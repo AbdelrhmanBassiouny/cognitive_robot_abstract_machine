@@ -14,6 +14,16 @@ on:
         description: "Lowercase repository name with tag"
         required: true
         type: string
+      ref:
+        # An integration probe runs this job over an assembled prefix rather than over
+        # the tree its own run started on, because a dispatch runs the workflow file the
+        # dispatched reference carries and a prefix carries none. Empty is what
+        # actions/checkout already reads as "the reference that triggered this run", so
+        # every caller that passes nothing keeps the behaviour it had.
+        description: "Tree to check out; defaults to the reference the run started on"
+        required: false
+        type: string
+        default: ""
 
 jobs:
   test:
@@ -25,6 +35,7 @@ jobs:
         with:
           path: cognitive_robot_abstract_machine
           submodules: recursive
+          ref: ${{ inputs.ref }}
 
       - name: Install dependencies
         env:

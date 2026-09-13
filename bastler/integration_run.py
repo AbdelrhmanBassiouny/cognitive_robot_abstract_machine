@@ -107,7 +107,8 @@ class IntegrationRun:
 
         Read rather than loaded from ``board.json``: a build is only as good as its idea
         of what is in flight, and a snapshot left behind by an earlier pass is worse
-        than no snapshot at all.
+        than no snapshot at all. What is in flight is what the export carries, which is
+        every open pull request except a candidate.
 
         :param fork: The fork to read the open pull requests from.
         :return: The derived stack.

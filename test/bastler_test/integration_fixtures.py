@@ -8,19 +8,26 @@ pytest collects ``test_*.py`` only, so nothing here runs on its own.
 
 from __future__ import annotations
 
+import fnmatch
 import subprocess
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
+from dataclasses import dataclass, field
 from pathlib import Path
 
+from bastler.git_commands import BranchPublication, ProposedPush, ReferenceUpdate
 from bastler.stack import Branch, BranchStatus, IntegrationStrategy, PullRequest, Stack
 
+from bastler.integration_carried_pipeline import PIPELINE_PATHS
 from bastler.integration_verdict import ChecksVerdict
+from bastler.workflow_document import REPOSITORY_ROOT
 import bastler.integration_constants
 import bastler.integration_tips
 import bastler.integration
 from bastler.integration_assembly import build_integration
+from bastler.integration_block_record import BlockStanding, MeasuredHead
 from bastler.integration_failure import IntegrationTestFailure
 from bastler.integration_report import IntegrationReport
+from bastler.integration_run import IntegrationRun
 from bastler.integration_tips import (
     PullRequestStackTipOutcome,
     ResolutionAuthor,
@@ -101,6 +108,21 @@ A_PULL_REQUEST_NUMBER = 111
 The fork pull request publishing the branch a block-branch test acts on.
 """
 
+A_FORK_REMOTE = "origin"
+"""
+The remote the scratch fork is reached as, which is where a record about it lives.
+"""
+
+A_MEASURED_COMMIT = "5d41402abc4b2a76b9719d911017c592a1b2c3d4"
+"""
+The commit the culprit of a localised failure pointed at when the break was measured.
+"""
+
+A_PARTNER_S_MEASURED_COMMIT = "7d793037a0760186574b0282f2f435e7a1b2c3d4"
+"""
+The commit the branch it breaks pointed at when the break was measured.
+"""
+
 CONFLICT_MARKER = "<" * 7
 """
 The marker git opens a conflicted hunk with, at its default
@@ -115,6 +137,39 @@ named here rather than spelled at the assertion.
 # %% the objects a build is described with
 
 
+def the_pipeline_this_checkout_carries() -> dict[str, str]:
+    """
+    A build a rebuild would publish carries the branches the pipeline lives on, and
+    publication is refused for one that does not - so a test about publishing has to
+    assemble a build that does, or it is answered about something it is not asking.
+
+    :return: Every file a rebuild needs, with the content this checkout holds at it.
+    """
+    return {path: (REPOSITORY_ROOT / path).read_text() for path in PIPELINE_PATHS}
+
+
+def write_into(root: Path, files: Mapping[str, str]) -> None:
+    """
+    :param root: The checkout to write them into.
+    :param files: What to write, by path, directories included.
+    """
+    for path, content in files.items():
+        written = root / path
+        written.parent.mkdir(parents=True, exist_ok=True)
+        written.write_text(content)
+
+
+def publishing(remote: str, branch: str) -> ProposedPush:
+    """
+    :param remote: The remote to publish to.
+    :param branch: The branch to publish under its own name.
+    :return: The push saying so, authorising no rewrite.
+    """
+    return ProposedPush(
+        remote=remote, publication=BranchPublication.under_its_own_name(branch)
+    )
+
+
 def create_branch_object(
     name: str,
     number: int,
@@ -122,6 +177,7 @@ def create_branch_object(
     status: BranchStatus = BranchStatus.READY,
     labels: Sequence[str] = (),
     checks: ChecksVerdict | None = None,
+    block_standing: BlockStanding | None = None,
 ) -> Branch:
     """
     :param name: The branch name.
@@ -130,6 +186,8 @@ def create_branch_object(
     :param status: Its lifecycle position, which decides whether a build may carry it.
     :param labels: What its pull request carries, one of which may withhold it.
     :param checks: What its own checks amount to, or None where nothing has read them.
+    :param block_standing: Whether the tree its block was measured in still exists, or
+        None where nothing has read that.
     :return: A stack node, for the selection tests that need no repository.
     """
     return Branch(
@@ -140,6 +198,7 @@ def create_branch_object(
         strategy=IntegrationStrategy.MERGE,
         labels=list(labels),
         ci=None if checks is None else str(checks),
+        block_standing=None if block_standing is None else str(block_standing),
     )
 
 
@@ -156,6 +215,23 @@ def create_stack_object(
         branches=branches,
         is_merged=lambda name: name in landed,
     )
+
+
+@dataclass(frozen=True)
+class RunAgainstAGivenFork(IntegrationRun):
+    """
+    A run whose fork is handed to it, so a command that reads or writes pull requests
+    can be exercised against a scratch repository without a credential.
+    """
+
+    given: object = None
+    """
+    The fork this run reads and writes.
+    """
+
+    def fork(self) -> object:
+        """:return: The fork it was given."""
+        return self.given
 
 
 def build(
@@ -268,11 +344,14 @@ def create_integration_test_failure(
     culprit: str = REMOVES_THE_MODULE,
     number: int = A_PULL_REQUEST_NUMBER,
     breaks_against: str | None = NEEDS_THE_MODULE,
+    measured_over: Sequence[MeasuredHead] | None = None,
 ) -> IntegrationTestFailure:
     """
     :param culprit: The tip whose arrival turned the suite.
     :param number: The pull request that publishes it.
     :param breaks_against: The earlier tip it fails against alone.
+    :param measured_over: The heads the break was found between, or None for the
+        culprit's and its partner's at fixed commits.
     :return: A localised failure to block a branch for.
     """
     return IntegrationTestFailure(
@@ -280,7 +359,67 @@ def create_integration_test_failure(
         culprit_pull_request_number=number,
         already_included=(INNOCENT_TIP, NEEDS_THE_MODULE),
         breaks_against=breaks_against,
+        measured_over=(
+            (
+                MeasuredHead(culprit, number, A_MEASURED_COMMIT),
+                MeasuredHead(NEEDS_THE_MODULE, 2, A_PARTNER_S_MEASURED_COMMIT),
+            )
+            if measured_over is None
+            else tuple(measured_over)
+        ),
     )
+
+
+@dataclass
+class GitAnsweringForTheFork:
+    """
+    A runner answering what the fork has published and recorded, and remembering every
+    push made through it instead of making one.
+    """
+
+    heads: dict[str, str] = field(default_factory=dict)
+    """
+    What the fork has each of its branches pointing at.
+    """
+
+    references: dict[str, str] = field(default_factory=dict)
+    """
+    Every reference below ``refs/`` the fork carries besides its branches, with its
+    commit - the records a rebuild keeps there.
+    """
+
+    pushes: list[tuple[str, ...]] = field(default_factory=list)
+    """
+    Every push made through it, in order.
+    """
+
+    def remote_branch_heads(self, remote: str) -> dict[str, str]:
+        """:param remote: Ignored; there is one fork.
+        :return: What it has each branch pointing at."""
+        return dict(self.heads)
+
+    def write_remote_references(
+        self, remote: str, updates: Sequence[ReferenceUpdate]
+    ) -> None:
+        """:param remote: The remote written to.
+        :param updates: What each reference is left at, remembered rather than pushed.
+        """
+        self.pushes.append(
+            ("push", "--force", remote, *(str(update) for update in updates))
+        )
+
+    def run(self, *arguments: str) -> str:
+        """:param arguments: What git was asked to do.
+        :return: What the fork answers."""
+        if arguments[0] == "ls-remote":
+            pattern = arguments[-1]
+            return "\n".join(
+                f"{commit}\t{reference}"
+                for reference, commit in self.references.items()
+                if fnmatch.fnmatch(reference, pattern)
+            )
+        self.pushes.append(arguments)
+        return ""
 
 
 # %% scratch-fork arrangements more than one module builds on
@@ -318,7 +457,7 @@ def two_colliding_tips(checkout: ForkCheckout) -> list[PullRequest]:
     checkout.commit_on(FIRST_TIP, "contested", "what the first tip wrote\n")
     checkout.git.checkout(SECOND_TIP, UPSTREAM_BASE)
     checkout.commit("contested", "what the second tip wrote\n")
-    checkout.git.push_refspec("origin", f"{SECOND_TIP}:{SECOND_TIP}")
+    checkout.git.push(publishing("origin", SECOND_TIP))
     checkout.git.fetch("origin")
     return [
         PullRequest(number=1, head=FIRST_TIP, base=UPSTREAM_BASE, draft=False),

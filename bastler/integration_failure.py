@@ -11,6 +11,7 @@ from __future__ import annotations
 import sys
 import dataclasses
 import json
+from collections.abc import Mapping
 from dataclasses import asdict, dataclass
 from typing import Any
 
@@ -33,8 +34,10 @@ from bastler.maintenance_restack_procedure import (
 )
 
 from bastler.integration_assembly import IntegrationBuild
+from bastler.integration_block_record import BlockRecords, MeasuredHead
 from bastler.integration_constants import RERERE_SETTINGS, ReportKey
 from bastler.integration_exit_codes import IntegrationExitCode
+from bastler.integration_reproduction import REPRODUCTION_MARKER
 from bastler.integration_selection import tips_of
 from bastler.integration_suite import run_tests
 from bastler.integration_tips import ResolutionProvenance
@@ -74,6 +77,47 @@ class IntegrationTestFailure:
     """The single earlier tip the culprit fails against alone, or ``None`` when only the
     combination fails - which is a materially different thing to tell somebody."""
 
+    measured_over: tuple[MeasuredHead, ...]
+    """The heads the break was found between: the culprit's, then the partner's, or
+    every tip that was in the build when no single partner reproduces it.
+
+    This is the tree the block is about. A later build reads these against the fork to
+    tell whether that tree still exists, which is what decides whether the block still
+    holds.
+    """
+
+    @classmethod
+    def measured(
+        cls,
+        git: MaintenanceGitCommandRunner,
+        configuration: Configuration,
+        culprit: Branch,
+        already_included: tuple[str, ...],
+        breaks_against: str | None,
+        by_name: Mapping[str, Branch],
+    ) -> IntegrationTestFailure:
+        """Describe a localised failure together with the heads it was measured over.
+
+        :param git: The runner the fork's heads are read through.
+        :param configuration: The resolved configuration, naming the fork remote.
+        :param culprit: The tip whose arrival turned the suite.
+        :param already_included: What was in the build when it turned, in merge order.
+        :param breaks_against: The single earlier tip it fails against alone, if any.
+        :param by_name: Every tip, keyed by branch name.
+        :return: The failure.
+        """
+        partners = (breaks_against,) if breaks_against is not None else already_included
+        return cls(
+            culprit=culprit.name,
+            culprit_pull_request_number=culprit.pull_request_number,
+            already_included=already_included,
+            breaks_against=breaks_against,
+            measured_over=tuple(
+                MeasuredHead.of(git, configuration, by_name[name])
+                for name in (culprit.name, *partners)
+            ),
+        )
+
     @classmethod
     def from_json(cls, document: dict[str, Any]) -> IntegrationTestFailure:
         """Read a localised failure back out of a report's document.
@@ -87,6 +131,10 @@ class IntegrationTestFailure:
             culprit_pull_request_number=document[ReportKey.CULPRIT_PULL_REQUEST_NUMBER],
             already_included=tuple(document[ReportKey.ALREADY_INCLUDED]),
             breaks_against=document.get(ReportKey.BREAKS_AGAINST),
+            measured_over=tuple(
+                MeasuredHead.from_json(head)
+                for head in document[ReportKey.MEASURED_OVER]
+            ),
         )
 
     def comment(self, session: str | None) -> str:
@@ -119,19 +167,32 @@ class IntegrationTestFailure:
             f"preimage, and there is no conflict here, so every later build carries the "
             f"failure until one of the two branches changes.\n\n"
             f"This branch is labelled `integration-conflict` so later passes withhold "
-            f"it rather than promoting it. Nothing clears that label automatically."
-            f"{addressed}"
+            f"it rather than promoting it. The heads the break was measured over are "
+            f"recorded with the block; once this branch or one it was measured against "
+            f"has moved on from them, the next build carries this branch again, and its "
+            f"suite passing is what lifts the label. A test marked "
+            f"`@pytest.mark.{REPRODUCTION_MARKER}('{self.culprit}')` pushed to this "
+            f"branch lifts it sooner, the moment it passes.{addressed}"
         )
 
     def block_the_branch_that_causes_it(
-        self, configuration: Configuration, fork: ForkPullRequests
+        self,
+        configuration: Configuration,
+        fork: ForkPullRequests,
+        records: BlockRecords,
     ) -> BlockedBranchReport:
         """Label the branch that breaks another, and tell its owner why.
 
+        The tree the break was measured in is recorded first: a label without it is a
+        block nothing can ever tell has gone stale, and a record without the label is
+        inert.
+
         :param configuration: The resolved configuration, naming the label to apply.
         :param fork: The fork to label and comment on.
+        :param records: What the fork has recorded about its blocks, which this joins.
         :return: What was written where.
         """
+        records.record(self)
         number = self.culprit_pull_request_number
         pull_request = fork.pull_request(number)
         body = PullRequestField.BODY.read(pull_request, number)
@@ -301,11 +362,13 @@ class FailureLocation:
                     continue
                 return self._report(
                     tips_tested=tuple(included) + (tip.name,),
-                    failure=IntegrationTestFailure(
-                        culprit=tip.name,
-                        culprit_pull_request_number=tip.pull_request_number,
+                    failure=IntegrationTestFailure.measured(
+                        git=self.git,
+                        configuration=self.stack.configuration,
+                        culprit=tip,
                         already_included=tuple(included),
                         breaks_against=self._narrow(build, tip, included, by_name),
+                        by_name=by_name,
                     ),
                 )
             return self._report(tips_tested=tuple(included))

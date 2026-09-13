@@ -8,6 +8,7 @@ first one would leave nothing to work from.
 from __future__ import annotations
 
 import dataclasses
+from collections.abc import Sequence
 from dataclasses import dataclass
 
 from bastler.stack import (
@@ -28,10 +29,16 @@ from bastler.integration_constants import (
     RERERE_SETTINGS,
     RESOLUTION_REPLAY_MARKER,
 )
+from bastler.integration_plans import PlanFilter
 from bastler.integration_report import IntegrationReport
 from bastler.integration_selection import select_for_build, tips_of
 from bastler.integration_suite import run_tests
-from bastler.integration_tips import PullRequestStackTipOutcome, ResolutionProvenance, TipStatus
+from bastler.integration_tips import (
+    PullRequestStackTipOutcome,
+    ReadmittedBranch,
+    ResolutionProvenance,
+    TipStatus,
+)
 
 
 @dataclass(frozen=True)
@@ -172,6 +179,7 @@ def build_integration(
     build_branch: str,
     provenance: ResolutionProvenance,
     test_command: str | None,
+    plans: PlanFilter | None = None,
 ) -> IntegrationReport:
     """
     Assemble one integration branch and report what went into it.
@@ -185,10 +193,11 @@ def build_integration(
     :param build_branch: The branch to assemble onto.
     :param provenance: Who wrote each recorded resolution.
     :param test_command: The suite to run on the finished branch, or ``None`` to skip.
+    :param plans: The plans this build was asked to carry, or ``None`` for all of them.
     :return: What the build contains and what it left out.
     """
-    selection = select_for_build(stack)
-    tips = tips_of(stack)
+    selection = select_for_build(stack, plans)
+    tips = tips_of(stack, plans)
     with DetachedCheckout.of(git), RestackWorktree.added_to(git) as assembling:
         build = IntegrationBuild(
             git=dataclasses.replace(
@@ -207,10 +216,37 @@ def build_integration(
                 included.append(tip.name)
         git.run("branch", "--force", POINTER_BRANCH, build_branch)
         tests_passed = run_tests(test_command, build.git.working_directory)
+    reached = branches_carried_by(stack, included)
     return IntegrationReport(
         build_branch=build_branch,
         base=stack.configuration.upstream_base,
         tips=tuple(outcomes),
         tests_passed=tests_passed,
         left_out=selection.left_out,
+        readmitted=tuple(
+            ReadmittedBranch(branch.name, branch.pull_request_number)
+            for branch in selection.readmitted
+            if branch.name in reached
+        ),
     )
+
+
+def branches_carried_by(stack: Stack, tips: Sequence[str]) -> set[str]:
+    """
+    Every branch in a build: each merged tip and everything it stands on in the stack.
+
+    A tip contains its stack, so a branch below a merged tip reached the build under the
+    tip's name.
+
+    :param stack: The derived stack, whose parents are walked.
+    :param tips: The tips that reached the build.
+    :return: The names of every branch the build carries.
+    """
+    by_name = {branch.name: branch for branch in stack.branches}
+    carried: set[str] = set()
+    for tip in tips:
+        name = tip
+        while name in by_name and name not in carried:
+            carried.add(name)
+            name = by_name[name].parent
+    return carried

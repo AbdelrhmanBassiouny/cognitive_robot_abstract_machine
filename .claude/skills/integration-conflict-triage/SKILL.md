@@ -195,9 +195,9 @@ Neither branch holds the merged tree, so a test that needs it cannot be written 
 can always be written is the rule, against a small tree the test builds itself. A fix without one
 is a fix the next build cannot tell from a break that went away on its own.
 
-Whichever it is, say plainly whether the integration branch is red until somebody acts, and which
-area of the suite is affected - a developer can still work from a branch whose breakage they
-know the shape of, and cannot from one they do not.
+Whichever it is, say plainly whether the integration branch is red until somebody acts or one of
+the two branches moves, and which area of the suite is affected - a developer can still work
+from a branch whose breakage they know the shape of, and cannot from one they do not.
 
 ### Step 5 - block the branch, because a comment alone is missed
 
@@ -214,20 +214,34 @@ by hand:
 python -m bastler.integration block-branch --json
 ```
 
-It applies the `integration-conflict` label to the breaking branch's pull request and comments
-on it naming the branch it breaks, addressed to the session in its description. Both halves
-matter: `needs-resolution` is cleared automatically once a pull request stops reporting a
-conflict, and a failure between two cleanly merging branches never makes one conflicted - so
-reusing that label would have
-the very next maintenance pass strip it, silently reopening the loop the label exists to close.
-`integration-conflict` blocks through the same code path and nothing clears it automatically.
+It applies the `integration-conflict` label to the breaking branch's pull request, comments on
+it naming the branch it breaks, addressed to the session in its description, and records the
+heads the break was measured over as `refs/integration/blocked/<pull request>/<pull request>`
+on the fork. All three halves matter: `needs-resolution` is cleared automatically once a pull
+request stops reporting a conflict, and a failure between two cleanly merging branches never
+makes one conflicted - so reusing that label would have the very next maintenance pass strip it,
+silently reopening the loop the label exists to close. `integration-conflict` blocks through the
+same code path, and the record is what lets a block end without anybody acting.
+
+**A block is about the tree it was measured in, and it ends with that tree.** A build honours
+the label only while every recorded head is still the fork's head. Once the breaking branch or
+the one it breaks has moved - a restack, a fix, a partner merging - the next build carries the
+branch again on trial, reports it as `readmitted`, and its suite passing lifts the label and
+drops the record; its suite failing localises again and blocks again over the new tree. A
+branch labelled without a record - by hand, or before records existed - is reported as
+`blocked-without-record`, which means exactly that no build will ever lift it: remove the label
+by hand once the break is gone, or give it the reproduction test below.
 
 Then make the failure reproducible and record it where the plan's state lives:
 
-1. **Push a failing test to the *breaking* branch.** Not to the branch that relies on the
-   thing: it cannot express a test against an import that does not exist on it yet. The worked
-   case is a branch adding a module-scope import of a package another branch's fixture does not
-   build - which is testable on the breaking branch alone, with no merge involved.
+1. **Push a failing test to the *breaking* branch**, marked
+   `@pytest.mark.integration_conflict('<the branch it breaks>')`. Not to the branch that relies
+   on the thing: it cannot express a test against an import that does not exist on it yet. The
+   worked case is a branch adding a module-scope import of a package another branch's fixture
+   does not build - which is testable on the breaking branch alone, with no merge involved.
+   The block lifts on its own once the tree moves, so this is the fast path rather than the
+   only one: a passing reproduction lifts the label the moment it passes, on the branch's own
+   checks, without waiting for a build.
 2. **Record it on the item**, with `plan_item_bootstrap.py block --branch <branch>`, so the
    dashboard shows the branch as blocked rather than leaving the fact in a comment.
 3. **Republish**, with `/plan-dashboard <plan-id>`, in the same turn - a dashboard older than
@@ -261,7 +275,7 @@ a fix, which is a design call and stays proposed.
 Report every pair, with its verdict and the reason. For a *defer*, say that the resolution is
 recorded and that the collision is still live for whoever lands second - a replay buys a working
 daily driver, not a discharged obligation upstream. For a *reconcile* or a *stack*, say which
-branch you took it to. For an integration test failure, say that the branch stays red until
-somebody acts,
-since nothing can be recorded for it. Name anything you left undecided, and why, rather than
-picking to be finished.
+branch you took it to. For an integration test failure, say that the branch stays blocked until
+somebody acts or until it or its partner moves and a build carrying it comes back green, since
+nothing can be replayed for it. Name anything you left undecided, and why, rather than picking
+to be finished.

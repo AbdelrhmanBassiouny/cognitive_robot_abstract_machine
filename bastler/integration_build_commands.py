@@ -5,6 +5,7 @@ Building the branch, and saying which pair of tips a failing suite is about.
 from __future__ import annotations
 
 import argparse
+import sys
 from dataclasses import dataclass
 from datetime import datetime, timezone
 
@@ -13,10 +14,14 @@ from bastler.stack import (
     ConfigurationKey,
 )
 
+from bastler.maintenance_github import GitHubRepository
+
 from bastler.integration_assembly import build_integration
+from bastler.integration_block_record import BlockRecords, lift_readmitted
+from bastler.integration_plans import PlanFilter
 from bastler.integration_exit_codes import IntegrationExitCode
 from bastler.integration_failure import FailureLocation, print_failure_location
-from bastler.integration_report import exit_code_for, print_build
+from bastler.integration_report import IntegrationReport, exit_code_for, print_build
 from bastler.integration_run import IntegrationCommand, IntegrationRun
 from bastler.integration_selection import build_branch_name, stack_to_build
 from bastler.integration_suite import TestCommandNotConfiguredError
@@ -60,6 +65,17 @@ class BuildCommand(IntegrationCommand):
             help="skip the suite that would otherwise be run on the finished branch",
         )
         parser.add_argument(
+            "--plan",
+            action="append",
+            default=[],
+            metavar="PLAN",
+            help=(
+                "carry only the tips belonging to this plan; repeat it or separate "
+                "several with commas. A branch the plan index names no plan for is "
+                "reported rather than dropped or carried"
+            ),
+        )
+        parser.add_argument(
             "--json",
             action="store_true",
             help="emit the machine-readable document rather than a summary",
@@ -68,9 +84,19 @@ class BuildCommand(IntegrationCommand):
     def run(
         self, run: IntegrationRun, arguments: argparse.Namespace
     ) -> IntegrationExitCode:
-        """:param run: What this run has resolved.
+        """
+        Assemble the branch and report what went into it.
+
+        The plans and the suite are settled before anything is built, so a request that
+        cannot be served fails before it has cost a build rather than after.
+
+        :param run: What this run has resolved.
         :param arguments: The parsed command line.
-        :return: The process exit code."""
+        :return: The process exit code.
+        :raises BranchPlanIndexUnavailable: If plans were named and the index that says
+            which branch is whose could not be read.
+        """
+        plans = PlanFilter.over(arguments.plan)
         test_command = self._test_command(run.configuration, arguments.run_tests)
         fork = run.fork()
         run.refresh_remotes()
@@ -81,12 +107,41 @@ class BuildCommand(IntegrationCommand):
             build_branch=build_branch_name(datetime.now(timezone.utc)),
             provenance=ResolutionProvenance.read(run.provenance_path()),
             test_command=test_command,
+            plans=plans,
         )
         if arguments.json:
             print(report.as_json())
         else:
             print_build(report)
+        self._lift_what_the_suite_cleared(run, fork, report)
         return exit_code_for(report)
+
+    @staticmethod
+    def _lift_what_the_suite_cleared(
+        run: IntegrationRun, fork: GitHubRepository, report: IntegrationReport
+    ) -> None:
+        """
+        Lift the block on every readmitted branch the suite passed over.
+
+        Only a suite that ran and passed is evidence; a build that skipped it leaves the
+        label where it is. Said on standard error, so the document on standard output
+        stays one document.
+
+        :param run: What this run has resolved.
+        :param fork: The fork to label and comment on.
+        :param report: What the build did.
+        """
+        if not report.tests_passed or not report.readmitted:
+            return
+        lifted = lift_readmitted(
+            report.readmitted,
+            report.build_branch,
+            run.configuration,
+            fork,
+            BlockRecords.read(run.git, run.configuration.fork_remote),
+        )
+        for cleared in lifted:
+            print(f"{cleared.branch}\tunblocked\t{cleared.label}", file=sys.stderr)
 
     @staticmethod
     def _test_command(configuration: Configuration, run_tests: bool) -> str | None:
@@ -146,7 +201,7 @@ class LocateFailureCommand(IntegrationCommand):
         fork = run.fork()
         run.refresh_remotes()
         report = FailureLocation(
-            stack=run.stack(fork),
+            stack=stack_to_build(run, fork, restack_first=False),
             git=run.git,
             build_branch=build_branch_name(datetime.now(timezone.utc)),
             provenance=ResolutionProvenance.read(run.provenance_path()),
@@ -197,6 +252,10 @@ class BlockBranchCommand(IntegrationCommand):
         is the one the suite actually turned on rather than the one a caller believed it
         would be.
 
+        The stack is read the way a build reads it, so the search assembles the tips the
+        failing build carried - a branch carried again after its block went stale
+        included - rather than the tips a label alone would allow.
+
         :param run: What this run has resolved.
         :param arguments: The parsed command line.
         :return: The process exit code.
@@ -205,7 +264,7 @@ class BlockBranchCommand(IntegrationCommand):
         fork = run.fork()
         run.refresh_remotes()
         report = FailureLocation(
-            stack=run.stack(fork),
+            stack=stack_to_build(run, fork, restack_first=False),
             git=run.git,
             build_branch=build_branch_name(datetime.now(timezone.utc)),
             provenance=ResolutionProvenance.read(run.provenance_path()),
@@ -215,6 +274,10 @@ class BlockBranchCommand(IntegrationCommand):
         if localised is None:
             print_failure_location(report)
             return IntegrationExitCode.SUCCESS
-        blocked = localised.block_the_branch_that_causes_it(run.configuration, fork)
+        blocked = localised.block_the_branch_that_causes_it(
+            run.configuration,
+            fork,
+            BlockRecords.read(run.git, run.configuration.fork_remote),
+        )
         print(blocked.as_json() if arguments.json else blocked.as_line())
         return report.exit_code
