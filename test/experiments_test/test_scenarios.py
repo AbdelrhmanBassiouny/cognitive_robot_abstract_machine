@@ -630,10 +630,17 @@ class PersonReadingTheWorld:
         self.looks_taken_when_asked.append(self.scenario.built_worlds[-1].looks_taken)
 
 
+A_QUESTION_ABOUT_THE_SCENE = "Which pieces did you put on the table?"
+"""
+Something a run asks the person at the scene, which only they can answer.
+"""
+
+
 class TestThePersonAtTheScene:
     """
     A perturbation is made by someone other than the robot: the run itself in
-    simulation, the person at the scene on the robot.
+    simulation, the person at the scene on the robot; and what the scene was set up to
+    be is theirs alone to say.
     """
 
     def test_the_person_is_given_the_perturbations_own_instruction(self):
@@ -682,6 +689,30 @@ class TestThePersonAtTheScene:
 
         assert instruction in output.getvalue()
         assert keyboard.read() == ""
+
+    def test_the_console_person_is_shown_a_question_and_answers_with_a_line(self):
+        """
+        What the person says is the only account of the scene a run on the robot has
+        that the camera did not make, so the run reads their answer rather than only
+        waiting for them.
+        """
+        output = StringIO()
+
+        said = PersonAtTheConsole(
+            output=output, keyboard=StringIO("cube, cylinder\n")
+        ).answer(A_QUESTION_ABOUT_THE_SCENE)
+
+        assert A_QUESTION_ABOUT_THE_SCENE in output.getvalue()
+        assert said == "cube, cylinder"
+
+    def test_a_trial_with_nobody_at_the_scene_is_told_nothing_about_how_it_was_set_up(
+        self,
+    ):
+        """
+        A run whose questions rest on what the person says is left with no account of
+        the scene rather than with an answer nobody gave.
+        """
+        assert AbsentPerson().answer(A_QUESTION_ABOUT_THE_SCENE) is None
 
 
 class TestAnEventBroughtAbout:

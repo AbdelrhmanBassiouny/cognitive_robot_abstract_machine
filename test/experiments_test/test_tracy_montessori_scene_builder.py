@@ -52,6 +52,7 @@ from experiments.montessori.semantics import (
 )
 from experiments.montessori.watched_run import WatchedSortingRun
 from experiments.questions.question import Memory
+from experiments.questions.question import SceneAsSetUp
 from experiments.questions.working_memory import SupportingSurfaces
 from experiments.scenarios.scenario import AbsentPerson
 from experiments.scenarios.trial import TrialOutcome
@@ -212,7 +213,7 @@ def test_a_perceived_piece_stands_on_tracys_own_table(
     ]
 
     assert SupportingSurfaces(subject=cube.root).ask(robot) == [robot.root]
-    assert SupportingSurfaces(subject=cube.root).ground_truth(robot) == [robot.root]
+    assert SceneAsSetUp.read_from(robot).holding_up(cube.root.name) == [robot.root.name]
 
 
 def test_the_perceived_scene_is_the_published_world_with_what_the_look_found(
@@ -337,6 +338,15 @@ class PersonWhoMovesTheScene:
         self.asked.append(instruction)
         self.pieces_when_asked = list(self.scene.pieces)
         self.look.moved = True
+
+    def answer(self, question: str) -> None:
+        """
+        Nothing: this person is at the table to move a piece rather than to say how it
+        was laid out.
+
+        :param question: What they were asked.
+        """
+        return None
 
 
 def _run_on_the_robot(
