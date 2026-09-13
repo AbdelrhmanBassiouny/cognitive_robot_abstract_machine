@@ -126,7 +126,8 @@ class ScenarioCondition(Generic[WorldType], SubClassSafeGeneric, ABC):
 class Person(Protocol):
     """
     The other agent a trial has beside the robot: the person at the scene, who brings
-    about on the robot what a simulated trial brings about itself.
+    about on the robot what a simulated trial brings about itself, and who is the only
+    one who can say what the scene was set up to be.
     """
 
     def carry_out(self, instruction: str) -> None:
@@ -134,6 +135,15 @@ class Person(Protocol):
         Do what the instruction says, returning once it is done.
 
         :param instruction: What the person is asked to do.
+        """
+
+    def answer(self, question: str) -> Optional[str]:
+        """
+        Say how the scene stands, in a line.
+
+        :param question: What the person is asked.
+        :return: What they said, or None where nobody answers, which is what a scene
+            nobody is at leaves every question with.
         """
 
 
@@ -159,12 +169,17 @@ class PersonAtTheConsole:
         self.output.flush()
         self.keyboard.readline()
 
+    def answer(self, question: str) -> str:
+        self.output.write("%s " % question)
+        self.output.flush()
+        return self.keyboard.readline().strip()
+
 
 @dataclass
 class AbsentPerson:
     """
-    Stands in for the person at a trial that has none: keeps every instruction and does
-    nothing about it.
+    Stands in for the person at a trial that has none: keeps every instruction, does
+    nothing about it, and cannot say anything about the scene.
     """
 
     asked: List[str] = field(default_factory=list)
@@ -174,6 +189,14 @@ class AbsentPerson:
 
     def carry_out(self, instruction: str) -> None:
         self.asked.append(instruction)
+
+    def answer(self, question: str) -> None:
+        """
+        Nothing, since there is nobody there to say anything.
+
+        :param question: What the person would have been asked.
+        """
+        return None
 
 
 # %% the change a run applies

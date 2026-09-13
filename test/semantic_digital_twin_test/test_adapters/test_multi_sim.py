@@ -1,7 +1,9 @@
+import gc
 import logging
 import os
 import threading
 import time
+import weakref
 from dataclasses import dataclass
 
 import mujoco
@@ -1639,3 +1641,24 @@ def test_a_following_joint_read_back_gives_the_shared_value():
         )
     finally:
         stop_multisim_if_running(multi_sim)
+
+
+# %% the world a dropped scene was built for
+
+
+def test_a_dropped_scene_lets_go_of_the_world_it_was_built_for():
+    """
+    A scene that was never stopped must not keep its world in memory.
+
+    The scene's simulator asks for its shutdown to be run when the interpreter exits,
+    and it reaches the world through the synchronizer, so a run that builds a scene per
+    test would hold one world per scene until the process ends.
+    """
+    world = World()
+    reference = weakref.ref(world)
+    MujocoSim(world=world, headless=headless)
+
+    del world
+    gc.collect()
+
+    assert reference() is None

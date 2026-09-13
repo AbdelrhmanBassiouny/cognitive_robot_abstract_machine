@@ -301,6 +301,15 @@ class RecordedTrial:
     Every insertion attempted while the trial ran, in the order they were made.
     """
 
+    instructions_carried_out: List[str] = field(default_factory=list)
+    """
+    What was done to this trial's scene by someone other than the robot, in the order it
+    was done, each as the person at the scene is told it.
+
+    The record of what the run had done to the scene beyond standing it: a piece pushed
+    across the table is not where the run put it any more, and nothing else says so.
+    """
+
     motions: List[RecordedMotion] = field(default_factory=list)
     """
     Every motion the trial ran, in the order they ran.
