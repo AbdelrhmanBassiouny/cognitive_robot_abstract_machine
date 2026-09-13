@@ -46,11 +46,10 @@ def look_for_the_cube_on_the_lid(
     relations.
 
     Nothing is fetched out of the world beforehand. The lid and the two holes are
-    described in the statement itself, by what the world calls them, and answering those
-    descriptions is the backend's own first move, which is what lets the relations that
-    mention them narrow the look at all. Their names are stated in the same statement as
-    everything else, so one clause says the whole of it and a relation is handed the
-    thing it is about rather than a description of it.
+    described in the statement itself, by what the world calls them -- the lid beside
+    the relation naming it, each hole as a statement of its own handed to the relation
+    in its place -- and answering those descriptions is the backend's own first move,
+    which is what lets the relations that mention them narrow the look at all.
 
     Support first, because it is the narrowing the request language already had and the
     one the digital twin answers by itself: naming the surface names a stretch of a
@@ -76,13 +75,15 @@ def look_for_the_cube_on_the_lid(
     cube = KNOWN_PIECE_BY_CATEGORY[MontessoriShapeCategory.CUBE]
     triangle = KNOWN_PIECE_BY_CATEGORY[MontessoriShapeCategory.TRIANGULAR_PRISM]
     lid = variable(Body, look.world.bodies)
-    square_hole = variable(Body, look.world.bodies)
-    triangle_hole = variable(Body, look.world.bodies)
+    square_hole = a(Body).from_(look.world.bodies)
+    square_hole.where(square_hole.name.name == HOLE_NAME_BY_CATEGORY[cube.category])
+    triangle_hole = a(Body).from_(look.world.bodies)
+    triangle_hole.where(
+        triangle_hole.name.name == HOLE_NAME_BY_CATEGORY[triangle.category]
+    )
     sought = a(DetectedMontessoriShape)
     return sought.where(
         lid.name == LID_NAME,
-        square_hole.name.name == HOLE_NAME_BY_CATEGORY[cube.category],
-        triangle_hole.name.name == HOLE_NAME_BY_CATEGORY[triangle.category],
         SupportedBy(sought, lid),
         Above(sought, square_hole, look.seen_from),
         Above(sought, triangle_hole, look.seen_from),

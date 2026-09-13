@@ -64,9 +64,31 @@ from krrood.symbol_graph.helpers import (
 )
 
 if TYPE_CHECKING:
+    from krrood.entity_query_language.factories import ConditionType
     from krrood.entity_query_language.operators.arithmetic import (
         ArithmeticOperation,
     )
+
+
+# %% what a statement says about the thing it describes
+
+
+class HasNarrowings(ABC):
+    """
+    Something that describes a thing by saying what narrows it.
+
+    A variable made for such a description points back at it, so that a query given a
+    condition about the variable can say those narrowings as well instead of dropping
+    them.
+    """
+
+    @property
+    @abstractmethod
+    def _narrowings_(self) -> List[ConditionType]:
+        """
+        :return: Everything this says about the thing it describes.
+        """
+        ...
 
 
 def identify_argument(argument: Any) -> Any:

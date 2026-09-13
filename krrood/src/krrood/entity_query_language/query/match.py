@@ -50,6 +50,7 @@ from krrood.entity_query_language.core.mapped_variable import (
     Attribute,
     FlatVariable,
     CanBehaveLikeAVariable,
+    HasNarrowings,
     HasSymbolicOperations,
     MappedVariable,
     IndexByValue,
@@ -214,6 +215,7 @@ class Match(
     Evaluable,
     HasQueryModifiers[T],
     HasSymbolicOperations[T],
+    HasNarrowings,
     AbstractMatchExpression[T],
     HasFactoryAndKwargs[T],
     HasExpression,
@@ -397,10 +399,24 @@ class Match(
         """
         :return: The variable this match describes, which is what a condition written
             with the match in the place of the thing it looks for is written about.
+
+        The variable points back at this match, so the query the condition is given to
+        says :attr:`_narrowings_` as well and the description is not reduced to its
+        subject.
         """
         if self._variable_ is None:
             self.resolve()
         return self._variable_
+
+    @property
+    def _narrowings_(self) -> List[ConditionType]:
+        """
+        :return: Everything this match says about the thing it looks for -- what its
+            pattern says, and what ``where`` added.
+        """
+        if not self._resolved_:
+            self.resolve()
+        return [*self._conditions_, *self._where_conditions_]
 
     def _get_expression_(self) -> SymbolicExpression:
         return self._symbolic_expression_
@@ -512,6 +528,7 @@ class Match(
             from krrood.entity_query_language.factories import variable
 
             self._variable_ = variable(self._type_, domain=self._domain_)
+            self._variable_._describing_statement_ = self
             return
 
         self._variable_._update_domain_(_resolve_domain(self._type_, self._domain_))
@@ -604,14 +621,19 @@ class Match(
         """
         Constrain the matched instance by conditions, on top of the pattern.
 
-        The conditions are also kept on the match itself, since a generative backend
-        reads them from the pattern rather than from the lowered query.
+        A condition mentioning another statement says what narrows that statement too,
+        so what this match is constrained by is the conditions together with those
+        narrowings. All of it is also kept on the match itself, since a generative
+        backend reads what a statement says from the match rather than from the lowered
+        query.
 
         :param conditions: The conditions the matched instance must satisfy.
         :return: This match.
         """
+        lowered = self._symbolic_expression_
+        conditions = (*conditions, *lowered._narrowings_mentioned_in_(*conditions))
         self._where_conditions_.extend(conditions)
-        self._symbolic_expression_.where(*conditions)
+        lowered.where(*conditions)
         return self
 
     def having(self, *conditions: ConditionType) -> Self:

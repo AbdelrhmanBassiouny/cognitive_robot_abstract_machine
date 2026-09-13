@@ -548,16 +548,22 @@ def _operands_of(bindings: Dict[str, Any]) -> Dict[str, Any]:
     """
     The arguments of a symbolic call as the operands they stand for.
 
-    Something that stands for a value contributes the expression it names -- a match
-    contributes the variable it describes -- so a statement about the thing sought can
-    be written with the statement itself in that thing's place. Anything else is its own
-    operand.
+    Something that stands for a value is read as an operand by
+    :meth:`~krrood.entity_query_language.core.base_expressions.SymbolicExpression._as_operand_`,
+    the same reading every other operation applies, so a statement about the thing
+    sought can be written with the statement itself in that thing's place. Anything else
+    is left as it was given, since whether any argument is symbolic at all is what
+    decides between a symbolic call and a computed one.
 
     :param bindings: A kwarg like dict mapping argument names to what was passed.
     :return: The same mapping, with each argument replaced by its operand.
     """
     return {
-        name: value._operand_ if isinstance(value, HasSymbolicOperations) else value
+        name: (
+            SymbolicExpression._as_operand_(value)
+            if isinstance(value, HasSymbolicOperations)
+            else value
+        )
         for name, value in bindings.items()
     }
 

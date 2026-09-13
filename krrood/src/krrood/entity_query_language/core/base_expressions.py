@@ -352,15 +352,44 @@ class SymbolicExpression(AbstractContextManager, HasExpression):
     @staticmethod
     def _as_operand_(value: Any, name: Optional[str] = None) -> SymbolicExpression:
         """
-        Read a value as the expression it contributes where an operand is expected.
+        Read a value as what it contributes where an operation expects an operand.
 
         Something that only stands for a value - a match, which is not part of the
-        expression graph - contributes the expression it reports, so that it can be
-        operated on from either side. Anything that is no expression at all is a literal.
+        expression graph - contributes the operand it reports, which for a match is the
+        variable it describes, so the operation is built about the thing rather than
+        about the description of it. Anything that is no expression at all is a literal.
 
-        :param value: The value given where an expression is expected.
+        This is the one reading every operation applies, so what a kind contributes is
+        said once by that kind instead of being decided again at each operation.
+
+        :param value: The value given where an operand is expected.
         :param name: The name to give a literal, where the operand is a named one.
         :return: The expression the value contributes.
+        """
+        from krrood.entity_query_language.core.mapped_variable import (
+            HasSymbolicOperations,
+        )
+        from krrood.entity_query_language.core.variable import Literal
+
+        if isinstance(value, SymbolicExpression):
+            return value
+        if isinstance(value, HasSymbolicOperations):
+            return value._operand_
+        return Literal(_value_=value, _name__=name)
+
+    @staticmethod
+    def _as_expression_(value: Any, name: Optional[str] = None) -> SymbolicExpression:
+        """
+        Read a value as the expression it stands for.
+
+        This is what quantifying, selecting and reading a bound value want: a match
+        stands for the query its pattern lowers to, which is the whole of what it
+        describes, where an operand of an operation wants only the thing described - see
+        :meth:`_as_operand_`.
+
+        :param value: The value given where an expression is expected.
+        :param name: The name to give a literal, where the value is a named one.
+        :return: The expression the value stands for.
         """
         from krrood.entity_query_language.core.mapped_variable import (
             HasSymbolicOperations,
@@ -1372,7 +1401,7 @@ class UnificationDict(UserDict):
             one - a match, which is read as the query it selects.
         :return: The value bound to that expression in this row.
         """
-        key = self._id_expression_map_[SymbolicExpression._as_operand_(key)._id_]
+        key = self._id_expression_map_[SymbolicExpression._as_expression_(key)._id_]
         return super().__getitem__(key)
 
     @cached_property

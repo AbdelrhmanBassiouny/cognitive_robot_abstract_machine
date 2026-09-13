@@ -33,7 +33,10 @@ from krrood.entity_query_language.core.base_expressions import (
     SymbolicExpression,
     Selectable,
 )
-from krrood.entity_query_language.core.mapped_variable import CanBehaveLikeAVariable
+from krrood.entity_query_language.core.mapped_variable import (
+    CanBehaveLikeAVariable,
+    HasNarrowings,
+)
 from krrood.entity_query_language.core.bound_value import HasBoundValue
 from krrood.entity_query_language.cache_data import ReEnterableLazyIterable
 from krrood.entity_query_language.enums import DomainSource
@@ -105,6 +108,16 @@ class Variable(CanHaveDomainSource[T]):
     _domain_source_: DomainSource = field(init=False, default=DomainSource.EXPLICIT)
     """
     The source of the domain for Variable is always EXPLICIT.
+    """
+
+    _describing_statement_: Optional[HasNarrowings] = field(
+        init=False, default=None, repr=False
+    )
+    """
+    The statement this variable was made for, where a statement made it.
+
+    What that statement says about the variable holds wherever the variable is used, so
+    a query given a condition mentioning it says those narrowings too.
     """
 
     def __post_init__(self):
