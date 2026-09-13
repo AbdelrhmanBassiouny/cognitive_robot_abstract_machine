@@ -23,7 +23,7 @@ from semantic_digital_twin.spatial_types.spatial_types import (
 )
 from semantic_digital_twin.robots.minimal_robot import MinimalRobot
 from semantic_digital_twin.robots.robot_parts import AbstractRobot
-from semantic_digital_twin.testing import two_arm_robot_world
+from semantic_digital_twin.testing import two_arm_robot_world, world_setup
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.connections import FixedConnection
 from semantic_digital_twin.world_description.geometry import Box, Color, Scale
@@ -623,6 +623,20 @@ def test_the_robot_counts_the_links_the_twin_says_are_its_own(
 def test_the_robot_counts_the_joints_it_can_move(robot: AbstractRobot):
     question = NumberOfOwnDegreesOfFreedom()
     assert question.ask(robot) == question.ground_truth(robot)
+
+
+def test_a_joint_driving_two_connections_is_one_joint(world_setup):
+    """
+    A gripper's fingers hang off several connections one joint drives, so the joints a
+    robot has are its degrees of freedom counted once each, however many connections
+    share one; the fixture's two arms share its one degree of freedom.
+    """
+    world, l1, l2, bf, r1, r2 = world_setup
+    robot = MinimalRobot.from_branch_in_world(bf)
+    question = NumberOfOwnDegreesOfFreedom()
+
+    assert question.ground_truth(robot) == 1
+    assert question.matches_ground_truth(robot)
 
 
 # %% every question at once
