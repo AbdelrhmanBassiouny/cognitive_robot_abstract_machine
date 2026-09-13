@@ -7,6 +7,7 @@ holds the same board and the same pieces where the camera finds them now.
 
 from __future__ import annotations
 
+import json
 import math
 from dataclasses import dataclass, field
 
@@ -38,8 +39,13 @@ from experiments.montessori.semantics import (
     MontessoriShape,
     MontessoriShapeCategory,
     ShapeSortingBoard,
+    ShapeSortingHole,
 )
 from experiments.montessori.world import BOARD_SCALE
+from semantic_digital_twin.adapters.ros.messages import WorldModelSnapshot
+from semantic_digital_twin.adapters.world_entity_kwargs_tracker import (
+    WorldEntityWithIDKwargsTracker,
+)
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.spatial_types.spatial_types import (
     HomogeneousTransformationMatrix,
@@ -99,6 +105,54 @@ def test_the_found_board_is_stood_in_the_published_world_once_where_it_was_found
         (float(found_at[0]), float(found_at[1]))
     )
     assert WorkspaceSurface.of(first, live.root).height == pytest.approx(LID_HEIGHT)
+
+
+# %% the board an earlier run left in the published world
+
+
+def _as_the_robot_publishes_it(world: World) -> World:
+    """
+    :param world: A world some process holds.
+    :return: That world as another process fetches it from the robot: rebuilt from the
+        JSON of its modification history, the way the world service serves it.
+    """
+    snapshot = WorldModelSnapshot(
+        modifications=list(world.get_world_model_manager().model_modification_blocks),
+        ids=list(world.state.keys()),
+        states=list(world.state.positions),
+    )
+    fetched = World()
+    WorldModelSnapshot.apply_to_json_snapshot_to_world(
+        fetched,
+        json.loads(json.dumps(snapshot.to_json())),
+        **WorldEntityWithIDKwargsTracker.from_world(fetched).create_kwargs(),
+    )
+    return fetched
+
+
+def test_the_holes_of_a_board_fetched_from_the_robot_keep_their_shape_categories():
+    """
+    A run reuses the board an earlier run stood in the world the robot publishes, which
+    reaches it through the JSON of that world; each hole's category must come back as
+    the category itself, since equality to its name is not enough for what records it.
+    """
+    described = DescribedBoard.of_layout(
+        BoardHoleLayout.of_board_mesh(), height=float(BOARD_SCALE.z)
+    )
+    live = _world_with_root("live")
+    stood = BoardPublisher(world=live).publish(described, _found_board(described))
+
+    fetched = _as_the_robot_publishes_it(live)
+
+    held = ShapeSortingBoard.held_by(fetched)
+    assert held is not None
+    assert [hole.name for hole in held.apertures] == [
+        hole.name for hole in stood.apertures
+    ]
+    for hole, stood_hole in zip(held.apertures, stood.apertures):
+        assert isinstance(hole, ShapeSortingHole)
+        assert hole.shape_category is stood_hole.shape_category
+        assert isinstance(hole.shape_category, MontessoriShapeCategory)
 
 
 # %% the pieces
