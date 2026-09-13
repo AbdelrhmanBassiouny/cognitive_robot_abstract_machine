@@ -725,25 +725,35 @@ class Match(
             **{**self._kwargs_, **kwargs}
         )
 
-    def answering(self, description: Match, answer: Any) -> Match[T]:
+    def answering(self, left_open: Union[Match, str], answer: Any) -> Match[T]:
         """
-        The same statement, with one of the descriptions it hands over answered.
+        The same statement, with one of the things it leaves open answered.
 
-        Everything else it says is left as it was, the conditions it states included, so
-        a statement is grown towards an answer one description at a time rather than
-        rebuilt from the part of it that happens to be ready.
+        A statement leaves something open in one of two ways: by handing over a
+        description of it, and by stating an attribute to nothing at all. Both are one
+        slot for whoever can answer it, so both are answered here.
 
-        :param description: The description it hands over, as it states it.
-        :param answer: What answers that description, to be stated in its place.
+        Everything else the statement says is left as it was -- the conditions it
+        states, and the domain it ranges over -- so a statement is grown towards an
+        answer one slot at a time rather than rebuilt from the part of it that happens
+        to be ready.
+
+        :param left_open: The description it hands over, as it states it, or the name of
+            the attribute it leaves unstated.
+        :param answer: What answers it, to be stated in its place.
         :raises DescriptionNotStated: If this statement hands that description over
             nowhere.
         """
+        if isinstance(left_open, str):
+            return self._restated(
+                self._where_conditions_, {**self._kwargs_, left_open: answer}
+            )
         stated = {
-            name: self._with_answer_in_the_place_of(value, description, answer)
+            name: self._with_answer_in_the_place_of(value, left_open, answer)
             for name, value in self._kwargs_.items()
         }
         if all(stated[name] is value for name, value in self._kwargs_.items()):
-            raise DescriptionNotStated(self, description)
+            raise DescriptionNotStated(self, left_open)
         return self._restated(self._where_conditions_, stated)
 
     @staticmethod

@@ -227,6 +227,33 @@ def test_a_statement_with_a_description_answered_states_the_answer_in_its_place(
     assert answered._kwargs_ == {"thing": CUBE_ON_THE_LID, "grip": ...}
 
 
+def test_a_statement_with_an_attribute_answered_states_the_answer_for_it():
+    """
+    An attribute stated to nothing at all is the other way a statement leaves something
+    open, so it is answered the same way a description it hands over is.
+    """
+    statement = an(TakingHoldOfSomethingFound)(thing=CUBE_ON_THE_LID, grip=...)
+
+    answered = statement.answering("grip", Grip.FROM_ABOVE)
+
+    assert answered._kwargs_ == {
+        "thing": CUBE_ON_THE_LID,
+        "grip": Grip.FROM_ABOVE,
+    }
+
+
+def test_a_statement_answered_over_the_domain_it_was_given_keeps_it():
+    """
+    What a statement ranges over is part of what it says, so answering one of its open
+    attributes leaves it ranging over the same things.
+    """
+    statement = a(Sighting)(label=...).from_([CUBE_ON_THE_LID, DISK_ON_THE_LID])
+
+    answered = statement.answering("label", DISK_ON_THE_LID.label)
+
+    assert list(answered._evaluate_natively_()) == [DISK_ON_THE_LID]
+
+
 def test_a_statement_keeps_the_conditions_it_states_once_a_description_is_answered(
     choice: BackendChoice,
 ):
