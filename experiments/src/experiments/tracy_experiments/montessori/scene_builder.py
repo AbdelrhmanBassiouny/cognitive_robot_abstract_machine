@@ -12,6 +12,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from semantic_digital_twin.robots.robot_parts import AbstractRobot
+from semantic_digital_twin.semantic_annotations.semantic_annotations import Table
 from semantic_digital_twin.spatial_types import Point3
 from semantic_digital_twin.world import World
 from typing_extensions import Type
@@ -95,6 +96,16 @@ class TracyOnItsOwnTable(MontessoriWorldBuilder):
     """
 
     def build(self, robot_type: Type[AbstractRobot]) -> World:
+        """
+        Build the scene on Tracy's own table.
+
+        Tracy's root body is its table, so once Tracy is mounted that body is annotated
+        as the scene's :class:`~semantic_digital_twin.semantic_annotations.semantic_annotations.Table`,
+        which is where the scenarios look the table up.
+
+        :param robot_type: The robot the scenario runs on, as its own binding names it.
+        :return: The world holding the scene.
+        """
         tracy = parse_tracy()
         mount_position, self._table_top_z = tracy_table_mount_position(
             tracy, x=TRACY_MOUNT_X, y=TRACY_MOUNT_Y
@@ -104,7 +115,13 @@ class TracyOnItsOwnTable(MontessoriWorldBuilder):
             table_top_z=self._table_top_z,
             pieces=self.piece_set,
         )
-        montessori.mount_stationary_robot(robot_type, tracy, mount_position, 0.0)
+        mounted = montessori.mount_stationary_robot(
+            robot_type, tracy, mount_position, 0.0
+        )
+        with montessori.world.modify_world():
+            montessori.world.add_semantic_annotation(
+                Table(name=mounted.root.name, root=mounted.root)
+            )
         return montessori.world
 
     @property

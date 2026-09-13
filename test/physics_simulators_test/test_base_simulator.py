@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 
+import gc
 import time
+import weakref
 from typing import List, Optional
 
 import pytest
@@ -275,3 +277,21 @@ class TestBaseSimulator:
         assert f"Function {function_2.__name__} is already defined" in str(
             exc_info.value
         )
+
+
+# %% a simulator nobody holds any more
+
+
+def test_a_simulator_that_was_never_stopped_is_collected():
+    """
+    A simulator runs its shutdown when the interpreter exits, and must not be kept alive
+    by that arrangement: it reaches everything it simulates, so one left behind by a test
+    holds that test's world for the rest of the process.
+    """
+    simulator = BaseSimulator(False)
+    reference = weakref.ref(simulator)
+
+    del simulator
+    gc.collect()
+
+    assert reference() is None

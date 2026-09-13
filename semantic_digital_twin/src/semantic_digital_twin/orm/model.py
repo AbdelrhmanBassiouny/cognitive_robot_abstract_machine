@@ -26,6 +26,7 @@ from semantic_digital_twin.spatial_types.spatial_types import (
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.connections import Connection
 from semantic_digital_twin.world_description.degree_of_freedom import DegreeOfFreedom
+from semantic_digital_twin.world_description.inertial_properties import InertiaTensor
 from semantic_digital_twin.world_description.world_entity import (
     SemanticAnnotation,
     KinematicStructureEntity,
@@ -216,6 +217,36 @@ class HomogeneousTransformationMatrixMapping(
     @classmethod
     def required_pre_build_classes(cls) -> List[Type]:
         return [Quaternion, Point3]
+
+
+@dataclass(eq=False)
+class InertiaTensorMapping(AlternativeMapping[InertiaTensor]):
+    """
+    An inertia tensor stored as its six distinct components, since it is symmetric.
+    """
+
+    ixx: float
+    iyy: float
+    izz: float
+    ixy: float
+    ixz: float
+    iyz: float
+
+    @classmethod
+    def from_domain_object(cls, obj: InertiaTensor):
+        return cls(
+            ixx=obj.ixx,
+            iyy=obj.iyy,
+            izz=obj.izz,
+            ixy=obj.ixy,
+            ixz=obj.ixz,
+            iyz=obj.iyz,
+        )
+
+    def to_domain_object(self) -> InertiaTensor:
+        return InertiaTensor.from_values(
+            self.ixx, self.iyy, self.izz, self.ixy, self.ixz, self.iyz
+        )
 
 
 @dataclass(eq=False)

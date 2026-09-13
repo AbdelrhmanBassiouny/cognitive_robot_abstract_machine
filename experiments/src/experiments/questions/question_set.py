@@ -28,6 +28,7 @@ from experiments.questions.question import (
     QuestionedThings,
     RememberedThings,
     RequiredFact,
+    ScoredAgainstTheSceneAsSetUp,
 )
 from experiments.questions.working_memory import WorkingMemoryQuestion
 
@@ -68,12 +69,22 @@ class QuestionSet:
         """
         The questions put to what the robot holds right now.
 
+        A question scored against the scene as it was set up is left out where nobody
+        can say what it was set up to be, since the only other thing left to score it
+        against is the twin it is answered from.
+
         :param things: What this scene fills in for the questions about one thing.
         """
+        asked_at_all = [
+            question
+            for question in questions_of(WorkingMemoryQuestion)
+            if things.scene is not None
+            or not issubclass(question, ScoredAgainstTheSceneAsSetUp)
+        ]
         return cls(
             questions=[
                 asked
-                for question in questions_of(WorkingMemoryQuestion)
+                for question in asked_at_all
                 for asked in question.asked_of(things)
             ]
         )

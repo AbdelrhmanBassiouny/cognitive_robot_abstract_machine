@@ -146,6 +146,48 @@ class InertiaTensor(NPMatrix3x3):
             self.data, self.data.T, atol=1e-10
         ), "Inertia tensor must be symmetric"
 
+    @property
+    def ixx(self) -> float:
+        """
+        Moment of inertia about the x axis.
+        """
+        return float(self.data[0, 0])
+
+    @property
+    def iyy(self) -> float:
+        """
+        Moment of inertia about the y axis.
+        """
+        return float(self.data[1, 1])
+
+    @property
+    def izz(self) -> float:
+        """
+        Moment of inertia about the z axis.
+        """
+        return float(self.data[2, 2])
+
+    @property
+    def ixy(self) -> float:
+        """
+        Product of inertia in the xy plane.
+        """
+        return float(self.data[0, 1])
+
+    @property
+    def ixz(self) -> float:
+        """
+        Product of inertia in the xz plane.
+        """
+        return float(self.data[0, 2])
+
+    @property
+    def iyz(self) -> float:
+        """
+        Product of inertia in the yz plane.
+        """
+        return float(self.data[1, 2])
+
     @classmethod
     def from_values(
         cls, ixx: float, iyy: float, izz: float, ixy: float, ixz: float, iyz: float
