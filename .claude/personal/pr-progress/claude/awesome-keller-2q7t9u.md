@@ -38,8 +38,16 @@ because #355's CI is not green.
 
 #355 CI: 16 failures, all in experiments. Four are red on the base branch too; six more
 follow from the same camera error (#286 is its fix, against the same base); five are the
-krrood `apply_mapping_on_external_root` bare-`next` bug, fixed as its own bug PR #362 off
-main (`NoValueAlongAccessPath`) - which makes the failure legible, not green.
+insertion ones, now addressed by two bug PRs off main, both merged into #355:
+- #362 `NoValueAlongAccessPath` - the bare `next` in
+  `MappedVariable.apply_mapping_on_external_root` turned into
+  `RuntimeError: generator raised StopIteration`.
+- #364 `Symbolic.names_one_element` - a StrEnum member was iterated character by
+  character, so `Value cylinder not in domain` with cylinder in the domain. Reproduced
+  locally on a board built from measurements (no robot needed):
+  `a(InsertionAction)(target=<hole>, arm=...)` now evaluates under ProbabilisticBackend.
+
+The remaining ten are the camera; #286 owns that, against the same base.
 
 ## Stages 2-4 - not started
 
