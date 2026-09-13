@@ -12,6 +12,8 @@ from pathlib import Path
 
 import numpy as np
 import pytest
+from dataclasses import dataclass
+
 from typing_extensions import Dict
 
 from segmind.datastructures.events import (
@@ -33,7 +35,10 @@ from experiments.tracy_experiments.pick_and_place_action import (
     PickUpActionMujoco,
     PlaceActionMujoco,
 )
+from experiments.tracy_experiments.equipment import TRACY_MOUNT_ROOT_NAME
 from experiments.tracy_experiments.pickup.pickup_demo_mujoco import (
+    CAMERA_CALIBRATION_CAPTURE,
+    CAMERA_LINK_NAME,
     CAMERA_VIDEO_RESOLUTION,
     LAB_BOARD_CENTRE,
     LAB_PIECE_PLACES,
@@ -42,7 +47,16 @@ from experiments.tracy_experiments.pickup.pickup_demo_mujoco import (
     Shove,
     SimulatedLab,
     SimulatedPickupDemo,
+    camera_on_tracy,
 )
+from experiments.montessori.perception.simulated_camera import SimulatedCamera
+from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
+from semantic_digital_twin.spatial_types.spatial_types import (
+    HomogeneousTransformationMatrix,
+)
+from semantic_digital_twin.world import World
+from semantic_digital_twin.world_description.connections import FixedConnection
+from semantic_digital_twin.world_description.world_entity import Body
 
 from .dataset.montessori_capture_truths import CAPTURE_TRUTHS
 
@@ -121,6 +135,89 @@ def test_the_camera_stands_where_the_captures_camera_stood() -> None:
     assert lab.camera.height == captured.color.shape[0]
     assert lab.camera.intrinsics.focal_length_y == pytest.approx(
         captured.intrinsics.focal_length_y, abs=0.5
+    )
+
+
+# %% the camera on a mount the description states wherever it likes
+
+
+@dataclass(frozen=True)
+class StatedCameraMount:
+    """
+    Where a description states Tracy's ``camera_link``, in Tracy's own frame.
+    """
+
+    x: float
+    """
+    How far in front of Tracy's own frame the link stands, in metres.
+    """
+
+    y: float
+    """
+    How far to Tracy's left the link stands, in metres.
+    """
+
+    z: float
+    """
+    How far above Tracy's own frame the link stands, in metres.
+    """
+
+    pitch: float
+    """
+    How far the link is tipped towards the table, in radians.
+    """
+
+    def world_holding_it(self) -> World:
+        """
+        :return: A world holding Tracy's root and its ``camera_link``, and nothing else.
+        """
+        world = World()
+        with world.modify_world():
+            world.add_kinematic_structure_entity(Body(name=TRACY_MOUNT_ROOT_NAME))
+        with world.modify_world():
+            world.add_connection(
+                FixedConnection(
+                    parent=world.root,
+                    child=Body(name=PrefixedName(CAMERA_LINK_NAME)),
+                    parent_T_connection_expression=(
+                        HomogeneousTransformationMatrix.from_xyz_rpy(
+                            x=self.x,
+                            y=self.y,
+                            z=self.z,
+                            pitch=self.pitch,
+                            reference_frame=world.root,
+                        )
+                    ),
+                )
+            )
+        return world
+
+
+@pytest.mark.parametrize(
+    "mount",
+    [
+        StatedCameraMount(x=0.41, y=-0.02, z=1.81, pitch=1.38),
+        StatedCameraMount(x=0.29, y=0.0, z=0.89, pitch=1.26),
+    ],
+    ids=["as_one_description_states_it", "as_another_does"],
+)
+def test_the_camera_stands_where_the_capture_says_wherever_its_mount_is_stated(
+    mount: StatedCameraMount,
+) -> None:
+    """
+    A recalibration of Tracy's description moves ``camera_link``, and the camera still
+    stands where the capture recorded the real one: the offset it hangs at is worked out
+    against the description in hand rather than stated for one of them.
+    """
+    world = mount.world_holding_it()
+
+    camera = SimulatedCamera(
+        world=world, camera=camera_on_tracy(world), reference_frame=world.root
+    )
+
+    assert camera.reference_frame_T_camera == pytest.approx(
+        SceneCapture.load(CAMERA_CALIBRATION_CAPTURE).reference_frame_T_camera,
+        abs=CAMERA_POSE_TOLERANCE,
     )
 
 
