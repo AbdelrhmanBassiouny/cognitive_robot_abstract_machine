@@ -2529,3 +2529,56 @@ what is seen have no event to reproduce and keep `apply` plus the person. #319 (
 motions recorded) was merged in from the fork on the way, clean; its `RecordedTrial`
 change needed the ORM regenerated before the episode tests passed here.
 
+## #265: the reach target, a Giskard collision stall, and the slip watch dying on a rejected re-close (2026-09-13)
+
+**Session.** https://claude.ai/code/session_017LDMjNhApJCWTz5o9QHuTR
+
+**The task, from the developer's own log of a real run sorting the rectangular
+prism.** The gripper's closes stalled correctly (expected -- it means the fingers
+stopped on the piece), the run then hung on `retract_and_park` and had to be
+interrupted, and a `GripperCommandRejected` traceback printed from a background
+thread. The robot was off; told not to run the real demo, so every fix below is
+reproduced with mimics or reasoned from the traceback rather than run on hardware.
+
+**Found and fixed, `efa53b147a`.** Three defects, not one:
+
+- `_SortingRig.sort`'s `ReachAction.object_designator` was the piece's bare `Body`,
+  which has no `.root`; `ReachAction` reads `.root` and the semantic type off its
+  designator, so it had to be the piece (`_reach_action_for`). This one was already
+  fixed, uncommitted, in the working tree at session start -- from an earlier, since-
+  cleared session on this same branch; verified against `ReachAction`'s own source
+  before keeping it.
+- `ExecutionEnvironment(execution_type=ExecutionType.REAL, ...)` now runs with
+  `collision_avoidance=False`. Also already uncommitted at session start. Since it
+  changes real-robot safety behaviour and neither its author nor its reasoning could
+  be verified from the tree, it was held out and asked about rather than assumed;
+  the developer said to include it. Giskard's collision-aware planning is the likely
+  cause of the hang on `retract_and_park`'s motion, which follows a `ReAttachNode`
+  putting the piece's collision geometry back under the world root right after a
+  grasp.
+- `LiveGraspGuard.watch()` re-sends the *same* re-close setpoint on every poll while
+  a piece is carried. The first poll genuinely moves the fingers further and stalls;
+  every poll after that asks for a position they are already at, and the Robotiq
+  controller answered that with neither `reached_goal` nor `stalled` set, which
+  `RobotiqGripperController` raises as `GripperCommandRejected`. Since `watch()` runs
+  as a bare `threading.Thread` target, the exception killed the slip-watch thread
+  silently (a stderr traceback only, easy to miss live) -- abandoning the piece for
+  the rest of the carry, on essentially every grasp held past one poll. `poll()` now
+  catches `RobotiqGripperError` and keeps polling: the knuckle position
+  `SlipDetector` classifies comes from the joint-state topic, not from the re-close
+  command's own result.
+
+**Tests.** `test_a_rejected_reclose_does_not_end_the_slip_watch` (new) reproduces the
+exact traceback text against the pre-fix code, with a mimic gripper controller that
+rejects a repeated re-close the way the real driver did on the rectangular prism.
+`test_tracy_pickup_demo_real.py`, `test_tracy_montessori_gripper_feedback.py`,
+`test_tracy_montessori_grasp_widths.py` and `test_tracy_montessori_event_dashboard.py`
+all pass (37 tests). Merged a same-branch remote advance
+(`62e046bf95`, the episode-film-memory work, no overlapping files) before pushing;
+clean merge, re-tested after.
+
+**Open for the developer.** Neither the collision-avoidance change nor the reach fix
+was exercised against the robot this session (it was off) -- both are reasoned fixes
+plus plan-construction/unit tests, not a confirmed cure for the `retract_and_park`
+hang. Next real run is what actually tells.
+
