@@ -2,6 +2,9 @@
 Which hole a piece goes through is knowledge about this board rather than geometry
 anything can be read off, so it is concluded by rules stated over the piece -- and a
 piece the rules get wrong is answered by adding a rule.
+
+Which piece is read off the statement the description of the hole is handed over by,
+since that is what says what the hole is for.
 """
 
 from __future__ import annotations
@@ -19,10 +22,12 @@ from experiments.montessori.semantics import (
     ShapeSortingBoard,
     ShapeSortingHole,
 )
-from experiments.open_slots.holes import Admits, HoleRulesBackend
-from krrood.entity_query_language.factories import a
+from experiments.open_slots.holes import HoleRulesBackend
+from krrood.entity_query_language.factories import a, an
 from krrood.entity_query_language.query.match import Match
 from semantic_digital_twin.spatial_types.spatial_types import Pose
+
+from .dataset.putting_a_piece_through import PuttingAPieceThrough
 
 LID_AT = (0.8, 0.1, 0.96)
 """
@@ -68,18 +73,23 @@ def hole_wanted_for(piece: MontessoriShape, board: ShapeSortingBoard) -> Match:
     A statement asking for the hole one piece goes through, out of the ones the board
     has, with the shape of that hole left for the rules to conclude.
 
+    The hole is stated as the target of putting that piece through the board, which is
+    what says what the hole is wanted for; the description of the hole itself says
+    nothing about the piece.
+
     :param piece: The piece being sorted.
     :param board: The board it is sorted into.
     """
     hole = a(ShapeSortingHole)(shape_category=...).from_(board.apertures)
-    return hole.where(Admits(hole, piece))
+    an(PuttingAPieceThrough)(piece=piece.root, hole=hole)
+    return hole
 
 
 # %% what this backend says it can answer
 
 
 def test_a_statement_asking_for_the_hole_one_piece_goes_through(scene: ImaginedWorld):
-    backend = HoleRulesBackend()
+    backend = HoleRulesBackend(world=scene.world)
 
     assert backend.capability(hole_wanted_for(piece_of(scene), board_of(scene))) is True
 
@@ -89,17 +99,18 @@ def test_a_statement_that_already_says_the_shape_of_the_hole(scene: ImaginedWorl
     There is nothing left for the rules to conclude, so the hole is selected out of the
     world rather than decided here.
     """
-    backend = HoleRulesBackend()
+    backend = HoleRulesBackend(world=scene.world)
     board = board_of(scene)
     hole = a(ShapeSortingHole)(shape_category=MontessoriShapeCategory.CUBE).from_(
         board.apertures
     )
+    an(PuttingAPieceThrough)(piece=piece_of(scene).root, hole=hole)
 
-    assert backend.capability(hole.where(Admits(hole, piece_of(scene)))) is False
+    assert backend.capability(hole) is False
 
 
 def test_a_statement_naming_no_piece_at_all(scene: ImaginedWorld):
-    backend = HoleRulesBackend()
+    backend = HoleRulesBackend(world=scene.world)
 
     statement = a(ShapeSortingHole)(shape_category=...).from_(board_of(scene).apertures)
 
@@ -110,7 +121,7 @@ def test_a_statement_naming_no_piece_at_all(scene: ImaginedWorld):
 
 
 def test_the_hole_a_piece_goes_through_is_the_one_shaped_like_it(scene: ImaginedWorld):
-    backend = HoleRulesBackend()
+    backend = HoleRulesBackend(world=scene.world)
     piece = piece_of(scene)
 
     answers = list(backend.evaluate(hole_wanted_for(piece, board_of(scene))))
@@ -119,7 +130,7 @@ def test_the_hole_a_piece_goes_through_is_the_one_shaped_like_it(scene: Imagined
 
 
 def test_the_hole_it_answers_with_is_one_the_board_has(scene: ImaginedWorld):
-    backend = HoleRulesBackend()
+    backend = HoleRulesBackend(world=scene.world)
     board = board_of(scene)
 
     answers = list(backend.evaluate(hole_wanted_for(piece_of(scene), board)))
@@ -133,13 +144,48 @@ def test_the_hole_it_answers_with_is_one_the_board_has(scene: ImaginedWorld):
 def test_a_piece_the_rules_get_wrong_is_answered_by_adding_a_rule(scene: ImaginedWorld):
     """
     Which shape of hole a piece belongs in is knowledge, so it is corrected by stating
-    the case the rules got wrong rather than by rewriting the rules already stated.
+    the case the rules got wrong rather than by rewriting the rules already stated -- and
+    the statement is answered by the hole the correction names from then on.
     """
-    backend = HoleRulesBackend()
+    backend = HoleRulesBackend(world=scene.world)
     piece = piece_of(scene)
     board = board_of(scene)
 
     backend.rules.add_rule(piece, MontessoriShapeCategory.RECTANGULAR_PRISM)
 
-    assert backend.rules.shape_for(piece) is MontessoriShapeCategory.RECTANGULAR_PRISM
-    assert list(backend.evaluate(hole_wanted_for(piece, board))) == []
+    answers = list(backend.evaluate(hole_wanted_for(piece, board)))
+    assert [hole.shape_category for hole in answers] == [
+        MontessoriShapeCategory.RECTANGULAR_PRISM
+    ]
+
+
+# %% which piece a statement is handed over for
+
+
+def test_the_piece_is_read_off_the_statement_the_hole_is_stated_inside(
+    scene: ImaginedWorld,
+):
+    """
+    The description of the hole says nothing about any piece; what it is for is what the
+    statement handing it over says.
+    """
+    backend = HoleRulesBackend(world=scene.world)
+    piece = piece_of(scene)
+    hole = a(ShapeSortingHole)(shape_category=...).from_(board_of(scene).apertures)
+    an(PuttingAPieceThrough)(piece=piece.root, hole=hole)
+
+    assert backend.piece_the_hole_is_wanted_for(hole) is piece
+
+
+def test_a_statement_naming_the_piece_itself_says_so_just_as_well(
+    scene: ImaginedWorld,
+):
+    """
+    A statement can name the piece as the world holds it rather than the body it stands
+    on, and it is the same piece either way.
+    """
+    backend = HoleRulesBackend(world=scene.world)
+    piece = piece_of(scene)
+
+    assert backend.piece_standing_for(piece) is piece
+    assert backend.piece_standing_for(piece.root) is piece

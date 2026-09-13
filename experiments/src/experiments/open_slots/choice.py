@@ -32,14 +32,15 @@ def backends_for(looking: MontessoriPerceptionBackend, world: World) -> BackendC
 
     :param looking: The backend that answers by looking at the scene.
     :param world: The world the robot plans in, which is also where a look's findings
-        are stood.
+        are stood, and which the rules read to answer which piece a statement naming a
+        body is about.
     :return: The choice to run the plan with.
     """
     return BackendChoice(
         backends=[
             looking,
             WorldBackend(world=world),
-            HoleRulesBackend(),
+            HoleRulesBackend(world=world),
             ProbabilisticBackend(),
         ]
     )

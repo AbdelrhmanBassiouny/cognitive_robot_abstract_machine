@@ -30,12 +30,14 @@ from experiments.montessori.semantics import (
 )
 from experiments.montessori.world import BOARD_SCALE
 from experiments.open_slots.choice import backends_for
-from experiments.open_slots.holes import Admits, HoleRulesBackend
+from experiments.open_slots.holes import HoleRulesBackend
 from experiments.open_slots.world import WorldBackend
 from krrood.entity_query_language.backends import BackendChoice, ProbabilisticBackend
 from krrood.entity_query_language.exceptions import NoBackendAnswers
-from krrood.entity_query_language.factories import a, entity, variable
+from krrood.entity_query_language.factories import a, an, entity, variable
 from semantic_digital_twin.spatial_types.spatial_types import Pose
+
+from .dataset.putting_a_piece_through import PuttingAPieceThrough
 
 LID_AT = (0.8, 0.1, 0.96)
 """
@@ -106,9 +108,9 @@ def test_the_hole_a_piece_goes_through_is_concluded_by_rules(
     choice: BackendChoice, scene: ImaginedWorld
 ):
     hole = a(ShapeSortingHole)(shape_category=...).from_(board_of(scene).apertures)
-    statement = hole.where(Admits(hole, piece_of(scene)))
+    an(PuttingAPieceThrough)(piece=piece_of(scene).root, hole=hole)
 
-    assert isinstance(choice.backend_for(statement), HoleRulesBackend)
+    assert isinstance(choice.backend_for(hole), HoleRulesBackend)
 
 
 def test_how_to_take_hold_of_a_piece_is_sampled(choice: BackendChoice):
