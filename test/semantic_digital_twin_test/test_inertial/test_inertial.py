@@ -54,6 +54,14 @@ moments_and_axes_values = [
 
 
 class TestComponentsAndAssembly:
+    def test_inertia_tensor_components_are_read_by_name(self):
+        tensor = InertiaTensor.from_values(
+            ixx=1.0, iyy=2.0, izz=3.0, ixy=0.1, ixz=0.2, iyz=0.3
+        )
+
+        assert (tensor.ixx, tensor.iyy, tensor.izz) == (1.0, 2.0, 3.0)
+        assert (tensor.ixy, tensor.ixz, tensor.iyz) == (0.1, 0.2, 0.3)
+
     def test_principal_moments_properties(self):
         for moments_values, _ in moments_and_axes_values:
             m = PrincipalMoments.from_values(*moments_values)

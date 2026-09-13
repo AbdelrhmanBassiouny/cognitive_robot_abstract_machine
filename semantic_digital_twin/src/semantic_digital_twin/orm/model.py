@@ -234,8 +234,14 @@ class InertiaTensorMapping(AlternativeMapping[InertiaTensor]):
 
     @classmethod
     def from_domain_object(cls, obj: InertiaTensor):
-        [[ixx, ixy, ixz], [_, iyy, iyz], [_, _, izz]] = obj.data.tolist()
-        return cls(ixx=ixx, iyy=iyy, izz=izz, ixy=ixy, ixz=ixz, iyz=iyz)
+        return cls(
+            ixx=obj.ixx,
+            iyy=obj.iyy,
+            izz=obj.izz,
+            ixy=obj.ixy,
+            ixz=obj.ixz,
+            iyz=obj.iyz,
+        )
 
     def to_domain_object(self) -> InertiaTensor:
         return InertiaTensor.from_values(
