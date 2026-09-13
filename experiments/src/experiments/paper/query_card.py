@@ -48,7 +48,11 @@ from experiments.paper.pose_change import (
     standing_pose,
 )
 from experiments.paper.run_timeline import RunTimeline
-from experiments.paper.scene import PointOfView, SceneRender
+from experiments.paper.scene import (
+    PointOfView,
+    SceneRender,
+    free_joints_below_a_body,
+)
 from experiments.paper.run_plan import ObjectIdentity, SameName, plans_of
 from experiments.paper.timeline import EventTimeline
 from experiments.questions.question import Question, objects_of_the_scene
@@ -64,6 +68,7 @@ from semantic_digital_twin.world import World
 from semantic_digital_twin.spatial_types.spatial_types import (
     HomogeneousTransformationMatrix,
 )
+from semantic_digital_twin.world_description.connections import Connection6DoF
 from semantic_digital_twin.world_description.world_entity import (
     Body,
     KinematicStructureEntity,
@@ -194,6 +199,44 @@ class EpisodeKeptNoWorldError(DataclassException):
             "A run keeps its world as it records, so an episode recorded before the run "
             "was asked for one has rows but nothing to draw. Record the episode again, "
             "or write only the cards whose panels do not show the twin."
+        )
+
+
+@dataclass
+class WorldCannotBeSimulatedError(DataclassException):
+    """
+    Raised when a card is asked to draw a scene of a kept world no simulation can be
+    built from: a piece hangs below a body by a free joint, which a simulation places at
+    its top level only.
+    """
+
+    episode_identifier: str
+    """
+    The episode that was asked.
+    """
+
+    connections: List[Connection6DoF]
+    """
+    The free joints that hang below a body.
+    """
+
+    def error_message(self) -> str:
+        return (
+            "Episode %s kept a world in which %s hang(s) below a body by a free joint, "
+            "so no simulation can be built to draw its scene."
+            % (
+                self.episode_identifier,
+                ", ".join(
+                    str(connection.child.name) for connection in self.connections
+                ),
+            )
+        )
+
+    def suggest_correction(self) -> str:
+        return (
+            "A run that ends holding a piece keeps the piece attached to the gripper. "
+            "Draw the scene from a world of the run in which nothing is held, or write "
+            "only the cards whose panels do not show the twin."
         )
 
 
@@ -359,9 +402,15 @@ class QueryCard(ABC):
 
         :param trial: The trial whose episode's world is read.
         :raises EpisodeKeptNoWorldError: If the episode kept no world.
+        :raises WorldCannotBeSimulatedError: If no simulation can be built from it.
         """
         if trial.episode.world is None:
             raise EpisodeKeptNoWorldError(episode_identifier=trial.episode.identifier)
+        hanging = free_joints_below_a_body(trial.episode.world)
+        if hanging:
+            raise WorldCannotBeSimulatedError(
+                episode_identifier=trial.episode.identifier, connections=hanging
+            )
         return trial.episode.world
 
     # %% what this card's files are called
@@ -1183,10 +1232,11 @@ class QueryCardSet:
         trials one inside that, so a corpus of runs is written in one pass without any of
         them writing over another.
 
-        An episode that kept no world has nothing a scene panel can draw, and is passed
-        over rather than stopping every other episode's cards: the paper's figures are
-        regenerated from the whole database, episodes recorded before runs kept their
-        world included.
+        An episode that kept no world has nothing a scene panel can draw, and one whose
+        kept world no simulation can be built from cannot have its scene drawn either;
+        both are passed over rather than stopping every other episode's cards: the
+        paper's figures are regenerated from the whole database, episodes recorded
+        before runs kept their world included.
 
         :param trials: The trials to draw, of however many episodes.
         :param output_directory: Where the episodes' directories go, created if they are
@@ -1201,6 +1251,15 @@ class QueryCardSet:
             if episode.world is None:
                 logger.warning(
                     "%s", EpisodeKeptNoWorldError(episode_identifier=episode.identifier)
+                )
+                continue
+            hanging = free_joints_below_a_body(episode.world)
+            if hanging:
+                logger.warning(
+                    "%s",
+                    WorldCannotBeSimulatedError(
+                        episode_identifier=episode.identifier, connections=hanging
+                    ),
                 )
                 continue
             episode_directory = output_directory / episode.identifier

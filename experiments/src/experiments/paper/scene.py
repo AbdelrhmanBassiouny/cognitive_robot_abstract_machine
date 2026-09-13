@@ -37,6 +37,7 @@ from semantic_digital_twin.spatial_types.spatial_types import (
 )
 from semantic_digital_twin.mixin import SimulatorAdditionalProperty
 from semantic_digital_twin.world import World
+from semantic_digital_twin.world_description.connections import Connection6DoF
 from semantic_digital_twin.world_description.geometry import Color
 from semantic_digital_twin.world_description.world_entity import (
     Body,
@@ -146,6 +147,25 @@ class NothingToDrawError(DataclassException):
             "Render an episode whose world was kept, or hand SceneRender a camera of "
             "its own so it does not have to place one around what the world holds."
         )
+
+
+# %% a world one simulation cannot be built from
+
+
+def free_joints_below_a_body(world: World) -> List[Connection6DoF]:
+    """
+    The free joints of a world that hang below a body rather than the world's root,
+    which a simulation cannot be built with: MuJoCo places a free joint at the top level
+    only. A piece a run ended holding is attached to the gripper that way.
+
+    :param world: The world to read.
+    """
+    return [
+        connection
+        for connection in world.connections
+        if isinstance(connection, Connection6DoF)
+        and connection.parent is not world.root
+    ]
 
 
 # %% where a scene is looked at from
