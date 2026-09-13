@@ -51,3 +51,15 @@ Plan: make the query cards of the simulated corpus right.
 - [x] same for #349/#352 (user asked): #349 fast-forwarded to 1bcef7d49f (its commits were
       already in #265); #352 merge 3287e8f054; cascaded #353 0010d7dc63 and #356 996e0a5af7
       (both empty-diff merges, trees unchanged). Descriptions of 349/352/353 got CI notes.
+- [x] asking finished 22:39 (record exit 0, 75 episodes, 3750 scored rows); first figures run
+      exit 1 at 22:39:57: recall_every_trial died on REAL episode 2f370626 (recorded 22:00 by
+      #265's latest real demo in another process; its world's 65 robot link meshes sit in a
+      vanished /tmp/semantic_digital_twin_meshes_<pid> root -- writer bug outside this stack).
+      Fix ea28d13aca: LongTermMemory.recall_every_readable_trial passes such episodes over with
+      KeptWorldCannotBeReadError; generate_paper_figures.py uses it; 2 tests; pushed, #356
+      description updated. Figures relaunched ~23:05 (scratchpad/figures_again.sh ->
+      figures_rerecorded_2026-09-13_run2.log; status file gets "figures exit N"/"figures done").
+      A second such REAL episode 6ffe9ec2 (pid 1175127) appeared meanwhile -- someone is
+      recording on the robot right now.
+- [ ] when figures done: check a re-recorded episode's scene card (idle arm parked, film frames
+      Tracy's table), final pg_dump + figures backup, report exit code and any Traceback.
