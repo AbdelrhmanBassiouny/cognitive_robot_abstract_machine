@@ -20,6 +20,7 @@ checked again, which is the state this started from.
 
 from __future__ import annotations
 
+import sys
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from enum import StrEnum
@@ -221,23 +222,36 @@ class PassedChecks:
         Answered with the set as it now stands rather than in place, so a second write in
         the same run does not ask the fork to delete a reference the first one removed.
 
+        A fork that refuses the write costs the reuse and nothing else: the record is an
+        optimisation, so a credential that may read the fork but not write this
+        namespace has to leave the rebuild running rather than end it. Said on standard
+        error, since a rebuild silently paying for a full matrix every run is one nobody
+        can explain.
+
         :param git: The runner to push through.
         :param remote: The fork remote.
         :param subject: What kind of thing passed.
         :param key: The tree or commit it passed over.
         :param commit: A commit to point the reference at, so the record names something
             the fork can still resolve.
-        :return: What the fork now holds.
+        :return: What the fork now holds, unchanged when it refused the write.
         """
         written = PassRecord(subject=subject, key=key, recorded_on=self.read_on)
         expired = self.expired
-        git.run(
+        pushed = git.attempt(
             "push",
             "--force",
             remote,
             f"{commit}:{written.reference}",
             *(f":{stale.reference}" for stale in expired),
         )
+        if not pushed.succeeded:
+            print(
+                f"{remote} refused a record under {RECORD_NAMESPACE}, so this pass is "
+                f"not remembered: {pushed.error_output}",
+                file=sys.stderr,
+            )
+            return self
         return PassedChecks(
             records=(
                 *(record for record in self.records if record not in expired),

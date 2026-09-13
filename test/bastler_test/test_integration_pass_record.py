@@ -235,6 +235,73 @@ def test_a_reference_that_is_not_a_record_reads_as_none(reference: str):
     assert PassRecord.named_by(reference) is None
 
 
+# %% a fork that will not accept a record
+
+
+def refuse_writes_into_the_record_namespace(checkout: ForkCheckout) -> None:
+    """
+    Make the fork reject every push into the record namespace, the way a credential
+    without the rights to write there is rejected.
+
+    :param checkout: The checkout whose fork to make refuse.
+    """
+    hook = checkout.fork_path / "hooks" / "pre-receive"
+    hook.write_text(
+        f"#!/bin/sh\nwhile read -r _ _ reference; do\n"
+        f'  case "$reference" in {RECORD_NAMESPACE}/*) exit 1 ;; esac\n'
+        f"done\nexit 0\n"
+    )
+    hook.chmod(0o755)
+
+
+def test_a_record_the_fork_refuses_leaves_the_run_going(fork_checkout: ForkCheckout):
+    """
+    A record is an optimisation, so a credential that may read the fork but not write
+    this namespace has to cost the reuse rather than the whole rebuild.
+    """
+    refuse_writes_into_the_record_namespace(fork_checkout)
+    head = fork_checkout.run_git("rev-parse", "HEAD")
+
+    after = records_on(fork_checkout).record(
+        fork_checkout.git, A_FORK_REMOTE, RecordedSubject.BUILD_TREE, A_TREE, head
+    )
+
+    assert after.records == ()
+
+
+def test_a_record_the_fork_refuses_is_not_claimed_to_hold(fork_checkout: ForkCheckout):
+    """
+    Claiming a refused write would let the next question be answered from a record the
+    fork never accepted, which is the one way a pass record can say something false.
+    """
+    refuse_writes_into_the_record_namespace(fork_checkout)
+    head = fork_checkout.run_git("rev-parse", "HEAD")
+
+    after = records_on(fork_checkout).record(
+        fork_checkout.git, A_FORK_REMOTE, RecordedSubject.BUILD_TREE, A_TREE, head
+    )
+
+    assert not after.holds(RecordedSubject.BUILD_TREE, A_TREE)
+    assert not records_on(fork_checkout).holds(RecordedSubject.BUILD_TREE, A_TREE)
+
+
+def test_a_fork_that_refuses_a_record_is_said_so_on_standard_error(
+    fork_checkout: ForkCheckout, capsys: pytest.CaptureFixture[str]
+):
+    """
+    Silently losing the reuse would leave a rebuild paying for a full matrix every run
+    with nothing saying why.
+    """
+    refuse_writes_into_the_record_namespace(fork_checkout)
+    head = fork_checkout.run_git("rev-parse", "HEAD")
+
+    records_on(fork_checkout).record(
+        fork_checkout.git, A_FORK_REMOTE, RecordedSubject.BUILD_TREE, A_TREE, head
+    )
+
+    assert RECORD_NAMESPACE in capsys.readouterr().err
+
+
 # %% publishing a build the record already answers for
 
 
