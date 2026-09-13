@@ -9,6 +9,7 @@ themselves does, so those tests are skipped where the run named no offscreen bac
 from __future__ import annotations
 
 import re
+from copy import deepcopy
 from dataclasses import replace
 from pathlib import Path
 
@@ -24,6 +25,7 @@ from experiments.paper.query_card import (
     TRIAL_DIRECTORY,
     EpisodeKeptNoWorldError,
     PickedUpRecentlyCard,
+    WorldCannotBeSimulatedError,
     QueryCardName,
     QueryCardSet,
     SideOfAnotherObjectCard,
@@ -41,7 +43,10 @@ from semantic_digital_twin.spatial_types.spatial_types import (
     HomogeneousTransformationMatrix,
 )
 from semantic_digital_twin.world import World
-from semantic_digital_twin.world_description.connections import FixedConnection
+from semantic_digital_twin.world_description.connections import (
+    Connection6DoF,
+    FixedConnection,
+)
 from semantic_digital_twin.world_description.geometry import Box, Color, Scale
 from semantic_digital_twin.world_description.shape_collection import ShapeCollection
 from semantic_digital_twin.world_description.world_entity import Body
@@ -354,6 +359,62 @@ def test_a_card_of_an_episode_that_kept_no_world_says_so(
     trial.episode.world = None
     with pytest.raises(EpisodeKeptNoWorldError):
         PickedUpRecentlyCard().write(trial, tmp_path)
+
+
+def held_freely_below_a_body(world: World) -> World:
+    """
+    The given scene with a third piece hanging below the other piece by a free joint,
+    the way a piece held in the gripper is attached when the world is kept.
+
+    :param world: The scene to hang the piece in.
+    """
+    held = piece("held")
+    with world.modify_world():
+        world.add_connection(
+            Connection6DoF.create_with_dofs(
+                world=world, parent=world.get_body_by_name(OTHER_NAME), child=held
+            )
+        )
+    return world
+
+
+def test_a_card_of_an_episode_holding_a_piece_freely_below_a_body_says_so(
+    trial: RecordedTrial, tmp_path: Path
+) -> None:
+    """
+    A simulation is built with free joints at its top level only, so a kept world in
+    which a piece hangs below the gripper cannot be drawn, which is said rather than
+    left to the simulator's compiler.
+    """
+    held_freely_below_a_body(trial.episode.world)
+
+    with pytest.raises(WorldCannotBeSimulatedError):
+        PickedUpRecentlyCard().write(trial, tmp_path)
+
+
+@needs_a_renderer
+def test_an_episode_holding_a_piece_freely_below_a_body_is_passed_over_when_a_corpus_is_written(
+    trial: RecordedTrial, tmp_path: Path
+) -> None:
+    """
+    An episode that ended holding a piece must not stop every other episode's cards.
+    """
+    holding = replace(
+        trial,
+        episode=replace(
+            trial.episode,
+            identifier="holding-a-piece",
+            world=held_freely_below_a_body(deepcopy(trial.episode.world)),
+        ),
+    )
+
+    written = QueryCardSet.for_the_paper().write_every_episode(
+        [holding, trial], tmp_path
+    )
+
+    assert {card.markup_path.parent.parent.name for card in written} == {
+        trial.episode.identifier
+    }
 
 
 # %% writing the card out
