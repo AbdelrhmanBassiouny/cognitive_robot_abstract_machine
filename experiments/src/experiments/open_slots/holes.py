@@ -8,9 +8,11 @@ the shape of the hole is concluded by a tree of ripple-down rules stated over th
 a piece the rules get wrong is answered by adding a rule rather than by editing the ones
 already stated, and the tree can be read as well as run.
 
-What the rules conclude is narrowed further by the statement itself: the hole is then
-selected out of the ones the board actually has, and the relation the statement asserts
-is read again over each candidate, so the rules choose but never decide alone.
+Which piece the hole is wanted for is read off the statements the description is handed
+over by -- a hole described inside an insertion of a piece is the hole that piece goes
+through -- so nothing has to be added to the statement for these rules' sake. What the
+rules conclude is then narrowed by measurement: of the board's holes of that shape, the
+ones the piece is small enough to pass through, closest fit first.
 """
 
 from __future__ import annotations
@@ -24,11 +26,7 @@ from experiments.montessori.semantics import (
     MontessoriShapeCategory,
     ShapeSortingHole,
 )
-from krrood.entity_query_language.backends import (
-    QueryBackend,
-    object_stated_by,
-    relations_stated_in,
-)
+from krrood.entity_query_language.backends import QueryBackend
 from krrood.entity_query_language.evaluable import Evaluable
 from krrood.entity_query_language.factories import (
     ConditionType,
@@ -37,7 +35,6 @@ from krrood.entity_query_language.factories import (
     alternative,
     entity,
 )
-from krrood.entity_query_language.predicate import Triple
 from krrood.entity_query_language.query.match import Match
 from krrood.entity_query_language.query.query import Entity
 from krrood.entity_query_language.rdr.answer_vocabulary import AnswerName
@@ -51,53 +48,13 @@ from krrood.entity_query_language.rdr.serialization import NullModelSaver
 from krrood.entity_query_language.rdr.single_class import EQLSingleClassRDR
 from krrood.entity_query_language.utils import T
 from krrood.entity_query_language.verbalization.vocabulary.english import Directive
-from krrood.entity_query_language.verbalization.vocabulary.parts_of_speech import (
-    Noun,
-    Verb,
-    clause,
-)
+from semantic_digital_twin.world import World
+from semantic_digital_twin.world_description.world_entity import Body
 
 SHAPE_STATED_BY_THE_HOLE = "shape_category"
 """
 The attribute of a hole the rules conclude, by the name the hole gives it.
 """
-
-# %% what a statement says a hole is wanted for
-
-
-@dataclass(eq=False)
-class Admits(Triple):
-    """
-    Asserts that a hole takes one piece.
-
-    Stated about the hole rather than about the piece, since the hole is what is being
-    looked for and the piece is what is already known.
-    """
-
-    hole: ShapeSortingHole
-    """
-    The hole the piece goes through.
-    """
-
-    piece: MontessoriShape
-    """
-    The piece that goes through it.
-    """
-
-    @property
-    def subject(self) -> ShapeSortingHole:
-        return self.hole
-
-    @property
-    def object(self) -> MontessoriShape:
-        return self.piece
-
-    def __call__(self) -> bool:
-        return self.piece.fits_through(self.hole)
-
-    @classmethod
-    def _verbalization_fragment_(cls, fields):
-        return clause(Noun(fields["hole"]), Verb("admit"), Noun(fields["piece"]))
 
 
 # %% what the rules read
@@ -240,7 +197,8 @@ class HoleShapeRules:
 class HoleRulesBackend(QueryBackend):
     """
     Answers a statement about the hole a piece goes through, by concluding the shape of
-    that hole from the piece and selecting the board's holes of that shape.
+    that hole from the piece the statement is handed over for, and selecting the board's
+    holes of that shape the piece is small enough to pass through.
 
     Neither of the two kinds of backend a statement usually meets. Nothing is
     constructed -- the board's holes are things the world already holds -- but the
@@ -254,6 +212,15 @@ class HoleRulesBackend(QueryBackend):
     The hole is found among the ones the board has, so this reads as *"Find …"*.
     """
 
+    world: World = field(repr=False)
+    """
+    The world holding the pieces, read to answer which piece a statement naming a body
+    is about.
+
+    Never shown when this backend is: a world prints as everything it holds, which is
+    the whole scene wherever a backend is named in a message.
+    """
+
     rules: HoleShapeRules = field(default_factory=HoleShapeRules)
     """
     What says which shape of hole a piece goes through.
@@ -261,9 +228,9 @@ class HoleRulesBackend(QueryBackend):
 
     def capability(self, statement: Evaluable) -> ConditionType:
         """
-        A statement about a hole whose shape it leaves open, said to be for one piece
-        the statement names: the rules conclude the shape from that piece, so a
-        statement naming no piece is one they have nothing to conclude from.
+        A statement about a hole whose shape it leaves open, handed over by one about a
+        piece: the rules conclude the shape from that piece, so a statement stated
+        inside nothing that names one is one they have nothing to conclude from.
         """
         return (
             isinstance(statement, Match)
@@ -276,7 +243,12 @@ class HoleRulesBackend(QueryBackend):
     def evaluate(self, expression: Match[T]) -> Iterable[T]:
         """
         Conclude the shape of the hole wanted, and select the holes of that shape the
-        statement admits.
+        piece actually passes through.
+
+        The rules say what shape of hole the piece belongs in; the measurements say
+        which holes of that shape it is small enough for, closest fit first, since a
+        board can have two holes of one shape and the piece goes through the one cut for
+        it.
 
         :param expression: The statement to answer.
         :return: Every hole it is answered by, which is none where no rule reaches the
@@ -286,21 +258,52 @@ class HoleRulesBackend(QueryBackend):
         shape = self.rules.shape_for(piece)
         if shape is None:
             return
-        yield from expression.answering(
-            SHAPE_STATED_BY_THE_HOLE, shape
-        )._evaluate_natively_()
+        answered = expression.answering(SHAPE_STATED_BY_THE_HOLE, shape)
+        large_enough = [
+            hole
+            for hole in answered._evaluate_natively_()
+            if piece.cross_section_size <= hole.cross_section_size
+        ]
+        yield from sorted(large_enough, key=lambda hole: hole.cross_section_size)
 
-    @staticmethod
     def piece_the_hole_is_wanted_for(
-        statement: Match[T],
+        self, statement: Match[T]
     ) -> Optional[MontessoriShape]:
         """
+        The piece a statement asking for a hole is handed over for.
+
+        Read off the statements it is stated inside rather than off the description
+        itself: a hole described inside an insertion of a piece is the hole that piece
+        goes through, and the description of the hole says nothing of it.
+
         :param statement: The statement to read.
-        :return: The piece it says the hole is wanted for, or None where it names none.
+        :return: The first piece any statement it is stated inside is about, or None
+            where none of them is about one.
         """
-        pieces: List[MontessoriShape] = [
-            object_stated_by(stated)
-            for stated in relations_stated_in(statement)
-            if stated._type_ is Admits
-        ]
-        return pieces[0] if len(pieces) == 1 else None
+        for enclosing in statement._enclosing_statements_:
+            for stated in enclosing._kwargs_.values():
+                piece = self.piece_standing_for(stated)
+                if piece is not None:
+                    return piece
+        return None
+
+    def piece_standing_for(self, stated: Any) -> Optional[MontessoriShape]:
+        """
+        :param stated: Something a statement states one of its attributes to.
+        :return: The piece it is, or the piece the world says stands on the body it is,
+            or None where it is neither.
+        """
+        if isinstance(stated, MontessoriShape):
+            return stated
+        if not isinstance(stated, Body):
+            return None
+        return next(
+            (
+                piece
+                for piece in self.world.get_semantic_annotations_by_type(
+                    MontessoriShape
+                )
+                if piece.root is stated
+            ),
+            None,
+        )

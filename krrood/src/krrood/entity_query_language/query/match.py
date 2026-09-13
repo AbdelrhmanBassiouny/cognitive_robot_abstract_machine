@@ -25,6 +25,7 @@ import rustworkx as rx
 from typing_extensions import (
     Callable,
     Dict,
+    Tuple,
     Optional,
     Type,
     List,
@@ -212,6 +213,28 @@ class AbstractMatchExpression(Generic[T], ABC):
                 yield expression
 
 
+# %% where a description is handed over
+
+
+@dataclass(frozen=True)
+class StatedBy:
+    """
+    Where a description is handed over: the statement stating it, and the attribute of
+    that statement it is stated to.
+    """
+
+    statement: Match
+    """
+    The statement that hands the description over.
+    """
+
+    attribute_name: str
+    """
+    The attribute of that statement the description is stated to, which is the attribute
+    the collection is stated to where the description is one element of a collection.
+    """
+
+
 @dataclass(eq=False)
 class Match(
     Evaluable,
@@ -283,6 +306,14 @@ class Match(
     ``the(...)``.
     """
 
+    _stated_by_: Optional[StatedBy] = field(default=None, init=False, repr=False)
+    """
+    Where this statement is handed over, or None where nobody hands it over.
+
+    Written by the statement that states it, the moment its pattern is set, so a
+    description knows what it is for before anything asks it anything.
+    """
+
     _domain_: Optional[DomainType] = field(default=None, init=False)
     """
     The instances the match ranges over.
@@ -349,6 +380,8 @@ class Match(
             raise PositionalArgumentsInMatchPattern(self, args)
         self._kwargs_ = kwargs
         self._has_been_called = True
+        for attribute_name, stated in self._stated_matches_by_attribute_:
+            stated._stated_by_ = StatedBy(statement=self, attribute_name=attribute_name)
         if self._variable_ is None:
             self._create_or_update_variable_()
         return self
@@ -588,11 +621,39 @@ class Match(
             an element of a collection it assigns -- the descriptions it hands over, as
             against the ones those in turn hand over.
         """
-        for value in self._kwargs_.values():
+        for _, stated in self._stated_matches_by_attribute_:
+            yield stated
+
+    @property
+    def _stated_matches_by_attribute_(self) -> Iterator[Tuple[str, Match]]:
+        """
+        :return: Every description this one hands over, with the attribute it is stated
+            to -- the attribute the collection is stated to, where it is one element of
+            a collection.
+        """
+        for name, value in self._kwargs_.items():
             elements = value if isinstance(value, (list, tuple, set)) else (value,)
             for element in elements:
                 if isinstance(element, Match):
-                    yield element
+                    yield name, element
+
+    @property
+    def _enclosing_statements_(self) -> Iterator[Match]:
+        """
+        :return: The statements this one is handed over by, innermost first -- the one
+            stating it, then the one stating that, and so on -- which is empty for a
+            statement nobody hands over.
+
+        What a description is for is said by the statement it is handed over by: a hole
+        described inside an insertion of a piece is the hole *that piece* goes through,
+        and nothing of that is written in the description itself. So whoever answers a
+        description reads what it is for from here, rather than from something the
+        statement was made to carry for its sake.
+        """
+        stated_by = self._stated_by_
+        while stated_by is not None:
+            yield stated_by.statement
+            stated_by = stated_by.statement._stated_by_
 
     @property
     def _nested_matches_(self) -> Iterator[Match]:
@@ -857,6 +918,7 @@ class Match(
             _declared_type_=self._declared_type_,
             _variable_=self._variable_,
         )
+        restated._stated_by_ = self._stated_by_
         if self._has_been_called:
             restated = restated(**(self._kwargs_ if stated is None else stated))
         return restated.where(*conditions) if conditions else restated
