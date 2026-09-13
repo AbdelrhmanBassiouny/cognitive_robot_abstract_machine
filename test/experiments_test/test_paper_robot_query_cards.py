@@ -19,7 +19,7 @@ from coraplex.datastructures.enums import ExecutionType
 from experiments.episodes.episode import Episode, RecordedQuery, RecordedTrial
 from experiments.paper.panel import PanelKind
 from experiments.paper.lettering import drawn
-from experiments.paper.scene import LABEL_COLOR
+from experiments.paper.labels import LABEL_COLOR
 from experiments.paper.query_card import (
     ObjectsSeenCard,
     OwnDegreesOfFreedomCard,

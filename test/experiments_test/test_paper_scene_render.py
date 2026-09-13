@@ -22,7 +22,9 @@ from experiments.episodes.episode import Episode, RecordedTrial
 from experiments.episodes.long_term_memory import LongTermMemory
 from experiments.episodes.recording import open_recording
 from experiments.montessori.results_database import ResultsDatabase
+from experiments.paper.labels import LABEL_COLOR
 from experiments.paper.scene import (
+    LOOKING_CLOSELY,
     NothingToDrawError,
     PointOfView,
     SceneRender,
@@ -444,6 +446,35 @@ def test_the_answer_is_visible_in_the_picture_that_was_drawn(
 
 
 @needs_a_renderer
+def test_a_name_is_written_above_the_thing_it_names(
+    scene_with_two_things: World,
+) -> None:
+    """
+    A name written across a thing hides it, so it is written a little above it and
+    joined to it by a line, and the name is what the twin calls the thing.
+    """
+    answered = body_named(scene_with_two_things, ANSWERED_NAME)
+
+    drawn = render_of(scene_with_two_things).of([answered])
+
+    [placed] = drawn.labels
+    assert placed.label.text == answered.name.name
+    assert placed.bottom < placed.label.thing[1]
+    assert drawn.holds(LABEL_COLOR)
+
+
+@needs_a_renderer
+def test_a_render_asked_not_to_write_names_writes_none(
+    scene_with_two_things: World,
+) -> None:
+    drawn = SceneRender(
+        world=scene_with_two_things, highlight=HIGHLIGHT, label_answers=False
+    ).of([body_named(scene_with_two_things, ANSWERED_NAME)])
+    assert drawn.labels == ()
+    assert not drawn.holds(LABEL_COLOR)
+
+
+@needs_a_renderer
 def test_a_picture_taken_from_a_body_sees_what_stands_in_front_of_it(
     scene_with_two_things: World,
 ) -> None:
@@ -513,6 +544,23 @@ def test_a_point_of_view_stood_behind_a_box_looks_down_on_it_from_behind(
     )
     assert pose[2, 3] > box[1, 2]
     assert np.dot(heading_of(looker), towards_the_centre) > 0
+
+
+def test_a_point_of_view_stood_behind_a_box_narrows_its_view_to_the_box(
+    scene_with_two_things: World,
+) -> None:
+    """
+    Stood back far enough to see over an arm, the looker would leave the box a few
+    pixels across at its usual view, so the view is narrowed to fill the picture with
+    it.
+    """
+    looker = PointOfView(body=scene_with_two_things.root)
+    box = SceneRender(world=scene_with_two_things).bounds()
+
+    stood = looker.stood_behind(box)
+
+    assert stood.field_of_view == LOOKING_CLOSELY
+    assert stood.field_of_view < looker.field_of_view
 
 
 def test_a_point_of_view_stands_where_its_pose_puts_it(

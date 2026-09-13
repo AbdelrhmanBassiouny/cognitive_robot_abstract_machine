@@ -17,6 +17,8 @@ from dataclasses import dataclass, field
 from typing_extensions import List
 
 from semantic_digital_twin.adapters.multi_sim import MultiSimSynchronizer
+from semantic_digital_twin.datastructures.definitions import StaticJointState
+from semantic_digital_twin.robots.robot_parts import Arm
 from semantic_digital_twin.robots.tracy import Tracy
 from semantic_digital_twin.spatial_types.spatial_types import Vector3
 from semantic_digital_twin.world import World
@@ -41,6 +43,7 @@ from experiments.montessori.scenarios import (
     LayoutAsFound,
     PieceShoved,
     RealScene,
+    SimulatedScene,
     SortingScene,
     SortingStep,
     TracyWatchesTheSceneStandStill,
@@ -173,6 +176,35 @@ def test_the_built_scenes_table_is_tracys_own():
     scene = SortingScene(world)
     assert scene.table.root is scene.robot.root
     assert table_surface(world).height == pytest.approx(builder.table_top_z)
+
+
+def test_the_built_scene_stands_tracy_with_both_arms_parked():
+    """
+    An arm the run never moves stays where the scene stood it, so both arms start
+    parked rather than stretched out along their zero joint angles across the table.
+    """
+    world = TracyOnItsOwnTable().build(Tracy)
+
+    arms = world.get_semantic_annotations_by_type(Arm)
+    assert len(arms) == 2
+    for arm in arms:
+        assert arm.get_joint_state_by_type(StaticJointState.PARK).is_achieved()
+
+
+def test_an_arm_the_run_never_moves_stays_parked_under_physics():
+    """
+    The simulation reads every joint it carries back into the world after each step, so
+    an arm nothing holds up would sag out of its parked pose under gravity and the world
+    would follow it there.
+    """
+    world = TracyOnItsOwnTable().build(Tracy)
+    physics = SimulatedScene(world=world)
+
+    physics.advance(1.0)
+    physics.stop()
+
+    for arm in world.get_semantic_annotations_by_type(Arm):
+        assert arm.get_joint_state_by_type(StaticJointState.PARK).is_achieved()
 
 
 def test_the_built_scene_keeps_its_meshes_beside_the_artifacts(monkeypatch, tmp_path):

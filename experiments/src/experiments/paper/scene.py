@@ -20,6 +20,7 @@ from krrood.exceptions import DataclassException
 from typing_extensions import List, Optional, Sequence, Tuple
 
 from experiments.montessori.perception.camera import RgbdFrame
+from experiments.paper.labels import LIFTED_ABOVE, Label, Labelling, PlacedLabel
 from experiments.paper.lettering import drawn
 from experiments.paper.panel import ANSWER_COLOR, CardPanel
 from experiments.montessori.perception.simulated_camera import SimulatedCamera
@@ -44,12 +45,7 @@ from semantic_digital_twin.world_description.world_entity import (
     KinematicStructureEntity,
 )
 
-# %% the colours a picture tells an answer apart in
-
-LABEL_COLOR = Color(1.0, 1.0, 1.0, 1.0)
-"""
-What an answer's name is written in.
-"""
+# %% the picture a render takes
 
 PICTURE_WIDTH = 960
 """
@@ -178,18 +174,27 @@ UP = np.array([0.0, 0.0, 1.0])
 Which way is up in the frame a point of view is given in.
 """
 
-LOOKING_DOWN_BY = np.radians(55.0)
+LOOKING_DOWN_BY = np.radians(80.0)
 """
 How steeply a point of view stood behind what it is asked about looks down on it, in
-radians: enough to see over whatever stands in front, shallow enough that left and right
-still read as sides rather than as up and down the picture.
+radians: steep enough to see over the arm the robot reaches across the table with, since
+the question is asked from the robot's side and the arm is between the two; shallow
+enough that left and right still read as sides rather than as up and down the picture.
 """
 
-STANDING_BACK_AT_LEAST = 0.6
+STANDING_BACK_AT_LEAST = 0.8
 """
 How far back from what it is asked about a point of view stands at the least, in metres:
-the pieces a question relates are a few centimetres across, and a looker any farther off
-leaves them a few pixels each.
+
+far enough that, looking down by :data:`LOOKING_DOWN_BY`, it stands above the elbow of
+an arm reaching across the table.
+"""
+
+LOOKING_CLOSELY = 40.0
+"""
+The angle a point of view stood back that far spans from the top of its picture to the
+bottom, in degrees: the pieces a question relates are a few centimetres across, and at a
+wider view from that far off they are a few pixels each.
 """
 
 
@@ -254,12 +259,13 @@ class PointOfView:
         looking_down_by: float = LOOKING_DOWN_BY,
         minimum_distance: float = STANDING_BACK_AT_LEAST,
         distance_factor: float = 1.5,
+        field_of_view: float = LOOKING_CLOSELY,
     ) -> PointOfView:
         """
         This point of view moved to where the given box fills the picture, still facing
-        the way it faces: stood back from the box's centre along its own heading and
-        raised to look down on the box, so what the box holds is seen with its left and
-        right where the question had them.
+        the way it faces: stood back from the box's centre along its own heading, raised
+        to look down on the box, and narrowed to the box, so what the box holds is seen
+        with its left and right where the question had them.
 
         A question is asked from wherever the robot happens to stand, which is as often
         as not inside its own table; the picture is taken from where the two things it
@@ -271,6 +277,8 @@ class PointOfView:
             radians.
         :param minimum_distance: How far back the looker stands at the least, in metres.
         :param distance_factor: How many times the box's diagonal the looker stands back.
+        :param field_of_view: The angle the picture spans from its top to its bottom
+            from there, in degrees.
         """
         stood = self.pose.to_np()
         heading = stood[:3, 0] * np.array([1.0, 1.0, 0.0])
@@ -294,7 +302,11 @@ class PointOfView:
         pose[:3, 1] = left
         pose[:3, 2] = np.cross(facing, left)
         pose[:3, 3] = position
-        return replace(self, pose=HomogeneousTransformationMatrix(pose))
+        return replace(
+            self,
+            pose=HomogeneousTransformationMatrix(pose),
+            field_of_view=field_of_view,
+        )
 
 
 # %% the picture that comes out
@@ -316,6 +328,12 @@ class RenderedScene(CardPanel):
     """
     Which pixels of the picture the answer covers, shape ``(height, width)`` of
     ``bool``.
+    """
+
+    labels: Tuple[PlacedLabel, ...] = ()
+    """
+    The names written on the picture and where each ended up, or none when the render
+    was asked not to write any.
     """
 
     def pixels_of(self, color: Color) -> np.ndarray:
@@ -530,9 +548,10 @@ class SceneRender:
 
         :param entity: The thing to measure.
         """
-        if entity.collision is None or not entity.collision.shapes:
+        mesh = entity.combined_mesh
+        if mesh is None:
             return []
-        lowest, highest = np.asarray(entity.collision.combined_mesh.bounds)
+        lowest, highest = np.asarray(mesh.bounds)
         root_T_entity = self.world.compute_forward_kinematics_np(
             self.world.root, entity
         )
@@ -639,9 +658,8 @@ class SceneRender:
                 self._covered_by(segmentation, scene, [singled_out.entity]),
                 singled_out.color,
             )
-        if self.label_answers:
-            self._label(picture, viewpoint, answers)
-        return RenderedScene(image=picture, answer_mask=covered)
+        labels = self._label(picture, viewpoint, answers) if self.label_answers else []
+        return RenderedScene(image=picture, answer_mask=covered, labels=tuple(labels))
 
     @staticmethod
     def _covered_by(
@@ -687,45 +705,54 @@ class SceneRender:
         picture: np.ndarray,
         viewpoint: SimulatedCamera,
         answers: Sequence[KinematicStructureEntity],
-    ) -> None:
+    ) -> List[PlacedLabel]:
         """
-        Write each thing's name where it stands in the picture.
+        Write each thing's name a little above where it stands in the picture, clear of
+        the other names.
 
         :param picture: The picture to write on, changed in place.
         :param viewpoint: The camera the picture was taken through, which is what says
             where a place in the world falls in it.
         :param answers: The bodies and regions the answer names.
+        :return: Where each name was written.
         """
         if not answers:
-            return
+            return []
         frame = RgbdFrame(
             color=picture,
             depth=np.zeros(picture.shape[:2]),
             intrinsics=viewpoint.intrinsics,
             reference_frame_T_camera=viewpoint.reference_frame_T_camera,
         )
-        for answer, pixel in zip(answers, frame.project(self._places_of(answers))):
-            cv2.putText(
-                picture,
-                answer.name.name,
-                (round(pixel[0]), round(pixel[1])),
-                cv2.FONT_HERSHEY_SIMPLEX,
-                self.label_height,
-                drawn(LABEL_COLOR),
-                self.line_width,
-                cv2.LINE_AA,
-            )
-
-    def _places_of(self, answers: Sequence[KinematicStructureEntity]) -> np.ndarray:
-        """
-        Where each thing the answer names stands, in the frame the camera's pose is
-        given in.
-
-        :param answers: The bodies and regions the answer names.
-        :return: Their positions as ``(n, 3)`` ``(x, y, z)`` in metres.
-        """
-        places: List[np.ndarray] = [
-            self.world.compute_forward_kinematics_np(self.world.root, answer)[:3, 3]
-            for answer in answers
+        things = frame.project(np.vstack([self._place_of(one) for one in answers]))
+        anchors = frame.project(np.vstack([self._above(one) for one in answers]))
+        labels = [
+            Label(text=answer.name.name, anchor=tuple(anchor), thing=tuple(thing))
+            for answer, anchor, thing in zip(answers, anchors, things)
         ]
-        return np.vstack(places)
+        return Labelling(height=self.label_height, line_width=self.line_width).write_on(
+            picture, labels
+        )
+
+    def _place_of(self, entity: KinematicStructureEntity) -> np.ndarray:
+        """
+        Where one thing stands, in the world root frame.
+
+        :param entity: The thing to place.
+        :return: Its position as ``(x, y, z)`` in metres.
+        """
+        return self.world.compute_forward_kinematics_np(self.world.root, entity)[:3, 3]
+
+    def _above(self, entity: KinematicStructureEntity) -> np.ndarray:
+        """
+        The point a little above one thing, where its name is anchored: over where it
+        stands, :data:`LIFTED_ABOVE` higher than the top of its geometry, or than the
+        thing itself where it states none.
+
+        :param entity: The thing to write over.
+        :return: The point as ``(x, y, z)`` in metres, in the world root frame.
+        """
+        place = self._place_of(entity)
+        corners = self._corners_of(entity)
+        top = max(corner[2] for corner in corners) if corners else place[2]
+        return np.array([place[0], place[1], top + LIFTED_ABOVE])

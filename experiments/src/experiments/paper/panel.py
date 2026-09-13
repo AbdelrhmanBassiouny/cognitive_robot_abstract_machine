@@ -18,13 +18,14 @@ from semantic_digital_twin.world_description.geometry import Color
 
 # %% the colour every panel picks the answer out in
 
-ANSWER_COLOR = Color(1.0, 0.78, 0.06, 1.0)
+ANSWER_COLOR = Color(0.85, 0.1, 0.6, 1.0)
 """
 What a card draws the answer in, whichever of its pictures is drawing it.
 
 One colour across every panel is what lets the reader carry an answer from one to the
 next: the body picked out of the scene, the row of the event it is about, and the item
-of the plan that accounts for that event are all the same amber.
+of the plan that accounts for that event are all the same magenta -- which nothing in
+the scene is, where the pieces are yellow, the board orange and the robot grey and blue.
 """
 
 # %% which picture of a card a panel is

@@ -30,7 +30,7 @@ from semantic_digital_twin.adapters.multi_sim import (
 )
 from semantic_digital_twin.datastructures.joint_state import JointState
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
-from semantic_digital_twin.robots.robot_parts import AbstractRobotPart
+from semantic_digital_twin.robots.robot_parts import AbstractRobot, AbstractRobotPart
 from semantic_digital_twin.robots.tracy import Tracy
 from semantic_digital_twin.spatial_types.spatial_types import (
     HomogeneousTransformationMatrix,
@@ -287,28 +287,31 @@ def table_top_z(robot: Tracy) -> float:
 # %% physical simulation
 
 
-def apply_gravity_compensation(world: World, robot: Tracy) -> None:
+def apply_gravity_compensation(world: World, robot: AbstractRobot) -> None:
     """
-    Give every arm and gripper link MuJoCo's own gravity compensation.
+    Give every link of the robot below its root MuJoCo's own gravity compensation.
 
     Without it, each link's own position servo would have to spend part of its available
-    torque fighting gravity instead of tracking its commanded target. This covers the
-    gripper's own links too, not just the arm's own chain up to the wrist: without it,
-    the gripper -- an entirely separate semantic annotation hanging off the arm's end,
-    not part of ``arm.active_connections`` -- settles wherever gravity pulls it
-    regardless of its own actuator's commanded target, since its comparatively weak
-    servo (see :data:`GRIPPER_JOINT_SERVO`) never has enough authority to fight the whole
-    uncompensated finger assembly's own weight.
+    torque fighting gravity instead of tracking its commanded target, and a joint nothing
+    drives sags until its link lies on whatever is below it. Every link below the root is
+    covered, not only the ones an arm or a gripper lists as its own: a description's
+    frames -- a flange, a tool frame, a force-torque frame -- hang off the wrist as bodies
+    of their own, and the twin gives a body that states no mass a kilogram, so left
+    uncompensated they weigh on every joint above them. The gripper's own links are
+    covered the same way: an entirely separate semantic annotation hanging off the arm's
+    end, whose comparatively weak servo (see :data:`GRIPPER_JOINT_SERVO`) never has
+    enough authority to fight the whole uncompensated finger assembly's own weight.
 
     :param world: The world to modify in place.
     :param robot: The robot to compensate.
     """
     with world.modify_world():
-        for arm in robot.get_arms():
-            for body in arm.bodies + arm.end_effector.bodies:
-                body.simulator_additional_properties.append(
-                    MujocoBody(gravitation_compensation_factor=1.0)
-                )
+        for entity in world.get_kinematic_structure_entities_of_branch(robot.root):
+            if entity is robot.root or not isinstance(entity, Body):
+                continue
+            entity.simulator_additional_properties.append(
+                MujocoBody(gravitation_compensation_factor=1.0)
+            )
 
 
 ROBOT_COLLISION_BIT = 1
