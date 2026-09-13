@@ -532,7 +532,7 @@ def save_rdr_with_case(rdr: EQLSingleClassRDR, path: str) -> str:
     from krrood.entity_query_language.rdr.function_case import FunctionCase
 
     if isinstance(rdr.case_type, type) and issubclass(rdr.case_type, FunctionCase):
-        class_source = FunctionCaseGenerator().generate(
+        class_source = FunctionCaseGenerator(base_class=FunctionCase).generate(
             rdr.case_type.function,
             class_name=rdr.case_type.__name__,
         )
