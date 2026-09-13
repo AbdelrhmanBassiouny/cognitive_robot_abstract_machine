@@ -31,11 +31,18 @@ fingers then travel past where the grasp first settled, the piece has left the p
 is logged, and a slip also shows on the dashboard as a ``GripperSlipEvent``.
 
 The run is recorded as one trial of one episode, the way a simulated run is: every
-plan the rig performs, every event its monitors report and the working-memory question
-set asked about one piece at the end go onto the trial, and where every joint stood
-along the run is kept beside the episode's other artifacts -- with the bag, when one is
-recorded -- so the paper's cards can be drawn from the run on the robot exactly as from
-a run in MuJoCo.
+plan the rig performs, every motion state chart those plans run, every event its
+monitors report and the working-memory question set asked about one piece at the end go
+onto the trial, and where every joint stood along the run is kept beside the episode's
+other artifacts -- with the bag, when one is recorded -- so the paper's cards can be
+drawn from the run on the robot exactly as from a run in MuJoCo. The questions are
+scored against what the person at the table says they put on it, since the twin is what
+the camera made of the table and so the very thing an answer could be wrong about.
+
+A perturbation can be asked for (``--perturbation``, aimed at ``--piece``): the person
+at the table is told what to do before the sort, the camera looks at the table again
+once they have done it, and the trial keeps what they were told and the episode which
+perturbation it ran under.
 
 Run with (the camera, ``iai_tracy_description`` and the Giskard/world-fetcher ROS stack
 must be running)::
@@ -91,7 +98,7 @@ from experiments.episodes.artifacts import (
     Transcript,
 )
 from experiments.episodes.episode import Episode, RecordedTrial
-from experiments.episodes.observer import EpisodeObserver
+from experiments.episodes.observer import EpisodeObserver, ObserverMotionListener
 from experiments.episodes.recording import open_recording
 from experiments.episodes.trace import JointTrace, JointTraceRecorder
 from experiments.montessori.perception.recorded_setup import lab_board
@@ -99,14 +106,22 @@ from experiments.montessori.perception.scene_publishing import (
     LOOKS_FOR_THE_BOARD,
     PerceivedScene,
 )
+from experiments.montessori.record_episode import DEFAULT_PIECE, PerturbationChoice
 from experiments.montessori.results_database import (
     ResultsDatabase,
     resolve_lasting_database,
 )
+from experiments.montessori.scenarios import (
+    SortingPerturbation,
+    SortingScene,
+    SortingStep,
+)
 from experiments.montessori.semantics import MontessoriShape, MontessoriShapeCategory
+from experiments.montessori.watched_run import SceneThePersonSetUp
 from experiments.questions.question import QuestionedThings, SceneAsSetUp
 from experiments.questions.after_the_move import QuestionAfterTheMove
 from experiments.questions.question_set import QuestionSet
+from experiments.scenarios.scenario import Person, PersonAtTheConsole
 from experiments.scenarios.trial import TrialOutcome
 from experiments.tracy_experiments.live_tracy import LiveTracy
 from experiments.tracy_experiments.montessori.event_dashboard import (
@@ -203,6 +218,23 @@ Leading part of the recorded bag's directory name, completed with a timestamp so
 consecutive runs do not collide.
 """
 
+PERTURBATIONS_A_PERSON_BRINGS_ABOUT = (
+    PerturbationChoice.PIECE_SHOVED,
+    PerturbationChoice.TARGET_HOLE_MOVED,
+)
+"""
+The perturbations this demo offers: the ones that are events of the scene, which the
+person at the table brings about.
+
+A perturbation of what the camera reports is the recorder's, in simulation.
+"""
+
+PERTURBATION_STEP = SortingStep.PICK_UP
+"""
+The step a perturbation of this demo strikes before: the person acts once the arm is
+parked and before the first piece is picked up.
+"""
+
 
 class DemoOption(StrEnum):
     """
@@ -210,6 +242,8 @@ class DemoOption(StrEnum):
     """
 
     ASK_ABOUT = "--ask-about"
+    PERTURBATION = "--perturbation"
+    PIECE = "--piece"
     RECORD = "--record"
     BAG_DIRECTORY = "--bag-directory"
     KEEP_EVERY_NTH_FRAME = "--keep-every-nth-frame"
@@ -360,6 +394,13 @@ class _SortingRig(ShapeSorter):
     What asks the question set once the piece asked about has come to rest, or None for
     a run that asks it some other way.
     """
+
+    def __post_init__(self) -> None:
+        """
+        Have every plan this rig performs hand the motion state charts it runs to the
+        observer, so the trial keeps them as its motions.
+        """
+        self.context.motion_listener = ObserverMotionListener(observer=self.observer)
 
     def sort(self, piece: MontessoriShape, release_pose: Pose) -> None:
         """
@@ -553,15 +594,21 @@ def piece_asked_about(
 
 
 def question_set_about(
-    sorting: PerceivedSorting, piece: MontessoriShape, robot: Tracy
+    sorting: PerceivedSorting,
+    piece: MontessoriShape,
+    robot: Tracy,
+    scene: Optional[SceneAsSetUp],
 ) -> QuestionSet:
     """
     The working-memory question set, asked about one of the pieces the look found,
-    placed against the next one, from where the robot stands.
+    placed against the next one, from where the robot stands, and scored against the
+    scene as whoever set it up states it.
 
     :param sorting: The run, once it has looked.
     :param piece: The piece the questions single out.
     :param robot: The robot the questions are put to.
+    :param scene: The scene as the person at the table states it, or None where nobody
+        can, which leaves out every question scored against it.
     """
     others = [other for other in sorting.pieces if other is not piece]
     compared_against = others[0] if others else sorting.board
@@ -576,7 +623,7 @@ def question_set_about(
             point_of_view=HomogeneousTransformationMatrix(
                 robot.root.global_transform.to_np()
             ),
-            scene=SceneAsSetUp.read_from(robot),
+            scene=scene,
         )
     )
 
@@ -616,6 +663,190 @@ def outcome_of(trial_events, asked_about: Body) -> TrialOutcome:
     return TrialOutcome.SUCCEEDED if picked_up else TrialOutcome.FAILED
 
 
+def perturbation_asked_for(
+    choice: Optional[PerturbationChoice], piece: MontessoriShapeCategory
+) -> Optional[SortingPerturbation]:
+    """
+    The perturbation the command line asked for, aimed at the piece it named and due
+    before the sort, or None for an unperturbed run.
+
+    :param choice: The perturbation asked for, or None.
+    :param piece: The piece it is aimed at.
+    """
+    if choice is None:
+        return None
+    return choice.aimed_at(piece, PERTURBATION_STEP)
+
+
+@dataclass
+class SortingTrial:
+    """
+    The one trial a run of this demo records: the account of the table the person at it
+    gives, the perturbation they bring about, the sorting itself, and the question set
+    asked once the piece asked about has come to rest.
+    """
+
+    rig: _SortingRig
+    """
+    What sorts each piece, and observes everything the trial records.
+    """
+
+    sorting: PerceivedSorting
+    """
+    The run, once it has looked: the board and the pieces as the camera found them.
+    """
+
+    person: Person
+    """
+    The person at the table, who says what they placed and brings the perturbation
+    about.
+    """
+
+    asked_about: MontessoriShapeCategory
+    """
+    The kind of piece the question set is asked about.
+    """
+
+    perturbation: Optional[SortingPerturbation] = None
+    """
+    What someone other than the robot does to the table before the sort, or None for an
+    unperturbed run.
+    """
+
+    stated_scene: Optional[SceneAsSetUp] = field(init=False, default=None)
+    """
+    The table as the person at it states it, once asked, or None where nobody can say.
+    """
+
+    joints: Optional[JointTraceRecorder] = field(init=False, default=None)
+    """
+    What traces where every joint stands while the trial runs, once it has begun.
+    """
+
+    def episode(self) -> Episode:
+        """
+        The episode this trial is the one trial of, naming the perturbation it runs
+        under and keeping the world it runs in.
+        """
+        perturbations = [] if self.perturbation is None else [self.perturbation]
+        return Episode(
+            scenario_name=SCENARIO_NAME,
+            execution_type=ExecutionType.REAL,
+            perturbation_names=[
+                type(perturbation).__name__ for perturbation in perturbations
+            ],
+            world=self.rig.world,
+        )
+
+    def begin(self) -> None:
+        """
+        Start the trial's clock and trace the joints against it.
+
+        Every moment the trial records -- a tick, a query, a motion, a joint sample --
+        is seconds from now, and the trial says when now was on the wall clock, which is
+        the clock the bag stamps its messages on.
+        """
+        self.rig.observer.restart()
+        self.joints = JointTraceRecorder(
+            _world=self.rig.world, clock=lambda: self.rig.observer.elapsed_seconds
+        )
+
+    def state_the_scene(self) -> None:
+        """
+        Ask the person at the table which pieces they placed, and keep the table as they
+        state it.
+        """
+        self.stated_scene = SceneThePersonSetUp(self.person).stated_over(
+            SortingScene(self.rig.world)
+        )
+
+    def bring_about_the_perturbation(self) -> None:
+        """
+        Have the person bring the perturbation about, if there is one: they are told
+        what to do, the account stops saying where what they moved stands, the trial
+        keeps what they were told, and the camera looks at the table again to learn what
+        they did.
+
+        What they moved is named off the table as it stood before they acted, since what
+        the look then finds of it is the look's to say.
+        """
+        if self.perturbation is None:
+            return
+        instruction = self.perturbation.instruction_for_a_person()
+        if self.stated_scene is not None:
+            for moved in self.perturbation.things_moved(SortingScene(self.rig.world)):
+                self.stated_scene.forget_where(moved)
+        self.person.carry_out(instruction)
+        self.rig.observer.carried_out(instruction)
+        self.sorting.perceive()
+
+    @property
+    def piece_asked_about(self) -> MontessoriShape:
+        """
+        The piece the question set is asked about, as the latest look found it.
+
+        :raises PieceNotSeenError: If the look found no piece of the kind asked about.
+        """
+        return piece_asked_about(self.sorting, self.asked_about)
+
+    def question_set(self) -> QuestionSet:
+        """
+        The working-memory question set about the piece asked about, scored against the
+        table as the person states it.
+
+        :raises PieceNotSeenError: If the look found no piece of the kind asked about.
+        """
+        return question_set_about(
+            self.sorting, self.piece_asked_about, self.rig.robot, self.stated_scene
+        )
+
+    def perform(self) -> None:
+        """
+        Run the trial: take the person's account, have them bring the perturbation
+        about, sort every piece and ask the question set once the piece asked about has
+        come to rest -- or at the end, if it never does.
+
+        :raises PieceNotSeenError: If the look found no piece of the kind asked about.
+        """
+        self.state_the_scene()
+        self.bring_about_the_perturbation()
+        self.rig.asks = QuestionAfterTheMove(
+            observer=self.rig.observer,
+            asked_about=self.piece_asked_about.root,
+            question_set=self.question_set,
+            robot=self.rig.robot,
+        )
+        self.sorting.sort_every_piece()
+        self.rig.asks.ask_if_not_yet()
+
+    @property
+    def outcome(self) -> TrialOutcome:
+        """
+        Whether the run picked the piece it was asked about up, as its monitors saw it.
+        """
+        return outcome_of(
+            [event for tick in self.rig.observer.ticks for event in tick.events],
+            self.piece_asked_about.root,
+        )
+
+    def finish(self, episode: Episode) -> RecordedTrial:
+        """
+        Stop tracing the joints and record the trial with everything observed in it.
+
+        :param episode: The episode the trial belongs to.
+        :return: The trial, carrying when it began, its ticks, queries, plans, motions
+            and the instruction carried out on its table.
+        """
+        self.joints.stop()
+        return self.rig.observer.into(
+            RecordedTrial(
+                episode=episode,
+                outcome=self.outcome,
+                duration=self.rig.observer.elapsed_seconds,
+            )
+        )
+
+
 def _parse_arguments(argument_list: Optional[Sequence[str]]) -> argparse.Namespace:
     """
     :param argument_list: Arguments to read; the process's own when None.
@@ -630,6 +861,23 @@ def _parse_arguments(argument_list: Optional[Sequence[str]]) -> argparse.Namespa
         choices=list(MontessoriShapeCategory),
         default=DEFAULT_PIECE_ASKED_ABOUT,
         help="the piece the question set is asked about once the sorting is done",
+    )
+    parser.add_argument(
+        DemoOption.PERTURBATION,
+        type=PerturbationChoice,
+        choices=list(PERTURBATIONS_A_PERSON_BRINGS_ABOUT),
+        default=None,
+        help=(
+            "what the person at the table is asked to do before the sort; the trial "
+            "keeps what they were told and the episode names it"
+        ),
+    )
+    parser.add_argument(
+        DemoOption.PIECE,
+        type=MontessoriShapeCategory,
+        choices=list(MontessoriShapeCategory),
+        default=DEFAULT_PIECE,
+        help="the piece the perturbation is aimed at",
     )
     parser.add_argument(
         DemoOption.RECORD,
@@ -682,6 +930,7 @@ def main(argument_list: Optional[Sequence[str]] = None) -> None:
     """
     arguments = _parse_arguments(argument_list)
     database = resolve_lasting_database(arguments.database_uri)
+    perturbation = perturbation_asked_for(arguments.perturbation, arguments.piece)
 
     feed = EventFeed()
     run_dashboard(feed)
@@ -738,23 +987,19 @@ def main(argument_list: Optional[Sequence[str]] = None) -> None:
         )
         input()
         logger.info("Sorting %d piece(s) on the real robot.", len(sorting.pieces))
-        episode = Episode(
-            scenario_name=SCENARIO_NAME,
-            execution_type=ExecutionType.REAL,
-            world=tracy.world,
+        trial = SortingTrial(
+            rig=rig,
+            sorting=sorting,
+            person=PersonAtTheConsole(),
+            asked_about=arguments.ask_about,
+            perturbation=perturbation,
         )
-        asked_about = piece_asked_about(sorting, arguments.ask_about)
-        question_set = question_set_about(sorting, asked_about, tracy.robot)
-        rig.asks = QuestionAfterTheMove(
-            observer=rig.observer,
-            asked_about=asked_about.root,
-            question_set=lambda: question_set,
-            robot=tracy.robot,
-        )
+        episode = trial.episode()
         # Recording starts here rather than at start-up so the bag holds the sorting
         # itself, not the operator's wait at the prompt above, and closes as soon as
-        # the last piece is placed. The trial's own clock starts with it, so the bag
-        # and the trial agree.
+        # the last piece is placed. The trial's own clock starts just before it on the
+        # same wall clock the bag stamps its messages on, so the two are read against
+        # one another through the trial's start.
         recorder = (
             RosbagRecordingProcess(
                 RosbagRecorder.timestamped(
@@ -766,10 +1011,7 @@ def main(argument_list: Optional[Sequence[str]] = None) -> None:
             if arguments.record
             else contextlib.nullcontext()
         )
-        rig.observer.restart()
-        joints = JointTraceRecorder(
-            _world=tracy.world, clock=lambda: rig.observer.elapsed_seconds
-        )
+        trial.begin()
         with (
             recorder as bag,
             ExecutionEnvironment(
@@ -777,23 +1019,12 @@ def main(argument_list: Optional[Sequence[str]] = None) -> None:
             ),
         ):
             rig.perform_and_record(park)
-            sorting.sort_every_piece()
-            rig.asks.ask_if_not_yet()
-        joints.stop()
+            trial.perform()
+        recorded = trial.finish(episode)
         logger.info("Sorting finished.")
-        trial = rig.observer.into(
-            RecordedTrial(
-                episode=episode,
-                outcome=outcome_of(
-                    [event for tick in rig.observer.ticks for event in tick.events],
-                    asked_about.root,
-                ),
-                duration=rig.observer.elapsed_seconds,
-            )
-        )
         keep_the_episode(
-            trial,
-            joints.trace,
+            recorded,
+            trial.joints.trace,
             None if bag is None else Path(bag.output_directory),
             database,
         )
@@ -826,7 +1057,7 @@ def keep_the_episode(
     artifacts.keep_transcript(Transcript(episode=trial.episode, trials=[trial]))
     artifacts.trial(trial.number).keep_joint_trace(joints)
     if bag_directory is not None:
-        artifacts.keep_directory(bag_directory)
+        artifacts.keep_camera_recording(bag_directory)
     logger.info(
         "Episode %s recorded; artifacts in %s",
         trial.episode.identifier,

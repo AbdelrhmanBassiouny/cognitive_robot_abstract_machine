@@ -112,6 +112,11 @@ from experiments.montessori.world import (
     TABLE_SCALE,
     MontessoriWorld,
 )
+from experiments.questions.question import (
+    PlacedObject,
+    SceneAsSetUp,
+    objects_of_the_scene,
+)
 from experiments.scenarios.scenario import (
     EventBroughtAbout,
     Goal,
@@ -782,6 +787,52 @@ class SortingScene:
             if is_supported_by(self.body_of(category), surface):
                 return surface
         raise NothingHoldsThePieceUp(shape_category=category)
+
+    def piece_as_named(self, category: MontessoriShapeCategory) -> PlacedObject:
+        """
+        One loose piece as whoever set the scene up names it, and nothing more: where
+        it stands is not theirs to say.
+
+        A piece the twin holds none of -- one placed but never found -- is named by its
+        own shape, since the twin has no name for what it does not hold.
+
+        :param category: The shape of the piece.
+        """
+        if category in self.categories:
+            return PlacedObject(name=self.body_of(category).name)
+        return PlacedObject(name=PrefixedName(str(category)))
+
+    def as_set_up(
+        self,
+        pieces: List[PlacedObject],
+        in_the_hand: Optional[MontessoriShapeCategory] = None,
+    ) -> SceneAsSetUp:
+        """
+        This scene as whoever set it up knows it, given the loose pieces as they know
+        them.
+
+        The rest of the scene -- the table, the board, whatever the script acts with --
+        is named and placed off the world as it stands, since a run builds that rather
+        than putting it there; every loose piece the twin holds is left to the given
+        account, whether or not that account names it.
+
+        :param pieces: The loose pieces standing in the scene, as whoever set it up
+            knows them.
+        :param in_the_hand: The shape of the piece left in the robot's hand, or None
+            where it holds none.
+        """
+        piece_names = {self.body_of(category).name for category in self.categories}
+        return SceneAsSetUp(
+            objects=pieces
+            + [
+                PlacedObject.read_from(body)
+                for body in objects_of_the_scene(self.robot)
+                if body.name not in piece_names
+            ],
+            object_in_the_hand=(
+                None if in_the_hand is None else self.body_of(in_the_hand).name
+            ),
+        )
 
     def hole_for(self, category: MontessoriShapeCategory) -> ShapeSortingHole:
         """

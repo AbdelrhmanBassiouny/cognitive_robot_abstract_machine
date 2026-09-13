@@ -13,21 +13,30 @@ from dataclasses import dataclass, field
 
 import numpy as np
 import pytest
-from coraplex.datastructures.enums import Arms
+from coraplex.datastructures.dataclasses import Context
+from coraplex.datastructures.enums import Arms, ExecutionType
+from giskardpy.motion_statechart.motion_statechart import MotionStatechart
 from segmind.datastructures.events import PickUpEvent
 
 from experiments.episodes.artifacts import (
     ARTIFACT_DIRECTORY_ENVIRONMENT_VARIABLE,
+    RunFile,
     Transcript,
 )
 from experiments.episodes.trace import JointTrace
+from experiments.montessori.record_episode import PerturbationChoice
 from experiments.montessori.results_database import (
     IN_MEMORY_DATABASE_URI,
     InMemoryDatabaseRefused,
     ResultsDatabase,
 )
+from experiments.montessori.scenarios import SortingScene
 from experiments.montessori.semantics import CubeShape, MontessoriShapeCategory
+from experiments.montessori.watched_run import WHICH_PIECES_WERE_PLACED
 from experiments.orm.ormatic_interface import RecordedTrialDAO
+from experiments.paper.run_plan import TrialClock
+from experiments.questions.question import ScoredAgainstTheSceneAsSetUp
+from experiments.scenarios.scenario import AbsentPerson
 from experiments.scenarios.trial import TrialOutcome
 from experiments.tracy_experiments.montessori.gripper_feedback import (
     FULLY_CLOSED_KNUCKLE_POSITION,
@@ -40,15 +49,21 @@ from experiments.tracy_experiments.montessori.grasp_widths import (
 )
 from experiments.tracy_experiments.pickup.pickup_demo_real import (
     GRASP_HEIGHT_OFFSET,
+    PERTURBATION_STEP,
+    PERTURBATIONS_A_PERSON_BRINGS_ABOUT,
     PICK_ARM,
+    SCENARIO_NAME,
     DemoOption,
     PieceNotSeenError,
+    SortingTrial,
     _grasp_target_pose,
+    _parse_arguments,
     _reach_action_for,
     _SortingRig,
     keep_the_episode,
     main,
     outcome_of,
+    perturbation_asked_for,
     piece_asked_about,
 )
 from experiments.tracy_experiments.robotiq_gripper import GripperCommandRejected
@@ -61,11 +76,16 @@ from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.connections import FixedConnection
 from semantic_digital_twin.world_description.world_entity import Body
 
+from .test_episode_artifacts import a_bag
 from .test_episode_recording import (
     UNREACHABLE_URI,
     finished_trial,
     recorded_count,
     sorting_episode,
+)
+from .test_working_memory_ground_truth import (
+    ATableTheCameraFound,
+    PersonWhoSaysWhatTheyPlaced,
 )
 
 # %% the grasp offset
@@ -260,7 +280,7 @@ def _slip_watch_rig(
     A rig with only the fields :meth:`_SortingRig._carry_watching_for_slip` reads.
     """
     return _SortingRig(
-        context=None,
+        context=Context(world=None, robot=None),
         world=None,
         robot=None,
         feed=feed,
@@ -444,6 +464,54 @@ class PerformedNothing:
         self.performed = True
 
 
+HOW_LONG_THE_CHART_RAN = 0.5
+"""
+Seconds the mimic plan's one chart ran for.
+"""
+
+
+@dataclass
+class PlanWhoseExecutableHandsOverItsChart:
+    """
+    Stands in for a plan whose one executable, as coraplex's does once it has run its
+    chart, hands that chart to whoever the context says listens.
+    """
+
+    context: Context
+    """
+    The context the plan runs under.
+    """
+
+    motion_statechart: MotionStatechart
+    """
+    The chart the plan runs.
+    """
+
+    def perform(self) -> None:
+        self.context.motion_listener.receive(
+            self.motion_statechart, HOW_LONG_THE_CHART_RAN
+        )
+
+
+def test_every_chart_a_plan_of_the_rig_runs_is_kept_as_a_motion_of_the_trial():
+    """
+    The rig's plans run under its own context, so what that context is told about the
+    charts they run reaches the trial as its motions -- which is what a question about
+    the control program reads.
+    """
+    rig = _slip_watch_rig(RecordingGripper(), _held())
+    chart = MotionStatechart()
+
+    rig.perform_and_record(PlanWhoseExecutableHandsOverItsChart(rig.context, chart))
+    trial = rig.observer.into(finished_trial(sorting_episode()))
+
+    [motion] = trial.motions
+    assert motion.motion_statechart is chart
+    assert motion.end_moment - motion.start_moment == pytest.approx(
+        HOW_LONG_THE_CHART_RAN
+    )
+
+
 def test_the_run_succeeded_when_its_monitors_saw_the_asked_piece_picked_up():
     piece = Body(name=PrefixedName("shape"))
     another = Body(name=PrefixedName("another"))
@@ -465,13 +533,35 @@ def test_asking_about_a_piece_the_look_did_not_find_says_so():
 @dataclass
 class LookedAndFound:
     """
-    Stands in for a run that has looked, holding the pieces the look found.
+    Stands in for a run that has looked, holding the pieces the look found, and counting
+    how often it is asked to look again and whether it sorted.
     """
 
     pieces: list
     """
     The pieces, as the world holds them.
     """
+
+    board: object = None
+    """
+    The board, as the world holds it.
+    """
+
+    looks_taken: int = 0
+    """
+    How many times :meth:`perceive` has been called.
+    """
+
+    sorted: bool = False
+    """
+    Whether :meth:`sort_every_piece` was called.
+    """
+
+    def perceive(self) -> None:
+        self.looks_taken += 1
+
+    def sort_every_piece(self) -> None:
+        self.sorted = True
 
 
 # %% the database the sorting is recorded to
@@ -505,3 +595,280 @@ def test_the_episode_is_kept_in_the_database_the_run_was_checked_against(
         Transcript(episode=trial.episode, trials=[trial]).render()
         == artifacts.transcript.read_text()
     )
+
+
+def test_the_bag_is_kept_where_a_reader_of_the_episode_looks_for_it(
+    tmp_path, monkeypatch
+):
+    """
+    The bag is named after the demo and the moment it started, which nothing reading the
+    episode back knows; kept as the episode's camera recording, a card finds it from the
+    episode alone.
+    """
+    monkeypatch.setenv(ARTIFACT_DIRECTORY_ENVIRONMENT_VARIABLE, str(tmp_path))
+    database = ResultsDatabase(uri="sqlite:///%s" % (tmp_path / "episodes.db"))
+    bag = a_bag(tmp_path)
+
+    artifacts = keep_the_episode(
+        finished_trial(sorting_episode()), JointTrace(), bag, database
+    )
+
+    assert artifacts.camera_recording == artifacts.run_file(RunFile.CAMERA_RECORDING)
+    assert sorted(path.name for path in artifacts.camera_recording.iterdir()) == sorted(
+        path.name for path in bag.iterdir()
+    )
+
+
+# %% the perturbation the command line asks for
+
+
+def test_the_two_perturbations_a_person_can_bring_about_are_offered():
+    for choice in PERTURBATIONS_A_PERSON_BRINGS_ABOUT:
+        arguments = _parse_arguments(
+            [
+                DemoOption.PERTURBATION,
+                choice.value,
+                DemoOption.PIECE,
+                MontessoriShapeCategory.CYLINDER.value,
+            ]
+        )
+        assert arguments.perturbation is choice
+        assert arguments.piece is MontessoriShapeCategory.CYLINDER
+
+
+def test_a_perturbation_of_what_is_seen_is_not_offered():
+    """
+    A person at the table can push a piece or slide the board, but cannot make the
+    camera misread one; those perturbations are the recorder's, in simulation.
+    """
+    not_offered = set(PerturbationChoice) - set(PERTURBATIONS_A_PERSON_BRINGS_ABOUT)
+    assert not_offered
+    for choice in not_offered:
+        with pytest.raises(SystemExit):
+            _parse_arguments([DemoOption.PERTURBATION, choice.value])
+
+
+def test_the_perturbation_asked_for_is_aimed_at_the_piece_and_due_before_the_sort():
+    perturbation = perturbation_asked_for(
+        PerturbationChoice.PIECE_SHOVED, MontessoriShapeCategory.CYLINDER
+    )
+
+    assert perturbation == PerturbationChoice.PIECE_SHOVED.aimed_at(
+        MontessoriShapeCategory.CYLINDER, PERTURBATION_STEP
+    )
+    assert perturbation_asked_for(None, MontessoriShapeCategory.CYLINDER) is None
+
+
+# %% the trial the demo records
+
+
+def rig_over(world) -> _SortingRig:
+    """
+    A rig over the given world, with the parts a trial reads: its world, its robot, its
+    observer and the context its plans run under.
+    """
+    scene = SortingScene(world)
+    return _SortingRig(
+        context=Context(world=world, robot=scene.robot),
+        world=world,
+        robot=scene.robot,
+        feed=RecordingFeed(),
+        gripper=RecordingGripper(),
+        gripper_listener=_held(),
+        grasp_description=None,
+        tool_frame=None,
+    )
+
+
+def sorting_over(world) -> LookedAndFound:
+    """
+    A sorting that has looked at the given world, holding every piece standing in it.
+    """
+    scene = SortingScene(world)
+    return LookedAndFound(
+        pieces=[
+            scene.shape_of(category)
+            for category in MontessoriShapeCategory
+            if category in scene.categories
+        ],
+        board=scene.board,
+    )
+
+
+def trial_over(found: ATableTheCameraFound, person, perturbation=None) -> SortingTrial:
+    """
+    The demo's trial over a table the camera found, with the given person at it.
+    """
+    return SortingTrial(
+        rig=rig_over(found.world),
+        sorting=sorting_over(found.world),
+        person=person,
+        asked_about=found.pieces_standing[0],
+        perturbation=perturbation,
+    )
+
+
+def test_the_questions_are_scored_against_what_the_person_says_they_placed():
+    """
+    The twin is what the camera made of the table, which is the very thing an answer
+    could be wrong about; the person at the table is the only other account of it.
+    """
+    found = ATableTheCameraFound.looked_at()
+    scene = SortingScene(found.world)
+    placed, not_placed = found.pieces_standing[:2], found.pieces_standing[2:]
+    person = PersonWhoSaysWhatTheyPlaced.who_placed(placed)
+    trial = trial_over(found, person)
+
+    trial.state_the_scene()
+    question_set = trial.question_set()
+
+    assert person.asked == [WHICH_PIECES_WERE_PLACED]
+    scored = [
+        question
+        for question in question_set.questions
+        if isinstance(question, ScoredAgainstTheSceneAsSetUp)
+    ]
+    assert scored
+    assert all(question.scene is trial.stated_scene for question in scored)
+    names = trial.stated_scene.names
+    assert all(scene.body_of(category).name in names for category in placed)
+    assert not any(scene.body_of(category).name in names for category in not_placed)
+
+
+def test_a_trial_nobody_is_at_asks_only_what_it_can_score():
+    found = ATableTheCameraFound.looked_at()
+    trial = trial_over(found, AbsentPerson())
+
+    trial.state_the_scene()
+
+    assert trial.stated_scene is None
+    assert not any(
+        isinstance(question, ScoredAgainstTheSceneAsSetUp)
+        for question in trial.question_set().questions
+    )
+
+
+def test_the_episode_names_the_perturbation_the_trial_ran_under():
+    found = ATableTheCameraFound.looked_at()
+    perturbation = perturbation_asked_for(
+        PerturbationChoice.PIECE_SHOVED, found.pieces_standing[0]
+    )
+
+    episode = trial_over(found, AbsentPerson(), perturbation).episode()
+
+    assert episode.perturbation_names == [type(perturbation).__name__]
+    assert episode.scenario_name == SCENARIO_NAME
+    assert episode.execution_type is ExecutionType.REAL
+    assert episode.world is found.world
+
+
+def test_an_unperturbed_episode_names_no_perturbation():
+    found = ATableTheCameraFound.looked_at()
+    assert trial_over(found, AbsentPerson()).episode().perturbation_names == []
+
+
+def test_the_person_brings_the_perturbation_about_and_the_trial_records_it():
+    """
+    A perturbation on the robot is something the person at the table does: they are told
+    what to do before the sort, the run looks at the table again once they have done it,
+    and what they were told is kept with the trial.
+    """
+    found = ATableTheCameraFound.looked_at()
+    person = AbsentPerson()
+    perturbation = perturbation_asked_for(
+        PerturbationChoice.PIECE_SHOVED, found.pieces_standing[0]
+    )
+    trial = trial_over(found, person, perturbation)
+    instruction = perturbation.instruction_for_a_person()
+
+    trial.begin()
+    trial.perform()
+    recorded = trial.finish(trial.episode())
+
+    assert person.asked == [instruction]
+    assert recorded.instructions_carried_out == [instruction]
+    assert trial.sorting.looks_taken == 1
+    assert trial.sorting.sorted
+
+
+def test_an_unperturbed_trial_tells_the_person_nothing_and_looks_no_further():
+    found = ATableTheCameraFound.looked_at()
+    person = AbsentPerson()
+    trial = trial_over(found, person)
+
+    trial.begin()
+    trial.perform()
+    recorded = trial.finish(trial.episode())
+
+    assert person.asked == []
+    assert recorded.instructions_carried_out == []
+    assert trial.sorting.looks_taken == 0
+
+
+def test_what_the_perturbation_moved_is_no_longer_placed_in_the_persons_account():
+    """
+    The board the person slid is not where the run had it any more, so the account stops
+    saying where it stands.
+    """
+    found = ATableTheCameraFound.looked_at()
+    scene = SortingScene(found.world)
+    trial = trial_over(
+        found,
+        PersonWhoSaysWhatTheyPlaced.who_placed(found.pieces_standing),
+        perturbation_asked_for(
+            PerturbationChoice.TARGET_HOLE_MOVED, found.pieces_standing[0]
+        ),
+    )
+
+    trial.state_the_scene()
+    assert trial.stated_scene.place_of(scene.board.root.name) is not None
+    trial.bring_about_the_perturbation()
+
+    assert trial.stated_scene.place_of(scene.board.root.name) is None
+
+
+def test_the_trial_asks_the_question_set_once_the_sorting_is_done():
+    found = ATableTheCameraFound.looked_at()
+    trial = trial_over(
+        found, PersonWhoSaysWhatTheyPlaced.who_placed(found.pieces_standing)
+    )
+
+    trial.begin()
+    trial.perform()
+    recorded = trial.finish(trial.episode())
+
+    assert recorded.queries
+    assert all(
+        query.question.scene is trial.stated_scene
+        for query in recorded.queries
+        if isinstance(query.question, ScoredAgainstTheSceneAsSetUp)
+    )
+
+
+# %% the clock the trial's rows, its joint trace and its bag share
+
+
+def test_the_joint_trace_and_the_rows_count_their_seconds_from_when_the_trial_began():
+    """
+    The bag is stamped on the wall clock, the rows say when the trial began on it, and
+    every moment of the trial -- a tick, a query, a joint sample -- is seconds from that
+    instant, so all of them are read against one another through the trial's clock.
+    """
+    found = ATableTheCameraFound.looked_at()
+    trial = trial_over(found, AbsentPerson())
+
+    trial.begin()
+    began_at = trial.rig.observer.began_at
+    found.world.notify_state_change()
+    assert trial.joints.clock() == pytest.approx(
+        trial.rig.observer.elapsed_seconds, abs=0.01
+    )
+    trial.perform()
+    recorded = trial.finish(trial.episode())
+
+    assert TrialClock.of(recorded).origin == began_at
+    assert trial.joints.trace.moments
+    assert all(
+        0.0 <= moment <= recorded.duration for moment in trial.joints.trace.moments
+    )
+    assert all(0.0 <= query.moment <= recorded.duration for query in recorded.queries)
