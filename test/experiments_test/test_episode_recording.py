@@ -5,22 +5,28 @@ Tests for whether and where a run keeps the trials it finishes.
 from __future__ import annotations
 
 import logging
+import shutil
 from dataclasses import dataclass, field
 
 import numpy
 import pytest
+import trimesh
 from coraplex.datastructures.enums import ExecutionType
 from semantic_digital_twin.adapters.mujoco_video_recording import RecordedVideo
 from semantic_digital_twin.testing import two_arm_robot_world
+from semantic_digital_twin.world_description.geometry import Mesh
+from semantic_digital_twin.world_description.mesh_file_storage import MeshFileStorage
 from sqlalchemy import func, select
 from typing_extensions import Optional
 
 from experiments.episodes.artifacts import (
+    ARTIFACT_DIRECTORY_ENVIRONMENT_VARIABLE,
     ArtifactDirectory,
     ArtifactNotKept,
     EpisodeArtifacts,
     Transcript,
 )
+from experiments.episodes.long_term_memory import LongTermMemory
 from experiments.episodes.episode import (
     Episode,
     InsertionAttempt,
@@ -33,6 +39,7 @@ from experiments.episodes.recording import (
     RecordsTrialsToADatabase,
     open_recording,
 )
+from experiments.montessori.world import MontessoriWorld
 from experiments.montessori.results_database import (
     IN_MEMORY_DATABASE_URI,
     ResultsDatabase,
@@ -242,8 +249,8 @@ def test_every_trial_of_a_run_is_recorded_under_one_episode():
 
 def test_a_recorded_run_keeps_the_world_its_trial_ran_in():
     """
-    A query card draws its scene from the episode's world, so an episode recorded by
-    the run itself must keep the world the trial ran in, as the pickup demo does.
+    A query card draws its scene from the episode's world, so an episode recorded by the
+    run itself must keep the world the trial ran in, as the pickup demo does.
     """
     scenario = SortOnePiece()
     episode = Episode.from_run(scenario)
@@ -253,6 +260,37 @@ def test_a_recorded_run_keeps_the_world_its_trial_ran_in():
 
     [world] = scenario.built_worlds
     assert episode.world is world
+
+
+def test_a_kept_world_is_read_back_after_the_process_that_built_it_has_exited(
+    tmp_path, monkeypatch
+):
+    """
+    A kept world refers to the meshes its scene was built from by path, and is read back
+    by a later process, so those files must outlive the process that exported them.
+    """
+    monkeypatch.setenv(ARTIFACT_DIRECTORY_ENVIRONMENT_VARIABLE, str(tmp_path))
+    exporting_process_root = tmp_path / "exporting-process"
+    exporting_process_root.mkdir()
+    monkeypatch.setattr(MeshFileStorage(), "root", exporting_process_root)
+    database = ResultsDatabase(uri="sqlite:///%s" % (tmp_path / "results.db"))
+    episode = sorting_episode()
+    episode.world = MontessoriWorld(shapes_are_movable=True).world
+    recording = open_recording(database)
+    recording.record(finished_trial(episode))
+    recording.close()
+    shutil.rmtree(exporting_process_root)
+
+    [trial] = LongTermMemory(database).recall_every_trial()
+
+    read_back = [
+        shape
+        for body in trial.episode.world.bodies
+        for shape in [*body.visual, *body.collision]
+        if isinstance(shape, Mesh)
+    ]
+    assert read_back
+    assert all(isinstance(shape.mesh, trimesh.Trimesh) for shape in read_back)
 
 
 def test_a_recorded_trial_carries_what_its_trial_measured():

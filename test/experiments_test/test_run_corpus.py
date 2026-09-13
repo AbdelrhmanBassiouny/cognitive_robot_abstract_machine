@@ -16,6 +16,7 @@ from pathlib import Path
 import pytest
 from segmind.datastructures.events import PickUpEvent, TranslationEvent
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
+from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.world_entity import Body
 from typing_extensions import List
 
@@ -134,6 +135,18 @@ class EpisodeRecorderWithoutASimulation:
                 )
             )
         return self.directory
+
+
+@dataclass
+class EpisodeRecorderThatKeepsAWorld(EpisodeRecorderWithoutASimulation):
+    """
+    Records each episode the way the real recorder does in one respect: the episode is
+    handed the world its trial ran in.
+    """
+
+    def record(self, arguments: RecordingArguments, episode: Episode) -> Path:
+        episode.world = World()
+        return super().record(arguments, episode)
 
 
 # %% the corpus under test
@@ -301,6 +314,49 @@ def test_an_episode_that_watched_nothing_cannot_be_asked_about_a_piece(
 
     with pytest.raises(EpisodeWatchedNothing):
         corpus.object_watched_in(episode)
+
+
+# %% what the corpus holds in memory while it runs
+
+
+def test_a_recorded_episode_leaves_its_world_to_the_database(
+    corpus: RecordedCorpus, tmp_path
+):
+    """
+    A corpus of worlds does not fit in memory beside the run recording the next one, and
+    the database keeps every world an episode ran in.
+    """
+    corpus.recorder = EpisodeRecorderThatKeepsAWorld(
+        records_trials=open_recording(corpus.database), directory=tmp_path
+    )
+
+    episodes = corpus.record()
+
+    assert episodes
+    assert all(episode.world is None for episode in episodes)
+
+
+def test_a_finished_corpus_recalls_every_trial_once(corpus: RecordedCorpus):
+    """
+    Every question spanning the corpus is answered from the same trials once the corpus
+    stands, so they are read once rather than for every asking.
+    """
+    corpus.record()
+
+    first = corpus.memory.recall_every_trial()
+
+    assert corpus.memory.recall_every_trial() is first
+
+
+def test_a_memory_that_is_not_of_a_finished_corpus_recalls_afresh(
+    corpus: RecordedCorpus,
+):
+    corpus.record()
+    memory = LongTermMemory(corpus.database)
+
+    first = memory.recall_every_trial()
+
+    assert memory.recall_every_trial() is not first
 
 
 # %% the command line

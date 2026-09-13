@@ -8,6 +8,8 @@ table was laid out with a tape, in the world Tracy's own description gives.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import numpy as np
 import pytest
 from coraplex.datastructures.enums import ExecutionType
@@ -18,7 +20,13 @@ from semantic_digital_twin.adapters.multi_sim import MultiSimSynchronizer
 from semantic_digital_twin.robots.tracy import Tracy
 from semantic_digital_twin.spatial_types.spatial_types import Vector3
 from semantic_digital_twin.world import World
+from semantic_digital_twin.world_description.geometry import Mesh
+from semantic_digital_twin.world_description.mesh_file_storage import MeshFileStorage
 
+from experiments.episodes.artifacts import (
+    ARTIFACT_DIRECTORY_ENVIRONMENT_VARIABLE,
+    configured_mesh_directory,
+)
 from experiments.episodes.episode import Episode
 from experiments.montessori.exceptions import WorldHoldsNoSuchRobot
 from experiments.montessori.perception.captures import SceneCapture
@@ -26,6 +34,7 @@ from experiments.montessori.perception.node import pipeline_of
 from experiments.montessori.perception.recorded_setup import lab_board
 from experiments.montessori.perception.scene_publishing import PerceivedScene
 from experiments.montessori.perception.scene_source import RecordedFrame
+from experiments.montessori.perception.simulated_setup import table_surface
 from experiments.montessori.pieces import FULL_SIZE_PIECES, SMALLER_PIECES
 from experiments.montessori.scenarios import (
     HOW_FAR_A_MOVED_HOLE_GOES,
@@ -43,6 +52,7 @@ from experiments.montessori.semantics import (
 )
 from experiments.montessori.watched_run import WatchedSortingRun
 from experiments.questions.question import Memory
+from experiments.questions.question import SceneAsSetUp
 from experiments.questions.working_memory import SupportingSurfaces
 from experiments.scenarios.scenario import AbsentPerson
 from experiments.scenarios.trial import TrialOutcome
@@ -155,6 +165,35 @@ def test_the_built_scene_is_the_full_size_set_unless_told_otherwise():
     assert TracyOnItsOwnTable().piece_set is FULL_SIZE_PIECES
 
 
+def test_the_built_scenes_table_is_tracys_own():
+    builder = TracyOnItsOwnTable()
+
+    world = builder.build(Tracy)
+
+    scene = SortingScene(world)
+    assert scene.table.root is scene.robot.root
+    assert table_surface(world).height == pytest.approx(builder.table_top_z)
+
+
+def test_the_built_scene_keeps_its_meshes_beside_the_artifacts(monkeypatch, tmp_path):
+    """
+    A recorded episode keeps the world it ran in, which refers to the board and the
+    pieces by the files they were exported to, so none of them may live in the
+    directory this process removes when it exits.
+    """
+    monkeypatch.setenv(ARTIFACT_DIRECTORY_ENVIRONMENT_VARIABLE, str(tmp_path))
+
+    world = TracyOnItsOwnTable().build(Tracy)
+
+    shapes = [
+        *(shape for body in world.bodies for shape in [*body.visual, *body.collision]),
+        *(shape for region in world.regions for shape in region.area),
+    ]
+    meshes = [Path(shape.filename) for shape in shapes if isinstance(shape, Mesh)]
+    assert any(path.is_relative_to(configured_mesh_directory()) for path in meshes)
+    assert not any(path.is_relative_to(MeshFileStorage().root) for path in meshes)
+
+
 # %% the scene Tracy's camera finds
 
 
@@ -174,7 +213,7 @@ def test_a_perceived_piece_stands_on_tracys_own_table(
     ]
 
     assert SupportingSurfaces(subject=cube.root).ask(robot) == [robot.root]
-    assert SupportingSurfaces(subject=cube.root).ground_truth(robot) == [robot.root]
+    assert SceneAsSetUp.read_from(robot).holding_up(cube.root.name) == [robot.root.name]
 
 
 def test_the_perceived_scene_is_the_published_world_with_what_the_look_found(
@@ -299,6 +338,15 @@ class PersonWhoMovesTheScene:
         self.asked.append(instruction)
         self.pieces_when_asked = list(self.scene.pieces)
         self.look.moved = True
+
+    def answer(self, question: str) -> None:
+        """
+        Nothing: this person is at the table to move a piece rather than to say how it
+        was laid out.
+
+        :param question: What they were asked.
+        """
+        return None
 
 
 def _run_on_the_robot(
