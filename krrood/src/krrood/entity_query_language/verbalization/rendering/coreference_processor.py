@@ -5,7 +5,6 @@ from typing_extensions import Dict, Iterable, List, Optional, Set, Tuple
 import uuid
 
 from krrood.entity_query_language.verbalization.fragments.base import (
-    apply_subject_verb_agreement,
     Clause,
     map_structural_children,
     NounPhrase,
@@ -211,14 +210,16 @@ class CoreferenceProcessor(RealizationPass):
 
     def _predicate_clause(self, clause: PhraseFragment) -> VerbalizationFragment:
         """A clause led by its subject chain (*"<subject> <copula> <value>"* — a comparator
-        predicate or a *"… is between …"* range) whose finite copula agrees with that subject.
+        predicate or a *"… is between …"* range) whose subject's concord number is recorded here.
 
         The build tags the copula singular; coreference is what may realise the subject as a plural
         population (*"their batteries"*), distributing a scalar attribute over the quantified
-        variable. Since that population reading is decided here — with the pronominalisation — the
-        copula's agreement is decided here too, in one place, rather than pre-baked into the
-        quantifier rule (which cannot know whether the body's grammatical subject is the variable).
-        A singular subject leaves the copula untouched, so every plain predicate is unaffected.
+        variable. Since that population reading is decided here — with the pronominalisation, from the
+        discourse subject's number — the *concord number* is discovered here too and stamped on the
+        clause (:attr:`~…PhraseFragment.concord_number`); the
+        :class:`~krrood.entity_query_language.verbalization.rendering.agreement_processor.AgreementProcessor`
+        pass then agrees the copula. A singular subject leaves the clause unstamped, so every plain
+        predicate is unaffected.
 
         Both surfaces agree off the same plural subject (*"are"* / *"are between"*):
 
@@ -232,7 +233,7 @@ class CoreferenceProcessor(RealizationPass):
         subject_number = self._clause_subject_number(clause.parts[0])
         rebuilt = map_structural_children(clause, self._walk)
         if subject_number is GrammaticalNumber.PLURAL:
-            return self._with_agreed_copula(rebuilt, subject_number)
+            return replace(rebuilt, concord_number=GrammaticalNumber.PLURAL)
         return rebuilt
 
     def _clause_subject_number(
@@ -253,10 +254,13 @@ class CoreferenceProcessor(RealizationPass):
         :func:`~krrood.entity_query_language.verbalization.vocabulary.parts_of_speech.clause`).
 
         When the leading constituent is the current discourse subject, it pronominalises to the
-        nominative *"it"* / *"they"* and the finite verb or copula agrees with that subject's number
-        (*"is"* → *"are"*, *"works"* → *"work"*); otherwise the clause is rebuilt unchanged, so a
-        plain predicate and a top-level mention are untouched. A clause whose subject is a navigation
-        chain defers to :meth:`_predicate_clause` (the *"its/their …"* path).
+        nominative *"it"* / *"they"*; otherwise the clause is rebuilt unchanged, so a plain predicate
+        and a top-level mention are untouched. A clause whose subject is a navigation chain defers to
+        :meth:`_predicate_clause` (the *"its/their …"* path). The subject's number is recorded as the
+        clause's :attr:`~…PhraseFragment.concord_number` (a plural pronoun cannot carry it on its own
+        leaf — it must not inflect to *"theys"*); the
+        :class:`~krrood.entity_query_language.verbalization.rendering.agreement_processor.AgreementProcessor`
+        pass reads that and agrees the finite verb / copula, not here.
 
         The body's subject is the quantified population, so it reads *"they"* and the copula agrees:
 
@@ -273,11 +277,8 @@ class CoreferenceProcessor(RealizationPass):
             rebuilt = map_structural_children(clause, self._walk)
             return rebuilt if rebuilt is not None else clause
         pronoun = Pronouns.nominative(number).as_fragment()
-        agreed_rest = [
-            apply_subject_verb_agreement(self._walk(part), number)
-            for part in clause.parts[1:]
-        ]
-        return replace(clause, parts=[pronoun, *agreed_rest])
+        walked_rest = [self._walk(part) for part in clause.parts[1:]]
+        return replace(clause, parts=[pronoun, *walked_rest], concord_number=number)
 
     def _subject_pronoun_number(
         self, subject: VerbalizationFragment
@@ -295,19 +296,6 @@ class CoreferenceProcessor(RealizationPass):
         ):
             return None
         return self._subject_stack[-1].number
-
-    @staticmethod
-    def _with_agreed_copula(
-        clause: PhraseFragment, number: GrammaticalNumber
-    ) -> VerbalizationFragment:
-        """:return: *clause* with its finite copula tagged *number* (*"is"* → *"are"* once the
-        morphology pass realises it). Only the operator slot's leading copula inflects — the subject
-        and value (and any copula nested in a relative clause on either) are left untouched.
-        """
-        return replace(
-            clause,
-            parts=[apply_subject_verb_agreement(part, number) for part in clause.parts],
-        )
 
     def _owned_attributes(self, owned: OwnedAttributes) -> VerbalizationFragment:
         """:return: the owner's attributes as the possessive *"its/their <attrs>"* when the owner is
