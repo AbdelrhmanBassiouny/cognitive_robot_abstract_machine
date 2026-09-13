@@ -9,8 +9,8 @@ targets that branch.
    EQL pre/post conditions) — done, 7 tests green.
 3. `InsertActionMujoco` beside `PlaceActionMujoco`; `MujocoSortingRig` drives it — done.
 4. `PutThePieceInItsHole` / `SortingScene` insert rather than place — done, test added.
-5. `InsertMontessoriShapeAction` thinned onto `InsertShapeAction(InsertAction)`, which
-   asks the shape for its release pose — done, two tests added.
+5. `InsertMontessoriShapeAction` builds `InsertAction` directly, handing it the turn
+   the shape states for its hole (`target_R_body`) — done, two tests added.
 6. Cube starts on the board's lid, furthest from the square hole — done
    (`CUBE_STARTS_ON_THE_LID`, `experiments.montessori.world.solid_lid_away_from`).
 7. Framework figure: cube on the lid, plan prints `InsertAction` — done, re-rendered.
@@ -37,48 +37,63 @@ Proposal, not a defect: rather than a new action, EQL-based RDR rules (`EQLSingl
 that choose the target from context; and the figure's target hole filled by an RDR backend
 from an underspecified statement.
 
-Replied (r3999715839), **left open** — it forks into three and needs a decision:
-- The figure already colours the `target=a(ShapeSortingHole)(...)` slot as the *rules*
-  backend, but the code behind it is `ShapeSortingBoard.hole_for`, a hand-written
-  three-tier lookup (fits_through filter, name pairing, smallest-fitting fallback).
-  Making that an `EQLSingleClassRDR` is agreed and plugs in upstream of `InsertAction`
-  (whose `target` is already a statement) — recommended as a follow-up PR, since
-  `hole_for` is on the base branch with five callers including `event_monitoring`.
-- Target-selection rules do not replace `InsertAction`: they choose *where*, not the
-  post-condition (`InsideOf` the landing region) or the descent through the aperture.
-- The design that would collapse the two actions is a polymorphic *target* (surface or
-  aperture states its release pose and its satisfied condition), not an action subclass —
-  which does sidestep the LSP objection raised earlier. Rewrite of this PR + `PlaceAction`.
+Replied (r3999715839) laying out three readings; the answer (r3999854266) was
+"no `InsertShapeAction` is needed, only `InsertAction` is enough."
 
-Awaiting the choice between (a) rules as a follow-up, (b) rules in this PR, (c) collapse
-into a polymorphic-target `PlaceAction`.
+**Done at `d11d1ad6c0`.** `InsertShapeAction` existed for one thing: a disk has to be
+tipped onto its edge for its slot. That is a property of the body, not a second kind of
+insertion, so `InsertAction` carries
+`target_R_body: RotationMatrix = field(default_factory=RotationMatrix, kw_only=True)`
+(identity = turned the way the opening is), and `InsertMontessoriShapeAction` hands it
+`insertion_pose_relative_to_hole(...).to_rotation_matrix()`. `DiskShape` keeps the
+knowledge it already had. New coraplex test
+`test_a_body_that_only_fits_turned_is_released_turned_that_way` (verified red before the
+field existed); the two montessori release-pose tests build `InsertAction` directly.
 
-### CI round 1 (13 failures on f227cebb)
+`RotationMatrix` was chosen over a whole `Pose` field partly because it is what the sdt
+style guide's `root_R_tip` notation names, and partly because it has an ORM
+`AlternativeMapping` like `Pose` does, so it survives the `FeatureExtractor` the
+`ProbabilisticBackend` runs over every `a(...)`-wrapped field.
+
+**Thread left open** for the other half of the original comment: the RDR filling `target`
+is still a follow-up PR (`hole_for` is on the base branch with five callers including
+`event_monitoring`). Replied r3999968096 saying so.
+
+### CI round 1 (13 failures on f227cebb) - both fixed
 Two causes, both diagnosed from the `experiments` job log:
 
-1. **5 in `test_montessori_insert_shape_action.py`** — `ValueError: Value cube not in
+1. **5 in `test_montessori_insert_shape_action.py`** - `ValueError: Value cube not in
    domain of variable Symbolic(InsertShapeAction.target.shape_category, ∅)`. Not this
    PR's bug: `PolymorphicEnumType` maps back to the abstract `enum.Enum`, which has no
    members, so `FeatureExtractor._process_attributes` built an empty-domain variable for
    any entity with an enum field handed to a query the `ProbabilisticBackend` resolves.
-   `InsertAction.target` (a `ShapeSortingHole`) is just the first such entity.
    Fixed in its own bug PR off main: **#357**, branch
-   `claude/polymorphic-enum-feature-domain-14xvqi`. Verified: the feature type for
-   `shape_category` goes from `enum.Enum` to `MontessoriShapeCategory`; krrood suite
-   2383 passed (2 pre-existing graphviz failures).
-   **#355 stays red until #357 reaches this stack** — #355 is stacked on #265, so
-   landing #357 on main does not reach it on its own.
+   `claude/polymorphic-enum-feature-domain-14xvqi`. Merged into this branch at
+   `471a6ca3df` (one conflict, an import line in `example_classes.py`; kept both), so
+   this stack no longer waits for #357 to land.
 
-2. **8 in `test_tracy_pickup_demo_mujoco.py`** — this PR's. `PerceivedScene.perceive`
+2. **8 in `test_tracy_pickup_demo_mujoco.py`** - this PR's. `PerceivedScene.perceive`
    stood only the pieces resting on the bare table, so the cube on the lid was never
-   perceived and never sorted; everything downstream (monitor, trial outcome,
-   containment, recorded plan) cascaded from that. Fixed at `3e9e5b069`:
-   `PiecePublisher.publish` takes the surfaces a piece may rest on, and `PerceivedScene`
-   asks for the table and the lid both. Also fixed a stale `LAB_PIECE_PLACES[...].x`
-   left behind by the `PiecePlace` rename.
-   New test `test_a_piece_on_the_lid_is_stood_along_with_the_ones_on_the_table` runs
-   locally (13 passed). Whether the simulated MuJoCo camera actually detects the cube on
-   the lid can only be answered by CI.
+   perceived and never sorted; everything downstream cascaded from that. Fixed at
+   `3e9e5b069`. Whether the simulated MuJoCo camera actually detects the cube on the lid
+   can only be answered by CI.
+
+### Base merge 2 (2026-09-13)
+`origin/claude/icra-experiments-simulation-pipeline-w4ep7n` moved to `62e046bf95` (film
+written as taken, per-worker scene files, camera optical-frame offset). Merged at
+`e7d1a2ebbf`; one conflict, two adjacent imports in `test_tracy_pickup_demo_mujoco.py`
+(`CUBE_STARTS_ON_THE_LID` here, `CAMERA_VIDEO_RESOLUTION` there) - kept both.
+
+### Local sweeps
+- `test_insertion.py` + `test_montessori_insert_shape_action.py` +
+  `test_montessori_scene_publishing.py`: 23 passed, 7 skipped (HSR).
+- `test_montessori_scenarios.py` + `test_montessori_semantics.py` + publishing: 119
+  passed; the 1 failure and 3 errors are all GLFW/`DISPLAY` (no X11 here).
+- The Tracy/MuJoCo errors in a full sweep are all
+  `PathResolutionError: iai_tracy_description` - the known environment gap, not the diff.
+- krrood tests cannot share a pytest invocation with the others: its conftest regenerates
+  its own dataset ORM and collides with the already-registered metadata
+  (`InvalidRequestError: Table '_789...' is already defined`). Run them separately.
 
 ### Local environment (not committed)
 - `pip install -U uv` then `uv sync --python /usr/bin/python3.12 --extra dev`.
