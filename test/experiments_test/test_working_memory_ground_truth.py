@@ -23,7 +23,7 @@ from semantic_digital_twin.world import World
 from coraplex.datastructures.enums import ExecutionType
 
 from experiments.episodes.episode import Episode
-from experiments.montessori.exceptions import UnknownPieceNamed
+from experiments.montessori.exceptions import NoPieceNumbered, UnknownPieceNamed
 from experiments.montessori.scenarios import (
     BoardOnItsOwnTable,
     DetectionRelabelled,
@@ -41,7 +41,9 @@ from experiments.montessori.semantics import (
     MontessoriShapeCategory,
 )
 from experiments.montessori.watched_run import (
+    PIECES_ON_OFFER,
     WHICH_PIECES_WERE_PLACED,
+    SceneThePersonSetUp,
     WatchedSortingRun,
 )
 from experiments.questions.question import (
@@ -485,6 +487,52 @@ def test_a_shape_no_piece_of_the_set_is_is_not_a_piece_anyone_placed():
 
     with pytest.raises(UnknownPieceNamed):
         found.as_the_person_says(PersonWhoSaysWhatTheyPlaced(says="banana"))
+
+
+# %% the pieces chosen off a numbered list
+
+
+def test_the_person_is_offered_every_shape_of_the_set_with_its_number():
+    """
+    Typing a shape's exact spelling is easy to get wrong at the console; the shapes are
+    listed with a number each, and a number is what the person types.
+    """
+    for number, category in enumerate(PIECES_ON_OFFER, start=1):
+        assert "%d. %s" % (number, category) in WHICH_PIECES_WERE_PLACED
+    assert list(PIECES_ON_OFFER) == list(MontessoriShapeCategory)
+
+
+def test_the_pieces_are_chosen_by_their_numbers():
+    chosen = [PIECES_ON_OFFER[0], PIECES_ON_OFFER[2]]
+    person = PersonWhoSaysWhatTheyPlaced(
+        says=", ".join(str(PIECES_ON_OFFER.index(category) + 1) for category in chosen)
+    )
+
+    assert SceneThePersonSetUp(person).pieces_placed() == chosen
+
+
+def test_numbers_may_be_separated_by_spaces_as_well_as_commas():
+    person = PersonWhoSaysWhatTheyPlaced(says="1 2,3")
+
+    assert SceneThePersonSetUp(person).pieces_placed() == list(PIECES_ON_OFFER[:3])
+
+
+def test_a_number_no_piece_is_listed_under_is_refused():
+    person = PersonWhoSaysWhatTheyPlaced(says=str(len(PIECES_ON_OFFER) + 1))
+
+    with pytest.raises(NoPieceNumbered) as refused:
+        SceneThePersonSetUp(person).pieces_placed()
+    assert refused.value.number == len(PIECES_ON_OFFER) + 1
+    assert refused.value.count == len(PIECES_ON_OFFER)
+
+
+def test_a_shape_can_still_be_named_instead_of_numbered():
+    person = PersonWhoSaysWhatTheyPlaced(says="2, %s" % PIECES_ON_OFFER[0])
+
+    assert SceneThePersonSetUp(person).pieces_placed() == [
+        PIECES_ON_OFFER[1],
+        PIECES_ON_OFFER[0],
+    ]
 
 
 # %% a table nobody can give an account of

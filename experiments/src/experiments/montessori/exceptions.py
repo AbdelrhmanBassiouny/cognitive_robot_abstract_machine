@@ -295,3 +295,27 @@ class UnknownPieceNamed(DataclassException):
 
     def suggest_correction(self) -> str:
         return "Name the pieces among: %s." % ", ".join(sorted(self.known))
+
+
+@dataclass
+class NoPieceNumbered(DataclassException):
+    """
+    Raised when the person at the table picks a number no piece of the set is listed
+    under.
+    """
+
+    number: int
+    """
+    The number they typed.
+    """
+
+    count: int
+    """
+    How many pieces are listed, numbered from one.
+    """
+
+    def error_message(self) -> str:
+        return "No piece is listed under %d." % self.number
+
+    def suggest_correction(self) -> str:
+        return "Pick numbers between 1 and %d." % self.count

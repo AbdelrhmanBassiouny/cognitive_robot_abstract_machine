@@ -27,7 +27,7 @@ from experiments.montessori.event_monitoring import (
     MontessoriEventMonitor,
     build_shape_monitor_in_scene,
 )
-from experiments.montessori.exceptions import UnknownPieceNamed
+from experiments.montessori.exceptions import NoPieceNumbered, UnknownPieceNamed
 from experiments.montessori.scenarios import (
     LookAtTheScene,
     MontessoriSortingScenario,
@@ -47,18 +47,29 @@ from experiments.questions.question_set import QuestionSet
 from experiments.questions.working_memory import BeliefAgreesWithPerception
 from experiments.scenarios.scenario import Person, ScenarioStep
 
-WHICH_PIECES_WERE_PLACED = (
-    "Which pieces did you put on the table when you set it up? "
-    "Name their shapes, separated by commas:"
-)
+PIECES_ON_OFFER = tuple(MontessoriShapeCategory)
 """
-What the person at the table is asked, so a run on the robot is scored on the scene they
-set up rather than on the one the camera made of it.
+The shapes the person at the table chooses among, numbered from one in this order.
 """
 
 BETWEEN_THE_PIECES_THEY_NAME = ","
 """
-What separates one shape from the next in what the person types.
+What separates one piece from the next in what the person types, beside whitespace.
+"""
+
+WHICH_PIECES_WERE_PLACED = (
+    "Which pieces did you put on the table when you set it up? "
+    "Type their numbers, separated by commas:\n"
+    + "\n".join(
+        "  %d. %s" % (number, category)
+        for number, category in enumerate(PIECES_ON_OFFER, start=1)
+    )
+    + "\n"
+)
+"""
+What the person at the table is asked, so a run on the robot is scored on the scene they
+set up rather than on the one the camera made of it: every shape of the set with its
+number, since a number is easier to type right at the console than a spelling.
 """
 
 # %% what the person at the table says they set up
@@ -82,24 +93,40 @@ class SceneThePersonSetUp:
 
     def pieces_placed(self) -> Optional[List[MontessoriShapeCategory]]:
         """
-        The shapes the person at the table says they put on it.
+        The shapes the person at the table says they put on it, each picked by its
+        number on the list they are offered, or named.
 
         :return: The shapes, or None where nobody at the table says.
+        :raises NoPieceNumbered: If they pick a number no piece is listed under.
         :raises UnknownPieceNamed: If they name a shape no piece of the set is.
         """
         said = self.person.answer(WHICH_PIECES_WERE_PLACED)
         if said is None:
             return None
-        named = [
-            spelled.strip()
-            for spelled in said.split(BETWEEN_THE_PIECES_THEY_NAME)
-            if spelled.strip()
+        return [
+            self.piece_picked(typed)
+            for typed in said.replace(BETWEEN_THE_PIECES_THEY_NAME, " ").split()
         ]
-        spellings = {str(category) for category in MontessoriShapeCategory}
-        unknown = [spelled for spelled in named if spelled not in spellings]
-        if unknown:
-            raise UnknownPieceNamed(named=unknown[0], known=frozenset(spellings))
-        return [MontessoriShapeCategory(spelled) for spelled in named]
+
+    @staticmethod
+    def piece_picked(typed: str) -> MontessoriShapeCategory:
+        """
+        The shape one thing the person typed picks: a number off the list, or a shape's
+        own name.
+
+        :param typed: What they typed for one piece.
+        :raises NoPieceNumbered: If it is a number no piece is listed under.
+        :raises UnknownPieceNamed: If it is a name no shape of the set has.
+        """
+        if typed.isdigit():
+            number = int(typed)
+            if not 1 <= number <= len(PIECES_ON_OFFER):
+                raise NoPieceNumbered(number=number, count=len(PIECES_ON_OFFER))
+            return PIECES_ON_OFFER[number - 1]
+        spellings = {str(category) for category in PIECES_ON_OFFER}
+        if typed not in spellings:
+            raise UnknownPieceNamed(named=typed, known=frozenset(spellings))
+        return MontessoriShapeCategory(typed)
 
     def stated_over(self, scene: SortingScene) -> Optional[SceneAsSetUp]:
         """
