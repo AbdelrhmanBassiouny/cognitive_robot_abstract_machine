@@ -300,12 +300,49 @@ query itself.
 
 ---
 
+## One Backend per Description: `BackendChoice`
+
+A statement can hand over descriptions no single backend answers. A plan says *pick up the
+cyan cube resting on the board, gripped somehow*: the cube has to be looked for, and the grip
+has to be generated, and the plan says neither who is to find it nor who is to choose the grip.
+
+{py:class}`~krrood.entity_query_language.backends.BackendChoice` is itself a backend, so it goes
+wherever one does. It is given the backends to pick from, in the order it prefers them, and
+answers each description a statement hands over with the first that declares it can:
+
+```python
+from krrood.entity_query_language.backends import (
+    BackendChoice,
+    EntityQueryLanguageGenerativeBackend,
+)
+
+backend = BackendChoice(backends=[looking, EntityQueryLanguageGenerativeBackend()])
+holds = list(backend.evaluate(an(TakingHold)(thing=a(Sighting)(label="cube"), grip=...)))
+```
+
+Descriptions are answered innermost first, so one is always answered after the descriptions it
+is stated in terms of, and the answer stands in its place in the statement that handed it over.
+Which backend answered which statement is kept in
+{py:attr}`~krrood.entity_query_language.backends.BackendChoice.answered`, and a statement none of
+them declares it can answer raises
+{py:class}`~krrood.entity_query_language.exceptions.NoBackendAnswers` rather than being answered
+by whichever happens to be first.
+
+What a backend declares it answers is its own
+{py:meth}`~krrood.entity_query_language.backends.QueryBackend.capability`; to ask one about a
+single field rather than a whole statement, use
+{py:func}`~krrood.entity_query_language.backends.backend_supplies`.
+
+---
+
 ## API Reference
 
 - {py:func}`~krrood.entity_query_language.factories.an`
 - {py:func}`~krrood.entity_query_language.factories.the`
 - {py:class}`~krrood.entity_query_language.query.match.Match`
 - {py:class}`~krrood.entity_query_language.backends.ProbabilisticBackend`
+- {py:class}`~krrood.entity_query_language.backends.BackendChoice`
+- {py:func}`~krrood.entity_query_language.backends.backend_supplies`
 - {py:class}`~krrood.parametrization.parameterizer.UnderspecifiedParameters`
 - {py:class}`~krrood.parametrization.model_registries.ModelRegistry`
 - {py:class}`~krrood.parametrization.model_registries.DictRegistry`

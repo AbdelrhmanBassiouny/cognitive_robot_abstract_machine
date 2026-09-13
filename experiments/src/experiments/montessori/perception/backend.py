@@ -193,7 +193,7 @@ class MontessoriLookRequest(LookRequest[MontessoriDetection]):
 
 
 @dataclass
-class MontessoriPerceptionBackend(PerceptionBackend):
+class MontessoriPerceptionBackend(PerceptionBackend[MontessoriDetection]):
     """
     Answers a statement about the Montessori scene by looking at it.
     """

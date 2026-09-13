@@ -188,7 +188,7 @@ class StandingBeside(Triple):
 
 
 @dataclass
-class BackendThatLooksAtTheWorld(PerceptionBackend):
+class BackendThatLooksAtTheWorld(PerceptionBackend[Sighting]):
     """
     Answers by looking, over a fixed set of sightings standing in for a world.
     """

@@ -24,6 +24,7 @@ from typing import assert_never, Any
 import rustworkx as rx
 from typing_extensions import (
     Callable,
+    Dict,
     Optional,
     Type,
     List,
@@ -60,6 +61,7 @@ from krrood.entity_query_language.evaluable import Evaluable
 from krrood.entity_query_language.exceptions import (
     CalledMatchAfterResolution,
     CalledMatchMultipleTimes,
+    DescriptionNotStated,
     MatchTypeCannotBeDetermined,
     PositionalArgumentsInMatchPattern,
     ReadOnlyMapping,
@@ -580,19 +582,28 @@ class Match(
         return isinstance(value, type(Ellipsis))
 
     @property
+    def _stated_matches_(self) -> Iterator[Match]:
+        """
+        :return: Every match this one's pattern assigns to a field itself, directly or as
+            an element of a collection it assigns -- the descriptions it hands over, as
+            against the ones those in turn hand over.
+        """
+        for value in self._kwargs_.values():
+            elements = value if isinstance(value, (list, tuple, set)) else (value,)
+            for element in elements:
+                if isinstance(element, Match):
+                    yield element
+
+    @property
     def _nested_matches_(self) -> Iterator[Match]:
         """
         :return: Every match this one's pattern assigns to a field, directly or as an
             element of a collection it assigns, innermost first -- so a match is always
             reached after the matches it nests, which are what say what it describes.
         """
-        for value in self._kwargs_.values():
-            elements = value if isinstance(value, (list, tuple, set)) else (value,)
-            for element in elements:
-                if not isinstance(element, Match):
-                    continue
-                yield from element._nested_matches_
-                yield element
+        for stated in self._stated_matches_:
+            yield from stated._nested_matches_
+            yield stated
 
     @property
     def _has_cause_attributes_(self) -> bool:
@@ -714,6 +725,48 @@ class Match(
             **{**self._kwargs_, **kwargs}
         )
 
+    def answering(self, description: Match, answer: Any) -> Match[T]:
+        """
+        The same statement, with one of the descriptions it hands over answered.
+
+        Everything else it says is left as it was, the conditions it states included, so
+        a statement is grown towards an answer one description at a time rather than
+        rebuilt from the part of it that happens to be ready.
+
+        :param description: The description it hands over, as it states it.
+        :param answer: What answers that description, to be stated in its place.
+        :raises DescriptionNotStated: If this statement hands that description over
+            nowhere.
+        """
+        stated = {
+            name: self._with_answer_in_the_place_of(value, description, answer)
+            for name, value in self._kwargs_.items()
+        }
+        if all(stated[name] is value for name, value in self._kwargs_.items()):
+            raise DescriptionNotStated(self, description)
+        return self._restated(self._where_conditions_, stated)
+
+    @staticmethod
+    def _with_answer_in_the_place_of(
+        value: Any, description: Match, answer: Any
+    ) -> Any:
+        """
+        :param value: What the pattern states one of its attributes to.
+        :param description: The description being answered, told apart by which one it
+            is rather than by what it says, since two written alike are two descriptions.
+        :param answer: What answers it.
+        :return: The same value with the answer wherever that description stood.
+        """
+        if value is description:
+            return answer
+        if not isinstance(value, (list, tuple, set)):
+            return value
+        if not any(element is description for element in value):
+            return value
+        return type(value)(
+            answer if element is description else element for element in value
+        )
+
     def covers(self, other: Match) -> bool:
         """
         Whether everything this pattern states, another states too.
@@ -772,11 +825,22 @@ class Match(
             for count in range(len(about_it) + 1)
         ]
 
-    def _restated(self, conditions: List[ConditionType]) -> Match[T]:
+    def _restated(
+        self,
+        conditions: List[ConditionType],
+        stated: Optional[Dict[str, Any]] = None,
+    ) -> Match[T]:
         """
         This statement over the same variable, saying only what it is given.
 
-        :param conditions: What the restated statement says.
+        The variable is the one this statement already describes, so a condition written
+        about it -- by this statement or by another one mentioning it -- still says what
+        it said.
+
+        :param conditions: What the restated statement says about the thing it looks
+            for.
+        :param stated: What its pattern states, by the attribute's own name, or None to
+            state what this one states.
         """
         restated = type(self)(
             self._factory_,
@@ -784,7 +848,7 @@ class Match(
             _variable_=self._variable_,
         )
         if self._has_been_called:
-            restated = restated(**self._kwargs_)
+            restated = restated(**(self._kwargs_ if stated is None else stated))
         return restated.where(*conditions) if conditions else restated
 
     def causes_effect(self, *conditions: ConditionType) -> Match[T]:
