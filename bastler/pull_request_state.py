@@ -16,11 +16,13 @@ import os
 import re
 import shutil
 import subprocess
+import urllib.error
 import urllib.parse
 import urllib.request
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import StrEnum
+from http import HTTPStatus
 from pathlib import Path
 from typing import Any, ClassVar
 
@@ -732,6 +734,11 @@ class RepositoryEndpoints:
         """
         return f"repos/{self.repository}/issues/{number}"
 
+    @property
+    def pages(self) -> str:
+        """:return: The repository's GitHub Pages configuration endpoint."""
+        return f"repos/{self.repository}/pages"
+
 
 class RequestHeader(StrEnum):
     """
@@ -747,6 +754,26 @@ class RequestHeader(StrEnum):
     """
     Names the media type asked for.
     """
+
+    CONTENT_TYPE = "Content-Type"
+    """
+    Names the representation of a request body, on the calls that send one.
+    """
+
+
+class HttpMethod(StrEnum):
+    """
+    The HTTP methods the token transport's write requests use.
+    """
+
+    GET = "GET"
+    """Reads a resource."""
+
+    POST = "POST"
+    """Creates a resource that does not exist yet."""
+
+    PUT = "PUT"
+    """Replaces a resource that already exists."""
 
 
 class GitHubApi(ABC):
@@ -830,6 +857,11 @@ class CommandGitHubApi(GitHubApi):
 class TokenGitHubApi(GitHubApi):
     """
     The plain-HTTP transport, authenticating with a personal or installation token.
+
+    Beyond :meth:`get`, this transport also carries :meth:`find` and :meth:`send` - the
+    read-with-a-tolerated-404 and write requests that :mod:`bastler.pages_site` needs to
+    configure a repository's GitHub Pages source. Neither is part of the base
+    :class:`GitHubApi` contract, since :class:`CommandGitHubApi` has no equivalent.
     """
 
     token: str
@@ -855,6 +887,43 @@ class TokenGitHubApi(GitHubApi):
         )
         with urllib.request.urlopen(request) as response:
             return json.load(response)
+
+    def find(self, path: str) -> Any | None:
+        """
+        Fetch one path whose absence is an ordinary outcome rather than an error.
+
+        :param path: The endpoint path, without a leading slash.
+        :return: The parsed JSON response, or ``None`` if GitHub has no such resource.
+        """
+        try:
+            return self.get(path)
+        except urllib.error.HTTPError as error:
+            if error.code != HTTPStatus.NOT_FOUND:
+                raise
+            return None
+
+    def send(self, method: HttpMethod, path: str, body: dict[str, Any]) -> Any:
+        """
+        Send one request that writes to GitHub, rather than reading from it.
+
+        :param method: The HTTP method to send it with.
+        :param path: The endpoint path, without a leading slash.
+        :param body: The JSON body to send.
+        :return: The parsed JSON response, or ``None`` when GitHub answers with none.
+        """
+        request = urllib.request.Request(
+            f"{self.base_url}/{path}",
+            data=json.dumps(body).encode(),
+            headers={
+                RequestHeader.AUTHORIZATION: f"Bearer {self.token}",
+                RequestHeader.ACCEPT: self.ACCEPTED_MEDIA_TYPE,
+                RequestHeader.CONTENT_TYPE: self.ACCEPTED_MEDIA_TYPE,
+            },
+            method=method.value,
+        )
+        with urllib.request.urlopen(request) as response:
+            content = response.read()
+        return json.loads(content) if content else None
 
 
 # %% fetch orchestration

@@ -13,8 +13,10 @@ from __future__ import annotations
 import io
 import json
 import os
+import urllib.error
 import urllib.request
 from dataclasses import dataclass, field
+from http import HTTPStatus
 from typing import Any
 
 import pytest
@@ -28,6 +30,7 @@ from bastler.pull_request_state import (
     CommandGitHubApi,
     GitHubAccessError,
     GitHubApi,
+    HttpMethod,
     ListParameter,
     PullRequestFetcher,
     PullRequestField,
@@ -196,6 +199,91 @@ def test_the_token_transport_authorizes_and_parses_the_response(monkeypatch):
     assert (
         request.get_header(RequestHeader.ACCEPT) == TokenGitHubApi.ACCEPTED_MEDIA_TYPE
     )
+
+
+def test_the_pages_endpoint_addresses_the_repositorys_pages_configuration():
+    assert ENDPOINTS.pages == f"repos/{REPOSITORY}/pages"
+
+
+def test_the_token_transport_sends_a_write_request_with_its_body(monkeypatch):
+    captured_requests: list[urllib.request.Request] = []
+    response = {"result": "ok"}
+
+    def fake_urlopen(request: urllib.request.Request) -> io.BytesIO:
+        captured_requests.append(request)
+        return io.BytesIO(json.dumps(response).encode())
+
+    monkeypatch.setattr(
+        bastler.pull_request_state.urllib.request, "urlopen", fake_urlopen
+    )
+
+    body = {"branch": "plan-dashboards-site"}
+    sent = TokenGitHubApi(token=TOKEN).send(HttpMethod.POST, ENDPOINTS.pages, body)
+
+    assert sent == response
+    request = captured_requests[0]
+    assert request.full_url == f"{GITHUB_API_ROOT}/{ENDPOINTS.pages}"
+    assert request.get_method() == HttpMethod.POST
+    assert json.loads(request.data) == body
+    assert request.get_header(RequestHeader.AUTHORIZATION) == f"Bearer {TOKEN}"
+    # urllib.request.Request.get_header() looks the name up verbatim rather than
+    # normalizing it the way add_header() stores it - a multi-word header like this
+    # one has to be looked up in the same capitalized form it was stored under.
+    assert request.get_header(RequestHeader.CONTENT_TYPE.capitalize()) == (
+        TokenGitHubApi.ACCEPTED_MEDIA_TYPE
+    )
+
+
+def test_a_write_request_with_no_response_body_is_read_as_none(monkeypatch):
+    monkeypatch.setattr(
+        bastler.pull_request_state.urllib.request,
+        "urlopen",
+        lambda request: io.BytesIO(b""),
+    )
+
+    assert TokenGitHubApi(token=TOKEN).send(HttpMethod.PUT, ENDPOINTS.pages, {}) is None
+
+
+def test_finding_an_existing_path_returns_its_response(monkeypatch):
+    response = {"result": "ok"}
+    monkeypatch.setattr(
+        bastler.pull_request_state.urllib.request,
+        "urlopen",
+        lambda request: io.BytesIO(json.dumps(response).encode()),
+    )
+
+    assert TokenGitHubApi(token=TOKEN).find(ENDPOINTS.pages) == response
+
+
+def test_finding_a_missing_path_returns_none(monkeypatch):
+    def raise_not_found(request: urllib.request.Request) -> io.BytesIO:
+        raise urllib.error.HTTPError(
+            request.full_url, HTTPStatus.NOT_FOUND, "Not Found", None, None
+        )
+
+    monkeypatch.setattr(
+        bastler.pull_request_state.urllib.request, "urlopen", raise_not_found
+    )
+
+    assert TokenGitHubApi(token=TOKEN).find(ENDPOINTS.pages) is None
+
+
+def test_finding_a_path_reraises_a_non_404_error(monkeypatch):
+    def raise_server_error(request: urllib.request.Request) -> io.BytesIO:
+        raise urllib.error.HTTPError(
+            request.full_url,
+            HTTPStatus.INTERNAL_SERVER_ERROR,
+            "Server Error",
+            None,
+            None,
+        )
+
+    monkeypatch.setattr(
+        bastler.pull_request_state.urllib.request, "urlopen", raise_server_error
+    )
+
+    with pytest.raises(urllib.error.HTTPError):
+        TokenGitHubApi(token=TOKEN).find(ENDPOINTS.pages)
 
 
 # %% fetch orchestration
