@@ -5,6 +5,8 @@ saw, sampled along the seconds of a trial, and put back afterwards.
 
 from __future__ import annotations
 
+import gc
+import weakref
 from pathlib import Path
 
 import numpy as np
@@ -18,6 +20,8 @@ from experiments.episodes.artifacts import (
     TrialArtifactNotKept,
 )
 from experiments.episodes.trace import (
+    FilmBeingTaken,
+    FilmHasNoFrameError,
     JointPositions,
     JointTrace,
     JointTraceRecorder,
@@ -285,6 +289,96 @@ def test_a_film_with_no_frame_hands_none_back(tmp_path: Path) -> None:
 
     with pytest.raises(TraceIsEmptyError):
         film.at(EARLIER)
+
+
+# %% a film written as it is taken
+
+FILM_NAME = "camera.mp4"
+"""
+What the films written here are called.
+"""
+
+FRAMES_FILMED = 5
+"""
+How many frames the film that is watched for what it holds on to is handed: more than
+the one it can still have in hand, so that letting go is what the test sees.
+"""
+
+
+def test_a_film_written_as_it_is_taken_reads_back_what_it_was_handed(
+    tmp_path: Path,
+) -> None:
+    """
+    A film encoded frame by frame as a trial runs leaves the same video, and the same
+    moments beside it, as one kept whole and written at the end.
+    """
+    film = FilmBeingTaken(path=tmp_path / FILM_NAME, frames_per_second=15)
+    earlier, later = coloured_frames(2)
+    film.keep(earlier, EARLIER)
+    film.keep(later, LATER)
+
+    taken = film.finish()
+
+    assert taken.moments == [EARLIER, LATER]
+    assert (
+        np.abs(taken.at(EARLIER).astype(int) - earlier.astype(int)).max()
+        <= ENCODING_TOLERANCE
+    )
+    assert (
+        np.abs(taken.at(LATER).astype(int) - later.astype(int)).max()
+        <= ENCODING_TOLERANCE
+    )
+
+
+def test_a_film_holds_no_frame_it_has_finished_encoding(tmp_path: Path) -> None:
+    """
+    What makes filming a whole trial affordable: nothing of a frame is held once it is
+    in the video but the moment it was taken at, so a run costs the same memory whether
+    it films for a minute or for an hour.
+    """
+    film = FilmBeingTaken(path=tmp_path / FILM_NAME)
+    frames = coloured_frames(FRAMES_FILMED)
+    still_held = [weakref.ref(frame) for frame in frames]
+    for moment, frame in enumerate(frames):
+        film.keep(frame, float(moment))
+
+    frames.clear()
+    gc.collect()
+
+    assert [held() for held in still_held[:-1]] == [None] * (FRAMES_FILMED - 1)
+    assert film.moments == [float(moment) for moment in range(FRAMES_FILMED)]
+
+
+def test_a_film_taken_on_disk_is_left_with_its_moments_where_it_is_asked_for(
+    tmp_path: Path,
+) -> None:
+    """
+    The film is already a video, so leaving it somewhere copies it rather than decoding
+    the whole trial back into memory to encode it again.
+    """
+    film = FilmBeingTaken(path=tmp_path / "taken" / FILM_NAME, frames_per_second=15)
+    earlier, later = coloured_frames(2)
+    film.keep(earlier, EARLIER)
+    film.keep(later, LATER)
+
+    left = TimedFramesFile(film.finish().write(tmp_path / "kept" / FILM_NAME))
+
+    assert left.moments == [EARLIER, LATER]
+    assert (
+        np.abs(left.at(LATER).astype(int) - later.astype(int)).max()
+        <= ENCODING_TOLERANCE
+    )
+
+
+def test_a_film_that_took_no_frame_has_no_video_to_leave(tmp_path: Path) -> None:
+    film = FilmBeingTaken(path=tmp_path / "taken" / FILM_NAME)
+
+    taken = film.finish()
+
+    assert film.is_empty
+    assert taken.moments == []
+    with pytest.raises(FilmHasNoFrameError):
+        taken.write(tmp_path / "kept" / FILM_NAME)
 
 
 # %% kept with the trial

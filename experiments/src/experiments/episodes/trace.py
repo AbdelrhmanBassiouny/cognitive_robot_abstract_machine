@@ -9,6 +9,7 @@ in the pose it was in, the camera showing what it showed -- rather than describe
 
 from __future__ import annotations
 
+import shutil
 import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
@@ -16,6 +17,7 @@ from pathlib import Path
 
 import imageio.v2 as imageio
 import numpy as np
+from imageio.core.format import Format
 from krrood.exceptions import DataclassException
 from semantic_digital_twin.adapters.mujoco_video_recording import RecordedVideo
 from semantic_digital_twin.callbacks.callback import StateChangeCallback
@@ -262,6 +264,32 @@ class JointTraceRecorder(StateChangeCallback):
 
 # %% what a camera saw
 
+FRAMES_PER_SECOND = 15
+"""
+The rate a film is played back at unless told otherwise.
+"""
+
+
+@dataclass
+class FilmHasNoFrameError(DataclassException):
+    """
+    Raised when a film that took no frame is asked to leave its video somewhere.
+    """
+
+    path: Path
+    """
+    Where the video was to be left.
+    """
+
+    def error_message(self) -> str:
+        return "There is no video to leave at %s: the film took no frame." % self.path
+
+    def suggest_correction(self) -> str:
+        return (
+            "A film is filled by keeping frames while the trial runs; a run that was "
+            "not filmed has none to leave."
+        )
+
 
 @dataclass(frozen=True)
 class TimedFrame:
@@ -298,6 +326,15 @@ class FramesByMoment(ABC):
         blue.
 
         :param index: Its place, counted from the first frame.
+        """
+
+    @abstractmethod
+    def write(self, path: Path) -> Path:
+        """
+        Leave the frames as a video at the given path, with their moments beside it.
+
+        :param path: The video file, its directory created if it is not there.
+        :return:``path``.
         """
 
     def at(self, moment: float) -> np.ndarray:
@@ -383,6 +420,25 @@ class TimedFramesFile(FramesByMoment):
         with imageio.get_reader(str(self.path)) as reader:
             return np.asarray(reader.get_data(index))
 
+    def write(self, path: Path) -> Path:
+        """
+        Leave a copy of the video, and of the moments beside it, at the given path.
+
+        Copied rather than encoded again: the frames are already a video, and decoding
+        a whole trial's film back into memory to re-encode it is what writing it as it
+        was taken avoids.
+
+        :param path: The video file, its directory created if it is not there.
+        :raises FilmHasNoFrameError: If the film took no frame, so there is no video.
+        :return:``path``.
+        """
+        if not self.path.is_file():
+            raise FilmHasNoFrameError(path=path)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(self.path, path)
+        shutil.copy2(self.moments_path, TimedFramesFile(path).moments_path)
+        return path
+
     def read(self) -> TimedFrames:
         """
         Every frame of the video, with its moments.
@@ -415,7 +471,7 @@ class TimedFrames(FramesByMoment):
     Seconds into the trial each frame was taken at.
     """
 
-    frames_per_second: int = 15
+    frames_per_second: int = FRAMES_PER_SECOND
     """
     The rate the frames are played back at when written as a video.
     """
@@ -470,3 +526,76 @@ class TimedFrames(FramesByMoment):
         :param path: The video file, with its moments beside it.
         """
         return TimedFramesFile(path).read()
+
+
+# %% a film written as it is taken
+
+
+@dataclass
+class FilmBeingTaken:
+    """
+    A film encoded into its video one frame at a time, as a running trial takes them.
+
+    A trial films thousands of frames of a megabyte or two each, which is far more than
+    the machine running it has to spare for them; a film that encodes each frame and
+    lets go of it costs the same memory whether the trial lasts a minute or an hour, and
+    leaves behind the same video and moments as one kept whole and written at the end.
+    """
+
+    path: Path
+    """
+    The video file the frames are encoded into, its directory created with the first
+    frame; the moments stand beside it once the film is finished.
+    """
+
+    frames_per_second: int = FRAMES_PER_SECOND
+    """
+    The rate the frames are played back at.
+    """
+
+    moments: List[float] = field(init=False, default_factory=list)
+    """
+    Seconds into the trial each frame taken so far was taken at.
+    """
+
+    _encoder: Optional[Format.Writer] = field(init=False, default=None, repr=False)
+    """
+    What encodes the frames, opened with the first one and kept until the film is
+    finished.
+    """
+
+    def keep(self, frame: np.ndarray, moment: float) -> None:
+        """
+        Encode one frame into the video, holding on to nothing of it but the moment.
+
+        :param frame: What the camera saw, as red, green and blue.
+        :param moment: Seconds into the trial it saw it at.
+        """
+        if self._encoder is None:
+            self.path.parent.mkdir(parents=True, exist_ok=True)
+            self._encoder = imageio.get_writer(
+                str(self.path), fps=self.frames_per_second
+            )
+        self._encoder.append_data(frame)
+        self.moments.append(moment)
+
+    @property
+    def is_empty(self) -> bool:
+        """
+        Whether no frame has been taken yet.
+        """
+        return not self.moments
+
+    def finish(self) -> TimedFramesFile:
+        """
+        Close the video and leave the moments beside it.
+
+        :return: The film, read back a frame at a time.
+        """
+        if self._encoder is not None:
+            self._encoder.close()
+            self._encoder = None
+        film = TimedFramesFile(self.path)
+        film.moments_path.parent.mkdir(parents=True, exist_ok=True)
+        np.save(film.moments_path, np.array(self.moments, dtype=float))
+        return film
