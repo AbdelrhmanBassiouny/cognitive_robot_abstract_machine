@@ -15,8 +15,13 @@ from pathlib import Path
 import imageio.v2 as imageio
 import numpy as np
 import pytest
+from coraplex.datastructures.enums import ExecutionType
 from typing_extensions import Tuple
 
+from experiments.episodes.episode import Episode, RecordedTrial
+from experiments.episodes.long_term_memory import LongTermMemory
+from experiments.episodes.recording import open_recording
+from experiments.montessori.results_database import ResultsDatabase
 from experiments.paper.scene import (
     NothingToDrawError,
     PointOfView,
@@ -38,6 +43,8 @@ from semantic_digital_twin.world_description.connections import FixedConnection
 from semantic_digital_twin.world_description.geometry import Box, Color, Scale
 from semantic_digital_twin.world_description.shape_collection import ShapeCollection
 from semantic_digital_twin.world_description.world_entity import Body
+
+from experiments.scenarios.trial import TrialOutcome
 
 from .offscreen_rendering import needs_a_renderer
 
@@ -477,3 +484,31 @@ def test_framing_on_one_body_covers_that_body(
     )[:3, 3]
     assert np.all(framed[0] <= stands_at)
     assert np.all(stands_at <= framed[1])
+
+
+# %% the scene of a world read back from the database
+
+
+@needs_a_renderer
+def test_a_world_read_back_from_the_database_is_drawn(
+    scene_with_two_things: World, tmp_path: Path
+) -> None:
+    """
+    A card is drawn from the world an episode kept, which is read back from the database
+    by a later process, so what came back has to build a simulation as the original did.
+    """
+    database = ResultsDatabase(uri="sqlite:///%s" % (tmp_path / "results.db"))
+    episode = Episode(scenario_name="drawn", execution_type=ExecutionType.SIMULATED)
+    episode.world = scene_with_two_things
+    recording = open_recording(database)
+    recording.record(
+        RecordedTrial(episode=episode, outcome=TrialOutcome.SUCCEEDED, duration=1.0)
+    )
+    recording.close()
+    [trial] = LongTermMemory(database).recall_every_trial()
+
+    drawn = render_of(trial.episode.world).of(
+        [body_named(trial.episode.world, ANSWERED_NAME)]
+    )
+
+    assert drawn.write(tmp_path / "read_back.png").is_file()

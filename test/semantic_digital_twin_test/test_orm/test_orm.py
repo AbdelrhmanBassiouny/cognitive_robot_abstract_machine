@@ -22,6 +22,10 @@ from semantic_digital_twin.world_description.degree_of_freedom import (
     DegreeOfFreedomLimits,
 )
 from semantic_digital_twin.world_description.geometry import Box, Scale, Color
+from semantic_digital_twin.world_description.inertial_properties import (
+    Inertial,
+    InertiaTensor,
+)
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.spatial_types.spatial_types import (
     HomogeneousTransformationMatrix,
@@ -311,3 +315,22 @@ def test_part_whole_relationship_field_metadata_survives_orm_round_trip(session)
     # The field values themselves survived the round trip.
     assert isinstance(reconstructed_drawer.handle, Handle)
     assert isinstance(reconstructed_drawer.mechanical_joint, Slider)
+
+
+def test_a_bodys_inertia_tensor_survives_the_orm_round_trip(session):
+    """
+    A simulator is built from a body's inertia, so a world read back from the database
+    must carry the tensor its bodies were stored with, not an empty one.
+    """
+    inertia = InertiaTensor.from_values(1.0, 2.0, 3.0, 0.1, 0.2, 0.3)
+    body = Body(
+        name=PrefixedName("weighted"),
+        inertial=Inertial(mass=4.0, inertia=inertia),
+    )
+
+    session.add(to_dao(body))
+    session.commit()
+    reconstructed: Body = session.scalar(select(BodyDAO)).from_dao()
+
+    assert reconstructed.inertial.mass == body.inertial.mass
+    assert np.array_equal(reconstructed.inertial.inertia.data, inertia.data)
