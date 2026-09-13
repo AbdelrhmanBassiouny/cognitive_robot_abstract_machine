@@ -301,6 +301,15 @@ class PersonWhoMovesTheScene:
         self.pieces_when_asked = list(self.scene.pieces)
         self.look.moved = True
 
+    def answer(self, question: str) -> None:
+        """
+        Nothing: this person is at the table to move a piece rather than to say how it
+        was laid out.
+
+        :param question: What they were asked.
+        """
+        return None
+
 
 def _run_on_the_robot(
     perceived: TracyLookingAtItsOwnTable, person=None, repetitions: int = 1

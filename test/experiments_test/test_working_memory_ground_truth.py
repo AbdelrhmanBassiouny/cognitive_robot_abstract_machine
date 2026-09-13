@@ -13,9 +13,10 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 import pytest
-from typing_extensions import List
+from typing_extensions import List, Optional, Type
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.robots.robot_parts import AbstractRobot
+from semantic_digital_twin.semantic_annotations.semantic_annotations import Table
 from semantic_digital_twin.spatial_types.spatial_types import Point3
 from semantic_digital_twin.world import World
 
@@ -43,7 +44,11 @@ from experiments.montessori.watched_run import (
     WHICH_PIECES_WERE_PLACED,
     WatchedSortingRun,
 )
-from experiments.questions.question import Memory, SceneAsSetUp
+from experiments.questions.question import (
+    Memory,
+    SceneAsSetUp,
+    ScoredAgainstTheSceneAsSetUp,
+)
 from experiments.questions.working_memory import ObjectPlaces, ObjectsSeen
 
 from .test_episode_recording import TrialsKeptInMemory
@@ -385,13 +390,22 @@ class ATableTheCameraFound:
     """
 
     @classmethod
-    def looked_at(cls) -> ATableTheCameraFound:
+    def looked_at(
+        cls, world_builder: Optional[PerceivingWorldBuilder] = None
+    ) -> ATableTheCameraFound:
         """
         One such scene, its pieces standing where this package builds them.
+
+        :param world_builder: What the look leaves standing in the world, or None for a
+            camera that finds everything this package builds.
         """
         scenario = SyntheticGrasperWatchesTheSceneStandStill(
             layout=LayoutAsFound(),
-            world_builder=TheBoardAndTheArmAsIfPerceived(robot=mounted_arm()),
+            world_builder=(
+                TheBoardAndTheArmAsIfPerceived(robot=mounted_arm())
+                if world_builder is None
+                else world_builder
+            ),
             execution_type=ExecutionType.REAL,
         )
         return cls(scenario=scenario, world=scenario.build_world())
@@ -471,3 +485,104 @@ def test_a_shape_no_piece_of_the_set_is_is_not_a_piece_anyone_placed():
 
     with pytest.raises(UnknownPieceNamed):
         found.as_the_person_says(PersonWhoSaysWhatTheyPlaced(says="banana"))
+
+
+# %% a table nobody can give an account of
+
+
+@dataclass
+class ATableTheCameraDoesNotName(TheBoardAndTheArmAsIfPerceived):
+    """
+    A scene builder standing in for a camera that finds the board and the pieces but
+    nothing they stand on, which is what looking at a table gives: the surface is in the
+    scene, and the scene has no word for it.
+    """
+
+    def build(self, robot_type: Type[AbstractRobot]) -> World:
+        """
+        The scene as this package builds it, with what holds the pieces up left unnamed.
+
+        :param robot_type: The robot the scenario runs on.
+        """
+        world = super().build(robot_type)
+        with world.modify_world():
+            for table in world.get_semantic_annotations_by_type(Table):
+                world.remove_semantic_annotation(table)
+        return world
+
+
+def a_table_the_camera_does_not_name() -> ATableTheCameraFound:
+    """
+    A scene on the robot whose table the camera has no word for.
+    """
+    return ATableTheCameraFound.looked_at(
+        ATableTheCameraDoesNotName(robot=mounted_arm())
+    )
+
+
+def test_a_scene_with_no_word_for_its_table_is_still_one_the_person_can_state():
+    """
+    What a piece stands on is nothing the person is asked on the robot, so a scene the
+    camera named no table in is one they can still say what they put on.
+    """
+    found = a_table_the_camera_does_not_name()
+
+    stood = found.as_the_person_says(
+        PersonWhoSaysWhatTheyPlaced.who_placed(found.pieces_standing)
+    )
+
+    assert ObjectsSeen(scene=stood.as_set_up).matches_ground_truth(stood.robot) is True
+
+
+def test_nobody_at_the_table_leaves_the_run_without_an_account_of_it():
+    """
+    On the robot the person who set the scene up is the only one who can say what was
+    set up, so a trial nobody is at is one the run can state nothing about.
+    """
+    found = a_table_the_camera_does_not_name()
+
+    stated = watched(found.scenario).scene_as_set_up(found.scenario, found.world)
+
+    assert stated is None
+
+
+def test_a_scene_nobody_can_state_is_asked_none_of_the_questions_scored_on_it():
+    """
+    The questions answered from the twin without being scored on it are asked as they
+    always were.
+    """
+    found = a_table_the_camera_does_not_name()
+    run = watched(found.scenario)
+    run.stated_scene = SceneAsSetUp.read_from(SortingScene(found.world).robot)
+    asked_of_the_twin = [
+        type(question)
+        for question in run.question_set(found.scenario, found.world).questions
+        if not isinstance(question, ScoredAgainstTheSceneAsSetUp)
+    ]
+
+    run.stated_scene = None
+
+    assert [
+        type(question)
+        for question in run.question_set(found.scenario, found.world).questions
+    ] == asked_of_the_twin
+
+
+def test_a_trial_nobody_is_at_scores_every_question_it_asks():
+    """
+    A run on the robot with nobody at the table asks fewer questions rather than failing
+    or scoring one against an account nobody gave.
+    """
+    found = a_table_the_camera_does_not_name()
+    run = watched(found.scenario)
+
+    run.run(found.scenario)
+
+    [trial] = run.records_trials.trials
+    assert trial.queries
+    assert all(query.answered_correctly is not None for query in trial.queries)
+    assert [
+        query
+        for query in trial.queries
+        if isinstance(query.question, ScoredAgainstTheSceneAsSetUp)
+    ] == []

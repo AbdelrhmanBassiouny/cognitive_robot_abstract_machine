@@ -38,7 +38,6 @@ from experiments.scenarios.scenario import (
     AbsentPerson,
     EventBroughtAbout,
     Goal,
-    NobodyIsThereToAsk,
     PersonAtTheConsole,
     Perturbation,
     Scenario,
@@ -706,9 +705,14 @@ class TestThePersonAtTheScene:
         assert A_QUESTION_ABOUT_THE_SCENE in output.getvalue()
         assert said == "cube, cylinder"
 
-    def test_a_trial_with_nobody_at_the_scene_cannot_ask_how_it_was_set_up(self):
-        with pytest.raises(NobodyIsThereToAsk):
-            AbsentPerson().answer(A_QUESTION_ABOUT_THE_SCENE)
+    def test_a_trial_with_nobody_at_the_scene_is_told_nothing_about_how_it_was_set_up(
+        self,
+    ):
+        """
+        A run whose questions rest on what the person says is left with no account of
+        the scene rather than with an answer nobody gave.
+        """
+        assert AbsentPerson().answer(A_QUESTION_ABOUT_THE_SCENE) is None
 
 
 class TestAnEventBroughtAbout:

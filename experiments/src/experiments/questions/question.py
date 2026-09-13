@@ -768,10 +768,13 @@ class QuestionedThings:
     Where the scene is looked at from, which is what makes left and right mean anything.
     """
 
-    scene: SceneAsSetUp
+    scene: Optional[SceneAsSetUp]
     """
     The scene as whoever set it up knows it, which is what its questions are scored
-    against.
+    against, or None where nobody can say what it was set up to be.
+
+    A question there is no account to score is not asked at all, rather than scored on
+    the twin it is answered from.
     """
 
 

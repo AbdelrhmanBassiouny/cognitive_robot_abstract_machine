@@ -137,12 +137,13 @@ class Person(Protocol):
         :param instruction: What the person is asked to do.
         """
 
-    def answer(self, question: str) -> str:
+    def answer(self, question: str) -> Optional[str]:
         """
         Say how the scene stands, in a line.
 
         :param question: What the person is asked.
-        :return: What they said.
+        :return: What they said, or None where nobody answers, which is what a scene
+            nobody is at leaves every question with.
         """
 
 
@@ -175,27 +176,6 @@ class PersonAtTheConsole:
 
 
 @dataclass
-class NobodyIsThereToAsk(DataclassException):
-    """
-    Raised when a run puts a question to the person at the scene and there is none.
-    """
-
-    question: str
-    """
-    What the person would have been asked.
-    """
-
-    def error_message(self) -> str:
-        return "Nobody is at the scene to answer '%s'." % self.question
-
-    def suggest_correction(self) -> str:
-        return (
-            "Run this in simulation, where the run knows what it set up, or give the "
-            "run the person who set the scene up."
-        )
-
-
-@dataclass
 class AbsentPerson:
     """
     Stands in for the person at a trial that has none: keeps every instruction, does
@@ -210,14 +190,13 @@ class AbsentPerson:
     def carry_out(self, instruction: str) -> None:
         self.asked.append(instruction)
 
-    def answer(self, question: str) -> str:
+    def answer(self, question: str) -> None:
         """
-        Nothing, since there is nobody there.
+        Nothing, since there is nobody there to say anything.
 
         :param question: What the person would have been asked.
-        :raises NobodyIsThereToAsk: Always.
         """
-        raise NobodyIsThereToAsk(question=question)
+        return None
 
 
 # %% the change a run applies
