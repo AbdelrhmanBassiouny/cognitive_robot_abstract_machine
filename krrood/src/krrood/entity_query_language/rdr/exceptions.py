@@ -106,6 +106,31 @@ class NoInferenceTarget(DataclassException):
 
 
 @dataclass
+class QueryIsNotAMatch(DataclassException):
+    """
+    Raised when the RDR backend is asked to answer an expression that is not a ``Match``.
+
+    Only a ``Match`` marks an attribute with ``...``, so anything else names no attribute
+    for the backend to complete.
+    """
+
+    expression: Any
+    """The expression the backend was handed."""
+
+    def error_message(self) -> str:
+        return (
+            f"{type(self.expression).__name__} marks no attribute with `...`, so there "
+            "is nothing for an RDR to infer."
+        )
+
+    def suggest_correction(self) -> str:
+        return (
+            "Evaluate a match that underspecifies the attribute, e.g. "
+            "an(Animal)(species=...).from_(animals)."
+        )
+
+
+@dataclass
 class MultipleInferenceTargets(DataclassException):
     """
     Raised when a single-class RDR is handed more than one ``...`` attribute.
