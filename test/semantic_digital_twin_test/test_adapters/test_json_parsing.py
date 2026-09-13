@@ -44,7 +44,12 @@ from semantic_digital_twin.world_description.degree_of_freedom import (
     DegreeOfFreedom,
     DegreeOfFreedomLimits,
 )
-from semantic_digital_twin.world_description.geometry import Box, SurfaceFinish
+from semantic_digital_twin.world_description.geometry import (
+    Box,
+    Color,
+    Mesh,
+    SurfaceFinish,
+)
 from semantic_digital_twin.world_description.shape_collection import ShapeCollection
 from semantic_digital_twin.world_description.world_entity import (
     Body,
@@ -527,6 +532,19 @@ def test_json_serialization_with_mesh():
             # shell rather than exactly empty; treat a negligible residual volume as
             # geometrically identical.
             assert difference.is_empty or difference.volume < c1.mesh.volume * 1e-3
+
+
+def test_a_mesh_read_from_json_keeps_its_colour():
+    """
+    A mesh carries its geometry in its json and is rebuilt from that geometry, and the
+    colour written beside it is what a reader who did not have the file sees it in.
+    """
+    coloured = Mesh.from_trimesh(mesh=trimesh.creation.box((0.1, 0.1, 0.1)))
+    coloured.color = Color(R=1.0, G=0.5, B=0.0)
+
+    read_back = from_json(json.loads(json.dumps(to_json(coloured))))
+
+    assert read_back.color == coloured.color
 
 
 # %% connection references survive same-name ambiguity
