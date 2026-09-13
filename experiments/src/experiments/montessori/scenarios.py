@@ -1902,6 +1902,18 @@ class SortingPerturbation(Perturbation[World], ABC):
         """
         return ()
 
+    def things_moved(self, scene: SortingScene) -> List[PrefixedName]:
+        """
+        What this change moves in the scene itself, named as the scene names it, and
+        nothing for a change that only alters what is reported of something.
+
+        What a run stops being able to say where it stands: it put the thing somewhere
+        and somebody else has taken it elsewhere.
+
+        :param scene: The scene the change is made to.
+        """
+        return []
+
 
 @dataclass
 class LightingChanged(SortingPerturbation):
@@ -1955,6 +1967,14 @@ class TargetHoleMoved(EventBroughtAbout[World], SortingPerturbation):
             ).to_pose(),
         )
 
+    def things_moved(self, scene: SortingScene) -> List[PrefixedName]:
+        """
+        The board, which every hole travels with.
+
+        :param scene: The scene the board slides in.
+        """
+        return [scene.board.root.name]
+
     def instruction_for_a_person(self) -> str:
         return (
             f"Slide the board so its {self.category} hole sits "
@@ -2000,6 +2020,14 @@ class PieceShoved(EventBroughtAbout[World], SortingPerturbation):
         longer there.
         """
         return (self.category,)
+
+    def things_moved(self, scene: SortingScene) -> List[PrefixedName]:
+        """
+        The piece that is shoved.
+
+        :param scene: The scene the piece stands in.
+        """
+        return [scene.body_of(self.category).name]
 
     def instruction_for_a_person(self) -> str:
         return (
@@ -2436,6 +2464,17 @@ class MontessoriSortingScenario(
         """
         return None
 
+    @property
+    def category_in_the_hand(self) -> Optional[MontessoriShapeCategory]:
+        """
+        The shape of the piece this scenario's script leaves in the robot's hand when
+        the scene is asked about, or None for a script that leaves the hand empty.
+
+        A held piece is one of the robot's own bodies by the twin's account, so a run
+        has to say which piece that is to know what its scene still holds.
+        """
+        return None
+
     def video_of_the_trial(self) -> RecordedVideo:
         """
         The video of the trial that ran in the world built most recently.
@@ -2708,6 +2747,10 @@ class PieceHeldWhileTheQuestionIsAsked(
 
     @property
     def acted_on_category(self) -> Optional[MontessoriShapeCategory]:
+        return self.held_category
+
+    @property
+    def category_in_the_hand(self) -> Optional[MontessoriShapeCategory]:
         return self.held_category
 
     def goal(self, world: World) -> Goal[World]:

@@ -66,6 +66,12 @@ class EpisodeObserver:
     Every motion run in the trial being observed, in the order they ran.
     """
 
+    instructions_carried_out: List[str] = field(default_factory=list)
+    """
+    What was done to the scene of the trial being observed by someone other than the
+    robot, in the order it was done, each as the person at the scene is told it.
+    """
+
     started_at: float = field(default_factory=time.monotonic)
     """
     Reading of the monotonic clock the trial being observed began at.
@@ -158,6 +164,14 @@ class EpisodeObserver:
         self.motions.append(motion)
         return motion
 
+    def carried_out(self, instruction: str) -> None:
+        """
+        Keep one thing done to the scene by someone other than the robot.
+
+        :param instruction: What was done, as the person at the scene is told it.
+        """
+        self.instructions_carried_out.append(instruction)
+
     def attempted(self, insertion_attempt: InsertionAttempt) -> None:
         """
         Keep one insertion attempt.
@@ -172,7 +186,7 @@ class EpisodeObserver:
 
         :param trial: The trial the runner recorded.
         :return: The same trial, now carrying when it began, its ticks, queries, plans,
-            attempts and motions.
+            attempts, motions and the instructions carried out on its scene.
         """
         trial.began_at = self.began_at
         trial.ticks = self.ticks
@@ -180,11 +194,13 @@ class EpisodeObserver:
         trial.plans = self.plans
         trial.insertion_attempts = self.insertion_attempts
         trial.motions = self.motions
+        trial.instructions_carried_out = self.instructions_carried_out
         self.ticks = []
         self.queries = []
         self.plans = []
         self.insertion_attempts = []
         self.motions = []
+        self.instructions_carried_out = []
         self.restart()
         return trial
 

@@ -272,3 +272,26 @@ class NothingHoldsThePieceUp(DataclassException):
             "Let the scene settle before reading what holds a piece up, and ask this "
             "of a loose piece rather than one the robot is holding."
         )
+
+
+@dataclass
+class UnknownPieceNamed(DataclassException):
+    """
+    Raised when the person at the table names a piece the set does not hold.
+    """
+
+    named: str
+    """
+    What they called it.
+    """
+
+    known: FrozenSet[str]
+    """
+    The shapes a piece can be, as they are spelled.
+    """
+
+    def error_message(self) -> str:
+        return "'%s' is not a shape a piece of this set is." % self.named
+
+    def suggest_correction(self) -> str:
+        return "Name the pieces among: %s." % ", ".join(sorted(self.known))

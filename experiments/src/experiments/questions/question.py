@@ -11,7 +11,7 @@ different levels and are therefore scored apart.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import StrEnum
 
 import numpy as np
@@ -20,13 +20,18 @@ from krrood.adapters.json_serializer import (
     DataclassJSONSerializer,
     SubclassJSONSerializer,
 )
+from krrood.exceptions import DataclassException
 from krrood.entity_query_language.backends import QueryBackend
 from krrood.entity_query_language.core.variable import InstantiatedVariable
 from krrood.entity_query_language.predicate import Predicate
 from krrood.entity_query_language.query.query import Query
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
+from semantic_digital_twin.reasoning.predicates import is_supported_by
+from semantic_digital_twin.robots.robot_parts import AbstractRobot
 from semantic_digital_twin.spatial_types.spatial_types import (
     HomogeneousTransformationMatrix,
+    Point3,
+    Pose,
     SpatialType,
 )
 from semantic_digital_twin.world_description.world_entity import Body
@@ -39,6 +44,7 @@ from typing_extensions import (
     Dict,
     Generic,
     List,
+    Optional,
     Tuple,
     Type,
     TypeVar,
@@ -136,6 +142,394 @@ class GroundTruthSource(StrEnum):
         if execution_type is ExecutionType.SIMULATED:
             return cls.TWIN
         return cls.CALIBRATED_TWIN_AND_HUMAN_CHECK
+
+
+# %% what a scene holds
+
+
+def moving_parts_of(robot: AbstractRobot) -> List[Body]:
+    """
+    The robot's bodies apart from its root.
+
+    A fixed robot's description bolts its arms to what it stands on, so its root body is
+    the table its scene is set on rather than a part of the robot.
+
+    :param robot: The robot whose parts they are.
+    """
+    return [body for body in robot.bodies if body is not robot.root]
+
+
+def objects_of_the_scene(robot: AbstractRobot) -> List[Body]:
+    """
+    The bodies the robot can be asked about as objects, read off the twin directly.
+
+    ..note:: A body the robot is holding is one of its own by the twin's account, so it
+        is answered by the embodiment bucket rather than counted here.
+
+    :param robot: The robot whose scene it is.
+    """
+    return [
+        body
+        for body in robot._world.bodies
+        if body.has_collision() and body not in robot.bodies
+    ]
+
+
+def surfaces_of_the_scene(robot: AbstractRobot) -> List[Body]:
+    """
+    The bodies something in the robot's scene can stand on, read off the twin directly:
+    every body with a shape that is not one of the robot's moving parts.
+
+    :param robot: The robot whose scene it is.
+    """
+    moving_parts = moving_parts_of(robot)
+    return [
+        body
+        for body in robot._world.bodies
+        if body.has_collision() and body not in moving_parts
+    ]
+
+
+# %% the scene as whoever set it up knows it
+
+HOW_FAR_A_PLACE_MAY_DIFFER = 0.01
+"""
+How far from where it was put a thing may stand and still count as standing where it was
+put, in metres.
+
+A scene comes to rest under gravity between being stood and being asked about, and a
+piece put down resting on its surface travels well under a millimetre doing so. A
+centimetre is inside the smallest change anyone makes to one of these scenes, so it
+separates settling from something having happened.
+"""
+
+
+@dataclass
+class PlacedObject:
+    """
+    One object as whoever set the scene up put it there.
+    """
+
+    name: PrefixedName
+    """
+    What the scene calls it.
+    """
+
+    place: Optional[Point3] = None
+    """
+    Where it was put, in the world root frame, or None where the run acted on it and
+    what the physics then did with it is not its to say.
+
+    Where rather than how it stands: a scene says where it put a thing, and how far a
+    piece ended up turned is the settling's to say.
+
+    ..note:: Held without the frame it is measured in, since a place outlives the world
+        it was measured in and a frame is a body of that world.
+    """
+
+    standing_on: Optional[PrefixedName] = None
+    """
+    What it was put on, or None where the run cannot say what holds it up.
+    """
+
+    @classmethod
+    def read_from(
+        cls, body: Body, standing_on: Optional[PrefixedName] = None
+    ) -> PlacedObject:
+        """
+        One object as the twin has it, named and placed where the twin puts it, without
+        the frame that place was measured in: a scene's account of itself outlives the
+        world a frame is a body of.
+
+        ..warning:: Read off the very twin the questions are answered from, so it is an
+            account of what was set up only where it is taken before anything acts on
+            the scene.
+
+        :param body: The object as the twin holds it.
+        :param standing_on: What it was put on, where that is known.
+        """
+        stands_at = body.global_pose.to_position().to_np()
+        return cls(
+            name=body.name,
+            place=Point3(float(stands_at[0]), float(stands_at[1]), float(stands_at[2])),
+            standing_on=standing_on,
+        )
+
+
+@dataclass
+class SceneAsSetUp:
+    """
+    The scene as whoever set it up knows it: which objects stand in it, where each was
+    put, and which one is in the robot's hand.
+
+    What a question is scored against, and stated rather than read: the twin a question
+    is answered from is the very thing an answer could be wrong about, so a true answer
+    taken from it agrees with every answer whatever the twin holds.
+    """
+
+    objects: List[PlacedObject] = field(default_factory=list)
+    """
+    The objects standing in the scene, which is every object but the one in the hand.
+    """
+
+    object_in_the_hand: Optional[PrefixedName] = None
+    """
+    The object the robot was left holding, or None where it holds nothing.
+    """
+
+    how_far_a_place_may_differ: float = HOW_FAR_A_PLACE_MAY_DIFFER
+    """
+    How far a thing may stand from where it was put and still count as being there, in
+    metres.
+    """
+
+    @property
+    def names(self) -> List[PrefixedName]:
+        """
+        What the scene calls each object standing in it.
+        """
+        return [placed.name for placed in self.objects]
+
+    @property
+    def places(self) -> List[Optional[Point3]]:
+        """
+        Where each object standing in the scene was put, in the order they are held.
+        """
+        return [placed.place for placed in self.objects]
+
+    def object_called(self, name: PrefixedName) -> Optional[PlacedObject]:
+        """
+        The object of that name, or None where the scene holds none.
+
+        :param name: What the scene calls it.
+        """
+        for placed in self.objects:
+            if placed.name == name:
+                return placed
+        return None
+
+    def holding_up(self, name: PrefixedName) -> Optional[List[PrefixedName]]:
+        """
+        What the scene put under one of its objects: nothing at all for the object in
+        the hand, and None where the scene does not say -- which is what a piece the run
+        acted on leaves it able to say, since where the physics took it is not the
+        script's.
+
+        :param name: What the scene calls the object.
+        """
+        if name == self.object_in_the_hand:
+            return []
+        placed = self.object_called(name)
+        if placed is None or placed.standing_on is None:
+            return None
+        return [placed.standing_on]
+
+    def place_of(self, name: PrefixedName) -> Optional[Point3]:
+        """
+        Where the scene put one of its objects, or None where it does not say.
+
+        :param name: What the scene calls the object.
+        """
+        placed = self.object_called(name)
+        return None if placed is None else placed.place
+
+    def forget_where(self, name: PrefixedName) -> None:
+        """
+        Give up saying where an object stands and what holds it up, which is what
+        someone else moving it leaves the run knowing about it.
+
+        :param name: What the scene calls the object.
+        """
+        placed = self.object_called(name)
+        if placed is None:
+            return
+        placed.place = None
+        placed.standing_on = None
+
+    @classmethod
+    def read_from(cls, robot: AbstractRobot) -> SceneAsSetUp:
+        """
+        The scene as the twin has it, which is the account a run that stood nothing
+        itself can give of the scene it was handed.
+
+        ..warning:: Read off the very twin the questions are answered from, so it is an
+            account of what was set up only where it is taken before anything acts on
+            the scene.
+
+        :param robot: The robot whose scene it is.
+        """
+        surfaces = surfaces_of_the_scene(robot)
+        return cls(
+            objects=[
+                PlacedObject.read_from(
+                    body,
+                    standing_on=next(
+                        (
+                            surface.name
+                            for surface in surfaces
+                            if surface is not body and is_supported_by(body, surface)
+                        ),
+                        None,
+                    ),
+                )
+                for body in objects_of_the_scene(robot)
+            ]
+        )
+
+
+# %% a true answer that says for itself whether an answer agrees with it
+
+
+class TrueAnswer(ABC):
+    """
+    A true answer stated in the currency whoever knows it states it in, which therefore
+    says for itself whether an answer agrees with it.
+
+    What a question is scored against wherever the true answer is not a value of the
+    kind the question answers with: a scene names the objects standing in it while the
+    question answers with the bodies the twin holds, and how far a place may differ from
+    where a thing was put is the scene's to say rather than a numerical accident.
+    """
+
+    @abstractmethod
+    def agrees_with(self, answered: Any) -> bool:
+        """
+        Whether an answer is this true answer.
+
+        :param answered: What the question answered.
+        """
+
+
+@dataclass
+class BodiesNamed(TrueAnswer):
+    """
+    The true answer is the things the scene calls these, in any order.
+    """
+
+    names: List[PrefixedName]
+    """
+    What the scene calls each of them.
+    """
+
+    def agrees_with(self, answered: List[Body]) -> bool:
+        """
+        Whether the bodies answered are called exactly these, each as often.
+
+        Compared by name rather than by identity: a body is the twin's own account of
+        what stands somewhere, and a scene that was set up knows only what it called the
+        things it put there.
+
+        :param answered: The bodies the question answered.
+        """
+        return sorted(str(body.name) for body in answered) == sorted(
+            str(name) for name in self.names
+        )
+
+
+@dataclass
+class PlacesPutAt(TrueAnswer):
+    """
+    The true answer is these places, in any order, each within the spread a scene allows
+    a thing to have travelled by.
+    """
+
+    places: List[Optional[Point3]]
+    """
+    Where each thing was put, with None for one whose place the scene does not state.
+    """
+
+    how_far_a_place_may_differ: float
+    """
+    How far an answered place may lie from the place it stands for, in metres.
+    """
+
+    def agrees_with(self, answered: List[Pose]) -> bool:
+        """
+        Whether as many places were answered as things were put, each stated place among
+        them once.
+
+        A place the scene does not state is matched by whichever answered place is left
+        over, so a thing someone moved is still counted without pretending to know where
+        it went.
+
+        :param answered: The places the question answered.
+        """
+        if len(answered) != len(self.places):
+            return False
+        left = list(answered)
+        for place in [stated for stated in self.places if stated is not None]:
+            found = next(
+                (index for index, other in enumerate(left) if self.near(other, place)),
+                None,
+            )
+            if found is None:
+                return False
+            left.pop(found)
+        return True
+
+    def near(self, answered: Pose, place: Point3) -> bool:
+        """
+        Whether two places are the same place, to within the spread this allows.
+
+        :param answered: The place the question answered.
+        :param place: The place a thing was put.
+        """
+        return bool(
+            np.allclose(
+                answered.to_position().to_np(),
+                place.to_np(),
+                atol=self.how_far_a_place_may_differ,
+            )
+        )
+
+
+@dataclass
+class SceneNotStated(DataclassException):
+    """
+    Raised when a question scored against the scene it was asked of is asked for its
+    true answer and nothing says what that scene was set up to be, or says the part of
+    it the question is about.
+    """
+
+    question: str
+    """
+    The question that was asked, as a person would ask it.
+    """
+
+    def error_message(self) -> str:
+        return "Nothing says what the scene '%s' was asked of was set up to be." % (
+            self.question
+        )
+
+    def suggest_correction(self) -> str:
+        return (
+            "Build the question through 'asked_of', handing it the scene whoever set it "
+            "up says it stood."
+        )
+
+
+@dataclass
+class ScoredAgainstTheSceneAsSetUp:
+    """
+    A question whose true answer is what the scene was set up to be rather than what the
+    twin its query reads holds.
+    """
+
+    scene: Optional[SceneAsSetUp] = field(default=None, kw_only=True)
+    """
+    The scene as whoever set it up knows it, or None where nobody has said -- which a
+    question read back out of a record made before anyone did comes back as.
+    """
+
+    def stated_scene(self) -> SceneAsSetUp:
+        """
+        The scene this question is scored against.
+
+        :raises SceneNotStated: If nobody has said what the scene was set up to be.
+        """
+        if self.scene is None:
+            raise SceneNotStated(question=self.english)
+        return self.scene
 
 
 # %% the question itself
@@ -308,9 +702,14 @@ class Question(
         """
         Whether one answered value and its true counterpart are the same thing.
 
+        A true answer stated in a currency of its own says for itself whether the answer
+        is it.
+
         :param answered: What a question answered, or one element of it.
         :param true: What the representation actually holds, or one element of it.
         """
+        if isinstance(true, TrueAnswer):
+            return true.agrees_with(answered)
         if isinstance(answered, SpatialType):
             return np.allclose(answered.to_np(), true.to_np())
         if isinstance(answered, list):
@@ -339,7 +738,8 @@ class Question(
 @dataclass
 class QuestionedThings:
     """
-    What a scene fills in for the questions of the set that single out one thing.
+    What a scene fills in for the questions of the set: the things the ones about a
+    single thing single out, and the account of itself they are all scored against.
     """
 
     object_asked_about: Body
@@ -366,6 +766,12 @@ class QuestionedThings:
     point_of_view: HomogeneousTransformationMatrix
     """
     Where the scene is looked at from, which is what makes left and right mean anything.
+    """
+
+    scene: SceneAsSetUp
+    """
+    The scene as whoever set it up knows it, which is what its questions are scored
+    against.
     """
 
 

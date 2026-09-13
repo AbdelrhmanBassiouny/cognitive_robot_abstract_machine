@@ -67,7 +67,7 @@ def trial(scene: QuestionedScene) -> RecordedTrial:
         duration=TRIAL_DURATION,
         queries=[
             RecordedQuery(
-                role_taker=ObjectsSeen(),
+                role_taker=ObjectsSeen(scene=scene.as_set_up),
                 answer="a table, a cube and a cylinder",
                 latency=0.02,
                 moment=ASKED_AT,
@@ -85,17 +85,19 @@ def trial(scene: QuestionedScene) -> RecordedTrial:
 # %% what the robot says it sees
 
 
-def test_the_objects_seen_card_picks_out_the_questions_own_answer(
+def test_the_objects_seen_card_picks_out_the_objects_the_question_names(
     trial: RecordedTrial, scene: QuestionedScene
 ) -> None:
     """
-    The card shows what the question itself holds the answer to be, rather than a second
-    reading of the scene that could disagree with it.
+    The card draws the twin the run happened in and the question is scored on what
+    whoever set that scene up says they put there, so what the card picks out is what
+    the question's true answer names.
     """
     question = trial.queries[0].question
-    assert ObjectsSeenCard().answers(question, scene.world) == question.ground_truth(
-        scene.robot
-    )
+
+    picked_out = ObjectsSeenCard().answers(question, scene.world)
+
+    assert question.ground_truth(scene.robot).agrees_with(picked_out)
 
 
 def test_the_objects_seen_card_picks_out_what_stands_in_the_scene(

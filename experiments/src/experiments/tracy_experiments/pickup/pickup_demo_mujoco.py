@@ -78,7 +78,7 @@ from experiments.montessori.pieces import SMALLER_PIECES, KnownPieceSet
 from experiments.montessori.planar_geometry import PlanarPoint
 from experiments.montessori.semantics import MontessoriShape, MontessoriShapeCategory
 from experiments.montessori.world import BOARD_SCALE
-from experiments.questions.question import QuestionedThings
+from experiments.questions.question import QuestionedThings, SceneAsSetUp
 from experiments.questions.question_set import QuestionSet
 from experiments.scenarios.trial import TrialOutcome
 from experiments.tracy_experiments.equipment import (
@@ -1085,6 +1085,7 @@ class SimulatedPickupDemo:
                 point_of_view=HomogeneousTransformationMatrix(
                     self.lab.robot.root.global_transform.to_np()
                 ),
+                scene=SceneAsSetUp.read_from(self.lab.robot),
             )
         )
 

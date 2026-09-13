@@ -126,7 +126,8 @@ class ScenarioCondition(Generic[WorldType], SubClassSafeGeneric, ABC):
 class Person(Protocol):
     """
     The other agent a trial has beside the robot: the person at the scene, who brings
-    about on the robot what a simulated trial brings about itself.
+    about on the robot what a simulated trial brings about itself, and who is the only
+    one who can say what the scene was set up to be.
     """
 
     def carry_out(self, instruction: str) -> None:
@@ -134,6 +135,14 @@ class Person(Protocol):
         Do what the instruction says, returning once it is done.
 
         :param instruction: What the person is asked to do.
+        """
+
+    def answer(self, question: str) -> str:
+        """
+        Say how the scene stands, in a line.
+
+        :param question: What the person is asked.
+        :return: What they said.
         """
 
 
@@ -159,12 +168,38 @@ class PersonAtTheConsole:
         self.output.flush()
         self.keyboard.readline()
 
+    def answer(self, question: str) -> str:
+        self.output.write("%s " % question)
+        self.output.flush()
+        return self.keyboard.readline().strip()
+
+
+@dataclass
+class NobodyIsThereToAsk(DataclassException):
+    """
+    Raised when a run puts a question to the person at the scene and there is none.
+    """
+
+    question: str
+    """
+    What the person would have been asked.
+    """
+
+    def error_message(self) -> str:
+        return "Nobody is at the scene to answer '%s'." % self.question
+
+    def suggest_correction(self) -> str:
+        return (
+            "Run this in simulation, where the run knows what it set up, or give the "
+            "run the person who set the scene up."
+        )
+
 
 @dataclass
 class AbsentPerson:
     """
-    Stands in for the person at a trial that has none: keeps every instruction and does
-    nothing about it.
+    Stands in for the person at a trial that has none: keeps every instruction, does
+    nothing about it, and cannot say anything about the scene.
     """
 
     asked: List[str] = field(default_factory=list)
@@ -174,6 +209,15 @@ class AbsentPerson:
 
     def carry_out(self, instruction: str) -> None:
         self.asked.append(instruction)
+
+    def answer(self, question: str) -> str:
+        """
+        Nothing, since there is nobody there.
+
+        :param question: What the person would have been asked.
+        :raises NobodyIsThereToAsk: Always.
+        """
+        raise NobodyIsThereToAsk(question=question)
 
 
 # %% the change a run applies

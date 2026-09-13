@@ -53,12 +53,19 @@ from typing_extensions import Any, ClassVar, Generic, List, Tuple, Type
 from experiments.questions.question import (
     AnswerType,
     BloomLevel,
+    BodiesNamed,
     Bucket,
     Memory,
+    PlacesPutAt,
     Question,
     QueryBackend,
     QuestionedThings,
     RequiredFact,
+    SceneNotStated,
+    ScoredAgainstTheSceneAsSetUp,
+    moving_parts_of,
+    objects_of_the_scene,
+    surfaces_of_the_scene,
 )
 
 # %% what a live question is asked of
@@ -196,54 +203,11 @@ def is_on_side_of(
     return bool(relation())
 
 
-def objects_of_the_scene(robot: AbstractRobot) -> List[Body]:
-    """
-    The bodies the robot can be asked about as objects, read off the twin directly.
-
-    ..note:: A body the robot is holding is one of its own by the twin's account, so it
-        is answered by the embodiment bucket rather than counted here.
-
-    :param robot: The robot whose scene it is.
-    """
-    return [
-        body
-        for body in robot._world.bodies
-        if body.has_collision() and body not in robot.bodies
-    ]
-
-
-def moving_parts_of(robot: AbstractRobot) -> List[Body]:
-    """
-    The robot's bodies apart from its root.
-
-    A fixed robot's description bolts its arms to what it stands on, so its root body is
-    the table its scene is set on rather than a part of the robot.
-
-    :param robot: The robot whose parts they are.
-    """
-    return [body for body in robot.bodies if body is not robot.root]
-
-
-def surfaces_of_the_scene(robot: AbstractRobot) -> List[Body]:
-    """
-    The bodies something in the robot's scene can stand on, read off the twin directly:
-    every body with a shape that is not one of the robot's moving parts.
-
-    :param robot: The robot whose scene it is.
-    """
-    moving_parts = moving_parts_of(robot)
-    return [
-        body
-        for body in robot._world.bodies
-        if body.has_collision() and body not in moving_parts
-    ]
-
-
 # %% scene
 
 
 @dataclass
-class ObjectsSeen(WorkingMemoryQuestion[List[Body]]):
+class ObjectsSeen(WorkingMemoryQuestion[List[Body]], ScoredAgainstTheSceneAsSetUp):
     """
     Which objects the robot has in front of it.
     """
@@ -280,13 +244,22 @@ class ObjectsSeen(WorkingMemoryQuestion[List[Body]]):
             )
         )
 
-    def ground_truth(self, source: AbstractRobot) -> List[Body]:
+    @classmethod
+    def asked_of(cls, things: QuestionedThings) -> List[ObjectsSeen]:
         """
-        The objects the twin holds, read off it directly.
+        Asked once of the scene, scored on the objects it was set up to hold.
+
+        :param things: What the scene fills in for its questions.
+        """
+        return [cls(scene=things.scene)]
+
+    def ground_truth(self, source: AbstractRobot) -> BodiesNamed:
+        """
+        The objects the scene was set up to hold.
 
         :param source: The robot whose scene it is.
         """
-        return objects_of_the_scene(source)
+        return BodiesNamed(names=self.stated_scene().names)
 
 
 @dataclass
@@ -346,6 +319,10 @@ class ObjectColours(WorkingMemoryQuestion[List[Color]]):
         """
         The colours the twin holds, read off it directly.
 
+        What a piece is painted belongs to the description it is built from rather than
+        to the setting up of a scene, which only says which pieces stand where, so the
+        twin is the only account of it there is.
+
         :param source: The robot whose scene it is.
         """
         return [
@@ -356,7 +333,7 @@ class ObjectColours(WorkingMemoryQuestion[List[Color]]):
 
 
 @dataclass
-class ObjectPlaces(WorkingMemoryQuestion[List[Pose]]):
+class ObjectPlaces(WorkingMemoryQuestion[List[Pose]], ScoredAgainstTheSceneAsSetUp):
     """
     Where each object in front of the robot is.
     """
@@ -396,20 +373,35 @@ class ObjectPlaces(WorkingMemoryQuestion[List[Pose]]):
             )
         )
 
-    def ground_truth(self, source: AbstractRobot) -> List[Pose]:
+    @classmethod
+    def asked_of(cls, things: QuestionedThings) -> List[ObjectPlaces]:
         """
-        The places the twin holds, read off it directly.
+        Asked once of the scene, scored on where it put each of its objects.
+
+        :param things: What the scene fills in for its questions.
+        """
+        return [cls(scene=things.scene)]
+
+    def ground_truth(self, source: AbstractRobot) -> PlacesPutAt:
+        """
+        Where the scene put each of its objects.
 
         :param source: The robot whose scene it is.
         """
-        return [body.global_pose for body in objects_of_the_scene(source)]
+        scene = self.stated_scene()
+        return PlacesPutAt(
+            places=scene.places,
+            how_far_a_place_may_differ=scene.how_far_a_place_may_differ,
+        )
 
 
 # %% support and spatial relations
 
 
 @dataclass
-class SupportingSurfaces(WorkingMemoryQuestion[List[Body]]):
+class SupportingSurfaces(
+    WorkingMemoryQuestion[List[Body]], ScoredAgainstTheSceneAsSetUp
+):
     """
     What one object is standing on.
     """
@@ -436,11 +428,15 @@ class SupportingSurfaces(WorkingMemoryQuestion[List[Body]]):
     @classmethod
     def asked_of(cls, things: QuestionedThings) -> List[SupportingSurfaces]:
         """
-        Asked about the one object the scene singles out.
+        Asked about the one object the scene singles out, and only where the scene says
+        what holds that object up: a piece the run acted on ended up wherever the
+        physics left it, which is nothing the run can be scored against.
 
         :param things: What the scene fills in for the questions about one thing.
         """
-        return [cls(subject=things.object_asked_about)]
+        if things.scene.holding_up(things.object_asked_about.name) is None:
+            return []
+        return [cls(subject=things.object_asked_about, scene=things.scene)]
 
     @property
     def english(self) -> str:
@@ -468,21 +464,21 @@ class SupportingSurfaces(WorkingMemoryQuestion[List[Body]]):
             )
         )
 
-    def ground_truth(self, source: AbstractRobot) -> List[Body]:
+    def ground_truth(self, source: AbstractRobot) -> BodiesNamed:
         """
-        What the subject stands on, read off the twin directly.
+        What the scene put under the subject, which is nothing at all for a piece it
+        left in the robot's hand.
 
         :param source: The robot whose scene it is.
         """
-        return [
-            surface
-            for surface in surfaces_of_the_scene(source)
-            if is_supported_by(self.subject, surface)
-        ]
+        holding_it_up = self.stated_scene().holding_up(self.subject.name)
+        if holding_it_up is None:
+            raise SceneNotStated(question=self.english)
+        return BodiesNamed(names=holding_it_up)
 
 
 @dataclass
-class SideOfAnotherObject(WorkingMemoryQuestion[bool]):
+class SideOfAnotherObject(WorkingMemoryQuestion[bool], ScoredAgainstTheSceneAsSetUp):
     """
     Whether one object is to a given side of another.
     """
@@ -530,16 +526,23 @@ class SideOfAnotherObject(WorkingMemoryQuestion[bool]):
     def asked_of(cls, things: QuestionedThings) -> List[SideOfAnotherObject]:
         """
         Asked once per side, because a question answering which of the two holds needs
-        either a branch in python or an aggregate the query language does not translate.
+        either a branch in python or an aggregate the query language does not translate,
+        and only where the scene says where both objects stand.
 
         :param things: What the scene fills in for the questions about one thing.
         """
+        if (
+            things.scene.place_of(things.object_asked_about.name) is None
+            or things.scene.place_of(things.object_compared_against.name) is None
+        ):
+            return []
         return [
             cls(
                 subject=things.object_asked_about,
                 other=things.object_compared_against,
                 side=side,
                 point_of_view=things.point_of_view,
+                scene=things.scene,
             )
             for side in Side
         ]
@@ -580,16 +583,18 @@ class SideOfAnotherObject(WorkingMemoryQuestion[bool]):
 
     def ground_truth(self, source: AbstractRobot) -> bool:
         """
-        Which side the subject really is on, read off the twin directly.
+        Which side the subject is on, read from where the scene put the two of them.
 
         :param source: The robot whose scene it is.
         """
-        relation = self.side.relation(
-            self.subject.center_of_mass,
-            self.other.center_of_mass,
-            self.point_of_view,
+        scene = self.stated_scene()
+        subject_place = scene.place_of(self.subject.name)
+        other_place = scene.place_of(self.other.name)
+        if subject_place is None or other_place is None:
+            raise SceneNotStated(question=self.english)
+        return bool(
+            self.side.relation(subject_place, other_place, self.point_of_view)()
         )
-        return bool(relation())
 
 
 @dataclass
@@ -943,7 +948,7 @@ class PickedUpRecently(WorkingMemoryQuestion[bool]):
 
 
 @dataclass
-class HeldInTheHand(WorkingMemoryQuestion[bool]):
+class HeldInTheHand(WorkingMemoryQuestion[bool], ScoredAgainstTheSceneAsSetUp):
     """
     Whether the robot is holding one object right now.
 
@@ -978,7 +983,7 @@ class HeldInTheHand(WorkingMemoryQuestion[bool]):
 
         :param things: What the scene fills in for the questions about one thing.
         """
-        return [cls(subject=things.object_in_the_hand)]
+        return [cls(subject=things.object_in_the_hand, scene=things.scene)]
 
     @property
     def english(self) -> str:
@@ -1012,11 +1017,11 @@ class HeldInTheHand(WorkingMemoryQuestion[bool]):
 
     def ground_truth(self, source: AbstractRobot) -> bool:
         """
-        What the twin has the subject hanging from, read off it directly.
+        Whether the script left the subject in the robot's hand.
 
         :param source: The robot whose hand it is.
         """
-        return self.subject.parent_kinematic_structure_entity in source.bodies
+        return self.stated_scene().object_in_the_hand == self.subject.name
 
 
 # %% self-model
@@ -1090,6 +1095,10 @@ class PlaceOfOwnBody(WorkingMemoryQuestion[Pose]):
         """
         Where the twin puts the named link, read off it directly.
 
+        Where a robot's own arm ends up is what its controller drove it to, not
+        something whoever set the scene up said, so there is nothing else to read it
+        from.
+
         :param source: The robot whose link it is.
         """
         return source._world.get_body_by_name(self.body_name).global_pose
@@ -1131,6 +1140,9 @@ class NumberOfOwnParts(WorkingMemoryQuestion[int], ABC):
     def ground_truth(self, source: AbstractRobot) -> int:
         """
         How many the twin holds, counted off it directly.
+
+        How many links and joints a robot is made of is its own description's to say and
+        no part of setting a scene up, so there is nothing else to count them off.
 
         :param source: The robot whose body it is.
         """
