@@ -27,7 +27,9 @@ from typing_extensions import TYPE_CHECKING, Any, Callable, Dict, List, Optional
 
 from krrood.entity_query_language.core.mapped_variable import CanBehaveLikeAVariable
 from krrood.entity_query_language.rdr.exceptions import ExpertAbort
+from krrood.entity_query_language.rdr.answer_vocabulary import AnswerName, NamespaceName
 from krrood.entity_query_language.scope import get_definition_scope
+from krrood.exceptions import DataclassException
 
 if TYPE_CHECKING:
     from krrood.entity_query_language.core.base_expressions import SymbolicExpression
@@ -35,19 +37,6 @@ if TYPE_CHECKING:
     from krrood.entity_query_language.rdr.conclusion_domain import ConclusionDomain
     from krrood.entity_query_language.rdr.condition_resolver import ResolvedCondition
     from krrood.entity_query_language.rdr.observer import ClassificationTrace
-    from krrood.entity_query_language.rdr.progress import ProgressReporter
-
-#: Shell name bound to the concrete case (inspect/experiment: ``case_instance.milk``).
-CASE_INSTANCE_NAME = "case_instance"
-
-#: Shell name bound to the shared EQL variable (author: ``case_variable.milk == True``).
-CASE_VARIABLE_NAME = "case_variable"
-
-#: Shell name of the zero-arg callable the expert calls to leave without answering.
-EXIT_NAME = "exit"
-
-#: Private namespace flag set by ``exit()``; checked by the expert interaction loop.
-_ABORT_FLAG = "__expert_abort__"
 
 
 @dataclass
@@ -123,19 +112,47 @@ class CaseContext:
 
 
 @dataclass
+class AnswerValidator(ABC):
+    """
+    Validates one answer's value, returning the exception describing why it is
+    unacceptable, or ``None``.
+
+    A first-class replacement for a bare ``Callable[[Any], Optional[DataclassException]]``
+    so an :attr:`AnswerRequest.validate` is a checkable concept, not any function.
+    Concrete subclasses implement :meth:`validate`; :meth:`__call__` forwards to it so a
+    validator is still usable as a plain callable.
+    """
+
+    def __call__(self, value: Any) -> Optional[DataclassException]:
+        """
+        :param value: The candidate answer value.
+        :return: The exception describing why ``value`` is unacceptable, or ``None``.
+        """
+        return self.validate(value)
+
+    @abstractmethod
+    def validate(self, value: Any) -> Optional[DataclassException]:
+        """
+        :param value: The candidate answer value.
+        :return: The exception describing why ``value`` is unacceptable, or ``None``.
+        """
+        ...
+
+
+@dataclass
 class AnswerRequest:
     """
     One named answer the expert must place in the namespace, with validation.
     """
 
-    name: str
+    name: AnswerName
     """
-    The namespace variable the expert assigns (e.g. ``"conditions"``).
+    The namespace variable the expert assigns.
     """
 
-    validate: Callable[[Any], Optional[str]]
+    validate: AnswerValidator
     """
-    Returns an error message if the assigned value is unacceptable, else ``None``.
+    Returns the exception describing why the assigned value is unacceptable, else ``None``.
     """
 
     example: str
@@ -158,33 +175,19 @@ class ExpertInterface(ABC):
     """
     The I/O strategy an :class:`Expert` uses as the interaction interface through which
     answers and questions are communicated.
+
+    Carries the question-and-answer surface only. Model persistence
+    (:class:`~krrood.entity_query_language.rdr.serialization.ModelSaver`) and fitting
+    progress (:class:`~krrood.entity_query_language.rdr.progress.ProgressReporter`) are
+    the RDR's own collaborators.
     """
-
-    on_save: Optional[Callable[[], None]] = field(default=None, kw_only=True)
-    """
-    Zero-arg callable that persists the model state.
-
-    ``None`` when no save path is configured (see :attr:`~EQLSingleClassRDR.save_path`).
-    Injected automatically by :meth:`EQLSingleClassRDR.fit` when a save path is present,
-    or supplied directly by callers that need a custom persistence strategy.
-    """
-
-    def save(self) -> None:
-        """
-        Persist the current model state.
-
-        Calls :attr:`on_save` if configured; silently no-ops otherwise so callers never
-        need to guard against an unconfigured interface.
-        """
-        if self.on_save is not None:
-            self.on_save()
 
     def interact(
         self,
         context: CaseContext,
         requests: List[AnswerRequest],
-        initial_errors: Optional[Dict[str, str]] = None,
-    ) -> Dict[str, Any]:
+        initial_errors: Optional[List[DataclassException]] = None,
+    ) -> Dict[AnswerName, Any]:
         """
         Drive the request loop until every required answer validates.
 
@@ -200,14 +203,14 @@ class ExpertInterface(ABC):
         """
         namespace = self._build_namespace(context, requests)
 
-        def validate() -> Dict[str, str]:
+        def validate() -> List[DataclassException]:
             return self._validate(namespace, requests)
 
-        errors: Dict[str, str] = initial_errors or {}
+        errors: List[DataclassException] = initial_errors or []
         while True:
             header = self._render_header(context, requests, errors)
             self._run(namespace, header, validate)
-            if namespace.get(_ABORT_FLAG):
+            if namespace.get(NamespaceName.ABORT_FLAG):
                 raise ExpertAbort(self._missing_required(namespace, requests))
             errors = validate()
             if not errors:
@@ -217,10 +220,10 @@ class ExpertInterface(ABC):
         self, context: CaseContext, requests: List[AnswerRequest]
     ) -> Dict[str, Any]:
         namespace = get_definition_scope(context.case_variable)
-        namespace[CASE_INSTANCE_NAME] = context.case_instance
-        namespace[CASE_VARIABLE_NAME] = context.case_variable
-        namespace[_ABORT_FLAG] = False
-        namespace[EXIT_NAME] = _make_exit(namespace)
+        namespace[NamespaceName.CASE_INSTANCE] = context.case_instance
+        namespace[NamespaceName.CASE_VARIABLE] = context.case_variable
+        namespace[NamespaceName.ABORT_FLAG] = False
+        namespace[NamespaceName.EXIT] = _make_exit(namespace)
         for request in requests:
             namespace[request.name] = request.default
         return namespace
@@ -228,40 +231,42 @@ class ExpertInterface(ABC):
     @staticmethod
     def _validate(
         namespace: Dict[str, Any], requests: List[AnswerRequest]
-    ) -> Dict[str, str]:
+    ) -> List[DataclassException]:
         """
         Run every request's validator against its current namespace value.
 
         :param namespace: The interaction namespace, keyed by answer name.
         :param requests: The answers to validate.
-        :return:``{request.name: error_message}`` for every request whose value failed
-            validation.
+        :return: The validation failures, one per request whose value failed (each
+            exception names its own request via :attr:`~DataclassException.answer_name`).
         """
-        errors: Dict[str, str] = {}
+        errors: List[DataclassException] = []
         for request in requests:
-            message = request.validate(namespace.get(request.name))
-            if message is not None:
-                errors[request.name] = message
+            error = request.validate(namespace.get(request.name))
+            if error is not None:
+                errors.append(error)
         return errors
 
     @classmethod
     def _missing_required(
         cls, namespace: Dict[str, Any], requests: List[AnswerRequest]
-    ) -> List[str]:
+    ) -> List[AnswerName]:
         """
         :param namespace: The interaction namespace, keyed by answer name.
         :param requests: The answers to check.
         :return: The names of the required requests whose current value still fails
             validation.
         """
-        errors = cls._validate(namespace, requests)
-        return [r.name for r in requests if r.required and r.name in errors]
+        failing_names = {
+            error.answer_name for error in cls._validate(namespace, requests)
+        }
+        return [r.name for r in requests if r.required and r.name in failing_names]
 
     def _render_header(
         self,
         context: CaseContext,
         requests: List[AnswerRequest],
-        errors: Dict[str, str],
+        errors: List[DataclassException],
     ) -> str:
         """
         Plain-text header.
@@ -269,11 +274,11 @@ class ExpertInterface(ABC):
         Interactive subclasses may override with richer rendering.
         :param context: The case being labelled.
         :param requests: The answers the expert must supply.
-        :param errors: Validation errors from the previous cycle, keyed by answer name.
+        :param errors: Validation errors from the previous cycle.
         :return: The rendered header text.
         """
         lines: List[str] = []
-        lines.append(f"  {CASE_INSTANCE_NAME}: {context.case_instance!r}")
+        lines.append(f"  {NamespaceName.CASE_INSTANCE}: {context.case_instance!r}")
         lines.append(f"  current: {context.current_conclusion!r}")
         if context.has_target:
             lines.append(f"  target:  {context.target_conclusion!r}")
@@ -281,27 +286,18 @@ class ExpertInterface(ABC):
             lines.append(f"  set `{request.name}`   e.g.  {request.example}")
         lines.append(
             "EQL RDR — supply the answer(s) above, then press Ctrl-D to submit "
-            f"(call {EXIT_NAME}() to cancel):"
+            f"(call {NamespaceName.EXIT}() to cancel):"
         )
-        for name, message in errors.items():
-            lines.append(f"[error] {name}: {message}")
+        for error in errors:
+            lines.append(f"[error] {error.answer_name}: {error}")
         return "\n".join(lines)
-
-    def make_progress_reporter(self) -> Optional[ProgressReporter]:
-        """
-        Return a :class:`ProgressReporter` for this interface, or ``None``.
-
-        Override in concrete subclasses that want to display a progress bar during
-        fitting.  The default returns ``None`` (no progress displayed).
-        """
-        return None
 
     @abstractmethod
     def _run(
         self,
         namespace: Dict[str, Any],
         header: str,
-        validate: Callable[[], Dict[str, str]],
+        validate: Callable[[], List[DataclassException]],
     ) -> None:
         """
         Present ``header`` and let the expert populate the answer names in
@@ -331,7 +327,7 @@ class FunctionInterface(ExpertInterface):
     answers, which are written into the namespace and then validated by the normal loop.
     """
 
-    answer_fn: Callable[[CaseContext, List[AnswerRequest]], Dict[str, Any]]
+    answer_function: Callable[[CaseContext, List[AnswerRequest]], Dict[AnswerName, Any]]
     """
     Returns ``{name: value}`` for the requested answers.
 
@@ -353,8 +349,8 @@ class FunctionInterface(ExpertInterface):
         self,
         context: CaseContext,
         requests: List[AnswerRequest],
-        initial_errors: Optional[Dict[str, str]] = None,
-    ) -> Dict[str, Any]:
+        initial_errors: Optional[List[DataclassException]] = None,
+    ) -> Dict[AnswerName, Any]:
         self._context = context
         self._requests = requests
         return super().interact(context, requests, initial_errors=initial_errors)
@@ -363,14 +359,14 @@ class FunctionInterface(ExpertInterface):
         self,
         namespace: Dict[str, Any],
         header: str,
-        validate: Callable[[], Dict[str, str]],
+        validate: Callable[[], List[DataclassException]],
     ) -> None:
-        answers = self.answer_fn(self._context, self._requests)
+        answers = self.answer_function(self._context, self._requests)
         namespace.update(answers)
 
 
 def _make_exit(namespace: Dict[str, Any]) -> Callable[[], None]:
     def exit() -> None:
-        namespace[_ABORT_FLAG] = True
+        namespace[NamespaceName.ABORT_FLAG] = True
 
     return exit
