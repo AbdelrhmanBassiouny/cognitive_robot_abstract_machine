@@ -25,7 +25,7 @@ from experiments.montessori.results_database import (
     InMemoryDatabaseRefused,
     ResultsDatabase,
 )
-from experiments.montessori.semantics import MontessoriShapeCategory
+from experiments.montessori.semantics import CubeShape, MontessoriShapeCategory
 from experiments.orm.ormatic_interface import RecordedTrialDAO
 from experiments.scenarios.trial import TrialOutcome
 from experiments.tracy_experiments.montessori.gripper_feedback import (
@@ -40,17 +40,21 @@ from experiments.tracy_experiments.montessori.grasp_widths import (
 )
 from experiments.tracy_experiments.pickup.pickup_demo_real import (
     GRASP_HEIGHT_OFFSET,
+    PICK_ARM,
     POST_LIFT_SETTLE_SECONDS,
     DemoOption,
     PieceNotSeenError,
     _grasp_target_pose,
+    _reach_action_for,
     _SortingRig,
     keep_the_episode,
     main,
     outcome_of,
     piece_asked_about,
 )
+from experiments.tracy_experiments.robotiq_gripper import GripperCommandRejected
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
+from semantic_digital_twin.spatial_types.spatial_types import Pose
 from semantic_digital_twin.world_description.world_entity import Body
 
 from .test_episode_recording import (
@@ -77,6 +81,24 @@ def test_grasp_target_pose_sits_the_offset_above_the_body_origin():
     assert pose.reference_frame is body
 
 
+# %% the reach that is built to grasp a piece
+
+
+def test_the_reach_is_aimed_at_the_piece_not_its_body():
+    """
+    ``ReachAction.object_designator`` needs a semantic annotation to read its own
+    ``.root`` from, not the piece's bare body, which has no ``root`` of its own.
+    """
+    piece = CubeShape(root=Body(name=PrefixedName("cube")))
+    target_pose = Pose(reference_frame=piece.root)
+
+    reach = _reach_action_for(piece, target_pose, grasp_description=None)
+
+    assert reach.object_designator is piece
+    assert reach.target_pose is target_pose
+    assert reach.arm is PICK_ARM
+
+
 # %% slip watch while carrying
 
 
@@ -93,6 +115,32 @@ class RecordingGripper:
 
     def close_to(self, arm: Arms, setpoint: float) -> None:
         self.close_to_setpoints.append(setpoint)
+
+
+@dataclass
+class RejectingOnceGripper:
+    """
+    Records every re-close like :class:`RecordingGripper`, but raises
+    :class:`~experiments.tracy_experiments.robotiq_gripper.GripperCommandRejected` on
+    one chosen call -- reproducing a Robotiq controller that answers a repeated,
+    already-satisfied re-close with neither ``reached_goal`` nor ``stalled`` set.
+    """
+
+    close_to_setpoints: list[float] = field(default_factory=list)
+    """
+    Setpoint of every :meth:`close_to` call, in order, rejected calls included.
+    """
+
+    reject_on_call_index: int = 1
+    """
+    Zero-based index, among all :meth:`close_to` calls, that raises.
+    """
+
+    def close_to(self, arm: Arms, setpoint: float) -> None:
+        index = len(self.close_to_setpoints)
+        self.close_to_setpoints.append(setpoint)
+        if index == self.reject_on_call_index:
+            raise GripperCommandRejected(arm, reached_goal=False, stalled=False)
 
 
 @dataclass
@@ -251,6 +299,31 @@ def test_the_slip_watch_re_closes_past_a_shapes_own_firmer_close_setpoint():
         for setpoint in re_closes
     )
     assert all(setpoint > RECTANGULAR_PRISM_CLOSE_SETPOINT for setpoint in re_closes)
+    assert _no_slip_watch_thread_left_running()
+
+
+def test_a_rejected_reclose_does_not_end_the_slip_watch():
+    """
+    A re-close that repeats the previous poll's setpoint asks the fingers for no further
+    travel once they have already settled there, and a real run against the rectangular
+    prism had exactly that rejected with neither ``reached_goal`` nor ``stalled`` set --
+    which used to raise out of the watch thread's target and kill it silently (a bare
+    traceback on stderr, and nobody watching the piece for the rest of the carry).
+
+    The watch must keep polling through a rejected re-close instead: the
+    knuckle position :class:`SlipDetector` reads comes from the joint-state topic, not
+    from the re-close action's own result.
+    """
+    gripper = RejectingOnceGripper()
+    rig = _slip_watch_rig(gripper, _held(0.46))
+
+    rig._carry_watching_for_slip(
+        Body(name=PrefixedName("rectangular_prism")),
+        0.5,
+        lambda: _wait_until(lambda: len(gripper.close_to_setpoints) > 3),
+    )
+
+    assert len(gripper.close_to_setpoints) > 3
     assert _no_slip_watch_thread_left_running()
 
 

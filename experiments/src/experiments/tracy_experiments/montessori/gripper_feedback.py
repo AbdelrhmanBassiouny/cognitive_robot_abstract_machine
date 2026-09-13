@@ -20,6 +20,7 @@ wire them to ROS.
 
 from __future__ import annotations
 
+import logging
 import time
 from dataclasses import dataclass, field
 from enum import StrEnum
@@ -32,8 +33,11 @@ from coraplex.datastructures.enums import Arms
 from experiments.tracy_experiments.robotiq_gripper import (
     FingerSetpoint,
     RobotiqGripperController,
+    RobotiqGripperError,
 )
 from segmind.datastructures.events import EventWithTrackedObjects
+
+logger = logging.getLogger(__name__)
 
 OPEN_KNUCKLE_POSITION = 0.0
 """
@@ -411,8 +415,21 @@ class LiveGraspGuard:
     def poll(self) -> GraspVerdict:
         """
         Re-command the close and classify the resulting knuckle position once.
+
+        Once a re-close has already settled the fingers at :attr:`reclose_setpoint`,
+        repeating it asks for no further travel, and a Robotiq controller can answer
+        that with neither ``reached_goal`` nor ``stalled`` set -- a
+        :class:`~experiments.tracy_experiments.robotiq_gripper.
+        RobotiqGripperError` that would otherwise end :meth:`watch`'s loop outright.
+        It is logged and otherwise ignored: the knuckle position classified below comes
+        from the joint-state topic, not from the re-close command's own result.
         """
-        self.controller.close_to(self.arm, self.reclose_setpoint)
+        try:
+            self.controller.close_to(self.arm, self.reclose_setpoint)
+        except RobotiqGripperError as error:
+            logger.warning(
+                "%s re-close during slip watch did not confirm: %s", self.arm, error
+            )
         return self.slip_detector.check(self.listener.latest_closure)
 
     def watch(

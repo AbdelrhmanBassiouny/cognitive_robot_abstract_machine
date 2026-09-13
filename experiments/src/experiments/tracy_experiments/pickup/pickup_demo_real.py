@@ -240,6 +240,20 @@ def _grasp_target_pose(body: Body, grasp_height_offset: float) -> Pose:
     return Pose.from_xyz_rpy(0.0, 0.0, grasp_height_offset, reference_frame=body)
 
 
+def _reach_action_for(
+    piece: MontessoriShape, target_pose: Pose, grasp_description: GraspDescription
+) -> ReachAction:
+    """
+    :return: The reach that aims :data:`PICK_ARM` at ``target_pose`` to grasp ``piece``.
+    """
+    return ReachAction(
+        target_pose=target_pose,
+        object_designator=piece,
+        arm=PICK_ARM,
+        grasp_description=grasp_description,
+    )
+
+
 REPORTED_PICK_EVENT_TYPES: tuple[type, ...] = (
     SupportEvent,
     LossOfSupportEvent,
@@ -370,12 +384,7 @@ class _SortingRig(ShapeSorter):
         """
         body = piece.root
         grasp_target = _grasp_target_pose(body, self.grasp_height_offset)
-        reach = ReachAction(
-            target_pose=grasp_target,
-            object_designator=body,
-            arm=PICK_ARM,
-            grasp_description=self.grasp_description,
-        )
+        reach = _reach_action_for(piece, grasp_target, self.grasp_description)
         _, _, lift_to_pose = self.grasp_description.pose_sequence(grasp_target, body)
         transport_pose, placing_pose, retract_pose = (
             self.grasp_description.pose_sequence(release_pose, body, reverse=True)
@@ -779,7 +788,7 @@ def main(argument_list: Optional[Sequence[str]] = None) -> None:
         with (
             recorder as bag,
             ExecutionEnvironment(
-                execution_type=ExecutionType.REAL, collision_avoidance=True
+                execution_type=ExecutionType.REAL, collision_avoidance=False
             ),
         ):
             rig.perform_and_record(park)
