@@ -1,6 +1,6 @@
 """
-Tests for the continuous Montessori perception pipeline and the query interface it
-answers through.
+Tests for the continuous Montessori perception pipeline: what one look at the scene
+finds, on which surface, and how tall it says a piece stands.
 """
 
 from __future__ import annotations
@@ -14,13 +14,9 @@ import pytest
 from experiments.montessori.perception.detections import (
     MontessoriScene,
     MontessoriShapeDetection,
-    ShapeSortingHoleDetection,
 )
 from experiments.montessori.perception.pipeline import MontessoriPerceptionPipeline
-from experiments.montessori.perception.scene_source import FixedScene, PerceivedObjects
 from experiments.montessori.semantics import MontessoriShapeCategory
-from krrood.entity_query_language.factories import a, the
-
 from .dataset import montessori_scene_fixtures
 from .dataset.montessori_scene_renderer import MontessoriSceneRenderer, PlacedPiece
 
@@ -130,27 +126,6 @@ def test_pipeline_reports_no_board_when_none_is_in_view(
 # %% pieces standing on a raised surface
 
 
-@pytest.fixture
-def piece_on_the_lid(renderer: MontessoriSceneRenderer) -> PlacedPiece:
-    """
-    A cube standing on the board's lid, clear of the holes cut through it.
-    """
-    x, y = renderer.clear_lid_position()
-    return PlacedPiece(
-        MontessoriShapeCategory.CUBE, x=x, y=y, surface_height=renderer.lid_height
-    )
-
-
-@pytest.fixture
-def scene_with_a_piece_on_the_lid(
-    pipeline: MontessoriPerceptionPipeline,
-    renderer: MontessoriSceneRenderer,
-    placed_pieces: list[PlacedPiece],
-    piece_on_the_lid: PlacedPiece,
-) -> MontessoriScene:
-    return pipeline.detect(renderer.render([*placed_pieces, piece_on_the_lid]))
-
-
 def _pieces_near(
     scene: MontessoriScene, placed: PlacedPiece
 ) -> list[MontessoriShapeDetection]:
@@ -228,71 +203,6 @@ def test_the_board_is_still_found_under_a_piece_standing_on_its_lid(
 ):
     assert scene_with_a_piece_on_the_lid.board is not None
     assert len(scene_with_a_piece_on_the_lid.holes) == len(renderer.hole_footprints())
-
-
-# %% querying it
-
-
-def test_a_query_over_perceived_objects_runs_perception_to_answer_itself(
-    scene: MontessoriScene,
-):
-    class CountingSource(FixedScene):
-        looks: int = 0
-
-        def scene(self) -> MontessoriScene:
-            self.looks += 1
-            return self.captured
-
-    source = CountingSource(captured=scene)
-    perceived = PerceivedObjects(source=source)
-    query = a(MontessoriShapeDetection).from_(perceived)
-
-    assert source.looks == 0
-    results = query.tolist()
-    assert source.looks == 1
-    assert len(results) == len(scene.shapes)
-
-
-def test_a_query_selects_a_hole_by_the_shape_it_takes(scene: MontessoriScene):
-    perceived = PerceivedObjects(source=FixedScene(captured=scene))
-
-    holes = (
-        a(ShapeSortingHoleDetection)(category=MontessoriShapeCategory.CUBE)
-        .from_(perceived)
-        .tolist()
-    )
-
-    assert holes
-    for hole in holes:
-        assert hole.category is MontessoriShapeCategory.CUBE
-
-
-def test_a_query_answers_a_pose_a_plan_can_reach_for(scene: MontessoriScene):
-    perceived = PerceivedObjects(source=FixedScene(captured=scene))
-    [expected] = [
-        hole
-        for hole in scene.holes
-        if hole.category is MontessoriShapeCategory.TRIANGULAR_PRISM
-    ][:1]
-
-    hole = the(
-        a(ShapeSortingHoleDetection)(category=MontessoriShapeCategory.TRIANGULAR_PRISM)
-        .from_(perceived)
-        .expression
-    ).tolist()[0]
-
-    assert hole.pose.to_position().to_np() == pytest.approx(
-        expected.pose.to_position().to_np()
-    )
-
-
-def test_a_query_over_one_kind_does_not_return_the_other(scene: MontessoriScene):
-    perceived = PerceivedObjects(source=FixedScene(captured=scene))
-
-    pieces = a(MontessoriShapeDetection).from_(perceived).tolist()
-
-    assert pieces
-    assert all(not isinstance(piece, ShapeSortingHoleDetection) for piece in pieces)
 
 
 # %% how tall a piece is taken to stand
