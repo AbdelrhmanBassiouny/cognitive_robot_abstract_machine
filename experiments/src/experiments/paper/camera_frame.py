@@ -11,7 +11,6 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from enum import StrEnum
 from pathlib import Path
 
 import cv2
@@ -20,29 +19,15 @@ import numpy as np
 from krrood.exceptions import DataclassException
 from typing_extensions import Tuple
 
-from experiments.episodes.artifacts import EpisodeArtifact, EpisodeArtifacts
+from experiments.episodes.artifacts import EpisodeArtifacts, RunFile
 from experiments.episodes.trace import FramesByMoment, TimedFrame
 from experiments.paper.chart import TimelineSpan
 from experiments.montessori.perception.camera import decode_compressed_color_image
 from experiments.montessori.perception.recordings import REFERENCE_FRAME, RecordedCamera
 from experiments.paper.lettering import Face, Lettering
 from experiments.paper.panel import CardPanel
+from experiments.paper.run_plan import TrialClock
 from semantic_digital_twin.world_description.geometry import Color
-
-# %% what a run leaves its camera in
-
-
-class RunFile(StrEnum):
-    """
-    What a run leaves among its own files that a query card reads back, named as the run
-    writes it.
-    """
-
-    CAMERA_RECORDING = "bag"
-    """
-    Directory of the recording the robot's camera published into.
-    """
-
 
 # %% how the two frames are laid side by side
 
@@ -129,8 +114,8 @@ class FramesAround(CardPanel, ABC):
 
     over: TimelineSpan
     """
-    The stretch of the trial the frames are taken either side of: the seconds
-    something happened over.
+    The stretch of the trial the frames are taken either side of: the seconds something
+    happened over.
     """
 
     @property
@@ -193,10 +178,10 @@ class BagFrameAt(CardPanel):
     Seconds between the start of the trial and the moment the frame is wanted for.
     """
 
-    trial_duration: float
+    clock: TrialClock
     """
-    How long the trial ran, in seconds, which is what turns a moment of it into a place
-    in the recording.
+    Where the trial's seconds start on the wall clock, which is what turns a moment of
+    it into the stamp the recording wrote the frame under.
     """
 
     reference_frame: str = REFERENCE_FRAME
@@ -209,11 +194,7 @@ class BagFrameAt(CardPanel):
         """
         Where the run's camera recording is kept, whether or not it kept one.
         """
-        return (
-            self.artifacts.directory
-            / EpisodeArtifact.RUN_FILES
-            / RunFile.CAMERA_RECORDING
-        )
+        return self.artifacts.run_file(RunFile.CAMERA_RECORDING)
 
     @property
     def was_recorded(self) -> bool:
@@ -221,7 +202,7 @@ class BagFrameAt(CardPanel):
         Whether the episode kept a camera recording to read a frame out of, which is
         what lets a card leave the panel out rather than fail on it.
         """
-        return self.expected_at.is_dir()
+        return self.artifacts.kept_a_camera_recording
 
     @property
     def recording(self) -> Path:
@@ -238,18 +219,12 @@ class BagFrameAt(CardPanel):
         return self.expected_at
 
     @property
-    def fraction(self) -> float:
+    def stamp(self) -> int:
         """
-        How far through the recording the moment falls, from 0 at its first frame to 1 at
-        its last.
-
-        A moment outside the trial is read as its nearest end rather than as a place the
-        recording does not reach, and a trial that took no time at all is read as its
-        first frame.
+        The moment as the recording stamps it: nanoseconds since the epoch on the wall
+        clock the trial began on.
         """
-        if self.trial_duration <= 0.0:
-            return 0.0
-        return min(max(self.moment / self.trial_duration, 0.0), 1.0)
+        return self.clock.stamp_of(self.moment)
 
     @property
     def image(self) -> np.ndarray:
@@ -257,13 +232,17 @@ class BagFrameAt(CardPanel):
         The colour image the camera published nearest the moment, in OpenCV's blue,
         green, red order.
 
+        A moment the recording does not reach -- the trial's first seconds where the
+        recording opened after the trial began, or its last where it closed before the
+        trial ended -- is shown the nearest frame the recording holds.
+
         :raises NoCameraRecordingError: When the episode kept no camera recording.
         :raises NothingRecordedOnTopic: When the recording holds no colour image a depth
             image was published before.
         """
         recorded = RecordedCamera(
             bag=self.recording, reference_frame=self.reference_frame
-        ).image_at(self.fraction)
+        ).image_nearest(self.stamp)
         return decode_compressed_color_image(
             recorded.color_payload, recorded.color_format
         )
@@ -272,8 +251,9 @@ class BagFrameAt(CardPanel):
         """
         Leave this frame at the given path.
 
-        :param path: The file it is written to, its directory created if it is not there.
-        :return: ``path``.
+        :param path: The file it is written to, its directory created if it is not
+            there.
+        :return:``path``.
         :raises NoCameraRecordingError: When the episode kept no camera recording.
         """
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -299,9 +279,10 @@ class BagFramesAround(FramesAround):
     The episode's own files, among which its camera's recording is kept.
     """
 
-    trial_duration: float
+    clock: TrialClock
     """
-    How long the trial ran, in seconds.
+    Where the trial's seconds start on the wall clock the recording stamps its frames
+    on.
     """
 
     gap: int = FRAME_GAP
@@ -365,8 +346,9 @@ class BagFramesAround(FramesAround):
         """
         Leave the pair at the given path.
 
-        :param path: The file it is written to, its directory created if it is not there.
-        :return: ``path``.
+        :param path: The file it is written to, its directory created if it is not
+            there.
+        :return:``path``.
         :raises NoCameraRecordingError: When the episode kept no camera recording.
         """
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -378,13 +360,13 @@ class BagFramesAround(FramesAround):
         One of the pair, read out of the same recording as the other.
 
         :param moment: Seconds into the trial the frame is wanted for, which the frame
-            itself reads as the nearest end of the recording where it falls outside the
-            trial.
+            itself reads as the nearest end of the recording where the recording does
+            not reach it.
         """
         return BagFrameAt(
             artifacts=self.artifacts,
             moment=moment,
-            trial_duration=self.trial_duration,
+            clock=self.clock,
             reference_frame=self.reference_frame,
         )
 
@@ -395,8 +377,8 @@ class BagFramesAround(FramesAround):
 @dataclass
 class RecordedFramesAround(FramesAround):
     """
-    The frames a run's own camera took either side of a stretch of the trial, written
-    as one picture with the earlier one on the left.
+    The frames a run's own camera took either side of a stretch of the trial, written as
+    one picture with the earlier one on the left.
 
     What a run that kept its camera along the trial -- a simulated one filming the
     camera the twin states, or any run that traced its frames with their moments --
@@ -451,8 +433,9 @@ class RecordedFramesAround(FramesAround):
         """
         Leave the pair at the given path.
 
-        :param path: The file it is written to, its directory created if it is not there.
-        :return: ``path``.
+        :param path: The file it is written to, its directory created if it is not
+            there.
+        :return:``path``.
         """
         path.parent.mkdir(parents=True, exist_ok=True)
         imageio.imwrite(str(path), self.image)

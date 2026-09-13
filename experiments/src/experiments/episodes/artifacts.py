@@ -48,6 +48,18 @@ class EpisodeArtifact(StrEnum):
     """
 
 
+class RunFile(StrEnum):
+    """
+    What a run leaves among its own files under a name of the episode's rather than its
+    own, so that a reader of the episode finds it by the episode alone.
+    """
+
+    CAMERA_RECORDING = "bag"
+    """
+    Directory of the recording the robot's camera published into.
+    """
+
+
 class TrialArtifact(StrEnum):
     """
     What one trial keeps of its own, each under this name in the trial's directory.
@@ -158,7 +170,7 @@ class ArtifactNotKept(DataclassException):
     The episode that was asked.
     """
 
-    artifact: EpisodeArtifact
+    artifact: Union[EpisodeArtifact, RunFile]
     """
     The artifact it does not have.
     """
@@ -230,6 +242,22 @@ class EpisodeArtifacts:
         run_files.mkdir(parents=True, exist_ok=True)
         return Path(shutil.copytree(path, run_files / path.name))
 
+    def keep_camera_recording(self, path: Path) -> Path:
+        """
+        Take a copy of the recording the robot's camera published into, under the name
+        a reader of the episode looks for it by.
+
+        A run names its bag after itself and the moment it started, so that two runs do
+        not collide; the episode's own directory already tells its runs apart, and what
+        a reader needs is to find the recording from the episode alone.
+
+        :param path: The directory of the bag the run recorded.
+        :return: The copy this episode keeps.
+        """
+        kept = self.run_file(RunFile.CAMERA_RECORDING)
+        kept.parent.mkdir(parents=True, exist_ok=True)
+        return Path(shutil.copytree(path, kept))
+
     def keep_transcript(self, transcript: Transcript) -> Path:
         """
         Render this episode's questions and answers into one readable document.
@@ -271,6 +299,37 @@ class EpisodeArtifacts:
         :raises ArtifactNotKept: When the run kept no transcript.
         """
         return self._kept(EpisodeArtifact.TRANSCRIPT)
+
+    def run_file(self, name: RunFile) -> Path:
+        """
+        Where one of the run's named files is kept, whether or not the run kept it.
+
+        :param name: What the file is kept as.
+        """
+        return self.directory / EpisodeArtifact.RUN_FILES / name
+
+    @property
+    def kept_a_camera_recording(self) -> bool:
+        """
+        Whether the run kept the recording its camera published into.
+        """
+        return self.run_file(RunFile.CAMERA_RECORDING).is_dir()
+
+    @property
+    def camera_recording(self) -> Path:
+        """
+        The directory of the recording the robot's camera published into.
+
+        :raises ArtifactNotKept: When the run kept none, which every simulated run and
+            every run on the robot that was not asked to record one leaves the episode
+            without.
+        """
+        if not self.kept_a_camera_recording:
+            raise ArtifactNotKept(
+                episode_identifier=self.episode.identifier,
+                artifact=RunFile.CAMERA_RECORDING,
+            )
+        return self.run_file(RunFile.CAMERA_RECORDING)
 
     @property
     def run_files(self) -> List[Path]:

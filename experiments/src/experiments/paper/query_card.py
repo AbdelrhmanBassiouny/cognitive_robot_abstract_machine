@@ -49,7 +49,7 @@ from experiments.paper.pose_change import (
 )
 from experiments.paper.run_timeline import RunTimeline
 from experiments.paper.scene import PointOfView, SceneRender
-from experiments.paper.run_plan import ObjectIdentity, SameName, plans_of
+from experiments.paper.run_plan import ObjectIdentity, SameName, TrialClock, plans_of
 from experiments.paper.timeline import EventTimeline
 from experiments.questions.question import Question, objects_of_the_scene
 from experiments.questions.working_memory import (
@@ -793,7 +793,7 @@ class QueryCard(ABC):
         if artifacts is None:
             return None
         frame = BagFrameAt(
-            artifacts=artifacts, moment=query.moment, trial_duration=trial.duration
+            artifacts=artifacts, moment=query.moment, clock=TrialClock.of(trial)
         )
         return frame if frame.was_recorded else None
 
@@ -821,7 +821,7 @@ class QueryCard(ABC):
             return None
         over = self.moved_over(trial, query)
         bagged = BagFramesAround(
-            over=over, artifacts=artifacts, trial_duration=trial.duration
+            over=over, artifacts=artifacts, clock=TrialClock.of(trial)
         )
         if bagged.was_recorded:
             return bagged

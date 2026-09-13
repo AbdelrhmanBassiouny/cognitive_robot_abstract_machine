@@ -17,6 +17,7 @@ from experiments.montessori.record_episode import (
     BuiltSceneCannotRunOnTheRobot,
     CHOICES_CLASH_EXIT_CODE,
     DEFAULT_REPETITIONS,
+    HOW_FAR_A_PERTURBATION_MOVES_SOMETHING,
     ExecutionChoice,
     LayoutChoice,
     PerceivedSceneCannotBeLaidOut,
@@ -37,6 +38,7 @@ from experiments.montessori.results_database import (
     IN_MEMORY_DATABASE_URI,
     InMemoryDatabaseRefused,
 )
+from experiments.montessori.semantics import MontessoriShapeCategory
 from experiments.montessori.scenarios import (
     DetectionRelabelled,
     LayoutAsFound,
@@ -201,6 +203,43 @@ def test_a_perturbation_choice_builds_the_perturbation_it_names(
 
     assert type(perturbation) is perturbation_class
     assert perturbation.step is SortingStep.SETTLE
+
+
+@pytest.mark.parametrize(
+    "choice, perturbation_class",
+    [
+        (PerturbationChoice.TARGET_HOLE_MOVED, TargetHoleMoved),
+        (PerturbationChoice.PIECE_SHOVED, PieceShoved),
+        (PerturbationChoice.PERCEIVED_POSE_OFFSET, PerceivedPoseOffset),
+        (PerturbationChoice.DETECTION_RELABELLED, DetectionRelabelled),
+    ],
+)
+def test_a_perturbation_choice_aims_the_perturbation_it_names_at_a_piece(
+    choice, perturbation_class
+):
+    """
+    The choice itself builds the perturbation, so a run that offers the same choices
+    without the rest of this command line builds the same perturbation.
+    """
+    perturbation = choice.aimed_at(
+        MontessoriShapeCategory.CYLINDER, SortingStep.PICK_UP
+    )
+
+    assert type(perturbation) is perturbation_class
+    assert perturbation.category is MontessoriShapeCategory.CYLINDER
+    assert perturbation.step is SortingStep.PICK_UP
+
+
+def test_a_perturbation_that_moves_something_moves_it_the_stated_distance():
+    shoved = PerturbationChoice.PIECE_SHOVED.aimed_at(
+        MontessoriShapeCategory.CUBE, SortingStep.PICK_UP
+    )
+    hole_moved = PerturbationChoice.TARGET_HOLE_MOVED.aimed_at(
+        MontessoriShapeCategory.CUBE, SortingStep.PICK_UP
+    )
+
+    assert shoved.displacement is HOW_FAR_A_PERTURBATION_MOVES_SOMETHING
+    assert hole_moved.displacement is HOW_FAR_A_PERTURBATION_MOVES_SOMETHING
 
 
 def test_the_command_line_offers_no_lighting_perturbation():
