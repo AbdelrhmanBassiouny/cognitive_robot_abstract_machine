@@ -72,7 +72,7 @@ from coraplex.plans.factories import sequential
 from coraplex.plans.plan import Plan
 from coraplex.robot_plans.actions.base import ActionDescription
 from coraplex.robot_plans.actions.core.pick_up import PickUpAction
-from coraplex.robot_plans.actions.core.placing import PlaceAction
+from coraplex.robot_plans.actions.core.insertion import InsertAction
 
 from krrood.exceptions import DataclassException
 
@@ -820,26 +820,20 @@ class SortingScene:
             )
         )
 
-    def put_the_piece_down_at(
-        self, category: MontessoriShapeCategory, destination: Point3
-    ) -> Plan:
+    def insert_the_piece_in_its_hole(self, category: MontessoriShapeCategory) -> Plan:
         """
-        Have the robot carry the piece it is holding to a place and let go of it there.
+        Have the robot carry the piece it is holding over the board's hole for its own
+        shape and let it go there.
 
         :param category: The shape of the piece being carried.
-        :param destination: Where to let go of it, in the world root frame.
         :return: The plan that was performed.
         """
         return self._perform(
-            PlaceAction(
+            InsertAction(
                 self.body_of(category),
-                Pose.from_xyz_rpy(
-                    float(destination.x),
-                    float(destination.y),
-                    float(destination.z),
-                    reference_frame=self.world.root,
-                ),
+                self.hole_for(category),
                 THE_ARM_THAT_SORTS,
+                hover_height=RELEASE_HEIGHT_ABOVE_THE_HOLE,
                 grasp_description=self._grasp_description,
             )
         )
@@ -1637,15 +1631,8 @@ class PutThePieceInItsHole(HaveTheRobotAct):
     """
 
     def perform(self, world: World) -> None:
-        scene = self.scene_of(world)
-        hole = scene.hole_for(self.category).root.global_transform.to_position()
-        self.performed = scene.put_the_piece_down_at(
-            self.category,
-            Point3(
-                float(hole.x),
-                float(hole.y),
-                float(hole.z) + RELEASE_HEIGHT_ABOVE_THE_HOLE,
-            ),
+        self.performed = self.scene_of(world).insert_the_piece_in_its_hole(
+            self.category
         )
         self.scene.settle()
 

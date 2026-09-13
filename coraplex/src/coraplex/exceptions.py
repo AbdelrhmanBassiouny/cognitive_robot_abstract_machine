@@ -9,14 +9,14 @@ from krrood.entity_query_language.factories import ConditionType, get_false_stat
 from krrood.exceptions import DataclassException
 from coraplex.datastructures.enums import Arms, ExecutionType
 from coraplex.plans.failures import PlanFailure
+from semantic_digital_twin.semantic_annotations.semantic_annotations import (
+    Aperture,
+)
 
 if TYPE_CHECKING:
     from coraplex.plans.designator import Designator
     from coraplex.robot_plans.actions.base import ActionDescription
     from semantic_digital_twin.robots.robot_parts import AbstractRobot, EndEffector
-    from semantic_digital_twin.semantic_annotations.semantic_annotations import (
-        Aperture,
-    )
     from semantic_digital_twin.world_description.world_entity import (
         KinematicStructureEntity,
         SemanticAnnotation,

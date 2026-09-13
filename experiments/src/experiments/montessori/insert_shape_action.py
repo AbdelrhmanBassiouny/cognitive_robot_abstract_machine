@@ -6,7 +6,7 @@ sorting board's hole matching its category.
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import logging
 
@@ -21,18 +21,27 @@ from coraplex.robot_plans.actions.base import ActionDescription
 from coraplex.robot_plans.actions.core.misc import MoveToReach
 from coraplex.robot_plans.actions.core.navigation import NavigateAction
 from coraplex.robot_plans.actions.core.pick_up import PickUpAction
-from coraplex.robot_plans.actions.core.placing import PlaceAction
+from coraplex.robot_plans.actions.core.insertion import InsertAction
 from coraplex.robot_plans.actions.core.robot_body import ParkArmsAction
 from coraplex.robot_plans.motions.robot_body import MoveJointsMotion
 from coraplex.view_manager import ViewManager
-from experiments.montessori.semantics import MontessoriShape, ShapeSortingBoard
+from experiments.montessori.semantics import (
+    MontessoriShape,
+    ShapeSortingBoard,
+    ShapeSortingHole,
+)
 from experiments.montessori.world import DEFAULT_ROBOT_STANDOFF_DISTANCE
 from krrood.entity_query_language.factories import a
 from krrood.entity_query_language.query.match import Match
 from semantic_digital_twin.exceptions import PointOccupiedError
 from semantic_digital_twin.robots.robot_part_mixins import HasMobileBase
 from semantic_digital_twin.semantic_annotations.semantic_annotations import Table
-from semantic_digital_twin.spatial_types.spatial_types import Point2, Point3, Pose, Pose2D
+from semantic_digital_twin.spatial_types.spatial_types import (
+    Point2,
+    Point3,
+    Pose,
+    Pose2D,
+)
 from semantic_digital_twin.world_description.graph_of_convex_sets.boxes import (
     PlanarGraphOfBoundingBoxes,
 )
@@ -53,6 +62,48 @@ robot, since inflating it to a wide robot's full footprint would push the pre-gr
 hover point (and, transitively, the base stance :meth:`_move_to_reach` resolves near
 it) far enough from the target to put the actual grasp out of comfortable arm reach.
 """
+
+
+NO_HORIZONTAL_OFFSET = Point3(0.0, 0.0, 0.0)
+"""
+Release a shape over the centre of its hole rather than off to one side of it.
+"""
+
+
+@dataclass
+class InsertShapeAction(InsertAction):
+    """
+    An insertion through a hole of the shape-sorting board, released at the pose the
+    shape being inserted states for itself.
+
+    A shape whose fit depends on how it is turned relative to its hole -- a disk, which
+    has to be tipped onto its edge for a slot -- answers that differently from every
+    other shape, which only has to hover over its hole (see
+    :meth:`~experiments.montessori.semantics.MontessoriShape.insertion_pose_relative_to_hole`).
+    """
+
+    target: ShapeSortingHole
+    """
+    The board's hole the shape goes through, which is narrower than the opening
+    :attr:`InsertAction.target` takes: the pose a shape states is stated for a hole of
+    the board.
+    """
+
+    montessori_shape: Optional[MontessoriShape] = field(default=None, kw_only=True)
+    """
+    The shape :attr:`object_designator` is the body of, which states the pose it must be
+    released at.
+    """
+
+    @property
+    def insertion_pose(self) -> Pose:
+        """
+        Overrides :attr:`InsertAction.insertion_pose` with the pose
+        :attr:`montessori_shape` states for :attr:`target`.
+        """
+        return self.montessori_shape.insertion_pose_relative_to_hole(
+            self.target, NO_HORIZONTAL_OFFSET, self.hover_height
+        )
 
 
 @dataclass
@@ -95,28 +146,27 @@ class InsertMontessoriShapeAction(ActionDescription):
 
     placing_linear_velocity: float = 0.05
     """
-    Linear velocity (m/s) of :class:`~coraplex.robot_plans.actions.core.placing.PlaceAction`'s
-    own final descent onto the release pose, passed straight through to it.
+    Linear velocity (m/s) of :class:`InsertShapeAction`'s own final descent onto the
+    release pose, passed straight through to it.
     """
 
     transport_linear_velocity: float = 0.08
     """
-    Linear velocity (m/s) :class:`~coraplex.robot_plans.actions.core.placing.PlaceAction`
-    carries the held shape at, above the target location and before its final descent,
-    passed straight through to it.
+    Linear velocity (m/s) :class:`InsertShapeAction` carries the held shape at, above
+    the hole and before its final descent, passed straight through to it.
     """
 
     release_opening_velocity: float = 0.07
     """
-    Finger joint velocity (m/s) :class:`~coraplex.robot_plans.actions.core.placing.PlaceAction`
-    opens the gripper at to release the shape, passed straight through to it.
+    Finger joint velocity (m/s) :class:`InsertShapeAction` opens the gripper at to
+    release the shape, passed straight through to it.
     """
 
     retract_linear_velocity: Optional[float] = None
     """
-    Linear velocity (m/s) :class:`~coraplex.robot_plans.actions.core.placing.PlaceAction`
-    retracts the end effector away from the placed shape at, passed straight through to
-    it. ``None`` leaves the speed unconstrained.
+    Linear velocity (m/s) :class:`InsertShapeAction` retracts the end effector away
+    from the released shape at, passed straight through to it. ``None`` leaves the speed
+    unconstrained.
     """
 
     grasp_closing_velocity: float = 0.2
@@ -411,17 +461,17 @@ class InsertMontessoriShapeAction(ActionDescription):
     @property
     def _action_plan(self) -> PlanNode:
         hole = self.board.hole_for(self.montessori_shape)
-        offset = Point3(0.0, 0.0, 0.0)
-        insertion_pose = self.montessori_shape.insertion_pose_relative_to_hole(
-            hole, offset, self.insertion_hover_height
-        )
-        target_location = self.world.transform(insertion_pose, self.world.root)
+        release_position = self.world.transform(
+            self.montessori_shape.insertion_pose_relative_to_hole(
+                hole, NO_HORIZONTAL_OFFSET, self.insertion_hover_height
+            ),
+            self.world.root,
+        ).to_position()
         shape_position = self.montessori_shape.root.global_pose.to_position()
         self.grasp_description = self.grasp_description or GraspDescription(
             ApproachDirection.FRONT,
             VerticalAlignment.TOP,
             ViewManager.get_end_effector_view(self.arm, self.robot),
-
         )
 
         # A robot with a mobile base reaches whole-body from an underspecified standing
@@ -443,9 +493,7 @@ class InsertMontessoriShapeAction(ActionDescription):
             ]
             navigate_to_hole: list[PlanNode] = [
                 NavigateAction(
-                    self._hardcoded_standing_pose(
-                        table.root, target_location.to_position()
-                    )
+                    self._hardcoded_standing_pose(table.root, release_position)
                 )
             ]
             pick_up_shape: PlanNode = a(PickUpAction)(
@@ -458,10 +506,12 @@ class InsertMontessoriShapeAction(ActionDescription):
                 final_approach_linear_velocity=self.final_approach_linear_velocity,
                 object_friction=self.object_friction,
             )
-            place_shape: PlanNode = a(PlaceAction)(
+            insert_shape: PlanNode = a(InsertShapeAction)(
                 object_designator=self.montessori_shape.root,
-                target_location=target_location,
+                target=hole,
                 arm=self.arm,
+                montessori_shape=self.montessori_shape,
+                hover_height=self.insertion_hover_height,
                 placing_linear_velocity=self.placing_linear_velocity,
                 transport_linear_velocity=self.transport_linear_velocity,
                 release_opening_velocity=self.release_opening_velocity,
@@ -480,10 +530,12 @@ class InsertMontessoriShapeAction(ActionDescription):
                 final_approach_linear_velocity=self.final_approach_linear_velocity,
                 object_friction=self.object_friction,
             )
-            place_shape = PlaceAction(
-                object_designator=self.montessori_shape.root,
-                target_location=target_location,
-                arm=self.arm,
+            insert_shape = InsertShapeAction(
+                self.montessori_shape.root,
+                hole,
+                self.arm,
+                montessori_shape=self.montessori_shape,
+                hover_height=self.insertion_hover_height,
                 placing_linear_velocity=self.placing_linear_velocity,
                 transport_linear_velocity=self.transport_linear_velocity,
                 release_opening_velocity=self.release_opening_velocity,
@@ -496,7 +548,7 @@ class InsertMontessoriShapeAction(ActionDescription):
                 *navigate_to_shape,
                 pick_up_shape,
                 *navigate_to_hole,
-                place_shape,
+                insert_shape,
                 ParkArmsAction(Arms.BOTH),
             ]
         )
