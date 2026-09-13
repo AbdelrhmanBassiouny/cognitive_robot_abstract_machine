@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import pytest
 
+from coraplex.datastructures.grasp import GraspDescription
 from experiments.montessori.board_description import DescribedBoard
 from experiments.montessori.hole_geometry import BoardHoleLayout
 from experiments.montessori.world import BOARD_SCALE
@@ -82,6 +83,25 @@ def looking(scene: MontessoriScene) -> MontessoriPerceptionBackend:
     A backend answering from one already-captured look at the rendered scene.
     """
     return MontessoriPerceptionBackend(source=FixedScene(captured=scene))
+
+
+# %% what this backend says it can answer
+
+
+def test_a_statement_about_what_this_look_reports():
+    """
+    A look reports sightings of one kind of thing, which is what a statement has to be
+    about for this backend to have anything to say.
+    """
+    backend = MontessoriPerceptionBackend(source=FixedScene(captured=MontessoriScene()))
+
+    assert backend.capability(a(DetectedMontessoriShape)()) is True
+
+
+def test_a_statement_about_anything_else_at_all():
+    backend = MontessoriPerceptionBackend(source=FixedScene(captured=MontessoriScene()))
+
+    assert backend.capability(a(GraspDescription)(approach_direction=...)) is False
 
 
 # %% what the statement tells the search
