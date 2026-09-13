@@ -15,8 +15,10 @@ import rclpy
 import rosbag2_py
 from rclpy.node import Node
 from std_msgs.msg import String
-from typing_extensions import Iterator
+from typing_extensions import Iterator, List
 
+from experiments.episodes.observer import EpisodeObserver
+from experiments.paper.run_plan import TrialClock
 from experiments.tracy_experiments.rosbag_recording import (
     RosbagRecorder,
     RosbagRecordingFailed,
@@ -122,3 +124,49 @@ def test_a_recorder_that_cannot_start_fails_the_run_that_asked_for_it(
     with pytest.raises(RosbagRecordingFailed):
         with RosbagRecordingProcess(recorder):
             pass
+
+
+# %% the clock the bag and the trial share
+
+
+def stamps_recorded(bag_directory: str) -> List[int]:
+    """
+    The stamp every message of a bag was written under, in nanoseconds since the epoch,
+    in the order they were written.
+
+    :param bag_directory: The bag to read.
+    """
+    reader = rosbag2_py.SequentialReader()
+    reader.open(
+        rosbag2_py.StorageOptions(uri=bag_directory, storage_id="mcap"),
+        rosbag2_py.ConverterOptions("", ""),
+    )
+    stamps: List[int] = []
+    while reader.has_next():
+        _, _, stamp = reader.read_next()
+        stamps.append(stamp)
+    return stamps
+
+
+def test_every_message_of_the_bag_is_stamped_within_the_trial_that_recorded_it(
+    tmp_path, publishing: Node
+):
+    """
+    A trial counts its seconds from the instant its observer started on the wall clock,
+    and the bag stamps each message on that same clock as it is written, so a message's
+    stamp read through the trial's clock falls inside the trial: that is what lets a
+    frame of the bag be put beside a tick, a query or a joint sample of the rows.
+    """
+    observer = EpisodeObserver()
+    bag = str(tmp_path / "bag")
+
+    with RosbagRecordingProcess(RosbagRecorder(output_directory=bag, topics=[A_TOPIC])):
+        time.sleep(RECORDING_SECONDS)
+    trial_duration = observer.elapsed_seconds
+    clock = TrialClock(origin=observer.began_at)
+
+    stamps = stamps_recorded(bag)
+    assert stamps
+    moments = [clock.seconds_of_stamp(stamp) for stamp in stamps]
+    assert all(0.0 <= moment <= trial_duration for moment in moments)
+    assert moments == sorted(moments)

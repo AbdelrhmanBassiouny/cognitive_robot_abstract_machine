@@ -22,6 +22,7 @@ from experiments.episodes.artifacts import (
     ArtifactDirectory,
     ArtifactNotKept,
     EpisodeArtifact,
+    RunFile,
     Transcript,
     configured_artifact_directory,
     configured_mesh_directory,
@@ -320,3 +321,53 @@ def test_a_directory_the_run_produced_is_kept_whole(tmp_path):
         "run_0.mcap",
     ]
     assert (kept / "run_0.mcap").read_bytes() == b"mcap"
+
+
+# %% the recording the robot's camera published into
+
+
+def a_bag(tmp_path: Path) -> Path:
+    """
+    A recording as a run leaves it: a directory named after the run and the moment it
+    started, holding the bag's own files.
+
+    :param tmp_path: Where it is left.
+    """
+    bag = tmp_path / "tracy_pickup_demo_20260913_120000"
+    bag.mkdir()
+    (bag / "metadata.yaml").write_text("rosbag2_bagfile_information: {}")
+    (bag / "tracy_pickup_demo_20260913_120000_0.mcap").write_bytes(b"mcap")
+    return bag
+
+
+def test_a_camera_recording_is_kept_under_the_name_a_reader_looks_for(tmp_path):
+    """
+    A run names its bag after itself and the moment it started, which nothing reading
+    the episode back can know; kept as the episode's camera recording, it is found by
+    the episode alone.
+    """
+    bag = a_bag(tmp_path)
+    artifacts = ArtifactDirectory(path=tmp_path / "artifacts").open_for(
+        sorting_episode()
+    )
+
+    kept = artifacts.keep_camera_recording(bag)
+
+    assert kept == artifacts.run_file(RunFile.CAMERA_RECORDING)
+    assert artifacts.kept_a_camera_recording
+    assert artifacts.camera_recording == kept
+    assert sorted(path.name for path in kept.iterdir()) == sorted(
+        path.name for path in bag.iterdir()
+    )
+
+
+def test_an_episode_that_kept_no_camera_recording_says_so(tmp_path):
+    artifacts = ArtifactDirectory(path=tmp_path / "artifacts").open_for(
+        sorting_episode()
+    )
+
+    assert not artifacts.kept_a_camera_recording
+    with pytest.raises(ArtifactNotKept) as raised:
+        artifacts.camera_recording
+    assert raised.value.artifact is RunFile.CAMERA_RECORDING
+    assert raised.value.episode_identifier == artifacts.episode.identifier

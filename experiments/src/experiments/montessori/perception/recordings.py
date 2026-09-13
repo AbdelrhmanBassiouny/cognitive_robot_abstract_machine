@@ -310,11 +310,63 @@ class RecordedCamera:
         :raises NothingRecordedOnTopic: If the recording holds no colour image that a
             depth image was published before.
         """
-        wanted = max(int(self.color_image_count * fraction), 0)
-        for index, images in enumerate(self.images()):
-            if index >= wanted:
+        return self.image_at_index(max(int(self.color_image_count * fraction), 0))
+
+    def image_at_index(self, index: int) -> RecordedImages:
+        """
+        The images at a given place in the order :meth:`images` yields them, without
+        holding the rest in memory.
+
+        :param index: Their place, counted from the first pair.
+        :raises NothingRecordedOnTopic: If the recording holds no colour image that a
+            depth image was published before.
+        """
+        for place, images in enumerate(self.images()):
+            if place >= index:
                 return images
         raise NothingRecordedOnTopic(self.bag.name, str(CameraTopic.COLOR))
+
+    def colour_stamps(self) -> List[int]:
+        """
+        When each pair :meth:`images` yields was recorded, in the order it yields them:
+        the stamp the recording wrote the colour image under, in nanoseconds since the
+        epoch on the wall clock of the machine that recorded it.
+
+        Read without decoding a single image, so a recording is placed in time for the
+        cost of walking it.
+        """
+        reader = open_bag(
+            self.bag,
+            [str(CameraTopic.COLOR), str(CameraTopic.DEPTH), RAW_DEPTH_TOPIC],
+        )
+        stamps: List[int] = []
+        a_depth_was_published = False
+        while reader.has_next():
+            topic, _, stamp = reader.read_next()
+            if topic != str(CameraTopic.COLOR):
+                a_depth_was_published = True
+                continue
+            if a_depth_was_published:
+                stamps.append(stamp)
+        return stamps
+
+    def image_nearest(self, stamp: int) -> RecordedImages:
+        """
+        The images whose colour image was recorded nearest a moment of the wall clock.
+
+        A moment before the recording began or after it ended is answered with its first
+        or its last pair, since those are what the camera showed nearest then.
+
+        :param stamp: The moment, in nanoseconds since the epoch.
+        :raises NothingRecordedOnTopic: If the recording holds no colour image that a
+            depth image was published before.
+        """
+        stamps = self.colour_stamps()
+        if not stamps:
+            raise NothingRecordedOnTopic(self.bag.name, str(CameraTopic.COLOR))
+        return self.image_at_index(
+            int(np.argmin(np.abs(np.array(stamps, dtype=np.int64) - stamp)))
+        )
 
 
 def _decode_depth(topic: str, payload: bytes) -> np.ndarray:

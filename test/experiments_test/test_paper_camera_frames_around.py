@@ -18,7 +18,7 @@ import imageio.v2 as imageio
 import numpy as np
 import pytest
 
-from experiments.episodes.artifacts import EpisodeArtifact, EpisodeArtifacts
+from experiments.episodes.artifacts import EpisodeArtifacts, RunFile
 from experiments.episodes.trace import TimedFrames
 from experiments.paper.camera_frame import (
     CAPTION_HEIGHT,
@@ -26,17 +26,18 @@ from experiments.paper.camera_frame import (
     BagFramesAround,
     NoCameraRecordingError,
     RecordedFramesAround,
-    RunFile,
     captions_at,
 )
 from experiments.paper.chart import TimelineSpan
 
 from .test_montessori_bag_replay import demo_recording
+from .test_montessori_recorded_camera import A_SECOND, FRAMES_TAKEN, shade_of
 from .test_paper_camera_frame import (
     ASKED_AT,
-    TRIAL_DURATION,
+    CLOCK,
     episode_artifacts,
     keep_a_recording,
+    keep_the_frames_taken,
 )
 
 # %% the stretch the pair is taken either side of
@@ -51,6 +52,11 @@ MOVED_OVER = TimelineSpan(ASKED_AT, MOVED_FOR)
 The stretch of the trial the object moved over.
 """
 
+TRIAL_DURATION = 8.0
+"""
+How long the trial the kept camera filmed ran, in seconds.
+"""
+
 
 def pair(
     artifacts: EpisodeArtifacts, over: TimelineSpan = MOVED_OVER
@@ -61,9 +67,7 @@ def pair(
     :param artifacts: The episode's own directory.
     :param over: The stretch the object moved over.
     """
-    return BagFramesAround(
-        over=over, artifacts=artifacts, trial_duration=TRIAL_DURATION
-    )
+    return BagFramesAround(over=over, artifacts=artifacts, clock=CLOCK)
 
 
 def test_the_two_frames_are_taken_either_side_of_the_event(
@@ -91,30 +95,39 @@ def test_each_frame_reads_the_same_recording_as_the_pair(
     either_side = pair(episode_artifacts)
     assert isinstance(either_side.before, BagFrameAt)
     assert either_side.before.expected_at == either_side.expected_at
-    assert either_side.after.trial_duration == TRIAL_DURATION
+    assert either_side.after.clock == CLOCK
 
 
 def test_an_event_at_the_very_start_is_still_shown_from_the_beginning(
-    episode_artifacts: EpisodeArtifacts,
+    episode_artifacts: EpisodeArtifacts, tmp_path: Path
 ) -> None:
     """
     An event in the first moments of a run has no second before it, so the frame before
     it is the first one the camera recorded rather than a place the recording does not
     reach.
     """
-    assert pair(episode_artifacts, TimelineSpan(0.0, MOVED_FOR)).before.fraction == 0.0
+    keep_the_frames_taken(episode_artifacts, tmp_path)
+    before_the_first_frame = -CLOCK.seconds_of_stamp(FRAMES_TAKEN[0].stamp + A_SECOND)
+
+    either_side = pair(
+        episode_artifacts, TimelineSpan(before_the_first_frame, MOVED_FOR)
+    )
+
+    assert shade_of(either_side.before.image) == FRAMES_TAKEN[0].shade
 
 
 def test_an_event_at_the_very_end_is_still_shown_to_the_end(
-    episode_artifacts: EpisodeArtifacts,
+    episode_artifacts: EpisodeArtifacts, tmp_path: Path
 ) -> None:
     """
     An event in the last moments of a run has no second after it either.
     """
-    assert (
-        pair(episode_artifacts, TimelineSpan(TRIAL_DURATION, MOVED_FOR)).after.fraction
-        == 1.0
-    )
+    keep_the_frames_taken(episode_artifacts, tmp_path)
+    at_the_last_frame = CLOCK.seconds_of_stamp(FRAMES_TAKEN[-1].stamp)
+
+    either_side = pair(episode_artifacts, TimelineSpan(at_the_last_frame, MOVED_FOR))
+
+    assert shade_of(either_side.after.image) == FRAMES_TAKEN[-1].shade
 
 
 # %% a run that recorded no camera
@@ -166,9 +179,9 @@ def test_the_two_frames_are_written_side_by_side(
     The pair is one figure of the paper rather than two, so the two frames are written
     as one picture with the earlier one on the left.
     """
-    run_files = episode_artifacts.directory / EpisodeArtifact.RUN_FILES
-    run_files.mkdir(parents=True)
-    (run_files / RunFile.CAMERA_RECORDING).symlink_to(demo_recording)
+    bag = episode_artifacts.run_file(RunFile.CAMERA_RECORDING)
+    bag.parent.mkdir(parents=True)
+    bag.symlink_to(demo_recording)
     either_side = pair(episode_artifacts)
 
     written = either_side.write(tmp_path / "either_side.png")
