@@ -53,6 +53,13 @@ from bastler.render_common import (
     sanitize_http_url,
 )
 
+from bastler.pull_request_state import (
+    ChangeSize,
+    CheckConclusion,
+    PullRequestDataKey,
+    PullRequestState,
+)
+
 MAXIMUM_DEPENDENCY_STACK_LEVEL = 4
 """Same-track dependency chains deeper than this wrap back to indent level 0."""
 
@@ -89,13 +96,6 @@ class LiveState(StrEnum):
                 return "Closed (unmerged)"
             case LiveState.NOT_FOUND:
                 return "Not found on GitHub"
-
-
-class PullRequestState(StrEnum):
-    """GitHub's own coarse-grained pull request state, as returned by its API."""
-
-    OPEN = "open"
-    CLOSED = "closed"
 
 
 class PullRequestLabel(StrEnum):
@@ -454,6 +454,23 @@ class PullRequestRecord:
     closer manually adds the :attr:`PullRequestLabel.MERGED` label to record
     what actually happened - see :meth:`was_merged`."""
 
+    continuous_integration: CheckConclusion | None = None
+    """The reduced check conclusion on the pull request's head commit - ``None`` when
+    no check ran, or when the pull request data predates the chip fields."""
+
+    additions: int | None = None
+    """Lines added versus the base, or ``None`` when not fetched."""
+
+    deletions: int | None = None
+    """Lines deleted versus the base, or ``None`` when not fetched."""
+
+    mergeable: bool | None = None
+    """Whether GitHub reports the pull request as cleanly mergeable onto its base -
+    ``None`` while GitHub is still computing it or when not fetched."""
+
+    session_url: str | None = None
+    """The Claude session URL parsed from the pull request body, if any."""
+
     @property
     def identified_labels(self) -> frozenset[PullRequestLabel]:
         """The subset of :attr:`labels` that match a known
@@ -473,22 +490,58 @@ class PullRequestRecord:
         A closed entry must carry ``merged_at`` explicitly, ``null`` included:
         a gatherer that never requested the field would otherwise be
         indistinguishable from GitHub reporting no merge, silently turning
-        every merged pull request into a closed-unmerged one.
+        every merged pull request into a closed-unmerged one. Every chip
+        field is optional, so pull request data gathered before those fields
+        existed still parses - it just renders without chips.
 
         :raises MissingMergeTimestampError: If a closed entry omits ``merged_at``.
         """
-        state = PullRequestState(data["state"])
-        if state is PullRequestState.CLOSED and "merged_at" not in data:
+        state = PullRequestState(data[PullRequestDataKey.STATE])
+        if (
+            state is PullRequestState.CLOSED
+            and PullRequestDataKey.MERGED_AT not in data
+        ):
             raise MissingMergeTimestampError(
-                "a closed pull request entry must carry merged_at (null included)"
+                f"a closed pull request entry must carry {PullRequestDataKey.MERGED_AT} "
+                "(null included)"
             )
-        merged_at = data.get("merged_at")
+        merged_at = data.get(PullRequestDataKey.MERGED_AT)
+        continuous_integration = data.get(PullRequestDataKey.CONTINUOUS_INTEGRATION)
         return cls(
             state=state,
-            draft=data.get("draft", False),
+            draft=data.get(PullRequestDataKey.DRAFT, False),
             merged_at=datetime.fromisoformat(merged_at) if merged_at else None,
-            labels=list(data.get("labels") or []),
+            labels=list(data.get(PullRequestDataKey.LABELS) or []),
+            continuous_integration=(
+                CheckConclusion(continuous_integration)
+                if continuous_integration
+                else None
+            ),
+            additions=data.get(PullRequestDataKey.ADDITIONS),
+            deletions=data.get(PullRequestDataKey.DELETIONS),
+            mergeable=data.get(PullRequestDataKey.MERGEABLE),
+            session_url=sanitize_http_url(data.get(PullRequestDataKey.SESSION_URL)),
         )
+
+    @property
+    def change_size(self) -> ChangeSize | None:
+        """:return: The change size, or ``None`` when either line count is unknown."""
+        if self.additions is None or self.deletions is None:
+            return None
+        return ChangeSize(self.additions, self.deletions)
+
+    @property
+    def board_chips(self) -> list[BoardChip]:
+        """:return: The board-semantics chips this record's facts support - one per fact
+        it actually carries, so pre-chip data yields none."""
+        chips = []
+        if self.continuous_integration is not None:
+            chips.append(BoardChip.for_check_conclusion(self.continuous_integration))
+        if self.change_size is not None:
+            chips.append(BoardChip.for_change_size(self.change_size))
+        if self.mergeable is not None:
+            chips.append(BoardChip.for_mergeable(self.mergeable))
+        return chips
 
     @property
     def was_merged(self) -> bool:
@@ -623,6 +676,133 @@ class DependencyChip:
     dashboard's one visual cue that an item is blocked on this dependency."""
 
 
+class ChipTone(StrEnum):
+    """The visual tone of one board chip - doubles as its CSS class suffix."""
+
+    POSITIVE = "positive"
+    """The fact is healthy (checks passing, short change, cleanly mergeable)."""
+
+    NEGATIVE = "negative"
+    """The fact needs attention (checks failing, oversized change, conflicts)."""
+
+    PENDING = "pending"
+    """The fact is still being determined (checks running)."""
+
+
+class CheckDisplay(StrEnum):
+    """How each check conclusion reads on its chip."""
+
+    PASSING = "passing"
+    """Every check succeeded."""
+
+    FAILING = "failing"
+    """At least one check failed."""
+
+    PENDING = "pending"
+    """Checks are still running."""
+
+
+class MergeableDisplay(StrEnum):
+    """How GitHub's mergeability verdict reads on its chip."""
+
+    MERGEABLE = "mergeable"
+    """Merges cleanly onto its base."""
+
+    CONFLICTS = "conflicts"
+    """Does not merge cleanly onto its base."""
+
+
+@dataclass(frozen=True)
+class BoardChip:
+    """One ready-to-render board-semantics chip on an item's card - the CI,
+    change-size, and conflict facts the stack board also shows, derived from the
+    extended pull request data. A fact the data doesn't carry renders as no chip at
+    all rather than an unknown-state one."""
+
+    label: str
+    """The chip's display text."""
+
+    tone: ChipTone
+    """The chip's visual tone."""
+
+    tooltip: str
+    """The chip's hover title, spelling the fact out."""
+
+    CSS_CLASS: ClassVar[str] = "board-chip"
+    """The class every board chip's element carries, beside its tone's class."""
+
+    CHECK_DISPLAYS: ClassVar[dict[CheckConclusion, CheckDisplay]] = {
+        CheckConclusion.SUCCESS: CheckDisplay.PASSING,
+        CheckConclusion.FAILURE: CheckDisplay.FAILING,
+        CheckConclusion.PENDING: CheckDisplay.PENDING,
+    }
+    """How each check conclusion reads."""
+
+    CHECK_TONES: ClassVar[dict[CheckConclusion, ChipTone]] = {
+        CheckConclusion.SUCCESS: ChipTone.POSITIVE,
+        CheckConclusion.FAILURE: ChipTone.NEGATIVE,
+        CheckConclusion.PENDING: ChipTone.PENDING,
+    }
+    """Which tone each check conclusion takes."""
+
+    @classmethod
+    def for_check_conclusion(cls, conclusion: CheckConclusion) -> BoardChip:
+        """
+        :param conclusion: The reduced check conclusion on the head commit.
+        :return: The CI chip.
+        """
+        display = cls.CHECK_DISPLAYS[conclusion]
+        return cls(
+            label=f"checks {display}",
+            tone=cls.CHECK_TONES[conclusion],
+            tooltip=f"Latest checks on the head commit: {display}",
+        )
+
+    @classmethod
+    def for_change_size(cls, change_size: ChangeSize) -> BoardChip:
+        """
+        :param change_size: The lines changed versus the base.
+        :return: The change-size chip.
+        """
+        threshold = ChangeSize.SHORT_CHANGE_THRESHOLD
+        threshold_clause = (
+            f"within the short-change threshold of {threshold}"
+            if change_size.is_short
+            else (
+                f"over the short-change threshold of {threshold}, consider splitting "
+                "or restacking"
+            )
+        )
+        return cls(
+            label=f"+{change_size.additions} −{change_size.deletions}",
+            tone=ChipTone.POSITIVE if change_size.is_short else ChipTone.NEGATIVE,
+            tooltip=(
+                f"{change_size.lines_changed} lines changed versus the base - "
+                f"{threshold_clause}"
+            ),
+        )
+
+    @classmethod
+    def for_mergeable(cls, mergeable: bool) -> BoardChip:
+        """
+        :param mergeable: GitHub's mergeability verdict.
+        :return: The conflict chip.
+        """
+        if mergeable:
+            return cls(
+                label=MergeableDisplay.MERGEABLE,
+                tone=ChipTone.POSITIVE,
+                tooltip="GitHub reports this pull request merges cleanly onto its base",
+            )
+        return cls(
+            label=MergeableDisplay.CONFLICTS,
+            tone=ChipTone.NEGATIVE,
+            tooltip=(
+                "GitHub reports this pull request does not merge cleanly onto its base"
+            ),
+        )
+
+
 @dataclass(frozen=True)
 class ItemAction(ABC):
     """One not-done item's actionable dashboard button - see
@@ -750,6 +930,11 @@ class Item:
     dependency_chips: list[DependencyChip] = field(default_factory=list, init=False)
     """Ready-to-render chips for :attr:`depends_on`, filled in by
     :meth:`DashboardRenderer.render`."""
+
+    board_chips: list[BoardChip] = field(default_factory=list, init=False)
+    """Ready-to-render board-semantics chips (CI, change size, conflicts), filled in
+    by :meth:`DashboardRenderer.render` - empty when the pull request data doesn't
+    carry the chip fields."""
 
     action: ItemAction | None = field(default=None, init=False)
     """This item's dashboard action button, filled in by
@@ -1090,6 +1275,10 @@ class DashboardRenderer:
                 item.live_state is LiveState.OPEN_DRAFT
                 and item.status is not ItemStatus.DEFERRED
             )
+            record = self._pull_request_record_of(item)
+            item.board_chips = self._board_chips_of(record)
+            if item.session is None and record is not None:
+                item.session = record.session_url
         for item in self.plan.items:
             item.dependency_chips = self._dependency_chips_of(item)
             item.action = self._action_for(item)
@@ -1196,6 +1385,14 @@ class DashboardRenderer:
             pull_request is not None
             and PullRequestLabel.BUG in pull_request.identified_labels
         )
+
+    @staticmethod
+    def _board_chips_of(record: PullRequestRecord | None) -> list[BoardChip]:
+        """Derive one item's board-semantics chips from its pull request record, none
+        when the live data doesn't cover the item."""
+        if record is None:
+            return []
+        return record.board_chips
 
     @staticmethod
     def _drift_description_of(item: Item) -> str | None:

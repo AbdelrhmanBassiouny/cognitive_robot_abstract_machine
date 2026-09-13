@@ -17,6 +17,7 @@ from pathlib import Path
 from typing import Any
 
 from bastler.maintenance_constants import SESSION_LINK_PATTERN
+from bastler.pull_request_state import BoardEntryKey
 from bastler.stack import BOARD_PATH, PullRequest
 
 PullRequestRecord = Mapping[str, Any]
@@ -259,14 +260,18 @@ class BoardExport:
             base=PullRequestField.BASE.read(record, number),
             draft=bool(PullRequestField.DRAFT.read(record, number)),
             labels=PullRequestField.LABELS.read(record, number),
-            ci=record.get("ci"),
+            continuous_integration=record.get(BoardEntryKey.CONTINUOUS_INTEGRATION),
             session=get_session_link_in(PullRequestField.BODY.read(record, number)),
         )
 
     def as_json(self) -> str:
         """:return: The export, in the document :func:`stack.load_board` parses."""
         return json.dumps(
-            {"pull_requests": [asdict(entry) for entry in self.pull_requests]},
+            {
+                BoardEntryKey.PULL_REQUESTS: [
+                    asdict(entry) for entry in self.pull_requests
+                ]
+            },
             indent=2,
         )
 

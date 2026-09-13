@@ -21,6 +21,10 @@ set -uo pipefail
 #   STUB_GH_CALL_LOG            - file the invocation is appended to, so a
 #                                 test can assert the exact call made
 #
+# `gh api <path>`, the one call pull_request_state's command transport makes:
+#   STUB_GH_API_JSON - the JSON body to print
+#   STUB_GH_CALL_LOG - file the invocation is appended to
+#
 # Exits 64 on an invocation it doesn't recognize, rather than a plausible-looking
 # success: a test must fail loudly if a caller changes the call it makes.
 
@@ -49,6 +53,11 @@ if [ "${1:-}" = "api" ] && [ "${2:-}" = "--paginate" ]; then
       exit 0
       ;;
   esac
+fi
+
+if [ "${1:-}" = "api" ] && [ "$#" -eq 2 ]; then
+  printf '%s' "${STUB_GH_API_JSON:-{\}}"
+  exit 0
 fi
 
 echo "stub gh: unexpected invocation: $*" >&2

@@ -12,15 +12,34 @@ Values a program derives for itself belong beside the code that derives them, no
 from __future__ import annotations
 
 import re
+from enum import StrEnum
 
 GITHUB_API_ROOT = "https://api.github.com"
 """
 Base URL every REST call the executor makes is built on.
 """
 
-CREDENTIAL_VARIABLES = ("GH_TOKEN", "GITHUB_TOKEN")
+
+class CredentialVariable(StrEnum):
+    """
+    Environment variables read, in order, for the token the API calls authenticate with.
+    """
+
+    GH_TOKEN = "GH_TOKEN"
+    """
+    The variable the GitHub CLI itself reads first.
+    """
+
+    GITHUB_TOKEN = "GITHUB_TOKEN"
+    """
+    The variable an Actions runner provides.
+    """
+
+
+CREDENTIAL_VARIABLES = tuple(CredentialVariable)
 """
-Environment variables read, in order, for the token the API calls authenticate with.
+The credential variables in reading order, for callers that iterate rather than name
+them.
 """
 
 SESSION_LINK_PATTERN = re.compile(r"https://claude\.ai/code/session_[A-Za-z0-9_-]+")

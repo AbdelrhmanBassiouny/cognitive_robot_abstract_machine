@@ -306,6 +306,9 @@ BASTLER_PACKAGE_DIRECTORY="bastler"
 BUILD_DASHBOARD_MODULE="bastler.build_dashboard"
 # build_index: renders the master index page listing every plan.
 BUILD_INDEX_MODULE="bastler.build_index"
+# build_site: the headless static-site build (every plan dashboard plus the
+# master index) a Pages workflow runs with no live session.
+BUILD_SITE_MODULE="bastler.build_site"
 # sync_manifest_status: auto-corrects a plan.yaml's item statuses to
 # "done" wherever GitHub confirms the item's pull request is merged.
 SYNC_MANIFEST_STATUS_MODULE="bastler.sync_manifest_status"
