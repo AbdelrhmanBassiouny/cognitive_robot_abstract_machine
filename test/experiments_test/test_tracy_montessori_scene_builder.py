@@ -16,7 +16,7 @@ from coraplex.datastructures.enums import ExecutionType
 from dataclasses import dataclass, field
 from typing_extensions import List
 
-from semantic_digital_twin.adapters.multi_sim import MultiSimSynchronizer
+from semantic_digital_twin.adapters.multi_sim import MujocoCamera, MultiSimSynchronizer
 from semantic_digital_twin.datastructures.definitions import StaticJointState
 from semantic_digital_twin.robots.robot_parts import Arm
 from semantic_digital_twin.robots.tracy import Tracy
@@ -43,6 +43,7 @@ from experiments.montessori.scenarios import (
     LayoutAsFound,
     PieceShoved,
     RealScene,
+    SceneRecording,
     SimulatedScene,
     SortingScene,
     SortingStep,
@@ -205,6 +206,21 @@ def test_an_arm_the_run_never_moves_stays_parked_under_physics():
 
     for arm in world.get_semantic_annotations_by_type(Arm):
         assert arm.get_joint_state_by_type(StaticJointState.PARK).is_achieved()
+
+
+def test_a_run_on_tracys_own_table_is_filmed_framing_that_table():
+    """
+    The camera a run is filmed by frames the table the run is done on, which on Tracy is
+    its own and stands nowhere near the one the package's own scene is set on.
+    """
+    world = TracyOnItsOwnTable().build(Tracy)
+
+    recording = SceneRecording(world=world)
+
+    framing = MujocoCamera.overview_pose(table_surface(world).corners)
+    assert recording.camera.position == pytest.approx(
+        framing.to_position().to_np()[:3].tolist()
+    )
 
 
 def test_the_built_scene_keeps_its_meshes_beside_the_artifacts(monkeypatch, tmp_path):
