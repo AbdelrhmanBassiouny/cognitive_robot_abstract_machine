@@ -13,7 +13,6 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from coraplex.datastructures.enums import ExecutionType
-from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.spatial_types.spatial_types import (
     HomogeneousTransformationMatrix,
     Point3,
@@ -28,7 +27,7 @@ from experiments.montessori.event_monitoring import (
     MontessoriEventMonitor,
     build_shape_monitor_in_scene,
 )
-from experiments.montessori.exceptions import UnknownPieceNamed
+from experiments.montessori.exceptions import NoPieceNumbered, UnknownPieceNamed
 from experiments.montessori.scenarios import (
     LookAtTheScene,
     MontessoriSortingScenario,
@@ -43,25 +42,106 @@ from experiments.questions.question import (
     PlacedObject,
     QuestionedThings,
     SceneAsSetUp,
-    objects_of_the_scene,
 )
 from experiments.questions.question_set import QuestionSet
 from experiments.questions.working_memory import BeliefAgreesWithPerception
-from experiments.scenarios.scenario import ScenarioStep
+from experiments.scenarios.scenario import Person, ScenarioStep
 
-WHICH_PIECES_WERE_PLACED = (
-    "Which pieces did you put on the table when you set it up? "
-    "Name their shapes, separated by commas:"
-)
+PIECES_ON_OFFER = tuple(MontessoriShapeCategory)
 """
-What the person at the table is asked, so a run on the robot is scored on the scene they
-set up rather than on the one the camera made of it.
+The shapes the person at the table chooses among, numbered from one in this order.
 """
 
 BETWEEN_THE_PIECES_THEY_NAME = ","
 """
-What separates one shape from the next in what the person types.
+What separates one piece from the next in what the person types, beside whitespace.
 """
+
+WHICH_PIECES_WERE_PLACED = (
+    "Which pieces did you put on the table when you set it up? "
+    "Type their numbers, separated by commas:\n"
+    + "\n".join(
+        "  %d. %s" % (number, category)
+        for number, category in enumerate(PIECES_ON_OFFER, start=1)
+    )
+    + "\n"
+)
+"""
+What the person at the table is asked, so a run on the robot is scored on the scene they
+set up rather than on the one the camera made of it: every shape of the set with its
+number, since a number is easier to type right at the console than a spelling.
+"""
+
+# %% what the person at the table says they set up
+
+
+@dataclass
+class SceneThePersonSetUp:
+    """
+    The scene of a run on the robot as the person at the table can state it: which loose
+    pieces they put there, named but not placed, and the rest of the scene as the twin
+    was built.
+
+    On the robot the twin is what the camera made of the table, so the person is the
+    only account of the table that is not the camera's.
+    """
+
+    person: Person
+    """
+    The person at the table, who is asked which pieces they placed.
+    """
+
+    def pieces_placed(self) -> Optional[List[MontessoriShapeCategory]]:
+        """
+        The shapes the person at the table says they put on it, each picked by its
+        number on the list they are offered, or named.
+
+        :return: The shapes, or None where nobody at the table says.
+        :raises NoPieceNumbered: If they pick a number no piece is listed under.
+        :raises UnknownPieceNamed: If they name a shape no piece of the set is.
+        """
+        said = self.person.answer(WHICH_PIECES_WERE_PLACED)
+        if said is None:
+            return None
+        return [
+            self.piece_picked(typed)
+            for typed in said.replace(BETWEEN_THE_PIECES_THEY_NAME, " ").split()
+        ]
+
+    @staticmethod
+    def piece_picked(typed: str) -> MontessoriShapeCategory:
+        """
+        The shape one thing the person typed picks: a number off the list, or a shape's
+        own name.
+
+        :param typed: What they typed for one piece.
+        :raises NoPieceNumbered: If it is a number no piece is listed under.
+        :raises UnknownPieceNamed: If it is a name no shape of the set has.
+        """
+        if typed.isdigit():
+            number = int(typed)
+            if not 1 <= number <= len(PIECES_ON_OFFER):
+                raise NoPieceNumbered(number=number, count=len(PIECES_ON_OFFER))
+            return PIECES_ON_OFFER[number - 1]
+        spellings = {str(category) for category in PIECES_ON_OFFER}
+        if typed not in spellings:
+            raise UnknownPieceNamed(named=typed, known=frozenset(spellings))
+        return MontessoriShapeCategory(typed)
+
+    def stated_over(self, scene: SortingScene) -> Optional[SceneAsSetUp]:
+        """
+        The scene as the person states it: the pieces they say they placed, named as the
+        scene names them, among the rest of the scene as the twin holds it, with nothing
+        in the robot's hand.
+
+        :param scene: The scene, as the world the run is set in holds it.
+        :return: The account, or None where nobody at the table says what was placed.
+        """
+        placed = self.pieces_placed()
+        if placed is None:
+            return None
+        return scene.as_set_up([scene.piece_as_named(category) for category in placed])
+
 
 # %% the run
 
@@ -302,19 +382,7 @@ class WatchedSortingRun(EpisodeRecording[MontessoriSortingScenario, World]):
         pieces = self.pieces_set_up(scenario, scene)
         if pieces is None:
             return None
-        piece_names = {scene.body_of(category).name for category in scene.categories}
-        in_the_hand = scenario.category_in_the_hand
-        return SceneAsSetUp(
-            objects=pieces
-            + [
-                PlacedObject.read_from(body)
-                for body in objects_of_the_scene(scene.robot)
-                if body.name not in piece_names
-            ],
-            object_in_the_hand=(
-                None if in_the_hand is None else scene.body_of(in_the_hand).name
-            ),
-        )
+        return scene.as_set_up(pieces, in_the_hand=scenario.category_in_the_hand)
 
     def pieces_set_up(
         self, scenario: MontessoriSortingScenario, scene: SortingScene
@@ -347,11 +415,9 @@ class WatchedSortingRun(EpisodeRecording[MontessoriSortingScenario, World]):
         One loose piece as whoever set the scene up knows it.
 
         A piece the script acts on is named and nothing more: it is somewhere the physics
-        put it by the time the scene is asked about. A piece the twin holds none of --
-        one placed but never found -- is named by its own shape, since the twin has no
-        name for what it does not hold. A piece nobody says where they put stands on
-        nothing the account names: only a run that stood the piece itself knows it stood
-        it on the table.
+        put it by the time the scene is asked about. A piece nobody says where they put
+        stands on nothing the account names: only a run that stood the piece itself
+        knows it stood it on the table.
 
         :param scenario: The scenario whose scene it is.
         :param scene: The scene, as the world it was built in holds it.
@@ -359,15 +425,11 @@ class WatchedSortingRun(EpisodeRecording[MontessoriSortingScenario, World]):
         :param placement: Where it was put, or None where whoever set the scene up did
             not say.
         """
-        name = (
-            scene.body_of(category).name
-            if category in scene.categories
-            else PrefixedName(str(category))
-        )
+        named = scene.piece_as_named(category)
         if category is scenario.acted_on_category or placement is None:
-            return PlacedObject(name=name)
+            return named
         return PlacedObject(
-            name=name,
+            name=named.name,
             place=Point3(
                 placement.x,
                 placement.y,
@@ -389,7 +451,7 @@ class WatchedSortingRun(EpisodeRecording[MontessoriSortingScenario, World]):
             table says which are on it.
         """
         if scenario.execution_type is ExecutionType.REAL:
-            placed = self.pieces_the_person_placed()
+            placed = SceneThePersonSetUp(self.person).pieces_placed()
             if placed is None:
                 return None
             return {category: None for category in placed}
@@ -397,27 +459,6 @@ class WatchedSortingRun(EpisodeRecording[MontessoriSortingScenario, World]):
             placement.piece.category: placement
             for placement in scenario.starting_layout.placements
         }
-
-    def pieces_the_person_placed(self) -> Optional[List[MontessoriShapeCategory]]:
-        """
-        The shapes the person at the table says they put on it.
-
-        :return: The shapes, or None where nobody at the table says.
-        :raises UnknownPieceNamed: If they name a shape no piece of the set is.
-        """
-        said = self.person.answer(WHICH_PIECES_WERE_PLACED)
-        if said is None:
-            return None
-        named = [
-            spelled.strip()
-            for spelled in said.split(BETWEEN_THE_PIECES_THEY_NAME)
-            if spelled.strip()
-        ]
-        spellings = {str(category) for category in MontessoriShapeCategory}
-        unknown = [spelled for spelled in named if spelled not in spellings]
-        if unknown:
-            raise UnknownPieceNamed(named=unknown[0], known=frozenset(spellings))
-        return [MontessoriShapeCategory(spelled) for spelled in named]
 
     def _stop_watching(self):
         """

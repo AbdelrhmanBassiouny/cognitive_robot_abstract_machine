@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from coraplex.plans.plan import Plan
 from coraplex.plans.plan_node import ActionNode, PlanNode
@@ -101,6 +101,12 @@ class SameName(ObjectIdentity):
 
 # %% the clock the records of one trial share
 
+NANOSECONDS_PER_SECOND = 1_000_000_000
+"""
+How many nanoseconds a second is, since a recording stamps its messages in nanoseconds
+and a trial counts its seconds as a float.
+"""
+
 
 @dataclass(frozen=True)
 class TrialClock:
@@ -124,6 +130,34 @@ class TrialClock:
         :param instant: The instant to place.
         """
         return (instant - self.origin).total_seconds()
+
+    def instant_of(self, moment: float) -> datetime:
+        """
+        The instant of the wall clock a moment of the trial fell on.
+
+        :param moment: Seconds into the trial.
+        """
+        return self.origin + timedelta(seconds=moment)
+
+    def seconds_of_stamp(self, stamp: int) -> float:
+        """
+        How far into the trial a message a recording stamped was written.
+
+        A recording stamps each message with nanoseconds since the epoch on the wall
+        clock of the machine that wrote it, which is the clock the trial began on.
+
+        :param stamp: The stamp, in nanoseconds since the epoch.
+        """
+        return self.seconds_of(datetime.fromtimestamp(stamp / NANOSECONDS_PER_SECOND))
+
+    def stamp_of(self, moment: float) -> int:
+        """
+        The stamp a recording would have written a message under at a moment of the
+        trial, in nanoseconds since the epoch.
+
+        :param moment: Seconds into the trial.
+        """
+        return int(self.instant_of(moment).timestamp() * NANOSECONDS_PER_SECOND)
 
     @classmethod
     def of(cls, trial: RecordedTrial) -> TrialClock:

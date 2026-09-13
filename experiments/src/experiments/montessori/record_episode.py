@@ -146,6 +146,39 @@ class PerturbationChoice(StrEnum):
     PERCEIVED_POSE_OFFSET = "perceived-pose-offset"
     DETECTION_RELABELLED = "detection-relabelled"
 
+    def aimed_at(
+        self, piece: MontessoriShapeCategory, step: SortingStep
+    ) -> Perturbation:
+        """
+        The perturbation this choice names, aimed at a piece and due before a step.
+
+        A perturbation that moves something moves it
+        :data:`HOW_FAR_A_PERTURBATION_MOVES_SOMETHING`, so every perturbation a run
+        records was applied at one known distance.
+
+        :param piece: The piece the perturbation acts on.
+        :param step: The step the perturbation strikes before.
+        """
+        if self is PerturbationChoice.TARGET_HOLE_MOVED:
+            return TargetHoleMoved(
+                step=step,
+                category=piece,
+                displacement=HOW_FAR_A_PERTURBATION_MOVES_SOMETHING,
+            )
+        if self is PerturbationChoice.PIECE_SHOVED:
+            return PieceShoved(
+                step=step,
+                category=piece,
+                displacement=HOW_FAR_A_PERTURBATION_MOVES_SOMETHING,
+            )
+        if self is PerturbationChoice.PERCEIVED_POSE_OFFSET:
+            return PerceivedPoseOffset(
+                step=step, category=piece, offset=HOW_FAR_A_PERTURBATION_MOVES_SOMETHING
+            )
+        return DetectionRelabelled(
+            step=step, category=piece, reported_as=another_piece_than(piece)
+        )
+
 
 class ExecutionChoice(StrEnum):
     """
@@ -471,38 +504,12 @@ class RecordingArguments:
 
     def perturbations(self) -> List[Perturbation]:
         """
-        The perturbations applied to every trial: the one asked for, or none.
+        The perturbations applied to every trial: the one asked for, aimed at the piece
+        the run acts on, or none.
         """
         if self.perturbation is None:
             return []
-        return [self._perturbation_instance()]
-
-    def _perturbation_instance(self) -> Perturbation:
-        """
-        The perturbation asked for, aimed at the piece the run acts on.
-        """
-        step = self.perturbation_step
-        if self.perturbation is PerturbationChoice.TARGET_HOLE_MOVED:
-            return TargetHoleMoved(
-                step=step,
-                category=self.piece,
-                displacement=HOW_FAR_A_PERTURBATION_MOVES_SOMETHING,
-            )
-        if self.perturbation is PerturbationChoice.PIECE_SHOVED:
-            return PieceShoved(
-                step=step,
-                category=self.piece,
-                displacement=HOW_FAR_A_PERTURBATION_MOVES_SOMETHING,
-            )
-        if self.perturbation is PerturbationChoice.PERCEIVED_POSE_OFFSET:
-            return PerceivedPoseOffset(
-                step=step,
-                category=self.piece,
-                offset=HOW_FAR_A_PERTURBATION_MOVES_SOMETHING,
-            )
-        return DetectionRelabelled(
-            step=step, category=self.piece, reported_as=another_piece_than(self.piece)
-        )
+        return [self.perturbation.aimed_at(self.piece, self.perturbation_step)]
 
 
 def another_piece_than(piece: MontessoriShapeCategory) -> MontessoriShapeCategory:
@@ -625,7 +632,7 @@ def record_episode(arguments: RecordingArguments, episode: Episode) -> Path:
     finally:
         recording.close()
     if bag_directory is not None:
-        artifacts.keep_directory(bag_directory)
+        artifacts.keep_camera_recording(bag_directory)
     return artifacts.directory
 
 
@@ -680,8 +687,8 @@ def scene_of(arguments: RecordingArguments) -> Iterator[MontessoriWorldBuilder]:
 
 def episode_bag_recorder(parent_directory: Optional[str] = None) -> RosbagRecorder:
     """
-    The recorder of an episode's bag: the run's topics, keeping one camera frame in
-    :data:`~experiments.tracy_experiments.rosbag_recording.DEFAULT_KEEP_EVERY_NTH_FRAME`.
+    The recorder of an episode's bag: the run's topics, keeping one camera frame in :dat
+    a:`~experiments.tracy_experiments.rosbag_recording.DEFAULT_KEEP_EVERY_NTH_FRAME`.
 
     Imported here rather than at the top, so a run that records no bag needs no ROS.
 

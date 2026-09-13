@@ -30,6 +30,7 @@ from experiments.episodes.episode import (
 )
 from experiments.paper.run_plan import (
     JUST_FINISHED,
+    NANOSECONDS_PER_SECOND,
     ObjectIdentity,
     RunPlan,
     TrialClock,
@@ -206,6 +207,37 @@ def test_the_clock_turns_an_instant_into_seconds_into_the_trial(
         clock.seconds_of(TRIAL_BEGAN_AT + timedelta(seconds=PICKING_ENDED_AT))
         == PICKING_ENDED_AT
     )
+
+
+def test_the_clock_turns_seconds_into_the_trial_back_into_an_instant(
+    trial: RecordedTrial,
+) -> None:
+    """
+    A moment of the trial names an instant of the wall clock as well, which is what a
+    recording stamped on that clock is asked for by.
+    """
+    clock = TrialClock.of(trial)
+    assert clock.instant_of(PICKING_ENDED_AT) == TRIAL_BEGAN_AT + timedelta(
+        seconds=PICKING_ENDED_AT
+    )
+
+
+def test_a_recordings_stamp_is_placed_in_the_trial_it_was_written_during(
+    trial: RecordedTrial,
+) -> None:
+    """
+    A bag stamps every message with nanoseconds since the epoch on the wall clock the
+    trial began on, so a stamp and a tick of the trial are read against one another
+    through the trial's own start.
+    """
+    clock = TrialClock.of(trial)
+    stamp = clock.stamp_of(PICKING_ENDED_AT)
+
+    assert stamp == int(
+        (TRIAL_BEGAN_AT + timedelta(seconds=PICKING_ENDED_AT)).timestamp()
+        * NANOSECONDS_PER_SECOND
+    )
+    assert clock.seconds_of_stamp(stamp) == pytest.approx(PICKING_ENDED_AT)
 
 
 def test_a_trial_that_recorded_no_plan_says_so(trial: RecordedTrial) -> None:
