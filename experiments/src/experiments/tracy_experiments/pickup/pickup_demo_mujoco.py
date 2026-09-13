@@ -125,7 +125,6 @@ from semantic_digital_twin.robots.tracy import Tracy
 from semantic_digital_twin.spatial_types.spatial_types import (
     HomogeneousTransformationMatrix,
     Point3,
-    Pose,
 )
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.world_entity import Actuator
