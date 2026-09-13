@@ -11,35 +11,35 @@ to a follow-up PR - that is this work's stage 3 rules backend.
 ## Stage 1 - the syntax (PR #359, in review)
 
 Done:
-- `Match._operand_` / `HasSymbolicOperations._operand_`: a match handed to a predicate
-  or a `@symbolic_function` now stands for the variable it describes, instead of being
-  silently built into a concrete predicate holding the match object. Callers write
-  `Colored(shape, ...)` rather than `Colored(shape._variable_, ...)`.
-- `Match._nested_matches_`: the matches a pattern hands over, innermost first.
-- `PlanNode.underspecified_actions` (empty unless the node stands for a statement) and
-  `PlanNode.open_descriptions` over the node and its descendants.
-- Figure CONFIG renamed to the tree's own names and `framework.pdf` rebuilt.
-- Local ROS stubs live in the scratchpad only (never committed); without them this
-  container cannot import coraplex or build the ORM interfaces.
+- One reading per question, each written once: `_as_operand_` (what a value contributes
+  where an operation expects an operand - a match contributes the variable it describes)
+  and `_as_expression_` (the expression it stands for - what quantifying, selecting and
+  reading a bound value want). Everything that builds an expression goes through
+  `_as_operand_`, predicates and symbolic functions included.
+- A handed-over statement carries its narrowing: `Query._narrowings_mentioned_in_` takes
+  on what the statements a condition mentions say, transitively and once each, skipping
+  the statement the query is about. `Variable._describing_statement_` (declared by
+  `HasNarrowings`) is the link back. `Match.where` records them too, so generative
+  backends still read what a statement says off the match.
+- `Match._nested_matches_`; `PlanNode.underspecified_actions` / `open_descriptions`; no
+  `underspecified()` wrapper and no `UnderspecifiedPlan`.
+- Figure CONFIG says `sequential([...])`, `an(InsertionAction)`, `shape_category=`,
+  `.from_(board.apertures)`; `framework.pdf` rebuilt.
+- `watch_narrowing` and `scene_publishing` reach for nothing private.
+- Local ROS stubs live in the scratchpad only (never committed) and must be on PYTHONPATH
+  for `scripts/regenerate_all_orm.py` and any test run, or ORM generation dies on
+  `CouldNotResolveType: MetaData`.
 
-Review round 1 (5 threads, all handled):
-- `watch_narrowing` no longer reaches for `._symbolic_expression_`: the two holes are
-  plain `variable(Body, ...)` like the lid, with their names stated as conditions in the
-  one `where`. `one_condition_at_a_time` carries conditions about other variables into
-  every step, so the demo keeps the same steps.
-- No `underspecified(...)` wrapper and no `UnderspecifiedPlan`: a plan answers for
-  itself. The figure reads `sequential([...])`.
-- Test fixtures dropped; each test writes its own statements. `an(InsertAction)`,
-  `a(Sighting)`, and no empty `()` where there is no pattern.
+Review round 2 (2 threads): the `._symbolic_expression_` one handled and resolved; the
+`InsertionAction` one renamed in #355 (`634f0aa708`) and merged here, but left open
+because #355's CI is not green.
 
-Decided with the user: no `LIGHT_BLUE` member. The cube measures `#00FFDD` (hue 172),
-which reads as `CYAN`; the plan and the figure say CYAN. The renamings
-(`shape_category=`, `.from_(board.apertures)`) were accepted.
+#355's base had moved; the merge conflict is resolved and pushed (`48b125cece`).
 
-Known gap, raised not fixed: a *foreign* match that carries its own narrowing, handed as
-a predicate operand, contributes only its variable - the narrowing lives on the match's
-own lowered query. Nothing in the tree does that any more. Fixing it properly means
-hoisting such a match's conditions into the enclosing statement; offered as its own PR.
+#355 CI: 16 failures, all in experiments. Four are red on the base branch too; six more
+follow from the same camera error (#286 is its fix, against the same base); five are the
+krrood `apply_mapping_on_external_root` bare-`next` bug, fixed as its own bug PR #362 off
+main (`NoValueAlongAccessPath`) - which makes the failure legible, not green.
 
 ## Stages 2-4 - not started
 
