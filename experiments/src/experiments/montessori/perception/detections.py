@@ -17,6 +17,7 @@ from typing_extensions import List, Optional
 
 from experiments.montessori.perception.footprint import Footprint
 from experiments.montessori.semantics import MontessoriShapeCategory
+from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.spatial_types.spatial_types import Pose
 
 # %% detections
@@ -100,6 +101,15 @@ class MontessoriShapeDetection(MontessoriDetection):
     """
     The geometric shape it was recognised as, matched against a hole's own category to
     decide which hole it belongs in.
+    """
+
+    supporting_surface: PrefixedName = field(kw_only=True)
+    """
+    What the world calls the surface it was found resting on.
+
+    A piece is looked for on each of the scene's surfaces in turn, so which one it
+    stands on is something the look established rather than something a reader has to
+    infer from how high it sits.
     """
 
     height: float = field(kw_only=True)

@@ -16,6 +16,7 @@ from experiments.montessori.perception.edges import EdgeDistances
 from experiments.montessori.perception.detections import MontessoriScene
 from experiments.montessori.perception.orthophoto import Orthophoto, WorkspaceRegion
 from experiments.montessori.perception.piece_matcher import PieceMatcher
+from experiments.montessori.perception.surfaces import WorkspaceSurface
 from experiments.montessori.perception.pipeline import (
     MontessoriPerceptionPipeline,
     SurfaceColors,
@@ -30,9 +31,11 @@ from experiments.montessori.pieces import (
     hue_distance,
 )
 from experiments.montessori.semantics import MontessoriShapeCategory
+from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.world_description.geometry import Color
 
 from .dataset import montessori_scene_fixtures
+from .dataset.montessori_scene_fixtures import SCENE_REGION
 from .dataset.montessori_scene_renderer import MontessoriSceneRenderer, PlacedPiece
 
 pytest_plugins = [montessori_scene_fixtures.__name__]
@@ -331,14 +334,21 @@ def test_a_piece_only_half_in_view_is_not_reported(
     renderer: MontessoriSceneRenderer, placed_pieces: List[PlacedPiece]
 ):
     cut_through_a_piece = MontessoriPerceptionPipeline(
-        region=WorkspaceRegion(
-            minimum_x=0.35,
-            maximum_x=1.35,
-            minimum_y=placed_pieces[0].y,
-            maximum_y=0.75,
+        table=WorkspaceSurface(
+            name=PrefixedName("table", "montessori_scene"),
+            region=WorkspaceRegion(
+                minimum_x=0.35,
+                maximum_x=1.35,
+                minimum_y=placed_pieces[0].y,
+                maximum_y=0.75,
+            ),
+            height=renderer.table_height,
         ),
-        table_height=renderer.table_height,
-        board_height=renderer.board_height,
+        lid=WorkspaceSurface(
+            name=PrefixedName("board_lid", "montessori_scene"),
+            region=SCENE_REGION,
+            height=renderer.lid_height,
+        ),
     )
 
     scene = cut_through_a_piece.detect(renderer.render(placed_pieces))
