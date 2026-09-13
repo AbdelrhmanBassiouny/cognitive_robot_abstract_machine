@@ -26,6 +26,7 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 
 from rclpy.node import Node
+from rclpy.qos import qos_profile_sensor_data
 from sensor_msgs.msg import JointState
 from typing_extensions import Callable, Optional
 
@@ -337,11 +338,16 @@ class GripperJointStateListener:
     def __post_init__(self) -> None:
         side = _ARM_SIDES[self.arm]
         self._knuckle_joint_name = _KNUCKLE_JOINT_TEMPLATE.format(side=side)
+        # The gripper driver publishes its joint state at sensor-data QoS (best effort),
+        # the same as the camera streams (see live_camera.py); a subscription left at
+        # the default reliable profile is reported as an incompatible QoS pairing at
+        # discovery and never receives a single message from it, which is what left
+        # latest_closure raising NoGripperJointStateError on a live run.
         self.node.create_subscription(
             JointState,
             _GRIPPER_JOINT_STATE_TOPIC_TEMPLATE.format(side=side),
             self._on_joint_state,
-            10,
+            qos_profile_sensor_data,
         )
 
     def _on_joint_state(self, message: JointState) -> None:
