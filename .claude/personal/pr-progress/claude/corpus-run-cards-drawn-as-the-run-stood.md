@@ -61,5 +61,20 @@ Plan: make the query cards of the simulated corpus right.
       figures_rerecorded_2026-09-13_run2.log; status file gets "figures exit N"/"figures done").
       A second such REAL episode 6ffe9ec2 (pid 1175127) appeared meanwhile -- someone is
       recording on the robot right now.
-- [ ] when figures done: check a re-recorded episode's scene card (idle arm parked, film frames
-      Tracy's table), final pg_dump + figures backup, report exit code and any Traceback.
+- [x] figures run 2 exit 0 (23:20): 8 tables, 288 cards / 60 episodes; card checked (both arms
+      parked, film frames Tracy's table); 56 stale card dirs of removed episodes moved to
+      ~/episode-artifacts/stale_cards_of_removed_episodes_2026-09-13; final dump
+      montessori_sorting_results_final_scored_2026-09-13.dump; user given tar commands
+      (~/corpus-backup-2026-09-13/essential.tgz + real-episodes.tar).
+- [x] real episodes checked (user asked): 3 new REAL episodes 2f370626/d37b712d/6ffe9ec2 have
+      rows, 11 scored queries per trial, bags with all trials inside, transcripts; kept worlds
+      unreadable (Mesh._from_json of the fetched world exports into the process temp root --
+      bug on #265's real path, not this stack); joint traces empty/sparse (samples only on
+      world state change). Tables count Real=5 not 14 because the pass-over drops their trials.
+- [x] shadows off + held piece drawn (user asked 23:30): commit 67efe2bfa8 -- MujocoSim.
+      cast_no_shadows, SceneRender.shadows=False; MujocoBuilder.hangs_below_a_body builds a
+      6DoF below a body as no joint at the connection's pose; WorldCannotBeSimulatedError and
+      free_joints_below_a_body removed, tests replaced. Pushed, #356 description updated.
+- [ ] figures run 3 launched 23:40 (figures_rerecorded_2026-09-13_run3.log): expect 75 episodes
+      with cards; check a held-piece card and the shadows, then tell the user to redo the
+      figures backup (essential.tgz).
