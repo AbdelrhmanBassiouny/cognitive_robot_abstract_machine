@@ -201,8 +201,8 @@ def best_shape_of_each_category(
         each shape was first seen there.
     """
     source = FixedScene(captured=scene, reported_in=world.root)
-    sought = a(DetectedMontessoriShape)()
-    seen = sought.where(in_(sought._variable_.supporting_surface, resting_on)).tolist(
+    sought = a(DetectedMontessoriShape)
+    seen = sought.where(in_(sought.supporting_surface, resting_on)).tolist(
         backend=MontessoriPerceptionBackend(source=source)
     )
 
