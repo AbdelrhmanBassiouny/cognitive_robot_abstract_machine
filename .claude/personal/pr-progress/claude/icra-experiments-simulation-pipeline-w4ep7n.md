@@ -97,7 +97,17 @@ wrong answer, read back whole through LongTermMemory); exit 1 on any FAILED. Tes
 4. `b8c2bd3a93` colours truth compared position by position; same answer scored t/f/t.
 5. `13e2104bcc` transcript "Ran: 1" -> the member's name.
 
-**Found, not fixed (design, for the developer).** A perturbation leaves no motion
+**Fixed later the same night, at the developer's direction** ("the translation
+detector should handle big sudden moves as a translation event if the distance is not
+already claimed by another translation event"): `c77d938735` segmind
+`TranslationDetector` compares with `SegmindContext.rest_poses` (first sight, then
+where the last translation stopped), reports an unclaimed change of place beyond
+`distance_threshold`; `a8c66997f3` the monitor ticks once on `start()`; `bf62af5ed2`
+`trial_started(scenario, world, perturbations)` and `watched_category` prefers the
+perturbation's piece. End-to-end tests in MuJoCo and over the tape capture answer
+`AnythingMoved` True after a shove. All pushed to #265 (`bf62af5ed2`).
+
+**Found, not fixed (design, for the developer), as first written.** A perturbation leaves no motion
 event, on the robot or in simulation (`AnythingMoved` False after "Push the cube 10 cm"
 in every perturbed stands-still trial, sim and real): the person acts between two
 looks and the second look re-stands the body, the monitor ticks once per step. The
