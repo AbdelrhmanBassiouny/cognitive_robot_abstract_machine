@@ -16,7 +16,6 @@ from pathlib import Path
 import numpy as np
 import pytest
 from coraplex.datastructures.enums import ExecutionType
-from scipy.spatial.transform import Rotation
 from segmind.datastructures.events import InsertionEvent, PickUpEvent
 from typing_extensions import List
 
@@ -43,6 +42,7 @@ from experiments.questions.working_memory import (
     SideOfAnotherObject,
 )
 from experiments.scenarios.trial import TrialOutcome
+from semantic_digital_twin.adapters.picture import Viewpoint
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.spatial_types.spatial_types import (
     HomogeneousTransformationMatrix,
@@ -260,15 +260,14 @@ def artifacts_of(traced_trial: RecordedTrial, tmp_path: Path) -> EpisodeArtifact
     )
 
 
-def facing_of(camera) -> np.ndarray:
+def facing_of(viewpoint: Viewpoint) -> np.ndarray:
     """
-    The way a camera looks along the ground, as a unit vector in the frame of the body
-    it hangs on.
+    The way a viewpoint looks along the ground, as a unit vector in the world root
+    frame.
 
-    :param camera: The camera to read, whose quaternion is stated real part first.
+    :param viewpoint: The viewpoint to read, which looks down its own negative z.
     """
-    real, x, y, z = camera.quaternion
-    looks_along = Rotation.from_quat([x, y, z, real]).apply([0.0, 0.0, -1.0])
+    looks_along = -viewpoint.pose[:3, 2]
     along_the_ground = looks_along * np.array([1.0, 1.0, 0.0])
     return along_the_ground / np.linalg.norm(along_the_ground)
 
@@ -343,9 +342,11 @@ def test_a_spatial_card_faces_the_way_the_question_was_asked_from(
     the question says it was looked at from.
     """
     question = trial.queries[0].question
-    camera = SideOfAnotherObjectCard().point_of_view(question, scene)
+    viewpoint = SideOfAnotherObjectCard().point_of_view(question, scene)
     asked_from = question.point_of_view.to_np()[:3, 0]
-    assert facing_of(camera) == pytest.approx(asked_from / np.linalg.norm(asked_from))
+    assert facing_of(viewpoint) == pytest.approx(
+        asked_from / np.linalg.norm(asked_from)
+    )
 
 
 def test_a_spatial_card_is_drawn_from_behind_the_two_objects_it_relates(
@@ -357,11 +358,11 @@ def test_a_spatial_card_is_drawn_from_behind_the_two_objects_it_relates(
     the question faces, above them, with both in front of it.
     """
     question = trial.queries[0].question
-    camera = SideOfAnotherObjectCard().point_of_view(question, scene)
-    stands_at = np.array(camera.position)
+    viewpoint = SideOfAnotherObjectCard().point_of_view(question, scene)
+    stands_at = viewpoint.pose[:3, 3]
     for related in (question.subject, question.other):
         towards = scene.compute_forward_kinematics_np(scene.root, related)[:3, 3]
-        assert np.dot(towards - stands_at, facing_of(camera)) > 0
+        assert np.dot(towards - stands_at, facing_of(viewpoint)) > 0
         assert stands_at[2] > towards[2]
 
 

@@ -14,29 +14,28 @@ from pathlib import Path
 
 import cv2
 import imageio.v2 as imageio
-import mujoco
 import numpy as np
 from krrood.exceptions import DataclassException
-from typing_extensions import List, Optional, Sequence, Tuple
+from typing_extensions import Dict, List, Optional, Sequence, Tuple
 
-from experiments.montessori.perception.camera import RgbdFrame
 from experiments.paper.labels import LIFTED_ABOVE, Label, Labelling, PlacedLabel
 from experiments.paper.lettering import drawn
 from experiments.paper.panel import ANSWER_COLOR, CardPanel
-from experiments.montessori.perception.simulated_camera import SimulatedCamera
-from semantic_digital_twin.adapters.multi_sim import (
-    MujocoCamera,
-    MujocoLight,
-    MultiSimLight,
-    MujocoSim,
-    RegionAppearance,
-    select_offscreen_rendering_backend,
+from semantic_digital_twin.adapters.multi_sim import RegionAppearance
+from semantic_digital_twin.adapters.picture import (
+    UP,
+    Appearance,
+    Lighting,
+    Picture,
+    Recolored,
+    Softened,
+    Viewpoint,
+    WorldPicture,
 )
 from semantic_digital_twin.spatial_computations.raytracer import RayTracer
 from semantic_digital_twin.spatial_types.spatial_types import (
     HomogeneousTransformationMatrix,
 )
-from semantic_digital_twin.mixin import SimulatorAdditionalProperty
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.geometry import Color
 from semantic_digital_twin.world_description.world_entity import (
@@ -57,33 +56,21 @@ PICTURE_HEIGHT = 1200
 Height of the picture a render takes when it places the camera itself, in pixels.
 """
 
-OVERVIEW_CAMERA_NAME = "paper_overview_camera"
+OVERVIEW_FROM = (1.0, -1.0, 1.0)
 """
-What a render calls the camera it hangs over a scene to frame the whole of it.
-"""
-
-POINT_OF_VIEW_CAMERA_NAME = "paper_point_of_view_camera"
-"""
-What a render calls the camera it puts in a body's own frame.
+Which way from a scene's centre the overview viewpoint stands: diagonally off it and
+above, so the whole scene is seen at once.
 """
 
-SCENE_LIGHT_NAME = "paper_scene_light"
+STANDING_OFF_THE_SCENE_AT_LEAST = 1.0
 """
-What a render calls the light it hangs over a scene that states none of its own.
-"""
-
-AMBIENT_LIGHT = [0.45, 0.45, 0.45]
-"""
-How much light reaches a surface no lamp points at, as red, green and blue.
-
-High enough that a body facing away from the light is still read as a shape rather than
-as background, since a card has to show what the answer names wherever it happens to
-stand.
+How far from the centre of what it frames the overview viewpoint stands at the least, in
+metres.
 """
 
-DIFFUSE_LIGHT = [0.75, 0.75, 0.75]
+OVERVIEW_DISTANCE_FACTOR = 1.5
 """
-How much light a surface facing the lamp takes, as red, green and blue.
+How many times the diagonal of what it frames the overview viewpoint stands off.
 """
 
 # %% something the picture singles out
@@ -137,22 +124,15 @@ class NothingToDrawError(DataclassException):
 # %% where a scene is looked at from
 
 
-VIEW_T_MUJOCO_CAMERA = HomogeneousTransformationMatrix.from_xyz_rpy().to_np()
-VIEW_T_MUJOCO_CAMERA[:3, :3] = np.array(
-    [[0.0, 0.0, -1.0], [-1.0, 0.0, 0.0], [0.0, 1.0, 0.0]]
-)
+VIEW_T_CAMERA = HomogeneousTransformationMatrix.from_xyz_rpy().to_np()
+VIEW_T_CAMERA[:3, :3] = np.array([[0.0, 0.0, -1.0], [-1.0, 0.0, 0.0], [0.0, 1.0, 0.0]])
 """
-The turn from the way the twin states where something looks from to the way MuJoCo
+The turn from the way the twin states where something looks from to the way a renderer
 states a camera's own frame.
 
-The twin faces a looker down its x-axis with y to its left and z up; MuJoCo points a
+The twin faces a looker down its x-axis with y to its left and z up; a renderer points a
 camera down its own negative z with y up the picture and x across it. Getting this wrong
 leaves every picture facing somewhere the question was not asked from.
-"""
-
-UP = np.array([0.0, 0.0, 1.0])
-"""
-Which way is up in the frame a point of view is given in.
 """
 
 LOOKING_DOWN_BY = np.radians(80.0)
@@ -215,24 +195,19 @@ class PointOfView:
     Height of the picture taken from here, in pixels.
     """
 
-    def camera(self) -> MujocoCamera:
+    def viewpoint(self) -> Viewpoint:
         """
-        A camera standing where this point of view is and facing the way it faces,
-        already attached to :attr:`body`.
+        A viewpoint standing where this point of view is and facing the way it faces, in
+        the world root frame, as :attr:`body` stands right now.
         """
-        body_T_camera = HomogeneousTransformationMatrix(
-            self.pose.to_np() @ VIEW_T_MUJOCO_CAMERA
+        world = self.body._world
+        root_T_body = world.compute_forward_kinematics_np(world.root, self.body)
+        return Viewpoint(
+            pose=root_T_body @ self.pose.to_np() @ VIEW_T_CAMERA,
+            field_of_view=self.field_of_view,
+            width=self.width,
+            height=self.height,
         )
-        camera = MujocoCamera(
-            name=POINT_OF_VIEW_CAMERA_NAME,
-            body=self.body,
-            position=body_T_camera.to_position().to_np()[:3].tolist(),
-            quaternion=MujocoCamera.quaternion_of(body_T_camera),
-            fovy=self.field_of_view,
-            resolution=[float(self.width), float(self.height)],
-        )
-        self.body.simulator_additional_properties.append(camera)
-        return camera
 
     def stood_behind(
         self,
@@ -354,8 +329,9 @@ class SceneRender:
     """
     Draws one world with the things an answer names picked out of it.
 
-    The twin is left exactly as it was: only the MuJoCo copy the picture is drawn from is
-    recoloured, so the same world answers the next query the way it answered this one.
+    The twin is left exactly as it was: what is drawn in which colour is worked out for
+    the picture alone, so the same world answers the next query the way it answered this
+    one.
     """
 
     world: World
@@ -363,12 +339,10 @@ class SceneRender:
     The twin the picture is drawn of.
     """
 
-    camera: Optional[MujocoCamera] = None
+    viewpoint: Optional[Viewpoint] = None
     """
-    The camera to draw through, already attached to :attr:`world`.
-
-    When none is given, an overview camera framing the whole scene is hung on the
-    world's root for the one render and taken off again afterwards.
+    Where the picture is taken from, or None to frame the whole scene from the overview
+    viewpoint.
     """
 
     highlight: Color = ANSWER_COLOR
@@ -379,6 +353,18 @@ class SceneRender:
     faded: Optional[Color] = None
     """
     What everything else is drawn in, or None to draw it in the colours the twin states.
+    """
+
+    palette: Appearance = Softened()
+    """
+    What everything the picture leaves in the colours the twin states is drawn in:
+    those colours softened for print, so that the answer picked out in a full colour
+    stands out of the scene.
+    """
+
+    lighting: Lighting = Lighting()
+    """
+    How the picture is lit.
     """
 
     region_appearance: RegionAppearance = RegionAppearance.TRANSPARENT
@@ -419,91 +405,71 @@ class SceneRender:
     Size a name is written at, as OpenCV's own multiple of its base font.
     """
 
-    shadows: bool = False
-    """
-    Whether the lights cast shadows in the picture.
-
-    Off unless asked for: a shadow across the table reads as something standing there.
-    """
-
     def of(self, answers: Sequence[KinematicStructureEntity]) -> RenderedScene:
         """
         Draw the world with the given things picked out of it.
 
-        A world that states no camera or no light of its own is given one for the length
-        of the render and has it taken off again, so drawing a card changes nothing
-        about the twin the next query is answered from.
-
         :param answers: The bodies and regions the answer names, which may be none where
             the query answered nothing.
-        :raises NothingToDrawError: If the render has to place a camera or a light and
+        :raises NothingToDrawError: If the picture has to place its own viewpoint and
             the world holds no geometry to place it around.
         """
-        select_offscreen_rendering_backend()
-        placed = self.place_around_the_scene()
-        camera = self.camera if self.camera is not None else placed[0]
-        scene = MujocoSim(
+        viewpoint = self.viewpoint
+        if viewpoint is None:
+            viewpoint = self.overview(self.bounds())
+        picture = WorldPicture(
             world=self.world,
-            headless=True,
+            appearance=self.picked_out_of(answers),
+            lighting=self.lighting,
             region_appearance=self.region_appearance,
-        )
-        scene.simulator.start(simulate_in_thread=False, render_in_thread=False)
-        scene.make_room_for_a_picture(
-            int(camera.resolution[0]), int(camera.resolution[1])
-        )
-        if not self.shadows:
-            scene.cast_no_shadows()
-        try:
-            self.pick_out(scene, answers)
-            return self._drawn(scene, camera, answers)
-        finally:
-            scene.stop_simulation()
-            for own in placed:
-                own.body.simulator_additional_properties.remove(own)
+        ).taken_from(viewpoint)
+        return self._marked(picture, answers)
 
-    def pick_out(
-        self, scene: MujocoSim, answers: Sequence[KinematicStructureEntity]
-    ) -> None:
+    def picked_out_of(self, answers: Sequence[KinematicStructureEntity]) -> Recolored:
         """
-        Recolour an already-built scene so the answer stands out of it.
+        What each thing of the world is drawn in so that the answer stands out of it:
+        the answer in the highlight, anything singled out in its own colour, and the
+        rest in the fade where one is asked for or in the palette otherwise.
 
-        Anything the twin states geometry for but no appearance is drawn as well: a card
-        whose answer is missing from its own picture says nothing.
-
-        :param scene: The MuJoCo copy of :attr:`world` the picture is drawn from.
         :param answers: The bodies and regions the answer names.
         """
-        for entity in self.world.kinematic_structure_entities:
-            scene.make_visible(entity)
-            if self.faded is not None:
-                scene.recolor(entity, self.faded)
-        for answer in answers:
-            scene.recolor(answer, self.highlight)
-        for singled_out in self.picked_out:
-            scene.recolor(singled_out.entity, singled_out.color)
+        colors: Dict[KinematicStructureEntity, Color] = {}
+        if self.faded is not None:
+            colors.update(
+                (entity, self.faded)
+                for entity in self.world.kinematic_structure_entities
+            )
+        colors.update((answer, self.highlight) for answer in answers)
+        colors.update(
+            (singled_out.entity, singled_out.color) for singled_out in self.picked_out
+        )
+        return Recolored(colors=colors, otherwise=self.palette)
 
-    # %% placing the camera
+    # %% placing the viewpoint
 
-    def place_around_the_scene(self) -> List[SimulatorAdditionalProperty]:
+    def overview(self, bounds: np.ndarray) -> Viewpoint:
         """
-        What this render has to add to the world to draw it at all, already attached and
-        in the order it was placed: the overview camera when none was given, then a light
-        when the world states none.
+        A viewpoint looking diagonally down on the whole of a box from
+        :data:`OVERVIEW_FROM`, far enough off to take it all in.
 
-        :raises NothingToDrawError: If anything has to be placed and the world holds no
-            geometry to place it around.
+        :param bounds: The lowest and highest corner of the box, in the world root
+            frame, as a ``(2, 3)`` array.
         """
-        wanted_camera = self.camera is None
-        wanted_light = not self.is_lit()
-        if not wanted_camera and not wanted_light:
-            return []
-        bounds = self.bounds()
-        placed: List[SimulatorAdditionalProperty] = []
-        if wanted_camera:
-            placed.append(self.overview_camera(bounds))
-        if wanted_light:
-            placed.append(self.light_over(bounds))
-        return placed
+        centre = bounds.mean(axis=0)
+        distance = (
+            max(
+                float(np.linalg.norm(bounds[1] - bounds[0])),
+                STANDING_OFF_THE_SCENE_AT_LEAST,
+            )
+            * OVERVIEW_DISTANCE_FACTOR
+        )
+        away = np.array(OVERVIEW_FROM, dtype=float)
+        return Viewpoint.looking_from(
+            position=centre + away / np.linalg.norm(away) * distance,
+            at=centre,
+            width=PICTURE_WIDTH,
+            height=PICTURE_HEIGHT,
+        )
 
     def bounds(self) -> np.ndarray:
         """
@@ -552,126 +518,47 @@ class SceneRender:
             for z in (lowest[2], highest[2])
         ]
 
-    def is_lit(self) -> bool:
-        """
-        Whether the world says how it is lit, in which case a render leaves its lighting
-        alone.
-        """
-        return any(
-            isinstance(stated, MultiSimLight)
-            for entity in self.world.kinematic_structure_entities
-            for stated in entity.simulator_additional_properties
-        )
+    # %% marking the answer
 
-    def overview_camera(self, bounds: np.ndarray) -> MujocoCamera:
-        """
-        A camera hung on the world's root looking diagonally down on the whole scene,
-        already attached to it.
-
-        :param bounds: The corners of the box the scene stands in.
-        """
-        pose = MujocoCamera.overview_pose(bounds)
-        camera = MujocoCamera(
-            name=OVERVIEW_CAMERA_NAME,
-            body=self.world.root,
-            position=pose.to_position().to_np()[:3].tolist(),
-            quaternion=MujocoCamera.quaternion_of(pose),
-            resolution=[float(PICTURE_WIDTH), float(PICTURE_HEIGHT)],
-        )
-        self.world.root.simulator_additional_properties.append(camera)
-        return camera
-
-    def light_over(self, bounds: np.ndarray) -> MujocoLight:
-        """
-        A light shining down on the whole scene from the way the overview camera looks
-        at it, already attached to the world's root.
-
-        Cast in parallel rays rather than from a lamp standing somewhere, so a scene of
-        any size is lit evenly and a body far from the middle is as readable as one in
-        it.
-
-        :param bounds: The corners of the box the scene stands in.
-        """
-        overhead = MujocoCamera.overview_pose(bounds).to_position().to_np()[:3]
-        light = MujocoLight(
-            name=SCENE_LIGHT_NAME,
-            body=self.world.root,
-            directional=True,
-            position=overhead.tolist(),
-            direction=(-overhead / np.linalg.norm(overhead)).tolist(),
-            ambient=AMBIENT_LIGHT,
-            diffuse=DIFFUSE_LIGHT,
-        )
-        self.world.root.simulator_additional_properties.append(light)
-        return light
-
-    # %% drawing
-
-    def _drawn(
-        self,
-        scene: MujocoSim,
-        camera: MujocoCamera,
-        answers: Sequence[KinematicStructureEntity],
+    def _marked(
+        self, picture: Picture, answers: Sequence[KinematicStructureEntity]
     ) -> RenderedScene:
         """
-        Take the picture and mark the answer on it.
+        Mark the answer on the picture: an edge around it and around anything singled
+        out, and the answer's names.
 
-        :param scene: The recoloured MuJoCo copy of :attr:`world`.
-        :param camera: The camera the picture is taken through.
+        :param picture: The picture as taken.
         :param answers: The bodies and regions the answer names.
         """
-        viewpoint = SimulatedCamera(world=self.world, camera=camera)
-        simulator = scene.simulator
-        # Nothing but MuJoCo's own stepping works body poses out from the joint values,
-        # and this copy is never stepped, so they are worked out once before anything is
-        # drawn. Both renders are held under the one lock so the scene cannot move
-        # between the picture and the labelling of it.
-        with simulator._model_lock:
-            mujoco.mj_forward(simulator._mj_model, simulator._mj_data)
-            colors = simulator.capture_rgb(
-                camera_name=camera.name,
-                height=viewpoint.height,
-                width=viewpoint.width,
-            ).result
-            segmentation = simulator.capture_segmentation(
-                camera_name=camera.name,
-                height=viewpoint.height,
-                width=viewpoint.width,
-            ).result
-
-        picture = np.ascontiguousarray(colors)
-        covered = self._covered_by(segmentation, scene, answers)
-        self._outline(picture, covered, self.highlight)
+        image = picture.colors
+        covered = self._covered_by(picture, answers)
+        self._outline(image, covered, self.highlight)
         for singled_out in self.picked_out:
             self._outline(
-                picture,
-                self._covered_by(segmentation, scene, [singled_out.entity]),
+                image,
+                self._covered_by(picture, [singled_out.entity]),
                 singled_out.color,
             )
-        labels = self._label(picture, viewpoint, answers) if self.label_answers else []
-        return RenderedScene(image=picture, answer_mask=covered, labels=tuple(labels))
+        labels = (
+            self._label(image, picture.viewpoint, answers) if self.label_answers else []
+        )
+        return RenderedScene(image=image, answer_mask=covered, labels=tuple(labels))
 
     @staticmethod
     def _covered_by(
-        segmentation: np.ndarray,
-        scene: MujocoSim,
-        answers: Sequence[KinematicStructureEntity],
+        picture: Picture, answers: Sequence[KinematicStructureEntity]
     ) -> np.ndarray:
         """
-        Which pixels of the picture the answer covers.
+        Which pixels of the picture show the answer: what is actually visible of it
+        rather than everywhere it would be if nothing stood in front of it.
 
-        The segmentation says which geom each pixel was drawn from, so this is what is
-        actually visible of the answer rather than everywhere it would be if nothing
-        stood in front of it.
-
-        :param segmentation: Each pixel's ``(model id, object type)``.
-        :param scene: The scene the picture was drawn from.
+        :param picture: The picture as taken.
         :param answers: The bodies and regions the answer names.
         """
-        answered_geoms = [geom for answer in answers for geom in scene.geoms_of(answer)]
-        return np.isin(segmentation[:, :, 0], answered_geoms) & (
-            segmentation[:, :, 1] == mujoco.mjtObj.mjOBJ_GEOM
-        )
+        covered = np.zeros(picture.shown.shape, dtype=bool)
+        for answer in answers:
+            covered |= picture.mask_of(answer)
+        return covered
 
     def _outline(self, picture: np.ndarray, covered: np.ndarray, color: Color) -> None:
         """
@@ -693,7 +580,7 @@ class SceneRender:
     def _label(
         self,
         picture: np.ndarray,
-        viewpoint: SimulatedCamera,
+        viewpoint: Viewpoint,
         answers: Sequence[KinematicStructureEntity],
     ) -> List[PlacedLabel]:
         """
@@ -701,21 +588,15 @@ class SceneRender:
         the other names.
 
         :param picture: The picture to write on, changed in place.
-        :param viewpoint: The camera the picture was taken through, which is what says
-            where a place in the world falls in it.
+        :param viewpoint: Where the picture was taken from, which is what says where a
+            place in the world falls in it.
         :param answers: The bodies and regions the answer names.
         :return: Where each name was written.
         """
         if not answers:
             return []
-        frame = RgbdFrame(
-            color=picture,
-            depth=np.zeros(picture.shape[:2]),
-            intrinsics=viewpoint.intrinsics,
-            reference_frame_T_camera=viewpoint.reference_frame_T_camera,
-        )
-        things = frame.project(np.vstack([self._place_of(one) for one in answers]))
-        anchors = frame.project(np.vstack([self._above(one) for one in answers]))
+        things = viewpoint.project(np.vstack([self._place_of(one) for one in answers]))
+        anchors = viewpoint.project(np.vstack([self._above(one) for one in answers]))
         labels = [
             Label(text=answer.name.name, anchor=tuple(anchor), thing=tuple(thing))
             for answer, anchor, thing in zip(answers, anchors, things)

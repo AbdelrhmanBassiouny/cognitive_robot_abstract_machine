@@ -11,7 +11,6 @@ simulation is shown as the twin stood at those moments.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from contextlib import contextmanager
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
@@ -20,7 +19,7 @@ import cv2
 import imageio.v2 as imageio
 import numpy as np
 from krrood.exceptions import DataclassException
-from typing_extensions import Iterator, Optional, Tuple
+from typing_extensions import Optional, Tuple
 
 from experiments.episodes.artifacts import EpisodeArtifact, EpisodeArtifacts
 from experiments.episodes.trace import (
@@ -36,6 +35,7 @@ from experiments.paper.lettering import Face, Lettering
 from experiments.paper.panel import CardPanel
 from experiments.paper.scene import SceneRender
 from semantic_digital_twin.adapters.multi_sim import MujocoCamera
+from semantic_digital_twin.adapters.picture import Viewpoint
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.geometry import Color
 
@@ -519,7 +519,7 @@ class TwinFrames(FramesByMoment):
 
     A run in simulation has no camera to record, but it traced where every joint stood,
     and the twin put back there is the scene as the run showed it at that moment. Each
-    frame is drawn when it is asked for, since drawing one builds a simulation.
+    frame is drawn when it is asked for.
     """
 
     world: World
@@ -534,11 +534,11 @@ class TwinFrames(FramesByMoment):
 
     camera: Optional[MujocoCamera] = None
     """
-    The camera the run's robot looks through, standing on the robot but not hung on
-    the world, or None to draw the frames from an overview of the whole scene.
+    The camera the run's robot looks through, as the twin states it on the robot, or
+    None to draw the frames from an overview of the whole scene.
 
-    Hung on the world for the length of each frame and taken off again, so the world
-    is left as it was found.
+    Each frame is drawn from where the camera stands once the twin is stood at that
+    sample, since the camera moves with the body it hangs on.
     """
 
     def moments_taken(self) -> np.ndarray:
@@ -546,24 +546,13 @@ class TwinFrames(FramesByMoment):
 
     def frame(self, index: int) -> np.ndarray:
         with standing_at(self.world, self.trace.at(self.trace.moments[index])) as world:
-            with self.looking_through_the_camera():
-                return (
-                    SceneRender(world=world, camera=self.camera, label_answers=False)
-                    .of([])
-                    .image
-                )
-
-    @contextmanager
-    def looking_through_the_camera(self) -> Iterator[None]:
-        """
-        Hang :attr:`camera` on the body it stands on for the length of the block, or
-        nothing when the frames are drawn from an overview.
-        """
-        if self.camera is None:
-            yield
-            return
-        self.camera.body.simulator_additional_properties.append(self.camera)
-        try:
-            yield
-        finally:
-            self.camera.body.simulator_additional_properties.remove(self.camera)
+            viewpoint = (
+                Viewpoint.through(self.camera, world)
+                if self.camera is not None
+                else None
+            )
+            return (
+                SceneRender(world=world, viewpoint=viewpoint, label_answers=False)
+                .of([])
+                .image
+            )

@@ -327,13 +327,12 @@ def traced_move(world: World) -> JointTrace:
 
 
 @needs_a_renderer
-def test_a_twin_frame_is_drawn_through_the_robots_camera_and_the_camera_is_taken_off(
+def test_a_twin_frame_is_drawn_through_the_robots_camera(
     scene_with_a_loose_piece: World,
 ) -> None:
     """
     A run in simulation showed what its robot's camera saw, so a frame given that camera
-    is drawn through it rather than from the overview, and the camera is hung on the
-    twin for the frame alone.
+    is drawn through it rather than from the overview.
     """
     trace = traced_move(scene_with_a_loose_piece)
     stands = scene_with_a_loose_piece.get_body_by_name(ANSWERED_NAME)
@@ -351,7 +350,6 @@ def test_a_twin_frame_is_drawn_through_the_robots_camera_and_the_camera_is_taken
     ).frame(0)
 
     assert not np.array_equal(through_the_camera, overview)
-    assert camera not in stands.simulator_additional_properties
 
 
 def test_the_twins_frames_are_taken_at_the_moments_the_trace_was_sampled_at(

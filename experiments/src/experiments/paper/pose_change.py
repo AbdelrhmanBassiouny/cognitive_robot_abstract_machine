@@ -30,13 +30,13 @@ from experiments.paper.panel import ANSWER_COLOR
 from experiments.paper.run_plan import TrialClock
 from experiments.paper.scene import (
     LOOKING_CLOSELY,
-    UP,
+    OVERVIEW_FROM,
     PickedOut,
     PointOfView,
     RenderedScene,
     SceneRender,
 )
-from semantic_digital_twin.adapters.multi_sim import OVERVIEW_VIEWPOINT, MujocoCamera
+from semantic_digital_twin.adapters.picture import UP, Viewpoint
 from semantic_digital_twin.callbacks.callback import ModelChangeCallback
 from semantic_digital_twin.spatial_computations.forward_kinematics import (
     ForwardKinematicsManager,
@@ -145,7 +145,7 @@ def way_across_the_table(
     across_the_table = (end - start)[:2]
     length = float(np.linalg.norm(across_the_table))
     towards = (
-        np.array(OVERVIEW_VIEWPOINT[:2], dtype=float)
+        np.array(OVERVIEW_FROM[:2], dtype=float)
         if away_from is None
         else ((start + end) / 2 - away_from)[:2]
     )
@@ -646,14 +646,11 @@ class PoseChangeRender:
     The twin the picture is drawn of.
     """
 
-    camera: Optional[MujocoCamera] = None
+    viewpoint: Optional[Viewpoint] = None
     """
-    The camera to draw through, already attached to :attr:`world`.
-
-    When none is given, a camera looking at the move -- from straight above a move
-    across the table, from square across a lift -- is hung on the world's root for the
-    one panel and taken off again afterwards, so the two poses are seen side by side
-    rather than one behind the other.
+    Where the picture is taken from, or None to look at the move -- from straight above
+    a move across the table, from square across a lift -- so the two poses are seen side
+    by side rather than one behind the other.
     """
 
     highlight: Color = ANSWER_COLOR
@@ -694,8 +691,8 @@ class PoseChangeRender:
             the robot is shown as it was -- reaching for the piece, or holding it --
             rather than as the run left it. None leaves the joints where they are.
         :raises ObjectHeldFixedError: If the twin holds the object fixed where it is.
-        :raises NothingToDrawError: If a camera or a light has to be placed and the world
-            holds no geometry to place it around.
+        :raises NothingToDrawError: If the viewpoint has to be placed and the world holds
+            no geometry to place it around.
         """
         with put_back_afterwards(self.world):
             if robot_at is not None:
@@ -708,13 +705,13 @@ class PoseChangeRender:
                     change.subject, change.way or change.straight_way()
                 )
                 framed_on = self.framed_on(change.subject, ghost) + tuple(dots)
-                camera = self.camera
-                if camera is None:
-                    camera = self.hang_a_camera_at(change, ghost, dots)
+                viewpoint = self.viewpoint
+                if viewpoint is None:
+                    viewpoint = self.looking_at(change, ghost, dots)
                 try:
                     return SceneRender(
                         world=self.world,
-                        camera=camera,
+                        viewpoint=viewpoint,
                         highlight=self.highlight,
                         faded=self.faded,
                         label_answers=False,
@@ -725,8 +722,6 @@ class PoseChangeRender:
                         ),
                     ).of([change.subject])
                 finally:
-                    if self.camera is None:
-                        camera.body.simulator_additional_properties.remove(camera)
                     self.take_away([ghost] + dots)
                     stand(self.world, change.subject, stood_at)
 
@@ -743,23 +738,20 @@ class PoseChangeRender:
             self.world.root, robots[0].root
         )[:3, 3]
 
-    def hang_a_camera_at(
+    def looking_at(
         self, change: PoseChange, ghost: Body, dots: Sequence[Body]
-    ) -> MujocoCamera:
+    ) -> Viewpoint:
         """
-        Hang a camera on the world's root that looks at the move the way
-        :func:`looking_at_the_move` has it.
+        The viewpoint that looks at the move the way :func:`looking_at_the_move` has it.
 
         It frames the move itself -- the object, the ghost and the dots along the way
         -- and stands no closer than :data:`STANDING_OFF_A_MOVE_AT_LEAST`, so a short
         move is still seen with the scene around it while nothing farther off pulls
-        the camera back from it.
+        the viewpoint back from it.
 
         :param change: The move to look at.
         :param ghost: The copy of the object standing where it was.
         :param dots: The dots standing along its way.
-        :return: The camera, already attached, to be taken off again once the picture is
-            drawn.
         """
         framed_on = self.framed_on(change.subject, ghost) + tuple(dots)
         pose = looking_at_the_move(
@@ -770,7 +762,7 @@ class PoseChangeRender:
         )
         return PointOfView(
             body=self.world.root, pose=pose, field_of_view=MOVE_FIELD_OF_VIEW
-        ).camera()
+        ).viewpoint()
 
     @staticmethod
     def framed_on(subject: Body, ghost: Body) -> Tuple[Body, ...]:

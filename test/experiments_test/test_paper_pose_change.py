@@ -25,7 +25,8 @@ from segmind.datastructures.events import (
 from experiments.episodes.episode import Episode, RecordedTrial, Tick
 from experiments.episodes.trace import JointPositions
 from experiments.paper.panel import ANSWER_COLOR
-from experiments.paper.scene import UP, SceneRender
+from experiments.paper.scene import OVERVIEW_FROM, SceneRender
+from semantic_digital_twin.adapters.picture import UP
 from experiments.paper.pose_change import (
     GHOST_COLOR,
     LOOKING_DOWN_ON_A_LIFT_BY,
@@ -37,7 +38,6 @@ from experiments.paper.pose_change import (
     looking_at_the_move,
     stand,
 )
-from semantic_digital_twin.adapters.multi_sim import OVERVIEW_VIEWPOINT
 from experiments.scenarios.trial import TrialOutcome
 from semantic_digital_twin.spatial_types.spatial_types import (
     HomogeneousTransformationMatrix,
@@ -583,16 +583,16 @@ def test_a_straight_lift_is_looked_at_from_the_overviews_side() -> None:
 
     looking = looking_at_the_move(before, after, bounds_around(before, after)).to_np()
 
-    assert looking[:2, 3] @ np.array(OVERVIEW_VIEWPOINT[:2]) > 0.0
+    assert looking[:2, 3] @ np.array(OVERVIEW_FROM[:2]) > 0.0
 
 
 def test_a_short_move_is_looked_at_from_as_close_as_a_long_one(
     scene_with_a_loose_piece: World,
 ) -> None:
     """
-    The camera is hung to frame the move itself, not the rest of the scene: whatever
-    else stands in the world, however far off, does not pull the camera back from the
-    two poses and the way between them.
+    The viewpoint frames the move itself, not the rest of the scene: whatever else
+    stands in the world, however far off, does not pull it back from the two poses and
+    the way between them.
     """
     subject = loose_piece(scene_with_a_loose_piece)
     change = PoseChange.of(moved(subject))
@@ -602,9 +602,8 @@ def test_a_short_move_is_looked_at_from_as_close_as_a_long_one(
     midpoint = (change.before.to_np()[:3, 3] + change.after.to_np()[:3, 3]) / 2
 
     def stands_off() -> float:
-        camera = render.hang_a_camera_at(change, ghost, dots)
-        camera.body.simulator_additional_properties.remove(camera)
-        return float(np.linalg.norm(np.array(camera.position) - midpoint))
+        viewpoint = render.looking_at(change, ghost, dots)
+        return float(np.linalg.norm(viewpoint.pose[:3, 3] - midpoint))
 
     alone = stands_off()
     with scene_with_a_loose_piece.modify_world():
@@ -640,26 +639,19 @@ def test_the_ghost_is_taken_back_out_of_the_scene(
 
 
 @needs_a_renderer
-def test_the_render_leaves_nothing_hanging_on_the_world(
+def test_the_render_leaves_nothing_standing_in_the_world(
     scene_with_a_loose_piece: World,
 ) -> None:
     """
-    The camera and the light both poses are drawn under are placed for the one panel and
-    taken off again, so a second card of the same world is drawn the same way.
+    The ghost and the dots are stood in the scene for the one panel and taken out
+    again, so a second card of the same world is drawn the same way.
     """
     subject = loose_piece(scene_with_a_loose_piece)
     stood_in_it = list(scene_with_a_loose_piece.kinematic_structure_entities)
-    hanging = {
-        entity.name: len(entity.simulator_additional_properties)
-        for entity in stood_in_it
-    }
 
     PoseChangeRender(world=scene_with_a_loose_piece).of(PoseChange.of(moved(subject)))
 
-    assert {
-        entity.name: len(entity.simulator_additional_properties)
-        for entity in stood_in_it
-    } == hanging
+    assert list(scene_with_a_loose_piece.kinematic_structure_entities) == stood_in_it
 
 
 # %% what the world's own callbacks are told

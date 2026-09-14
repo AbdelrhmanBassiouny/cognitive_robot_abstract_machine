@@ -79,7 +79,7 @@ from experiments.questions.working_memory import (
     PickedUpRecently,
     SideOfAnotherObject,
 )
-from semantic_digital_twin.adapters.multi_sim import MujocoCamera
+from semantic_digital_twin.adapters.picture import Viewpoint
 from semantic_digital_twin.robots.robot_parts import AbstractRobot
 from semantic_digital_twin.world import World
 from semantic_digital_twin.spatial_types.spatial_types import (
@@ -336,9 +336,9 @@ class QueryCard(ABC):
         """
         return []
 
-    def point_of_view(self, asked: Question, world: World) -> Optional[MujocoCamera]:
+    def point_of_view(self, asked: Question, world: World) -> Optional[Viewpoint]:
         """
-        The camera this card's scene is drawn through, or None to frame the whole scene
+        Where this card's scene is looked at from, or None to frame the whole scene
         from the overview viewpoint.
 
         :param asked: The question as it was asked.
@@ -914,18 +914,13 @@ class QueryCard(ABC):
         """
         asked = query.question
         with self._stood_when_asked(trial, query, artifacts) as world:
-            camera = self.point_of_view(asked, world)
             answers = self.answers(asked, world)
-            try:
-                return SceneRender(
-                    world=world,
-                    camera=camera,
-                    label_answers=self.labels_the_answers,
-                    framed_on=tuple(answers),
-                ).of(answers)
-            finally:
-                if camera is not None:
-                    camera.body.simulator_additional_properties.remove(camera)
+            return SceneRender(
+                world=world,
+                viewpoint=self.point_of_view(asked, world),
+                label_answers=self.labels_the_answers,
+                framed_on=tuple(answers),
+            ).of(answers)
 
     def _stood_when_asked(
         self,
@@ -1026,9 +1021,9 @@ class SideOfAnotherObjectCard(QueryCard):
 
     def point_of_view(
         self, asked: SideOfAnotherObject, world: World
-    ) -> Optional[MujocoCamera]:
+    ) -> Optional[Viewpoint]:
         """
-        A camera facing the way the question was asked from, which is what makes its
+        A viewpoint facing the way the question was asked from, which is what makes its
         left and right mean anything, stood behind the two objects it relates so both
         are in the picture.
 
@@ -1038,7 +1033,7 @@ class SideOfAnotherObjectCard(QueryCard):
         looker = PointOfView(body=world.root, pose=asked.point_of_view)
         return looker.stood_behind(
             SceneRender(world=world, framed_on=(asked.subject, asked.other)).bounds()
-        ).camera()
+        ).viewpoint()
 
 
 @dataclass
