@@ -53,7 +53,11 @@ from experiments.montessori.semantics import (
 from experiments.montessori.watched_run import WatchedSortingRun
 from experiments.questions.question import Memory
 from experiments.questions.question import SceneAsSetUp
-from experiments.questions.working_memory import SupportingSurfaces
+from experiments.questions.working_memory import (
+    AnythingMoved,
+    ObjectsThatMoved,
+    SupportingSurfaces,
+)
 from experiments.scenarios.scenario import AbsentPerson
 from experiments.scenarios.trial import TrialOutcome
 from experiments.tracy_experiments.equipment import parse_tracy
@@ -431,6 +435,42 @@ def test_a_shove_on_the_robot_is_asked_of_the_person_and_learned_of_by_looking(
     assert scene.body_of(SHOVED_PIECE) in [
         piece.root for piece in person.pieces_when_asked
     ]
+
+
+def test_a_shove_on_the_robot_is_remembered_as_the_piece_moving(
+    published_world: World,
+):
+    """
+    The person moves the piece between the reading taken as watching began and the
+    look that follows their shove, and that change of place is a motion of the piece:
+    the run answers that something moved and names the piece.
+    """
+    look = RecordedFrameWhoseSceneCanBeMoved(
+        pipeline=pipeline_of(published_world),
+        frame=SceneCapture.load(MEASURED_CAPTURE).to_frame(),
+        cube_shoved_by=A_SHOVE.displacement,
+        board_slid_by=Vector3(0.0, 0.0, 0.0),
+    )
+    perceived = TracyLookingAtItsOwnTable(
+        scene=PerceivedScene(
+            world=published_world, look=look, described_board=lab_board()
+        )
+    )
+    person = PersonWhoMovesTheScene(look=look, scene=perceived.scene)
+    scenario, run = _run_on_the_robot(perceived, person=person)
+
+    run.run(scenario, perturbations=[A_SHOVE])
+
+    [trial] = run.records_trials.trials
+    [anything_moved] = [
+        query for query in trial.queries if isinstance(query.question, AnythingMoved)
+    ]
+    assert anything_moved.answer == str(True)
+    [which_moved] = [
+        query for query in trial.queries if isinstance(query.question, ObjectsThatMoved)
+    ]
+    shoved = SortingScene(scenario.physics.world).body_of(SHOVED_PIECE)
+    assert shoved.name.name in which_moved.answer
 
 
 def test_a_shove_nobody_makes_leaves_the_scene_as_the_look_finds_it(
