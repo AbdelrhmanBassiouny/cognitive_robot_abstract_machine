@@ -166,8 +166,8 @@ process; `RecordsTrialsToADatabase.record` keeps the meshes of every world a tri
 records, the audit checks the plans' worlds too (`8fbddff9d3`). (7) The synchronizer's
 depth-10 subscription dropped state updates while the demo's executor was inside a
 look; the gripper's close never reached the demo world (trace knuckle 0 throughout).
-`UPDATE_QUEUE_DEPTH = 1000` in sdt's `world_synchronizer.py` (`fac4de65b7`, bug PR off
-main). (8) `trial.finish` ran after the bag closed → "recording ends N s before the
+`UPDATE_QUEUE_DEPTH = 1000` in sdt's `world_synchronizer.py` (`fac4de65b7`, #372 off
+main, `bug`). (8) `trial.finish` ran after the bag closed → "recording ends N s before the
 trial" (`5fce6d2f4c`). Note: a recalled plan's `initial_world` comes back as a
 `WorldMapping`, not a `World` (coraplex `PlanMapping.to_domain_object`) -- reported,
 not fixed.
