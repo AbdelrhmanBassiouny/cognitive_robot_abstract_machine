@@ -609,23 +609,23 @@ class _SortingRig(ShapeSorter):
 
 
 def piece_asked_about(
-    sorting: PerceivedSorting, category: MontessoriShapeCategory
+    perceived: PerceivedScene, category: MontessoriShapeCategory
 ) -> MontessoriShape:
     """
     The piece the look found of the given kind, which the run is asked about.
 
-    :param sorting: The run, once it has looked.
+    :param perceived: The scene, once it has been looked at.
     :param category: The kind of piece.
     :raises PieceNotSeenError: If the look found no piece of that kind.
     """
-    for piece in sorting.pieces:
+    for piece in perceived.pieces:
         if piece.shape_category is category:
             return piece
     raise PieceNotSeenError(category=category)
 
 
 def question_set_about(
-    sorting: PerceivedSorting,
+    perceived: PerceivedScene,
     piece: MontessoriShape,
     robot: Tracy,
     scene: Optional[SceneAsSetUp],
@@ -635,14 +635,14 @@ def question_set_about(
     placed against the next one, from where the robot stands, and scored against the
     scene as whoever set it up states it.
 
-    :param sorting: The run, once it has looked.
+    :param perceived: The scene, once it has been looked at.
     :param piece: The piece the questions single out.
     :param robot: The robot the questions are put to.
     :param scene: The scene as the person at the table states it, or None where nobody
         can, which leaves out every question scored against it.
     """
-    others = [other for other in sorting.pieces if other is not piece]
-    compared_against = others[0] if others else sorting.board
+    others = [other for other in perceived.pieces if other is not piece]
+    compared_against = others[0] if others else perceived.board
     return QuestionSet.over_working_memory(
         QuestionedThings(
             object_asked_about=piece.root,
@@ -827,7 +827,7 @@ class SortingTrial:
 
         :raises PieceNotSeenError: If the look found no piece of the kind asked about.
         """
-        return piece_asked_about(self.sorting, self.asked_about)
+        return piece_asked_about(self.sorting.scene, self.asked_about)
 
     def question_set(self) -> QuestionSet:
         """
@@ -837,7 +837,10 @@ class SortingTrial:
         :raises PieceNotSeenError: If the look found no piece of the kind asked about.
         """
         return question_set_about(
-            self.sorting, self.piece_asked_about, self.rig.robot, self.stated_scene
+            self.sorting.scene,
+            self.piece_asked_about,
+            self.rig.robot,
+            self.stated_scene,
         )
 
     def perform(self) -> None:
@@ -1207,17 +1210,21 @@ def database_asked_for(arguments: argparse.Namespace) -> Optional[ResultsDatabas
     return resolve_lasting_database(arguments.database_uri)
 
 
-def bag_asked_for(arguments: argparse.Namespace) -> Optional[RosbagRecorder]:
+def bag_asked_for(
+    arguments: argparse.Namespace, name_prefix: str = BAG_NAME_PREFIX
+) -> Optional[RosbagRecorder]:
     """
     The bag the command line asked the run to record, or None for a run that records
     none.
 
     :param arguments: The command line as read.
+    :param name_prefix: Leading part of the bag directory's name, so a demo's bags are
+        told apart from another's.
     """
     if not arguments.record:
         return None
     return RosbagRecorder.timestamped(
-        BAG_NAME_PREFIX,
+        name_prefix,
         arguments.bag_directory,
         keep_every_nth_frame=arguments.keep_every_nth_frame,
     )

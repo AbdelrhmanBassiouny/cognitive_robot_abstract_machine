@@ -41,8 +41,10 @@ is how this lab lays its pieces out; see :func:`_finger_midpoint_offset`'s own d
 for where the fingers stand once the gripper is turned there.
 
 :class:`ActuatorDrivenAction` is what ties the two families together: each action here
-says which action of a plan it carries out, so a plan resolved in the words it was
-written in can be handed to the lab that can run it.
+says which action of a plan it carries out and which lab it drives, so a plan resolved
+in the words it was written in can be handed to the lab that can run it. The members
+here drive :class:`SimulatedActuators`; the ones driving the physical robot are in
+:mod:`~experiments.tracy_experiments.pick_and_place_action_real`.
 """
 
 from __future__ import annotations
@@ -227,33 +229,57 @@ def _reach(
 
 
 ActionT = TypeVar("ActionT", bound=ActionDescription)
+LabT = TypeVar("LabT")
+
+
+@dataclass
+class SimulatedActuators:
+    """
+    What an action drives in a simulated lab: the running simulation, and the actuator
+    of every joint it commands.
+    """
+
+    simulation: RealTimeSimulation
+    """
+    The running real-time simulation whose actuators are commanded.
+    """
+
+    actuators: Dict[str, Actuator]
+    """
+    Every joint's own actuator, keyed by joint name.
+    """
 
 
 class NoActionCarriesItOut(LookupError):
     """
     Raised when a plan states an action no member of :class:`ActuatorDrivenAction`
-    carries out, so the lab cannot run it.
+    carries out in the lab it is handed, so that lab cannot run it.
     """
 
-    def __init__(self, action: ActionDescription):
+    def __init__(self, action: ActionDescription, lab: object):
         super().__init__(
-            f"No action driving the actuators carries out {type(action).__name__}."
+            f"Nothing driving {type(lab).__name__} carries out "
+            f"{type(action).__name__}."
         )
         self.action = action
         """
-        The action of the plan that nothing here carries out.
+        The action of the plan that nothing carries out.
+        """
+        self.lab = lab
+        """
+        What the action was to have been carried out on.
         """
 
 
 @dataclass
-class ActuatorDrivenAction(Generic[ActionT], SubClassSafeGeneric, ABC):
+class ActuatorDrivenAction(Generic[ActionT, LabT], SubClassSafeGeneric, ABC):
     """
-    An action that carries one a plan states out by commanding a running simulation's
-    actuators.
+    An action that carries one a plan states out by driving a lab's own actuators.
 
-    Each member binds the action of a plan it carries out, so a plan resolved in the
-    words it was written in can be run in a lab whose robot is a simulated one without
-    anything having to say, action by action, which class stands for which.
+    Each member binds two things: the action of a plan it carries out, and the lab it
+    drives it in. A plan resolved in the words it was written in can then be run in any
+    lab that has members of its own -- simulated or physical -- without anything having
+    to say, action by action, which class stands for which.
     """
 
     @classmethod
@@ -264,64 +290,66 @@ class ActuatorDrivenAction(Generic[ActionT], SubClassSafeGeneric, ABC):
         return cls.get_generic_type_parameters()[0]
 
     @classmethod
+    def lab_it_drives(cls) -> Type[LabT]:
+        """
+        The lab this one is carried out in, read off the type parameter it binds.
+        """
+        return cls.get_generic_type_parameters()[1]
+
+    @classmethod
     @abstractmethod
-    def carrying_out(
-        cls,
-        action: ActionT,
-        simulation: RealTimeSimulation,
-        actuators: Dict[str, Actuator],
-    ) -> Self:
+    def carrying_out(cls, action: ActionT, lab: LabT) -> Self:
         """
         Build this action from the one it carries out.
 
         :param action: The action of the plan, with everything it left open answered.
-        :param simulation: The running simulation whose actuators are driven.
-        :param actuators: Every joint's own actuator, keyed by joint name.
+        :param lab: The lab whose actuators are driven.
         """
 
     @classmethod
     def performing(
-        cls,
-        plan: List[ActionDescription],
-        simulation: RealTimeSimulation,
-        actuators: Dict[str, Actuator],
+        cls, plan: List[ActionDescription], lab: LabT
     ) -> List[ActuatorDrivenAction]:
         """
-        Say how a resolved plan is run here: for every action it states, the one that
-        carries that action out.
+        Say how a resolved plan is run in one lab: for every action it states, the one
+        that carries that action out there.
 
         :param plan: The actions the plan came to, in the order it runs them.
-        :param simulation: The running simulation whose actuators are driven.
-        :param actuators: Every joint's own actuator, keyed by joint name.
+        :param lab: The lab whose actuators are driven.
         :return: The actions carrying them out, in the same order.
-        :raises NoActionCarriesItOut: Where nothing here carries one of them out.
+        :raises NoActionCarriesItOut: Where nothing carries one of them out in this lab.
         """
         return [
-            cls._carrier_of(action).carrying_out(action, simulation, actuators)
-            for action in plan
+            cls._carrier_of(action, lab).carrying_out(action, lab) for action in plan
         ]
 
     @classmethod
-    def _carrier_of(cls, action: ActionDescription) -> Type[ActuatorDrivenAction]:
+    def _carrier_of(
+        cls, action: ActionDescription, lab: LabT
+    ) -> Type[ActuatorDrivenAction]:
         """
         :param action: An action of a plan.
-        :return: The member of this family that carries it out.
+        :param lab: The lab it is to be carried out in.
+        :return: The member of this family that carries it out there.
         :raises NoActionCarriesItOut: Where no member does.
         """
         carriers = [
             member
             for member in cls.__subclasses__()
             if isinstance(action, member.action_it_carries_out())
+            and isinstance(lab, member.lab_it_drives())
         ]
         if not carriers:
-            raise NoActionCarriesItOut(action)
+            raise NoActionCarriesItOut(action, lab)
         [carrier] = carriers
         return carrier
 
 
 @dataclass
 class PickUpActionMujoco(
-    ActionDescription, ManipulatesBodies, ActuatorDrivenAction[PickUpAction]
+    ActionDescription,
+    ManipulatesBodies,
+    ActuatorDrivenAction[PickUpAction, SimulatedActuators],
 ):
     """
     :class:`~coraplex.robot_plans.actions.core.pick_up.PickUpAction`'s own field
@@ -360,18 +388,13 @@ class PickUpActionMujoco(
     """
 
     @classmethod
-    def carrying_out(
-        cls,
-        action: PickUpAction,
-        simulation: RealTimeSimulation,
-        actuators: Dict[str, Actuator],
-    ) -> Self:
+    def carrying_out(cls, action: PickUpAction, lab: SimulatedActuators) -> Self:
         return cls(
             object_designator=action.object_designator.root,
             arm=action.arm,
             grasp_description=action.grasp_description,
-            sim=simulation,
-            actuators=actuators,
+            sim=lab.simulation,
+            actuators=lab.actuators,
         )
 
     @property
@@ -410,7 +433,9 @@ class PickUpActionMujoco(
 
 @dataclass
 class PlaceActionMujoco(
-    ActionDescription, ManipulatesBodies, ActuatorDrivenAction[PlaceAction]
+    ActionDescription,
+    ManipulatesBodies,
+    ActuatorDrivenAction[PlaceAction, SimulatedActuators],
 ):
     """
     :class:`~coraplex.robot_plans.actions.core.placing.PlaceAction`'s own field
@@ -460,19 +485,14 @@ class PlaceActionMujoco(
     """
 
     @classmethod
-    def carrying_out(
-        cls,
-        action: PlaceAction,
-        simulation: RealTimeSimulation,
-        actuators: Dict[str, Actuator],
-    ) -> Self:
+    def carrying_out(cls, action: PlaceAction, lab: SimulatedActuators) -> Self:
         return cls(
             object_designator=action.object_designator.root,
             target_location=action.target_location,
             arm=action.arm,
             grasp_description=action.grasp_description,
-            sim=simulation,
-            actuators=actuators,
+            sim=lab.simulation,
+            actuators=lab.actuators,
         )
 
     @property
@@ -511,7 +531,9 @@ class PlaceActionMujoco(
 
 @dataclass
 class InsertionActionMujoco(
-    ActionDescription, ManipulatesBodies, ActuatorDrivenAction[InsertionAction]
+    ActionDescription,
+    ManipulatesBodies,
+    ActuatorDrivenAction[InsertionAction, SimulatedActuators],
 ):
     """
     :class:`~coraplex.robot_plans.actions.core.insertion.InsertionAction`'s own field
@@ -573,19 +595,14 @@ class InsertionActionMujoco(
     """
 
     @classmethod
-    def carrying_out(
-        cls,
-        action: InsertionAction,
-        simulation: RealTimeSimulation,
-        actuators: Dict[str, Actuator],
-    ) -> Self:
+    def carrying_out(cls, action: InsertionAction, lab: SimulatedActuators) -> Self:
         return cls(
             object_designator=action.object_designator.root,
             target=action.target,
             arm=action.arm,
             grasp_description=action.grasp_description,
-            sim=simulation,
-            actuators=actuators,
+            sim=lab.simulation,
+            actuators=lab.actuators,
             hover_height=action.hover_height,
         )
 
