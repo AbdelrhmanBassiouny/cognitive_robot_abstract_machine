@@ -239,8 +239,68 @@ class TranslationDetector(MotionDetector):
     """
     Detector for translation events.
 
-    Triggers a TranslationEvent when an object starts moving.
+    Triggers a TranslationEvent when an object starts moving, or when it is found
+    somewhere else than where it rested without any translation event claiming the
+    change of place -- a body moved between two ticks has moved whether or not the
+    window saw it move.
     """
+
+    def update_context_and_events(
+        self,
+        context: MotionStatechartContext,
+        segmind_context: SegmindContext,
+        tracked_objs: List[Body],
+    ) -> List[DetectionEvent]:
+        """
+        Check the window of every tracked object for motion, and every object the window
+        reported nothing about for an unclaimed change of place.
+
+        :param context: The current motion statechart context.
+        :param segmind_context: The shared SegmindContext containing the information
+            required to track events.
+        :param tracked_objs: List of bodies to update and check.
+        :return: A list of events triggered during this update.
+        """
+        events = super().update_context_and_events(
+            context, segmind_context, tracked_objs
+        )
+        reported = {event.tracked_object for event in events}
+        for obj in tracked_objs:
+            if obj in reported:
+                continue
+            event = self._unclaimed_change_of_place(segmind_context, obj)
+            if event:
+                events.append(event)
+        return events
+
+    def _unclaimed_change_of_place(
+        self, context: SegmindContext, obj: Body
+    ) -> Optional[TranslationEvent]:
+        """
+        A translation from where the object rested to where it is now, if it is found
+        farther away than :attr:`distance_threshold` and no translation event of it is
+        under way to claim the change.
+
+        An object is at rest where it was first seen, and thereafter where its last
+        reported translation ended.
+
+        :param context: The shared SegmindContext containing the information required to
+            track events.
+        :param obj: The object to check.
+        """
+        current = self._pose_history[obj][-1]
+        rested = context.rest_poses.setdefault(obj, current)
+        if context.latest_motion_events.get(obj) is not None:
+            return None
+        if rested.euclidean_distance(current) <= self.distance_threshold:
+            return None
+        event = TranslationEvent(
+            tracked_object=obj,
+            start_pose=self._in_the_world_frame(rested, obj),
+            current_pose=self._in_the_world_frame(current, obj),
+        )
+        context.latest_motion_events[obj] = event
+        return event
 
     def _check_and_trigger_event(
         self, context: SegmindContext, obj: Body, poses: List[NumericPose]
@@ -310,6 +370,7 @@ class StopTranslationDetector(MotionDetector):
         )
 
         context.latest_motion_events.pop(obj, None)
+        context.rest_poses[obj] = poses[-1]
 
         return stop_event
 

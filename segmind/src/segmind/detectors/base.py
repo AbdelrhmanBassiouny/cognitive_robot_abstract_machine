@@ -12,6 +12,7 @@ from segmind.datastructures.events import MotionEvent, DetectionEvent, RotationE
 from segmind.datastructures.object_tracker import ObjectTrackerFactory
 from segmind.event_logger import EventLogger
 from semantic_digital_twin.semantic_annotations.semantic_annotations import Aperture
+from semantic_digital_twin.spatial_types.numeric import NumericPose
 from semantic_digital_twin.world_description.connections import Connection6DoF
 from semantic_digital_twin.world_description.world_entity import Body, Region
 
@@ -59,6 +60,14 @@ class SegmindContext(ContextExtension):
     latest_motion_events: Dict[Body, MotionEvent] = field(default_factory=dict)
     """
     Dictionary mapping each body to its currently active motion event, if any.
+    """
+
+    rest_poses: Dict[Body, NumericPose] = field(default_factory=dict)
+    """
+    Where each tracked body was last at rest as far as its motion has been reported:
+    where it was first seen, then wherever a translation of it was reported to end.
+
+    What a change of place no translation event claims is measured from.
     """
 
     latest_rotation_events: Dict[Body, RotationEvent] = field(default_factory=dict)
