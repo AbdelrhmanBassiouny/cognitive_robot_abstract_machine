@@ -29,6 +29,11 @@ Plan:
 - [x] merged #382 into this branch (worktree removed); bag_frames now narrows the bag's first
       frame (ROBOT_TABLE_PIECES = SMALLER_PIECES; full-size set found no cube offline).
       Panel 1 + framework.pdf rebuilt from tracy_framework_demo_20260914_211651. 60 tests pass.
+- [x] figure layout (ec803047f3): panel 1 is a 2x2 grid, names above tiles (current view, cyan,
+      on the lid, cube), panel 1 taller at the other panels' cost (figure height unchanged);
+      robot row stacks tracy_picking_up.png above tracy_inserting.png. last_hold gives the
+      pick-up; SHORTEST_OPENING (0.2 s) ignores the one open misreading at 36.81 s in the bag.
+      12 bag-frame tests pass.
 - [ ] user reruns framework_demo real --record; not done: narrowing as DB rows
 - still open elsewhere: #379 pickup rerun; framework figure frames/cards after a good run;
   cube-evidence feature follow-on (worktree ~/bass/cram-board-by-the-cube)
