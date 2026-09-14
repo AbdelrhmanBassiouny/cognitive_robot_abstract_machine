@@ -15,6 +15,7 @@ from krrood.exceptions import DataclassException
 
 if TYPE_CHECKING:
     from krrood.entity_query_language.backends import QueryBackend
+    from krrood.entity_query_language.evaluable import Evaluable
     from krrood.entity_query_language.query.query import (
         Query,
     )
@@ -1087,6 +1088,67 @@ class CalledMatchMultipleTimes(DataclassException):
 
     def suggest_correction(self) -> str:
         return ""
+
+
+@dataclass
+class DescriptionNotStated(DataclassException):
+    """
+    Raised when a statement is asked to answer a description it hands over nowhere.
+
+    A description is told apart by which one it is rather than by what it says, so one
+    written alike but stated elsewhere is another description and answering it here
+    would leave the statement saying something nobody asked.
+    """
+
+    statement: AbstractMatchExpression
+    """
+    The statement asked to answer it.
+    """
+
+    description: AbstractMatchExpression
+    """
+    The description it states none of its attributes to.
+    """
+
+    def error_message(self) -> str:
+        return (
+            f"{self.statement} does not hand over {self.description}, so there is "
+            f"nowhere in it for an answer to that description to stand."
+        )
+
+
+@dataclass
+class NoBackendAnswers(DataclassException):
+    """
+    Raised when none of the backends a choice picks from can answer a statement.
+
+    A backend declares for itself what it can answer, so a statement none of them
+    declares is one the choice was never given the means to answer, rather than one that
+    has no answer.
+    """
+
+    statement: Evaluable
+    """
+    The statement none of them can answer.
+    """
+
+    backend_types: List[Type[QueryBackend]]
+    """
+    The types of the backends asked, in the order they were asked.
+    """
+
+    def error_message(self) -> str:
+        asked = ", ".join(backend.__name__ for backend in self.backend_types)
+        return (
+            f"None of the backends asked ({asked}) can answer {self.statement}: each "
+            f"declares it cannot."
+        )
+
+    def suggest_correction(self) -> str:
+        return (
+            "Add a backend that declares it answers this statement, or state the "
+            "statement so that one of them does."
+        )
 
 
 @dataclass

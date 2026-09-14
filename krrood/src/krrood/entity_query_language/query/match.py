@@ -24,6 +24,8 @@ from typing import assert_never, Any
 import rustworkx as rx
 from typing_extensions import (
     Callable,
+    Dict,
+    Tuple,
     Optional,
     Type,
     List,
@@ -60,6 +62,7 @@ from krrood.entity_query_language.evaluable import Evaluable
 from krrood.entity_query_language.exceptions import (
     CalledMatchAfterResolution,
     CalledMatchMultipleTimes,
+    DescriptionNotStated,
     MatchTypeCannotBeDetermined,
     PositionalArgumentsInMatchPattern,
     ReadOnlyMapping,
@@ -210,6 +213,28 @@ class AbstractMatchExpression(Generic[T], ABC):
                 yield expression
 
 
+# %% where a description is handed over
+
+
+@dataclass(frozen=True)
+class StatedBy:
+    """
+    Where a description is handed over: the statement stating it, and the attribute of
+    that statement it is stated to.
+    """
+
+    statement: Match
+    """
+    The statement that hands the description over.
+    """
+
+    attribute_name: str
+    """
+    The attribute of that statement the description is stated to, which is the attribute
+    the collection is stated to where the description is one element of a collection.
+    """
+
+
 @dataclass(eq=False)
 class Match(
     Evaluable,
@@ -281,6 +306,14 @@ class Match(
     ``the(...)``.
     """
 
+    _stated_by_: Optional[StatedBy] = field(default=None, init=False, repr=False)
+    """
+    Where this statement is handed over, or None where nobody hands it over.
+
+    Written by the statement that states it, the moment its pattern is set, so a
+    description knows what it is for before anything asks it anything.
+    """
+
     _domain_: Optional[DomainType] = field(default=None, init=False)
     """
     The instances the match ranges over.
@@ -347,6 +380,8 @@ class Match(
             raise PositionalArgumentsInMatchPattern(self, args)
         self._kwargs_ = kwargs
         self._has_been_called = True
+        for attribute_name, stated in self._stated_matches_by_attribute_:
+            stated._stated_by_ = StatedBy(statement=self, attribute_name=attribute_name)
         if self._variable_ is None:
             self._create_or_update_variable_()
         return self
@@ -580,19 +615,56 @@ class Match(
         return isinstance(value, type(Ellipsis))
 
     @property
+    def _stated_matches_(self) -> Iterator[Match]:
+        """
+        :return: Every match this one's pattern assigns to a field itself, directly or as
+            an element of a collection it assigns -- the descriptions it hands over, as
+            against the ones those in turn hand over.
+        """
+        for _, stated in self._stated_matches_by_attribute_:
+            yield stated
+
+    @property
+    def _stated_matches_by_attribute_(self) -> Iterator[Tuple[str, Match]]:
+        """
+        :return: Every description this one hands over, with the attribute it is stated
+            to -- the attribute the collection is stated to, where it is one element of
+            a collection.
+        """
+        for name, value in self._kwargs_.items():
+            elements = value if isinstance(value, (list, tuple, set)) else (value,)
+            for element in elements:
+                if isinstance(element, Match):
+                    yield name, element
+
+    @property
+    def _enclosing_statements_(self) -> Iterator[Match]:
+        """
+        :return: The statements this one is handed over by, innermost first -- the one
+            stating it, then the one stating that, and so on -- which is empty for a
+            statement nobody hands over.
+
+        What a description is for is said by the statement it is handed over by: a hole
+        described inside an insertion of a piece is the hole *that piece* goes through,
+        and nothing of that is written in the description itself. So whoever answers a
+        description reads what it is for from here, rather than from something the
+        statement was made to carry for its sake.
+        """
+        stated_by = self._stated_by_
+        while stated_by is not None:
+            yield stated_by.statement
+            stated_by = stated_by.statement._stated_by_
+
+    @property
     def _nested_matches_(self) -> Iterator[Match]:
         """
         :return: Every match this one's pattern assigns to a field, directly or as an
             element of a collection it assigns, innermost first -- so a match is always
             reached after the matches it nests, which are what say what it describes.
         """
-        for value in self._kwargs_.values():
-            elements = value if isinstance(value, (list, tuple, set)) else (value,)
-            for element in elements:
-                if not isinstance(element, Match):
-                    continue
-                yield from element._nested_matches_
-                yield element
+        for stated in self._stated_matches_:
+            yield from stated._nested_matches_
+            yield stated
 
     @property
     def _has_cause_attributes_(self) -> bool:
@@ -714,6 +786,58 @@ class Match(
             **{**self._kwargs_, **kwargs}
         )
 
+    def answering(self, left_open: Union[Match, str], answer: Any) -> Match[T]:
+        """
+        The same statement, with one of the things it leaves open answered.
+
+        A statement leaves something open in one of two ways: by handing over a
+        description of it, and by stating an attribute to nothing at all. Both are one
+        slot for whoever can answer it, so both are answered here.
+
+        Everything else the statement says is left as it was -- the conditions it
+        states, and the domain it ranges over -- so a statement is grown towards an
+        answer one slot at a time rather than rebuilt from the part of it that happens
+        to be ready.
+
+        :param left_open: The description it hands over, as it states it, or the name of
+            the attribute it leaves unstated.
+        :param answer: What answers it, to be stated in its place.
+        :raises DescriptionNotStated: If this statement hands that description over
+            nowhere.
+        """
+        if isinstance(left_open, str):
+            return self._restated(
+                self._where_conditions_, {**self._kwargs_, left_open: answer}
+            )
+        stated = {
+            name: self._with_answer_in_the_place_of(value, left_open, answer)
+            for name, value in self._kwargs_.items()
+        }
+        if all(stated[name] is value for name, value in self._kwargs_.items()):
+            raise DescriptionNotStated(self, left_open)
+        return self._restated(self._where_conditions_, stated)
+
+    @staticmethod
+    def _with_answer_in_the_place_of(
+        value: Any, description: Match, answer: Any
+    ) -> Any:
+        """
+        :param value: What the pattern states one of its attributes to.
+        :param description: The description being answered, told apart by which one it
+            is rather than by what it says, since two written alike are two descriptions.
+        :param answer: What answers it.
+        :return: The same value with the answer wherever that description stood.
+        """
+        if value is description:
+            return answer
+        if not isinstance(value, (list, tuple, set)):
+            return value
+        if not any(element is description for element in value):
+            return value
+        return type(value)(
+            answer if element is description else element for element in value
+        )
+
     def covers(self, other: Match) -> bool:
         """
         Whether everything this pattern states, another states too.
@@ -772,19 +896,31 @@ class Match(
             for count in range(len(about_it) + 1)
         ]
 
-    def _restated(self, conditions: List[ConditionType]) -> Match[T]:
+    def _restated(
+        self,
+        conditions: List[ConditionType],
+        stated: Optional[Dict[str, Any]] = None,
+    ) -> Match[T]:
         """
         This statement over the same variable, saying only what it is given.
 
-        :param conditions: What the restated statement says.
+        The variable is the one this statement already describes, so a condition written
+        about it -- by this statement or by another one mentioning it -- still says what
+        it said.
+
+        :param conditions: What the restated statement says about the thing it looks
+            for.
+        :param stated: What its pattern states, by the attribute's own name, or None to
+            state what this one states.
         """
         restated = type(self)(
             self._factory_,
             _declared_type_=self._declared_type_,
             _variable_=self._variable_,
         )
+        restated._stated_by_ = self._stated_by_
         if self._has_been_called:
-            restated = restated(**self._kwargs_)
+            restated = restated(**(self._kwargs_ if stated is None else stated))
         return restated.where(*conditions) if conditions else restated
 
     def causes_effect(self, *conditions: ConditionType) -> Match[T]:

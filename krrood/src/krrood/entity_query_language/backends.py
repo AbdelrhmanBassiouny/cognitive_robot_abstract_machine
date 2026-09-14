@@ -11,7 +11,16 @@ from typing import Generic, Iterable, Type, TypeVar
 import random_events.variable
 from random_events.product_algebra import Event
 from sqlalchemy.orm import sessionmaker
-from typing_extensions import Any, ClassVar, Dict, List, Optional, Set, Tuple
+from typing_extensions import (
+    Any,
+    ClassVar,
+    Dict,
+    Iterator,
+    List,
+    Optional,
+    Set,
+    Tuple,
+)
 
 from krrood import logger
 from krrood.entity_query_language.verbalization.vocabulary.english import Directive
@@ -46,6 +55,7 @@ from krrood.entity_query_language.exceptions import (
     BackendCannotResolveCondition,
     NoCauseVariablesForRanking,
     NoCausesEffectConditionForCause,
+    NoBackendAnswers,
     NoSolutionFound,
     GenerativeBackendQueryIsNotUnderspecifiedVariable,
     SelectiveBackendCannotResolveEllipsisMatch,
@@ -797,7 +807,7 @@ class DetectorChoice(Generic[LookT], SubClassSafeGeneric, ABC):
 
 
 @dataclass
-class PerceptionBackend(GenerativeBackend, ABC):
+class PerceptionBackend(GenerativeBackend, Generic[T], SubClassSafeGeneric, ABC):
     """
     Answers a statement about the world by going and looking at it.
 
@@ -827,6 +837,24 @@ class PerceptionBackend(GenerativeBackend, ABC):
     relation's own implementation has nothing to evaluate against. Naming it is
     therefore a promise to check it over the answer too, in :meth:`relations_hold`.
     """
+
+    @classmethod
+    def reported_type(cls) -> Type[T]:
+        """
+        The kind of thing this backend's look reports, read off the type parameter it
+        binds.
+        """
+        return cls.get_generic_type_parameters()[0]
+
+    def capability(self, statement: Evaluable) -> ConditionType:
+        """
+        Beyond what every generative backend answers, the statement must be about the
+        kind of thing this look reports, since a look that reports one kind of thing has
+        nothing to say about anything else.
+        """
+        return super().capability(statement) and issubclass(
+            statement._type_, self.reported_type()
+        )
 
     def _evaluate(self, expression: Match[T]) -> Iterable[T]:
         """
@@ -1642,3 +1670,126 @@ class ProbabilisticBackend(GenerativeBackend):
         return ScoredIntervention(
             cause_variable, float(effect_given_region_probability), narrowed
         )
+
+
+# %% one backend per statement, chosen from several
+
+
+@dataclass(frozen=True)
+class AnsweredStatement:
+    """
+    Which backend answered one statement.
+    """
+
+    statement: Evaluable
+    """
+    The statement, as whoever stated it holds it.
+    """
+
+    backend: QueryBackend
+    """
+    The backend that answered it.
+    """
+
+
+@dataclass
+class BackendChoice(QueryBackend):
+    """
+    Answers a statement by asking, for each description it hands over, whichever backend
+    can answer that one.
+
+    A plan says what it wants and leaves who is to supply it open, so the descriptions
+    one statement hands over need not be answerable by any single backend: the thing to
+    act on is looked for, what nothing has stated is generated, and the plan says
+    neither. Each is answered innermost first, so a description is always answered after
+    the ones it is stated in terms of, and the answer stands in its place in the
+    statement that handed it over.
+
+    Which backend answers is the first that declares it can, so the order they are given
+    in is the preference between those that could.
+    """
+
+    backends: List[QueryBackend] = field(default_factory=list)
+    """
+    The backends to choose from, in the order they are preferred.
+    """
+
+    answered: List[AnsweredStatement] = field(default_factory=list, init=False)
+    """
+    Which backend answered each statement, in the order they were answered.
+    """
+
+    def evaluate(self, expression: Evaluable) -> Iterable[T]:
+        yield from self._answers_to(expression)
+
+    def capability(self, statement: Evaluable) -> ConditionType:
+        """
+        A choice answers what any of the backends it picks from answers.
+        """
+        return any(backend.capability(statement) for backend in self.backends)
+
+    def _answers_to(self, statement: Evaluable) -> Iterable[T]:
+        """
+        Answer a statement, once for every way the descriptions it hands over are
+        answered.
+
+        :param statement: The statement to answer.
+        :return: Everything that answers it.
+        """
+        for stated in self._with_its_descriptions_answered(statement):
+            backend = self._backend_for(stated)
+            self._record(statement, backend)
+            yield from backend.evaluate(stated)
+
+    def _with_its_descriptions_answered(
+        self, statement: Evaluable
+    ) -> Iterable[Evaluable]:
+        """
+        The statement with every description it hands over answered, one way at a time.
+
+        :param statement: The statement to answer the descriptions of.
+        :return: The same statement per combination of answers to them, which is the one
+            statement itself where it hands none over.
+        """
+        description = next(self._descriptions_handed_over_by(statement), None)
+        if description is None:
+            yield statement
+            return
+        for answer in self._answers_to(description):
+            yield from self._with_its_descriptions_answered(
+                statement.answering(description, answer)
+            )
+
+    @staticmethod
+    def _descriptions_handed_over_by(statement: Evaluable) -> Iterator[Match]:
+        """
+        :param statement: The statement to read.
+        :return: The descriptions it hands over, which is none unless it is a pattern.
+        """
+        return statement._stated_matches_ if isinstance(statement, Match) else iter(())
+
+    def _backend_for(self, statement: Evaluable) -> QueryBackend:
+        """
+        :param statement: The statement to answer.
+        :return: The first backend that declares it can answer it.
+        :raises NoBackendAnswers: If none of them declares it can.
+        """
+        for backend in self.backends:
+            if backend.capability(statement):
+                return backend
+        raise NoBackendAnswers(statement, [type(backend) for backend in self.backends])
+
+    def _record(self, statement: Evaluable, backend: QueryBackend) -> None:
+        """
+        Keep which backend answered a statement, the once.
+
+        A statement is answered again for each way the descriptions it hands over are
+        answered, and by the same backend each time, so the record says who answers it
+        rather than how often it was asked.
+
+        :param statement: The statement answered.
+        :param backend: The backend that answered it.
+        """
+        if any(entry.statement is statement for entry in self.answered):
+            return
+        self.answered.append(AnsweredStatement(statement=statement, backend=backend))
