@@ -154,6 +154,14 @@ class RealTimeSimulation:
         self._start_time = None
 
     @property
+    def simulated_time(self) -> float:
+        """
+        How many seconds of simulated time the physics has been stepped for since
+        :meth:`start`.
+        """
+        return self._simulated_time
+
+    @property
     def is_running(self) -> bool:
         """
         Whether the simulation is still being displayed, i.e. the viewer window is open.

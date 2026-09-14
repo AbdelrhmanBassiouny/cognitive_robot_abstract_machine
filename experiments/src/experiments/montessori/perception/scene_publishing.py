@@ -278,7 +278,7 @@ class PiecePublisher:
             surfaces.
         """
         stood = [
-            self.publish_piece(shape)
+            self.publish_piece(scene, shape)
             for shape in best_shape_of_each_category(scene, resting_on, self.world)
         ]
         self.taken_down = []
@@ -311,11 +311,20 @@ class PiecePublisher:
             if piece.name.prefix == PUBLISHED_PREFIX
         ]
 
-    def publish_piece(self, shape: DetectedMontessoriShape) -> MontessoriShape:
+    def publish_piece(
+        self, scene: MontessoriScene, shape: DetectedMontessoriShape
+    ) -> MontessoriShape:
         """
         Stand one piece where a look saw it: the piece of its kind taken down before the
         look, if there is one, or a new one.
 
+        The finding then names that piece, and the body the look stood for it in a world
+        of its own leaves that world: a plan reaches for the piece a look answers with,
+        so what it answers with is the piece this world holds rather than a second body
+        standing for the same sighting.
+
+        :param scene: What the look found, which holds the world it stood its findings
+            in.
         :param shape: The piece as the look found it.
         :return: The piece as the published world now holds it.
         """
@@ -339,6 +348,9 @@ class PiecePublisher:
                 )
             )
             self.world.add_semantic_annotation(piece)
+        if scene.imagined is not None:
+            scene.imagined.remove(shape.role_taker)
+        shape.role_taker = piece
         self.published.append(piece)
         return piece
 
@@ -425,6 +437,14 @@ class PerceivedScene:
     The pieces the last look put on the table, as the world holds them.
     """
 
+    seen: MontessoriScene = field(init=False)
+    """
+    What the last look found, once :meth:`perceive` has run.
+
+    Every piece it found on a surface pieces are sorted from names the piece this world
+    holds, so a statement answered from it is answered by something the robot can reach.
+    """
+
     _publisher: PiecePublisher = field(init=False)
     """
     What stands the pieces, and takes them down again before the next look.
@@ -476,8 +496,9 @@ class PerceivedScene:
             looks=self.looks_for_board,
             period=self.board_search_period,
         )
+        self.seen = self.look.scene()
         self.pieces = self._publisher.publish(
-            self.look.scene(), resting_on=self.surfaces_a_piece_may_rest_on
+            self.seen, resting_on=self.surfaces_a_piece_may_rest_on
         )
         logger.info(
             "Perceived %s and %d piece(s) to sort: %s.",
@@ -485,6 +506,16 @@ class PerceivedScene:
             len(self.pieces),
             ", ".join(self.describe(piece) for piece in self.pieces),
         )
+
+    @property
+    def last_look(self) -> FixedScene:
+        """
+        The last look taken, as something a statement about this scene is answered from.
+
+        A statement answered from it is answered by the pieces this world holds, since
+        every piece the look found is stood here and named by the finding.
+        """
+        return FixedScene(captured=self.seen, reported_in=self.look.reference_frame)
 
     @staticmethod
     def describe(piece: MontessoriShape) -> str:

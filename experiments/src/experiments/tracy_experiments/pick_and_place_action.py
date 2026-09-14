@@ -33,25 +33,36 @@ kinematic detach would otherwise risk. They are generic over any body and arm, u
 same way for a Montessori shape being sorted into a hole and a cube being stacked onto
 another.
 
-They currently support only a fixed top-down grasp (``grasp_description`` is
-accepted for interface parity with ``PickUpAction``, but its own approach direction and
-vertical alignment are not yet read); see :func:`_finger_midpoint_offset`'s own
-docstring for the geometry this fixed orientation assumes.
+Every action here is turned the way its own ``grasp_description`` says, so the answer a
+plan resolved the grasp to is what the gripper is actually held in rather than something
+the lab decided for itself. The grasp's own orientation is read in the world root frame,
+which is a body's own frame for as long as the body stands square to the world -- which
+is how this lab lays its pieces out; see :func:`_finger_midpoint_offset`'s own docstring
+for where the fingers stand once the gripper is turned there.
+
+:class:`ActuatorDrivenAction` is what ties the two families together: each action here
+says which action of a plan it carries out, so a plan resolved in the words it was
+written in can be handed to the lab that can run it.
 """
 
 from __future__ import annotations
 
-import math
+from abc import ABC, abstractmethod
 
 import numpy
-from typing_extensions import Dict, List
+from typing_extensions import Callable, Dict, Generic, List, Self, Type, TypeVar
 
 from coraplex.datastructures.enums import Arms
 from coraplex.datastructures.grasp import GraspDescription
 from coraplex.plans.factories import code
 from coraplex.plans.plan_node import PlanNode
 from coraplex.robot_plans.actions.base import ActionDescription
-from coraplex.robot_plans.actions.core.insertion import DEFAULT_HOVER_HEIGHT
+from coraplex.robot_plans.actions.core.insertion import (
+    DEFAULT_HOVER_HEIGHT,
+    InsertionAction,
+)
+from coraplex.robot_plans.actions.core.pick_up import PickUpAction
+from coraplex.robot_plans.actions.core.placing import PlaceAction
 from coraplex.robot_plans.mixins import ManipulatesBodies
 from dataclasses import dataclass
 from experiments.tracy_experiments.real_time_simulation import RealTimeSimulation
@@ -61,10 +72,11 @@ from experiments.tracy_experiments.trajectory_planning import (
     plan_cartesian_trajectory,
     set_gripper,
 )
+from krrood.patterns.subclass_safe_generic import SubClassSafeGeneric
 from semantic_digital_twin.datastructures.definitions import GripperState
 from semantic_digital_twin.robots.tracy import Tracy
 from semantic_digital_twin.semantic_annotations.semantic_annotations import Aperture
-from semantic_digital_twin.spatial_types.spatial_types import Pose
+from semantic_digital_twin.spatial_types.spatial_types import Point3, Pose
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.world_entity import Actuator, Body
 
@@ -152,25 +164,29 @@ def _finger_midpoint_offset(robot: Tracy, arm_side: Arms) -> numpy.ndarray:
     return root_transform_tool[:3, :3].T @ offset_in_root_frame
 
 
-def _top_down_pose_builder(world: World, robot: Tracy, arm: Arms):
+def _grasp_pose_builder(
+    world: World, robot: Tracy, arm: Arms, grasp: GraspDescription
+) -> Callable[[float, float, float], Pose]:
     """
     Build a ``pose(x, y, z) -> Pose`` closure that places the gripper's own finger
-    midpoint (not its tool frame) at the given world-frame point, fixed top-down.
+    midpoint (not its tool frame) at the given world-frame point, with the gripper
+    turned the way ``grasp`` describes.
 
     :param world: The world the returned poses are expressed in.
     :param robot: The robot whose gripper geometry corrects the target.
     :param arm: Which arm's gripper geometry to use.
+    :param grasp: How the body is taken hold of, which says how the gripper is turned.
     """
-    orientation = Pose.from_xyz_rpy(0, 0, 0, pitch=math.pi, reference_frame=world.root)
-    tool_frame_rotation = orientation.to_rotation_matrix().evaluate()[:3, :3]
+    orientation = grasp.grasp_orientation()
+    tool_frame_rotation = numpy.array(
+        orientation.to_rotation_matrix().evaluate()[:3, :3], dtype=float
+    )
     finger_midpoint_offset = _finger_midpoint_offset(robot, arm)
 
     def pose(x: float, y: float, z: float) -> Pose:
         finger_target = numpy.array([x, y, z])
         tool_frame_target = finger_target - tool_frame_rotation @ finger_midpoint_offset
-        return Pose.from_xyz_rpy(
-            *tool_frame_target, pitch=math.pi, reference_frame=world.root
-        )
+        return Pose(Point3(*tool_frame_target), orientation, reference_frame=world.root)
 
     return pose
 
@@ -207,8 +223,106 @@ def _reach(
     follow_joint_trajectory(sim, actuators, trajectory)
 
 
+# %% the plan on one side, the actuators on the other
+
+
+ActionT = TypeVar("ActionT", bound=ActionDescription)
+
+
+class NoActionCarriesItOut(LookupError):
+    """
+    Raised when a plan states an action no member of :class:`ActuatorDrivenAction`
+    carries out, so the lab cannot run it.
+    """
+
+    def __init__(self, action: ActionDescription):
+        super().__init__(
+            f"No action driving the actuators carries out {type(action).__name__}."
+        )
+        self.action = action
+        """
+        The action of the plan that nothing here carries out.
+        """
+
+
 @dataclass
-class PickUpActionMujoco(ActionDescription, ManipulatesBodies):
+class ActuatorDrivenAction(Generic[ActionT], SubClassSafeGeneric, ABC):
+    """
+    An action that carries one a plan states out by commanding a running simulation's
+    actuators.
+
+    Each member binds the action of a plan it carries out, so a plan resolved in the
+    words it was written in can be run in a lab whose robot is a simulated one without
+    anything having to say, action by action, which class stands for which.
+    """
+
+    @classmethod
+    def action_it_carries_out(cls) -> Type[ActionT]:
+        """
+        The action of a plan this one carries out, read off the type parameter it binds.
+        """
+        return cls.get_generic_type_parameters()[0]
+
+    @classmethod
+    @abstractmethod
+    def carrying_out(
+        cls,
+        action: ActionT,
+        simulation: RealTimeSimulation,
+        actuators: Dict[str, Actuator],
+    ) -> Self:
+        """
+        Build this action from the one it carries out.
+
+        :param action: The action of the plan, with everything it left open answered.
+        :param simulation: The running simulation whose actuators are driven.
+        :param actuators: Every joint's own actuator, keyed by joint name.
+        """
+
+    @classmethod
+    def performing(
+        cls,
+        plan: List[ActionDescription],
+        simulation: RealTimeSimulation,
+        actuators: Dict[str, Actuator],
+    ) -> List[ActuatorDrivenAction]:
+        """
+        Say how a resolved plan is run here: for every action it states, the one that
+        carries that action out.
+
+        :param plan: The actions the plan came to, in the order it runs them.
+        :param simulation: The running simulation whose actuators are driven.
+        :param actuators: Every joint's own actuator, keyed by joint name.
+        :return: The actions carrying them out, in the same order.
+        :raises NoActionCarriesItOut: Where nothing here carries one of them out.
+        """
+        return [
+            cls._carrier_of(action).carrying_out(action, simulation, actuators)
+            for action in plan
+        ]
+
+    @classmethod
+    def _carrier_of(cls, action: ActionDescription) -> Type[ActuatorDrivenAction]:
+        """
+        :param action: An action of a plan.
+        :return: The member of this family that carries it out.
+        :raises NoActionCarriesItOut: Where no member does.
+        """
+        carriers = [
+            member
+            for member in cls.__subclasses__()
+            if isinstance(action, member.action_it_carries_out())
+        ]
+        if not carriers:
+            raise NoActionCarriesItOut(action)
+        [carrier] = carriers
+        return carrier
+
+
+@dataclass
+class PickUpActionMujoco(
+    ActionDescription, ManipulatesBodies, ActuatorDrivenAction[PickUpAction]
+):
     """
     :class:`~coraplex.robot_plans.actions.core.pick_up.PickUpAction`'s own field
     interface, but driven by direct MuJoCo actuator control; see this module's own
@@ -227,8 +341,7 @@ class PickUpActionMujoco(ActionDescription, ManipulatesBodies):
 
     grasp_description: GraspDescription
     """
-    Accepted for interface parity with ``PickUpAction``; not yet read (see this module's
-    own docstring) -- every grasp is currently a fixed top-down approach.
+    How the body is taken hold of, which says how the gripper is turned to reach it.
     """
 
     sim: RealTimeSimulation
@@ -246,6 +359,21 @@ class PickUpActionMujoco(ActionDescription, ManipulatesBodies):
     See :data:`HOVER_CLEARANCE`.
     """
 
+    @classmethod
+    def carrying_out(
+        cls,
+        action: PickUpAction,
+        simulation: RealTimeSimulation,
+        actuators: Dict[str, Actuator],
+    ) -> Self:
+        return cls(
+            object_designator=action.object_designator.root,
+            arm=action.arm,
+            grasp_description=action.grasp_description,
+            sim=simulation,
+            actuators=actuators,
+        )
+
     @property
     def manipulated_bodies(self) -> List[Body]:
         """
@@ -260,7 +388,7 @@ class PickUpActionMujoco(ActionDescription, ManipulatesBodies):
     def _run(self) -> None:
         world = self.world
         robot = self.robot
-        pose = _top_down_pose_builder(world, robot, self.arm)
+        pose = _grasp_pose_builder(world, robot, self.arm, self.grasp_description)
 
         body_center = _bounding_box_center_world(world, self.object_designator)
         pick_hover = pose(
@@ -281,7 +409,9 @@ class PickUpActionMujoco(ActionDescription, ManipulatesBodies):
 
 
 @dataclass
-class PlaceActionMujoco(ActionDescription, ManipulatesBodies):
+class PlaceActionMujoco(
+    ActionDescription, ManipulatesBodies, ActuatorDrivenAction[PlaceAction]
+):
     """
     :class:`~coraplex.robot_plans.actions.core.placing.PlaceAction`'s own field
     interface, but driven by direct MuJoCo actuator control; see this module's own
@@ -304,6 +434,11 @@ class PlaceActionMujoco(ActionDescription, ManipulatesBodies):
     Which arm places it.
     """
 
+    grasp_description: GraspDescription
+    """
+    How the body is held, which says how the gripper is turned to carry and release it.
+    """
+
     sim: RealTimeSimulation
     """
     The running real-time simulation to drive.
@@ -324,6 +459,22 @@ class PlaceActionMujoco(ActionDescription, ManipulatesBodies):
     See :data:`PLACE_HOVER_CLEARANCE`.
     """
 
+    @classmethod
+    def carrying_out(
+        cls,
+        action: PlaceAction,
+        simulation: RealTimeSimulation,
+        actuators: Dict[str, Actuator],
+    ) -> Self:
+        return cls(
+            object_designator=action.object_designator.root,
+            target_location=action.target_location,
+            arm=action.arm,
+            grasp_description=action.grasp_description,
+            sim=simulation,
+            actuators=actuators,
+        )
+
     @property
     def manipulated_bodies(self) -> List[Body]:
         """
@@ -338,7 +489,7 @@ class PlaceActionMujoco(ActionDescription, ManipulatesBodies):
     def _run(self) -> None:
         world = self.world
         robot = self.robot
-        pose = _top_down_pose_builder(world, robot, self.arm)
+        pose = _grasp_pose_builder(world, robot, self.arm, self.grasp_description)
 
         target_position = self.target_location.to_position()
         place_hover = pose(
@@ -359,7 +510,9 @@ class PlaceActionMujoco(ActionDescription, ManipulatesBodies):
 
 
 @dataclass
-class InsertionActionMujoco(ActionDescription, ManipulatesBodies):
+class InsertionActionMujoco(
+    ActionDescription, ManipulatesBodies, ActuatorDrivenAction[InsertionAction]
+):
     """
     :class:`~coraplex.robot_plans.actions.core.insertion.InsertionAction`'s own field
     interface, but driven by direct MuJoCo actuator control; see this module's own
@@ -384,6 +537,11 @@ class InsertionActionMujoco(ActionDescription, ManipulatesBodies):
     arm: Arms
     """
     Which arm carries it.
+    """
+
+    grasp_description: GraspDescription
+    """
+    How the body is held, which says how the gripper is turned to carry and release it.
     """
 
     sim: RealTimeSimulation
@@ -414,6 +572,23 @@ class InsertionActionMujoco(ActionDescription, ManipulatesBodies):
     see :data:`GRASP_CLOSE_SWING_CLEARANCE`.
     """
 
+    @classmethod
+    def carrying_out(
+        cls,
+        action: InsertionAction,
+        simulation: RealTimeSimulation,
+        actuators: Dict[str, Actuator],
+    ) -> Self:
+        return cls(
+            object_designator=action.object_designator.root,
+            target=action.target,
+            arm=action.arm,
+            grasp_description=action.grasp_description,
+            sim=simulation,
+            actuators=actuators,
+            hover_height=action.hover_height,
+        )
+
     @property
     def manipulated_bodies(self) -> List[Body]:
         """
@@ -439,7 +614,7 @@ class InsertionActionMujoco(ActionDescription, ManipulatesBodies):
 
     def _run(self) -> None:
         world = self.world
-        pose = _top_down_pose_builder(world, self.robot, self.arm)
+        pose = _grasp_pose_builder(world, self.robot, self.arm, self.grasp_description)
 
         released_at = self.release_pose.to_position()
         insertion_hover = pose(

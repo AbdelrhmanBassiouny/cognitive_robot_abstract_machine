@@ -50,6 +50,8 @@
 // A plan is a list of entries, top to bottom. A plain entry is one line of code. A slot
 // entry is a box in its backend's hue, indented by `indent` characters, holding `lines`
 // and optionally one `nested` slot at its end. `...` is how coraplex leaves a field open.
+// A name a later line reuses (`shape`, `grasp`) is whatever the slot above it stood for:
+// the plan states the one description in both actions, so both act on the one answer.
 
 #let open-plan = (
   (text: "sequential(["),
@@ -59,16 +61,18 @@
   (
     slot: "perception", indent: 6,
     lines: ("a(DetectedMontessoriShape)(", "  category=CUBE)", ".where(", "  Colored(shape, CYAN),"),
-    nested: (slot: "simulation", indent: 2, lines: ("SupportedBy(shape, board)),",)),
+    nested: (slot: "simulation", indent: 2, lines: ("SupportedBy(shape, lid)),",)),
   ),
   (text: "    grasp_description="),
   (
     slot: "probabilistic", indent: 6,
-    lines: ("a(GraspDescription)(", "  approach_direction=...,", "  vertical_alignment=...)"),
+    lines: ("a(GraspDescription)(", "  approach_direction=...,", "  vertical_alignment=TOP,", "  end_effector=LEFT_HAND)"),
   ),
   (text: "  ),"),
   (text: "  an(InsertionAction)("),
+  (text: "    arm=LEFT,"),
   (text: "    object_designator=shape,"),
+  (text: "    grasp_description=grasp,"),
   (text: "    target="),
   (
     slot: "rules", indent: 6,
@@ -88,16 +92,18 @@
     // where tracy/render_tracy.py stands the cube, in Tracy's own frame: on the board's
     // lid, on the stretch of it furthest from the square hole, as the sorting demo starts it
     lines: ("cube_1  # CYAN, CUBE", "  at (0.72, 0.13, 0.10) m,"),
-    nested: (slot: "simulation", indent: 2, lines: ("SupportedBy(cube_1, board) ✓",)),
+    nested: (slot: "simulation", indent: 2, lines: ("SupportedBy(cube_1, lid) ✓",)),
   ),
   (text: "    grasp_description="),
   (
     slot: "probabilistic", indent: 6,
-    lines: ("GraspDescription(", "  FRONT, TOP)"),
+    lines: ("grasp_1 = GraspDescription(", "  FRONT, TOP,", "  LEFT_HAND)"),
   ),
   (text: "  ),"),
   (text: "  InsertionAction("),
+  (text: "    arm=LEFT,"),
   (text: "    object_designator=cube_1,"),
+  (text: "    grasp_description=grasp_1,"),
   (text: "    target="),
   (
     slot: "rules", indent: 6,
@@ -124,7 +130,7 @@
 #let world-title = "imagined world"
 #let spawn-label = "spawn"
 #let support-reading = "overlap 3 mm ≤ 0.1 m"
-#let support-verdict = "SupportedBy(cube_1, board) → True"
+#let support-verdict = "SupportedBy(cube_1, lid) → True"
 #let board-color = rgb("#e9dcbd")
 #let cube-color = rgb("#bfe6ea")
 
@@ -136,7 +142,7 @@
   (approach: "FRONT", alignment: "TOP", p: 0.58),
   (approach: "LEFT", alignment: "TOP", p: 0.24),
   (approach: "RIGHT", alignment: "TOP", p: 0.13),
-  (approach: "FRONT", alignment: "NONE", p: 0.05),
+  (approach: "BACK", alignment: "TOP", p: 0.05),
 )
 
 // %% CONFIG: panel 4, the rules -------------------------------------------------------

@@ -30,6 +30,9 @@ the way it is turned, whether it touches something -- and what the statement rej
 leaves that world again. Only what the look establishes *differently* from a body is
 read off the sighting itself: which surface it searched, and where it reported the thing
 standing.
+
+A finding the world the look was taken in has come to stand is answered by that world's
+own piece instead, which is what lets a plan act on what a look reported.
 """
 
 from __future__ import annotations
@@ -284,6 +287,10 @@ class MontessoriPerceptionBackend(PerceptionBackend[MontessoriDetection]):
         """
         Take what the statement rejected out of the world the look stood it in, so what
         that world holds is the answer and nothing else.
+
+        A finding the world the look was taken in has come to stand is left standing
+        there: a statement rejecting it says only that it is not what was asked for, not
+        that the piece is gone.
 
         :param instances: Everything the look reported that the statement rejected.
         """

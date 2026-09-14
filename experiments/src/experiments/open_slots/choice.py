@@ -6,6 +6,10 @@ where the plan needs it to be, how to take hold of it, and the hole to put it th
 and each is answered by a different faculty. What answers which is not written into the
 plan: every backend declares what it can answer, and the choice asks them in the order
 stated here.
+
+The generated ORM interface is loaded here because the probabilistic backend reads a
+thing a statement names -- the hand a grasp is described for, say -- through the mapping
+of its class, and a run that never loaded the interface has no mapping to read it by.
 """
 
 from __future__ import annotations
@@ -36,6 +40,8 @@ def backends_for(looking: MontessoriPerceptionBackend, world: World) -> BackendC
         body is about.
     :return: The choice to run the plan with.
     """
+    import experiments.orm.ormatic_interface  # type: ignore  # noqa: F401
+
     return BackendChoice(
         backends=[
             looking,

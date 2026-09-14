@@ -118,8 +118,8 @@ declared limit (`equipment.GRIPPER_JOINT_VELOCITY_LIMIT`, raised from 0.032 to 1
   `actuators: Dict[str, Actuator]` field each, unlike the real `PickUpAction`/
   `PlaceAction`'s clean, ORM-mappable fields -- `experiments/scripts/generate_orm.py`
   sweeps the whole `experiments` package for dataclasses to map, so these two currently
-  get swept up along with `RealTimeSimulation` itself, neither of which makes sense to
-  persist to a database.
+  get swept up along with `RealTimeSimulation` itself, and so is `framework_demo.py`'s
+  own `FrameworkDemo`, none of which makes sense to persist to a database.
 
 ## How to run
 
@@ -132,6 +132,9 @@ python -m experiments.tracy_experiments.montessori.montessori_demo_real         
 # Cube stacking
 python -m experiments.tracy_experiments.stacking.stacking_demo_mujoco
 python -m experiments.tracy_experiments.stacking.stacking_demo_real
+
+# The framework figure's open plan, resolved against a look and then carried out
+python -m experiments.tracy_experiments.framework_demo --headless --film-directory films
 
 # Bare park sanity check, no board/shapes/cubes
 python -m experiments.tracy_experiments.parkarms_demo --viewer
