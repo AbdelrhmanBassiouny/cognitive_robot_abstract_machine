@@ -314,3 +314,26 @@ temp dir inside `run`. Fast tests pass 3/3 (shoved cube found moved within the t
 tolerance, others unmoved); the end-to-end rehearsal expecting PERTURBATION PASSED is
 running. The re-recording of the three unreadable episodes is the developer's to run.
 
+## episode-check-noise-and-board: the re-recorded real stand-still runs checked (2026-09-14, night)
+
+**Asked.** Check and fix what `check_episode.py` warned on for the three new real
+stand-still episodes (`508e367a…` unperturbed, `0a793ded…` piece-shoved, `c2efb7db…`
+target-hole-moved; 3 trials each, all health checks PASSED).
+
+**Done, pushed to #265 (`98bec17de0`, still draft, description section "Checked
+2026-09-14 (night)" added).** `60bd6c165e`: `PlaceOfOwnBody` true answer is
+`PlaceStoodAt` (position within `HOW_FAR_A_PLACE_MAY_DIFFER`; `PlacesPutAt.near`
+delegates) -- joint noise 1-1.6e-4 rad between ask and ground truth scored it wrong at
+random. `98bec17de0`: `WatchedSortingRun.apply_perturbation` wraps the perturbation in
+`watching_translations_of(not_watched(things_moved))`
+(`build_translation_monitor_in_scene`, `translation_detectors_of` shared with the Tracy
+monitor module) so a slid board is seen translating. FAILED outcomes of the perturbed
+episodes are correct by design. Tests: questions 35, watched run 30, pickup demo real +
+audit + ground truth + record_episode 163 passed.
+
+**Left.** Recorded rows of those three episodes keep old scores / no board event
+(`ask_episode --rescore-working-memory` does not rescore `PlaceOfOwnBody`); a new
+target-hole-moved recording is what shows the board fix. `WatchedSortingRun.watching_translations_of`
+and `_SortingRig.watching` in pickup_demo_real are near-duplicates -- candidate to unify.
+Orientation of a link is no longer scored -- asked the developer implicitly in the chat.
+
