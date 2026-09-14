@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 import numpy as np
-from typing_extensions import List
+import numpy.typing as npt
 
 from krrood.symbolic_math.exceptions import (
     SymbolicMathExpressionNotRegisteredError,
@@ -36,7 +36,7 @@ class BoundArgument:
     Index of the argument holding the values.
     """
 
-    def point_at(self, data: np.ndarray) -> None:
+    def point_at(self, data: npt.NDArray) -> None:
         """
         Make the argument read `data` from now on.
 
@@ -54,12 +54,12 @@ class FloatVariableData:
     evaluation of compiled casadi functions.
     """
 
-    variables: List[FloatVariable] = field(default_factory=list)
+    variables: list[FloatVariable] = field(default_factory=list)
     """
     All FloatVariables managed by this data object.
     """
 
-    data: np.ndarray = field(default_factory=lambda: np.array([], dtype=np.float64))
+    data: npt.NDArray = field(default_factory=lambda: np.array([], dtype=np.float64))
     """
     Flat array of values for all `variables`.
 
@@ -67,7 +67,7 @@ class FloatVariableData:
         :meth:`bind_argument` instead of holding on to it, or the values read go stale.
     """
 
-    _bound_arguments: List[BoundArgument] = field(
+    _bound_arguments: list[BoundArgument] = field(
         default_factory=list, init=False, repr=False
     )
     """
@@ -131,7 +131,7 @@ class FloatVariableData:
             variable.resolve = resolve_variable
 
     def set_value(
-        self, expression: SymbolicMathType, value: float | list[float] | np.ndarray
+        self, expression: SymbolicMathType, value: float | list[float] | npt.NDArray
     ):
         """
         Set the managed values of free variables in an expression.
