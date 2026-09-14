@@ -16,10 +16,12 @@ from datetime import datetime
 from coraplex.plans.plan import Plan
 from giskardpy.motion_statechart.motion_statechart import MotionStatechart
 from segmind.datastructures.events import DetectionEvent
+from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from typing_extensions import Any, List, Sequence
 
 from experiments.episodes.episode import (
     InsertionAttempt,
+    MovedBySomeoneElse,
     PerformedPlan,
     RecordedMotion,
     RecordedQuery,
@@ -70,6 +72,12 @@ class EpisodeObserver:
     """
     What was done to the scene of the trial being observed by someone other than the
     robot, in the order it was done, each as the person at the scene is told it.
+    """
+
+    moved_by_someone_else: List[MovedBySomeoneElse] = field(default_factory=list)
+    """
+    What each of those instructions moved and when it was given, for the ones that moved
+    something.
     """
 
     started_at: float = field(default_factory=time.monotonic)
@@ -164,13 +172,23 @@ class EpisodeObserver:
         self.motions.append(motion)
         return motion
 
-    def carried_out(self, instruction: str) -> None:
+    def carried_out(
+        self, instruction: str, moment: float, things_moved: Sequence[PrefixedName]
+    ) -> None:
         """
-        Keep one thing done to the scene by someone other than the robot.
+        Keep one thing done to the scene by someone other than the robot, and what it
+        moved and when it was given, where it moved anything.
 
         :param instruction: What was done, as the person at the scene is told it.
+        :param moment: Seconds into the trial the person was told it at.
+        :param things_moved: What it moves, named as the scene names it.
         """
         self.instructions_carried_out.append(instruction)
+        if not things_moved:
+            return
+        self.moved_by_someone_else.append(
+            MovedBySomeoneElse(moment=moment, things_moved=list(things_moved))
+        )
 
     def attempted(self, insertion_attempt: InsertionAttempt) -> None:
         """
@@ -186,7 +204,8 @@ class EpisodeObserver:
 
         :param trial: The trial the runner recorded.
         :return: The same trial, now carrying when it began, its ticks, queries, plans,
-            attempts, motions and the instructions carried out on its scene.
+            attempts, motions, the instructions carried out on its scene and what they
+            moved.
         """
         trial.began_at = self.began_at
         trial.ticks = self.ticks
@@ -195,12 +214,14 @@ class EpisodeObserver:
         trial.insertion_attempts = self.insertion_attempts
         trial.motions = self.motions
         trial.instructions_carried_out = self.instructions_carried_out
+        trial.moved_by_someone_else = self.moved_by_someone_else
         self.ticks = []
         self.queries = []
         self.plans = []
         self.insertion_attempts = []
         self.motions = []
         self.instructions_carried_out = []
+        self.moved_by_someone_else = []
         self.restart()
         return trial
 

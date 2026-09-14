@@ -11,13 +11,14 @@ the checks over one live in :mod:`test_episode_audit_camera`.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from datetime import timedelta
 from pathlib import Path
 
 import pytest
 import trimesh
 from coraplex.datastructures.enums import ExecutionType
 from semantic_digital_twin.adapters.mujoco_video_recording import RecordedVideo
-from segmind.datastructures.events import PickUpEvent
+from segmind.datastructures.events import PickUpEvent, TranslationEvent
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.geometry import Mesh
@@ -40,6 +41,7 @@ from experiments.episodes.audit import (
 )
 from experiments.episodes.episode import (
     Episode,
+    MovedBySomeoneElse,
     PerformedPlan,
     RecordedQuery,
     RecordedTrial,
@@ -490,6 +492,88 @@ def test_a_perturbation_the_run_noticed_passes(run: RecordedRun) -> None:
     )
 
     assert finding_of(run.audit(), Check.PERTURBATION).verdict is Verdict.PASSED
+
+
+MOVED_AT = 0.5
+"""
+When the person was told to move the piece, in seconds into the trial.
+"""
+
+SORT_STARTS_AT = 1.5
+"""
+When the robot's first plan after the move started, in seconds into the trial.
+"""
+
+BEFORE_THE_SORT = 1.0
+"""
+A moment between the move and the sort, in seconds into the trial.
+"""
+
+DURING_THE_SORT = 2.5
+"""
+A moment after the sort started, in seconds into the trial.
+"""
+
+
+def a_sorting_trial_whose_piece_translated_at(
+    episode: Episode, translated_at: float, anything_moved: bool
+) -> RecordedTrial:
+    """
+    A trial in which the person moved the episode's piece, the robot then sorted, and
+    the monitor saw the piece translate once.
+
+    :param episode: The episode the trial belongs to.
+    :param translated_at: When the monitor saw the piece translate, in seconds into the
+        trial.
+    :param anything_moved: What the trial answered when asked whether anything moved.
+    """
+    piece = episode.world.bodies[0]
+    trial = trial_of(
+        episode,
+        queries=[answered(AnythingMoved(), str(anything_moved))],
+        instructions_carried_out=["Push the piece 10 cm across the table."],
+    )
+    sort = minimal_plan()
+    sort.root.start_time = trial.began_at + timedelta(seconds=SORT_STARTS_AT)
+    trial.plans = [PerformedPlan(plan=sort)]
+    trial.moved_by_someone_else = [
+        MovedBySomeoneElse(moment=MOVED_AT, things_moved=[piece.name])
+    ]
+    trial.ticks.append(
+        Tick(moment=translated_at, events=[TranslationEvent(tracked_object=piece)])
+    )
+    return trial
+
+
+def test_a_moved_piece_seen_translating_before_the_sort_is_noticed(
+    run: RecordedRun,
+) -> None:
+    """
+    What the robot's own motions move cannot be the person's move, so the move is
+    noticed by a translation of what they moved between being told and the next plan,
+    whatever the question about motion answered once the sort had run.
+    """
+    run.episode.perturbation_names = ["PieceShoved"]
+    run.record(
+        a_sorting_trial_whose_piece_translated_at(
+            run.episode, BEFORE_THE_SORT, anything_moved=False
+        )
+    )
+
+    assert finding_of(run.audit(), Check.PERTURBATION).verdict is Verdict.PASSED
+
+
+def test_a_moved_piece_seen_translating_only_during_the_sort_is_a_warning(
+    run: RecordedRun,
+) -> None:
+    run.episode.perturbation_names = ["PieceShoved"]
+    run.record(
+        a_sorting_trial_whose_piece_translated_at(
+            run.episode, DURING_THE_SORT, anything_moved=True
+        )
+    )
+
+    assert finding_of(run.audit(), Check.PERTURBATION).verdict is Verdict.WARNING
 
 
 def test_trials_that_did_not_end_alike_are_a_warning(run: RecordedRun) -> None:

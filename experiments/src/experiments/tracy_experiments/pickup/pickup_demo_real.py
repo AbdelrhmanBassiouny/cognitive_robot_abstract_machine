@@ -72,7 +72,7 @@ from enum import StrEnum
 from pathlib import Path
 
 from krrood.exceptions import DataclassException
-from typing_extensions import Optional, Sequence
+from typing_extensions import Iterator, Optional, Sequence
 
 logging.basicConfig(level=logging.INFO, format="%(message)s")
 
@@ -133,6 +133,7 @@ from experiments.tracy_experiments.montessori.event_dashboard import (
 from experiments.tracy_experiments.montessori.event_monitoring import (
     MontessoriEventMonitor,
     build_pick_monitor,
+    build_translation_monitor,
 )
 from experiments.tracy_experiments.montessori.grasp_widths import GraspCloseTable
 from experiments.tracy_experiments.montessori.gripper_feedback import (
@@ -166,6 +167,7 @@ from segmind.datastructures.events import (
 )
 from segmind.detectors.base import SegmindContext
 from semantic_digital_twin.datastructures.definitions import GripperState
+from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.spatial_types.spatial_types import (
     HomogeneousTransformationMatrix,
     Pose,
@@ -515,6 +517,30 @@ class _SortingRig(ShapeSorter):
         if self.asks is not None:
             self.asks.receive([event])
 
+    @contextlib.contextmanager
+    def watching(self, things: Sequence[PrefixedName]) -> Iterator[None]:
+        """
+        Watch the named things for the length of the block, seen where they rest before
+        it and again after it, so what someone moves while nothing of the robot moves is
+        reported as a translation of what they moved.
+
+        :param things: What is watched, named as the scene names it.
+        """
+        monitor = build_translation_monitor(
+            world=self.world,
+            tracked_bodies=[
+                self.world.get_kinematic_structure_entity_by_name(name)
+                for name in things
+            ],
+        )
+        monitor.context.require_extension(SegmindContext).logger.add_callback(
+            DetectionEvent,
+            lambda event: self.note_event(event.tracked_object.name.name, event),
+        )
+        monitor.tick()
+        yield
+        monitor.tick()
+
     def _carry_watching_for_slip(
         self, body: Body, close_setpoint: float, carry: Callable[[], None]
     ) -> None:
@@ -765,23 +791,29 @@ class SortingTrial:
 
     def bring_about_the_perturbation(self) -> None:
         """
-        Have the person bring the perturbation about, if there is one: they are told
-        what to do, the account stops saying where what they moved stands, the trial
-        keeps what they were told, and the camera looks at the table again to learn what
-        they did.
+        Have the person bring the perturbation about, if there is one: the account stops
+        saying where what they are to move stands, the trial keeps what they were told
+        with what it moves and when, they are told what to do, and the camera looks at
+        the table again to learn what they did.
 
-        What they moved is named off the table as it stood before they acted, since what
-        the look then finds of it is the look's to say.
+        What they move is watched from before they act until the camera has found it
+        again, since nothing of the robot moves meanwhile to watch it otherwise. It is
+        named off the table as it stood before they acted, since what the look then
+        finds of it is the look's to say.
         """
         if self.perturbation is None:
             return
         instruction = self.perturbation.instruction_for_a_person()
+        things_moved = self.perturbation.things_moved(SortingScene(self.rig.world))
         if self.stated_scene is not None:
-            for moved in self.perturbation.things_moved(SortingScene(self.rig.world)):
+            for moved in things_moved:
                 self.stated_scene.forget_where(moved)
-        self.person.carry_out(instruction)
-        self.rig.observer.carried_out(instruction)
-        self.sorting.perceive()
+        self.rig.observer.carried_out(
+            instruction, self.rig.observer.elapsed_seconds, things_moved
+        )
+        with self.rig.watching(things_moved):
+            self.person.carry_out(instruction)
+            self.sorting.perceive()
 
     @property
     def piece_asked_about(self) -> MontessoriShape:

@@ -11,11 +11,14 @@ of failing wherever it happens to be read first.
 from __future__ import annotations
 
 import datetime
+import math
 from dataclasses import dataclass, field
 from enum import StrEnum
 from pathlib import Path
 
 from coraplex.datastructures.enums import ExecutionType
+from segmind.datastructures.events import TranslationEvent
+from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from sqlalchemy import select
 from typing_extensions import Any, Dict, Iterator, List, Optional, Sequence
 
@@ -25,7 +28,7 @@ from experiments.episodes.artifacts import (
     EpisodeArtifacts,
     RunFile,
 )
-from experiments.episodes.episode import Episode, RecordedQuery
+from experiments.episodes.episode import Episode, MovedBySomeoneElse, RecordedQuery
 from experiments.episodes.long_term_memory import LongTermMemory
 from experiments.montessori.results_database import ResultsDatabase
 from experiments.questions.working_memory import AnythingMoved
@@ -144,6 +147,23 @@ class EpisodeAuditReport:
 
 
 @dataclass(frozen=True)
+class TranslationSeen:
+    """
+    One translation a trial's event monitor reported: what translated, and when.
+    """
+
+    moment: float
+    """
+    Seconds into the trial of the tick that reported it.
+    """
+
+    thing: PrefixedName
+    """
+    What translated, named as the scene names it.
+    """
+
+
+@dataclass(frozen=True)
 class TrialRecord:
     """
     One trial's rows, read for the checks without rebuilding the world it ran in.
@@ -172,6 +192,21 @@ class TrialRecord:
     instructions_carried_out: List[str]
     """
     What someone other than the robot was told to do to its scene.
+    """
+
+    moved_by_someone_else: List[MovedBySomeoneElse]
+    """
+    What those instructions moved, and when each was given.
+    """
+
+    translations: List[TranslationSeen]
+    """
+    Every translation its event monitor reported, in the order its ticks happened.
+    """
+
+    plan_start_moments: List[float]
+    """
+    When each plan the robot performed started, in seconds into the trial.
     """
 
     queries: List[RecordedQuery]
@@ -205,6 +240,35 @@ class TrialRecord:
         return any(
             isinstance(query.question, AnythingMoved) and query.answer == str(False)
             for query in self.queries
+        )
+
+    def noticed_what_someone_else_moved(self) -> bool:
+        """
+        Whether the trial saw what someone other than the robot did to its scene: each
+        move seen as a translation of what it moved after the person was told and before
+        the robot's next plan, or, for a trial that kept no record of what was moved, an
+        answer that something moved.
+        """
+        if not self.moved_by_someone_else:
+            return not self.answered_that_nothing_moved()
+        return all(self.saw_translate(moved) for moved in self.moved_by_someone_else)
+
+    def saw_translate(self, moved: MovedBySomeoneElse) -> bool:
+        """
+        Whether something the person moved was seen translating after they were told and
+        before the robot's next plan started, when nothing the robot does can have moved
+        it.
+
+        :param moved: What they moved, and when they were told.
+        """
+        next_plan_starts_at = min(
+            (start for start in self.plan_start_moments if start >= moved.moment),
+            default=math.inf,
+        )
+        return any(
+            moved.moment <= seen.moment < next_plan_starts_at
+            and seen.thing in moved.things_moved
+            for seen in self.translations
         )
 
 
@@ -341,6 +405,26 @@ class EpisodeAudit:
             duration=row.duration,
             began_at=row.began_at,
             instructions_carried_out=list(row.instructions_carried_out),
+            moved_by_someone_else=[
+                association.target.from_dao()
+                for association in row.moved_by_someone_else
+            ],
+            translations=[
+                TranslationSeen(
+                    moment=tick.moment,
+                    thing=PrefixedName(
+                        name=event.tracked_object.name.name,
+                        prefix=event.tracked_object.name.prefix,
+                    ),
+                )
+                for tick in ticks
+                for event in (association.target for association in tick.events)
+                if issubclass(event.original_class(), TranslationEvent)
+            ],
+            plan_start_moments=[
+                (association.target.plan.root.start_time - row.began_at).total_seconds()
+                for association in row.plans
+            ],
             queries=[association.target.from_dao() for association in row.queries],
             tick_moments=[tick.moment for tick in ticks],
             event_count=sum(len(tick.events) for tick in ticks),
@@ -645,14 +729,17 @@ class EpisodeAudit:
                         % (trial.number, episode.perturbation_names),
                     )
         unnoticed = [
-            trial.number for trial in trials if trial.answered_that_nothing_moved()
+            trial.number
+            for trial in trials
+            if not trial.noticed_what_someone_else_moved()
         ]
         if unnoticed:
             return Finding(
                 Check.PERTURBATION,
                 Verdict.WARNING,
-                "trials %s answered that nothing moved after %s: the perturbation "
-                "left no motion event" % (unnoticed, episode.perturbation_names),
+                "trials %s saw nothing %s moved move before the robot acted again: the "
+                "perturbation left no motion event"
+                % (unnoticed, episode.perturbation_names),
             )
         return Finding(
             Check.PERTURBATION,

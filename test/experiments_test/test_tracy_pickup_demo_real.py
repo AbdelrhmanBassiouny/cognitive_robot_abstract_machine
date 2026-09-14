@@ -16,7 +16,7 @@ import pytest
 from coraplex.datastructures.dataclasses import Context
 from coraplex.datastructures.enums import Arms, ExecutionType
 from giskardpy.motion_statechart.motion_statechart import MotionStatechart
-from segmind.datastructures.events import PickUpEvent
+from segmind.datastructures.events import PickUpEvent, TranslationEvent
 
 from experiments.episodes.artifacts import (
     ARTIFACT_DIRECTORY_ENVIRONMENT_VARIABLE,
@@ -827,6 +827,66 @@ def test_the_person_brings_the_perturbation_about_and_the_trial_records_it():
     assert recorded.instructions_carried_out == [instruction]
     assert trial.sorting.looks_taken == 1
     assert trial.sorting.sorted
+
+
+@dataclass
+class LookedAndFoundWhatWasShoved(LookedAndFound):
+    """
+    Stands in for a run whose second look finds what the person at the table moved where
+    they moved it.
+    """
+
+    world: World = None
+    """
+    The world the look stands what it found in.
+    """
+
+    shove: object = None
+    """
+    What the person did, which the look finds done.
+    """
+
+    def perceive(self) -> None:
+        super().perceive()
+        self.shove.apply(self.world)
+
+
+def test_the_piece_the_person_shoves_is_watched_and_recorded_as_moved_by_them():
+    """
+    Nothing of the robot moves while the person acts, so the piece they were told to
+    move is watched from before they act until the camera has found it again, and the
+    trial keeps what they moved and when.
+    """
+    found = ATableTheCameraFound.looked_at()
+    shoved = found.pieces_standing[0]
+    perturbation = perturbation_asked_for(PerturbationChoice.PIECE_SHOVED, shoved)
+    piece = SortingScene(found.world).body_of(shoved)
+    sorting = sorting_over(found.world)
+    trial = SortingTrial(
+        rig=rig_over(found.world),
+        sorting=LookedAndFoundWhatWasShoved(
+            pieces=sorting.pieces,
+            board=sorting.board,
+            world=found.world,
+            shove=perturbation,
+        ),
+        person=AbsentPerson(),
+        asked_about=shoved,
+        perturbation=perturbation,
+    )
+
+    trial.begin()
+    trial.perform()
+    recorded = trial.finish(trial.episode())
+
+    [moved] = recorded.moved_by_someone_else
+    assert moved.things_moved == [piece.name]
+    assert any(
+        isinstance(event, TranslationEvent) and event.tracked_object is piece
+        for tick in recorded.ticks
+        if tick.moment >= moved.moment
+        for event in tick.events
+    )
 
 
 def test_an_unperturbed_trial_tells_the_person_nothing_and_looks_no_further():
