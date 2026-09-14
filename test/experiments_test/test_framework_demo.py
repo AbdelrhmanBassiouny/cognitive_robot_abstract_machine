@@ -48,7 +48,7 @@ def test_each_slot_is_answered_by_the_backend_that_can(
 ) -> None:
     assert [
         (type(answered.backend), answered.statement._type_)
-        for answered in performed.answered_by.answered
+        for answered in performed.grounded.answered_by.answered
     ] == [
         (MontessoriPerceptionBackend, DetectedMontessoriShape),
         (ProbabilisticBackend, GraspDescription),
@@ -63,7 +63,7 @@ def test_it_reaches_for_the_piece_the_look_found_where_the_robot_plans(
     The arm is driven at a body the world the robot plans in holds, which is what a look
     keeping its findings in that world is for.
     """
-    [picking_up, putting_through] = performed.resolved
+    [picking_up, putting_through] = performed.grounded.actions
 
     assert isinstance(picking_up, PickUpAction)
     assert isinstance(putting_through, InsertionAction)
@@ -75,7 +75,7 @@ def test_it_reaches_for_the_piece_the_look_found_where_the_robot_plans(
 def test_the_hand_it_takes_hold_with_comes_down_on_the_piece(
     performed: FrameworkDemo,
 ) -> None:
-    [picking_up, _] = performed.resolved
+    [picking_up, _] = performed.grounded.actions
 
     assert picking_up.grasp_description.vertical_alignment is FROM_ABOVE
 

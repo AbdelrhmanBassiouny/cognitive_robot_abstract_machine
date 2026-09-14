@@ -13,34 +13,21 @@ import itertools
 
 import pytest
 
-from coraplex.datastructures.enums import Arms
 from coraplex.datastructures.grasp import GraspDescription
 from coraplex.robot_plans.actions.core.insertion import InsertionAction
 from coraplex.robot_plans.actions.core.pick_up import PickUpAction, ReachAction
-from experiments.montessori.board_description import DescribedBoard
-from experiments.montessori.hole_geometry import BoardHoleLayout
 from experiments.montessori.perception.backend import MontessoriPerceptionBackend
 from experiments.montessori.perception.captures import SceneCapture
-from experiments.montessori.perception.detections import (
-    DetectedMontessoriShape,
-    MontessoriScene,
-)
-from experiments.montessori.perception.imagination import ImaginedWorld
-from experiments.montessori.perception.pipeline import MontessoriPerceptionPipeline
+from experiments.montessori.perception.detections import DetectedMontessoriShape
 from experiments.montessori.perception.recorded_setup import (
     lab_board,
     perception_pipeline,
     recorded_world,
 )
 from experiments.montessori.perception.scene_publishing import PerceivedScene
-from experiments.montessori.perception.scene_source import FixedScene, RecordedFrame
+from experiments.montessori.perception.scene_source import RecordedFrame
 from experiments.montessori.pieces import KnownPieceSet
-from experiments.montessori.semantics import (
-    MontessoriShapeCategory,
-    ShapeSortingBoard,
-    ShapeSortingHole,
-)
-from experiments.montessori.world import BOARD_SCALE
+from experiments.montessori.semantics import ShapeSortingBoard, ShapeSortingHole
 from experiments.open_slots.choice import backends_for
 from experiments.open_slots.holes import HoleRulesBackend
 from experiments.open_slots.plan import FROM_ABOVE, SORTED_PIECE, sorting_plan
@@ -49,91 +36,29 @@ from experiments.tracy_experiments.pick_and_place_action import (
     InsertionActionMujoco,
     NoActionCarriesItOut,
     PickUpActionMujoco,
+    SimulatedActuators,
 )
 from krrood.entity_query_language.backends import BackendChoice, ProbabilisticBackend
 from semantic_digital_twin.spatial_types.spatial_types import Pose
 from semantic_digital_twin.world_description.world_entity import Body
 
-from .dataset import montessori_scene_fixtures
+from .dataset import figure_plan_fixtures, montessori_scene_fixtures
+from .dataset.figure_plan_fixtures import PICK_ARM
 
-pytest_plugins = [montessori_scene_fixtures.__name__]
+pytest_plugins = [
+    montessori_scene_fixtures.__name__,
+    figure_plan_fixtures.__name__,
+]
 """
-The rendered scene and the pipeline that reads it.
-"""
-
-BOARD_STANDS_AT = Pose.from_xyz_rpy(0.8, 0.1, 0.96)
-"""
-Where the board's lid stands, in metres.
-"""
-
-PICK_ARM = Arms.LEFT
-"""
-The arm the plan below picks the piece up with.
+The rendered scene and the pipeline that reads it, and the figure's plan grounded
+against it.
 """
 
 GRASPS_LOOKED_AT = 12
 """
-How many of the ways the plan can be grounded the grasp is read off, which is enough
-for every side of the piece to have been sampled several times over.
+How many of the ways the plan can be grounded the grasp is read off, which is enough for
+every side of the piece to have been sampled several times over.
 """
-
-
-@pytest.fixture
-def board() -> ShapeSortingBoard:
-    """
-    The board the plan puts its piece into, with one hole per shape.
-    """
-    return ImaginedWorld.copied_from(None).stand_board(
-        DescribedBoard.of_layout(
-            BoardHoleLayout.of_board_mesh(), height=float(BOARD_SCALE.z)
-        ),
-        BOARD_STANDS_AT,
-    )
-
-
-@pytest.fixture
-def lid(pipeline: MontessoriPerceptionPipeline) -> Body:
-    """
-    The board's lid, as the surface the look searches names it.
-    """
-    return pipeline.lid.entity
-
-
-@pytest.fixture
-def backends(scene_with_a_piece_on_the_lid: MontessoriScene) -> BackendChoice:
-    """
-    The four backends the plan is run with, over the world the look stood its findings
-    in.
-    """
-    return backends_for(
-        MontessoriPerceptionBackend(
-            source=FixedScene(captured=scene_with_a_piece_on_the_lid)
-        ),
-        scene_with_a_piece_on_the_lid.imagined.world,
-    )
-
-
-@pytest.fixture
-def pieces(pipeline: MontessoriPerceptionPipeline) -> KnownPieceSet:
-    """
-    The set of loose pieces the look this plan is run against was fitted with.
-    """
-    return pipeline.pieces
-
-
-@pytest.fixture
-def grounded(
-    board: ShapeSortingBoard,
-    lid: Body,
-    pieces: KnownPieceSet,
-    backends: BackendChoice,
-) -> list:
-    """
-    The plan's actions, with everything it leaves open answered.
-    """
-    plan = sorting_plan(board, lid, pieces, PICK_ARM, end_effector=None)
-    return next(plan.grounded_by(backends))
-
 
 # %% what the plan leaves open
 
@@ -312,7 +237,7 @@ def test_the_resolved_plan_is_carried_out_by_the_actions_that_drive_the_actuator
     [picking_up, putting_through] = grounded
 
     [takes_hold, puts_through] = ActuatorDrivenAction.performing(
-        grounded, simulation=None, actuators={}
+        grounded, SimulatedActuators(simulation=None, actuators={})
     )
 
     assert isinstance(takes_hold, PickUpActionMujoco)
@@ -336,4 +261,6 @@ def test_an_action_nothing_here_carries_out_is_refused(grounded: list) -> None:
     )
 
     with pytest.raises(NoActionCarriesItOut):
-        ActuatorDrivenAction.performing([reaching], simulation=None, actuators={})
+        ActuatorDrivenAction.performing(
+            [reaching], SimulatedActuators(simulation=None, actuators={})
+        )

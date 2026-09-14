@@ -14,9 +14,16 @@ the arm is driven at the piece the look found, turned the way the grasp was samp
 films are taken of the run: what the robot's own camera saw, and the table from in front
 of it.
 
+The same plan runs on the physical robot with ``--execution real``, where it is carried
+out by the actions that drive Tracy's own arm and fingers and the run is recorded as an
+episode; see :mod:`~experiments.tracy_experiments.framework_demo_real`. Which backend
+answered which slot is reported the same way in both, so the two runs are read against
+one another.
+
 Usage:
     python -m experiments.tracy_experiments.framework_demo \
         [--film-directory DIRECTORY] [--headless] [--watch]
+    python -m experiments.tracy_experiments.framework_demo --execution real [--record]
 
 Needs MuJoCo and Tracy's description, like the pickup demo whose lab it builds.
 """
@@ -29,20 +36,21 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 from pathlib import Path
 
-from typing_extensions import List
+from typing_extensions import List, Optional, Sequence
 
 from coraplex.datastructures.dataclasses import Context
 from coraplex.plans.factories import sequential
 from coraplex.robot_plans.actions.base import ActionDescription
-from coraplex.view_manager import ViewManager
 from experiments.episodes.trace import FilmBeingTaken
-from experiments.montessori.perception.backend import MontessoriPerceptionBackend
 from experiments.montessori.perception.recorded_setup import lab_board
 from experiments.montessori.perception.scene_publishing import PerceivedScene
 from experiments.montessori.pieces import SMALLER_PIECES, KnownPieceSet
-from experiments.open_slots.choice import backends_for
-from experiments.open_slots.plan import SORTED_PIECE, sorting_plan
-from experiments.tracy_experiments.pick_and_place_action import ActuatorDrivenAction
+from experiments.open_slots.grounding import GroundedPlan
+from experiments.open_slots.plan import SORTED_PIECE
+from experiments.tracy_experiments.pick_and_place_action import (
+    ActuatorDrivenAction,
+    SimulatedActuators,
+)
 from experiments.tracy_experiments.pickup.pickup_demo_mujoco import (
     CAMERA_NAME,
     FRAMES_PER_SECOND,
@@ -56,7 +64,6 @@ from experiments.tracy_experiments.real_time_simulation import RealTimeSimulatio
 from semantic_digital_twin.adapters.multi_sim import RegionAppearance
 from semantic_digital_twin.adapters.mujoco_video_recording import VideoResolution
 from semantic_digital_twin.spatial_types.spatial_types import Point3
-from krrood.entity_query_language.backends import BackendChoice
 
 logger = logging.getLogger(__name__)
 
@@ -141,14 +148,10 @@ class FrameworkDemo:
     The two worlds the run is performed in, once :meth:`perform` has built them.
     """
 
-    resolved: List[ActionDescription] = field(init=False)
+    grounded: GroundedPlan = field(init=False)
     """
-    What the plan came to, in the order it runs, once :meth:`perform` has resolved it.
-    """
-
-    answered_by: BackendChoice = field(init=False)
-    """
-    The backends that answered the plan, which keep which of them answered which slot.
+    The figure's plan with every slot closed, once :meth:`perform` has resolved it, and
+    the record of which backend closed which.
     """
 
     carried_out: List[ActionDescription] = field(init=False)
@@ -201,17 +204,9 @@ class FrameworkDemo:
                 world=self.lab.belief, look=look, described_board=lab_board()
             )
             scene.perceive()
-            self.answered_by = backends_for(
-                MontessoriPerceptionBackend(source=scene.last_look), self.lab.belief
+            self.grounded = GroundedPlan.grounded_against(
+                scene, PICK_ARM, self.lab.believed_robot
             )
-            plan = sorting_plan(
-                scene.board,
-                look.pipeline.lid.entity,
-                self.pieces,
-                PICK_ARM,
-                ViewManager.get_end_effector_view(PICK_ARM, self.lab.believed_robot),
-            )
-            self.resolved = next(plan.grounded_by(self.answered_by))
             self._carry_out(simulation)
             simulation.advance(SETTLING_TIME)
             for film in self.films:
@@ -248,7 +243,7 @@ class FrameworkDemo:
             self.lab.belief, self.lab.believed_robot, evaluate_conditions=False
         )
         self.carried_out = ActuatorDrivenAction.performing(
-            self.resolved, simulation, self.lab.actuators
+            self.grounded.actions, SimulatedActuators(simulation, self.lab.actuators)
         )
         sequential(self.carried_out, context).plan.perform()
 
@@ -264,32 +259,77 @@ class FrameworkDemo:
 # %% running it
 
 
-def parse_arguments() -> argparse.Namespace:
+class Execution(StrEnum):
     """
+    Which lab the run is performed in, as ``--execution`` spells it.
+    """
+
+    SIMULATED = "simulated"
+    REAL = "real"
+
+
+def parse_arguments(
+    argument_list: Optional[Sequence[str]] = None,
+) -> argparse.Namespace:
+    """
+    :param argument_list: Arguments to read; the process's own when omitted.
     :return: This demo's own command line arguments.
     """
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
+        "--execution",
+        type=Execution,
+        choices=list(Execution),
+        default=Execution.SIMULATED,
+        help="the lab the plan is carried out in",
+    )
+    simulated = parser.add_argument_group(
+        Execution.SIMULATED, "only read for a simulated run"
+    )
+    simulated.add_argument(
         "--film-directory",
         type=Path,
         default=Path.cwd(),
         help="where the run's two films are written",
     )
-    parser.add_argument(
+    simulated.add_argument(
         "--headless",
         action="store_true",
         help="run without opening MuJoCo's viewer window",
     )
-    parser.add_argument(
+    simulated.add_argument(
         "--watch",
         action="store_true",
         help="run the motion at life speed rather than as fast as the machine allows",
     )
-    return parser.parse_args()
+    return parser.parse_known_args(argument_list)[0]
 
 
-def main() -> None:
-    arguments = parse_arguments()
+def main(argument_list: Optional[Sequence[str]] = None) -> None:
+    """
+    Run the figure's plan in the lab ``--execution`` names.
+
+    :param argument_list: Arguments to read; the process's own when omitted.
+    """
+    arguments = parse_arguments(argument_list)
+    if arguments.execution is Execution.REAL:
+        # Imported here rather than at the top so a simulated run needs no ROS
+        # installation: the real demo reaches the robot through rclpy.
+        from experiments.tracy_experiments.framework_demo_real import (
+            main as run_on_the_robot,
+        )
+
+        run_on_the_robot(argument_list)
+        return
+    perform_in_simulation(arguments)
+
+
+def perform_in_simulation(arguments: argparse.Namespace) -> None:
+    """
+    Run the figure's plan in the simulated lab and report what it came to.
+
+    :param arguments: The command line as read.
+    """
     arguments.film_directory.mkdir(parents=True, exist_ok=True)
     demo = FrameworkDemo(
         films_directory=arguments.film_directory,
@@ -297,12 +337,7 @@ def main() -> None:
         paced_to_the_wall_clock=arguments.watch,
     )
     demo.perform()
-    for answered in demo.answered_by.answered:
-        logger.info(
-            "%s answered %s.", type(answered.backend).__name__, answered.statement
-        )
-    for action in demo.resolved:
-        logger.info("Resolved to %s.", action)
+    demo.grounded.report()
     for film in demo.films:
         logger.info("Filmed %s.", film.film.path)
     logger.info(
