@@ -1004,10 +1004,10 @@ class PickupDemo:
         """
         Sort the pieces the camera finds, recording the episode.
 
-        The bag opens before the trial's clock starts, so the recording spans the trial
-        from its first moment; the trial's clock runs on the same wall clock the bag
-        stamps its messages on, so the two are read against one another through the
-        trial's start.
+        The bag opens before the trial's clock starts and closes after it has stopped,
+        so the recording spans the whole trial; the trial's clock runs on the same wall
+        clock the bag stamps its messages on, so the two are read against one another
+        through the trial's start.
 
         :return: The artifacts the episode kept.
         :raises PieceNotSeenError: If the look found no piece of the kind asked about.
@@ -1080,7 +1080,7 @@ class PickupDemo:
             trial.begin()
             rig.perform_and_record(park)
             trial.perform()
-        recorded = trial.finish(episode)
+            recorded = trial.finish(episode)
         logger.info("Sorting finished.")
         return keep_the_episode(
             recorded,
