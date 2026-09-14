@@ -11,7 +11,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from semantic_digital_twin.robots.robot_parts import AbstractRobot
+from semantic_digital_twin.datastructures.definitions import StaticJointState
+from semantic_digital_twin.robots.robot_parts import AbstractRobot, Arm
 from semantic_digital_twin.semantic_annotations.semantic_annotations import Table
 from semantic_digital_twin.spatial_types import Point3
 from semantic_digital_twin.world import World
@@ -28,6 +29,8 @@ from experiments.montessori.scenarios import (
 )
 from experiments.montessori.world import BOARD_SCALE
 from experiments.tracy_experiments.equipment import (
+    compensate_gravity_on_every_link,
+    exclude_self_collision,
     parse_tracy,
     tracy_table_mount_position,
 )
@@ -103,6 +106,14 @@ class TracyOnItsOwnTable(MontessoriWorldBuilder):
         as the scene's :class:`~semantic_digital_twin.semantic_annotations.semantic_annotations.Table`,
         which is where the scenarios look the table up.
 
+        Both arms start parked, as a run on the robot has them. Nothing drives them in
+        the simulation but the run itself, so every link is held up against gravity,
+        and the links are excused from colliding with each other where the description
+        overlaps them. The simulation reads every joint it carries back into the world,
+        so an arm the run never moves would otherwise be pushed out of its parked pose
+        by its own overlapping links and sag under gravity until it lay across the
+        table.
+
         :param robot_type: The robot the scenario runs on, as its own binding names it.
         :return: The world holding the scene.
         """
@@ -122,6 +133,12 @@ class TracyOnItsOwnTable(MontessoriWorldBuilder):
             montessori.world.add_semantic_annotation(
                 Table(name=mounted.root.name, root=mounted.root)
             )
+        for arm in montessori.world.get_semantic_annotations_by_type(Arm):
+            arm.get_joint_state_by_type(StaticJointState.PARK).apply_to(
+                montessori.world
+            )
+        compensate_gravity_on_every_link(montessori.world, mounted)
+        exclude_self_collision(montessori.world, mounted)
         return montessori.world
 
     @property

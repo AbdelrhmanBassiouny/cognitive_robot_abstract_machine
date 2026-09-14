@@ -16,7 +16,9 @@ from coraplex.datastructures.enums import ExecutionType
 from dataclasses import dataclass, field
 from typing_extensions import List
 
-from semantic_digital_twin.adapters.multi_sim import MultiSimSynchronizer
+from semantic_digital_twin.adapters.multi_sim import MujocoCamera, MultiSimSynchronizer
+from semantic_digital_twin.datastructures.definitions import StaticJointState
+from semantic_digital_twin.robots.robot_parts import Arm
 from semantic_digital_twin.robots.tracy import Tracy
 from semantic_digital_twin.spatial_types.spatial_types import Vector3
 from semantic_digital_twin.world import World
@@ -25,6 +27,7 @@ from semantic_digital_twin.world_description.mesh_file_storage import MeshFileSt
 
 from experiments.episodes.artifacts import (
     ARTIFACT_DIRECTORY_ENVIRONMENT_VARIABLE,
+    ArtifactDirectory,
     configured_mesh_directory,
 )
 from experiments.episodes.episode import Episode
@@ -41,8 +44,11 @@ from experiments.montessori.scenarios import (
     LayoutAsFound,
     PieceShoved,
     RealScene,
+    SceneRecording,
+    SimulatedScene,
     SortingScene,
     SortingStep,
+    TargetHoleMoved,
     TracyWatchesTheSceneStandStill,
 )
 from experiments.montessori.semantics import (
@@ -70,7 +76,10 @@ from .dataset.montessori_capture_truths import CAPTURE_TRUTHS, CaptureTruth
 from .dataset.synthetic_grasping_robot import SyntheticGraspingRobot
 from .test_episode_recording import TrialsKeptInMemory
 from .test_montessori_detection_on_captures import TAPE_TOLERANCE
-from .test_montessori_scene_publishing import RecordedFrameWhoseSceneCanBeMoved
+from .test_montessori_scene_publishing import (
+    A_SLIDE,
+    RecordedFrameWhoseSceneCanBeMoved,
+)
 
 MEASURED_CAPTURE = "scaled_pieces_in_a_row"
 """
@@ -90,6 +99,21 @@ A_SHOVE = PieceShoved(
 )
 """
 The perturbation a run on the robot asks the person for.
+"""
+
+A_SLID_BOARD = TargetHoleMoved(
+    step=SortingStep.SETTLE,
+    category=SHOVED_PIECE,
+    displacement=A_SLIDE,
+)
+"""
+The perturbation that has the person slide the board rather than a piece.
+"""
+
+HOW_SOON_A_TRIAL_IS_TRACED = 0.05
+"""
+How long after its trial begins a run may take to read where the joints stand, in
+seconds: the reading follows the start of the trial's clock with nothing in between.
 """
 
 
@@ -177,6 +201,50 @@ def test_the_built_scenes_table_is_tracys_own():
     scene = SortingScene(world)
     assert scene.table.root is scene.robot.root
     assert table_surface(world).height == pytest.approx(builder.table_top_z)
+
+
+def test_the_built_scene_stands_tracy_with_both_arms_parked():
+    """
+    An arm the run never moves stays where the scene stood it, so both arms start
+    parked rather than stretched out along their zero joint angles across the table.
+    """
+    world = TracyOnItsOwnTable().build(Tracy)
+
+    arms = world.get_semantic_annotations_by_type(Arm)
+    assert len(arms) == 2
+    for arm in arms:
+        assert arm.get_joint_state_by_type(StaticJointState.PARK).is_achieved()
+
+
+def test_an_arm_the_run_never_moves_stays_parked_under_physics():
+    """
+    The simulation reads every joint it carries back into the world after each step, so
+    an arm nothing holds up would sag out of its parked pose under gravity and the world
+    would follow it there.
+    """
+    world = TracyOnItsOwnTable().build(Tracy)
+    physics = SimulatedScene(world=world)
+
+    physics.advance(1.0)
+    physics.stop()
+
+    for arm in world.get_semantic_annotations_by_type(Arm):
+        assert arm.get_joint_state_by_type(StaticJointState.PARK).is_achieved()
+
+
+def test_a_run_on_tracys_own_table_is_filmed_framing_that_table():
+    """
+    The camera a run is filmed by frames the table the run is done on, which on Tracy is
+    its own and stands nowhere near the one the package's own scene is set on.
+    """
+    world = TracyOnItsOwnTable().build(Tracy)
+
+    recording = SceneRecording(world=world)
+
+    framing = MujocoCamera.overview_pose(table_surface(world).corners)
+    assert recording.camera.position == pytest.approx(
+        framing.to_position().to_np()[:3].tolist()
+    )
 
 
 def test_the_built_scene_keeps_its_meshes_beside_the_artifacts(monkeypatch, tmp_path):
@@ -435,6 +503,51 @@ def test_a_shove_on_the_robot_is_asked_of_the_person_and_learned_of_by_looking(
     assert scene.body_of(SHOVED_PIECE) in [
         piece.root for piece in person.pieces_when_asked
     ]
+
+
+def test_a_board_the_person_slid_on_the_robot_leaves_the_scene_disturbed(
+    published_world: World,
+):
+    """
+    The person slides the board rather than a piece, the second look finds it where they
+    left it, and the scene the trial ends in is not the one it started in.
+    """
+    look = RecordedFrameWhoseSceneCanBeMoved(
+        pipeline=pipeline_of(published_world),
+        frame=SceneCapture.load(MEASURED_CAPTURE).to_frame(),
+        cube_shoved_by=Vector3(0.0, 0.0, 0.0),
+        board_slid_by=A_SLIDE,
+    )
+    perceived = TracyLookingAtItsOwnTable(
+        scene=PerceivedScene(
+            world=published_world, look=look, described_board=lab_board()
+        )
+    )
+    person = PersonWhoMovesTheScene(look=look, scene=perceived.scene)
+    scenario, run = _run_on_the_robot(perceived, person=person)
+
+    run.run(scenario, perturbations=[A_SLID_BOARD])
+
+    assert person.asked == [A_SLID_BOARD.instruction_for_a_person()]
+    [trial] = run.records_trials.trials
+    assert trial.outcome is TrialOutcome.FAILED
+
+
+def test_a_run_on_the_robot_traces_where_the_joints_stood_as_its_trial_began(
+    perceived: TracyLookingAtItsOwnTable, tmp_path: Path
+):
+    """
+    Nothing of a still robot changes on the robot, so the trace a trial keeps would hold
+    nothing unless the run reads the joints as the trial begins.
+    """
+    scenario, run = _run_on_the_robot(perceived)
+    run.artifacts = ArtifactDirectory(path=tmp_path).open_for(run.episode)
+
+    run.run(scenario)
+
+    [trial] = run.records_trials.trials
+    trace = run.artifacts.trial(trial.number).joint_trace
+    assert trace.moments[0] == pytest.approx(0.0, abs=HOW_SOON_A_TRIAL_IS_TRACED)
 
 
 def test_a_shove_on_the_robot_is_remembered_as_the_piece_moving(

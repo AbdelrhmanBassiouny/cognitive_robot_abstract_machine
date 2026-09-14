@@ -39,7 +39,10 @@ from experiments.montessori.perception.capture_from_camera import (
     write_capture,
 )
 from experiments.montessori.perception.captures import SceneCapture
-from experiments.montessori.perception.exceptions import NoSceneAvailable
+from experiments.montessori.perception.exceptions import (
+    LookingHasStopped,
+    NoSceneAvailable,
+)
 from experiments.montessori.perception.live_camera import LiveCamera
 from experiments.montessori.perception.node import (
     MontessoriPerceptionNode,
@@ -503,6 +506,45 @@ def test_a_wait_for_a_scene_outlasts_a_look_that_is_under_way(node: Node):
 
     looking.join()
     assert seen is perception.wait_for_scene(A_SHORT_WAIT)
+
+
+def test_a_node_told_to_stop_looking_lets_the_look_under_way_finish_first(
+    node: Node,
+):
+    """
+    A look copies the world it is taken in, so whoever stops the looking to change that
+    world waits for the look under way rather than changing the world beneath it.
+    """
+    perception = MontessoriPerceptionNode(node=node, pipeline=perception_pipeline())
+    read_with_now = perception.pipeline
+    perception.read_with(
+        _PipelineTakingItsTime(
+            table=read_with_now.table,
+            lid=read_with_now.lid,
+            reference_frame=read_with_now.reference_frame,
+            world=read_with_now.world,
+            pieces=read_with_now.pieces,
+        )
+    )
+    looking = threading.Thread(
+        target=perception.look_at, args=(SceneCapture.load(A_LOOK).to_frame(),)
+    )
+    looking.start()
+    time.sleep(A_SHORT_WAIT / 2)
+
+    perception.stop_looking()
+
+    assert not looking.is_alive()
+    looking.join()
+
+
+def test_a_node_that_stopped_looking_takes_no_look(node: Node):
+    perception = MontessoriPerceptionNode(node=node, pipeline=perception_pipeline())
+
+    perception.stop_looking()
+
+    with pytest.raises(LookingHasStopped):
+        perception.look_at(SceneCapture.load(A_LOOK).to_frame())
 
 
 def test_a_look_taken_is_the_newest_result_the_node_serves(node: Node):

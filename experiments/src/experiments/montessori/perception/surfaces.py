@@ -12,6 +12,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+import numpy as np
 from typing_extensions import Optional, Tuple
 
 from experiments.montessori.perception.detections import MontessoriDetection
@@ -155,6 +156,20 @@ class WorkspaceSurface:
             raise SurfaceHasNothingToMeasure(str(body.name))
         shape, box = max(measured, key=lambda pair: pair[1].scale.x * pair[1].scale.y)
         return cls._of_box(body, box, shape)
+
+    @property
+    def corners(self) -> np.ndarray:
+        """
+        The lowest and highest corner of the patch, both at the surface's own height, as
+        a ``(2, 3)`` array of ``[minimum, maximum]``: the flat box a camera framing the
+        surface is stood to see.
+        """
+        return np.asarray(
+            [
+                [self.region.minimum_x, self.region.minimum_y, self.height],
+                [self.region.maximum_x, self.region.maximum_y, self.height],
+            ]
+        )
 
     @property
     def name(self) -> PrefixedName:

@@ -62,6 +62,16 @@ HOW_LONG_THE_MOTION_RAN = 0.25
 How long the motion an executable hands over is taken to have run, in seconds.
 """
 
+MOMENT_OF_THE_SHOVE = 1.0
+"""
+When someone other than the robot is told to move the piece, in seconds into the trial.
+"""
+
+A_SHOVE = "Push the piece 10 cm across the table."
+"""
+What the person at the scene is told to do.
+"""
+
 
 @pytest.fixture()
 def observer() -> EpisodeObserver:
@@ -166,6 +176,8 @@ def test_a_performed_plan_is_kept(observer: EpisodeObserver):
 
     assert observer.plans == [performed]
     assert performed.plan is plan
+
+
 # %% motions
 
 
@@ -241,6 +253,33 @@ def test_what_was_observed_is_written_onto_the_trial(
     assert trial.plans == [performed]
     assert trial.insertion_attempts == [attempt]
     assert trial.motions == [motion]
+
+
+def test_what_someone_else_moved_is_kept_with_when_they_were_told(
+    observer: EpisodeObserver,
+):
+    """
+    A move by someone other than the robot is told apart from the robot's own motions
+    by when it happened and what it moved, so both are kept beside the instruction.
+    """
+    piece = tracked_piece()
+
+    observer.carried_out(A_SHOVE, MOMENT_OF_THE_SHOVE, [piece.name])
+    trial = observer.into(recorded_trial())
+
+    assert trial.instructions_carried_out == [A_SHOVE]
+    [moved] = trial.moved_by_someone_else
+    assert moved.moment == MOMENT_OF_THE_SHOVE
+    assert moved.things_moved == [piece.name]
+
+
+def test_an_instruction_that_moves_nothing_keeps_no_move(observer: EpisodeObserver):
+    observer.carried_out(A_SHOVE, MOMENT_OF_THE_SHOVE, [])
+
+    trial = observer.into(recorded_trial())
+
+    assert trial.instructions_carried_out == [A_SHOVE]
+    assert trial.moved_by_someone_else == []
 
 
 def test_the_trial_is_handed_the_instant_it_began(observer: EpisodeObserver):

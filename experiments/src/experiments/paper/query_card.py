@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import logging
 from abc import ABC, abstractmethod
+from contextlib import nullcontext
 from dataclasses import dataclass, field
 from enum import StrEnum
 from pathlib import Path
@@ -22,18 +23,34 @@ from segmind.datastructures.events import (
     PickUpEvent,
 )
 import numpy as np
-from typing_extensions import ClassVar, Dict, List, Optional, Sequence, Tuple, Type
+from typing_extensions import (
+    ClassVar,
+    ContextManager,
+    Dict,
+    List,
+    Optional,
+    Sequence,
+    Tuple,
+    Type,
+)
 
 from experiments.episodes.artifacts import ArtifactDirectory, EpisodeArtifacts
 from experiments.episodes.episode import RecordedQuery, RecordedTrial
 from experiments.experiment_definitions import TypstRenderer
-from experiments.episodes.trace import JointPositions, JointTrace
+from experiments.episodes.trace import (
+    FramesByMoment,
+    JointTrace,
+    put_back_afterwards,
+    standing_at,
+)
 from experiments.montessori.same_piece import SamePiece
 from experiments.paper.camera_frame import (
     BagFrameAt,
     BagFramesAround,
     FramesAround,
+    RecordedFrameAt,
     RecordedFramesAround,
+    TwinFrames,
 )
 from experiments.paper.chart import TimelineSpan
 from experiments.paper.figure import FigureFile
@@ -48,7 +65,11 @@ from experiments.paper.pose_change import (
     standing_pose,
 )
 from experiments.paper.run_timeline import RunTimeline
-from experiments.paper.scene import PointOfView, SceneRender
+from experiments.tracy_experiments.camera import camera_of_the_robot
+from experiments.paper.scene import (
+    PointOfView,
+    SceneRender,
+)
 from experiments.paper.run_plan import ObjectIdentity, SameName, TrialClock, plans_of
 from experiments.paper.timeline import EventTimeline
 from experiments.questions.question import Question, objects_of_the_scene
@@ -58,7 +79,7 @@ from experiments.questions.working_memory import (
     PickedUpRecently,
     SideOfAnotherObject,
 )
-from semantic_digital_twin.adapters.multi_sim import MujocoCamera
+from semantic_digital_twin.adapters.picture import Viewpoint
 from semantic_digital_twin.robots.robot_parts import AbstractRobot
 from semantic_digital_twin.world import World
 from semantic_digital_twin.spatial_types.spatial_types import (
@@ -315,9 +336,9 @@ class QueryCard(ABC):
         """
         return []
 
-    def point_of_view(self, asked: Question, world: World) -> Optional[MujocoCamera]:
+    def point_of_view(self, asked: Question, world: World) -> Optional[Viewpoint]:
         """
-        The camera this card's scene is drawn through, or None to frame the whole scene
+        Where this card's scene is looked at from, or None to frame the whole scene
         from the overview viewpoint.
 
         :param asked: The question as it was asked.
@@ -352,8 +373,8 @@ class QueryCard(ABC):
             raise RobotNotFoundInTheWorldError(found=len(robots))
         return robots[0]
 
-    @staticmethod
-    def world_of(trial: RecordedTrial) -> World:
+    @classmethod
+    def world_of(cls, trial: RecordedTrial) -> World:
         """
         The twin the run happened in.
 
@@ -363,6 +384,15 @@ class QueryCard(ABC):
         if trial.episode.world is None:
             raise EpisodeKeptNoWorldError(episode_identifier=trial.episode.identifier)
         return trial.episode.world
+
+    @classmethod
+    def can_draw(cls, trial: RecordedTrial) -> bool:
+        """
+        Whether the run kept a world a scene can be drawn of.
+
+        :param trial: The trial whose episode's world is asked about.
+        """
+        return trial.episode.world is not None
 
     # %% what this card's files are called
 
@@ -570,7 +600,7 @@ class QueryCard(ABC):
         :param artifacts: The episode's own files, or None.
         """
         if panel is PanelKind.SCENE:
-            return self._scene(query.question, trial)
+            return self._scene(trial, query, artifacts)
         if panel is PanelKind.TIMELINE:
             return self._event_chart(trial, query)
         if panel is PanelKind.PLAN_TIMELINE:
@@ -760,20 +790,11 @@ class QueryCard(ABC):
         held_by = str(subject.parent_connection.name)
         if not any(name.startswith(held_by) for name in trace.names):
             return []
-        stood = JointPositions(
-            moment=0.0,
-            positions={
-                str(name): position
-                for name, position in world.state.to_position_dict().items()
-            },
-        )
         way = []
-        try:
+        with put_back_afterwards(world):
             for moment in np.linspace(over.start, over.end, dots + 2)[1:-1]:
                 trace.at(float(moment)).restore_into(world)
                 way.append(standing_pose(world, subject))
-        finally:
-            stood.restore_into(world)
         return way
 
     def _camera_frame(
@@ -783,8 +804,8 @@ class QueryCard(ABC):
         artifacts: Optional[EpisodeArtifacts],
     ) -> Optional[CardPanel]:
         """
-        What the robot's camera saw at the moment the query was asked. None where the run
-        recorded none.
+        What the run's camera saw at the moment the query was asked. None where the run
+        left nothing to show it from.
 
         :param trial: The trial the query was asked during.
         :param query: The query this card shows.
@@ -792,10 +813,15 @@ class QueryCard(ABC):
         """
         if artifacts is None:
             return None
-        frame = BagFrameAt(
+        bagged = BagFrameAt(
             artifacts=artifacts, moment=query.moment, clock=TrialClock.of(trial)
         )
-        return frame if frame.was_recorded else None
+        if bagged.was_recorded:
+            return bagged
+        frames = self._frames_of(trial, artifacts)
+        if frames is None:
+            return None
+        return RecordedFrameAt(frames=frames, moment=query.moment)
 
     def _camera_frames_around(
         self,
@@ -804,13 +830,13 @@ class QueryCard(ABC):
         artifacts: Optional[EpisodeArtifacts],
     ) -> Optional[FramesAround]:
         """
-        What the robot's camera saw either side of the stretch the answered event's
-        object moved over.
+        What the run's camera saw either side of the stretch the answered event's object
+        moved over.
 
-        A run on the robot kept a bag, so the two frames are read back out of it; a run
-        that kept what its camera saw along the trial, with the moments, is read the
-        same way. None where the run answered no event to take the frames around, or
-        kept no camera at all.
+        A run on the robot kept a bag, so the two frames are read back out of it; any
+        other run's frames are read the way :meth:`_frames_of` finds them. None where
+        the run answered no event to take the frames around, or left nothing to show
+        the frames from.
 
         :param trial: The trial the query was asked during.
         :param query: The query this card shows.
@@ -825,10 +851,34 @@ class QueryCard(ABC):
         )
         if bagged.was_recorded:
             return bagged
-        kept = artifacts.trial(trial.number)
-        if not kept.kept_a_camera:
+        frames = self._frames_of(trial, artifacts)
+        if frames is None:
             return None
-        return RecordedFramesAround(over=over, frames=kept.camera)
+        return RecordedFramesAround(over=over, frames=frames)
+
+    def _frames_of(
+        self, trial: RecordedTrial, artifacts: EpisodeArtifacts
+    ) -> Optional[FramesByMoment]:
+        """
+        What the run's camera saw along the trial, by the moment each frame was taken
+        at: the frames a run kept beside its trace, with their moments, or, for a run
+        that traced its joints and kept a world a scene can be drawn of, the twin stood
+        at each sample of the trace. None where the run kept neither.
+
+        :param trial: The trial to read.
+        :param artifacts: The episode's own files.
+        """
+        kept = artifacts.trial(trial.number)
+        if kept.kept_a_camera:
+            return kept.camera
+        trace = self._trace_of(trial, artifacts)
+        if trace is None or not self.can_draw(trial):
+            return None
+        return TwinFrames(
+            world=trial.episode.world,
+            trace=trace,
+            camera=camera_of_the_robot(trial.episode.world),
+        )
 
     @staticmethod
     def reported_at(
@@ -846,23 +896,53 @@ class QueryCard(ABC):
                 return tick.moment
         return otherwise
 
-    def _scene(self, asked: Question, trial: RecordedTrial) -> CardPanel:
+    def _scene(
+        self,
+        trial: RecordedTrial,
+        query: RecordedQuery,
+        artifacts: Optional[EpisodeArtifacts],
+    ) -> CardPanel:
         """
-        The twin with the things this question's answer names picked out of it.
+        The twin as it stood when the query was asked, with the things this question's
+        answer names picked out of it and, where the picture places its own camera,
+        framed on them.
 
-        :param asked: The question as it was asked.
-        :param trial: The trial it was asked during.
+        :param trial: The trial the query was asked during.
+        :param query: The query this card shows.
+        :param artifacts: The episode's own files, or None.
+        :raises EpisodeKeptNoWorldError: If the episode kept no world.
+        """
+        asked = query.question
+        with self._stood_when_asked(trial, query, artifacts) as world:
+            answers = self.answers(asked, world)
+            return SceneRender(
+                world=world,
+                viewpoint=self.point_of_view(asked, world),
+                label_answers=self.labels_the_answers,
+                framed_on=tuple(answers),
+            ).of(answers)
+
+    def _stood_when_asked(
+        self,
+        trial: RecordedTrial,
+        query: RecordedQuery,
+        artifacts: Optional[EpisodeArtifacts],
+    ) -> ContextManager[World]:
+        """
+        The episode's world stood as it was when the query was asked, for the length of
+        a block, wherever the run traced its joints; a run that traced none leaves the
+        world as the episode kept it.
+
+        :param trial: The trial the query was asked during.
+        :param query: The query this card shows.
+        :param artifacts: The episode's own files, or None.
         :raises EpisodeKeptNoWorldError: If the episode kept no world.
         """
         world = self.world_of(trial)
-        camera = self.point_of_view(asked, world)
-        try:
-            return SceneRender(
-                world=world, camera=camera, label_answers=self.labels_the_answers
-            ).of(self.answers(asked, world))
-        finally:
-            if camera is not None:
-                camera.body.simulator_additional_properties.remove(camera)
+        trace = self._trace_of(trial, artifacts)
+        if trace is None:
+            return nullcontext(world)
+        return standing_at(world, trace.at(query.moment))
 
     @staticmethod
     def _markup(query: RecordedQuery, figures: List[Tuple[str, Path]]) -> str:
@@ -941,15 +1021,19 @@ class SideOfAnotherObjectCard(QueryCard):
 
     def point_of_view(
         self, asked: SideOfAnotherObject, world: World
-    ) -> Optional[MujocoCamera]:
+    ) -> Optional[Viewpoint]:
         """
-        The place the question was asked from, which is what makes its left and right
-        mean anything.
+        A viewpoint facing the way the question was asked from, which is what makes its
+        left and right mean anything, stood behind the two objects it relates so both
+        are in the picture.
 
         :param asked: The question as it was asked.
         :param world: The twin the run happened in.
         """
-        return PointOfView(body=world.root, pose=asked.point_of_view).camera()
+        looker = PointOfView(body=world.root, pose=asked.point_of_view)
+        return looker.stood_behind(
+            SceneRender(world=world, framed_on=(asked.subject, asked.other)).bounds()
+        ).viewpoint()
 
 
 @dataclass
@@ -1183,7 +1267,7 @@ class QueryCardSet:
         trials one inside that, so a corpus of runs is written in one pass without any of
         them writing over another.
 
-        An episode that kept no world has nothing a scene panel can draw, and is passed
+        An episode that kept no world has nothing a scene panel can draw and is passed
         over rather than stopping every other episode's cards: the paper's figures are
         regenerated from the whole database, episodes recorded before runs kept their
         world included.

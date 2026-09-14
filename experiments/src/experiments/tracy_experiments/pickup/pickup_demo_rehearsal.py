@@ -38,6 +38,7 @@ logging.basicConfig(level=logging.INFO, format="%(message)s")
 
 import rclpy
 from coraplex.datastructures.enums import ExecutionType
+from rclpy.signals import SignalHandlerOptions
 from typing_extensions import List, Optional, Sequence
 
 from experiments.episodes.artifacts import (
@@ -369,7 +370,10 @@ def main(argument_list: Optional[Sequence[str]] = None) -> int:
         keep_every_nth_frame=arguments.keep_every_nth_frame,
     )
     run_dashboard(rehearsal.feed)
-    rclpy.init()
+    # rclpy's own signal handler would shut ROS down from a thread of its own on Ctrl+C,
+    # racing the shutdown below; without it the interruption reaches this command while
+    # ROS is still up, and the command alone shuts it down.
+    rclpy.init(signal_handler_options=SignalHandlerOptions.NO)
     try:
         report = rehearsal.run()
     finally:

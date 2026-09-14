@@ -15,6 +15,7 @@ from typing_extensions import Tuple
 
 from semantic_digital_twin.adapters.multi_sim import (
     GeomVisibilityAndCollisionType,
+    MujocoLight,
     MujocoSim,
     RegionAppearance,
 )
@@ -350,3 +351,24 @@ def test_asking_for_the_geoms_of_something_the_scene_has_no_body_for_says_so(
         scene.geoms_of(missing)
     assert raised.value.entity_name == missing.name.name
     assert raised.value.entity_type is mujoco.mjtObj.mjOBJ_BODY
+
+
+# %% drawing without shadows
+
+
+def test_a_scene_told_to_cast_no_shadows_has_no_light_casting_one(
+    world_with_a_region: World,
+) -> None:
+    """
+    A light casts shadows unless told otherwise, and a picture drawn without shadows
+    needs every light of the scene to stop, the world's own included.
+    """
+    world_with_a_region.root.simulator_additional_properties.append(
+        MujocoLight(name="stated_light", body=world_with_a_region.root)
+    )
+    scene = built_as(world_with_a_region, RegionAppearance.TRANSPARENT)
+    assert list(scene.simulator._mj_model.light_castshadow) == [1]
+
+    scene.cast_no_shadows()
+
+    assert list(scene.simulator._mj_model.light_castshadow) == [0]

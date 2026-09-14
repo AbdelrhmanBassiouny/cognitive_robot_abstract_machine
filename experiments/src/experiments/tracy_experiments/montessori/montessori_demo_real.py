@@ -1,10 +1,11 @@
 """
 The physical Tracy's left arm picks up every loose Montessori shape that has a matching
 hole and places it above that hole, with the real robot as the real robot: the same
-action sequence :mod:`~experiments.tracy_experiments.montessori.montessori_demo_mujoco` builds (see
-:func:`~experiments.tracy_experiments.montessori.montessori_actions.build_sorting_actions`), but
-from the real ``PickUpAction``/``PlaceAction`` (Giskard-driven, over ROS) instead of
-:mod:`~experiments.tracy_experiments.pick_and_place_action`'s MuJoCo-actuator pair.
+action sequence :mod:`~experiments.tracy_experiments.montessori.montessori_demo_mujoco`
+builds (see :func:`~experiments.tracy_experiments.montessori.montessori_actions.build_so
+rting_actions`), but from the real ``PickUpAction``/``PlaceAction`` (Giskard-driven,
+over ROS) instead of :mod:`~experiments.tracy_experiments.pick_and_place_action`'s
+MuJoCo-actuator pair.
 
 Wired the way :mod:`coraplex_real_tracy.demo` wires the physical robot: a Giskard
 standalone node is launched, the live world is fetched from a running ``WorldFetcher``
@@ -39,13 +40,11 @@ import logging
 import os
 import signal
 import subprocess
-import threading
 import time
 
 logging.basicConfig(level=logging.INFO, format="%(message)s")
 
 import rclpy
-from rclpy.executors import MultiThreadedExecutor
 
 from coraplex.datastructures.dataclasses import Context
 from coraplex.datastructures.enums import Arms, ExecutionType
@@ -56,6 +55,7 @@ from coraplex.robot_plans.actions.core.placing import PlaceAction
 from coraplex.robot_plans.actions.core.robot_body import ParkArmsAction
 from experiments.montessori.semantics import ShapeSortingBoard
 from experiments.tracy_experiments.equipment import table_top_z as read_table_top_z
+from experiments.tracy_experiments.live_tracy import EXECUTOR_THREAD_NAME, SpunNode
 from experiments.tracy_experiments.montessori.montessori_actions import (
     build_sorting_actions,
 )
@@ -68,6 +68,15 @@ from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.connections import FixedConnection
 
 logger = logging.getLogger(__name__)
+
+NODE_NAME = "tracy_montessori_demo_real"
+"""
+The name the demo's node registers under.
+
+Spun on one thread: every callback of the node -- the world fetch, the synchronizer,
+Giskard's action client -- is in its one mutually exclusive group, and rclpy's multi-
+threaded executor spins hot for as long as a callback it has handed out runs.
+"""
 
 TRACY_MOUNT_X = 0.0
 TRACY_MOUNT_Y = 0.0
@@ -88,8 +97,7 @@ def _attach_montessori_scene(
 ) -> ShapeSortingBoard:
     """
     Build the shape-sorting board and loose shapes in their own scratch world, then
-    merge that scene onto the live, already-mounted ``world`` at Tracy's own mount
-    pose.
+    merge that scene onto the live, already-mounted ``world`` at Tracy's own mount pose.
 
     :param world: The live, fetched world to attach the scene to, modified in place.
     :param mounted_table_top_z: Height of the live robot's own table top, read via
@@ -120,42 +128,38 @@ def main() -> None:
     time.sleep(8)  # Wait for the launch file to start
 
     rclpy.init()
-    node = rclpy.create_node("tracy_montessori_demo_real")
-    executor = MultiThreadedExecutor()
-    executor.add_node(node)
-    thread = threading.Thread(target=executor.spin, daemon=True, name="rclpy-executor")
-    thread.start()
-
     try:
-        # 300s matches giskardpy's own client (giskardpy/middleware/ros2/python_interface.py),
-        # which waits this long for the same race: the world-fetcher server is still
-        # parsing the URDF and starting up when the client's default 10s budget would
-        # otherwise expire.
-        world = fetch_world_from_service(node=node, timeout_seconds=300)
-        WorldSynchronizer(_world=world, node=node)
-        [robot] = world.get_semantic_annotations_by_type(Tracy)
+        with SpunNode.spun(NODE_NAME, EXECUTOR_THREAD_NAME) as spun:
+            node = spun.node
+            # 300s matches giskardpy's own client (giskardpy/middleware/ros2/python_interface.py),
+            # which waits this long for the same race: the world-fetcher server is still
+            # parsing the URDF and starting up when the client's default 10s budget would
+            # otherwise expire.
+            world = fetch_world_from_service(node=node, timeout_seconds=300)
+            WorldSynchronizer(_world=world, node=node)
+            [robot] = world.get_semantic_annotations_by_type(Tracy)
 
-        board = _attach_montessori_scene(world, read_table_top_z(robot))
+            board = _attach_montessori_scene(world, read_table_top_z(robot))
 
-        context = Context(
-            world=world, robot=robot, ros_node=node, evaluate_conditions=False
-        )
-        actions = [ParkArmsAction(Arms.BOTH)] + build_sorting_actions(
-            world,
-            board,
-            robot,
-            PICK_ARM,
-            pick_up_action=PickUpAction,
-            place_action=PlaceAction,
-        )
-        plan = sequential(actions, context=context).plan
+            context = Context(
+                world=world, robot=robot, ros_node=node, evaluate_conditions=False
+            )
+            actions = [ParkArmsAction(Arms.BOTH)] + build_sorting_actions(
+                world,
+                board,
+                robot,
+                PICK_ARM,
+                pick_up_action=PickUpAction,
+                place_action=PlaceAction,
+            )
+            plan = sequential(actions, context=context).plan
 
-        logger.info("Performing sorting plan on the real robot.")
-        with ExecutionEnvironment(
-            execution_type=ExecutionType.REAL, collision_avoidance=False
-        ):
-            plan.perform()
-        logger.info("Sorting plan finished.")
+            logger.info("Performing sorting plan on the real robot.")
+            with ExecutionEnvironment(
+                execution_type=ExecutionType.REAL, collision_avoidance=False
+            ):
+                plan.perform()
+            logger.info("Sorting plan finished.")
     finally:
         os.killpg(os.getpgid(giskard_process.pid), signal.SIGTERM)
         giskard_process.wait()

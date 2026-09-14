@@ -8,10 +8,15 @@ measured.
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
+from pathlib import Path
 
 import pytest
+from semantic_digital_twin.world import World
+from semantic_digital_twin.world_description.geometry import Mesh
 
+from experiments.episodes.artifacts import ARTIFACT_DIRECTORY_ENVIRONMENT_VARIABLE
 from experiments.episodes.episode import (
     Episode,
     InsertionAttempt,
@@ -20,11 +25,13 @@ from experiments.episodes.episode import (
     RecordedTrial,
 )
 from experiments.episodes.long_term_memory import (
+    KeptWorldCannotBeReadError,
     LongTermMemory,
     UnrecordedEpisodeError,
 )
 from experiments.episodes.recording import EpisodeRecording, open_recording
 from experiments.montessori.results_database import ResultsDatabase
+from experiments.montessori.world import MontessoriWorld
 from experiments.scenarios.report import GoalReached, Metric, Report, TrialDuration
 from experiments.scenarios.trial import TrialOutcome
 from giskardpy.motion_statechart.motion_statechart import MotionStatechart
@@ -167,6 +174,81 @@ def test_an_episode_the_database_does_not_hold_recalls_no_trial(results_database
     below that has to tell an unfound episode from one that measured nothing.
     """
     assert LongTermMemory(results_database).recall_trials("never recorded") == []
+
+
+# %% recalling past an episode whose kept world cannot be read back
+
+
+def mesh_files_of(world: World) -> list[Path]:
+    """
+    The files the meshes of the given world's bodies are read from.
+    """
+    return [
+        Path(shape.filename)
+        for body in world.bodies
+        for shape in [*body.visual, *body.collision]
+        if isinstance(shape, Mesh)
+    ]
+
+
+def test_an_episode_whose_kept_world_refers_to_a_mesh_that_is_gone_is_passed_over(
+    results_database, tmp_path, monkeypatch, caplog
+):
+    """
+    A kept world refers to its meshes by path, and reading one back loads every one of
+    them, so an episode whose mesh file is gone cannot be read back at all. The paper's
+    figures are regenerated from the whole database, so such an episode is passed over
+    with a warning rather than stopping every other episode's recall.
+    """
+    monkeypatch.setenv(ARTIFACT_DIRECTORY_ENVIRONMENT_VARIABLE, str(tmp_path))
+    unreadable = sorting_episode()
+    unreadable.world = MontessoriWorld(shapes_are_movable=True).world
+    readable = sorting_episode()
+    readable.world = MontessoriWorld(shapes_are_movable=True).world
+    record(
+        results_database,
+        succeeded_trial(unreadable, 1.0),
+        succeeded_trial(readable, 2.0),
+    )
+    gone = mesh_files_of(unreadable.world)[0]
+    assert gone not in mesh_files_of(readable.world)
+    gone.unlink()
+
+    with caplog.at_level(logging.WARNING):
+        trials = LongTermMemory(results_database).recall_every_readable_trial()
+
+    assert [trial.episode.identifier for trial in trials] == [readable.identifier]
+    assert caplog.messages == [
+        str(
+            KeptWorldCannotBeReadError(
+                episode_identifier=unreadable.identifier,
+                missing_mesh_files=[str(gone)],
+            )
+        )
+    ]
+
+
+def test_every_trial_is_recalled_when_every_kept_world_can_be_read(
+    results_database, tmp_path, monkeypatch
+):
+    """
+    Passing over is for the episode that cannot be read; the readable trials are the
+    same ones an ordinary recall returns.
+    """
+    monkeypatch.setenv(ARTIFACT_DIRECTORY_ENVIRONMENT_VARIABLE, str(tmp_path))
+    with_a_world = sorting_episode()
+    with_a_world.world = MontessoriWorld(shapes_are_movable=True).world
+    record(
+        results_database,
+        succeeded_trial(with_a_world, 1.0),
+        succeeded_trial(sorting_episode(), 2.0),
+    )
+
+    memory = LongTermMemory(results_database)
+
+    assert [trial.duration for trial in memory.recall_every_readable_trial()] == [
+        trial.duration for trial in memory.recall_every_trial()
+    ]
 
 
 # %% asking the history a question of one's own

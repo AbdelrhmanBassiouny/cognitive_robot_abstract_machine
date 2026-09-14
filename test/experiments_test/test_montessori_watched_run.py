@@ -17,7 +17,7 @@ from giskardpy.motion_statechart.graph_node import Task
 from giskardpy.motion_statechart.motion_statechart import MotionStatechart
 from krrood.ormatic.data_access_objects.helper import to_dao
 from giskardpy.motion_statechart.data_types import LifeCycleValues
-from segmind.datastructures.events import DetectionEvent
+from segmind.datastructures.events import DetectionEvent, TranslationEvent
 from semantic_digital_twin.adapters.mujoco_video_recording import RecordedVideo
 from semantic_digital_twin.adapters.world_entity_kwargs_tracker import (
     WorldEntityWithIDKwargsTracker,
@@ -627,6 +627,28 @@ def a_look_at_a_shoved_piece() -> ALookAtTheScene:
     return looked_at(
         shoved(MontessoriShapeCategory.CUBE),
         LayoutArea.on_the_table_beside_the_board(),
+    )
+
+
+def test_a_shoved_piece_is_recorded_as_moved_and_seen_translating_after_the_shove(
+    a_look_at_a_shoved_piece: ALookAtTheScene,
+):
+    """
+    The run records what the shove moved and when, and its monitor sees that piece
+    translate from then on, which is what tells the shove apart from the robot's own
+    motions.
+    """
+    cube = a_look_at_a_shoved_piece.scene.body_of(MontessoriShapeCategory.CUBE)
+    trial = a_look_at_a_shoved_piece.trial
+
+    [moved] = trial.moved_by_someone_else
+
+    assert moved.things_moved == [cube.name]
+    assert any(
+        isinstance(event, TranslationEvent) and event.tracked_object.name == cube.name
+        for tick in trial.ticks
+        if tick.moment >= moved.moment
+        for event in tick.events
     )
 
 

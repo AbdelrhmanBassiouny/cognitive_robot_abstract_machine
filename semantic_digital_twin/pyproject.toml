@@ -51,6 +51,7 @@ dependencies = [
     "coacd",
     "pymysql",
     "pyglet==1.5.31",
+    "pyrender",
     "pycollada",
     "psycopg",
     "plyfile",

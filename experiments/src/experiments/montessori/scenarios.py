@@ -91,6 +91,7 @@ from experiments.montessori.perception.simulated_camera import SimulatedCamera
 from experiments.montessori.perception.simulated_setup import (
     camera_over_the_table,
     perception_pipeline,
+    table_surface,
 )
 from experiments.montessori.pieces import (
     FULL_SIZE_PIECES,
@@ -113,6 +114,7 @@ from experiments.montessori.world import (
     MontessoriWorld,
 )
 from experiments.questions.question import (
+    HOW_FAR_A_PLACE_MAY_DIFFER,
     PlacedObject,
     SceneAsSetUp,
     objects_of_the_scene,
@@ -1012,6 +1014,21 @@ class SortingScene:
             <= placement.piece.radius * UNDISTURBED_FRACTION_OF_A_PIECE
         )
 
+    def board_stands_at(self, place: Point3) -> bool:
+        """
+        Whether the board still stands where it stood, to within how far a place may
+        differ and still be the same place.
+
+        :param place: Where the board stood, in the world root frame.
+        """
+        position = self.board.root.global_transform.to_position()
+        return (
+            math.hypot(
+                float(position.x) - float(place.x), float(position.y) - float(place.y)
+            )
+            <= HOW_FAR_A_PLACE_MAY_DIFFER
+        )
+
 
 RELEASE_HEIGHT_ABOVE_THE_HOLE = 0.02
 """
@@ -1114,22 +1131,6 @@ it happened.
 VIDEO_RESOLUTION = VideoResolution(width=640, height=480)
 """
 How large a filmed run's frames are, in pixels.
-"""
-
-TABLE_BOUNDS = (
-    (
-        float(TABLE_POSITION.x) - TABLE_SCALE.x / 2,
-        float(TABLE_POSITION.y) - TABLE_SCALE.y / 2,
-        float(TABLE_POSITION.z) - TABLE_SCALE.z / 2,
-    ),
-    (
-        float(TABLE_POSITION.x) + TABLE_SCALE.x / 2,
-        float(TABLE_POSITION.y) + TABLE_SCALE.y / 2,
-        float(TABLE_POSITION.z) + TABLE_SCALE.z / 2,
-    ),
-)
-"""
-The lowest and highest corner of the Montessori table, in the world root frame.
 """
 
 SCENE_CAMERA_NAME = "the camera a run is filmed by"
@@ -1285,13 +1286,15 @@ class SceneRecording:
 
     def _camera_watching_the_scene(self) -> MujocoCamera:
         """
-        A camera framing the table everything a run does is done on, attached to the
-        world's root.
+        A camera framing the top of the table everything a run does is done on,
+        attached to the world's root.
 
-        The table rather than the whole world, which also holds a floor reaching far
-        past anything a run touches.
+        The table the world itself holds, since which table that is depends on the
+        scene -- the package's own, or the one a robot carries -- and its top rather
+        than the whole world, which also holds a floor reaching far past anything a run
+        touches.
         """
-        watches_from = MujocoCamera.overview_pose(numpy.asarray(TABLE_BOUNDS))
+        watches_from = MujocoCamera.overview_pose(table_surface(self.world).corners)
         quaternion = watches_from.to_quaternion().to_np().tolist()
         camera = MujocoCamera(
             name=SCENE_CAMERA_NAME,
@@ -1670,10 +1673,10 @@ class PutThePieceInItsHole(HaveTheRobotAct):
     Nothing puts the piece through the hole: the gripper opens above it and gravity does
     the rest, so a piece that does not fit does not go in.
 
-    Carrying the piece is the one stretch of a run that cannot be simulated: a held
-    piece hangs off the gripper on the free connection it stood on the table with, and
-    a body on a free connection has to be a top-level one for MuJoCo to compile the
-    scene at all. The scene is taken up again once the piece has been let go of.
+    Carrying the piece is the one stretch of a run that is not simulated: a held piece
+    hangs off the gripper on the free connection it stood on the table with, which a
+    scene builds fixed to the gripper, so a scene built then could not let it slip. The
+    scene is taken up again once the piece has been let go of.
     """
 
     category: MontessoriShapeCategory
@@ -1800,7 +1803,8 @@ class LookAtTheScene(ScenePhysicsStep):
 @dataclass(eq=False)
 class TheSceneIsUndisturbed(Goal[World]):
     """
-    Success is every piece still standing where the layout put it.
+    Success is every piece still standing where the layout put it, and the board still
+    standing where it stood.
     """
 
     layout: PieceLayout
@@ -1808,8 +1812,18 @@ class TheSceneIsUndisturbed(Goal[World]):
     Where the pieces were put.
     """
 
+    board_stood_at: Optional[Point3] = field(default=None, kw_only=True)
+    """
+    Where the board stood when the trial began, in the world root frame, or None where
+    nothing says, which leaves the board out of the comparison.
+    """
+
     def __call__(self) -> bool:
         scene = SortingScene(self.world)
+        if self.board_stood_at is not None and not scene.board_stands_at(
+            self.board_stood_at
+        ):
+            return False
         return all(
             scene.stands_at(placement.piece.category, placement)
             for placement in self.layout.placements
@@ -2437,6 +2451,12 @@ class MontessoriSortingScenario(
     before one has been.
     """
 
+    _starting_board_place: Optional[Point3] = field(init=False, default=None)
+    """
+    Where the board stood when the world built most recently was built, or None before
+    one has been.
+    """
+
     def __post_init__(self) -> None:
         if self.execution_type is not ExecutionType.REAL:
             return
@@ -2470,11 +2490,27 @@ class MontessoriSortingScenario(
             raise SceneNotBuiltYet(scenario_name=self.name)
         return self._starting_layout
 
+    @property
+    def starting_board_place(self) -> Point3:
+        """
+        Where the board stood when the trial in the world built most recently began, in
+        the world root frame, which is what a goal asking whether the scene changed
+        compares against.
+
+        :raises SceneNotBuiltYet: Before any world has been built.
+        """
+        if self._starting_board_place is None:
+            raise SceneNotBuiltYet(scenario_name=self.name)
+        return self._starting_board_place
+
     def build_world(self) -> World:
         if self.physics is not None:
             self.physics.stop()
         world = self.world_builder.build(self.robot_type)
         self._starting_layout = self.layout.stand_in(world, self.world_builder)
+        self._starting_board_place = SortingScene(
+            world
+        ).board.root.global_transform.to_position()
         self.add_what_the_script_acts_with(world)
         world.update_forward_kinematics()
         self.physics = self._physics_carrying(world)
@@ -2553,7 +2589,11 @@ class TheSceneStandsStill(
 
         :param world: The world the trial is running in.
         """
-        return TheSceneIsUndisturbed(world=world, layout=self.starting_layout)
+        return TheSceneIsUndisturbed(
+            world=world,
+            layout=self.starting_layout,
+            board_stood_at=self.starting_board_place,
+        )
 
     def steps(self, world: World) -> Sequence[ScenarioStep[World]]:
         return [
@@ -2749,7 +2789,11 @@ class RobotLooksAtTheScene(
 
         :param world: The world the trial is running in.
         """
-        return TheSceneIsUndisturbed(world=world, layout=self.starting_layout)
+        return TheSceneIsUndisturbed(
+            world=world,
+            layout=self.starting_layout,
+            board_stood_at=self.starting_board_place,
+        )
 
     def steps(self, world: World) -> Sequence[ScenarioStep[World]]:
         return [
