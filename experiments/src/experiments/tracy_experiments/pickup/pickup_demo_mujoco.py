@@ -59,7 +59,6 @@ from experiments.montessori.event_monitoring import (
     build_shape_monitor_in_scene,
 )
 from experiments.montessori.perception.camera import RgbdFrame
-from experiments.montessori.perception.captures import SceneCapture
 from experiments.montessori.perception.detections import MontessoriScene
 from experiments.montessori.perception.overlay import CameraView, DetectionOverlay
 from experiments.montessori.perception.pipeline import MontessoriPerceptionPipeline
@@ -67,15 +66,7 @@ from experiments.montessori.perception.recorded_setup import lab_board
 from experiments.montessori.perception.scene_request import SceneRequest
 from experiments.montessori.perception.scene_publishing import PerceivedScene
 from experiments.montessori.perception.scene_source import RepeatedLook
-from experiments.montessori.perception.simulated_camera import (
-    CAMERA_T_OPTICAL,
-    SimulatedCamera,
-)
-from experiments.montessori.perception.simulated_setup import (
-    CAMERA_FIELD_OF_VIEW,
-    CAMERA_PICTURE_HEIGHT,
-    CAMERA_PICTURE_WIDTH,
-)
+from experiments.montessori.perception.simulated_camera import SimulatedCamera
 from experiments.montessori.pieces import SMALLER_PIECES, KnownPieceSet
 from experiments.montessori.planar_geometry import PlanarPoint
 from experiments.montessori.semantics import MontessoriShape, MontessoriShapeCategory
@@ -83,6 +74,12 @@ from experiments.montessori.world import BOARD_SCALE, solid_lid_away_from
 from experiments.questions.question import QuestionedThings, SceneAsSetUp
 from experiments.questions.question_set import QuestionSet
 from experiments.scenarios.trial import TrialOutcome
+from experiments.tracy_experiments.camera import (
+    CAMERA_CALIBRATION_CAPTURE,
+    CAMERA_LINK_NAME,
+    CAMERA_NAME,
+    camera_on_tracy,
+)
 from experiments.tracy_experiments.equipment import (
     TRACY_MOUNT_ROOT_NAME,
     apply_gravity_compensation,
@@ -222,26 +219,6 @@ Where each piece starts: the tape's own row for every piece but the cube, which 
 on the lid (see :data:`CUBE_STARTS_ON_THE_LID`).
 """
 
-# %% the camera on Tracy's camera link
-
-CAMERA_NAME = "tracy_camera"
-"""
-What the simulated camera is called.
-"""
-
-CAMERA_LINK_NAME = "camera_link"
-"""
-The body of Tracy's description the camera hangs on.
-"""
-
-CAMERA_CALIBRATION_CAPTURE = "tracy_pickup_demo"
-"""
-The capture whose record of where the camera stood the simulated camera is stood by.
-
-All eight shipped captures agree on that pose to a ten-millionth of a metre, so any one
-of them says it; this is the one taken of the run this scene simulates.
-"""
-
 OVERVIEW_VIDEO_RESOLUTION = VideoResolution(width=960, height=540)
 """
 The size of the film of the whole table.
@@ -357,53 +334,6 @@ def camera_looking_at(
         resolution=[float(resolution.width), float(resolution.height)],
     )
     world.root.simulator_additional_properties.append(camera)
-    return camera
-
-
-def camera_link_T_optical(world: World) -> np.ndarray:
-    """
-    Where the colour camera's optical frame stands on the ``camera_link`` of the
-    description ``world`` was built from.
-
-    A capture records where the camera stood in Tracy's own frame, which is the same
-    wherever ``camera_link`` is said to be; how far the optical frame lies from that
-    link is what differs between one calibration of the description and the next, so it
-    is worked out against the description at hand rather than stated.
-
-    :param world: The world holding Tracy.
-    :return: The offset as a 4x4 homogeneous transformation.
-    """
-    tracy_root = world.get_body_by_name(TRACY_MOUNT_ROOT_NAME)
-    camera_link = world.get_body_by_name(CAMERA_LINK_NAME)
-    root_T_link = world.compute_forward_kinematics_np(tracy_root, camera_link)
-    root_T_optical = SceneCapture.load(
-        CAMERA_CALIBRATION_CAPTURE
-    ).reference_frame_T_camera
-    return np.linalg.inv(root_T_link) @ root_T_optical
-
-
-def camera_on_tracy(world: World) -> MujocoCamera:
-    """
-    Hang the camera on Tracy's ``camera_link``, where the real one stands, looking the
-    way it looks and seeing as wide as it sees.
-
-    :param world: The world holding Tracy.
-    :return: The camera, attached to the link.
-    """
-    camera_link = world.get_body_by_name(CAMERA_LINK_NAME)
-    link_T_camera = camera_link_T_optical(world) @ np.linalg.inv(CAMERA_T_OPTICAL)
-    x, y, z, real = (
-        HomogeneousTransformationMatrix(link_T_camera).to_quaternion().to_np().tolist()
-    )
-    camera = MujocoCamera(
-        name=CAMERA_NAME,
-        body=camera_link,
-        position=link_T_camera[:3, 3].tolist(),
-        quaternion=[real, x, y, z],
-        fovy=CAMERA_FIELD_OF_VIEW,
-        resolution=[float(CAMERA_PICTURE_WIDTH), float(CAMERA_PICTURE_HEIGHT)],
-    )
-    camera_link.simulator_additional_properties.append(camera)
     return camera
 
 

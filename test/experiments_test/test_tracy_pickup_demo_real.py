@@ -16,10 +16,11 @@ import pytest
 from coraplex.datastructures.dataclasses import Context
 from coraplex.datastructures.enums import Arms, ExecutionType
 from giskardpy.motion_statechart.motion_statechart import MotionStatechart
-from segmind.datastructures.events import PickUpEvent
+from segmind.datastructures.events import PickUpEvent, TranslationEvent
 
 from experiments.episodes.artifacts import (
     ARTIFACT_DIRECTORY_ENVIRONMENT_VARIABLE,
+    ArtifactDirectory,
     RunFile,
     Transcript,
 )
@@ -54,12 +55,14 @@ from experiments.tracy_experiments.pickup.pickup_demo_real import (
     PICK_ARM,
     SCENARIO_NAME,
     DemoOption,
+    PickupDemo,
     PieceNotSeenError,
     SortingTrial,
     _grasp_target_pose,
     _parse_arguments,
     _reach_action_for,
     _SortingRig,
+    database_asked_for,
     keep_the_episode,
     main,
     outcome_of,
@@ -77,6 +80,7 @@ from semantic_digital_twin.world_description.connections import FixedConnection
 from semantic_digital_twin.world_description.world_entity import Body
 
 from .test_episode_artifacts import a_bag
+from .test_tracy_montessori_scene_builder import HOW_SOON_A_TRIAL_IS_TRACED
 from .test_episode_recording import (
     UNREACHABLE_URI,
     finished_trial,
@@ -619,6 +623,41 @@ def test_the_bag_is_kept_where_a_reader_of_the_episode_looks_for_it(
     )
 
 
+# %% a run that keeps no episode
+
+
+def test_a_run_keeps_its_episode_unless_told_not_to():
+    assert _parse_arguments([]).no_episode is False
+    assert _parse_arguments([DemoOption.NO_EPISODE]).no_episode is True
+
+
+def test_a_run_that_keeps_no_episode_needs_no_database():
+    """
+    A database is checked before the robot moves only because the episode is recorded to
+    it, so a run keeping none is not refused for one it cannot reach.
+    """
+    arguments = _parse_arguments(
+        [DemoOption.NO_EPISODE, DemoOption.DATABASE_URI, UNREACHABLE_URI]
+    )
+
+    assert database_asked_for(arguments) is None
+
+
+def test_a_run_that_keeps_no_episode_writes_nothing(tmp_path):
+    artifact_directory = ArtifactDirectory(path=tmp_path / "artifacts")
+    demo = PickupDemo(
+        tracy=None,
+        person=AbsentPerson(),
+        database=None,
+        artifact_directory=artifact_directory,
+    )
+
+    kept = demo.keep(finished_trial(sorting_episode()), JointTrace(), a_bag(tmp_path))
+
+    assert kept is None
+    assert not artifact_directory.path.exists()
+
+
 # %% the perturbation the command line asks for
 
 
@@ -789,6 +828,81 @@ def test_the_person_brings_the_perturbation_about_and_the_trial_records_it():
     assert recorded.instructions_carried_out == [instruction]
     assert trial.sorting.looks_taken == 1
     assert trial.sorting.sorted
+
+
+@dataclass
+class LookedAndFoundWhatWasShoved(LookedAndFound):
+    """
+    Stands in for a run whose second look finds what the person at the table moved where
+    they moved it.
+    """
+
+    world: World = None
+    """
+    The world the look stands what it found in.
+    """
+
+    shove: object = None
+    """
+    What the person did, which the look finds done.
+    """
+
+    def perceive(self) -> None:
+        super().perceive()
+        self.shove.apply(self.world)
+
+
+def test_the_piece_the_person_shoves_is_watched_and_recorded_as_moved_by_them():
+    """
+    Nothing of the robot moves while the person acts, so the piece they were told to
+    move is watched from before they act until the camera has found it again, and the
+    trial keeps what they moved and when.
+    """
+    found = ATableTheCameraFound.looked_at()
+    shoved = found.pieces_standing[0]
+    perturbation = perturbation_asked_for(PerturbationChoice.PIECE_SHOVED, shoved)
+    piece = SortingScene(found.world).body_of(shoved)
+    sorting = sorting_over(found.world)
+    trial = SortingTrial(
+        rig=rig_over(found.world),
+        sorting=LookedAndFoundWhatWasShoved(
+            pieces=sorting.pieces,
+            board=sorting.board,
+            world=found.world,
+            shove=perturbation,
+        ),
+        person=AbsentPerson(),
+        asked_about=shoved,
+        perturbation=perturbation,
+    )
+
+    trial.begin()
+    trial.perform()
+    recorded = trial.finish(trial.episode())
+
+    [moved] = recorded.moved_by_someone_else
+    assert moved.things_moved == [piece.name]
+    assert any(
+        isinstance(event, TranslationEvent) and event.tracked_object is piece
+        for tick in recorded.ticks
+        if tick.moment >= moved.moment
+        for event in tick.events
+    )
+
+
+def test_a_trial_in_which_nothing_moves_still_traces_where_the_joints_stood():
+    """
+    A still robot changes no joint, so the trace is read once as the trial begins, and a
+    trial that moves nothing keeps where the robot stood.
+    """
+    found = ATableTheCameraFound.looked_at()
+    trial = trial_over(found, AbsentPerson())
+
+    trial.begin()
+    trial.finish(trial.episode())
+
+    [moment] = trial.joints.trace.moments
+    assert moment == pytest.approx(0.0, abs=HOW_SOON_A_TRIAL_IS_TRACED)
 
 
 def test_an_unperturbed_trial_tells_the_person_nothing_and_looks_no_further():

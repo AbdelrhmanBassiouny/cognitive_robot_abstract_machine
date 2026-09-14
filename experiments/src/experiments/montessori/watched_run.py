@@ -208,10 +208,16 @@ class WatchedSortingRun(EpisodeRecording[MontessoriSortingScenario, World]):
         :param perturbations: The changes due to be applied to this trial's world.
         """
         super().trial_started(scenario, world, perturbations)
+        self._stop_watching()
+        self.joints = JointTraceRecorder(
+            _world=world, clock=lambda: self.observer.elapsed_seconds
+        )
+        # A still robot changes no joint, so where the joints stand is read once here,
+        # as the trial's clock starts, or a trial that moves nothing would keep no trace.
+        self.joints.trace.sample(world, self.observer.elapsed_seconds)
         self.pieces_acted_on = set()
         self.stated_scene = self.scene_as_set_up(scenario, world)
         scenario.motion_listener = ObserverMotionListener(observer=self.observer)
-        self._stop_watching()
         scene = SortingScene(world)
         self.watched_piece = self.watched_category(scenario, perturbations)
         self.monitor = build_shape_monitor_in_scene(
@@ -220,9 +226,6 @@ class WatchedSortingRun(EpisodeRecording[MontessoriSortingScenario, World]):
             listener=ObserverListener(observer=self.observer),
         )
         self.monitor.start()
-        self.joints = JointTraceRecorder(
-            _world=world, clock=lambda: self.observer.elapsed_seconds
-        )
 
     def perform_step(
         self,
@@ -269,9 +272,9 @@ class WatchedSortingRun(EpisodeRecording[MontessoriSortingScenario, World]):
         world: World,
     ) -> None:
         """
-        Bring the perturbation about, note which pieces it acted on, keep the
-        instruction it states with the trial, and stop saying where anything it moved
-        stands.
+        Keep the instruction the perturbation states with the trial, with what it moves
+        and when, bring it about, note which pieces it acted on, and stop saying where
+        anything it moved stands.
 
         The run is the only thing that sees both a perturbation and a look, so it is
         where what the robot ought to have been wrong about is known. What someone else
@@ -282,12 +285,17 @@ class WatchedSortingRun(EpisodeRecording[MontessoriSortingScenario, World]):
         :param perturbation: The perturbation due at the step about to be performed.
         :param world: The world the trial is running in.
         """
+        things_moved = perturbation.things_moved(SortingScene(world))
+        self.observer.carried_out(
+            perturbation.instruction_for_a_person(),
+            self.observer.elapsed_seconds,
+            things_moved,
+        )
         super().apply_perturbation(scenario, perturbation, world)
         self.pieces_acted_on.update(perturbation.pieces_acted_on)
-        self.observer.carried_out(perturbation.instruction_for_a_person())
         if self.stated_scene is None:
             return
-        for moved in perturbation.things_moved(SortingScene(world)):
+        for moved in things_moved:
             self.stated_scene.forget_where(moved)
 
     def belief_questions(self, step: LookAtTheScene, world: World) -> QuestionSet:

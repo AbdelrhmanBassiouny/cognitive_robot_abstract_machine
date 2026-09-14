@@ -41,7 +41,7 @@ import threading
 import time
 from dataclasses import dataclass, field
 
-from typing_extensions import List, Optional
+from typing_extensions import List, Optional, Sequence
 
 from coraplex.datastructures.enums import Arms
 from experiments.montessori.semantics import MontessoriShape, ShapeSortingBoard
@@ -145,6 +145,29 @@ def build_pick_monitor(
         StopLiftDetector(tracked_object=tracked_body),
         PickUpDetector(tracked_object=tracked_body),
         PlacingDetector(tracked_object=tracked_body),
+    ]
+    return MontessoriEventMonitor(world=world, detectors=detectors)
+
+
+def build_translation_monitor(
+    *, world: World, tracked_bodies: Sequence[Body]
+) -> MontessoriEventMonitor:
+    """
+    Build a :class:`MontessoriEventMonitor` seeing only whether the given bodies change
+    place: where each one rests, and a translation of it from there.
+
+    Needs no robot, since nothing it watches for involves a gripper.
+
+    :param world: The live world the detectors tick against.
+    :param tracked_bodies: The bodies watched.
+    """
+    detectors = [
+        detector
+        for tracked_body in tracked_bodies
+        for detector in (
+            TranslationDetector(tracked_object=tracked_body),
+            StopTranslationDetector(tracked_object=tracked_body),
+        )
     ]
     return MontessoriEventMonitor(world=world, detectors=detectors)
 

@@ -200,15 +200,15 @@ def test_the_rehearsed_episode_is_checked_again_by_the_printed_command(
 
 def test_the_person_is_asked_to_bring_the_perturbation_about(rehearsed_with_a_shove):
     """
-    The trial records the instruction, and the check passes the perturbation: the
-    sorting moves every piece itself, so a shove the camera does not show is not told
-    apart from it.
+    The trial records the instruction, and the check warns: the camera shows the same
+    capture after the person was asked, so what they were to move is never seen to move
+    before the sorting starts.
     """
     rehearsal, report = rehearsed_with_a_shove
 
     assert rehearsal.perturbation.instruction_for_a_person() in rehearsal.person.asked
     finding = finding_of(report, Check.PERTURBATION)
-    assert finding.verdict is Verdict.PASSED, report.render()
+    assert finding.verdict is Verdict.WARNING, report.render()
     assert type(rehearsal.perturbation).__name__ in finding.detail
 
 
