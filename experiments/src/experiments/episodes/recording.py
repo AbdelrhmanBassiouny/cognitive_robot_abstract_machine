@@ -15,7 +15,7 @@ from dataclasses import dataclass, field
 from krrood.ormatic.data_access_objects.helper import to_dao
 from krrood.ormatic.data_access_objects.to_dao import ToDataAccessObjectState
 from sqlalchemy.orm import Session
-from typing_extensions import TYPE_CHECKING, List, Optional, Protocol
+from typing_extensions import TYPE_CHECKING, List, Optional, Protocol, Sequence
 
 from experiments.episodes.artifacts import EpisodeArtifacts, Transcript, keep_meshes_of
 from experiments.episodes.episode import Episode, RecordedTrial
@@ -29,7 +29,7 @@ from experiments.montessori.results_database import (
     verify_writable,
 )
 from experiments.scenarios.runner import ScenarioRunner, ScenarioType
-from experiments.scenarios.scenario import WorldType
+from experiments.scenarios.scenario import Perturbation, WorldType
 
 if TYPE_CHECKING:
     from semantic_digital_twin.adapters.mujoco_video_recording import RecordedVideo
@@ -200,13 +200,19 @@ class EpisodeRecording(ScenarioRunner[ScenarioType, WorldType]):
     The video of every filmed trial so far, as one video, or None before the first.
     """
 
-    def trial_started(self, scenario: ScenarioType, world: WorldType) -> None:
+    def trial_started(
+        self,
+        scenario: ScenarioType,
+        world: WorldType,
+        perturbations: Sequence[Perturbation[WorldType]],
+    ) -> None:
         """
         Keep the world the trial runs in as the episode's, and start the observer's
         clock with the trial, so its moments and the trial's agree.
 
         :param scenario: The scenario the trial runs.
         :param world: The world the trial is about to run in.
+        :param perturbations: The changes due to be applied to this trial's world.
         """
         self.episode.world = world
         self.observer.restart()
