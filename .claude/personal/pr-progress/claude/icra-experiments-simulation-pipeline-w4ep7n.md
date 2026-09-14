@@ -243,7 +243,9 @@ DoF, event against the plan; side-of-another-object not asked by that run). Sile
 break fixed `269a35a911`: `FramesByMoment.write` is abstract here (7f5e9376dd), #356's
 `TwinFrames` had none -> TypeError on every twin camera panel; `TwinFrames.write` + 2 tests
 (frames-around module 19 passed). Scene panels of the rehearsed episode hide the pieces
-behind the arm -- to report, not fixed. Next: card/scene/ask/camera + MuJoCo demo module
-reruns, push (merge + fix), #265 section (draft in session scratchpad), then items 5-8;
-item 9 is a re-recording, the developer's to run.
+behind the arm -- to report, not fixed. Merge suite 144 passed (4 failed = the TwinFrames
+break, before the fix); fixed-tree rerun 84 passed. Pushed (`269a35a911`), #265 still draft,
+section "Merged 2026-09-14 (afternoon)" added. The only REAL episodes with a world in the
+lasting database are the three unreadable ones, so the `tracy_mount` camera hazard waits
+for the re-recording. Next: items 5-8; item 9 is a re-recording, the developer's to run.
 
