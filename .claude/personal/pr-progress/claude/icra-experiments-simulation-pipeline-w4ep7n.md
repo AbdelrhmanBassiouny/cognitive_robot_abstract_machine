@@ -247,5 +247,18 @@ behind the arm -- to report, not fixed. Merge suite 144 passed (4 failed = the T
 break, before the fix); fixed-tree rerun 84 passed. Pushed (`269a35a911`), #265 still draft,
 section "Merged 2026-09-14 (afternoon)" added. The only REAL episodes with a world in the
 lasting database are the three unreadable ones, so the `tracy_mount` camera hazard waits
-for the re-recording. Next: items 5-8; item 9 is a re-recording, the developer's to run.
+for the re-recording.
+
+**Item 5 in progress (developer chose "record it, then check").** Found: the record never
+said which piece a perturbation acted on or when, and in the pickup demo no monitor ran
+while the person acted (monitors start inside each sort; the shove comes after the park
+plan). Built (uncommitted): `MovedBySomeoneElse(moment, things_moved)` on `RecordedTrial`
+(schema change, ORM regenerated, never tracked); `EpisodeObserver.carried_out(instruction,
+moment, things_moved)`; watched run records it before bringing the perturbation about;
+pickup demo records it before the person acts and `_SortingRig.watching(things)` ticks a
+`build_translation_monitor` before the person acts and after the look; audit
+`TrialRecord.noticed_what_someone_else_moved` = a TranslationEvent of what was moved
+between the instruction and the next plan start (falls back to AnythingMoved where no
+move was recorded, so old episodes and existing tests read as before). Tests: 2 observer,
+2 audit, 1 watched run, 1 demo. Then items 6-8; item 9 is a re-recording, the developer's.
 
