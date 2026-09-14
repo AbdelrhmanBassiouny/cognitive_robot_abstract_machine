@@ -34,6 +34,8 @@ Plan:
       robot row stacks tracy_picking_up.png above tracy_inserting.png. last_hold gives the
       pick-up; SHORTEST_OPENING (0.2 s) ignores the one open misreading at 36.81 s in the bag.
       12 bag-frame tests pass.
+- [x] 4851615aad: panel 1 uses only rectified pictures (0/1/2_rectified + answer; the camera
+      pictures are untracked now); the acting pictures' space is 7.2x4.3 cm (figure +0.8 cm tall)
 - [ ] user reruns framework_demo real --record; not done: narrowing as DB rows
 - still open elsewhere: #379 pickup rerun; framework figure frames/cards after a good run;
   cube-evidence feature follow-on (worktree ~/bass/cram-board-by-the-cube)
