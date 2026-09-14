@@ -8,19 +8,26 @@ what was recorded rather than from what is still in the process that recorded it
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass, field
+from pathlib import Path
 
 from krrood.entity_query_language.factories import an, entity, variable
 from krrood.entity_query_language.query.query import Query
 from krrood.exceptions import DataclassException
 from krrood.ormatic.data_access_objects.from_dao import FromDataAccessObjectState
 from krrood.ormatic.eql_interface import eql_to_sql
-from typing_extensions import Any, List, Optional, Sequence
+from typing_extensions import TYPE_CHECKING, Any, Iterable, List, Optional, Sequence
 
 from experiments.episodes.episode import RecordedTrial
 from experiments.experiment_definitions import DEFAULT_CONFIDENCE_LEVEL
 from experiments.montessori.results_database import ResultsDatabase
 from experiments.scenarios.report import Metric, Report
+
+if TYPE_CHECKING:
+    from semantic_digital_twin.orm.ormatic_interface import WorldMappingDAO
+
+logger = logging.getLogger(__name__)
 
 # %% asking after an episode that is not there
 
@@ -45,6 +52,71 @@ class UnrecordedEpisodeError(DataclassException):
             "recorded to this database rather than falling back to one in memory "
             "because this one could not be reached."
         )
+
+
+# %% an episode whose kept world cannot be read back
+
+
+@dataclass
+class KeptWorldCannotBeReadError(DataclassException):
+    """
+    Raised for an episode whose kept world refers to mesh files that are no longer there.
+
+    A kept world refers to its meshes by path, and reading it back loads every one of
+    them, so one missing file makes the whole episode unreadable.
+    """
+
+    episode_identifier: str
+    """
+    The episode whose world it is.
+    """
+
+    missing_mesh_files: List[str]
+    """
+    The files the world refers to that are not there.
+    """
+
+    def error_message(self) -> str:
+        return (
+            "The kept world of episode %s refers to %d mesh file(s) that are gone, "
+            "%s among them."
+            % (
+                self.episode_identifier,
+                len(self.missing_mesh_files),
+                self.missing_mesh_files[0],
+            )
+        )
+
+    def suggest_correction(self) -> str:
+        return (
+            "A mesh a recorded world refers to must be exported where it outlives the "
+            "process that wrote it (experiments.episodes.artifacts.keep_mesh); an "
+            "episode recorded otherwise cannot be read back and needs its rows removed."
+        )
+
+
+def missing_mesh_files_of(world: Optional[WorldMappingDAO]) -> List[str]:
+    """
+    The mesh files a stored world refers to that are not there.
+
+    :param world: The world as stored, or none if the episode kept no world.
+    :return: Each missing file's path, in the order the world's bodies refer to them.
+    """
+    from semantic_digital_twin.orm.ormatic_interface import BodyDAO, MeshDAO
+
+    if world is None:
+        return []
+    missing: List[str] = []
+    for held in world.kinematic_structure_entities:
+        if not isinstance(held.target, BodyDAO):
+            continue
+        for collection in (held.target.visual, held.target.collision):
+            for shape in collection.shapes:
+                if not isinstance(shape.target, MeshDAO):
+                    continue
+                if not Path(shape.target.filename).is_file():
+                    missing.append(shape.target.filename)
+    return missing
 
 
 # %% the memory itself
@@ -77,9 +149,19 @@ class LongTermMemory:
         :return: The domain objects the query selected.
         """
         with self.results_database.open_session() as session:
-            rows = eql_to_sql(question, session).evaluate()
-            conversion_state = FromDataAccessObjectState()
-            return [row.from_dao(conversion_state) for row in rows]
+            return self._as_domain_objects(eql_to_sql(question, session).evaluate())
+
+    @staticmethod
+    def _as_domain_objects(rows: Iterable[Any]) -> List[Any]:
+        """
+        Convert the given rows to the domain objects they store, through one conversion
+        state.
+
+        :param rows: The rows a query evaluated to, within the session that read them.
+        :return: Their domain objects, in the rows' order.
+        """
+        conversion_state = FromDataAccessObjectState()
+        return [row.from_dao(conversion_state) for row in rows]
 
     def answer_with_identifiers(self, question: Query) -> List[str]:
         """
@@ -119,6 +201,37 @@ class LongTermMemory:
         """
         trial = variable(type_=RecordedTrial, domain=[])
         return self.answer(an(entity(trial)))
+
+    def recall_every_readable_trial(self) -> List[RecordedTrial]:
+        """
+        Every trial the database holds whose episode's kept world can be read back.
+
+        An episode whose kept world refers to a mesh file that is gone cannot be read
+        back at all and would stop the recall of every other; it is passed over with a
+        warning instead, so the paper's figures are still made of the rest of the corpus.
+
+        :return: Every readable trial, in whatever order the database returns them.
+        """
+        trial = variable(type_=RecordedTrial, domain=[])
+        with self.results_database.open_session() as session:
+            readable = []
+            passed_over: set[str] = set()
+            for row in eql_to_sql(an(entity(trial)), session).evaluate():
+                if row.episode.identifier in passed_over:
+                    continue
+                missing = missing_mesh_files_of(row.episode.world)
+                if missing:
+                    passed_over.add(row.episode.identifier)
+                    logger.warning(
+                        "%s",
+                        KeptWorldCannotBeReadError(
+                            episode_identifier=row.episode.identifier,
+                            missing_mesh_files=missing,
+                        ),
+                    )
+                    continue
+                readable.append(row)
+            return self._as_domain_objects(readable)
 
     def report_on(
         self,

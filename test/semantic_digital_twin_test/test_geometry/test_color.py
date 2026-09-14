@@ -5,6 +5,8 @@ them, and for reading and writing a colour as a hex string.
 
 from __future__ import annotations
 
+import colorsys
+
 import pytest
 from krrood.entity_query_language.factories import variable
 from krrood.entity_query_language.verbalization.pipeline import verbalize_expression
@@ -123,3 +125,31 @@ def test_equal_colors_are_one_and_the_same_set_member():
 
 def test_colors_differing_only_in_opacity_are_told_apart():
     assert len({Color.from_hex("#4080C0"), Color.from_hex("#4080C020")}) == 2
+
+
+# %% softening a colour for print
+
+
+def test_a_softened_colour_is_the_colour_mixed_with_white_then_dimmed():
+    """
+    Pure red mixed 60:40 with white is (1, 0.6, 0.6), and dimmed to 0.94 of that; the
+    opacity is kept.
+    """
+    softened = Color(1.0, 0.0, 0.0, 0.5).softened(toward_white=0.6, brightness=0.94)
+    assert softened.to_rgba() == pytest.approx((0.94, 0.564, 0.564, 0.5))
+
+
+@pytest.mark.parametrize("name", [ColorName.RED, ColorName.GREEN, ColorName.BLUE])
+def test_softening_keeps_the_hue(name: ColorName):
+    """
+    Mixing with white moves a colour toward grey without turning it.
+    """
+    hue, _, _ = colorsys.rgb_to_hsv(*name.color.softened().to_rgb())
+    assert hue == pytest.approx(colorsys.rgb_to_hsv(*name.color.to_rgb())[0])
+
+
+def test_white_softened_is_not_white():
+    """
+    The dimming is what keeps a white thing visible against a white page.
+    """
+    assert Color.WHITE().softened() == Color(0.94, 0.94, 0.94, 1.0)

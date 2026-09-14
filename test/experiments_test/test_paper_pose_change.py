@@ -13,6 +13,7 @@ from datetime import datetime, timedelta
 
 import numpy as np
 import pytest
+from typing_extensions import Tuple
 from coraplex.datastructures.enums import ExecutionType
 from segmind.datastructures.events import (
     PickUpEvent,
@@ -24,19 +25,19 @@ from segmind.datastructures.events import (
 from experiments.episodes.episode import Episode, RecordedTrial, Tick
 from experiments.episodes.trace import JointPositions
 from experiments.paper.panel import ANSWER_COLOR
-from experiments.paper.scene import SceneRender
+from experiments.paper.scene import OVERVIEW_FROM, SceneRender
+from semantic_digital_twin.adapters.picture import UP
 from experiments.paper.pose_change import (
     GHOST_COLOR,
+    LOOKING_DOWN_ON_A_LIFT_BY,
     EventStatesNoPoseChangeError,
-    ACROSS_ELEVATION,
     ModelChangesUnannounced,
     MotionStretch,
     PoseChange,
     PoseChangeRender,
+    looking_at_the_move,
     stand,
-    viewpoint_across,
 )
-from semantic_digital_twin.adapters.multi_sim import OVERVIEW_VIEWPOINT
 from experiments.scenarios.trial import TrialOutcome
 from semantic_digital_twin.spatial_types.spatial_types import (
     HomogeneousTransformationMatrix,
@@ -498,46 +499,100 @@ def test_the_ghost_is_drawn_where_the_object_was_rather_than_on_it(
 # %% where the move is looked at from
 
 
-def test_the_move_is_looked_at_from_square_across_it() -> None:
+def a_move_on_the_table() -> (
+    Tuple[HomogeneousTransformationMatrix, HomogeneousTransformationMatrix]
+):
     """
-    Seen from along the way the object went, the two poses hide one another; seen from
-    square across it they stand side by side.
+    Where a piece pushed along x was and where it ended up, at the height it stood.
+    """
+    return (
+        Pose.from_xyz_rpy(x=STOOD_AT).to_homogeneous_matrix(),
+        Pose.from_xyz_rpy(x=ENDED_AT).to_homogeneous_matrix(),
+    )
 
-    The camera stands on the side the overview camera stands on, so the picture is
-    turned the same way as the others.
+
+def bounds_around(*poses: HomogeneousTransformationMatrix) -> np.ndarray:
+    """
+    The box a move between the given poses is framed on.
+    """
+    standing_at = np.vstack([pose.to_np()[:3, 3] for pose in poses])
+    return np.vstack((standing_at.min(axis=0), standing_at.max(axis=0)))
+
+
+def test_a_move_across_the_table_is_looked_at_from_straight_above_its_middle() -> None:
+    """
+    A push leaves the piece on the table, and its way is seen best from above, where
+    nothing stands between the camera and either pose.
+    """
+    before, after = a_move_on_the_table()
+
+    looking = looking_at_the_move(before, after, bounds_around(before, after)).to_np()
+
+    assert looking[:3, 0] == pytest.approx(-UP)
+    assert looking[:2, 3] == pytest.approx([(STOOD_AT + ENDED_AT) / 2, 0.0])
+    assert looking[2, 3] > 0.0
+
+
+def test_the_way_across_the_table_runs_across_the_picture() -> None:
+    """
+    Seen from above, the picture is turned so the way the object went runs from its
+    left to its right, whichever way across the table that was.
+    """
+    before, after = a_move_on_the_table()
+
+    looking = looking_at_the_move(before, after, bounds_around(before, after)).to_np()
+
+    picture_right = -looking[:3, 1]
+    assert picture_right == pytest.approx([np.sign(ENDED_AT - STOOD_AT), 0.0, 0.0])
+
+
+def test_a_lift_is_looked_at_from_square_across_it_a_little_from_above() -> None:
+    """
+    A piece picked up went up along a line; seen from square across that line, both
+    poses stand side by side, and a tilt down keeps the table it left in the picture.
     """
     before = Pose.from_xyz_rpy(x=STOOD_AT).to_homogeneous_matrix()
-    after = Pose.from_xyz_rpy(x=ENDED_AT).to_homogeneous_matrix()
+    after = Pose.from_xyz_rpy(x=ENDED_AT, z=0.3).to_homogeneous_matrix()
 
-    viewpoint = viewpoint_across(before, after)
+    looking = looking_at_the_move(before, after, bounds_around(before, after)).to_np()
 
-    assert viewpoint[0] == 0.0
-    assert viewpoint[1] * OVERVIEW_VIEWPOINT[1] > 0
-    assert viewpoint[2] == ACROSS_ELEVATION
+    facing = looking[:3, 0]
+    assert facing[0] == pytest.approx(0.0, abs=1e-9)
+    assert facing @ UP == pytest.approx(-np.sin(LOOKING_DOWN_ON_A_LIFT_BY))
 
 
-def test_the_move_is_looked_at_from_the_side_away_from_the_robot() -> None:
+def test_a_lift_is_looked_at_from_the_side_away_from_the_robot() -> None:
     """
     With the robot standing to one side of the move, the camera stands on the other, so
     the robot's body is behind the move rather than between the camera and it.
     """
     before = Pose.from_xyz_rpy(x=STOOD_AT).to_homogeneous_matrix()
-    after = Pose.from_xyz_rpy(x=ENDED_AT).to_homogeneous_matrix()
+    after = Pose.from_xyz_rpy(x=ENDED_AT, z=0.3).to_homogeneous_matrix()
     robot_at = np.array([0.0, 1.0, 0.0])
 
-    viewpoint = viewpoint_across(before, after, away_from=robot_at)
+    looking = looking_at_the_move(
+        before, after, bounds_around(before, after), away_from=robot_at
+    ).to_np()
 
-    assert viewpoint[1] < 0
-    assert viewpoint[2] == ACROSS_ELEVATION
+    assert looking[1, 3] < 0.0
+
+
+def test_a_straight_lift_is_looked_at_from_the_overviews_side() -> None:
+    before = Pose.from_xyz_rpy(z=0.0).to_homogeneous_matrix()
+    after = Pose.from_xyz_rpy(z=0.3).to_homogeneous_matrix()
+
+    looking = looking_at_the_move(before, after, bounds_around(before, after)).to_np()
+
+    assert looking[:2, 3] @ np.array(OVERVIEW_FROM[:2]) > 0.0
 
 
 def test_a_short_move_is_looked_at_from_as_close_as_a_long_one(
     scene_with_a_loose_piece: World,
 ) -> None:
     """
-    The camera is hung to frame the move itself, not the rest of the scene: whatever
-    else stands in the world, however far off, does not pull the camera back from the
-    two poses and the way between them.
+    The viewpoint frames the move itself, not the rest of the scene: whatever else
+    stands in the world, however far off, does not pull it back from the two poses and
+    the way between them.
     """
     subject = loose_piece(scene_with_a_loose_piece)
     change = PoseChange.of(moved(subject))
@@ -547,9 +602,8 @@ def test_a_short_move_is_looked_at_from_as_close_as_a_long_one(
     midpoint = (change.before.to_np()[:3, 3] + change.after.to_np()[:3, 3]) / 2
 
     def stands_off() -> float:
-        camera = render.hang_a_camera_across(change, ghost, dots)
-        camera.body.simulator_additional_properties.remove(camera)
-        return float(np.linalg.norm(np.array(camera.position) - midpoint))
+        viewpoint = render.looking_at(change, ghost, dots)
+        return float(np.linalg.norm(viewpoint.pose[:3, 3] - midpoint))
 
     alone = stands_off()
     with scene_with_a_loose_piece.modify_world():
@@ -564,13 +618,6 @@ def test_a_short_move_is_looked_at_from_as_close_as_a_long_one(
         )
 
     assert stands_off() == alone
-
-
-def test_a_lift_is_looked_at_from_the_overviews_side() -> None:
-    before = Pose.from_xyz_rpy(z=0.0).to_homogeneous_matrix()
-    after = Pose.from_xyz_rpy(z=0.3).to_homogeneous_matrix()
-
-    assert np.array_equal(viewpoint_across(before, after), OVERVIEW_VIEWPOINT)
 
 
 def test_the_ghost_is_taken_back_out_of_the_scene(
@@ -592,26 +639,19 @@ def test_the_ghost_is_taken_back_out_of_the_scene(
 
 
 @needs_a_renderer
-def test_the_render_leaves_nothing_hanging_on_the_world(
+def test_the_render_leaves_nothing_standing_in_the_world(
     scene_with_a_loose_piece: World,
 ) -> None:
     """
-    The camera and the light both poses are drawn under are placed for the one panel and
-    taken off again, so a second card of the same world is drawn the same way.
+    The ghost and the dots are stood in the scene for the one panel and taken out
+    again, so a second card of the same world is drawn the same way.
     """
     subject = loose_piece(scene_with_a_loose_piece)
     stood_in_it = list(scene_with_a_loose_piece.kinematic_structure_entities)
-    hanging = {
-        entity.name: len(entity.simulator_additional_properties)
-        for entity in stood_in_it
-    }
 
     PoseChangeRender(world=scene_with_a_loose_piece).of(PoseChange.of(moved(subject)))
 
-    assert {
-        entity.name: len(entity.simulator_additional_properties)
-        for entity in stood_in_it
-    } == hanging
+    assert list(scene_with_a_loose_piece.kinematic_structure_entities) == stood_in_it
 
 
 # %% what the world's own callbacks are told
