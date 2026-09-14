@@ -12,6 +12,7 @@ from __future__ import annotations
 import pytest
 
 from coraplex.datastructures.grasp import GraspDescription
+from coraplex.robot_plans.actions.core.insertion import InsertionAction
 from experiments.montessori.board_description import DescribedBoard
 from experiments.montessori.hole_geometry import BoardHoleLayout
 from experiments.montessori.perception.backend import MontessoriPerceptionBackend
@@ -36,8 +37,6 @@ from krrood.entity_query_language.backends import BackendChoice, ProbabilisticBa
 from krrood.entity_query_language.exceptions import NoBackendAnswers
 from krrood.entity_query_language.factories import a, an, entity, variable
 from semantic_digital_twin.spatial_types.spatial_types import Pose
-
-from .dataset.putting_a_piece_through import PuttingAPieceThrough
 
 LID_AT = (0.8, 0.1, 0.96)
 """
@@ -108,7 +107,7 @@ def test_the_hole_a_piece_goes_through_is_concluded_by_rules(
     choice: BackendChoice, scene: ImaginedWorld
 ):
     hole = a(ShapeSortingHole)(shape_category=...).from_(board_of(scene).apertures)
-    an(PuttingAPieceThrough)(piece=piece_of(scene).root, hole=hole)
+    an(InsertionAction)(object_designator=piece_of(scene).root, target=hole)
 
     assert isinstance(choice.backend_for(hole), HoleRulesBackend)
 
