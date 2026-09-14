@@ -254,14 +254,56 @@ stack's own to fold it into):
   `test_the_piece_it_picks_up_is_one_the_world_the_robot_plans_in_holds` (the plan,
   end to end over `displaced_cube_from_hole`, headless).
 
-Still open, and not attempted: the demo resolves but does not *perform*. That is no
-longer a perception gap - what the plan grounds to is the belief's own piece. What is
-missing is a way to carry a resolved `PickUpAction` out in this lab: Giskard's closed
-loop races the physics thread, and `experiments.tracy_experiments.pick_and_place_action`'s
-MuJoCo-driven actions are separate classes (not subclasses) that read no grasp
-description, so performing the figure's plan through them would discard the
-probabilistic slot's answer. Neither MuJoCo nor ROS is installed in the session
-container, so nothing of that could be verified here.
+## The plan performs (still #369)
+
+The ask: make the plan performable on the demo, and film it from the robot's camera and
+from a front view.
+
+Done:
+- **`ActuatorDrivenAction`** in `pick_and_place_action.py`: a `SubClassSafeGeneric`
+  family whose members bind the plan action each carries out (`PickUpActionMujoco` ->
+  `PickUpAction`, and so on). `ActuatorDrivenAction.performing(resolved, simulation,
+  actuators)` turns a resolved plan into the actions that drive this lab, and
+  `NoActionCarriesItOut` where nothing does.
+- **The grasp is read.** `_top_down_pose_builder` -> `_grasp_pose_builder(world, robot,
+  arm, grasp)`, turned by `grasp.grasp_orientation()`; all three MuJoCo actions now take
+  a `grasp_description`. The old fixed `pitch=pi` is exactly `RIGHT`+`TOP`, so the
+  existing demos (all `FRONT`+`TOP`) now grasp rotated 90 degrees about the vertical -
+  `test_tracy_pickup_demo_mujoco.py` is the check on that.
+- **The plan says the hand comes down on the piece** (`FROM_ABOVE = TOP`), since a piece
+  resting on a surface offers the fingers nothing else; only the approach direction is
+  sampled, and every sample is then performable. Both actions state the one grasp.
+- **`sorting_plan` takes the piece set.** `PIECE_COLOR` was the full-size set's cyan
+  while the lab runs `SMALLER_PIECES` (blue), so `Colored` rejected every finding and
+  the plan grounded to nothing. This was the real reason the demo had never performed.
+- `backends_for` loads the generated ORM interface (a local import, the sanctioned
+  exception): the probabilistic backend reads a stated object - the hand - through its
+  DAO, and a plain `python -m` run had never imported one.
+- `RealTimeSimulation.simulated_time` made public, so a film stamps its frames by the
+  simulation's clock.
+- `SimulationFilm` widens the offscreen buffer for its own frames instead of relying on
+  the camera having done it.
+- **The demo moved into the package**: `experiments/scripts/framework_demo.py` ->
+  `experiments/src/experiments/tracy_experiments/framework_demo.py`, so it is importable
+  and testable; `FrameworkDemo` builds the lab, looks, grounds, carries out and films.
+  Two films at 960x544 (both sides a multiple of sixteen, so the codec does not resize):
+  `robot_camera.mp4` and `table_from_the_front.mp4`, the latter from a camera at
+  (1.7, 0.12, 1.38) looking at (0.7, 0.12, 0.95).
+- **The figure**: `vertical_alignment=TOP` stated, `grasp_description=grasp` /
+  `grasp_description=grasp_1` on both insertions, the fourth grasp bar is now `BACK/TOP`
+  (the placeholder `FRONT/NONE` is excluded by the plan). PDF rebuilt.
+- Tests: `test_framework_demo.py` (7, performs the whole run), 4 added to
+  `test_the_plan_the_figure_shows.py`, 2 to `test_tracy_pick_and_place_action.py`, 1 to
+  `test_tracy_real_time_simulation.py`.
+
+Verified in this container: MuJoCo renders headless with OSMesa (`apt install
+libosmesa6`, `MUJOCO_GL=osmesa`), and Tracy parses from clones of `code-iai/iai_tracy`
+(branch `ros2-jazzy`), `UniversalRobots/Universal_Robots_ROS2_Description` and
+`PickNikRobotics/ros2_robotiq_gripper` on `AMENT_PREFIX_PATH`, with a real
+`ament_index_python` shim in the scratchpad rather than the dumb stub (the dumb stub is
+what produced the 15 `get_package_share_directory` errors earlier sessions saw). The
+baseline pickup demo run before any change: cube, cylinder and rectangular prism all
+1.0, triangular prism 0.0 (its own xfail), 1168 s.
 
 ## Open review thread on #368 (r4002576823, awaiting a decision)
 
