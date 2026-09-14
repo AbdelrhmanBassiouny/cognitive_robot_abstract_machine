@@ -260,5 +260,28 @@ pickup demo records it before the person acts and `_SortingRig.watching(things)`
 `TrialRecord.noticed_what_someone_else_moved` = a TranslationEvent of what was moved
 between the instruction and the next plan start (falls back to AnythingMoved where no
 move was recorded, so old episodes and existing tests read as before). Tests: 2 observer,
-2 audit, 1 watched run, 1 demo. Then items 6-8; item 9 is a re-recording, the developer's.
+2 audit, 1 watched run, 1 demo; all 6 pass, watched run 29 passed. Rehearsal module
+exposed two things: (a) `test_the_person_is_asked_to_bring_the_perturbation_about` pinned
+the old PASSED reading -- developer approved changing it to expect WARNING (the capture
+never shows the shove; item 9's `--shove-shown` is where it PASSES); (b) the interrupted
+rehearsal test is racy: rclpy's own SIGINT handler shuts the context from its signal
+thread (no on_shutdown callbacks run), `try_shutdown`'s `ok()` check races it. Fix: the
+rehearsal `main` inits with `SignalHandlerOptions.NO` and `rclpy.shutdown()`s itself;
+new test `test_an_interrupted_rehearsal_is_shut_down_by_the_command_itself` (on_shutdown
+thread is MainThread) fails 3/3 on the old code, both interrupted tests pass 3/3 after.
+Separate commit from item 5.
+
+**Item 6 (uncommitted, tests green).** Developer: delete `pickup/main.py` (half-written
+stacking copy, nothing imports it) -- `git rm`'d. Stacking + Montessori real demos spin
+via `live_tracy.SpunNode` (single-threaded, joined before destroy); `NODE_NAME` constants
+document why. Test `test_tracy_real_demos_spin_one_thread.py` (stands in for the Giskard
+launch; the world fetch reads `node.executor`) failed on both demos before, passes after;
+`test_tracy_montessori_actions.py` still passes.
+
+**Item 8 decision.** Developer: runs sample the joints as the trial begins (pickup demo
+`SortingTrial.begin`, watched run `trial_started`); `JointTraceRecorder`'s contract and its
+four tests stay. **Item 7 pending:** `TheSceneIsUndisturbed` gets the board's starting
+position from the scenario (captured in `build_world` like `starting_layout`); the goal
+is built at trial end, and the verbalization test constructs it with world and layout
+only. Then items 7-8; item 9 is a re-recording, the developer's.
 
