@@ -280,8 +280,15 @@ launch; the world fetch reads `node.executor`) failed on both demos before, pass
 
 **Item 8 decision.** Developer: runs sample the joints as the trial begins (pickup demo
 `SortingTrial.begin`, watched run `trial_started`); `JointTraceRecorder`'s contract and its
-four tests stay. **Item 7 pending:** `TheSceneIsUndisturbed` gets the board's starting
-position from the scenario (captured in `build_world` like `starting_layout`); the goal
-is built at trial end, and the verbalization test constructs it with world and layout
-only. Then items 7-8; item 9 is a re-recording, the developer's.
+four tests stay.
+
+**Committed locally (not yet pushed):** item 5 `b2e78aea2b`, rehearsal shutdown
+`e01c1d749e`, item 6 `77f84e2a6a`, item 7 `4279f2bd6d` (`TheSceneIsUndisturbed.board_stood_at`,
+scenario `starting_board_place`; MuJoCo TargetHoleMoved + tape-capture slid board tests),
+item 8 `e91793a345` (sample moved to the very start of `trial_started`, else the first
+sample was 0.12 s in). New tests all failed first, pass after. Pre-push run over scenarios,
+trace, spin, scene builder, watched run, demo, recording, audit, rehearsal, lab and
+interrupted modules in progress; #265 description sections drafted in the scratchpad.
+Next: push, re-draft, splice sections. Item 9 (`--shove-shown`) not started; the
+re-recording of the three unreadable episodes is the developer's to run.
 
