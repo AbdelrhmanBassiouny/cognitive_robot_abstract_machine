@@ -290,9 +290,11 @@ item 8 `e91793a345` (sample moved to the very start of `trial_started`, else the
 sample was 0.12 s in). New tests all failed first, pass after. Pre-push: 127 + 50 + 87 + 22
 passed.
 
-**Item 9 committed locally (`cee219f6e7`, not pushed).** End-to-end shove rehearsal PASSED
+**Item 9 pushed to #265 (`cee219f6e7` + `9b3c7f5dc9`, still draft, description section
+"Rehearsed 2026-09-14 (evening)" added).** Pre-push: rehearsal module 17 passed twice in a
+row; lab/camera/publishing/demo/recording/audit 134 passed. End-to-end shove rehearsal PASSED
 the perturbation check alone but WARNED inside the full rehearsal module. Cause (its own
-commit `9b3c7f5dc9`, local): `hold_board` -> `read_with` after the person
+commit `9b3c7f5dc9`): `hold_board` -> `read_with` after the person
 acts, but the node's next look took the next colour image off the subscription queue
 (sensor-data QoS depth 5, stand-in sends every 0.25 s, a look ~2 s), i.e. one sent before
 the shove was shown. Fix in `MontessoriPerceptionNode`: no look of a colour image sent
@@ -301,9 +303,8 @@ delay seen (real camera stamps with this machine's clock, ~0.6 s latency, measur
 2026-09-13 22:01 bag; `camera_replay.py` replays day-old stamps, which a plain clock
 comparison refused forever); stops asking once one image sent after it arrives (looped
 bag). 3 tests in `test_montessori_live_camera.py`, each seen failing (stale 3/3; replay vs
-clock comparison; loop with the reset removed); module 24 passed. Rehearsal module x2 and
-lab/camera/publishing/demo/recording/audit reruns in progress, then commit, push, re-draft,
-description section (drafted in scratchpad with both parts).
+clock comparison; loop with the reset removed); module 24 passed. All ten items of the list are now done except item 10, the
+re-recording, which is the developer's to run.
 `lab_without_the_robot.CaptureOfAShove` (detects the
 piece, inpaints where it stood, warps its pixels through the plane of its top by the
 shove, writes a new capture `<name>_shoved`); `Rehearsal.shove_shown` +
