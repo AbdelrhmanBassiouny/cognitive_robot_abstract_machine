@@ -282,13 +282,20 @@ launch; the world fetch reads `node.executor`) failed on both demos before, pass
 `SortingTrial.begin`, watched run `trial_started`); `JointTraceRecorder`'s contract and its
 four tests stay.
 
-**Committed locally (not yet pushed):** item 5 `b2e78aea2b`, rehearsal shutdown
+**Pushed to #265 (`e91793a345`, still draft, description sections "Fixed ... (afternoon)"
+and "(late afternoon)" added):** item 5 `b2e78aea2b`, rehearsal shutdown
 `e01c1d749e`, item 6 `77f84e2a6a`, item 7 `4279f2bd6d` (`TheSceneIsUndisturbed.board_stood_at`,
 scenario `starting_board_place`; MuJoCo TargetHoleMoved + tape-capture slid board tests),
 item 8 `e91793a345` (sample moved to the very start of `trial_started`, else the first
-sample was 0.12 s in). New tests all failed first, pass after. Pre-push run over scenarios,
-trace, spin, scene builder, watched run, demo, recording, audit, rehearsal, lab and
-interrupted modules in progress; #265 description sections drafted in the scratchpad.
-Next: push, re-draft, splice sections. Item 9 (`--shove-shown`) not started; the
-re-recording of the three unreadable episodes is the developer's to run.
+sample was 0.12 s in). New tests all failed first, pass after. Pre-push: 127 + 50 + 87 + 22
+passed.
+
+**Item 9 in progress (uncommitted).** `lab_without_the_robot.CaptureOfAShove` (detects the
+piece, inpaints where it stood, warps its pixels through the plane of its top by the
+shove, writes a new capture `<name>_shoved`); `Rehearsal.shove_shown` +
+`--shove-shown METRES` (direction = the perturbation's displacement), refused without
+`PieceShoved` (`ShoveShownWithoutAShove`); the person shows the shoved capture, made in a
+temp dir inside `run`. Fast tests pass 3/3 (shoved cube found moved within the tape
+tolerance, others unmoved); the end-to-end rehearsal expecting PERTURBATION PASSED is
+running. The re-recording of the three unreadable episodes is the developer's to run.
 
