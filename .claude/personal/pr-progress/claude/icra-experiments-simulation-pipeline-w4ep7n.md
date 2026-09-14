@@ -237,8 +237,13 @@ camera.py now holds this branch's `camera_link_T_optical(world)` from 7aa4013ae8
 re-exports the names its tests read). #356's trace fix kept. Hazard: `camera_link_T_optical`
 looks up `tracy_mount`, which a world fetched from the real robot may not hold -- check
 when rendering real episodes' cards. #356 needs `pyrender`; the venv lacked it, installed
-`pyrender` and `freetype-py` with `--no-deps` (PyOpenGL kept at 3.1.10). Next: merge
-modules' tests, then `render_query_cards.py --episode 1b5069d9e4ae4954af65dbbc77b71e21
---database-uri sqlite:///$HOME/episode-artifacts/rehearsals.db`, fix what stops a card
-(test first), push. Then items 5-8; item 9 is a re-recording, the developer's to run.
+`pyrender` and `freetype-py` with `--no-deps` (PyOpenGL kept at 3.1.10). Cards of
+`1b5069d9e4ae4954af65dbbc77b71e21` draw (4 cards: objects seen, picked up recently, own
+DoF, event against the plan; side-of-another-object not asked by that run). Silent merge
+break fixed `269a35a911`: `FramesByMoment.write` is abstract here (7f5e9376dd), #356's
+`TwinFrames` had none -> TypeError on every twin camera panel; `TwinFrames.write` + 2 tests
+(frames-around module 19 passed). Scene panels of the rehearsed episode hide the pieces
+behind the arm -- to report, not fixed. Next: card/scene/ask/camera + MuJoCo demo module
+reruns, push (merge + fix), #265 section (draft in session scratchpad), then items 5-8;
+item 9 is a re-recording, the developer's to run.
 
