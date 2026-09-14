@@ -20,7 +20,7 @@ import logging
 import time
 from dataclasses import dataclass, field
 
-from typing_extensions import Any, Callable, List, Optional, Protocol
+from typing_extensions import Any, Callable, List, Optional, Protocol, Sequence
 
 from krrood.patterns.method_patch import MethodPatch
 
@@ -52,6 +52,7 @@ from segmind.detectors.spatial_relation_detector_nodes import (
 from segmind.episode_segmenter import EpisodeSegmenterExecutor
 from segmind.statecharts.segmind_statechart import SegmindStatechart
 from semantic_digital_twin.world import World
+from semantic_digital_twin.world_description.world_entity import Body
 
 logger = logging.getLogger(__name__)
 
@@ -146,6 +147,44 @@ def build_shape_monitor_in_scene(
         InsertionDetector(tracked_object=shape.root),
     ]
     return MontessoriEventMonitor(world=world, detectors=detectors, listener=listener)
+
+
+def translation_detectors_of(tracked_bodies: Sequence[Body]) -> List[AbstractDetector]:
+    """
+    The detectors that see whether the given bodies change place: where each one rests,
+    and a translation of it from there.
+
+    :param tracked_bodies: The bodies watched.
+    """
+    return [
+        detector
+        for tracked_body in tracked_bodies
+        for detector in (
+            TranslationDetector(tracked_object=tracked_body),
+            StopTranslationDetector(tracked_object=tracked_body),
+        )
+    ]
+
+
+def build_translation_monitor_in_scene(
+    world: World,
+    tracked_bodies: Sequence[Body],
+    listener: Optional[ReceivesDetectedEvents] = None,
+) -> MontessoriEventMonitor:
+    """
+    Build a :class:`MontessoriEventMonitor` seeing only whether the given bodies change
+    place, for something other than a loose shape, such as the board, that someone
+    moves.
+
+    :param world: The world the bodies stand in.
+    :param tracked_bodies: The bodies watched.
+    :param listener: Told what each tick detected.
+    """
+    return MontessoriEventMonitor(
+        world=world,
+        detectors=translation_detectors_of(tracked_bodies),
+        listener=listener,
+    )
 
 
 class TicksDetectors(Protocol):

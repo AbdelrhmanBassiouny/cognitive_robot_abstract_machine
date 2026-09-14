@@ -57,7 +57,9 @@ from experiments.questions.question import (
     Bucket,
     ColoursWorn,
     Memory,
+    PlacedObject,
     PlacesPutAt,
+    PlaceStoodAt,
     Question,
     QueryBackend,
     QuestionedThings,
@@ -1094,17 +1096,20 @@ class PlaceOfOwnBody(WorkingMemoryQuestion[Pose]):
         (place,) = self.solutions(source)
         return place
 
-    def ground_truth(self, source: AbstractRobot) -> Pose:
+    def ground_truth(self, source: AbstractRobot) -> PlaceStoodAt:
         """
         Where the twin puts the named link, read off it directly.
 
         Where a robot's own arm ends up is what its controller drove it to, not
         something whoever set the scene up said, so there is nothing else to read it
-        from.
+        from. The twin is read again after the question was answered, and on the robot
+        the joints report noise in between, so the true answer is the place to within
+        the spread a place may differ by.
 
         :param source: The robot whose link it is.
         """
-        return source._world.get_body_by_name(self.body_name).global_pose
+        link = source._world.get_body_by_name(self.body_name)
+        return PlaceStoodAt(place=PlacedObject.read_from(link).place)
 
 
 @dataclass
