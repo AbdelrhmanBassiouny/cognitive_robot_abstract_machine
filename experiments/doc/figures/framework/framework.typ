@@ -3,7 +3,7 @@
 // Reads left to right: the plan with its open slots, the backend that closes each slot,
 // the plan with the slots filled. Below it, in one row, the robot thinking and the robot acting.
 // Everything a reader sees is data in the CONFIG section: the two plans as nested
-// trees, colours, sizes, the camera crop, the bars, the rules, the image slots.
+// trees, colours, sizes, the look's pictures, the bars, the rules, the image slots.
 // The DRAWING section below it only lays that data out.
 //
 // Build:  python build.py
@@ -115,12 +115,19 @@
 
 // %% CONFIG: panel 1, the look --------------------------------------------------------
 
-// the repository's own camera frame of the board, 1920 x 1080; the build root is the repository root
-#let capture = "../../../src/experiments/montessori/resources/captures/objects_on_montessori_color.jpg"
-#let capture-size = (1920, 1080)
-#let crop = (x: 570, y: 172, w: 360, h: 200)        // pixels of the frame shown per tile
-#let cube-box = (x: 772, y: 191, w: 50, h: 56)      // the cube, in frame pixels
-#let stages = ("colour", "shape", "cube found")     // one tile each, back to front
+// The plan's own statement about the cube, read one stated condition at a time over a
+// frame Tracy's camera took: what each condition left to read, then the cube it ended in.
+// A run of the framework demo keeps these under trials/<n>/narrowing of its episode, and
+// `python -m experiments.tracy_experiments.bag_frames <bag> --narrowing <that directory>`
+// puts them here. The names are experiments.montessori.perception.step_by_step.NarrowingPictures'.
+
+#let stages = (                                     // one tile each, back to front
+  (label: "cube", picture: "narrowing/0_camera.png"),
+  (label: "cyan", picture: "narrowing/1_rectified.png"),
+  (label: "on the lid", picture: "narrowing/2_camera.png"),
+  (label: "cube_1", picture: "narrowing/answer.png"),
+)
+#let tile-aspect = 16 / 10                          // width over height of every tile
 #let stage-offset = (0.75cm, 0.32cm)                // how far each tile steps forward
 
 // %% CONFIG: panel 2, the imagined world ----------------------------------------------
@@ -271,51 +278,21 @@
 
 // %% DRAWING: panel 1, detection stages ---------------------------------------------------
 
-#let tile(stage-index, w, h, label) = {
-  let scale = w / (crop.w * 1pt)
-  let frame-w = capture-size.at(0) * 1pt * scale
-  let frame-h = capture-size.at(1) * 1pt * scale
-  let frame = image(capture, width: frame-w, height: frame-h)
-  let cube = (
-    x: (cube-box.x - crop.x) * 1pt * scale,
-    y: (cube-box.y - crop.y) * 1pt * scale,
-    w: cube-box.w * 1pt * scale,
-    h: cube-box.h * 1pt * scale,
-  )
-  box(width: w, height: h, clip: true, radius: 0.08cm, stroke: stroke-width + hairline, {
-    place(dx: -crop.x * 1pt * scale, dy: -crop.y * 1pt * scale, frame)
-    if stage-index >= 0 {
-      // colour: everything that is not the colour asked for falls back
-      place(rect(width: w, height: h, fill: white.transparentize(45%)))
-      place(dx: cube.x, dy: cube.y, box(width: cube.w, height: cube.h, clip: true,
-        place(dx: -cube.x - crop.x * 1pt * scale, dy: -cube.y - crop.y * 1pt * scale, frame)))
-    }
-    if stage-index >= 1 {
-      // shape: the fitted outline
-      place(dx: cube.x - 0.04cm, dy: cube.y - 0.04cm,
-        rect(width: cube.w + 0.08cm, height: cube.h + 0.08cm, stroke: 0.7pt + perception.stroke, radius: 0.03cm))
-    }
-    if stage-index >= 2 {
-      // found: its place
-      let cx = cube.x + cube.w / 2
-      let cy = cube.y + cube.h / 2
-      place(dx: cx - 0.06cm, dy: cy - 0.06cm, circle(radius: 0.06cm, fill: perception.stroke, stroke: 0.6pt + white))
-      // the tag is worth its space only on a tile wide enough to hold it
-      let tag = box(fill: perception.stroke, radius: 0.04cm, inset: (x: 0.07cm, y: 0.03cm), text(size: 5pt, fill: white, font: mono-font, "cube_1"))
-      if w > 2.6cm { place(dx: cx + 0.14cm, dy: cy - 0.16cm, tag) }
-    }
+#let tile(w, h, stage) = {
+  box(width: w, height: h, clip: true, radius: 0.08cm, stroke: stroke-width + hairline, fill: ink, {
+    place(image(stage.picture, width: w, height: h, fit: "contain"))
     place(dx: 0.08cm, dy: 0.07cm, box(fill: white.transparentize(10%), radius: 0.04cm, inset: (x: 0.07cm, y: 0.03cm),
-      text(size: 5pt, fill: ink, label)))
+      text(size: 5pt, fill: ink, stage.label)))
   })
 }
 
 #let detection-panel(x, y, w, h) = {
   let n = stages.len() - 1
   let top = y + 0.45cm
-  let tile-h = calc.min((h - 0.6cm) - n * stage-offset.at(1), (w - 0.2cm - n * stage-offset.at(0)) * crop.h / crop.w)
-  let tile-w = tile-h * crop.w / crop.h
-  for (i, label) in stages.enumerate() {
-    place(dx: x + 0.1cm + i * stage-offset.at(0), dy: top + i * stage-offset.at(1), tile(i, tile-w, tile-h, label))
+  let tile-h = calc.min((h - 0.6cm) - n * stage-offset.at(1), (w - 0.2cm - n * stage-offset.at(0)) / tile-aspect)
+  let tile-w = tile-h * tile-aspect
+  for (i, stage) in stages.enumerate() {
+    place(dx: x + 0.1cm + i * stage-offset.at(0), dy: top + i * stage-offset.at(1), tile(tile-w, tile-h, stage))
   }
 }
 

@@ -34,7 +34,7 @@ import logging
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from typing_extensions import List, Optional, Sequence
+from typing_extensions import TYPE_CHECKING, List, Optional, Sequence
 
 logging.basicConfig(level=logging.INFO, format="%(message)s")
 
@@ -102,6 +102,9 @@ from segmind.detectors.base import SegmindContext
 from semantic_digital_twin.robots.tracy import Tracy
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.world_entity import Body
+
+if TYPE_CHECKING:
+    from experiments.montessori.perception.camera import RgbdFrame
 
 logger = logging.getLogger(__name__)
 
@@ -426,6 +429,7 @@ class FrameworkDemoOnTracy:
             looks_for_board=LOOKS_FOR_THE_BOARD,
         )
         scene.perceive()
+        looked_at = tracy.look.wait_for_frame()
         self.person.carry_out(CHECK_THE_SCENE % len(scene.pieces))
 
         self.grounded = GroundedPlan.grounded_against(scene, PICK_ARM, tracy.robot)
@@ -457,7 +461,10 @@ class FrameworkDemoOnTracy:
         # look still copying the world would read half-written.
         tracy.look.stop_looking()
         return self.keep(
-            recorded, trial, None if bag is None else Path(bag.output_directory)
+            recorded,
+            trial,
+            None if bag is None else Path(bag.output_directory),
+            looked_at,
         )
 
     def report_slip(self, body: Body, verdict: GraspVerdict) -> None:
@@ -475,26 +482,35 @@ class FrameworkDemoOnTracy:
         recorded: RecordedTrial,
         trial: FrameworkTrial,
         bag_directory: Optional[Path],
+        looked_at: RgbdFrame,
     ) -> Optional[EpisodeArtifacts]:
         """
-        Keep the episode of the finished trial, unless this run keeps none.
+        Keep the episode of the finished trial, unless this run keeps none, with the
+        pictures of the plan's statement about the piece read one condition at a time
+        over the frame the look was taken from.
 
         :param recorded: The trial the run recorded.
         :param trial: The trial it was recorded from, which holds the joint trace.
         :param bag_directory: The bag the run recorded, or None for a run that recorded
             none.
+        :param looked_at: The frame the camera took when the scene was looked at.
         :return: The artifacts that were kept, or None for a run that keeps no episode.
         """
         if self.database is None:
             logger.info("No episode kept, as asked.")
             return None
-        return keep_the_episode(
+        # Read before the episode is kept: reading a statement copies the world, and
+        # keeping the episode rewrites where that world's meshes are read from.
+        narrowing = self.grounded.narrowing_over(looked_at)
+        artifacts = keep_the_episode(
             recorded,
             trial.joints.trace,
             bag_directory,
             self.database,
             self.artifact_directory,
         )
+        artifacts.trial(recorded.number).keep_narrowing(narrowing)
+        return artifacts
 
 
 # %% running it

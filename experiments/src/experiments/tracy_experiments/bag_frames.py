@@ -1,6 +1,7 @@
 """
 The framework figure's two pictures of Tracy, cut out of a bag its framework demo
-recorded on the robot.
+recorded on the robot, and the pictures of the look its plan was answered from, as a
+trial of that run kept them.
 
 The figure shows the robot twice: before it acts, and inserting the cube. Both are taken
 through the robot's own camera, which is the only camera a run records. The first is the
@@ -11,6 +12,7 @@ joint's own positions in the same recording.
 Run with::
 
     python -m experiments.tracy_experiments.bag_frames <bag directory> \
+        [--narrowing <episode directory>/trials/1/narrowing] \
         [--output-directory experiments/doc/figures/framework]
 """
 
@@ -18,6 +20,7 @@ from __future__ import annotations
 
 import argparse
 import logging
+import shutil
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
@@ -29,6 +32,7 @@ from typing_extensions import List, Optional, Sequence
 
 import experiments
 from coraplex.datastructures.enums import Arms
+from experiments.episodes.artifacts import TrialArtifact
 from experiments.montessori.perception.camera import decode_compressed_color_image
 from experiments.montessori.perception.recordings import (
     RecordedCamera,
@@ -227,14 +231,47 @@ class FigureFramesFromBag:
         return written
 
 
+@dataclass
+class FigureNarrowing:
+    """
+    The framework figure's pictures of the look its plan was answered from, as a trial
+    of a run on the robot kept them.
+    """
+
+    kept: Path
+    """
+    Directory the trial kept the pictures in.
+    """
+
+    def write(self, directory: Path) -> List[Path]:
+        """
+        Put the pictures where the figure reads them from.
+
+        :param directory: The directory the figure reads its pictures from.
+        :return: The files written.
+        """
+        figure_narrowing = directory / TrialArtifact.NARROWING
+        shutil.copytree(self.kept, figure_narrowing, dirs_exist_ok=True)
+        return [
+            figure_narrowing / picture.name for picture in sorted(self.kept.iterdir())
+        ]
+
+
 def main(argument_list: Optional[Sequence[str]] = None) -> None:
     """
-    Cut the figure's two pictures of Tracy out of a recording.
+    Cut the figure's two pictures of Tracy out of a recording, and put the pictures of
+    the look a trial of that run kept beside them.
 
     :param argument_list: Arguments to read; the process's own when omitted.
     """
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("bag", type=Path, help="directory of the recording")
+    parser.add_argument(
+        "--narrowing",
+        type=Path,
+        default=None,
+        help="the narrowing pictures a trial of the run kept, to put beside them",
+    )
     parser.add_argument(
         "--output-directory",
         type=Path,
@@ -242,9 +279,12 @@ def main(argument_list: Optional[Sequence[str]] = None) -> None:
         help="where the figure reads its pictures of Tracy from",
     )
     arguments = parser.parse_args(argument_list)
-    for path in FigureFramesFromBag(bag=arguments.bag).write(
-        arguments.output_directory
-    ):
+    written = FigureFramesFromBag(bag=arguments.bag).write(arguments.output_directory)
+    if arguments.narrowing is not None:
+        written += FigureNarrowing(kept=arguments.narrowing).write(
+            arguments.output_directory
+        )
+    for path in written:
         logger.info("Wrote %s.", path)
 
 
