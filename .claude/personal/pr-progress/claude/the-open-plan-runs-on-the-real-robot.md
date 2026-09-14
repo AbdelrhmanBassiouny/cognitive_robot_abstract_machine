@@ -24,8 +24,18 @@ Plan: run the framework figure's plan on the physical Tracy, record the episode,
       with scratchpad/bass_env.sh (PYTHONPATH prepends ~/bass). pip installed pyrender +
       freetype-py --no-deps (PyOpenGL 3.1.10 kept)
 - [ ] bag_frames: idle = first colour frame, inserting = frame at last left-knuckle opening
-- [ ] commit, push, draft PR onto #369's branch; real run by the user in their terminal
-      (stdin prompts); compare slots; cards; figure frames + README/typ comments; rebuild
+- [x] commit, push, draft PR #376 onto #369's branch
+- [x] first real run (18:51) died at LiveTracy's fetch_world: KeyError 'buffer_zone_distance'.
+      Not a code bug: venv .pth point at ~/bass since 02:42; Giskard started 17:20 while ~/bass
+      was on #356's branch (old AvoidExternalCollisions JSON), checkout moved to this branch
+      18:01 (upstream 83909bdd36 reads the new keys). Fix = restart Giskard from this checkout.
+      Verified offline: scratchpad/giskard_world_round_trip.py builds Giskard's Tracy world
+      with the lab params (scratchpad/giskard_params.yaml), serializes it as FetchWorldServer,
+      reads it back 53/53 bodies. Never switch ~/bass's branch while Giskard runs.
+- [x] merged #265 98bec17de0 (PlaceOfOwnBody tolerance - relevant; watched-run slide) +
+      remote cascade merges; 97 tests passed; pushed 6294ea8248; PR body updated
+- [ ] real run by the user after the Giskard restart; compare slots; check_episode.py;
+      cards; figure frames + README/typ comments; rebuild
 Old note for claude/corpus-run-cards-drawn-as-the-run-stood (#356) follows, kept on its own key.
 
 Branch claude/corpus-run-cards-drawn-as-the-run-stood, stacked on #353 (-> #352 -> ... -> #265),
