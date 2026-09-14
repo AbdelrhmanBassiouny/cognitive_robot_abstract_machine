@@ -11,10 +11,12 @@ from pathlib import Path
 import pytest
 
 from experiments.episodes.artifacts import TrialArtifact
+from experiments.montessori.perception.captures import SceneCapture
 from experiments.montessori.perception.recordings import (
     REFERENCE_FRAME,
     RecordedCamera,
 )
+from experiments.montessori.perception.step_by_step import NarrowingPictures
 from experiments.tracy_experiments.bag_frames import (
     FigureFramesFromBag,
     HOLDING_KNUCKLE_POSITION,
@@ -27,6 +29,8 @@ from experiments.tracy_experiments.montessori.gripper_feedback import (
     FULLY_CLOSED_KNUCKLE_POSITION,
     OPEN_KNUCKLE_POSITION,
 )
+
+from .dataset.montessori_capture_truths import CAPTURE_TRUTHS
 
 HOLDING = (HOLDING_KNUCKLE_POSITION + FULLY_CLOSED_KNUCKLE_POSITION) / 2
 """
@@ -86,6 +90,50 @@ def test_the_camera_is_read_in_the_frame_recordings_use() -> None:
 
     assert FigureFramesFromBag(bag=bag).camera == RecordedCamera(
         bag=bag, reference_frame=REFERENCE_FRAME
+    )
+
+
+# %% the narrowing a frame before the robot acts shows
+
+
+CUBE_ON_THE_LID_CAPTURE = "washed_out_lid"
+"""
+The shipped capture off the robot's camera with the smaller set on the table and the
+cube resting on the lid, as a recording of the framework demo starts.
+"""
+
+
+@pytest.fixture(scope="module")
+def narrowed_before_it_acts() -> NarrowingPictures:
+    """
+    The figure's look, read over a frame of the robot's table before the robot moves.
+    """
+    return FigureFramesFromBag.narrowing_over(
+        SceneCapture.load(CUBE_ON_THE_LID_CAPTURE).to_frame()
+    )
+
+
+def test_a_frame_before_the_robot_acts_is_narrowed_down_to_the_cube_on_the_lid(
+    narrowed_before_it_acts: NarrowingPictures,
+) -> None:
+    """
+    The figure's look is the plan's own statement about the piece it sorts, so each of
+    its conditions leaves less to read, down to the piece on the lid.
+    """
+    steps = narrowed_before_it_acts.steps
+
+    assert [piece.category for piece in steps[-1].found] == list(
+        CAPTURE_TRUTHS[CUBE_ON_THE_LID_CAPTURE].pieces_on_lid
+    )
+    assert steps[-1].searched_area < steps[0].searched_area
+
+
+def test_a_frame_before_the_robot_acts_is_read_for_the_pieces_on_its_table(
+    narrowed_before_it_acts: NarrowingPictures,
+) -> None:
+    assert (
+        narrowed_before_it_acts.narrowing.pipeline.pieces
+        == CAPTURE_TRUTHS[CUBE_ON_THE_LID_CAPTURE].piece_set
     )
 
 

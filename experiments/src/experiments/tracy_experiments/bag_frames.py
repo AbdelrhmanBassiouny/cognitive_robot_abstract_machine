@@ -9,6 +9,9 @@ first colour frame of the recording, before the arm has moved; the second is the
 nearest the moment the fingers let go of the piece they carried, read off the knuckle
 joint's own positions in the same recording.
 
+The look is the plan's own statement about the piece it sorts, read one stated condition
+at a time over that first frame, unless a trial of the run kept pictures of its own look.
+
 Run with::
 
     python -m experiments.tracy_experiments.bag_frames <bag directory> \
@@ -33,13 +36,23 @@ from typing_extensions import List, Optional, Sequence
 import experiments
 from coraplex.datastructures.enums import Arms
 from experiments.episodes.artifacts import TrialArtifact
-from experiments.montessori.perception.camera import decode_compressed_color_image
+from experiments.montessori.perception.camera import (
+    RgbdFrame,
+    decode_compressed_color_image,
+)
+from experiments.montessori.perception.node import ROBOT_TABLE_PIECES
+from experiments.montessori.perception.recorded_setup import (
+    perception_pipeline,
+    recorded_world,
+)
 from experiments.montessori.perception.recordings import (
     REFERENCE_FRAME,
     RecordedCamera,
     RecordedImages,
     open_bag,
 )
+from experiments.montessori.perception.step_by_step import NarrowingPictures
+from experiments.open_slots.plan import piece_to_sort
 from experiments.tracy_experiments.montessori.gripper_feedback import (
     FULLY_CLOSED_KNUCKLE_POSITION,
     OPEN_KNUCKLE_POSITION,
@@ -199,6 +212,40 @@ class FigureFramesFromBag:
         """
         return self.camera.image_at(FIRST_FRAME)
 
+    def look_before_it_acts(self) -> RgbdFrame:
+        """
+        The camera data a look before the robot moved reads: the first colour image,
+        with the depth image, calibration and pose the recording holds for it.
+        """
+        camera = self.camera
+        return self.before_it_acts().to_frame(
+            camera.intrinsics, camera.reference_frame_T_camera
+        )
+
+    @staticmethod
+    def narrowing_over(frame: RgbdFrame) -> NarrowingPictures:
+        """
+        The plan's statement about the piece it sorts, read one stated condition at a
+        time over a frame of the robot's table, as the setup the recordings are made on
+        describes that table.
+
+        :param frame: The camera data to read it over.
+        """
+        pipeline = perception_pipeline(recorded_world(), pieces=ROBOT_TABLE_PIECES)
+        return NarrowingPictures.taken(
+            pipeline,
+            frame,
+            piece_to_sort(pipeline.lid.entity, pipeline.pieces),
+            pipeline.board_in(frame),
+        )
+
+    def narrowing(self) -> NarrowingPictures:
+        """
+        The plan's statement about the piece it sorts, read over what the camera showed
+        before the robot moved.
+        """
+        return self.narrowing_over(self.look_before_it_acts())
+
     def inserting(self) -> RecordedImages:
         """
         What the camera showed as the fingers let go of the piece over its hole.
@@ -261,7 +308,7 @@ class FigureNarrowing:
 def main(argument_list: Optional[Sequence[str]] = None) -> None:
     """
     Cut the figure's two pictures of Tracy out of a recording, and put the pictures of
-    the look a trial of that run kept beside them.
+    the look beside them.
 
     :param argument_list: Arguments to read; the process's own when omitted.
     """
@@ -271,7 +318,10 @@ def main(argument_list: Optional[Sequence[str]] = None) -> None:
         "--narrowing",
         type=Path,
         default=None,
-        help="the narrowing pictures a trial of the run kept, to put beside them",
+        help=(
+            "the narrowing pictures a trial of the run kept, to put beside them in "
+            "place of the narrowing of the recording's first frame"
+        ),
     )
     parser.add_argument(
         "--output-directory",
@@ -280,8 +330,13 @@ def main(argument_list: Optional[Sequence[str]] = None) -> None:
         help="where the figure reads its pictures of Tracy from",
     )
     arguments = parser.parse_args(argument_list)
-    written = FigureFramesFromBag(bag=arguments.bag).write(arguments.output_directory)
-    if arguments.narrowing is not None:
+    frames = FigureFramesFromBag(bag=arguments.bag)
+    written = frames.write(arguments.output_directory)
+    if arguments.narrowing is None:
+        written += frames.narrowing().write(
+            arguments.output_directory / TrialArtifact.NARROWING
+        )
+    else:
         written += FigureNarrowing(kept=arguments.narrowing).write(
             arguments.output_directory
         )
