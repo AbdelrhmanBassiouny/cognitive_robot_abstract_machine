@@ -9,6 +9,7 @@ import experiments.scenarios.runner
 import experiments.scenarios.scenario
 import experiments.scenarios.trial
 import coraplex.orm.ormatic_interface
+import segmind.orm.ormatic_interface
 
 from krrood.ormatic.ormatic import ORMatic
 from krrood.ormatic.utils import classes_of_module
@@ -36,7 +37,10 @@ for scenario_model_module in (
 
 # Create an ORMatic object with the classes to be mapped
 ormatic = ORMatic.from_package(
-    [experiments], [coraplex.orm.ormatic_interface], ignored_classes, type_mappings={}
+    [experiments],
+    [coraplex.orm.ormatic_interface, segmind.orm.ormatic_interface],
+    ignored_classes,
+    type_mappings={},
 )
 logging.getLogger("krrood").setLevel(logging.DEBUG)
 
