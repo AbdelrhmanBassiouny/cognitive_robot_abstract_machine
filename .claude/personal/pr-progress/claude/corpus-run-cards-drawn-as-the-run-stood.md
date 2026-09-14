@@ -106,5 +106,9 @@ Plan: make the query cards of the simulated corpus right.
       The 0cbb28d8ac rerun died the same way (runner lost communication, no log) -> not a
       flake; suspected llvmpipe memory with per-capture MuJoCo renderers at 1600x1200 -- gone
       with the pyrender path anyway.
-- [ ] figures run 5 launched 2026-09-14 03:44 (figures_rerecorded_2026-09-14_run5.log, status
-      file "figures exit N"); check cards, tell the user to redo the figures backup.
+- [x] figures run 5 (2026-09-14 03:44-03:54, 11 min, exit 0): 348 cards / 75 episodes, 97 MB;
+      held-piece, push, camera, spatial and layered panels checked; two sent to the user.
+      Spatial card still has the upper arm across the picture in some episodes (same framing
+      as before: LOOKING_DOWN_BY/STANDING_BACK_AT_LEAST) -- told the user, not changed.
+- [ ] CI run 34797104927 for 4e7fdd3482 pending (experiments/semdt jobs); user told to redo the
+      figures backup.
