@@ -18,7 +18,7 @@ from semantic_digital_twin.spatial_types.spatial_types import (
     Point3,
 )
 from semantic_digital_twin.world import World
-from typing_extensions import Dict, List, Optional, Set
+from typing_extensions import Dict, List, Optional, Sequence, Set
 
 from experiments.episodes.observer import ObserverListener, ObserverMotionListener
 from experiments.episodes.recording import EpisodeRecording
@@ -45,7 +45,7 @@ from experiments.questions.question import (
 )
 from experiments.questions.question_set import QuestionSet
 from experiments.questions.working_memory import BeliefAgreesWithPerception
-from experiments.scenarios.scenario import Person, ScenarioStep
+from experiments.scenarios.scenario import Person, Perturbation, ScenarioStep
 
 PIECES_ON_OFFER = tuple(MontessoriShapeCategory)
 """
@@ -174,6 +174,13 @@ class WatchedSortingRun(EpisodeRecording[MontessoriSortingScenario, World]):
     on: a piece nobody else touched is one the look and the belief ought to agree about.
     """
 
+    watched_piece: Optional[MontessoriShapeCategory] = field(init=False, default=None)
+    """
+    The piece the monitor watches in the trial that is running, or None between
+    trials: the one the script acts on, else the one a perturbation acts on, else the
+    first piece standing in the scene.
+    """
+
     stated_scene: Optional[SceneAsSetUp] = field(init=False, default=None)
     """
     What the run knows it set up in the trial that is running, or None between trials
@@ -184,24 +191,32 @@ class WatchedSortingRun(EpisodeRecording[MontessoriSortingScenario, World]):
     from.
     """
 
-    def trial_started(self, scenario: MontessoriSortingScenario, world: World) -> None:
+    def trial_started(
+        self,
+        scenario: MontessoriSortingScenario,
+        world: World,
+        perturbations: Sequence[Perturbation[World]],
+    ) -> None:
         """
-        Take down what the run knows it set up, start watching the piece the script acts
-        on, tick the observer with every detection, trace where every joint of the world
-        stands, and have the steps hand their motions to the observer as they finish.
+        Take down what the run knows it set up, start watching the piece something is
+        going to happen to, tick the observer with every detection, trace where every
+        joint of the world stands, and have the steps hand their motions to the observer
+        as they finish.
 
         :param scenario: The scenario the trial runs.
         :param world: The world the trial is about to run in.
+        :param perturbations: The changes due to be applied to this trial's world.
         """
-        super().trial_started(scenario, world)
+        super().trial_started(scenario, world, perturbations)
         self.pieces_acted_on = set()
         self.stated_scene = self.scene_as_set_up(scenario, world)
         scenario.motion_listener = ObserverMotionListener(observer=self.observer)
         self._stop_watching()
         scene = SortingScene(world)
+        self.watched_piece = self.watched_category(scenario, perturbations)
         self.monitor = build_shape_monitor_in_scene(
             world,
-            scene.shape_of(self.watched_category(scenario)),
+            scene.shape_of(self.watched_piece),
             listener=ObserverListener(observer=self.observer),
         )
         self.monitor.start()
@@ -309,18 +324,41 @@ class WatchedSortingRun(EpisodeRecording[MontessoriSortingScenario, World]):
             return
         self.artifacts.trial(self.recorded_trials[-1].number).keep_joint_trace(traced)
 
+    def piece_asked_about(
+        self, scenario: MontessoriSortingScenario
+    ) -> MontessoriShapeCategory:
+        """
+        The piece the questions single out: the one being watched, or, outside a trial,
+        the one the script acts on or the first standing in the scene.
+
+        :param scenario: The scenario whose scene is asked, which has built its scene.
+        """
+        if self.watched_piece is not None:
+            return self.watched_piece
+        return self.watched_category(scenario, ())
+
     @staticmethod
     def watched_category(
         scenario: MontessoriSortingScenario,
+        perturbations: Sequence[Perturbation[World]],
     ) -> MontessoriShapeCategory:
         """
-        The piece the monitor tracks: the one the script acts on, or the first piece
-        standing in the scene for a script that acts on none.
+        The piece the monitor tracks: the one the script acts on, else the one a
+        perturbation acts on, else the first piece standing in the scene.
+
+        Something is going to happen to a piece someone acts on, which is what a monitor
+        is there to see.
 
         :param scenario: The scenario whose piece is watched, which has built its scene.
+        :param perturbations: The changes due to be applied to the trial's world.
         """
         if scenario.acted_on_category is not None:
             return scenario.acted_on_category
+        for perturbation in perturbations:
+            if not isinstance(perturbation, SortingPerturbation):
+                continue
+            if perturbation.pieces_acted_on:
+                return perturbation.pieces_acted_on[0]
         return scenario.starting_layout.placements[0].piece.category
 
     def question_set(
@@ -339,7 +377,7 @@ class WatchedSortingRun(EpisodeRecording[MontessoriSortingScenario, World]):
         :param world: The world the trial is running in.
         """
         scene = SortingScene(world)
-        acted_on = self.watched_category(scenario)
+        acted_on = self.piece_asked_about(scenario)
         others = [
             placement.piece.category
             for placement in scenario.starting_layout.placements
