@@ -21,8 +21,11 @@ from experiments.tracy_experiments.bag_frames import (
     FigureFramesFromBag,
     HOLDING_KNUCKLE_POSITION,
     FigureNarrowing,
+    Hold,
     KnuckleReading,
     NoReleaseRecordedError,
+    SHORTEST_OPENING,
+    last_hold,
     last_release,
 )
 from experiments.tracy_experiments.montessori.gripper_feedback import (
@@ -38,14 +41,15 @@ A knuckle position the fingers stand at while they hold a piece.
 """
 
 
-def readings(*positions: float) -> list[KnuckleReading]:
+def readings(*positions: float, apart: int = 1) -> list[KnuckleReading]:
     """
-    :param positions: Knuckle positions, one per nanosecond stamp from zero.
+    :param positions: Knuckle positions, one per stamp from zero.
+    :param apart: Nanoseconds between two readings.
     :return: The readings, stamped in order.
     """
     return [
-        KnuckleReading(stamp=stamp, position=position)
-        for stamp, position in enumerate(positions)
+        KnuckleReading(stamp=index * apart, position=position)
+        for index, position in enumerate(positions)
     ]
 
 
@@ -80,6 +84,61 @@ def test_fingers_that_never_closed_let_nothing_go() -> None:
 def test_fingers_still_closed_when_the_recording_ends_let_nothing_go() -> None:
     with pytest.raises(NoReleaseRecordedError):
         last_release(readings(OPEN_KNUCKLE_POSITION, HOLDING, HOLDING))
+
+
+# %% when the fingers closed on the piece
+
+
+def test_the_pick_up_is_the_first_moment_the_fingers_closed_on_the_piece_they_let_go_of() -> (
+    None
+):
+    recorded = readings(OPEN_KNUCKLE_POSITION, HOLDING, HOLDING, OPEN_KNUCKLE_POSITION)
+
+    assert last_hold(recorded) == Hold(
+        grasped=recorded[1].stamp, released=recorded[3].stamp
+    )
+
+
+def test_of_two_grasps_the_one_the_last_release_ends_is_taken() -> None:
+    """
+    A run that closes on something before the piece it sorts -- a grasp retried, say --
+    is filmed picking up the piece, which is the last thing it closes on.
+    """
+    recorded = readings(
+        HOLDING,
+        OPEN_KNUCKLE_POSITION,
+        HOLDING,
+        HOLDING,
+        OPEN_KNUCKLE_POSITION,
+        apart=SHORTEST_OPENING,
+    )
+
+    assert last_hold(recorded).grasped == recorded[2].stamp
+
+
+def test_a_misreading_shorter_than_the_fingers_take_to_open_does_not_end_the_hold() -> (
+    None
+):
+    recorded = readings(
+        HOLDING,
+        HOLDING,
+        OPEN_KNUCKLE_POSITION,
+        HOLDING,
+        OPEN_KNUCKLE_POSITION,
+        apart=SHORTEST_OPENING // 2,
+    )
+
+    assert last_hold(recorded) == Hold(
+        grasped=recorded[0].stamp, released=recorded[4].stamp
+    )
+
+
+def test_fingers_closed_from_the_recordings_start_are_picked_up_at_its_first_reading() -> (
+    None
+):
+    recorded = readings(HOLDING, OPEN_KNUCKLE_POSITION)
+
+    assert last_hold(recorded).grasped == recorded[0].stamp
 
 
 # %% reading the bag's own camera
