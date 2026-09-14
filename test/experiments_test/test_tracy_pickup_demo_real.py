@@ -80,6 +80,7 @@ from semantic_digital_twin.world_description.connections import FixedConnection
 from semantic_digital_twin.world_description.world_entity import Body
 
 from .test_episode_artifacts import a_bag
+from .test_tracy_montessori_scene_builder import HOW_SOON_A_TRIAL_IS_TRACED
 from .test_episode_recording import (
     UNREACHABLE_URI,
     finished_trial,
@@ -887,6 +888,21 @@ def test_the_piece_the_person_shoves_is_watched_and_recorded_as_moved_by_them():
         if tick.moment >= moved.moment
         for event in tick.events
     )
+
+
+def test_a_trial_in_which_nothing_moves_still_traces_where_the_joints_stood():
+    """
+    A still robot changes no joint, so the trace is read once as the trial begins, and a
+    trial that moves nothing keeps where the robot stood.
+    """
+    found = ATableTheCameraFound.looked_at()
+    trial = trial_over(found, AbsentPerson())
+
+    trial.begin()
+    trial.finish(trial.episode())
+
+    [moment] = trial.joints.trace.moments
+    assert moment == pytest.approx(0.0, abs=HOW_SOON_A_TRIAL_IS_TRACED)
 
 
 def test_an_unperturbed_trial_tells_the_person_nothing_and_looks_no_further():

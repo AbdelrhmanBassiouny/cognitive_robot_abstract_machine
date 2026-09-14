@@ -27,6 +27,7 @@ from semantic_digital_twin.world_description.mesh_file_storage import MeshFileSt
 
 from experiments.episodes.artifacts import (
     ARTIFACT_DIRECTORY_ENVIRONMENT_VARIABLE,
+    ArtifactDirectory,
     configured_mesh_directory,
 )
 from experiments.episodes.episode import Episode
@@ -107,6 +108,12 @@ A_SLID_BOARD = TargetHoleMoved(
 )
 """
 The perturbation that has the person slide the board rather than a piece.
+"""
+
+HOW_SOON_A_TRIAL_IS_TRACED = 0.05
+"""
+How long after its trial begins a run may take to read where the joints stand, in
+seconds: the reading follows the start of the trial's clock with nothing in between.
 """
 
 
@@ -524,6 +531,23 @@ def test_a_board_the_person_slid_on_the_robot_leaves_the_scene_disturbed(
     assert person.asked == [A_SLID_BOARD.instruction_for_a_person()]
     [trial] = run.records_trials.trials
     assert trial.outcome is TrialOutcome.FAILED
+
+
+def test_a_run_on_the_robot_traces_where_the_joints_stood_as_its_trial_began(
+    perceived: TracyLookingAtItsOwnTable, tmp_path: Path
+):
+    """
+    Nothing of a still robot changes on the robot, so the trace a trial keeps would hold
+    nothing unless the run reads the joints as the trial begins.
+    """
+    scenario, run = _run_on_the_robot(perceived)
+    run.artifacts = ArtifactDirectory(path=tmp_path).open_for(run.episode)
+
+    run.run(scenario)
+
+    [trial] = run.records_trials.trials
+    trace = run.artifacts.trial(trial.number).joint_trace
+    assert trace.moments[0] == pytest.approx(0.0, abs=HOW_SOON_A_TRIAL_IS_TRACED)
 
 
 def test_a_shove_on_the_robot_is_remembered_as_the_piece_moving(

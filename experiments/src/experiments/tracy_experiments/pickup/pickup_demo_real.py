@@ -779,6 +779,9 @@ class SortingTrial:
         self.joints = JointTraceRecorder(
             _world=self.rig.world, clock=lambda: self.rig.observer.elapsed_seconds
         )
+        # A still robot changes no joint, so where the joints stand is read once here
+        # or a trial that moves nothing would keep no trace at all.
+        self.joints.trace.sample(self.rig.world, self.rig.observer.elapsed_seconds)
 
     def state_the_scene(self) -> None:
         """

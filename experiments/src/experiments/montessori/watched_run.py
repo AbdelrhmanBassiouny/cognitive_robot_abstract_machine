@@ -208,10 +208,16 @@ class WatchedSortingRun(EpisodeRecording[MontessoriSortingScenario, World]):
         :param perturbations: The changes due to be applied to this trial's world.
         """
         super().trial_started(scenario, world, perturbations)
+        self._stop_watching()
+        self.joints = JointTraceRecorder(
+            _world=world, clock=lambda: self.observer.elapsed_seconds
+        )
+        # A still robot changes no joint, so where the joints stand is read once here,
+        # as the trial's clock starts, or a trial that moves nothing would keep no trace.
+        self.joints.trace.sample(world, self.observer.elapsed_seconds)
         self.pieces_acted_on = set()
         self.stated_scene = self.scene_as_set_up(scenario, world)
         scenario.motion_listener = ObserverMotionListener(observer=self.observer)
-        self._stop_watching()
         scene = SortingScene(world)
         self.watched_piece = self.watched_category(scenario, perturbations)
         self.monitor = build_shape_monitor_in_scene(
@@ -220,9 +226,6 @@ class WatchedSortingRun(EpisodeRecording[MontessoriSortingScenario, World]):
             listener=ObserverListener(observer=self.observer),
         )
         self.monitor.start()
-        self.joints = JointTraceRecorder(
-            _world=world, clock=lambda: self.observer.elapsed_seconds
-        )
 
     def perform_step(
         self,
