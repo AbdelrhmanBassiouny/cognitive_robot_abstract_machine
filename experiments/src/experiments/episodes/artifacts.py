@@ -27,6 +27,7 @@ from experiments.episodes.episode import Episode, RecordedTrial
 from experiments.episodes.trace import FramesByMoment, JointTrace, TimedFramesFile
 
 if TYPE_CHECKING:
+    from experiments.montessori.perception.step_by_step import NarrowingPictures
     from semantic_digital_twin.adapters.mujoco_video_recording import RecordedVideo
 
 # %% what an episode keeps, and where
@@ -75,6 +76,12 @@ class TrialArtifact(StrEnum):
     CAMERA = "camera.mp4"
     """
     What the robot's camera saw along the trial, with the moments beside it.
+    """
+
+    NARROWING = "narrowing"
+    """
+    Directory holding the pictures of the statement the trial's plan was answered by,
+    read one stated condition at a time over a frame the camera took.
     """
 
 
@@ -485,6 +492,15 @@ class TrialArtifacts:
         :return: The video they were written to.
         """
         return frames.write(self.directory / TrialArtifact.CAMERA)
+
+    def keep_narrowing(self, pictures: NarrowingPictures) -> List[Path]:
+        """
+        Keep what each condition of a statement left a look to read.
+
+        :param pictures: The statement, read over a frame the run's camera took.
+        :return: The pictures that were written.
+        """
+        return pictures.write(self.directory / TrialArtifact.NARROWING)
 
     @property
     def kept_a_joint_trace(self) -> bool:

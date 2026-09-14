@@ -14,17 +14,21 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 
-from typing_extensions import List, Self
+from typing_extensions import TYPE_CHECKING, List, Self
 
 from coraplex.datastructures.enums import Arms
 from coraplex.robot_plans.actions.base import ActionDescription
 from coraplex.view_manager import ViewManager
 from experiments.montessori.perception.backend import MontessoriPerceptionBackend
 from experiments.montessori.perception.scene_publishing import PerceivedScene
+from experiments.montessori.perception.step_by_step import NarrowingPictures
 from experiments.open_slots.choice import backends_for
-from experiments.open_slots.plan import sorting_plan
+from experiments.open_slots.plan import piece_to_sort, sorting_plan
 from krrood.entity_query_language.backends import BackendChoice
 from semantic_digital_twin.robots.tracy import Tracy
+
+if TYPE_CHECKING:
+    from experiments.montessori.perception.camera import RgbdFrame
 
 logger = logging.getLogger(__name__)
 
@@ -91,6 +95,21 @@ class GroundedPlan:
             f"{type(answered.backend).__name__} answered {answered.statement}"
             for answered in self.answered_by.answered
         ]
+
+    def narrowing_over(self, frame: RgbdFrame) -> NarrowingPictures:
+        """
+        The statement the plan makes about the piece it sorts, read one stated condition
+        at a time over a frame the camera took of this scene.
+
+        :param frame: The camera data to read it over.
+        """
+        pipeline = self.scene.look.pipeline
+        return NarrowingPictures.taken(
+            pipeline,
+            frame,
+            piece_to_sort(pipeline.lid.entity, self.scene.piece_set),
+            self.scene.seen.board,
+        )
 
     def report(self) -> None:
         """

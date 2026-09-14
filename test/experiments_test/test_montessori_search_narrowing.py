@@ -11,11 +11,16 @@ them instead of opening a window.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from pathlib import Path
 
+import cv2
 import numpy as np
 import pytest
 from typing_extensions import Any, Callable, List, Optional, Tuple
 
+from coraplex.datastructures.enums import ExecutionType
+from experiments.episodes.artifacts import ArtifactDirectory, TrialArtifact
+from experiments.episodes.episode import Episode
 from experiments.montessori.perception.backend import MontessoriPerceptionBackend
 from experiments.montessori.perception.camera import RgbdFrame
 from experiments.montessori.perception.captures import SceneCapture
@@ -44,6 +49,7 @@ from experiments.montessori.perception.scene_source import FixedScene, RecordedF
 from experiments.montessori.perception.viewer import ImageDisplay
 from experiments.montessori.perception.step_by_step import (
     DEMONSTRATION_CAPTURE,
+    NarrowingPictures,
     NarrowingView,
     RecordedLook,
     SearchNarrowing,
@@ -53,6 +59,7 @@ from experiments.montessori.perception.step_by_step import (
 from experiments.montessori.perception.watch_narrowing import (
     look_for_the_cube_on_the_lid,
 )
+from experiments.open_slots.plan import SORTED_PIECE, piece_to_sort
 from krrood.entity_query_language.factories import a
 from krrood.entity_query_language.query.match import Match
 from krrood.entity_query_language.verbalization.pipeline import verbalize_expression
@@ -894,3 +901,110 @@ def test_watching_a_statement_step_by_step_needs_nothing_but_the_statement(
         capture_look.board,
     )
     assert [step.label for step in watched] == [step.label for step in taken_by_hand]
+
+
+# %% the pictures a narrowing keeps
+
+
+@pytest.fixture
+def kept_pictures(watched, capture_frame) -> NarrowingPictures:
+    """
+    The demonstration's narrowing, as the pictures a reader looks at after the run.
+    """
+    narrowing, _, steps = watched
+    return NarrowingPictures(narrowing=narrowing, frame=capture_frame, steps=steps)
+
+
+def test_each_step_keeps_the_pictures_it_is_drawn_as(
+    watched, kept_pictures: NarrowingPictures, tmp_path: Path
+):
+    """
+    What is kept of a step is what a watched run puts on screen for it, so a picture
+    read after the run shows what the look was left to read at that step.
+    """
+    _, display, steps = watched
+    drawn = dict(display.drawn)
+
+    kept_pictures.write(tmp_path)
+
+    for index, step in enumerate(steps):
+        for view in (NarrowingView.CAMERA, NarrowingView.RECTIFIED):
+            assert np.array_equal(
+                cv2.imread(
+                    str(tmp_path / NarrowingPictures.step_file_name(index, view))
+                ),
+                drawn[SearchNarrowing.window_name(view, step)],
+            )
+
+
+def test_the_answer_is_kept_boxed_in_the_stretch_the_last_step_left(
+    watched,
+    kept_pictures: NarrowingPictures,
+    capture_pipeline: MontessoriPerceptionPipeline,
+    capture_frame,
+    tmp_path: Path,
+):
+    """
+    What the narrowing was for is one piece, and a stretch the size of the whole table
+    leaves it too small to see, so the answer is kept cut to what the last step left.
+    """
+    _, _, steps = watched
+    answer = steps[-1]
+
+    kept_pictures.write(tmp_path)
+
+    assert np.array_equal(
+        cv2.imread(str(tmp_path / NarrowingPictures.ANSWER_FILE_NAME)),
+        capture_pipeline.workspace_over(answer.region).clip(
+            DetectionOverlay().draw(
+                CameraView(frame=capture_frame),
+                MontessoriScene(shapes=list(answer.found)),
+            ),
+            capture_frame,
+        ),
+    )
+
+
+def test_writing_the_pictures_says_every_file_it_wrote(
+    kept_pictures: NarrowingPictures, tmp_path: Path
+):
+    written = kept_pictures.write(tmp_path)
+
+    assert sorted(written) == sorted(tmp_path.iterdir())
+
+
+def test_a_trial_keeps_the_pictures_of_its_narrowing_in_its_own_directory(
+    kept_pictures: NarrowingPictures, tmp_path: Path
+):
+    trial = (
+        ArtifactDirectory(path=tmp_path)
+        .open_for(Episode(scenario_name=SETUP_NAME, execution_type=ExecutionType.REAL))
+        .trial(1)
+    )
+
+    written = trial.keep_narrowing(kept_pictures)
+
+    assert {path.parent for path in written} == {
+        trial.directory / TrialArtifact.NARROWING
+    }
+
+
+def test_the_figures_plan_narrows_the_capture_down_to_the_cube_on_the_lid(
+    capture_pipeline: MontessoriPerceptionPipeline, capture_frame, capture_board, lid
+):
+    """
+    A run on the robot narrows the statement the plan itself makes about the piece it
+    sorts: its shape, then its colour, then the lid it rests on.
+    """
+    sorted_color = capture_pipeline.pieces.by_category[SORTED_PIECE].color
+
+    steps = NarrowingPictures.taken(
+        capture_pipeline,
+        capture_frame,
+        piece_to_sort(lid, capture_pipeline.pieces),
+        capture_board,
+    ).steps
+
+    assert [step.request.color for step in steps] == [None, sorted_color, sorted_color]
+    assert steps[1].searched_area > steps[2].searched_area
+    assert [piece.category for piece in steps[-1].found] == [SORTED_PIECE]
