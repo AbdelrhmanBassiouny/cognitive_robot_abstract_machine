@@ -509,10 +509,41 @@ class PlacesPutAt(TrueAnswer):
         :param answered: The place the question answered.
         :param place: The place a thing was put.
         """
+        return PlaceStoodAt(
+            place=place, how_far_a_place_may_differ=self.how_far_a_place_may_differ
+        ).agrees_with(answered)
+
+
+@dataclass
+class PlaceStoodAt(TrueAnswer):
+    """
+    The true answer is this place, to within a spread.
+
+    Where the thing is read twice, once by the query and once for the true answer, and
+    can move between the two readings, as a robot's own link does while its joints
+    report noise.
+    """
+
+    place: Point3
+    """
+    Where the thing stands, in the world root frame.
+    """
+
+    how_far_a_place_may_differ: float = HOW_FAR_A_PLACE_MAY_DIFFER
+    """
+    How far an answered place may lie from this one, in metres.
+    """
+
+    def agrees_with(self, answered: Pose) -> bool:
+        """
+        Whether the answered pose stands at this place, however it is turned.
+
+        :param answered: The pose the question answered.
+        """
         return bool(
             np.allclose(
                 answered.to_position().to_np(),
-                place.to_np(),
+                self.place.to_np(),
                 atol=self.how_far_a_place_may_differ,
             )
         )

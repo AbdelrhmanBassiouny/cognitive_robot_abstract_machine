@@ -32,11 +32,13 @@ from experiments.tracy_experiments.pickup.pickup_demo_real import (
     CHECK_THE_SCENE,
     perturbation_asked_for,
 )
+from experiments.montessori.scenarios import HOW_FAR_A_MOVED_HOLE_GOES
 from experiments.tracy_experiments.pickup.pickup_demo_rehearsal import (
     DEFAULT_CAPTURE,
     PersonAtTheRehearsal,
     Rehearsal,
     RehearsalOption,
+    ShoveShownWithoutAShove,
     check_again_command,
     parse_arguments,
     rehearsal_database_uri,
@@ -47,6 +49,12 @@ from .test_episode_audit import finding_of
 PIECES_IN_THE_CAPTURE = list(SMALLER_PIECES.by_category)
 """
 The pieces the default capture shows on the table, which is every piece of the set.
+"""
+
+A_SHOVE_SHOWN = HOW_FAR_A_MOVED_HOLE_GOES
+"""
+How far the camera shows the shoved piece moved, in metres: as far as the person is
+asked to move it.
 """
 
 # %% the rehearsals
@@ -127,6 +135,29 @@ def rehearsed_with_a_shove(
         perturbation=perturbation_asked_for(
             PerturbationChoice.PIECE_SHOVED, MontessoriShapeCategory.CUBE
         ),
+    )
+    return rehearsal, rehearsal.run()
+
+
+@pytest.fixture(scope="module")
+def rehearsed_with_a_shown_shove(
+    ros: None,
+    artifacts: ArtifactDirectory,
+    database: ResultsDatabase,
+    tmp_path_factory: pytest.TempPathFactory,
+) -> tuple[Rehearsal, EpisodeAuditReport]:
+    """
+    A run the person is asked to shove the cube in, over a camera that shows the cube
+    shoved once they have been asked.
+    """
+    rehearsal = rehearsal_over(
+        artifacts,
+        database,
+        tmp_path_factory.mktemp("bags"),
+        perturbation=perturbation_asked_for(
+            PerturbationChoice.PIECE_SHOVED, MontessoriShapeCategory.CUBE
+        ),
+        shove_shown=A_SHOVE_SHOWN,
     )
     return rehearsal, rehearsal.run()
 
@@ -213,6 +244,33 @@ def test_the_person_is_asked_to_bring_the_perturbation_about(rehearsed_with_a_sh
 
 
 # %% the person
+
+
+def test_a_rehearsal_that_shows_the_shove_notices_it(rehearsed_with_a_shown_shove):
+    """
+    The camera shows the table the person left, with the shoved piece moved, so the
+    check sees what they moved move before the sorting starts.
+    """
+    rehearsal, report = rehearsed_with_a_shown_shove
+
+    finding = finding_of(report, Check.PERTURBATION)
+    assert finding.verdict is Verdict.PASSED, report.render()
+
+
+def test_a_shove_cannot_be_shown_in_a_rehearsal_that_asks_for_none(
+    artifacts: ArtifactDirectory,
+    database: ResultsDatabase,
+    tmp_path: Path,
+):
+    with pytest.raises(ShoveShownWithoutAShove):
+        rehearsal_over(artifacts, database, tmp_path, shove_shown=A_SHOVE_SHOWN)
+
+
+def test_the_shove_shown_is_read_off_the_command_line():
+    assert parse_arguments([]).shove_shown is None
+    assert parse_arguments(
+        [RehearsalOption.SHOVE_SHOWN, str(A_SHOVE_SHOWN)]
+    ).shove_shown == pytest.approx(A_SHOVE_SHOWN)
 
 
 def test_the_person_shows_the_capture_taken_after_the_perturbation_only_when_asked_for_it():

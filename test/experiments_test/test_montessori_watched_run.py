@@ -36,6 +36,7 @@ from experiments.montessori.scenarios import (
     PieceShoved,
     SortingScene,
     SortingStep,
+    TargetHoleMoved,
     TrialNotFilmedError,
 )
 from experiments.montessori.semantics import MontessoriShapeCategory
@@ -217,6 +218,40 @@ def test_a_shoved_piece_is_remembered_as_having_moved(area):
     ]
     assert SortingScene(scenario.physics.world).body_of(shoved_piece).name.name in (
         which_moved.answer
+    )
+
+
+def test_a_slid_board_is_seen_translating_after_it_slid(area):
+    """
+    Sliding the board moves no piece, so the piece the monitor watches stays still; what
+    slid is the board, and that is what has to be seen translating once someone slid it.
+    """
+    scenario = SyntheticGrasperWatchesTheSceneStandStill(
+        layout=PieceLayout.randomized(seed=SEED, area=area),
+        world_builder=board_and_the_arm(),
+    )
+    run = watched(scenario)
+
+    run.run(
+        scenario,
+        perturbations=[
+            TargetHoleMoved(
+                step=SortingStep.SETTLE,
+                category=MontessoriShapeCategory.CUBE,
+                displacement=HOW_FAR_A_PERTURBATION_MOVES_SOMETHING,
+            )
+        ],
+    )
+
+    [trial] = run.records_trials.trials
+    board = SortingScene(scenario.physics.world).board.root
+    [moved] = trial.moved_by_someone_else
+    assert moved.things_moved == [board.name]
+    assert any(
+        isinstance(event, TranslationEvent) and event.tracked_object.name == board.name
+        for tick in trial.ticks
+        if tick.moment >= moved.moment
+        for event in tick.events
     )
 
 
