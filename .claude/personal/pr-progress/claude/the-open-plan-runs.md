@@ -305,6 +305,21 @@ what produced the 15 `get_package_share_directory` errors earlier sessions saw).
 baseline pickup demo run before any change: cube, cylinder and rectangular prism all
 1.0, triangular prism 0.0 (its own xfail), 1168 s.
 
+Regression after the round: `test_tracy_pickup_demo_mujoco.py` 20 passed + 1 xfailed
+(the grasp change did not break it); `test_framework_demo.py` + `test_tracy_real_time_simulation.py`
+11 passed; the whole of `test/experiments_test` bar the pickup demo, 1758 passed, 12
+skipped, 6 xfailed, 22 failed + 35 errors - every one of them in a camera/rosbag/rclpy
+file the container only fabricates (`test_montessori_live_camera.py`,
+`test_montessori_recorded_camera.py`, `test_episode_audit_camera.py`,
+`test_paper_camera_frame*.py`, `test_tracy_rosbag_recording_process.py`,
+`test_tracy_montessori_gripper_feedback.py`, `test_sage10k.py`,
+`test_real_stretch_demo_process_boundary.py`), none of them a file this round touches.
+`test_an_unpaced_simulation_does_not_wait_for_the_wall_clock` fails only while the
+container is loaded (1.05 s against its 1.0 s bound) and passes on its own.
+
+Pushed as `7372c13a83`; #369's description rewritten. #369 is not a draft and was left
+that way.
+
 ## Open review thread on #368 (r4002576823, awaiting a decision)
 
 "Index the symbol graph by the world it has" for `WorldBackend.everything_it_holds`.
