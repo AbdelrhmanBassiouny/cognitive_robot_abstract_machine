@@ -471,6 +471,13 @@ def test_a_card_of_an_episode_that_kept_no_world_says_so(
         PickedUpRecentlyCard().write(trial, tmp_path)
 
 
+HELD_BELOW_BY = 0.15
+"""
+How far below the piece it hangs from a held piece hangs, in metres: clear of it, so
+that the two are not drawn in the same place.
+"""
+
+
 def held_freely_below_a_body(world: World) -> World:
     """
     The given scene with a third piece hanging below the other piece by a free joint,
@@ -482,7 +489,12 @@ def held_freely_below_a_body(world: World) -> World:
     with world.modify_world():
         world.add_connection(
             Connection6DoF.create_with_dofs(
-                world=world, parent=world.get_body_by_name(OTHER_NAME), child=held
+                world=world,
+                parent=world.get_body_by_name(OTHER_NAME),
+                child=held,
+                parent_T_connection_expression=HomogeneousTransformationMatrix.from_xyz_rpy(
+                    z=-HELD_BELOW_BY
+                ),
             )
         )
     return world

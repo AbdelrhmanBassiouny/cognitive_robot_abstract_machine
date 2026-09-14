@@ -343,13 +343,14 @@ class DirectionalLight:
         return facing(np.asarray(self.coming_from, dtype=float), np.zeros(3))
 
 
-KEY_LIGHT = DirectionalLight(coming_from=(2.4, -1.0, 3.8), intensity=3.0)
+KEY_LIGHT = DirectionalLight(coming_from=(2.4, -1.0, 3.8), intensity=2.0)
 """
 The main light, from high up and a little to the side, which gives every body a lit face
-and a shaded one to read its shape by.
+and a shaded one to read its shape by; strong enough to shape a light grey body without
+washing the face it falls square on out to white.
 """
 
-FILL_LIGHT = DirectionalLight(coming_from=(-2.6, -3.0, 1.8), intensity=1.2)
+FILL_LIGHT = DirectionalLight(coming_from=(-2.6, -3.0, 1.8), intensity=0.8)
 """
 The weaker light from the other side, which keeps the faces the main light leaves in
 shade from going black.
@@ -362,7 +363,7 @@ class Lighting:
     How a picture is lit.
     """
 
-    ambient: float = 0.35
+    ambient: float = 0.3
     """
     How much light reaches a surface no light points at, so a body facing away from every
     light is still read as a shape rather than as background.
@@ -423,9 +424,17 @@ class Softened(Appearance):
     What the mix is multiplied by afterwards.
     """
 
+    uncolored: Optional[Color] = None
+    """
+    What a mesh is drawn in, as it is, when neither its file nor the world colours it;
+    None draws it in the world's default colour.
+    """
+
     def color_of(
         self, entity: KinematicStructureEntity, shape: Shape
     ) -> Optional[Color]:
+        if self.uncolored is not None and is_uncolored(shape):
+            return self.uncolored
         stated = stated_color_of(shape)
         if stated is None:
             return None
@@ -467,6 +476,16 @@ def stated_color_of(shape: Shape) -> Optional[Color]:
     if isinstance(shape, Mesh) and shape.color == Color():
         return None
     return shape.color
+
+
+def is_uncolored(shape: Shape) -> bool:
+    """
+    Whether neither the world nor the shape's file gives the shape a colour: a mesh the
+    world leaves at the default colour, out of a file that states none of its own.
+
+    :param shape: The shape to read.
+    """
+    return stated_color_of(shape) is None and not shape.mesh.visual.defined
 
 
 # %% the picture that comes out

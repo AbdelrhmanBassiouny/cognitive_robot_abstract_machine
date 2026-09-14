@@ -158,6 +158,14 @@ bottom, in degrees: the pieces a question relates are a few centimetres across, 
 wider view from that far off they are a few pixels each.
 """
 
+UNCOLORED = Color(0.792156862745098, 0.819607843137255, 0.933333333333333)
+"""
+What a body the twin states no colour for is drawn in: the light grey Tracy's
+description gives its table (its ``grey`` material), which the twin's reader of the
+description keeps for boxes and cylinders but not for meshes, so the table would
+otherwise be drawn white.
+"""
+
 
 @dataclass(frozen=True)
 class PointOfView:
@@ -355,11 +363,11 @@ class SceneRender:
     What everything else is drawn in, or None to draw it in the colours the twin states.
     """
 
-    palette: Appearance = Softened()
+    palette: Appearance = Softened(uncolored=UNCOLORED)
     """
     What everything the picture leaves in the colours the twin states is drawn in:
     those colours softened for print, so that the answer picked out in a full colour
-    stands out of the scene.
+    stands out of the scene, and :data:`UNCOLORED` where the twin states none.
     """
 
     lighting: Lighting = Lighting()

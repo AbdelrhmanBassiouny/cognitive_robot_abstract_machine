@@ -28,6 +28,7 @@ from semantic_digital_twin.adapters.picture import (
     Lighting,
     Recolored,
     Softened,
+    is_uncolored,
     Viewpoint,
     IndexPaint,
     WorldPicture,
@@ -360,6 +361,26 @@ def test_a_mesh_carrying_its_own_colours_is_not_softened(tmp_path: Path) -> None
     assert stated_color_of(as_the_file_has_it) is None
     assert Softened().color_of(body, as_the_file_has_it) is None
     assert Softened().color_of(body, stated) == NEAR_COLOR.softened()
+
+
+def test_a_mesh_nothing_colours_is_drawn_in_the_colour_given_for_one(
+    tmp_path: Path,
+) -> None:
+    """
+    A mesh out of a file that states no colours, which the world leaves at the default
+    colour too, is drawn in the colour a softening is given for such a mesh, as it is; a
+    mesh the world colours is not.
+    """
+    mesh_file = tmp_path / "part.stl"
+    Box(scale=Scale(0.1, 0.1, 0.1)).mesh.export(str(mesh_file))
+    uncolored = Mesh(filename=str(mesh_file))
+    stated = Mesh(filename=str(mesh_file), color=NEAR_COLOR)
+    body = Body(name=PrefixedName("part"))
+    softened = Softened(uncolored=FAR_COLOR)
+    assert is_uncolored(uncolored)
+    assert not is_uncolored(stated)
+    assert softened.color_of(body, uncolored) == FAR_COLOR
+    assert softened.color_of(body, stated) == NEAR_COLOR.softened()
 
 
 def test_as_stated_draws_nothing_differently(

@@ -25,6 +25,7 @@ from experiments.montessori.results_database import ResultsDatabase
 from experiments.paper.labels import LABEL_COLOR
 from experiments.paper.scene import (
     LOOKING_CLOSELY,
+    UNCOLORED,
     NothingToDrawError,
     PointOfView,
     SceneRender,
@@ -36,7 +37,7 @@ from semantic_digital_twin.spatial_types.spatial_types import (
 )
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.connections import FixedConnection
-from semantic_digital_twin.world_description.geometry import Box, Color, Scale
+from semantic_digital_twin.world_description.geometry import Box, Color, Mesh, Scale
 from semantic_digital_twin.world_description.shape_collection import ShapeCollection
 from semantic_digital_twin.world_description.world_entity import (
     Body,
@@ -177,8 +178,37 @@ def test_a_body_the_answer_leaves_out_is_drawn_in_the_palette(
     answered = body_named(scene_with_two_things, ANSWERED_NAME)
     other = body_named(scene_with_two_things, OTHER_NAME)
     render = SceneRender(world=scene_with_two_things, highlight=HIGHLIGHT)
-    assert render.palette == Softened()
+    assert render.palette == Softened(uncolored=UNCOLORED)
     assert drawn_colors_of(render, [answered], other) == (STATED_COLOR.softened(),)
+
+
+def test_a_body_the_twin_states_no_colour_for_is_drawn_in_the_description_grey(
+    scene_with_two_things: World, tmp_path: Path
+) -> None:
+    """
+    The twin's reader of a robot description keeps the colour of a box but not of a
+    mesh, so a table read from one is white to the twin; the palette draws such a body
+    in the grey the description gives it rather than in white.
+    """
+    mesh_file = tmp_path / "table.stl"
+    Box(scale=Scale(0.2, 0.2, 0.2)).mesh.export(str(mesh_file))
+    table = Body(name=PrefixedName("table"))
+    table.visual = ShapeCollection(
+        [Mesh(filename=str(mesh_file))], reference_frame=table
+    )
+    answered = body_named(scene_with_two_things, ANSWERED_NAME)
+    with scene_with_two_things.modify_world():
+        scene_with_two_things.add_connection(
+            FixedConnection(
+                parent=answered,
+                child=table,
+                parent_T_connection_expression=HomogeneousTransformationMatrix.from_xyz_rpy(
+                    z=-0.5
+                ),
+            )
+        )
+    render = SceneRender(world=scene_with_two_things, highlight=HIGHLIGHT)
+    assert drawn_colors_of(render, [answered], table) == (UNCOLORED,)
 
 
 def test_everything_the_answer_does_not_name_is_faded_when_a_fade_is_asked_for(

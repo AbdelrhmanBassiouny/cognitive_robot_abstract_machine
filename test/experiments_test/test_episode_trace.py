@@ -430,6 +430,29 @@ def test_a_recorder_thins_changes_that_come_faster_than_its_period(
     assert recorder.trace.moments == [EARLIER, LATER]
 
 
+def test_a_stopped_recorder_keeps_the_last_change_its_period_thinned_away(
+    two_arm_robot_world: World,
+) -> None:
+    """
+    A run whose last move falls within one period of the sample before it would
+    otherwise end its trace one period short of where the world ended up.
+    """
+    clock = Ticking()
+    recorder = JointTraceRecorder(
+        _world=two_arm_robot_world, clock=clock.read, period=1.0
+    )
+    joint = a_joint_of(two_arm_robot_world)
+
+    for moment in (EARLIER, EARLIER + 0.25, EARLIER + 0.5):
+        clock.now = moment
+        two_arm_robot_world.state[joint.id].position = moment
+        two_arm_robot_world.notify_state_change()
+    recorder.stop()
+
+    assert recorder.trace.moments == [EARLIER, EARLIER + 0.5]
+    assert recorder.trace.at(EARLIER + 0.5).positions[str(joint.name)] == EARLIER + 0.5
+
+
 def test_a_stopped_recorder_samples_nothing_more(two_arm_robot_world: World) -> None:
     clock = Ticking()
     recorder = JointTraceRecorder(_world=two_arm_robot_world, clock=clock.read)

@@ -308,12 +308,30 @@ class JointTraceRecorder(StateChangeCallback):
     The reading of the clock the next sample is due at, or None before the first.
     """
 
+    _thinned_at: Optional[float] = field(init=False, default=None)
+    """
+    The reading of the clock at the latest change the period thinned away, or None where
+    the latest change was sampled.
+    """
+
     def on_state_change(self, **kwargs) -> None:
         moment = self.clock()
         if self._next_at is not None and moment < self._next_at:
+            self._thinned_at = moment
             return
         self._next_at = moment + self.period
+        self._thinned_at = None
         self.trace.sample(self._world, moment)
+
+    def stop(self) -> None:
+        """
+        Stop sampling, keeping the latest change the period thinned away, so the trace
+        ends where the world did rather than one period short of it.
+        """
+        if self._thinned_at is not None:
+            self.trace.sample(self._world, self._thinned_at)
+            self._thinned_at = None
+        super().stop()
 
 
 # %% what a camera saw
