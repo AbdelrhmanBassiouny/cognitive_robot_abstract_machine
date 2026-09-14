@@ -15,7 +15,14 @@ from dataclasses import dataclass, field
 from krrood.ormatic.data_access_objects.helper import to_dao
 from krrood.ormatic.data_access_objects.to_dao import ToDataAccessObjectState
 from sqlalchemy.orm import Session
-from typing_extensions import TYPE_CHECKING, List, Optional, Protocol, Sequence
+from typing_extensions import (
+    TYPE_CHECKING,
+    Iterator,
+    List,
+    Optional,
+    Protocol,
+    Sequence,
+)
 
 from experiments.episodes.artifacts import EpisodeArtifacts, Transcript, keep_meshes_of
 from experiments.episodes.episode import Episode, RecordedTrial
@@ -33,6 +40,7 @@ from experiments.scenarios.scenario import Perturbation, WorldType
 
 if TYPE_CHECKING:
     from semantic_digital_twin.adapters.mujoco_video_recording import RecordedVideo
+    from semantic_digital_twin.world import World
 
     from experiments.scenarios.trial import Trial
 
@@ -83,15 +91,31 @@ class RecordsTrialsToADatabase:
         """
         Commit one finished trial, under the episode it belongs to.
 
-        The world the episode kept is recorded by the files its meshes are read from, so
-        those are kept where a later process finds them before the world goes in.
+        Every world the trial records -- the episode's, and the copy each performed plan
+        keeps of the world it was performed in -- is recorded by the files its meshes
+        are read from, so those are kept where a later process finds them before the
+        world goes in.
+
+        :param trial: The trial to keep.
+        """
+        for world in self.worlds_recorded_with(trial):
+            keep_meshes_of(world)
+        self.session.add(to_dao(trial, self.conversion_state))
+        self.session.commit()
+
+    @staticmethod
+    def worlds_recorded_with(trial: RecordedTrial) -> Iterator[World]:
+        """
+        Every world the trial's rows carry: the episode's own, if it kept one, and the
+        world each of its plans was performed in.
 
         :param trial: The trial to keep.
         """
         if trial.episode.world is not None:
-            keep_meshes_of(trial.episode.world)
-        self.session.add(to_dao(trial, self.conversion_state))
-        self.session.commit()
+            yield trial.episode.world
+        for performed in trial.plans:
+            if performed.plan.initial_world is not None:
+                yield performed.plan.initial_world
 
     def close(self) -> None:
         """

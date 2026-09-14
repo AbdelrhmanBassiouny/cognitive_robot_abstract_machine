@@ -37,6 +37,7 @@ from experiments.episodes.episode import (
     Episode,
     InsertionAttempt,
     InsertionOutcome,
+    PerformedPlan,
     RecordedTrial,
 )
 from experiments.episodes.recording import (
@@ -343,6 +344,37 @@ def test_a_kept_world_whose_meshes_go_with_this_process_is_read_back_after_it_ha
     assert isinstance(read_back, Mesh)
     assert isinstance(read_back.mesh, trimesh.Trimesh)
     assert Path(read_back.filename).is_relative_to(configured_mesh_directory())
+
+
+def test_the_world_a_plan_was_performed_in_is_read_back_after_the_process_has_exited(
+    tmp_path, monkeypatch
+):
+    """
+    A plan keeps a copy of the world it was performed in, meshes and all, and that copy
+    goes into the record with the trial; its meshes have to be kept the way the
+    episode's own are, or the trial cannot be read back once the process has exited.
+    """
+    monkeypatch.setenv(ARTIFACT_DIRECTORY_ENVIRONMENT_VARIABLE, str(tmp_path))
+    exporting_process_root = tmp_path / "exporting-process"
+    exporting_process_root.mkdir()
+    monkeypatch.setattr(MeshFileStorage(), "root", exporting_process_root)
+    database = ResultsDatabase(uri="sqlite:///%s" % (tmp_path / "results.db"))
+    plan = minimal_plan()
+    plan.initial_world = world_of_a_mesh_this_process_exported()
+    trial = finished_trial(sorting_episode())
+    trial.plans.append(PerformedPlan(plan=plan))
+    recording = open_recording(database)
+    recording.record(trial)
+    recording.close()
+    shutil.rmtree(exporting_process_root)
+
+    [read_back] = LongTermMemory(database).recall_every_trial()
+
+    [performed] = read_back.plans
+    [body] = performed.plan.initial_world.kinematic_structure_entities
+    [mesh] = body.visual.shapes
+    assert isinstance(mesh.mesh, trimesh.Trimesh)
+    assert Path(mesh.filename).is_relative_to(configured_mesh_directory())
 
 
 def test_a_recorded_trial_carries_what_its_trial_measured():
