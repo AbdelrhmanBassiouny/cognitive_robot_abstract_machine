@@ -25,6 +25,7 @@ from dataclasses import dataclass, field
 
 import rclpy
 from rclpy.node import Node
+from rclpy.time import Time
 from sensor_msgs.msg import CompressedImage
 from typing_extensions import Callable, List, Optional, TypeVar
 
@@ -163,19 +164,36 @@ class MontessoriPerceptionNode(RepeatedLook):
     Whether the node has been told to take no more looks.
     """
 
+    _handed_its_pipeline_at: Optional[int] = field(init=False, default=None)
+    """
+    When the node was handed the pipeline it reads with, in nanoseconds of its own
+    clock, while no colour image sent since has arrived; None otherwise.
+    """
+
+    _shortest_delay: Optional[int] = field(init=False, default=None)
+    """
+    The shortest time a colour image has taken from the stamp the camera gave it to
+    reaching the node, in nanoseconds of the node's clock, or None until one has
+    arrived.
+    """
+
     def __post_init__(self) -> None:
         self._camera = LiveCamera(node=self.node, color_callback=self._on_look)
 
     # %% each look
 
-    def _on_look(self, _: CompressedImage) -> None:
+    def _on_look(self, image: CompressedImage) -> None:
         """
         Run the pipeline on the newest look, once a colour image has completed it.
 
         The bare images are shown only while the camera cannot be placed in the world,
         since a viewer that is about to be handed the same ones cut down to the
         workspace and drawn on would otherwise flash the bare ones first.
+
+        :param image: The colour image that completed the look.
         """
+        if self._was_sent_before_the_pipeline_was_handed_over(image):
+            return
         if (
             self._has_stopped_looking
             or self._camera.missing_inputs()
@@ -256,12 +274,44 @@ class MontessoriPerceptionNode(RepeatedLook):
         Take every later look through the given pipeline, and forget the newest result,
         which was taken through the pipeline this replaces.
 
+        A pipeline is handed over once the table may have changed, so no later look is
+        taken of a colour image the camera sent before then, even one still on its way.
+
         :param pipeline: What takes the looks from now on.
         """
         with self._lock:
             super().read_with(pipeline)
             self._scene = None
             self._frame = None
+            self._handed_its_pipeline_at = self.node.get_clock().now().nanoseconds
+
+    def _was_sent_before_the_pipeline_was_handed_over(
+        self, image: CompressedImage
+    ) -> bool:
+        """
+        Whether a colour image that has just arrived was sent before the node was handed
+        the pipeline it reads with.
+
+        The camera's stamps are read against the node's clock by the shortest delay any
+        image has taken to arrive, since a bag played back stamps its images with the
+        day it was recorded. Images arrive in the order they were sent, so once one sent
+        after the handover has arrived no later one is asked about -- a bag played round
+        again starts over from its first stamp.
+
+        :param image: A colour image that has just arrived.
+        :return: Whether it was sent before the handover.
+        """
+        stamp = Time.from_msg(image.header.stamp).nanoseconds
+        delay = self.node.get_clock().now().nanoseconds - stamp
+        with self._lock:
+            if self._shortest_delay is None or delay < self._shortest_delay:
+                self._shortest_delay = delay
+            if self._handed_its_pipeline_at is None:
+                return False
+            if stamp + self._shortest_delay < self._handed_its_pipeline_at:
+                return True
+            self._handed_its_pipeline_at = None
+            return False
 
     def check_camera_pose(self, frame: RgbdFrame) -> CameraPoseError:
         """

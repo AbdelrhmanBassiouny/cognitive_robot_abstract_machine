@@ -19,10 +19,13 @@ from __future__ import annotations
 import contextlib
 import logging
 import threading
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
+from pathlib import Path
 
+import cv2
 import numpy as np
 import rclpy
+from krrood.exceptions import DataclassException
 from control_msgs.action import ParallelGripperCommand
 from geometry_msgs.msg import TransformStamped
 from rclpy.action import ActionServer
@@ -40,12 +43,18 @@ from experiments.montessori.perception.camera import (
     COMPRESSED_DEPTH_IN_MILLIMETRES_FORMAT,
     MILLIMETRES_PER_METRE,
     CameraTopic,
+    CompressedImageFormat,
     ImageEncoding,
+    RgbdFrame,
     encode_compressed_depth_image,
 )
 from experiments.montessori.perception.captures import CapturePart, SceneCapture
+from experiments.montessori.perception.detections import DetectedMontessoriShape
+from experiments.montessori.perception.orthophoto import OrthophotoProjector
+from experiments.montessori.perception.overlay import project_to_pixels
+from experiments.montessori.perception.pipeline import MontessoriPerceptionPipeline
 from experiments.montessori.perception.recordings import RAW_DEPTH_TOPIC
-from experiments.montessori.semantics import MontessoriShape
+from experiments.montessori.semantics import MontessoriShape, MontessoriShapeCategory
 from experiments.tracy_experiments.equipment import parse_tracy
 from experiments.tracy_experiments.montessori.gripper_feedback import (
     FULLY_CLOSED_KNUCKLE_POSITION,
@@ -63,6 +72,7 @@ from semantic_digital_twin.adapters.ros.world_synchronizer import WorldSynchroni
 from semantic_digital_twin.robots.tracy import Tracy
 from semantic_digital_twin.spatial_types.spatial_types import (
     HomogeneousTransformationMatrix,
+    Vector3,
 )
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.degree_of_freedom import DegreeOfFreedom
@@ -337,6 +347,203 @@ class CaptureCamera:
             message.header.stamp = stamp
             message.header.frame_id = CAMERA_FRAME
             self._publishers[str(topic)].publish(message)
+
+
+# %% a capture of a shoved piece
+
+SHOVED_CAPTURE_SUFFIX = "_shoved"
+"""
+What the name of a capture showing a shove adds to the name of the capture it was made
+from.
+"""
+
+MARGIN_AROUND_A_PIECE_PIXELS = 4
+"""
+How many pixels beyond the outline a look found a piece's image is taken to reach, so
+the rim a compressed image blurs and the shadow at the piece's foot move with it.
+"""
+
+INPAINTING_RADIUS_PIXELS = 5
+"""
+How far around a pixel the table is read to fill in where a moved piece stood.
+"""
+
+SHOVED_JPEG_QUALITY = 95
+"""
+The quality the colour image of a capture showing a shove is compressed at: high enough
+that recompressing leaves the pieces' outlines as sharp as the capture had them.
+"""
+
+
+@dataclass
+class ShovedPieceNotInTheCapture(DataclassException):
+    """
+    Raised when a capture is to show a piece shoved that no look at it finds.
+    """
+
+    capture_name: str
+    """
+    The capture that was looked at.
+    """
+
+    category: MontessoriShapeCategory
+    """
+    The kind of piece that was to be shoved.
+    """
+
+    def error_message(self) -> str:
+        return "A look at capture %s finds no %s to shove." % (
+            self.capture_name,
+            self.category.value,
+        )
+
+    def suggest_correction(self) -> str:
+        return "Shove a piece the capture shows standing on the table."
+
+
+@dataclass
+class CaptureOfAShove:
+    """
+    A capture of the table as someone who shoved one piece left it: the piece a look
+    finds is taken out of the colour and the depth, the table is filled in where it
+    stood, and the piece is set down the shove away, seen from where the camera stood.
+    """
+
+    capture: SceneCapture
+    """
+    The capture of the table before the shove.
+    """
+
+    pipeline: MontessoriPerceptionPipeline
+    """
+    What finds the piece in the capture.
+    """
+
+    category: MontessoriShapeCategory
+    """
+    The kind of piece shoved.
+    """
+
+    displacement: Vector3
+    """
+    How far the piece is shoved and which way, across the table in the frame the
+    capture's pose is given in.
+    """
+
+    def written_to(self, directory: Path) -> SceneCapture:
+        """
+        Write the capture of the shoved table.
+
+        :param directory: Where its three files are written.
+        :return: The capture, named after the one it was made from.
+        :raises ShovedPieceNotInTheCapture: If no look at the capture finds the piece.
+        """
+        frame = self.capture.to_frame()
+        piece = self.piece_on(frame)
+        where_it_stood = self.pixels_covered_by(frame, piece)
+        across_the_image = self.shove_across_the_image(frame, piece)
+        size = (frame.color.shape[1], frame.color.shape[0])
+        where_it_stands = cv2.warpPerspective(
+            where_it_stood, across_the_image, size, flags=cv2.INTER_NEAREST
+        ).astype(bool)
+        color = cv2.inpaint(
+            frame.color, where_it_stood, INPAINTING_RADIUS_PIXELS, cv2.INPAINT_TELEA
+        )
+        depth = cv2.inpaint(
+            frame.depth.astype(np.float32),
+            where_it_stood,
+            INPAINTING_RADIUS_PIXELS,
+            cv2.INPAINT_TELEA,
+        )
+        color[where_it_stands] = cv2.warpPerspective(
+            frame.color, across_the_image, size
+        )[where_it_stands]
+        depth[where_it_stands] = cv2.warpPerspective(
+            frame.depth.astype(np.float32),
+            across_the_image,
+            size,
+            flags=cv2.INTER_NEAREST,
+        )[where_it_stands]
+        shoved = replace(
+            self.capture,
+            name=self.capture.name + SHOVED_CAPTURE_SUFFIX,
+            directory=directory,
+        )
+        shoved.save(self.compressed(color), depth)
+        return shoved
+
+    def piece_on(self, frame: RgbdFrame) -> DetectedMontessoriShape:
+        """
+        :param frame: The capture's frame.
+        :return: The piece of the shoved kind a look at it finds.
+        :raises ShovedPieceNotInTheCapture: If the look finds none.
+        """
+        for shape in self.pipeline.detect(frame).shapes:
+            if shape.category is self.category:
+                return shape
+        raise ShovedPieceNotInTheCapture(
+            capture_name=self.capture.name, category=self.category
+        )
+
+    @staticmethod
+    def pixels_covered_by(
+        frame: RgbdFrame, piece: DetectedMontessoriShape
+    ) -> np.ndarray:
+        """
+        The pixels the piece's image covers: its outline seen at its foot and at its
+        top, and the sides between them, with a margin around.
+
+        :param frame: The frame the piece was found in.
+        :param piece: The piece.
+        :return: A mask of the image's size, 255 where the piece is seen.
+        """
+        corners = np.vstack(
+            [
+                project_to_pixels(frame, piece.outline, piece.surface_height),
+                project_to_pixels(frame, piece.outline, piece.top_height),
+            ]
+        )
+        mask = np.zeros(frame.color.shape[:2], dtype=np.uint8)
+        cv2.fillConvexPoly(
+            mask, cv2.convexHull(np.round(corners).astype(np.int32)), 255
+        )
+        return cv2.dilate(
+            mask,
+            np.ones((2 * MARGIN_AROUND_A_PIECE_PIXELS + 1,) * 2, dtype=np.uint8),
+        )
+
+    def shove_across_the_image(
+        self, frame: RgbdFrame, piece: DetectedMontessoriShape
+    ) -> np.ndarray:
+        """
+        Where each pixel of the piece's image lands once it is shoved: through the plane
+        of its top onto the table, along the shove, and back into the image.
+
+        :param frame: The frame the piece was found in.
+        :param piece: The piece.
+        :return: The 3x3 homography taking a pixel to where it lands.
+        """
+        pixel_T_plane = OrthophotoProjector.pixel_T_region(frame, piece.top_height)
+        x, y = self.displacement.to_np().flatten()[:2]
+        along_the_shove = np.array([[1.0, 0.0, x], [0.0, 1.0, y], [0.0, 0.0, 1.0]])
+        return pixel_T_plane @ along_the_shove @ np.linalg.inv(pixel_T_plane)
+
+    def compressed(self, color: np.ndarray) -> bytes:
+        """
+        :param color: The colour image, in OpenCV's blue, green, red order.
+        :return: The image compressed the way the capture's colour format says.
+        """
+        payload_encoding = CompressedImageFormat.from_format_field(
+            self.capture.color_format
+        ).payload_encoding
+        in_payload_order = (
+            color[:, :, ::-1] if payload_encoding == ImageEncoding.RGB8 else color
+        )
+        return cv2.imencode(
+            ".jpg",
+            np.ascontiguousarray(in_payload_order),
+            [cv2.IMWRITE_JPEG_QUALITY, SHOVED_JPEG_QUALITY],
+        )[1].tobytes()
 
 
 # %% the grippers' drivers

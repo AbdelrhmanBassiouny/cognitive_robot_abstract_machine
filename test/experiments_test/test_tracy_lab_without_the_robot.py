@@ -20,17 +20,22 @@ import rclpy
 from coraplex.datastructures.enums import Arms
 from rclpy.executors import MultiThreadedExecutor, SingleThreadedExecutor
 from rclpy.node import Node
-from typing_extensions import Callable, Iterator
+from typing_extensions import Callable, Dict, Iterator
 
 from experiments.montessori.perception.captures import SceneCapture
 from experiments.montessori.perception.imagination import piece_mesh
 from experiments.montessori.perception.live_camera import LiveCamera
 from experiments.montessori.pieces import SMALLER_PIECES
 from experiments.montessori.semantics import CubeShape, MontessoriShapeCategory
+from experiments.montessori.perception.node import pipeline_of
+from experiments.montessori.perception.pipeline import MontessoriPerceptionPipeline
+from experiments.montessori.scenarios import HOW_FAR_A_MOVED_HOLE_GOES
 from experiments.tracy_experiments.lab_without_the_robot import (
     KNUCKLE_POSITION_ON_A_PIECE,
     MERGED_JOINT_STATE_TOPIC,
+    CaptureOfAShove,
     LabWithoutTheRobot,
+    tracys_description,
 )
 from experiments.tracy_experiments.live_tracy import LiveTracy
 from experiments.tracy_experiments.montessori.gripper_feedback import (
@@ -51,6 +56,7 @@ from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.robots.tracy import Tracy
 from semantic_digital_twin.spatial_types.spatial_types import (
     HomogeneousTransformationMatrix,
+    Vector3,
 )
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.connections import FixedConnection
@@ -59,6 +65,7 @@ from semantic_digital_twin.world_description.mesh_file_storage import MeshFileSt
 from semantic_digital_twin.world_description.shape_collection import ShapeCollection
 from semantic_digital_twin.world_description.world_entity import Body
 
+from .test_montessori_detection_on_captures import TAPE_TOLERANCE
 from .test_tracy_montessori_scene_builder import MEASURED_CAPTURE
 
 ANOTHER_CAPTURE = "shadowed_lid_rim"
@@ -316,6 +323,62 @@ def test_a_close_on_a_piece_stalls_where_the_fingers_stop_and_stays_there_on_a_r
 
 
 # %% what a bag can record of it
+
+
+A_SHOVE_SHOWN = Vector3(HOW_FAR_A_MOVED_HOLE_GOES, 0.0, 0.0)
+"""
+How far the capture below shows the cube moved from where it stood, as a person's shove
+would leave it.
+"""
+
+
+def places_found_on(
+    capture: SceneCapture, pipeline: MontessoriPerceptionPipeline
+) -> Dict[MontessoriShapeCategory, np.ndarray]:
+    """
+    Where a look at a capture finds each piece, on the table's plane.
+
+    :param capture: The capture looked at.
+    :param pipeline: What takes the look.
+    """
+    return {
+        shape.category: shape.pose.to_position().to_np()[:2]
+        for shape in pipeline.detect(capture.to_frame()).shapes
+    }
+
+
+def test_a_capture_of_a_shove_shows_the_piece_moved_and_the_rest_where_they_stood(
+    capture: SceneCapture, tmp_path: Path
+):
+    """
+    A rehearsal that asks the person for a shove shows the table they leave, so the
+    capture shown afterwards is the same table with only the shoved piece moved.
+    """
+    pipeline = pipeline_of(tracys_description())
+    before = places_found_on(capture, pipeline)
+
+    shoved = CaptureOfAShove(
+        capture=capture,
+        pipeline=pipeline,
+        category=MontessoriShapeCategory.CUBE,
+        displacement=A_SHOVE_SHOWN,
+    ).written_to(tmp_path)
+
+    after = places_found_on(shoved, pipeline)
+    assert set(after) == set(before)
+    for category, stood_at in before.items():
+        moved_by = (
+            A_SHOVE_SHOWN.to_np()[:2]
+            if category is MontessoriShapeCategory.CUBE
+            else np.zeros(2)
+        )
+        np.testing.assert_allclose(
+            after[category], stood_at + moved_by, atol=TAPE_TOLERANCE
+        )
+    np.testing.assert_array_equal(
+        shoved.reference_frame_T_camera, capture.reference_frame_T_camera
+    )
+    assert shoved.intrinsics == capture.intrinsics
 
 
 def test_the_lab_publishes_the_camera_and_joint_state_topics_a_bag_records(
