@@ -224,6 +224,8 @@ of 2026-09-13 are to be re-recorded on the robot, not repaired.
 **State.** Items 1-3 committed (`5b790a4076`, `811b077e1e`, `f1f8e30927`) on top of
 `4c0e77ead0`; final-tree reruns: lab 8, rehearsal 12, recording 25, pickup_demo_real test
 module + audit 55 passed. Pushed to #265 (`f1f8e30927`), still a draft, description section
-"Fixed 2026-09-14 (midday)" added. Next: `--no-episode` (test first, own commit), then
+"Fixed 2026-09-14 (midday)" added. `--no-episode` done: `a90a043885` (pushed; 
+`database_asked_for`, `PickupDemo.keep`; demo test module 32 passed). Open question to the
+developer: the rehearsal inherits `--no-episode` and ignores it -- refuse it there? Next:
 items 4-8; item 9 is a re-recording on the robot, the developer's to run.
 
