@@ -184,3 +184,46 @@ record ~20 s, audit). Report: all PASSED except camera recording (fixed by 5) --
 reports the perturbation WARNING (nothing moved). Take a before/after capture pair at
 the lab with `capture_from_camera` to rehearse it later.
 
+## robot-reach-and-rehearsal-exit: the nine-item list of 2026-09-14 (midday)
+
+**Session.** https://claude.ai/code/session_01FDXKmgDQuFEQPonF7H2ni7
+
+**Robot error first.** `pickup_demo_real.py` on the robot died on its first reach with
+`GiskardWorldUpdateNotReceivedError` (update not within 30 s). Cause: this morning's
+single-threaded `LiveTracy` executor runs the camera's look (inside the colour callback,
+pipeline-long) on the same thread as the world synchronizer; rclpy takes one message per
+subscription per round, so a motion's ticks drained one per look. Fix `4c0e77ead0`
+(pushed): camera on its own node + `SingleThreadedExecutor` (`SpunNode`). Test in
+`test_tracy_lab_without_the_robot.py` (200 ticks at 100 Hz within 10 s). Tests and
+rehearsals must use their own `ROS_DOMAIN_ID` + `ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST`
+while the bringup is up (domain 2): the lab stand-in otherwise talks to the robot's graph.
+`--record` only adds the bag; the episode always goes to the database -- asked the developer.
+
+**Plan / done (items 1-3 of the list).**
+1. Recalled plan world is a `WorldMapping`: krrood orders alternative-mapping conversion
+   by declared pre-build classes only; `PlanMapping` declares none. Fix in
+   `from_dao.py` (`_conversion_order`: held mapping before holder unless it reverses a
+   declared edge). PR #374 off `bass/main` (`bug`, first branched off `origin/main` =
+   ACRAMbly by mistake, rebased and force-pushed at the developer's request), cherry-picked
+   onto #265 (`3f2f32f5f7`, to be amended with the experiments test). Asked the developer
+   whether `Plan.initial_world` should be recorded at all (17 worlds per sorting trial).
+2. `ask_episode.py --at`: `ask_at_a_moment`, `MomentOutsideTheTrial`, `AnswersAtAMoment`,
+   `JointPositions.standing_in`; first trial only. Tests 20 + 23 passed.
+3. Exit race: `MontessoriPerceptionNode.stop_looking` (+ `LookingHasStopped`), called by
+   `PickupDemo.run` before `keep_the_episode`. "rcl_shutdown already called" = rclpy's
+   SIGINT handler shutting the context before `main` (traced: nothing else does); rehearsal
+   `main` uses `try_shutdown`, test in `test_tracy_pickup_demo_rehearsal_interrupted.py`.
+   Traced rehearsal after the fixes: clean exit, audit PASSED except the camera-recording
+   WARNING (CLI keeps 1 frame in 10; first kept frame 2.6 s in; not a robot problem).
+
+**Developer's answers (2026-09-14).** Recording the episode stays the default, with a
+`--no-episode` flag to run without one (new work, test first, after 1-3 are pushed).
+`Plan.initial_world` keeps being recorded. The three unreadable real stand-still episodes
+of 2026-09-13 are to be re-recorded on the robot, not repaired.
+
+**State.** Items 1-3 committed (`5b790a4076`, `811b077e1e`, `f1f8e30927`) on top of
+`4c0e77ead0`; final-tree reruns: lab 8, rehearsal 12, recording 25, pickup_demo_real test
+module + audit 55 passed. Pushed to #265 (`f1f8e30927`), still a draft, description section
+"Fixed 2026-09-14 (midday)" added. Next: `--no-episode` (test first, own commit), then
+items 4-8; item 9 is a re-recording on the robot, the developer's to run.
+
