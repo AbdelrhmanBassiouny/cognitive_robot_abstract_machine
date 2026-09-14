@@ -18,13 +18,14 @@ from semantic_digital_twin.world_description.geometry import Color
 
 # %% the colour every panel picks the answer out in
 
-ANSWER_COLOR = Color(1.0, 0.78, 0.06, 1.0)
+ANSWER_COLOR = Color(0.85, 0.1, 0.6, 1.0)
 """
 What a card draws the answer in, whichever of its pictures is drawing it.
 
 One colour across every panel is what lets the reader carry an answer from one to the
 next: the body picked out of the scene, the row of the event it is about, and the item
-of the plan that accounts for that event are all the same amber.
+of the plan that accounts for that event are all the same magenta -- which nothing in
+the scene is, where the pieces are yellow, the board orange and the robot grey and blue.
 """
 
 # %% which picture of a card a panel is
@@ -65,7 +66,8 @@ class PanelKind(StrEnum):
 
     CAMERA_FRAME = "camera_frame"
     """
-    What the robot's own camera saw at that moment, which only a run on the robot has.
+    What the run's camera saw at that moment: the robot's own camera, or the twin as a
+    run in simulation stood at it.
     """
 
     CAMERA_BEFORE_AND_AFTER = "camera_before_and_after"
@@ -152,13 +154,13 @@ _PANEL_WORDING = {
     ),
     PanelKind.CAMERA_FRAME: PanelWording(
         level="what the camera saw",
-        caption="as the robot's camera saw it at that moment.",
-        when_missing="only a run on the robot records a camera.",
+        caption="as the run's camera saw it at that moment.",
+        when_missing="this run kept neither a camera nor a trace of its joints.",
     ),
     PanelKind.CAMERA_BEFORE_AND_AFTER: PanelWording(
         level="what the camera saw, before and after",
-        caption="as the robot's camera saw it just before and just after.",
-        when_missing="only a run on the robot records a camera.",
+        caption="as the run's camera saw it just before and just after.",
+        when_missing="this run kept neither a camera nor a trace of its joints.",
     ),
 }
 """

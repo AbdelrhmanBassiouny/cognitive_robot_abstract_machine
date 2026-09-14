@@ -377,6 +377,147 @@ def _build_world_with_two_textured_bodies(
     return builder
 
 
+# %% a Collada mesh coloured part by part
+
+collada_dir = os.path.join(os.path.dirname(mjcf_dir), "collada")
+"""
+Where the Collada files the tests read are kept.
+"""
+
+TWO_COLOURED_CUBES = os.path.join(collada_dir, "two_coloured_cubes.dae")
+"""
+A Collada file holding a red cube and a blue cube, each coloured by a material of its
+own, the way a robot link's visual mesh colours its parts.
+"""
+
+TWO_COLOURED_CUBES_BODY = "two_cubes"
+"""
+What the body wearing that mesh is called.
+"""
+
+
+def _build_world_wearing(
+    tmp_path, mesh_file: str, color: Color = Color()
+) -> MujocoBuilder:
+    """
+    Build a world of one body wearing the given mesh as what it is seen with.
+
+    :param tmp_path: Where the model is written.
+    :param mesh_file: The mesh the body wears.
+    :param color: The colour the shape states, or none.
+    """
+    world = World()
+    with world.modify_world():
+        root = Body(name=PrefixedName("root"))
+        world.add_body(root)
+        body = Body(
+            name=PrefixedName(TWO_COLOURED_CUBES_BODY),
+            visual=ShapeCollection([Mesh(filename=mesh_file, color=color)]),
+        )
+        world.add_kinematic_structure_entity(body)
+        world.add_connection(FixedConnection(parent=root, child=body))
+    builder = MujocoBuilder()
+    builder.build_world(world=world, file_path=str(tmp_path / "scene.xml"))
+    return builder
+
+
+def _geoms_of(builder: MujocoBuilder, body_name: str) -> list:
+    """
+    The geoms the spec holds for the named body.
+
+    :param builder: The builder whose spec is read.
+    :param body_name: The body whose geoms are wanted.
+    """
+    [body] = [body for body in builder.spec.bodies if body.name == body_name]
+    return list(body.geoms)
+
+
+def test_a_collada_mesh_of_several_materials_is_built_as_one_geom_per_material(
+    tmp_path,
+):
+    """
+    MuJoCo reads an STL, which carries no colour, so a Collada file colouring its parts
+    differently is written out one part per material and each part drawn in its own.
+    """
+    builder = _build_world_wearing(tmp_path, TWO_COLOURED_CUBES)
+
+    geoms = _geoms_of(builder, TWO_COLOURED_CUBES_BODY)
+
+    assert sorted(list(geom.rgba) for geom in geoms) == [
+        [0.0, 0.0, 1.0, 1.0],
+        [1.0, 0.0, 0.0, 1.0],
+    ]
+    assert len({geom.meshname for geom in geoms}) == 2
+    assert len({geom.name for geom in geoms}) == 2
+
+
+def test_the_parts_of_a_collada_mesh_stand_where_the_file_puts_them(tmp_path):
+    """
+    Splitting the file must not move anything: the parts together cover what the whole
+    mesh covers.
+    """
+    builder = _build_world_wearing(tmp_path, TWO_COLOURED_CUBES)
+
+    parts = [
+        trimesh.load(mesh.file)
+        for mesh in builder.spec.meshes
+        if mesh.name
+        in {geom.meshname for geom in _geoms_of(builder, TWO_COLOURED_CUBES_BODY)}
+    ]
+    together = trimesh.util.concatenate(parts)
+
+    whole = trimesh.load(TWO_COLOURED_CUBES, force="mesh")
+    assert together.bounds == pytest.approx(whole.bounds)
+
+
+def test_a_collision_mesh_named_like_the_visual_mesh_is_its_own_asset(tmp_path):
+    """
+    A link's collision mesh often shares its file name with the visual mesh in another
+    folder; the two are two assets, so the link collides with the mesh its description
+    states rather than with the one it is seen with.
+    """
+    visual_file = tmp_path / "visual" / "link.obj"
+    collision_file = tmp_path / "collision" / "link.stl"
+    visual_file.parent.mkdir()
+    collision_file.parent.mkdir()
+    trimesh.creation.icosphere(radius=0.1).export(str(visual_file))
+    trimesh.creation.box(extents=(0.1, 0.1, 0.1)).export(str(collision_file))
+    world = World()
+    with world.modify_world():
+        root = Body(name=PrefixedName("root"))
+        world.add_body(root)
+        body = Body(
+            name=PrefixedName(TWO_COLOURED_CUBES_BODY),
+            visual=ShapeCollection([Mesh(filename=str(visual_file))]),
+            collision=ShapeCollection([Mesh(filename=str(collision_file))]),
+        )
+        world.add_kinematic_structure_entity(body)
+        world.add_connection(FixedConnection(parent=root, child=body))
+    builder = MujocoBuilder()
+
+    builder.build_world(world=world, file_path=str(tmp_path / "scene.xml"))
+
+    file_of = {mesh.name: mesh.file for mesh in builder.spec.meshes}
+    seen_with, collides_with = sorted(
+        _geoms_of(builder, TWO_COLOURED_CUBES_BODY), key=lambda geom: geom.contype
+    )
+    assert file_of[seen_with.meshname] == str(visual_file)
+    assert file_of[collides_with.meshname] == str(collision_file)
+
+
+def test_a_colour_the_shape_states_is_drawn_over_the_files_own(tmp_path):
+    """
+    A shape given a colour of its own is drawn in it, whatever its file says, the way a
+    mesh dyed in the twin is.
+    """
+    dyed = Color(0.0, 1.0, 0.0, 1.0)
+    builder = _build_world_wearing(tmp_path, TWO_COLOURED_CUBES, color=dyed)
+
+    assert {
+        tuple(geom.rgba) for geom in _geoms_of(builder, TWO_COLOURED_CUBES_BODY)
+    } == {dyed.to_rgba()}
+
+
 def test_builder_assigns_material_to_every_geom_sharing_a_texture(tmp_path):
     """
     Regression test: MujocoBuilder._parse_geom used to return early - without ever setting
@@ -422,6 +563,62 @@ def test_builder_does_not_confuse_different_textures_sharing_a_basename(tmp_path
     assert materials["quad_0"] != materials["quad_1"]
     texture_files = {texture.name: texture.file for texture in builder.spec.textures}
     assert len(texture_files) == 2
+
+
+def world_holding_a_piece() -> World:
+    """
+    A world whose one body holds a piece by a free connection, the way a piece a robot
+    has picked up hangs off its gripper, the piece standing a little in front of it.
+    """
+    world = World()
+    root = Body(name=PrefixedName("world"))
+    hand = Body(name=PrefixedName("hand"))
+    held = Body(name=PrefixedName("held"))
+    with world.modify_world():
+        world.add_body(root)
+        world.add_connection(FixedConnection(parent=root, child=hand))
+        world.add_connection(
+            Connection6DoF.create_with_dofs(world=world, parent=hand, child=held)
+        )
+    held.parent_connection.origin = HomogeneousTransformationMatrix.from_xyz_rpy(
+        x=0.1, y=0.0, z=0.05, reference_frame=hand
+    )
+    return world
+
+
+def test_a_piece_held_below_a_body_is_built_fixed_where_it_hangs(tmp_path):
+    """
+    MuJoCo takes a free joint at the top level only, so a piece hanging off a body by a
+    free connection is built without a joint, standing where its connection has it.
+    """
+    world = world_holding_a_piece()
+
+    builder = MujocoBuilder()
+    builder.build_world(world=world, file_path=str(tmp_path / "scene.xml"))
+
+    [held] = [body for body in builder.spec.bodies if body.name == "held"]
+    assert list(held.joints) == []
+    assert list(held.pos) == pytest.approx([0.1, 0.0, 0.05])
+
+
+def test_a_scene_holding_a_piece_below_a_body_is_simulated(tmp_path):
+    """
+    The scene compiles and its state syncs both ways, the held piece being no joint of
+    the model.
+    """
+    world = world_holding_a_piece()
+    multi_sim = MujocoSim(world=world, headless=True)
+    try:
+        multi_sim.simulator.start(simulate_in_thread=False, render_in_thread=False)
+        world.notify_state_change()
+        assert (
+            mujoco.mj_name2id(
+                multi_sim.simulator._mj_model, mujoco.mjtObj.mjOBJ_BODY, "held"
+            )
+            >= 0
+        )
+    finally:
+        stop_multisim_if_running(multi_sim)
 
 
 def test_builder_writes_a_light_attached_to_a_body(tmp_path):

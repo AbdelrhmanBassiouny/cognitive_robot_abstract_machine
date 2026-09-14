@@ -128,6 +128,23 @@ class Color(SelfNamingValue):
             f"{round(channel * 255):02X}" for channel in self.to_rgb()
         )
 
+    def softened(self, toward_white: float = 0.6, brightness: float = 0.94) -> Color:
+        """
+        This colour softened for print: mixed with white, then dimmed a little so that
+        white itself is not lost against a white page. The hue and the opacity are kept.
+
+        :param toward_white: How much of the mix is white, from 0 for the colour as it
+            is to 1 for white.
+        :param brightness: What the mix is multiplied by afterwards.
+        """
+        return Color(
+            *(
+                (channel * (1.0 - toward_white) + toward_white) * brightness
+                for channel in self.to_rgb()
+            ),
+            self.A,
+        )
+
     def _verbalization_noun_phrase_(self) -> VerbalizationFragment:
         """
         :return: The name of the colour this one lies nearest to, which is what a reader

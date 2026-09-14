@@ -91,6 +91,7 @@ from experiments.montessori.perception.simulated_camera import SimulatedCamera
 from experiments.montessori.perception.simulated_setup import (
     camera_over_the_table,
     perception_pipeline,
+    table_surface,
 )
 from experiments.montessori.pieces import (
     FULL_SIZE_PIECES,
@@ -1071,22 +1072,6 @@ VIDEO_RESOLUTION = VideoResolution(width=640, height=480)
 How large a filmed run's frames are, in pixels.
 """
 
-TABLE_BOUNDS = (
-    (
-        float(TABLE_POSITION.x) - TABLE_SCALE.x / 2,
-        float(TABLE_POSITION.y) - TABLE_SCALE.y / 2,
-        float(TABLE_POSITION.z) - TABLE_SCALE.z / 2,
-    ),
-    (
-        float(TABLE_POSITION.x) + TABLE_SCALE.x / 2,
-        float(TABLE_POSITION.y) + TABLE_SCALE.y / 2,
-        float(TABLE_POSITION.z) + TABLE_SCALE.z / 2,
-    ),
-)
-"""
-The lowest and highest corner of the Montessori table, in the world root frame.
-"""
-
 SCENE_CAMERA_NAME = "the camera a run is filmed by"
 """
 The name of the camera a filmed run is watched through.
@@ -1240,13 +1225,15 @@ class SceneRecording:
 
     def _camera_watching_the_scene(self) -> MujocoCamera:
         """
-        A camera framing the table everything a run does is done on, attached to the
-        world's root.
+        A camera framing the top of the table everything a run does is done on,
+        attached to the world's root.
 
-        The table rather than the whole world, which also holds a floor reaching far
-        past anything a run touches.
+        The table the world itself holds, since which table that is depends on the
+        scene -- the package's own, or the one a robot carries -- and its top rather
+        than the whole world, which also holds a floor reaching far past anything a run
+        touches.
         """
-        watches_from = MujocoCamera.overview_pose(numpy.asarray(TABLE_BOUNDS))
+        watches_from = MujocoCamera.overview_pose(table_surface(self.world).corners)
         quaternion = watches_from.to_quaternion().to_np().tolist()
         camera = MujocoCamera(
             name=SCENE_CAMERA_NAME,
@@ -1625,10 +1612,10 @@ class PutThePieceInItsHole(HaveTheRobotAct):
     Nothing puts the piece through the hole: the gripper opens above it and gravity does
     the rest, so a piece that does not fit does not go in.
 
-    Carrying the piece is the one stretch of a run that cannot be simulated: a held
-    piece hangs off the gripper on the free connection it stood on the table with, and
-    a body on a free connection has to be a top-level one for MuJoCo to compile the
-    scene at all. The scene is taken up again once the piece has been let go of.
+    Carrying the piece is the one stretch of a run that is not simulated: a held piece
+    hangs off the gripper on the free connection it stood on the table with, which a
+    scene builds fixed to the gripper, so a scene built then could not let it slip. The
+    scene is taken up again once the piece has been let go of.
     """
 
     category: MontessoriShapeCategory

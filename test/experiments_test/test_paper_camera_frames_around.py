@@ -1,13 +1,14 @@
 """
-What the robot's camera saw on either side of an event, as one picture.
+What the run's camera saw on either side of an event, as one picture.
 
 The panel that says an event was really seen rather than only reported: the scene a
 moment before it and the scene a moment after, side by side, so a reader can tell that
 the piece really did end up in the gripper.
 
-Only a run on the robot records a camera, so everything here that needs actual frames is
-skipped wherever the recordings are not on disk, the same way
-:mod:`test_paper_camera_frame` is.
+Only a run on the robot records a camera, so everything here that needs recorded frames
+is skipped wherever the recordings are not on disk, the same way
+:mod:`test_paper_camera_frame` is; a run in simulation is shown as the twin stood along
+its joint trace, which needs a renderer instead.
 """
 
 from __future__ import annotations
@@ -19,18 +20,29 @@ import numpy as np
 import pytest
 
 from experiments.episodes.artifacts import EpisodeArtifact, EpisodeArtifacts
-from experiments.episodes.trace import TimedFrames
+from experiments.episodes.trace import JointTrace, TimedFrames
 from experiments.paper.camera_frame import (
     CAPTION_HEIGHT,
     BagFrameAt,
     BagFramesAround,
     NoCameraRecordingError,
+    RecordedFrameAt,
     RecordedFramesAround,
     RunFile,
+    TwinFrames,
     captions_at,
 )
 from experiments.paper.chart import TimelineSpan
+from experiments.paper.pose_change import stand, standing_pose
+from experiments.paper.scene import PICTURE_HEIGHT, PICTURE_WIDTH
+from semantic_digital_twin.adapters.multi_sim import MujocoCamera
+from semantic_digital_twin.spatial_types.spatial_types import (
+    HomogeneousTransformationMatrix,
+)
+from semantic_digital_twin.world import World
+from semantic_digital_twin.world_description.connections import Connection6DoF
 
+from .offscreen_rendering import needs_a_renderer
 from .test_montessori_bag_replay import demo_recording
 from .test_paper_camera_frame import (
     ASKED_AT,
@@ -38,6 +50,7 @@ from .test_paper_camera_frame import (
     episode_artifacts,
     keep_a_recording,
 )
+from .test_paper_scene_render import ANSWERED_NAME, OTHER_NAME, standing_box
 
 # %% the stretch the pair is taken either side of
 
@@ -252,3 +265,121 @@ def test_the_kept_frames_are_written_side_by_side_with_their_captions(
 
     assert written.shape[0] == FRAME_SIDE + CAPTION_HEIGHT
     assert written.shape[1] == 2 * FRAME_SIDE + either_side.gap
+
+
+# %% one frame of a run that kept what its camera saw
+
+
+def test_the_frame_of_a_kept_camera_is_the_one_nearest_the_moment() -> None:
+    frame = RecordedFrameAt(frames=kept_frames(), moment=ASKED_AT + 0.4)
+
+    assert frame.image[0, 0, 0] == round(ASKED_AT) * 10
+
+
+def test_the_frame_of_a_kept_camera_is_written_as_it_was_kept(tmp_path: Path) -> None:
+    frame = RecordedFrameAt(frames=kept_frames(), moment=ASKED_AT)
+
+    written = imageio.imread(frame.write(tmp_path / "frame.png"))
+
+    assert np.array_equal(written, frame.image)
+
+
+# %% the frames of a run in simulation, drawn from the twin
+
+MOVED_TO_X = 0.5
+"""
+Where along x the loose piece stands once the trace has moved it, in metres.
+"""
+
+
+@pytest.fixture
+def scene_with_a_loose_piece() -> World:
+    """
+    A world holding a box that stands somewhere and a loose one hanging from it by a
+    free joint, which a trace can move.
+    """
+    world = World()
+    stands = standing_box(ANSWERED_NAME)
+    loose = standing_box(OTHER_NAME)
+    with world.modify_world():
+        world.add_body(stands)
+        world.add_connection(
+            Connection6DoF.create_with_dofs(world=world, parent=stands, child=loose)
+        )
+    return world
+
+
+def traced_move(world: World) -> JointTrace:
+    """
+    A trace of the world with the loose piece where it stands as the trial starts and
+    moved along x by the time the stretch has ended, the world left as it was found.
+
+    :param world: The world to trace.
+    """
+    loose = world.get_body_by_name(OTHER_NAME)
+    trace = JointTrace()
+    trace.sample(world, MOVED_OVER.start)
+    stood_at = standing_pose(world, loose)
+    stand(world, loose, HomogeneousTransformationMatrix.from_xyz_rpy(x=MOVED_TO_X))
+    trace.sample(world, MOVED_OVER.end)
+    stand(world, loose, stood_at)
+    return trace
+
+
+@needs_a_renderer
+def test_a_twin_frame_is_drawn_through_the_robots_camera(
+    scene_with_a_loose_piece: World,
+) -> None:
+    """
+    A run in simulation showed what its robot's camera saw, so a frame given that camera
+    is drawn through it rather than from the overview.
+    """
+    trace = traced_move(scene_with_a_loose_piece)
+    stands = scene_with_a_loose_piece.get_body_by_name(ANSWERED_NAME)
+    camera = MujocoCamera(
+        name="robots_camera",
+        body=stands,
+        position=[0.0, 0.0, 1.0],
+        quaternion=[1.0, 0.0, 0.0, 0.0],
+        resolution=[float(PICTURE_WIDTH), float(PICTURE_HEIGHT)],
+    )
+    overview = TwinFrames(world=scene_with_a_loose_piece, trace=trace).frame(0)
+
+    through_the_camera = TwinFrames(
+        world=scene_with_a_loose_piece, trace=trace, camera=camera
+    ).frame(0)
+
+    assert not np.array_equal(through_the_camera, overview)
+
+
+def test_the_twins_frames_are_taken_at_the_moments_the_trace_was_sampled_at(
+    scene_with_a_loose_piece: World,
+) -> None:
+    trace = traced_move(scene_with_a_loose_piece)
+
+    frames = TwinFrames(world=scene_with_a_loose_piece, trace=trace)
+
+    assert frames.moments_taken().tolist() == trace.moments
+
+
+@needs_a_renderer
+def test_a_twin_frame_is_the_scene_stood_at_that_sample_and_the_twin_is_put_back(
+    scene_with_a_loose_piece: World,
+) -> None:
+    """
+    The twin shows the run as it stood at the moment asked for, so the two frames either
+    side of a move differ, and drawing them leaves every joint where it was found.
+    """
+    loose = scene_with_a_loose_piece.get_body_by_name(OTHER_NAME)
+    trace = traced_move(scene_with_a_loose_piece)
+    either_side = RecordedFramesAround(
+        over=MOVED_OVER,
+        frames=TwinFrames(world=scene_with_a_loose_piece, trace=trace),
+    )
+
+    before, after = either_side.before, either_side.after
+
+    assert before.image.shape == after.image.shape == (PICTURE_HEIGHT, PICTURE_WIDTH, 3)
+    assert not np.array_equal(before.image, after.image)
+    assert either_side.instants == (MOVED_OVER.start, MOVED_OVER.end)
+    assert standing_pose(scene_with_a_loose_piece, loose).to_np()[0, 3] == 0.0

@@ -65,15 +65,7 @@ from experiments.montessori.perception.recorded_setup import lab_board
 from experiments.montessori.perception.scene_request import SceneRequest
 from experiments.montessori.perception.scene_publishing import PerceivedScene
 from experiments.montessori.perception.scene_source import RepeatedLook
-from experiments.montessori.perception.simulated_camera import (
-    CAMERA_T_OPTICAL,
-    SimulatedCamera,
-)
-from experiments.montessori.perception.simulated_setup import (
-    CAMERA_FIELD_OF_VIEW,
-    CAMERA_PICTURE_HEIGHT,
-    CAMERA_PICTURE_WIDTH,
-)
+from experiments.montessori.perception.simulated_camera import SimulatedCamera
 from experiments.montessori.pieces import SMALLER_PIECES, KnownPieceSet
 from experiments.montessori.planar_geometry import PlanarPoint
 from experiments.montessori.semantics import MontessoriShape, MontessoriShapeCategory
@@ -81,6 +73,7 @@ from experiments.montessori.world import BOARD_SCALE
 from experiments.questions.question import QuestionedThings, SceneAsSetUp
 from experiments.questions.question_set import QuestionSet
 from experiments.scenarios.trial import TrialOutcome
+from experiments.tracy_experiments.camera import CAMERA_NAME, camera_on_tracy
 from experiments.tracy_experiments.equipment import (
     TRACY_MOUNT_ROOT_NAME,
     apply_gravity_compensation,
@@ -173,37 +166,6 @@ LAB_PIECE_PLACES: Dict[MontessoriShapeCategory, PlanarPoint] = {
 }
 """
 Where the tape put the middle of each piece, in the robot's frame.
-"""
-
-# %% the camera on Tracy's camera link
-
-CAMERA_NAME = "tracy_camera"
-"""
-What the simulated camera is called.
-"""
-
-CAMERA_LINK_NAME = "camera_link"
-"""
-The body of Tracy's description the camera hangs on.
-"""
-
-CAMERA_LINK_T_OPTICAL = HomogeneousTransformationMatrix.from_xyz_rpy(
-    x=0.041737,
-    y=-0.014025,
-    z=0.009141,
-    roll=-1.363448,
-    pitch=0.003959,
-    yaw=-1.546731,
-).to_np()
-"""
-Where the colour camera's optical frame stands on the ``camera_link`` this scene is
-built on.
-
-Read off the shipped captures, which agree on it to a ten-millionth of a metre. It is
-not the plain quarter turns a description states between a camera link and its optical
-frame: the lab calibrates the camera in the description in Tracy's own ROS workspace,
-not in the published one this scene is built from, and this pose carries the difference
-between the two so that the simulated camera looks where the real one looked.
 """
 
 OVERVIEW_VIDEO_RESOLUTION = VideoResolution(width=960, height=540)
@@ -321,31 +283,6 @@ def camera_looking_at(
         resolution=[float(resolution.width), float(resolution.height)],
     )
     world.root.simulator_additional_properties.append(camera)
-    return camera
-
-
-def camera_on_tracy(world: World) -> MujocoCamera:
-    """
-    Hang the camera on Tracy's ``camera_link``, where the real one stands, looking the
-    way it looks and seeing as wide as it sees.
-
-    :param world: The world holding Tracy.
-    :return: The camera, attached to the link.
-    """
-    link_T_camera = CAMERA_LINK_T_OPTICAL @ np.linalg.inv(CAMERA_T_OPTICAL)
-    x, y, z, real = (
-        HomogeneousTransformationMatrix(link_T_camera).to_quaternion().to_np().tolist()
-    )
-    camera_link = world.get_body_by_name(CAMERA_LINK_NAME)
-    camera = MujocoCamera(
-        name=CAMERA_NAME,
-        body=camera_link,
-        position=link_T_camera[:3, 3].tolist(),
-        quaternion=[real, x, y, z],
-        fovy=CAMERA_FIELD_OF_VIEW,
-        resolution=[float(CAMERA_PICTURE_WIDTH), float(CAMERA_PICTURE_HEIGHT)],
-    )
-    camera_link.simulator_additional_properties.append(camera)
     return camera
 
 

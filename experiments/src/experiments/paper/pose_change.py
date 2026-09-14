@@ -24,19 +24,19 @@ import numpy as np
 from typing_extensions import List, Optional, Sequence, Tuple
 
 from experiments.episodes.episode import RecordedTrial
-from experiments.episodes.trace import JointPositions
+from experiments.episodes.trace import JointPositions, put_back_afterwards
 from experiments.paper.chart import TimelineSpan
 from experiments.paper.panel import ANSWER_COLOR
 from experiments.paper.run_plan import TrialClock
 from experiments.paper.scene import (
-    BACKGROUND_COLOR,
-    PICTURE_HEIGHT,
-    PICTURE_WIDTH,
+    LOOKING_CLOSELY,
+    OVERVIEW_FROM,
     PickedOut,
+    PointOfView,
     RenderedScene,
     SceneRender,
 )
-from semantic_digital_twin.adapters.multi_sim import OVERVIEW_VIEWPOINT, MujocoCamera
+from semantic_digital_twin.adapters.picture import UP, Viewpoint
 from semantic_digital_twin.callbacks.callback import ModelChangeCallback
 from semantic_digital_twin.spatial_computations.forward_kinematics import (
     ForwardKinematicsManager,
@@ -89,34 +89,46 @@ How many dots the object's way is shown with.
 
 # %% where the move is looked at from
 
-MOVE_CAMERA_NAME = "paper_move_camera"
-"""
-What the render calls the camera it hangs to look across an object's move.
-"""
-
-ACROSS_ELEVATION = 1.0
-"""
-How far up the camera looking across a move stands for every metre it stands to the
-side, so the move is seen from diagonally above rather than along the table.
-"""
-
 MINIMUM_MOVE_ACROSS_THE_TABLE = 0.01
 """
-How far an object has to have moved across the table, in metres, for there to be a side
-to look at the move from; a move straight up or down is looked at from the overview's
-side.
+How far an object has to have moved across the table, in metres, for the way it went to
+give the picture its direction; a move straight up or down is looked at from the
+overview's side.
+"""
+
+MINIMUM_LIFT = 0.02
+"""
+How far up or down an object has to have gone, in metres, for its move to be looked at
+from the side: a move that stays on the table is looked at from straight above it.
+"""
+
+LOOKING_DOWN_ON_A_LIFT_BY = np.radians(20.0)
+"""
+The angle the camera looks down on a lift by, in radians: square to the line the object
+went up along, tilted just enough for the table it left to be in the picture.
+"""
+
+STANDING_OFF_A_MOVE_AT_LEAST = 0.35
+"""
+How far from the middle of a move the camera stands at the least, in metres, so a short
+move fills the picture the way a long one does rather than being lost in the scene.
+"""
+
+MOVE_FIELD_OF_VIEW = LOOKING_CLOSELY
+"""
+The angle the picture of a move spans from its top to its bottom, in degrees.
 """
 
 
-def viewpoint_across(
+def way_across_the_table(
     before: HomogeneousTransformationMatrix,
     after: HomogeneousTransformationMatrix,
     away_from: Optional[np.ndarray] = None,
-) -> np.ndarray:
+) -> Tuple[np.ndarray, np.ndarray]:
     """
-    Which way from a move the camera stands to see the two poses side by side: square
-    across the table to the way the object went, raised, and on the side away from
-    whatever would otherwise stand between the camera and the move.
+    The way an object went across the table, and which way from that line the camera
+    stands: square across it, on the side away from whatever would otherwise stand
+    between the camera and the move.
 
     A move with no way across the table -- a lift -- is looked at from the overview's
     own side; so is a move nothing is to be kept behind.
@@ -126,21 +138,77 @@ def viewpoint_across(
     :param away_from: A point of the world root frame to keep on the far side of the
         move -- where the robot stands, so its body is behind the move rather than in
         front of it -- or None to stand on the overview camera's side.
+    :return: Two unit vectors in the table's plane, as ``(x, y, 0)``: the way the object
+        went, and the side the camera stands on.
     """
     start, end = before.to_np()[:3, 3], after.to_np()[:3, 3]
     across_the_table = (end - start)[:2]
     length = float(np.linalg.norm(across_the_table))
-    if length < MINIMUM_MOVE_ACROSS_THE_TABLE:
-        return np.array(OVERVIEW_VIEWPOINT, dtype=float)
-    square_to_it = np.array([-across_the_table[1], across_the_table[0]]) / length
     towards = (
-        np.array(OVERVIEW_VIEWPOINT[:2])
+        np.array(OVERVIEW_FROM[:2], dtype=float)
         if away_from is None
         else ((start + end) / 2 - away_from)[:2]
     )
-    if square_to_it @ towards < 0:
-        square_to_it = -square_to_it
-    return np.array([square_to_it[0], square_to_it[1], ACROSS_ELEVATION])
+    if length < MINIMUM_MOVE_ACROSS_THE_TABLE:
+        side = towards / np.linalg.norm(towards)
+        along = np.array([side[1], -side[0]])
+    else:
+        along = across_the_table / length
+        side = np.array([-along[1], along[0]])
+        if side @ towards < 0:
+            side = -side
+    return np.append(along, 0.0), np.append(side, 0.0)
+
+
+def looking_at_the_move(
+    before: HomogeneousTransformationMatrix,
+    after: HomogeneousTransformationMatrix,
+    bounds: np.ndarray,
+    away_from: Optional[np.ndarray] = None,
+) -> HomogeneousTransformationMatrix:
+    """
+    Where the camera stands to see a move and which way it faces, in the world root
+    frame and stated the way the twin states a point of view: x the way it faces, y to
+    its left, z up its picture.
+
+    A move that stays on the table is looked at from straight above its middle, the way
+    the object went running across the picture from left to right. A lift is looked at
+    from square across the line it went up along, on the side away from ``away_from``,
+    tilted down by :data:`LOOKING_DOWN_ON_A_LIFT_BY`.
+
+    :param before: Where the object was, in the world root frame.
+    :param after: Where it ended up, in the world root frame.
+    :param bounds: The lowest and highest corner of the box the move is framed on, as a
+        ``(2, 3)`` array in the world root frame.
+    :param away_from: Where the robot stands, to keep its body behind the move, or None.
+    """
+    along, side = way_across_the_table(before, after, away_from)
+    centre = bounds.mean(axis=0)
+    distance = (
+        max(float(np.linalg.norm(bounds[1] - bounds[0])), STANDING_OFF_A_MOVE_AT_LEAST)
+        * 1.5
+    )
+    lift = abs(float((after.to_np()[:3, 3] - before.to_np()[:3, 3])[2]))
+    if lift < MINIMUM_LIFT:
+        position = centre + UP * distance
+        facing = -UP
+        left = -along
+    else:
+        position = (
+            centre
+            + side * distance * np.cos(LOOKING_DOWN_ON_A_LIFT_BY)
+            + UP * distance * np.sin(LOOKING_DOWN_ON_A_LIFT_BY)
+        )
+        facing = centre - position
+        facing /= np.linalg.norm(facing)
+        left = np.cross(UP, facing)
+        left /= np.linalg.norm(left)
+    pose = np.eye(4)
+    pose[:3, 0] = facing
+    pose[:3, 1] = left
+    pose[:3, 2] = np.cross(facing, left)
+    pose[:3, 3] = position
+    return HomogeneousTransformationMatrix(pose)
 
 
 # %% an event that says nothing about where its object went
@@ -578,13 +646,11 @@ class PoseChangeRender:
     The twin the picture is drawn of.
     """
 
-    camera: Optional[MujocoCamera] = None
+    viewpoint: Optional[Viewpoint] = None
     """
-    The camera to draw through, already attached to :attr:`world`.
-
-    When none is given, a camera looking across the move from the side is hung on the
-    world's root for the one panel and taken off again afterwards, so the two poses are
-    seen side by side rather than one behind the other.
+    Where the picture is taken from, or None to look at the move -- from straight above
+    a move across the table, from square across a lift -- so the two poses are seen side
+    by side rather than one behind the other.
     """
 
     highlight: Color = ANSWER_COLOR
@@ -597,9 +663,9 @@ class PoseChangeRender:
     What the object is drawn in where it used to be.
     """
 
-    faded: Color = BACKGROUND_COLOR
+    faded: Optional[Color] = None
     """
-    What everything else is drawn in.
+    What everything else is drawn in, or None to draw it in the colours the twin states.
     """
 
     def of(
@@ -625,46 +691,39 @@ class PoseChangeRender:
             the robot is shown as it was -- reaching for the piece, or holding it --
             rather than as the run left it. None leaves the joints where they are.
         :raises ObjectHeldFixedError: If the twin holds the object fixed where it is.
-        :raises NothingToDrawError: If a camera or a light has to be placed and the world
-            holds no geometry to place it around.
+        :raises NothingToDrawError: If the viewpoint has to be placed and the world holds
+            no geometry to place it around.
         """
-        stood = JointPositions(
-            moment=0.0,
-            positions={
-                str(name): position
-                for name, position in self.world.state.to_position_dict().items()
-            },
-        )
-        if robot_at is not None:
-            robot_at.restore_into(self.world)
-        stood_at = standing_pose(self.world, change.subject)
-        stand(self.world, change.subject, change.after)
-        with ModelChangesUnannounced(self.world):
-            ghost = self.stand_a_ghost_at(change.subject, change.before)
-            dots = self.stand_dots_along(
-                change.subject, change.way or change.straight_way()
-            )
-            framed_on = self.framed_on(change.subject, ghost) + tuple(dots)
-            camera = self.camera
-            if camera is None:
-                camera = self.hang_a_camera_across(change, ghost, dots)
-            try:
-                return SceneRender(
-                    world=self.world,
-                    camera=camera,
-                    highlight=self.highlight,
-                    faded=self.faded,
-                    label_answers=False,
-                    framed_on=framed_on,
-                    picked_out=(PickedOut(entity=ghost, color=self.ghost),)
-                    + tuple(PickedOut(entity=dot, color=self.ghost) for dot in dots),
-                ).of([change.subject])
-            finally:
-                if self.camera is None:
-                    camera.body.simulator_additional_properties.remove(camera)
-                self.take_away([ghost] + dots)
-                stand(self.world, change.subject, stood_at)
-                stood.restore_into(self.world)
+        with put_back_afterwards(self.world):
+            if robot_at is not None:
+                robot_at.restore_into(self.world)
+            stood_at = standing_pose(self.world, change.subject)
+            stand(self.world, change.subject, change.after)
+            with ModelChangesUnannounced(self.world):
+                ghost = self.stand_a_ghost_at(change.subject, change.before)
+                dots = self.stand_dots_along(
+                    change.subject, change.way or change.straight_way()
+                )
+                framed_on = self.framed_on(change.subject, ghost) + tuple(dots)
+                viewpoint = self.viewpoint
+                if viewpoint is None:
+                    viewpoint = self.looking_at(change, ghost, dots)
+                try:
+                    return SceneRender(
+                        world=self.world,
+                        viewpoint=viewpoint,
+                        highlight=self.highlight,
+                        faded=self.faded,
+                        label_answers=False,
+                        framed_on=framed_on,
+                        picked_out=(PickedOut(entity=ghost, color=self.ghost),)
+                        + tuple(
+                            PickedOut(entity=dot, color=self.ghost) for dot in dots
+                        ),
+                    ).of([change.subject])
+                finally:
+                    self.take_away([ghost] + dots)
+                    stand(self.world, change.subject, stood_at)
 
     def where_the_robot_stands(self) -> Optional[np.ndarray]:
         """
@@ -679,39 +738,31 @@ class PoseChangeRender:
             self.world.root, robots[0].root
         )[:3, 3]
 
-    def hang_a_camera_across(
+    def looking_at(
         self, change: PoseChange, ghost: Body, dots: Sequence[Body]
-    ) -> MujocoCamera:
+    ) -> Viewpoint:
         """
-        Hang a camera on the world's root that looks across the move from the side.
+        The viewpoint that looks at the move the way :func:`looking_at_the_move` has it.
 
         It frames the move itself -- the object, the ghost and the dots along the way
-        -- and stands no closer than a move's length or so, so a short move is still
-        seen with the scene around it while nothing farther off pulls the camera back
-        from it.
+        -- and stands no closer than :data:`STANDING_OFF_A_MOVE_AT_LEAST`, so a short
+        move is still seen with the scene around it while nothing farther off pulls
+        the viewpoint back from it.
 
-        :param change: The move to look across.
+        :param change: The move to look at.
         :param ghost: The copy of the object standing where it was.
         :param dots: The dots standing along its way.
-        :return: The camera, already attached, to be taken off again once the picture is
-            drawn.
         """
         framed_on = self.framed_on(change.subject, ghost) + tuple(dots)
-        pose = MujocoCamera.pose_looking_from(
+        pose = looking_at_the_move(
+            change.before,
+            change.after,
             SceneRender(world=self.world, framed_on=framed_on).bounds(),
-            viewpoint_across(
-                change.before, change.after, self.where_the_robot_stands()
-            ),
+            self.where_the_robot_stands(),
         )
-        camera = MujocoCamera(
-            name=MOVE_CAMERA_NAME,
-            body=self.world.root,
-            position=pose.to_position().to_np()[:3].tolist(),
-            quaternion=MujocoCamera.quaternion_of(pose),
-            resolution=[float(PICTURE_WIDTH), float(PICTURE_HEIGHT)],
-        )
-        self.world.root.simulator_additional_properties.append(camera)
-        return camera
+        return PointOfView(
+            body=self.world.root, pose=pose, field_of_view=MOVE_FIELD_OF_VIEW
+        ).viewpoint()
 
     @staticmethod
     def framed_on(subject: Body, ghost: Body) -> Tuple[Body, ...]:

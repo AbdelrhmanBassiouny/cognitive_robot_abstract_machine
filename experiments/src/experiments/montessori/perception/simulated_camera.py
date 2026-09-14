@@ -213,7 +213,7 @@ class SimulatedCamera:
             return
         if self._mirror is None:
             raise SimulatedCameraIsNotLooking(self.camera.name)
-        self._mirror.simulator.stop()
+        self._mirror.stop_simulation()
         self._mirror = None
 
     @property
