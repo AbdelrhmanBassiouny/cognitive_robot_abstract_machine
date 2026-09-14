@@ -303,6 +303,45 @@ class TestCartesianPositionTrajectory:
             cartesian_trajectory.tip_link,
         )
 
+    def test_trajectory_follows_a_goal_frame_that_moved_before_it_started(
+        self, cylinder_bot_world: World
+    ):
+        """
+        A trajectory bound on start must track its goal frame where that frame is when the
+        trajectory starts, even if a task built after the trajectory moved the frame
+        first.
+        """
+        root = cylinder_bot_world.root
+        tip = cylinder_bot_world.get_kinematic_structure_entity_by_name("bot")
+        points = [Point3(0, y, 0, reference_frame=tip) for y in np.linspace(0, 0.2, 21)]
+
+        motion_statechart = MotionStatechart()
+        cartesian_trajectory = CartesianPositionTrajectory(
+            root_link=root, tip_link=tip, goal_points=points
+        )
+        motion_statechart.add_node(cartesian_trajectory)
+        move_away = CartesianPosition(
+            root_link=root,
+            tip_link=tip,
+            goal_point=Point3(-0.5, 0, 0, reference_frame=root),
+        )
+        motion_statechart.add_node(move_away)
+        move_away.end_condition = move_away.observation_variable
+        cartesian_trajectory.start_condition = move_away.is_succeeded
+        motion_statechart.add_node(EndMotion.when_true(cartesian_trajectory))
+
+        executor = Executor(MotionStatechartContext(world=cylinder_bot_world))
+        executor.compile(motion_statechart=motion_statechart)
+        executor.tick_until_end()
+
+        root_P_tip_start = move_away.goal_point.to_np()[:3]
+        tip_start_P_last_point = points[-1].to_np()[:3]
+        assert np.allclose(
+            cylinder_bot_world.compute_forward_kinematics_np(root, tip)[:3, 3],
+            root_P_tip_start + tip_start_P_last_point,
+            atol=move_away.threshold + cartesian_trajectory.threshold,
+        )
+
     def test_cartesian_position_trajectory_spiral_pr2(
         self, pr2_world_state_reset: World, better_pr2_pose
     ):

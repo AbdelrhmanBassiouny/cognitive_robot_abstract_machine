@@ -339,9 +339,7 @@ class ObservationState(State):
         self._compiled_updater.bind_args_to_memory_view(
             arg_idx=2, numpy_array=context.world.state._data
         )
-        self._compiled_updater.bind_args_to_memory_view(
-            arg_idx=3, numpy_array=context.float_variable_data.data
-        )
+        context.float_variable_data.bind_argument(self._compiled_updater, 3)
 
     @staticmethod
     def _check_reads_no_predicate(node: MotionStatechartNode) -> None:

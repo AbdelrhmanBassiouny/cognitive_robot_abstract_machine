@@ -11,9 +11,38 @@ from krrood.symbolic_math.exceptions import (
     SymbolicMathExpressionAlreadyRegisteredError,
     FloatVariableAlreadyHasResolveError,
 )
-from krrood.symbolic_math.symbolic_math import FloatVariable, SymbolicMathType
+from krrood.symbolic_math.symbolic_math import (
+    CompiledFunction,
+    FloatVariable,
+    SymbolicMathType,
+)
 
 hidden_index_name = "__FLOAT_VARIABLE_INDEX__"
+
+
+@dataclass
+class BoundArgument:
+    """
+    One argument of a compiled function that reads a managed value array.
+    """
+
+    function: CompiledFunction
+    """
+    The function reading the values.
+    """
+
+    argument_index: int
+    """
+    Index of the argument holding the values.
+    """
+
+    def point_at(self, data: np.ndarray) -> None:
+        """
+        Make the argument read `data` from now on.
+
+        :param data: The array holding the values.
+        """
+        self.function.bind_args_to_memory_view(self.argument_index, data)
 
 
 @dataclass
@@ -33,7 +62,34 @@ class FloatVariableData:
     data: np.ndarray = field(default_factory=lambda: np.array([], dtype=np.float64))
     """
     Flat array of values for all `variables`.
+
+    .. warning:: Registering an expression replaces this array. Read it through
+        :meth:`bind_argument` instead of holding on to it, or the values read go stale.
     """
+
+    _bound_arguments: List[BoundArgument] = field(
+        default_factory=list, init=False, repr=False
+    )
+    """
+    Compiled function arguments that read `data` and are re-pointed at it when it grows.
+    """
+
+    def bind_argument(
+        self, compiled_function: CompiledFunction, argument_index: int
+    ) -> None:
+        """
+        Let one argument of a compiled function read the managed values.
+
+        The argument keeps reading them for the lifetime of this data object, including
+        across later registrations.
+        :param compiled_function: The function reading the values.
+        :param argument_index: Index of the argument holding the managed values.
+        """
+        bound_argument = BoundArgument(
+            function=compiled_function, argument_index=argument_index
+        )
+        self._bound_arguments.append(bound_argument)
+        bound_argument.point_at(self.data)
 
     def register_expression(self, expression: SymbolicMathType):
         """
@@ -62,6 +118,8 @@ class FloatVariableData:
 
         self.variables.extend(free_variables)
         self.data = np.concatenate((self.data, np.zeros(len(free_variables))))
+        for bound_argument in self._bound_arguments:
+            bound_argument.point_at(self.data)
 
         # define resolvers for the variables to make `.evaluate()` work
         for i, variable in enumerate(free_variables):
