@@ -4,13 +4,15 @@ anything can be read off, so it is concluded by rules stated over the piece -- a
 piece the rules get wrong is answered by adding a rule.
 
 Which piece is read off the statement the description of the hole is handed over by,
-since that is what says what the hole is for.
+since that is what says what the hole is for -- and a hole described for anything but an
+insertion is not these rules' to answer.
 """
 
 from __future__ import annotations
 
 import pytest
 
+from coraplex.robot_plans.actions.core.insertion import InsertionAction
 from experiments.montessori.board_description import DescribedBoard
 from experiments.montessori.hole_geometry import BoardHoleLayout
 from experiments.montessori.perception.imagination import ImaginedWorld
@@ -73,15 +75,15 @@ def hole_wanted_for(piece: MontessoriShape, board: ShapeSortingBoard) -> Match:
     A statement asking for the hole one piece goes through, out of the ones the board
     has, with the shape of that hole left for the rules to conclude.
 
-    The hole is stated as the target of putting that piece through the board, which is
-    what says what the hole is wanted for; the description of the hole itself says
-    nothing about the piece.
+    The hole is stated as the target of an insertion of that piece, which is what says
+    what the hole is wanted for; the description of the hole itself says nothing about
+    the piece.
 
     :param piece: The piece being sorted.
     :param board: The board it is sorted into.
     """
     hole = a(ShapeSortingHole)(shape_category=...).from_(board.apertures)
-    an(PuttingAPieceThrough)(piece=piece.root, hole=hole)
+    an(InsertionAction)(object_designator=piece.root, target=hole)
     return hole
 
 
@@ -104,7 +106,20 @@ def test_a_statement_that_already_says_the_shape_of_the_hole(scene: ImaginedWorl
     hole = a(ShapeSortingHole)(shape_category=MontessoriShapeCategory.CUBE).from_(
         board.apertures
     )
-    an(PuttingAPieceThrough)(piece=piece_of(scene).root, hole=hole)
+    an(InsertionAction)(object_designator=piece_of(scene).root, target=hole)
+
+    assert backend.capability(hole) is False
+
+
+def test_a_hole_described_for_anything_but_an_insertion(scene: ImaginedWorld):
+    """
+    These rules answer the hole a piece is to be put through, which is what an insertion
+    states its target to; a hole described for something else is described for something
+    else.
+    """
+    backend = HoleRulesBackend(world=scene.world)
+    hole = a(ShapeSortingHole)(shape_category=...).from_(board_of(scene).apertures)
+    a(PuttingAPieceThrough)(piece=piece_of(scene).root, hole=hole)
 
     assert backend.capability(hole) is False
 
@@ -172,7 +187,7 @@ def test_the_piece_is_read_off_the_statement_the_hole_is_stated_inside(
     backend = HoleRulesBackend(world=scene.world)
     piece = piece_of(scene)
     hole = a(ShapeSortingHole)(shape_category=...).from_(board_of(scene).apertures)
-    an(PuttingAPieceThrough)(piece=piece.root, hole=hole)
+    an(InsertionAction)(object_designator=piece.root, target=hole)
 
     assert backend.piece_the_hole_is_wanted_for(hole) is piece
 

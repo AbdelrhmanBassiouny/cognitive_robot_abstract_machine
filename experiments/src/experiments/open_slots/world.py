@@ -1,5 +1,5 @@
 """
-Answering a statement about the things the world holds.
+Answering a statement about the things one world holds.
 
 A look reports sightings and brings what it found into the world as bodies standing
 where they were seen; from then on the thing is one the world holds, and what is asked
@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from typing_extensions import Iterable, List
+from typing_extensions import Iterable, Iterator, List
 
 from krrood.entity_query_language.backends import SelectiveBackend
 from krrood.entity_query_language.evaluable import Evaluable
@@ -19,18 +19,26 @@ from krrood.entity_query_language.factories import ConditionType
 from krrood.entity_query_language.query.match import Match
 from krrood.entity_query_language.utils import T
 from semantic_digital_twin.world import World
-from semantic_digital_twin.world_description.world_entity import SemanticAnnotation
+from semantic_digital_twin.world_description.world_entity import WorldEntity
 
 
 @dataclass(eq=False)
 class WorldBackend(SelectiveBackend):
     """
-    Answers a statement about the things the world holds by selecting among them.
+    Answers a statement about the things one world holds by selecting among them.
 
     Selective, because the world already holds them: a statement here says which of them
     is meant, and every condition it states is decided against the thing itself -- a
     relation between two of them reads their geometry, which is the whole of why the
     answer is the world's to give rather than the look's.
+
+    Which world is the point. A world entity is a
+    :class:`~krrood.entity_query_language.predicate.Symbol`, so a statement over one that
+    is handed no domain is answered out of the symbol graph -- and that is one graph per
+    process, holding every entity ever made in it: the ones of a scene that has been torn
+    down, and the copies an imagined world takes to try something out. Answering from
+    there means answering with pieces standing in worlds nobody is planning in. This
+    answers out of the world it is given.
     """
 
     world: World = field(repr=False)
@@ -62,11 +70,26 @@ class WorldBackend(SelectiveBackend):
     def things_of_the_kind_of(self, statement: Match[T]) -> List[T]:
         """
         :param statement: The statement to read.
-        :return: Everything this world holds of the kind it is about, which is nothing
-            where it is about a kind the world says nothing about at all.
+        :return: Everything this world holds of the kind it is about, whatever kind that
+            is -- a body, a connection, a degree of freedom, an annotation -- which is
+            nothing where the world holds none of them.
         """
-        if statement._type_ is None or not issubclass(
-            statement._type_, SemanticAnnotation
-        ):
+        if statement._type_ is None:
             return []
-        return self.world.get_semantic_annotations_by_type(statement._type_)
+        return [
+            thing
+            for thing in self.everything_it_holds
+            if isinstance(thing, statement._type_)
+        ]
+
+    @property
+    def everything_it_holds(self) -> Iterator[WorldEntity]:
+        """
+        :return: Every entity of this world: what its kinematic structure is made of,
+            what moves in it, what drives it, and what it is annotated with.
+        """
+        yield from self.world.kinematic_structure_entities
+        yield from self.world.connections
+        yield from self.world.degrees_of_freedom
+        yield from self.world.actuators
+        yield from self.world.semantic_annotations

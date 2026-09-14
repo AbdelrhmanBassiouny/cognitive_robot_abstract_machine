@@ -9,8 +9,9 @@ a piece the rules get wrong is answered by adding a rule rather than by editing 
 already stated, and the tree can be read as well as run.
 
 Which piece the hole is wanted for is read off the statements the description is handed
-over by -- a hole described inside an insertion of a piece is the hole that piece goes
-through -- so nothing has to be added to the statement for these rules' sake. What the
+over by -- a hole stated as what an insertion puts a piece through is the hole that
+piece goes through -- so nothing has to be added to the statement for these rules' sake,
+and a hole described for anything else is not theirs to answer. What the
 rules conclude is then narrowed by measurement: of the board's holes of that shape, the
 ones the piece is small enough to pass through, closest fit first.
 """
@@ -21,6 +22,7 @@ from dataclasses import dataclass, field
 
 from typing_extensions import Any, ClassVar, Dict, Iterable, List, Optional
 
+from coraplex.robot_plans.actions.core.insertion import InsertionAction
 from experiments.montessori.semantics import (
     MontessoriShape,
     MontessoriShapeCategory,
@@ -54,6 +56,12 @@ from semantic_digital_twin.world_description.world_entity import Body
 SHAPE_STATED_BY_THE_HOLE = "shape_category"
 """
 The attribute of a hole the rules conclude, by the name the hole gives it.
+"""
+
+TARGET_OF_AN_INSERTION = "target"
+"""
+The attribute an insertion states the thing it puts something through to, by the name the
+insertion gives it.
 """
 
 
@@ -228,16 +236,49 @@ class HoleRulesBackend(QueryBackend):
 
     def capability(self, statement: Evaluable) -> ConditionType:
         """
-        A statement about a hole whose shape it leaves open, handed over by one about a
-        piece: the rules conclude the shape from that piece, so a statement stated
-        inside nothing that names one is one they have nothing to conclude from.
+        A statement about a hole whose shape it leaves open, stated as what an insertion
+        puts a piece through: the rules conclude the shape from that piece, so a
+        statement stated inside nothing that names one is one they have nothing to
+        conclude from.
+        """
+        return (
+            self.describes_a_hole_of_no_stated_shape(statement)
+            and self.wanted_as_the_target_of_an_insertion(statement)
+            and self.piece_the_hole_is_wanted_for(statement) is not None
+        )
+
+    @staticmethod
+    def describes_a_hole_of_no_stated_shape(statement: Evaluable) -> bool:
+        """
+        :param statement: The statement to read.
+        :return: Whether it describes a hole of this board and leaves the shape of it
+            unstated, which is the one thing these rules supply.
         """
         return (
             isinstance(statement, Match)
             and statement._type_ is not None
             and issubclass(statement._type_, ShapeSortingHole)
             and statement._kwargs_.get(SHAPE_STATED_BY_THE_HOLE) is ...
-            and self.piece_the_hole_is_wanted_for(statement) is not None
+        )
+
+    @staticmethod
+    def wanted_as_the_target_of_an_insertion(statement: Match[T]) -> bool:
+        """
+        Whether the statement is handed over as what an insertion puts something
+        through.
+
+        These rules answer the hole a piece is to be *put through*, which is what an
+        insertion states its target to. A hole described anywhere else is described for
+        something else, however much they could say about it.
+
+        :param statement: The statement to read.
+        """
+        stated_by = statement._stated_by_
+        return (
+            stated_by is not None
+            and stated_by.attribute_name == TARGET_OF_AN_INSERTION
+            and stated_by.statement._type_ is not None
+            and issubclass(stated_by.statement._type_, InsertionAction)
         )
 
     def evaluate(self, expression: Match[T]) -> Iterable[T]:

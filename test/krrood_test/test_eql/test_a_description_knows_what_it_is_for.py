@@ -8,7 +8,7 @@ So a description knows the statements it is stated inside, and what each states 
 
 from __future__ import annotations
 
-from krrood.entity_query_language.factories import a, an
+from krrood.entity_query_language.factories import a
 
 from ..dataset.action_stated_over_what_a_look_finds import (
     Grip,
@@ -28,7 +28,7 @@ The thing the statements below are answered with.
 def test_a_description_knows_the_statement_that_hands_it_over():
     described = a(Sighting)(label="cube")
 
-    statement = an(TakingHoldOfSomethingFound)(thing=described, grip=...)
+    statement = a(TakingHoldOfSomethingFound)(thing=described, grip=...)
 
     assert described._stated_by_.statement is statement
 
@@ -36,7 +36,7 @@ def test_a_description_knows_the_statement_that_hands_it_over():
 def test_a_description_knows_the_attribute_it_is_stated_to():
     described = a(Sighting)(label="cube")
 
-    an(TakingHoldOfSomethingFound)(thing=described, grip=...)
+    a(TakingHoldOfSomethingFound)(thing=described, grip=...)
 
     assert described._stated_by_.attribute_name == "thing"
 
@@ -44,7 +44,7 @@ def test_a_description_knows_the_attribute_it_is_stated_to():
 def test_a_description_stated_as_one_element_of_a_collection_knows_it_too():
     described = a(Sighting)(label="cube")
 
-    statement = an(TakingHoldOfSeveralThingsFound)(
+    statement = a(TakingHoldOfSeveralThingsFound)(
         things=[CUBE_ON_THE_LID, described], grip=Grip.FROM_ABOVE
     )
 
@@ -53,7 +53,7 @@ def test_a_description_stated_as_one_element_of_a_collection_knows_it_too():
 
 
 def test_a_statement_nobody_hands_over_is_stated_by_nothing():
-    assert an(TakingHoldOfSomethingFound)(thing=..., grip=...)._stated_by_ is None
+    assert a(TakingHoldOfSomethingFound)(thing=..., grip=...)._stated_by_ is None
 
 
 # %% every statement it is stated inside
@@ -66,13 +66,13 @@ def test_a_description_is_enclosed_by_every_statement_it_is_stated_inside():
     """
     place = a(Place)(name="lid")
     sighting = a(Sighting)(label="cube", place=place)
-    statement = an(TakingHoldOfSomethingFound)(thing=sighting, grip=...)
+    statement = a(TakingHoldOfSomethingFound)(thing=sighting, grip=...)
 
     assert list(place._enclosing_statements_) == [sighting, statement]
 
 
 def test_a_statement_nobody_hands_over_is_enclosed_by_nothing():
-    statement = an(TakingHoldOfSomethingFound)(thing=..., grip=...)
+    statement = a(TakingHoldOfSomethingFound)(thing=..., grip=...)
 
     assert list(statement._enclosing_statements_) == []
 
@@ -87,7 +87,7 @@ def test_a_description_still_open_is_handed_over_by_the_statement_as_it_now_stan
     said before.
     """
     described = a(Sighting)(label="cube")
-    statement = an(TakingHoldOfSomethingFound)(thing=described, grip=...)
+    statement = a(TakingHoldOfSomethingFound)(thing=described, grip=...)
 
     answered = statement.answering("grip", Grip.FROM_ABOVE)
 
