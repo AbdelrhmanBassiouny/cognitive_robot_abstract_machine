@@ -93,6 +93,7 @@ from experiments.montessori.pieces import (
 )
 from experiments.montessori.planar_geometry import PlanarPoint, turned
 from experiments.montessori.semantics import ShapeSortingBoard
+from experiments.montessori.world import BOARD_SCALE
 from semantic_digital_twin.spatial_types.spatial_types import (
     Pose,
 )
@@ -544,6 +545,14 @@ class BoardDetector:
     patches.
     """
 
+    lid_standing_height: float = float(BOARD_SCALE.z)
+    """
+    How far, in metres, the lid stands above the surface the board rests on.
+
+    A reading the camera measured nearer the lid's plane than that surface's, less than
+    half this far from the lid, belongs to something standing as high as the lid does.
+    """
+
     def detect(
         self,
         orthophoto: Orthophoto,
@@ -683,12 +692,35 @@ class BoardDetector:
         hole at all: the layout fit answers both, and where they stand is all it needs
         to start from.
 
+        The surfaces are read by their colour first, and by how high the camera measured
+        them standing only where no coloured surface carries enough openings. Colour
+        alone loses the lid wherever the light falling across it washes the wood's
+        colour out, which leaves it in pieces too small to be a lid however plainly its
+        holes show; how high it stands is the same under any light.
+
         :param orthophoto: The rectified view of the lid's plane.
         :return: That surface's openings, or None if no surface in view carried enough
             of them to be a board.
         """
+        for surfaces_in in (self.colors.surface_mask, self._raised_to_the_lid):
+            best = self._most_perforated(surfaces_in(orthophoto), orthophoto)
+            if best is not None:
+                return best
+        return None
+
+    def _most_perforated(
+        self, surfaces: np.ndarray, orthophoto: Orthophoto
+    ) -> Optional[PerforatedSurface]:
+        """
+        The openings of whichever surface of one mask carries the most of them.
+
+        :param surfaces: Mask of the surfaces to search, 255 on one and 0 elsewhere.
+        :param orthophoto: The rectified view of the lid's plane.
+        :return: That surface's openings, or None if no surface big enough to be the
+            board's lid carried enough of them to be a board.
+        """
         best: Optional[PerforatedSurface] = None
-        for contour in self._surfaces_large_enough_to_be_a_lid(orthophoto):
+        for contour in self._large_enough_to_be_a_lid(surfaces, orthophoto):
             found = self._openings_within(contour, orthophoto)
             if best is None or len(found.middles) > len(best.middles):
                 best = found
@@ -696,17 +728,19 @@ class BoardDetector:
             return None
         return best
 
-    def _surfaces_large_enough_to_be_a_lid(
-        self, orthophoto: Orthophoto
+    def _large_enough_to_be_a_lid(
+        self, surfaces: np.ndarray, orthophoto: Orthophoto
     ) -> List[np.ndarray]:
         """
-        The coloured surfaces in view big enough to be the board's lid.
+        The surfaces of one mask big enough to be the board's lid.
 
+        :param surfaces: Mask of the surfaces, 255 on one and 0 elsewhere.
         :param orthophoto: The rectified view of the lid's plane.
         :return: Their contours, in rectified pixels.
         """
-        mask = _clean(self.colors.surface_mask(orthophoto))
-        contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        contours, _ = cv2.findContours(
+            _clean(surfaces), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
+        )
         return [
             contour
             for contour in contours
@@ -715,6 +749,22 @@ class BoardDetector:
             ).area
             >= self.minimum_lid_area
         ]
+
+    def _raised_to_the_lid(self, orthophoto: Orthophoto) -> np.ndarray:
+        """
+        Mark what the camera measured standing as high as the board's lid.
+
+        :param orthophoto: The rectified view of the lid's plane.
+        :return: A ``uint8`` mask, 255 where a reading lies nearer the lid's plane than
+            the surface the board rests on and 0 elsewhere, including wherever the
+            camera measured nothing.
+        """
+        if orthophoto.measured_height is None:
+            return np.zeros(orthophoto.image.shape[:2], dtype=np.uint8)
+        apart = np.abs(orthophoto.measured_height - orthophoto.plane_height)
+        with np.errstate(invalid="ignore"):
+            raised = apart < self.lid_standing_height / 2
+        return raised.astype(np.uint8) * 255
 
     def _openings_within(
         self, surface: np.ndarray, orthophoto: Orthophoto
@@ -1478,12 +1528,17 @@ class FindTheBoard(SceneDetector):
     def board_detector_for(self, request: SceneRequest) -> BoardDetector:
         """
         :param request: What the look was asked for.
-        :return: The board detector fitting the layout the request describes, or the one
-            this way of looking was configured with where it describes none.
+        :return: The board detector fitting the layout the request describes, standing
+            as tall as it is described, or the one this way of looking was configured
+            with where it describes none.
         """
         if request.described_board is None:
             return self.board_detector
-        return replace(self.board_detector, layout=request.described_board.layout)
+        return replace(
+            self.board_detector,
+            layout=request.described_board.layout,
+            lid_standing_height=request.described_board.height,
+        )
 
 
 @dataclass(eq=False)
