@@ -412,6 +412,15 @@ class BodiesNamed(TrueAnswer):
     What the scene calls each of them.
     """
 
+    @classmethod
+    def of(cls, bodies: List[Body]) -> BodiesNamed:
+        """
+        The true answer is these bodies, whichever order they are answered in.
+
+        :param bodies: The bodies the memory itself holds.
+        """
+        return cls(names=[body.name for body in bodies])
+
     def agrees_with(self, answered: List[Body]) -> bool:
         """
         Whether the bodies answered are called exactly these, each as often.
