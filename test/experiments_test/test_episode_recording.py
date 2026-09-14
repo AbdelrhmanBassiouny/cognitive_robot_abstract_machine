@@ -7,15 +7,20 @@ from __future__ import annotations
 import logging
 import shutil
 from dataclasses import dataclass, field
+from pathlib import Path
 
 import numpy
 import pytest
 import trimesh
 from coraplex.datastructures.enums import ExecutionType
 from semantic_digital_twin.adapters.mujoco_video_recording import RecordedVideo
+from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.testing import two_arm_robot_world
+from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.geometry import Mesh
 from semantic_digital_twin.world_description.mesh_file_storage import MeshFileStorage
+from semantic_digital_twin.world_description.shape_collection import ShapeCollection
+from semantic_digital_twin.world_description.world_entity import Body
 from sqlalchemy import func, select
 from typing_extensions import Optional
 
@@ -25,6 +30,7 @@ from experiments.episodes.artifacts import (
     ArtifactNotKept,
     EpisodeArtifacts,
     Transcript,
+    configured_mesh_directory,
 )
 from experiments.episodes.long_term_memory import LongTermMemory
 from experiments.episodes.episode import (
@@ -291,6 +297,52 @@ def test_a_kept_world_is_read_back_after_the_process_that_built_it_has_exited(
     ]
     assert read_back
     assert all(isinstance(shape.mesh, trimesh.Trimesh) for shape in read_back)
+
+
+def world_of_a_mesh_this_process_exported() -> World:
+    """
+    A world holding one body whose mesh was exported the way a world fetched from the
+    robot exports every mesh it is rebuilt with: into the directory this process removes
+    when it exits.
+    """
+    world = World()
+    body = Body(name=PrefixedName("fetched_body"))
+    body.visual = ShapeCollection(
+        [Mesh.from_trimesh(mesh=trimesh.creation.box((0.1, 0.1, 0.1)))],
+        reference_frame=body,
+    )
+    with world.modify_world():
+        world.add_kinematic_structure_entity(body)
+    return world
+
+
+def test_a_kept_world_whose_meshes_go_with_this_process_is_read_back_after_it_has_exited(
+    tmp_path, monkeypatch
+):
+    """
+    A world fetched from the robot is rebuilt from what the robot publishes, and every
+    mesh of it is exported into the directory this process removes when it exits, so
+    recording the world has to keep those meshes where a later process finds them.
+    """
+    monkeypatch.setenv(ARTIFACT_DIRECTORY_ENVIRONMENT_VARIABLE, str(tmp_path))
+    exporting_process_root = tmp_path / "exporting-process"
+    exporting_process_root.mkdir()
+    monkeypatch.setattr(MeshFileStorage(), "root", exporting_process_root)
+    database = ResultsDatabase(uri="sqlite:///%s" % (tmp_path / "results.db"))
+    episode = sorting_episode()
+    episode.world = world_of_a_mesh_this_process_exported()
+    recording = open_recording(database)
+    recording.record(finished_trial(episode))
+    recording.close()
+    shutil.rmtree(exporting_process_root)
+
+    [trial] = LongTermMemory(database).recall_every_trial()
+
+    [body] = trial.episode.world.bodies
+    [read_back] = body.visual.shapes
+    assert isinstance(read_back, Mesh)
+    assert isinstance(read_back.mesh, trimesh.Trimesh)
+    assert Path(read_back.filename).is_relative_to(configured_mesh_directory())
 
 
 def test_a_recorded_trial_carries_what_its_trial_measured():

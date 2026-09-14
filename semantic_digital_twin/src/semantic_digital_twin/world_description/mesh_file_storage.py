@@ -108,6 +108,20 @@ class MeshFileStorage(metaclass=SingletonMeta):
         """
         return self.create_mesh_directory(self.root)
 
+    def is_in_a_root(self, path: Path) -> bool:
+        """
+        Whether a path lies beneath a root of this class, this process's own or another
+        process's, and so is removed when the process that wrote it exits.
+
+        :param path: The path to place.
+        """
+        if path.is_relative_to(self.root):
+            return True
+        if not path.is_relative_to(self.temporary_directory):
+            return False
+        first_directory = path.relative_to(self.temporary_directory).parts[0]
+        return first_directory.startswith(self.root_prefix)
+
     def remove(self) -> None:
         """
         Delete the root and every mesh exported into it.
