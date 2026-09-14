@@ -99,5 +99,12 @@ Plan: make the query cards of the simulated corpus right.
       devices like MuJoCo does), Color.softened, SceneRender/PoseChangeRender/TwinFrames/cards
       on Viewpoint, pyrender dep + uv override for its PyOpenGL==3.1.0 pin. Tests: semdt
       test_picture (24, also pass under forced mesa software EGL), paper tests ported.
-      Full experiments suite running (scratchpad/experiments_suite.log); then figures run 5,
-      commit, push, PR description (scratchpad/pr356_new.md updated).
+      Full experiments suite: 1711 passed, 15 errors in the pickup demo (pyrender's per-picture
+      renderer deletion terminated MuJoCo's shared EGL display) -> OffscreenDrawing keeps one
+      renderer per process, regression test added; demo passes after picture tests (3.5 min).
+      Committed 4e7fdd3482, pushed, PR description updated, draft. CI run 34797104927 pending.
+      The 0cbb28d8ac rerun died the same way (runner lost communication, no log) -> not a
+      flake; suspected llvmpipe memory with per-capture MuJoCo renderers at 1600x1200 -- gone
+      with the pyrender path anyway.
+- [ ] figures run 5 launched 2026-09-14 03:44 (figures_rerecorded_2026-09-14_run5.log, status
+      file "figures exit N"); check cards, tell the user to redo the figures backup.
