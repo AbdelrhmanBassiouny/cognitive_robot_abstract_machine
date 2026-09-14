@@ -160,6 +160,18 @@ its node while a look was still running on the executor (`InvalidHandle` at exit
 spinner joined first. (5) Raw depth best-effort over loopback is mostly lost; the
 stand-in publishes it reliably.
 
+**Found later the same morning (fixed).** (6) `Plan.initial_world` copies (17 per
+sorting trial) carried temp-root mesh paths → a trial read back only in the writing
+process; `RecordsTrialsToADatabase.record` keeps the meshes of every world a trial
+records, the audit checks the plans' worlds too (`8fbddff9d3`). (7) The synchronizer's
+depth-10 subscription dropped state updates while the demo's executor was inside a
+look; the gripper's close never reached the demo world (trace knuckle 0 throughout).
+`UPDATE_QUEUE_DEPTH = 1000` in sdt's `world_synchronizer.py` (`fac4de65b7`, bug PR off
+main). (8) `trial.finish` ran after the bag closed → "recording ends N s before the
+trial" (`5fce6d2f4c`). Note: a recalled plan's `initial_world` comes back as a
+`WorldMapping`, not a `World` (coraplex `PlanMapping.to_domain_object`) -- reported,
+not fixed.
+
 **Rehearsal timings.** Whole rehearsal with bag ~85 s (perceive 2 s, park+4 sorts ~35 s,
 record ~20 s, audit). Report: all PASSED except camera recording (fixed by 5) -- see run.
 
