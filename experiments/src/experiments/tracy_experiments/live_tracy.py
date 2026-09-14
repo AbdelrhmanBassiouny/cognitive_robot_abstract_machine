@@ -16,7 +16,7 @@ import threading
 from dataclasses import dataclass
 
 import rclpy
-from rclpy.executors import MultiThreadedExecutor
+from rclpy.executors import Executor, SingleThreadedExecutor
 from rclpy.node import Node
 from typing_extensions import Iterator
 
@@ -73,6 +73,17 @@ class LiveTracy:
     The robot's camera, watching the table continuously.
     """
 
+    executor: Executor
+    """
+    What spins :attr:`node`, on a thread of its own.
+
+    Single-threaded: every callback of the node but the transform listener's is in its
+    one mutually exclusive group anyway, the transforms it reads are a bolted camera's,
+    and the multi-threaded executor spins hot for as long as a callback it has handed
+    out runs, which starves the rest of the process -- measured, a motion whose every
+    tick the synchronizer publishes takes 47 s beside it and 0.8 s beside this one.
+    """
+
     @classmethod
     @contextlib.contextmanager
     def connected(
@@ -96,11 +107,12 @@ class LiveTracy:
         """
         check_large_messages_can_arrive()
         node = rclpy.create_node(node_name)
-        executor = MultiThreadedExecutor()
+        executor = SingleThreadedExecutor()
         executor.add_node(node)
-        threading.Thread(
+        spinner = threading.Thread(
             target=executor.spin, daemon=True, name=EXECUTOR_THREAD_NAME
-        ).start()
+        )
+        spinner.start()
         try:
             world = fetch_world_from_service(node=node, timeout_seconds=fetch_timeout)
             [robot] = world.get_semantic_annotations_by_type(Tracy)
@@ -115,7 +127,11 @@ class LiveTracy:
                 world=world,
                 robot=robot,
                 look=build_node(node, world, show_images=show_images),
+                executor=executor,
             )
         finally:
+            # The node is destroyed only once the spinner has returned, so a look still
+            # under way on it finishes before the publishers it draws on are gone.
             executor.shutdown()
+            spinner.join()
             node.destroy_node()
