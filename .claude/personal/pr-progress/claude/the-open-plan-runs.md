@@ -213,19 +213,55 @@ What the refactor exposed, and did not fix:
   rules); `WorldBackend` is in the choice but this plan does not reach it.
 - The demo resolves the plan but does not perform it. `ImaginedWorld.copied_from`
   deep-copies, so the piece the look answers with stands in a copy of the world the
-  robot plans in, and `ScenePublisher.publish_piece` builds a *separate* piece in the
+  robot plans in, and `PiecePublisher.publish_piece` builds a *separate* piece in the
   belief. The two halves are not joined, so the grounded `object_designator` is not
   something the arm can be driven at. The previous demo hid this by running the old
-  hand-coded pipeline and asking the backends for the hole slot alone. Fixing it is a
-  perception change (a look that keeps its findings in the world it was taken in), not
-  attempted here.
+  hand-coded pipeline and asking the backends for the hole slot alone. **Closed by the
+  round below.**
 - The plan states three things the figure elides: `arm` on the insertion,
   `end_effector` on the grasp, and the surface as the lid body the look names rather
-  than as `board`. All documented in the module docstring; the figure was not changed.
+  than as `board`. **Closed by the round below** - the figure now states all three.
 
 Regression: 1491 passed + 3 skipped (`test/krrood_test/test_eql`, `test/version_test`),
 113 passed (the stack's experiments tests + montessori perception/imagination/
 narrowing), 9 passed (coraplex underspecified plan).
+
+## Joining the two halves (the piece a look answers with is the robot's own)
+
+The ask: fix the two things the refactor exposed - the demo resolving rather than
+performing, and the figure eliding three fields the code states.
+
+Done, all on #369 (every perception file it touches is introduced far below the stack,
+at `claude/icra-experiments-simulation-pipeline-w4ep7n`, so there is no lower PR of this
+stack's own to fold it into):
+- **The join.** `PiecePublisher.publish_piece` now takes the scene, and the finding it
+  stood comes to name the piece the published world holds; the body the look stood for
+  the sighting in a world of its own leaves that world. So `DetectedMontessoriShape`'s
+  role taker is the belief's piece, and `object_designator.root` is a body the arm can
+  be driven at.
+- `ImaginedWorld.remove` leaves alone a piece it does not itself hold, since the
+  published world has taken it on; `MontessoriPerceptionBackend.discard` therefore no
+  longer removes a rejected finding from the robot's world (a statement rejecting a
+  piece says it is not what was asked for, not that the piece is gone).
+- `PerceivedScene` keeps what the look found (`seen`) and offers it as `last_look`, a
+  `FixedScene` a statement about the scene is answered from. `framework_demo.py` grounds
+  the plan against that rather than taking a second look, so the run looks once.
+- **The figure** now states `arm=LEFT` on the insertion, `end_effector=LEFT_HAND` on the
+  grasp, and `SupportedBy(shape, lid)`; `framework.pdf` rebuilt. `plan.py`'s caveat
+  paragraph about the elided fields is gone, because there is nothing left to caveat.
+- Tests: `test_the_piece_a_finding_names_is_the_one_the_published_world_holds` (scene
+  publishing, over a shipped capture) and
+  `test_the_piece_it_picks_up_is_one_the_world_the_robot_plans_in_holds` (the plan,
+  end to end over `displaced_cube_from_hole`, headless).
+
+Still open, and not attempted: the demo resolves but does not *perform*. That is no
+longer a perception gap - what the plan grounds to is the belief's own piece. What is
+missing is a way to carry a resolved `PickUpAction` out in this lab: Giskard's closed
+loop races the physics thread, and `experiments.tracy_experiments.pick_and_place_action`'s
+MuJoCo-driven actions are separate classes (not subclasses) that read no grasp
+description, so performing the figure's plan through them would discard the
+probabilistic slot's answer. Neither MuJoCo nor ROS is installed in the session
+container, so nothing of that could be verified here.
 
 ## The stack as it stands
 
