@@ -343,6 +343,26 @@ class TestTicksAreSpacedByTheGapBetweenThem:
         assert monitor.ticks == 2
 
 
+# %% watching begins with a reading of the scene
+
+
+def test_starting_to_watch_reads_the_scene_as_it_is():
+    """
+    A body's resting place has to be known before anyone moves it, or a change of
+    place between the start and the first tick is not one: so watching begins with a
+    reading, and the shape resting on its table is reported supported at once.
+    """
+    montessori = MontessoriWorld(shapes_are_movable=True)
+    shape, _ = _shape_and_hole(montessori, "square_hole")
+    monitor = build_shape_monitor(montessori, shape)
+
+    monitor.start()
+    try:
+        assert monitor.events
+    finally:
+        monitor.stop()
+
+
 # %% telling a run what was just detected
 class RecordsWhatItIsTold:
     """

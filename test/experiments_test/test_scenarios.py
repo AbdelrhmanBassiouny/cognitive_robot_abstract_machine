@@ -605,7 +605,9 @@ class TrialStartKeepingRunner(ScenarioRunner[SortOnePiece, RecordedWorld]):
     The worlds of the trials that started, in order.
     """
 
-    def trial_started(self, scenario: SortOnePiece, world: RecordedWorld) -> None:
+    def trial_started(
+        self, scenario: SortOnePiece, world: RecordedWorld, perturbations
+    ) -> None:
         self.started_worlds.append(world)
 
 
@@ -789,7 +791,9 @@ class TestTrialStart:
 
         @dataclass
         class StepsAtStartRunner(ScenarioRunner[SortOnePiece, RecordedWorld]):
-            def trial_started(self, scenario: SortOnePiece, world: RecordedWorld):
+            def trial_started(
+                self, scenario: SortOnePiece, world: RecordedWorld, perturbations
+            ):
                 steps_when_started.append(list(world.performed_steps))
 
         StepsAtStartRunner().run_trial(SortOnePiece())

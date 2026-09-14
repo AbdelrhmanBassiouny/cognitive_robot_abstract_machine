@@ -42,7 +42,11 @@ from experiments.montessori.semantics import MontessoriShapeCategory
 from experiments.montessori.watched_run import WatchedSortingRun
 from experiments.orm.ormatic_interface import RecordedTrialDAO
 from experiments.questions.question import BloomLevel, Bucket, Memory
-from experiments.questions.working_memory import BeliefAgreesWithPerception
+from experiments.questions.working_memory import (
+    AnythingMoved,
+    BeliefAgreesWithPerception,
+    ObjectsThatMoved,
+)
 from semantic_digital_twin.reasoning.predicates import Near
 
 from .test_episode_recording import TrialsKeptInMemory
@@ -152,6 +156,68 @@ def test_the_monitor_of_one_trial_is_stopped_before_the_next_starts(area):
 
     assert run.monitor is None
     assert len(run.records_trials.trials) == 2
+
+
+# %% what someone else moves is watched, and is seen to move
+
+
+def _shoved_before_settling(category: MontessoriShapeCategory) -> PieceShoved:
+    """
+    Something other than the robot running into a piece before the scene settles.
+
+    :param category: The shape of the piece that moves.
+    """
+    return PieceShoved(
+        step=SortingStep.SETTLE,
+        category=category,
+        displacement=HOW_FAR_A_PERTURBATION_MOVES_SOMETHING,
+    )
+
+
+def test_the_piece_a_perturbation_acts_on_is_the_one_watched(area):
+    """
+    A script acting on no piece has the monitor watch whatever someone else acts on,
+    since that is the piece something is going to happen to.
+    """
+    scenario = SyntheticGrasperWatchesTheSceneStandStill(
+        layout=PieceLayout.randomized(seed=SEED, area=area),
+        world_builder=board_and_the_arm(),
+    )
+    run = watched(scenario)
+    shoved_piece = MontessoriShapeCategory.CYLINDER
+
+    run.run(scenario, perturbations=[_shoved_before_settling(shoved_piece)])
+
+    [trial] = run.records_trials.trials
+    tracked = {event.tracked_object for tick in trial.ticks for event in tick.events}
+    assert tracked == {SortingScene(scenario.physics.world).body_of(shoved_piece)}
+
+
+def test_a_shoved_piece_is_remembered_as_having_moved(area):
+    """
+    A shove moves the piece between one reading of the scene and the next, and that is
+    a motion of it: the run answers that something moved, and names the piece.
+    """
+    scenario = SyntheticGrasperWatchesTheSceneStandStill(
+        layout=PieceLayout.randomized(seed=SEED, area=area),
+        world_builder=board_and_the_arm(),
+    )
+    run = watched(scenario)
+    shoved_piece = MontessoriShapeCategory.CYLINDER
+
+    run.run(scenario, perturbations=[_shoved_before_settling(shoved_piece)])
+
+    [trial] = run.records_trials.trials
+    [anything_moved] = [
+        query for query in trial.queries if isinstance(query.question, AnythingMoved)
+    ]
+    assert anything_moved.answer == str(True)
+    [which_moved] = [
+        query for query in trial.queries if isinstance(query.question, ObjectsThatMoved)
+    ]
+    assert SortingScene(scenario.physics.world).body_of(shoved_piece).name.name in (
+        which_moved.answer
+    )
 
 
 # %% the plans the robot performed, and where its joints stood
