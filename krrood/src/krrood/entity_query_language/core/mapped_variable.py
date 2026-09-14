@@ -65,9 +65,31 @@ from krrood.symbol_graph.helpers import (
 )
 
 if TYPE_CHECKING:
+    from krrood.entity_query_language.factories import ConditionType
     from krrood.entity_query_language.operators.arithmetic import (
         ArithmeticOperation,
     )
+
+
+# %% what a statement says about the thing it describes
+
+
+class HasNarrowings(ABC):
+    """
+    Something that describes a thing by saying what narrows it.
+
+    A variable made for such a description points back at it, so that a query given a
+    condition about the variable can say those narrowings as well instead of dropping
+    them.
+    """
+
+    @property
+    @abstractmethod
+    def _narrowings_(self) -> List[ConditionType]:
+        """
+        :return: Everything this says about the thing it describes.
+        """
+        ...
 
 
 def identify_argument(argument: Any) -> Any:
@@ -143,6 +165,17 @@ class HasSymbolicOperations(Generic[T], ABC):
         :return: The expression every symbolic operation on this is built on.
         """
         ...
+
+    @property
+    def _operand_(self) -> CanBehaveLikeAVariable[T]:
+        """
+        :return: What this contributes when it is handed to a symbolic operation in the
+            place of the value it stands for. An expression that is itself a variable
+            contributes that same expression; something that merely stands for one
+            contributes the variable it describes, so that the operation is asserted
+            about the value rather than about the description of it.
+        """
+        return self._symbolic_expression_
 
     def _is_own_name_(self, name: str) -> bool:
         """

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from copy import deepcopy
 from dataclasses import dataclass, field, replace
-from typing import Optional, Tuple, Type, TYPE_CHECKING, Iterator
+from typing import List, Optional, Tuple, Type, TYPE_CHECKING, Iterator
 
 from coraplex.datastructures.enums import ExecutionType
 from coraplex.execution_environment import ExecutionEnvironment
@@ -178,6 +178,14 @@ class UnderspecifiedNode(ExecutionBoundaryNode):
     Held across candidates so they share one copy of the world, rather than each paying
     for its own.
     """
+
+    @property
+    def underspecified_actions(self) -> List[Match]:
+        """
+        :return: The statement this node stands for, which is the one action it states
+            rather than grounds.
+        """
+        return [self.underspecified_action]
 
     @property
     def designator_type(self) -> Type:

@@ -72,24 +72,22 @@ def look_for_the_cube_on_the_lid(
     :return: The whole statement.
     """
     board_holes_in(look.world, look.board)
-    lid = variable(Body, look.world.bodies)
     cube = KNOWN_PIECE_BY_CATEGORY[MontessoriShapeCategory.CUBE]
     triangle = KNOWN_PIECE_BY_CATEGORY[MontessoriShapeCategory.TRIANGULAR_PRISM]
-    square_hole = a(Body)().from_(look.world.bodies)
-    square_hole.where(
-        square_hole._variable_.name.name == HOLE_NAME_BY_CATEGORY[cube.category]
-    )
-    triangle_hole = a(Body)().from_(look.world.bodies)
+    lid = variable(Body, look.world.bodies)
+    square_hole = a(Body).from_(look.world.bodies)
+    square_hole.where(square_hole.name.name == HOLE_NAME_BY_CATEGORY[cube.category])
+    triangle_hole = a(Body).from_(look.world.bodies)
     triangle_hole.where(
-        triangle_hole._variable_.name.name == HOLE_NAME_BY_CATEGORY[triangle.category]
+        triangle_hole.name.name == HOLE_NAME_BY_CATEGORY[triangle.category]
     )
-    sought = a(DetectedMontessoriShape)()
+    sought = a(DetectedMontessoriShape)
     return sought.where(
         lid.name == LID_NAME,
-        SupportedBy(sought._variable_, lid),
-        Above(sought._variable_, square_hole._symbolic_expression_, look.seen_from),
-        Above(sought._variable_, triangle_hole._symbolic_expression_, look.seen_from),
-        Colored(sought._variable_, cube.color),
+        SupportedBy(sought, lid),
+        Above(sought, square_hole, look.seen_from),
+        Above(sought, triangle_hole, look.seen_from),
+        Colored(sought, cube.color),
     )
 
 

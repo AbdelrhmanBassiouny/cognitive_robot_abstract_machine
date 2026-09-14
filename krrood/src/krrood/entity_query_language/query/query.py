@@ -32,6 +32,7 @@ from typing_extensions import (
 
 from krrood.entity_query_language.core.mapped_variable import (
     CanBehaveLikeAVariable,
+    HasNarrowings,
     Index,
     MappedVariable,
 )
@@ -74,6 +75,7 @@ from krrood.entity_query_language.evaluation_context import get_evaluation_conte
 from krrood.entity_query_language.core.variable import (
     InstantiatedVariable,
     ExternallySetVariable,
+    Variable,
 )
 from krrood.entity_query_language.enums import DomainSource
 from krrood.entity_query_language.exceptions import (
@@ -256,7 +258,7 @@ class Query(
 
     def __post_init__(self):
         self._selected_variables_ = tuple(
-            self._as_operand_(selected) for selected in self._selected_variables_
+            self._as_expression_(selected) for selected in self._selected_variables_
         )
         self._operation_children_ = tuple(self._selected_variables_)
         MultiArityExpressionThatPerformsACartesianProduct.__post_init__(self)
@@ -357,6 +359,75 @@ class Query(
                     pending.append(child)
         return condition
 
+    def _narrowings_mentioned_in_(
+        self, *conditions: ConditionType
+    ) -> List[ConditionType]:
+        """
+        What the statements these conditions mention say about the things they describe.
+
+        A statement written where the thing it looks for is expected stands for that
+        thing's variable, so what narrows the statement is said here rather than lost,
+        and a statement reached through one of those narrowings is followed in turn. The
+        statement this query is itself about is passed over, since its narrowings are
+        what this query is being given.
+
+        :param conditions: The conditions being attached to this query.
+        :return: Those narrowings, each said once and none of them already given.
+        """
+        said = {
+            condition._id_
+            for condition in conditions
+            if isinstance(condition, SymbolicExpression)
+        }
+        narrowings: List[ConditionType] = []
+        pending = list(conditions)
+        while pending:
+            for statement in self._statements_mentioned_in_(pending.pop()):
+                for narrowing in statement._narrowings_:
+                    if (
+                        not isinstance(narrowing, SymbolicExpression)
+                        or narrowing._id_ in said
+                    ):
+                        continue
+                    said.add(narrowing._id_)
+                    narrowings.append(narrowing)
+                    pending.append(narrowing)
+        return narrowings
+
+    def _statements_mentioned_in_(
+        self, condition: ConditionType
+    ) -> Iterator[HasNarrowings]:
+        """
+        :param condition: A condition being attached to this query.
+        :return: The statement behind every variable the condition names, other than the
+            one this query selects. A nested subquery is a scope of its own, so what it
+            names is left to it.
+        """
+        if not isinstance(condition, SymbolicExpression):
+            return
+        visited: Set[uuid.UUID] = set()
+        pending = [condition]
+        while pending:
+            expression = pending.pop()
+            if expression._id_ in visited:
+                continue
+            visited.add(expression._id_)
+            if isinstance(expression, Variable) and not self._is_selected_(expression):
+                statement = expression._describing_statement_
+                if statement is not None:
+                    yield statement
+            pending.extend(
+                child for child in expression._children_ if not isinstance(child, Query)
+            )
+
+    def _is_selected_(self, variable: Variable) -> bool:
+        """
+        :param variable: A variable named by one of this query's conditions.
+        :return: Whether it is one this query selects. Compared by identity, since
+            comparing two variables builds a comparator rather than answering.
+        """
+        return any(selected is variable for selected in self._selected_variables_)
+
     def _is_self_(self, expression: SymbolicExpression) -> bool:
         """
         :param expression: An expression appearing in this query's conditions.
@@ -425,12 +496,16 @@ class Query(
         """
         Set the conditions that describe the query object.
 
-        The conditions are chained using AND.
+        The conditions are chained using AND, and each is taken on together with what
+        the statements it mentions say about the things they describe.
+
         :param conditions: The conditions that describe the query
             object.
         :return: This query.
         """
-        conditions = self._reroot_conditions_(*conditions)
+        conditions = self._reroot_conditions_(
+            *conditions, *self._narrowings_mentioned_in_(*conditions)
+        )
         if self._where_builder_ is None:
             self._where_builder_ = WhereBuilder(conditions=conditions, query=self)
         else:

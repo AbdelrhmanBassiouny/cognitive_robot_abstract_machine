@@ -411,7 +411,7 @@ def _quantify_or_build_match(
     :return: A quantified query, or a ``Match`` builder.
     """
     if isinstance(arg, (SymbolicExpression, HasSymbolicOperations)):
-        arg = SymbolicExpression._as_operand_(arg)
+        arg = SymbolicExpression._as_expression_(arg)
         if not isinstance(arg, Query):
             arg = entity(arg)
         return arg._quantify_(quantifier_type, quantification_constraint=quantification)
