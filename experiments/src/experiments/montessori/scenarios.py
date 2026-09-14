@@ -114,6 +114,7 @@ from experiments.montessori.world import (
     MontessoriWorld,
 )
 from experiments.questions.question import (
+    HOW_FAR_A_PLACE_MAY_DIFFER,
     PlacedObject,
     SceneAsSetUp,
     objects_of_the_scene,
@@ -1019,6 +1020,21 @@ class SortingScene:
             <= placement.piece.radius * UNDISTURBED_FRACTION_OF_A_PIECE
         )
 
+    def board_stands_at(self, place: Point3) -> bool:
+        """
+        Whether the board still stands where it stood, to within how far a place may
+        differ and still be the same place.
+
+        :param place: Where the board stood, in the world root frame.
+        """
+        position = self.board.root.global_transform.to_position()
+        return (
+            math.hypot(
+                float(position.x) - float(place.x), float(position.y) - float(place.y)
+            )
+            <= HOW_FAR_A_PLACE_MAY_DIFFER
+        )
+
 
 RELEASE_HEIGHT_ABOVE_THE_HOLE = 0.02
 """
@@ -1800,7 +1816,8 @@ class LookAtTheScene(ScenePhysicsStep):
 @dataclass(eq=False)
 class TheSceneIsUndisturbed(Goal[World]):
     """
-    Success is every piece still standing where the layout put it.
+    Success is every piece still standing where the layout put it, and the board still
+    standing where it stood.
     """
 
     layout: PieceLayout
@@ -1808,8 +1825,18 @@ class TheSceneIsUndisturbed(Goal[World]):
     Where the pieces were put.
     """
 
+    board_stood_at: Optional[Point3] = field(default=None, kw_only=True)
+    """
+    Where the board stood when the trial began, in the world root frame, or None where
+    nothing says, which leaves the board out of the comparison.
+    """
+
     def __call__(self) -> bool:
         scene = SortingScene(self.world)
+        if self.board_stood_at is not None and not scene.board_stands_at(
+            self.board_stood_at
+        ):
+            return False
         return all(
             scene.stands_at(placement.piece.category, placement)
             for placement in self.layout.placements
@@ -2437,6 +2464,12 @@ class MontessoriSortingScenario(
     before one has been.
     """
 
+    _starting_board_place: Optional[Point3] = field(init=False, default=None)
+    """
+    Where the board stood when the world built most recently was built, or None before
+    one has been.
+    """
+
     def __post_init__(self) -> None:
         if self.execution_type is not ExecutionType.REAL:
             return
@@ -2470,11 +2503,27 @@ class MontessoriSortingScenario(
             raise SceneNotBuiltYet(scenario_name=self.name)
         return self._starting_layout
 
+    @property
+    def starting_board_place(self) -> Point3:
+        """
+        Where the board stood when the trial in the world built most recently began, in
+        the world root frame, which is what a goal asking whether the scene changed
+        compares against.
+
+        :raises SceneNotBuiltYet: Before any world has been built.
+        """
+        if self._starting_board_place is None:
+            raise SceneNotBuiltYet(scenario_name=self.name)
+        return self._starting_board_place
+
     def build_world(self) -> World:
         if self.physics is not None:
             self.physics.stop()
         world = self.world_builder.build(self.robot_type)
         self._starting_layout = self.layout.stand_in(world, self.world_builder)
+        self._starting_board_place = SortingScene(
+            world
+        ).board.root.global_transform.to_position()
         self.add_what_the_script_acts_with(world)
         world.update_forward_kinematics()
         self.physics = self._physics_carrying(world)
@@ -2553,7 +2602,11 @@ class TheSceneStandsStill(
 
         :param world: The world the trial is running in.
         """
-        return TheSceneIsUndisturbed(world=world, layout=self.starting_layout)
+        return TheSceneIsUndisturbed(
+            world=world,
+            layout=self.starting_layout,
+            board_stood_at=self.starting_board_place,
+        )
 
     def steps(self, world: World) -> Sequence[ScenarioStep[World]]:
         return [
@@ -2749,7 +2802,11 @@ class RobotLooksAtTheScene(
 
         :param world: The world the trial is running in.
         """
-        return TheSceneIsUndisturbed(world=world, layout=self.starting_layout)
+        return TheSceneIsUndisturbed(
+            world=world,
+            layout=self.starting_layout,
+            board_stood_at=self.starting_board_place,
+        )
 
     def steps(self, world: World) -> Sequence[ScenarioStep[World]]:
         return [

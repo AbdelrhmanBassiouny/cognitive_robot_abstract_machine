@@ -47,6 +47,7 @@ from experiments.montessori.scenarios import (
     SimulatedScene,
     SortingScene,
     SortingStep,
+    TargetHoleMoved,
     TracyWatchesTheSceneStandStill,
 )
 from experiments.montessori.semantics import (
@@ -74,7 +75,10 @@ from .dataset.montessori_capture_truths import CAPTURE_TRUTHS, CaptureTruth
 from .dataset.synthetic_grasping_robot import SyntheticGraspingRobot
 from .test_episode_recording import TrialsKeptInMemory
 from .test_montessori_detection_on_captures import TAPE_TOLERANCE
-from .test_montessori_scene_publishing import RecordedFrameWhoseSceneCanBeMoved
+from .test_montessori_scene_publishing import (
+    A_SLIDE,
+    RecordedFrameWhoseSceneCanBeMoved,
+)
 
 MEASURED_CAPTURE = "scaled_pieces_in_a_row"
 """
@@ -94,6 +98,15 @@ A_SHOVE = PieceShoved(
 )
 """
 The perturbation a run on the robot asks the person for.
+"""
+
+A_SLID_BOARD = TargetHoleMoved(
+    step=SortingStep.SETTLE,
+    category=SHOVED_PIECE,
+    displacement=A_SLIDE,
+)
+"""
+The perturbation that has the person slide the board rather than a piece.
 """
 
 
@@ -483,6 +496,34 @@ def test_a_shove_on_the_robot_is_asked_of_the_person_and_learned_of_by_looking(
     assert scene.body_of(SHOVED_PIECE) in [
         piece.root for piece in person.pieces_when_asked
     ]
+
+
+def test_a_board_the_person_slid_on_the_robot_leaves_the_scene_disturbed(
+    published_world: World,
+):
+    """
+    The person slides the board rather than a piece, the second look finds it where they
+    left it, and the scene the trial ends in is not the one it started in.
+    """
+    look = RecordedFrameWhoseSceneCanBeMoved(
+        pipeline=pipeline_of(published_world),
+        frame=SceneCapture.load(MEASURED_CAPTURE).to_frame(),
+        cube_shoved_by=Vector3(0.0, 0.0, 0.0),
+        board_slid_by=A_SLIDE,
+    )
+    perceived = TracyLookingAtItsOwnTable(
+        scene=PerceivedScene(
+            world=published_world, look=look, described_board=lab_board()
+        )
+    )
+    person = PersonWhoMovesTheScene(look=look, scene=perceived.scene)
+    scenario, run = _run_on_the_robot(perceived, person=person)
+
+    run.run(scenario, perturbations=[A_SLID_BOARD])
+
+    assert person.asked == [A_SLID_BOARD.instruction_for_a_person()]
+    [trial] = run.records_trials.trials
+    assert trial.outcome is TrialOutcome.FAILED
 
 
 def test_a_shove_on_the_robot_is_remembered_as_the_piece_moving(
