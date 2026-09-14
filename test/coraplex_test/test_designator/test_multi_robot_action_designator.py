@@ -33,7 +33,7 @@ from coraplex.robot_plans.actions.composite.transporting import TransportAction
 from coraplex.robot_plans.actions.core.container import OpenAction, CloseAction
 from coraplex.robot_plans.actions.core.misc import DetectAction, MoveToReach
 from coraplex.robot_plans.actions.core.navigation import (
-    GCSNavigateAction,
+    PathPlanningNavigateAction,
 )
 from coraplex.robot_plans.actions.core.navigation import (
     NavigateAction,
@@ -907,7 +907,7 @@ def test_multi_robot_gcs_navigation(immutable_multiple_robot_apartment, rclpy_no
     target_position = [5, 1]
 
     plan = execute_single(
-        GCSNavigateAction(
+        PathPlanningNavigateAction(
             Pose.from_xyz_rpy(*target_position, 0, reference_frame=world.root)
         ),
         context=context,
@@ -930,7 +930,7 @@ def test_gcs_navigation_arrives_at_each_waypoint_facing_the_next_one(
     """
     world, robot, context = immutable_multiple_robot_apartment
 
-    action = GCSNavigateAction(Pose.from_xyz_rpy(5, 1, 0, reference_frame=world.root))
+    action = PathPlanningNavigateAction(Pose.from_xyz_rpy(5, 1, 0, reference_frame=world.root))
     execute_single(action, context=context)
 
     waypoints = action._waypoints()

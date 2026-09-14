@@ -115,12 +115,15 @@ class LookAtAction(ActionDescription):
 
 
 @dataclass
-class GCSNavigateAction(ActionDescription):
+class PathPlanningNavigateAction(ActionDescription):
     """
     Navigates the robot to a pose along a path through the environment's free space.
 
     The free space is decomposed into a graph of convex sets, so the robot drives around
     the furniture and walls between it and the target instead of straight at them.
+
+
+    This works for obstacles which are known in the environment beforehand not such that are added during navigation.
     """
 
     target: Pose
