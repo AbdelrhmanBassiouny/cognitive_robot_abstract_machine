@@ -9,6 +9,7 @@ import experiments.scenarios.runner
 import experiments.scenarios.scenario
 import experiments.scenarios.trial
 import experiments.episodes.artifacts
+import experiments.episodes.audit
 import experiments.episodes.trace
 import experiments.episodes.observer
 import experiments.episodes.recording
@@ -44,6 +45,9 @@ import experiments.paper.timeline
 import experiments.tracy_experiments.live_tracy
 import experiments.tracy_experiments.pickup.perceived_sorting
 import experiments.tracy_experiments.pickup.pickup_demo_mujoco
+import experiments.tracy_experiments.pickup.pickup_demo_real
+import experiments.tracy_experiments.pickup.pickup_demo_rehearsal
+import experiments.tracy_experiments.lab_without_the_robot
 import coraplex.orm.ormatic_interface
 import segmind.orm.ormatic_interface
 
@@ -104,6 +108,10 @@ for episode_machinery_module in (
 ignored_classes |= set(classes_of_module(experiments.episodes.artifacts))
 ignored_classes |= set(classes_of_module(experiments.episodes.trace))
 
+# an audit reads the rows and files a run recorded and reports on them; its report is
+# printed, not recorded
+ignored_classes |= set(classes_of_module(experiments.episodes.audit))
+
 # the Montessori scenes and scripts are the same kind of description one level down:
 # they say how a sorting run is set up and what is done to it, and what a run then
 # recorded is the episode model's, not theirs
@@ -150,6 +158,8 @@ for paper_module in (
 for pickup_demo_module in (
     experiments.tracy_experiments.pickup.perceived_sorting,
     experiments.tracy_experiments.pickup.pickup_demo_mujoco,
+    experiments.tracy_experiments.pickup.pickup_demo_real,
+    experiments.tracy_experiments.pickup.pickup_demo_rehearsal,
 ):
     ignored_classes |= set(classes_of_module(pickup_demo_module))
 
@@ -158,6 +168,7 @@ for pickup_demo_module in (
 for live_robot_module in (
     experiments.montessori.perception.scene_publishing,
     experiments.tracy_experiments.live_tracy,
+    experiments.tracy_experiments.lab_without_the_robot,
 ):
     ignored_classes |= set(classes_of_module(live_robot_module))
 
