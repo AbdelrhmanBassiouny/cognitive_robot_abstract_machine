@@ -226,6 +226,19 @@ of 2026-09-13 are to be re-recorded on the robot, not repaired.
 module + audit 55 passed. Pushed to #265 (`f1f8e30927`), still a draft, description section
 "Fixed 2026-09-14 (midday)" added. `--no-episode` done: `a90a043885` (pushed; 
 `database_asked_for`, `PickupDemo.keep`; demo test module 32 passed). Open question to the
-developer: the rehearsal inherits `--no-episode` and ignores it -- refuse it there? Next:
-items 4-8; item 9 is a re-recording on the robot, the developer's to run.
+developer: the rehearsal inherits `--no-episode` and ignores it -- refuse it there?
+
+**Item 4 in progress.** #356 merged locally as `3ed1eb4c58` (not pushed). Five conflicts:
+trace.py (both added a joints reading -- kept #356's `JointPositions.of` + `standing_at`,
+ask_episode uses `standing_at`), camera_frame.py + its test (this branch's `RunFile` in
+artifacts.py and trial clock, #356's `TwinFrames`), query_card.py (#356's `bagged` with the
+trial clock), pickup_demo_mujoco.py (camera moved to `tracy_experiments/camera.py` by #356;
+camera.py now holds this branch's `camera_link_T_optical(world)` from 7aa4013ae8, demo
+re-exports the names its tests read). #356's trace fix kept. Hazard: `camera_link_T_optical`
+looks up `tracy_mount`, which a world fetched from the real robot may not hold -- check
+when rendering real episodes' cards. #356 needs `pyrender`; the venv lacked it, installed
+`pyrender` and `freetype-py` with `--no-deps` (PyOpenGL kept at 3.1.10). Next: merge
+modules' tests, then `render_query_cards.py --episode 1b5069d9e4ae4954af65dbbc77b71e21
+--database-uri sqlite:///$HOME/episode-artifacts/rehearsals.db`, fix what stops a card
+(test first), push. Then items 5-8; item 9 is a re-recording, the developer's to run.
 
