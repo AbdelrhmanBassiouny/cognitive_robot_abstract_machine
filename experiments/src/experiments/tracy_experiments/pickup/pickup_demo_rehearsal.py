@@ -373,7 +373,9 @@ def main(argument_list: Optional[Sequence[str]] = None) -> int:
     try:
         report = rehearsal.run()
     finally:
-        rclpy.shutdown()
+        # An interruption from the keyboard reaches rclpy's own signal handler first,
+        # which has already shut ROS down by the time this runs.
+        rclpy.try_shutdown()
     print(report.render(), flush=True)
     print(
         "Check it again with:\n  %s"

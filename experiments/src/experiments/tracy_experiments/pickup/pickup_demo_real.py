@@ -1082,6 +1082,9 @@ class PickupDemo:
             trial.perform()
             recorded = trial.finish(episode)
         logger.info("Sorting finished.")
+        # Keeping the episode rewrites where the world's meshes are read from, which a
+        # look still copying the world would read half-written.
+        tracy.look.stop_looking()
         return keep_the_episode(
             recorded,
             trial.joints.trace,

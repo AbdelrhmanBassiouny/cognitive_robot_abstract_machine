@@ -30,7 +30,10 @@ from typing_extensions import Callable, List, Optional, TypeVar
 
 from experiments.montessori.perception.camera import CameraTopic, RgbdFrame
 from experiments.montessori.perception.detections import MontessoriScene
-from experiments.montessori.perception.exceptions import NoSceneAvailable
+from experiments.montessori.perception.exceptions import (
+    LookingHasStopped,
+    NoSceneAvailable,
+)
 from experiments.montessori.perception.live_camera import LiveCamera
 from experiments.montessori.perception.markers import DetectionMarkerPublisher
 from experiments.montessori.perception.measured_plane import CameraPoseError
@@ -155,6 +158,11 @@ class MontessoriPerceptionNode(RepeatedLook):
     Guards the newest result against being read while it is being replaced.
     """
 
+    _has_stopped_looking: bool = field(init=False, default=False)
+    """
+    Whether the node has been told to take no more looks.
+    """
+
     def __post_init__(self) -> None:
         self._camera = LiveCamera(node=self.node, color_callback=self._on_look)
 
@@ -169,7 +177,8 @@ class MontessoriPerceptionNode(RepeatedLook):
         workspace and drawn on would otherwise flash the bare ones first.
         """
         if (
-            self._camera.missing_inputs()
+            self._has_stopped_looking
+            or self._camera.missing_inputs()
             or time.monotonic() - self._last_run < self.minimum_period
         ):
             return
@@ -206,10 +215,13 @@ class MontessoriPerceptionNode(RepeatedLook):
 
         :param frame: The look, in the pipeline's own reference frame.
         :return: What the look found.
+        :raises LookingHasStopped: If the node has been told to stop looking.
         :raises Exception: Whatever the pipeline's own look raised.
         """
         pipeline = self.pipeline
         with self._lock:
+            if self._has_stopped_looking:
+                raise LookingHasStopped()
             self._look_under_way_since = time.monotonic()
             if pipeline is self.pipeline:
                 self._frame = frame
@@ -222,6 +234,22 @@ class MontessoriPerceptionNode(RepeatedLook):
             if pipeline is self.pipeline:
                 self._scene = scene
         return scene
+
+    def stop_looking(self) -> None:
+        """
+        Take no more looks, and return once the look under way, if any, has ended.
+
+        A look copies the world it is taken in, so whatever changes that world once the
+        camera is of no more use -- keeping an episode rewrites where its meshes are read
+        from -- stops the looking first.
+        """
+        with self._lock:
+            self._has_stopped_looking = True
+        while True:
+            with self._lock:
+                if self._look_under_way_since is None:
+                    return
+            time.sleep(self.scene_check_period)
 
     def read_with(self, pipeline: MontessoriPerceptionPipeline) -> None:
         """
