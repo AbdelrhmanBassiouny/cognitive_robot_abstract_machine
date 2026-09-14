@@ -716,6 +716,7 @@ class MujocoSortingRig(ShapeSorter):
                     object_designator=piece.root,
                     target=insertion.hole,
                     arm=PICK_ARM,
+                    grasp_description=self.grasp_description,
                     sim=self.simulation,
                     actuators=self.actuators,
                     hover_height=insertion.hover_height,
@@ -802,6 +803,9 @@ class SimulationFilm(SimulationObserver):
         simulator = self.simulation.multi_sim.simulator
         with simulator._model_lock:
             if self._renderer is None:
+                self.simulation.multi_sim.make_room_for_a_picture(
+                    self.resolution.width, self.resolution.height
+                )
                 self._renderer = mujoco.Renderer(
                     simulator._mj_model, self.resolution.height, self.resolution.width
                 )

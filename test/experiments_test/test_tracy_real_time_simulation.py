@@ -1,7 +1,8 @@
 """
 Tests for :mod:`experiments.tracy_experiments.real_time_simulation`: a follower world's
 joints take the simulated positions after every advance, observers are told how far the
-simulation has come, and an unpaced simulation does not wait for the wall clock.
+simulation has come, it says how far it has been stepped, and an unpaced simulation does
+not wait for the wall clock.
 """
 
 from __future__ import annotations
@@ -112,6 +113,23 @@ def test_an_observer_is_told_the_simulated_time_after_every_advance():
         simulation.advance(ADVANCE)
 
     assert observer.told == pytest.approx([ADVANCE, 2 * ADVANCE])
+
+
+def test_it_says_how_far_it_has_been_stepped():
+    """
+    Anything filming or tracing a run alongside it stamps what it keeps by the
+    simulation's own clock rather than by the wall clock the run is not paced to.
+    """
+    reality, _ = _mounted_tracy()
+
+    with RealTimeSimulation(
+        world=reality, headless=True, paced_to_the_wall_clock=False
+    ) as simulation:
+        before = simulation.simulated_time
+        simulation.advance(ADVANCE)
+
+        assert before == 0.0
+        assert simulation.simulated_time == pytest.approx(ADVANCE)
 
 
 def test_an_unpaced_simulation_does_not_wait_for_the_wall_clock():

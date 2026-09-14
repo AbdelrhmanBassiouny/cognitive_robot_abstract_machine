@@ -196,6 +196,7 @@ def main(headless: bool = False) -> None:
                             world.root,
                         ),
                         arm=STACK_ARM,
+                        grasp_description=grasp_description,
                         sim=sim,
                         actuators=actuators,
                     )

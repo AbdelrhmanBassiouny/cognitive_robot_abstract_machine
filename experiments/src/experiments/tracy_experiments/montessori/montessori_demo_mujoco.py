@@ -179,6 +179,7 @@ def main(headless: bool = False) -> None:
                             circular_hole_1_shape
                         ).root.global_transform.to_pose(),
                         arm=PICK_ARM,
+                        grasp_description=grasp_description,
                         sim=sim,
                         actuators=actuators,
                     ),
@@ -196,6 +197,7 @@ def main(headless: bool = False) -> None:
                             square_hole_shape
                         ).root.global_transform.to_pose(),
                         arm=PICK_ARM,
+                        grasp_description=grasp_description,
                         sim=sim,
                         actuators=actuators,
                     ),
@@ -213,6 +215,7 @@ def main(headless: bool = False) -> None:
                             triangle_hole_shape
                         ).root.global_transform.to_pose(),
                         arm=PICK_ARM,
+                        grasp_description=grasp_description,
                         sim=sim,
                         actuators=actuators,
                     ),
@@ -230,6 +233,7 @@ def main(headless: bool = False) -> None:
                             rectangular_hole_shape
                         ).root.global_transform.to_pose(),
                         arm=PICK_ARM,
+                        grasp_description=grasp_description,
                         sim=sim,
                         actuators=actuators,
                     ),

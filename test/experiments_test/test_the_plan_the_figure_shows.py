@@ -9,12 +9,14 @@ so what the plan resolves to can be asserted without a robot or a simulation.
 
 from __future__ import annotations
 
+import itertools
+
 import pytest
 
 from coraplex.datastructures.enums import Arms
 from coraplex.datastructures.grasp import GraspDescription
 from coraplex.robot_plans.actions.core.insertion import InsertionAction
-from coraplex.robot_plans.actions.core.pick_up import PickUpAction
+from coraplex.robot_plans.actions.core.pick_up import PickUpAction, ReachAction
 from experiments.montessori.board_description import DescribedBoard
 from experiments.montessori.hole_geometry import BoardHoleLayout
 from experiments.montessori.perception.backend import MontessoriPerceptionBackend
@@ -32,6 +34,7 @@ from experiments.montessori.perception.recorded_setup import (
 )
 from experiments.montessori.perception.scene_publishing import PerceivedScene
 from experiments.montessori.perception.scene_source import FixedScene, RecordedFrame
+from experiments.montessori.pieces import KnownPieceSet
 from experiments.montessori.semantics import (
     MontessoriShapeCategory,
     ShapeSortingBoard,
@@ -40,7 +43,13 @@ from experiments.montessori.semantics import (
 from experiments.montessori.world import BOARD_SCALE
 from experiments.open_slots.choice import backends_for
 from experiments.open_slots.holes import HoleRulesBackend
-from experiments.open_slots.plan import PIECE_COLOR, SORTED_PIECE, sorting_plan
+from experiments.open_slots.plan import FROM_ABOVE, SORTED_PIECE, sorting_plan
+from experiments.tracy_experiments.pick_and_place_action import (
+    ActuatorDrivenAction,
+    InsertionActionMujoco,
+    NoActionCarriesItOut,
+    PickUpActionMujoco,
+)
 from krrood.entity_query_language.backends import BackendChoice, ProbabilisticBackend
 from semantic_digital_twin.spatial_types.spatial_types import Pose
 from semantic_digital_twin.world_description.world_entity import Body
@@ -60,6 +69,12 @@ Where the board's lid stands, in metres.
 PICK_ARM = Arms.LEFT
 """
 The arm the plan below picks the piece up with.
+"""
+
+GRASPS_LOOKED_AT = 12
+"""
+How many of the ways the plan can be grounded the grasp is read off, which is enough
+for every side of the piece to have been sampled several times over.
 """
 
 
@@ -99,11 +114,24 @@ def backends(scene_with_a_piece_on_the_lid: MontessoriScene) -> BackendChoice:
 
 
 @pytest.fixture
-def grounded(board: ShapeSortingBoard, lid: Body, backends: BackendChoice) -> list:
+def pieces(pipeline: MontessoriPerceptionPipeline) -> KnownPieceSet:
+    """
+    The set of loose pieces the look this plan is run against was fitted with.
+    """
+    return pipeline.pieces
+
+
+@pytest.fixture
+def grounded(
+    board: ShapeSortingBoard,
+    lid: Body,
+    pieces: KnownPieceSet,
+    backends: BackendChoice,
+) -> list:
     """
     The plan's actions, with everything it leaves open answered.
     """
-    plan = sorting_plan(board, lid, PICK_ARM, end_effector=None)
+    plan = sorting_plan(board, lid, pieces, PICK_ARM, end_effector=None)
     return next(plan.grounded_by(backends))
 
 
@@ -111,14 +139,14 @@ def grounded(board: ShapeSortingBoard, lid: Body, backends: BackendChoice) -> li
 
 
 def test_it_leaves_open_the_piece_the_grasp_and_the_hole(
-    board: ShapeSortingBoard, lid: Body
+    board: ShapeSortingBoard, lid: Body, pieces: KnownPieceSet
 ):
     """
     Whether the piece is where the plan needs it is stated as a condition on the piece
     rather than as a fourth description, so the look reads it in the world it stood the
     piece in.
     """
-    plan = sorting_plan(board, lid, PICK_ARM, end_effector=None)
+    plan = sorting_plan(board, lid, pieces, PICK_ARM, end_effector=None)
 
     assert [open_slot._type_ for open_slot in plan.open_descriptions] == [
         DetectedMontessoriShape,
@@ -130,12 +158,17 @@ def test_it_leaves_open_the_piece_the_grasp_and_the_hole(
 # %% what answers each of them
 
 
-def test_the_piece_it_picks_up_is_the_one_the_look_found(grounded: list):
+def test_the_piece_it_picks_up_is_the_one_the_look_found(
+    grounded: list, pieces: KnownPieceSet
+):
     [picking_up, _] = grounded
 
     assert isinstance(picking_up, PickUpAction)
     assert picking_up.object_designator.category is SORTED_PIECE
-    assert picking_up.object_designator.role_taker.root.visual[0].color == PIECE_COLOR
+    assert (
+        picking_up.object_designator.role_taker.root.visual[0].color
+        == pieces.by_category[SORTED_PIECE].color
+    )
 
 
 def test_the_piece_it_puts_through_is_the_piece_it_picked_up(grounded: list):
@@ -215,6 +248,7 @@ def test_the_piece_it_picks_up_is_one_the_world_the_robot_plans_in_holds(
     plan = sorting_plan(
         perceived_lab.board,
         perceived_lab.look.pipeline.lid.entity,
+        perceived_lab.look.pipeline.pieces,
         PICK_ARM,
         end_effector=None,
     )
@@ -230,3 +264,76 @@ def test_the_piece_it_picks_up_is_one_the_world_the_robot_plans_in_holds(
     assert any(piece is picked_up.role_taker for piece in perceived_lab.pieces)
     assert picked_up.role_taker.shape_category is SORTED_PIECE
     assert picked_up.root in perceived_lab.world.bodies
+
+
+# %% what carries the resolved plan out
+
+
+def test_every_grasp_it_grounds_to_comes_down_on_the_piece(
+    board: ShapeSortingBoard,
+    lid: Body,
+    pieces: KnownPieceSet,
+    backends: BackendChoice,
+) -> None:
+    """
+    A piece resting on a surface offers the fingers nothing but its top, so a grasp the
+    plan grounds to that came at it from the side or from underneath is one no arm could
+    carry out.
+    """
+    plan = sorting_plan(board, lid, pieces, PICK_ARM, end_effector=None)
+
+    grounded = itertools.islice(plan.grounded_by(backends), GRASPS_LOOKED_AT)
+
+    assert [
+        picking_up.grasp_description.vertical_alignment for picking_up, _ in grounded
+    ] == [FROM_ABOVE] * GRASPS_LOOKED_AT
+
+
+def test_the_grasp_it_puts_the_piece_through_the_hole_with_is_the_one_it_took_hold_with(
+    grounded: list,
+) -> None:
+    """
+    Both actions state the one grasp, so the piece is let go of held the way it was
+    picked up rather than turned on the way.
+    """
+    [picking_up, putting_through] = grounded
+
+    assert putting_through.grasp_description is picking_up.grasp_description
+
+
+def test_the_resolved_plan_is_carried_out_by_the_actions_that_drive_the_actuators(
+    grounded: list,
+) -> None:
+    """
+    The plan is written in the words a plan is written in; what runs it here is the
+    family that commands the lab's own actuators, and it is found from the plan rather
+    than named by it.
+    """
+    [picking_up, putting_through] = grounded
+
+    [takes_hold, puts_through] = ActuatorDrivenAction.performing(
+        grounded, simulation=None, actuators={}
+    )
+
+    assert isinstance(takes_hold, PickUpActionMujoco)
+    assert isinstance(puts_through, InsertionActionMujoco)
+    assert takes_hold.object_designator is picking_up.object_designator.root
+    assert puts_through.object_designator is takes_hold.object_designator
+    assert takes_hold.grasp_description is picking_up.grasp_description
+    assert puts_through.target is putting_through.target
+
+
+def test_an_action_nothing_here_carries_out_is_refused(grounded: list) -> None:
+    """
+    A plan stating an action the lab cannot run says so, rather than running the rest of
+    it and leaving that one out.
+    """
+    [picking_up, _] = grounded
+    reaching = ReachAction(
+        target_pose=Pose(),
+        arm=PICK_ARM,
+        grasp_description=picking_up.grasp_description,
+    )
+
+    with pytest.raises(NoActionCarriesItOut):
+        ActuatorDrivenAction.performing([reaching], simulation=None, actuators={})

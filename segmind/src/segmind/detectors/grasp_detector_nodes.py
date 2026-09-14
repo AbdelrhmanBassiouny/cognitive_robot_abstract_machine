@@ -18,7 +18,7 @@ The tool center point is a massless URDF link with no collision geometry of its 
 unlike the two fingers it can never register a real mesh contact; a properly grasped
 object's own centre sits close to it by construction (a pick action aims the gripper's
 own finger midpoint, which the tool center point tracks, at the object's centre -- see
-:func:`~experiments.tracy_experiments.pick_and_place_action._top_down_pose_builder`).
+:func:`~experiments.tracy_experiments.pick_and_place_action._grasp_pose_builder`).
 Not yet empirically validated against a real grasp on any particular robot's own scale
 of object -- tune down if it is triggering while the object is still merely nearby, or
 up if a genuine grasp is not being recognized.
