@@ -322,7 +322,7 @@ class PickUpActionReal(
             [
                 ReachAction(
                     target_pose=grasp_target,
-                    object_designator=self.object_designator,
+                    object_designator=self.object_designator.role_taker,
                     arm=self.arm,
                     grasp_description=self.grasp_description,
                 )

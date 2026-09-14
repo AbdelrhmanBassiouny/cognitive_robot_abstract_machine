@@ -12,8 +12,13 @@ from __future__ import annotations
 from dataclasses import replace
 
 import pytest
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+from typing_extensions import Any
 
+from coraplex.orm.ormatic_interface import ReachActionDAO
 from coraplex.robot_plans.actions.core.insertion import InsertionAction
+from krrood.ormatic.data_access_objects.helper import to_dao
 from coraplex.robot_plans.actions.core.pick_up import PickUpAction, ReachAction
 from coraplex.datastructures.dataclasses import Context
 from coraplex.robot_plans.actions.core.placing import PlaceAction
@@ -191,25 +196,52 @@ def test_it_takes_hold_of_the_piece_the_plan_names(
     assert taking_hold.manipulated_bodies == [picking_up.object_designator.root]
 
 
-def test_the_reach_is_handed_the_piece_the_plan_names_not_its_body(
-    grounded: list, tracy: ActuatorsThatRecord
-) -> None:
+def reach_of_the_pick_up(picking_up: PickUpAction, tracy: ActuatorsThatRecord) -> Any:
     """
-    A reach expands its plan from the piece's annotation, reading the body off it, so it
-    is handed the annotation the plan grounded rather than the body under it.
+    :return: The action the reach a real pick-up of ``picking_up`` would drive the arm
+        through carries out.
     """
-    [picking_up, _] = grounded
     taking_hold = PickUpActionReal.carrying_out(picking_up, tracy)
     taking_hold.grasp_description = replace(
         taking_hold.grasp_description,
         end_effector=EndEffectorFacingAWay(tracy.context.world),
     )
-
     taking_hold._run()
-
     [reaching] = [node.designator for node in tracy.driven[0].actions]
+    return reaching
+
+
+def test_the_reach_is_handed_the_piece_the_plan_names_not_its_body(
+    grounded: list, tracy: ActuatorsThatRecord
+) -> None:
+    """
+    A reach expands its plan from the piece's annotation, reading the body off it, so it
+    is handed the piece the look found rather than the body under it.
+    """
+    [picking_up, _] = grounded
+
+    reaching = reach_of_the_pick_up(picking_up, tracy)
+
     assert type(reaching) is ReachAction
-    assert reaching.object_designator is picking_up.object_designator
+    assert reaching.object_designator is picking_up.object_designator.role_taker
+
+
+def test_the_reach_a_real_pick_up_drives_is_kept_in_the_results_database(
+    grounded: list, tracy: ActuatorsThatRecord, experiments_database_session: Session
+) -> None:
+    """
+    An episode keeps every plan the arm was driven through, so the reach has to be
+    something the results database can hold.
+    """
+    [picking_up, _] = grounded
+    reaching = reach_of_the_pick_up(picking_up, tracy)
+    reaching.grasp_description = picking_up.grasp_description
+
+    experiments_database_session.add(to_dao(reaching))
+    experiments_database_session.commit()
+
+    [kept] = experiments_database_session.scalars(select(ReachActionDAO)).all()
+    assert kept.object_designator.name.name == picking_up.object_designator.name.name
 
 
 def test_the_fingers_close_to_the_width_that_piece_asks_for(
