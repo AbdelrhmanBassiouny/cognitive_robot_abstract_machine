@@ -59,15 +59,16 @@
   (
     slot: "perception", indent: 6,
     lines: ("a(DetectedMontessoriShape)(", "  category=CUBE)", ".where(", "  Colored(shape, CYAN),"),
-    nested: (slot: "simulation", indent: 2, lines: ("SupportedBy(shape, board)),",)),
+    nested: (slot: "simulation", indent: 2, lines: ("SupportedBy(shape, lid)),",)),
   ),
   (text: "    grasp_description="),
   (
     slot: "probabilistic", indent: 6,
-    lines: ("a(GraspDescription)(", "  approach_direction=...,", "  vertical_alignment=...)"),
+    lines: ("a(GraspDescription)(", "  approach_direction=...,", "  vertical_alignment=...,", "  end_effector=LEFT_HAND)"),
   ),
   (text: "  ),"),
   (text: "  an(InsertionAction)("),
+  (text: "    arm=LEFT,"),
   (text: "    object_designator=shape,"),
   (text: "    target="),
   (
@@ -88,15 +89,16 @@
     // where tracy/render_tracy.py stands the cube, in Tracy's own frame: on the board's
     // lid, on the stretch of it furthest from the square hole, as the sorting demo starts it
     lines: ("cube_1  # CYAN, CUBE", "  at (0.72, 0.13, 0.10) m,"),
-    nested: (slot: "simulation", indent: 2, lines: ("SupportedBy(cube_1, board) ✓",)),
+    nested: (slot: "simulation", indent: 2, lines: ("SupportedBy(cube_1, lid) ✓",)),
   ),
   (text: "    grasp_description="),
   (
     slot: "probabilistic", indent: 6,
-    lines: ("GraspDescription(", "  FRONT, TOP)"),
+    lines: ("GraspDescription(", "  FRONT, TOP,", "  LEFT_HAND)"),
   ),
   (text: "  ),"),
   (text: "  InsertionAction("),
+  (text: "    arm=LEFT,"),
   (text: "    object_designator=cube_1,"),
   (text: "    target="),
   (
@@ -124,7 +126,7 @@
 #let world-title = "imagined world"
 #let spawn-label = "spawn"
 #let support-reading = "overlap 3 mm ≤ 0.1 m"
-#let support-verdict = "SupportedBy(cube_1, board) → True"
+#let support-verdict = "SupportedBy(cube_1, lid) → True"
 #let board-color = rgb("#e9dcbd")
 #let cube-color = rgb("#bfe6ea")
 

@@ -294,6 +294,37 @@ def test_a_piece_on_another_surface_is_not_stood(look: RecordedFrame) -> None:
     assert live.get_semantic_annotations_by_type(MontessoriShape) == []
 
 
+def test_the_piece_a_finding_names_is_the_one_the_published_world_holds(
+    look: RecordedFrame,
+) -> None:
+    """
+    A plan reaches for the piece a look answers with, so that piece has to be the one
+    the world the robot plans in holds rather than a second body standing for the same
+    sighting in a world of the look's own.
+    """
+    scene = look.scene()
+    live = look.pipeline.world
+    findings = list(scene.shapes)
+    bodies_the_look_stood = [shape.role_taker for shape in findings]
+
+    stood = PiecePublisher(world=live).publish(
+        scene, resting_on=frozenset({look.pipeline.table.name})
+    )
+
+    left_in_the_looks_own_world = scene.imagined.world.get_semantic_annotations_by_type(
+        MontessoriShape
+    )
+    for piece in stood:
+        [(finding, its_own_body)] = [
+            (shape, body)
+            for shape, body in zip(findings, bodies_the_look_stood)
+            if shape.role_taker is piece
+        ]
+        assert finding.category is piece.shape_category
+        assert finding.root is piece.root
+        assert not any(held is its_own_body for held in left_in_the_looks_own_world)
+
+
 def test_two_looks_stand_pieces_under_different_names(look: RecordedFrame) -> None:
     scene = look.scene()
     publisher = PiecePublisher(world=look.pipeline.world)

@@ -8,10 +8,12 @@ plan as :mod:`~experiments.open_slots.plan` writes it: the piece to pick up is l
 for, how to take hold of it is sampled, and the hole it goes through is concluded by
 rules. Nothing here says who supplies any of it.
 
-The plan is resolved rather than performed. The look answers with the piece standing in
-the world it stood its findings in, which is a copy of the world the robot plans in, so
-what the plan grounds to is not yet something the arm can be driven at; see the module
-docstring of :mod:`~experiments.montessori.perception.imagination`.
+The plan is resolved rather than performed. What it resolves to is the piece the belief
+holds, standing where the look found it, so a reach can be planned against it; what is
+missing is a way to carry a resolved ``PickUpAction`` out in this lab, since Giskard's
+own closed loop races the physics thread and the actions that do drive the actuators --
+:mod:`~experiments.tracy_experiments.pick_and_place_action` -- are separate classes that
+read no grasp description.
 
 Usage:
     python3 framework_demo.py [--execution simulated] [--headless]
@@ -96,7 +98,9 @@ def resolved_in_the_simulated_lab(headless: bool) -> ResolvedPlan:
         lab.hold_the_parked_pose(simulation)
         scene = PerceivedScene(world=lab.belief, look=look, described_board=lab_board())
         scene.perceive()
-        backends = backends_for(MontessoriPerceptionBackend(source=look), lab.belief)
+        backends = backends_for(
+            MontessoriPerceptionBackend(source=scene.last_look), lab.belief
+        )
         plan = sorting_plan(
             scene.board,
             look.pipeline.lid.entity,

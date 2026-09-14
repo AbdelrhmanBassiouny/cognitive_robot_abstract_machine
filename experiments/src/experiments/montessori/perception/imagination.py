@@ -7,6 +7,10 @@ spawned into a copy of the world it was taken in, where every finding is a body 
 where it was seen and a relation asked about it has something real to be evaluated
 against. The world the look was taken in is left as it was, and what a statement rejects
 is removed from the copy again, so what the copy holds at the end is the answer.
+
+A finding the world the look was taken in comes to stand is that world's piece from then
+on and leaves the copy, so a plan reaching for what a look answered with reaches for
+something the robot can be driven at.
 """
 
 from __future__ import annotations
@@ -155,8 +159,14 @@ class ImaginedWorld:
         """
         Take a piece out of this world again, because the statement rejected it.
 
+        A piece the world the look was taken in has since taken on stands there rather
+        than here, so there is nothing here to take out and it is left where it stands.
+
         :param shape: The piece as this world holds it.
         """
+        held = self.world.get_semantic_annotations_by_type(MontessoriShape)
+        if not any(piece is shape for piece in held):
+            return
         with self.world.modify_world():
             self.world.remove_semantic_annotation(shape)
             self.world.remove_branch_from_world(shape.root)

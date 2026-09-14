@@ -121,7 +121,8 @@ class DetectedMontessoriShape(MontessoriDetection, Role[MontessoriShape]):
     relation of the world's vocabulary is written over bodies and what the world says
     about them, so a sighting with no such thing behind it is a subject no predicate can
     be evaluated about. The role taker is the piece standing where it was seen in the
-    world the look brought its findings into.
+    world the look brought its findings into, or, once the world the look was taken in
+    has come to stand that piece, the piece that world holds.
     """
 
     category: MontessoriShapeCategory = field(kw_only=True)
@@ -299,7 +300,7 @@ class MontessoriScene:
 
     A statement asking anything the search could not narrow itself by is answered there,
     against the bodies standing for what was found, and what it rejects is taken out
-    again.
+    again. A piece the world the look was taken in comes to stand leaves this one.
     """
 
     @property

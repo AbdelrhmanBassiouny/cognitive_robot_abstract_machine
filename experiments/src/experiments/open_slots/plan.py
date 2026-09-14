@@ -8,10 +8,6 @@ concluded by rules. Nothing here says who supplies any of it -- every backend de
 what it can answer, and
 :meth:`~coraplex.plans.plan_node.PlanNode.grounded_by` hands each slot to the first that
 declares it can.
-
-The figure writes the two actions without the fields the robot rather than the plan
-fixes -- which arm, and that arm's hand -- and writes the surface the piece rests on as
-the board it is the lid of.
 """
 
 from __future__ import annotations
@@ -57,7 +53,7 @@ def sorting_plan(
     :param lid: The board's lid, as the surface a look searches names it.
     :param arm: The arm that picks the piece up and carries it.
     :param end_effector: That arm's hand, which the grasp is described for.
-    :return: The plan, with the four things it does not supply left open.
+    :return: The plan, with the three things it does not supply left open.
     """
     piece = a(DetectedMontessoriShape)(category=SORTED_PIECE)
     piece = piece.where(Colored(piece, PIECE_COLOR), SupportedBy(piece, lid))

@@ -2,8 +2,9 @@
 The plan the framework figure shows, run as it is written: every slot it leaves open
 closed by the backend that can answer it.
 
-The look is taken at a rendered scene rather than through a camera, so what the plan
-resolves to can be asserted without a robot or a simulation.
+The look is taken at a rendered scene rather than through a camera, and at a shipped
+capture of the lab table for the run that has the robot's own world hold what was found,
+so what the plan resolves to can be asserted without a robot or a simulation.
 """
 
 from __future__ import annotations
@@ -17,13 +18,20 @@ from coraplex.robot_plans.actions.core.pick_up import PickUpAction
 from experiments.montessori.board_description import DescribedBoard
 from experiments.montessori.hole_geometry import BoardHoleLayout
 from experiments.montessori.perception.backend import MontessoriPerceptionBackend
+from experiments.montessori.perception.captures import SceneCapture
 from experiments.montessori.perception.detections import (
     DetectedMontessoriShape,
     MontessoriScene,
 )
 from experiments.montessori.perception.imagination import ImaginedWorld
 from experiments.montessori.perception.pipeline import MontessoriPerceptionPipeline
-from experiments.montessori.perception.scene_source import FixedScene
+from experiments.montessori.perception.recorded_setup import (
+    lab_board,
+    perception_pipeline,
+    recorded_world,
+)
+from experiments.montessori.perception.scene_publishing import PerceivedScene
+from experiments.montessori.perception.scene_source import FixedScene, RecordedFrame
 from experiments.montessori.semantics import (
     MontessoriShapeCategory,
     ShapeSortingBoard,
@@ -165,3 +173,60 @@ def test_each_slot_is_answered_by_the_backend_that_can(
         (ProbabilisticBackend, GraspDescription),
         (HoleRulesBackend, ShapeSortingHole),
     ]
+
+
+# %% the piece it picks up is one the robot's own world holds
+
+
+CAPTURE_OF_THE_LAB_TABLE = "displaced_cube_from_hole"
+"""
+A capture of the lab table with loose pieces on it and the cube on the board's lid, the
+way the sorting demo starts them.
+"""
+
+
+@pytest.fixture
+def perceived_lab() -> PerceivedScene:
+    """
+    The lab as one look at that capture leaves it: the board and the loose pieces stood
+    in the world the robot plans in.
+    """
+    world = recorded_world()
+    scene = PerceivedScene(
+        world=world,
+        look=RecordedFrame(
+            pipeline=perception_pipeline(world=world),
+            frame=SceneCapture.load(CAPTURE_OF_THE_LAB_TABLE).to_frame(),
+        ),
+        described_board=lab_board(),
+    )
+    scene.perceive()
+    return scene
+
+
+def test_the_piece_it_picks_up_is_one_the_world_the_robot_plans_in_holds(
+    perceived_lab: PerceivedScene,
+) -> None:
+    """
+    A plan that grounds to a body standing only in a world of the look's own is a plan
+    no arm can be driven by, so the piece both actions act on is the piece the world the
+    robot plans in holds.
+    """
+    plan = sorting_plan(
+        perceived_lab.board,
+        perceived_lab.look.pipeline.lid.entity,
+        PICK_ARM,
+        end_effector=None,
+    )
+    backends = backends_for(
+        MontessoriPerceptionBackend(source=perceived_lab.last_look),
+        perceived_lab.world,
+    )
+
+    [picking_up, putting_through] = next(plan.grounded_by(backends))
+
+    picked_up = picking_up.object_designator
+    assert picked_up is putting_through.object_designator
+    assert any(piece is picked_up.role_taker for piece in perceived_lab.pieces)
+    assert picked_up.role_taker.shape_category is SORTED_PIECE
+    assert picked_up.root in perceived_lab.world.bodies
