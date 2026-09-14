@@ -1282,6 +1282,30 @@ def test_a_shove_is_the_translation_of_the_piece_by_its_displacement(area):
     )
 
 
+def test_a_scene_whose_board_slid_is_not_undisturbed(area):
+    """
+    The board is part of the scene a static run starts in, so a scene whose board
+    someone slid is not the one the trial started in, however still the pieces stood.
+    """
+    scenario = SyntheticGrasperWatchesTheSceneStandStill(
+        layout=PieceLayout.randomized(seed=SEED, area=area),
+        world_builder=board_and_the_arm(),
+    )
+
+    trial = ScenarioRunner().run_trial(
+        scenario,
+        perturbations=[
+            TargetHoleMoved(
+                step=SortingStep.SETTLE,
+                category=MontessoriShapeCategory.CUBE,
+                displacement=HOW_FAR_A_PERTURBATION_MOVES_SOMETHING,
+            )
+        ],
+    )
+
+    assert trial.outcome is TrialOutcome.FAILED
+
+
 def test_a_moved_target_hole_is_the_translation_of_the_board(area):
     world = a_scene_to_perturb(area)
     board = SortingScene(world).board.root

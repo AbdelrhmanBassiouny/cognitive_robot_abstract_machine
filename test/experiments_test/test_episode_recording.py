@@ -377,6 +377,27 @@ def test_the_world_a_plan_was_performed_in_is_read_back_after_the_process_has_ex
     assert Path(mesh.filename).is_relative_to(configured_mesh_directory())
 
 
+def test_the_world_a_recalled_plan_was_performed_in_is_a_world(tmp_path, monkeypatch):
+    """
+    A recalled plan is asked about the world it was performed in the way the episode's
+    own world is asked, so it comes back as a world rather than as the record of one.
+    """
+    monkeypatch.setenv(ARTIFACT_DIRECTORY_ENVIRONMENT_VARIABLE, str(tmp_path))
+    database = ResultsDatabase(uri="sqlite:///%s" % (tmp_path / "results.db"))
+    plan = minimal_plan()
+    plan.initial_world = world_of_a_mesh_this_process_exported()
+    trial = finished_trial(sorting_episode())
+    trial.plans.append(PerformedPlan(plan=plan))
+    recording = open_recording(database)
+    recording.record(trial)
+    recording.close()
+
+    [read_back] = LongTermMemory(database).recall_trials(trial.episode.identifier)
+
+    [performed] = read_back.plans
+    assert isinstance(performed.plan.initial_world, World)
+
+
 def test_a_recorded_trial_carries_what_its_trial_measured():
     scenario = SortOnePiece()
     episode = Episode.from_run(scenario)

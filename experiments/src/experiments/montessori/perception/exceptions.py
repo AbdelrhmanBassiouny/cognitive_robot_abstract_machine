@@ -126,6 +126,22 @@ class NoSceneAvailable(DataclassException):
 
 
 @dataclass
+class LookingHasStopped(DataclassException):
+    """
+    Raised when a look is asked of a node that has been told to stop looking.
+    """
+
+    def error_message(self) -> str:
+        return "The camera was told to stop looking, so it takes no more looks."
+
+    def suggest_correction(self) -> str:
+        return (
+            "Stop looking only once the run has no more use for the camera, such as "
+            "when its episode is being kept."
+        )
+
+
+@dataclass
 class WorkspaceOutOfView(DataclassException):
     """
     Raised when the stretch of table perception looks at falls outside the camera image

@@ -28,6 +28,8 @@ from experiments.episodes.trace import (
     TimedFrames,
     TimedFramesFile,
     TraceIsEmptyError,
+    put_back_afterwards,
+    standing_at,
 )
 
 from coraplex.datastructures.enums import ExecutionType
@@ -176,6 +178,64 @@ def test_a_joint_the_sample_does_not_hold_is_left_where_it_is(
     JointPositions(moment=EARLIER, positions={}).restore_into(two_arm_robot_world)
 
     assert two_arm_robot_world.state[joint.id].position == MOVED_TO
+
+
+def test_a_reading_of_the_world_holds_where_every_joint_stands_now(
+    two_arm_robot_world: World,
+) -> None:
+    joint = a_joint_of(two_arm_robot_world)
+    two_arm_robot_world.state[joint.id].position = MOVED_TO
+
+    stood = JointPositions.of(two_arm_robot_world, moment=EARLIER)
+
+    assert stood.moment == EARLIER
+    assert stood.positions == {
+        str(degree_of_freedom.name): two_arm_robot_world.state[
+            degree_of_freedom.id
+        ].position
+        for degree_of_freedom in two_arm_robot_world.degrees_of_freedom
+    }
+
+
+def test_a_world_stood_at_a_sample_is_there_for_the_block_and_back_afterwards(
+    two_arm_robot_world: World,
+) -> None:
+    """
+    A moment of the trial is put in front of a reader for as long as it is being read,
+    and the world is left as it was found, so the next reading starts from the same
+    world.
+    """
+    joint = a_joint_of(two_arm_robot_world)
+    trace = traced_twice(two_arm_robot_world)
+    trace.at(EARLIER).restore_into(two_arm_robot_world)
+
+    with standing_at(two_arm_robot_world, trace.at(LATER)) as stood:
+        assert stood is two_arm_robot_world
+        assert two_arm_robot_world.state[joint.id].position == MOVED_TO
+    assert two_arm_robot_world.state[joint.id].position == 0.0
+
+
+def test_a_world_is_put_back_after_a_block_that_moved_it(
+    two_arm_robot_world: World,
+) -> None:
+    joint = a_joint_of(two_arm_robot_world)
+
+    with put_back_afterwards(two_arm_robot_world):
+        two_arm_robot_world.state[joint.id].position = MOVED_TO
+        two_arm_robot_world.notify_state_change()
+    assert two_arm_robot_world.state[joint.id].position == 0.0
+
+
+def test_a_world_is_put_back_even_when_the_block_fails(
+    two_arm_robot_world: World,
+) -> None:
+    joint = a_joint_of(two_arm_robot_world)
+
+    with pytest.raises(TraceIsEmptyError):
+        with put_back_afterwards(two_arm_robot_world):
+            two_arm_robot_world.state[joint.id].position = MOVED_TO
+            JointTrace().at(EARLIER)
+    assert two_arm_robot_world.state[joint.id].position == 0.0
 
 
 def test_a_trace_written_out_is_read_back_the_same(
@@ -462,6 +522,29 @@ def test_a_recorder_thins_changes_that_come_faster_than_its_period(
     recorder.stop()
 
     assert recorder.trace.moments == [EARLIER, LATER]
+
+
+def test_a_stopped_recorder_keeps_the_last_change_its_period_thinned_away(
+    two_arm_robot_world: World,
+) -> None:
+    """
+    A run whose last move falls within one period of the sample before it would
+    otherwise end its trace one period short of where the world ended up.
+    """
+    clock = Ticking()
+    recorder = JointTraceRecorder(
+        _world=two_arm_robot_world, clock=clock.read, period=1.0
+    )
+    joint = a_joint_of(two_arm_robot_world)
+
+    for moment in (EARLIER, EARLIER + 0.25, EARLIER + 0.5):
+        clock.now = moment
+        two_arm_robot_world.state[joint.id].position = moment
+        two_arm_robot_world.notify_state_change()
+    recorder.stop()
+
+    assert recorder.trace.moments == [EARLIER, EARLIER + 0.5]
+    assert recorder.trace.at(EARLIER + 0.5).positions[str(joint.name)] == EARLIER + 0.5
 
 
 def test_a_stopped_recorder_samples_nothing_more(two_arm_robot_world: World) -> None:

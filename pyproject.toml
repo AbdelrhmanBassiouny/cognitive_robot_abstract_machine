@@ -71,6 +71,9 @@ doc = [
 # make treon require docopt-ng instead of the unmaintained docopt
 override-dependencies = [
     { package = { name = "treon" }, dependencies = ["docopt-ng"] },
+    # pyrender's last release pins PyOpenGL to 3.1.0, which predates the interpreter this
+    # workspace runs on; it draws fine through the PyOpenGL mujoco already brings in
+    { package = { name = "pyrender" }, dependencies = ["pyopengl>=3.1.0"] },
 ]
 exclude-dependencies = [
     { package = { name = "treon" }, dependencies = ["docopt"] },

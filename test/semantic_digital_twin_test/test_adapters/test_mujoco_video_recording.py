@@ -115,9 +115,9 @@ def test_stop_without_start_raises(ray_test_world):
 def test_default_camera_is_resolved_at_construction_not_at_start(ray_test_world):
     """
     The default overview camera is attached as soon as the recorder is constructed, not
-    lazily on start(): a caller that never starts the recorder still gets a fully resolved
-    camera, and a world without any geometry to frame fails fast at construction instead of
-    only once start() is later called.
+    lazily on start(): a caller that never starts the recorder still gets a fully
+    resolved camera, and a world without any geometry to frame fails fast at
+    construction instead of only once start() is later called.
     """
     world, *_ = ray_test_world
     recorder = MujocoVideoRecorder(world=world)
@@ -264,3 +264,19 @@ def test_recording_the_same_world_twice_does_not_accumulate_cameras(ray_test_wor
         assert second_recorder.captured_frame_count == 1
     finally:
         second_recorder.stop()
+
+
+def test_a_stopped_recorder_leaves_no_callback_on_the_world(ray_test_world):
+    """
+    The mirror a recorder films is told about every change of the world through a
+    callback, and a stopped recorder tears that mirror down; a callback left behind
+    would keep the mirror, and its compiled model, alive for as long as the world is.
+    """
+    world, *_ = ray_test_world
+    before = list(world.state.state_change_callbacks)
+
+    recorder = MujocoVideoRecorder(world=world)
+    recorder.start()
+    recorder.stop()
+
+    assert world.state.state_change_callbacks == before

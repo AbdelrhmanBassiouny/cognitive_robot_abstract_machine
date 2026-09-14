@@ -12,6 +12,7 @@ from semantic_digital_twin.adapters.ros.world_fetcher import (
     FetchWorldServer,
     fetch_world_from_service,
 )
+from semantic_digital_twin.adapters.multi_sim import MujocoCamera
 from semantic_digital_twin.adapters.urdf import URDFParser
 from semantic_digital_twin.orm.utils import semantic_digital_twin_sessionmaker
 from semantic_digital_twin.robots.hsrb import HSRB
@@ -334,3 +335,21 @@ def test_a_bodys_inertia_tensor_survives_the_orm_round_trip(session):
 
     assert reconstructed.inertial.mass == body.inertial.mass
     assert np.array_equal(reconstructed.inertial.inertia.data, inertia.data)
+
+
+def test_a_worlds_camera_keeps_the_body_it_is_attached_to(session):
+    """
+    A simulator built from a world read back needs the camera's body by name, so the
+    body a camera is attached to must survive the round trip with the world.
+    """
+    world = World.create_with_root_body()
+    camera = MujocoCamera(name="over_the_root", body=world.root)
+    world.root.simulator_additional_properties.append(camera)
+
+    session.add(to_dao(world))
+    session.commit()
+    reconstructed: World = session.scalar(select(WorldMappingDAO)).from_dao()
+
+    [read_back] = reconstructed.root.simulator_additional_properties
+    assert isinstance(read_back, MujocoCamera)
+    assert read_back.body is reconstructed.root

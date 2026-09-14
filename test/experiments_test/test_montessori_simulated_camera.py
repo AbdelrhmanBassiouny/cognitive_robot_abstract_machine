@@ -347,6 +347,23 @@ def test_a_camera_that_was_never_started_answers_no_look(
         camera.frame()
 
 
+def test_a_stopped_camera_leaves_no_callback_on_the_world(
+    montessori_world: MontessoriWorld,
+) -> None:
+    """
+    A look's mirror is told about every change of the world through a callback, and
+    stopping the camera tears the mirror down; a callback left behind would keep the
+    mirror, and its compiled model, alive for as long as the world is, once per look.
+    """
+    world = montessori_world.world
+    before = list(world.state.state_change_callbacks)
+
+    with camera_over_the_table(world):
+        pass
+
+    assert world.state.state_change_callbacks == before
+
+
 # %% what a region shows in a picture
 
 

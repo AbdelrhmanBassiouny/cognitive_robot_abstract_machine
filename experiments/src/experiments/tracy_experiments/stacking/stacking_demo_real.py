@@ -1,8 +1,8 @@
 """
 The physical Tracy's left arm stacks a tower of cubes onto a base cube, with the real
 robot as the real robot: the same per-cube pick/place action pairs
-:mod:`~experiments.tracy_experiments.stacking.stacking_demo_mujoco` builds, but from the real
-``PickUpAction``/``PlaceAction`` (Giskard-driven, over ROS) instead of
+:mod:`~experiments.tracy_experiments.stacking.stacking_demo_mujoco` builds, but from the
+real ``PickUpAction``/``PlaceAction`` (Giskard-driven, over ROS) instead of
 :mod:`~experiments.tracy_experiments.pick_and_place_action`'s MuJoCo-actuator pair, and
 each cube's own target pose still precomputed up front via
 :func:`~experiments.tracy_experiments.stacking.stacking_actions.stack_target_pose`.
@@ -35,13 +35,11 @@ import logging
 import os
 import signal
 import subprocess
-import threading
 import time
 
 logging.basicConfig(level=logging.INFO, format="%(message)s")
 
 import rclpy
-from rclpy.executors import MultiThreadedExecutor
 from typing_extensions import Dict
 
 from coraplex.datastructures.dataclasses import Context
@@ -59,6 +57,7 @@ from coraplex.robot_plans.actions.core.placing import PlaceAction
 from coraplex.robot_plans.actions.core.robot_body import ParkArmsAction
 from coraplex.view_manager import ViewManager
 from experiments.tracy_experiments.equipment import table_top_z as read_table_top_z
+from experiments.tracy_experiments.live_tracy import EXECUTOR_THREAD_NAME, SpunNode
 from experiments.tracy_experiments.stacking.stacking_actions import stack_target_pose
 from semantic_digital_twin.adapters.ros.world_fetcher import fetch_world_from_service
 from semantic_digital_twin.adapters.ros.world_synchronizer import WorldSynchronizer
@@ -72,6 +71,15 @@ from semantic_digital_twin.world_description.shape_collection import ShapeCollec
 from semantic_digital_twin.world_description.world_entity import Body
 
 logger = logging.getLogger(__name__)
+
+NODE_NAME = "tracy_stacking_demo_real"
+"""
+The name the demo's node registers under.
+
+Spun on one thread: every callback of the node -- the world fetch, the synchronizer,
+Giskard's action client -- is in its one mutually exclusive group, and rclpy's multi-
+threaded executor spins hot for as long as a callback it has handed out runs.
+"""
 
 STACK_ARM = Arms.LEFT
 """
@@ -87,14 +95,14 @@ Edge length of every cube, in metres -- matches
 _STACK_XY = (0.8, 0.0)
 """
 Where the base cube stands, and every cube is stacked on top of it -- matches
-:mod:`~experiments.tracy_experiments.stacking.stacking_demo_mujoco`'s own coordinates, since both
-are the same physical table.
+:mod:`~experiments.tracy_experiments.stacking.stacking_demo_mujoco`'s own coordinates,
+since both are the same physical table.
 """
 
 _PICK_XY_LIST = [(0.8, 0.25), (0.8, 0.10), (0.8, 0.40)]
 """
-Where each cube to be stacked must already be placed by hand before this runs --
-matches :mod:`~experiments.tracy_experiments.stacking.stacking_demo_mujoco`'s own coordinates.
+Where each cube to be stacked must already be placed by hand before this runs -- matches
+:mod:`~experiments.tracy_experiments.stacking.stacking_demo_mujoco`'s own coordinates.
 """
 
 
@@ -171,58 +179,54 @@ def main() -> None:
     time.sleep(8)  # Wait for the launch file to start
 
     rclpy.init()
-    node = rclpy.create_node("tracy_stacking_demo_real")
-    executor = MultiThreadedExecutor()
-    executor.add_node(node)
-    thread = threading.Thread(target=executor.spin, daemon=True, name="rclpy-executor")
-    thread.start()
-
     try:
-        world = fetch_world_from_service(node=node, timeout_seconds=300)
-        WorldSynchronizer(_world=world, node=node)
-        [robot] = world.get_semantic_annotations_by_type(Tracy)
+        with SpunNode.spun(NODE_NAME, EXECUTOR_THREAD_NAME) as spun:
+            node = spun.node
+            world = fetch_world_from_service(node=node, timeout_seconds=300)
+            WorldSynchronizer(_world=world, node=node)
+            [robot] = world.get_semantic_annotations_by_type(Tracy)
 
-        table_top_z = read_table_top_z(robot)
-        cube_bodies = _add_cubes(world, table_top_z)
-        stack_cube_names = [name for name in cube_bodies if name != "cube_base"]
-        stack_x, stack_y = _STACK_XY
+            table_top_z = read_table_top_z(robot)
+            cube_bodies = _add_cubes(world, table_top_z)
+            stack_cube_names = [name for name in cube_bodies if name != "cube_base"]
+            stack_x, stack_y = _STACK_XY
 
-        context = Context(
-            world=world, robot=robot, ros_node=node, evaluate_conditions=False
-        )
-        grasp_description = GraspDescription(
-            ApproachDirection.FRONT,
-            VerticalAlignment.TOP,
-            ViewManager.get_end_effector_view(STACK_ARM, robot),
-        )
-
-        actions = [ParkArmsAction(Arms.BOTH)]
-        for stack_index, name in enumerate(stack_cube_names, start=1):
-            actions.append(
-                PickUpAction(cube_bodies[name], STACK_ARM, grasp_description)
+            context = Context(
+                world=world, robot=robot, ros_node=node, evaluate_conditions=False
             )
-            actions.append(
-                PlaceAction(
-                    cube_bodies[name],
-                    stack_target_pose(
-                        stack_index,
-                        stack_x,
-                        stack_y,
-                        table_top_z,
-                        CUBE_SIZE,
-                        world.root,
-                    ),
-                    STACK_ARM,
+            grasp_description = GraspDescription(
+                ApproachDirection.FRONT,
+                VerticalAlignment.TOP,
+                ViewManager.get_end_effector_view(STACK_ARM, robot),
+            )
+
+            actions = [ParkArmsAction(Arms.BOTH)]
+            for stack_index, name in enumerate(stack_cube_names, start=1):
+                actions.append(
+                    PickUpAction(cube_bodies[name], STACK_ARM, grasp_description)
                 )
-            )
-        plan = sequential(actions, context=context).plan
+                actions.append(
+                    PlaceAction(
+                        cube_bodies[name],
+                        stack_target_pose(
+                            stack_index,
+                            stack_x,
+                            stack_y,
+                            table_top_z,
+                            CUBE_SIZE,
+                            world.root,
+                        ),
+                        STACK_ARM,
+                    )
+                )
+            plan = sequential(actions, context=context).plan
 
-        logger.info("Performing stacking plan on the real robot.")
-        with ExecutionEnvironment(
-            execution_type=ExecutionType.REAL, collision_avoidance=False
-        ):
-            plan.perform()
-        logger.info("Stacking plan finished.")
+            logger.info("Performing stacking plan on the real robot.")
+            with ExecutionEnvironment(
+                execution_type=ExecutionType.REAL, collision_avoidance=False
+            ):
+                plan.perform()
+            logger.info("Stacking plan finished.")
     finally:
         os.killpg(os.getpgid(giskard_process.pid), signal.SIGTERM)
         giskard_process.wait()

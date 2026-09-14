@@ -18,6 +18,7 @@ from coraplex.plans.plan import Plan
 from giskardpy.motion_statechart.motion_statechart import MotionStatechart
 from krrood.patterns.role import Role
 from segmind.datastructures.events import DetectionEvent
+from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.world import World
 from typing_extensions import TYPE_CHECKING, List, Optional, Sequence, Type
 
@@ -77,6 +78,25 @@ class Tick:
     events: List[DetectionEvent] = field(default_factory=list)
     """
     The segmind events detected in this tick.
+    """
+
+
+@dataclass
+class MovedBySomeoneElse:
+    """
+    What someone other than the robot moved in a trial's scene, and when they were told
+    to move it.
+    """
+
+    moment: float
+    """
+    Seconds between the start of the trial and the moment the person was told what to
+    do, which is before anything they did could be seen.
+    """
+
+    things_moved: List[PrefixedName] = field(default_factory=list)
+    """
+    What they moved, named as the scene names it.
     """
 
 
@@ -308,6 +328,15 @@ class RecordedTrial:
 
     The record of what the run had done to the scene beyond standing it: a piece pushed
     across the table is not where the run put it any more, and nothing else says so.
+    """
+
+    moved_by_someone_else: List[MovedBySomeoneElse] = field(default_factory=list)
+    """
+    What each of those instructions moved and when it was given, for the ones that moved
+    something.
+
+    What tells a move by someone else apart from the robot's own motions: what they
+    moved is seen to translate after they were told, before the robot's next plan.
     """
 
     motions: List[RecordedMotion] = field(default_factory=list)
