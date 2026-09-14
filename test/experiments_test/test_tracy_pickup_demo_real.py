@@ -20,6 +20,7 @@ from segmind.datastructures.events import PickUpEvent
 
 from experiments.episodes.artifacts import (
     ARTIFACT_DIRECTORY_ENVIRONMENT_VARIABLE,
+    ArtifactDirectory,
     RunFile,
     Transcript,
 )
@@ -54,12 +55,14 @@ from experiments.tracy_experiments.pickup.pickup_demo_real import (
     PICK_ARM,
     SCENARIO_NAME,
     DemoOption,
+    PickupDemo,
     PieceNotSeenError,
     SortingTrial,
     _grasp_target_pose,
     _parse_arguments,
     _reach_action_for,
     _SortingRig,
+    database_asked_for,
     keep_the_episode,
     main,
     outcome_of,
@@ -617,6 +620,41 @@ def test_the_bag_is_kept_where_a_reader_of_the_episode_looks_for_it(
     assert sorted(path.name for path in artifacts.camera_recording.iterdir()) == sorted(
         path.name for path in bag.iterdir()
     )
+
+
+# %% a run that keeps no episode
+
+
+def test_a_run_keeps_its_episode_unless_told_not_to():
+    assert _parse_arguments([]).no_episode is False
+    assert _parse_arguments([DemoOption.NO_EPISODE]).no_episode is True
+
+
+def test_a_run_that_keeps_no_episode_needs_no_database():
+    """
+    A database is checked before the robot moves only because the episode is recorded to
+    it, so a run keeping none is not refused for one it cannot reach.
+    """
+    arguments = _parse_arguments(
+        [DemoOption.NO_EPISODE, DemoOption.DATABASE_URI, UNREACHABLE_URI]
+    )
+
+    assert database_asked_for(arguments) is None
+
+
+def test_a_run_that_keeps_no_episode_writes_nothing(tmp_path):
+    artifact_directory = ArtifactDirectory(path=tmp_path / "artifacts")
+    demo = PickupDemo(
+        tracy=None,
+        person=AbsentPerson(),
+        database=None,
+        artifact_directory=artifact_directory,
+    )
+
+    kept = demo.keep(finished_trial(sorting_episode()), JointTrace(), a_bag(tmp_path))
+
+    assert kept is None
+    assert not artifact_directory.path.exists()
 
 
 # %% the perturbation the command line asks for

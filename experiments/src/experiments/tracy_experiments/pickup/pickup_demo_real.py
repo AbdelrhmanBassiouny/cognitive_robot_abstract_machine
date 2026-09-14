@@ -55,7 +55,9 @@ the duration of the sorting. Bags are written to
 one camera frame in
 :data:`~experiments.tracy_experiments.rosbag_recording.DEFAULT_KEEP_EVERY_NTH_FRAME`;
 both are overridable, see
-``--bag-directory`` and ``--keep-every-nth-frame``.
+``--bag-directory`` and ``--keep-every-nth-frame``. Pass ``--no-episode`` for a run that
+keeps no episode: nothing is recorded to a database or beside it, and a bag asked for
+stays where it was written.
 """
 
 from __future__ import annotations
@@ -248,6 +250,7 @@ class DemoOption(StrEnum):
     BAG_DIRECTORY = "--bag-directory"
     KEEP_EVERY_NTH_FRAME = "--keep-every-nth-frame"
     DATABASE_URI = "--database-uri"
+    NO_EPISODE = "--no-episode"
 
 
 def _grasp_target_pose(body: Body, grasp_height_offset: float, world: World) -> Pose:
@@ -928,6 +931,15 @@ def argument_parser(add_help: bool = True) -> argparse.ArgumentParser:
             "robot moves."
         ),
     )
+    parser.add_argument(
+        DemoOption.NO_EPISODE,
+        action="store_true",
+        help=(
+            "Keep no episode: nothing is written to a database or beside it, and no "
+            "database is checked. A bag asked for with --record is still recorded and "
+            "stays in its bag directory."
+        ),
+    )
     return parser
 
 
@@ -963,9 +975,9 @@ class PickupDemo:
     brings the perturbation about.
     """
 
-    database: ResultsDatabase
+    database: Optional[ResultsDatabase]
     """
-    The database the episode is recorded to.
+    The database the episode is recorded to, or None for a run that keeps no episode.
     """
 
     asked_about: MontessoriShapeCategory = DEFAULT_PIECE_ASKED_ABOUT
@@ -1000,7 +1012,7 @@ class PickupDemo:
     Where the events the rig's monitors report are streamed to.
     """
 
-    def run(self) -> EpisodeArtifacts:
+    def run(self) -> Optional[EpisodeArtifacts]:
         """
         Sort the pieces the camera finds, recording the episode.
 
@@ -1009,7 +1021,8 @@ class PickupDemo:
         clock the bag stamps its messages on, so the two are read against one another
         through the trial's start.
 
-        :return: The artifacts the episode kept.
+        :return: The artifacts the episode kept, or None for a run that keeps no
+            episode.
         :raises PieceNotSeenError: If the look found no piece of the kind asked about.
         """
         tracy = self.tracy
@@ -1085,12 +1098,32 @@ class PickupDemo:
         # Keeping the episode rewrites where the world's meshes are read from, which a
         # look still copying the world would read half-written.
         tracy.look.stop_looking()
-        return keep_the_episode(
+        return self.keep(
             recorded,
             trial.joints.trace,
             None if bag is None else Path(bag.output_directory),
-            self.database,
-            self.artifact_directory,
+        )
+
+    def keep(
+        self,
+        trial: RecordedTrial,
+        joints: JointTrace,
+        bag_directory: Optional[Path],
+    ) -> Optional[EpisodeArtifacts]:
+        """
+        Keep the episode of the finished trial, unless this run keeps none.
+
+        :param trial: The trial the run recorded.
+        :param joints: The trace of where every joint stood along it.
+        :param bag_directory: The bag the run recorded, or None for a run that recorded
+            none.
+        :return: The artifacts that were kept, or None for a run that keeps no episode.
+        """
+        if self.database is None:
+            logger.info("No episode kept, as asked.")
+            return None
+        return keep_the_episode(
+            trial, joints, bag_directory, self.database, self.artifact_directory
         )
 
 
@@ -1103,7 +1136,7 @@ def main(argument_list: Optional[Sequence[str]] = None) -> None:
         dies with the run, before anything on the robot is touched.
     """
     arguments = _parse_arguments(argument_list)
-    database = resolve_lasting_database(arguments.database_uri)
+    database = database_asked_for(arguments)
     perturbation = perturbation_asked_for(arguments.perturbation, arguments.piece)
     bag = bag_asked_for(arguments)
 
@@ -1121,6 +1154,20 @@ def main(argument_list: Optional[Sequence[str]] = None) -> None:
             bag=bag,
             feed=feed,
         ).run()
+
+
+def database_asked_for(arguments: argparse.Namespace) -> Optional[ResultsDatabase]:
+    """
+    The database the command line asked the episode to be recorded to, or None for a run
+    that keeps no episode.
+
+    :param arguments: The command line as read.
+    :raises InMemoryDatabaseRefused: If the episode would be recorded to a database that
+        dies with the run.
+    """
+    if arguments.no_episode:
+        return None
+    return resolve_lasting_database(arguments.database_uri)
 
 
 def bag_asked_for(arguments: argparse.Namespace) -> Optional[RosbagRecorder]:
