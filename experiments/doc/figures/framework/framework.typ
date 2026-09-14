@@ -122,9 +122,9 @@
 // puts them here. The names are experiments.montessori.perception.step_by_step.NarrowingPictures'.
 
 #let stages = (                                     // one tile each, read row by row
-  (label: "current view", picture: "narrowing/0_camera.png"),
+  (label: "current view", picture: "narrowing/0_rectified.png"),
   (label: "cyan", picture: "narrowing/1_rectified.png"),
-  (label: "on the lid", picture: "narrowing/2_camera.png"),
+  (label: "on the lid", picture: "narrowing/2_rectified.png"),
   (label: "cube", picture: "narrowing/answer.png"),
 )
 #let stage-columns = 2
@@ -183,7 +183,7 @@
   (picture: "tracy_inserting.png", placeholder: "inserting the cube"),
 )
 #let robot-size = (5.8cm, 3.2cm)
-#let execution-size = (6.2cm, 3.5cm)          // the space all of them share
+#let execution-size = (7.2cm, 4.3cm)          // the space all of them share
 #let execution-gap = 0.1cm                    // between two of them
 #let camera-aspect = 16 / 9                   // width over height of the robot's camera
 
