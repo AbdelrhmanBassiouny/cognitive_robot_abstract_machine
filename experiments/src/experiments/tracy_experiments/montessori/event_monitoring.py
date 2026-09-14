@@ -44,6 +44,7 @@ from dataclasses import dataclass, field
 from typing_extensions import List, Optional, Sequence
 
 from coraplex.datastructures.enums import Arms
+from experiments.montessori.event_monitoring import translation_detectors_of
 from experiments.montessori.semantics import MontessoriShape, ShapeSortingBoard
 from experiments.tracy_experiments.montessori.world import TracyMontessoriWorld
 from giskardpy.motion_statechart.context import MotionStatechartContext
@@ -161,15 +162,9 @@ def build_translation_monitor(
     :param world: The live world the detectors tick against.
     :param tracked_bodies: The bodies watched.
     """
-    detectors = [
-        detector
-        for tracked_body in tracked_bodies
-        for detector in (
-            TranslationDetector(tracked_object=tracked_body),
-            StopTranslationDetector(tracked_object=tracked_body),
-        )
-    ]
-    return MontessoriEventMonitor(world=world, detectors=detectors)
+    return MontessoriEventMonitor(
+        world=world, detectors=translation_detectors_of(tracked_bodies)
+    )
 
 
 def build_shape_monitor(
