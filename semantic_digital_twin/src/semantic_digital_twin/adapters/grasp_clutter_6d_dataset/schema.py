@@ -12,6 +12,7 @@ from typing_extensions import Self
 
 from semantic_digital_twin.adapters.grasp_clutter_6d_dataset.exceptions import (
     GraspClutter6DImageNotFoundError,
+    GraspClutter6DMissingWorldFrameError,
     GraspClutter6DObjectModelNotFoundError,
     GraspClutter6DSceneFilesMissingError,
 )
@@ -255,10 +256,11 @@ class GraspClutter6DScene:
         :param image_id: The frame to build, one of `self.frames`' `image_id`s.
         :param models_directory: The extracted `models`/`models_eval`/`models_m` directory
             containing this frame's objects' `obj_%06d.ply` mesh files.
-        :param with_world_frame: If True and the frame's camera has a `camera_T_world`,
-            also add a `map` root body and place the camera under it via the inverse of
-            that world-to-camera transform. If False (the default), or if the frame has
-            no world-frame information, the camera body itself is the world's root.
+        :param with_world_frame: If True, also add a `map` root body and place the camera
+            under it via the inverse of the frame's `camera_T_world` (world-to-camera
+            transform). If False (the default), the camera body itself is the world's
+            root - regardless of whether the frame carries a `camera_T_world`, since object
+            poses are always camera-relative and so meaningful either way.
         :param mesh_unit_scale: Factor applied to every loaded mesh's vertices. The
             default assumes millimeter-unit meshes (the `models`/`models_eval` archives);
             pass ``1.0`` when using the meter-unit `models_m`/`models_obj_m` archives.
@@ -267,6 +269,8 @@ class GraspClutter6DScene:
             in the dataset itself). Objects without an entry get a generic
             ``f"object_{object_id:06d}"`` name.
         :raises GraspClutter6DImageNotFoundError: if `image_id` is not in `self.frames`.
+        :raises GraspClutter6DMissingWorldFrameError: if `with_world_frame` is True but
+            the frame's camera has no `camera_T_world` to build one from.
         :raises GraspClutter6DObjectModelNotFoundError: if an object's mesh file is not
             found in `models_directory`.
         :return: The built world.
@@ -279,7 +283,11 @@ class GraspClutter6DScene:
         camera_body = world.root
 
         root_body = camera_body
-        if with_world_frame and frame.camera.camera_T_world is not None:
+        if with_world_frame:
+            if frame.camera.camera_T_world is None:
+                raise GraspClutter6DMissingWorldFrameError(
+                    scene_id=self.scene_id, image_id=image_id
+                )
             root_body = self._add_world_frame(world, frame.camera, camera_body)
 
         for index, pose in enumerate(frame.object_poses):

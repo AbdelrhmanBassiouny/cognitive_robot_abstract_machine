@@ -56,6 +56,34 @@ class GraspClutter6DImageNotFoundError(DataclassException, LookupError):
 
 
 @dataclass
+class GraspClutter6DMissingWorldFrameError(DataclassException, ValueError):
+    """
+    Raised when `GraspClutter6DScene.create_world` is called with
+    `with_world_frame=True` for a frame whose camera has no `camera_T_world`
+    (world-to-camera transform) to build one from.
+    """
+
+    scene_id: str
+    """The scene that was being built."""
+
+    image_id: str
+    """The frame that was requested."""
+
+    def error_message(self) -> str:
+        return (
+            f"create_world was called with with_world_frame=True for frame "
+            f"'{self.image_id}' of GraspClutter6D scene '{self.scene_id}', but this "
+            f"frame's camera has no camera_T_world to build a world frame from."
+        )
+
+    def suggest_correction(self) -> str:
+        return (
+            "Call with with_world_frame=False (the default) for this frame, or check "
+            "that frame.camera.camera_T_world is not None before requesting one."
+        )
+
+
+@dataclass
 class GraspClutter6DObjectModelNotFoundError(DataclassException, LookupError):
     """
     Raised when an object's mesh file is not found in the given models directory.

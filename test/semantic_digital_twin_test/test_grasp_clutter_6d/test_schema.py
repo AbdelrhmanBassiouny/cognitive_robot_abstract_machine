@@ -8,6 +8,7 @@ import trimesh
 
 from semantic_digital_twin.adapters.grasp_clutter_6d_dataset.exceptions import (
     GraspClutter6DImageNotFoundError,
+    GraspClutter6DMissingWorldFrameError,
     GraspClutter6DObjectModelNotFoundError,
     GraspClutter6DSceneFilesMissingError,
 )
@@ -186,6 +187,23 @@ def test_create_world_without_world_frame_flag_ignores_available_transform(tmp_p
 
     assert world.root.name.name == "camera"
     assert len(world.bodies) == 2
+
+
+def test_create_world_with_world_frame_raises_when_transform_missing(tmp_path):
+    """
+    Frame "1" has no world-to-camera transform, so requesting with_world_frame=True for
+    it is a contradiction between the caller's intent and the frame's actual data -
+    this must raise rather than silently fall back to the camera as root.
+    """
+    _write_scene(tmp_path)
+    models_directory = tmp_path / "models"
+    _write_object_mesh(models_directory)
+
+    scene = GraspClutter6DScene.from_directory(scene_id="000001", directory=tmp_path)
+    with pytest.raises(GraspClutter6DMissingWorldFrameError):
+        scene.create_world(
+            image_id="1", models_directory=models_directory, with_world_frame=True
+        )
 
 
 @requires_mujoco_ci
