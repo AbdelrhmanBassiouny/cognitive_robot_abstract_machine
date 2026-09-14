@@ -439,9 +439,15 @@ class MontessoriEventMonitor:
 
     def start(self) -> None:
         """
-        Start watching, ticking whenever :attr:`ticking` says to.
+        Start watching: read the scene as it is, then tick whenever :attr:`ticking` says
+        to.
+
+        The first reading is what every later tick is measured against, so a body found
+        somewhere else at the first tick is one that was moved while being watched
+        rather than one first seen there.
         """
         self._read_geometry_out()
+        self.tick()
         self.ticking.drive(self)
 
     def _read_geometry_out(self) -> None:

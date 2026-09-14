@@ -120,7 +120,7 @@ class ScenarioRunner(Generic[ScenarioType, WorldType], SubClassSafeGeneric):
                 execution_type=scenario.execution_type,
             )
         )
-        self.trial_started(scenario, world)
+        self.trial_started(scenario, world, perturbations)
         try:
             for condition in conditions:
                 condition.apply(world)
@@ -177,7 +177,12 @@ class ScenarioRunner(Generic[ScenarioType, WorldType], SubClassSafeGeneric):
             return
         perturbation.apply(world)
 
-    def trial_started(self, scenario: ScenarioType, world: WorldType) -> None:
+    def trial_started(
+        self,
+        scenario: ScenarioType,
+        world: WorldType,
+        perturbations: Sequence[Perturbation[WorldType]],
+    ) -> None:
         """
         Take note of a trial that has just started, before any of its steps runs.
 
@@ -186,6 +191,7 @@ class ScenarioRunner(Generic[ScenarioType, WorldType], SubClassSafeGeneric):
 
         :param scenario: The scenario the trial runs.
         :param world: The world the trial is about to run in.
+        :param perturbations: The changes due to be applied to this trial's world.
         """
 
     def trial_finished(self, scenario: ScenarioType, trial: Trial) -> None:
