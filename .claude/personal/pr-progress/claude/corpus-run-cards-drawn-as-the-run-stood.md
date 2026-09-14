@@ -88,3 +88,16 @@ Plan: make the query cards of the simulated corpus right.
       through Tracy's camera -- all as intended. User told to redo the figures backup.
 - [ ] open for the user: tables count Real=5 (the 3 unreadable real episodes' trials are dropped
       by the pass-over); mesh-file repair or a world-free recall would bring them back.
+- [x] #356 CI red on 0cbb28d8ac (user asked 2026-09-14 ~00:30): experiments job's runner "lost
+      communication" after 1h26m (no log); same for coraplex on ea28d13aca; 67efe2bfa8 between
+      them was green and the touched tests pass locally in 98 s -> reran the failed jobs
+      (run 34785664677).
+- [ ] user (2026-09-14 ~00:40): cards drawn the framework figure's way (pyrender from the kept
+      world) with its colours, reusable in semdt. Done: semantic_digital_twin/adapters/picture.py
+      (WorldPicture/Viewpoint/Appearance: AsStated, Softened, Recolored; Lighting; Picture;
+      IndexPaint with check bytes because MSAA averages edge pixels; select_egl_device tries
+      devices like MuJoCo does), Color.softened, SceneRender/PoseChangeRender/TwinFrames/cards
+      on Viewpoint, pyrender dep + uv override for its PyOpenGL==3.1.0 pin. Tests: semdt
+      test_picture (24, also pass under forced mesa software EGL), paper tests ported.
+      Full experiments suite running (scratchpad/experiments_suite.log); then figures run 5,
+      commit, push, PR description (scratchpad/pr356_new.md updated).
