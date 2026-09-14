@@ -8,7 +8,10 @@ import experiments.scenarios.report
 import experiments.scenarios.runner
 import experiments.scenarios.scenario
 import experiments.scenarios.trial
+import experiments.episodes.recording
+import experiments.episodes.long_term_memory
 import coraplex.orm.ormatic_interface
+import segmind.orm.ormatic_interface
 
 from krrood.ormatic.ormatic import ORMatic
 from krrood.ormatic.utils import classes_of_module
@@ -34,9 +37,20 @@ for scenario_model_module in (
 ):
     ignored_classes |= set(classes_of_module(scenario_model_module))
 
+# recording an episode and asking after one are machinery rather than records: each
+# holds the database a run is written to or read from, which is nothing to store in it
+for episode_database_module in (
+    experiments.episodes.recording,
+    experiments.episodes.long_term_memory,
+):
+    ignored_classes |= set(classes_of_module(episode_database_module))
+
 # Create an ORMatic object with the classes to be mapped
 ormatic = ORMatic.from_package(
-    [experiments], [coraplex.orm.ormatic_interface], ignored_classes, type_mappings={}
+    [experiments],
+    [coraplex.orm.ormatic_interface, segmind.orm.ormatic_interface],
+    ignored_classes,
+    type_mappings={},
 )
 logging.getLogger("krrood").setLevel(logging.DEBUG)
 
