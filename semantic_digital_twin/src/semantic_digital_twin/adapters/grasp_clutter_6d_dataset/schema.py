@@ -283,11 +283,11 @@ class GraspClutter6DScene:
         camera_body = world.root
 
         root_body = camera_body
+        if with_world_frame and frame.camera.camera_T_world is None:
+            raise GraspClutter6DMissingWorldFrameError(
+                scene_id=self.scene_id, image_id=image_id
+            )
         if with_world_frame:
-            if frame.camera.camera_T_world is None:
-                raise GraspClutter6DMissingWorldFrameError(
-                    scene_id=self.scene_id, image_id=image_id
-                )
             root_body = self._add_world_frame(world, frame.camera, camera_body)
 
         for index, pose in enumerate(frame.object_poses):
