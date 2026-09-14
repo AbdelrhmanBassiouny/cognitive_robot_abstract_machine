@@ -165,6 +165,34 @@ Done across the three PRs it belongs to:
   PDF rebuilt. `sorting.py` now imports coraplex robot plans, so that test file needs
   ROS (CI has it; here the scratchpad stubs).
 
+## Review round on #368 (3 threads, all handled and resolved)
+
+- **"It should also condition that this is for an Insertion Action"** (`holes.py`
+  capability) -> `e62fb39805`: capability is now three parts -
+  `describes_a_hole_of_no_stated_shape` + `wanted_as_the_target_of_an_insertion`
+  (`_stated_by_.attribute_name == "target"` and the enclosing type is an
+  `InsertionAction`) + a piece being readable. The dataset mimic
+  `PuttingAPieceThrough` is now the negative case. Cost: `holes.py` imports coraplex
+  robot plans -> `rclpy` at import, so the two hole tests need ROS (CI has it; here the
+  scratchpad stubs). Offered, not done: carrying "it is for an insertion" into
+  `PieceToSort` so a *rule* can condition on it.
+- **"Why only semantic annotations? How is this different from the symbol graph?"**
+  (`world.py`) -> same commit: `everything_it_holds` now yields kinematic structure
+  entities, connections, degrees of freedom, actuators and annotations, filtered by the
+  statement's kind (a `a(Body)()` used to answer nothing). The symbol-graph answer,
+  verified: it is one singleton per process, so a native answer returned pieces from
+  *both* of two worlds while the backend returned only the first world's. Written into
+  the class docstring and pinned by
+  `test_a_thing_standing_in_another_world_is_not_among_the_answers` (asserts only the
+  scoped side - the symbol graph accumulates across a pytest process).
+- **"'a' not 'an'"** -> `9fe389c889` on #366: every `an(TakingHoldOf...)` is `a(...)`;
+  `an` no longer imported in those two files. Pre-existing `an(Sighting)` in
+  `test_backend_that_answers_by_looking.py` left alone.
+
+Regression after the round: 1602 passed, 3 skipped across `test/krrood_test/test_eql`,
+the stack's experiments tests, montessori perception/narrowing/imagination and
+`test/version_test`.
+
 ## The stack as it stands
 
 #355 -> #359 (stage 1) -> #366 (stage 2) -> #368 (stage 3) -> #369 (stage 4), all
