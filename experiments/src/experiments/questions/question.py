@@ -34,6 +34,7 @@ from semantic_digital_twin.spatial_types.spatial_types import (
     Pose,
     SpatialType,
 )
+from semantic_digital_twin.world_description.geometry import Color
 from semantic_digital_twin.world_description.world_entity import Body
 from krrood.patterns.subclass_safe_generic import SubClassSafeGeneric
 from krrood.utils import get_generic_type_parameters
@@ -424,6 +425,40 @@ class BodiesNamed(TrueAnswer):
         return sorted(str(body.name) for body in answered) == sorted(
             str(name) for name in self.names
         )
+
+
+@dataclass
+class ColoursWorn(TrueAnswer):
+    """
+    The true answer is these colours, in any order, each as often as it is worn.
+    """
+
+    colors: List[Color]
+    """
+    The colour of each shape the scene's objects are made of.
+    """
+
+    def agrees_with(self, answered: List[Color]) -> bool:
+        """
+        Whether the colours answered are exactly these, each as often.
+
+        In any order, because a query and the twin each enumerate the scene's objects in
+        an order of their own.
+
+        :param answered: The colours the question answered.
+        """
+        return sorted(self.as_channels(answered)) == sorted(
+            self.as_channels(self.colors)
+        )
+
+    @staticmethod
+    def as_channels(colors: List[Color]) -> List[Tuple[float, float, float, float]]:
+        """
+        Each colour as its four channels, which is what orders them.
+
+        :param colors: The colours to spell out.
+        """
+        return [(color.R, color.G, color.B, color.A) for color in colors]
 
 
 @dataclass

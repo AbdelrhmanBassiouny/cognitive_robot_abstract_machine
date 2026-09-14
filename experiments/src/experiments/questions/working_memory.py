@@ -55,6 +55,7 @@ from experiments.questions.question import (
     BloomLevel,
     BodiesNamed,
     Bucket,
+    ColoursWorn,
     Memory,
     PlacesPutAt,
     Question,
@@ -315,9 +316,9 @@ class ObjectColours(WorkingMemoryQuestion[List[Color]]):
         """
         return [shape.color for shapes in self.solutions(source) for shape in shapes]
 
-    def ground_truth(self, source: AbstractRobot) -> List[Color]:
+    def ground_truth(self, source: AbstractRobot) -> ColoursWorn:
         """
-        The colours the twin holds, read off it directly.
+        The colours the twin holds, read off it directly, in any order.
 
         What a piece is painted belongs to the description it is built from rather than
         to the setting up of a scene, which only says which pieces stand where, so the
@@ -325,11 +326,13 @@ class ObjectColours(WorkingMemoryQuestion[List[Color]]):
 
         :param source: The robot whose scene it is.
         """
-        return [
-            shape.color
-            for body in objects_of_the_scene(source)
-            for shape in body.collision.shapes
-        ]
+        return ColoursWorn(
+            colors=[
+                shape.color
+                for body in objects_of_the_scene(source)
+                for shape in body.collision.shapes
+            ]
+        )
 
 
 @dataclass
@@ -1143,10 +1146,12 @@ class NumberOfOwnParts(WorkingMemoryQuestion[int], ABC):
 
         How many links and joints a robot is made of is its own description's to say and
         no part of setting a scene up, so there is nothing else to count them off.
+        Counted once each, as the answer is: a joint that drives several connections is
+        reached through each of them and is one joint.
 
         :param source: The robot whose body it is.
         """
-        return len(self.parts(source))
+        return len(self.distinct(self.parts(source)))
 
 
 @dataclass
