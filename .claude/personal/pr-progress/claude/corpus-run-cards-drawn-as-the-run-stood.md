@@ -125,5 +125,7 @@ Plan: make the query cards of the simulated corpus right.
       it in the description's grey (rgba 0.79 0.82 0.93). (3) lights dimmed: key 3.0->2.0,
       fill 1.2->0.8, ambient 0.35->0.3. Gripper closed through the piece is the recorded
       state (knuckle 0.791 of 0.8, closed at 0.0088 rad/s from 44 s to 140.6 s, piece never
-      moved) -- not a rendering matter, to report. Next: commit, push, description,
-      figures run 6.
+      moved) -- not a rendering matter, to report. Held-piece card test hung its piece on
+      its parent (z-fight, flaky) -> hung 0.15 m below. Commit fa1e21ae4c pushed, #356
+      description updated, draft. Figures run 6 launched 08:45 (figures_again.sh ->
+      figures_rerecorded_2026-09-14_run6.log).
