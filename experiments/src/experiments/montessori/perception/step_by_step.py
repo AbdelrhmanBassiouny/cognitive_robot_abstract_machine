@@ -24,7 +24,7 @@ from pathlib import Path
 
 import cv2
 import numpy as np
-from typing_extensions import Callable, List, Optional, Self, Tuple
+from typing_extensions import Callable, ClassVar, Dict, List, Optional, Self, Tuple
 
 from experiments.montessori.perception.backend import MontessoriPerceptionBackend
 from experiments.montessori.perception.camera import RgbdFrame
@@ -75,6 +75,11 @@ DEMONSTRATION_CAPTURE = "tracy_pickup_demo"
 """
 The shipped capture a run watches where none was named: the one holding pieces on the
 table and on the board's lid, which is what a narrowing has something to leave out of.
+"""
+
+PICTURE_SUFFIX = ".png"
+"""
+The format a kept picture is written in, which loses nothing of what was drawn.
 """
 
 # %% which capture is watched, and how
@@ -391,34 +396,58 @@ class SearchNarrowing:
         self.display.wait(0)
         return taken
 
-    def draw(self, step: NarrowingStep, frame: RgbdFrame) -> None:
+    def pictures_of(
+        self, step: NarrowingStep, frame: RgbdFrame
+    ) -> Dict[NarrowingView, np.ndarray]:
         """
-        Put one step's two pictures on screen, each in a window named by the statement.
+        One step's two pictures, by what each shows: the camera's image cut to what the
+        step left to read, and the plane the detectors read there.
 
         A step says where there is still to look, so nothing is drawn over either
         picture: what the statement ends up finding is marked once, in
-        :meth:`draw_answer`.
+        :meth:`answer_picture`.
 
-        A step that narrowed the look away from every surface has nothing to draw, and
-        says so by drawing nothing.
+        :param step: The step to picture.
+        :param frame: The camera data the look is taken from.
+        :return: Both pictures, or none where the step narrowed the look away from every
+            surface.
+        """
+        if step.region is None:
+            return {}
+        return {
+            NarrowingView.CAMERA: self.pipeline.workspace_over(step.region).clip(
+                frame.color, frame
+            ),
+            NarrowingView.RECTIFIED: self.rectified_view(step, frame).to_image(),
+        }
+
+    def answer_picture(self, step: NarrowingStep, frame: RgbdFrame) -> np.ndarray:
+        """
+        The camera's whole image with a box around every piece a statement found, which
+        is what all the narrowing was for.
+
+        :param step: The step whose statement was read whole.
+        :param frame: The camera data the look is taken from.
+        """
+        return DetectionOverlay().draw(
+            CameraView(frame=frame), MontessoriScene(shapes=list(step.found))
+        )
+
+    def draw(self, step: NarrowingStep, frame: RgbdFrame) -> None:
+        """
+        Put one step's pictures on screen, each in a window named by the statement.
 
         :param step: The step to draw.
         :param frame: The camera data the look is taken from.
         """
-        if self.display is None or step.region is None:
+        if self.display is None:
             return
-        camera = self.pipeline.workspace_over(step.region).clip(frame.color, frame)
-        rectified = self.rectified_view(step, frame).to_image()
-        for view, picture in (
-            (NarrowingView.CAMERA, camera),
-            (NarrowingView.RECTIFIED, rectified),
-        ):
+        for view, picture in self.pictures_of(step, frame).items():
             self.display.draw(self.window_name(view, step), self._fitted(picture))
 
     def draw_answer(self, step: NarrowingStep, frame: RgbdFrame) -> None:
         """
-        Put the camera's whole image on screen with a box around every piece the
-        statement found, which is what all the narrowing was for.
+        Put the answer's picture on screen.
 
         :param step: The step whose statement was read whole.
         :param frame: The camera data the look is taken from.
@@ -427,12 +456,7 @@ class SearchNarrowing:
             return
         self.display.draw(
             self.window_name(NarrowingView.ANSWER, step),
-            self._fitted(
-                DetectionOverlay().draw(
-                    CameraView(frame=frame),
-                    MontessoriScene(shapes=list(step.found)),
-                )
-            ),
+            self._fitted(self.answer_picture(step, frame)),
         )
 
     def rectified_view(self, step: NarrowingStep, frame: RgbdFrame) -> DetectionView:
@@ -498,6 +522,105 @@ class SearchNarrowing:
         :param picture: The picture to fit.
         """
         return scale_to_fit(picture, self.maximum_width, self.maximum_height)
+
+
+# %% keeping what a narrowing showed
+
+
+@dataclass
+class NarrowingPictures:
+    """
+    One statement read one stated condition at a time over one frame, as the pictures a
+    reader looks at once the run is over.
+    """
+
+    ANSWER_FILE_NAME: ClassVar[str] = NarrowingView.ANSWER + PICTURE_SUFFIX
+    """
+    What the picture of the answer is called.
+    """
+
+    narrowing: SearchNarrowing
+    """
+    What read the statement, and so draws each step's pictures.
+    """
+
+    frame: RgbdFrame
+    """
+    The camera data the statement was read over.
+    """
+
+    steps: List[NarrowingStep]
+    """
+    What each condition of the statement left to read, from the bare statement to the
+    whole of it.
+    """
+
+    @classmethod
+    def taken(
+        cls,
+        pipeline: MontessoriPerceptionPipeline,
+        frame: RgbdFrame,
+        statement: Match[DetectedMontessoriShape],
+        board: Optional[MontessoriBoardDetection],
+    ) -> Self:
+        """
+        Read a statement over a frame one stated condition at a time.
+
+        :param pipeline: The pipeline whose surfaces the conditions narrow.
+        :param frame: The camera data the statement is read over.
+        :param statement: What a look is asked for.
+        :param board: The board as that frame shows it, or None to find it there.
+        """
+        narrowing = SearchNarrowing(pipeline=pipeline)
+        return cls(
+            narrowing=narrowing,
+            frame=frame,
+            steps=narrowing.steps(frame, statement, board),
+        )
+
+    @staticmethod
+    def step_file_name(index: int, view: NarrowingView) -> str:
+        """
+        What one picture of one step is called.
+
+        :param index: Where the step comes as the statement grows, counted from zero for
+            the bare statement.
+        :param view: Which of the step's pictures it is.
+        """
+        return f"{index}_{view.value}{PICTURE_SUFFIX}"
+
+    def answer_picture(self) -> np.ndarray:
+        """
+        The camera's image with every piece the whole statement found boxed, cut to the
+        stretch its last condition left, where that piece is large enough to see.
+
+        A statement that left no stretch at all is pictured whole.
+        """
+        answer = self.steps[-1]
+        picture = self.narrowing.answer_picture(answer, self.frame)
+        if answer.region is None:
+            return picture
+        return self.narrowing.pipeline.workspace_over(answer.region).clip(
+            picture, self.frame
+        )
+
+    def write(self, directory: Path) -> List[Path]:
+        """
+        Write every step's pictures and the answer's into a directory.
+
+        :param directory: Where the pictures go, made if it is not there yet.
+        :return: The files written.
+        """
+        directory.mkdir(parents=True, exist_ok=True)
+        pictures = {
+            self.step_file_name(index, view): picture
+            for index, step in enumerate(self.steps)
+            for view, picture in self.narrowing.pictures_of(step, self.frame).items()
+        }
+        pictures[self.ANSWER_FILE_NAME] = self.answer_picture()
+        for name, picture in pictures.items():
+            cv2.imwrite(str(directory / name), picture)
+        return [directory / name for name in pictures]
 
 
 # %% watching one statement being read

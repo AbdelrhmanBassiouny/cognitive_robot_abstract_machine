@@ -70,6 +70,11 @@ REPORT_PERIOD_SECONDS = 1.0
 How often the scene is logged while the node runs.
 """
 
+ROBOT_TABLE_PIECES = SMALLER_PIECES
+"""
+The set of loose pieces standing on the robot's own table.
+"""
+
 Held = TypeVar("Held")
 """
 Whatever the node holds that a caller waits to arrive: a look, or a frame.
@@ -490,7 +495,7 @@ def pipeline_of(world: World) -> MontessoriPerceptionPipeline:
         table, for the pieces standing on it now.
     """
     [robot] = world.get_semantic_annotations_by_type(Tracy)
-    return MontessoriPerceptionPipeline.of_world(world, robot.root, SMALLER_PIECES)
+    return MontessoriPerceptionPipeline.of_world(world, robot.root, ROBOT_TABLE_PIECES)
 
 
 def parse_arguments() -> Namespace:

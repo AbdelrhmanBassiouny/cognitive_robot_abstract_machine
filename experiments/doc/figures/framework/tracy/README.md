@@ -1,7 +1,10 @@
 # Rendering Tracy for the framework figure
 
-`tracy_idle.png` and `tracy_inserting.png` next to the figure are rendered from Tracy's own
-description, not photographed. The board is the repository's `board.stl`, the pieces are built
+The figure's pictures of Tracy (`tracy_idle.png`, `tracy_picking_up.png` and
+`tracy_inserting.png`) are cut out of a recording of the framework demo on the robot by
+`python -m experiments.tracy_experiments.bag_frames <bag>`. This directory renders the idle and
+inserting shots from Tracy's own description instead, for when no recording is at hand. The
+board is the repository's `board.stl`, the pieces are built
 from the sizes in `experiments.montessori.pieces`, the drawers stand where the montessori world
 puts them, and the square hole's place on the lid was measured off the board mesh.
 

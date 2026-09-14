@@ -3,7 +3,7 @@
 // Reads left to right: the plan with its open slots, the backend that closes each slot,
 // the plan with the slots filled. Below it, in one row, the robot thinking and the robot acting.
 // Everything a reader sees is data in the CONFIG section: the two plans as nested
-// trees, colours, sizes, the camera crop, the bars, the rules, the image slots.
+// trees, colours, sizes, the look's pictures, the bars, the rules, the image slots.
 // The DRAWING section below it only lays that data out.
 //
 // Build:  python build.py
@@ -115,13 +115,22 @@
 
 // %% CONFIG: panel 1, the look --------------------------------------------------------
 
-// the repository's own camera frame of the board, 1920 x 1080; the build root is the repository root
-#let capture = "../../../src/experiments/montessori/resources/captures/objects_on_montessori_color.jpg"
-#let capture-size = (1920, 1080)
-#let crop = (x: 570, y: 172, w: 360, h: 200)        // pixels of the frame shown per tile
-#let cube-box = (x: 772, y: 191, w: 50, h: 56)      // the cube, in frame pixels
-#let stages = ("colour", "shape", "cube found")     // one tile each, back to front
-#let stage-offset = (0.75cm, 0.32cm)                // how far each tile steps forward
+// The plan's own statement about the cube, read one stated condition at a time over a
+// frame Tracy's camera took: what each condition left to read, then the cube it ended in.
+// A run of the framework demo keeps these under trials/<n>/narrowing of its episode, and
+// `python -m experiments.tracy_experiments.bag_frames <bag> --narrowing <that directory>`
+// puts them here. The names are experiments.montessori.perception.step_by_step.NarrowingPictures'.
+
+#let stages = (                                     // one tile each, read row by row
+  (label: "current view", picture: "narrowing/0_rectified.png"),
+  (label: "cyan", picture: "narrowing/1_rectified.png"),
+  (label: "on the lid", picture: "narrowing/2_rectified.png"),
+  (label: "cube", picture: "narrowing/answer.png"),
+)
+#let stage-columns = 2
+#let tile-aspect = 3 / 2                            // width over height of every tile
+#let tile-gap = 0.12cm                              // between two tiles
+#let stage-label-h = 0.24cm                         // room above a tile for its name
 
 // %% CONFIG: panel 2, the imagined world ----------------------------------------------
 // The look's finding is spawned into a copy of the twin; the relation is then read off
@@ -165,10 +174,18 @@
 // %% CONFIG: image slots ----------------------------------------------------------------
 // Set to a file name to show it; leave `none` for a dashed placeholder.
 
-#let robot-image = "tracy_idle.png"           // rendered by tracy/render_tracy.py idle
-#let execution-image = "tracy_inserting.png"  // rendered by tracy/render_tracy.py inserting
+// The pictures of Tracy are cut from a recording of the framework demo on the robot by
+// `python -m experiments.tracy_experiments.bag_frames <bag>`.
+
+#let robot-image = "tracy_idle.png"           // before it acts
+#let execution-images = (                     // acting, one above the other
+  (picture: "tracy_picking_up.png", placeholder: "picking up the cube"),
+  (picture: "tracy_inserting.png", placeholder: "inserting the cube"),
+)
 #let robot-size = (5.8cm, 3.2cm)
-#let execution-size = (6.2cm, 3.5cm)
+#let execution-size = (7.2cm, 4.3cm)          // the space all of them share
+#let execution-gap = 0.1cm                    // between two of them
+#let camera-aspect = 16 / 9                   // width over height of the robot's camera
 
 // %% DRAWING: helpers -------------------------------------------------------------------
 
@@ -271,51 +288,23 @@
 
 // %% DRAWING: panel 1, detection stages ---------------------------------------------------
 
-#let tile(stage-index, w, h, label) = {
-  let scale = w / (crop.w * 1pt)
-  let frame-w = capture-size.at(0) * 1pt * scale
-  let frame-h = capture-size.at(1) * 1pt * scale
-  let frame = image(capture, width: frame-w, height: frame-h)
-  let cube = (
-    x: (cube-box.x - crop.x) * 1pt * scale,
-    y: (cube-box.y - crop.y) * 1pt * scale,
-    w: cube-box.w * 1pt * scale,
-    h: cube-box.h * 1pt * scale,
-  )
-  box(width: w, height: h, clip: true, radius: 0.08cm, stroke: stroke-width + hairline, {
-    place(dx: -crop.x * 1pt * scale, dy: -crop.y * 1pt * scale, frame)
-    if stage-index >= 0 {
-      // colour: everything that is not the colour asked for falls back
-      place(rect(width: w, height: h, fill: white.transparentize(45%)))
-      place(dx: cube.x, dy: cube.y, box(width: cube.w, height: cube.h, clip: true,
-        place(dx: -cube.x - crop.x * 1pt * scale, dy: -cube.y - crop.y * 1pt * scale, frame)))
-    }
-    if stage-index >= 1 {
-      // shape: the fitted outline
-      place(dx: cube.x - 0.04cm, dy: cube.y - 0.04cm,
-        rect(width: cube.w + 0.08cm, height: cube.h + 0.08cm, stroke: 0.7pt + perception.stroke, radius: 0.03cm))
-    }
-    if stage-index >= 2 {
-      // found: its place
-      let cx = cube.x + cube.w / 2
-      let cy = cube.y + cube.h / 2
-      place(dx: cx - 0.06cm, dy: cy - 0.06cm, circle(radius: 0.06cm, fill: perception.stroke, stroke: 0.6pt + white))
-      // the tag is worth its space only on a tile wide enough to hold it
-      let tag = box(fill: perception.stroke, radius: 0.04cm, inset: (x: 0.07cm, y: 0.03cm), text(size: 5pt, fill: white, font: mono-font, "cube_1"))
-      if w > 2.6cm { place(dx: cx + 0.14cm, dy: cy - 0.16cm, tag) }
-    }
-    place(dx: 0.08cm, dy: 0.07cm, box(fill: white.transparentize(10%), radius: 0.04cm, inset: (x: 0.07cm, y: 0.03cm),
-      text(size: 5pt, fill: ink, label)))
-  })
-}
+#let tile(w, h, stage) = box(width: w, height: h, clip: true, radius: 0.08cm, stroke: stroke-width + hairline, fill: ink,
+  image(stage.picture, width: w, height: h, fit: "contain"))
 
+// the tiles in a grid, each with its name above it
 #let detection-panel(x, y, w, h) = {
-  let n = stages.len() - 1
-  let top = y + 0.45cm
-  let tile-h = calc.min((h - 0.6cm) - n * stage-offset.at(1), (w - 0.2cm - n * stage-offset.at(0)) * crop.h / crop.w)
-  let tile-w = tile-h * crop.w / crop.h
-  for (i, label) in stages.enumerate() {
-    place(dx: x + 0.1cm + i * stage-offset.at(0), dy: top + i * stage-offset.at(1), tile(i, tile-w, tile-h, label))
+  let rows = calc.ceil(stages.len() / stage-columns)
+  let top = y + 0.36cm
+  let cell-w = (w - 0.3cm - (stage-columns - 1) * tile-gap) / stage-columns
+  let cell-h = (y + h - 0.1cm - top - (rows - 1) * tile-gap) / rows
+  let tile-h = calc.min(cell-h - stage-label-h, cell-w / tile-aspect)
+  let tile-w = tile-h * tile-aspect
+  let left = x + (w - stage-columns * tile-w - (stage-columns - 1) * tile-gap) / 2
+  for (i, stage) in stages.enumerate() {
+    let tile-x = left + calc.rem(i, stage-columns) * (tile-w + tile-gap)
+    let tile-y = top + calc.quo(i, stage-columns) * (stage-label-h + tile-h + tile-gap)
+    place(dx: tile-x, dy: tile-y, text(size: 5pt, fill: ink, stage.label))
+    place(dx: tile-x, dy: tile-y + stage-label-h, tile(tile-w, tile-h, stage))
   }
 }
 
@@ -358,7 +347,7 @@
   let chart-x = x + 0.3cm
   let chart-w = w - 0.6cm
   let base = y + h - 0.62cm
-  let top = y + 0.8cm
+  let top = y + 0.66cm
   let n = grasps.len()
   let slot-w = chart-w / n
   let bar-w = slot-w * 0.52
@@ -422,8 +411,8 @@
 #let gap = 0.7cm                     // between a column and the next, where the arrows turn
 #let plan-w = 5.4cm
 #let panel-w = 5.0cm
-#let panel-h = 2.15cm
-#let panel-gap = 0.28cm
+#let panel-heights = (perception: 3.24cm, simulation: 2.0cm, probabilistic: 1.73cm, rules: 1.93cm)
+#let panel-gap = 0.18cm
 #let plan-x = bubble-x + margin
 #let panel-x = plan-x + plan-w + gap
 #let resolved-x = panel-x + panel-w + gap
@@ -431,13 +420,13 @@
 
 #let bubble-y = 0.2cm
 #let columns-y = bubble-y + 0.75cm
-#let panels-h = panel-order.len() * panel-h + (panel-order.len() - 1) * panel-gap
+#let panels-h = panel-heights.values().sum() + (panel-order.len() - 1) * panel-gap
 #let bubble-h = 0.75cm + panels-h + margin
 #let floor-y = bubble-y + bubble-h + 0.75cm          // the row with both robot images
 #let floor-h = calc.max(robot-size.at(1), execution-size.at(1))
 #let H = floor-y + floor-h + 0.45cm
 
-#let panel-y(i) = columns-y + i * (panel-h + panel-gap)
+#let panel-y(i) = columns-y + panel-order.slice(0, i).map(name => panel-heights.at(name)).sum(default: 0cm) + i * panel-gap
 
 // %% DRAWING: the page ---------------------------------------------------------------------
 
@@ -460,19 +449,21 @@
   for (i, name) in panel-order.enumerate() {
     let hue = hues.at(name)
     let y = panel-y(i)
-    card(panel-x, y, panel-w, panel-h, none)
+    let h = panel-heights.at(name)
+    card(panel-x, y, panel-w, h, none)
     place(dx: panel-x + 0.15cm, dy: y + 0.1cm, text(size: label-size, fill: hue.stroke, weight: "bold", panel-titles.at(name)))
-    (panel-drawers.at(name))(panel-x, y, panel-w, panel-h)
+    (panel-drawers.at(name))(panel-x, y, panel-w, h)
     let turn = 0.2cm + i * 0.12cm
     let from = open.slots.at(name)
-    elbow((from.right, from.mid), (panel-x, y + panel-h / 2), plan-x + plan-w + turn, stroke: hue.stroke)
+    elbow((from.right, from.mid), (panel-x, y + h / 2), plan-x + plan-w + turn, stroke: hue.stroke)
     let to = resolved.slots.at(name)
-    elbow((panel-x + panel-w, y + panel-h / 2), (to.left, to.mid), panel-x + panel-w + gap - turn, stroke: hue.stroke)
+    elbow((panel-x + panel-w, y + h / 2), (to.left, to.mid), panel-x + panel-w + gap - turn, stroke: hue.stroke)
   }
   // the look's finding is spawned into the imagined world before the relation is read
   let spawn-x = panel-x + panel-w * 0.5
-  arrow((spawn-x, panel-y(0) + panel-h), (spawn-x, panel-y(1)), stroke: simulation.stroke, head: 0.12cm)
-  place(dx: spawn-x + 0.12cm, dy: panel-y(0) + panel-h + 0.02cm, text(size: 4.8pt, fill: simulation.stroke, spawn-label))
+  let look-bottom = panel-y(0) + panel-heights.at(panel-order.at(0))
+  arrow((spawn-x, look-bottom), (spawn-x, panel-y(1)), stroke: simulation.stroke, head: 0.12cm)
+  place(dx: spawn-x + 0.12cm, dy: look-bottom + 0.01cm, text(size: 4.8pt, fill: simulation.stroke, spawn-label))
 
   // the robot, thinking: the bubble above is its thought
   let robot-x = 0.35cm
@@ -488,15 +479,21 @@
       circle(radius: r.at(0), fill: bubble-fill, stroke: stroke-width + hairline))
   }
 
-  // the robot, acting
-  let execution-x = W - 0.35cm - execution-size.at(0)
+  // the robot, acting: one picture above the next, in the space they share
+  let n = execution-images.len()
+  let acting-h = (execution-size.at(1) - (n - 1) * execution-gap) / n
+  let acting-w = calc.min(execution-size.at(0), acting-h * camera-aspect)
+  let execution-x = W - 0.35cm - acting-w
   let execution-y = floor-y + (floor-h - execution-size.at(1)) / 2
-  if execution-image != none {
-    place(dx: execution-x, dy: execution-y, box(width: execution-size.at(0), height: execution-size.at(1), clip: true, radius: 0.1cm,
-      image(execution-image, width: execution-size.at(0), height: execution-size.at(1), fit: "cover")))
-  } else {
-    card(execution-x, execution-y, execution-size.at(0), execution-size.at(1), fill: white, stroke: muted, dash: "dashed",
-      align(center + horizon, small("photo: " + robot-name + " inserting the cube")))
+  for (i, acting) in execution-images.enumerate() {
+    let acting-y = execution-y + i * (acting-h + execution-gap)
+    if acting.picture != none {
+      place(dx: execution-x, dy: acting-y, box(width: acting-w, height: acting-h, clip: true, radius: 0.1cm,
+        image(acting.picture, width: acting-w, height: acting-h, fit: "cover")))
+    } else {
+      card(execution-x, acting-y, acting-w, acting-h, fill: white, stroke: muted, dash: "dashed",
+        align(center + horizon, small("photo: " + robot-name + " " + acting.placeholder)))
+    }
   }
   let arrow-y = floor-y + floor-h / 2
   let arrow-from = robot-x + robot-size.at(0) + 0.4cm

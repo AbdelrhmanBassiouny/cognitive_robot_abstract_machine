@@ -12,11 +12,13 @@ from __future__ import annotations
 from dataclasses import replace
 
 import pytest
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+from typing_extensions import Any
 
-from coraplex.robot_plans.actions.core.insertion import (
-    DEFAULT_HOVER_HEIGHT,
-    InsertionAction,
-)
+from coraplex.orm.ormatic_interface import ReachActionDAO
+from coraplex.robot_plans.actions.core.insertion import InsertionAction
+from krrood.ormatic.data_access_objects.helper import to_dao
 from coraplex.robot_plans.actions.core.pick_up import PickUpAction, ReachAction
 from coraplex.datastructures.dataclasses import Context
 from coraplex.robot_plans.actions.core.placing import PlaceAction
@@ -37,7 +39,14 @@ from experiments.tracy_experiments.pick_and_place_action_real import (
     PickUpActionReal,
     TracyActuators,
 )
-from semantic_digital_twin.spatial_types.spatial_types import Pose
+from experiments.tracy_experiments.pickup.perceived_sorting import (
+    PLACE_HOVER,
+    PerceivedSorting,
+)
+from semantic_digital_twin.spatial_types.spatial_types import (
+    HomogeneousTransformationMatrix,
+    Pose,
+)
 
 from .dataset import figure_plan_fixtures, montessori_scene_fixtures
 from .dataset.actuators_that_record import (
@@ -54,6 +63,12 @@ pytest_plugins = [
 """
 The rendered scene and the pipeline that reads it, and the figure's plan grounded
 against it.
+"""
+
+SHORT_DEPTH_READING = 0.005
+"""
+A height, in metres, well short of any piece's own, as the depth image reads a piece
+whose pixels partly fall past it onto what lies behind.
 """
 
 
@@ -181,25 +196,52 @@ def test_it_takes_hold_of_the_piece_the_plan_names(
     assert taking_hold.manipulated_bodies == [picking_up.object_designator.root]
 
 
-def test_the_reach_is_handed_the_piece_the_plan_names_not_its_body(
-    grounded: list, tracy: ActuatorsThatRecord
-) -> None:
+def reach_of_the_pick_up(picking_up: PickUpAction, tracy: ActuatorsThatRecord) -> Any:
     """
-    A reach expands its plan from the piece's annotation, reading the body off it, so it
-    is handed the annotation the plan grounded rather than the body under it.
+    :return: The action the reach a real pick-up of ``picking_up`` would drive the arm
+        through carries out.
     """
-    [picking_up, _] = grounded
     taking_hold = PickUpActionReal.carrying_out(picking_up, tracy)
     taking_hold.grasp_description = replace(
         taking_hold.grasp_description,
         end_effector=EndEffectorFacingAWay(tracy.context.world),
     )
-
     taking_hold._run()
-
     [reaching] = [node.designator for node in tracy.driven[0].actions]
+    return reaching
+
+
+def test_the_reach_is_handed_the_piece_the_plan_names_not_its_body(
+    grounded: list, tracy: ActuatorsThatRecord
+) -> None:
+    """
+    A reach expands its plan from the piece's annotation, reading the body off it, so it
+    is handed the piece the look found rather than the body under it.
+    """
+    [picking_up, _] = grounded
+
+    reaching = reach_of_the_pick_up(picking_up, tracy)
+
     assert type(reaching) is ReachAction
-    assert reaching.object_designator is picking_up.object_designator
+    assert reaching.object_designator is picking_up.object_designator.role_taker
+
+
+def test_the_reach_a_real_pick_up_drives_is_kept_in_the_results_database(
+    grounded: list, tracy: ActuatorsThatRecord, experiments_database_session: Session
+) -> None:
+    """
+    An episode keeps every plan the arm was driven through, so the reach has to be
+    something the results database can hold.
+    """
+    [picking_up, _] = grounded
+    reaching = reach_of_the_pick_up(picking_up, tracy)
+    reaching.grasp_description = picking_up.grasp_description
+
+    experiments_database_session.add(to_dao(reaching))
+    experiments_database_session.commit()
+
+    [kept] = experiments_database_session.scalars(select(ReachActionDAO)).all()
+    assert kept.object_designator.name.name == picking_up.object_designator.name.name
 
 
 def test_the_fingers_close_to_the_width_that_piece_asks_for(
@@ -224,24 +266,32 @@ def test_it_puts_through_the_opening_the_plan_names(
     insertion = InsertionActionReal.carrying_out(putting_through, tracy)
 
     assert insertion.target is putting_through.target
-    assert insertion.object_designator is putting_through.object_designator.root
+    assert insertion.object_designator is putting_through.object_designator
     assert insertion.arm is putting_through.arm
     assert insertion.grasp_description is putting_through.grasp_description
-    assert insertion.hover_height == putting_through.hover_height
 
 
-def test_it_lets_the_piece_go_above_the_opening_rather_than_in_it(
-    grounded: list, tracy: TracyActuators
+def test_it_lets_the_piece_go_with_its_underside_clear_of_the_lid(
+    grounded: list,
+    tracy: TracyActuators,
+    scene_with_a_piece_on_the_lid: MontessoriScene,
 ) -> None:
     """
-    The piece is released clear of the lid so what carries it through is its own fall,
-    which is the height the insertion it carries out states.
+    The piece's underside is let go the height above the lid the pickup demo lets go at,
+    so what carries it through is its own fall rather than the arm pressing it into the
+    lid.
     """
     [_, putting_through] = grounded
-
     insertion = InsertionActionReal.carrying_out(putting_through, tracy)
 
-    assert insertion.hover_height == DEFAULT_HOVER_HEIGHT
+    released_at = float(insertion.release_pose.to_position().z)
+
+    underside = released_at - PerceivedSorting.half_height_of(
+        putting_through.object_designator
+    )
+    assert underside == pytest.approx(
+        scene_with_a_piece_on_the_lid.board.lid_height + PLACE_HOVER
+    )
 
 
 def test_the_reach_is_aimed_above_the_piece_it_stands_on_the_surface(
@@ -252,11 +302,42 @@ def test_the_reach_is_aimed_above_the_piece_it_stands_on_the_surface(
     back off that surface by the offset the demo reaches with.
     """
     [picking_up, _] = grounded
-    body = picking_up.object_designator.root
-    stands_at = body.global_transform.to_position()
+    piece = picking_up.object_designator
+    stands_at = piece.root.global_transform.to_position()
 
-    aimed_at = tracy.grasp_target_above(body).to_position()
+    aimed_at = tracy.grasp_target_above(piece).to_position()
 
     assert float(aimed_at.x) == pytest.approx(float(stands_at.x))
     assert float(aimed_at.y) == pytest.approx(float(stands_at.y))
     assert float(aimed_at.z) == pytest.approx(float(stands_at.z) + GRASP_HEIGHT_OFFSET)
+
+
+def test_a_piece_the_depth_reads_short_is_reached_at_its_own_centre(
+    grounded: list, tracy: TracyActuators
+) -> None:
+    """
+    A piece the depth image reads shorter than it is stands lower than it rests, so the
+    reach is aimed from the surface it was seen on and the piece's own height rather than
+    at where it was stood, and does not reach down past it.
+    """
+    [picking_up, _] = grounded
+    piece = picking_up.object_designator
+    world = tracy.context.world
+    surface = piece.surface_height
+    stands_at = piece.root.global_transform.to_position()
+    stood_too_low = HomogeneousTransformationMatrix.from_xyz_rpy(
+        x=float(stands_at.x),
+        y=float(stands_at.y),
+        z=surface + SHORT_DEPTH_READING / 2,
+        yaw=piece.yaw,
+        reference_frame=world.root,
+    )
+    world.move_branch_to(piece.root, stood_too_low)
+    piece.pose = stood_too_low.to_pose()
+    piece.height = SHORT_DEPTH_READING
+
+    aimed_at = tracy.grasp_target_above(piece).to_position()
+
+    assert float(aimed_at.z) == pytest.approx(
+        surface + PerceivedSorting.half_height_of(piece) + GRASP_HEIGHT_OFFSET
+    )

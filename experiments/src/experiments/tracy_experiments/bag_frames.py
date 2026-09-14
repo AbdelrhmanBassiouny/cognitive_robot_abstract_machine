@@ -1,16 +1,22 @@
 """
-The framework figure's two pictures of Tracy, cut out of a bag its framework demo
-recorded on the robot.
+The framework figure's pictures of Tracy, cut out of a bag its framework demo recorded
+on the robot, and the pictures of the look its plan was answered from, as a trial of
+that run kept them.
 
-The figure shows the robot twice: before it acts, and inserting the cube. Both are taken
-through the robot's own camera, which is the only camera a run records. The first is the
-first colour frame of the recording, before the arm has moved; the second is the frame
-nearest the moment the fingers let go of the piece they carried, read off the knuckle
-joint's own positions in the same recording.
+The figure shows the robot three times: before it acts, picking up the cube, and
+inserting it. All are taken through the robot's own camera, which is the only camera a
+run records. The first is the first colour frame of the recording, before the arm has
+moved; the others are the frames nearest the moments the fingers closed on the piece
+they carried and let go of it, read off the knuckle joint's own positions in the same
+recording.
+
+The look is the plan's own statement about the piece it sorts, read one stated condition
+at a time over that first frame, unless a trial of the run kept pictures of its own look.
 
 Run with::
 
     python -m experiments.tracy_experiments.bag_frames <bag directory> \
+        [--narrowing <episode directory>/trials/1/narrowing] \
         [--output-directory experiments/doc/figures/framework]
 """
 
@@ -18,6 +24,7 @@ from __future__ import annotations
 
 import argparse
 import logging
+import shutil
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
@@ -29,12 +36,24 @@ from typing_extensions import List, Optional, Sequence
 
 import experiments
 from coraplex.datastructures.enums import Arms
-from experiments.montessori.perception.camera import decode_compressed_color_image
+from experiments.episodes.artifacts import TrialArtifact
+from experiments.montessori.perception.camera import (
+    RgbdFrame,
+    decode_compressed_color_image,
+)
+from experiments.montessori.perception.node import ROBOT_TABLE_PIECES
+from experiments.montessori.perception.recorded_setup import (
+    perception_pipeline,
+    recorded_world,
+)
 from experiments.montessori.perception.recordings import (
+    REFERENCE_FRAME,
     RecordedCamera,
     RecordedImages,
     open_bag,
 )
+from experiments.montessori.perception.step_by_step import NarrowingPictures
+from experiments.open_slots.plan import piece_to_sort
 from experiments.tracy_experiments.montessori.gripper_feedback import (
     FULLY_CLOSED_KNUCKLE_POSITION,
     OPEN_KNUCKLE_POSITION,
@@ -49,6 +68,16 @@ HOLDING_KNUCKLE_POSITION = (OPEN_KNUCKLE_POSITION + FULLY_CLOSED_KNUCKLE_POSITIO
 """
 Knuckle position, in radians, past which the fingers count as closed on something, which
 is halfway between fully open and fully closed.
+"""
+
+SHORTEST_OPENING = 200_000_000
+"""
+The shortest stretch, in nanoseconds, the fingers must read open for to count as having
+let go.
+
+A shorter one is a misreading: opening from a held piece to fully open took the gripper
+0.44 s in the framework demo recorded on 2026-09-14, and that recording holds a single
+reading of an open gripper in the middle of a hold.
 """
 
 FIRST_FRAME = 0.0
@@ -67,11 +96,11 @@ The directory the framework figure reads its pictures of Tracy from.
 
 class FigureFrame(StrEnum):
     """
-    The framework figure's two pictures of Tracy, by the file the figure reads each
-    from.
+    The framework figure's pictures of Tracy, by the file the figure reads each from.
     """
 
     BEFORE_IT_ACTS = "tracy_idle.png"
+    PICKING_UP = "tracy_picking_up.png"
     INSERTING = "tracy_inserting.png"
 
 
@@ -120,6 +149,56 @@ class NoReleaseRecordedError(DataclassException):
         )
 
 
+@dataclass(frozen=True)
+class Hold:
+    """
+    One stretch of a recording the fingers held something through.
+    """
+
+    grasped: int
+    """
+    The stamp of the first reading the fingers stood closed at.
+    """
+
+    released: int
+    """
+    The stamp of the first reading the fingers stood open again at.
+    """
+
+
+def last_hold(readings: Sequence[KnuckleReading]) -> Hold:
+    """
+    The last stretch the fingers held something through and then let it go.
+
+    An opening shorter than :data:`SHORTEST_OPENING` is a misreading and does not end
+    the hold; an opening the recording ends in counts however short it is.
+
+    :param readings: The knuckle's positions, in the order they were recorded.
+    :raises NoReleaseRecordedError: If the fingers never closed, or never opened again
+        after they last did.
+    """
+    hold: Optional[Hold] = None
+    grasped: Optional[int] = None
+    opened: Optional[int] = None
+    for reading in readings:
+        closed = reading.position >= HOLDING_KNUCKLE_POSITION
+        if not closed:
+            if grasped is not None and opened is None:
+                opened = reading.stamp
+            continue
+        if opened is not None and reading.stamp - opened >= SHORTEST_OPENING:
+            hold = Hold(grasped=grasped, released=opened)
+            grasped = None
+        opened = None
+        if grasped is None:
+            grasped = reading.stamp
+    if opened is not None:
+        return Hold(grasped=grasped, released=opened)
+    if hold is None or grasped is not None:
+        raise NoReleaseRecordedError(readings=len(readings))
+    return hold
+
+
 def last_release(readings: Sequence[KnuckleReading]) -> int:
     """
     The last moment the fingers stood open again after holding something.
@@ -129,16 +208,7 @@ def last_release(readings: Sequence[KnuckleReading]) -> int:
     :raises NoReleaseRecordedError: If the fingers never closed, or never opened again
         after they last did.
     """
-    release: Optional[int] = None
-    holding = False
-    for reading in readings:
-        closed = reading.position >= HOLDING_KNUCKLE_POSITION
-        if holding and not closed:
-            release = reading.stamp
-        holding = closed
-    if release is None or holding:
-        raise NoReleaseRecordedError(readings=len(readings))
-    return release
+    return last_hold(readings).released
 
 
 def knuckle_readings(bag: Path, arm: Arms) -> List[KnuckleReading]:
@@ -168,7 +238,7 @@ def knuckle_readings(bag: Path, arm: Arms) -> List[KnuckleReading]:
 @dataclass
 class FigureFramesFromBag:
     """
-    The framework figure's two pictures of Tracy, as one recording shows them.
+    The framework figure's pictures of Tracy, as one recording shows them.
     """
 
     bag: Path
@@ -178,7 +248,8 @@ class FigureFramesFromBag:
 
     arm: Arms = Arms.LEFT
     """
-    The arm that carried the piece, whose fingers letting go marks the insertion.
+    The arm that carried the piece, whose fingers closing on it and letting go of it
+    mark the pick-up and the insertion.
     """
 
     @property
@@ -186,7 +257,7 @@ class FigureFramesFromBag:
         """
         The robot's camera, as the recording holds it.
         """
-        return RecordedCamera(bag=self.bag)
+        return RecordedCamera(bag=self.bag, reference_frame=REFERENCE_FRAME)
 
     def before_it_acts(self) -> RecordedImages:
         """
@@ -194,27 +265,63 @@ class FigureFramesFromBag:
         """
         return self.camera.image_at(FIRST_FRAME)
 
-    def inserting(self) -> RecordedImages:
+    def look_before_it_acts(self) -> RgbdFrame:
         """
-        What the camera showed as the fingers let go of the piece over its hole.
+        The camera data a look before the robot moved reads: the first colour image,
+        with the depth image, calibration and pose the recording holds for it.
+        """
+        camera = self.camera
+        return self.before_it_acts().to_frame(
+            camera.intrinsics, camera.reference_frame_T_camera
+        )
+
+    @staticmethod
+    def narrowing_over(frame: RgbdFrame) -> NarrowingPictures:
+        """
+        The plan's statement about the piece it sorts, read one stated condition at a
+        time over a frame of the robot's table, as the setup the recordings are made on
+        describes that table.
+
+        :param frame: The camera data to read it over.
+        """
+        pipeline = perception_pipeline(recorded_world(), pieces=ROBOT_TABLE_PIECES)
+        return NarrowingPictures.taken(
+            pipeline,
+            frame,
+            piece_to_sort(pipeline.lid.entity, pipeline.pieces),
+            pipeline.board_in(frame),
+        )
+
+    def narrowing(self) -> NarrowingPictures:
+        """
+        The plan's statement about the piece it sorts, read over what the camera showed
+        before the robot moved.
+        """
+        return self.narrowing_over(self.look_before_it_acts())
+
+    def last_hold(self) -> Hold:
+        """
+        The stretch the fingers held the piece through, from picking it up to letting go
+        of it over its hole.
 
         :raises NoReleaseRecordedError: If the recording holds no release.
         """
-        return self.camera.image_nearest(
-            last_release(knuckle_readings(self.bag, self.arm))
-        )
+        return last_hold(knuckle_readings(self.bag, self.arm))
 
     def write(self, directory: Path) -> List[Path]:
         """
-        Write both pictures where the figure reads them from.
+        Write the pictures of Tracy where the figure reads them from.
 
         :param directory: The directory the figure reads its pictures from.
         :return: The files written.
+        :raises NoReleaseRecordedError: If the recording holds no release.
         """
+        hold = self.last_hold()
         written = []
         for frame, images in (
             (FigureFrame.BEFORE_IT_ACTS, self.before_it_acts()),
-            (FigureFrame.INSERTING, self.inserting()),
+            (FigureFrame.PICKING_UP, self.camera.image_nearest(hold.grasped)),
+            (FigureFrame.INSERTING, self.camera.image_nearest(hold.released)),
         ):
             path = directory / frame
             cv2.imwrite(
@@ -227,14 +334,50 @@ class FigureFramesFromBag:
         return written
 
 
+@dataclass
+class FigureNarrowing:
+    """
+    The framework figure's pictures of the look its plan was answered from, as a trial
+    of a run on the robot kept them.
+    """
+
+    kept: Path
+    """
+    Directory the trial kept the pictures in.
+    """
+
+    def write(self, directory: Path) -> List[Path]:
+        """
+        Put the pictures where the figure reads them from.
+
+        :param directory: The directory the figure reads its pictures from.
+        :return: The files written.
+        """
+        figure_narrowing = directory / TrialArtifact.NARROWING
+        shutil.copytree(self.kept, figure_narrowing, dirs_exist_ok=True)
+        return [
+            figure_narrowing / picture.name for picture in sorted(self.kept.iterdir())
+        ]
+
+
 def main(argument_list: Optional[Sequence[str]] = None) -> None:
     """
-    Cut the figure's two pictures of Tracy out of a recording.
+    Cut the figure's two pictures of Tracy out of a recording, and put the pictures of
+    the look beside them.
 
     :param argument_list: Arguments to read; the process's own when omitted.
     """
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("bag", type=Path, help="directory of the recording")
+    parser.add_argument(
+        "--narrowing",
+        type=Path,
+        default=None,
+        help=(
+            "the narrowing pictures a trial of the run kept, to put beside them in "
+            "place of the narrowing of the recording's first frame"
+        ),
+    )
     parser.add_argument(
         "--output-directory",
         type=Path,
@@ -242,9 +385,17 @@ def main(argument_list: Optional[Sequence[str]] = None) -> None:
         help="where the figure reads its pictures of Tracy from",
     )
     arguments = parser.parse_args(argument_list)
-    for path in FigureFramesFromBag(bag=arguments.bag).write(
-        arguments.output_directory
-    ):
+    frames = FigureFramesFromBag(bag=arguments.bag)
+    written = frames.write(arguments.output_directory)
+    if arguments.narrowing is None:
+        written += frames.narrowing().write(
+            arguments.output_directory / TrialArtifact.NARROWING
+        )
+    else:
+        written += FigureNarrowing(kept=arguments.narrowing).write(
+            arguments.output_directory
+        )
+    for path in written:
         logger.info("Wrote %s.", path)
 
 

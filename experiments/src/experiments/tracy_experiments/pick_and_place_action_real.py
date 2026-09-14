@@ -34,15 +34,14 @@ from coraplex.plans.attachment_nodes import ReAttachNode
 from coraplex.plans.factories import code, sequential
 from coraplex.plans.plan_node import PlanNode
 from coraplex.robot_plans.actions.base import ActionDescription
-from coraplex.robot_plans.actions.core.insertion import (
-    DEFAULT_HOVER_HEIGHT,
-    InsertionAction,
-)
+from coraplex.robot_plans.actions.core.insertion import InsertionAction
 from coraplex.robot_plans.actions.core.pick_up import PickUpAction, ReachAction
 from coraplex.robot_plans.actions.core.robot_body import ParkArmsAction
 from coraplex.robot_plans.mixins import ManipulatesBodies
 from coraplex.robot_plans.motions.gripper import MoveToolCenterPointMotion
 from experiments.episodes.observer import EpisodeObserver
+from experiments.montessori.hole_geometry import HOLE_MARKER_THICKNESS
+from experiments.montessori.perception.detections import DetectedMontessoriShape
 from experiments.montessori.semantics import MontessoriShapeCategory
 from experiments.tracy_experiments.montessori.grasp_widths import GraspCloseTable
 from experiments.tracy_experiments.montessori.gripper_feedback import (
@@ -53,11 +52,17 @@ from experiments.tracy_experiments.montessori.gripper_feedback import (
     reclose_setpoint_for,
 )
 from experiments.tracy_experiments.pick_and_place_action import ActuatorDrivenAction
+from experiments.tracy_experiments.pickup.perceived_sorting import (
+    PLACE_HOVER,
+    PerceivedSorting,
+)
 from experiments.tracy_experiments.robotiq_gripper import RobotiqGripperController
 from semantic_digital_twin.datastructures.definitions import GripperState
-from semantic_digital_twin.semantic_annotations.mixins import HasRootBody
 from semantic_digital_twin.semantic_annotations.semantic_annotations import Aperture
-from semantic_digital_twin.spatial_types.spatial_types import Pose
+from semantic_digital_twin.spatial_types.spatial_types import (
+    HomogeneousTransformationMatrix,
+    Pose,
+)
 from semantic_digital_twin.world_description.world_entity import Body
 
 logger = logging.getLogger(__name__)
@@ -154,22 +159,29 @@ class TracyActuators:
         plan.perform()
         self.observer.performed(plan)
 
-    def grasp_target_above(self, body: Body) -> Pose:
+    def grasp_target_above(self, piece: DetectedMontessoriShape) -> Pose:
         """
-        :param body: The piece to be taken hold of, standing where a look saw it.
-        :return: Where the reach, grasp and lift are aimed: the piece's own position
-            raised by :attr:`grasp_height_offset`, held at the identity orientation.
+        :param piece: The piece to be taken hold of, standing where a look saw it.
+        :return: Where the reach, grasp and lift are aimed: over the piece, at its own
+            centre on the surface it was seen resting on, raised by
+            :attr:`grasp_height_offset`, held at the identity orientation.
+
+        The centre's height is the surface's plus half the piece's own, not the height
+        the look stood it at: the depth image can read a piece shorter than it is, most
+        of all on the lid, where its pixels fall past the lid's edge onto the table.
 
         A perceived piece can rest turned any way it happens to lie, and the reach is not
         aimed at that turn -- :class:`~coraplex.datastructures.grasp.GraspDescription`
         alone decides how the gripper is turned to it.
         """
         world = self.context.world
-        position = body.global_transform.to_position()
+        position = piece.root.global_transform.to_position()
         return Pose.from_xyz_rpy(
             float(position.x),
             float(position.y),
-            float(position.z) + self.grasp_height_offset,
+            piece.surface_height
+            + PerceivedSorting.half_height_of(piece)
+            + self.grasp_height_offset,
             reference_frame=world.root,
         )
 
@@ -247,9 +259,9 @@ class PickUpActionReal(
     clear of what it was resting on.
     """
 
-    object_designator: HasRootBody
+    object_designator: DetectedMontessoriShape
     """
-    The annotation of the piece to pick up, as the plan names it.
+    The piece to pick up, as the look found it and the plan names it.
     """
 
     shape_category: MontessoriShapeCategory
@@ -303,14 +315,14 @@ class PickUpActionReal(
     def _run(self) -> None:
         lab = self.lab
         body = self.object_designator.root
-        grasp_target = lab.grasp_target_above(body)
+        grasp_target = lab.grasp_target_above(self.object_designator)
         _, _, lift_to = self.grasp_description.pose_sequence(grasp_target, body)
 
         reach = sequential(
             [
                 ReachAction(
                     target_pose=grasp_target,
-                    object_designator=self.object_designator,
+                    object_designator=self.object_designator.role_taker,
                     arm=self.arm,
                     grasp_description=self.grasp_description,
                 )
@@ -352,9 +364,9 @@ class InsertionActionReal(
     the opening stands.
     """
 
-    object_designator: Body
+    object_designator: DetectedMontessoriShape
     """
-    The piece to put through :attr:`target`.
+    The piece to put through :attr:`target`, as the look found it and the plan names it.
     """
 
     shape_category: MontessoriShapeCategory
@@ -382,21 +394,20 @@ class InsertionActionReal(
     The robot this is driven on.
     """
 
-    hover_height: float = DEFAULT_HOVER_HEIGHT
+    hover_height: float = PLACE_HOVER
     """
-    How far above :attr:`target`'s own origin, along its own axis, the piece is let go.
+    How far above the lid the piece's underside is let go.
     """
 
     @classmethod
     def carrying_out(cls, action: InsertionAction, lab: TracyActuators) -> Self:
         return cls(
-            object_designator=action.object_designator.root,
+            object_designator=action.object_designator,
             shape_category=action.object_designator.shape_category,
             target=action.target,
             arm=action.arm,
             grasp_description=action.grasp_description,
             lab=lab,
-            hover_height=action.hover_height,
         )
 
     @property
@@ -404,22 +415,25 @@ class InsertionActionReal(
         """
         The body this action acts on.
         """
-        return [self.object_designator]
+        return [self.object_designator.root]
 
     @property
     def release_pose(self) -> Pose:
         """
-        Where the piece's own centre is let go, in the world root frame:
-
-        :attr:`hover_height` above the opening's origin along its own axis.
+        Where the piece's own centre is let go, in the world root frame, turned as the
+        opening is: over the opening, with the piece's underside :attr:`hover_height`
+        above the lid the opening lies flush with.
         """
-        world = self.lab.context.world
-        return world.transform(
-            Pose.from_xyz_rpy(
-                0.0, 0.0, self.hover_height, reference_frame=self.target.root
-            ),
-            world.root,
+        lid_above_opening = HOLE_MARKER_THICKNESS / 2
+        centre_above_lid = self.hover_height + PerceivedSorting.half_height_of(
+            self.object_designator
         )
+        return (
+            self.target.root.global_transform
+            @ HomogeneousTransformationMatrix.from_xyz_rpy(
+                z=lid_above_opening + centre_above_lid
+            )
+        ).to_pose()
 
     @property
     def _action_plan(self) -> PlanNode:
@@ -427,7 +441,7 @@ class InsertionActionReal(
 
     def _run(self) -> None:
         lab = self.lab
-        body = self.object_designator
+        body = self.object_designator.root
         world = lab.context.world
         transport_to, lower_to, retract_to = self.grasp_description.pose_sequence(
             self.release_pose, body, reverse=True

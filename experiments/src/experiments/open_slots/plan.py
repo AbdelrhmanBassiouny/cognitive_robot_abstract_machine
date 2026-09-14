@@ -34,6 +34,10 @@ from krrood.entity_query_language.factories import a, an
 from semantic_digital_twin.reasoning.predicates import Colored, SupportedBy
 from semantic_digital_twin.robots.robot_parts import EndEffector
 from semantic_digital_twin.world_description.world_entity import Body
+from typing_extensions import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from krrood.entity_query_language.query.match import Match
 
 SORTED_PIECE = MontessoriShapeCategory.CUBE
 """
@@ -45,6 +49,22 @@ FROM_ABOVE = VerticalAlignment.TOP
 The hand comes down on the piece, which is the only way to the fingers a piece resting
 on a surface leaves open.
 """
+
+
+def piece_to_sort(lid: Body, pieces: KnownPieceSet) -> Match[DetectedMontessoriShape]:
+    """
+    The piece the plan picks up: one of the shape it sorts, in the colour the set gives
+    that shape, resting on the board's lid.
+
+    :param lid: The board's lid, as the surface a look searches names it.
+    :param pieces: The set on this table, which says what colour a piece of the shape
+        sorted wears.
+    """
+    piece = a(DetectedMontessoriShape)(category=SORTED_PIECE)
+    return piece.where(
+        Colored(piece, pieces.by_category[SORTED_PIECE].color),
+        SupportedBy(piece, lid),
+    )
 
 
 def sorting_plan(
@@ -65,11 +85,7 @@ def sorting_plan(
     :param end_effector: That arm's hand, which the grasp is described for.
     :return: The plan, with the three things it does not supply left open.
     """
-    piece = a(DetectedMontessoriShape)(category=SORTED_PIECE)
-    piece = piece.where(
-        Colored(piece, pieces.by_category[SORTED_PIECE].color),
-        SupportedBy(piece, lid),
-    )
+    piece = piece_to_sort(lid, pieces)
     grasp = a(GraspDescription)(
         approach_direction=...,
         vertical_alignment=FROM_ABOVE,
