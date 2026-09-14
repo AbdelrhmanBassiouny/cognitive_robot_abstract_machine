@@ -7,18 +7,27 @@ run wrote while it happened again.
 from __future__ import annotations
 
 import pytest
+from semantic_digital_twin.world import World
+from semantic_digital_twin.world_description.connections import Connection
 
+from experiments.episodes.artifacts import (
+    ARTIFACT_DIRECTORY_ENVIRONMENT_VARIABLE,
+    ArtifactDirectory,
+)
 from experiments.episodes.episode import Episode
 from experiments.episodes.long_term_memory import (
     LongTermMemory,
     UnrecordedEpisodeError,
 )
 from experiments.episodes.episode import RecordedQuery, RecordedTrial, Tick
+from experiments.episodes.trace import JointTrace
 from experiments.montessori.ask_episode import (
     AskingOption,
     EpisodeKeptNoWorldToAskAgain,
     FACTS_IN_THE_EVENT_LOG,
+    MomentOutsideTheTrial,
     TheObjectAskedAboutIsNotNamed,
+    ask_at_a_moment,
     ask_episode,
     keep_with_the_trial,
     main,
@@ -26,6 +35,7 @@ from experiments.montessori.ask_episode import (
     recorded_facts,
     rescore_the_working_memory,
 )
+from experiments.montessori.scenarios import SortingScene
 from experiments.questions.long_term_memory import (
     AnythingMovedInTheEpisode,
     NumberOfDegreesOfFreedomInTheRecordedWorld,
@@ -35,6 +45,7 @@ from experiments.scenarios.trial import TrialOutcome
 from experiments.montessori.results_database import ResultsDatabase
 from experiments.questions.question import Memory
 
+from .dataset.synthetic_grasping_robot import FINGER_OPENING
 from .test_episodes import sorting_episode
 from .test_long_term_memory import record
 from .test_working_memory_ground_truth import ASceneTheRunStood, area, stood
@@ -330,6 +341,143 @@ def test_the_command_scores_the_working_memory_of_an_episode_again(
     [trial] = memory.recall_trials(episode.identifier)
     [stored] = [query for query in trial.queries if type(query.question) is ObjectsSeen]
     assert stored.answered_correctly is True
+
+
+# %% asking what the robot held at a moment of the trial
+
+MOMENT_THE_FINGERS_STOOD_OPEN = 0.0
+"""
+When the trial's trace first sampled the joints, with the fingers where the scene stood
+them.
+"""
+
+MOMENT_THE_FINGERS_STOOD_CLOSED = 2.0
+"""
+When the trace sampled the joints again, with the fingers closed; the trial ends then.
+"""
+
+
+def finger_joint_of(world: World) -> Connection:
+    """
+    The joint the sorting gripper's finger moves on.
+
+    :param world: The world the gripper stands in.
+    """
+    return SortingScene(world).end_effector.finger.root.parent_connection
+
+
+def a_trial_whose_fingers_closed(
+    results_database: ResultsDatabase,
+    stood: ASceneTheRunStood,
+    artifact_directory: ArtifactDirectory,
+) -> Episode:
+    """
+    One recorded trial whose trace holds the fingers open and then closed, recorded with
+    the world as it stood before they closed.
+
+    :param results_database: The database to record to.
+    :param stood: The scene the trial ran in.
+    :param artifact_directory: Where the trial's trace is kept.
+    """
+    episode = sorting_episode()
+    episode.world = stood.world
+    finger = finger_joint_of(stood.world)
+    stood_open = finger.position
+    trace = JointTrace()
+    trace.sample(stood.world, MOMENT_THE_FINGERS_STOOD_OPEN)
+    finger.position = FINGER_OPENING
+    trace.sample(stood.world, MOMENT_THE_FINGERS_STOOD_CLOSED)
+    finger.position = stood_open
+    trial = RecordedTrial(
+        episode=episode,
+        outcome=TrialOutcome.SUCCEEDED,
+        duration=MOMENT_THE_FINGERS_STOOD_CLOSED,
+    )
+    record(results_database, trial)
+    artifact_directory.open_for(episode).trial(trial.number).keep_joint_trace(trace)
+    return episode
+
+
+def piece_name_of(world: World) -> str:
+    """
+    What one of the pieces standing in the scene is called.
+
+    :param world: The world the scene stands in.
+    """
+    scene = SortingScene(world)
+    return scene.body_of(sorted(scene.categories)[0]).name.name
+
+
+def test_the_questions_are_asked_of_the_joints_as_they_stood_at_that_moment(
+    tmp_path, results_database, memory, stood
+):
+    artifact_directory = ArtifactDirectory(path=tmp_path / "artifacts")
+    episode = a_trial_whose_fingers_closed(results_database, stood, artifact_directory)
+    [trial] = memory.recall_trials(episode.identifier)
+    trace = artifact_directory.open_for(episode).trial(trial.number).joint_trace
+
+    answers = ask_at_a_moment(
+        trial, trace, piece_name_of(stood.world), MOMENT_THE_FINGERS_STOOD_CLOSED
+    )
+
+    assert answers.finger_joint_position == pytest.approx(FINGER_OPENING)
+    assert answers.rows
+    assert {row.question.memory for row in answers.rows} == {Memory.WORKING}
+
+
+def test_the_world_is_put_back_once_the_moment_has_been_asked(
+    tmp_path, results_database, memory, stood
+):
+    artifact_directory = ArtifactDirectory(path=tmp_path / "artifacts")
+    episode = a_trial_whose_fingers_closed(results_database, stood, artifact_directory)
+    [trial] = memory.recall_trials(episode.identifier)
+    trace = artifact_directory.open_for(episode).trial(trial.number).joint_trace
+    stood_before = finger_joint_of(trial.episode.world).position
+
+    ask_at_a_moment(
+        trial, trace, piece_name_of(stood.world), MOMENT_THE_FINGERS_STOOD_CLOSED
+    )
+
+    assert finger_joint_of(trial.episode.world).position == stood_before
+
+
+def test_a_moment_outside_the_trial_is_refused(
+    tmp_path, results_database, memory, stood
+):
+    artifact_directory = ArtifactDirectory(path=tmp_path / "artifacts")
+    episode = a_trial_whose_fingers_closed(results_database, stood, artifact_directory)
+    [trial] = memory.recall_trials(episode.identifier)
+    trace = artifact_directory.open_for(episode).trial(trial.number).joint_trace
+
+    with pytest.raises(MomentOutsideTheTrial):
+        ask_at_a_moment(trial, trace, piece_name_of(stood.world), trial.duration + 1.0)
+
+
+def test_the_command_asks_at_a_moment_and_keeps_nothing(
+    tmp_path, monkeypatch, results_database, memory, stood
+):
+    artifact_directory = ArtifactDirectory(path=tmp_path / "artifacts")
+    monkeypatch.setenv(
+        ARTIFACT_DIRECTORY_ENVIRONMENT_VARIABLE, str(artifact_directory.path)
+    )
+    episode = a_trial_whose_fingers_closed(results_database, stood, artifact_directory)
+
+    exit_code = main(
+        [
+            AskingOption.EPISODE,
+            episode.identifier,
+            AskingOption.OBJECT_NAME,
+            piece_name_of(stood.world),
+            AskingOption.DATABASE_URI,
+            results_database.uri,
+            AskingOption.AT,
+            str(MOMENT_THE_FINGERS_STOOD_CLOSED),
+        ]
+    )
+
+    assert exit_code == 0
+    [trial] = memory.recall_trials(episode.identifier)
+    assert trial.queries == []
 
 
 def test_the_set_cannot_be_asked_without_the_object_it_singles_out(

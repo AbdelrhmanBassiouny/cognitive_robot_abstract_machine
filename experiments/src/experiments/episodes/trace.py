@@ -92,6 +92,22 @@ class JointPositions:
     Each joint's position, by the joint's full name.
     """
 
+    @classmethod
+    def standing_in(cls, world: World, moment: float = 0.0) -> Self:
+        """
+        Where every joint of the given world stands now.
+
+        :param world: The world to read.
+        :param moment: Seconds into the trial the joints are read at.
+        """
+        return cls(
+            moment=moment,
+            positions={
+                str(name): position
+                for name, position in world.state.to_position_dict().items()
+            },
+        )
+
     def restore_into(self, world: World) -> None:
         """
         Put every joint of the given world that this sample holds back where it stood.
