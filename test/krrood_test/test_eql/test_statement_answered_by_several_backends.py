@@ -18,7 +18,7 @@ from krrood.entity_query_language.backends import (
     backend_supplies,
 )
 from krrood.entity_query_language.exceptions import NoBackendAnswers
-from krrood.entity_query_language.factories import a, an, variable
+from krrood.entity_query_language.factories import a, variable
 from krrood.entity_query_language.query.match import Match
 
 from ..dataset.action_stated_over_what_a_look_finds import (
@@ -95,7 +95,7 @@ def test_a_statement_is_answered_by_a_backend_per_description_it_hands_over(
     choice: BackendChoice,
 ):
     described = standing_on(LID)
-    statement = an(TakingHoldOfSomethingFound)(thing=described, grip=...)
+    statement = a(TakingHoldOfSomethingFound)(thing=described, grip=...)
 
     assert list(choice.evaluate(statement)) == [
         TakingHoldOfSomethingFound(CUBE_ON_THE_LID, Grip.FROM_ABOVE),
@@ -107,7 +107,7 @@ def test_a_statement_is_answered_once_for_every_answer_a_description_it_hands_ov
     choice: BackendChoice,
 ):
     described = standing_on(TABLE)
-    statement = an(TakingHoldOfSomethingFound)(thing=described, grip=...)
+    statement = a(TakingHoldOfSomethingFound)(thing=described, grip=...)
 
     assert list(choice.evaluate(statement)) == [
         TakingHoldOfSomethingFound(CUBE_ON_THE_TABLE, Grip.FROM_ABOVE),
@@ -120,7 +120,7 @@ def test_a_statement_is_answered_once_for_every_answer_a_description_it_hands_ov
 def test_a_description_handed_over_as_one_element_of_a_collection_is_answered_too(
     choice: BackendChoice,
 ):
-    statement = an(TakingHoldOfSeveralThingsFound)(
+    statement = a(TakingHoldOfSeveralThingsFound)(
         things=[CUBE_ON_THE_TABLE, standing_on(LID)], grip=Grip.FROM_ABOVE
     )
 
@@ -149,7 +149,7 @@ def test_each_statement_is_recorded_against_the_backend_that_answered_it(
     Innermost first, so the record reads in the order the statement was answered.
     """
     described = standing_on(LID)
-    statement = an(TakingHoldOfSomethingFound)(thing=described, grip=...)
+    statement = a(TakingHoldOfSomethingFound)(thing=described, grip=...)
 
     list(choice.evaluate(statement))
 
@@ -188,7 +188,7 @@ def test_a_statement_no_backend_can_answer_is_refused(
     generating: EntityQueryLanguageGenerativeBackend,
 ):
     choice = BackendChoice(backends=[generating])
-    statement = an(TakingHoldOfSomethingFound)(thing=..., grip=...)
+    statement = a(TakingHoldOfSomethingFound)(thing=..., grip=...)
 
     with pytest.raises(NoBackendAnswers):
         list(choice.evaluate(statement))
@@ -220,7 +220,7 @@ def test_a_field_none_of_its_backends_can_supply(
 
 def test_a_statement_with_a_description_answered_states_the_answer_in_its_place():
     described = standing_on(LID)
-    statement = an(TakingHoldOfSomethingFound)(thing=described, grip=...)
+    statement = a(TakingHoldOfSomethingFound)(thing=described, grip=...)
 
     answered = statement.answering(described, CUBE_ON_THE_LID)
 
@@ -232,7 +232,7 @@ def test_a_statement_with_an_attribute_answered_states_the_answer_for_it():
     An attribute stated to nothing at all is the other way a statement leaves something
     open, so it is answered the same way a description it hands over is.
     """
-    statement = an(TakingHoldOfSomethingFound)(thing=CUBE_ON_THE_LID, grip=...)
+    statement = a(TakingHoldOfSomethingFound)(thing=CUBE_ON_THE_LID, grip=...)
 
     answered = statement.answering("grip", Grip.FROM_ABOVE)
 
@@ -258,7 +258,7 @@ def test_a_statement_keeps_the_conditions_it_states_once_a_description_is_answer
     choice: BackendChoice,
 ):
     described = standing_on(LID)
-    statement = an(TakingHoldOfSomethingFound)(thing=described, grip=...)
+    statement = a(TakingHoldOfSomethingFound)(thing=described, grip=...)
     statement = statement.where(statement.grip == Grip.FROM_ABOVE)
 
     assert list(choice.evaluate(statement)) == [
