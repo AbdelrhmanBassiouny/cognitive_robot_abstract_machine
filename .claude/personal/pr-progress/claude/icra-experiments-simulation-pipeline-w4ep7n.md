@@ -290,7 +290,10 @@ item 8 `e91793a345` (sample moved to the very start of `trial_started`, else the
 sample was 0.12 s in). New tests all failed first, pass after. Pre-push: 127 + 50 + 87 + 22
 passed.
 
-**Item 9 in progress (uncommitted).** `lab_without_the_robot.CaptureOfAShove` (detects the
+**Item 9 committed locally (`cee219f6e7`, not pushed).** End-to-end shove rehearsal PASSED
+the perturbation check; lab module 9 passed. Full rehearsal module and recording + audit
+reruns in progress, then push, re-draft, description section (drafted in scratchpad).
+`lab_without_the_robot.CaptureOfAShove` (detects the
 piece, inpaints where it stood, warps its pixels through the plane of its top by the
 shove, writes a new capture `<name>_shoved`); `Rehearsal.shove_shown` +
 `--shove-shown METRES` (direction = the perturbation's displacement), refused without
