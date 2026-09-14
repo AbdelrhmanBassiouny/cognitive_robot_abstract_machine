@@ -26,7 +26,9 @@ Plan:
       narrowing/ pictures; bag_frames --narrowing copies to figure; panel 1 reads them.
       Stand-in pictures from shipped tracy_pickup_demo (cube + cylinder on lid). 57 tests pass.
       Draft PR #382 (base: this branch). *.png is gitignored: the 4 panel pictures are add -f.
-- [ ] user reruns framework_demo real --record, then bag_frames <bag> --narrowing
-      <episode>/trials/1/narrowing and build.py; not done: narrowing from the bag, DB rows
+- [x] merged #382 into this branch (worktree removed); bag_frames now narrows the bag's first
+      frame (ROBOT_TABLE_PIECES = SMALLER_PIECES; full-size set found no cube offline).
+      Panel 1 + framework.pdf rebuilt from tracy_framework_demo_20260914_211651. 60 tests pass.
+- [ ] user reruns framework_demo real --record; not done: narrowing as DB rows
 - still open elsewhere: #379 pickup rerun; framework figure frames/cards after a good run;
   cube-evidence feature follow-on (worktree ~/bass/cram-board-by-the-cube)
