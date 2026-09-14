@@ -61,3 +61,34 @@ class EntryPointMapping(AlternativeMapping[Entrypoint]):
     @classmethod
     def required_pre_build_classes(cls) -> List[Type]:
         return [BuildFirst, BuildFirstAssociation]
+
+
+@dataclass
+class HoldsAnEntrypoint:
+
+    entrypoint: Entrypoint
+
+
+@dataclass(eq=False)
+class HoldsAnEntrypointMapping(AlternativeMapping[HoldsAnEntrypoint]):
+    """
+    A mapping that states no classes to wait for, holding one that does.
+    """
+
+    entrypoint: Entrypoint
+
+    @classmethod
+    def from_domain_object(cls, obj: T) -> Self:
+        return cls(obj.entrypoint)
+
+    def to_domain_object(self) -> T:
+        return HoldsAnEntrypoint(self.entrypoint)
+
+
+@dataclass
+class OwnsAHolder:
+    """
+    What refers to a mapping holding another, so the holder is converted along with it.
+    """
+
+    holder: HoldsAnEntrypoint

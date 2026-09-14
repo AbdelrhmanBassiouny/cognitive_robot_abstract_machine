@@ -55,7 +55,9 @@ the duration of the sorting. Bags are written to
 one camera frame in
 :data:`~experiments.tracy_experiments.rosbag_recording.DEFAULT_KEEP_EVERY_NTH_FRAME`;
 both are overridable, see
-``--bag-directory`` and ``--keep-every-nth-frame``.
+``--bag-directory`` and ``--keep-every-nth-frame``. Pass ``--no-episode`` for a run that
+keeps no episode: nothing is recorded to a database or beside it, and a bag asked for
+stays where it was written.
 """
 
 from __future__ import annotations
@@ -70,7 +72,7 @@ from enum import StrEnum
 from pathlib import Path
 
 from krrood.exceptions import DataclassException
-from typing_extensions import Optional, Sequence
+from typing_extensions import Iterator, Optional, Sequence
 
 logging.basicConfig(level=logging.INFO, format="%(message)s")
 
@@ -131,6 +133,7 @@ from experiments.tracy_experiments.montessori.event_dashboard import (
 from experiments.tracy_experiments.montessori.event_monitoring import (
     MontessoriEventMonitor,
     build_pick_monitor,
+    build_translation_monitor,
 )
 from experiments.tracy_experiments.montessori.grasp_widths import GraspCloseTable
 from experiments.tracy_experiments.montessori.gripper_feedback import (
@@ -165,6 +168,7 @@ from segmind.datastructures.events import (
 )
 from segmind.detectors.base import SegmindContext
 from semantic_digital_twin.datastructures.definitions import GripperState
+from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.spatial_types.spatial_types import (
     HomogeneousTransformationMatrix,
     Pose,
@@ -249,6 +253,7 @@ class DemoOption(StrEnum):
     BAG_DIRECTORY = "--bag-directory"
     KEEP_EVERY_NTH_FRAME = "--keep-every-nth-frame"
     DATABASE_URI = "--database-uri"
+    NO_EPISODE = "--no-episode"
 
 
 def _grasp_target_pose(body: Body, grasp_height_offset: float, world: World) -> Pose:
@@ -514,6 +519,30 @@ class _SortingRig(ShapeSorter):
         if self.asks is not None:
             self.asks.receive([event])
 
+    @contextlib.contextmanager
+    def watching(self, things: Sequence[PrefixedName]) -> Iterator[None]:
+        """
+        Watch the named things for the length of the block, seen where they rest before
+        it and again after it, so what someone moves while nothing of the robot moves is
+        reported as a translation of what they moved.
+
+        :param things: What is watched, named as the scene names it.
+        """
+        monitor = build_translation_monitor(
+            world=self.world,
+            tracked_bodies=[
+                self.world.get_kinematic_structure_entity_by_name(name)
+                for name in things
+            ],
+        )
+        monitor.context.require_extension(SegmindContext).logger.add_callback(
+            DetectionEvent,
+            lambda event: self.note_event(event.tracked_object.name.name, event),
+        )
+        monitor.tick()
+        yield
+        monitor.tick()
+
     def _carry_watching_for_slip(
         self, body: Body, close_setpoint: float, carry: Callable[[], None]
     ) -> None:
@@ -752,6 +781,9 @@ class SortingTrial:
         self.joints = JointTraceRecorder(
             _world=self.rig.world, clock=lambda: self.rig.observer.elapsed_seconds
         )
+        # A still robot changes no joint, so where the joints stand is read once here
+        # or a trial that moves nothing would keep no trace at all.
+        self.joints.trace.sample(self.rig.world, self.rig.observer.elapsed_seconds)
 
     def state_the_scene(self) -> None:
         """
@@ -764,23 +796,29 @@ class SortingTrial:
 
     def bring_about_the_perturbation(self) -> None:
         """
-        Have the person bring the perturbation about, if there is one: they are told
-        what to do, the account stops saying where what they moved stands, the trial
-        keeps what they were told, and the camera looks at the table again to learn what
-        they did.
+        Have the person bring the perturbation about, if there is one: the account stops
+        saying where what they are to move stands, the trial keeps what they were told
+        with what it moves and when, they are told what to do, and the camera looks at
+        the table again to learn what they did.
 
-        What they moved is named off the table as it stood before they acted, since what
-        the look then finds of it is the look's to say.
+        What they move is watched from before they act until the camera has found it
+        again, since nothing of the robot moves meanwhile to watch it otherwise. It is
+        named off the table as it stood before they acted, since what the look then
+        finds of it is the look's to say.
         """
         if self.perturbation is None:
             return
         instruction = self.perturbation.instruction_for_a_person()
+        things_moved = self.perturbation.things_moved(SortingScene(self.rig.world))
         if self.stated_scene is not None:
-            for moved in self.perturbation.things_moved(SortingScene(self.rig.world)):
+            for moved in things_moved:
                 self.stated_scene.forget_where(moved)
-        self.person.carry_out(instruction)
-        self.rig.observer.carried_out(instruction)
-        self.sorting.perceive()
+        self.rig.observer.carried_out(
+            instruction, self.rig.observer.elapsed_seconds, things_moved
+        )
+        with self.rig.watching(things_moved):
+            self.person.carry_out(instruction)
+            self.sorting.perceive()
 
     @property
     def piece_asked_about(self) -> MontessoriShape:
@@ -930,6 +968,15 @@ def argument_parser(add_help: bool = True) -> argparse.ArgumentParser:
             "robot moves."
         ),
     )
+    parser.add_argument(
+        DemoOption.NO_EPISODE,
+        action="store_true",
+        help=(
+            "Keep no episode: nothing is written to a database or beside it, and no "
+            "database is checked. A bag asked for with --record is still recorded and "
+            "stays in its bag directory."
+        ),
+    )
     return parser
 
 
@@ -965,9 +1012,9 @@ class PickupDemo:
     brings the perturbation about.
     """
 
-    database: ResultsDatabase
+    database: Optional[ResultsDatabase]
     """
-    The database the episode is recorded to.
+    The database the episode is recorded to, or None for a run that keeps no episode.
     """
 
     asked_about: MontessoriShapeCategory = DEFAULT_PIECE_ASKED_ABOUT
@@ -1002,7 +1049,7 @@ class PickupDemo:
     Where the events the rig's monitors report are streamed to.
     """
 
-    def run(self) -> EpisodeArtifacts:
+    def run(self) -> Optional[EpisodeArtifacts]:
         """
         Sort the pieces the camera finds, recording the episode.
 
@@ -1011,7 +1058,8 @@ class PickupDemo:
         clock the bag stamps its messages on, so the two are read against one another
         through the trial's start.
 
-        :return: The artifacts the episode kept.
+        :return: The artifacts the episode kept, or None for a run that keeps no
+            episode.
         :raises PieceNotSeenError: If the look found no piece of the kind asked about.
         """
         tracy = self.tracy
@@ -1084,12 +1132,35 @@ class PickupDemo:
             trial.perform()
             recorded = trial.finish(episode)
         logger.info("Sorting finished.")
-        return keep_the_episode(
+        # Keeping the episode rewrites where the world's meshes are read from, which a
+        # look still copying the world would read half-written.
+        tracy.look.stop_looking()
+        return self.keep(
             recorded,
             trial.joints.trace,
             None if bag is None else Path(bag.output_directory),
-            self.database,
-            self.artifact_directory,
+        )
+
+    def keep(
+        self,
+        trial: RecordedTrial,
+        joints: JointTrace,
+        bag_directory: Optional[Path],
+    ) -> Optional[EpisodeArtifacts]:
+        """
+        Keep the episode of the finished trial, unless this run keeps none.
+
+        :param trial: The trial the run recorded.
+        :param joints: The trace of where every joint stood along it.
+        :param bag_directory: The bag the run recorded, or None for a run that recorded
+            none.
+        :return: The artifacts that were kept, or None for a run that keeps no episode.
+        """
+        if self.database is None:
+            logger.info("No episode kept, as asked.")
+            return None
+        return keep_the_episode(
+            trial, joints, bag_directory, self.database, self.artifact_directory
         )
 
 
@@ -1102,7 +1173,7 @@ def main(argument_list: Optional[Sequence[str]] = None) -> None:
         dies with the run, before anything on the robot is touched.
     """
     arguments = _parse_arguments(argument_list)
-    database = resolve_lasting_database(arguments.database_uri)
+    database = database_asked_for(arguments)
     perturbation = perturbation_asked_for(arguments.perturbation, arguments.piece)
     bag = bag_asked_for(arguments)
 
@@ -1120,6 +1191,20 @@ def main(argument_list: Optional[Sequence[str]] = None) -> None:
             bag=bag,
             feed=feed,
         ).run()
+
+
+def database_asked_for(arguments: argparse.Namespace) -> Optional[ResultsDatabase]:
+    """
+    The database the command line asked the episode to be recorded to, or None for a run
+    that keeps no episode.
+
+    :param arguments: The command line as read.
+    :raises InMemoryDatabaseRefused: If the episode would be recorded to a database that
+        dies with the run.
+    """
+    if arguments.no_episode:
+        return None
+    return resolve_lasting_database(arguments.database_uri)
 
 
 def bag_asked_for(arguments: argparse.Namespace) -> Optional[RosbagRecorder]:
