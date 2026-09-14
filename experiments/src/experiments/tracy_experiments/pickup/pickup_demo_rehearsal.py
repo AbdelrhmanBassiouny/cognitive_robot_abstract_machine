@@ -21,6 +21,9 @@ Run with (ROS must be sourced; no robot and no camera need be up)::
 The demo's own options are taken as they are; ``--capture`` says which capture the
 camera shows, ``--capture-after`` which one it shows once the person has brought the
 perturbation about, and ``--pieces-placed`` what the person says they put on the table.
+``--shove-shown METRES`` with ``--perturbation piece-shoved`` has the camera show the
+capture with the shoved piece that far from where it stood once the person has been
+asked, so the rehearsal sees the shove it asks for.
 The episode goes to a database of its own beside the episodes' artifacts, so it is
 never taken for a run on the robot, and the report of its check is printed with the
 command that checks it again.
@@ -31,14 +34,20 @@ from __future__ import annotations
 import argparse
 import logging
 import sys
+import tempfile
 from dataclasses import dataclass, field
 from enum import StrEnum
+from pathlib import Path
 
 logging.basicConfig(level=logging.INFO, format="%(message)s")
 
+import numpy as np
 import rclpy
 from coraplex.datastructures.enums import ExecutionType
+from krrood.exceptions import DataclassException
 from rclpy.signals import SignalHandlerOptions
+from semantic_digital_twin.spatial_types.spatial_types import Vector3
+from semantic_digital_twin.world import World
 from typing_extensions import List, Optional, Sequence
 
 from experiments.episodes.artifacts import (
@@ -52,16 +61,19 @@ from experiments.montessori.check_episode import (
     CheckOption,
 )
 from experiments.montessori.perception.captures import SceneCapture
+from experiments.montessori.perception.node import pipeline_of
 from experiments.montessori.pieces import SMALLER_PIECES
+from experiments.montessori.record_episode import PerturbationChoice
 from experiments.montessori.results_database import (
     ResultsDatabase,
     resolve_lasting_database,
 )
-from experiments.montessori.scenarios import SortingPerturbation
+from experiments.montessori.scenarios import PieceShoved, SortingPerturbation
 from experiments.montessori.semantics import MontessoriShapeCategory
 from experiments.montessori.watched_run import BETWEEN_THE_PIECES_THEY_NAME
 from experiments.tracy_experiments.lab_without_the_robot import (
     CaptureCamera,
+    CaptureOfAShove,
     LabWithoutTheRobot,
 )
 from experiments.tracy_experiments.live_tracy import LiveTracy
@@ -73,6 +85,7 @@ from experiments.tracy_experiments.pickup.pickup_demo_real import (
     BAG_NAME_PREFIX,
     DEFAULT_PIECE_ASKED_ABOUT,
     NODE_NAME,
+    DemoOption,
     PickupDemo,
     argument_parser,
     perturbation_asked_for,
@@ -106,6 +119,33 @@ class RehearsalOption(StrEnum):
     CAPTURE = "--capture"
     CAPTURE_AFTER = "--capture-after"
     PIECES_PLACED = "--pieces-placed"
+    SHOVE_SHOWN = "--shove-shown"
+
+
+@dataclass
+class ShoveShownWithoutAShove(DataclassException):
+    """
+    Raised when a rehearsal is to show a shove the person is not asked for.
+    """
+
+    perturbation: Optional[SortingPerturbation]
+    """
+    What the rehearsal asks the person for, or None for nothing.
+    """
+
+    def error_message(self) -> str:
+        asked = (
+            "nothing" if self.perturbation is None else type(self.perturbation).__name__
+        )
+        return "A shove is to be shown, but the person is asked for %s." % asked
+
+    def suggest_correction(self) -> str:
+        return "Pass %s %s with %s, or leave %s out." % (
+            DemoOption.PERTURBATION,
+            PerturbationChoice.PIECE_SHOVED,
+            RehearsalOption.SHOVE_SHOWN,
+            RehearsalOption.SHOVE_SHOWN,
+        )
 
 
 def rehearsal_database_uri(artifact_directory: ArtifactDirectory) -> str:
@@ -213,6 +253,12 @@ class Rehearsal:
     What the person is asked to bring about, or None for an unperturbed run.
     """
 
+    shove_shown: Optional[float] = None
+    """
+    How far, in metres, the camera shows the shoved piece moved once the person has been
+    asked to shove it, or None to show :attr:`capture_after` as it is.
+    """
+
     bag_directory: Optional[str] = None
     """
     Where the bag is recorded, or None to record none.
@@ -233,6 +279,12 @@ class Rehearsal:
     The person at the console and the table, once the rehearsal has run.
     """
 
+    def __post_init__(self) -> None:
+        if self.shove_shown is not None and not isinstance(
+            self.perturbation, PieceShoved
+        ):
+            raise ShoveShownWithoutAShove(perturbation=self.perturbation)
+
     def run(self) -> EpisodeAuditReport:
         """
         Bring the lab up, run the demo over it and check what it recorded.
@@ -241,11 +293,14 @@ class Rehearsal:
 
         :return: The report of the check.
         """
-        with LabWithoutTheRobot.brought_up(self.capture) as lab:
+        with (
+            tempfile.TemporaryDirectory() as captures_shown,
+            LabWithoutTheRobot.brought_up(self.capture) as lab,
+        ):
             self.person = PersonAtTheRehearsal(
                 camera=lab.camera,
                 pieces_placed=self.pieces_placed,
-                capture_after=self.capture_after,
+                capture_after=self.capture_shown_after(lab.world, Path(captures_shown)),
                 perturbation=self.perturbation,
             )
             with LiveTracy.connected(NODE_NAME) as tracy:
@@ -264,6 +319,26 @@ class Rehearsal:
             results_database=self.database,
             artifact_directory=self.artifact_directory,
         ).audit(artifacts.episode.identifier)
+
+    def capture_shown_after(self, world: World, directory: Path) -> SceneCapture:
+        """
+        The capture the camera shows once the person has brought the perturbation
+        about: :attr:`capture_after` itself, or that capture with the shoved piece moved
+        :attr:`shove_shown` metres the way the person is asked to shove it.
+
+        :param world: The world the robot publishes, which the piece is looked for in.
+        :param directory: Where a capture made for the rehearsal is written.
+        """
+        if self.shove_shown is None:
+            return self.capture_after
+        direction = self.perturbation.displacement.to_np().flatten()[:3]
+        x, y, z = direction / np.linalg.norm(direction) * self.shove_shown
+        return CaptureOfAShove(
+            capture=self.capture_after,
+            pipeline=pipeline_of(world),
+            category=self.perturbation.category,
+            displacement=Vector3(x, y, z),
+        ).written_to(directory)
 
     def bag_for(self, lab: LabWithoutTheRobot) -> Optional[RosbagRecorder]:
         """
@@ -335,6 +410,17 @@ def parse_arguments(argument_list: Optional[Sequence[str]]) -> argparse.Namespac
         default=list(SMALLER_PIECES.by_category),
         help="the pieces the person says they put on the table",
     )
+    parser.add_argument(
+        RehearsalOption.SHOVE_SHOWN,
+        type=float,
+        default=None,
+        metavar="METRES",
+        help=(
+            "show the shoved piece this far from where it stood once the person has "
+            "been asked to shove it; needs %s %s"
+            % (DemoOption.PERTURBATION, PerturbationChoice.PIECE_SHOVED)
+        ),
+    )
     return parser.parse_args(argument_list)
 
 
@@ -366,6 +452,7 @@ def main(argument_list: Optional[Sequence[str]] = None) -> int:
         artifact_directory=artifact_directory,
         asked_about=arguments.ask_about,
         perturbation=perturbation_asked_for(arguments.perturbation, arguments.piece),
+        shove_shown=arguments.shove_shown,
         bag_directory=arguments.bag_directory if arguments.record else None,
         keep_every_nth_frame=arguments.keep_every_nth_frame,
     )

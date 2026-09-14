@@ -21,6 +21,7 @@ import pytest
 rclpy = pytest.importorskip("rclpy")
 
 from geometry_msgs.msg import TransformStamped
+from rclpy.duration import Duration
 from rclpy.node import Node
 from rclpy.qos import qos_profile_sensor_data
 from sensor_msgs.msg import CameraInfo, CompressedImage
@@ -39,11 +40,13 @@ from experiments.montessori.perception.capture_from_camera import (
     write_capture,
 )
 from experiments.montessori.perception.captures import SceneCapture
+from experiments.montessori.perception.detections import MontessoriScene
 from experiments.montessori.perception.exceptions import (
     LookingHasStopped,
     NoSceneAvailable,
 )
 from experiments.montessori.perception.live_camera import LiveCamera
+from experiments.montessori.perception.measured_plane import CameraPoseError
 from experiments.montessori.perception.node import (
     MontessoriPerceptionNode,
     configure_logging,
@@ -51,9 +54,12 @@ from experiments.montessori.perception.node import (
 from experiments.montessori.perception.pipeline import MontessoriPerceptionPipeline
 from experiments.montessori.perception.recorded_setup import perception_pipeline
 from experiments.montessori.perception.scene_request import SceneRequest
+from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.spatial_types.spatial_types import (
     HomogeneousTransformationMatrix,
 )
+from semantic_digital_twin.world import World
+from semantic_digital_twin.world_description.world_entity import Body
 
 from .test_montessori_camera import (
     COLOR_FORMAT_FIELD,
@@ -592,6 +598,255 @@ def test_a_look_begun_through_a_pipeline_since_replaced_is_not_kept(node: Node):
     assert perception.pipeline is handed_over
     with pytest.raises(NoSceneAvailable):
         perception.wait_for_scene(A_SHORT_WAIT)
+
+
+# %% a look after a handover is taken of images the camera sent after it
+
+TABLE_AS_IT_IS_NOW = np.full((4, 6, 3), (200, 10, 30), dtype=np.uint8)
+"""
+The colour image the camera sends once the table has changed, unlike
+:data:`COLOR_IMAGE`.
+"""
+
+A_STALE_IMAGE_ON_ITS_WAY = 0.5
+"""
+How long a test spins for an image already sent to arrive, in seconds.
+"""
+
+
+@dataclass
+class _PipelineNotingWhatItLooksAt(MontessoriPerceptionPipeline):
+    """
+    A pipeline that finds nothing and notes every frame it was handed.
+    """
+
+    looked_at: List[RgbdFrame] = field(kw_only=True, default_factory=list)
+    """
+    The frames looked at, in order.
+    """
+
+    def detect(self, frame: RgbdFrame, request: SceneRequest = SceneRequest()):
+        self.looked_at.append(frame)
+        return MontessoriScene()
+
+
+def noting_pipeline_placed_in(world: World) -> _PipelineNotingWhatItLooksAt:
+    """
+    :param world: The world whose root the camera's pose is published against.
+    :return: A pipeline of the recorded setup reporting in that world's root.
+    """
+    recorded = perception_pipeline()
+    return _PipelineNotingWhatItLooksAt(
+        table=recorded.table,
+        lid=recorded.lid,
+        reference_frame=world.root,
+        world=world,
+        pieces=recorded.pieces,
+    )
+
+
+def world_rooted_where_the_camera_pose_is_published() -> World:
+    """
+    :return: A world holding only a root named as the frame the camera's pose is
+        published against.
+    """
+    world = World()
+    with world.modify_world():
+        world.add_kinematic_structure_entity(Body(name=PrefixedName(REFERENCE_FRAME)))
+    return world
+
+
+WHILE_THE_PERSON_ACTS = 0.1
+"""
+How long passes between the camera sending an image of the table as it was and the run
+handing the node the pipeline to look again with, in seconds.
+"""
+
+A_DAY = 24 * 60 * 60.0
+"""
+How far behind the moment it is sent a bag played back a day after it was recorded
+stamps an image, in seconds.
+"""
+
+
+def publish_color_sent_now(
+    node: Node,
+    published: PublishedCamera,
+    image: np.ndarray,
+    stamped_behind: float = 0.0,
+) -> None:
+    """
+    Send one colour image stamped with the moment it is sent, as the camera does, or a
+    stated time before it, as a bag played back does.
+
+    :param node: The node whose clock stamps it.
+    :param published: The camera's publishers.
+    :param image: The image, blue/green/red.
+    :param stamped_behind: How far before the moment it is sent its stamp lies, in
+        seconds.
+    """
+    message = CompressedImage()
+    message.header.stamp = (
+        node.get_clock().now() - Duration(seconds=stamped_behind)
+    ).to_msg()
+    message.format = COLOR_FORMAT_FIELD
+    message.data = cv2.imencode(".png", image)[1].tobytes()
+    published.color.publish(message)
+
+
+def publish_all_sent_now(
+    node: Node,
+    published: PublishedCamera,
+    image: np.ndarray,
+    stamped_behind: float = 0.0,
+) -> None:
+    """
+    Send the calibration, the depth, the pose and one colour image stamped as
+    :func:`publish_color_sent_now` stamps it.
+
+    :param node: The node whose clock stamps the colour image.
+    :param published: The camera's publishers.
+    :param image: The colour image, blue/green/red.
+    :param stamped_behind: How far before the moment it is sent the colour image's stamp
+        lies, in seconds.
+    """
+    published.publish_camera_info()
+    published.publish_depth()
+    published.publish_pose()
+    publish_color_sent_now(node, published, image, stamped_behind)
+
+
+def node_looking_through(
+    node: Node, pipeline: MontessoriPerceptionPipeline
+) -> MontessoriPerceptionNode:
+    """
+    :param node: The node to subscribe on.
+    :param pipeline: What takes the looks.
+    :return: A perception node looking at every image it is sent, the camera's pose
+        already checked on a capture, since the tiny images published here show no
+        table to check it against.
+    """
+    perception = MontessoriPerceptionNode(
+        node=node, pipeline=pipeline, minimum_period=0.0
+    )
+    perception.camera_pose_error = CameraPoseError.of(
+        SceneCapture.load(A_LOOK).to_frame(), pipeline.table
+    )
+    return perception
+
+
+def test_a_camera_stamping_its_images_a_day_behind_is_looked_at_after_a_handover(
+    node: Node, published: PublishedCamera
+):
+    """
+    A bag played back beside the robot stamps its images with the day it was recorded,
+    so the moment a pipeline is handed over is read against the camera's own stamps.
+    """
+    world = world_rooted_where_the_camera_pose_is_published()
+    before = noting_pipeline_placed_in(world)
+    perception = node_looking_through(node, before)
+    spin_until(
+        node,
+        lambda: publish_all_sent_now(node, published, COLOR_IMAGE, A_DAY),
+        lambda: len(before.looked_at) > 0,
+    )
+    after = noting_pipeline_placed_in(world)
+
+    time.sleep(WHILE_THE_PERSON_ACTS)
+    perception.read_with(after)
+    spin_until(
+        node,
+        lambda: publish_color_sent_now(node, published, TABLE_AS_IT_IS_NOW, A_DAY),
+        lambda: len(after.looked_at) > 0,
+    )
+
+    np.testing.assert_array_equal(after.looked_at[0].color, TABLE_AS_IT_IS_NOW)
+
+
+A_BAG_PLAYED_ROUND = 60.0
+"""
+How much earlier a bag played round again stamps its images than the last ones it sent,
+in seconds.
+"""
+
+
+def shows(frames: List[RgbdFrame], image: np.ndarray) -> bool:
+    """
+    :param frames: Frames looked at.
+    :param image: A colour image.
+    :return: Whether any of the frames was taken of that image.
+    """
+    return any(np.array_equal(frame.color, image) for frame in frames)
+
+
+def test_a_bag_played_round_again_is_still_looked_at_after_a_handover(
+    node: Node, published: PublishedCamera
+):
+    """
+    A bag played in a loop starts over from its first stamp; its images were still sent
+    after the pipeline was handed over.
+    """
+    world = world_rooted_where_the_camera_pose_is_published()
+    before = noting_pipeline_placed_in(world)
+    perception = node_looking_through(node, before)
+    spin_until(
+        node,
+        lambda: publish_all_sent_now(node, published, COLOR_IMAGE, A_DAY),
+        lambda: len(before.looked_at) > 0,
+    )
+    after = noting_pipeline_placed_in(world)
+    time.sleep(WHILE_THE_PERSON_ACTS)
+    perception.read_with(after)
+    spin_until(
+        node,
+        lambda: publish_color_sent_now(node, published, COLOR_IMAGE, A_DAY),
+        lambda: len(after.looked_at) > 0,
+    )
+
+    spin_until(
+        node,
+        lambda: publish_color_sent_now(
+            node, published, TABLE_AS_IT_IS_NOW, A_DAY + A_BAG_PLAYED_ROUND
+        ),
+        lambda: shows(after.looked_at, TABLE_AS_IT_IS_NOW),
+    )
+
+    assert shows(after.looked_at, TABLE_AS_IT_IS_NOW)
+
+
+def test_a_look_after_another_pipeline_is_handed_over_is_taken_of_images_sent_after_it(
+    node: Node, published: PublishedCamera
+):
+    """
+    A run hands the node the pipeline to look again with once the person has changed the
+    table; an image the camera sent before then, still on its way, shows the table as it
+    was.
+    """
+    world = world_rooted_where_the_camera_pose_is_published()
+    before = noting_pipeline_placed_in(world)
+    perception = node_looking_through(node, before)
+    spin_until(
+        node,
+        lambda: publish_all_sent_now(node, published, COLOR_IMAGE),
+        lambda: len(before.looked_at) > 0,
+    )
+    after = noting_pipeline_placed_in(world)
+
+    publish_color_sent_now(node, published, COLOR_IMAGE)
+    time.sleep(WHILE_THE_PERSON_ACTS)
+    perception.read_with(after)
+    deadline = time.monotonic() + A_STALE_IMAGE_ON_ITS_WAY
+    while time.monotonic() < deadline:
+        rclpy.spin_once(node, timeout_sec=PUBLISH_PERIOD)
+    stale_looks = len(after.looked_at)
+    spin_until(
+        node,
+        lambda: publish_color_sent_now(node, published, TABLE_AS_IT_IS_NOW),
+        lambda: len(after.looked_at) > 0,
+    )
+
+    assert stale_looks == 0
+    np.testing.assert_array_equal(after.looked_at[0].color, TABLE_AS_IT_IS_NOW)
 
 
 # %% a look that fails still lets a later wait time out
