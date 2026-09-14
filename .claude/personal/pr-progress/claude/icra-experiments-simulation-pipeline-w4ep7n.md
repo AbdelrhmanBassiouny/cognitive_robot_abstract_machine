@@ -367,3 +367,40 @@ watched run + query cards 126 passed.
 as it was set up, and this one is scored against what the segmentation saw. A fresh
 perturbed recording is what shows the fix.
 
+## washed-out-lid: the board stopped being found on the robot (2026-09-14, night)
+
+**Asked.** "the demos and perception node as well are not detecting the board anymore".
+
+**Measured first, and it cleared this branch.** The board *is* found in the last real
+run's own frames: cutting them out of `cb2af2ff...`'s bag and running
+`pipeline_of(tracys_description())` + `look_for_board(lab_board())` returns the board
+with all six holes, lid 0.96. Captures 102 passed / 6 xfailed, the rehearsal green but
+for one bag-timing check, the installed URDF carrying the recalibrated camera pose, and
+no commit since that run touching perception at all. So the change was on the live side
+-- which the developer then named: the fix was already written in the ~/bass checkout.
+
+**Taken.** #378's own commit (`e24d6bc26b`, "A lid whose colour the light washes out is
+found by how high it stands"), cherry-picked as `54b4ec5848` with its author and message
+kept; the patch is byte for byte the other session's. The board detector took only
+surfaces coloured unlike the bare table as lid candidates, and the light across the
+board left too little wood coloured, so the lid broke into pieces under the 0.01 m2 a
+lid must cover while all six holes showed plainly. Where no coloured surface carries
+enough openings it now reads what the camera measured standing as high as the lid
+(`BoardDetector.lid_standing_height`, taken from the described board); colour is read
+first, so every capture already handled fits as before.
+
+**Nothing else of that stack.** `pipeline.py` and `montessori_capture_truths.py` are
+identical on `e24d6bc26b`'s parent and on this branch, so the fix needs none of #376.
+#376's own perception commits are the open-plan/EQL-backend feature work, not board
+detection.
+
+**Verified.** The shipped `washed_out_lid` capture (the live frame) fails 7 of its 13
+checks without the change and passes with it; captures 115 passed, 6 xfailed; perception
+backend + board layout + board description + scene publishing + simulated camera +
+search narrowing 114 passed.
+
+**Left.** Not run on the robot from this checkout -- the developer says ~/bass already
+runs well. Worth knowing for the next look: a board pushed past x = 1.18 falls off the
+stretch of table that is searched, and a world already holding a board makes the search
+rectify onto that board's lid plane rather than the table plus the described height.
+
