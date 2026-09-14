@@ -337,3 +337,33 @@ target-hole-moved recording is what shows the board fix. `WatchedSortingRun.watc
 and `_SortingRig.watching` in pickup_demo_real are near-duplicates -- candidate to unify.
 Orientation of a link is no longer scored -- asked the developer implicitly in the chat.
 
+## objects-named-are-a-set: a right answer scored wrong on a perturbed run (2026-09-14, night)
+
+**Asked.** Why the last real `--perturbation piece-shoved` recording
+(`cb2af2ffca354e3d97273ee3898ecbc9`, 1 trial, 10 of 11 correct) scored "Did you move
+them?" wrong.
+
+**Cause.** `Question.values_agree` compares a list position by position, and the two
+accounts enumerate the four pieces differently: `ObjectsTheRobotMoved.ground_truth`
+reads the motion events, whose first is the cube the person shoved before the robot
+acted, while its query joins the motions with the robot's own actions and answers in
+the order it sorted them (`rectangular_prism, triangular_prism, cube, cylinder` -- the
+recorded answer). Same four bodies, different order. Reproduced offline in the question
+fixture.
+
+**Fix.** `89cea9f0b3` (pushed, #265 still draft, description section "Fixed 2026-09-14
+(night)"): every question answering with bodies states its truth as `BodiesNamed`
+(new `BodiesNamed.of(bodies)`) -- `ObjectsThatMoved`, `ObjectsTheRobotMoved`, and the
+three recorded-run ones for the same contract, though their join already answers in the
+motions' order. Same shape as the colours fix `b8c2bd3a93`.
+
+**Verified.** New working-memory test fails before and passes after; the long-term one
+passes both ways (contract only). Suites: questions + working-memory ground truth +
+query cards 64, long-term + cross-episode 19, scoring + episodes + audit + observer +
+watched run + query cards 126 passed.
+
+**Left.** The rows of that episode keep the wrong score:
+`ask_episode --rescore-working-memory` only rescores questions scored against the scene
+as it was set up, and this one is scored against what the segmentation saw. A fresh
+perturbed recording is what shows the fix.
+
