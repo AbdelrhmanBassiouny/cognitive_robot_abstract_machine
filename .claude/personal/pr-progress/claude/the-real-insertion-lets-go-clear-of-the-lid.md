@@ -25,6 +25,7 @@ Plan:
       Frame = look.wait_for_frame() after perceive; GroundedPlan.narrowing_over -> trial
       narrowing/ pictures; bag_frames --narrowing copies to figure; panel 1 reads them.
       Stand-in pictures from shipped tracy_pickup_demo (cube + cylinder on lid). 57 tests pass.
+      Draft PR #382 (base: this branch). *.png is gitignored: the 4 panel pictures are add -f.
 - [ ] user reruns framework_demo real --record, then bag_frames <bag> --narrowing
       <episode>/trials/1/narrowing and build.py; not done: narrowing from the bag, DB rows
 - still open elsewhere: #379 pickup rerun; framework figure frames/cards after a good run;
