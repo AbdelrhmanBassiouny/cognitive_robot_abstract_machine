@@ -27,7 +27,8 @@ from semantic_digital_twin.world_description.world_entity import Body
 class QuestionAfterTheMove:
     """
     Asks the question set once, the moment the monitor reports the object asked about
-    has stopped moving, and records the query on the trial.
+    has stopped moving while nothing of the robot holds it, and records the query on the
+    trial.
 
     Told what a monitor detects, in place of the trial's own listener, which it tells in
     turn.
@@ -76,6 +77,8 @@ class QuestionAfterTheMove:
             self.listener.receive(events)
         if self.asked or not any(self.stops_the_object(event) for event in events):
             return
+        if self.held_by_the_robot():
+            return
         self.ask()
 
     def stops_the_object(self, event: DetectionEvent) -> bool:
@@ -91,6 +94,20 @@ class QuestionAfterTheMove:
             isinstance(event, StopTranslationEvent)
             and event.tracked_object.name == self.asked_about.name
         )
+
+    def held_by_the_robot(self) -> bool:
+        """
+        Whether the object asked about hangs from the robot, as a grasped object is
+        attached to the hand that holds it: a stop while it does is a pause of the arm,
+        not the object coming to rest.
+        """
+        robot_bodies = set(self.robot.bodies)
+        parent = self.asked_about.parent_kinematic_structure_entity
+        while parent is not None:
+            if parent in robot_bodies:
+                return True
+            parent = parent.parent_kinematic_structure_entity
+        return False
 
     def ask(self) -> List[RecordedQuery]:
         """

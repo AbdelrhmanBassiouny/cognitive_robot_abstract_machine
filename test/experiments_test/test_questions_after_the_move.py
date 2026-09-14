@@ -76,3 +76,28 @@ def test_a_run_that_never_saw_the_object_stop_asks_as_it_ends(
     assert asks.asked
     assert asked == asks.observer.queries
     assert asks.ask_if_not_yet() == []
+
+
+def test_a_stop_while_the_object_hangs_from_the_robot_is_not_its_coming_to_rest(
+    scene: QuestionedScene,
+) -> None:
+    """
+    A carried object stops whenever the arm pauses between two motions, and is not at
+    rest then: the set is asked once it stops while nothing of the robot holds it up.
+    """
+    observer = EpisodeObserver()
+    asks = QuestionAfterTheMove(
+        observer=observer,
+        asked_about=scene.held_cube,
+        question_set=lambda: scene.question_set,
+        robot=scene.robot,
+    )
+
+    asks.receive([StopTranslationEvent(tracked_object=scene.held_cube)])
+    assert not asks.asked
+
+    with scene.world.modify_world():
+        scene.world.move_branch_with_fixed_connection(scene.held_cube, scene.world.root)
+    asks.receive([StopTranslationEvent(tracked_object=scene.held_cube)])
+
+    assert asks.asked
