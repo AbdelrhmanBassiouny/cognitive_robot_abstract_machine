@@ -110,5 +110,5 @@ Plan: make the query cards of the simulated corpus right.
       held-piece, push, camera, spatial and layered panels checked; two sent to the user.
       Spatial card still has the upper arm across the picture in some episodes (same framing
       as before: LOOKING_DOWN_BY/STANDING_BACK_AT_LEAST) -- told the user, not changed.
-- [ ] CI run 34797104927 for 4e7fdd3482 pending (experiments/semdt jobs); user told to redo the
-      figures backup.
+- [x] CI run 34797104927 for 4e7fdd3482: every job green (experiments and semdt included);
+      user told to redo the figures backup. #356 draft, description current.
