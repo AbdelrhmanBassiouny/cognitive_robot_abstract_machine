@@ -29,7 +29,6 @@ from semantic_digital_twin.semantic_annotations.part_whole import (
 from semantic_digital_twin.semantic_annotations.semantic_annotations import Aperture
 from semantic_digital_twin.spatial_types import Vector3
 from semantic_digital_twin.spatial_types.spatial_types import Point3, Pose
-from semantic_digital_twin.world_description.world_entity import Region
 
 if TYPE_CHECKING:
     from semantic_digital_twin.world import World
@@ -266,15 +265,6 @@ class ShapeSortingHole(Aperture):
     turn_on_lid: float = field(kw_only=True, default=0.0)
     """
     How far the hole is turned about the lid's vertical axis, in radians.
-    """
-
-    landing_region: Optional[Region] = field(kw_only=True, default=None)
-    """
-    The space under this hole, which a shape that has gone through it is inside and a
-    shape resting on the board is not.
-
-    Optional because a hole can be described without one -- a hole detected in a camera
-    image has no space measured under it.
     """
 
     @property

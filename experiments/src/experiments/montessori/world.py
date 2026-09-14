@@ -30,6 +30,7 @@ from experiments.montessori.pieces import (
     KnownPiece,
     color_of_hue,
 )
+from experiments.montessori.planar_geometry import PlanarPoint
 from experiments.montessori.semantics import (
     MONTESSORI_SHAPE_CLASSES,
     MontessoriShapeCategory,
@@ -279,6 +280,47 @@ after.
 Detected from the board's mesh by
 :func:`~experiments.montessori.hole_geometry.detect_hole_footprints`.
 """
+
+
+def solid_lid_away_from(category: MontessoriShapeCategory) -> PlanarPoint:
+    """
+    Where on the lid, in the board's own frame, a piece can stand on solid lid furthest
+    from the hole of a given shape.
+
+    The lid is crowded, so the only stretch far from a hole that is wide enough to stand
+    a piece on is the one the lid's own mid-line runs through between the end of the lid
+    furthest from that hole and the holes the mid-line crosses nearest that end; this is
+    the middle of it, where a piece stands as clear of both as the lid allows.
+
+    :param category: The shape of the hole to stand away from.
+    """
+    [hole] = [
+        footprint for footprint in _HOLE_FOOTPRINTS if footprint.category is category
+    ]
+    towards_the_far_end = -1.0 if hole.center.y > 0 else 1.0
+    far_end = towards_the_far_end * BOARD_SCALE.y / 2
+    nearest_hole_edge = max(
+        (
+            footprint.center.y + point.y
+            for footprint in _HOLE_FOOTPRINTS
+            if _crosses_the_lids_mid_line(footprint)
+            for point in footprint.boundary
+        ),
+        key=lambda edge: towards_the_far_end * edge,
+    )
+    return PlanarPoint(0.0, (far_end + nearest_hole_edge) / 2)
+
+
+def _crosses_the_lids_mid_line(footprint: HoleFootprint) -> bool:
+    """
+    Whether a hole stands over the lid's own mid-line, so a piece standing on that line
+    has to keep clear of it.
+
+    :param footprint: The hole to check.
+    """
+    across = [footprint.center.x + point.x for point in footprint.boundary]
+    return min(across) <= 0.0 <= max(across)
+
 
 _BOARD_MESH: trimesh.Trimesh = cut_board_mesh(BOARD_SCALE, _HOLE_FOOTPRINTS)
 """

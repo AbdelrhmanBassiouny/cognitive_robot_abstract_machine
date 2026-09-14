@@ -35,6 +35,7 @@ from experiments.montessori.semantics import (
     ShapeSortingBoard,
 )
 from experiments.tracy_experiments.pickup.perceived_sorting import (
+    Insertion,
     PerceivedSorting,
     ShapeSorter,
 )
@@ -56,13 +57,13 @@ The capture whose pieces and board were measured with a tape.
 @dataclass
 class _SorterKeepingWhatItWasHanded(ShapeSorter):
     """
-    Stands in for the arm: keeps every piece and release pose it was handed, in order.
+    Stands in for the arm: keeps every piece and insertion it was handed, in order.
     """
 
-    sorted: List[Tuple[MontessoriShape, Pose]] = field(default_factory=list)
+    sorted: List[Tuple[MontessoriShape, Insertion]] = field(default_factory=list)
 
-    def sort(self, piece: MontessoriShape, release_pose: Pose) -> None:
-        self.sorted.append((piece, release_pose))
+    def sort(self, piece: MontessoriShape, insertion: Insertion) -> None:
+        self.sorted.append((piece, insertion))
 
 
 @dataclass
@@ -233,7 +234,9 @@ def test_a_board_the_world_already_holds_is_moved_to_where_the_look_finds_it(
         )
         <= TAPE_TOLERANCE
     ), corner_xy
-    assert not np.allclose(held.root.global_transform.to_position().to_np()[:2], stood_by_hand)
+    assert not np.allclose(
+        held.root.global_transform.to_position().to_np()[:2], stood_by_hand
+    )
 
 
 def test_a_run_with_no_board_in_view_says_so(
@@ -363,16 +366,18 @@ def test_the_cylinder_is_released_over_the_smaller_circular_hole(
 
 
 def test_every_piece_is_sorted_in_the_order_it_was_reported(
-    sorting: PerceivedSorting,
+    sorting: PerceivedSorting, world: World
 ) -> None:
     """
-    The sorter is handed each stood piece with its own release pose, in report order.
+    The sorter is handed each stood piece with the hole it goes through, in report
+    order, and the height that hole states lets it go where the release pose says.
     """
     sorting.sort_every_piece()
 
     sorter = sorting.sorter
     assert [piece for piece, _ in sorter.sorted] == sorting.pieces
-    for piece, release_pose in sorter.sorted:
-        assert release_pose.to_position().to_np() == pytest.approx(
+    for piece, insertion in sorter.sorted:
+        assert insertion.hole is sorting.board.hole_for(piece)
+        assert insertion.release_pose(world).to_position().to_np() == pytest.approx(
             sorting.release_pose_for(piece).to_position().to_np()
         )

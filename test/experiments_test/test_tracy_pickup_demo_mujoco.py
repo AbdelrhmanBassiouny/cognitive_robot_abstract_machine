@@ -1,9 +1,10 @@
 """
 Tests for :mod:`experiments.tracy_experiments.pickup.pickup_demo_mujoco`: the simulated
-lab is laid out as the tape measured the real one, its camera stands where the real
-camera's captures say it stood, and the run -- perceiving the board and the pieces into a
-belief holding Tracy alone, then sorting every piece by driving the simulation -- puts
-each piece through its hole and leaves its films behind.
+lab is laid out as the tape measured the real one -- but for the cube, which starts on
+the board's lid away from its own hole -- its camera stands where the real camera's
+captures say it stood, and the run -- perceiving the board and the pieces into a belief
+holding Tracy alone, then sorting every piece by driving the simulation -- puts each
+piece through its hole and leaves its films behind.
 """
 
 from __future__ import annotations
@@ -32,17 +33,20 @@ from experiments.paper.run_plan import RunPlan
 from experiments.questions.working_memory import PickedUpRecently
 from experiments.scenarios.trial import TrialOutcome
 from experiments.tracy_experiments.pick_and_place_action import (
+    InsertionActionMujoco,
     PickUpActionMujoco,
-    PlaceActionMujoco,
 )
 from experiments.tracy_experiments.equipment import TRACY_MOUNT_ROOT_NAME
 from experiments.tracy_experiments.pickup.pickup_demo_mujoco import (
     CAMERA_CALIBRATION_CAPTURE,
     CAMERA_LINK_NAME,
     CAMERA_VIDEO_RESOLUTION,
+    CUBE_STARTS_ON_THE_LID,
     LAB_BOARD_CENTRE,
     LAB_PIECE_PLACES,
+    RestingSurface,
     RunArtifact,
+    SORTED_INTO_ITS_HOLE,
     TRACE_PERIOD,
     Shove,
     SimulatedLab,
@@ -78,11 +82,6 @@ has it: a rendered look carries no sensor noise, so the look is held to the size
 pixel on the table rather than to the tape's tolerance.
 """
 
-IN_ITS_HOLE = 0.9
-"""
-How much of a piece must stand in the space under its hole for it to count as sorted.
-"""
-
 
 @pytest.fixture(scope="module")
 def performed() -> SimulatedPickupDemo:
@@ -97,16 +96,18 @@ def performed() -> SimulatedPickupDemo:
 # %% the lab as the tape measured it
 
 
-def test_the_pieces_and_the_board_stand_where_the_tape_put_them() -> None:
+def test_every_piece_but_the_cube_stands_where_the_tape_put_it() -> None:
     lab = SimulatedLab.build()
     truth = CAPTURE_TRUTHS[MEASURED_CAPTURE]
 
     for measured in truth.tape_measured:
+        if measured.category is MontessoriShapeCategory.CUBE:
+            continue
         stands_at = lab.real_position_of(measured.category)
         assert stands_at[:2] == pytest.approx(
             [measured.place.x, measured.place.y], abs=1e-9
         )
-        assert LAB_PIECE_PLACES[measured.category].x == measured.place.x
+        assert LAB_PIECE_PLACES[measured.category].middle.x == measured.place.x
     board_at = lab.reality.compute_forward_kinematics_np(
         lab.reality.root, lab.scene.board.root
     )[:3, 3]
@@ -116,6 +117,35 @@ def test_the_pieces_and_the_board_stand_where_the_tape_put_them() -> None:
     )
     assert LAB_BOARD_CENTRE.y + BOARD_SCALE.y / 2 == pytest.approx(
         truth.board_front_left_corner.y
+    )
+
+
+def test_the_cube_starts_on_the_lid_away_from_the_hole_it_belongs_in() -> None:
+    """
+    The cube is picked up from the board's own lid, at the far end of it from the square
+    hole, so the place it comes from and the place it goes to are plainly apart.
+    """
+    lab = SimulatedLab.build()
+    cube = lab.real_piece_of(MontessoriShapeCategory.CUBE)
+    hole_at = lab.scene.board.hole_for(cube).root.global_transform.to_position().to_np()
+    lid_top = (
+        lab.scene.board.root.collision.as_bounding_box_collection_in_frame(
+            lab.reality.root
+        )
+        .bounding_box()
+        .max_z
+    )
+
+    stands_at = lab.real_position_of(MontessoriShapeCategory.CUBE)
+
+    assert CUBE_STARTS_ON_THE_LID.rests_on is RestingSurface.THE_BOARDS_LID
+    assert stands_at[:2] == pytest.approx(
+        [CUBE_STARTS_ON_THE_LID.middle.x, CUBE_STARTS_ON_THE_LID.middle.y]
+    )
+    lowest = float(cube.root.collision.combined_mesh.bounds[0][2])
+    assert stands_at[2] == pytest.approx(lid_top - lowest)
+    assert float(np.hypot(stands_at[0] - hole_at[0], stands_at[1] - hole_at[1])) > (
+        BOARD_SCALE.y / 2
     )
 
 
@@ -237,7 +267,7 @@ def test_the_belief_stands_every_piece_where_the_reality_has_it(
     )
     for piece in performed.sorting.pieces:
         believed = lab.believed_position_of(piece)
-        real = LAB_PIECE_PLACES[piece.shape_category]
+        real = LAB_PIECE_PLACES[piece.shape_category].middle
         assert float(np.hypot(believed[0] - real.x, believed[1] - real.y)) <= (
             PERCEPTION_TOLERANCE
         ), (piece.shape_category, believed)
@@ -262,13 +292,26 @@ def test_the_belief_stands_the_board_where_the_reality_has_it(
 
 
 HELD_FLAT_BETWEEN_THE_PADS = (
-    MontessoriShapeCategory.CUBE,
     MontessoriShapeCategory.CYLINDER,
     MontessoriShapeCategory.RECTANGULAR_PRISM,
 )
 """
-The pieces two parallel pads hold by a face each.
+The pieces two parallel pads hold by a face each, besides the cube, which
+:func:`test_the_cube_is_carried_off_the_lid_and_into_the_square_hole` covers on its own.
 """
+
+
+def test_the_cube_is_carried_off_the_lid_and_into_the_square_hole(
+    performed: SimulatedPickupDemo,
+) -> None:
+    """
+    The whole point of the run: the cube starts on the lid, away from its hole, and ends
+    up inside the space under the square hole.
+    """
+    assert (
+        performed.lab.containment_in_its_hole(MontessoriShapeCategory.CUBE)
+        >= SORTED_INTO_ITS_HOLE
+    )
 
 
 def test_every_piece_the_pads_hold_flat_ends_up_through_its_hole(
@@ -283,7 +326,9 @@ def test_every_piece_the_pads_hold_flat_ends_up_through_its_hole(
         for category in HELD_FLAT_BETWEEN_THE_PADS
     }
 
-    assert all(value >= IN_ITS_HOLE for value in containment.values()), containment
+    assert all(
+        value >= SORTED_INTO_ITS_HOLE for value in containment.values()
+    ), containment
 
 
 def test_the_triangular_prism_ends_up_through_its_hole(
@@ -295,7 +340,7 @@ def test_the_triangular_prism_ends_up_through_its_hole(
     """
     assert (
         performed.lab.containment_in_its_hole(MontessoriShapeCategory.TRIANGULAR_PRISM)
-        >= IN_ITS_HOLE
+        >= SORTED_INTO_ITS_HOLE
     )
 
 
@@ -354,8 +399,8 @@ def test_every_plan_the_rig_performed_is_recorded_with_when_its_actions_ran(
     performed: SimulatedPickupDemo,
 ) -> None:
     """
-    One plan is performed per piece the look found, each of a pick-up and a place, and
-    each action ran over a stretch of the trial the record places it in.
+    One plan is performed per piece the look found, each of a pick-up and an insertion,
+    and each action ran over a stretch of the trial the record places it in.
     """
     trial = performed.trial
     assert len(trial.plans) == len(performed.sorting.pieces)
@@ -363,7 +408,7 @@ def test_every_plan_the_rig_performed_is_recorded_with_when_its_actions_ran(
     items = RunPlan.of(trial).items
     assert {type(item.action) for item in items} == {
         PickUpActionMujoco,
-        PlaceActionMujoco,
+        InsertionActionMujoco,
     }
     assert all(0.0 <= item.start and item.duration > 0.0 for item in items)
     assert all(item.start + item.duration <= trial.duration for item in items)

@@ -9,6 +9,9 @@ from krrood.entity_query_language.factories import ConditionType, get_false_stat
 from krrood.exceptions import DataclassException
 from coraplex.datastructures.enums import Arms, ExecutionType
 from coraplex.plans.failures import PlanFailure
+from semantic_digital_twin.semantic_annotations.semantic_annotations import (
+    Aperture,
+)
 
 if TYPE_CHECKING:
     from coraplex.plans.designator import Designator
@@ -365,3 +368,25 @@ class BodyIsNotHeld(DataclassException):
 
     def suggest_correction(self) -> str:
         return "pick the body up before reading its grasp."
+
+
+@dataclass
+class ApertureHasNoLandingRegion(DataclassException):
+    """
+    Raised when an insertion should be judged by what lies behind an opening that has no
+    such space measured.
+    """
+
+    aperture: Aperture
+    """
+    The opening that was expected to carry a landing region.
+    """
+
+    def error_message(self) -> str:
+        return (
+            f"'{self.aperture.name}' carries no landing region, so there is no space to "
+            f"read an inserted body's containment in."
+        )
+
+    def suggest_correction(self) -> str:
+        return "give the aperture the region behind it before inserting through it."

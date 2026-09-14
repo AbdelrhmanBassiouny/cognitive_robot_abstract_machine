@@ -145,6 +145,7 @@ from experiments.tracy_experiments.montessori.gripper_feedback import (
     reclose_setpoint_for,
 )
 from experiments.tracy_experiments.pickup.perceived_sorting import (
+    Insertion,
     PerceivedSorting,
     ShapeSorter,
 )
@@ -407,9 +408,9 @@ class _SortingRig(ShapeSorter):
         """
         self.context.motion_listener = ObserverMotionListener(observer=self.observer)
 
-    def sort(self, piece: MontessoriShape, release_pose: Pose) -> None:
+    def sort(self, piece: MontessoriShape, insertion: Insertion) -> None:
         """
-        Pick ``piece`` off the table and release it at ``release_pose``.
+        Pick ``piece`` off the table and let it go over the hole it belongs in.
 
         The gripper is opened and closed through :attr:`gripper` rather than a plan
         node, since Giskard cannot command Tracy's real fingers, and the close is sized
@@ -418,9 +419,10 @@ class _SortingRig(ShapeSorter):
         resting on the table.
 
         :param piece: The piece to sort, standing on the table where the look saw it.
-        :param release_pose: Where the piece's centre is let go, over its hole.
+        :param insertion: The hole it goes through and how far above it it is let go.
         """
         body = piece.root
+        release_pose = insertion.release_pose(self.world)
         grasp_target = _grasp_target_pose(body, self.grasp_height_offset, self.world)
         reach = _reach_action_for(piece, grasp_target, self.grasp_description)
         _, _, lift_to_pose = self.grasp_description.pose_sequence(grasp_target, body)

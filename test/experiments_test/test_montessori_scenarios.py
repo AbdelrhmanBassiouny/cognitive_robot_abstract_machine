@@ -18,6 +18,7 @@ import pytest
 from typing_extensions import Dict, List, Type
 
 from coraplex.datastructures.enums import ExecutionType
+from coraplex.robot_plans.actions.core.insertion import InsertionAction
 
 from experiments.montessori.pieces import FULL_SIZE_PIECES, KNOWN_PIECES
 from krrood.entity_query_language.factories import an, variable
@@ -49,6 +50,7 @@ from experiments.montessori.scenarios import (
     PiecePlacement,
     PiecePushedWhileTheRobotIsIdle,
     PieceShoved,
+    RELEASE_HEIGHT_ABOVE_THE_HOLE,
     RealScene,
     RobotLooksAtTheScene,
     RobotSortsAPiece,
@@ -979,6 +981,36 @@ def test_a_released_piece_is_outside_its_landing_region_until_it_has_fallen(area
 
     assert carried < CONTAINED_IN_ITS_LANDING_REGION
     assert scene.is_in_its_hole(MontessoriShapeCategory.CUBE)
+
+
+def test_the_put_down_step_inserts_the_piece_through_its_hole(area):
+    """
+    The step the robot puts a piece down with is an insertion, so a recorded episode
+    holds the same action the demo runs rather than a plain place that happens to aim at
+    a hole.
+    """
+    scenario = SyntheticGrasperSortsAPiece(
+        layout=PieceLayout.randomized(seed=SEED, area=area),
+        world_builder=board_and_the_arm(),
+        sorted_category=MontessoriShapeCategory.CUBE,
+    )
+    world = scenario.build_world()
+    scene = SortingScene(world)
+    steps = {step.name: step for step in scenario.steps(world)}
+    steps[SortingStep.SETTLE].perform(world)
+    steps[SortingStep.PICK_UP].perform(world)
+
+    put_down = steps[SortingStep.PUT_DOWN]
+    put_down.perform(world)
+
+    [insertion] = [
+        node.designator
+        for node in put_down.performed.nodes
+        if isinstance(getattr(node, "designator", None), InsertionAction)
+    ]
+    assert insertion.object_designator is scene.body_of(MontessoriShapeCategory.CUBE)
+    assert insertion.target is scene.hole_for(MontessoriShapeCategory.CUBE)
+    assert insertion.hover_height == RELEASE_HEIGHT_ABOVE_THE_HOLE
 
 
 def test_a_piece_standing_on_the_table_is_not_in_its_hole(area):

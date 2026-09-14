@@ -16,7 +16,7 @@ import logging
 import time
 from dataclasses import dataclass, field, replace
 
-from typing_extensions import List, Optional
+from typing_extensions import FrozenSet, List, Optional
 
 from experiments.montessori.board_description import DescribedBoard
 from experiments.montessori.perception.backend import MontessoriPerceptionBackend
@@ -39,7 +39,7 @@ from experiments.montessori.semantics import (
     MontessoriShapeCategory,
     ShapeSortingBoard,
 )
-from krrood.entity_query_language.factories import a, entity, the, variable
+from krrood.entity_query_language.factories import a, entity, in_, the, variable
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.spatial_types.spatial_types import (
     HomogeneousTransformationMatrix,
@@ -182,12 +182,12 @@ class BoardPublisher:
 
 
 def best_shape_of_each_category(
-    scene: MontessoriScene, resting_on: PrefixedName, world: World
+    scene: MontessoriScene, resting_on: FrozenSet[PrefixedName], world: World
 ) -> List[DetectedMontessoriShape]:
     """
-    The one piece of each shape a look found resting on one surface.
+    The one piece of each shape a look found resting on the given surfaces.
 
-    The set a look is told stands on the table holds exactly one piece of every shape it
+    The set a look is told stands there holds exactly one piece of every shape it
     contains, so where a look reports two sightings of the same shape it has mistaken
     some other place for it. Which sighting is kept is asked of the look itself, as
     :func:`~krrood.entity_query_language.factories.the` piece of that shape -- ordered by
@@ -195,14 +195,14 @@ def best_shape_of_each_category(
     most sure of is kept and the rest are let go rather than every one of them standing.
 
     :param scene: What one look found.
-    :param resting_on: What the look calls the surface a piece must rest on to be kept.
+    :param resting_on: What the look calls the surfaces a piece may rest on to be kept.
     :param world: The world the look's detections are placed against.
-    :return: One piece per shape the look found resting on that surface, in the order
+    :return: One piece per shape the look found resting on those surfaces, in the order
         each shape was first seen there.
     """
     source = FixedScene(captured=scene, reported_in=world.root)
     sought = a(DetectedMontessoriShape)()
-    seen = sought.where(sought._variable_.supporting_surface == resting_on).tolist(
+    seen = sought.where(in_(sought._variable_.supporting_surface, resting_on)).tolist(
         backend=MontessoriPerceptionBackend(source=source)
     )
 
@@ -265,16 +265,17 @@ class PiecePublisher:
     """
 
     def publish(
-        self, scene: MontessoriScene, resting_on: PrefixedName
+        self, scene: MontessoriScene, resting_on: FrozenSet[PrefixedName]
     ) -> List[MontessoriShape]:
         """
-        Stand every piece one look put on one surface; a piece taken down and not found
-        again is gone for good.
+        Stand every piece one look put on the given surfaces; a piece taken down and not
+        found again is gone for good.
 
         :param scene: What the look found.
-        :param resting_on: What the look calls the surface a piece must rest on to be
+        :param resting_on: What the look calls the surfaces a piece may rest on to be
             stood; a piece on any other surface is left out.
-        :return: The pieces stood, one per shape the look found resting on that surface.
+        :return: The pieces stood, one per shape the look found resting on those
+            surfaces.
         """
         stood = [
             self.publish_piece(shape)
@@ -446,16 +447,24 @@ class PerceivedScene:
         """
         return self.look.pipeline.table.height
 
+    @property
+    def surfaces_a_piece_may_rest_on(self) -> FrozenSet[PrefixedName]:
+        """
+        What the look calls the surfaces a piece still to be sorted stands on: the bare
+        table, and the board's own lid, which the sorting demo starts a piece on.
+        """
+        return frozenset({self.look.pipeline.table.name, self.look.pipeline.lid.name})
+
     def perceive(self) -> None:
         """
-        Have the world hold the board and the pieces on the table as the camera finds
-        them now.
+        Have the world hold the board and the pieces to sort as the camera finds them
+        now.
 
         The pieces an earlier look stood are taken down first, so the look is not told
         to expect them where they stood; the board is then looked for by its description
         and stood, or moved to, where it is found; and once the pipeline is handed the
-        board's lid, one look stands every piece resting on the bare table -- each piece
-        found again as the body it already was.
+        board's lid, one look stands every piece resting on a surface pieces are sorted
+        from -- each piece found again as the body it already was.
 
         :raises NoBoardInView: If the world holds no board and none is in view.
         """
@@ -468,10 +477,10 @@ class PerceivedScene:
             period=self.board_search_period,
         )
         self.pieces = self._publisher.publish(
-            self.look.scene(), resting_on=self.look.pipeline.table.name
+            self.look.scene(), resting_on=self.surfaces_a_piece_may_rest_on
         )
         logger.info(
-            "Perceived %s and %d piece(s) on the table: %s.",
+            "Perceived %s and %d piece(s) to sort: %s.",
             self.board.name,
             len(self.pieces),
             ", ".join(self.describe(piece) for piece in self.pieces),

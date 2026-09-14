@@ -55,6 +55,7 @@ from semantic_digital_twin.spatial_types.spatial_types import (
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.world_entity import Body
 
+from .dataset.montessori_capture_truths import CAPTURE_TRUTHS
 from .test_montessori_occupancy import piece_at
 
 LID_HEIGHT = 0.96
@@ -187,7 +188,7 @@ def test_the_pieces_a_look_put_on_the_table_are_stood_where_they_were_seen(
     live = look.pipeline.world
     publisher = PiecePublisher(world=live)
 
-    stood = publisher.publish(scene, resting_on=look.pipeline.table.name)
+    stood = publisher.publish(scene, resting_on=frozenset({look.pipeline.table.name}))
 
     assert live.get_semantic_annotations_by_type(MontessoriShape) == stood
     assert [piece.shape_category for piece in stood] == [
@@ -205,6 +206,52 @@ def test_the_pieces_a_look_put_on_the_table_are_stood_where_they_were_seen(
         bounds = piece.root.collision.combined_mesh.bounds
         assert float(bounds[1][2] - bounds[0][2]) == pytest.approx(known.height)
         assert piece.root.collision[0].color == known.color
+
+
+CAPTURE_WITH_A_PIECE_ON_THE_LID = "displaced_cube_from_hole"
+"""
+A capture of the full-size set with pieces on the bare table and the cube on the lid,
+the way the sorting demo starts them.
+"""
+
+
+@pytest.fixture
+def look_at_the_lid() -> RecordedFrame:
+    """
+    A capture holding a piece on the lid as well as pieces on the table, looked at
+    afresh for every request.
+    """
+    return RecordedFrame(
+        pipeline=perception_pipeline(world=recorded_world()),
+        frame=SceneCapture.load(CAPTURE_WITH_A_PIECE_ON_THE_LID).to_frame(),
+    )
+
+
+def test_a_piece_on_the_lid_is_stood_along_with_the_ones_on_the_table(
+    look_at_the_lid: RecordedFrame,
+) -> None:
+    """
+    The sorting demo starts a piece on the lid, so a look asked for both surfaces holds
+    every piece there is to sort rather than only the ones on the bare table.
+    """
+    look = look_at_the_lid
+    live = look.pipeline.world
+    scene = look.scene()
+    on_the_table = [
+        shape.category
+        for shape in scene.shapes
+        if shape.supporting_surface == look.pipeline.table.name
+    ]
+
+    stood = PiecePublisher(world=live).publish(
+        scene,
+        resting_on=frozenset({look.pipeline.table.name, look.pipeline.lid.name}),
+    )
+
+    assert sorted(piece.shape_category for piece in stood) == sorted(
+        on_the_table
+        + list(CAPTURE_TRUTHS[CAPTURE_WITH_A_PIECE_ON_THE_LID].pieces_on_lid)
+    )
 
 
 def test_the_better_explained_of_two_sightings_of_one_shape_is_the_one_stood(
@@ -225,7 +272,9 @@ def test_the_better_explained_of_two_sightings_of_one_shape_is_the_one_stood(
     stronger.supporting_surface = resting_on
     scene = MontessoriScene(shapes=[weaker, stronger])
 
-    stood = PiecePublisher(world=live).publish(scene, resting_on=resting_on)
+    stood = PiecePublisher(world=live).publish(
+        scene, resting_on=frozenset({resting_on})
+    )
 
     assert len(stood) == 1
     assert live.get_semantic_annotations_by_type(MontessoriShape) == stood
@@ -237,7 +286,9 @@ def test_a_piece_on_another_surface_is_not_stood(look: RecordedFrame) -> None:
     scene = look.scene()
     live = look.pipeline.world
 
-    stood = PiecePublisher(world=live).publish(scene, resting_on=look.pipeline.lid.name)
+    stood = PiecePublisher(world=live).publish(
+        scene, resting_on=frozenset({look.pipeline.lid.name})
+    )
 
     assert stood == []
     assert live.get_semantic_annotations_by_type(MontessoriShape) == []
@@ -247,8 +298,8 @@ def test_two_looks_stand_pieces_under_different_names(look: RecordedFrame) -> No
     scene = look.scene()
     publisher = PiecePublisher(world=look.pipeline.world)
 
-    first = publisher.publish(scene, resting_on=look.pipeline.table.name)
-    second = publisher.publish(scene, resting_on=look.pipeline.table.name)
+    first = publisher.publish(scene, resting_on=frozenset({look.pipeline.table.name}))
+    second = publisher.publish(scene, resting_on=frozenset({look.pipeline.table.name}))
 
     assert len({piece.name for piece in first + second}) == len(first) + len(second)
     assert publisher.published == first + second
@@ -260,7 +311,7 @@ def test_taking_the_pieces_down_leaves_none_of_them_in_the_world(
     scene = look.scene()
     live = look.pipeline.world
     publisher = PiecePublisher(world=live)
-    stood = publisher.publish(scene, resting_on=look.pipeline.table.name)
+    stood = publisher.publish(scene, resting_on=frozenset({look.pipeline.table.name}))
     assert stood
 
     publisher.take_down()
@@ -281,10 +332,10 @@ def test_a_piece_found_again_after_a_take_down_is_stood_as_the_same_piece(
     scene = look.scene()
     live = look.pipeline.world
     publisher = PiecePublisher(world=live)
-    first = publisher.publish(scene, resting_on=look.pipeline.table.name)
+    first = publisher.publish(scene, resting_on=frozenset({look.pipeline.table.name}))
 
     publisher.take_down()
-    second = publisher.publish(scene, resting_on=look.pipeline.table.name)
+    second = publisher.publish(scene, resting_on=frozenset({look.pipeline.table.name}))
 
     assert second == first
     assert all(piece.root in live.bodies for piece in second)
@@ -302,11 +353,11 @@ def test_the_pieces_an_earlier_run_stood_are_taken_down_before_a_look_stands_its
     scene = look.scene()
     live = look.pipeline.world
     an_earlier_run = PiecePublisher(world=live)
-    an_earlier_run.publish(scene, resting_on=look.pipeline.table.name)
+    an_earlier_run.publish(scene, resting_on=frozenset({look.pipeline.table.name}))
     this_run = PiecePublisher(world=live)
 
     this_run.take_down()
-    stood = this_run.publish(scene, resting_on=look.pipeline.table.name)
+    stood = this_run.publish(scene, resting_on=frozenset({look.pipeline.table.name}))
 
     assert live.get_semantic_annotations_by_type(MontessoriShape) == stood
     assert len(stood) == len(
@@ -324,13 +375,13 @@ def test_a_piece_the_next_look_no_longer_finds_stays_taken_down(
     scene = look.scene()
     live = look.pipeline.world
     publisher = PiecePublisher(world=live)
-    first = publisher.publish(scene, resting_on=look.pipeline.table.name)
+    first = publisher.publish(scene, resting_on=frozenset({look.pipeline.table.name}))
     gone, *still_there = scene.shapes
 
     publisher.take_down()
     second = publisher.publish(
         MontessoriScene(shapes=still_there, board=scene.board, imagined=scene.imagined),
-        resting_on=look.pipeline.table.name,
+        resting_on=frozenset({look.pipeline.table.name}),
     )
 
     assert [piece.shape_category for piece in second] == [

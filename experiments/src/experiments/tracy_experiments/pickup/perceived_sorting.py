@@ -20,14 +20,52 @@ from typing_extensions import List
 
 from experiments.montessori.perception.scene_publishing import PerceivedScene
 from experiments.montessori.perception.surfaces import WorkspaceSurface
-from experiments.montessori.semantics import MontessoriShape, ShapeSortingBoard
+from experiments.montessori.semantics import (
+    MontessoriShape,
+    ShapeSortingBoard,
+    ShapeSortingHole,
+)
 from semantic_digital_twin.spatial_types.spatial_types import Pose
+from semantic_digital_twin.world import World
 
 PLACE_HOVER = 0.04
 """
 Height above the board's lid, in metres, at which a piece's underside is released over
 its hole.
 """
+
+# %% where a piece is let go
+
+
+@dataclass(frozen=True)
+class Insertion:
+    """
+    Where a piece is let go of so that it goes through the hole it belongs in.
+    """
+
+    hole: ShapeSortingHole
+    """
+    The hole the piece goes through.
+    """
+
+    hover_height: float
+    """
+    How far above :attr:`hole`'s own origin, along its own axis, the piece's centre is
+    let go of.
+    """
+
+    def release_pose(self, world: World) -> Pose:
+        """
+        :param world: The world holding the hole.
+        :return: Where the piece's centre is let go, in the world root frame.
+        """
+        return world.transform(
+            Pose.from_xyz_rpy(
+                0.0, 0.0, self.hover_height, reference_frame=self.hole.root
+            ),
+            world.root,
+        )
+
 
 # %% what does the sorting
 
@@ -38,13 +76,12 @@ class ShapeSorter(ABC):
     """
 
     @abstractmethod
-    def sort(self, piece: MontessoriShape, release_pose: Pose) -> None:
+    def sort(self, piece: MontessoriShape, insertion: Insertion) -> None:
         """
-        Pick a piece off the table and release it at a pose.
+        Pick a piece off the table and let it go through a hole.
 
         :param piece: The piece, standing in the world where the look saw it.
-        :param release_pose: Where the piece's centre is let go, in the world root
-            frame.
+        :param insertion: The hole it goes through and how far above it it is let go.
         """
 
 
@@ -114,6 +151,21 @@ class PerceivedSorting:
             reference_frame=world.root,
         )
 
+    def insertion_for(self, piece: MontessoriShape) -> Insertion:
+        """
+        :param piece: A piece the world holds.
+        :return: The hole it goes through and how far above that hole's own origin
+            :meth:`release_pose_for` lets it go, so the two say the same thing whichever
+            frame a sorter works in.
+        :raises NoMatchingHoleError: If the piece fits through none of the board's holes.
+        """
+        hole = self.board.hole_for(piece)
+        released_at = self.release_pose_for(piece).to_position()
+        hole_at = hole.root.global_transform.to_position()
+        return Insertion(
+            hole=hole, hover_height=float(released_at.z) - float(hole_at.z)
+        )
+
     @staticmethod
     def half_height_of(piece: MontessoriShape) -> float:
         """
@@ -128,4 +180,4 @@ class PerceivedSorting:
         Sort every piece the look put on the table, in the order it reported them.
         """
         for piece in self.pieces:
-            self.sorter.sort(piece, self.release_pose_for(piece))
+            self.sorter.sort(piece, self.insertion_for(piece))

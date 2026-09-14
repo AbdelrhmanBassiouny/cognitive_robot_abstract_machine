@@ -67,9 +67,9 @@
     lines: ("a(GraspDescription)(", "  approach_direction=...,", "  vertical_alignment=...)"),
   ),
   (text: "  ),"),
-  (text: "  a(PlaceAction)("),
+  (text: "  a(InsertionAction)("),
   (text: "    object_designator=shape,"),
-  (text: "    target_location="),
+  (text: "    target="),
   (
     slot: "rules", indent: 6,
     lines: ("a(ShapeSortingHole)(", "  shape=..., on=board)"),
@@ -85,7 +85,9 @@
   (text: "    object_designator="),
   (
     slot: "perception", indent: 6,
-    lines: ("cube_1  # LIGHT_BLUE, CUBE", "  at (0.61, 0.24, 0.79) m,"),
+    // where tracy/render_tracy.py stands the cube, in Tracy's own frame: on the board's
+    // lid, on the stretch of it furthest from the square hole, as the sorting demo starts it
+    lines: ("cube_1  # LIGHT_BLUE, CUBE", "  at (0.72, 0.13, 0.10) m,"),
     nested: (slot: "simulation", indent: 2, lines: ("SupportedBy(cube_1, board) ✓",)),
   ),
   (text: "    grasp_description="),
@@ -94,9 +96,9 @@
     lines: ("GraspDescription(", "  FRONT, TOP)"),
   ),
   (text: "  ),"),
-  (text: "  PlaceAction("),
+  (text: "  InsertionAction("),
   (text: "    object_designator=cube_1,"),
-  (text: "    target_location="),
+  (text: "    target="),
   (
     slot: "rules", indent: 6,
     lines: ("ShapeSortingHole(", "  shape=SQUARE, on=board)"),
