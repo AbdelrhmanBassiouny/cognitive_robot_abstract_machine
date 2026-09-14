@@ -17,7 +17,7 @@ from krrood.ormatic.data_access_objects.to_dao import ToDataAccessObjectState
 from sqlalchemy.orm import Session
 from typing_extensions import TYPE_CHECKING, List, Optional, Protocol
 
-from experiments.episodes.artifacts import EpisodeArtifacts, Transcript
+from experiments.episodes.artifacts import EpisodeArtifacts, Transcript, keep_meshes_of
 from experiments.episodes.episode import Episode, RecordedTrial
 from experiments.episodes.observer import EpisodeObserver
 from experiments.montessori.results_database import (
@@ -83,8 +83,13 @@ class RecordsTrialsToADatabase:
         """
         Commit one finished trial, under the episode it belongs to.
 
+        The world the episode kept is recorded by the files its meshes are read from, so
+        those are kept where a later process finds them before the world goes in.
+
         :param trial: The trial to keep.
         """
+        if trial.episode.world is not None:
+            keep_meshes_of(trial.episode.world)
         self.session.add(to_dao(trial, self.conversion_state))
         self.session.commit()
 

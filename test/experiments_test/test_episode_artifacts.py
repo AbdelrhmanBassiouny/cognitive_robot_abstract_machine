@@ -14,7 +14,12 @@ import numpy
 import pytest
 import trimesh
 from semantic_digital_twin.adapters.mujoco_video_recording import RecordedVideo
+from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
+from semantic_digital_twin.world import World
+from semantic_digital_twin.world_description.geometry import Mesh
 from semantic_digital_twin.world_description.mesh_file_storage import MeshFileStorage
+from semantic_digital_twin.world_description.shape_collection import ShapeCollection
+from semantic_digital_twin.world_description.world_entity import Body
 
 from experiments.episodes.artifacts import (
     ARTIFACT_DIRECTORY_ENVIRONMENT_VARIABLE,
@@ -27,6 +32,7 @@ from experiments.episodes.artifacts import (
     configured_artifact_directory,
     configured_mesh_directory,
     keep_mesh,
+    keep_meshes_of,
 )
 from experiments.episodes.episode import Episode, RecordedQuery, RecordedTrial
 from experiments.questions.working_memory import ObjectColours, ObjectsSeen
@@ -157,6 +163,33 @@ def test_a_kept_mesh_is_written_beside_the_artifacts(monkeypatch, tmp_path):
     assert not written_to.is_relative_to(MeshFileStorage().root)
 
 
+def test_the_meshes_of_a_world_that_go_with_this_process_are_kept_beside_the_artifacts(
+    monkeypatch, tmp_path
+):
+    """
+    A world rebuilt from what the robot publishes reads every mesh from the directory
+    this process removes when it exits; kept, its shapes read from copies that outlive
+    it, while a mesh already kept is left where it is.
+    """
+    monkeypatch.setenv(ARTIFACT_DIRECTORY_ENVIRONMENT_VARIABLE, str(tmp_path))
+    exported = Mesh.from_trimesh(mesh=trimesh.creation.box((0.1, 0.1, 0.1)))
+    already_kept = keep_mesh(trimesh.creation.box((0.2, 0.2, 0.2)))
+    body = Body(name=PrefixedName("fetched_body"))
+    body.visual = ShapeCollection([exported], reference_frame=body)
+    body.collision = ShapeCollection([already_kept], reference_frame=body)
+    world = World()
+    with world.modify_world():
+        world.add_kinematic_structure_entity(body)
+
+    kept = keep_meshes_of(world)
+
+    assert kept == [Path(exported.filename)]
+    assert Path(exported.filename).is_relative_to(configured_mesh_directory())
+    assert Path(exported.filename).is_file()
+    assert Path(already_kept.filename).is_relative_to(configured_mesh_directory())
+    assert isinstance(exported.mesh, trimesh.Trimesh)
+
+
 # %% the video
 
 
@@ -254,6 +287,18 @@ def test_the_transcript_names_the_episode_it_transcribes():
 
     assert episode.identifier in rendered
     assert episode.scenario_name in rendered
+
+
+def test_the_transcript_says_where_the_episode_ran_by_name():
+    """
+    An execution type is an enum whose values are numbers, so a transcript saying where
+    the run happened has to name the member rather than print its value.
+    """
+    episode = sorting_episode()
+
+    rendered = Transcript(episode=episode, trials=[]).render()
+
+    assert episode.execution_type.name in rendered
 
 
 def test_the_transcript_is_read_back_from_the_episode_that_kept_it(tmp_path):

@@ -183,3 +183,33 @@ def test_unrelated_directory_is_kept(tmp_path):
     )
 
     assert stranger.exists()
+
+
+# %% telling an export that goes with a process from a file that outlives it
+
+
+def test_a_mesh_exported_into_this_process_root_is_in_a_root(mesh_file_storage):
+    exported = Mesh.from_trimesh(mesh=trimesh.creation.box(extents=(1.0, 1.0, 1.0)))
+
+    assert mesh_file_storage.is_in_a_root(Path(exported.filename))
+
+
+def test_a_file_in_another_process_root_is_in_a_root(tmp_path):
+    """
+    A file another process of this package exported is removed when that process exits,
+    the same as one of this process's own.
+    """
+    storage = MeshFileStorage(
+        temporary_directory=tmp_path,
+        process_liveness=DeclaredProcessLiveness(live_process_ids={424242}),
+    )
+    left_by_another_process = stale_root(tmp_path, process_id=424242) / "leftover.obj"
+
+    assert storage.is_in_a_root(left_by_another_process)
+
+
+def test_a_file_the_caller_placed_is_in_no_root(mesh_file_storage, tmp_path):
+    caller_owned_path = tmp_path / "caller_owned.stl"
+    trimesh.creation.box(extents=(1.0, 1.0, 1.0)).export(caller_owned_path)
+
+    assert not mesh_file_storage.is_in_a_root(caller_owned_path)
