@@ -564,6 +564,35 @@ def decode_compressed_color_image(data: bytes, image_format: str) -> np.ndarray:
     return image
 
 
+PNG_CODEC = "png"
+"""
+The codec ``compressedDepth`` stores its payload in.
+"""
+
+COMPRESSED_DEPTH_IN_MILLIMETRES_FORMAT = (
+    f"{ImageEncoding.DEPTH_IN_MILLIMETRES}{FORMAT_FIELD_SEPARATOR} "
+    f"{ImageTransport.COMPRESSED_DEPTH} {PNG_CODEC}"
+)
+"""
+The ``format`` field of a ``compressedDepth`` message carrying depth in millimetres,
+which needs no quantization undone.
+"""
+
+
+def encode_compressed_depth_image(millimetres: np.ndarray) -> bytes:
+    """
+    Write a depth image in millimetres as a ``compressedDepth`` payload, the way the
+    camera publishes depth: the header, then a PNG.
+
+    :param millimetres: Depth in millimetres, zero where the sensor returned no reading.
+    :return: The payload of a ``sensor_msgs/CompressedImage`` whose format is
+        :data:`COMPRESSED_DEPTH_IN_MILLIMETRES_FORMAT`.
+    """
+    encoded, payload = cv2.imencode(f".{PNG_CODEC}", millimetres.astype(np.uint16))
+    assert encoded
+    return DepthQuantization(0, 0.0, 0.0).to_header_bytes() + payload.tobytes()
+
+
 def decode_compressed_depth_image(data: bytes, image_format: str) -> np.ndarray:
     """
     Read a ``compressedDepth`` ``sensor_msgs/CompressedImage`` into a depth image in
