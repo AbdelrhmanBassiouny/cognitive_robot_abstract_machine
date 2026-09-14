@@ -31,6 +31,7 @@ import experiments
 from coraplex.datastructures.enums import Arms
 from experiments.montessori.perception.camera import decode_compressed_color_image
 from experiments.montessori.perception.recordings import (
+    REFERENCE_FRAME,
     RecordedCamera,
     RecordedImages,
     open_bag,
@@ -186,7 +187,7 @@ class FigureFramesFromBag:
         """
         The robot's camera, as the recording holds it.
         """
-        return RecordedCamera(bag=self.bag)
+        return RecordedCamera(bag=self.bag, reference_frame=REFERENCE_FRAME)
 
     def before_it_acts(self) -> RecordedImages:
         """
