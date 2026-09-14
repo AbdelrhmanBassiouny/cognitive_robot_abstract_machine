@@ -55,6 +55,7 @@ from experiments.tracy_experiments.montessori.gripper_feedback import (
 from experiments.tracy_experiments.pick_and_place_action import ActuatorDrivenAction
 from experiments.tracy_experiments.robotiq_gripper import RobotiqGripperController
 from semantic_digital_twin.datastructures.definitions import GripperState
+from semantic_digital_twin.semantic_annotations.mixins import HasRootBody
 from semantic_digital_twin.semantic_annotations.semantic_annotations import Aperture
 from semantic_digital_twin.spatial_types.spatial_types import Pose
 from semantic_digital_twin.world_description.world_entity import Body
@@ -246,9 +247,9 @@ class PickUpActionReal(
     clear of what it was resting on.
     """
 
-    object_designator: Body
+    object_designator: HasRootBody
     """
-    The piece to pick up, as the world holds it.
+    The annotation of the piece to pick up, as the plan names it.
     """
 
     shape_category: MontessoriShapeCategory
@@ -274,7 +275,7 @@ class PickUpActionReal(
     @classmethod
     def carrying_out(cls, action: PickUpAction, lab: TracyActuators) -> Self:
         return cls(
-            object_designator=action.object_designator.root,
+            object_designator=action.object_designator,
             shape_category=action.object_designator.shape_category,
             arm=action.arm,
             grasp_description=action.grasp_description,
@@ -286,7 +287,7 @@ class PickUpActionReal(
         """
         The body this action acts on.
         """
-        return [self.object_designator]
+        return [self.object_designator.root]
 
     @property
     def close_setpoint(self) -> float:
@@ -301,7 +302,7 @@ class PickUpActionReal(
 
     def _run(self) -> None:
         lab = self.lab
-        body = self.object_designator
+        body = self.object_designator.root
         grasp_target = lab.grasp_target_above(body)
         _, _, lift_to = self.grasp_description.pose_sequence(grasp_target, body)
 
@@ -309,7 +310,7 @@ class PickUpActionReal(
             [
                 ReachAction(
                     target_pose=grasp_target,
-                    object_designator=body,
+                    object_designator=self.object_designator,
                     arm=self.arm,
                     grasp_description=self.grasp_description,
                 )

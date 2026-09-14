@@ -9,6 +9,8 @@ the actions would drive is a stand-in that records what it was asked to do.
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 import pytest
 
 from coraplex.robot_plans.actions.core.insertion import (
@@ -38,7 +40,11 @@ from experiments.tracy_experiments.pick_and_place_action_real import (
 from semantic_digital_twin.spatial_types.spatial_types import Pose
 
 from .dataset import figure_plan_fixtures, montessori_scene_fixtures
-from .dataset.actuators_that_record import ActuatorsThatRecord, FingersThatRecord
+from .dataset.actuators_that_record import (
+    ActuatorsThatRecord,
+    EndEffectorFacingAWay,
+    FingersThatRecord,
+)
 from .dataset.figure_plan_fixtures import PICK_ARM
 
 pytest_plugins = [
@@ -168,11 +174,32 @@ def test_it_takes_hold_of_the_piece_the_plan_names(
 
     taking_hold = PickUpActionReal.carrying_out(picking_up, tracy)
 
-    assert taking_hold.object_designator is picking_up.object_designator.root
+    assert taking_hold.object_designator is picking_up.object_designator
     assert taking_hold.arm is picking_up.arm
     assert taking_hold.grasp_description is picking_up.grasp_description
     assert taking_hold.shape_category is SORTED_PIECE
     assert taking_hold.manipulated_bodies == [picking_up.object_designator.root]
+
+
+def test_the_reach_is_handed_the_piece_the_plan_names_not_its_body(
+    grounded: list, tracy: ActuatorsThatRecord
+) -> None:
+    """
+    A reach expands its plan from the piece's annotation, reading the body off it, so it
+    is handed the annotation the plan grounded rather than the body under it.
+    """
+    [picking_up, _] = grounded
+    taking_hold = PickUpActionReal.carrying_out(picking_up, tracy)
+    taking_hold.grasp_description = replace(
+        taking_hold.grasp_description,
+        end_effector=EndEffectorFacingAWay(tracy.context.world),
+    )
+
+    taking_hold._run()
+
+    [reaching] = [node.designator for node in tracy.driven[0].actions]
+    assert type(reaching) is ReachAction
+    assert reaching.object_designator is picking_up.object_designator
 
 
 def test_the_fingers_close_to_the_width_that_piece_asks_for(
