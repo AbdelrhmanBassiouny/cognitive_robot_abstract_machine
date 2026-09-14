@@ -133,16 +133,6 @@ class PerceivedSorting:
         """
         self.scene.perceive()
 
-    def hole_for(self, piece: MontessoriShape) -> ShapeSortingHole:
-        """
-        The hole of the perceived board a piece goes through.
-
-        :param piece: A piece the world holds.
-        :return: The hole it goes through.
-        :raises NoMatchingHoleError: If it fits through none of the board's holes.
-        """
-        return self.board.hole_for(piece)
-
     def release_pose_for(self, piece: MontessoriShape) -> Pose:
         """
         :param piece: A piece the world holds.
@@ -152,7 +142,7 @@ class PerceivedSorting:
         :raises NoMatchingHoleError: If the piece fits through none of the board's holes.
         """
         world = self.scene.world
-        hole_position = self.hole_for(piece).root.global_transform.to_position()
+        hole_position = self.board.hole_for(piece).root.global_transform.to_position()
         lid_height = WorkspaceSurface.of(self.board, world.root).height
         return Pose.from_xyz_rpy(
             float(hole_position.x),
@@ -169,7 +159,7 @@ class PerceivedSorting:
             frame a sorter works in.
         :raises NoMatchingHoleError: If the piece fits through none of the board's holes.
         """
-        hole = self.hole_for(piece)
+        hole = self.board.hole_for(piece)
         released_at = self.release_pose_for(piece).to_position()
         hole_at = hole.root.global_transform.to_position()
         return Insertion(

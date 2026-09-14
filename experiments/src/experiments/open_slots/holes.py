@@ -50,6 +50,7 @@ from krrood.entity_query_language.rdr.serialization import NullModelSaver
 from krrood.entity_query_language.rdr.single_class import EQLSingleClassRDR
 from krrood.entity_query_language.utils import T
 from krrood.entity_query_language.verbalization.vocabulary.english import Directive
+from krrood.patterns.role import Role
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.world_entity import Body
 
@@ -331,11 +332,13 @@ class HoleRulesBackend(QueryBackend):
     def piece_standing_for(self, stated: Any) -> Optional[MontessoriShape]:
         """
         :param stated: Something a statement states one of its attributes to.
-        :return: The piece it is, or the piece the world says stands on the body it is,
-            or None where it is neither.
+        :return: The piece it is, the piece it is a role of, or the piece the world says
+            stands on the body it is; None where it is none of those.
         """
         if isinstance(stated, MontessoriShape):
             return stated
+        if isinstance(stated, Role) and isinstance(stated.role_taker, MontessoriShape):
+            return stated.role_taker
         if not isinstance(stated, Body):
             return None
         return next(

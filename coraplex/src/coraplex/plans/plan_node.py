@@ -5,13 +5,14 @@ from abc import abstractmethod, ABC
 from collections import deque
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Optional, Any, List, Type, TYPE_CHECKING, Iterable
+from typing import Optional, Any, Iterator, List, Type, TYPE_CHECKING, Iterable
 
 from typing_extensions import Union
 
 from coraplex.plans.designator import Designator
 from giskardpy.motion_statechart.goals.templates import NodeListGoal
 from giskardpy.motion_statechart.graph_node import Goal
+from krrood.entity_query_language.backends import QueryBackend
 from krrood.entity_query_language.query.match import Match
 from giskardpy.motion_statechart.data_types import LifeCycleValues
 from coraplex.datastructures.execution_data import ExecutionData
@@ -141,23 +142,85 @@ class PlanNode(PlanEntity):
         return []
 
     @property
+    def _actions_it_states(self) -> List[Match]:
+        """
+        :return: Every action :attr:`underspecified_actions` reports for this node and
+            its descendants, in the order the plan runs them.
+        """
+        return [
+            action
+            for node in [self, *self.descendants]
+            for action in node.underspecified_actions
+        ]
+
+    @property
     def open_descriptions(self) -> List[Match]:
         """
         :return: Every description the actions stated in this node and its descendants
             hand over, each once and innermost first, so a description is always reached
             after the ones it is stated in terms of.
         """
-        stated = [
-            action
-            for node in [self, *self.descendants]
-            for action in node.underspecified_actions
-        ]
         descriptions: List[Match] = []
-        for action in stated:
+        for action in self._actions_it_states:
             for description in action._nested_matches_:
                 if not any(kept is description for kept in descriptions):
                     descriptions.append(description)
         return descriptions
+
+    def grounded_by(self, backend: QueryBackend) -> Iterator[List[ActionDescription]]:
+        """
+        Ground the actions this plan states, once for every way what it leaves open is
+        answered.
+
+        Each description is answered once and stands in its place in every action that
+        hands it over, so two actions stating the same thing act on the one thing rather
+        than on two answers to the same question.
+
+        :param backend: What answers the descriptions the plan hands over.
+        :return: The grounded actions in the order the plan runs them, one list per way
+            of answering it.
+        """
+        yield from self._grounded(
+            self._actions_it_states, self.open_descriptions, backend
+        )
+
+    @classmethod
+    def _grounded(
+        cls,
+        actions: List[Match],
+        descriptions: List[Match],
+        backend: QueryBackend,
+    ) -> Iterator[List[ActionDescription]]:
+        """
+        :param actions: The stated actions, with the descriptions answered so far
+            standing in their place.
+        :param descriptions: The descriptions still to answer, innermost first.
+        :param backend: What answers them.
+        :return: The grounded actions, one list per way of answering what is left.
+        """
+        if not descriptions:
+            yield [action.construct_instance() for action in actions]
+            return
+        answered, rest = descriptions[0], descriptions[1:]
+        for answer in backend.evaluate(answered):
+            yield from cls._grounded(
+                [cls._stating(action, answered, answer) for action in actions],
+                [cls._stating(other, answered, answer) for other in rest],
+                backend,
+            )
+
+    @staticmethod
+    def _stating(statement: Match, description: Match, answer: Any) -> Match:
+        """
+        :param statement: A statement that may hand the description over.
+        :param description: The description answered.
+        :param answer: What answers it.
+        :return: The statement with the answer in the description's place, or the
+            statement itself where it hands that description over nowhere.
+        """
+        if any(stated is description for stated in statement._stated_matches_):
+            return statement.answering(description, answer)
+        return statement
 
     @property
     def path(self) -> List[PlanNode]:
