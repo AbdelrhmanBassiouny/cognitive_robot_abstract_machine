@@ -29,6 +29,7 @@ from krrood.entity_query_language.factories import a, an
 from krrood.entity_query_language.query.match import Match
 from semantic_digital_twin.spatial_types.spatial_types import Pose
 
+from .dataset.piece_as_a_look_found_it import PieceAsALookFoundIt
 from .dataset.putting_a_piece_through import PuttingAPieceThrough
 
 LID_AT = (0.8, 0.1, 0.96)
@@ -204,3 +205,16 @@ def test_a_statement_naming_the_piece_itself_says_so_just_as_well(
 
     assert backend.piece_standing_for(piece) is piece
     assert backend.piece_standing_for(piece.root) is piece
+
+
+def test_a_role_of_the_piece_stands_for_the_piece_it_is_a_role_of(
+    scene: ImaginedWorld,
+):
+    """
+    What a look answers with is a role of the piece rather than the piece, and a hole
+    wanted for it is wanted for the piece behind it.
+    """
+    backend = HoleRulesBackend(world=scene.world)
+    piece = piece_of(scene)
+
+    assert backend.piece_standing_for(PieceAsALookFoundIt(role_taker=piece)) is piece
