@@ -17,9 +17,15 @@ Plan:
       #380's reach test now asserts role_taker; commit 258fb6ae35 pushed, PR body updated
 - [ ] user reruns on the robot; if the hole's sideways error is still large, look at the
       board before the cube goes on the lid
-- [ ] new ask (2026-09-14): record perception's narrowing to the cyan cube from the real camera
-      images during framework_demo real, and use it in the framework figure
-      (experiments/doc/figures/framework). Exploring step_by_step.NarrowingStep + bag_frames;
-      likely a new PR stacked on this branch
+- [x] new ask (2026-09-14): record perception's narrowing to the cyan cube from the real camera
+      frame during framework_demo real, and use it in the framework figure. Done on stacked
+      branch claude/the-framework-figure-shows-the-real-narrowing, in worktree
+      ~/bass/cram-framework-narrowing (user wants this checkout left on the fix branch).
+      Run tests there with PYTHONPATH="$WT:$WT/*/src:$PYTHONPATH" (editable installs point here).
+      Frame = look.wait_for_frame() after perceive; GroundedPlan.narrowing_over -> trial
+      narrowing/ pictures; bag_frames --narrowing copies to figure; panel 1 reads them.
+      Stand-in pictures from shipped tracy_pickup_demo (cube + cylinder on lid). 57 tests pass.
+- [ ] user reruns framework_demo real --record, then bag_frames <bag> --narrowing
+      <episode>/trials/1/narrowing and build.py; not done: narrowing from the bag, DB rows
 - still open elsewhere: #379 pickup rerun; framework figure frames/cards after a good run;
   cube-evidence feature follow-on (worktree ~/bass/cram-board-by-the-cube)
