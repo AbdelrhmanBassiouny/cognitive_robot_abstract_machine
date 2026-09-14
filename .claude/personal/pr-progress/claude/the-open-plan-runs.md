@@ -118,29 +118,15 @@ Answers #355's open thread r3999689257 ("an RDR fills the target hole").
 ## Stage 4 - the open plan runs (PR #369, draft, branch
 `claude/the-open-plan-runs`, on #368)
 
-Done:
-- `experiments/open_slots/sorting.py` - `SortingByAnOpenPlan`, which states
-  `a(ShapeSortingHole)(shape_category=...).from_(board.apertures).where(Admits(hole,
-  piece)).ordered_by(hole.cross_section_size)` and takes the first answer. Only which
-  hole is meant is asked for; the hover arithmetic is unchanged.
-- `PerceivedSorting.hole_for` extracted (the step it overrides);
-  `SimulatedPickupDemo.sorting_over` extracted (the extension point the demo overrides).
-- `experiments/scripts/framework_demo.py --execution simulated`, logging which backend
-  answered which slot.
-- The figure's target slot now carries `.where(Admits(hole, shape))`; `framework.pdf`
-  rebuilt (typst is installed in the venv, so the figure builds here). `framework.svg`
-  and `.png` are not tracked - do not add them.
-- Tests: `test_sorting_by_an_open_plan.py` (4, headless) + `SceneAlreadyStood` mimic in
-  the test dataset. `test_tracy_pickup_perceived_sorting.py` 9 passed.
-
-Not done, deliberately:
-- The MuJoCo run itself is unverified: `pickup_demo_mujoco` needs `rclpy` to import
-  (the scratchpad ROS stubs make it importable, and the 21 MuJoCo tests still collect)
-  and Tracy's description to build a lab, which this checkout has not. No slow
-  end-to-end MuJoCo test was added - one that cannot be run or debugged here is worse
-  than none.
-- The figure's resolved plan is still written into the CONFIG by hand; feeding the
-  run's own numbers back as JSON needs a run first.
+Rewritten by the refactor round below. What stands now:
+- `experiments/open_slots/plan.py` - `sorting_plan(board, lid, arm, end_effector)`,
+  the figure's whole plan written once: `sequential([a(PickUpAction)(...),
+  an(InsertionAction)(...)])` with all its slots open.
+- `coraplex.plans.plan_node.PlanNode.grounded_by(backend)` - the general machinery that
+  answers a stated plan.
+- `experiments/scripts/framework_demo.py` - builds the simulated lab, looks, writes the
+  plan and grounds it, reporting which backend answered which slot.
+- `framework.pdf`/`framework.typ` untouched by this stage.
 
 ## Review round on #369 (thread r4001095327, handled and resolved)
 
@@ -192,6 +178,54 @@ Done across the three PRs it belongs to:
 Regression after the round: 1602 passed, 3 skipped across `test/krrood_test/test_eql`,
 the stack's experiments tests, montessori perception/narrowing/imagination and
 `test/version_test`.
+
+## Refactor round on #369 (the plan in one place, no hand-made classes)
+
+The ask: the whole plan written in one place exactly as the framework image has it, and
+no more classes hand-made for this plan - that is faking the work and hard-wiring it.
+
+Done, all on #369 except the `Role` reading, which belongs to #368:
+- **`coraplex.plans.plan_node`**: `PlanNode.grounded_by(backend)` grounds a stated plan
+  - every open description answered once, innermost first, standing in its place in
+  *every* action that hands it over, then each action constructed. So two actions
+  naming one description act on the one thing. `_actions_it_states` is the plan-wide
+  gather `open_descriptions` already did inline. 9 tests in
+  `test/coraplex_test/test_plan/test_underspecified_plan.py` over its own
+  `PostingSlot` dataset.
+- **`experiments/open_slots/plan.py`** (new): the figure's plan, whole, in one
+  function. `experiments/open_slots/sorting.py` (`SortingByAnOpenPlan`) deleted, and
+  with it `SceneAlreadyStood`.
+- **Reverted**: `PerceivedSorting.hole_for` and `SimulatedPickupDemo.sorting_over`,
+  the two hooks carved into shared classes for that deleted subclass. Both files are
+  now byte-identical to #368's.
+- **`framework_demo.py`** rewritten: no subclass of anything, just lab -> look -> plan
+  -> ground -> report.
+- **`holes.py`**: `piece_standing_for` also reads a piece off a `Role` of it, since
+  what a look answers with is a role of the piece.
+- Tests: `test_the_plan_the_figure_shows.py` (6, headless, over the rendered scene
+  fixtures) replaces `test_sorting_by_an_open_plan.py`.
+
+What the refactor exposed, and did not fix:
+- The plan grounds to three slots, not four: the figure draws the *simulation* slot
+  nested inside the perception slot, and it is - `SupportedBy` is a `.where` condition
+  the look checks in the imagined world it stood its finding in, not a description
+  handed over. So `backends.answered` names three backends (look, probabilistic,
+  rules); `WorldBackend` is in the choice but this plan does not reach it.
+- The demo resolves the plan but does not perform it. `ImaginedWorld.copied_from`
+  deep-copies, so the piece the look answers with stands in a copy of the world the
+  robot plans in, and `ScenePublisher.publish_piece` builds a *separate* piece in the
+  belief. The two halves are not joined, so the grounded `object_designator` is not
+  something the arm can be driven at. The previous demo hid this by running the old
+  hand-coded pipeline and asking the backends for the hole slot alone. Fixing it is a
+  perception change (a look that keeps its findings in the world it was taken in), not
+  attempted here.
+- The plan states three things the figure elides: `arm` on the insertion,
+  `end_effector` on the grasp, and the surface as the lid body the look names rather
+  than as `board`. All documented in the module docstring; the figure was not changed.
+
+Regression: 1491 passed + 3 skipped (`test/krrood_test/test_eql`, `test/version_test`),
+113 passed (the stack's experiments tests + montessori perception/imagination/
+narrowing), 9 passed (coraplex underspecified plan).
 
 ## The stack as it stands
 
