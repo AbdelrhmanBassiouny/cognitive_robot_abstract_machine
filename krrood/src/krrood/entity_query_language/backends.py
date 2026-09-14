@@ -1737,7 +1737,7 @@ class BackendChoice(QueryBackend):
         :return: Everything that answers it.
         """
         for stated in self._with_its_descriptions_answered(statement):
-            backend = self._backend_for(stated)
+            backend = self.backend_for(stated)
             self._record(statement, backend)
             yield from backend.evaluate(stated)
 
@@ -1768,8 +1768,10 @@ class BackendChoice(QueryBackend):
         """
         return statement._stated_matches_ if isinstance(statement, Match) else iter(())
 
-    def _backend_for(self, statement: Evaluable) -> QueryBackend:
+    def backend_for(self, statement: Evaluable) -> QueryBackend:
         """
+        Which of them answers a statement.
+
         :param statement: The statement to answer.
         :return: The first backend that declares it can answer it.
         :raises NoBackendAnswers: If none of them declares it can.
