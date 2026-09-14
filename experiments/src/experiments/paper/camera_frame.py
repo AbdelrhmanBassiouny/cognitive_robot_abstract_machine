@@ -22,9 +22,11 @@ from typing_extensions import Optional, Tuple
 
 from experiments.episodes.artifacts import EpisodeArtifacts, RunFile
 from experiments.episodes.trace import (
+    FilmHasNoFrameError,
     FramesByMoment,
     JointTrace,
     TimedFrame,
+    TimedFrames,
     standing_at,
 )
 from experiments.paper.chart import TimelineSpan
@@ -540,3 +542,19 @@ class TwinFrames(FramesByMoment):
                 .of([])
                 .image
             )
+
+    def write(self, path: Path) -> Path:
+        """
+        Draw every frame and leave them as a video at the given path, with their moments
+        beside it.
+
+        :param path: The video file, its directory created if it is not there.
+        :raises FilmHasNoFrameError: If the trace holds no sample, so there is no video.
+        :return:``path``.
+        """
+        if self.trace.is_empty:
+            raise FilmHasNoFrameError(path=path)
+        drawn = TimedFrames()
+        for index, moment in enumerate(self.trace.moments):
+            drawn.keep(self.frame(index), moment)
+        return drawn.write(path)

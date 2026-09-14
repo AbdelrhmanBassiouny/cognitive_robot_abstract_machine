@@ -19,8 +19,8 @@ import imageio.v2 as imageio
 import numpy as np
 import pytest
 
-from experiments.episodes.artifacts import EpisodeArtifacts, RunFile
-from experiments.episodes.trace import JointTrace, TimedFrames
+from experiments.episodes.artifacts import EpisodeArtifacts, RunFile, TrialArtifact
+from experiments.episodes.trace import FilmHasNoFrameError, JointTrace, TimedFrames
 from experiments.paper.camera_frame import (
     CAPTION_HEIGHT,
     BagFrameAt,
@@ -363,6 +363,34 @@ def test_a_twin_frame_is_drawn_through_the_robots_camera(
     ).frame(0)
 
     assert not np.array_equal(through_the_camera, overview)
+
+
+@needs_a_renderer
+def test_the_twins_frames_are_written_as_a_film_with_the_moments_they_show(
+    scene_with_a_loose_piece: World, tmp_path: Path
+) -> None:
+    """
+    A film of the twin is kept the way a camera's is, so it is read back with a frame at
+    every moment the trace was sampled at.
+    """
+    trace = traced_move(scene_with_a_loose_piece)
+
+    written = TwinFrames(world=scene_with_a_loose_piece, trace=trace).write(
+        tmp_path / TrialArtifact.CAMERA
+    )
+
+    read_back = TimedFrames.read(written)
+    assert read_back.moments == trace.moments
+    assert len(read_back.frames) == len(trace.moments)
+
+
+def test_a_twin_traced_at_no_moment_has_no_film_to_write(
+    scene_with_a_loose_piece: World, tmp_path: Path
+) -> None:
+    with pytest.raises(FilmHasNoFrameError):
+        TwinFrames(world=scene_with_a_loose_piece, trace=JointTrace()).write(
+            tmp_path / TrialArtifact.CAMERA
+        )
 
 
 def test_the_twins_frames_are_taken_at_the_moments_the_trace_was_sampled_at(
