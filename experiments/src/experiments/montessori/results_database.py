@@ -17,11 +17,12 @@ from enum import Enum
 
 from krrood.exceptions import DataclassException
 from krrood.ormatic.utils import create_engine
-from sqlalchemy import Column, Engine, Integer, MetaData, Table
-from sqlalchemy.engine import make_url
+from sqlalchemy import Column, Connection, Engine, Integer, MetaData, Table, inspect
+from sqlalchemy.engine import Inspector, make_url
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
+from sqlalchemy.schema import AddConstraint, CreateColumn
 from sqlalchemy.sql.sqltypes import NullType
 from typing_extensions import List, Optional
 
@@ -244,11 +245,75 @@ class ResultsDatabase:
         table, including this module's own, from being created; a table left out purely
         because it depends on a skipped one would otherwise fail with an "undefined
         table" error the moment ``CREATE TABLE`` tried to reference it.
+
+        A table the database already holds gains the columns the schema added to it
+        since, see :meth:`_add_missing_columns`.
         """
         engine = create_results_engine(self.uri)
         metadata = self._schema()
-        metadata.create_all(engine, tables=self._creatable_tables(metadata))
+        tables = self._creatable_tables(metadata)
+        self._add_missing_columns(engine, tables)
+        metadata.create_all(engine, tables=tables)
         return sessionmaker(engine)
+
+    @classmethod
+    def _add_missing_columns(cls, engine: Engine, tables: List[Table]) -> None:
+        """
+        Add to every table the database already holds the columns the schema gave that
+        table after it was created.
+
+        A lasting database outlives the schema that created its tables and is never
+        recreated to catch up with a newer one, while creating the schema only creates
+        the tables that are not there yet.
+
+        :param engine: The database to bring up to the schema.
+        :param tables: The tables of the schema to bring it up to.
+        """
+        inspector = inspect(engine)
+        existing = set(inspector.get_table_names())
+        with engine.begin() as connection:
+            for table in tables:
+                if table.name not in existing:
+                    continue
+                for column in cls._columns_missing_from(inspector, table):
+                    cls._add_column(connection, column)
+
+    @staticmethod
+    def _columns_missing_from(inspector: Inspector, table: Table) -> List[Column]:
+        """
+        :param inspector: Reads the tables the database holds.
+        :param table: A table of the schema the database already holds.
+        :return: The columns the schema gives that table and the database's table lacks.
+        """
+        present = {column["name"] for column in inspector.get_columns(table.name)}
+        return [column for column in table.columns if column.name not in present]
+
+    @staticmethod
+    def _add_column(connection: Connection, column: Column) -> None:
+        """
+        Add one column of the schema to the database's table of the same name.
+
+        The column is added nullable whatever the schema says, since the rows recorded
+        before it existed hold no value for it. The reference it holds to another table
+        is declared too, where the database can add a constraint to a table it holds.
+
+        :param connection: The connection to the database, inside a transaction.
+        :param column: The column of the schema to add.
+        """
+        dialect = connection.dialect
+        nullable = Column(column.name, column.type)
+        Table(column.table.name, MetaData(), nullable)
+        connection.exec_driver_sql(
+            "ALTER TABLE %s ADD COLUMN %s"
+            % (
+                dialect.identifier_preparer.format_table(column.table),
+                CreateColumn(nullable).compile(dialect=dialect),
+            )
+        )
+        if not dialect.supports_alter:
+            return
+        for foreign_key in column.foreign_keys:
+            connection.execute(AddConstraint(foreign_key.constraint))
 
     @staticmethod
     def _schema() -> MetaData:
