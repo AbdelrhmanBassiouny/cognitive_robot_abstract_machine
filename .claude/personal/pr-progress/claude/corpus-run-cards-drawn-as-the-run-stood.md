@@ -112,3 +112,18 @@ Plan: make the query cards of the simulated corpus right.
       as before: LOOKING_DOWN_BY/STANDING_BACK_AT_LEAST) -- told the user, not changed.
 - [x] CI run 34797104927 for 4e7fdd3482: every job green (experiments and semdt included);
       user told to redo the figures backup. #356 draft, description current.
+- [ ] user (2026-09-14 07:27, from phone, card e2210efd): held piece drawn inside the wrist,
+      gripper closed through it, pictures too bright, camera before/after identical.
+      Causes: (1) JointTraceRecorder thinned away the last change (the lift at ~140.97 fell
+      within one period of the 140.96 sample; trial ended 141.36) so the robot was drawn
+      pre-lift while the piece stood at the event's lifted pose -> recorder now samples the
+      thinned change on stop() (test); existing corpus traces completed with the kept
+      world's end state at trial.duration (scratchpad/complete_traces.py --apply: 69 of 75,
+      backups ~/episode-artifacts/trace-backups-2026-09-14). Fixes the identical camera
+      frames too (before 141.0 on the table, after 141.4 lifted). (2) URDF reader drops the
+      material colour of mesh visuals -> table white; Softened(uncolored=UNCOLORED) draws
+      it in the description's grey (rgba 0.79 0.82 0.93). (3) lights dimmed: key 3.0->2.0,
+      fill 1.2->0.8, ambient 0.35->0.3. Gripper closed through the piece is the recorded
+      state (knuckle 0.791 of 0.8, closed at 0.0088 rad/s from 44 s to 140.6 s, piece never
+      moved) -- not a rendering matter, to report. Next: commit, push, description,
+      figures run 6.
