@@ -306,6 +306,23 @@ Body-side token for each single-arm :class:`~coraplex.datastructures.enums.Arms`
 """
 
 
+def knuckle_joint_name(arm: Arms) -> str:
+    """
+    :param arm: A single arm.
+    :return: The name of the knuckle joint its gripper's driver reports the fingers'
+        closure through.
+    """
+    return _KNUCKLE_JOINT_TEMPLATE.format(side=_ARM_SIDES[arm])
+
+
+def gripper_joint_state_topic(arm: Arms) -> str:
+    """
+    :param arm: A single arm.
+    :return: The topic its gripper's driver publishes the gripper's joint state on.
+    """
+    return _GRIPPER_JOINT_STATE_TOPIC_TEMPLATE.format(side=_ARM_SIDES[arm])
+
+
 @dataclass
 class GripperJointStateListener:
     """
@@ -336,8 +353,7 @@ class GripperJointStateListener:
     """
 
     def __post_init__(self) -> None:
-        side = _ARM_SIDES[self.arm]
-        self._knuckle_joint_name = _KNUCKLE_JOINT_TEMPLATE.format(side=side)
+        self._knuckle_joint_name = knuckle_joint_name(self.arm)
         # The gripper driver publishes its joint state at sensor-data QoS (best effort),
         # the same as the camera streams (see live_camera.py); a subscription left at
         # the default reliable profile is reported as an incompatible QoS pairing at
@@ -345,7 +361,7 @@ class GripperJointStateListener:
         # latest_closure raising NoGripperJointStateError on a live run.
         self.node.create_subscription(
             JointState,
-            _GRIPPER_JOINT_STATE_TOPIC_TEMPLATE.format(side=side),
+            gripper_joint_state_topic(self.arm),
             self._on_joint_state,
             qos_profile_sensor_data,
         )
