@@ -852,8 +852,19 @@ def _parse_arguments(argument_list: Optional[Sequence[str]]) -> argparse.Namespa
     :param argument_list: Arguments to read; the process's own when None.
     :return: The demo's own command line arguments.
     """
+    return argument_parser().parse_args(argument_list)
+
+
+def argument_parser(add_help: bool = True) -> argparse.ArgumentParser:
+    """
+    The demo's own command line.
+
+    :param add_help: Whether the parser answers ``--help`` itself; not when it is the
+        parent of another command line.
+    """
     parser = argparse.ArgumentParser(
-        description="Sort the Montessori pieces with the physical Tracy by looking."
+        description="Sort the Montessori pieces with the physical Tracy by looking.",
+        add_help=add_help,
     )
     parser.add_argument(
         DemoOption.ASK_ABOUT,
@@ -917,26 +928,91 @@ def _parse_arguments(argument_list: Optional[Sequence[str]]) -> argparse.Namespa
             "robot moves."
         ),
     )
-    return parser.parse_args(argument_list)
+    return parser
 
 
-def main(argument_list: Optional[Sequence[str]] = None) -> None:
+CHECK_THE_SCENE = (
+    "Board and %d perceived piece(s) in rviz. Check they line up with the real objects "
+    "before the sorting runs."
+)
+"""
+What the person at the console is asked to do once the camera has stood the scene, with
+how many pieces it found.
+"""
+
+
+@dataclass
+class PickupDemo:
     """
-    Sort the pieces the camera finds with the physical Tracy, recording the episode.
+    The run of this demo over a connected Tracy: look, have the scene checked, sort
+    every piece the look found as one recorded trial, and keep the episode.
 
-    :param argument_list: Arguments to read; the process's own when omitted.
-    :raises InMemoryDatabaseRefused: If the episode would be recorded to a database that
-        dies with the run, before anything on the robot is touched.
+    What the run reaches the robot through -- the connection, the grippers' drivers, the
+    camera -- is the robot's own; how the arm's motions are run is
+    :attr:`motion_execution`'s.
     """
-    arguments = _parse_arguments(argument_list)
-    database = resolve_lasting_database(arguments.database_uri)
-    perturbation = perturbation_asked_for(arguments.perturbation, arguments.piece)
 
-    feed = EventFeed()
-    run_dashboard(feed)
+    tracy: LiveTracy
+    """
+    The robot, connected.
+    """
 
-    rclpy.init()
-    with LiveTracy.connected(NODE_NAME) as tracy:
+    person: Person
+    """
+    The person at the console and the table: checks the scene, says what they placed and
+    brings the perturbation about.
+    """
+
+    database: ResultsDatabase
+    """
+    The database the episode is recorded to.
+    """
+
+    asked_about: MontessoriShapeCategory = DEFAULT_PIECE_ASKED_ABOUT
+    """
+    The kind of piece the question set is asked about.
+    """
+
+    perturbation: Optional[SortingPerturbation] = None
+    """
+    What the person at the table is asked to do before the sort, or None for an
+    unperturbed run.
+    """
+
+    bag: Optional[RosbagRecorder] = None
+    """
+    The bag the run records for as long as the sorting runs, or None to record none.
+    """
+
+    motion_execution: ExecutionType = ExecutionType.REAL
+    """
+    How the arm's motions are run: on the robot through Giskard's node, or ticked in
+    this process against the world's own joints.
+    """
+
+    artifact_directory: ArtifactDirectory = field(default_factory=ArtifactDirectory)
+    """
+    Where the episode's artifacts are kept.
+    """
+
+    feed: EventFeed = field(default_factory=EventFeed)
+    """
+    Where the events the rig's monitors report are streamed to.
+    """
+
+    def run(self) -> EpisodeArtifacts:
+        """
+        Sort the pieces the camera finds, recording the episode.
+
+        The bag opens before the trial's clock starts, so the recording spans the trial
+        from its first moment; the trial's clock runs on the same wall clock the bag
+        stamps its messages on, so the two are read against one another through the
+        trial's start.
+
+        :return: The artifacts the episode kept.
+        :raises PieceNotSeenError: If the look found no piece of the kind asked about.
+        """
+        tracy = self.tracy
         context = Context(
             world=tracy.world,
             robot=tracy.robot,
@@ -961,7 +1037,7 @@ def main(argument_list: Optional[Sequence[str]] = None) -> None:
             context,
             tracy.world,
             tracy.robot,
-            feed,
+            self.feed,
             gripper,
             gripper_listener,
             grasp_description,
@@ -980,54 +1056,84 @@ def main(argument_list: Optional[Sequence[str]] = None) -> None:
 
         park = sequential([ParkArmsAction(PICK_ARM)], context=context).plan
 
-        logger.info(
-            "Board and %d perceived piece(s) in rviz. Check they line up with the real "
-            "objects, then press Enter to run the sorting.",
-            len(sorting.pieces),
-        )
-        input()
-        logger.info("Sorting %d piece(s) on the real robot.", len(sorting.pieces))
+        self.person.carry_out(CHECK_THE_SCENE % len(sorting.pieces))
+        logger.info("Sorting %d piece(s).", len(sorting.pieces))
         trial = SortingTrial(
             rig=rig,
             sorting=sorting,
-            person=PersonAtTheConsole(),
-            asked_about=arguments.ask_about,
-            perturbation=perturbation,
+            person=self.person,
+            asked_about=self.asked_about,
+            perturbation=self.perturbation,
         )
         episode = trial.episode()
-        # Recording starts here rather than at start-up so the bag holds the sorting
-        # itself, not the operator's wait at the prompt above, and closes as soon as
-        # the last piece is placed. The trial's own clock starts just before it on the
-        # same wall clock the bag stamps its messages on, so the two are read against
-        # one another through the trial's start.
         recorder = (
-            RosbagRecordingProcess(
-                RosbagRecorder.timestamped(
-                    BAG_NAME_PREFIX,
-                    arguments.bag_directory,
-                    keep_every_nth_frame=arguments.keep_every_nth_frame,
-                )
-            )
-            if arguments.record
-            else contextlib.nullcontext()
+            contextlib.nullcontext()
+            if self.bag is None
+            else RosbagRecordingProcess(self.bag)
         )
-        trial.begin()
         with (
             recorder as bag,
             ExecutionEnvironment(
-                execution_type=ExecutionType.REAL, collision_avoidance=False
+                execution_type=self.motion_execution, collision_avoidance=False
             ),
         ):
+            trial.begin()
             rig.perform_and_record(park)
             trial.perform()
         recorded = trial.finish(episode)
         logger.info("Sorting finished.")
-        keep_the_episode(
+        return keep_the_episode(
             recorded,
             trial.joints.trace,
             None if bag is None else Path(bag.output_directory),
-            database,
+            self.database,
+            self.artifact_directory,
         )
+
+
+def main(argument_list: Optional[Sequence[str]] = None) -> None:
+    """
+    Sort the pieces the camera finds with the physical Tracy, recording the episode.
+
+    :param argument_list: Arguments to read; the process's own when omitted.
+    :raises InMemoryDatabaseRefused: If the episode would be recorded to a database that
+        dies with the run, before anything on the robot is touched.
+    """
+    arguments = _parse_arguments(argument_list)
+    database = resolve_lasting_database(arguments.database_uri)
+    perturbation = perturbation_asked_for(arguments.perturbation, arguments.piece)
+    bag = bag_asked_for(arguments)
+
+    feed = EventFeed()
+    run_dashboard(feed)
+
+    rclpy.init()
+    with LiveTracy.connected(NODE_NAME) as tracy:
+        PickupDemo(
+            tracy=tracy,
+            person=PersonAtTheConsole(),
+            database=database,
+            asked_about=arguments.ask_about,
+            perturbation=perturbation,
+            bag=bag,
+            feed=feed,
+        ).run()
+
+
+def bag_asked_for(arguments: argparse.Namespace) -> Optional[RosbagRecorder]:
+    """
+    The bag the command line asked the run to record, or None for a run that records
+    none.
+
+    :param arguments: The command line as read.
+    """
+    if not arguments.record:
+        return None
+    return RosbagRecorder.timestamped(
+        BAG_NAME_PREFIX,
+        arguments.bag_directory,
+        keep_every_nth_frame=arguments.keep_every_nth_frame,
+    )
 
 
 def keep_the_episode(
@@ -1035,6 +1141,7 @@ def keep_the_episode(
     joints: JointTrace,
     bag_directory: Optional[Path],
     database: ResultsDatabase,
+    artifact_directory: Optional[ArtifactDirectory] = None,
 ) -> EpisodeArtifacts:
     """
     Record the trial to the database the run was checked against and keep the run's
@@ -1046,6 +1153,8 @@ def keep_the_episode(
     :param bag_directory: The bag the run recorded, or None for a run that recorded
         none.
     :param database: The database the trial is recorded to.
+    :param artifact_directory: Where the artifacts are kept; the configured directory
+        when None.
     :return: The artifacts that were kept.
     """
     recording = open_recording(database)
@@ -1053,7 +1162,9 @@ def keep_the_episode(
         recording.record(trial)
     finally:
         recording.close()
-    artifacts = ArtifactDirectory().open_for(trial.episode)
+    if artifact_directory is None:
+        artifact_directory = ArtifactDirectory()
+    artifacts = artifact_directory.open_for(trial.episode)
     artifacts.keep_transcript(Transcript(episode=trial.episode, trials=[trial]))
     artifacts.trial(trial.number).keep_joint_trace(joints)
     if bag_directory is not None:
