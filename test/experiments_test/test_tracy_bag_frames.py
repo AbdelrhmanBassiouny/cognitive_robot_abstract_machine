@@ -5,9 +5,16 @@ go of the piece they carried, read off the knuckle joint's own positions.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
+from experiments.montessori.perception.recordings import (
+    REFERENCE_FRAME,
+    RecordedCamera,
+)
 from experiments.tracy_experiments.bag_frames import (
+    FigureFramesFromBag,
     HOLDING_KNUCKLE_POSITION,
     KnuckleReading,
     NoReleaseRecordedError,
@@ -66,3 +73,14 @@ def test_fingers_that_never_closed_let_nothing_go() -> None:
 def test_fingers_still_closed_when_the_recording_ends_let_nothing_go() -> None:
     with pytest.raises(NoReleaseRecordedError):
         last_release(readings(OPEN_KNUCKLE_POSITION, HOLDING, HOLDING))
+
+
+# %% reading the bag's own camera
+
+
+def test_the_camera_is_read_in_the_frame_recordings_use() -> None:
+    bag = Path("some_recording")
+
+    assert FigureFramesFromBag(bag=bag).camera == RecordedCamera(
+        bag=bag, reference_frame=REFERENCE_FRAME
+    )
