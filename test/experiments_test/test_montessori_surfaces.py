@@ -137,6 +137,20 @@ def test_a_surface_lies_at_the_top_of_the_body_it_is_read_from():
     assert surface.height == pytest.approx(float(TABLE_POSITION.z) + TABLE_SCALE.z / 2)
 
 
+def test_a_surfaces_corners_are_its_patch_at_its_own_height():
+    montessori = _scene_world()
+    surface = WorkspaceSurface.of_body(
+        _table_in(montessori).root, montessori.world.root
+    )
+
+    corners = surface.corners
+
+    assert corners.tolist() == [
+        [surface.region.minimum_x, surface.region.minimum_y, surface.height],
+        [surface.region.maximum_x, surface.region.maximum_y, surface.height],
+    ]
+
+
 def test_a_surface_ignores_the_legs_that_hold_it_up():
     top_scale = Scale(0.8, 0.8, 0.02)
     top_center_z = 0.7

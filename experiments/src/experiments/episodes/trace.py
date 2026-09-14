@@ -12,6 +12,7 @@ from __future__ import annotations
 import shutil
 import time
 from abc import ABC, abstractmethod
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -22,7 +23,15 @@ from krrood.exceptions import DataclassException
 from semantic_digital_twin.adapters.mujoco_video_recording import RecordedVideo
 from semantic_digital_twin.callbacks.callback import StateChangeCallback
 from semantic_digital_twin.world import World
-from typing_extensions import Callable, ClassVar, Dict, List, Optional, Self
+from typing_extensions import (
+    Callable,
+    ClassVar,
+    Dict,
+    Iterator,
+    List,
+    Optional,
+    Self,
+)
 
 # %% asking a trace for a moment it holds nothing of
 
@@ -93,12 +102,12 @@ class JointPositions:
     """
 
     @classmethod
-    def standing_in(cls, world: World, moment: float = 0.0) -> Self:
+    def of(cls, world: World, moment: float = 0.0) -> Self:
         """
         Where every joint of the given world stands now.
 
         :param world: The world to read.
-        :param moment: Seconds into the trial the joints are read at.
+        :param moment: Seconds into the trial the reading is stamped with.
         """
         return cls(
             moment=moment,
@@ -124,6 +133,37 @@ class JointPositions:
                 continue
             world.state[degree_of_freedom.id].position = self.positions[name]
         world.notify_state_change()
+
+
+@contextmanager
+def put_back_afterwards(world: World) -> Iterator[World]:
+    """
+    Put every joint of the world back where it stood before the block once the block
+    ends, whatever the block moved, so a world read at some moment of a trial is left as
+    it was found.
+
+    :param world: The world to put back.
+    """
+    stood = JointPositions.of(world)
+    try:
+        yield world
+    finally:
+        stood.restore_into(world)
+
+
+@contextmanager
+def standing_at(world: World, positions: JointPositions) -> Iterator[World]:
+    """
+    Put every joint of the world where the given sample has it for the length of the
+    block, and back where it stood before afterwards, so the block reads the world as it
+    was at that moment of the trial.
+
+    :param world: The world to stand.
+    :param positions: Where every joint stood at the moment to read the world at.
+    """
+    with put_back_afterwards(world):
+        positions.restore_into(world)
+        yield world
 
 
 @dataclass
@@ -270,12 +310,30 @@ class JointTraceRecorder(StateChangeCallback):
     The reading of the clock the next sample is due at, or None before the first.
     """
 
+    _thinned_at: Optional[float] = field(init=False, default=None)
+    """
+    The reading of the clock at the latest change the period thinned away, or None where
+    the latest change was sampled.
+    """
+
     def on_state_change(self, **kwargs) -> None:
         moment = self.clock()
         if self._next_at is not None and moment < self._next_at:
+            self._thinned_at = moment
             return
         self._next_at = moment + self.period
+        self._thinned_at = None
         self.trace.sample(self._world, moment)
+
+    def stop(self) -> None:
+        """
+        Stop sampling, keeping the latest change the period thinned away, so the trace
+        ends where the world did rather than one period short of it.
+        """
+        if self._thinned_at is not None:
+            self.trace.sample(self._world, self._thinned_at)
+            self._thinned_at = None
+        super().stop()
 
 
 # %% what a camera saw

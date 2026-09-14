@@ -286,19 +286,13 @@ def test_every_piece_the_pads_hold_flat_ends_up_through_its_hole(
     assert all(value >= IN_ITS_HOLE for value in containment.values()), containment
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "Two parallel pads hold the triangular prism by one face and the opposite "
-        "edge, and in MuJoCo that grasp does not last the carry to its hole: the prism "
-        "works its way out of the pads on the way and lands on the table in front of "
-        "the board. A firmer squeeze only pushes it out sooner. The real pads are "
-        "compliant and hold it; the simulated ones need a grasp of their own for it."
-    ),
-)
 def test_the_triangular_prism_ends_up_through_its_hole(
     performed: SimulatedPickupDemo,
 ) -> None:
+    """
+    Two parallel pads hold the triangular prism by one face and the opposite edge, and
+    that grasp lasts the carry to its hole.
+    """
     assert (
         performed.lab.containment_in_its_hole(MontessoriShapeCategory.TRIANGULAR_PRISM)
         >= IN_ITS_HOLE

@@ -34,7 +34,7 @@ from experiments.episodes.long_term_memory import (
     LongTermMemory,
     UnrecordedEpisodeError,
 )
-from experiments.episodes.trace import JointPositions, JointTrace
+from experiments.episodes.trace import JointTrace, standing_at
 from experiments.montessori.results_database import (
     ConfiguredDatabase,
     ResultsDatabase,
@@ -402,9 +402,7 @@ def ask_at_a_moment(
     world = trial.episode.world
     if world is None:
         raise EpisodeKeptNoWorldToAskAgain(episode_identifier=identifier)
-    stood = JointPositions.standing_in(world)
-    try:
-        trace.at(moment).restore_into(world)
+    with standing_at(world, trace.at(moment)):
         scene = SortingScene(world)
         rows = working_memory_questions_about(
             scene, world.get_body_by_name(object_name), trial
@@ -412,8 +410,6 @@ def ask_at_a_moment(
         finger_joint_position = (
             scene.end_effector.finger.root.parent_connection.position
         )
-    finally:
-        stood.restore_into(world)
     return AnswersAtAMoment(
         moment=moment, rows=rows, finger_joint_position=finger_joint_position
     )

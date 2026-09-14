@@ -38,7 +38,6 @@ from experiments.episodes.episode import (
 from experiments.episodes.trace import JointTrace, TimedFrames
 from experiments.paper.layered import Layer, LayeredFigure
 from experiments.paper.panel import PanelKind
-from experiments.paper.scene import PointOfView
 from experiments.paper.plan_timeline import PlanTimeline
 from experiments.paper.query_card import (
     EventAgainstThePlanCard,
@@ -48,10 +47,7 @@ from experiments.paper.query_card import (
 from experiments.paper.run_plan import RunPlan
 from experiments.questions.working_memory import PickedUpRecently
 from experiments.scenarios.trial import TrialOutcome
-from semantic_digital_twin.spatial_types.spatial_types import (
-    HomogeneousTransformationMatrix,
-    Pose,
-)
+from semantic_digital_twin.spatial_types.spatial_types import Pose
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.connections import Connection6DoF
 from semantic_digital_twin.world_description.world_entity import Body
@@ -121,10 +117,6 @@ def scene() -> World:
         world.add_connection(
             Connection6DoF.create_with_dofs(world=world, parent=stands, child=loose)
         )
-    PointOfView(
-        body=world.root,
-        pose=HomogeneousTransformationMatrix.from_xyz_rpy(x=-1.5, z=0.8, pitch=0.5),
-    ).camera()
     return world
 
 
