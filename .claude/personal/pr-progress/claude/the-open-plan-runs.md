@@ -263,6 +263,23 @@ description, so performing the figure's plan through them would discard the
 probabilistic slot's answer. Neither MuJoCo nor ROS is installed in the session
 container, so nothing of that could be verified here.
 
+## Open review thread on #368 (r4002576823, awaiting a decision)
+
+"Index the symbol graph by the world it has" for `WorldBackend.everything_it_holds`.
+Checked: every kind of thing a world holds carries the `_world` backreference, so the
+premise is sound. Replied with two routes and the hazard they share - an entity's world
+is set by `add_to_world` *after* `Symbol.__new__` files the node, so any index keyed on
+it has to be told when the key moves:
+- **A** (recommended): a general keyed index in `SymbolGraph` - `index_by(key_of)` saved
+  under the key function itself, `refile(instance)` - plus `WorldEntity.add_to_world` /
+  `remove_from_world` calling `refile`, and a public `WorldEntity.world`. krrood stays
+  self-contained because the key function is the caller's. Exact.
+- **B**: the index in the backend with weakrefs, rebuilt when `World.revision` moves
+  (needs that made public). No krrood change, but only as good as the invariant that
+  every change to what a world holds advances the revision.
+Thread left open; implement whichever is chosen, with the index pinned by tests (in
+krrood over its own mimics for A).
+
 ## The stack as it stands
 
 #355 -> #359 (stage 1) -> #366 (stage 2) -> #368 (stage 3) -> #369 (stage 4), all
