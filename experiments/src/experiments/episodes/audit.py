@@ -298,7 +298,11 @@ class EpisodeAudit:
             mesh_files = (
                 None
                 if episode_row.world is None
-                else list(self._mesh_files_of(episode_row.world))
+                else [
+                    mesh_file
+                    for world_row in self._world_rows_of(episode_row, rows)
+                    for mesh_file in self._mesh_files_of(world_row)
+                ]
             )
         report = EpisodeAuditReport(
             identifier=identifier, description=self._describe(episode, trials)
@@ -341,6 +345,22 @@ class EpisodeAudit:
             tick_moments=[tick.moment for tick in ticks],
             event_count=sum(len(tick.events) for tick in ticks),
         )
+
+    @staticmethod
+    def _world_rows_of(episode_row: Any, trial_rows: Sequence[Any]) -> Iterator[Any]:
+        """
+        Every world the episode's rows carry: the episode's own, and the world each
+        performed plan of each trial kept a copy of.
+
+        :param episode_row: The episode's row, which keeps a world.
+        :param trial_rows: The trials' rows, whose plans keep their worlds.
+        """
+        yield episode_row.world
+        for trial_row in trial_rows:
+            for association in trial_row.plans:
+                initial_world = association.target.plan.initial_world
+                if initial_world is not None:
+                    yield initial_world
 
     @staticmethod
     def _mesh_files_of(world_row: Any) -> Iterator[Path]:
@@ -408,13 +428,14 @@ class EpisodeAudit:
             return Finding(
                 Check.WORLD,
                 Verdict.FAILED,
-                "%d of %d mesh files the kept world reads from are gone, e.g. %s"
+                "%d of %d mesh files the kept worlds read from are gone, e.g. %s"
                 % (len(missing), len(mesh_files), missing[0]),
             )
         return Finding(
             Check.WORLD,
             Verdict.PASSED,
-            "the kept world reads from %d mesh files, all present" % len(mesh_files),
+            "the kept worlds, the episode's and its plans', read from %d mesh files, "
+            "all present" % len(mesh_files),
         )
 
     @staticmethod
