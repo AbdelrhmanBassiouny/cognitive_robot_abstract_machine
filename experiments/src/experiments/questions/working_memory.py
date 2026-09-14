@@ -795,14 +795,16 @@ class ObjectsThatMoved(WorkingMemoryQuestion[List[Body]]):
         """
         return self.distinct(self.solutions(source))
 
-    def ground_truth(self, source: AbstractRobot) -> List[Body]:
+    def ground_truth(self, source: AbstractRobot) -> BodiesNamed:
         """
-        The objects the segmentation says moved, read off it directly.
+        The objects the segmentation says moved, read off it directly, in any order.
 
         :param source: The robot whose memory it is.
         """
-        return self.distinct(
-            [event.tracked_object for event in self.remembered_events(MotionEvent)]
+        return BodiesNamed.of(
+            self.distinct(
+                [event.tracked_object for event in self.remembered_events(MotionEvent)]
+            )
         )
 
 
@@ -864,9 +866,14 @@ class ObjectsTheRobotMoved(WorkingMemoryQuestion[List[Body]]):
         """
         return self.distinct(self.solutions(source))
 
-    def ground_truth(self, source: AbstractRobot) -> List[Body]:
+    def ground_truth(self, source: AbstractRobot) -> BodiesNamed:
         """
-        The objects the segmentation says the robot moved, read off it directly.
+        The objects the segmentation says the robot moved, read off it directly, in any
+        order.
+
+        In any order because the two accounts enumerate them differently: the motions
+        name what someone else moved before the robot acted, while the query names them
+        in the order the robot acted on them.
 
         :param source: The robot whose memory it is.
         """
@@ -874,12 +881,14 @@ class ObjectsTheRobotMoved(WorkingMemoryQuestion[List[Body]]):
             event.tracked_object
             for event in self.remembered_events(AgentInteractionEvent)
         }
-        return self.distinct(
-            [
-                event.tracked_object
-                for event in self.remembered_events(MotionEvent)
-                if event.tracked_object in acted_on
-            ]
+        return BodiesNamed.of(
+            self.distinct(
+                [
+                    event.tracked_object
+                    for event in self.remembered_events(MotionEvent)
+                    if event.tracked_object in acted_on
+                ]
+            )
         )
 
 

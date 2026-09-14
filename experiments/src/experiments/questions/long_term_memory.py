@@ -58,6 +58,7 @@ from experiments.episodes.long_term_memory import LongTermMemory
 from experiments.questions.question import (
     AnswerType,
     BloomLevel,
+    BodiesNamed,
     Bucket,
     Memory,
     Question,
@@ -225,14 +226,16 @@ class ObjectsSeenInTheEpisode(LongTermMemoryQuestion[List[Body]]):
         """
         return self.distinct(self.solutions(source))
 
-    def ground_truth(self, source: LongTermMemory) -> List[Body]:
+    def ground_truth(self, source: LongTermMemory) -> BodiesNamed:
         """
-        The objects the recorded events name, traversed off them directly.
+        The objects the recorded events name, traversed off them directly, in any order.
 
         :param source: The long-term memory holding what actually happened.
         """
-        return self.distinct(
-            [event.tracked_object for event in self.recorded_events(source)]
+        return BodiesNamed.of(
+            self.distinct(
+                [event.tracked_object for event in self.recorded_events(source)]
+            )
         )
 
 
@@ -346,18 +349,21 @@ class ObjectsThatMovedInTheEpisode(LongTermMemoryQuestion[List[Body]]):
         """
         return self.distinct(self.solutions(source))
 
-    def ground_truth(self, source: LongTermMemory) -> List[Body]:
+    def ground_truth(self, source: LongTermMemory) -> BodiesNamed:
         """
-        The objects the recorded motions name, traversed off them directly.
+        The objects the recorded motions name, traversed off them directly, in any
+        order.
 
         :param source: The long-term memory holding what actually happened.
         """
-        return self.distinct(
-            [
-                event.tracked_object
-                for event in self.recorded_events(source)
-                if isinstance(event, MotionEvent)
-            ]
+        return BodiesNamed.of(
+            self.distinct(
+                [
+                    event.tracked_object
+                    for event in self.recorded_events(source)
+                    if isinstance(event, MotionEvent)
+                ]
+            )
         )
 
 
@@ -424,10 +430,10 @@ class ObjectsTheRobotMovedInTheEpisode(LongTermMemoryQuestion[List[Body]]):
         """
         return self.distinct(self.solutions(source))
 
-    def ground_truth(self, source: LongTermMemory) -> List[Body]:
+    def ground_truth(self, source: LongTermMemory) -> BodiesNamed:
         """
         The objects the run recorded both a pick-up and a motion of, traversed off what
-        it wrote.
+        it wrote, in any order.
 
         :param source: The long-term memory holding what actually happened.
         """
@@ -437,12 +443,15 @@ class ObjectsTheRobotMovedInTheEpisode(LongTermMemoryQuestion[List[Body]]):
             for event in events
             if isinstance(event, AgentInteractionEvent)
         }
-        return self.distinct(
-            [
-                event.tracked_object
-                for event in events
-                if isinstance(event, MotionEvent) and event.tracked_object in acted_on
-            ]
+        return BodiesNamed.of(
+            self.distinct(
+                [
+                    event.tracked_object
+                    for event in events
+                    if isinstance(event, MotionEvent)
+                    and event.tracked_object in acted_on
+                ]
+            )
         )
 
 
