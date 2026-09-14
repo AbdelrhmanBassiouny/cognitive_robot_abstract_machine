@@ -123,3 +123,52 @@ through `pickup_demo_real` (one trial per run).
 **The other session** (in ~/bass) reported the same two health findings (meshes, joint
 traces) and offered a row repair of the robot links by body name; not done here.
 
+## pickup-demo-rehearsal: the real sorting demo rehearsed and checked without the robot (2026-09-14, morning)
+
+**Session.** https://claude.ai/code/session_01DW221gKgpaa45K7i2yx9kf
+
+**Asked.** "Mimic as close as possible the recording and the health check of real
+robot sorting trials without the real robot and the real camera", so the lab holds
+fewer surprises.
+
+**Built, on #265.** `experiments/tracy_experiments/lab_without_the_robot.py`: the
+lab's ROS side served by this process -- `PublishedWorld` (Tracy's description over
+`FetchWorldServer` + `WorldSynchronizer`), `CaptureCamera` (a capture's colour, depth
+over both transports, calibration, static TF of its pose; `show()` swaps the capture),
+`GripperDriverInTheWorld` (the `ParallelGripperCommand` action per arm, closes the
+knuckle in the served world, stalls on a piece within 6 cm of the tool frame, publishes
+`/<side>_gripper/joint_states`), `JointStatePublisher`, `LabWithoutTheRobot.brought_up`.
+`pickup_demo_rehearsal.py`: `Rehearsal.run()` brings the lab up, connects through
+`LiveTracy.connected` verbatim, runs `PickupDemo` with Giskard SIMULATED in-process and
+a scripted `PersonAtTheRehearsal`, records to `<artifacts>/rehearsals.db`, audits, prints
+the `check_episode.py` command. Script `experiments/scripts/rehearse_pickup_demo.py`.
+`pickup_demo_real.main` refactored into `PickupDemo` (fields: tracy, person, database,
+asked_about, perturbation, bag, motion_execution, artifact_directory, feed);
+`argument_parser(add_help)`; `bag_asked_for`; `CHECK_THE_SCENE` goes through
+`person.carry_out`.
+
+**Found by rehearsing (fixed).** (1) segmind `EventCallbacks` registered a callback
+twice for kinds reached by two inheritance paths (every event noted twice) -- #371 off
+main (`bug`), also on #265. (2) The bag opened *after* the trial's clock started, so
+every real recording would have warned "recording begins N s into the trial" --
+`trial.begin()` now inside the recorder block. (3) `LiveTracy` spun a
+`MultiThreadedExecutor`: a motion whose ticks the synchronizer publishes took 47 s
+beside it and 0.8 s beside a `SingleThreadedExecutor` (rclpy's multi-threaded executor
+spins hot while a callback runs); every callback of the node is in one mutually
+exclusive group anyway, so switched -- this hits the lab too. (4) `LiveTracy` destroyed
+its node while a look was still running on the executor (`InvalidHandle` at exit) --
+spinner joined first. (5) Raw depth best-effort over loopback is mostly lost; the
+stand-in publishes it reliably.
+
+**Rehearsal timings.** Whole rehearsal with bag ~85 s (perceive 2 s, park+4 sorts ~35 s,
+record ~20 s, audit). Report: all PASSED except camera recording (fixed by 5) -- see run.
+
+**Tests.** `test_tracy_lab_without_the_robot.py` (7), `test_tracy_pickup_demo_rehearsal.py`
+(12; two module-scoped rehearsals, ~3 min), `test_segmind_detectors`'s sibling
+`test_event_callbacks.py` (3).
+
+**Left.** A perturbation can only be rehearsed with a second capture
+(`--capture-after`); none of the shipped captures shows a shoved table, so the rehearsal
+reports the perturbation WARNING (nothing moved). Take a before/after capture pair at
+the lab with `capture_from_camera` to rehearse it later.
+
