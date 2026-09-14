@@ -12,7 +12,14 @@ Plan:
 - [x] fix: release = hole frame + marker/2 + PLACE_HOVER + half the model height; grasp =
       surface_height + half the model height + offset; carriers hold DetectedMontessoriShape
 - [x] tests: 12 carrier tests + test_framework_demo pass; pushed; draft PR #381
+- [x] recording crash on the robot (ReachActionDAO.object_designator can't hold
+      DetectedMontessoriShapeDAO): reach now gets object_designator.role_taker; DB test added;
+      #380's reach test now asserts role_taker; commit 258fb6ae35 pushed, PR body updated
 - [ ] user reruns on the robot; if the hole's sideways error is still large, look at the
       board before the cube goes on the lid
+- [ ] new ask (2026-09-14): record perception's narrowing to the cyan cube from the real camera
+      images during framework_demo real, and use it in the framework figure
+      (experiments/doc/figures/framework). Exploring step_by_step.NarrowingStep + bag_frames;
+      likely a new PR stacked on this branch
 - still open elsewhere: #379 pickup rerun; framework figure frames/cards after a good run;
   cube-evidence feature follow-on (worktree ~/bass/cram-board-by-the-cube)
