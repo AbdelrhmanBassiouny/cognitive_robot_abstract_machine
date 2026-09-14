@@ -600,6 +600,28 @@ def test_an_object_moved_after_being_picked_up_is_one_the_robot_moved_itself(
     assert ObjectsTheRobotMoved().ask(robot) == [scene.cube]
 
 
+def test_the_objects_the_robot_moved_are_true_in_any_order(
+    scene: QuestionedScene, robot: AbstractRobot
+):
+    """
+    Someone else shoved one object before the robot handled anything, so the motions
+    name it first while the robot's own actions name what it picked up first.
+
+    The answer is the objects it moved either way.
+    """
+    scene.events[:] = [
+        TranslationEvent(tracked_object=scene.cylinder),
+        PickUpEvent(tracked_object=scene.cube),
+        TranslationEvent(tracked_object=scene.cube),
+        PickUpEvent(tracked_object=scene.cylinder),
+        TranslationEvent(tracked_object=scene.cylinder),
+    ]
+    asked = ObjectsTheRobotMoved()
+
+    assert asked.ask(robot) == [scene.cube, scene.cylinder]
+    assert asked.matches_ground_truth(robot)
+
+
 def test_only_the_object_with_a_pick_up_event_was_picked_up(
     scene: QuestionedScene, robot: AbstractRobot
 ):
