@@ -174,6 +174,15 @@ CAPTURE_TRUTHS: Dict[str, CaptureTruth] = {
         ),
         board_front_left_corner=PlanarPoint(0.99, 0.30),
     ),
+    "washed_out_lid": CaptureTruth(
+        pieces_on_table=(
+            MontessoriShapeCategory.CYLINDER,
+            MontessoriShapeCategory.TRIANGULAR_PRISM,
+            MontessoriShapeCategory.RECTANGULAR_PRISM,
+        ),
+        pieces_on_lid=(MontessoriShapeCategory.CUBE,),
+        piece_set=SMALLER_PIECES,
+    ),
 }
 """
 What each shipped capture shows, keyed by the capture's own name.
@@ -183,4 +192,7 @@ first six hold the full-size set; ``scaled_pieces_in_a_row`` and ``shadowed_lid_
 were taken on 2026-09-11 of the smaller set standing in a row, each piece and the board
 measured with a tape. In the second the shadow under the lid's left rim reads as one
 more dark patch on the lid, beside the four holes the lighting leaves dark.
+``washed_out_lid`` was taken on 2026-09-14 off the live camera, with the light-blue cube
+on the lid's far corner from the square hole: the light falling across the board leaves
+too little of the lid's wood coloured for the lid to read as one coloured surface.
 """
