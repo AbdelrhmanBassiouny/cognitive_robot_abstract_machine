@@ -20,6 +20,7 @@ from semantic_digital_twin.reasoning.predicates import Near, SupportedBy
 from semantic_digital_twin.spatial_types.spatial_types import (
     HomogeneousTransformationMatrix,
     Point3,
+    Pose,
 )
 from semantic_digital_twin.robots.minimal_robot import MinimalRobot
 from semantic_digital_twin.robots.robot_parts import AbstractRobot
@@ -37,6 +38,7 @@ from segmind.datastructures.events import (
 from typing_extensions import List
 
 from experiments.questions.question import (
+    HOW_FAR_A_PLACE_MAY_DIFFER,
     BloomLevel,
     Bucket,
     GroundTruthSource,
@@ -623,6 +625,55 @@ def test_the_place_of_a_link_is_where_the_twin_puts_it(
 ):
     question = PlaceOfOwnBody(body_name=scene.own_body_name)
     assert question.matches_ground_truth(robot)
+
+
+def _place_of_a_link_moved_by(
+    question: PlaceOfOwnBody, robot: AbstractRobot, distance: float
+) -> Pose:
+    """
+    Where the link a question is about would be read had it moved the given distance.
+
+    :param question: The question about the link.
+    :param robot: The robot whose link it is.
+    :param distance: How far the link moved, along the world's x axis, in metres.
+    """
+    world = robot._world
+    link = world.get_body_by_name(question.body_name)
+    return (
+        HomogeneousTransformationMatrix.from_xyz_rpy(
+            x=distance, reference_frame=world.root
+        )
+        @ link.global_transform
+    ).to_pose()
+
+
+def test_the_place_of_a_link_read_a_moment_apart_is_still_where_it_is(
+    scene: QuestionedScene, robot: AbstractRobot
+):
+    """
+    On the robot the joints report noise between one reading and the next, so a link
+    asked about and then read off the twin a moment later is read a hair apart, and it
+    is still the same place.
+    """
+    question = PlaceOfOwnBody(body_name=scene.own_body_name)
+
+    read_a_moment_later = _place_of_a_link_moved_by(
+        question, robot, HOW_FAR_A_PLACE_MAY_DIFFER / 10
+    )
+
+    assert question.values_agree(read_a_moment_later, question.ground_truth(robot))
+
+
+def test_a_link_further_away_than_a_place_may_differ_is_elsewhere(
+    scene: QuestionedScene, robot: AbstractRobot
+):
+    question = PlaceOfOwnBody(body_name=scene.own_body_name)
+
+    elsewhere = _place_of_a_link_moved_by(
+        question, robot, HOW_FAR_A_PLACE_MAY_DIFFER * 2
+    )
+
+    assert not question.values_agree(elsewhere, question.ground_truth(robot))
 
 
 def test_the_robot_counts_the_links_the_twin_says_are_its_own(

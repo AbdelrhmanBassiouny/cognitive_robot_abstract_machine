@@ -10,15 +10,18 @@ ticks, its scored queries and the motions it ran rather than only its outcome.
 
 from __future__ import annotations
 
+import contextlib
 from dataclasses import dataclass, field
 
 from coraplex.datastructures.enums import ExecutionType
+from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.spatial_types.spatial_types import (
     HomogeneousTransformationMatrix,
     Point3,
 )
 from semantic_digital_twin.world import World
-from typing_extensions import Dict, List, Optional, Sequence, Set
+from semantic_digital_twin.world_description.world_entity import Body
+from typing_extensions import Dict, Iterator, List, Optional, Sequence, Set
 
 from experiments.episodes.observer import ObserverListener, ObserverMotionListener
 from experiments.episodes.recording import EpisodeRecording
@@ -26,6 +29,7 @@ from experiments.episodes.trace import JointTraceRecorder
 from experiments.montessori.event_monitoring import (
     MontessoriEventMonitor,
     build_shape_monitor_in_scene,
+    build_translation_monitor_in_scene,
 )
 from experiments.montessori.exceptions import NoPieceNumbered, UnknownPieceNamed
 from experiments.montessori.scenarios import (
@@ -291,12 +295,51 @@ class WatchedSortingRun(EpisodeRecording[MontessoriSortingScenario, World]):
             self.observer.elapsed_seconds,
             things_moved,
         )
-        super().apply_perturbation(scenario, perturbation, world)
+        with self.watching_translations_of(
+            self.not_watched(things_moved, world), world
+        ):
+            super().apply_perturbation(scenario, perturbation, world)
         self.pieces_acted_on.update(perturbation.pieces_acted_on)
         if self.stated_scene is None:
             return
         for moved in things_moved:
             self.stated_scene.forget_where(moved)
+
+    def not_watched(self, names: Sequence[PrefixedName], world: World) -> List[Body]:
+        """
+        The named things the trial's monitor does not already watch, such as the board.
+
+        :param names: What is asked after, named as the scene names it.
+        :param world: The world the trial is running in.
+        """
+        watched = SortingScene(world).body_of(self.watched_piece).name
+        return [
+            world.get_kinematic_structure_entity_by_name(name)
+            for name in names
+            if name != watched
+        ]
+
+    @contextlib.contextmanager
+    def watching_translations_of(
+        self, bodies: Sequence[Body], world: World
+    ) -> Iterator[None]:
+        """
+        Watch the given bodies for the length of the block, seen where they rest before
+        it and again after it, so what someone moves in it is kept as a translation of
+        what they moved.
+
+        :param bodies: The bodies watched.
+        :param world: The world the trial is running in.
+        """
+        if not bodies:
+            yield
+            return
+        monitor = build_translation_monitor_in_scene(
+            world, bodies, listener=ObserverListener(observer=self.observer)
+        )
+        monitor.tick()
+        yield
+        monitor.tick()
 
     def belief_questions(self, step: LookAtTheScene, world: World) -> QuestionSet:
         """
