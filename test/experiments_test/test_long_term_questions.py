@@ -54,6 +54,11 @@ UNTOUCHED_OBJECT_NAME = "cylinder"
 The object the recorded run only ever saw, so a question about it has a false to give.
 """
 
+SHOVED_OBJECT_NAME = "shoved_cube"
+"""
+The object someone other than the robot moved before the run handled anything.
+"""
+
 FIRST_TICK = 1.0
 """
 When the run's first tick was taken, in seconds from the start of its trial.
@@ -187,7 +192,7 @@ def test_the_objects_seen_are_the_ones_the_recorded_events_name(
     recorded_episode: Episode, memory: LongTermMemory
 ):
     question = ObjectsSeenInTheEpisode(episode_identifier=recorded_episode.identifier)
-    assert names(question.ask(memory)) == names(question.ground_truth(memory))
+    assert question.matches_ground_truth(memory)
     assert set(names(question.ask(memory))) == {
         MOVED_OBJECT_NAME,
         UNTOUCHED_OBJECT_NAME,
@@ -227,7 +232,7 @@ def test_only_the_object_the_run_picked_up_and_moved_is_one_it_moved_itself(
         episode_identifier=recorded_episode.identifier
     )
     assert names(question.ask(memory)) == [MOVED_OBJECT_NAME]
-    assert names(question.ask(memory)) == names(question.ground_truth(memory))
+    assert question.matches_ground_truth(memory)
 
 
 def test_an_object_the_robot_handled_twice_is_named_once_among_the_ones_it_moved(
@@ -265,6 +270,50 @@ def test_an_object_the_robot_handled_twice_is_named_once_among_the_ones_it_moved
     question = ObjectsTheRobotMovedInTheEpisode(episode_identifier=episode.identifier)
 
     assert names(question.ask(memory)) == [MOVED_OBJECT_NAME]
+    assert question.matches_ground_truth(memory)
+
+
+def test_the_objects_the_run_moved_are_true_in_any_order(
+    results_database: ResultsDatabase, memory: LongTermMemory
+):
+    """
+    Someone else shoved one object before the run handled anything, so the recorded
+    motions name it first while the run's own actions name what it picked up first.
+
+    The answer is the objects the robot moved either way.
+    """
+    episode = sorting_episode()
+    shoved = Body(name=PrefixedName(SHOVED_OBJECT_NAME))
+    picked_up = Body(name=PrefixedName(MOVED_OBJECT_NAME))
+    recording = open_recording(results_database)
+    recording.record(
+        RecordedTrial(
+            episode=episode,
+            outcome=TrialOutcome.SUCCEEDED,
+            duration=12.5,
+            ticks=[
+                Tick(
+                    moment=FIRST_TICK,
+                    events=[TranslationEvent(tracked_object=shoved)],
+                ),
+                Tick(
+                    moment=SECOND_TICK,
+                    events=[
+                        PickUpEvent(tracked_object=picked_up),
+                        TranslationEvent(tracked_object=picked_up),
+                        PickUpEvent(tracked_object=shoved),
+                        TranslationEvent(tracked_object=shoved),
+                    ],
+                ),
+            ],
+        )
+    )
+    recording.close()
+    question = ObjectsTheRobotMovedInTheEpisode(episode_identifier=episode.identifier)
+
+    assert names(question.ask(memory)) == sorted(
+        [MOVED_OBJECT_NAME, SHOVED_OBJECT_NAME]
+    )
     assert question.matches_ground_truth(memory)
 
 
