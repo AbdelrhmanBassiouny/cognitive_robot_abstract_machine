@@ -7,7 +7,7 @@ from __future__ import annotations
 import threading
 
 import pytest
-from sqlalchemy import inspect
+from sqlalchemy import Column, MetaData, Table, inspect, select
 
 from experiments.montessori.results_database import (
     ConfiguredDatabase,
@@ -75,6 +75,79 @@ class TestOpeningSessions:
         monkeypatch.setenv(DATABASE_URI_ENVIRONMENT_VARIABLE, "sqlite://")
 
         assert ResultsDatabase().uri == "sqlite://"
+
+
+# %% a database recorded to before the schema gained a column
+OLDER_TABLE = "ApertureDAO"
+"""
+A table that gained a column after a lasting database had already created it.
+"""
+
+COLUMN_GAINED = "_landing_region_id"
+"""
+The column that table gained: the reference to an aperture's landing region.
+"""
+
+ROW_RECORDED_EARLIER = 1
+"""
+The identifier of the row the older table already holds.
+"""
+
+
+@pytest.fixture(scope="module")
+def database_recorded_to_earlier(tmp_path_factory) -> str:
+    """
+    A database whose :data:`OLDER_TABLE` was created before the schema gave it
+    :data:`COLUMN_GAINED`, holding one row recorded then, and opened again since.
+    """
+    uri = "sqlite:///%s" % (tmp_path_factory.mktemp("earlier") / "results.db")
+    ResultsDatabase(uri=uri).open_session().close()
+    schema_table = ResultsDatabase._schema().tables[OLDER_TABLE]
+    earlier_table = Table(
+        OLDER_TABLE,
+        MetaData(),
+        *[
+            Column(column.name, column.type, primary_key=column.primary_key)
+            for column in schema_table.columns
+            if column.name != COLUMN_GAINED
+        ],
+    )
+    with create_results_engine(uri).begin() as connection:
+        schema_table.drop(connection)
+        earlier_table.create(connection)
+        connection.execute(
+            earlier_table.insert().values(database_id=ROW_RECORDED_EARLIER)
+        )
+    ResultsDatabase(uri=uri).open_session().close()
+    return uri
+
+
+class TestOpeningADatabaseRecordedToEarlier:
+    """
+    A lasting database outlives the schema that created it, and is never recreated to
+    catch up with a newer one.
+    """
+
+    def test_a_table_created_earlier_gains_the_columns_the_schema_added(
+        self, database_recorded_to_earlier
+    ):
+        columns = inspect(
+            create_results_engine(database_recorded_to_earlier)
+        ).get_columns(OLDER_TABLE)
+
+        assert {column["name"] for column in columns} == {
+            column.name
+            for column in ResultsDatabase._schema().tables[OLDER_TABLE].columns
+        }
+
+    def test_the_rows_recorded_earlier_are_kept(self, database_recorded_to_earlier):
+        table = ResultsDatabase._schema().tables[OLDER_TABLE]
+        with create_results_engine(
+            database_recorded_to_earlier
+        ).connect() as connection:
+            rows = connection.execute(select(table.c.database_id)).scalars().all()
+
+        assert rows == [ROW_RECORDED_EARLIER]
 
 
 # %% is it actually reachable
