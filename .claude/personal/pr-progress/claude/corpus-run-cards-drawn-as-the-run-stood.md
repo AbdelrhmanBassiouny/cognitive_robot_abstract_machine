@@ -112,7 +112,7 @@ Plan: make the query cards of the simulated corpus right.
       as before: LOOKING_DOWN_BY/STANDING_BACK_AT_LEAST) -- told the user, not changed.
 - [x] CI run 34797104927 for 4e7fdd3482: every job green (experiments and semdt included);
       user told to redo the figures backup. #356 draft, description current.
-- [ ] user (2026-09-14 07:27, from phone, card e2210efd): held piece drawn inside the wrist,
+- [x] user (2026-09-14 07:27, from phone, card e2210efd): held piece drawn inside the wrist,
       gripper closed through it, pictures too bright, camera before/after identical.
       Causes: (1) JointTraceRecorder thinned away the last change (the lift at ~140.97 fell
       within one period of the 140.96 sample; trial ended 141.36) so the robot was drawn
@@ -127,5 +127,6 @@ Plan: make the query cards of the simulated corpus right.
       state (knuckle 0.791 of 0.8, closed at 0.0088 rad/s from 44 s to 140.6 s, piece never
       moved) -- not a rendering matter, to report. Held-piece card test hung its piece on
       its parent (z-fight, flaky) -> hung 0.15 m below. Commit fa1e21ae4c pushed, #356
-      description updated, draft. Figures run 6 launched 08:45 (figures_again.sh ->
-      figures_rerecorded_2026-09-14_run6.log).
+      description updated, draft. Figures run 6 (08:45-08:56, exit 0): 348 cards / 75
+      episodes, 102 MB; e2210efd and 98f619ab pose-change panels checked (piece lifted in
+      the fingers, ghost on the table). CI runs 34814797580/34814797501 pending.
