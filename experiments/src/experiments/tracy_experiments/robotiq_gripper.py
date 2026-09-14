@@ -156,6 +156,14 @@ Action name of a Robotiq gripper controller, parameterised by body side.
 """
 
 
+def gripper_action_name(arm: Arms) -> str:
+    """
+    :param arm: A single arm.
+    :return: The name of the action its Robotiq gripper's driver serves.
+    """
+    return GRIPPER_ACTION_TEMPLATE.format(side=_ARM_SIDES[arm])
+
+
 # %% controller
 
 
@@ -165,8 +173,8 @@ class RobotiqGripperController:
     Opens and closes Tracy's Robotiq grippers over their ``ParallelGripperCommand``
     action servers, blocking until each command finishes.
 
-    ..note:: The node must be spun by an executor (for example a background
-        :class:`~rclpy.executors.MultiThreadedExecutor`) while a command is in flight.
+    ..note:: The node must be spun by an executor on a thread of its own while a
+        command is in flight.
     """
 
     node: Node
@@ -239,21 +247,16 @@ class RobotiqGripperController:
         """:return: The cached action client for ``arm``, creating it on first use."""
         if arm not in self._clients:
             self._clients[arm] = ActionClient(
-                self.node, ParallelGripperCommand, self._action_name(arm)
+                self.node, ParallelGripperCommand, gripper_action_name(arm)
             )
         return self._clients[arm]
-
-    @staticmethod
-    def _action_name(arm: Arms) -> str:
-        """:return: The gripper action name for a single arm."""
-        return GRIPPER_ACTION_TEMPLATE.format(side=_ARM_SIDES[arm])
 
     def _send(self, arm: Arms, setpoint: float) -> None:
         """
         Send one finger-position command to a single arm and wait for its result.
         """
         client = self._client(arm)
-        action_name = self._action_name(arm)
+        action_name = gripper_action_name(arm)
         if not client.wait_for_server(timeout_sec=self.server_timeout):
             raise GripperActionServerUnavailable(arm, action_name)
 

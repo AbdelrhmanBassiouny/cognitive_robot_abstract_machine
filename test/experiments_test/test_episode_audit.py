@@ -38,7 +38,13 @@ from experiments.episodes.audit import (
     Finding,
     Verdict,
 )
-from experiments.episodes.episode import Episode, RecordedQuery, RecordedTrial, Tick
+from experiments.episodes.episode import (
+    Episode,
+    PerformedPlan,
+    RecordedQuery,
+    RecordedTrial,
+    Tick,
+)
 from experiments.episodes.recording import open_recording
 from experiments.episodes.trace import JointTrace
 from experiments.montessori.check_episode import (
@@ -51,6 +57,7 @@ from experiments.questions.working_memory import AnythingMoved, NumberOfOwnBodie
 from experiments.scenarios.trial import TrialOutcome
 
 from .test_episode_artifacts import coloured_frames
+from .test_episodes import minimal_plan
 
 # %% an episode recorded the way a run records one
 
@@ -325,6 +332,29 @@ def test_a_world_whose_mesh_file_is_gone_fails_the_world_check(
     assert world.verdict is Verdict.FAILED
     assert mesh.filename in world.detail
     assert Check.READ_BACK not in [finding.check for finding in report.findings]
+
+
+def test_a_plans_world_whose_mesh_file_is_gone_fails_the_world_check(
+    run: RecordedRun,
+) -> None:
+    """
+    A plan keeps the world it was performed in, and that world goes into the record with
+    the trial, so its meshes are checked with the episode's own.
+    """
+    plan = minimal_plan()
+    plan.initial_world = world_of_one_kept_mesh()
+    trial = trial_of(run.episode)
+    trial.plans.append(PerformedPlan(plan=plan))
+    run.record(trial)
+    [body] = plan.initial_world.bodies
+    [mesh] = body.visual.shapes
+    Path(mesh.filename).unlink()
+
+    report = run.audit()
+
+    world = finding_of(report, Check.WORLD)
+    assert world.verdict is Verdict.FAILED
+    assert mesh.filename in world.detail
 
 
 def test_an_episode_that_kept_no_world_fails_the_world_check(
