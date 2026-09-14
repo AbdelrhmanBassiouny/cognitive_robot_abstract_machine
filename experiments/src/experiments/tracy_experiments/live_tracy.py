@@ -45,6 +45,57 @@ EXECUTOR_THREAD_NAME = "rclpy-executor"
 The name of the thread the connection's node is spun on.
 """
 
+CAMERA_NODE_SUFFIX = "_camera"
+"""
+What the camera's node is named after the connection's own node name.
+"""
+
+CAMERA_EXECUTOR_THREAD_NAME = "rclpy-camera-executor"
+"""
+The name of the thread the camera's node is spun on.
+"""
+
+
+@dataclass
+class SpunNode:
+    """
+    A node spun by a single-threaded executor on a thread of its own.
+    """
+
+    node: Node
+    """
+    The node spun.
+    """
+
+    executor: Executor
+    """
+    What spins :attr:`node`.
+    """
+
+    @classmethod
+    @contextlib.contextmanager
+    def spun(cls, node_name: str, thread_name: str) -> Iterator[SpunNode]:
+        """
+        Spin a new node for as long as the block runs.
+
+        The node is destroyed only once its spinner has returned, so a callback still
+        under way on it finishes before the publishers it draws on are gone.
+
+        :param node_name: The name the node registers under.
+        :param thread_name: The name of the thread it is spun on.
+        """
+        node = rclpy.create_node(node_name)
+        executor = SingleThreadedExecutor()
+        executor.add_node(node)
+        spinner = threading.Thread(target=executor.spin, daemon=True, name=thread_name)
+        spinner.start()
+        try:
+            yield cls(node=node, executor=executor)
+        finally:
+            executor.shutdown()
+            spinner.join()
+            node.destroy_node()
+
 
 @dataclass
 class LiveTracy:
@@ -78,10 +129,19 @@ class LiveTracy:
     What spins :attr:`node`, on a thread of its own.
 
     Single-threaded: every callback of the node but the transform listener's is in its
-    one mutually exclusive group anyway, the transforms it reads are a bolted camera's,
-    and the multi-threaded executor spins hot for as long as a callback it has handed
-    out runs, which starves the rest of the process -- measured, a motion whose every
-    tick the synchronizer publishes takes 47 s beside it and 0.8 s beside this one.
+    one mutually exclusive group anyway, and the multi-threaded executor spins hot for
+    as long as a callback it has handed out runs, which starves the rest of the process
+    -- measured, a motion whose every tick the synchronizer publishes takes 47 s beside
+    it and 0.8 s beside this one.
+    """
+
+    camera_executor: Executor
+    """
+    What spins the node :attr:`look` is subscribed on, on a thread of its own.
+
+    A look runs for as long as the pipeline takes, inside the camera's own callback; on
+    the thread that applies the world's updates it would let one update through per
+    look, and a goal waiting for the last tick of its motion would give up.
     """
 
     @classmethod
@@ -95,8 +155,9 @@ class LiveTracy:
         """
         Connect to the robot for as long as the block runs.
 
-        ROS must already be initialised. The node is spun on a thread of its own, the
-        published world is fetched and then kept in step through a
+        ROS must already be initialised. The node is spun on a thread of its own and the
+        camera on a node and a thread of its own, the published world is fetched and
+        then kept in step through a
         :class:`~semantic_digital_twin.adapters.ros.world_synchronizer.WorldSynchronizer`,
         so what is stood in it is what every process watching it holds, and drawn into
         rviz, so it can be checked against the real table.
@@ -106,14 +167,13 @@ class LiveTracy:
         :param show_images: Whether the camera opens a window on each of its streams.
         """
         check_large_messages_can_arrive()
-        node = rclpy.create_node(node_name)
-        executor = SingleThreadedExecutor()
-        executor.add_node(node)
-        spinner = threading.Thread(
-            target=executor.spin, daemon=True, name=EXECUTOR_THREAD_NAME
-        )
-        spinner.start()
-        try:
+        with (
+            SpunNode.spun(node_name, EXECUTOR_THREAD_NAME) as connection,
+            SpunNode.spun(
+                node_name + CAMERA_NODE_SUFFIX, CAMERA_EXECUTOR_THREAD_NAME
+            ) as camera,
+        ):
+            node = connection.node
             world = fetch_world_from_service(node=node, timeout_seconds=fetch_timeout)
             [robot] = world.get_semantic_annotations_by_type(Tracy)
             # The rviz publisher is built before the synchronizer: it registers a
@@ -126,12 +186,7 @@ class LiveTracy:
                 node=node,
                 world=world,
                 robot=robot,
-                look=build_node(node, world, show_images=show_images),
-                executor=executor,
+                look=build_node(camera.node, world, show_images=show_images),
+                executor=connection.executor,
+                camera_executor=camera.executor,
             )
-        finally:
-            # The node is destroyed only once the spinner has returned, so a look still
-            # under way on it finishes before the publishers it draws on are gone.
-            executor.shutdown()
-            spinner.join()
-            node.destroy_node()

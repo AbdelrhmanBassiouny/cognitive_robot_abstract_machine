@@ -76,6 +76,16 @@ POLL_PERIOD = 0.05
 How often a test looks whether what it waits for has arrived, in seconds.
 """
 
+MOTION_TICKS = 200
+"""
+How many states a motion publishes, one per tick of its controller.
+"""
+
+MOTION_TICK_PERIOD = 0.01
+"""
+Seconds between two ticks of a motion's controller.
+"""
+
 CLOSE_SETPOINT_ON_A_PIECE = 0.65
 """
 A close sized to a piece, as the demo's close table sizes one.
@@ -341,3 +351,26 @@ def test_the_demo_connects_to_the_lab_as_it_connects_to_the_robot(
     np.testing.assert_allclose(
         frame.reference_frame_T_camera, lab.camera.capture.reference_frame_T_camera
     )
+
+
+def test_every_tick_a_motion_publishes_reaches_the_demo_while_its_camera_looks(
+    lab: LabWithoutTheRobot,
+):
+    """
+    The world a motion changes tick by tick is kept in step while the camera keeps
+    looking at the table: Giskard's goal waits for its last tick to arrive, and a look
+    runs for as long as the pipeline takes.
+    """
+    joint = lab.world.get_degree_of_freedom_by_name(knuckle_joint_name(Arms.RIGHT))
+    positions = np.linspace(
+        OPEN_KNUCKLE_POSITION, FULLY_CLOSED_KNUCKLE_POSITION, MOTION_TICKS
+    )
+    with LiveTracy.connected("lab_without_the_robot_test_motion") as tracy:
+        tracy.look.wait_for_scene(timeout_seconds=ARRIVAL_TIMEOUT)
+        for position in positions:
+            lab.world.state[joint.id].position = position
+            lab.world.notify_state_change()
+            time.sleep(MOTION_TICK_PERIOD)
+        wait_until(
+            lambda: np.isclose(tracy.world.state[joint.id].position, positions[-1])
+        )
