@@ -40,7 +40,11 @@ from experiments.questions.long_term_memory import (
     AnythingMovedInTheEpisode,
     NumberOfDegreesOfFreedomInTheRecordedWorld,
 )
-from experiments.questions.working_memory import AnythingMoved, ObjectsSeen
+from experiments.questions.working_memory import (
+    AnythingMoved,
+    ObjectsSeen,
+    PlaceOfOwnBody,
+)
 from experiments.scenarios.trial import TrialOutcome
 from experiments.montessori.results_database import ResultsDatabase
 from experiments.questions.question import Memory
@@ -341,6 +345,98 @@ def test_the_command_scores_the_working_memory_of_an_episode_again(
     [trial] = memory.recall_trials(episode.identifier)
     [stored] = [query for query in trial.queries if type(query.question) is ObjectsSeen]
     assert stored.answered_correctly is True
+
+
+# %% scoring again what the robot said of its own body
+
+ASKED_WHERE_ITS_LINK_IS_AT = 0.5
+"""
+Seconds into the trial the robot was asked where its own link is.
+"""
+
+
+def a_trial_asked_where_its_own_link_is(
+    results_database: ResultsDatabase,
+    stood: ASceneTheRunStood,
+    artifact_directory: ArtifactDirectory,
+    traced: bool,
+) -> Episode:
+    """
+    One recorded trial whose robot was asked where its gripper is, stored with the wrong
+    score.
+
+    :param results_database: The database to record to.
+    :param stood: The scene the trial ran in.
+    :param artifact_directory: Where the trial's trace is kept.
+    :param traced: Whether the trial kept a trace of its joints.
+    """
+    episode = sorting_episode()
+    episode.world = stood.world
+    trial = RecordedTrial(
+        episode=episode,
+        outcome=TrialOutcome.SUCCEEDED,
+        duration=2 * ASKED_WHERE_ITS_LINK_IS_AT,
+        queries=[
+            RecordedQuery(
+                role_taker=PlaceOfOwnBody(
+                    body_name=SortingScene(stood.world).gripper.name
+                ),
+                answer="",
+                latency=0.0,
+                moment=ASKED_WHERE_ITS_LINK_IS_AT,
+                answered_correctly=A_SCORE_NOBODY_BELIEVES,
+            )
+        ],
+    )
+    record(results_database, trial)
+    if traced:
+        trace = JointTrace()
+        trace.sample(stood.world, 0.0)
+        trace.sample(stood.world, trial.duration)
+        artifact_directory.open_for(episode).trial(trial.number).keep_joint_trace(trace)
+    return episode
+
+
+def test_where_the_robots_own_link_is_is_scored_again_as_its_joints_stood(
+    tmp_path, results_database, memory, stood
+):
+    """
+    Where a link is follows from where the joints stood when the question was asked,
+    which the trace holds, so the row is asked again of the world stood that way.
+    """
+    artifact_directory = ArtifactDirectory(path=tmp_path / "artifacts")
+    episode = a_trial_asked_where_its_own_link_is(
+        results_database, stood, artifact_directory, traced=True
+    )
+
+    [rescored] = rescore_the_working_memory(
+        results_database, episode.identifier, artifact_directory
+    )
+
+    assert type(rescored.question) is PlaceOfOwnBody
+    assert rescored.answered_correctly is True
+    [trial] = memory.recall_trials(episode.identifier)
+    [stored] = trial.queries
+    assert stored.answered_correctly is True
+
+
+def test_where_the_robots_own_link_is_is_left_alone_without_a_trace(
+    tmp_path, results_database, memory, stood
+):
+    """
+    Without a trace nothing says where the joints stood when the question was asked, so
+    the row keeps the score the run gave it.
+    """
+    artifact_directory = ArtifactDirectory(path=tmp_path / "artifacts")
+    episode = a_trial_asked_where_its_own_link_is(
+        results_database, stood, artifact_directory, traced=False
+    )
+
+    rescore_the_working_memory(results_database, episode.identifier, artifact_directory)
+
+    [trial] = memory.recall_trials(episode.identifier)
+    [stored] = trial.queries
+    assert stored.answered_correctly is A_SCORE_NOBODY_BELIEVES
 
 
 # %% asking what the robot held at a moment of the trial
