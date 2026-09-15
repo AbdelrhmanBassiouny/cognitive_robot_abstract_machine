@@ -33,6 +33,12 @@ HOOKS_SOURCE_DIRECTORY = Path(plan_manifest_tools.__file__).parent
 The real hooks directory the scripts under test are copied from.
 """
 
+PROJECT_SOURCE_DIRECTORY = HOOKS_SOURCE_DIRECTORY.parent.parent
+"""
+This clone's own root, which the files a scratch layout needs real copies of are read
+from - derived from where the hooks are rather than counted out in parent steps.
+"""
+
 NOTES_BRANCH = "claude/personal-notes"
 """
 The personal-notes branch name the hooks resolve to by default.
@@ -53,11 +59,10 @@ The throwaway branch a scratch repository is left checked out on.
 
 SOURCED_SCRIPT_PATTERN = re.compile(r'source\s+"([^"]+)"')
 """
-A shell ``source`` of a quoted path, the form every hook script uses to reach another.
+A shell ``source`` of a quoted path, one of the two ways a hook script reaches another.
 
-Only the ones ending in a hook script's own file name are followed - a path composed
-through a variable (``source "${GITHUB_API_SCRIPT}"``) names nothing readable here, so
-that script stays the caller's to install.
+A path composed through a variable (``source "${GITHUB_API_SCRIPT}"``) names nothing
+readable here; :data:`CONFIGURATION_CONSTANT_DEFINITION_PATTERN` is what resolves those.
 """
 
 PYTHON_SUFFIX = ".py"
@@ -208,6 +213,35 @@ def initialize_bare_repository(path: Path) -> Path:
     return path
 
 
+# %% which hook scripts a hook script runs
+
+CONFIGURATION_CONSTANT_DEFINITION_PATTERN = re.compile(
+    r'^(?P<constant>[A-Z_]+)="\.claude/hooks/(?P<script_name>[a-z0-9-]+\.sh)"',
+    re.MULTILINE,
+)
+"""
+How the configuration script declares where another hook script lives.
+
+The second way a shell hook names a sibling: it sources or runs ``${GITHUB_API_SCRIPT}``
+rather than a path, and only the configuration script says which file that is.
+"""
+
+
+def script_name_by_configuration_constant() -> dict[str, str]:
+    """
+    The hook script each configuration constant names, keyed by the constant.
+
+    :return: The declarations the real configuration script carries.
+    """
+    configuration = (
+        HOOKS_SOURCE_DIRECTORY / HookScript.CONFIGURATION.value
+    ).read_text()
+    return {
+        match["constant"]: match["script_name"]
+        for match in CONFIGURATION_CONSTANT_DEFINITION_PATTERN.finditer(configuration)
+    }
+
+
 @dataclass
 class ScratchRepository:
     """
@@ -325,8 +359,9 @@ class ScratchRepository:
 
     def install_hook_scripts(self, *scripts: HookScript) -> None:
         """
-        Copy the hook scripts under test into the scratch layout, along with every
-        sibling they name.
+        Copy the real hook scripts under test into the scratch layout, along with the
+        siblings they run, so naming the script a test is about is enough to get a
+        layout it can run in.
 
         Reading each script's own dependencies rather than asking every caller to list
         them is what keeps them stated once, in the script itself: a hook that grows one
@@ -387,9 +422,16 @@ class ScratchRepository:
         """
         source_text = (HOOKS_SOURCE_DIRECTORY / script.value).read_text()
         if not script.value.endswith(PYTHON_SUFFIX):
-            return [
+            sourced_directly = [
                 Path(sourced).name
                 for sourced in SOURCED_SCRIPT_PATTERN.findall(source_text)
+            ]
+            return sourced_directly + [
+                named_script
+                for constant, named_script in (
+                    script_name_by_configuration_constant().items()
+                )
+                if f"${{{constant}}}" in source_text
             ]
         return [
             f"{module}{PYTHON_SUFFIX}"
@@ -506,41 +548,51 @@ class ScratchRepository:
         self.run_git("push", "--quiet", str(self.notes_remote_path), NOTES_BRANCH)
         self.run_git("checkout", "--quiet", WORK_BRANCH)
 
-    def clone_notes_branch(self, destination: Path) -> Path:
+    def clone_branch(self, remote: Path, branch: str, destination: Path) -> Path:
         """
-        Check the notes branch out of the notes remote, for asserting against what a
-        hook actually pushed rather than what it reported.
+        Check a branch out of a remote, for asserting against what a hook actually
+        pushed rather than what it reported.
 
+        :param remote: The remote holding the branch.
+        :param branch: The branch to check out.
         :param destination: Where to put the checkout.
         :return: The checkout's path.
         """
         self.run_git(
-            "clone",
-            "--quiet",
-            "--branch",
-            NOTES_BRANCH,
-            str(self.notes_remote_path),
-            str(destination),
+            "clone", "--quiet", "--branch", branch, str(remote), str(destination)
         )
         return destination
 
+    def clone_notes_branch(self, destination: Path) -> Path:
+        """
+        Check the notes branch out of the notes remote.
+
+        :param destination: Where to put the checkout.
+        :return: The checkout's path.
+        """
+        return self.clone_branch(self.notes_remote_path, NOTES_BRANCH, destination)
+
+    def remote_branch_commit(self, remote: Path, branch: str) -> str | None:
+        """
+        Read the commit a branch points at on a remote, for asserting that a re-run
+        pushed nothing rather than trusting it said so.
+
+        :param remote: The remote to look the branch up on.
+        :param branch: The branch to resolve.
+        :return: The commit hash, or ``None`` if the branch isn't on the remote at all.
+        """
+        listing = self.run_git("ls-remote", str(remote), branch).stdout
+        if not listing.strip():
+            return None
+        return listing.split()[0]
+
     def notes_branch_commit(self) -> str | None:
         """
-        Read the commit the notes branch points at on the notes remote, for asserting
-        that a re-run pushed nothing rather than trusting it said so.
+        Read the commit the notes branch points at on the notes remote.
 
         :return: The commit hash, or ``None`` if the branch isn't on the remote at all.
         """
-        result = subprocess.run(
-            ["git", "ls-remote", str(self.notes_remote_path), NOTES_BRANCH],
-            cwd=self.project_root,
-            capture_output=True,
-            text=True,
-        )
-        assert result.returncode == 0, result.stderr
-        if not result.stdout.strip():
-            return None
-        return result.stdout.split()[0]
+        return self.remote_branch_commit(self.notes_remote_path, NOTES_BRANCH)
 
     def update_notes_branch_file(self, relative_path: str, content: str) -> None:
         """

@@ -17,16 +17,17 @@ from pathlib import Path
 
 import pytest
 
+from github_api import RepositoryLabel
 from scratch_repository import ScratchRepository
+from tooling_files import StackToolingFile
 
 from stack import (
-    AmbiguousForkRemoteError,
     CommitMoveAction,
     BranchStatus,
     Configuration,
     ContradictoryLabelWriteError,
     ExitCode,
-    ForkRemoteNotFoundError,
+    ForkRepositoryNotConfiguredError,
     LabelWrite,
     MalformedRepositoryError,
     IntegrationStrategy,
@@ -34,6 +35,7 @@ from stack import (
     ProposedCommitMove,
     RefusalReason,
     PromotionLink,
+    PERSONAL_STACK_CONFIGURATION_PATH,
     PromotionLinkTooLongError,
     PullRequest,
     Remote,
@@ -66,11 +68,13 @@ The tool under test, invoked as a subprocess wherever an exit status is the asse
 
 def make_configuration(upstream_setup_command: str | None = None) -> Configuration:
     return Configuration(
-        in_review_label="in-review",
-        rebase_label="rebase",
-        needs_resolution_label="needs-resolution",
+        in_review_label=RepositoryLabel.IN_REVIEW,
+        rebase_label=RepositoryLabel.REBASE,
+        needs_resolution_label=RepositoryLabel.NEEDS_RESOLUTION,
+        cram2_link_sent_label=RepositoryLabel.PROMOTION_LINK_SENT,
         fork_repository=Repository("a-fork-owner", "a-fork"),
         fork_remote="origin",
+        fork_setup_command=None,
         upstream_repository=Repository("an-upstream-owner", "a-project"),
         upstream_remote="cram2",
         upstream_base="main",
@@ -289,6 +293,7 @@ DEFAULT_STACK_TOML = """\
 in_review_label = "in-review"
 rebase_label = "rebase"
 needs_resolution_label = "needs-resolution"
+fork_repository = "a-fork-owner/a-fork"
 fork_remote = "origin"
 upstream_repository = "an-upstream-owner/a-project"
 upstream_remote = "cram2"
@@ -303,13 +308,15 @@ def _committed_configuration_path(scratch_repository: ScratchRepository) -> Path
     :param scratch_repository: The scratch repository to write into.
     :return: The path :func:`load_configuration` should be pointed at.
     """
-    path = scratch_repository.write(".claude/stack/stack.toml", DEFAULT_STACK_TOML)
+    path = scratch_repository.write(
+        StackToolingFile.STACK_CONFIGURATION, DEFAULT_STACK_TOML
+    )
     scratch_repository.commit_everything("add stack.toml")
     scratch_repository.run_git(
         "remote",
         "add",
         "a-name-nobody-expects",
-        "https://github.com/a-fork-owner/a-fork.git",
+        Repository("a-fork-owner", "a-fork").remote_url,
     )
     return path
 
@@ -326,12 +333,24 @@ def test_load_configuration_uses_committed_defaults_when_no_personal_notes_branc
     assert configuration.upstream_remote == "cram2"
 
 
+def test_load_configuration_defaults_the_cram2_link_sent_label_when_the_file_omits_it(
+    scratch_repository: ScratchRepository, monkeypatch
+):
+    configuration_path = _committed_configuration_path(scratch_repository)
+    scratch_repository.resolve_notes_remote_to()
+    monkeypatch.chdir(scratch_repository.project_root)
+
+    configuration = load_configuration(configuration_path)
+
+    assert configuration.cram2_link_sent_label == "cram2-link-sent"
+
+
 def test_load_configuration_layers_personal_notes_override_on_top_of_defaults(
     scratch_repository: ScratchRepository, monkeypatch
 ):
     configuration_path = _committed_configuration_path(scratch_repository)
     scratch_repository.publish_notes_branch(
-        {".claude/personal/stack.toml": 'upstream_remote = "my-fork-cram2"\n'}
+        {PERSONAL_STACK_CONFIGURATION_PATH: 'upstream_remote = "my-fork-cram2"\n'}
     )
     scratch_repository.resolve_notes_remote_to()
     monkeypatch.chdir(scratch_repository.project_root)
@@ -380,10 +399,12 @@ def test_load_configuration_takes_the_fork_from_a_personal_notes_override(
     """
     configuration_path = _committed_configuration_path(scratch_repository)
     scratch_repository.run_git(
-        "remote", "add", "another", "https://github.com/someone-else/their-fork.git"
+        "remote", "add", "another", Repository("someone-else", "their-fork").remote_url
     )
     scratch_repository.publish_notes_branch(
-        {".claude/personal/stack.toml": 'fork_repository = "someone-else/their-fork"\n'}
+        {
+            PERSONAL_STACK_CONFIGURATION_PATH: 'fork_repository = "someone-else/their-fork"\n'
+        }
     )
     scratch_repository.resolve_notes_remote_to()
     monkeypatch.chdir(scratch_repository.project_root)
@@ -447,13 +468,15 @@ UPSTREAM = Repository("an-upstream-owner", "a-project")
 FORK = Repository("a-fork-owner", "a-project")
 
 
-def resolve(remote_urls: dict[str, str], fork_repository: Repository | None = None):
-    return resolve_remotes(remote_urls, UPSTREAM, "an-upstream-remote", fork_repository)
+def resolve(remote_urls: dict[str, str], fork_repository: Repository = FORK):
+    return resolve_remotes(
+        remote_urls, fork_repository, UPSTREAM, "a-fork-remote", "an-upstream-remote"
+    )
 
 
-def test_the_fork_is_the_remote_that_is_not_the_upstream():
+def test_each_remote_is_found_by_the_repository_its_url_names():
     """
-    Names carry no meaning: the fork is identified by the repository its URL points at.
+    Names carry no meaning: both remotes are identified by where their URL points.
     """
     resolution = resolve(
         {
@@ -497,7 +520,23 @@ def test_a_checkout_without_an_upstream_remote_is_told_how_to_add_one():
     assert resolution.upstream_name == "an-upstream-remote"
 
 
-def test_nothing_to_add_when_the_upstream_remote_is_already_there():
+def test_a_checkout_without_a_fork_remote_is_told_how_to_add_one():
+    """
+    Setup runs before the remotes exist, so a missing fork remote is a command to run
+    rather than a failure - the same answer the upstream half has always given.
+    """
+    resolution = resolve(
+        {"cram2": "https://github.com/an-upstream-owner/a-project.git"}
+    )
+
+    assert resolution.fork is None
+    assert resolution.fork_setup_command == (
+        "git remote add a-fork-remote https://github.com/a-fork-owner/a-project.git"
+    )
+    assert resolution.fork_name == "a-fork-remote"
+
+
+def test_nothing_to_add_when_both_remotes_are_already_there():
     resolution = resolve(
         {
             "origin": "https://github.com/a-fork-owner/a-project.git",
@@ -505,35 +544,23 @@ def test_nothing_to_add_when_the_upstream_remote_is_already_there():
         }
     )
 
+    assert resolution.fork_setup_command is None
     assert resolution.upstream_setup_command is None
     assert resolution.upstream_name == "cram2"
 
 
-def test_a_checkout_with_only_the_upstream_is_rejected_rather_than_guessed():
+def test_only_the_configured_fork_is_taken_from_several_candidate_remotes():
     """
-    Treating the upstream as the fork would target every push at the review repository.
+    Every remote that is not the upstream used to be a candidate, which made two of them
+    ambiguous.
+
+    Naming the fork outright leaves nothing to choose between.
     """
-    with pytest.raises(ForkRemoteNotFoundError):
-        resolve({"origin": "https://github.com/an-upstream-owner/a-project.git"})
-
-
-def test_two_possible_forks_are_rejected_rather_than_guessed():
-    with pytest.raises(AmbiguousForkRemoteError):
-        resolve(
-            {
-                "mine": "https://github.com/a-fork-owner/a-project.git",
-                "theirs": "https://github.com/another-owner/a-project.git",
-            }
-        )
-
-
-def test_configuration_disambiguates_two_possible_forks():
     resolution = resolve(
         {
             "mine": "https://github.com/a-fork-owner/a-project.git",
             "theirs": "https://github.com/another-owner/a-project.git",
-        },
-        fork_repository=FORK,
+        }
     )
 
     assert resolution.fork == Remote("mine", FORK)
@@ -541,7 +568,7 @@ def test_configuration_disambiguates_two_possible_forks():
 
 def test_a_remote_that_names_no_repository_is_ignored():
     """
-    A local-path remote is not a candidate, and must not make the fork ambiguous.
+    A local-path remote names no owner/repo pair, so it can never be mistaken for one.
     """
     resolution = resolve(
         {
@@ -565,15 +592,17 @@ def test_every_setting_is_printed_under_its_own_field_name(capsys):
 
     printed = dict(line.split("\t") for line in capsys.readouterr().out.splitlines())
 
+    configuration = make_configuration()
     assert printed == {
-        "in_review_label": "in-review",
-        "rebase_label": "rebase",
-        "needs_resolution_label": "needs-resolution",
-        "fork_repository": "a-fork-owner/a-fork",
-        "fork_remote": "origin",
-        "upstream_repository": "an-upstream-owner/a-project",
-        "upstream_remote": "cram2",
-        "upstream_base": "main",
+        "in_review_label": configuration.in_review_label,
+        "rebase_label": configuration.rebase_label,
+        "needs_resolution_label": configuration.needs_resolution_label,
+        "cram2_link_sent_label": configuration.cram2_link_sent_label,
+        "fork_repository": str(configuration.fork_repository),
+        "fork_remote": configuration.fork_remote,
+        "upstream_repository": str(configuration.upstream_repository),
+        "upstream_remote": configuration.upstream_remote,
+        "upstream_base": configuration.upstream_base,
     }
 
 
@@ -1030,22 +1059,23 @@ def test_nothing_has_landed_while_the_whole_stack_is_still_open():
 # %% configuration named rather than inferred
 
 
-def test_a_named_fork_is_used_where_inference_would_have_refused_to_guess(
+def test_a_named_fork_outranks_the_configured_one(
     scratch_repository: ScratchRepository, monkeypatch
 ):
     """
-    Two candidate remotes are ambiguous to inference; naming the fork settles it without
-    anything being written to the checkout.
+    A caller that already knows which repository it is operating on must be able to say
+    so, without anything being written to the checkout to make it stick.
     """
     configuration_path = _committed_configuration_path(scratch_repository)
     scratch_repository.run_git(
-        "remote", "add", "another", "https://github.com/someone-else/their-fork.git"
+        "remote", "add", "another", Repository("someone-else", "their-fork").remote_url
     )
     scratch_repository.resolve_notes_remote_to()
     monkeypatch.chdir(scratch_repository.project_root)
 
-    with pytest.raises(AmbiguousForkRemoteError):
-        load_configuration(configuration_path)
+    assert load_configuration(configuration_path).fork_repository == Repository(
+        "a-fork-owner", "a-fork"
+    )
 
     configuration = load_configuration(
         configuration_path, fork_repository=Repository("someone-else", "their-fork")
@@ -1053,6 +1083,28 @@ def test_a_named_fork_is_used_where_inference_would_have_refused_to_guess(
 
     assert configuration.fork_repository == Repository("someone-else", "their-fork")
     assert configuration.fork_remote == "another"
+
+
+def test_a_checkout_that_names_no_fork_is_asked_rather_than_guessed_at(
+    scratch_repository: ScratchRepository, monkeypatch
+):
+    """
+    The fork used to be deduced by elimination, which guessed wrong whenever more than
+    one remote qualified.
+
+    Nothing deduces it now, so an unconfigured checkout has a question to put to its
+    caller instead of an answer it invented.
+    """
+    configuration_path = scratch_repository.write(
+        StackToolingFile.STACK_CONFIGURATION,
+        DEFAULT_STACK_TOML.replace('fork_repository = "a-fork-owner/a-fork"\n', ""),
+    )
+    scratch_repository.commit_everything("add stack.toml naming no fork")
+    scratch_repository.resolve_notes_remote_to()
+    monkeypatch.chdir(scratch_repository.project_root)
+
+    with pytest.raises(ForkRepositoryNotConfiguredError):
+        load_configuration(configuration_path)
 
 
 def test_a_named_upstream_replaces_the_committed_default(
@@ -1164,8 +1216,12 @@ def test_a_checkout_whose_fork_cannot_be_identified_says_so_by_status(
 def test_a_readable_checkout_with_no_board_reports_the_missing_board_instead(
     offline_checkout: ScratchRepository,
 ):
+    offline_checkout.publish_notes_branch(
+        {PERSONAL_STACK_CONFIGURATION_PATH: 'fork_repository = "a-fork-owner/a-fork"\n'}
+    )
+    offline_checkout.resolve_notes_remote_to()
     offline_checkout.run_git(
-        "remote", "add", "whatever", "https://github.com/a-fork-owner/a-fork.git"
+        "remote", "add", "whatever", Repository("a-fork-owner", "a-fork").remote_url
     )
 
     result = run_stack(offline_checkout, "status")
@@ -1173,18 +1229,18 @@ def test_a_readable_checkout_with_no_board_reports_the_missing_board_instead(
     assert result.returncode == ExitCode.BOARD_UNAVAILABLE
 
 
-def test_a_named_fork_and_upstream_are_used_where_inference_would_have_refused(
+def test_a_named_fork_and_upstream_are_used_where_the_checkout_configures_neither(
     offline_checkout: ScratchRepository,
 ):
     """
-    Two candidate remotes are ambiguous, so a caller that already knows the answer must
-    be able to say so rather than be blocked by the guess it does not need.
+    An unconfigured checkout stops rather than guessing, so a caller that already knows
+    the answer must be able to say so and proceed.
     """
     offline_checkout.run_git(
-        "remote", "add", "whatever", "https://github.com/a-fork-owner/a-fork.git"
+        "remote", "add", "whatever", Repository("a-fork-owner", "a-fork").remote_url
     )
     offline_checkout.run_git(
-        "remote", "add", "another", "https://github.com/someone-else/their-fork.git"
+        "remote", "add", "another", Repository("someone-else", "their-fork").remote_url
     )
 
     assert (
@@ -1219,8 +1275,12 @@ def test_a_fork_that_is_not_owner_and_name_is_a_usage_error(
 def test_a_promotion_link_is_built_from_the_resolved_repositories(
     offline_checkout: ScratchRepository,
 ):
+    offline_checkout.publish_notes_branch(
+        {PERSONAL_STACK_CONFIGURATION_PATH: 'fork_repository = "a-fork-owner/a-fork"\n'}
+    )
+    offline_checkout.resolve_notes_remote_to()
     offline_checkout.run_git(
-        "remote", "add", "whatever", "https://github.com/a-fork-owner/a-fork.git"
+        "remote", "add", "whatever", Repository("a-fork-owner", "a-fork").remote_url
     )
 
     result = run_stack(
