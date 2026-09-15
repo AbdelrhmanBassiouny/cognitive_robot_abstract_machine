@@ -390,6 +390,13 @@ class AbstractRobotPart(HasRootBody, HasRobotParts, ABC):
         """
         return None
 
+    def prepare_for_physical_simulation(self) -> None:
+        """
+        Adjust this robot part for being simulated physically, such as raising a
+        velocity limit the description sets conservatively for kinematic planning.
+        Does nothing by default.
+        """
+
 
 @dataclass(eq=False)
 class KinematicChain(AbstractRobotPart, ABC):

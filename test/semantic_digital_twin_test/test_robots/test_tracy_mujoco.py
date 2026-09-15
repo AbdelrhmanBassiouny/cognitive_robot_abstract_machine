@@ -85,9 +85,24 @@ def test_equipping_declares_each_joints_own_servo(mounted_tracy):
     assert (knuckle.raw_dof.servo_gains, knuckle.dynamics) == gripper.servo_for(knuckle)
 
 
-def test_the_annotation_overwrites_the_descriptions_finger_velocity_limit(
+def test_mounting_alone_leaves_the_descriptions_own_finger_velocity_limit(
     mounted_tracy,
 ):
+    """
+    Kinematic planning against a Tracy that is never physically simulated has no reason
+    to distrust the description's own, conservative velocity limit.
+    """
+    knuckle = mounted_tracy._world.get_connection_by_name(
+        TracyJoint.LEFT_GRIPPER_LEFT_KNUCKLE
+    )
+    gripper = mounted_tracy.left_arm.end_effector
+
+    assert knuckle.raw_dof.limits.upper.velocity != gripper.finger_velocity_limit
+
+
+def test_equipping_overwrites_the_descriptions_finger_velocity_limit(mounted_tracy):
+    equip_for_mujoco(mounted_tracy)
+
     gripper = mounted_tracy.left_arm.end_effector
     knuckle = mounted_tracy._world.get_connection_by_name(
         TracyJoint.LEFT_GRIPPER_LEFT_KNUCKLE

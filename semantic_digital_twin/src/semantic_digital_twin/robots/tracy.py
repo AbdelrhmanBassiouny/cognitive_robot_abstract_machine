@@ -223,9 +223,12 @@ class Robotiq85GripperGeometry(ABC):
             JointDynamics(armature=0.05),
         )
 
-    def overwrite_finger_velocity_limits(self) -> None:
+    def prepare_for_physical_simulation(self) -> None:
         """
-        Give every finger joint's degree of freedom :attr:`finger_velocity_limit`.
+        Give every finger joint's degree of freedom :attr:`finger_velocity_limit`,
+        overriding the description's own conservative one: kinematic planning has no
+        reason to trust it, but a physically simulated servo needs the room to actually
+        reach a commanded position within a plan's own convergence tolerance.
         """
         for connection in self.active_connections:
             if not isinstance(connection, ActiveConnection1DOF):
@@ -590,8 +593,6 @@ class Tracy(
 
     def _setup_velocity_limits(self):
         self.tighten_dof_velocity_limits_proportionally(maximum_velocity=0.2)
-        for gripper in self.get_end_effectors():
-            gripper.overwrite_finger_velocity_limits()
 
     def get_end_effectors(self) -> list[EndEffector]:
         return [self.left_arm.end_effector, self.right_arm.end_effector]

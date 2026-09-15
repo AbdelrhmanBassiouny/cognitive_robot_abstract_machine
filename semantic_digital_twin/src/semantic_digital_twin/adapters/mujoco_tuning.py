@@ -110,6 +110,8 @@ def equip_for_mujoco(robot: AbstractRobot) -> Dict[str, Actuator]:
     """
     world = robot._world
     robot.declare_servos()
+    for robot_part in robot._robot_parts:
+        robot_part.prepare_for_physical_simulation()
     for arm in robot.get_arms():
         compensate_gravity(world, arm)
         compensate_gravity(world, arm.end_effector)
