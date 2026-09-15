@@ -24,7 +24,10 @@ import bastler.integration_reproduction
 from bastler.integration_reproduction import (
     REPRODUCTION_MARKER,
     REPRODUCTION_REPORT_OPTION,
+    BreakVerdict,
     ClearedBranchReport,
+    ClearingReport,
+    ClearingStatus,
     RecordedBreak,
     ReproductionOutcome,
     ReproductionReportKey,
@@ -619,7 +622,7 @@ def test_the_command_reads_the_run_document_the_targeted_job_wrote(tmp_path: Pat
         heads={A_PULL_REQUEST_NUMBER: BREAKING_BRANCH},
     )
 
-    cleared = CLEAR_FIXED_BREAKS_COMMAND.clear(report, configuration, fork)
+    cleared = CLEAR_FIXED_BREAKS_COMMAND.clear(report, configuration, fork).cleared
 
     assert [report.branch for report in cleared] == [BREAKING_BRANCH]
 
@@ -636,8 +639,9 @@ def test_the_command_reports_every_branch_it_unblocked_as_one_document(tmp_path:
         heads={A_PULL_REQUEST_NUMBER: BREAKING_BRANCH},
     )
 
-    cleared = CLEAR_FIXED_BREAKS_COMMAND.clear(report, configuration, fork)
-    document = json.loads(CLEAR_FIXED_BREAKS_COMMAND.as_json(cleared))
+    clearing = CLEAR_FIXED_BREAKS_COMMAND.clear(report, configuration, fork)
+    cleared = clearing.cleared
+    document = json.loads(clearing.as_json())
 
     assert document[ReportKey.CLEARED] == [
         {
@@ -647,6 +651,93 @@ def test_the_command_reports_every_branch_it_unblocked_as_one_document(tmp_path:
             ReportKey.COMMENT: cleared[0].comment,
         }
     ]
+
+
+def test_a_run_that_collected_no_reproduction_is_said_to_have_recorded_nothing():
+    """
+    A branch with no reproduction recorded looks exactly like one nobody has run yet if
+    the run stays silent, so the report says which it was.
+    """
+    clearing = ClearingReport(run=a_run(), cleared=())
+
+    assert clearing.status is ClearingStatus.NO_REPRODUCTION_RECORDED
+    assert (
+        clearing.to_json()[ReportKey.STATUS] == ClearingStatus.NO_REPRODUCTION_RECORDED
+    )
+    assert clearing.as_lines() == (str(ClearingStatus.NO_REPRODUCTION_RECORDED),)
+
+
+def test_a_run_whose_reproductions_ran_names_each_break_and_whether_it_is_fixed():
+    """
+    "Nothing cleared" has two meanings once something ran - every break still
+    reproduces, or every fixed branch had already lost its label - and the report
+    tells them apart per branch.
+    """
+    run = a_run(
+        an_outcome(branch=BREAKING_BRANCH, passed=True),
+        an_outcome(branch=A_SECOND_BREAKING_BRANCH, passed=False),
+    )
+
+    clearing = ClearingReport(run=run, cleared=())
+    document = clearing.to_json()
+
+    assert clearing.status is ClearingStatus.REPRODUCTIONS_RAN
+    assert document[ReportKey.RECORDED_BREAKS] == [
+        recorded.to_json() for recorded in run.breaks
+    ]
+    assert [
+        recorded[ReproductionReportKey.VERDICT]
+        for recorded in document[ReportKey.RECORDED_BREAKS]
+    ] == [BreakVerdict.FIXED, BreakVerdict.STILL_BREAKING]
+
+
+def test_a_break_that_still_reproduces_is_named_in_the_summary():
+    """
+    The summary is what a reader of the job log sees, and a still-breaking branch is the
+    one thing in it they have to act on.
+    """
+    clearing = ClearingReport(run=a_run(an_outcome(passed=False)), cleared=())
+
+    assert clearing.as_lines() == (
+        f"{BREAKING_BRANCH}\t{BreakVerdict.STILL_BREAKING}\t1 reproduction(s)",
+    )
+
+
+def test_the_summary_says_what_was_unblocked_after_what_was_recorded():
+    """
+    Both halves of one run, in the order they happened.
+    """
+    configuration = make_configuration()
+    fork = RecordingPullRequests(
+        labels={A_PULL_REQUEST_NUMBER: [configuration.integration_conflict_label]},
+        heads={A_PULL_REQUEST_NUMBER: BREAKING_BRANCH},
+    )
+    run = a_run(an_outcome(passed=True))
+
+    clearing = ClearingReport(
+        run=run, cleared=clear_fixed_breaks(run, configuration, fork)
+    )
+
+    assert clearing.as_lines() == (
+        f"{BREAKING_BRANCH}\t{BreakVerdict.FIXED}\t1 reproduction(s)",
+        f"{BREAKING_BRANCH}\tunblocked\t{configuration.integration_conflict_label}",
+    )
+
+
+def test_the_command_says_when_the_run_recorded_nothing(tmp_path: Path):
+    """
+    The job writes an empty document on a healthy tree, and the command has to say so
+    rather than print an empty list.
+    """
+    report = tmp_path / "reproductions.json"
+    report.write_text(a_run().as_json())
+
+    clearing = CLEAR_FIXED_BREAKS_COMMAND.clear(
+        report, make_configuration(), RecordingPullRequests()
+    )
+
+    assert clearing.status is ClearingStatus.NO_REPRODUCTION_RECORDED
+    assert json.loads(clearing.as_json())[ReportKey.CLEARED] == []
 
 
 # %% the targeted job that runs them

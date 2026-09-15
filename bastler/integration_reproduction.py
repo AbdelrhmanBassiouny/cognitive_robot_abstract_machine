@@ -28,6 +28,8 @@ from bastler.maintenance_board import PullRequestField  # noqa: E402
 from bastler.maintenance_github import ForkPullRequests  # noqa: E402
 from bastler.stack import Configuration, DefaultLabel, LabelWrite  # noqa: E402
 
+from bastler.integration_constants import ReportKey  # noqa: E402
+
 REPRODUCTION_MARKER = DefaultLabel.INTEGRATION_CONFLICT.replace("-", "_")
 """
 The ``pytest`` marker a reproduction test carries, given the branch it was broken
@@ -96,6 +98,9 @@ class ReproductionReportKey(StrEnum):
     PASSED = "passed"
     """Whether it passed this time."""
 
+    VERDICT = "verdict"
+    """Whether every reproduction recorded against a branch passes now."""
+
 
 # %% what a run of the reproductions found
 
@@ -118,7 +123,7 @@ class ReproductionOutcome:
     @classmethod
     def from_json(cls, document: dict[str, Any]) -> ReproductionOutcome:
         """
-        :param document: One reproduction's object, as :meth:`as_document` wrote it.
+        :param document: One reproduction's object, as :meth:`to_json` wrote it.
         :return: The outcome it describes.
         """
         return cls(
@@ -127,13 +132,25 @@ class ReproductionOutcome:
             passed=document[ReproductionReportKey.PASSED],
         )
 
-    def as_document(self) -> dict[str, Any]:
+    def to_json(self) -> dict[str, Any]:
         """:return: This outcome, keyed the way a reader parses it."""
         return {
             ReproductionReportKey.BRANCH: self.branch,
             ReproductionReportKey.TEST: self.test,
             ReproductionReportKey.PASSED: self.passed,
         }
+
+
+class BreakVerdict(StrEnum):
+    """
+    What a run of the reproductions recorded against one branch says about its break.
+    """
+
+    FIXED = "fixed"
+    """Every reproduction passes, so the break is gone."""
+
+    STILL_BREAKING = "still-breaking"
+    """At least one reproduction still fails, so the branch stays blocked."""
 
 
 @dataclass(frozen=True)
@@ -159,6 +176,21 @@ class RecordedBreak:
         :return: Whether the block on this branch can be lifted.
         """
         return all(outcome.passed for outcome in self.outcomes)
+
+    @property
+    def verdict(self) -> BreakVerdict:
+        """:return: What this run says about the break, as a reader is told it."""
+        return BreakVerdict.FIXED if self.is_fixed else BreakVerdict.STILL_BREAKING
+
+    def to_json(self) -> dict[str, Any]:
+        """:return: This break, keyed the way a reader parses it."""
+        return {
+            ReproductionReportKey.BRANCH: self.branch,
+            ReproductionReportKey.VERDICT: self.verdict,
+            ReproductionReportKey.REPRODUCTIONS: [
+                outcome.to_json() for outcome in self.outcomes
+            ],
+        }
 
 
 @dataclass(frozen=True)
@@ -214,7 +246,7 @@ class ReproductionRun:
         return json.dumps(
             {
                 ReproductionReportKey.REPRODUCTIONS: [
-                    outcome.as_document() for outcome in self.outcomes
+                    outcome.to_json() for outcome in self.outcomes
                 ]
             },
             indent=2,
@@ -241,6 +273,83 @@ class ClearedBranchReport:
 
     comment: str
     """What was said on the pull request."""
+
+    def to_json(self) -> dict[str, Any]:
+        """:return: What was written, keyed the way a reader parses it."""
+        return {
+            ReportKey.BRANCH: self.branch,
+            ReportKey.PULL_REQUEST_NUMBER: self.pull_request_number,
+            ReportKey.LABEL: self.label,
+            ReportKey.COMMENT: self.comment,
+        }
+
+
+class ClearingStatus(StrEnum):
+    """
+    What a run of the reproductions established, before anything was lifted for it.
+
+    An empty run and a run whose every break still reproduces both lift nothing, and a
+    caller reading only what was lifted cannot tell a branch nothing has measured from
+    one that is still broken.
+    """
+
+    NO_REPRODUCTION_RECORDED = "no-reproduction-recorded"
+    """The run collected no reproduction at all, so it says nothing about any branch."""
+
+    REPRODUCTIONS_RAN = "reproductions-ran"
+    """At least one reproduction ran, so every branch it names has a verdict."""
+
+
+@dataclass(frozen=True)
+class ClearingReport:
+    """
+    What one run of the reproductions established, and what was lifted for it.
+    """
+
+    run: ReproductionRun
+    """What the reproduction tests did."""
+
+    cleared: tuple[ClearedBranchReport, ...]
+    """What was written where, one entry per branch unblocked."""
+
+    @property
+    def status(self) -> ClearingStatus:
+        """:return: Whether the run measured anything at all."""
+        if not self.run.breaks:
+            return ClearingStatus.NO_REPRODUCTION_RECORDED
+        return ClearingStatus.REPRODUCTIONS_RAN
+
+    def to_json(self) -> dict[str, Any]:
+        """:return: The run and the lifting as one document a later step reads."""
+        return {
+            ReportKey.STATUS: self.status,
+            ReportKey.RECORDED_BREAKS: [
+                recorded.to_json() for recorded in self.run.breaks
+            ],
+            ReportKey.CLEARED: [unblocked.to_json() for unblocked in self.cleared],
+        }
+
+    def as_json(self) -> str:
+        """:return: :meth:`to_json`, serialised."""
+        return json.dumps(self.to_json(), indent=2)
+
+    def as_lines(self) -> tuple[str, ...]:
+        """:return: The summary a reader of the job log sees: each recorded break and its
+        verdict, then each branch unblocked - or the one line saying nothing was
+        recorded."""
+        if self.status is ClearingStatus.NO_REPRODUCTION_RECORDED:
+            return (str(self.status),)
+        return (
+            *(
+                f"{recorded.branch}\t{recorded.verdict}\t"
+                f"{len(recorded.outcomes)} reproduction(s)"
+                for recorded in self.run.breaks
+            ),
+            *(
+                f"{unblocked.branch}\tunblocked\t{unblocked.label}"
+                for unblocked in self.cleared
+            ),
+        )
 
 
 def clearing_comment(branch: str) -> str:
