@@ -19,12 +19,18 @@ from experiments.episodes.long_term_memory import (
     LongTermMemory,
     UnrecordedEpisodeError,
 )
-from experiments.episodes.episode import RecordedQuery, RecordedTrial, Tick
+from experiments.episodes.episode import (
+    PerformedPlan,
+    RecordedQuery,
+    RecordedTrial,
+    Tick,
+)
 from experiments.episodes.trace import JointTrace
 from experiments.montessori.ask_episode import (
     AskingOption,
     EpisodeKeptNoWorldToAskAgain,
     FACTS_IN_THE_EVENT_LOG,
+    FACTS_IN_THE_PERFORMED_PLANS,
     MomentOutsideTheTrial,
     TheObjectAskedAboutIsNotNamed,
     ask_at_a_moment,
@@ -38,6 +44,7 @@ from experiments.montessori.ask_episode import (
 from experiments.montessori.scenarios import SortingScene
 from experiments.questions.long_term_memory import (
     AnythingMovedInTheEpisode,
+    MotionsRequestedInTheEpisode,
     NumberOfDegreesOfFreedomInTheRecordedWorld,
 )
 from experiments.questions.working_memory import (
@@ -50,11 +57,13 @@ from experiments.montessori.results_database import ResultsDatabase
 from experiments.questions.question import Memory
 
 from .dataset.synthetic_grasping_robot import FINGER_OPENING
-from .test_episodes import sorting_episode
+from .test_episodes import minimal_plan, sorting_episode
 from .test_long_term_memory import record
 from .test_working_memory_ground_truth import ASceneTheRunStood, area, stood
 from .test_long_term_questions import (
     MOVED_OBJECT_NAME,
+    EpisodeThatRequestedMotions,
+    episode_that_requested_motions,
     memory,
     recorded_episode,
     results_database,
@@ -78,6 +87,16 @@ def test_the_episode_and_the_object_are_read(tmp_path):
     assert arguments.episode_identifier == "episode-42"
     assert arguments.object_name == MOVED_OBJECT_NAME
     assert arguments.database_uri == "sqlite:///%s" % (tmp_path / "results.db")
+
+
+def test_asking_the_control_program_is_read_off_the_command_line():
+    told_to = parse_arguments(
+        [AskingOption.EPISODE, "episode-42", AskingOption.ASK_THE_CONTROL_PROGRAM]
+    )
+    not_told_to = parse_arguments([AskingOption.EPISODE, "episode-42"])
+
+    assert told_to.asking_the_control_program is True
+    assert not_told_to.asking_the_control_program is False
 
 
 # %% asking
@@ -194,6 +213,57 @@ def test_the_facts_an_episode_recorded_follow_what_it_kept():
 
     assert recorded_facts([without_anything]) == set()
     assert recorded_facts([with_ticks]) == FACTS_IN_THE_EVENT_LOG
+
+
+def test_an_episode_whose_trial_performed_a_plan_recorded_what_it_requested():
+    with_a_plan = RecordedTrial(
+        episode=sorting_episode(),
+        outcome=TrialOutcome.SUCCEEDED,
+        duration=1.0,
+        plans=[PerformedPlan(plan=minimal_plan())],
+    )
+
+    assert recorded_facts([with_a_plan]) == FACTS_IN_THE_PERFORMED_PLANS
+
+
+def test_the_control_program_is_asked_about_only_when_told_to(
+    memory: LongTermMemory,
+    episode_that_requested_motions: EpisodeThatRequestedMotions,
+):
+    identifier = episode_that_requested_motions.episode.identifier
+
+    left_out = ask_episode(memory, identifier, MOVED_OBJECT_NAME)
+    told_to = ask_episode(
+        memory, identifier, MOVED_OBJECT_NAME, asking_the_control_program=True
+    )
+
+    assert MotionsRequestedInTheEpisode not in {type(row.question) for row in left_out}
+    [asked] = [
+        row for row in told_to if isinstance(row.question, MotionsRequestedInTheEpisode)
+    ]
+    assert asked.answered_correctly is True
+
+
+def test_the_rows_about_the_control_program_are_kept_with_the_trial(
+    results_database: ResultsDatabase,
+    memory: LongTermMemory,
+    episode_that_requested_motions: EpisodeThatRequestedMotions,
+):
+    identifier = episode_that_requested_motions.episode.identifier
+    rows = ask_episode(
+        memory, identifier, MOVED_OBJECT_NAME, asking_the_control_program=True
+    )
+
+    keep_with_the_trial(results_database, identifier, rows)
+
+    [trial] = memory.recall_trials(identifier)
+    [kept] = [
+        query
+        for query in trial.queries
+        if isinstance(query.question, MotionsRequestedInTheEpisode)
+    ]
+    assert kept.question.episode_identifier == identifier
+    assert kept.answered_correctly is True
 
 
 # %% the whole command

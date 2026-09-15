@@ -90,23 +90,28 @@ class QuestionSet:
         )
 
     @classmethod
-    def over_long_term_memory(cls, things: RememberedThings) -> QuestionSet:
+    def over_long_term_memory(
+        cls, things: RememberedThings, asking_the_control_program: bool = False
+    ) -> QuestionSet:
         """
         The questions put to what past runs recorded.
 
         ..note:: Thinner than the working-memory set, and the gaps are what other items
             still owe: the support and spatial relations bucket needs geometric
-            predicates routed to a backend that can answer them from rows, the
+            predicates routed to a backend that can answer them from rows, and the
             embodiment bucket reduces to the pick-up record unless an episode also
-            records which links were the robot's, and the control bucket has no spelling
-            in either memory yet.
+            records which links were the robot's.
 
         :param things: What this run fills in for the questions about one thing.
+        :param asking_the_control_program: Whether the questions of the control bucket
+            are asked too. Left out unless asked for, so the set is the same with or
+            without them.
         """
         return cls(
             questions=[
                 asked
                 for question in questions_of(LongTermMemoryQuestion)
+                if asking_the_control_program or question.bucket is not Bucket.CONTROL
                 for asked in question.asked_of(things)
             ]
         )
