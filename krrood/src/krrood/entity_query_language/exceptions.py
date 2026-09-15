@@ -968,6 +968,41 @@ class BackendCannotEvaluateCause(DataclassException):
 
 
 @dataclass
+class BackendCannotResolveCondition(DataclassException):
+    """
+    Raised when a backend that translates a query into another engine's plan meets a
+    condition that has no place in that plan and cannot be applied to the results
+    either.
+
+    A backend that dropped such a condition would answer a different question from the
+    one it was asked, so it refuses instead.
+    """
+
+    condition: SymbolicExpression
+    """
+    The condition that could be neither translated nor applied afterwards.
+    """
+
+    backend_type: Type[QueryBackend]
+    """
+    The type of the backend that cannot resolve it.
+    """
+
+    def error_message(self) -> str:
+        return (
+            f"{self.backend_type.__name__} cannot resolve the condition {self.condition}: "
+            f"it is neither part of the plan the backend translates the query into, nor "
+            f"applicable to the results that plan returns."
+        )
+
+    def suggest_correction(self) -> str:
+        return (
+            "Constrain only the variable being selected, or evaluate with a backend that "
+            "can reach whatever else the condition names."
+        )
+
+
+@dataclass
 class BackendCannotEvaluateProbabilisticQuery(DataclassException):
     """
     Raised when a
