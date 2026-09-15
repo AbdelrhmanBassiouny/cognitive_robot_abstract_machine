@@ -48,7 +48,23 @@ Plan:
       Also on main: #386 (buffer_zone_distance), #387 (typst nested table).
       Then (user ask): applying row in the Bloom table = GoalReached over trials with plans
       (real: 3 sorting runs + framework demo); branch claude/bloom-table-reports-applying.
-- [ ] pipeline run: scratch worktree ~/Projects_2/cram-paper-pipeline (branch local/paper-pipeline
-      = this branch + #386/#387/#388/#389/#390 cherry-picked); reproduction script
-      generate_paper_artifacts.py now re-scores, asks the long-term set (object per episode),
-      copies .tex/.json/.png into krrood-icra-2027/paper/figures/real
+      Draft PR #391 (applying row). Draft PR #393 (bug, branch claude/joints-counted-once-per-episode):
+      NumberOfDegreesOfFreedomInTheRecordedWorld counted the world once per trial (42 not 14
+      for the 3-trial stand-still episodes) - the last wrong answers (Remembering 0.96,
+      self-model 0.93). Before/after card of 0a793ded checked: frames now differ (5.5 s / 22.7 s).
+- [ ] pipeline run 1 (without the control question): scratch worktree ~/Projects_2/cram-paper-pipeline
+      (branch local/paper-pipeline = this branch + #386..#391 + #393 cherry-picked);
+      generate_paper_artifacts.py re-scores, asks the long-term set (object per episode),
+      copies .tex/.json/.png into krrood-icra-2027/paper/figures/real. Rerun started with #393.
+- [ ] run 2 (user ask 2026-09-15): a question querying the constraints the motions put on the
+      controller, kept apart so the paper can use either run. User chose the recorded motion
+      requests (MoveToolCenterPointMotion / MoveJointsMotion of the plans' MotionNodes); the
+      giskard statechart nodes are not persisted (MotionStatechartDAO holds only an id).
+      Branch claude/the-long-term-set-asks-what-the-motions-requested (worktree
+      ~/Projects_2/cram-the-long-term-set-asks-what-the-motions-requested), base this branch.
+      Probe on the real DB: query trial.plans -> plan.nodes -> MotionNode.designator gives 29
+      rows = 29 walked for 25f5161d. Design: MotionsRequestedInTheEpisode, bucket CONTROL,
+      RequiredFact.PERFORMED_PLANS, answers MotionRequest (JointRequest/ToolCenterPointRequest,
+      frozen); QuestionSet.over_long_term_memory(asking_the_control_program=False);
+      ask_episode --ask-the-control-program. Tests written (not yet run: ORM regenerating).
+      Then: pipeline flag -> paper/figures/real_with_control_program; maybe a card.
