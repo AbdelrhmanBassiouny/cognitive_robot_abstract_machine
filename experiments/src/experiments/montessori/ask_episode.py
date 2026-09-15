@@ -47,6 +47,7 @@ from experiments.questions.question import (
     RequiredFact,
     SceneAsSetUp,
     ScoredAgainstTheSceneAsSetUp,
+    ScoredAgainstWhereTheJointsStood,
 )
 from experiments.questions.question_set import QuestionSet
 
@@ -274,20 +275,26 @@ def robot_of(world: World) -> AbstractRobot:
 
 
 def rescore_the_working_memory(
-    results_database: ResultsDatabase, episode_identifier: str
+    results_database: ResultsDatabase,
+    episode_identifier: str,
+    artifact_directory: Optional[ArtifactDirectory] = None,
 ) -> List[RecordedQuery]:
     """
     Score the working-memory rows of a recorded episode again and keep the fresh scores
     on them, so an episode scored by an older rule is re-scored rather than run again.
 
-    Only the rows whose questions are scored against the scene as it was set up: those
-    carry the account they are scored against, and putting them to the world the run
-    kept asks exactly what the run asked. A question answered from what the segmentation
-    saw is left alone, since the events it read are the running process's rather than
-    the record's.
+    Only the rows whose questions are scored against the scene as it was set up, and
+    those scored against where the robot's joints stood. The first carry the account
+    they are scored against, and putting them to the world the run kept asks exactly
+    what the run asked. The second are put to that world stood where the trial's joint
+    trace holds the joints at the moment the row was asked, and left alone where the
+    trial kept no trace. A question answered from what the segmentation saw is left
+    alone, since the events it read are the running process's rather than the record's.
 
     :param results_database: The database the episode was recorded to.
     :param episode_identifier: The episode whose rows are scored again.
+    :param artifact_directory: Where the episode's joint traces are kept, or None to
+        score again only the rows scored against the scene as it was set up.
     :raises UnrecordedEpisodeError: If the database holds no trial of that episode.
     :raises EpisodeKeptNoWorldToAskAgain: If the episode kept no world to ask again.
     :return: The rows that were scored again, in the order they were recorded.
@@ -310,15 +317,53 @@ def rescore_the_working_memory(
                 raise EpisodeKeptNoWorldToAskAgain(
                     episode_identifier=episode_identifier
                 )
-            robot = robot_of(recalled.episode.world)
+            trace = joint_trace_of(recalled, artifact_directory)
             for row, association in zip(recalled.queries, stored.queries):
-                if not isinstance(row.question, ScoredAgainstTheSceneAsSetUp):
+                score = scored_again(row, recalled.episode.world, trace)
+                if score is None:
                     continue
-                row.answered_correctly = row.question.matches_ground_truth(robot)
-                association.target.answered_correctly = row.answered_correctly
+                row.answered_correctly = score
+                association.target.answered_correctly = score
                 rescored.append(row)
         session.commit()
         return rescored
+
+
+def joint_trace_of(
+    trial: RecordedTrial, artifact_directory: Optional[ArtifactDirectory]
+) -> Optional[JointTrace]:
+    """
+    Where every joint of a recalled trial stood along it, or None where the trial kept
+    no trace or nothing says where traces are kept.
+
+    :param trial: The recalled trial.
+    :param artifact_directory: Where the episode's joint traces are kept, or None.
+    """
+    if artifact_directory is None:
+        return None
+    kept = artifact_directory.open_for(trial.episode).trial(trial.number)
+    if not kept.kept_a_joint_trace:
+        return None
+    return kept.joint_trace
+
+
+def scored_again(
+    row: RecordedQuery, world: World, trace: Optional[JointTrace]
+) -> Optional[bool]:
+    """
+    Whether a working-memory row's question agrees with ground truth when put to the
+    world a run kept once more, or None where the row cannot be scored again.
+
+    :param row: The recalled row.
+    :param world: The world the run kept.
+    :param trace: Where every joint stood along the trial, or None.
+    """
+    if isinstance(row.question, ScoredAgainstTheSceneAsSetUp):
+        return row.question.matches_ground_truth(robot_of(world))
+    if not isinstance(row.question, ScoredAgainstWhereTheJointsStood) or trace is None:
+        return None
+    with standing_at(world, trace.at(row.moment)):
+        return row.question.matches_ground_truth(robot_of(world))
 
 
 # %% asking the working memory as it stood at a moment of a trial
@@ -476,7 +521,9 @@ def main(argument_list: Optional[Sequence[str]] = None) -> int:
     )
     if arguments.rescore_working_memory:
         return print_the_scores(
-            rescore_the_working_memory(database, arguments.episode_identifier),
+            rescore_the_working_memory(
+                database, arguments.episode_identifier, ArtifactDirectory()
+            ),
             "%d working-memory questions of episode %s scored again.",
             arguments.episode_identifier,
         )
