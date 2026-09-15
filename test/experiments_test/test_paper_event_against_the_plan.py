@@ -30,6 +30,7 @@ from segmind.datastructures.events import PickUpEvent, TranslationEvent
 from experiments.episodes.artifacts import ArtifactDirectory, EpisodeArtifacts
 from experiments.episodes.episode import (
     Episode,
+    MovedBySomeoneElse,
     PerformedPlan,
     RecordedQuery,
     RecordedTrial,
@@ -402,6 +403,77 @@ def test_the_camera_is_asked_for_the_moment_the_event_was_reported(
         )
         == SOMETHING_HAPPENED_AT
     )
+
+
+# %% where the object stood before someone else moved it
+
+TOLD_AT = 1.0
+"""
+Seconds into the trial the person was told to move the piece, before the monitor
+reported it moving.
+"""
+
+TOLD_ONLY_AFTERWARDS_AT = 5.0
+"""
+Seconds into the trial a person was told to move the piece after the monitor had already
+reported it moving.
+"""
+
+
+def told_to_move(trial: RecordedTrial, moved: Body, moment: float) -> RecordedTrial:
+    """
+    The given trial, recording that a person was told to move a thing at a moment.
+
+    :param trial: The trial to add the instruction to.
+    :param moved: What the person was told to move.
+    :param moment: Seconds into the trial they were told.
+    """
+    trial.moved_by_someone_else = [
+        MovedBySomeoneElse(moment=moment, things_moved=[moved.name])
+    ]
+    return trial
+
+
+def test_the_stretch_pictured_starts_as_the_person_was_told_to_move_the_piece(
+    a_person_shoved_it: RecordedTrial, piece: Body
+) -> None:
+    """
+    The monitor reports a piece a person moved only once it sees it somewhere new, which
+    is already after the move, so a frame taken then shows the piece where it ended up.
+    The run last knew the piece where it stood as the person was told to move it, so the
+    earlier picture is taken then.
+    """
+    told_to_move(a_person_shoved_it, piece, TOLD_AT)
+
+    over = EventAgainstThePlanCard().moved_over(
+        a_person_shoved_it, a_person_shoved_it.queries[0]
+    )
+
+    assert (over.start, over.end) == (TOLD_AT, TRIAL_DURATION)
+
+
+def test_a_person_told_to_move_something_else_leaves_the_stretch_as_reported(
+    a_person_shoved_it: RecordedTrial, scene: World
+) -> None:
+    told_to_move(a_person_shoved_it, scene.get_body_by_name(ANSWERED_NAME), TOLD_AT)
+
+    over = EventAgainstThePlanCard().moved_over(
+        a_person_shoved_it, a_person_shoved_it.queries[0]
+    )
+
+    assert over.start == SOMETHING_HAPPENED_AT
+
+
+def test_a_person_told_only_after_the_piece_was_seen_moving_leaves_the_stretch_as_reported(
+    a_person_shoved_it: RecordedTrial, piece: Body
+) -> None:
+    told_to_move(a_person_shoved_it, piece, TOLD_ONLY_AFTERWARDS_AT)
+
+    over = EventAgainstThePlanCard().moved_over(
+        a_person_shoved_it, a_person_shoved_it.queries[0]
+    )
+
+    assert over.start == SOMETHING_HAPPENED_AT
 
 
 # %% the card written out
