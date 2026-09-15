@@ -6,11 +6,13 @@ and reporting every plan in a plans directory against it.
 import sys
 from pathlib import Path
 
+import pytest
 import yaml
 
 from bastler.plan_item_bootstrap import PlanDocument
 from bastler.plan_size_budget import (
     BudgetLimit,
+    PlanOverBudgetError,
     PlansDirectory,
     PlanSize,
     SizeBudget,
@@ -218,6 +220,48 @@ def test_an_overrun_states_the_excess_against_what_was_allowed():
     )
     (overrun,) = budget.overruns(size)
     assert str(overrun) == "5 items over 10"
+
+
+# %% enforcing the budget
+
+
+def test_enforce_raises_nothing_for_a_plan_within_budget():
+    size = PlanSize(
+        plan_id="a-plan",
+        item_count=SizeBudget().maximum_items,
+        manifest_line_count=SizeBudget().maximum_lines,
+        roadmap_line_count=0,
+    )
+    SizeBudget().enforce(size)
+
+
+def test_enforce_raises_a_plan_over_budget_error_naming_the_plan_and_every_overrun():
+    budget = SizeBudget(maximum_items=10, maximum_lines=100)
+    size = PlanSize(
+        plan_id="over-plan",
+        item_count=11,
+        manifest_line_count=101,
+        roadmap_line_count=0,
+    )
+    with pytest.raises(PlanOverBudgetError) as excinfo:
+        budget.enforce(size)
+    assert excinfo.value.plan_size is size
+    assert excinfo.value.overruns == budget.overruns(size)
+
+
+def test_a_plan_over_budget_error_states_every_overrun():
+    budget = SizeBudget(maximum_items=10, maximum_lines=100)
+    size = PlanSize(
+        plan_id="over-plan",
+        item_count=11,
+        manifest_line_count=101,
+        roadmap_line_count=0,
+    )
+    with pytest.raises(PlanOverBudgetError) as excinfo:
+        budget.enforce(size)
+    for overrun in budget.overruns(size):
+        assert str(overrun) in str(excinfo.value)
+    assert "over-plan" in str(excinfo.value)
 
 
 # %% measuring every plan
