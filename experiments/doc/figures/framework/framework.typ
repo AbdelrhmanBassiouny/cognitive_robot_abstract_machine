@@ -480,10 +480,6 @@
     card(robot-x, robot-y, robot-size.at(0), robot-size.at(1), fill: white, stroke: muted, dash: "dashed", align(center + horizon, small(robot-name)))
   }
   place(dx: robot-x, dy: robot-y + robot-size.at(1) + 0.02cm, box(width: robot-size.at(0), align(center, small(robot-name))))
-  for (i, r) in ((0.12cm, 0.0cm), (0.09cm, 0.26cm), (0.06cm, 0.47cm)).enumerate() {
-    place(dx: robot-x + robot-size.at(0) * 0.55 - i * 0.2cm - r.at(0), dy: bubble-y + bubble-h + 0.06cm + r.at(1) - r.at(0),
-      circle(radius: r.at(0), fill: bubble-fill, stroke: stroke-width + hairline))
-  }
 
   // the robot, acting: one picture above the next, in the space they share
   let n = execution-images.len()
