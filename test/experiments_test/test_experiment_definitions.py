@@ -12,6 +12,8 @@ from __future__ import annotations
 import enum
 import json
 import pathlib
+import shutil
+import subprocess
 from dataclasses import dataclass
 
 import pytest
@@ -21,6 +23,7 @@ from experiments.experiment_definitions import (
     ExperimentResult,
     ExperimentsTable,
     IncompatibleUnitConversionError,
+    LatexRenderer,
     MeanAndStandardDeviation,
     NoMeasurementsError,
     PercentageBound,
@@ -291,6 +294,126 @@ def test_count_keeps_its_exact_value():
     A count is exact, so it is written as it is rather than as a rounded quantity.
     """
     assert "[7]" in rendered(NestedMeasurement(trials=7))
+
+
+# %% the table written for a LaTeX paper
+
+LATEX_DOCUMENT = pathlib.Path(__file__).parent / "dataset" / "latex_table_document.tex"
+"""
+A document that includes nothing but the table written beside it as ``table.tex``.
+"""
+
+LATEX_COMPILER = "pdflatex"
+"""
+The program the written table is compiled with, the one IEEE conference papers are
+built with.
+"""
+
+
+@dataclass
+class LabelledRow(ExperimentResult):
+    """
+    A row reporting a label of its own wording and a measurement with its spread.
+    """
+
+    label: str
+    """
+    What the row is about, worded freely.
+    """
+
+    duration: MeanAndStandardDeviation
+    """
+    The measurement and how much it varied.
+    """
+
+
+def labelled(label: str = "the row") -> LabelledRow:
+    """
+    :param label: What the row is about.
+    :return: A row reporting that label and a spread measurement.
+    """
+    return LabelledRow(
+        label=label,
+        duration=MeanAndStandardDeviation(mean=1.5, standard_deviation=0.25),
+    )
+
+
+def test_a_latex_table_names_its_columns_between_the_rules():
+    """
+    The paper's tables are ruled the way the paper already rules its own, so the column
+    headings sit between the top rule and the middle rule and the rows end at the bottom
+    rule.
+    """
+    markup = LatexRenderer(ExperimentsTable([row()])).render_table()
+
+    assert "\\toprule\nQuality & Score & Unestablished Score \\\\\n\\midrule" in markup
+    assert markup.rstrip().endswith("\\bottomrule\n\\end{tabular}")
+
+
+def test_a_latex_table_writes_a_row_as_its_cells():
+    markup = LatexRenderer(ExperimentsTable([row(score=0.5)])).render_table()
+
+    assert "Fully Established & 0.50 & 1.00 \\\\" in markup
+
+
+def test_a_latex_table_aligns_a_number_right_and_words_left():
+    markup = LatexRenderer(ExperimentsTable([row()])).render_table()
+
+    assert "\\begin{tabular}{@{}lrr@{}}" in markup
+
+
+def test_a_latex_cell_escapes_what_latex_reads_as_markup():
+    """
+    A label is written as it reads, so a character LaTeX would take for markup is
+    escaped rather than breaking the table.
+    """
+    markup = LatexRenderer(
+        ExperimentsTable([labelled("50% of a_b & c")])
+    ).render_table()
+
+    assert "50\\% of a\\_b \\& c" in markup
+
+
+def test_a_spread_is_written_with_the_latex_plus_minus():
+    markup = LatexRenderer(ExperimentsTable([labelled()])).render_table()
+
+    assert "%s $\\pm$ %s" % (1.5, 0.25) in markup
+
+
+def test_a_latex_table_presented_to_a_reader_carries_its_caption_and_label():
+    renderer = LatexRenderer(ExperimentsTable([row()]))
+
+    table = renderer.render_figure("What 50% of it measured.", "tab:measured")
+
+    assert renderer.render_table() in table
+    assert "\\caption{What 50\\% of it measured.}" in table
+    assert "\\label{tab:measured}" in table
+
+
+@pytest.mark.skipif(
+    shutil.which(LATEX_COMPILER) is None, reason="%s is not installed" % LATEX_COMPILER
+)
+def test_a_latex_table_presented_to_a_reader_compiles(tmp_path: pathlib.Path):
+    (tmp_path / "table.tex").write_text(
+        LatexRenderer(
+            ExperimentsTable([row(), row(quality=MeasuredQuality.NOT_ESTABLISHED)])
+        ).render_figure("What 50% of it measured.", "tab:measured")
+    )
+    shutil.copy(LATEX_DOCUMENT, tmp_path / LATEX_DOCUMENT.name)
+
+    compiled = subprocess.run(
+        [
+            LATEX_COMPILER,
+            "-interaction=nonstopmode",
+            "-halt-on-error",
+            LATEX_DOCUMENT.name,
+        ],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+    )
+
+    assert compiled.returncode == 0, compiled.stdout
 
 
 # %% recording the results alongside the table

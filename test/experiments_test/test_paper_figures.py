@@ -566,6 +566,22 @@ def test_writing_a_figure_leaves_its_table_and_the_rows_behind_it(
     assert written.table_path.read_text() == figure.render(recorded_trials)
 
 
+def test_writing_a_figure_leaves_its_table_for_a_latex_paper(recorded_trials, tmp_path):
+    """
+    The paper is written in LaTeX, so the table is also left as a LaTeX table it inputs,
+    labelled after the figure so the paper refers to it by the figure's own name.
+    """
+    figure = figure_named(FigureName.TRIAL_OUTCOME_BY_CONDITION)
+
+    written = figure.write(recorded_trials, tmp_path)
+
+    assert written.latex_table_path == tmp_path / figure.file_name(
+        FigureFile.LATEX_TABLE
+    )
+    assert written.latex_table_path.read_text() == figure.render_latex(recorded_trials)
+    assert "\\label{tab:%s}" % figure.name.value in written.latex_table_path.read_text()
+
+
 def test_writing_the_set_leaves_every_figure_of_the_paper(recorded_trials, tmp_path):
     """
     One script regenerates every table, so writing the set has to leave a file per
