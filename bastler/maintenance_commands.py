@@ -26,8 +26,10 @@ from bastler.maintenance_report import (
     print_fast_forward,
     print_promotions,
     print_restack,
+    print_tooling_labels,
 )
 from bastler.maintenance_restack_procedure import restack
+from bastler.maintenance_tooling_label import label_tooling_changes
 from bastler.stack import BOARD_PATH, Configuration, Stack, load_stack
 
 
@@ -214,6 +216,58 @@ class PromoteCommand(MaintenanceCommand):
         fork = maintenance.fork()
         print_promotions(
             promote(stack, fork), clear_spent_promotion_labels(stack, fork)
+        )
+        return MaintenanceExitCode.SUCCESS
+
+
+@dataclass(frozen=True)
+class LabelToolingCommand(MaintenanceCommand):
+    """
+    Says which fork pull requests change the tooling, from the files they change.
+    """
+
+    @property
+    def invoked_as(self) -> str:
+        """
+        The name it is invoked by on the command line.
+        """
+        return "label-tooling"
+
+    @property
+    def description(self) -> str:
+        """
+        What it does, as ``--help`` puts it.
+        """
+        return "label every pull request that changes the tooling and nothing else"
+
+    def declare_arguments(self, parser: argparse.ArgumentParser) -> None:
+        """:param parser: The subparser to declare ``--pull-request`` on."""
+        parser.add_argument(
+            "--pull-request",
+            action="append",
+            type=int,
+            default=[],
+            metavar="NUMBER",
+            help=(
+                "label only this pull request; repeat it for several. Every open one "
+                "is labelled when none is named, which costs a call per pull request"
+            ),
+        )
+
+    def run(
+        self, maintenance: MaintenancePass, arguments: argparse.Namespace
+    ) -> MaintenanceExitCode:
+        """:param maintenance: What this run has resolved.
+        :param arguments: The parsed command line.
+        :return: The process exit code."""
+        fork = maintenance.fork()
+        print_tooling_labels(
+            label_tooling_changes(
+                fork,
+                fork,
+                maintenance.configuration,
+                arguments.pull_request or None,
+            )
         )
         return MaintenanceExitCode.SUCCESS
 
