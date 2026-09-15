@@ -166,9 +166,9 @@
 #let title-open = "Underspecified plan"
 #let title-backends = "Resolved by"
 #let title-resolved = "Resolved plan"
-#let panel-titles = (perception: "PerceptionBackend", simulation: "Simulation backend", probabilistic: "ProbabilisticBackend", rules: "Ripple-down rules")
+#let panel-titles = (perception: "PerceptionBackend", simulation: "Working memory backend", probabilistic: "ProbabilisticBackend", rules: "Ripple-down rules")
 #let panel-order = ("perception", "simulation", "probabilistic", "rules")
-#let robot-name = "Tracy"
+#let robot-name = "Robot"                     // named generically for double anonymous review
 #let execute-label = "executes the resolved plan"
 
 // %% CONFIG: image slots ----------------------------------------------------------------
@@ -331,7 +331,7 @@
   place(dx: board-x, dy: board-y, rect(width: board-w, height: board-h, fill: board-color, stroke: stroke-width + rgb("#c9b98f"), radius: 0.03cm))
   place(dx: board-x + board-w * 0.18, dy: board-y, rect(width: 0.24cm, height: board-h * 0.55, fill: white, stroke: stroke-width + rgb("#c9b98f")))
   place(dx: cube-x, dy: cube-y, rect(width: cube-s, height: cube-s, fill: cube-color, stroke: stroke-width + perception.stroke, radius: 0.02cm))
-  place(dx: cube-x + 0.02cm, dy: cube-y - 0.28cm, mono(size: 4.8pt, "cube_1"))
+  place(dx: cube-x + cube-s + 0.06cm, dy: cube-y + 0.02cm, mono(size: 4.8pt, "cube_1"))   // beside the cube, clear of the panel title
   // the two bounding boxes and the band where they overlap
   place(dx: cube-x - 0.06cm, dy: cube-y - 0.06cm, rect(width: cube-s + 0.12cm, height: cube-s + 0.12cm, stroke: (paint: simulation.stroke, thickness: 0.4pt, dash: "dotted")))
   place(dx: board-x - 0.06cm, dy: board-y - 0.06cm, rect(width: board-w + 0.12cm, height: board-h + 0.12cm, stroke: (paint: simulation.stroke, thickness: 0.4pt, dash: "dotted")))
@@ -397,8 +397,14 @@
   let root-bottom = root.y + node-h
   arrow((root.x + root-w * 0.25, root-bottom), (except.x + leaf-w / 2, except.y), stroke: muted)
   arrow((root.x + root-w * 0.75, root-bottom), (else-node.x + leaf-w / 2, else-node.y), stroke: muted)
-  place(dx: except.x, dy: root-bottom + 0.1cm, box(width: leaf-w, align(center, small("except"))))
-  place(dx: else-node.x, dy: root-bottom + 0.1cm, box(width: leaf-w, align(center, small("else"))))
+  // each label beside its arrow, on the side the arrow leans away from, so no stroke runs through it
+  let label-w = 1.2cm
+  let label-gap = 0.12cm
+  let label-y = root-bottom + 0.1cm
+  let except-mid = (root.x + root-w * 0.25 + except.x + leaf-w / 2) / 2
+  let else-mid = (root.x + root-w * 0.75 + else-node.x + leaf-w / 2) / 2
+  place(dx: except-mid - label-gap - label-w, dy: label-y, box(width: label-w, align(right, small("except"))))
+  place(dx: else-mid + label-gap, dy: label-y, box(width: label-w, align(left, small("else"))))
 }
 
 #let panel-drawers = (perception: detection-panel, simulation: world-panel, probabilistic: grasp-panel, rules: rules-panel)
