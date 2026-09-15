@@ -833,8 +833,19 @@ def test_generic_class(session, database):
     assert reconstructed.associated_value == obj.associated_value
     assert len(reconstructed.associated_value_list) == 2
     assert reconstructed.associated_value_list == obj.associated_value_list
-    assert reconstructed.associated_value_not_parametrized is None
-    assert reconstructed.associated_value_not_parametrized_list == []
+    assert reconstructed.associated_value_not_parametrized == generic_position
+
+    # GenericClass(2.0) is a genuinely bare instance: unlike generic_position, it is
+    # never referenced through a parametrized field, and GenericClass does not use
+    # SubClassSafeGeneric to carry its type argument at runtime. With two
+    # parametrizations mapped elsewhere (float and KRROODPosition), which one it
+    # belongs to is unrecoverable, so it round trips through the ambiguous base with
+    # its type-bound field left unset; only the fields whose type does not depend on
+    # the generic parameter survive.
+    [reconstructed_bare_value] = reconstructed.associated_value_not_parametrized_list
+    assert not hasattr(reconstructed_bare_value, "value")
+    assert reconstructed_bare_value.optional_value is None
+    assert reconstructed_bare_value.container == []
 
 
 def test_consistent_hashes_of_association_object_table_names():

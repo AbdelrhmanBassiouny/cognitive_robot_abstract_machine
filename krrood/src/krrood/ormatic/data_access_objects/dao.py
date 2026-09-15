@@ -19,6 +19,7 @@ from sqlalchemy.orm import (
 )
 from typing_extensions import (
     Type,
+    get_args,
     get_origin,
     Any,
     TypeVar,
@@ -697,6 +698,18 @@ class DataAccessObject(HasGeneric[T]):
             relationship.direction == ONETOMANY and not relationship.uselist
         )
 
+    @staticmethod
+    def _relationship_domain_type_specificity(domain_type: Type) -> int:
+        """
+        Rank a relationship's domain type by how much it narrows a shared source
+        object's DAO class: a parametrized generic (e.g. ``GenericClass[float]``) is
+        more specific than its bare form (``GenericClass``).
+
+        :param domain_type: The domain type of a relationship.
+        :return: 0 for a parametrized type, 1 for a bare one.
+        """
+        return 0 if get_args(domain_type) else 1
+
     def _fill_relationships_from_plan(
         self,
         source_object: Any,
@@ -707,23 +720,39 @@ class DataAccessObject(HasGeneric[T]):
         """
         Populate relationships from a source object using a conversion plan.
 
+        A relationship whose domain type is a parametrized generic is resolved before
+        one whose domain type is the bare generic, regardless of whether either is
+        single- or collection-valued: :meth:`_get_or_queue_dao` fixes a shared source
+        object's DAO class on its first resolution, so resolving the coarser, bare-typed
+        reference first would permanently pin the object to the ambiguous base DAO for
+        every other relationship that shares it.
+
         :param source_object: The source of relationship values.
         :param single_relationships: The single-valued relationship entries.
         :param collection_relationships: The collection relationship entries.
         :param state: The conversion state.
         """
-        for relationship in single_relationships:
-            value = getattr(source_object, relationship.key)
-            if value is None:
-                setattr(self, relationship.key, None)
-            else:
-                setattr(
-                    self,
-                    relationship.key,
-                    self._get_or_queue_dao(value, state, relationship.domain_type),
-                )
+        ordered_relationships = sorted(
+            [(True, relationship) for relationship in single_relationships]
+            + [(False, relationship) for relationship in collection_relationships],
+            key=lambda entry: self._relationship_domain_type_specificity(
+                entry[1].domain_type
+            ),
+        )
 
-        for relationship in collection_relationships:
+        for is_single, relationship in ordered_relationships:
+            if is_single:
+                value = getattr(source_object, relationship.key)
+                if value is None:
+                    setattr(self, relationship.key, None)
+                else:
+                    setattr(
+                        self,
+                        relationship.key,
+                        self._get_or_queue_dao(value, state, relationship.domain_type),
+                    )
+                continue
+
             source_collection = getattr(source_object, relationship.key)
 
             if relationship.association_class is not None:
