@@ -66,6 +66,7 @@ from experiments.questions.question import (
     RequiredFact,
     SceneNotStated,
     ScoredAgainstTheSceneAsSetUp,
+    ScoredAgainstWhereTheJointsStood,
     moving_parts_of,
     objects_of_the_scene,
     surfaces_of_the_scene,
@@ -1042,7 +1043,7 @@ class HeldInTheHand(WorkingMemoryQuestion[bool], ScoredAgainstTheSceneAsSetUp):
 
 
 @dataclass
-class PlaceOfOwnBody(WorkingMemoryQuestion[Pose]):
+class PlaceOfOwnBody(WorkingMemoryQuestion[Pose], ScoredAgainstWhereTheJointsStood):
     """
     Where one of the robot's own links is.
     """

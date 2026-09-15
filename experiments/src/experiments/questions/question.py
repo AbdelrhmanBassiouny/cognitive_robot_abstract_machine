@@ -607,6 +607,14 @@ class ScoredAgainstTheSceneAsSetUp:
         return self.scene
 
 
+@dataclass
+class ScoredAgainstWhereTheJointsStood:
+    """
+    A question whose true answer follows from where the robot's joints stood when it was
+    asked, read off the twin directly.
+    """
+
+
 # %% the question itself
 
 SourceType = TypeVar("SourceType")
