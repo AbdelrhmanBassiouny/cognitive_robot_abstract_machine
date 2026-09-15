@@ -17,26 +17,38 @@ query under test -- a query checked against itself proves nothing.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 import pytest
+from coraplex.datastructures.enums import Arms, MovementType
+from coraplex.plans.plan import Plan
+from coraplex.plans.plan_node import MotionNode, PlanNode
+from coraplex.robot_plans.motions.base import BaseMotion
+from coraplex.robot_plans.motions.gripper import MoveToolCenterPointMotion
+from coraplex.robot_plans.motions.robot_body import MoveJointsMotion
 from segmind.datastructures.events import PickUpEvent, TranslationEvent
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
-from semantic_digital_twin.spatial_types.spatial_types import Vector3
+from semantic_digital_twin.spatial_types.spatial_types import Pose, Vector3
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.connections import PrismaticConnection
 from semantic_digital_twin.world_description.world_entity import Body
 from typing_extensions import List
 
-from experiments.episodes.episode import Episode, RecordedTrial, Tick
+from experiments.episodes.episode import Episode, PerformedPlan, RecordedTrial, Tick
 from experiments.episodes.long_term_memory import LongTermMemory
 from experiments.episodes.recording import open_recording
 from experiments.montessori.results_database import ResultsDatabase
 from experiments.questions.long_term_memory import (
     AnythingMovedInTheEpisode,
+    JointRequest,
+    MotionRequest,
+    MotionsRequestedInTheEpisode,
     NumberOfDegreesOfFreedomInTheRecordedWorld,
     ObjectsSeenInTheEpisode,
     ObjectsThatMovedInTheEpisode,
     ObjectsTheRobotMovedInTheEpisode,
     PickedUpInTheEpisode,
+    ToolCenterPointRequest,
 )
 from experiments.questions.question import BloomLevel, Bucket, Memory
 from experiments.questions.question_set import QuestionSet, RememberedThings
@@ -347,6 +359,147 @@ def test_the_joints_counted_are_the_ones_the_recorded_world_held(
     )
     assert question.ask(memory) == JOINTS_THE_ROBOT_HAD
     assert question.ask(memory) == question.ground_truth(memory)
+
+
+# %% control
+
+REQUESTED_JOINT_NAME = "arm_joint"
+"""
+The joint the recorded plan asked to be moved.
+"""
+
+REQUESTED_JOINT_POSITION = 0.25
+"""
+Where the recorded plan asked that joint to go.
+"""
+
+REQUESTED_POSITION_THRESHOLD = 0.004
+"""
+How close to its target the recorded plan asked the tool center point to come, in
+metres.
+"""
+
+REQUESTED_TARGET_HEIGHT = 0.3
+"""
+How high above the world's root the recorded plan asked the tool center point to go.
+"""
+
+
+@dataclass
+class EpisodeThatRequestedMotions:
+    """
+    A recorded run whose plan asked the controller for motions, and the motions it asked
+    for.
+    """
+
+    episode: Episode
+    """
+    The run.
+    """
+
+    motions: List[BaseMotion]
+    """
+    The motions its plan requested, in the order the plan holds them.
+    """
+
+
+def plan_requesting(motions: List[BaseMotion]) -> Plan:
+    """
+    A plan whose one root holds a motion node for each of the given motions.
+
+    :param motions: The motions the plan requests.
+    """
+    plan = Plan()
+    root = PlanNode()
+    plan.add_node(root)
+    for motion in motions:
+        plan.add_edge(root, MotionNode(designator=motion))
+    return plan
+
+
+@pytest.fixture()
+def episode_that_requested_motions(
+    results_database: ResultsDatabase,
+) -> EpisodeThatRequestedMotions:
+    """
+    One run whose plan moved a joint and then the tool center point, each under
+    constraints of its own.
+    """
+    episode = sorting_episode()
+    episode.world = one_jointed_world()
+    motions = [
+        MoveJointsMotion(
+            names=[REQUESTED_JOINT_NAME], positions=[REQUESTED_JOINT_POSITION]
+        ),
+        MoveToolCenterPointMotion(
+            Pose.from_xyz_rpy(
+                z=REQUESTED_TARGET_HEIGHT, reference_frame=episode.world.root
+            ),
+            Arms.LEFT,
+            movement_type=MovementType.TRANSLATION,
+            allow_gripper_collision=True,
+            position_threshold=REQUESTED_POSITION_THRESHOLD,
+        ),
+    ]
+    recording = open_recording(results_database)
+    recording.record(
+        RecordedTrial(
+            episode=episode,
+            outcome=TrialOutcome.SUCCEEDED,
+            duration=12.5,
+            plans=[PerformedPlan(plan=plan_requesting(motions))],
+        )
+    )
+    recording.close()
+    return EpisodeThatRequestedMotions(episode=episode, motions=motions)
+
+
+def test_the_motion_requests_are_the_ones_the_recorded_plan_made(
+    episode_that_requested_motions: EpisodeThatRequestedMotions,
+    memory: LongTermMemory,
+):
+    question = MotionsRequestedInTheEpisode(
+        episode_identifier=episode_that_requested_motions.episode.identifier
+    )
+    assert question.ask(memory) == MotionRequest.over(
+        episode_that_requested_motions.motions
+    )
+    assert question.matches_ground_truth(memory)
+
+
+def test_the_answer_carries_the_constraints_the_plan_put_on_the_controller(
+    episode_that_requested_motions: EpisodeThatRequestedMotions,
+    memory: LongTermMemory,
+):
+    answered = MotionsRequestedInTheEpisode(
+        episode_identifier=episode_that_requested_motions.episode.identifier
+    ).ask(memory)
+    [joints] = [request for request in answered if isinstance(request, JointRequest)]
+    [tool_center_point] = [
+        request for request in answered if isinstance(request, ToolCenterPointRequest)
+    ]
+    assert joints.joint_names == (REQUESTED_JOINT_NAME,)
+    assert joints.positions == (REQUESTED_JOINT_POSITION,)
+    assert tool_center_point.arm is Arms.LEFT
+    assert tool_center_point.movement_type is MovementType.TRANSLATION
+    assert tool_center_point.allow_gripper_collision is True
+    assert tool_center_point.position_threshold == REQUESTED_POSITION_THRESHOLD
+
+
+def test_the_long_term_set_asks_about_the_control_program_only_when_told_to(
+    recorded_episode: Episode,
+):
+    things = RememberedThings(
+        episode_identifier=recorded_episode.identifier,
+        object_name=MOVED_OBJECT_NAME,
+    )
+    assert Bucket.CONTROL not in QuestionSet.over_long_term_memory(things).buckets
+    assert (
+        Bucket.CONTROL
+        in QuestionSet.over_long_term_memory(
+            things, asking_the_control_program=True
+        ).buckets
+    )
 
 
 # %% every question at once

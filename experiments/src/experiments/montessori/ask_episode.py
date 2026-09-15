@@ -63,6 +63,7 @@ class AskingOption(StrEnum):
     DATABASE_URI = "--database-uri"
     RESCORE_WORKING_MEMORY = "--rescore-working-memory"
     AT = "--at"
+    ASK_THE_CONTROL_PROGRAM = "--ask-the-control-program"
 
 
 @dataclass(frozen=True)
@@ -99,6 +100,12 @@ class AskingArguments:
     where the joints stood then, or None to ask the long-term-memory set.
     """
 
+    asking_the_control_program: bool = False
+    """
+    Whether the long-term-memory set asked includes the questions about the control
+    program.
+    """
+
 
 def parse_arguments(argument_list: Optional[Sequence[str]] = None) -> AskingArguments:
     """
@@ -112,6 +119,7 @@ def parse_arguments(argument_list: Optional[Sequence[str]] = None) -> AskingArgu
     parser.add_argument(AskingOption.DATABASE_URI, default=None)
     parser.add_argument(AskingOption.RESCORE_WORKING_MEMORY, action="store_true")
     parser.add_argument(AskingOption.AT, type=float, default=None)
+    parser.add_argument(AskingOption.ASK_THE_CONTROL_PROGRAM, action="store_true")
     parsed = parser.parse_args(argument_list)
     return AskingArguments(
         episode_identifier=parsed.episode,
@@ -119,6 +127,7 @@ def parse_arguments(argument_list: Optional[Sequence[str]] = None) -> AskingArgu
         database_uri=parsed.database_uri,
         rescore_working_memory=parsed.rescore_working_memory,
         moment=parsed.at,
+        asking_the_control_program=parsed.ask_the_control_program,
     )
 
 
@@ -137,6 +146,11 @@ FACTS_IN_THE_RECORDED_WORLD = {
 What an episode that kept its world represents.
 """
 
+FACTS_IN_THE_PERFORMED_PLANS = {RequiredFact.PERFORMED_PLANS}
+"""
+What an episode whose trials performed a plan represents.
+"""
+
 
 def recorded_facts(trials: Sequence[RecordedTrial]) -> Set[RequiredFact]:
     """
@@ -150,11 +164,16 @@ def recorded_facts(trials: Sequence[RecordedTrial]) -> Set[RequiredFact]:
         facts |= FACTS_IN_THE_EVENT_LOG
     if any(trial.episode.world is not None for trial in trials):
         facts |= FACTS_IN_THE_RECORDED_WORLD
+    if any(trial.plans for trial in trials):
+        facts |= FACTS_IN_THE_PERFORMED_PLANS
     return facts
 
 
 def ask_episode(
-    memory: LongTermMemory, episode_identifier: str, object_name: str
+    memory: LongTermMemory,
+    episode_identifier: str,
+    object_name: str,
+    asking_the_control_program: bool = False,
 ) -> List[RecordedQuery]:
     """
     Ask one episode every question of the long-term-memory set its record can answer,
@@ -164,6 +183,8 @@ def ask_episode(
     :param episode_identifier: The episode the questions are about.
     :param object_name: What the object the questions about one object are about was
         called.
+    :param asking_the_control_program: Whether the questions about the control program
+        are asked too.
     :raises UnrecordedEpisodeError: If the database holds no trial of that episode.
     :return: The scored rows, in the set's own order.
     """
@@ -171,7 +192,10 @@ def ask_episode(
     if not trials:
         raise UnrecordedEpisodeError(episode_identifier=episode_identifier)
     question_set = QuestionSet.over_long_term_memory(
-        RememberedThings(episode_identifier=episode_identifier, object_name=object_name)
+        RememberedThings(
+            episode_identifier=episode_identifier, object_name=object_name
+        ),
+        asking_the_control_program,
     ).answerable_with(recorded_facts(trials))
     return question_set.answer_and_record(memory)
 
@@ -495,7 +519,10 @@ def main(argument_list: Optional[Sequence[str]] = None) -> int:
             arguments.episode_identifier,
         )
     rows = ask_episode(
-        LongTermMemory(database), arguments.episode_identifier, arguments.object_name
+        LongTermMemory(database),
+        arguments.episode_identifier,
+        arguments.object_name,
+        arguments.asking_the_control_program,
     )
     keep_with_the_trial(database, arguments.episode_identifier, rows)
     return print_the_scores(

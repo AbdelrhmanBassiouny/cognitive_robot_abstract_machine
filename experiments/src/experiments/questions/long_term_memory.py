@@ -17,6 +17,11 @@ from __future__ import annotations
 from abc import ABC
 from dataclasses import dataclass
 
+from coraplex.datastructures.enums import Arms, MovementType
+from coraplex.plans.plan_node import MotionNode
+from coraplex.robot_plans.motions.base import BaseMotion
+from coraplex.robot_plans.motions.gripper import MoveToolCenterPointMotion
+from coraplex.robot_plans.motions.robot_body import MoveJointsMotion
 from krrood.entity_query_language.backends import SQLAlchemyBackend
 from krrood.entity_query_language.factories import (
     an,
@@ -25,6 +30,7 @@ from krrood.entity_query_language.factories import (
     variable,
 )
 from krrood.entity_query_language.query.query import Query
+from krrood.utils import recursive_subclasses
 from segmind.datastructures.events import (
     AgentInteractionEvent,
     DetectionEvent,
@@ -51,6 +57,7 @@ from experiments.episodes.episode import (
     FailureType,
     InsertionAttempt,
     InsertionOutcome,
+    PerformedPlan,
     RecordedTrial,
     Tick,
 )
@@ -962,3 +969,247 @@ class NumberOfDegreesOfFreedomInTheRecordedWorld(LongTermMemoryQuestion[int]):
         """
         trial, *rest = source.recall_trials(self.episode_identifier)
         return len(trial.episode.world.degrees_of_freedom)
+
+
+# %% control
+
+
+@dataclass(frozen=True)
+class MotionRequest:
+    """
+    What one motion of a recorded plan asked the controller for.
+
+    A motion of a kind that puts no constraint of its own on the controller is named by
+    its kind alone; the kinds that do are answered by a subclass carrying them.
+    """
+
+    motion: Type[BaseMotion]
+    """
+    The kind of motion that made the request.
+    """
+
+    made_by: ClassVar[Type[BaseMotion]] = BaseMotion
+    """
+    The kind of motion whose requests this class describes.
+    """
+
+    @property
+    def ordering(self) -> Tuple[str, str]:
+        """
+        What sorts requests into one order, so an answer and its ground truth are read
+        in the same order.
+        """
+        return self.motion.__name__, repr(self)
+
+    @classmethod
+    def from_motion(cls, motion: BaseMotion) -> MotionRequest:
+        """
+        The request the given motion made, named by its kind.
+
+        :param motion: A motion of the kind this class describes.
+        """
+        return cls(motion=type(motion))
+
+    @classmethod
+    def of(cls, motion: BaseMotion) -> MotionRequest:
+        """
+        The request the given motion made, described by the class made for its kind.
+
+        :param motion: A motion a recorded plan held.
+        """
+        described_by = next(
+            (
+                request
+                for request in recursive_subclasses(MotionRequest)
+                if request.made_by is type(motion)
+            ),
+            MotionRequest,
+        )
+        return described_by.from_motion(motion)
+
+    @classmethod
+    def over(cls, motions: Sequence[BaseMotion]) -> List[MotionRequest]:
+        """
+        The requests the given motions made, one per motion, in one order.
+
+        :param motions: The motions recorded plans held.
+        """
+        return sorted(
+            (cls.of(motion) for motion in motions),
+            key=lambda request: request.ordering,
+        )
+
+
+@dataclass(frozen=True)
+class ToolCenterPointRequest(MotionRequest):
+    """
+    Where a motion asked the controller to take a tool center point, under which limits.
+
+    A threshold or speed limit left unset is recorded as None, which is the plan's own
+    default tolerance and the robot's own speed limits.
+    """
+
+    arm: Arms
+    """
+    The arm whose tool center point was moved.
+    """
+
+    movement_type: Optional[MovementType]
+    """
+    How the tool center point was asked to get there.
+    """
+
+    allow_gripper_collision: Optional[bool]
+    """
+    Whether the gripper was allowed to touch what it was reaching for.
+    """
+
+    position_threshold: Optional[float]
+    """
+    How close to its target the tool center point had to come, in metres.
+    """
+
+    orientation_threshold: Optional[float]
+    """
+    How close to its target orientation the tool center point had to turn, in radians.
+    """
+
+    max_linear_velocity: Optional[float]
+    """
+    The fastest the tool center point was allowed to move, in metres per second.
+    """
+
+    max_angular_velocity: Optional[float]
+    """
+    The fastest the tool center point was allowed to turn, in radians per second.
+    """
+
+    made_by: ClassVar[Type[BaseMotion]] = MoveToolCenterPointMotion
+
+    @classmethod
+    def from_motion(cls, motion: MoveToolCenterPointMotion) -> ToolCenterPointRequest:
+        """
+        The constraints the given motion put on its tool center point.
+
+        :param motion: A motion that moved a tool center point.
+        """
+        return cls(
+            motion=type(motion),
+            arm=motion.arm,
+            movement_type=motion.movement_type,
+            allow_gripper_collision=motion.allow_gripper_collision,
+            position_threshold=motion.position_threshold,
+            orientation_threshold=motion.orientation_threshold,
+            max_linear_velocity=motion.max_linear_velocity,
+            max_angular_velocity=motion.max_angular_velocity,
+        )
+
+
+@dataclass(frozen=True)
+class JointRequest(MotionRequest):
+    """
+    Where a motion asked the controller to take a set of joints, under which speed
+    limit.
+    """
+
+    joint_names: Tuple[str, ...]
+    """
+    The joints that were moved.
+    """
+
+    positions: Tuple[float, ...]
+    """
+    Where each of those joints was asked to go, in the same order.
+    """
+
+    max_joint_velocity: Optional[float]
+    """
+    The fastest any of those joints was allowed to move, or None for the robot's own
+    limits.
+    """
+
+    made_by: ClassVar[Type[BaseMotion]] = MoveJointsMotion
+
+    @classmethod
+    def from_motion(cls, motion: MoveJointsMotion) -> JointRequest:
+        """
+        The joint goals the given motion set.
+
+        :param motion: A motion that moved joints to positions.
+        """
+        return cls(
+            motion=type(motion),
+            joint_names=tuple(motion.names),
+            positions=tuple(motion.positions),
+            max_joint_velocity=motion.max_joint_velocity,
+        )
+
+
+@dataclass
+class MotionsRequestedInTheEpisode(LongTermMemoryQuestion[List[MotionRequest]]):
+    """
+    What the motions of one past run asked the controller for: the goals and the limits
+    each put on the robot's control program.
+    """
+
+    bucket: ClassVar[Bucket] = Bucket.CONTROL
+    """
+    What the robot asked its controller to do.
+    """
+
+    required_facts: ClassVar[Tuple[RequiredFact, ...]] = (RequiredFact.PERFORMED_PLANS,)
+    """
+    Answered from the plans the run performed, which hold its motions.
+    """
+
+    @property
+    def english(self) -> str:
+        """
+        The question as a person would ask it.
+        """
+        return (
+            "What did your motions ask the controller for in episode %s?"
+            % self.episode_identifier
+        )
+
+    def query(self, source: LongTermMemory) -> Query:
+        """
+        The motion of every motion node of every plan that run performed.
+
+        :param source: The long-term memory the question is put to.
+        """
+        trial = variable(RecordedTrial, domain=[])
+        performed = variable(PerformedPlan, domain=[])
+        node = variable(MotionNode, domain=[])
+        return an(
+            entity(node.designator).where(
+                trial.episode.identifier == self.episode_identifier,
+                contains(trial.plans, performed),
+                contains(performed.plan.nodes, node),
+            )
+        )
+
+    def ask(self, source: LongTermMemory) -> List[MotionRequest]:
+        """
+        What the found motions requested.
+
+        :param source: The long-term memory the question is put to.
+        """
+        return MotionRequest.over(self.solutions(source))
+
+    def ground_truth(self, source: LongTermMemory) -> List[MotionRequest]:
+        """
+        What the motions of the run's plans requested, traversed off the trials
+        directly.
+
+        :param source: The long-term memory holding what actually happened.
+        """
+        return MotionRequest.over(
+            [
+                node.designator
+                for trial in source.recall_trials(self.episode_identifier)
+                for performed in trial.plans
+                for node in performed.plan.nodes
+                if isinstance(node, MotionNode)
+            ]
+        )
