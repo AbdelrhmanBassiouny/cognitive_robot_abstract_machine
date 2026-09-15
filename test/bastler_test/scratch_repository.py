@@ -221,6 +221,11 @@ class ScratchRepository:
         repository.run_git("init", "--quiet")
         repository.run_git("config", "user.name", SCRATCH_IDENTITY.name)
         repository.run_git("config", "user.email", SCRATCH_IDENTITY.email)
+        # A throwaway repository has no reason to sign, and an environment that signs
+        # by default makes every commit here depend on a reachable signing service -
+        # observed failing mid-suite with "signing server returned status 520", on a
+        # different test each run.
+        repository.run_git("config", "commit.gpgsign", "false")
         return repository
 
     def clear_local_git_identity(self) -> None:
@@ -430,8 +435,9 @@ class ScratchRepository:
         checkout = self.project_root.parent / "notes-update-checkout"
         shutil.rmtree(checkout, ignore_errors=True)
         self.clone_notes_branch(checkout)
-        self.run_git("config", "user.name", "Scratch Repo", cwd=checkout)
-        self.run_git("config", "user.email", "scratch-repo@example.com", cwd=checkout)
+        self.run_git("config", "user.name", SCRATCH_IDENTITY.name, cwd=checkout)
+        self.run_git("config", "user.email", SCRATCH_IDENTITY.email, cwd=checkout)
+        self.run_git("config", "commit.gpgsign", "false", cwd=checkout)
 
         destination = checkout / relative_path
         destination.parent.mkdir(parents=True, exist_ok=True)

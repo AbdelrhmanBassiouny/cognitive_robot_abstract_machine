@@ -14,7 +14,7 @@ from dataclasses import dataclass
 from bastler.class_property import classproperty
 from bastler.maintenance_board import BoardExport
 from bastler.maintenance_fast_forward import fast_forward
-from bastler.maintenance_git_commands import GitCommandRunner
+from bastler.maintenance_git_commands import MaintenanceGitCommandRunner
 from bastler.maintenance_github import GitHubRepository
 from bastler.maintenance_promotion import clear_spent_promotion_labels, promote
 from bastler.maintenance_report import (
@@ -46,7 +46,7 @@ class MaintenancePass:
     The resolved configuration naming both repositories and every label.
     """
 
-    git: GitCommandRunner
+    git: MaintenanceGitCommandRunner
     """
     The runner every git command goes through.
     """

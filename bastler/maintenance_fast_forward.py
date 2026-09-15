@@ -10,7 +10,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import StrEnum
 
-from bastler.maintenance_git_commands import GitCommandRunner, ProposedPush
+from bastler.maintenance_git_commands import MaintenanceGitCommandRunner, ProposedPush
 from bastler.stack import Configuration, resolve_ref
 
 
@@ -68,7 +68,7 @@ class FastForwardReport:
 
 
 def fast_forward(
-    configuration: Configuration, git: GitCommandRunner
+    configuration: Configuration, git: MaintenanceGitCommandRunner
 ) -> FastForwardReport:
     """
     Move the fork's copy of the upstream base onto the upstream's tip.
