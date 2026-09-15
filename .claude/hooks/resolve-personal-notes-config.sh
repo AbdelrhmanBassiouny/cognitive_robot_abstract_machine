@@ -423,6 +423,12 @@ CREATE_PERSONAL_NOTES_BRANCH_SCRIPT=".claude/hooks/create-personal-notes-branch.
 # as every path above.
 PLAN_SIZE_BUDGET_MODULE="bastler.plan_size_budget"
 PLAN_SIZE_REPORT_SCRIPT=".claude/hooks/plan-size-report.sh"
+# PLAN_SIZE_CHECK_MODULE: whether a plan is already full, for `/add-plan-item`
+# and `/plan-create` to check before writing into or as it - never refuses,
+# unlike a future save-time gate, since the routing decision has to happen
+# before a save is even attempted. Same defined-once reasoning as every path
+# above.
+PLAN_SIZE_CHECK_MODULE="bastler.plan_size_check"
 # prerequisite-check.md: the shared "run check-setup.sh, offer
 # /setup-personal-notes if it fails" procedure that plan-create,
 # plan-dashboard, plan-item-kickoff and plan-item-resolve each reference in
