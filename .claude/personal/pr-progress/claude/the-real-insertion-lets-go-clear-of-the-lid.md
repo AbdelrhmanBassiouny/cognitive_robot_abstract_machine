@@ -58,7 +58,9 @@ Plan:
       copies .tex/.json/.png into krrood-icra-2027/paper/figures/real. DONE 2026-09-15 with #393:
       0 wrong answers; Remembering 70/1.0, Understanding 143/1.0, Applying 4/1.0; every bucket
       1.0; 140 files (8 tex, 8 json, 124 png) in paper/figures/real, PDFs gone.
-      Run 2 started: #394 cherry-picked, ORM regen, --ask-the-control-program (log work/pipeline_run2.log).
+      Run 2 DONE: #394 cherry-picked (test-file conflict with #393 resolved, keep both), 0 wrong;
+      Remembering 74/1.0, Control bucket 4/1.0 (the 4 plan-performing episodes); 144 files in
+      paper/figures/real_with_control_program incl. 4 motions_requested plan-timeline cards.
 - [ ] run 2 (user ask 2026-09-15): a question querying the constraints the motions put on the
       controller, kept apart so the paper can use either run. User chose the recorded motion
       requests (MoveToolCenterPointMotion / MoveJointsMotion of the plans' MotionNodes); the
