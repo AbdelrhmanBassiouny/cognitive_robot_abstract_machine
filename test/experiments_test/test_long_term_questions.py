@@ -75,6 +75,12 @@ How many joints the world the run happened in held, so counting them has an answ
 is neither nothing nor everything.
 """
 
+NUMBERS_OF_THE_TRIALS_OF_A_REPEATED_EPISODE = (1, 2, 3)
+"""
+The trials of an episode run more than once, each of which reaches the one world the
+episode recorded.
+"""
+
 # %% the run every question is asked of
 
 
@@ -347,6 +353,28 @@ def test_the_joints_counted_are_the_ones_the_recorded_world_held(
     )
     assert question.ask(memory) == JOINTS_THE_ROBOT_HAD
     assert question.ask(memory) == question.ground_truth(memory)
+
+
+def test_the_joints_are_counted_once_however_many_trials_the_episode_ran(
+    results_database: ResultsDatabase, memory: LongTermMemory
+):
+    episode = sorting_episode()
+    episode.world = one_jointed_world()
+    recording = open_recording(results_database)
+    for number in NUMBERS_OF_THE_TRIALS_OF_A_REPEATED_EPISODE:
+        recording.record(
+            RecordedTrial(
+                episode=episode,
+                outcome=TrialOutcome.SUCCEEDED,
+                duration=12.5,
+                number=number,
+            )
+        )
+    recording.close()
+    question = NumberOfDegreesOfFreedomInTheRecordedWorld(
+        episode_identifier=episode.identifier
+    )
+    assert question.ask(memory) == JOINTS_THE_ROBOT_HAD
 
 
 # %% every question at once
