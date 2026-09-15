@@ -405,7 +405,7 @@ def test_dataclass_dict():
 def test_dataclass_list():
     cls = ClassWithList([3, 1, 2])
     data = to_json(cls)
-    assert data["a"] == {"collection_type": "list", "items": [3, 1, 2]}
+    assert data["a"] == {"collection_type": "LIST", "items": [3, 1, 2]}
     result = from_json(data)
     assert result == cls
     assert isinstance(result.a, list)
@@ -414,7 +414,7 @@ def test_dataclass_list():
 def test_dataclass_set():
     cls = ClassWithSet({1, 2, 3})
     data = to_json(cls)
-    assert data["a"]["collection_type"] == "set"
+    assert data["a"]["collection_type"] == "SET"
     assert sorted(data["a"]["items"]) == [1, 2, 3]
     result = from_json(data)
     assert result == cls
@@ -424,7 +424,7 @@ def test_dataclass_set():
 def test_dataclass_sorted_set():
     cls = ClassWithSortedSet(SortedSet([3, 1, 2]))
     data = to_json(cls)
-    assert data["a"] == {"collection_type": "SortedSet", "items": [1, 2, 3]}
+    assert data["a"] == {"collection_type": "SORTED_SET", "items": [1, 2, 3]}
     result = from_json(data)
     assert result == cls
     assert isinstance(result.a, SortedSet)

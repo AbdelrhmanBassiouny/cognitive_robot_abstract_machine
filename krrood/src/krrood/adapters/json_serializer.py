@@ -599,15 +599,25 @@ class NumpyNDarrayJSONSerializer(ExternalClassJSONSerializer[np.ndarray]):
         return np.array(data["data"], dtype=data["type"])
 
 
-DATACLASS_SERIALIZER_COLLECTION_TYPES: Dict[str, Type] = {
-    "list": list,
-    "set": set,
-    "SortedSet": SortedSet,
-}
-"""
-Collection types :class:`DataclassJSONSerializer` restores by name on deserialization,
-keyed by :meth:`type.__name__`.
-"""
+class DataclassSerializerCollectionType(enum.Enum):
+    """
+    Collection types that :class:`DataclassJSONSerializer` tags a field with on
+    serialization, so ``from_json`` can restore the exact type on the way back instead
+    of guessing or defaulting to ``list``.
+    """
+
+    LIST = list
+    SET = set
+    SORTED_SET = SortedSet
+
+    @classmethod
+    def of(cls, value: object) -> "DataclassSerializerCollectionType":
+        """
+        :param value: A ``list``, ``set`` or :class:`~sortedcontainers.SortedSet`
+            instance.
+        :return: The member matching ``value``'s exact type.
+        """
+        return cls(type(value))
 
 
 @dataclass
@@ -631,7 +641,7 @@ class DataclassJSONSerializer(ExternalClassJSONSerializer[None]):
 
             if isinstance(value, (list, set, SortedSet)):
                 current_result = {
-                    "collection_type": type(value).__name__,
+                    "collection_type": DataclassSerializerCollectionType.of(value).name,
                     "items": [to_json(item, **kwargs) for item in value],
                 }
             elif isinstance(value, dict):
@@ -669,9 +679,9 @@ class DataclassJSONSerializer(ExternalClassJSONSerializer[None]):
                 and "items" in current_data.keys()
             ):
                 items = [from_json(item, **kwargs) for item in current_data["items"]]
-                collection_type = DATACLASS_SERIALIZER_COLLECTION_TYPES[
+                collection_type = DataclassSerializerCollectionType[
                     current_data["collection_type"]
-                ]
+                ].value
                 current_result = collection_type(items)
             elif (
                 isinstance(current_data, dict)
