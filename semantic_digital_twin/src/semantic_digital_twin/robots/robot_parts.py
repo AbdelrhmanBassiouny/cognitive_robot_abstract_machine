@@ -56,7 +56,7 @@ from semantic_digital_twin.spatial_types import (
     RotationMatrix,
     HomogeneousTransformationMatrix,
 )
-from semantic_digital_twin.spatial_types.spatial_types import Pose
+from semantic_digital_twin.spatial_types.spatial_types import Point3, Pose
 from semantic_digital_twin.spatial_types.derivatives import DerivativeMap
 from semantic_digital_twin.world_description.connections import (
     ActiveConnection,
@@ -779,6 +779,51 @@ class AbstractRobot(Agent, HasRobotParts, ABC):
         Creates a robot from a world.
         """
         return cls.from_branch_in_world(world.root)
+
+    @classmethod
+    def mount_stationary(
+        cls,
+        world: World,
+        robot_world: World,
+        mount_position: Point3,
+        mount_yaw: float = 0.0,
+    ) -> Self:
+        """
+        Bolt an already-parsed, fixed-base robot into ``world`` at ``mount_position``.
+
+        Takes a parsed world rather than a description to parse, so a robot whose
+        description is not a ROS package can be read by its caller from whichever format
+        it does ship in. The robot's root is attached with a
+        :class:`~semantic_digital_twin.world_description.connections.FixedConnection`:
+        a robot with no mobile base has nothing for an active drive connection to move.
+
+        Any actuator ``robot_world`` carries is dropped first, since an actuator parsed
+        into one world cannot be merged into another; callers that need actuators add
+        them to the merged world afterwards.
+
+        :param world: The world to mount the robot into, modified in place.
+        :param robot_world: The parsed robot, consumed by the merge.
+        :param mount_position: Where the robot's root is bolted, in ``world``'s root
+            frame.
+        :param mount_yaw: Which way the robot is turned to face, in radians.
+        :return: The mounted robot.
+        """
+        with robot_world.modify_world():
+            for actuator in list(robot_world.actuators):
+                robot_world.remove_actuator(actuator)
+        with world.modify_world():
+            mount = FixedConnection(
+                parent=world.root,
+                child=robot_world.root,
+                parent_T_connection_expression=HomogeneousTransformationMatrix.from_xyz_rpy(
+                    x=mount_position.x,
+                    y=mount_position.y,
+                    z=mount_position.z,
+                    yaw=mount_yaw,
+                ),
+            )
+            world.merge_world(robot_world, mount)
+        return cls.from_world(world)
 
     @classmethod
     def from_branch_in_world(cls, branch_root: KinematicStructureEntity) -> Self:

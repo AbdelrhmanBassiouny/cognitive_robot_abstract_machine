@@ -3,12 +3,21 @@ from __future__ import annotations
 import os
 from abc import ABC
 from collections import defaultdict
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import StrEnum
 from importlib.resources import files
 from pathlib import Path
 from typing import Self, List
 
+from typing_extensions import Dict, Tuple
+
+from semantic_digital_twin.adapters.mujoco_tuning import (
+    ServoGains,
+    compensate_gravity,
+    equip_with_servos,
+    exclude_self_collision,
+)
+from semantic_digital_twin.adapters.urdf import URDFParser
 from semantic_digital_twin.collision_checking.collision_rules import (
     AvoidExternalCollisions,
     AvoidSelfCollisions,
@@ -37,7 +46,11 @@ from semantic_digital_twin.robots.robot_parts import (
 )
 from semantic_digital_twin.datastructures.field_of_view import FieldOfView
 from semantic_digital_twin.spatial_types import Quaternion, Vector3
+from semantic_digital_twin.spatial_types.spatial_types import Point3
+from semantic_digital_twin.world import World
+from semantic_digital_twin.world_description.connections import ActiveConnection1DOF
 from semantic_digital_twin.world_description.world_entity import (
+    Actuator,
     KinematicStructureEntity,
 )
 
@@ -337,6 +350,111 @@ class TracyCamera(Camera):
         )
 
 
+@dataclass(frozen=True)
+class TracyServoTuning:
+    """
+    The position servos Tracy's arms and grippers are equipped with when it is simulated
+    physically in MuJoCo.
+    """
+
+    arm_joint_gains: Dict[str, ServoGains] = field(
+        default_factory=lambda: TracyServoTuning.ur10e_arm_gains()
+    )
+    """
+    Each arm joint's gains, keyed by joint name without the arm's ``left_``/``right_``
+    prefix.
+    """
+
+    gripper_joint_gains: ServoGains = field(
+        default_factory=lambda: TracyServoTuning.robotiq_85_knuckle_gains()
+    )
+    """
+    The gains of every gripper joint.
+    """
+
+    gripper_joint_velocity_limit: float = 1.0
+    """
+    Velocity limit, in radians per second, given to every gripper joint's degree of
+    freedom, overriding the description's own.
+
+    The description's knuckle joint velocity limit is roughly ``0.032`` rad/s, at which
+    closing through the gripper's ~0.8 rad range takes about 25 seconds, and no hardware
+    reference backs that number. ``1.0`` converges cleanly under joint-space planning;
+    ``2.0`` was measured to leave the QP solver settled about 0.016 rad short of its
+    target indefinitely.
+    """
+
+    @staticmethod
+    def ur10e_gains(torque_limit: float, joint_damping: float) -> ServoGains:
+        """
+        The gains of one UR10e joint size class, taken from MuJoCo Menagerie's
+        ``universal_robots_ur10e/ur10e.xml``: its stiffness of 5000, actuator damping of
+        500 and armature of 0.1 apply to every joint regardless of size, and only the
+        torque limit and the joint's passive damping differ per size class. Tracy's own
+        UR10 arms are close enough to reuse this.
+
+        :param torque_limit: The size class's torque limit, in newton metres.
+        :param joint_damping: The size class's passive joint damping.
+        :return: The gains.
+        """
+        return ServoGains(
+            stiffness=5_000.0,
+            actuator_damping=500.0,
+            torque_limit=torque_limit,
+            joint_damping=joint_damping,
+            armature=0.1,
+        )
+
+    @classmethod
+    def ur10e_arm_gains(cls) -> Dict[str, ServoGains]:
+        """
+        The per-joint gains of a UR10e arm, keyed by joint name without a ``left_``/
+        ``right_`` prefix.
+
+        The two shoulder joints carry the whole rest of the arm and need the most torque
+        and passive damping to settle without ringing, the elbow less, and the three
+        wrist joints, which carry only the gripper, the least.
+
+        :return: The gains of every arm joint.
+        """
+        return {
+            "shoulder_pan_joint": cls.ur10e_gains(
+                torque_limit=330.0, joint_damping=10.0
+            ),
+            "shoulder_lift_joint": cls.ur10e_gains(
+                torque_limit=330.0, joint_damping=10.0
+            ),
+            "elbow_joint": cls.ur10e_gains(torque_limit=150.0, joint_damping=5.0),
+            "wrist_1_joint": cls.ur10e_gains(torque_limit=56.0, joint_damping=2.0),
+            "wrist_2_joint": cls.ur10e_gains(torque_limit=56.0, joint_damping=2.0),
+            "wrist_3_joint": cls.ur10e_gains(torque_limit=56.0, joint_damping=2.0),
+        }
+
+    @staticmethod
+    def robotiq_85_knuckle_gains() -> ServoGains:
+        """
+        The gains of a Robotiq 2F-85 knuckle joint, raised empirically; no pre-tuned
+        reference exists for this gripper.
+
+        :return: The gains.
+        """
+        return ServoGains(
+            stiffness=100.0,
+            actuator_damping=10.0,
+            torque_limit=10.0,
+            joint_damping=0.0,
+            armature=0.05,
+        )
+
+    def arm_gains_for(self, joint_name: str) -> ServoGains:
+        """
+        :param joint_name: Name of an arm joint, possibly ``left_``/``right_``-prefixed.
+        :return: Its gains.
+        """
+        unprefixed = joint_name.removeprefix("left_").removeprefix("right_")
+        return self.arm_joint_gains[unprefixed]
+
+
 @dataclass(eq=False)
 class Tracy(
     AbstractRobot, HasLeftRightArm[TracyLeftArm, TracyRightArm], HasSensors[TracyCamera]
@@ -384,3 +502,147 @@ class Tracy(
 
     def get_end_effectors(self) -> list[EndEffector]:
         return [self.left_arm.end_effector, self.right_arm.end_effector]
+
+    @classmethod
+    def parse_description(
+        cls, mount_root_name: PrefixedName = PrefixedName("tracy_mount", "tracy")
+    ) -> World:
+        """
+        Read Tracy out of its own ROS package into a world of its own, without any
+        actuator, ready to be mounted into another world with :meth:`mount_stationary`.
+
+        :param mount_root_name: Name given to the parsed world's synthetic root, so it
+            never collides with a merge target's own root. Tracy's real kinematic root,
+            its table, is a descendant of that node, so renaming it does not affect
+            :meth:`from_world`'s later lookup.
+        :return: A world holding only Tracy's own body tree.
+        """
+        tracy_world = URDFParser.from_file(cls.get_ros_file_path()).parse()
+        with tracy_world.modify_world():
+            for actuator in list(tracy_world.actuators):
+                tracy_world.remove_actuator(actuator)
+            tracy_world.root.name = mount_root_name
+        return tracy_world
+
+    @staticmethod
+    def floor_mount_position(
+        tracy_world: World, x: float, y: float
+    ) -> Tuple[Point3, float]:
+        """
+        Where to bolt a parsed, not yet mounted Tracy so that its own table's legs rest
+        exactly on the floor, and the height its table top ends up at.
+
+        :param tracy_world: Tracy's own parsed world, as :meth:`parse_description`
+            returns it, not yet merged into anything.
+        :param x: Where to mount Tracy's root along the merge target's x-axis.
+        :param y: Where to mount Tracy's root along the merge target's y-axis.
+        :return: The mount position, and the height of the table top above the floor
+            once mounted there, both in metres.
+        """
+        table = tracy_world.get_body_by_name("table")
+        table_bounding_box = table.collision.as_bounding_box_collection_in_frame(
+            tracy_world.root
+        ).bounding_box()
+        mount_z = -table_bounding_box.min_z
+        tabletop = max(table.collision, key=lambda shape: shape.scale.x * shape.scale.y)
+        root_transform_table = tracy_world.compute_forward_kinematics_np(
+            tracy_world.root, table
+        )
+        tabletop_top_z = float(tabletop.origin.to_np()[2, 3] + tabletop.scale.z / 2)
+        table_top_z = mount_z + float(root_transform_table[2, 3]) + tabletop_top_z
+        return Point3(x, y, mount_z), table_top_z
+
+    @property
+    def table_top_z(self) -> float:
+        """
+        Height of this mounted Tracy's own table top above the world root, in metres.
+        """
+        table = self.root
+        tabletop = max(table.collision, key=lambda shape: shape.scale.x * shape.scale.y)
+        root_transform_table = self._world.compute_forward_kinematics_np(
+            self._world.root, table
+        )
+        return float(
+            root_transform_table[2, 3]
+            + tabletop.origin.to_np()[2, 3]
+            + tabletop.scale.z / 2
+        )
+
+    def equip_for_mujoco(
+        self, tuning: TracyServoTuning = TracyServoTuning()
+    ) -> Dict[str, Actuator]:
+        """
+        Prepare this mounted Tracy to be simulated physically: a position servo on every
+        arm and gripper joint, gravity compensation on every link, and no collision
+        between its own links.
+
+        :param tuning: The servos to equip.
+        :return: Each driven degree of freedom's actuator, keyed by joint name.
+        """
+        world = self._world
+        compensate_gravity(world, self)
+        exclude_self_collision(world, self)
+        return {
+            **self.equip_arms_with_servos(tuning),
+            **self.equip_grippers_with_servos(tuning),
+        }
+
+    def equip_arms_with_servos(
+        self, tuning: TracyServoTuning = TracyServoTuning()
+    ) -> Dict[str, Actuator]:
+        """
+        Give every joint of both arms a position servo, its own passive damping and
+        armature.
+
+        :param tuning: The servos to equip.
+        :return: Each driven degree of freedom's actuator, keyed by joint name.
+        """
+        connections = [
+            connection
+            for arm in self.get_arms()
+            for connection in arm.active_connections
+            if isinstance(connection, ActiveConnection1DOF)
+        ]
+        return equip_with_servos(
+            self._world,
+            connections,
+            {
+                connection.raw_dof.name.name: tuning.arm_gains_for(
+                    connection.raw_dof.name.name
+                )
+                for connection in connections
+            },
+        )
+
+    def equip_grippers_with_servos(
+        self, tuning: TracyServoTuning = TracyServoTuning()
+    ) -> Dict[str, Actuator]:
+        """
+        Give every joint of both grippers a position servo, and raise every gripper
+        joint's velocity limit to the tuning's.
+
+        :param tuning: The servos to equip.
+        :return: Each driven degree of freedom's actuator, keyed by joint name.
+        """
+        connections = [
+            connection
+            for arm in self.get_arms()
+            for connection in arm.end_effector.active_connections
+            if isinstance(connection, ActiveConnection1DOF)
+        ]
+        with self._world.modify_world():
+            for degree_of_freedom in {connection.raw_dof for connection in connections}:
+                degree_of_freedom.limits.upper.velocity = (
+                    tuning.gripper_joint_velocity_limit
+                )
+                degree_of_freedom.limits.lower.velocity = (
+                    -tuning.gripper_joint_velocity_limit
+                )
+        return equip_with_servos(
+            self._world,
+            connections,
+            {
+                connection.raw_dof.name.name: tuning.gripper_joint_gains
+                for connection in connections
+            },
+        )
