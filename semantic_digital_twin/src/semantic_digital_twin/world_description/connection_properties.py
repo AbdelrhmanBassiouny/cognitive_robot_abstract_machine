@@ -43,3 +43,33 @@ class JointDynamics:
     """
     Viscous friction coefficient of the joint.
     """
+
+
+@dataclass
+class ServoGains:
+    r"""
+    How hard a position servo pulls its joint towards the position it was given.
+
+    .. math::
+
+       \tau = \min(\tau_\mathrm{max}, K (q_\mathrm{set} - q) - D \dot{q})
+
+    where :math:`K` is the stiffness, :math:`D` the damping, :math:`q_\mathrm{set}` the
+    commanded position and :math:`\tau_\mathrm{max}` the torque limit.
+    """
+
+    stiffness: float
+    """
+    Restoring torque per radian, or newton per metre, away from the set point.
+    """
+
+    damping: float
+    """
+    Opposing torque per radian per second the servo itself applies, on top of the
+    joint's own passive damping.
+    """
+
+    torque_limit: float
+    """
+    The largest torque, or force, the servo may exert.
+    """

@@ -517,9 +517,9 @@ def test_builder_assigns_material_to_a_textured_primitive_shape(tmp_path):
 
 def test_builder_writes_a_geoms_contact_bitmasks(tmp_path):
     """
-    A shape's ``MujocoGeom.contype``/``conaffinity`` must reach the built geom, so two
-    geoms can be kept from ever generating a contact (a robot's own overlapping links)
-    while each still collides with everything else.
+    A shape's ``MujocoGeom.contact_type``/``contact_affinity`` must reach the built
+    geom, so two geoms can be kept from ever generating a contact (a robot's own
+    overlapping links) while each still collides with everything else.
     """
     world = World()
     with world.modify_world():
@@ -527,7 +527,7 @@ def test_builder_writes_a_geoms_contact_bitmasks(tmp_path):
         world.add_body(root)
         box_shape = Box(scale=Scale(1, 1, 1))
         box_shape.simulator_additional_properties.append(
-            MujocoGeom(contype=2, conaffinity=4)
+            MujocoGeom(contact_type=2, contact_affinity=4)
         )
         link = Body(
             name=PrefixedName("link"),
@@ -562,7 +562,7 @@ def test_builder_keeps_a_visual_only_geom_contactless_despite_its_bitmasks(tmp_p
         world.add_body(root)
         box_shape = Box(scale=Scale(1, 1, 1))
         box_shape.simulator_additional_properties.append(
-            MujocoGeom(contype=2, conaffinity=4)
+            MujocoGeom(contact_type=2, contact_affinity=4)
         )
         link = Body(name=PrefixedName("link"), visual=ShapeCollection([box_shape]))
         world.add_kinematic_structure_entity(link)

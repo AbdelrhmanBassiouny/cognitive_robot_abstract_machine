@@ -13,17 +13,14 @@ import pytest
 from ...pytest_environment import runs_in_continuous_integration
 
 from semantic_digital_twin.adapters.multi_sim import (
-    MujocoContactFriction,
     MujocoGeom,
     MujocoSolverImpedance,
     MujocoSolverReference,
 )
 from semantic_digital_twin.adapters.mujoco_tuning import (
-    CollisionGroup,
     MujocoContactParameters,
-    ServoGains,
     equip_with_servos,
-    make_touchable,
+    servo_actuator,
 )
 from semantic_digital_twin.adapters.real_time_simulation import RealTimeSimulation
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
@@ -41,15 +38,20 @@ from semantic_digital_twin.world_description.degree_of_freedom import (
     DegreeOfFreedom,
     DegreeOfFreedomLimits,
 )
-from semantic_digital_twin.world_description.geometry import Box, Scale
+from semantic_digital_twin.world_description.connection_properties import ServoGains
+from semantic_digital_twin.world_description.geometry import (
+    Box,
+    ContactFriction,
+    Scale,
+)
 from semantic_digital_twin.world_description.shape_collection import ShapeCollection
 from semantic_digital_twin.world_description.world_entity import Body
 
 # %% servo gains
 
 
-def test_position_servo_is_a_pd_law_clamped_to_the_joints_range():
-    gains = ServoGains(stiffness=100.0, actuator_damping=10.0, torque_limit=5.0)
+def test_servo_actuator_is_a_pd_law_clamped_to_the_joints_range():
+    gains = ServoGains(stiffness=100.0, damping=10.0, torque_limit=5.0)
     degree_of_freedom = DegreeOfFreedom(
         name=PrefixedName("hinge"),
         limits=DegreeOfFreedomLimits(
@@ -57,12 +59,12 @@ def test_position_servo_is_a_pd_law_clamped_to_the_joints_range():
         ),
     )
 
-    servo = gains.position_servo(degree_of_freedom)
+    servo = servo_actuator(gains, degree_of_freedom)
 
     assert servo.gain_type == mujoco.mjtGain.mjGAIN_FIXED
     assert servo.gain_parameters[0] == gains.stiffness
     assert servo.bias_type == mujoco.mjtBias.mjBIAS_AFFINE
-    assert servo.bias_parameters[:3] == [0.0, -gains.stiffness, -gains.actuator_damping]
+    assert servo.bias_parameters[:3] == [0.0, -gains.stiffness, -gains.damping]
     assert servo.control_range == [-1.0, 1.0]
     assert servo.force_range == [-gains.torque_limit, gains.torque_limit]
 
@@ -142,27 +144,27 @@ def _pendulum_world() -> PendulumWorld:
     return PendulumWorld(world=world, hinge=hinge, mirrored_hinge=mirrored_hinge)
 
 
-def test_a_shared_degree_of_freedom_gets_one_servo_but_every_joint_its_damping():
+def test_a_shared_degree_of_freedom_gets_one_servo_from_its_declared_gains():
     pendulum = _pendulum_world()
-    gains = ServoGains(
-        stiffness=50.0,
-        actuator_damping=5.0,
-        torque_limit=2.0,
-        joint_damping=0.3,
-        armature=0.01,
+    pendulum.hinge.raw_dof.servo_gains = ServoGains(
+        stiffness=50.0, damping=5.0, torque_limit=2.0
     )
 
     actuators = equip_with_servos(
-        pendulum.world,
-        [pendulum.hinge, pendulum.mirrored_hinge],
-        {"hinge": gains},
+        pendulum.world, [pendulum.hinge.raw_dof, pendulum.mirrored_hinge.raw_dof]
     )
 
     assert list(actuators) == ["hinge"]
     assert pendulum.world.actuators == [actuators["hinge"]]
-    for connection in (pendulum.hinge, pendulum.mirrored_hinge):
-        assert connection.dynamics.armature == gains.armature
-        assert connection.dynamics.damping == gains.joint_damping
+
+
+def test_a_joint_without_declared_gains_gets_no_servo():
+    pendulum = _pendulum_world()
+
+    actuators = equip_with_servos(pendulum.world, [pendulum.hinge.raw_dof])
+
+    assert actuators == {}
+    assert pendulum.world.actuators == []
 
 
 @pytest.mark.skipif(
@@ -176,15 +178,17 @@ def test_a_servoed_joint_is_driven_towards_the_world_state_not_teleported():
     rather than being overwritten with the position reached so far.
     """
     pendulum = _pendulum_world()
-    gains = ServoGains(stiffness=50.0, actuator_damping=5.0, torque_limit=2.0)
-    equip_with_servos(pendulum.world, [pendulum.hinge], {"hinge": gains})
+    pendulum.hinge.raw_dof.servo_gains = ServoGains(
+        stiffness=50.0, damping=5.0, torque_limit=2.0
+    )
+    equip_with_servos(pendulum.world, [pendulum.hinge.raw_dof])
     world = pendulum.world
     set_point = 0.5
 
     with RealTimeSimulation(
         world=world, headless=True, real_time_factor=None
     ) as simulation:
-        simulator = simulation.mirror.simulator
+        simulator = simulation.mujoco_mirror.simulator
         world.state[pendulum.hinge.raw_dof.id].position = set_point
         world.notify_state_change()
         simulation.advance(simulator.step_size)
@@ -206,8 +210,10 @@ def test_starting_the_simulation_holds_a_servoed_joint_where_the_world_has_it():
     holds elsewhere would rush to zero the moment the physics starts.
     """
     pendulum = _pendulum_world()
-    gains = ServoGains(stiffness=50.0, actuator_damping=5.0, torque_limit=2.0)
-    equip_with_servos(pendulum.world, [pendulum.hinge], {"hinge": gains})
+    pendulum.hinge.raw_dof.servo_gains = ServoGains(
+        stiffness=50.0, damping=5.0, torque_limit=2.0
+    )
+    equip_with_servos(pendulum.world, [pendulum.hinge.raw_dof])
     world = pendulum.world
     with world.modify_world():
         world.state[pendulum.hinge.raw_dof.id].position = 0.7
@@ -217,7 +223,7 @@ def test_starting_the_simulation_holds_a_servoed_joint_where_the_world_has_it():
         world=world, headless=True, real_time_factor=None
     ) as simulation:
         simulation.advance(1.0)
-        held = simulation.mirror.simulator.get_joint_value("hinge").result
+        held = simulation.mujoco_mirror.simulator.get_joint_value("hinge").result
 
     assert held == pytest.approx(0.7, abs=0.02)
 
@@ -231,8 +237,8 @@ def test_solver_parameters_round_trip_through_mujocos_own_order():
         minimum=0.96, maximum=0.99, width=0.002, midpoint=0.4, power=3.0
     )
 
-    assert MujocoSolverReference.from_list(reference.to_list()) == reference
-    assert MujocoSolverImpedance.from_list(impedance.to_list()) == impedance
+    assert MujocoSolverReference(*reference.to_list()) == reference
+    assert MujocoSolverImpedance(*impedance.to_list()) == impedance
     assert reference.to_list() == [0.008, 0.9]
     assert impedance.to_list() == [0.96, 0.99, 0.002, 0.4, 3.0]
 
@@ -251,10 +257,10 @@ def test_contact_parameters_reach_every_collision_geometry():
     contact.apply_to([body])
 
     for shape in body.collision:
-        mujoco_geom = shape.simulator_property(MujocoGeom)
-        assert mujoco_geom.friction == MujocoContactFriction(
+        assert shape.friction == ContactFriction(
             sliding=0.4, torsional=0.05, rolling=0.001
         )
+        mujoco_geom = shape.simulator_property(MujocoGeom)
         assert mujoco_geom.solver_reference == contact.solver_reference
         assert mujoco_geom.solver_impedance == contact.solver_impedance
 
@@ -268,18 +274,16 @@ def test_a_surface_leaves_the_geometrys_own_solver_settings():
 
     MujocoContactParameters.surface(sliding_friction=0.2).apply_to([body])
 
-    mujoco_geom = shape.simulator_property(MujocoGeom)
-    assert mujoco_geom.friction == MujocoContactFriction(sliding=0.2)
-    assert mujoco_geom.solver_reference == own_reference
+    assert shape.friction == ContactFriction(sliding=0.2)
+    assert shape.simulator_property(MujocoGeom).solver_reference == own_reference
 
 
-def test_a_touchable_object_collides_with_robots_and_other_objects():
-    body = Body(name=PrefixedName("box"))
+def test_a_surface_without_solver_settings_attaches_no_mujoco_property():
+    body = Body(name=PrefixedName("table"))
     shape = Box(origin=HomogeneousTransformationMatrix(), scale=Scale(1, 1, 1))
     body.collision = ShapeCollection([shape], reference_frame=body)
 
-    make_touchable(body, MujocoContactParameters.surface())
+    MujocoContactParameters.surface(sliding_friction=0.2).apply_to([body])
 
-    mujoco_geom = shape.simulator_property(MujocoGeom)
-    assert mujoco_geom.contype == CollisionGroup.EXTERNAL
-    assert mujoco_geom.conaffinity == CollisionGroup.ROBOT | CollisionGroup.EXTERNAL
+    assert shape.friction == ContactFriction(sliding=0.2)
+    assert shape.simulator_property(MujocoGeom) is None

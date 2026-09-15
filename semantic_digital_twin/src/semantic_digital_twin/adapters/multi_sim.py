@@ -837,6 +837,26 @@ class MujocoActuator(SimulatorAdditionalProperty):
     mujoco.mjtGain.mjGAIN_USER:     gain_term = mjcb_act_gain(…)
     """
 
+    def to_dict(self) -> Dict[str, Any]:
+        """
+        :return: These properties under the names MuJoCo's own actuator attributes
+            carry, ready to be passed to ``MjSpec.add_actuator``.
+        """
+        return {
+            "actlimited": self.activation_limited,
+            "actrange": self.activation_range,
+            "ctrllimited": self.control_limited,
+            "ctrlrange": self.control_range,
+            "forcelimited": self.force_limited,
+            "forcerange": self.force_range,
+            "biasprm": self.bias_parameters,
+            "biastype": self.bias_type,
+            "dynprm": self.dynamics_parameters,
+            "dyntype": self.dynamics_type,
+            "gainprm": self.gain_parameters,
+            "gaintype": self.gain_type,
+        }
+
 
 @dataclass
 class MujocoCamera(MultiSimCamera):
@@ -1210,15 +1230,6 @@ class MujocoSolverReference:
     Damping of that resolution; ``1`` is critically damped.
     """
 
-    @classmethod
-    def from_list(cls, values: List[float]) -> MujocoSolverReference:
-        """
-        :param values: The pair in the order MuJoCo's own ``solref`` attribute lists it.
-        :return: The reference.
-        """
-        time_constant, damping_ratio = values
-        return cls(time_constant=time_constant, damping_ratio=damping_ratio)
-
     def to_list(self) -> List[float]:
         """
         :return: The pair in the order MuJoCo's own ``solref`` attribute expects it.
@@ -1259,58 +1270,12 @@ class MujocoSolverImpedance:
     How sharply the rise bends around the midpoint.
     """
 
-    @classmethod
-    def from_list(cls, values: List[float]) -> MujocoSolverImpedance:
-        """
-        :param values: The quintuple in the order MuJoCo's own ``solimp`` attribute
-            lists it.
-        :return: The impedance.
-        """
-        minimum, maximum, width, midpoint, power = values
-        return cls(
-            minimum=minimum,
-            maximum=maximum,
-            width=width,
-            midpoint=midpoint,
-            power=power,
-        )
-
     def to_list(self) -> List[float]:
         """
         :return: The quintuple in the order MuJoCo's own ``solimp`` attribute expects
             it.
         """
         return [self.minimum, self.maximum, self.width, self.midpoint, self.power]
-
-
-@dataclass(frozen=True)
-class MujocoContactFriction:
-    """
-    A MuJoCo contact's three friction coefficients, named rather than counted; see
-    https://mujoco.readthedocs.io/en/stable/modeling.html#geom-friction.
-    """
-
-    sliding: float = 1.0
-    """
-    Friction along both axes of the tangent plane.
-    """
-
-    torsional: float = 0.005
-    """
-    Friction around the contact normal.
-    """
-
-    rolling: float = 0.0001
-    """
-    Friction around both axes of the tangent plane.
-    """
-
-    def to_list(self) -> List[float]:
-        """
-        :return: The coefficients in the order MuJoCo's own geom ``friction``
-            attribute expects them.
-        """
-        return [self.sliding, self.torsional, self.rolling]
 
 
 @dataclass(eq=False)
@@ -1333,36 +1298,36 @@ class MujocoGeom(SimulatorAdditionalProperty):
     How stiff and how damped the geom's contacts are.
     """
 
-    friction: MujocoContactFriction = field(default_factory=MujocoContactFriction)
+    contact_type: int = 1
     """
-    Contact friction parameters for dynamically generated contact pairs.
+    Which contact categories this geom offers when it presses into another geom, as a
+    32-bit mask; MuJoCo's ``contype``.
+
+    A contact between geoms A and B is generated only if A offers a category B accepts
+    or B offers one A accepts, i.e. ``A.contact_type & B.contact_affinity`` or
+    ``B.contact_type & A.contact_affinity`` is nonzero. MuJoCo defaults both masks to
+    bit 0 on every geom, so by default every geom collides with every other one.
+    Clearing this mask stops the geom from initiating a contact while other geoms can
+    still collide into it.
     """
 
-    contype: int = 1
+    contact_affinity: int = 1
     """
-    MuJoCo's own ``contype``/``conaffinity`` pair, kept under MuJoCo's own names since
-    they are passed straight through to MuJoCo's ``add_geom`` (see
-    :meth:`MujocoBuilder._build_shape`).
-
-    Each geom carries two 32-bit masks of which "categories" it belongs to:
-    ``contype`` is what this geom offers when it presses into another geom, and
-    ``conaffinity`` is what this geom accepts pressing into it. A contact between
-    geoms A and B is generated only if ``A.contype & B.conaffinity`` or
-    ``B.contype & A.conaffinity`` is nonzero, i.e. at least one of them offers a
-    category the other one accepts.
-
-    MuJoCo defaults both masks to bit 0 (value 1) on every geom, so by default every
-    geom offers and accepts that one category and collides with every other geom.
-    Clearing a geom's ``conaffinity`` to ``0`` makes nothing collide with it; clearing
-    its ``contype`` to ``0`` stops it from initiating a contact while still letting
-    other geoms collide into it.
+    Which contact categories this geom accepts pressing into it, as a 32-bit mask;
+    MuJoCo's ``conaffinity``. Clearing it makes nothing collide with the geom.
     """
 
-    conaffinity: int = 1
-    """
-    What this geom accepts colliding into it; see :attr:`contype` for the full
-    explanation of both masks together.
-    """
+    def to_dict(self) -> Dict[str, Any]:
+        """
+        :return: These properties under the names MuJoCo's own geom attributes carry,
+            ready to be passed to ``MjsBody.add_geom``.
+        """
+        return {
+            "solimp": self.solver_impedance.to_list(),
+            "solref": self.solver_reference.to_list(),
+            "contype": self.contact_type,
+            "conaffinity": self.contact_affinity,
+        }
 
 
 @dataclass(eq=False)
@@ -1636,18 +1601,7 @@ class MujocoGeneralActuatorConverter(MujocoActuatorConverter, ActuatorConverter)
     ) -> Dict[str, Any]:
         mujoco_actuator = entity.simulator_property(MujocoActuator)
         if mujoco_actuator is not None:
-            actuator_props["actlimited"] = mujoco_actuator.activation_limited
-            actuator_props["actrange"] = mujoco_actuator.activation_range
-            actuator_props["ctrllimited"] = mujoco_actuator.control_limited
-            actuator_props["ctrlrange"] = mujoco_actuator.control_range
-            actuator_props["forcelimited"] = mujoco_actuator.force_limited
-            actuator_props["forcerange"] = mujoco_actuator.force_range
-            actuator_props["biasprm"] = mujoco_actuator.bias_parameters
-            actuator_props["biastype"] = mujoco_actuator.bias_type
-            actuator_props["dynprm"] = mujoco_actuator.dynamics_parameters
-            actuator_props["dyntype"] = mujoco_actuator.dynamics_type
-            actuator_props["gainprm"] = mujoco_actuator.gain_parameters
-            actuator_props["gaintype"] = mujoco_actuator.gain_type
+            actuator_props.update(mujoco_actuator.to_dict())
         return actuator_props
 
 
@@ -1957,6 +1911,7 @@ class MujocoBuilder(MultiSimBuilder):
         self._thickened_mesh_paths = {}
 
     def _end_build(self, file_path: str):
+        self._build_contact_exclusions()
         self._build_equalities()
         self._build_tendons()
         self.spec.compile()
@@ -2055,14 +2010,16 @@ class MujocoBuilder(MultiSimBuilder):
                     texture_repeat=texture_repeat,
                     texture_uniform=texture_uniform,
                 )
+        if shape.friction is not None:
+            geom_props["friction"] = shape.friction.to_list()
         mujoco_geom = shape.simulator_property(MujocoGeom)
         if mujoco_geom is not None:
-            geom_props["solimp"] = mujoco_geom.solver_impedance.to_list()
-            geom_props["solref"] = mujoco_geom.solver_reference.to_list()
-            geom_props["friction"] = mujoco_geom.friction.to_list()
-            if is_collidable:
-                geom_props["contype"] = mujoco_geom.contype
-                geom_props["conaffinity"] = mujoco_geom.conaffinity
+            mujoco_geom_props = mujoco_geom.to_dict()
+            if not is_collidable:
+                # a visual-only geom keeps the contact masks the converter cleared
+                mujoco_geom_props.pop("contype")
+                mujoco_geom_props.pop("conaffinity")
+            geom_props.update(mujoco_geom_props)
         geom_spec = parent_body_spec.add_geom(**geom_props)
         if geom_spec.type == mujoco.mjtGeom.mjGEOM_BOX and geom_spec.size[2] == 0:
             geom_spec.type = mujoco.mjtGeom.mjGEOM_PLANE
@@ -2406,6 +2363,59 @@ class MujocoBuilder(MultiSimBuilder):
                 entity_type=mujoco.mjtObj.mjOBJ_BODY,
                 action="add",
             )
+
+    def _build_contact_exclusions(self):
+        """
+        Tell MuJoCo which pairs of a robot's own bodies never to check for contact: the
+        pairs the world's own collision rules allow to collide.
+
+        A description's neighbouring links overlap where they meet, so two links left
+        to collide hold the joint between them still with the very contact the rules
+        exist to ignore, and no servo can drive it. Only pairs within one robot are
+        excluded: a rule excusing two other bodies says the planner need not check
+        them, not that they pass through each other.
+        """
+        body_to_robot = self.world.robot_body_to_robot_mapping
+        excluded: set[tuple[str, str]] = set()
+        for rule in self.world.collision_manager.ignore_collision_rules:
+            rule.update(self.world)
+            for collision_check in rule.allowed_collision_pairs:
+                self._exclude_robot_contact(
+                    collision_check.body_a,
+                    collision_check.body_b,
+                    body_to_robot,
+                    excluded,
+                )
+            for body in rule.allowed_collision_bodies:
+                for other in self.world.bodies_with_collision:
+                    self._exclude_robot_contact(body, other, body_to_robot, excluded)
+
+    def _exclude_robot_contact(
+        self,
+        body_a: Body,
+        body_b: Body,
+        body_to_robot: Dict[Body, Any],
+        excluded: set[tuple[str, str]],
+    ) -> None:
+        """
+        Exclude one pair from contact checking if both bodies belong to the same robot
+        and the pair was not excluded yet.
+
+        :param body_a: One of the two bodies.
+        :param body_b: The other.
+        :param body_to_robot: Which robot each body belongs to, if any.
+        :param excluded: The pairs excluded so far, extended in place.
+        """
+        if body_a is body_b:
+            return
+        robot = body_to_robot.get(body_a)
+        if robot is None or body_to_robot.get(body_b) is not robot:
+            return
+        pair = tuple(sorted((body_a.name.name, body_b.name.name)))
+        if pair in excluded:
+            return
+        excluded.add(pair)
+        self.spec.add_exclude(name="_".join(pair), bodyname1=pair[0], bodyname2=pair[1])
 
     def _build_equalities(self):
         """

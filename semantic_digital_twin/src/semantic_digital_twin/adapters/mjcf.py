@@ -46,6 +46,7 @@ from semantic_digital_twin.world_description.degree_of_freedom import (
 )
 from semantic_digital_twin.world_description.geometry import (
     Box,
+    ContactFriction,
     Sphere,
     Cylinder,
     Scale,
@@ -165,14 +166,17 @@ class MJCFParser(WorldModelParser):
         for mujoco_geom in mujoco_body.geoms:
             shape = self.parse_geom(mujoco_geom=mujoco_geom)
             shape.origin.reference_frame = body
+            shape.friction = ContactFriction(*mujoco_geom.friction.tolist())
             shape.simulator_additional_properties.append(
                 MujocoGeom(
-                    solver_impedance=MujocoSolverImpedance.from_list(
-                        mujoco_geom.solimp.tolist()
+                    solver_impedance=MujocoSolverImpedance(
+                        *mujoco_geom.solimp.tolist()
                     ),
-                    solver_reference=MujocoSolverReference.from_list(
-                        mujoco_geom.solref.tolist()
+                    solver_reference=MujocoSolverReference(
+                        *mujoco_geom.solref.tolist()
                     ),
+                    contact_type=mujoco_geom.contype,
+                    contact_affinity=mujoco_geom.conaffinity,
                 )
             )
             if mujoco_geom.contype != 0 or mujoco_geom.conaffinity != 0:

@@ -19,6 +19,7 @@ from giskardpy.motion_statechart.graph_node import EndMotion
 from giskardpy.motion_statechart.motion_statechart import MotionStatechart
 from giskardpy.motion_statechart.tasks.cartesian_tasks import CartesianPosition
 from giskardpy.qp.qp_controller_config import QPControllerConfig
+from semantic_digital_twin.adapters.mujoco_tuning import equip_for_mujoco
 from semantic_digital_twin.adapters.real_time_simulation import RealTimeSimulation
 from semantic_digital_twin.datastructures.definitions import StaticJointState
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
@@ -41,12 +42,12 @@ pytestmark = [
 @pytest.fixture
 def parked_tracy() -> Tracy:
     tracy_world = Tracy.parse_description()
-    mount_position, _ = Tracy.floor_mount_position(tracy_world, x=0.0, y=0.0)
+    mount_pose = Tracy.floor_mount_pose(tracy_world, x=0.0, y=0.0)
     world = World()
     with world.modify_world():
         world.add_kinematic_structure_entity(Body(name=PrefixedName("floor")))
-    robot = Tracy.mount_stationary(world, tracy_world, mount_position)
-    robot.equip_for_mujoco()
+    robot = Tracy.mount_stationary(world, tracy_world, mount_pose)
+    equip_for_mujoco(robot)
     for arm in robot.get_arms():
         arm.get_joint_state_by_type(StaticJointState.PARK).apply_to(world)
     world.notify_state_change()
@@ -89,7 +90,7 @@ def test_the_simulated_arm_reaches_the_pose_giskard_commands_live(parked_tracy):
             simulation.advance(controller_config.control_dt)
         simulation.advance(1.0)
         simulated = numpy.array(
-            simulation.mirror.simulator.get_body_position(
+            simulation.mujoco_mirror.simulator.get_body_position(
                 body_name=tool_frame.name.name
             ).result
         )

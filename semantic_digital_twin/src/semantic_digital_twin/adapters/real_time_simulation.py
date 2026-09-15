@@ -28,6 +28,18 @@ class RealTimeSimulation:
     the calling thread instead and waits out the difference between simulated and
     elapsed time, so a controller can tick against the world between advances, in
     lockstep with the physics, and still be watched at life speed.
+
+    Use it as a context manager, driving the world between advances::
+
+        with RealTimeSimulation(world) as simulation:
+            for _ in range(cycles):
+                executor.tick()
+                simulation.advance(control_period)
+
+    Entering starts the simulation and leaving stops it; :meth:`start` and
+    :meth:`stop` do the same for a simulation that outlives one block. A joint an
+    actuator drives takes the world's position as its set point on every advance,
+    and :meth:`command` hands an actuator a set point directly.
     """
 
     world: World
@@ -67,9 +79,9 @@ class RealTimeSimulation:
     running faster than that reading a stale world every other cycle.
     """
 
-    mirror: MujocoSim = field(init=False)
+    mujoco_mirror: MujocoSim = field(init=False)
     """
-    The MuJoCo mirror of :attr:`world`.
+    The MuJoCo simulation mirroring :attr:`world`.
     """
 
     _simulated_time: float = field(init=False, default=0.0, repr=False)
@@ -83,10 +95,10 @@ class RealTimeSimulation:
     """
 
     def __post_init__(self):
-        self.mirror = MujocoSim(
+        self.mujoco_mirror = MujocoSim(
             world=self.world, headless=self.headless, step_size=self.step_size
         )
-        self.mirror.synchronizer.sync_rate_hz = self.sync_rate_hz
+        self.mujoco_mirror.synchronizer.sync_rate_hz = self.sync_rate_hz
 
     def __enter__(self) -> Self:
         self.start()
@@ -101,8 +113,10 @@ class RealTimeSimulation:
         actuator the position its joint currently holds, so nothing rushes towards zero
         the moment the physics starts.
         """
-        self.mirror.simulator.start(simulate_in_thread=False, render_in_thread=False)
-        self.mirror.synchronizer.command_actuators_from_world_state()
+        self.mujoco_mirror.simulator.start(
+            simulate_in_thread=False, render_in_thread=False
+        )
+        self.mujoco_mirror.synchronizer.command_actuators_from_world_state()
         self._simulated_time = 0.0
         self._start_time = time.time()
 
@@ -110,7 +124,7 @@ class RealTimeSimulation:
         """
         Close the viewer and tear the simulation down.
         """
-        self.mirror.stop_simulation()
+        self.mujoco_mirror.stop_simulation()
         self._start_time = None
 
     @property
@@ -118,7 +132,7 @@ class RealTimeSimulation:
         """
         Whether the simulation is still being displayed, i.e. the viewer window is open.
         """
-        return self.mirror.simulator.renderer.is_running()
+        return self.mujoco_mirror.simulator.renderer.is_running()
 
     def command(self, actuator: Actuator, set_point: float) -> None:
         """
@@ -128,7 +142,7 @@ class RealTimeSimulation:
         :param actuator: The actuator to command. It has to belong to :attr:`world`.
         :param set_point: The value the actuator should drive towards.
         """
-        self.mirror.simulator.set_actuator_control(
+        self.mujoco_mirror.simulator.set_actuator_control(
             actuator_name=actuator.name.name, value=set_point
         )
 
@@ -146,7 +160,7 @@ class RealTimeSimulation:
         if self._start_time is None:
             raise SimulationNotStartedError(self.world.root.name.name)
 
-        simulator = self.mirror.simulator
+        simulator = self.mujoco_mirror.simulator
         for _ in range(round(duration / simulator.step_size)):
             simulator.step()
             self._simulated_time += simulator.step_size

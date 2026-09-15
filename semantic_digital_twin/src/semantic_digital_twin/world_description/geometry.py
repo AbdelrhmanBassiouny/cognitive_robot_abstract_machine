@@ -403,6 +403,35 @@ class Scale:
 
 
 @dataclass
+class ContactFriction:
+    """
+    The friction a shape's surface offers in a contact, in the three coefficients a
+    physics engine resolves a contact with.
+    """
+
+    sliding: float = 1.0
+    """
+    Friction along both axes of the tangent plane.
+    """
+
+    torsional: float = 0.005
+    """
+    Friction around the contact normal.
+    """
+
+    rolling: float = 0.0001
+    """
+    Friction around both axes of the tangent plane.
+    """
+
+    def to_list(self) -> List[float]:
+        """
+        :return: The coefficients as sliding, torsional and rolling.
+        """
+        return [self.sliding, self.torsional, self.rolling]
+
+
+@dataclass
 class Shape(ABC, SubclassJSONSerializer, HasSimulatorProperties):
     """
     Base class for all shapes in the world.
@@ -421,6 +450,12 @@ class Shape(ABC, SubclassJSONSerializer, HasSimulatorProperties):
     Only meaningful for primitive shapes (:class:`Box`, :class:`Cylinder`,
     :class:`Sphere`); :class:`Mesh` shapes carry their own texture as part of their
     trimesh visual instead.
+    """
+
+    friction: Optional[ContactFriction] = None
+    """
+    The friction this shape's surface offers in a physical simulation, or ``None`` for
+    the simulator's own default.
     """
 
     @property

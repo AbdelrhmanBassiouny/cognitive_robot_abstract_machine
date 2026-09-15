@@ -14,6 +14,7 @@ from typing import (
     Set,
     List,
     DefaultDict,
+    Tuple,
     Type,
     Union,
     Any,
@@ -33,6 +34,7 @@ from krrood.utils import get_generic_type_parameters
 from semantic_digital_twin.datastructures.definitions import JointStateType
 from semantic_digital_twin.datastructures.field_of_view import FieldOfView
 from semantic_digital_twin.datastructures.joint_state import JointState
+from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.exceptions import (
     NoJointStateWithType,
     UselessConceptError,
@@ -56,8 +58,13 @@ from semantic_digital_twin.spatial_types import (
     RotationMatrix,
     HomogeneousTransformationMatrix,
 )
-from semantic_digital_twin.spatial_types.spatial_types import Point3, Pose
+from semantic_digital_twin.spatial_types.spatial_types import Pose
 from semantic_digital_twin.spatial_types.derivatives import DerivativeMap
+from semantic_digital_twin.adapters.urdf import URDFParser
+from semantic_digital_twin.world_description.connection_properties import (
+    JointDynamics,
+    ServoGains,
+)
 from semantic_digital_twin.world_description.connections import (
     ActiveConnection,
     FixedConnection,
@@ -369,6 +376,19 @@ class AbstractRobotPart(HasRootBody, HasRobotParts, ABC):
             for connection in self.connections
             if isinstance(connection, ActiveConnection)
         ]
+
+    def servo_for(
+        self, connection: ActiveConnection1DOF
+    ) -> Optional[Tuple[ServoGains, JointDynamics]]:
+        """
+        The position servo and joint dynamics one of this part's joints gets when the
+        robot is simulated physically.
+
+        :param connection: One of this part's active 1-DOF connections.
+        :return: The servo's gains and the joint's dynamics, or ``None`` if this part
+            declares no servo for the joint.
+        """
+        return None
 
 
 @dataclass(eq=False)
@@ -790,15 +810,29 @@ class AbstractRobot(Agent, HasRobotParts, ABC):
         return cls.from_branch_in_world(world.root)
 
     @classmethod
+    def parse_description(cls, root_name: Optional[PrefixedName] = None) -> World:
+        """
+        Read this robot out of its own description into a world of its own, ready to be
+        mounted into another world with :meth:`mount_stationary`.
+
+        :param root_name: A name for the parsed world's synthetic root, so it never
+            collides with a merge target's own root; the robot's real kinematic root is
+            a descendant of that node, so renaming it does not affect :meth:`from_world`.
+            ``None`` keeps the parser's own name.
+        :return: A world holding only the robot's own body tree.
+        """
+        robot_world = URDFParser.from_file(cls.get_ros_file_path()).parse()
+        if root_name is not None:
+            with robot_world.modify_world():
+                robot_world.root.name = root_name
+        return robot_world
+
+    @classmethod
     def mount_stationary(
-        cls,
-        world: World,
-        robot_world: World,
-        mount_position: Point3,
-        mount_yaw: float = 0.0,
+        cls, world: World, robot_world: World, mount_pose: Pose
     ) -> Self:
         """
-        Bolt an already-parsed, fixed-base robot into ``world`` at ``mount_position``.
+        Bolt an already-parsed, fixed-base robot into ``world`` at ``mount_pose``.
 
         Takes a parsed world rather than a description to parse, so a robot whose
         description is not a ROS package can be read by its caller from whichever format
@@ -806,33 +840,35 @@ class AbstractRobot(Agent, HasRobotParts, ABC):
         :class:`~semantic_digital_twin.world_description.connections.FixedConnection`:
         a robot with no mobile base has nothing for an active drive connection to move.
 
-        Any actuator ``robot_world`` carries is dropped first, since an actuator parsed
-        into one world cannot be merged into another; callers that need actuators add
-        them to the merged world afterwards.
-
         :param world: The world to mount the robot into, modified in place.
         :param robot_world: The parsed robot, consumed by the merge.
-        :param mount_position: Where the robot's root is bolted, in ``world``'s root
-            frame.
-        :param mount_yaw: Which way the robot is turned to face, in radians.
+        :param mount_pose: Where the robot's root is bolted, in ``world``'s root frame.
         :return: The mounted robot.
         """
-        with robot_world.modify_world():
-            for actuator in list(robot_world.actuators):
-                robot_world.remove_actuator(actuator)
         with world.modify_world():
             mount = FixedConnection(
                 parent=world.root,
                 child=robot_world.root,
-                parent_T_connection_expression=HomogeneousTransformationMatrix.from_xyz_rpy(
-                    x=mount_position.x,
-                    y=mount_position.y,
-                    z=mount_position.z,
-                    yaw=mount_yaw,
-                ),
+                parent_T_connection_expression=mount_pose.to_homogeneous_matrix(),
             )
             world.merge_world(robot_world, mount)
         return cls.from_world(world)
+
+    def declare_servos(self) -> None:
+        """
+        Declare, on every degree of freedom one of this robot's parts knows a servo
+        for, the servo and joint dynamics that part gives it (see
+        :meth:`AbstractRobotPart.servo_for`), so a physical simulation can drive it.
+        """
+        with self._world.modify_world():
+            for robot_part in self._robot_parts:
+                for connection in robot_part.active_connections:
+                    if not isinstance(connection, ActiveConnection1DOF):
+                        continue
+                    servo = robot_part.servo_for(connection)
+                    if servo is None:
+                        continue
+                    connection.raw_dof.servo_gains, connection.dynamics = servo
 
     @classmethod
     def from_branch_in_world(cls, branch_root: KinematicStructureEntity) -> Self:
