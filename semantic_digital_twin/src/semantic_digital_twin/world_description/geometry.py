@@ -664,9 +664,13 @@ class Mesh(Shape):
         # readable by the visualizer and the collision loader.
         if vertex_colors is not None:
             file_type = "obj"
-        return cls.from_trimesh(
+        read = cls.from_trimesh(
             mesh=mesh, origin=origin, scale=scale, file_type=file_type
         )
+        # The export names the file; the colour is the shape's own, written beside the
+        # geometry, and is read back the way every other shape reads it.
+        read.color = from_json(data["color"], **kwargs)
+        return read
 
     @classmethod
     def add_uv(cls, mesh: trimesh.Trimesh, uv: np.ndarray) -> trimesh.Trimesh:
