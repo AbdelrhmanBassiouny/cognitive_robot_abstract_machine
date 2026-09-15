@@ -948,11 +948,12 @@ class NumberOfDegreesOfFreedomInTheRecordedWorld(LongTermMemoryQuestion[int]):
 
     def ask(self, source: LongTermMemory) -> int:
         """
-        How many degrees of freedom came back.
+        How many degrees of freedom came back, each counted once however many of the
+        episode's trials reached the world holding it.
 
         :param source: The long-term memory the question is put to.
         """
-        return len(self.solutions(source))
+        return len(self.distinct(self.solutions(source)))
 
     def ground_truth(self, source: LongTermMemory) -> int:
         """
