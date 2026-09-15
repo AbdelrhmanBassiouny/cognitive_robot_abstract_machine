@@ -463,11 +463,18 @@ class TypstRenderer:
         """
         Renders the entire ExperimentsTable into a valid Typst #table markup string.
         """
+        return f"#{self._table_expression()}"
+
+    def _table_expression(self) -> str:
+        """
+        The table as a Typst code-mode expression, without the leading ``#`` a top-level
+        statement needs but a nested argument (see :meth:`render_figure`) must not have.
+        """
         row_class = self.experiments_table.row_class
 
         # Handle empty table edge-case gracefully
         if not row_class:
-            return "#table()"
+            return "table()"
 
         # 1. Extract headers and setup column configuration
         headers = row_class.get_column_names()
@@ -489,7 +496,7 @@ class TypstRenderer:
 
         # 4. Construct complete Typst syntax block
         typst_markup = (
-            f"#table(\n"
+            f"table(\n"
             f"  columns: {columns_count},\n"
             f"  align: center + horizon,\n"
             f"  {all_cells}\n"
@@ -507,7 +514,7 @@ class TypstRenderer:
         :param caption: Caption text describing what the table shows.
         :return: Typst markup for a captioned figure.
         """
-        return f"#figure(\n{self.render_table()},\n  caption: [{caption}]\n)"
+        return f"#figure(\n{self._table_expression()},\n  caption: [{caption}]\n)"
 
     @staticmethod
     def render_image_figure(caption: str, image_name: str) -> str:

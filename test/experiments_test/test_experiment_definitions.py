@@ -282,8 +282,26 @@ def test_table_presented_to_a_reader_carries_its_caption():
 
     figure = renderer.render_figure("What the experiment measured.")
 
-    assert renderer.render_table() in figure
+    assert renderer.render_table().removeprefix("#") in figure
     assert "caption: [What the experiment measured.]" in figure
+
+
+def test_table_presented_to_a_reader_compiles_as_typst(tmp_path: pathlib.Path):
+    """
+    render_table's own leading '#' makes it valid Typst on its own, but render_figure
+    nests it inside #figure(...)'s argument list, where Typst's code mode does not allow
+    a second leading '#'. The figure the reader is actually shown must compile.
+    """
+    typst = pytest.importorskip("typst")
+    renderer = TypstRenderer(ExperimentsTable([row()]))
+    figure = renderer.render_figure("What the experiment measured.")
+    source_path = tmp_path / "figure.typ"
+    source_path.write_text(figure)
+    output_path = tmp_path / "figure.pdf"
+
+    typst.compile(source_path, output=output_path)
+
+    assert output_path.exists()
 
 
 def test_count_keeps_its_exact_value():
