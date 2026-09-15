@@ -48,7 +48,7 @@ from semantic_digital_twin.exceptions import (
     AlreadyBelongsToAWorldError,
     ReferenceFrameMismatchError,
 )
-from semantic_digital_twin.mixin import HasSimulatorProperties
+from semantic_digital_twin.mixin import HasSimulatorProperties, UniqueSimulatorProperty
 from semantic_digital_twin.spatial_types.spatial_types import (
     HomogeneousTransformationMatrix,
     Point3,
@@ -506,6 +506,21 @@ class KinematicStructureEntity(ABC, WorldEntityWithSimulatorProperties):
         return cls.from_shape_collection(name, ShapeCollection([area_mesh]))
 
 
+@dataclass
+class GravityCompensation(UniqueSimulatorProperty):
+    """
+    How much of a body's weight a physical simulation carries for it: a link a servo
+    drives is carried by that servo in reality, so a simulation compensates its gravity
+    rather than making the servo spend torque holding it up.
+    """
+
+    fraction: float = 1.0
+    """
+    The fraction of the body's weight the simulation carries; ``1`` cancels gravity
+    exactly.
+    """
+
+
 @dataclass(eq=False)
 class Body(KinematicStructureEntity):
     """
@@ -537,13 +552,6 @@ class Body(KinematicStructureEntity):
     inertial: Optional[Inertial] = field(default_factory=Inertial, repr=False)
     """
     Inertia properties of the body.
-    """
-
-    gravity_compensation: float = 0.0
-    """
-    How much of this body's weight a physical simulation carries for it, between 0 and
-    1: a link a servo drives is carried by that servo in reality, so a simulation
-    compensates its gravity rather than making the servo spend torque holding it up.
     """
 
     def __post_init__(self):
@@ -624,7 +632,6 @@ class Body(KinematicStructureEntity):
             visual=self.visual.copy_without_reference_frame(),
             collision=self.collision.copy_without_reference_frame(),
             inertial=deepcopy(self.inertial),
-            gravity_compensation=self.gravity_compensation,
         )
 
 

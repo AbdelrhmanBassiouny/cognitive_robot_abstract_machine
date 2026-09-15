@@ -12,12 +12,21 @@ import pytest
 from ...pytest_environment import runs_in_continuous_integration
 
 from semantic_digital_twin.adapters.multi_sim import MujocoBuilder, MujocoSim
+from semantic_digital_twin.api import RobotSpecification
 from semantic_digital_twin.datastructures.definitions import StaticJointState
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.robots.tracy import Tracy, TracyJoint
+from semantic_digital_twin.semantic_annotations.semantic_annotations import Table
+from semantic_digital_twin.spatial_types.spatial_types import (
+    HomogeneousTransformationMatrix,
+)
+from semantic_digital_twin.world_description.connections import FixedConnection
 from semantic_digital_twin.utils import tracy_installed
 from semantic_digital_twin.world import World
-from semantic_digital_twin.world_description.world_entity import Body
+from semantic_digital_twin.world_description.world_entity import (
+    Body,
+    GravityCompensation,
+)
 
 pytestmark = pytest.mark.skipif(
     not tracy_installed(), reason="iai_tracy_description is not installed"
@@ -26,34 +35,50 @@ pytestmark = pytest.mark.skipif(
 
 @pytest.fixture
 def mounted_tracy() -> Tracy:
-    tracy_world = Tracy.parse_description()
-    mount_pose = Tracy.floor_mount_pose(tracy_world, x=0.0, y=0.0)
     world = World()
     with world.modify_world():
         world.add_kinematic_structure_entity(Body(name=PrefixedName("floor")))
-    return Tracy.mount_stationary(world, tracy_world, mount_pose)
+    return RobotSpecification(Tracy).spawn(world)
 
 
-def test_parsed_description_can_be_given_its_own_root_name():
-    root_name = PrefixedName("tracy_mount", "tracy")
+def test_a_stationary_robot_is_bolted_to_the_world_through_a_fixed_odom():
+    """
+    Tracy has no mobile base, so both its odom and its drive are fixed connections, and
+    the localization pose it is spawned with is where its root ends up.
+    """
+    world = World()
+    with world.modify_world():
+        world.add_kinematic_structure_entity(Body(name=PrefixedName("floor")))
+    world_T_odom = HomogeneousTransformationMatrix.from_xyz_rpy(x=1.0, y=2.0)
 
-    tracy_world = Tracy.parse_description(root_name)
+    tracy = RobotSpecification(Tracy, world_T_odom=world_T_odom).spawn(world)
 
-    assert tracy_world.root.name == root_name
-    assert tracy_world.get_body_by_name("table") is not tracy_world.root
+    odom_C_robot = tracy.root.parent_connection.parent.parent_connection
+    root_C_odom = odom_C_robot.parent.parent_connection
+    assert isinstance(odom_C_robot, FixedConnection)
+    assert isinstance(root_C_odom, FixedConnection)
+    assert root_C_odom.parent is world.root
+    root_position = world.compute_forward_kinematics_np(world.root, tracy.root)[:3, 3]
+    assert root_position[:2] == pytest.approx([1.0, 2.0])
 
 
-def test_floor_mounted_tracy_has_its_table_legs_on_the_floor(mounted_tracy):
-    table = mounted_tracy.root
+def test_the_mounting_table_is_a_table_at_the_robots_root(mounted_tracy):
+    """
+    The table the arms are bolted onto is a robot part of its own, so it is set up with
+    the robot, and a table, so its top is where objects can stand.
+    """
+    table = mounted_tracy.table
 
-    legs_bottom_z = (
-        table.collision.as_bounding_box_collection_in_frame(mounted_tracy._world.root)
-        .bounding_box()
-        .min_z
+    assert isinstance(table, Table)
+    assert table.root is mounted_tracy.root
+    assert table in mounted_tracy._robot_parts
+    widest_slab = max(
+        table.root.collision.as_bounding_box_collection_in_frame(
+            mounted_tracy._world.root
+        ),
+        key=lambda box: (box.max_x - box.min_x) * (box.max_y - box.min_y),
     )
-
-    assert legs_bottom_z == pytest.approx(0.0, abs=1e-6)
-    assert mounted_tracy.table_top_z > 0.5
+    assert table.top_z == pytest.approx(widest_slab.max_z)
 
 
 def test_every_arm_and_gripper_joint_is_servoed_on_mounting(mounted_tracy, tmp_path):
@@ -127,7 +152,9 @@ def test_the_servoed_parts_carry_their_weight_and_the_links_pass_through_each_ot
     """
     for arm in mounted_tracy.get_arms():
         for body in arm.bodies + arm.end_effector.bodies:
-            assert body.gravity_compensation == 1.0
+            assert body.get_simulator_property_of_type(GravityCompensation) == (
+                GravityCompensation(fraction=1.0)
+            )
     builder = MujocoBuilder()
     builder.build_world(
         world=mounted_tracy._world, file_path=str(tmp_path / "scene.xml")

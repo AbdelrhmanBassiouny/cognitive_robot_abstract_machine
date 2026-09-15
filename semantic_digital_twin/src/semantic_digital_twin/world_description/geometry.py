@@ -38,11 +38,6 @@ from random_events.product_algebra import SimpleEvent
 from semantic_digital_twin.datastructures.variables import SpatialVariables
 from semantic_digital_twin.exceptions import MalformedHexColor
 from semantic_digital_twin.mixin import HasSimulatorProperties
-from semantic_digital_twin.world_description.contact import (
-    ContactFriction,
-    ContactImpedance,
-    ContactStiffness,
-)
 from semantic_digital_twin.spatial_types import (
     HomogeneousTransformationMatrix,
     Point,
@@ -426,24 +421,6 @@ class Shape(ABC, SubclassJSONSerializer, HasSimulatorProperties):
     Only meaningful for primitive shapes (:class:`Box`, :class:`Cylinder`,
     :class:`Sphere`); :class:`Mesh` shapes carry their own texture as part of their
     trimesh visual instead.
-    """
-
-    friction: Optional[ContactFriction] = None
-    """
-    The friction this shape's surface offers in a physical simulation, or ``None`` for
-    the simulator's own default.
-    """
-
-    contact_stiffness: Optional[ContactStiffness] = None
-    """
-    How stiff and how damped this shape's contacts are in a physical simulation, or
-    ``None`` for the simulator's own default.
-    """
-
-    contact_impedance: Optional[ContactImpedance] = None
-    """
-    How hard this shape's contacts push back as they are penetrated in a physical
-    simulation, or ``None`` for the simulator's own default.
     """
 
     @property

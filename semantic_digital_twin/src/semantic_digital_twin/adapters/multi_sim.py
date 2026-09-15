@@ -77,15 +77,20 @@ from semantic_digital_twin.world_description.geometry import (
     Mesh,
     Color,
 )
+from semantic_digital_twin.world_description.contact import ContactParameters
 from semantic_digital_twin.world_description.world_entity import (
     Region,
     Body,
+    GravityCompensation,
     KinematicStructureEntity,
     Connection,
     WorldEntity,
     Actuator,
 )
-from semantic_digital_twin.mixin import SimulatorAdditionalProperty
+from semantic_digital_twin.mixin import (
+    SimulatorAdditionalProperty,
+    UniqueSimulatorProperty,
+)
 from semantic_digital_twin.world_description.world_modification import (
     AddKinematicStructureEntityModification,
     AddActuatorModification,
@@ -754,7 +759,7 @@ class LightConverter(EntityConverter, ABC):
 
 
 @dataclass
-class MujocoActuator(SimulatorAdditionalProperty):
+class MujocoActuator(UniqueSimulatorProperty):
     """
     Represents a MuJoCo-specific actuator in the world model.
     For more information, see: https://mujoco.readthedocs.io/en/stable/XMLreference.html#actuator-general
@@ -1285,7 +1290,7 @@ class MujocoTendon(SimulatorAdditionalProperty):
 
 
 @dataclass(eq=False)
-class MujocoGeom(SimulatorAdditionalProperty):
+class MujocoGeom(UniqueSimulatorProperty):
     """
     An additional property declaring that a Shape is a MujocoGeom.
     """
@@ -1322,7 +1327,7 @@ class MujocoGeom(SimulatorAdditionalProperty):
 
 
 @dataclass(eq=False)
-class MujocoJoint(SimulatorAdditionalProperty):
+class MujocoJoint(UniqueSimulatorProperty):
     """
     An additional property declaring that a Connection is a MujocoJoint.
     """
@@ -1341,7 +1346,7 @@ class MujocoJoint(SimulatorAdditionalProperty):
 
 
 @dataclass(eq=False)
-class MujocoBody(SimulatorAdditionalProperty):
+class MujocoBody(UniqueSimulatorProperty):
     """
     Additional properties representing a MuJoCo body in the world model.
     """
@@ -1582,7 +1587,7 @@ class MujocoGeneralActuatorConverter(MujocoActuatorConverter, ActuatorConverter)
     def _post_convert(
         self, entity: Actuator, actuator_props: Dict[str, Any], **kwargs
     ) -> Dict[str, Any]:
-        mujoco_actuator = entity.simulator_property(MujocoActuator)
+        mujoco_actuator = entity.get_simulator_property_of_type(MujocoActuator)
         if mujoco_actuator is not None:
             actuator_props.update(mujoco_actuator.to_dict())
         return actuator_props
@@ -1955,9 +1960,11 @@ class MujocoBuilder(MultiSimBuilder):
         tree.write(file_path, encoding="utf-8", xml_declaration=True)
 
     def _build_body(self, body: Body):
-        self._build_mujoco_body(
-            body=body, additional_properties={"gravcomp": body.gravity_compensation}
-        )
+        gravity_compensation = body.get_simulator_property_of_type(GravityCompensation)
+        additional_properties = {}
+        if gravity_compensation is not None:
+            additional_properties["gravcomp"] = gravity_compensation.fraction
+        self._build_mujoco_body(body=body, additional_properties=additional_properties)
 
     def _build_region(self, region: Region):
         self._build_mujoco_body(body=region)
@@ -1996,13 +2003,14 @@ class MujocoBuilder(MultiSimBuilder):
                     texture_repeat=texture_repeat,
                     texture_uniform=texture_uniform,
                 )
-        if shape.friction is not None:
-            geom_props["friction"] = shape.friction.to_list()
-        if shape.contact_stiffness is not None:
-            geom_props["solref"] = shape.contact_stiffness.to_list()
-        if shape.contact_impedance is not None:
-            geom_props["solimp"] = shape.contact_impedance.to_list()
-        mujoco_geom = shape.simulator_property(MujocoGeom)
+        contact = shape.get_simulator_property_of_type(ContactParameters)
+        if contact is not None:
+            geom_props["friction"] = contact.friction.to_list()
+            if contact.stiffness is not None:
+                geom_props["solref"] = contact.stiffness.to_list()
+            if contact.impedance is not None:
+                geom_props["solimp"] = contact.impedance.to_list()
+        mujoco_geom = shape.get_simulator_property_of_type(MujocoGeom)
         if mujoco_geom is not None:
             mujoco_geom_props = mujoco_geom.to_dict()
             if not is_collidable:
@@ -2217,7 +2225,7 @@ class MujocoBuilder(MultiSimBuilder):
             equality.name1 = joint_props["name"]
             equality.name2 = equality_joint["joint"]
             equality.data = equality_joint["data"]
-        mujoco_joint = connection.simulator_property(MujocoJoint)
+        mujoco_joint = connection.get_simulator_property_of_type(MujocoJoint)
         if mujoco_joint is not None:
             joint_props["stiffness"] = (
                 mujoco_joint.stiffness[0]
@@ -2366,7 +2374,7 @@ class MujocoBuilder(MultiSimBuilder):
             return
         body_props = MujocoKinematicStructureEntityConverter.convert(body)
         body_props.update(additional_properties or {})
-        mujoco_body = body.simulator_property(MujocoBody)
+        mujoco_body = body.get_simulator_property_of_type(MujocoBody)
         if mujoco_body is not None:
             body_props["mocap"] = mujoco_body.motion_capture
         parent_body_name = body.parent_connection.parent.name.name

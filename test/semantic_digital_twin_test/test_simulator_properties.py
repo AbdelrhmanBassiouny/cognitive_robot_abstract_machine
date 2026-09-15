@@ -1,18 +1,19 @@
 """
-Tests for looking up the one simulator property of a type an entity carries.
+Tests for attaching simulator properties to an entity and looking up the one property of
+a type it carries.
 """
 
 from __future__ import annotations
 
 import pytest
 
-from semantic_digital_twin.adapters.multi_sim import MujocoBody, MujocoGeom
+from semantic_digital_twin.adapters.multi_sim import (
+    MujocoBody,
+    MujocoCamera,
+    MujocoGeom,
+)
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.exceptions import DuplicateSimulatorPropertyError
-from semantic_digital_twin.spatial_types.spatial_types import (
-    HomogeneousTransformationMatrix,
-)
-from semantic_digital_twin.world_description.geometry import Box, Scale
 from semantic_digital_twin.world_description.world_entity import Body
 
 
@@ -22,37 +23,47 @@ def body() -> Body:
 
 
 def test_no_property_of_a_type_is_none(body):
-    assert body.simulator_property(MujocoBody) is None
+    assert body.get_simulator_property_of_type(MujocoBody) is None
 
 
 def test_the_attached_property_is_found(body):
     attached = MujocoBody(motion_capture=True)
-    body.simulator_additional_properties.append(attached)
+    body.add_simulator_property(attached)
 
-    assert body.simulator_property(MujocoBody) is attached
+    assert body.get_simulator_property_of_type(MujocoBody) is attached
 
 
 def test_a_property_of_another_type_is_ignored(body):
-    body.simulator_additional_properties.append(MujocoGeom())
+    body.add_simulator_property(MujocoGeom())
 
-    assert body.simulator_property(MujocoBody) is None
+    assert body.get_simulator_property_of_type(MujocoBody) is None
 
 
-def test_two_properties_of_one_type_raise(body):
-    body.simulator_additional_properties.append(MujocoBody())
-    body.simulator_additional_properties.append(MujocoBody())
+def test_attaching_a_second_unique_property_of_one_type_raises(body):
+    body.add_simulator_property(MujocoBody())
 
     with pytest.raises(DuplicateSimulatorPropertyError) as raised:
-        body.simulator_property(MujocoBody)
+        body.add_simulator_property(MujocoBody())
+    assert raised.value.property_type is MujocoBody
+    assert body.simulator_additional_properties == [MujocoBody()]
+
+
+def test_a_property_an_entity_may_carry_several_of_is_attached_again(body):
+    """
+    Cameras and lights are not unique per entity, so a second one is not a duplicate.
+    """
+    first, second = MujocoCamera(), MujocoCamera()
+
+    body.add_simulator_property(first)
+    body.add_simulator_property(second)
+
+    assert body.simulator_additional_properties == [first, second]
+
+
+def test_two_properties_of_one_type_handed_in_whole_raise_on_lookup(body):
+    body.simulator_additional_properties = [MujocoBody(), MujocoBody()]
+
+    with pytest.raises(DuplicateSimulatorPropertyError) as raised:
+        body.get_simulator_property_of_type(MujocoBody)
     assert raised.value.property_type is MujocoBody
     assert raised.value.count == 2
-
-
-def test_default_is_attached_once_and_then_reused():
-    shape = Box(origin=HomogeneousTransformationMatrix(), scale=Scale(1, 1, 1))
-
-    created = shape.simulator_property_or_default(MujocoGeom)
-    reused = shape.simulator_property_or_default(MujocoGeom)
-
-    assert reused is created
-    assert shape.simulator_additional_properties == [created]

@@ -17,10 +17,26 @@ class SimulatorAdditionalProperty:
     ...
 
 
-TSimulatorProperty = TypeVar("TSimulatorProperty", bound=SimulatorAdditionalProperty)
+@dataclass
+class UniqueSimulatorProperty(SimulatorAdditionalProperty):
+    """
+    A simulator property an entity carries at most one of, such as the physical
+    settings of one body or one geometry; a simulator reads exactly one and would
+    silently ignore the rest.
+
+    Properties an entity may carry several of, such as cameras or lights, are plain
+    :class:`SimulatorAdditionalProperty`.
+    """
+
+    ...
+
+
+TUniqueSimulatorProperty = TypeVar(
+    "TUniqueSimulatorProperty", bound=UniqueSimulatorProperty
+)
 """
-The concrete kind of simulator property a lookup asks for, so that the lookup returns
-that kind rather than the base class.
+The concrete kind of property a lookup asks for, so that the lookup returns that kind
+rather than the base class.
 """
 
 
@@ -35,19 +51,36 @@ class HasSimulatorProperties:
     )
     """
     A list of additional properties for the simulator, it can contain properties of
-    multiple simulators.
+    multiple simulators. Extend it with :meth:`add_simulator_property`, which keeps a
+    :class:`UniqueSimulatorProperty` from being attached twice.
     """
 
-    def simulator_property(
-        self, property_type: Type[TSimulatorProperty]
-    ) -> Optional[TSimulatorProperty]:
+    def add_simulator_property(
+        self, simulator_property: SimulatorAdditionalProperty
+    ) -> None:
+        """
+        Attach a property to this entity.
+
+        :param simulator_property: The property to attach.
+        :raises DuplicateSimulatorPropertyError: If the property is a
+            :class:`UniqueSimulatorProperty` and one of its type is attached already.
+        """
+        if isinstance(simulator_property, UniqueSimulatorProperty):
+            property_type = type(simulator_property)
+            if self.get_simulator_property_of_type(property_type) is not None:
+                raise DuplicateSimulatorPropertyError(property_type, 2)
+        self.simulator_additional_properties.append(simulator_property)
+
+    def get_simulator_property_of_type(
+        self, property_type: Type[TUniqueSimulatorProperty]
+    ) -> Optional[TUniqueSimulatorProperty]:
         """
         The one property of ``property_type`` this entity carries.
 
         :param property_type: The type of property to look up.
         :return: The property, or ``None`` if none of that type is attached.
-        :raises DuplicateSimulatorPropertyError: If more than one is attached, since a
-            simulator reads exactly one and would silently ignore the rest.
+        :raises DuplicateSimulatorPropertyError: If more than one is attached, which
+            :meth:`add_simulator_property` prevents but a list handed in whole does not.
         """
         matches = [
             simulator_property
@@ -59,21 +92,3 @@ class HasSimulatorProperties:
         if not matches:
             return None
         return matches[0]
-
-    def simulator_property_or_default(
-        self, property_type: Type[TSimulatorProperty]
-    ) -> TSimulatorProperty:
-        """
-        The one property of ``property_type`` this entity carries, attaching a default-
-        constructed one first if it carries none yet, so callers modify the property a
-        simulator will actually read.
-
-        :param property_type: The type of property to look up or attach.
-        :return: The property.
-        """
-        existing = self.simulator_property(property_type)
-        if existing is not None:
-            return existing
-        created = property_type()
-        self.simulator_additional_properties.append(created)
-        return created

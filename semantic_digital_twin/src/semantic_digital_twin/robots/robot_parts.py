@@ -33,7 +33,6 @@ from krrood.utils import get_generic_type_parameters
 from semantic_digital_twin.datastructures.definitions import JointStateType
 from semantic_digital_twin.datastructures.field_of_view import FieldOfView
 from semantic_digital_twin.datastructures.joint_state import JointState
-from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.exceptions import (
     NoJointStateWithType,
     UselessConceptError,
@@ -50,7 +49,10 @@ from semantic_digital_twin.robots.robot_part_mixins import (
     RobotPartMixin,
 )
 from semantic_digital_twin.semantic_annotations.mixins import HasRootBody
-from semantic_digital_twin.semantic_annotations.semantic_annotations import Agent
+from semantic_digital_twin.semantic_annotations.semantic_annotations import (
+    Agent,
+    Table,
+)
 from semantic_digital_twin.spatial_types import (
     Quaternion,
     Vector3,
@@ -59,7 +61,6 @@ from semantic_digital_twin.spatial_types import (
 )
 from semantic_digital_twin.spatial_types.spatial_types import Pose
 from semantic_digital_twin.spatial_types.derivatives import DerivativeMap
-from semantic_digital_twin.adapters.urdf import URDFParser
 from semantic_digital_twin.world_description.connections import (
     ActiveConnection,
     FixedConnection,
@@ -77,6 +78,7 @@ from semantic_digital_twin.world_description.geometry import (
 )
 from semantic_digital_twin.world_description.world_entity import (
     Body,
+    GravityCompensation,
     KinematicStructureEntity,
     Connection,
 )
@@ -386,7 +388,11 @@ class AbstractRobotPart(HasRootBody, HasRobotParts, ABC):
         part holds its own weight.
         """
         for body in self.bodies:
-            body.gravity_compensation = 1.0
+            compensation = body.get_simulator_property_of_type(GravityCompensation)
+            if compensation is None:
+                body.add_simulator_property(GravityCompensation(fraction=1.0))
+                continue
+            compensation.fraction = 1.0
 
     def prepare_for_physical_simulation(self) -> None:
         """
@@ -626,6 +632,27 @@ TGenericDrive = TypeVar("TGenericDrive", bound=WheeledDrive)
 
 
 @dataclass(eq=False)
+class MountingTable(Table, AbstractRobotPart, ABC):
+    """
+    The table a stationary robot is bolted onto: the robot's base and, at the same
+    time, a table objects can stand on, with everything the :class:`Table` annotation
+    offers such as its supporting surface.
+    """
+
+    def setup_hardware_interfaces(self):
+        pass
+
+    def setup_joint_states(self) -> List[JointState]:
+        return []
+
+    @classmethod
+    def setup_default_configuration_in_world_below_robot_root(
+        cls, robot_root: KinematicStructureEntity
+    ) -> Self:
+        return cls(root=robot_root)
+
+
+@dataclass(eq=False)
 class MobileBase(AbstractRobotPart, Generic[TGenericDrive], ABC):
     """
     The base of a robot.
@@ -813,51 +840,6 @@ class AbstractRobot(Agent, HasRobotParts, ABC):
         Creates a robot from a world.
         """
         return cls.from_branch_in_world(world.root)
-
-    @classmethod
-    def parse_description(cls, root_name: Optional[PrefixedName] = None) -> World:
-        """
-        Read this robot out of its own description into a world of its own, ready to be
-        mounted into another world with :meth:`mount_stationary`.
-
-        :param root_name: A name for the parsed world's synthetic root, so it never
-            collides with a merge target's own root; the robot's real kinematic root is
-            a descendant of that node, so renaming it does not affect :meth:`from_world`.
-            ``None`` keeps the parser's own name.
-        :return: A world holding only the robot's own body tree.
-        """
-        robot_world = URDFParser.from_file(cls.get_ros_file_path()).parse()
-        if root_name is not None:
-            with robot_world.modify_world():
-                robot_world.root.name = root_name
-        return robot_world
-
-    @classmethod
-    def mount_stationary(
-        cls, world: World, robot_world: World, mount_pose: Pose
-    ) -> Self:
-        """
-        Bolt an already-parsed, fixed-base robot into ``world`` at ``mount_pose``.
-
-        Takes a parsed world rather than a description to parse, so a robot whose
-        description is not a ROS package can be read by its caller from whichever format
-        it does ship in. The robot's root is attached with a
-        :class:`~semantic_digital_twin.world_description.connections.FixedConnection`:
-        a robot with no mobile base has nothing for an active drive connection to move.
-
-        :param world: The world to mount the robot into, modified in place.
-        :param robot_world: The parsed robot, consumed by the merge.
-        :param mount_pose: Where the robot's root is bolted, in ``world``'s root frame.
-        :return: The mounted robot.
-        """
-        with world.modify_world():
-            mount = FixedConnection(
-                parent=world.root,
-                child=robot_world.root,
-                parent_T_connection_expression=mount_pose.to_homogeneous_matrix(),
-            )
-            world.merge_world(robot_world, mount)
-        return cls.from_world(world)
 
     def prepare_for_physical_simulation(self) -> None:
         """

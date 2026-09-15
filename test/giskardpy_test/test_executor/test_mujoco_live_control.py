@@ -22,6 +22,7 @@ from giskardpy.motion_statechart.motion_statechart import MotionStatechart
 from giskardpy.motion_statechart.tasks.cartesian_tasks import CartesianPosition
 from giskardpy.qp.qp_controller_config import QPControllerConfig
 from semantic_digital_twin.adapters.multi_sim import MujocoSim
+from semantic_digital_twin.api import RobotSpecification
 from semantic_digital_twin.datastructures.definitions import StaticJointState
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.robots.tracy import Tracy
@@ -42,12 +43,10 @@ pytestmark = [
 
 @pytest.fixture
 def parked_tracy() -> Tracy:
-    tracy_world = Tracy.parse_description()
-    mount_pose = Tracy.floor_mount_pose(tracy_world, x=0.0, y=0.0)
     world = World()
     with world.modify_world():
         world.add_kinematic_structure_entity(Body(name=PrefixedName("floor")))
-    robot = Tracy.mount_stationary(world, tracy_world, mount_pose)
+    robot = RobotSpecification(Tracy).spawn(world)
     for arm in robot.get_arms():
         arm.get_joint_state_by_type(StaticJointState.PARK).apply_to(world)
     world.notify_state_change()

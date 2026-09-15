@@ -8,7 +8,6 @@ from importlib.resources import files
 from pathlib import Path
 from typing import Self, List
 
-from typing_extensions import Dict
 
 from semantic_digital_twin.collision_checking.collision_rules import (
     AvoidExternalCollisions,
@@ -24,10 +23,12 @@ from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.robots.robot_part_mixins import (
     HasLeftRightArm,
     HasEndEffector,
+    HasMountingTable,
     HasSensors,
 )
 from semantic_digital_twin.robots.robot_parts import (
     AbstractRobot,
+    MountingTable,
     Camera,
     EndEffector,
     Finger,
@@ -36,8 +37,6 @@ from semantic_digital_twin.robots.robotiq_85_gripper import Robotiq85Gripper
 from semantic_digital_twin.robots.ur10e_arm import UR10eArm
 from semantic_digital_twin.datastructures.field_of_view import FieldOfView
 from semantic_digital_twin.spatial_types import Quaternion, Vector3
-from semantic_digital_twin.spatial_types.spatial_types import Pose
-from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.world_entity import (
     KinematicStructureEntity,
 )
@@ -338,8 +337,35 @@ class TracyCamera(Camera):
 
 
 @dataclass(eq=False)
+class TracyTable(MountingTable):
+    """
+    The table Tracy's arms are bolted onto.
+    """
+
+    @property
+    def top_z(self) -> float:
+        """
+        Height of the table top above the world root, in metres.
+        """
+        tabletop = max(
+            self.root.collision, key=lambda shape: shape.scale.x * shape.scale.y
+        )
+        root_transform_table = self._world.compute_forward_kinematics_np(
+            self._world.root, self.root
+        )
+        return float(
+            root_transform_table[2, 3]
+            + tabletop.origin.to_np()[2, 3]
+            + tabletop.scale.z / 2
+        )
+
+
+@dataclass(eq=False)
 class Tracy(
-    AbstractRobot, HasLeftRightArm[TracyLeftArm, TracyRightArm], HasSensors[TracyCamera]
+    AbstractRobot,
+    HasLeftRightArm[TracyLeftArm, TracyRightArm],
+    HasSensors[TracyCamera],
+    HasMountingTable[TracyTable],
 ):
     """
     The dual UR10 arm setup used in the TraceBot project.
@@ -384,37 +410,3 @@ class Tracy(
 
     def get_end_effectors(self) -> list[EndEffector]:
         return [self.left_arm.end_effector, self.right_arm.end_effector]
-
-    @staticmethod
-    def floor_mount_pose(tracy_world: World, x: float, y: float) -> Pose:
-        """
-        Where to bolt a parsed, not yet mounted Tracy so that its own table's legs rest
-        exactly on the floor.
-
-        :param tracy_world: Tracy's own parsed world, as :meth:`parse_description`
-            returns it, not yet merged into anything.
-        :param x: Where to mount Tracy's root along the merge target's x-axis.
-        :param y: Where to mount Tracy's root along the merge target's y-axis.
-        :return: The mount pose, in the merge target's root frame.
-        """
-        table = tracy_world.get_body_by_name("table")
-        table_bounding_box = table.collision.as_bounding_box_collection_in_frame(
-            tracy_world.root
-        ).bounding_box()
-        return Pose.from_xyz_rpy(x=x, y=y, z=-table_bounding_box.min_z)
-
-    @property
-    def table_top_z(self) -> float:
-        """
-        Height of this mounted Tracy's own table top above the world root, in metres.
-        """
-        table = self.root
-        tabletop = max(table.collision, key=lambda shape: shape.scale.x * shape.scale.y)
-        root_transform_table = self._world.compute_forward_kinematics_np(
-            self._world.root, table
-        )
-        return float(
-            root_transform_table[2, 3]
-            + tabletop.origin.to_np()[2, 3]
-            + tabletop.scale.z / 2
-        )

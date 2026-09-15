@@ -2,14 +2,17 @@
 What a shape's surface does in a contact: the friction it offers, and how stiffly and
 how hard the contact resolves.
 
-A physics engine reads these off the shape; without them it uses its own defaults.
+A physics engine reads these off the shape as a simulator property; a shape without them
+gets the engine's own defaults.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from typing_extensions import TYPE_CHECKING, Iterable, List, Optional
+
+from semantic_digital_twin.mixin import UniqueSimulatorProperty
 
 if TYPE_CHECKING:
     from semantic_digital_twin.world_description.world_entity import Body
@@ -108,11 +111,11 @@ class ContactImpedance:
         return [self.minimum, self.maximum, self.width, self.midpoint, self.power]
 
 
-@dataclass(frozen=True)
-class ContactParameters:
+@dataclass
+class ContactParameters(UniqueSimulatorProperty):
     """
-    The contact parameters one kind of geometry gets: its friction and, optionally, how
-    stiffly and how hard its contacts resolve.
+    The contact parameters a shape carries for a physical simulation: its friction and,
+    optionally, how stiffly and how hard its contacts resolve.
 
     A physics engine combines the friction of two shapes in contact as the larger of the
     two, so a contact is only as slippery as the grippier of its two sides.
@@ -189,14 +192,23 @@ class ContactParameters:
 
     def apply_to(self, bodies: Iterable[Body]) -> None:
         """
-        Declare these parameters on every collision geometry of every body, in place.
+        Declare these parameters on every collision geometry of every body that has
+        collision geometry, in place: a geometry without contact parameters gets a copy
+        of these, one that has some keeps its own stiffness and impedance where these
+        leave them open.
 
         :param bodies: The bodies to modify.
         """
         for body in bodies:
+            if not body.has_collision():
+                continue
             for geometry in body.collision:
-                geometry.friction = self.friction
+                existing = geometry.get_simulator_property_of_type(ContactParameters)
+                if existing is None:
+                    geometry.add_simulator_property(replace(self))
+                    continue
+                existing.friction = self.friction
                 if self.stiffness is not None:
-                    geometry.contact_stiffness = self.stiffness
+                    existing.stiffness = self.stiffness
                 if self.impedance is not None:
-                    geometry.contact_impedance = self.impedance
+                    existing.impedance = self.impedance

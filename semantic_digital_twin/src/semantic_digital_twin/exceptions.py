@@ -1895,8 +1895,8 @@ class DuplicateSimulatorPropertyError(UsageError):
 
     def suggest_correction(self) -> str:
         return (
-            "Modify the existing property in place instead of appending a second one; "
-            "HasSimulatorProperties.simulator_property_or_default returns it."
+            "Modify the existing property in place instead of attaching a second one; "
+            "HasSimulatorProperties.get_simulator_property_of_type returns it."
         )
 
 

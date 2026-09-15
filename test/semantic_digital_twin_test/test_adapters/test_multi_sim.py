@@ -44,7 +44,12 @@ from semantic_digital_twin.world_description.geometry import (
     Texture,
 )
 from semantic_digital_twin.world_description.shape_collection import ShapeCollection
-from semantic_digital_twin.world_description.world_entity import Body, Region, Actuator
+from semantic_digital_twin.world_description.world_entity import (
+    Body,
+    Region,
+    Actuator,
+    GravityCompensation,
+)
 
 from physics_simulators.mujoco_simulator import MujocoSimulator
 from physics_simulators.base_simulator import SimulatorState
@@ -258,7 +263,7 @@ def test_world_multi_sim_with_change(test_urdf_1_world):
         actuator = Actuator()
         dof = test_urdf_1_world.get_degree_of_freedom_by_name(name="r_joint_1")
         actuator.add_dof(dof=dof)
-        actuator.simulator_additional_properties.append(
+        actuator.add_simulator_property(
             MujocoActuator(
                 dynamics_type=mujoco.mjtDyn.mjDYN_NONE,
                 dynamics_parameters=[T_const] + [0.0] * 9,
@@ -439,7 +444,7 @@ def test_builder_writes_a_light_attached_to_a_body(tmp_path):
     with world.modify_world():
         root = Body(name=PrefixedName("root"))
         world.add_body(root)
-        root.simulator_additional_properties.append(
+        root.add_simulator_property(
             MujocoLight(
                 name="overview_light",
                 body=root,
@@ -528,9 +533,7 @@ def test_builder_writes_a_geoms_contact_bitmasks(tmp_path):
         root = Body(name=PrefixedName("root"))
         world.add_body(root)
         box_shape = Box(scale=Scale(1, 1, 1))
-        box_shape.simulator_additional_properties.append(
-            MujocoGeom(contact_type=2, contact_affinity=4)
-        )
+        box_shape.add_simulator_property(MujocoGeom(contact_type=2, contact_affinity=4))
         link = Body(
             name=PrefixedName("link"),
             visual=ShapeCollection([box_shape]),
@@ -554,9 +557,9 @@ def test_builder_writes_a_geoms_contact_bitmasks(tmp_path):
 
 def test_contact_declarations_and_gravity_compensation_survive_a_round_trip(tmp_path):
     """
-    A shape's friction, contact stiffness and impedance and a body's gravity
-    compensation are written into the built model under MuJoCo's own attributes, and
-    read back into the same declarations when that model is parsed again.
+    A shape's contact parameters and a body's gravity compensation are written into the
+    built model under MuJoCo's own attributes, and read back into the same properties
+    when that model is parsed again.
     """
     world = World()
     with world.modify_world():
@@ -564,11 +567,8 @@ def test_contact_declarations_and_gravity_compensation_survive_a_round_trip(tmp_
         world.add_body(root)
         box_shape = Box(scale=Scale(1, 1, 1))
         contact = ContactParameters.create_for_grasped_object(sliding_friction=0.4)
-        link = Body(
-            name=PrefixedName("link"),
-            collision=ShapeCollection([box_shape]),
-            gravity_compensation=0.5,
-        )
+        link = Body(name=PrefixedName("link"), collision=ShapeCollection([box_shape]))
+        link.add_simulator_property(GravityCompensation(fraction=0.5))
         contact.apply_to([link])
         world.add_kinematic_structure_entity(link)
         world.add_connection(FixedConnection(parent=root, child=link))
@@ -579,10 +579,10 @@ def test_contact_declarations_and_gravity_compensation_survive_a_round_trip(tmp_
 
     parsed_link = parsed_world.get_body_by_name("link")
     [parsed_shape] = parsed_link.collision.shapes
-    assert parsed_link.gravity_compensation == 0.5
-    assert parsed_shape.friction == contact.friction
-    assert parsed_shape.contact_stiffness == contact.stiffness
-    assert parsed_shape.contact_impedance == contact.impedance
+    assert parsed_link.get_simulator_property_of_type(GravityCompensation) == (
+        GravityCompensation(fraction=0.5)
+    )
+    assert parsed_shape.get_simulator_property_of_type(ContactParameters) == contact
 
 
 def test_builder_keeps_a_visual_only_geom_contactless_despite_its_bitmasks(tmp_path):
@@ -596,9 +596,7 @@ def test_builder_keeps_a_visual_only_geom_contactless_despite_its_bitmasks(tmp_p
         root = Body(name=PrefixedName("root"))
         world.add_body(root)
         box_shape = Box(scale=Scale(1, 1, 1))
-        box_shape.simulator_additional_properties.append(
-            MujocoGeom(contact_type=2, contact_affinity=4)
-        )
+        box_shape.add_simulator_property(MujocoGeom(contact_type=2, contact_affinity=4))
         link = Body(name=PrefixedName("link"), visual=ShapeCollection([box_shape]))
         world.add_kinematic_structure_entity(link)
         world.add_connection(FixedConnection(parent=root, child=link))
