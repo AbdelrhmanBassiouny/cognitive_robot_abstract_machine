@@ -1,15 +1,17 @@
 """
 Giskard's own control loop driving a physically simulated Tracy live: each control
 cycle's command becomes the servos' set point through the world state, and the physics
-steps in lockstep between cycles. Skipped where Tracy's description is not installed.
+steps in lockstep between cycles.
+
+Skipped where Tracy's description is not installed.
 """
 
 from __future__ import annotations
 
-import os
-
 import numpy
 import pytest
+
+from ...pytest_environment import runs_in_continuous_integration
 
 from giskardpy.executor import Executor
 from giskardpy.motion_statechart.context import MotionStatechartContext
@@ -31,10 +33,10 @@ pytestmark = [
         not tracy_installed(), reason="iai_tracy_description is not installed"
     ),
     pytest.mark.skipif(
-        os.environ.get("CI", "false").lower() == "false",
-        reason="MuJoCo tests only run in CI",
+        not runs_in_continuous_integration(), reason="MuJoCo tests only run in CI"
     ),
 ]
+
 
 @pytest.fixture
 def parked_tracy() -> Tracy:
@@ -53,9 +55,9 @@ def parked_tracy() -> Tracy:
 
 def test_the_simulated_arm_reaches_the_pose_giskard_commands_live(parked_tracy):
     """
-    A goal ticked by Giskard against the world is reached by the arm in the physics,
-    not merely in the world's own belief: every cycle's command is handed to the servos
-    as their set point and the physics steps in between.
+    A goal ticked by Giskard against the world is reached by the arm in the physics, not
+    merely in the world's own belief: every cycle's command is handed to the servos as
+    their set point and the physics steps in between.
     """
     control_frequency = 50
     time_limit = 10.0

@@ -3205,7 +3205,7 @@ class MujocoSynchronizer(MultiSimSynchronizer):
         :return: Whether any connection was read.
         """
         changed = False
-        actuator_name_by_dof_id = self._actuator_name_by_dof_id()
+        actuator_name_by_dof_id = self._actuator_names_by_degree_of_freedom()
         with self.simulator._model_lock:
             for joint_backed in self._joint_backed_connections():
                 connection = joint_backed.connection
@@ -3246,7 +3246,7 @@ class MujocoSynchronizer(MultiSimSynchronizer):
             used to find what changed. Must be the same length as ``positions``.
         """
         state_index = self._world.state._index
-        actuator_name_by_dof_id = self._actuator_name_by_dof_id()
+        actuator_name_by_dof_id = self._actuator_names_by_degree_of_freedom()
         with self.simulator._model_lock:
             for joint_backed in self._joint_backed_connections():
                 connection = joint_backed.connection
@@ -3282,15 +3282,15 @@ class MujocoSynchronizer(MultiSimSynchronizer):
                     case _:
                         self._warn_unsupported_connection("world→sim", connection)
 
-    def _actuator_name_by_dof_id(self) -> Dict[Any, str]:
+    def _actuator_names_by_degree_of_freedom(self) -> Dict[Any, str]:
         """
         :return: The name of the actuator driving each actuated degree of freedom, by
             the degree of freedom's id.
         """
         return {
-            dof.id: actuator.name.name
+            degree_of_freedom.id: actuator.name.name
             for actuator in self._world.actuators
-            for dof in actuator.dofs
+            for degree_of_freedom in actuator.dofs
         }
 
     def _command_actuator(
@@ -3314,11 +3314,11 @@ class MujocoSynchronizer(MultiSimSynchronizer):
             compared against ``positions`` to decide whether to command.
         :param state_index: Maps a DoF id to its column in those two arrays.
         """
-        idx = state_index[connection.raw_dof.id]
-        if positions[idx] == previous_positions[idx]:
+        column = state_index[connection.raw_dof.id]
+        if positions[column] == previous_positions[column]:
             return
         self.simulator.set_actuator_control(
-            actuator_name=actuator_name, value=float(positions[idx])
+            actuator_name=actuator_name, value=float(positions[column])
         )
 
     def command_actuators_from_world_state(self) -> None:
@@ -3331,10 +3331,10 @@ class MujocoSynchronizer(MultiSimSynchronizer):
         """
         state = self._world.state
         for actuator in self._world.actuators:
-            for dof in actuator.dofs:
+            for degree_of_freedom in actuator.dofs:
                 self.simulator.set_actuator_control(
                     actuator_name=actuator.name.name,
-                    value=float(state[dof.id].position),
+                    value=float(state[degree_of_freedom.id].position),
                 )
 
     def _read_6dof_from_qpos(

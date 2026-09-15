@@ -5,11 +5,12 @@ parameters on objects, and a servoed joint being driven rather than teleported.
 
 from __future__ import annotations
 
-import os
 from dataclasses import dataclass
 
 import mujoco
 import pytest
+
+from ...pytest_environment import runs_in_continuous_integration
 
 from semantic_digital_twin.adapters.multi_sim import (
     MujocoContactFriction,
@@ -43,8 +44,6 @@ from semantic_digital_twin.world_description.degree_of_freedom import (
 from semantic_digital_twin.world_description.geometry import Box, Scale
 from semantic_digital_twin.world_description.shape_collection import ShapeCollection
 from semantic_digital_twin.world_description.world_entity import Body
-
-only_run_in_ci = os.environ.get("CI", "false").lower() == "false"
 
 # %% servo gains
 
@@ -116,19 +115,19 @@ def _pendulum_world() -> PendulumWorld:
                 ],
                 reference_frame=body,
             )
-        dof = DegreeOfFreedom(
+        degree_of_freedom = DegreeOfFreedom(
             name=PrefixedName("hinge"),
             limits=DegreeOfFreedomLimits(
                 DerivativeMap(position=-1.0), DerivativeMap(position=1.0)
             ),
         )
-        world.add_degree_of_freedom(dof)
+        world.add_degree_of_freedom(degree_of_freedom)
         hinge = RevoluteConnection(
             name=PrefixedName("hinge"),
             parent=base,
             child=arm,
             axis=Vector3.Z(reference_frame=arm),
-            raw_dof=dof,
+            raw_dof=degree_of_freedom,
         )
         world.add_connection(hinge)
         mirrored_hinge = RevoluteConnection(
@@ -136,7 +135,7 @@ def _pendulum_world() -> PendulumWorld:
             parent=base,
             child=mirrored_arm,
             axis=Vector3.Z(reference_frame=mirrored_arm),
-            raw_dof=dof,
+            raw_dof=degree_of_freedom,
             multiplier=-1.0,
         )
         world.add_connection(mirrored_hinge)
@@ -166,7 +165,9 @@ def test_a_shared_degree_of_freedom_gets_one_servo_but_every_joint_its_damping()
         assert connection.dynamics.damping == gains.joint_damping
 
 
-@pytest.mark.skipif(only_run_in_ci, reason="MuJoCo tests only run in CI")
+@pytest.mark.skipif(
+    not runs_in_continuous_integration(), reason="MuJoCo tests only run in CI"
+)
 def test_a_servoed_joint_is_driven_towards_the_world_state_not_teleported():
     """
     Writing a servoed joint's position into the world hands the servo a set point:
@@ -196,7 +197,9 @@ def test_a_servoed_joint_is_driven_towards_the_world_state_not_teleported():
     assert world.state[pendulum.hinge.raw_dof.id].position == set_point
 
 
-@pytest.mark.skipif(only_run_in_ci, reason="MuJoCo tests only run in CI")
+@pytest.mark.skipif(
+    not runs_in_continuous_integration(), reason="MuJoCo tests only run in CI"
+)
 def test_starting_the_simulation_holds_a_servoed_joint_where_the_world_has_it():
     """
     A freshly reset simulation leaves every control input at zero, so a joint the world

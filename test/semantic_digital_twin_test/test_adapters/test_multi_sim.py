@@ -596,20 +596,20 @@ def test_builder_writes_a_negative_multiplier_mimic_joints_own_range(tmp_path):
         mirrored_knuckle = Body(name=PrefixedName("mirrored_knuckle"))
         world.add_body(knuckle)
         world.add_body(mirrored_knuckle)
-        dof = DegreeOfFreedom(
+        degree_of_freedom = DegreeOfFreedom(
             name=PrefixedName("knuckle_joint"),
             limits=DegreeOfFreedomLimits(
                 DerivativeMap(position=0.0), DerivativeMap(position=0.8)
             ),
         )
-        world.add_degree_of_freedom(dof)
+        world.add_degree_of_freedom(degree_of_freedom)
         world.add_connection(
             RevoluteConnection(
                 name=PrefixedName("knuckle_joint"),
                 parent=root,
                 child=knuckle,
                 axis=Vector3.Z(reference_frame=knuckle),
-                raw_dof=dof,
+                raw_dof=degree_of_freedom,
             )
         )
         world.add_connection(
@@ -618,7 +618,7 @@ def test_builder_writes_a_negative_multiplier_mimic_joints_own_range(tmp_path):
                 parent=root,
                 child=mirrored_knuckle,
                 axis=Vector3.Z(reference_frame=mirrored_knuckle),
-                raw_dof=dof,
+                raw_dof=degree_of_freedom,
                 multiplier=-1.0,
             )
         )

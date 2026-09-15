@@ -4,10 +4,11 @@ Tests for a MuJoCo simulation stepped by its owner and paced to the wall clock.
 
 from __future__ import annotations
 
-import os
 import time
 
 import pytest
+
+from ...pytest_environment import runs_in_continuous_integration
 
 from semantic_digital_twin.adapters.real_time_simulation import RealTimeSimulation
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
@@ -20,8 +21,6 @@ from semantic_digital_twin.world_description.connections import Connection6DoF
 from semantic_digital_twin.world_description.geometry import Box, Scale
 from semantic_digital_twin.world_description.shape_collection import ShapeCollection
 from semantic_digital_twin.world_description.world_entity import Body
-
-only_run_in_ci = os.environ.get("CI", "false").lower() == "false"
 
 
 @pytest.fixture
@@ -62,7 +61,9 @@ def test_advance_before_start_raises(falling_box_world):
         simulation.advance(0.1)
 
 
-@pytest.mark.skipif(only_run_in_ci, reason="MuJoCo tests only run in CI")
+@pytest.mark.skipif(
+    not runs_in_continuous_integration(), reason="MuJoCo tests only run in CI"
+)
 def test_unpaced_advance_does_not_wait_for_the_wall_clock(falling_box_world):
     """
     With no real-time factor, advancing a simulated second must finish well before a
@@ -78,7 +79,9 @@ def test_unpaced_advance_does_not_wait_for_the_wall_clock(falling_box_world):
     assert elapsed < simulated_seconds / 2
 
 
-@pytest.mark.skipif(only_run_in_ci, reason="MuJoCo tests only run in CI")
+@pytest.mark.skipif(
+    not runs_in_continuous_integration(), reason="MuJoCo tests only run in CI"
+)
 def test_paced_advance_waits_for_the_wall_clock(falling_box_world):
     simulated_seconds = 0.3
     with RealTimeSimulation(

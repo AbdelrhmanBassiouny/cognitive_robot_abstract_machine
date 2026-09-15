@@ -5,9 +5,10 @@ MuJoCo; skipped where Tracy's description is not installed.
 
 from __future__ import annotations
 
-import os
 
 import pytest
+
+from ...pytest_environment import runs_in_continuous_integration
 
 from semantic_digital_twin.adapters.multi_sim import MujocoBody, MujocoGeom
 from semantic_digital_twin.adapters.mujoco_tuning import CollisionGroup
@@ -22,8 +23,6 @@ from semantic_digital_twin.world_description.world_entity import Body
 pytestmark = pytest.mark.skipif(
     not tracy_installed(), reason="iai_tracy_description is not installed"
 )
-
-only_run_in_ci = os.environ.get("CI", "false").lower() == "false"
 
 
 @pytest.fixture
@@ -105,7 +104,9 @@ def test_equipping_compensates_gravity_and_excludes_self_collision(mounted_tracy
         assert shape.simulator_property(MujocoGeom) is None
 
 
-@pytest.mark.skipif(only_run_in_ci, reason="MuJoCo tests only run in CI")
+@pytest.mark.skipif(
+    not runs_in_continuous_integration(), reason="MuJoCo tests only run in CI"
+)
 def test_the_servos_hold_the_parked_arms_up(mounted_tracy):
     """
     A joint with no servo would be written straight into MuJoCo and sag under its own
