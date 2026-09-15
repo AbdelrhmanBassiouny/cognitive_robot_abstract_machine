@@ -69,7 +69,9 @@ Every script also accepts `--database-uri`, which wins over the environment vari
 
 ### The reproduction package
 
-Download and unpack the reproduction package: **<!-- TODO: link to the anonymised data -->**
+Download and unpack the reproduction package:
+**<https://osf.io/sc38m/?view_only=6d981619c6e24aea92df64df5e1f13d7>**
+(`reproduction_package_2.zip`, 3.5 GB, unpacking to `reproduction_package/`).
 
 ```
 reproduction_package/
