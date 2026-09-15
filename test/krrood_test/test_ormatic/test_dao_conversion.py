@@ -8,8 +8,44 @@ from krrood.ormatic.data_access_objects.from_dao import FromDataAccessObjectStat
 from krrood.ormatic.data_access_objects.helper import to_dao, get_dao_class
 from krrood.ormatic.data_access_objects.to_dao import ToDataAccessObjectState
 from krrood.ormatic.ormatic import ORMatic
+from krrood.entity_query_language.core.mapped_variable import Attribute
+from ..dataset.alternative_mappings_construction_order import (
+    BuildFirst,
+    BuildFirstAssociation,
+    BuildFirstMapping,
+    EntryPointMapping,
+    HoldsAnEntrypointMapping,
+    OwnsAHolder,
+)
 from ..dataset.example_classes import *
 from ..dataset.ormatic_interface import *
+
+
+def test_an_alternative_mapping_is_handed_the_domain_object_it_holds():
+    """
+    A mapping builds its domain object out of what it holds, so a held mapping is
+    converted before the mapping holding it, even where the declared dependencies alone
+    would convert the holder first.
+    """
+    build_first = BuildFirst("first")
+    held = EntryPointMapping(build_first, BuildFirstAssociation(build_first))
+    holder = HoldsAnEntrypointMapping(held)
+    owner = OwnsAHolder(holder)
+    state = FromDataAccessObjectState()
+    # Inserted in this order, the declared dependencies alone sort the holder first.
+    state._build_class_dependencies(
+        [BuildFirstMapping, HoldsAnEntrypointMapping, EntryPointMapping]
+    )
+    state._alternative_mappings_being_referenced[held].append(
+        (holder, Attribute(_attribute_name_="entrypoint", _child_=None))
+    )
+    state._alternative_mappings_being_referenced[holder].append(
+        (owner, Attribute(_attribute_name_="holder", _child_=None))
+    )
+
+    state.convert_alternative_mappings_to_domain_objects()
+
+    assert owner.holder.entrypoint is state.resolve_alternative_mapping(held)
 
 
 def test_shared_state_does_not_rerun_post_init(session, database, monkeypatch):
