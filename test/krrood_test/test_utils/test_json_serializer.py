@@ -6,6 +6,7 @@ from typing import Dict, Any, Self
 
 import numpy as np
 import pytest
+from sortedcontainers import SortedSet
 
 from krrood.adapters.exceptions import (
     MissingTypeError,
@@ -164,6 +165,15 @@ class ClassThatNeedsKWARGSInList(SubclassJSONSerializer):
 @dataclass
 class ClassWithDict(DataclassJSONSerializer):
     a: Dict[str, int]
+
+
+@dataclass
+class ClassWithSortedSet(DataclassJSONSerializer):
+    a: SortedSet
+
+    def __post_init__(self):
+        if not isinstance(self.a, SortedSet):
+            self.a = SortedSet(self.a)
 
 
 class CustomEnum(str, Enum):
@@ -384,6 +394,15 @@ def test_dataclass_dict():
     data = to_json(cls)
     result = from_json(data)
     assert result == cls
+
+
+def test_dataclass_sorted_set():
+    cls = ClassWithSortedSet(SortedSet([3, 1, 2]))
+    data = to_json(cls)
+    assert data["a"] == [1, 2, 3]
+    result = from_json(data)
+    assert result == cls
+    assert isinstance(result.a, SortedSet)
 
 
 # %% durations

@@ -12,6 +12,7 @@ from types import NoneType
 from typing import List, Optional, TypeAlias, TYPE_CHECKING
 
 import numpy as np
+from sortedcontainers import SortedSet
 from typing_extensions import Dict, Any, Self, Union, Type, TypeVar
 
 from krrood.adapters.exceptions import (
@@ -603,8 +604,12 @@ class DataclassJSONSerializer(ExternalClassJSONSerializer[None]):
     """
     Generic JSON serializer for dataclasses.
 
-    It creates a dict where all fields are serialized using the to_json function. If
-    this is not enough, you still need to implement a custom serializer.
+    It creates a dict where all fields are serialized using the to_json function. A
+    ``list``, ``set`` or :class:`~sortedcontainers.SortedSet` field serializes as a JSON
+    array of its items; on the way back it deserializes as a plain ``list``; a class that
+    needs a specific container type restored coerces it itself, typically in
+    ``__post_init__``. If this is not enough, you still need to implement a custom
+    serializer.
     """
 
     @classmethod
@@ -614,7 +619,7 @@ class DataclassJSONSerializer(ExternalClassJSONSerializer[None]):
         for field_ in introspector.discover(obj.__class__):
             value = getattr(obj, field_.public_name)
 
-            if isinstance(value, (list, set)):
+            if isinstance(value, (list, set, SortedSet)):
                 current_result = [to_json(item, **kwargs) for item in value]
             elif isinstance(value, dict):
                 keys = [to_json(k, **kwargs) for k in value.keys()]
