@@ -16,6 +16,7 @@ from experiments.episodes.episode import (
     Episode,
     InsertionAttempt,
     InsertionOutcome,
+    PerformedPlan,
     RecordedQuery,
     RecordedTrial,
 )
@@ -25,7 +26,7 @@ from experiments.paper.figure_set import FigureSet
 from experiments.paper.measurement import RunConditions
 from experiments.paper.outcomes import ConditionOutcome, PredictionScore
 from experiments.paper.queries import BackendLatency
-from experiments.questions.question import Question
+from experiments.questions.question import BloomLevel, Question
 from experiments.questions.working_memory import ObjectColours, ObjectsSeen
 from experiments.scenarios.trial import TrialOutcome
 
@@ -519,6 +520,78 @@ def test_the_robot_and_the_simulator_are_reported_apart(recorded_trials):
     ]
     assert [row.goal_reached.measurement_count for row in rows] == [1, 5]
     assert [row.goal_reached.average.mean for row in rows] == [0.0, 0.6]
+
+
+# %% how well each level of Bloom's taxonomy was exercised
+
+
+def acted_in(of_episode: Episode, outcome: TrialOutcome) -> RecordedTrial:
+    """
+    One trial in which the robot carried out a plan.
+
+    :param of_episode: The episode the trial belongs to.
+    :param outcome: Whether the trial reached the scenario's goal.
+    """
+    acted = trial(of_episode, outcome)
+    acted.plans = [PerformedPlan(plan=minimal_plan())]
+    return acted
+
+
+def test_applying_is_the_share_of_the_trials_the_robot_acted_in_that_reached_the_goal():
+    """
+    Applying is carrying the procedure out, so its row is how often a trial in which the
+    robot performed a plan reached the scenario's goal; a trial it performed none in
+    exercised nothing to apply.
+    """
+    run = episode(NO_ABLATION, execution_type=ExecutionType.REAL)
+    figure = figure_named(FigureName.ACCURACY_BY_BLOOM_LEVEL)
+
+    [applying] = figure.rows(
+        [
+            acted_in(run, TrialOutcome.SUCCEEDED),
+            acted_in(run, TrialOutcome.FAILED),
+            acted_in(run, TrialOutcome.SUCCEEDED),
+            trial(run, TrialOutcome.FAILED),
+        ]
+    )
+
+    assert applying.bloom_level is BloomLevel.APPLYING
+    assert applying.accuracy == figure.measured([1.0, 0.0, 1.0])
+
+
+def test_applying_is_reported_after_the_levels_the_questions_exercised():
+    run = episode(NO_ABLATION)
+    asked = trial(
+        run,
+        TrialOutcome.SUCCEEDED,
+        queries=[
+            query(
+                repeated_question(),
+                "cube",
+                0.2,
+                TWIN_BACKEND,
+                answered_correctly=True,
+            )
+        ],
+    )
+
+    rows = rows_of(
+        FigureName.ACCURACY_BY_BLOOM_LEVEL,
+        [asked, acted_in(run, TrialOutcome.SUCCEEDED)],
+    )
+
+    assert [row.bloom_level for row in rows] == [
+        repeated_question().bloom_level,
+        BloomLevel.APPLYING,
+    ]
+
+
+def test_a_corpus_the_robot_acted_in_at_no_point_reports_no_applying_row(
+    recorded_trials,
+):
+    rows = rows_of(FigureName.ACCURACY_BY_BLOOM_LEVEL, recorded_trials)
+
+    assert BloomLevel.APPLYING not in [row.bloom_level for row in rows]
 
 
 # %% the set of figures, and what the script writes
