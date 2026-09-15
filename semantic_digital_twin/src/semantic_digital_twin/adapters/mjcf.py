@@ -10,6 +10,7 @@ from typing_extensions import Optional, Dict, Self
 from xml.etree import ElementTree as ET
 
 from semantic_digital_twin.adapters.multi_sim import (
+    ContactCategories,
     MujocoActuator,
     GeomVisibilityAndCollisionType,
     MujocoCamera,
@@ -181,8 +182,8 @@ class MJCFParser(WorldModelParser):
             )
             shape.add_simulator_property(
                 MujocoGeom(
-                    contact_type=mujoco_geom.contype,
-                    contact_affinity=mujoco_geom.conaffinity,
+                    contact_type=ContactCategories(mujoco_geom.contype),
+                    contact_affinity=ContactCategories(mujoco_geom.conaffinity),
                 )
             )
             if mujoco_geom.contype != 0 or mujoco_geom.conaffinity != 0:

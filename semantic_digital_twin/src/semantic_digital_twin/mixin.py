@@ -1,11 +1,24 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, fields
+from enum import StrEnum
 from typing import List
 
-from typing_extensions import Optional, Type, TypeVar
+from typing_extensions import Any, Dict, Optional, Type, TypeVar
 
 from semantic_digital_twin.exceptions import DuplicateSimulatorPropertyError
+
+
+class FieldMetadata(StrEnum):
+    """
+    The keys a simulator property's fields carry in their ``metadata``.
+    """
+
+    SIMULATOR_NAME = "simulator_name"
+    """
+    The name the simulator's own attribute for the field carries, where it differs from
+    the field's name.
+    """
 
 
 @dataclass
@@ -14,7 +27,18 @@ class SimulatorAdditionalProperty:
     Class representing an additional property for a simulator.
     """
 
-    ...
+    def to_dict(self) -> Dict[str, Any]:
+        """
+        :return: The fields as a dictionary, each under the simulator's own name for it
+            if the field declares one (see :attr:`FieldMetadata.SIMULATOR_NAME`), else
+            under its own.
+        """
+        return {
+            declared_field.metadata.get(
+                FieldMetadata.SIMULATOR_NAME, declared_field.name
+            ): getattr(self, declared_field.name)
+            for declared_field in fields(self)
+        }
 
 
 @dataclass

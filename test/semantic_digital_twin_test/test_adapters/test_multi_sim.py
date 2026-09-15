@@ -55,6 +55,7 @@ from physics_simulators.mujoco_simulator import MujocoSimulator
 from physics_simulators.base_simulator import SimulatorState
 from semantic_digital_twin.adapters.mjcf import MJCFParser
 from semantic_digital_twin.adapters.multi_sim import (
+    ContactCategories,
     MujocoSim,
     MujocoActuator,
     MujocoBuilder,
@@ -533,7 +534,9 @@ def test_builder_writes_a_geoms_contact_bitmasks(tmp_path):
         root = Body(name=PrefixedName("root"))
         world.add_body(root)
         box_shape = Box(scale=Scale(1, 1, 1))
-        box_shape.add_simulator_property(MujocoGeom(contact_type=2, contact_affinity=4))
+        box_shape.add_simulator_property(MujocoGeom(
+            contact_type=ContactCategories(2), contact_affinity=ContactCategories(4)
+        ))
         link = Body(
             name=PrefixedName("link"),
             visual=ShapeCollection([box_shape]),
@@ -596,7 +599,9 @@ def test_builder_keeps_a_visual_only_geom_contactless_despite_its_bitmasks(tmp_p
         root = Body(name=PrefixedName("root"))
         world.add_body(root)
         box_shape = Box(scale=Scale(1, 1, 1))
-        box_shape.add_simulator_property(MujocoGeom(contact_type=2, contact_affinity=4))
+        box_shape.add_simulator_property(MujocoGeom(
+            contact_type=ContactCategories(2), contact_affinity=ContactCategories(4)
+        ))
         link = Body(name=PrefixedName("link"), visual=ShapeCollection([box_shape]))
         world.add_kinematic_structure_entity(link)
         world.add_connection(FixedConnection(parent=root, child=link))
