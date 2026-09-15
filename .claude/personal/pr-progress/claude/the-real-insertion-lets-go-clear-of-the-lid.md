@@ -39,3 +39,14 @@ Plan:
 - [ ] user reruns framework_demo real --record; not done: narrowing as DB rows
 - still open elsewhere: #379 pickup rerun; framework figure frames/cards after a good run;
   cube-evidence feature follow-on (worktree ~/bass/cram-board-by-the-cube)
+- [x] 2026-09-15 paper figures of the real corpus (reproduction package in ~/Downloads), three
+      draft PRs stacked on this branch, each in its own worktree ~/Projects_2/cram-<branch>:
+      #388 (bug) card's before frame starts at MovedBySomeoneElse.moment (stand-still PieceShoved
+      frames were identical); #389 (bug) PlaceOfOwnBody marked ScoredAgainstWhereTheJointsStood,
+      --rescore-working-memory re-asks it at the joint trace's moment (3 l_gripper rows stored
+      wrong by the pre-60bd6c165e np.allclose); #390 LaTeX tables (LatexRenderer, <name>.tex).
+      Also on main: #386 (buffer_zone_distance), #387 (typst nested table).
+- [ ] pipeline run: scratch worktree ~/Projects_2/cram-paper-pipeline (branch local/paper-pipeline
+      = this branch + #386/#387/#388/#389/#390 cherry-picked); reproduction script
+      generate_paper_artifacts.py now re-scores, asks the long-term set (object per episode),
+      copies .tex/.json/.png into krrood-icra-2027/paper/figures/real
