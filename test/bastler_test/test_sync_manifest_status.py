@@ -16,9 +16,13 @@ import yaml
 
 from bastler.build_dashboard import (
     ItemStatus,
+    ManifestKey,
+    MissingPlanDirectory,
+    PlanFile,
     PlanValidationError,
     PullRequestRecord,
     PullRequestState,
+    SUPPORTED_SCHEMA_VERSION,
     validate_plan,
 )
 from bastler.sync_manifest_status import (
@@ -26,6 +30,14 @@ from bastler.sync_manifest_status import (
     apply_status_corrections,
     find_items_to_correct,
     main,
+)
+
+from .fixture_plans import (
+    FIXTURE_PLANS_DIRECTORY,
+    FixturePlanId,
+    ForeignItemId,
+    PLAN_UNDER_TEST_ID,
+    foreign_reference,
 )
 
 
@@ -36,14 +48,22 @@ def plan(**overrides: Any) -> dict[str, Any]:
     operates directly on that raw structure, never on a parsed :class:`Plan`.
     """
     data = {
-        "schema_version": 1,
-        "id": "test-plan",
-        "title": "Test Plan",
-        "description": "A plan.",
-        "default_repository": "owner/repo",
-        "waves": [{"id": "wave-1", "name": "Wave 1"}],
-        "tracks": [{"id": "track-1", "name": "Track 1", "wave": "wave-1"}],
-        "items": [],
+        ManifestKey.SCHEMA_VERSION.value: SUPPORTED_SCHEMA_VERSION,
+        ManifestKey.ID.value: PLAN_UNDER_TEST_ID,
+        ManifestKey.TITLE.value: "Test Plan",
+        ManifestKey.DESCRIPTION.value: "A plan.",
+        ManifestKey.DEFAULT_REPOSITORY.value: "owner/repo",
+        ManifestKey.WAVES.value: [
+            {ManifestKey.ID.value: "wave-1", ManifestKey.NAME.value: "Wave 1"}
+        ],
+        ManifestKey.TRACKS.value: [
+            {
+                ManifestKey.ID.value: "track-1",
+                ManifestKey.NAME.value: "Track 1",
+                ManifestKey.WAVE.value: "wave-1",
+            }
+        ],
+        ManifestKey.ITEMS.value: [],
     }
     data.update(overrides)
     return data
@@ -54,6 +74,7 @@ def item(
     status: str,
     pull_request_number: int | None = None,
     repository: str | None = None,
+    depends_on: list[str] | None = None,
 ) -> dict[str, Any]:
     """
     Build one raw, plan.yaml-shaped item ``dict`` for a test.
@@ -64,15 +85,17 @@ def item(
     on that raw structure.
     """
     entry = {
-        "id": identifier,
-        "title": identifier,
-        "branch": identifier,
-        "track": "track-1",
-        "status": status,
-        "pull_request_number": pull_request_number,
+        ManifestKey.ID.value: identifier,
+        ManifestKey.TITLE.value: identifier,
+        ManifestKey.BRANCH.value: identifier,
+        ManifestKey.TRACK.value: "track-1",
+        ManifestKey.STATUS.value: status,
+        ManifestKey.PULL_REQUEST_NUMBER.value: pull_request_number,
     }
     if repository is not None:
-        entry["repository"] = repository
+        entry[ManifestKey.REPOSITORY.value] = repository
+    if depends_on is not None:
+        entry[ManifestKey.DEPENDS_ON.value] = depends_on
     return entry
 
 
@@ -89,7 +112,7 @@ def test_finds_an_in_progress_item_whose_pull_request_is_merged():
     }
     items = [item("a", "in_progress", pull_request_number=1)]
     corrections = find_items_to_correct(plan(items=items), pull_requests_by_repository)
-    assert [entry["id"] for entry in corrections] == ["a"]
+    assert [entry[ManifestKey.ID] for entry in corrections] == ["a"]
 
 
 def test_ignores_an_item_already_marked_done():
@@ -125,7 +148,7 @@ def test_merged_via_out_of_band_label_is_also_corrected():
     }
     items = [item("a", "blocked", pull_request_number=1)]
     corrections = find_items_to_correct(plan(items=items), pull_requests_by_repository)
-    assert [entry["id"] for entry in corrections] == ["a"]
+    assert [entry[ManifestKey.ID] for entry in corrections] == ["a"]
 
 
 def test_uses_the_item_repository_override_over_the_plan_default():
@@ -140,7 +163,7 @@ def test_uses_the_item_repository_override_over_the_plan_default():
         item("a", "in_progress", pull_request_number=1, repository="owner/other-repo")
     ]
     corrections = find_items_to_correct(plan(items=items), pull_requests_by_repository)
-    assert [entry["id"] for entry in corrections] == ["a"]
+    assert [entry[ManifestKey.ID] for entry in corrections] == ["a"]
 
 
 # %% apply_status_corrections - real manifest text
@@ -155,7 +178,7 @@ MANIFEST_TEXT = (DATASET_DIRECTORY / "manifest.yaml").read_text()
 def test_patches_only_the_targeted_items_status_line():
     data = yaml.safe_load(MANIFEST_TEXT)
     patched_text, corrections = apply_status_corrections(
-        MANIFEST_TEXT, [data["items"][0]]
+        MANIFEST_TEXT, [data[ManifestKey.ITEMS][0]]
     )
     assert "    status: done" in patched_text
     assert "    status: not_started" in patched_text  # item b untouched
@@ -165,7 +188,9 @@ def test_patches_only_the_targeted_items_status_line():
 
 def test_patching_leaves_every_other_line_byte_for_byte_identical():
     data = yaml.safe_load(MANIFEST_TEXT)
-    patched_text, _ = apply_status_corrections(MANIFEST_TEXT, [data["items"][0]])
+    patched_text, _ = apply_status_corrections(
+        MANIFEST_TEXT, [data[ManifestKey.ITEMS][0]]
+    )
     original_lines = MANIFEST_TEXT.split("\n")
     patched_lines = patched_text.split("\n")
     changed_line_pairs = [
@@ -178,10 +203,15 @@ def test_patching_leaves_every_other_line_byte_for_byte_identical():
 
 def test_patched_text_still_parses_and_validates():
     data = yaml.safe_load(MANIFEST_TEXT)
-    patched_text, _ = apply_status_corrections(MANIFEST_TEXT, [data["items"][0]])
+    patched_text, _ = apply_status_corrections(
+        MANIFEST_TEXT, [data[ManifestKey.ITEMS][0]]
+    )
     reparsed = yaml.safe_load(patched_text)
-    assert reparsed["items"][0]["status"] == "done"
-    assert reparsed["items"][0]["notes"] == data["items"][0]["notes"]
+    assert reparsed[ManifestKey.ITEMS][0][ManifestKey.STATUS] == ItemStatus.DONE.value
+    assert (
+        reparsed[ManifestKey.ITEMS][0][ManifestKey.NOTES]
+        == data[ManifestKey.ITEMS][0][ManifestKey.NOTES]
+    )
 
 
 def test_no_items_to_correct_returns_original_text_unchanged():
@@ -193,7 +223,10 @@ def test_no_items_to_correct_returns_original_text_unchanged():
 def test_raises_if_an_item_has_no_status_line():
     text = "- id: a\n  title: A\n  branch: a\n"
     with pytest.raises(MissingStatusLineError, match="no status: line"):
-        apply_status_corrections(text, [{"id": "a", "branch": "a"}])
+        apply_status_corrections(
+            text,
+            [{ManifestKey.ID.value: "a", ManifestKey.BRANCH.value: "a"}],
+        )
 
 
 # %% main - manifest validation
@@ -301,3 +334,92 @@ def test_main_writes_the_corrected_manifest_to_output_leaving_the_plan_file_unto
     assert exit_code == 0
     assert plan_path.read_text() == MANIFEST_TEXT
     assert "    status: done" in output_path.read_text()
+
+
+# %% main - cross-plan references
+
+
+def _write_plan_depending_on_another_plan(tmp_path: Path) -> tuple[Path, Path]:
+    """
+    Write a manifest whose one item depends on an item of another plan.
+
+    :param tmp_path: pytest's per-test temporary directory.
+    :return: The manifest's path and an empty pull request data file's path.
+    """
+    plan_path = tmp_path / PlanFile.MANIFEST
+    plan_path.write_text(
+        yaml.dump(
+            plan(
+                items=[
+                    item(
+                        "a",
+                        ItemStatus.NOT_STARTED.value,
+                        depends_on=[
+                            foreign_reference(ForeignItemId.DONE, FixturePlanId.OTHER)
+                        ],
+                    )
+                ]
+            )
+        )
+    )
+    pull_request_data_path = tmp_path / "pr_data.json"
+    pull_request_data_path.write_text("{}")
+    return plan_path, pull_request_data_path
+
+
+def _run_main(plan_path: Path, pull_request_data_path: Path, monkeypatch, *extra: str):
+    """
+    Run sync_manifest_status.py's ``main`` over the given files.
+
+    :param plan_path: The manifest to sync.
+    :param pull_request_data_path: The live pull request data to sync against.
+    :param monkeypatch: pytest's argv patcher.
+    :param extra: Further command line arguments.
+    :return:``main``'s exit code.
+    """
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "sync_manifest_status.py",
+            "--plan",
+            str(plan_path),
+            "--pr-data",
+            str(pull_request_data_path),
+            *extra,
+        ],
+    )
+    return main()
+
+
+def test_main_accepts_a_cross_plan_reference_given_the_plans_directory(
+    tmp_path, monkeypatch, capsys
+):
+    # This script validates the manifest before correcting it, so without the
+    # directory the whole refresh would stop before rendering.
+    plan_path, pull_request_data_path = _write_plan_depending_on_another_plan(tmp_path)
+    exit_code = _run_main(
+        plan_path,
+        pull_request_data_path,
+        monkeypatch,
+        "--plans-dir",
+        str(FIXTURE_PLANS_DIRECTORY),
+    )
+    assert exit_code == 0
+    assert json.loads(capsys.readouterr().out) == {"corrected": []}
+
+
+def test_main_rejects_a_cross_plan_reference_without_the_plans_directory(
+    tmp_path, monkeypatch, capsys
+):
+    plan_path, pull_request_data_path = _write_plan_depending_on_another_plan(tmp_path)
+    exit_code = _run_main(plan_path, pull_request_data_path, monkeypatch)
+    assert exit_code == 1
+    with pytest.raises(PlanValidationError) as expected_error:
+        validate_plan(yaml.safe_load(plan_path.read_text()))
+    assert [type(problem) for problem in expected_error.value.problems] == [
+        MissingPlanDirectory
+    ]
+    assert capsys.readouterr().err == (
+        f"plan.yaml failed validation: {expected_error.value}\n"
+    )

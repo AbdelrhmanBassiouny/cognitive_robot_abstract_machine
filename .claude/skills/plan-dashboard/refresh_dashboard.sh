@@ -18,7 +18,12 @@ set -euo pipefail
 #     --roadmap <roadmap.md path> \
 #     --pr-data <pr_data.json path> \
 #     --output <dashboard.html output path> \
-#     [--tracking-url <url>]
+#     [--tracking-url <url>] \
+#     [--plans-dir <directory holding every plan>]
+#
+# --plans-dir is forwarded to both scripts below: each validates the manifest,
+# and a depends_on entry naming <plan-id>/<item-id> resolves against that
+# directory.
 #
 # Prints one JSON summary to stdout, merging sync_manifest_status's own
 # {"corrected": [...]} with build_dashboard's status/drift/ready summary,
@@ -42,6 +47,7 @@ ROADMAP_FILE=""
 PULL_REQUEST_DATA_FILE=""
 OUTPUT_FILE=""
 TRACKING_URL=""
+PLANS_DIRECTORY=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --plan-id)
@@ -68,6 +74,10 @@ while [ $# -gt 0 ]; do
       TRACKING_URL="$2"
       shift 2
       ;;
+    --plans-dir)
+      PLANS_DIRECTORY="$2"
+      shift 2
+      ;;
     *)
       echo "Unrecognized argument: $1" >&2
       exit 1
@@ -77,13 +87,19 @@ done
 
 if [ -z "${PLAN_ID}" ] || [ -z "${PLAN_FILE}" ] || [ -z "${ROADMAP_FILE}" ] \
     || [ -z "${PULL_REQUEST_DATA_FILE}" ] || [ -z "${OUTPUT_FILE}" ]; then
-  echo "Usage: ${BASH_SOURCE[0]} --plan-id <id> --plan <plan.yaml> --roadmap <roadmap.md> --pr-data <pr_data.json> --output <dashboard.html> [--tracking-url <url>]" >&2
+  echo "Usage: ${BASH_SOURCE[0]} --plan-id <id> --plan <plan.yaml> --roadmap <roadmap.md> --pr-data <pr_data.json> --output <dashboard.html> [--tracking-url <url>] [--plans-dir <dir>]" >&2
   exit 1
+fi
+
+PLANS_DIRECTORY_ARGUMENTS=()
+if [ -n "${PLANS_DIRECTORY}" ]; then
+  PLANS_DIRECTORY_ARGUMENTS=(--plans-dir "${PLANS_DIRECTORY}")
 fi
 
 SYNC_SUMMARY="$(python3 -m "${SYNC_MANIFEST_STATUS_MODULE}" \
   --plan "${PLAN_FILE}" \
-  --pr-data "${PULL_REQUEST_DATA_FILE}")"
+  --pr-data "${PULL_REQUEST_DATA_FILE}" \
+  "${PLANS_DIRECTORY_ARGUMENTS[@]+"${PLANS_DIRECTORY_ARGUMENTS[@]}"}")"
 
 CORRECTED_COUNT="$(python3 -m "${REFRESH_DASHBOARD_SUPPORT_MODULE}" count-corrected "${SYNC_SUMMARY}")"
 
@@ -103,6 +119,9 @@ BUILD_ARGUMENTS=(
 )
 if [ -n "${TRACKING_URL}" ]; then
   BUILD_ARGUMENTS+=(--tracking-url "${TRACKING_URL}")
+fi
+if [ -n "${PLANS_DIRECTORY}" ]; then
+  BUILD_ARGUMENTS+=(--plans-dir "${PLANS_DIRECTORY}")
 fi
 BUILD_SUMMARY="$(python3 -m "${BUILD_DASHBOARD_MODULE}" "${BUILD_ARGUMENTS[@]}")"
 
