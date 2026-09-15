@@ -7,7 +7,7 @@ from ..dataset.classes_with_generic import (
 )
 from ..dataset.ormatic_interface import (
     BareGenericFieldHolderDAO,
-    SubClassGenericThatUpdatesGenericTypeToBuiltInTypeDAO,
+    SubClassGenericThatUpdatesGenericTypeToBuiltInTypeDAO, FirstGenericDAO,
 )
 
 
@@ -19,6 +19,7 @@ def test_bare_generic_field_dao_generation():
     """
     mapper = inspect(BareGenericFieldHolderDAO)
     assert "item" in mapper.relationships
+    assert issubclass(SubClassGenericThatUpdatesGenericTypeToBuiltInTypeDAO, FirstGenericDAO)
 
 
 def test_bare_generic_field_round_trips_to_concrete_subclass(session, database):
@@ -38,6 +39,7 @@ def test_bare_generic_field_round_trips_to_concrete_subclass(session, database):
 
     queried = session.scalars(select(BareGenericFieldHolderDAO)).one()
     assert isinstance(queried.item, SubClassGenericThatUpdatesGenericTypeToBuiltInTypeDAO)
+
 
     reconstructed = queried.from_dao()
     assert type(reconstructed.item) is SubClassGenericThatUpdatesGenericTypeToBuiltInType
