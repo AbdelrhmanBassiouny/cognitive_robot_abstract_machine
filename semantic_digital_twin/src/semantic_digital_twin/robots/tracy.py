@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import os
-from abc import ABC
+from abc import ABC, abstractmethod
 from collections import defaultdict
+from copy import deepcopy
 from dataclasses import dataclass, field
 from enum import StrEnum
 from importlib.resources import files
@@ -49,8 +50,10 @@ from semantic_digital_twin.spatial_types import Quaternion, Vector3
 from semantic_digital_twin.spatial_types.spatial_types import Point3
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.connections import ActiveConnection1DOF
+from semantic_digital_twin.world_description.degree_of_freedom import DegreeOfFreedom
 from semantic_digital_twin.world_description.world_entity import (
     Actuator,
+    Body,
     KinematicStructureEntity,
 )
 
@@ -177,10 +180,103 @@ class TracyRightGripperRightFinger(Finger):
         )
 
 
+class Robotiq85GripperGeometry(ABC):
+    """
+    What a grasp has to know about one of Tracy's Robotiq 2F-85 grippers: the pads that
+    meet an object, the joint that drives the fingers, and how far that joint has to
+    turn to close the pads to a given width.
+    """
+
+    @property
+    @abstractmethod
+    def knuckle_joint(self) -> TracyJoint:
+        """
+        The joint that actually drives the gripper; every other finger joint in the
+        mimic linkage follows it.
+        """
+
+    @property
+    def left_fingertip(self) -> Body:
+        """
+        The left fingertip pad's body.
+        """
+        return self.thumb.tip
+
+    @property
+    def right_fingertip(self) -> Body:
+        """
+        The right fingertip pad's body.
+        """
+        return self.finger.tip
+
+    @property
+    def knuckle_degree_of_freedom(self) -> DegreeOfFreedom:
+        """
+        The raw degree of freedom driving the knuckle.
+        """
+        return self._world.get_connection_by_name(self.knuckle_joint).raw_dof
+
+    def knuckle_angle_for_half_width(
+        self, target_half_width: float, iterations: int = 30
+    ) -> float:
+        """
+        The knuckle's raw angle at which the fingertip pads' inner faces first reach
+        ``target_half_width`` out from the gripper's own centreline.
+
+        The pad's inner position decreases monotonically as the knuckle closes, so
+        bisection against an isolated scratch copy of the world converges reliably; the
+        world itself is never modified.
+
+        :param target_half_width: The half-width, in metres, to close to.
+        :param iterations: Bisection steps; 30 narrows the joint's own ~0.8 rad range to
+            well under a micro-radian.
+        :return: The raw angle.
+        """
+        scratch_world = deepcopy(self._world)
+        [scratch_gripper] = scratch_world.get_semantic_annotations_by_type(type(self))
+        raw_dof = scratch_gripper.knuckle_degree_of_freedom
+        left_fingertip = scratch_gripper.left_fingertip
+
+        def inner_x(raw_angle: float) -> float:
+            """
+            The left pad's innermost point along the closing axis at one raw angle,
+            moving the scratch world's own state directly.
+            """
+            scratch_world.state[raw_dof.id].position = raw_angle
+            scratch_world.notify_state_change()
+            scratch_world.update_forward_kinematics()
+            return (
+                left_fingertip.collision.as_bounding_box_collection_in_frame(
+                    scratch_gripper.root
+                )
+                .bounding_box()
+                .min_x
+            )
+
+        lower, upper = raw_dof.limits.lower.position, raw_dof.limits.upper.position
+        if target_half_width >= inner_x(lower):
+            return lower
+        if target_half_width <= inner_x(upper):
+            return upper
+        for _ in range(iterations):
+            midpoint = (lower + upper) / 2
+            if inner_x(midpoint) > target_half_width:
+                lower = midpoint
+            else:
+                upper = midpoint
+        return upper
+
+
 @dataclass(eq=False)
 class TracyLeftGripper(
-    EndEffector, HasTwoFingers[TracyLeftGripperLeftFinger, TracyLeftGripperRightFinger]
+    EndEffector,
+    HasTwoFingers[TracyLeftGripperLeftFinger, TracyLeftGripperRightFinger],
+    Robotiq85GripperGeometry,
 ):
+
+    @property
+    def knuckle_joint(self) -> TracyJoint:
+        return TracyJoint.LEFT_GRIPPER_LEFT_KNUCKLE
 
     def setup_hardware_interfaces(self):
         self._setup_hardware_interfaces_for_active_connections()
@@ -231,7 +327,12 @@ class TracyLeftGripper(
 class TracyRightGripper(
     EndEffector,
     HasTwoFingers[TracyRightGripperLeftFinger, TracyRightGripperRightFinger],
+    Robotiq85GripperGeometry,
 ):
+
+    @property
+    def knuckle_joint(self) -> TracyJoint:
+        return TracyJoint.RIGHT_GRIPPER_LEFT_KNUCKLE
 
     def setup_hardware_interfaces(self):
         self._setup_hardware_interfaces_for_active_connections()

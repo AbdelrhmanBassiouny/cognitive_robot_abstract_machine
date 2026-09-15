@@ -129,3 +129,48 @@ def test_the_servos_hold_the_parked_arms_up(mounted_tracy):
         ).result
 
     assert list(simulated) == pytest.approx(list(parked), abs=0.01)
+
+
+# %% the gripper's own geometry
+
+
+def test_gripper_geometry_names_the_pads_and_the_driving_joint(mounted_tracy):
+    gripper = mounted_tracy.left_arm.end_effector
+
+    assert gripper.left_fingertip.name.name == "left_robotiq_85_left_finger_tip_link"
+    assert gripper.right_fingertip.name.name == "left_robotiq_85_right_finger_tip_link"
+    assert gripper.knuckle_joint == TracyJoint.LEFT_GRIPPER_LEFT_KNUCKLE
+    assert gripper.knuckle_degree_of_freedom.name.name == (
+        TracyJoint.LEFT_GRIPPER_LEFT_KNUCKLE
+    )
+    assert (
+        mounted_tracy.right_arm.end_effector.knuckle_joint
+        == TracyJoint.RIGHT_GRIPPER_LEFT_KNUCKLE
+    )
+
+
+def test_knuckle_angle_closes_the_pads_to_a_width_between_open_and_closed(
+    mounted_tracy,
+):
+    """
+    A width the open gripper already spans needs no closing, a width the closed gripper
+    still spans needs the full close, and one in between is found by bisection, with a
+    wider target closing less, and leaves the world untouched.
+    """
+    gripper = mounted_tracy.left_arm.end_effector
+    limits = gripper.knuckle_degree_of_freedom.limits
+    open_angle, closed_angle = limits.lower.position, limits.upper.position
+    state_before = mounted_tracy._world.state[
+        gripper.knuckle_degree_of_freedom.id
+    ].position
+
+    narrow = gripper.knuckle_angle_for_half_width(0.02)
+    wide = gripper.knuckle_angle_for_half_width(0.03)
+
+    assert gripper.knuckle_angle_for_half_width(1.0) == open_angle
+    assert gripper.knuckle_angle_for_half_width(0.0) == closed_angle
+    assert open_angle < wide < narrow < closed_angle
+    assert (
+        mounted_tracy._world.state[gripper.knuckle_degree_of_freedom.id].position
+        == state_before
+    )
