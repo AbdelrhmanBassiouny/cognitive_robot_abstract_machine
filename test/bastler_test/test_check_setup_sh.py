@@ -19,7 +19,9 @@ from .scratch_repository import (
     SCRATCH_IDENTITY,
     ScratchRepository,
     SetupPrerequisiteFile,
+    StackConfigurationPath,
     initialize_bare_repository,
+    stack_configuration,
 )
 
 # %% what a report is made of
@@ -40,6 +42,7 @@ class SetupCheck(StrEnum):
     NOTES_BRANCH = "notes_branch"
     NOTES_FILE = "notes_file"
     GIT_IDENTITY = "git_identity"
+    BRANCH_BASE = "branch_base"
     DASHBOARD_DEPENDENCIES = "dashboard_dependencies"
     CLAUDE_LOCAL_MD = "claude_local_md"
 
@@ -411,3 +414,169 @@ def test_reports_a_claude_local_md_that_was_never_written(
     report = run_check_setup(check_setup_repository)
     assert report.exit_code == 1
     assert report.results[SetupCheck.CLAUDE_LOCAL_MD].status == CheckStatus.NEEDS_SETUP
+
+
+# %% the branch this work would be based on
+
+CONFIGURED_BASE_BRANCH = "main"
+"""
+The branch the scratch repository's committed stack configuration names as its base.
+"""
+
+STAGING_DEFAULT_BRANCH = "integration"
+"""
+A default branch that is not the configured base - deliberately, since it is what puts
+reviewed-but-unlanded work into every fresh checkout. It carries commits the base does
+not, which is exactly why nothing may be based on it.
+"""
+
+
+def configure_a_staged_repository(
+    repository: ScratchRepository, base: str = CONFIGURED_BASE_BRANCH
+) -> str:
+    """
+    Set up the arrangement this check exists for: a configured base, and a different
+    default branch carrying commits of its own.
+
+    :param repository: The scratch repository to configure.
+    :param base: The branch the stack configuration names as the base.
+    :return: The commit the configured base points at.
+    """
+    repository.write(StackConfigurationPath.COMMITTED, stack_configuration(base))
+    repository.commit_everything("declare the configured base")
+    repository.add_work_remote()
+    base_commit = repository.run_git("rev-parse", "HEAD").stdout.strip()
+    repository.track_remote_branch(base, base_commit)
+    staged = repository.publish_staging_branch(STAGING_DEFAULT_BRANCH)
+    repository.declare_default_branch(STAGING_DEFAULT_BRANCH, staged)
+    return base_commit
+
+
+def test_refuses_a_branch_cut_from_the_staging_default_branch(
+    check_setup_repository: ScratchRepository,
+):
+    configure_a_staged_repository(check_setup_repository)
+    check_setup_repository.start_branch_from(
+        "work", f"refs/remotes/origin/{STAGING_DEFAULT_BRANCH}"
+    )
+
+    report = run_check_setup(check_setup_repository)
+    assert report.exit_code == 1
+    assert report.results[SetupCheck.BRANCH_BASE].status == CheckStatus.NEEDS_SETUP
+    detail = report.results[SetupCheck.BRANCH_BASE].detail
+    assert STAGING_DEFAULT_BRANCH in detail
+    assert CONFIGURED_BASE_BRANCH in detail
+
+
+def test_accepts_a_branch_cut_from_the_configured_base(
+    check_setup_repository: ScratchRepository,
+):
+    base_commit = configure_a_staged_repository(check_setup_repository)
+    check_setup_repository.start_branch_from("work", base_commit)
+
+    report = run_check_setup(check_setup_repository)
+    assert report.exit_code == 0
+    assert report.results[SetupCheck.BRANCH_BASE].status == CheckStatus.OK
+
+
+def test_accepts_a_branch_stacked_on_another_branch(
+    check_setup_repository: ScratchRepository,
+):
+    """
+    Stacking on a parent pull request is this workflow's normal shape, so a rule that
+    flagged it would fire on most of the fork.
+    """
+    base_commit = configure_a_staged_repository(check_setup_repository)
+    check_setup_repository.start_branch_from("parent", base_commit)
+    check_setup_repository.write("parent-work.txt", "what the parent adds\n")
+    check_setup_repository.commit_everything("the parent's own work")
+    check_setup_repository.start_branch_from("child", "parent")
+
+    report = run_check_setup(check_setup_repository)
+    assert report.exit_code == 0
+    assert report.results[SetupCheck.BRANCH_BASE].status == CheckStatus.OK
+
+
+def test_accepts_a_branch_whose_configured_base_has_moved_on_without_it(
+    check_setup_repository: ScratchRepository,
+):
+    """
+    The base advances constantly, so a branch cut from it is neither its ancestor nor
+    its descendant within a day.
+
+    Testing descent from the staging branch instead is what keeps that ordinary state
+    from reading as a defect.
+    """
+    base_commit = configure_a_staged_repository(check_setup_repository)
+    check_setup_repository.start_branch_from("work", base_commit)
+    check_setup_repository.publish_staging_branch(CONFIGURED_BASE_BRANCH)
+
+    report = run_check_setup(check_setup_repository)
+    assert report.exit_code == 0
+    assert report.results[SetupCheck.BRANCH_BASE].status == CheckStatus.OK
+
+
+def test_accepts_a_repository_whose_default_branch_is_its_configured_base(
+    check_setup_repository: ScratchRepository,
+):
+    check_setup_repository.write(
+        StackConfigurationPath.COMMITTED, stack_configuration(CONFIGURED_BASE_BRANCH)
+    )
+    check_setup_repository.commit_everything("declare the configured base")
+    check_setup_repository.add_work_remote()
+    check_setup_repository.declare_default_branch(CONFIGURED_BASE_BRANCH)
+
+    report = run_check_setup(check_setup_repository)
+    assert report.exit_code == 0
+    assert report.results[SetupCheck.BRANCH_BASE].status == CheckStatus.OK
+    assert CONFIGURED_BASE_BRANCH in report.results[SetupCheck.BRANCH_BASE].detail
+
+
+def test_reads_the_remotes_own_head_when_the_clone_records_no_default_branch(
+    check_setup_repository: ScratchRepository,
+):
+    configure_a_staged_repository(check_setup_repository)
+    check_setup_repository.start_branch_from(
+        "work", f"refs/remotes/origin/{STAGING_DEFAULT_BRANCH}"
+    )
+    check_setup_repository.forget_declared_default_branch()
+    check_setup_repository.declare_default_branch_on_work_remote(STAGING_DEFAULT_BRANCH)
+
+    report = run_check_setup(check_setup_repository)
+    assert report.exit_code == 1
+    assert report.results[SetupCheck.BRANCH_BASE].status == CheckStatus.NEEDS_SETUP
+    assert STAGING_DEFAULT_BRANCH in report.results[SetupCheck.BRANCH_BASE].detail
+
+
+def test_prefers_the_personal_base_override_over_the_committed_one(
+    check_setup_repository: ScratchRepository,
+):
+    overridden_base = "trunk"
+    check_setup_repository.write(
+        StackConfigurationPath.COMMITTED, stack_configuration(CONFIGURED_BASE_BRANCH)
+    )
+    check_setup_repository.commit_everything("declare the configured base")
+    check_setup_repository.update_notes_branch_file(
+        StackConfigurationPath.PERSONAL, stack_configuration(overridden_base)
+    )
+    check_setup_repository.add_work_remote()
+    check_setup_repository.declare_default_branch(overridden_base)
+
+    report = run_check_setup(check_setup_repository)
+    assert report.exit_code == 0
+    assert report.results[SetupCheck.BRANCH_BASE].status == CheckStatus.OK
+    assert overridden_base in report.results[SetupCheck.BRANCH_BASE].detail
+
+
+def test_reports_no_verdict_when_nothing_configures_a_base_branch(
+    check_setup_repository: ScratchRepository,
+):
+    # The package a clone carries brings the committed defaults with it, so the
+    # repository that configures no base at all is one this has to make.
+    (check_setup_repository.project_root / StackConfigurationPath.COMMITTED).unlink()
+    check_setup_repository.add_work_remote()
+    check_setup_repository.declare_default_branch(STAGING_DEFAULT_BRANCH)
+
+    report = run_check_setup(check_setup_repository)
+    assert report.exit_code == 0
+    assert report.results[SetupCheck.BRANCH_BASE].status == CheckStatus.INFORMATIONAL
