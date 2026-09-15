@@ -73,8 +73,11 @@ next to the workflow it describes, because it is read rather than run.
     compare-and-create URL, encoded and within the length limit, warning on stderr when the body had
     to be shortened.
   - `python -m bastler.stack reparents` - one `branch<TAB>pr<TAB>current base<TAB>target base`
-    line per open PR whose base has already landed, including a base whose own PR was *closed* and
-    which is therefore absent from `board.json`.
+    line per open PR whose base has left the board and left its commits somewhere else, including a
+    base whose own PR was *closed* and which is therefore absent from `board.json`. The target is
+    the upstream base when the commits landed there, and another open branch when the base merged
+    into that instead; a base whose commits reached nothing is not listed, since no target follows
+    from it - the restack hands that branch back to its owner as `parent-gone`.
   - `python -m bastler.stack landed` - one `name<TAB>pr` line per open fork PR whose branch
     is already in the upstream base. Reporting only: fast-forwarding the fork's copy of the
     upstream base is what actually closes them.

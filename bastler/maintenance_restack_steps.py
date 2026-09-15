@@ -28,6 +28,7 @@ from bastler.stack import (
     Configuration,
     IntegrationStrategy,
     LabelWrite,
+    ParentSituation,
     ProposedCommitMove,
     RefusalReason,
     Stack,
@@ -78,6 +79,12 @@ class RestackOutcome(StrEnum):
     """
     It is still conflicted against its base from a previous pass, so it was left
     untouched rather than re-reported.
+    """
+
+    PARENT_GONE = "parent-gone"
+    """
+    Nothing this stack can see carries its parent's commits, so there is no base to
+    build on; its owner was told and nothing was published.
     """
 
 
@@ -135,6 +142,14 @@ class BranchOutcome:
     """
 
 
+def _addressed_to(branch: Branch) -> str:
+    """:param branch: The branch whose owner is being written to.
+    :return: The session link to address, or a note that the description names none."""
+    if branch.session:
+        return f"\n\n{branch.session}"
+    return "\n\nThis pull request's description names no session to address."
+
+
 def conflict_report(
     branch: Branch, conflicting_paths: Sequence[str], parent: str
 ) -> str:
@@ -147,11 +162,6 @@ def conflict_report(
     :return: The comment body.
     """
     files = "\n".join(f"- `{path}`" for path in conflicting_paths)
-    addressed = (
-        f"\n\n{branch.session}"
-        if branch.session
-        else "\n\nThis pull request's description names no session to address."
-    )
     return (
         f"{CONFLICT_COMMENT_PREFIX} integrating `{parent}` into `{branch.name}` "
         f"conflicts, so this branch was left untouched and skipped.\n\n"
@@ -159,7 +169,29 @@ def conflict_report(
         f"Please resolve and push. This branch is labelled "
         f"`needs-resolution` so later passes skip it rather than re-reporting the same "
         f"conflict; the label is cleared automatically once it merges cleanly again, "
-        f"and the branch rejoins the pass.{addressed}"
+        f"and the branch rejoins the pass.{_addressed_to(branch)}"
+    )
+
+
+def gone_parent_report(branch: Branch, parent: str) -> str:
+    """
+    Write the comment telling a branch's owner that its base no longer leads anywhere.
+
+    :param branch: The branch left on it.
+    :param parent: The base whose commits reached nothing.
+    :return: The comment body.
+    """
+    return (
+        f"{CONFLICT_COMMENT_PREFIX} this branch is based on `{parent}`, whose commits "
+        f"are neither in the upstream base nor in any other open branch of the stack - "
+        f"so there is no base to retarget it at, and it cannot reach the upstream from "
+        f"where it stands.\n\n"
+        f"That happens when a base branch's own pull request was closed without "
+        f"merging. Only you can say what should replace it: rebase onto whatever "
+        f"superseded that work, or close this pull request if the work went with it.\n\n"
+        f"Nothing was changed here. This branch is labelled `needs-resolution` so later "
+        f"passes skip it rather than re-reporting the same thing, and it rejoins the "
+        f"pass once its base leads somewhere again.{_addressed_to(branch)}"
     )
 
 
@@ -182,6 +214,12 @@ class BranchUnderRestack:
     strategy: IntegrationStrategy
     """
     How that parent is to be integrated, which is also what authorises a rewrite.
+    """
+
+    situation: ParentSituation
+    """
+    What became of the parent this branch names, which decides whether there is anything
+    to integrate at all.
     """
 
     stack: Stack
@@ -356,17 +394,60 @@ class IntegrateParent(RestackStep):
         :param conflicting_paths: The paths that conflicted.
         :return: The URL of the comment posted.
         """
-        branch = restacking.branch
-        restacking.fork.replace_labels(
-            branch.pull_request_number,
-            LabelWrite.replacing(
-                branch.labels,
-                added=[restacking.configuration.needs_resolution_label],
-            ).labels,
+        return delegate_to_owner(
+            restacking,
+            conflict_report(restacking.branch, conflicting_paths, restacking.parent),
         )
-        return restacking.fork.add_comment(
-            branch.pull_request_number,
-            conflict_report(branch, conflicting_paths, restacking.parent),
+
+
+def delegate_to_owner(restacking: BranchUnderRestack, report: str) -> str:
+    """
+    Hand one branch back to its owner: label it, then tell them why.
+
+    The label is what makes a later pass withhold the branch rather than re-reporting
+    the same thing, so the two always happen together.
+
+    :param restacking: The branch being restacked.
+    :param report: The comment body to post.
+    :return: The URL of the comment posted.
+    """
+    branch = restacking.branch
+    restacking.fork.replace_labels(
+        branch.pull_request_number,
+        LabelWrite.replacing(
+            branch.labels,
+            added=[restacking.configuration.needs_resolution_label],
+        ).labels,
+    )
+    return restacking.fork.add_comment(branch.pull_request_number, report)
+
+
+@dataclass(frozen=True)
+class ReportAParentThatIsGone(RestackStep):
+    """
+    Hands back a branch whose base no longer leads anywhere.
+
+    A base whose own pull request closed without merging leaves its child unable to
+    reach the upstream at all, and no rule can say what should replace it - the work
+    that superseded it is the owner's to name. Merging it every pass would only keep
+    building on a branch nobody is going to land.
+    """
+
+    def attempt(self, restacking: BranchUnderRestack) -> BranchOutcome | None:
+        """:param restacking: The branch being restacked.
+        :return: A gone-parent outcome when nothing carries its base, otherwise
+            ``None``."""
+        if restacking.situation is not ParentSituation.GONE:
+            return None
+        return restacking.concluded(
+            RestackOutcome.PARENT_GONE,
+            explanation=(
+                f"its base '{restacking.parent}' is in neither the upstream base nor "
+                f"any other open branch"
+            ),
+            reported_at=delegate_to_owner(
+                restacking, gone_parent_report(restacking.branch, restacking.parent)
+            ),
         )
 
 
