@@ -168,6 +168,11 @@ class ClassWithDict(DataclassJSONSerializer):
 
 
 @dataclass
+class ClassWithList(DataclassJSONSerializer):
+    a: list
+
+
+@dataclass
 class ClassWithSet(DataclassJSONSerializer):
     a: set
 
@@ -395,6 +400,15 @@ def test_dataclass_dict():
     data = to_json(cls)
     result = from_json(data)
     assert result == cls
+
+
+def test_dataclass_list():
+    cls = ClassWithList([3, 1, 2])
+    data = to_json(cls)
+    assert data["a"] == {"collection_type": "list", "items": [3, 1, 2]}
+    result = from_json(data)
+    assert result == cls
+    assert isinstance(result.a, list)
 
 
 def test_dataclass_set():

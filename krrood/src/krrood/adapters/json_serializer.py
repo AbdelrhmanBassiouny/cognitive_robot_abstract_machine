@@ -600,13 +600,13 @@ class NumpyNDarrayJSONSerializer(ExternalClassJSONSerializer[np.ndarray]):
 
 
 DATACLASS_SERIALIZER_COLLECTION_TYPES: Dict[str, Type] = {
+    "list": list,
     "set": set,
     "SortedSet": SortedSet,
 }
 """
 Collection types :class:`DataclassJSONSerializer` restores by name on deserialization,
-keyed by :meth:`type.__name__`. ``list`` needs no entry here since it already round-trips
-as a plain JSON array without any type tag.
+keyed by :meth:`type.__name__`.
 """
 
 
@@ -616,11 +616,10 @@ class DataclassJSONSerializer(ExternalClassJSONSerializer[None]):
     Generic JSON serializer for dataclasses.
 
     It creates a dict where all fields are serialized using the to_json function. A
-    ``list`` field serializes as a plain JSON array and always deserializes back into a
-    ``list``. A ``set`` or :class:`~sortedcontainers.SortedSet` field serializes as a JSON
-    object that also records its collection type, so ``from_json`` restores that same
-    type instead of falling back to ``list``. If this is not enough, you still need to
-    implement a custom serializer.
+    ``list``, ``set`` or :class:`~sortedcontainers.SortedSet` field always serializes as
+    a JSON object that also records its collection type, so ``from_json`` restores that
+    same type on the way back rather than guessing or defaulting to ``list``. If this is
+    not enough, you still need to implement a custom serializer.
     """
 
     @classmethod
@@ -630,9 +629,7 @@ class DataclassJSONSerializer(ExternalClassJSONSerializer[None]):
         for field_ in introspector.discover(obj.__class__):
             value = getattr(obj, field_.public_name)
 
-            if isinstance(value, list):
-                current_result = [to_json(item, **kwargs) for item in value]
-            elif isinstance(value, (set, SortedSet)):
+            if isinstance(value, (list, set, SortedSet)):
                 current_result = {
                     "collection_type": type(value).__name__,
                     "items": [to_json(item, **kwargs) for item in value],
@@ -666,9 +663,7 @@ class DataclassJSONSerializer(ExternalClassJSONSerializer[None]):
 
             current_data = data[field_name]
 
-            if isinstance(current_data, list):
-                current_result = [from_json(item, **kwargs) for item in current_data]
-            elif (
+            if (
                 isinstance(current_data, dict)
                 and "collection_type" in current_data.keys()
                 and "items" in current_data.keys()
