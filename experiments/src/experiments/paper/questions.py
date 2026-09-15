@@ -14,6 +14,7 @@ from experiments.experiment_definitions import ExperimentResult
 from experiments.paper.figure import FigureName, PaperFigure
 from experiments.paper.measurement import MeasuredQuantity
 from experiments.questions.question import BloomLevel, Bucket
+from experiments.scenarios.report import GoalReached
 
 # %% accuracy per bucket
 
@@ -74,18 +75,20 @@ class AccuracyByBucket(PaperFigure):
 @dataclass
 class BloomLevelAccuracy(ExperimentResult):
     """
-    How often the frozen set's questions exercising one level of Bloom's taxonomy were
-    answered correctly.
+    How well one level of Bloom's taxonomy was exercised: how often the frozen set's
+    questions of that level were answered correctly, or, for applying, how often the
+    robot carrying out its plan reached the goal.
     """
 
     bloom_level: BloomLevel
     """
-    The level of Bloom's taxonomy this row's questions exercise.
+    The level of Bloom's taxonomy this row reports.
     """
 
     accuracy: MeasuredQuantity
     """
-    The share of this level's askings that matched ground truth.
+    The share of this level's askings that matched ground truth, and for applying the
+    share of the trials the robot performed a plan in that reached the goal.
     """
 
 
@@ -100,25 +103,35 @@ class AccuracyByBloomLevel(PaperFigure):
     caption: ClassVar[str] = (
         "Share of the frozen question set's askings answered correctly, per level of "
         "Bloom's taxonomy, with the interval that share lies in. An ordinary query that "
-        "answers no question of the set carries no level and is not counted."
+        "answers no question of the set carries no level and is not counted. Applying is "
+        "the share of the trials in which the robot carried out a plan that reached the "
+        "scenario's goal."
     )
 
     def rows(self, trials: Sequence[RecordedTrial]) -> List[ExperimentResult]:
         """
-        One row per level the given trials scored a question of, in the taxonomy's own
-        order.
+        One row per level the given trials exercised, in the taxonomy's own order:
+        remembering and understanding by the questions scored of them, applying by the
+        trials the robot performed a plan in.
 
         :param trials: Every trial the tables are computed over.
         """
         scored = self.scored_queries_of(trials)
-        by_level = self.group_by(scored, key=lambda query: query.bloom_level)
+        measurements = {
+            bloom_level: self.indicators(
+                askings, lambda asking: asking.answered_correctly
+            )
+            for bloom_level, askings in self.group_by(
+                scored, key=lambda query: query.bloom_level
+            ).items()
+        }
+        measurements.setdefault(BloomLevel.APPLYING, []).extend(
+            GoalReached().measure(trial) for trial in trials if trial.plans
+        )
         return [
             BloomLevelAccuracy(
-                bloom_level=bloom_level,
-                accuracy=self.measured(
-                    self.indicators(askings, lambda asking: asking.answered_correctly)
-                ),
+                bloom_level=bloom_level, accuracy=self.measured(of_level)
             )
             for bloom_level in BloomLevel
-            if (askings := by_level.get(bloom_level))
+            if (of_level := measurements.get(bloom_level))
         ]
