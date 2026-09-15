@@ -19,14 +19,12 @@ from sqlalchemy.orm import (
 )
 from typing_extensions import (
     Type,
-    get_args,
     get_origin,
     Any,
     TypeVar,
     Optional,
     List,
     Tuple,
-    Union,
 )
 
 from krrood.entity_query_language.core.mapped_variable import Attribute, IndexByValue
@@ -699,18 +697,6 @@ class DataAccessObject(HasGeneric[T]):
             relationship.direction == ONETOMANY and not relationship.uselist
         )
 
-    @staticmethod
-    def _relationship_domain_type_specificity(domain_type: Type) -> int:
-        """
-        Rank a relationship's domain type by how much it narrows a shared source
-        object's DAO class: a parametrized generic (e.g. ``GenericClass[float]``) is
-        more specific than its bare form (``GenericClass``).
-
-        :param domain_type: The domain type of a relationship.
-        :return: 0 for a parametrized type, 1 for a bare one.
-        """
-        return 0 if get_args(domain_type) else 1
-
     def _fill_relationships_from_plan(
         self,
         source_object: Any,
@@ -721,33 +707,18 @@ class DataAccessObject(HasGeneric[T]):
         """
         Populate relationships from a source object using a conversion plan.
 
-        A relationship whose domain type is a parametrized generic is filled before one
-        whose domain type is the bare generic, regardless of whether either is single-
-        or collection-valued: :meth:`_get_or_queue_dao` fixes a shared source object's
-        DAO class on its first resolution, so filling the coarser, bare-typed reference
-        first would permanently pin the object to the ambiguous base DAO for every other
-        relationship that shares it.
-
         :param source_object: The source of relationship values.
         :param single_relationships: The single-valued relationship entries.
         :param collection_relationships: The collection relationship entries.
         :param state: The conversion state.
         """
-        relationships: List[Union[SingleRelationship, CollectionRelationship]] = [
-            *single_relationships,
-            *collection_relationships,
-        ]
-        relationships.sort(
-            key=lambda relationship: self._relationship_domain_type_specificity(
-                relationship.domain_type
-            )
-        )
+        for single_relationship in single_relationships:
+            self._fill_single_relationship(source_object, single_relationship, state)
 
-        for relationship in relationships:
-            if isinstance(relationship, SingleRelationship):
-                self._fill_single_relationship(source_object, relationship, state)
-            else:
-                self._fill_collection_relationship(source_object, relationship, state)
+        for collection_relationship in collection_relationships:
+            self._fill_collection_relationship(
+                source_object, collection_relationship, state
+            )
 
     def _fill_single_relationship(
         self,
@@ -810,6 +781,21 @@ class DataAccessObject(HasGeneric[T]):
         )
         setattr(self, relationship.key, assignable_container_type(dao_collection))
 
+    @staticmethod
+    def _parametrization_of(source_object: Any) -> Optional[Type]:
+        """
+        The parametrized generic an object was created through, if any.
+
+        Constructing through a parametrized alias (``GenericClass[float](...)``) leaves
+        the alias on the instance, while a bare construction (``GenericClass(...)``)
+        leaves nothing. This is the object's own type argument, so it identifies the
+        parametrization no matter which field the object is reached through.
+
+        :param source_object: The object to read the parametrization off.
+        :return: The parametrized generic, or ``None`` if the object carries none.
+        """
+        return getattr(source_object, "__orig_class__", None)
+
     def _get_or_queue_dao(
         self,
         source_object: Any,
@@ -819,11 +805,19 @@ class DataAccessObject(HasGeneric[T]):
         """
         Resolve a source object to a DAO, queuing it if necessary.
 
+        An object that carries its own parametrization is resolved through that rather
+        than through ``expected_type``, which only describes the field the object is
+        reached through. A shared object therefore resolves to the same DAO class no
+        matter which field reaches it first, which matters because the first resolution
+        is the one this state keeps.
+
         :param source_object: The object to resolve.
         :param state: The conversion state.
-        :param expected_type: The expected domain type.
+        :param expected_type: The expected domain type of the field being filled.
         :return: The corresponding DAO instance.
         """
+        expected_type = self._parametrization_of(source_object) or expected_type
+
         # Check if already built
         existing = state.get(source_object)
         if existing is not None:
