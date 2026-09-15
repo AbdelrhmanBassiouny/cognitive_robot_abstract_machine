@@ -7,6 +7,7 @@ life speed.
 from __future__ import annotations
 
 import time
+from contextlib import AbstractContextManager
 from dataclasses import dataclass, field
 
 from typing_extensions import Optional, Self
@@ -18,7 +19,7 @@ from semantic_digital_twin.world_description.world_entity import Actuator
 
 
 @dataclass
-class RealTimeSimulation:
+class RealTimeSimulation(AbstractContextManager):
     """
     A MuJoCo simulation of a world, stepped by its owner and paced to the wall clock.
 
