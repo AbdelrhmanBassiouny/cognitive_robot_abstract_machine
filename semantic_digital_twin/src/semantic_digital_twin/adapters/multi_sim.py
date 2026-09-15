@@ -330,9 +330,17 @@ class KinematicStructureEntityConverter(EntityConverter, ABC):
         kinematic_structure_entity_props = EntityConverter._convert(self, entity)
         # The simulator joint supplies the variable part, so the static frame must
         # exclude it (see Connection.reference_origin_expression).
-        [px, py, pz, qx, qy, qz, qw] = (
-            entity.parent_connection.reference_origin_as_position_quaternion().evaluate()[0]
-        )
+        [
+            px,
+            py,
+            pz,
+            qx,
+            qy,
+            qz,
+            qw,
+        ] = entity.parent_connection.reference_origin_as_position_quaternion().evaluate()[
+            0
+        ]
         kinematic_structure_entity_pos = [px, py, pz]
         kinematic_structure_entity_quat = [qw, qx, qy, qz]
         kinematic_structure_entity_props.update(
@@ -598,7 +606,11 @@ class Connection1DOFConverter(ConnectionConverter, ABC):
         px, py, pz, qw, qx, qy, qz = cas_pose_to_list(child_T_connection_transform)
         joint_pos = [px, py, pz]
         joint_quat = [qw, qx, qy, qz]
-        joint_range = [dof.limits.lower.position, dof.limits.upper.position]
+        # entity.dof, not the raw dof: it applies this connection's own multiplier and
+        # sign, which a negative-multiplier mimic (a gripper's second finger) needs to
+        # get its own displayed range rather than the shared raw dof's.
+        adjusted_limits = entity.dof.limits
+        joint_range = [adjusted_limits.lower.position, adjusted_limits.upper.position]
         if any([r is None for r in joint_range]):
             joint_range = [0, 0]
         joint_props.update(
@@ -1180,30 +1192,176 @@ class MujocoTendon(SimulatorAdditionalProperty):
     """
 
 
+@dataclass(frozen=True)
+class MujocoSolverReference:
+    """
+    How stiff and how damped a MuJoCo constraint is, as the ``solref`` pair of a geom;
+    see https://mujoco.readthedocs.io/en/stable/modeling.html#solver-parameters.
+    """
+
+    time_constant: float = 0.02
+    """
+    Time, in seconds, the constraint takes to resolve a violation; a smaller value is a
+    stiffer contact.
+    """
+
+    damping_ratio: float = 1.0
+    """
+    Damping of that resolution; ``1`` is critically damped.
+    """
+
+    @classmethod
+    def from_list(cls, values: List[float]) -> MujocoSolverReference:
+        """
+        :param values: The pair in the order MuJoCo's own ``solref`` attribute lists it.
+        :return: The reference.
+        """
+        time_constant, damping_ratio = values
+        return cls(time_constant=time_constant, damping_ratio=damping_ratio)
+
+    def to_list(self) -> List[float]:
+        """
+        :return: The pair in the order MuJoCo's own ``solref`` attribute expects it.
+        """
+        return [self.time_constant, self.damping_ratio]
+
+
+@dataclass(frozen=True)
+class MujocoSolverImpedance:
+    """
+    How hard a MuJoCo constraint pushes back as it is violated, as the ``solimp``
+    quintuple of a geom; see
+    https://mujoco.readthedocs.io/en/stable/modeling.html#solver-parameters.
+    """
+
+    minimum: float = 0.9
+    """
+    Impedance at zero violation, between 0 and 1; a higher value is a harder contact.
+    """
+
+    maximum: float = 0.95
+    """
+    Impedance once the violation reaches :attr:`width`.
+    """
+
+    width: float = 0.001
+    """
+    Violation, in metres, over which the impedance rises from minimum to maximum.
+    """
+
+    midpoint: float = 0.5
+    """
+    Where along that width the rise is steepest, as a fraction of it.
+    """
+
+    power: float = 2.0
+    """
+    How sharply the rise bends around the midpoint.
+    """
+
+    @classmethod
+    def from_list(cls, values: List[float]) -> MujocoSolverImpedance:
+        """
+        :param values: The quintuple in the order MuJoCo's own ``solimp`` attribute
+            lists it.
+        :return: The impedance.
+        """
+        minimum, maximum, width, midpoint, power = values
+        return cls(
+            minimum=minimum,
+            maximum=maximum,
+            width=width,
+            midpoint=midpoint,
+            power=power,
+        )
+
+    def to_list(self) -> List[float]:
+        """
+        :return: The quintuple in the order MuJoCo's own ``solimp`` attribute expects
+            it.
+        """
+        return [self.minimum, self.maximum, self.width, self.midpoint, self.power]
+
+
+@dataclass(frozen=True)
+class MujocoContactFriction:
+    """
+    A MuJoCo contact's three friction coefficients, named rather than counted; see
+    https://mujoco.readthedocs.io/en/stable/modeling.html#geom-friction.
+    """
+
+    sliding: float = 1.0
+    """
+    Friction along both axes of the tangent plane.
+    """
+
+    torsional: float = 0.005
+    """
+    Friction around the contact normal.
+    """
+
+    rolling: float = 0.0001
+    """
+    Friction around both axes of the tangent plane.
+    """
+
+    def to_list(self) -> List[float]:
+        """
+        :return: The coefficients in the order MuJoCo's own geom ``friction``
+            attribute expects them.
+        """
+        return [self.sliding, self.torsional, self.rolling]
+
+
 @dataclass(eq=False)
 class MujocoGeom(SimulatorAdditionalProperty):
     """
     An additional property declaring that a Shape is a MujocoGeom.
     """
 
-    solver_impedance: List[float] = field(
-        default_factory=lambda: [0.9, 0.95, 0.001, 0.5, 2]
+    solver_impedance: MujocoSolverImpedance = field(
+        default_factory=MujocoSolverImpedance
     )
     """
-    The solver impedance parameters for the geom. See https://mujoco.readthedocs.io/en/stable/modeling.html#solver-parameters for more details.
+    How hard the geom's contacts push back as they are violated.
     """
 
-    solver_reference: List[float] = field(default_factory=lambda: [0.02, 1.0])
+    solver_reference: MujocoSolverReference = field(
+        default_factory=MujocoSolverReference
+    )
     """
-    The solver reference parameters for the geom. See https://mujoco.readthedocs.io/en/stable/modeling.html#solver-parameters for more details.
+    How stiff and how damped the geom's contacts are.
     """
 
-    friction: List[float] = field(default_factory=lambda: [1, 0.005, 0.0001])
+    friction: MujocoContactFriction = field(default_factory=MujocoContactFriction)
     """
-    Contact friction parameters for dynamically generated contact pairs. 
-    The first number is the sliding friction, acting along both axes of the tangent plane. 
-    The second number is the torsional friction, acting around the contact normal. 
-    The third number is the rolling friction, acting around both axes of the tangent plane. 
+    Contact friction parameters for dynamically generated contact pairs.
+    """
+
+    contype: int = 1
+    """
+    MuJoCo's own ``contype``/``conaffinity`` pair, kept under MuJoCo's own names since
+    they are passed straight through to MuJoCo's ``add_geom`` (see
+    :meth:`MujocoBuilder._build_shape`).
+
+    Each geom carries two 32-bit masks of which "categories" it belongs to:
+    ``contype`` is what this geom offers when it presses into another geom, and
+    ``conaffinity`` is what this geom accepts pressing into it. A contact between
+    geoms A and B is generated only if ``A.contype & B.conaffinity`` or
+    ``B.contype & A.conaffinity`` is nonzero, i.e. at least one of them offers a
+    category the other one accepts.
+
+    MuJoCo defaults both masks to bit 0 (value 1) on every geom, so by default every
+    geom offers and accepts that one category and collides with every other geom.
+    Clearing a geom's ``conaffinity`` to ``0`` makes nothing collide with it; clearing
+    its ``contype`` to ``0`` stops it from initiating a contact while still letting
+    other geoms collide into it.
+    """
+
+    conaffinity: int = 1
+    """
+    What this geom accepts colliding into it; see :attr:`contype` for the full
+    explanation of both masks together.
     """
 
 
@@ -1476,20 +1634,20 @@ class MujocoGeneralActuatorConverter(MujocoActuatorConverter, ActuatorConverter)
     def _post_convert(
         self, entity: Actuator, actuator_props: Dict[str, Any], **kwargs
     ) -> Dict[str, Any]:
-        for mujoco_actuator in entity.simulator_additional_properties:
-            if isinstance(mujoco_actuator, MujocoActuator):
-                actuator_props["actlimited"] = mujoco_actuator.activation_limited
-                actuator_props["actrange"] = mujoco_actuator.activation_range
-                actuator_props["ctrllimited"] = mujoco_actuator.control_limited
-                actuator_props["ctrlrange"] = mujoco_actuator.control_range
-                actuator_props["forcelimited"] = mujoco_actuator.force_limited
-                actuator_props["forcerange"] = mujoco_actuator.force_range
-                actuator_props["biasprm"] = mujoco_actuator.bias_parameters
-                actuator_props["biastype"] = mujoco_actuator.bias_type
-                actuator_props["dynprm"] = mujoco_actuator.dynamics_parameters
-                actuator_props["dyntype"] = mujoco_actuator.dynamics_type
-                actuator_props["gainprm"] = mujoco_actuator.gain_parameters
-                actuator_props["gaintype"] = mujoco_actuator.gain_type
+        mujoco_actuator = entity.simulator_property(MujocoActuator)
+        if mujoco_actuator is not None:
+            actuator_props["actlimited"] = mujoco_actuator.activation_limited
+            actuator_props["actrange"] = mujoco_actuator.activation_range
+            actuator_props["ctrllimited"] = mujoco_actuator.control_limited
+            actuator_props["ctrlrange"] = mujoco_actuator.control_range
+            actuator_props["forcelimited"] = mujoco_actuator.force_limited
+            actuator_props["forcerange"] = mujoco_actuator.force_range
+            actuator_props["biasprm"] = mujoco_actuator.bias_parameters
+            actuator_props["biastype"] = mujoco_actuator.bias_type
+            actuator_props["dynprm"] = mujoco_actuator.dynamics_parameters
+            actuator_props["dyntype"] = mujoco_actuator.dynamics_type
+            actuator_props["gainprm"] = mujoco_actuator.gain_parameters
+            actuator_props["gaintype"] = mujoco_actuator.gain_type
         return actuator_props
 
 
@@ -1897,12 +2055,14 @@ class MujocoBuilder(MultiSimBuilder):
                     texture_repeat=texture_repeat,
                     texture_uniform=texture_uniform,
                 )
-        for mujoco_geom in shape.simulator_additional_properties:
-            if isinstance(mujoco_geom, MujocoGeom):
-                geom_props["solimp"] = mujoco_geom.solver_impedance
-                geom_props["solref"] = mujoco_geom.solver_reference
-                geom_props["friction"] = mujoco_geom.friction
-                break
+        mujoco_geom = shape.simulator_property(MujocoGeom)
+        if mujoco_geom is not None:
+            geom_props["solimp"] = mujoco_geom.solver_impedance.to_list()
+            geom_props["solref"] = mujoco_geom.solver_reference.to_list()
+            geom_props["friction"] = mujoco_geom.friction.to_list()
+            if is_collidable:
+                geom_props["contype"] = mujoco_geom.contype
+                geom_props["conaffinity"] = mujoco_geom.conaffinity
         geom_spec = parent_body_spec.add_geom(**geom_props)
         if geom_spec.type == mujoco.mjtGeom.mjGEOM_BOX and geom_spec.size[2] == 0:
             geom_spec.type = mujoco.mjtGeom.mjGEOM_PLANE
@@ -2110,15 +2270,14 @@ class MujocoBuilder(MultiSimBuilder):
             equality.name1 = joint_props["name"]
             equality.name2 = equality_joint["joint"]
             equality.data = equality_joint["data"]
-        for mujoco_joint in connection.simulator_additional_properties:
-            if isinstance(mujoco_joint, MujocoJoint):
-                joint_props["stiffness"] = (
-                    mujoco_joint.stiffness[0]
-                    if mujoco.mj_version() < 3007000
-                    else mujoco_joint.stiffness
-                )
-                joint_props["actfrcrange"] = mujoco_joint.actuator_force_range
-                break
+        mujoco_joint = connection.simulator_property(MujocoJoint)
+        if mujoco_joint is not None:
+            joint_props["stiffness"] = (
+                mujoco_joint.stiffness[0]
+                if mujoco.mj_version() < 3007000
+                else mujoco_joint.stiffness
+            )
+            joint_props["actfrcrange"] = mujoco_joint.actuator_force_range
 
         child_body_name = connection.child.name.name
         child_body_spec = self._find_entity(
@@ -2227,10 +2386,10 @@ class MujocoBuilder(MultiSimBuilder):
         if body.name.name == "world":
             return
         body_props = MujocoKinematicStructureEntityConverter.convert(body)
-        for mujoco_body in body.simulator_additional_properties:
-            if isinstance(mujoco_body, MujocoBody):
-                body_props["gravcomp"] = mujoco_body.gravitation_compensation_factor
-                body_props["mocap"] = mujoco_body.motion_capture
+        mujoco_body = body.simulator_property(MujocoBody)
+        if mujoco_body is not None:
+            body_props["gravcomp"] = mujoco_body.gravitation_compensation_factor
+            body_props["mocap"] = mujoco_body.motion_capture
         parent_body_name = body.parent_connection.parent.name.name
         parent_body_spec = self._find_entity(
             entity_type=mujoco.mjtObj.mjOBJ_BODY, entity_name=parent_body_name
@@ -3046,19 +3205,21 @@ class MujocoSynchronizer(MultiSimSynchronizer):
         :return: Whether any connection was read.
         """
         changed = False
+        actuator_name_by_dof_id = self._actuator_name_by_dof_id()
         with self.simulator._model_lock:
             for joint_backed in self._joint_backed_connections():
                 connection = joint_backed.connection
                 match connection:
                     case Connection6DoF():
-                        self._read_6dof_from_qpos(
-                            connection, joint_backed.qpos_address
-                        )
+                        self._read_6dof_from_qpos(connection, joint_backed.qpos_address)
                         changed = True
                     case ActiveConnection1DOF():
-                        self._read_1dof_from_qpos(
-                            connection, joint_backed.qpos_address
-                        )
+                        # An actuated joint's world position is the set point it was
+                        # commanded to, which the position it has reached so far must
+                        # not overwrite.
+                        if connection.raw_dof.id in actuator_name_by_dof_id:
+                            continue
+                        self._read_1dof_from_qpos(connection, joint_backed.qpos_address)
                         changed = True
                     case _:
                         self._warn_unsupported_connection("sim→world", connection)
@@ -3085,6 +3246,7 @@ class MujocoSynchronizer(MultiSimSynchronizer):
             used to find what changed. Must be the same length as ``positions``.
         """
         state_index = self._world.state._index
+        actuator_name_by_dof_id = self._actuator_name_by_dof_id()
         with self.simulator._model_lock:
             for joint_backed in self._joint_backed_connections():
                 connection = joint_backed.connection
@@ -3098,17 +3260,86 @@ class MujocoSynchronizer(MultiSimSynchronizer):
                             state_index,
                         )
                     case ActiveConnection1DOF():
-                        self._write_1dof_to_qpos(
-                            connection,
-                            joint_backed.qpos_address,
-                            positions,
-                            previous_positions,
-                            state_index,
+                        actuator_name = actuator_name_by_dof_id.get(
+                            connection.raw_dof.id
                         )
+                        if actuator_name is None:
+                            self._write_1dof_to_qpos(
+                                connection,
+                                joint_backed.qpos_address,
+                                positions,
+                                previous_positions,
+                                state_index,
+                            )
+                        else:
+                            self._command_actuator(
+                                connection,
+                                actuator_name,
+                                positions,
+                                previous_positions,
+                                state_index,
+                            )
                     case _:
                         self._warn_unsupported_connection("world→sim", connection)
 
-    def _read_6dof_from_qpos(self, connection: Connection6DoF, qpos_address: int) -> None:
+    def _actuator_name_by_dof_id(self) -> Dict[Any, str]:
+        """
+        :return: The name of the actuator driving each actuated degree of freedom, by
+            the degree of freedom's id.
+        """
+        return {
+            dof.id: actuator.name.name
+            for actuator in self._world.actuators
+            for dof in actuator.dofs
+        }
+
+    def _command_actuator(
+        self,
+        connection: ActiveConnection1DOF,
+        actuator_name: str,
+        positions: numpy.ndarray,
+        previous_positions: numpy.ndarray,
+        state_index: Dict[Any, int],
+    ) -> None:
+        """
+        Hand the world's position for ``connection`` to its actuator as a set point,
+        instead of writing it into ``qpos``: the joint then reaches it through the
+        actuator's own dynamics, as fast and as hard as its gains allow, rather than
+        being teleported there. No-op if the value is unchanged.
+
+        :param connection: The actuated 1DoF connection whose value is commanded.
+        :param actuator_name: Name of the actuator driving it.
+        :param positions: The current ``world.state`` positions.
+        :param previous_positions: The positions as of the last notification,
+            compared against ``positions`` to decide whether to command.
+        :param state_index: Maps a DoF id to its column in those two arrays.
+        """
+        idx = state_index[connection.raw_dof.id]
+        if positions[idx] == previous_positions[idx]:
+            return
+        self.simulator.set_actuator_control(
+            actuator_name=actuator_name, value=float(positions[idx])
+        )
+
+    def command_actuators_from_world_state(self) -> None:
+        """
+        Give every actuator the set point its joint currently holds in the world.
+
+        A freshly reset simulation leaves every control input at zero, which would
+        send an actuated joint rushing towards the origin the moment the physics
+        starts.
+        """
+        state = self._world.state
+        for actuator in self._world.actuators:
+            for dof in actuator.dofs:
+                self.simulator.set_actuator_control(
+                    actuator_name=actuator.name.name,
+                    value=float(state[dof.id].position),
+                )
+
+    def _read_6dof_from_qpos(
+        self, connection: Connection6DoF, qpos_address: int
+    ) -> None:
         """
         Copy a 6DoF MuJoCo free-joint qpos block into ``world.state`` for
         ``connection``.

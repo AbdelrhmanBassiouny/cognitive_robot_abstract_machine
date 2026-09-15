@@ -18,6 +18,8 @@ from semantic_digital_twin.adapters.multi_sim import (
     MujocoBody,
     MujocoJoint,
     MujocoLight,
+    MujocoSolverImpedance,
+    MujocoSolverReference,
     MujocoTendon,
 )
 from semantic_digital_twin.adapters.world_model_parser import WorldModelParser
@@ -165,8 +167,12 @@ class MJCFParser(WorldModelParser):
             shape.origin.reference_frame = body
             shape.simulator_additional_properties.append(
                 MujocoGeom(
-                    solver_impedance=mujoco_geom.solimp.tolist(),
-                    solver_reference=mujoco_geom.solref.tolist(),
+                    solver_impedance=MujocoSolverImpedance.from_list(
+                        mujoco_geom.solimp.tolist()
+                    ),
+                    solver_reference=MujocoSolverReference.from_list(
+                        mujoco_geom.solref.tolist()
+                    ),
                 )
             )
             if mujoco_geom.contype != 0 or mujoco_geom.conaffinity != 0:
