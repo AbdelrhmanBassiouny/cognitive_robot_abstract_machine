@@ -17,10 +17,13 @@ class SimulatorAdditionalProperty:
     ...
 
 
-# the concrete property type a lookup asks for, so that it also returns that type
-TGenericSimulatorAdditionalProperty = TypeVar(
-    "TGenericSimulatorAdditionalProperty", bound=SimulatorAdditionalProperty
+SimulatorPropertyType = TypeVar(
+    "SimulatorPropertyType", bound=SimulatorAdditionalProperty
 )
+"""
+The concrete kind of simulator property a lookup asks for, so that the lookup returns
+that kind rather than the base class.
+"""
 
 
 @dataclass(eq=False)
@@ -38,8 +41,8 @@ class HasSimulatorProperties:
     """
 
     def simulator_property(
-        self, property_type: Type[TGenericSimulatorAdditionalProperty]
-    ) -> Optional[TGenericSimulatorAdditionalProperty]:
+        self, property_type: Type[SimulatorPropertyType]
+    ) -> Optional[SimulatorPropertyType]:
         """
         The one property of ``property_type`` this entity carries.
 
@@ -60,8 +63,8 @@ class HasSimulatorProperties:
         return matches[0]
 
     def simulator_property_or_default(
-        self, property_type: Type[TGenericSimulatorAdditionalProperty]
-    ) -> TGenericSimulatorAdditionalProperty:
+        self, property_type: Type[SimulatorPropertyType]
+    ) -> SimulatorPropertyType:
         """
         The one property of ``property_type`` this entity carries, attaching a default-
         constructed one first if it carries none yet, so callers modify the property a
