@@ -168,12 +168,13 @@ class ClassWithDict(DataclassJSONSerializer):
 
 
 @dataclass
+class ClassWithSet(DataclassJSONSerializer):
+    a: set
+
+
+@dataclass
 class ClassWithSortedSet(DataclassJSONSerializer):
     a: SortedSet
-
-    def __post_init__(self):
-        if not isinstance(self.a, SortedSet):
-            self.a = SortedSet(self.a)
 
 
 class CustomEnum(str, Enum):
@@ -396,10 +397,20 @@ def test_dataclass_dict():
     assert result == cls
 
 
+def test_dataclass_set():
+    cls = ClassWithSet({1, 2, 3})
+    data = to_json(cls)
+    assert data["a"]["collection_type"] == "set"
+    assert sorted(data["a"]["items"]) == [1, 2, 3]
+    result = from_json(data)
+    assert result == cls
+    assert isinstance(result.a, set)
+
+
 def test_dataclass_sorted_set():
     cls = ClassWithSortedSet(SortedSet([3, 1, 2]))
     data = to_json(cls)
-    assert data["a"] == [1, 2, 3]
+    assert data["a"] == {"collection_type": "SortedSet", "items": [1, 2, 3]}
     result = from_json(data)
     assert result == cls
     assert isinstance(result.a, SortedSet)
