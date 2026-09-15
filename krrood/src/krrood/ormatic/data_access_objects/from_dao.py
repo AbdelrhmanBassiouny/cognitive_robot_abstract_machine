@@ -346,6 +346,37 @@ class FromDataAccessObjectState(DataAccessObjectState[FromDataAccessObjectWorkIt
                     None,
                 )
 
+    def _conversion_order(self) -> rustworkx.PyDiGraph:
+        """
+        The order the alternative mappings of this conversion are converted in: the
+        declared dependencies, and every mapping after the mappings it holds.
+
+        A mapping builds its domain object out of what it holds, so a held mapping not
+        yet converted would end up inside that domain object as a mapping. Where holding
+        and a declared dependency point opposite ways, the declared one is kept.
+
+        :return: A graph over the mapping types whose edge (source, target) means that
+            ``source`` is converted before ``target``.
+        """
+        conversion_order = self._class_dependencies.copy()
+        index_of_type = {
+            conversion_order[index]: index for index in conversion_order.node_indices()
+        }
+        for held, references in self._alternative_mappings_being_referenced.items():
+            for holder, _ in references:
+                if not isinstance(holder, AlternativeMapping):
+                    continue
+                held_index = index_of_type.get(type(held))
+                holder_index = index_of_type.get(type(holder))
+                if held_index is None or holder_index is None:
+                    continue
+                if held_index == holder_index or rustworkx.has_path(
+                    conversion_order, holder_index, held_index
+                ):
+                    continue
+                conversion_order.add_edge(held_index, holder_index, None)
+        return conversion_order
+
     def convert_alternative_mappings_to_domain_objects(self):
         """
         Convert all alternative mappings registered in
@@ -361,9 +392,10 @@ class FromDataAccessObjectState(DataAccessObjectState[FromDataAccessObjectWorkIt
 
         # types in dependency order first, then any referenced types not in the graph
         # (e.g. instances that were already converted in a previous conversion)
+        conversion_order = self._conversion_order()
         ordered_types = [
-            self._class_dependencies[type_index]
-            for type_index in rustworkx.topological_sort(self._class_dependencies)
+            conversion_order[type_index]
+            for type_index in rustworkx.topological_sort(conversion_order)
         ]
         ordered_types += [
             type_ for type_ in instances_by_type if type_ not in set(ordered_types)
