@@ -46,6 +46,8 @@ Plan:
       --rescore-working-memory re-asks it at the joint trace's moment (3 l_gripper rows stored
       wrong by the pre-60bd6c165e np.allclose); #390 LaTeX tables (LatexRenderer, <name>.tex).
       Also on main: #386 (buffer_zone_distance), #387 (typst nested table).
+      Then (user ask): applying row in the Bloom table = GoalReached over trials with plans
+      (real: 3 sorting runs + framework demo); branch claude/bloom-table-reports-applying.
 - [ ] pipeline run: scratch worktree ~/Projects_2/cram-paper-pipeline (branch local/paper-pipeline
       = this branch + #386/#387/#388/#389/#390 cherry-picked); reproduction script
       generate_paper_artifacts.py now re-scores, asks the long-term set (object per episode),
