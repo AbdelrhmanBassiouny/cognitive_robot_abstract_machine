@@ -44,27 +44,18 @@ already exists**, which is where the cause of a stall almost always is:
   exists to surface. A failing check or a requested-changes review is
   usually the actual blocker; state exactly which one and why, don't just
   say "CI is failing."
-- If the fork PR carries the `in_review_label` from `bastler/stack.toml`
-  (`in-review` by default, the recorded signal for "promoted upstream, under
-  review"), the branch also has a pull request on the upstream, whose review
-  threads none of the calls above can see — a fork PR can look entirely clean
-  while the item is in fact stalled on an upstream request for changes. Invoke
-  `/upstream-reviews` for the item's `branch` and read every unresolved thread
-  it reports. Invoke it even without the label when `notes`/`status` say the
-  item is under upstream review; skip it otherwise, since a branch never
-  promoted has no upstream PR to read. If the dispatch or the run fails, don't
-  let that fail the skill: mention it when presenting the plan (step 5) and
-  continue — upstream state is valuable context, not a precondition.
-- If the fork PR carries the `in_review_label` from `.claude/stack/stack.toml`
-  (`in-review` by default, the recorded signal for "promoted upstream, under
-  review"), the branch also has a pull request on the upstream, whose review
-  threads none of the calls above can see — a fork PR can look entirely clean
-  while the item is in fact stalled on an upstream request for changes. Invoke
-  `/upstream-reviews` for the item's `branch` and read every unresolved thread
-  it reports. Invoke it even without the label when `notes`/`status` say the
-  item is under upstream review; skip it otherwise, since a branch never
-  promoted has no upstream PR to read. If the dispatch or the run fails, don't
-  let that fail the skill: mention it when drafting the plan (step 3) and
+- If the item has a `branch`, invoke `/upstream-reviews` for it and read every
+  unresolved thread it reports — always, whatever state the fork PR is in. The
+  branch may also have a pull request on the upstream, whose review threads
+  none of the calls above can see, and a fork PR can look entirely clean while
+  the item is in fact stalled on an upstream request for changes. Nothing this
+  session can read tells it whether that upstream pull request exists — its
+  GitHub scope is the fork alone, and a label recording the promotion is added
+  by hand afterwards, so the label's absence is no evidence. `/upstream-reviews`
+  settles it where the read is permitted, and reports a branch with no upstream
+  pull request as a clean answer, so a pre-check would buy nothing and skip the
+  case this bullet exists to catch. If the dispatch or the run fails, don't let
+  that fail the skill: mention it when presenting the plan (step 5) and
   continue — upstream state is valuable context, not a precondition.
 - If the item has no PR yet (e.g. blocked before ever starting): there is
   no PR-side state to check — rely on `blockers`/`notes` and the tracking
@@ -127,8 +118,8 @@ explicitly, never silently paper over:
 - Any conflict between the fork PR's state and the upstream review: a fork
   PR that is green and out of draft while its upstream pull request has
   unresolved threads is exactly the stall this skill exists to surface.
-- Whether upstream review state was read at all, when the item looked
-  promoted but `/upstream-reviews` could not be run.
+- Whether upstream review state was read at all, when the item has a branch
+  but `/upstream-reviews` could not be run.
 - Anything genuinely unresolved after the check above — say so rather
   than filling the gap with an assumption.
 
