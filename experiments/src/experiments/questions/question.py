@@ -113,6 +113,7 @@ class RequiredFact(StrEnum):
     ATTACHMENTS = "attachments"
     KINEMATIC_STRUCTURE = "kinematic structure"
     DEGREES_OF_FREEDOM = "degrees of freedom"
+    PERFORMED_PLANS = "performed plans"
 
 
 class GroundTruthSource(StrEnum):

@@ -72,6 +72,7 @@ from experiments.paper.scene import (
 )
 from experiments.paper.run_plan import ObjectIdentity, SameName, TrialClock, plans_of
 from experiments.paper.timeline import EventTimeline
+from experiments.questions.long_term_memory import MotionsRequestedInTheEpisode
 from experiments.questions.question import Question, objects_of_the_scene
 from experiments.questions.working_memory import (
     NumberOfOwnDegreesOfFreedom,
@@ -108,6 +109,7 @@ class QueryCardName(StrEnum):
     PICKED_UP_RECENTLY = "picked_up_recently"
     OWN_DEGREES_OF_FREEDOM = "own_degrees_of_freedom"
     EVENT_AGAINST_THE_PLAN = "event_against_the_plan"
+    MOTIONS_REQUESTED = "motions_requested"
 
 
 class CardFile(StrEnum):
@@ -1192,6 +1194,33 @@ class EventAgainstThePlanCard(QueryCard):
         ]
 
 
+@dataclass
+class MotionsRequestedCard(QueryCard):
+    """
+    What a past run's motions asked the controller for, drawn as the plan the robot ran.
+
+    A request is a goal and the limits the controller was held to while reaching it,
+    which stands nowhere in the scene; what it is read against is the actions of the plan
+    its motions were part of.
+    """
+
+    name: ClassVar[QueryCardName] = QueryCardName.MOTIONS_REQUESTED
+    question: ClassVar[Type[Question]] = MotionsRequestedInTheEpisode
+    panels: ClassVar[Tuple[PanelKind, ...]] = (PanelKind.PLAN_TIMELINE,)
+    caption: ClassVar[str] = "The plan whose motions made the requests:"
+
+    def answers(
+        self, asked: MotionsRequestedInTheEpisode, world: World
+    ) -> List[KinematicStructureEntity]:
+        """
+        Nothing, since this card draws no scene.
+
+        :param asked: The question as it was asked.
+        :param world: The twin the run happened in.
+        """
+        return []
+
+
 # %% every card the paper shows
 
 
@@ -1218,6 +1247,7 @@ class QueryCardSet:
                 PickedUpRecentlyCard(),
                 OwnDegreesOfFreedomCard(),
                 EventAgainstThePlanCard(),
+                MotionsRequestedCard(),
             ]
         )
 
