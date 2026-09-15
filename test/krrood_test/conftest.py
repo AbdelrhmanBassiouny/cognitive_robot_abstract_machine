@@ -1,3 +1,4 @@
+import enum
 import logging
 import os
 import tempfile
@@ -18,6 +19,7 @@ from krrood.entity_query_language.testing.result_generation import (
     regenerate_verbalization_results,
 )
 from krrood.ormatic.data_access_objects.alternative_mappings import *  # type: ignore
+from krrood.ormatic.custom_types import PolymorphicEnumType
 from krrood.ormatic.helper import OrmaticInterfaceInformation
 from krrood.ormatic.ormatic import ORMatic
 from krrood.ormatic.type_dict import TypeDict
@@ -108,7 +110,12 @@ def generate_sqlalchemy_interface():
     instance = ORMatic(
         class_dependency_graph=class_diagram,
         interface_information=OrmaticInterfaceInformation(
-            type_mappings=TypeDict({KRROODPhysicalObject: ConceptType}),
+            type_mappings=TypeDict(
+                {
+                    KRROODPhysicalObject: ConceptType,
+                    enum.Enum: PolymorphicEnumType,
+                }
+            ),
             alternative_mappings=recursive_subclasses(AlternativeMapping),
         ),
     )
