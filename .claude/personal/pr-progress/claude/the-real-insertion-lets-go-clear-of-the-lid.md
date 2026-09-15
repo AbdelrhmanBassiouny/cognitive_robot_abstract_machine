@@ -66,5 +66,8 @@ Plan:
       rows = 29 walked for 25f5161d. Design: MotionsRequestedInTheEpisode, bucket CONTROL,
       RequiredFact.PERFORMED_PLANS, answers MotionRequest (JointRequest/ToolCenterPointRequest,
       frozen); QuestionSet.over_long_term_memory(asking_the_control_program=False);
-      ask_episode --ask-the-control-program. Tests written (not yet run: ORM regenerating).
-      Then: pipeline flag -> paper/figures/real_with_control_program; maybe a card.
+      ask_episode --ask-the-control-program; MotionsRequestedCard (plan timeline).
+      Draft PR #394 (105 + 24 tests pass). Reproduction script has --ask-the-control-program
+      (corpus real_with_control_program, own DB + paper dir).
+      Next: once run 1 finishes, cherry-pick #394 into local/paper-pipeline, regenerate ORM,
+      run generate_paper_artifacts.py --ask-the-control-program --skip-database-setup.
