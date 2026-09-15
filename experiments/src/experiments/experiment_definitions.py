@@ -412,9 +412,10 @@ class ExperimentsTable:
 
 
 @dataclass
-class TypstRenderer:
+class TableRenderer:
     """
-    Represents a renderer for converting an ExperimentsTable into Typst markup.
+    Words an ExperimentsTable's columns and values the way a reader of the table sees
+    them, whatever markup the table is then written in.
     """
 
     experiments_table: ExperimentsTable
@@ -441,7 +442,7 @@ class TypstRenderer:
         experiment did not establish is marked absent rather than written as a number.
 
         :param value: One value of a row.
-        :return: The Typst cell content for it.
+        :return: The cell content for it.
         """
         if value is None:
             return self.absent_measurement
@@ -450,6 +451,21 @@ class TypstRenderer:
         if isinstance(value, float):
             return f"{value:.{self.reported_decimals}f}"
         return str(value)
+
+    @staticmethod
+    def column_heading(column_name: str) -> str:
+        """
+        :param column_name: A column's name, as its field is called.
+        :return: The heading a reader sees over that column.
+        """
+        return column_name.replace("_", " ").title()
+
+
+@dataclass
+class TypstRenderer(TableRenderer):
+    """
+    Represents a renderer for converting an ExperimentsTable into Typst markup.
+    """
 
     def render_row(self, row: ExperimentResult) -> str:
         """
@@ -482,7 +498,7 @@ class TypstRenderer:
 
         # 2. Build the Typst header block
         header_cells = ", ".join(
-            [f"[*{name.replace('_', ' ').title()}*]" for name in headers]
+            [f"[*{self.column_heading(name)}*]" for name in headers]
         )
 
         # 3. Build the rows content
@@ -530,3 +546,107 @@ class TypstRenderer:
         :return: Typst markup for a captioned figure.
         """
         return f'#figure(\n  image("{image_name}"),\n  caption: [{caption}]\n)'
+
+
+LATEX_ESCAPES: dict[str, str] = {
+    "\\": r"\textbackslash{}",
+    "&": r"\&",
+    "%": r"\%",
+    "$": r"\$",
+    "#": r"\#",
+    "_": r"\_",
+    "{": r"\{",
+    "}": r"\}",
+    "~": r"\textasciitilde{}",
+    "^": r"\textasciicircum{}",
+    "±": r"$\pm$",
+}
+"""
+What each character LaTeX would read as markup, or cannot typeset as text, is written
+as, so a cell reads as it is worded.
+"""
+
+
+@dataclass
+class LatexRenderer(TableRenderer):
+    """
+    Renders an ExperimentsTable as a LaTeX tabular ruled with booktabs, the way a LaTeX
+    paper rules its own tables.
+    """
+
+    def render_cell(self, value: Any) -> str:
+        """
+        Renders a single value as a reader of the table should see it, escaped for
+        LaTeX.
+
+        :param value: One value of a row.
+        :return: The LaTeX cell content for it.
+        """
+        return self.escaped(super().render_cell(value))
+
+    @staticmethod
+    def escaped(text: str) -> str:
+        """
+        :param text: Text as a reader should see it.
+        :return: The text with every character LaTeX would read as markup escaped.
+        """
+        return "".join(LATEX_ESCAPES.get(character, character) for character in text)
+
+    @staticmethod
+    def column_alignment(value: Any) -> str:
+        """
+        :param value: A value of the column.
+        :return: ``r`` for a number, so its digits line up, and ``l`` for anything else.
+        """
+        if isinstance(value, (int, float)) and not isinstance(value, bool):
+            return "r"
+        return "l"
+
+    def render_table(self) -> str:
+        """
+        Renders the entire ExperimentsTable as a LaTeX tabular: the column headings
+        between the top and the middle rule, and a line per row down to the bottom rule.
+        """
+        row_class = self.experiments_table.row_class
+        if not row_class:
+            return "\\begin{tabular}{@{}l@{}}\n\\toprule\n\\bottomrule\n\\end{tabular}"
+        rows = self.experiments_table.experiments
+        alignments = "".join(
+            self.column_alignment(value) for value in rows[0].get_column_values()
+        )
+        headings = " & ".join(
+            self.escaped(self.column_heading(name))
+            for name in row_class.get_column_names()
+        )
+        lines = [
+            f"\\begin{{tabular}}{{@{{}}{alignments}@{{}}}}",
+            "\\toprule",
+            f"{headings} \\\\",
+            "\\midrule",
+            *[
+                " & ".join(self.render_cell(value) for value in row.get_column_values())
+                + " \\\\"
+                for row in rows
+            ],
+            "\\bottomrule",
+            "\\end{tabular}",
+        ]
+        return "\n".join(lines)
+
+    def render_figure(self, caption: str, label: str) -> str:
+        """
+        Renders the table as a captioned, labelled LaTeX table float.
+
+        :param caption: Caption text describing what the table shows.
+        :param label: What the paper refers to the table by.
+        :return: LaTeX markup for the table float.
+        """
+        return (
+            "\\begin{table}[t]\n"
+            f"\\caption{{{self.escaped(caption)}}}\n"
+            f"\\label{{{label}}}\n"
+            "\\centering\n"
+            "\\scriptsize\n"
+            f"{self.render_table()}\n"
+            "\\end{table}\n"
+        )
