@@ -1,300 +1,326 @@
-# Cognitive Robot Abstract Machine (CRAM)
+# Reproducing the experiments
 
-Monorepo for the CRAM cognitive architecture. 
+This branch holds the code behind the paper's experiments: a dual-arm robot ("Tracy":
+two UR arms with Robotiq grippers and a table-mounted RGB-D camera) sorting the pieces of
+a Montessori shape-sorting board, recording every run as an *episode*, and answering
+questions about those episodes from working memory (during a run) and long-term memory
+(afterwards, from the results database).
 
-## Installation
+There are three ways to reproduce the results, from least to most effort:
 
-### Clone the repo and its submodules
-Pull the submodules:
+| | What you get | Needs |
+|---|---|---|
+| [A. Recompute the tables from the recorded corpus](#a-recompute-the-tables-from-the-recorded-corpus) | Every table and query card in the paper, for the simulated and the real corpus | The reproduction package, PostgreSQL. No robot, no ROS |
+| [B. Re-run the experiments in simulation](#b-re-run-the-experiments-in-simulation) | New simulated episodes, the framework-figure plan carried out in MuJoCo, tables over your own corpus | ROS 2 workspace, MuJoCo |
+| [C. Re-run the experiments on the real robot](#c-re-run-the-experiments-on-the-real-robot) | New real episodes | The robot, its camera, the board and pieces, the ROS 2 robot stack |
+
+The paper's figures were produced with path A over the corpus recorded with paths B and C.
+
+## Contents
+
+- [Setup](#setup)
+- [A. Recompute the tables from the recorded corpus](#a-recompute-the-tables-from-the-recorded-corpus)
+- [B. Re-run the experiments in simulation](#b-re-run-the-experiments-in-simulation)
+- [C. Re-run the experiments on the real robot](#c-re-run-the-experiments-on-the-real-robot)
+- [Which real episodes the paper uses, and why](#which-real-episodes-the-paper-uses-and-why)
+- [Where things are](#where-things-are)
+
+## Setup
+
+Tested on Ubuntu 24.04 with Python 3.12 and ROS 2 Jazzy.
+
 ```bash
-git clone https://github.com/cram2/cognitive_robot_abstract_machine.git
-cd cognitive_robot_abstract_machine
-git submodule update --init --recursive
-```
+# system packages
+sudo apt install -y python3-virtualenv virtualenvwrapper graphviz graphviz-dev \
+    postgresql postgresql-client
 
-### CRAM Architecture Installation
-
-To install the CRAM architecture, follow these steps:
-
-Setup the Python venvironment:
-
-```bash
-sudo apt install -y virtualenv virtualenvwrapper && \
-grep -qxF 'export WORKON_HOME=$HOME/.virtualenvs' ~/.bashrc || echo 'export WORKON_HOME=$HOME/.virtualenvs' >> ~/.bashrc && \
-grep -qxF 'export VIRTUALENVWRAPPER_PYTHON=/usr/bin/python3' ~/.bashrc || echo 'export VIRTUALENVWRAPPER_PYTHON=/usr/bin/python3' >> ~/.bashrc && \
-grep -qxF 'source /usr/share/virtualenvwrapper/virtualenvwrapper.sh' ~/.bashrc || echo 'source /usr/share/virtualenvwrapper/virtualenvwrapper.sh' >> ~/.bashrc && \
-source ~/.bashrc && \
+# a virtual environment that can see the ROS Python packages
+source /usr/share/virtualenvwrapper/virtualenvwrapper.sh
 mkvirtualenv cram-env --system-site-packages
-```
-Activate / deactivate
-
-```
 workon cram-env
-deactivate
-```
 
-#### Optional: Setup your ROS Workspace
-To run the tests or use CRAM with a real robot you need to setup a ROS workspace with the dependencies. 
-The monorepo provides a shell script to setup the workspace for you. 
-```bash
-export OVERLAY_WS=$HOME/ros_ws
-./scripts/setup_ros_workspace.sh
-```
-This will create a ROS workspace in the folder specified in OVERLAY_WS
-
-### Install additional dependencies
-
-You need to install the following system dependencies:
-
-```bash
-sudo apt install -y graphviz graphviz-dev
-```
-
-
-### Install using UV
-
-To install the whole repo we use uv (https://github.com/astral-sh/uv), first to install uv:
-
-```bash 
-# On macOS and Linux.
+# every package of this repository, installed editable
 curl -LsSf https://astral.sh/uv/install.sh | sh
-```
-
-then install packages:
-
-```bash
 uv sync --active
+
+# the ORM interfaces are generated, not tracked: build them once after installing
+python scripts/regenerate_all_orm.py
 ```
 
-If you also want the development dependencies, run:
-
-```bash
-uv sync --extra dev --active 
-```
-
-
-### Alternative: Poetry
-
-Alternatively you can use poetry to install all packages in the repository.
-
-Install poetry if you haven't already:
-
-```bash
-pip install poetry
-```
-
-Install the CRAM package along with its dependencies:
-
-```bash
-poetry install
-```
-
-## To run tests
-
-**1. Install system dependencies, set up and build the ROS 2 workspace**
+Paths B and C additionally need a ROS 2 Jazzy workspace with the robot description, the
+gripper driver and the camera driver. The repository builds one for you:
 
 ```bash
 sudo bash .github/docker/setup_ros_workspace.sh && source ~/.bashrc
 ```
 
-**2. Run a test**
+The list of repositories it clones is in `.github/docker/setup_workspace.py`.
 
-```bash
-pytest test/<package>_test
+### Environment variables
+
+| Variable | Meaning | Default |
+|---|---|---|
+| `MONTESSORI_SORTING_DATABASE_URI` | Results database episodes are recorded to and read from (any SQLAlchemy URI; PostgreSQL or SQLite) | `postgresql+psycopg://semantic_digital_twin:montessori@localhost:5432/montessori_sorting_results` |
+| `EPISODE_ARTIFACTS_DIRECTORY` | Where each episode's transcript, joint trace, meshes and (real runs) camera bag are kept | `~/episode-artifacts` |
+
+Every script also accepts `--database-uri`, which wins over the environment variable.
+
+## A. Recompute the tables from the recorded corpus
+
+### The reproduction package
+
+Download and unpack the reproduction package: **<!-- TODO: link to the anonymised data -->**
+
+```
+reproduction_package/
+├── database/montessori_sorting_results.dump   # pg_dump -Fc of the results database: 75 simulated + 17 real episodes
+├── episode-artifacts/<identifier>/            # per episode: transcript, joint traces, and for real runs the camera bag and video
+├── episode-artifacts/meshes/                  # every mesh a recorded world refers to
+└── doc/figures/                               # the tables and cards as submitted, to compare against
 ```
 
-e.g. `pytest test/coraplex_test`
+### One command
 
-## Developer / Agent Tooling
+`experiments/reproduction/generate_paper_artifacts.py` goes from a fresh machine to the
+paper's tables. It
 
-`.claude/` holds tooling for AI coding agents (Claude Code) working in this
-repository - hooks that run automatically each session, and skills invoked
-on demand (`/<skill-name>`). Each is documented where it lives; the links
-below are a starting point, not a duplicate of that documentation.
-
-**New here? Start with [`.claude/SETUP.md`](.claude/SETUP.md)** - the one-time
-setup in three steps, including what to change in your fork, your GitHub
-access and your Claude environment.
-[`.claude/hooks/README.md`](.claude/hooks/README.md) is the reference behind
-it: what the setup configures, and everything it unlocks (personal notes,
-per-PR progress tracking, multi-PR plan dashboards).
-
-- **[`.claude/hooks/`](.claude/hooks/README.md)** - a `SessionStart` hook
-  that carries a contributor's own personal workflow notes, per-PR
-  plan/progress tracking, and multi-PR plan manifests across sessions via a
-  personal (gitignored, never-merged) branch, with zero required
-  configuration.
-- **[`.claude/skills/plan-dashboard/`](.claude/skills/plan-dashboard/SKILL.md)** -
-  publishes a live status dashboard for a multi-PR/multi-session
-  initiative, cross-checked against live GitHub PR/CI/review state so a
-  plan's manually-tracked status can never silently drift from reality. See
-  [`example-walkthrough.md`](.claude/skills/plan-dashboard/example-walkthrough.md)
-  for a short, worked example - idea to dashboard, with screenshots.
-- **[`.claude/skills/plan-create/`](.claude/skills/plan-create/SKILL.md)** -
-  bootstraps a new multi-PR/multi-session plan (or migrates an existing
-  freeform roadmap doc into one), validated against the same schema
-  `plan-dashboard` reads.
-- **[`.claude/skills/plan-item-kickoff/`](.claude/skills/plan-item-kickoff/SKILL.md)** -
-  gathers everything available about one tracked plan item (its manifest
-  entry, roadmap history, dependency chain's live state, sibling-item
-  patterns) and proposes an implementation plan via plan mode, without
-  writing any code. The "Start now" button on a not-started item's
-  dashboard card copies the invoking command for this skill.
-- **[`.claude/skills/plan-item-resolve/`](.claude/skills/plan-item-resolve/SKILL.md)** -
-  gathers everything available about one already-underway item (its
-  branch/PR state, CI, review comments, tracking-issue discussion, recorded
-  blockers) and proposes a plan to resolve whatever is stalling it, via plan
-  mode, without writing any code. The "Resolve"/"Resume"/"Reconsider" button
-  on a blocked/in-progress/deferred item's dashboard card copies the
-  invoking command for this skill.
-- **[`.claude/skills/add-plan-item/`](.claude/skills/add-plan-item/SKILL.md)** -
-  decides where a newly described piece of work belongs - folded into an
-  unlanded item, a new item in an existing plan, a plan of its own, or
-  tracked nowhere - by running the shared scope check in
-  [`scope-decision.md`](.claude/skills/add-plan-item/scope-decision.md)
-  against live branch and PR state, then proposes the outcome via plan mode.
-- **[`.claude/skills/stacked-pr-maintenance/`](.claude/skills/stacked-pr-maintenance/SKILL.md)** -
-  runs one maintenance pass over a stacked-PR fork-staging workflow: reparents any pull
-  request whose base has landed, closes what has landed by fast-forwarding, restacks
-  branches whose parent moved, and builds the promotion link for every approved,
-  unblocked branch. Deliberately never writes code - a conflict it cannot merge cleanly,
-  or a red check, is reported to the branch's owner and skipped. Invoke it by hand when
-  the stack needs a pass, or register it as a scheduled Routine using the template in
-  [`routine-prompt.md`](.claude/skills/stacked-pr-maintenance/routine-prompt.md). The
-  workflow it maintains, and the read-only tool it computes with, are described in
-  [`.claude/stack/README.md`](.claude/stack/README.md).
-- **[`.claude/skills/local-code-review/`](.claude/skills/local-code-review/SKILL.md)** -
-  reviews the current branch against upstream `main` for bugs and
-  `AGENTS.md` adherence, then hands back an approval-gated plan to fix every
-  finding (including adding missing tests) before you push.
-
-## Contribution
-
-Before committing any changes, please navigate into the project root and install pre-commit hooks:
+1. starts PostgreSQL, creates the `semantic_digital_twin` role and the
+   `montessori_sorting_results` database, and restores the dump (each step only if still
+   needed);
+2. links the absolute mesh paths the recorded worlds refer to (`/home/tracy/...`) to the
+   package, since a world recorded on the robot's computer stores them that way;
+3. splits the database into a simulated and a real SQLite corpus
+   (`experiments/reproduction/export_filtered_corpus.py`), keeping the
+   [7 real episodes the paper uses](#which-real-episodes-the-paper-uses-and-why);
+4. scores every real episode's working-memory answers again under the current scoring
+   rules and asks each one the long-term-memory question set
+   (`experiments/scripts/ask_episode.py`);
+5. writes every table (Typst, LaTeX and the rows behind it as JSON) and every query card
+   (`experiments/scripts/generate_paper_figures.py`).
 
 ```bash
-sudo apt install pre-commit
-pre-commit install
+export PACKAGE=/path/to/reproduction_package
+
+python experiments/reproduction/generate_paper_artifacts.py \
+    --repository "$(pwd)" \
+    --reproduction-package "$PACKAGE" \
+    --figures-directory ~/paper_figures \
+    --simulated
 ```
 
-### Code of Conduct
+Steps 1 and 2 need root and ask for it through `pkexec` (a graphical prompt). If your
+database is already restored, pass `--skip-database-setup`.
 
-> Any code added to the repository must have at least an 85% test coverage.
+The results land in `~/paper_figures/real/` and `~/paper_figures/simulated/`. Add
+`--ask-the-control-program` to also ask each real episode what its motions requested of
+the controller; that corpus is written to `~/paper_figures/real_with_control_program/`
+instead.
 
-🚀 How to Create a Pull Request (PR) in Our System
+### Step by step
 
-This guide outlines the best practices for creating a Pull Request in our system to ensure high-quality, maintainable, and robust code.
+The same, by hand, if you would rather not run `pkexec` or want to look at each stage:
 
-1. 🤖 AI Code Review First (Pre-PR Check)
+```bash
+# 1. restore the database
+sudo -u postgres psql -v db_name=montessori_sorting_results \
+    -v user_name=semantic_digital_twin -v user_password=montessori \
+    < semantic_digital_twin/scripts/create_postgres_database_and_user_if_not_exists.sql
+PGPASSWORD=montessori pg_restore -h localhost -U semantic_digital_twin \
+    -d montessori_sorting_results --no-owner --role=semantic_digital_twin \
+    "$PACKAGE/database/montessori_sorting_results.dump"
 
-    Before submitting your PR, let AI review your code to catch common issues and suggest improvements.
+# 2. make the recorded mesh paths resolve
+sudo ln -s "$PACKAGE" /home/tracy
+export EPISODE_ARTIFACTS_DIRECTORY="$PACKAGE/episode-artifacts"
 
-    - GitHub Copilot Reviewer: You can integrate GitHub Copilot as a reviewer directly into your PR process.
+# 3. split into a simulated and a real corpus
+python experiments/reproduction/export_filtered_corpus.py \
+    --source-database-uri postgresql+psycopg://semantic_digital_twin:montessori@localhost:5432/montessori_sorting_results \
+    --simulated-output /tmp/montessori_simulated.db \
+    --real-output /tmp/montessori_real.db \
+    --real-episode 508e367a6fd04cc2ba657f991e3f4bd9 0a793ded6dd54da7b64171ab78638d38 \
+        57bbcbb2c919404e9cd729d7e766bf66 25f5161da5584bac9554b686711a01fe \
+        e9b1eef3d2f34a57a95e2b897ec63cdd 25ccb55ba8ab4d90aabe54c5800cedb8 \
+        3bfe66c1afe644379180e9950081dbc5
 
-    - PyCharm Integration: Alternatively, use AI features directly within PyCharm for an immediate local review.
+# 4. score each real episode again and ask it the long-term-memory set
+#    (repeat for every episode, with the object it is asked about - see the table below)
+python experiments/scripts/ask_episode.py --episode 508e367a6fd04cc2ba657f991e3f4bd9 \
+    --database-uri sqlite:////tmp/montessori_real.db --rescore-working-memory
+python experiments/scripts/ask_episode.py --episode 508e367a6fd04cc2ba657f991e3f4bd9 \
+    --object-name rectangular_prism_0 --database-uri sqlite:////tmp/montessori_real.db
 
-2. 🛡️ Embrace Test-Driven Thinking
+# 5. the tables and the query cards, once per corpus
+python experiments/scripts/generate_paper_figures.py \
+    --database-uri sqlite:////tmp/montessori_simulated.db --output-directory ~/paper_figures/simulated
+python experiments/scripts/generate_paper_figures.py \
+    --database-uri sqlite:////tmp/montessori_real.db --output-directory ~/paper_figures/real
+```
 
-    Our process is Test-Driven Development (TDD):
+To check a recorded episode's rows, artifacts and scores on their own:
 
-    - Bug Fixes: If you find a bug, your first step is to write a test that fails (reproduces the bug). Push this failing test, then implement the fix, and ensure the test now passes.
+```bash
+python experiments/scripts/check_episode.py --episode <identifier> --database-uri <uri>
+python experiments/scripts/check_episode.py --real --database-uri <uri>
+```
 
-    - The Beyoncé Rule: "If you like it, you should put a test on it." Every new feature or piece of logic needs corresponding tests.
+## B. Re-run the experiments in simulation
 
-3. 🎯 Focus on Method Quality and Complexity
+In simulation, MuJoCo stands in for the robot and the table; plans are made by Giskard
+against a copy of the world and played back on MuJoCo's actuators. See
+[`experiments/src/experiments/tracy_experiments/README.md`](experiments/src/experiments/tracy_experiments/README.md)
+for how the simulated rig is built.
 
-    - Method Length/Complexity: Keep your methods concise and focused. If the cyclomatic complexity (which you can check using plugins like Code Complexity for JetBrains) reaches the hundreds, your method is highly likely to need refactoring/improvement.
+### The framework figure's plan
 
-    - Helper Methods: Extract duplicate code into helper methods to adhere to the Don't Repeat Yourself (DRY) principle.
+The plan in the paper's framework figure: look at the table, pick the cube off the board's
+lid, and insert it through the hole the rules conclude it belongs in. Each open slot of
+the plan is answered by a backend (perception, rules, probabilistic model), and the run
+reports which backend answered which slot.
 
-    - Modularity/Plugin Thinking: Think modularly. Code should be designed with a plugin-like approach, making components easily interchangeable or extendable.
+```bash
+python -m experiments.tracy_experiments.framework_demo --headless --film-directory films
+# --watch to run in real time, drop --headless to open the MuJoCo viewer
+```
 
-    - Side Effects & Entanglement: Methods should be decoupled (not entangled) and should not have hidden side effects. They should ideally do one thing and do it well, following the Single Responsibility Principle (SRP) from SOLID.
-Example:
-        ```python
-        counter = 0      # outer scope state
+### Sorting the pieces the robot saw
 
-        def increment_counter():
-            global counter
-            counter += 1   # side effect: modifies outer scope state
-            print(f"Counter is now {counter}")  # side effect: I/O
-        ```
+```bash
+python -m experiments.tracy_experiments.pickup.pickup_demo_mujoco --headless --video-directory films
+```
 
-4. 📐 Adhere to Code Style and Principles
+### The simulated corpus
 
-    - Code Formatting: We use Black, which is fully PEP 8 compliant. All code must be automatically formatted with Black before submission.
+`run_corpus.py` records one episode for every scenario × layout × perturbation, headless,
+and once the corpus stands asks each episode the long-term-memory question set
+(`--repetitions` times, default 3). Episode identifiers are written to a manifest as they
+are recorded, so an interrupted corpus still names what it recorded.
 
-    - SOLID Principles: Read and understand the SOLID principles for writing robust, maintainable, and scalable software. This article is a great resource: https://realpython.com/solid-principles-python/
+```bash
+export MONTESSORI_SORTING_DATABASE_URI=sqlite:////tmp/my_corpus.db
+export EPISODE_ARTIFACTS_DIRECTORY=/tmp/my_episode_artifacts
 
-5. ✍️ Naming, Typing, and Imports
+python experiments/scripts/run_corpus.py [--repetitions 3] [--seed 0]
+python experiments/scripts/generate_paper_figures.py --output-directory ~/my_figures
+```
 
-    - Descriptive Naming: Choose descriptive names for variables, functions, and classes. Names should clearly communicate intent.
+A single episode:
 
-    - Correct Typing: Use correct type hints consistently throughout your code.
+```bash
+python experiments/scripts/record_episode.py --headless \
+    --scenario scene-stands-still \
+    --layout randomized \
+    --perturbation piece-shoved --piece cube
+```
 
-    Import Strategy:
+| Option | Values |
+|---|---|
+| `--scenario` | `scene-stands-still`, `robot-sorts-a-piece`, `piece-pushed-while-idle`, `piece-held-when-asked`, `robot-looks-at-the-scene` |
+| `--layout` | `randomized`, `partial`, `nearly-ambiguous` (built scenes); `as-found` (perceived scenes) |
+| `--perturbation` | `target-hole-moved`, `piece-shoved`, `perceived-pose-offset`, `detection-relabelled` |
+| `--perturbation-step` | the sorting step the perturbation strikes before (default `settle`) |
+| `--piece` | the piece the perturbation is aimed at (default `cube`) |
+| `--seed`, `--repetitions` | the layout draw's seed, and how many trials the episode holds |
 
-    - Use absolute imports always within the package as this is easier to maintain and clearer to read and understand.
+Then ask it and read it back as in path A, steps 4 and 5.
 
-    - Use relative imports always in tests when importing modules defined in the same test folder/package.
+### Tests
 
-    - When importing types, use typing extensions instead of typing or the standard library types;
+The simulated demos are covered by tests that run them headless end to end:
 
-    - Avoid importing types directly from modules if you don't need to construct an instance of the type inside the module. Annotations can be imported with the TYPE_CHECKING guard.
+```bash
+pytest test/experiments_test/test_framework_demo.py
+pytest test/experiments_test/test_tracy_pickup_demo_mujoco.py
+pytest test/experiments_test
+```
 
-6. 📝 Documentation and Comments
+## C. Re-run the experiments on the real robot
 
-    - Non-Trivial Code: Document everything that is not trivial to understand.
+This needs the physical setup: the robot with its Giskard/world-fetcher ROS 2 stack, the
+Robotiq action servers and the RGB-D camera running, the Montessori board and its pieces on
+the table, and a person at the table who places pieces and carries out perturbations when
+the console asks. On the robot, the scene is always the one the camera finds, and every
+answer is scored against what the person at the table says they set up, not against the
+robot's own model of the table.
 
-    - Avoid Over-Swaffling: Be concise. Do not use unnecessary, verbose explanations.
+Record the episodes with a bag (`--record` / `--record-bag`) to keep the camera streams
+alongside the joint trace; the query cards are drawn from them.
 
-    - Inline Comments: Use inline comments sparingly, primarily for explaining complex logic or a long block of code.
+**The scene stands still** (3 trials per episode; the robot only looks and answers):
 
-7. 🔁 Final Review and Responsibility
+```bash
+python experiments/scripts/record_episode.py --execution real --record-bag --repetitions 3 \
+    --scenario scene-stands-still
+python experiments/scripts/record_episode.py --execution real --record-bag --repetitions 3 \
+    --scenario scene-stands-still --perturbation piece-shoved --piece cube
+python experiments/scripts/record_episode.py --execution real --record-bag --repetitions 3 \
+    --scenario scene-stands-still --perturbation target-hole-moved
+```
 
-    - Human Review: Always perform a final human review of your own code before submitting the PR. Read it line-by-line as if you were the reviewer.
+**The robot sorts the pieces it saw** (the camera finds the board and every loose piece,
+the left arm sorts each into its hole; a perturbation is asked of the person before the
+sort, then looked at again):
 
-    - "If you break it, you fix it" Rule: You are the primary owner and person responsible for the code you introduce. If a bug is found in your changes, you must prioritize its fix.
+```bash
+python -m experiments.tracy_experiments.pickup.pickup_demo_real --record
+python -m experiments.tracy_experiments.pickup.pickup_demo_real --record \
+    --perturbation piece-shoved --piece cube
+python -m experiments.tracy_experiments.pickup.pickup_demo_real --record \
+    --perturbation target-hole-moved
+```
 
-    - The "One Change, One Commit" Rule: Each commit should be a logical, atomic unit of work.
+**The framework figure's plan, on the robot:**
 
-8. Post-Submission and Review 🔎
+```bash
+python -m experiments.tracy_experiments.framework_demo --execution real --record
+```
 
-    After you open your Pull Request (PR), it enters the review stage. This is a critical step for ensuring code quality and collaboration.
+Each run writes its episode to the results database and its artifacts to
+`EPISODE_ARTIFACTS_DIRECTORY`, and prints the episode identifier. Ask it the
+long-term-memory set and regenerate the tables as in path A, steps 4 and 5.
 
-    Responding to Feedback:
+## Which real episodes the paper uses, and why
 
-    - Mindset is Key: Remember that code reviews are about the code, not you. Feedback is given to improve the project's quality and help you learn. Take all comments professionally and constructively.
+17 real episodes are in the database; the paper uses 7.
 
-     - Addressing the Feedback: When a reviewer requests changes, you don't need to close the PR and start over! Simply make the required modifications in your local working directory.
+| Episode | Scenario | Perturbation | Trials | Asked about |
+|---|---|---|---|---|
+| `508e367a6fd04cc2ba657f991e3f4bd9` | the scene stands still | none | 3 | `rectangular_prism_0` |
+| `0a793ded6dd54da7b64171ab78638d38` | the scene stands still | piece shoved (cube) | 3 | `cube_2` |
+| `57bbcbb2c919404e9cd729d7e766bf66` | the scene stands still | target hole moved (board) | 3 | `rectangular_prism_0` |
+| `25f5161da5584bac9554b686711a01fe` | the robot sorts the pieces it saw | none | 1 | `cube_2` |
+| `e9b1eef3d2f34a57a95e2b897ec63cdd` | the robot sorts the pieces it saw | piece shoved (cube) | 1 | `cube_3` |
+| `25ccb55ba8ab4d90aabe54c5800cedb8` | the robot sorts the pieces it saw | target hole moved (board) | 1 | `cube_3` |
+| `3bfe66c1afe644379180e9950081dbc5` | the robot carries out the plan the framework figure shows | none | 1 | `cube_3` |
 
-    - Commit and Push: Once the changes are made, create a new commit and push it to the same feature branch you used for the PR. The PR will automatically update with your new commits.
-                
-        ```
-        # 1. Make the changes locally...
-        git add .
-        git commit -m "Address review feedback on component X"
-        git push origin <your-feature-branch-name>
-        ```
+The 10 left out:
 
-PR Checklist Summary
+- **Recorded before scoring was fixed to use what the person at the table says**, rather
+  than the robot's simulated twin of the table (all "the scene stands still", each showing
+  the same one wrong answer in 14): `2c6c42943eaa437cb0c9f715e8deb199`,
+  `99a3454aa1164093ad06c10a75df9f13`, `4aebad2d18e5425c8e46705206785a79`,
+  `d0953ca1550848ceae88094ef054d11e`, `16177269e93c477c9786a1b174e8df91`.
+- **Superseded by a later rerun of the same condition:**
+  `2f37062677c94eb1bd51ea6d3f496f06` (by `508e367a…`),
+  `d37b712da5434f7cac205cd477d9e868` (by `0a793ded…`),
+  `6ffe9ec2ef3c4f0b8d7d5b44adf94d33` and `c2efb7db9f45406ba5a42b54f8d1e0ac`
+  (by `57bbcbb2…`), `cb2af2ffca354e3d97273ee3898ecbc9` (by `e9b1eef3…`).
 
-    [ ] AI (Copilot/PyCharm) has reviewed the code.
+All 17 remain in the dump; pass other identifiers to `export_filtered_corpus.py
+--real-episode` to include them.
 
-    [ ] Black has formatted the code (PEP 8 compliant).
+## Where things are
 
-    [ ] New features/logic have tests (Beyoncé Rule).
-
-    [ ] Bug fixes include a test that reproduced the bug.
-
-    [ ] Methods are concise and low in complexity.
-
-    [ ] Descriptive names and correct type hints are used.
-
-    [ ] Relative importing is used correctly.
-
-    [ ] Non-trivial code is documented concisely.
-
-    [ ] Code is modular, decoupled, and adheres to SOLID principles.
-
-    [ ] Final personal human review complete.
+| Path | What |
+|---|---|
+| `experiments/reproduction/` | The two scripts of path A |
+| `experiments/scripts/` | Command-line entry points: `record_episode.py`, `run_corpus.py`, `ask_episode.py`, `check_episode.py`, `generate_paper_figures.py` |
+| `experiments/src/experiments/montessori/` | Scenarios, perturbations, perception, the results database |
+| `experiments/src/experiments/episodes/` | Recording an episode, its artifacts, long-term memory |
+| `experiments/src/experiments/questions/` | The working-memory and long-term-memory question sets |
+| `experiments/src/experiments/open_slots/` | The framework figure's plan and the backends that answer its open slots |
+| `experiments/src/experiments/tracy_experiments/` | The simulated (`*_mujoco.py`) and real (`*_real.py`) robot rigs and demos |
+| `experiments/src/experiments/paper/` | Tables, query cards and plan timelines |
+| `experiments/doc/figures/framework/` | The framework figure (`python experiments/doc/figures/framework/build.py`, needs `pip install typst`) |
+| `test/experiments_test/` | Tests for all of the above |
+| `MONOREPO.md` | The general README of the monorepo this branch lives in |
