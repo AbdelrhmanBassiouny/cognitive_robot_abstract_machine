@@ -703,14 +703,22 @@ class QueryCard(ABC):
         The stretch of the trial the answered event's object moved over, or the one
         instant the event was reported at where the run saw it move at no point.
 
+        Where someone other than the robot was told to move the object before the
+        monitor saw it moving, the stretch starts as they were told: the monitor sees
+        such a move only once the object stands somewhere new, and that moment is the
+        last the run knew it where it stood.
+
         :param trial: The trial the query was asked during.
         :param query: The query this card shows.
         """
         [answered] = self.emphasise(query.question, trial)[:1]
         change = PoseChange.around(answered, trial)
-        if change is not None and change.over is not None:
+        if change is None or change.over is None:
+            return TimelineSpan(self.reported_at(answered, trial, query.moment), 0.0)
+        told_at = trial.last_told_to_move(change.subject.name, change.over.start)
+        if told_at is None:
             return change.over
-        return TimelineSpan(self.reported_at(answered, trial, query.moment), 0.0)
+        return TimelineSpan(told_at, change.over.end - told_at)
 
     def _pose_change(
         self,

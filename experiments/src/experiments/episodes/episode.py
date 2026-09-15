@@ -363,6 +363,24 @@ class RecordedTrial:
         """
         return cls(episode=episode, outcome=trial.outcome, duration=trial.duration)
 
+    def last_told_to_move(self, moved: PrefixedName, by: float) -> Optional[float]:
+        """
+        The last moment, no later than the given one, someone other than the robot was
+        told to move the named thing.
+
+        :param moved: What the thing is called, as the scene names it.
+        :param by: Seconds into the trial the moment may lie at the latest.
+        :return: Seconds into the trial they were told, or None where nobody was.
+        """
+        return max(
+            (
+                instruction.moment
+                for instruction in self.moved_by_someone_else
+                if instruction.moment <= by and moved in instruction.things_moved
+            ),
+            default=None,
+        )
+
 
 # %% the episode itself
 
