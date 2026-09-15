@@ -76,3 +76,13 @@ Plan:
       (corpus real_with_control_program, own DB + paper dir).
       Next: once run 1 finishes, cherry-pick #394 into local/paper-pipeline, regenerate ORM,
       run generate_paper_artifacts.py --ask-the-control-program --skip-database-setup.
+- [x] 2026-09-16 reviewer page (user ask): branch real-experiments-tracy-icra-2026 (for the
+      anonymous repo; no PR, pushed directly; worktree ~/Projects_2/cram-real-experiments-tracy-icra-2026)
+      = this branch + local/paper-pipeline (ff) + #396 merged. README.md is now the reproduction
+      guide (A: tables from the dump, B: simulation, C: real robot, kept-episode table);
+      old README -> MONOREPO.md. generate_paper_artifacts.py + export_filtered_corpus.py moved
+      to experiments/reproduction (--reproduction-package required, --figures-directory
+      replaces --paper-repository). Pushed 2d6c356b54. Leftover bubble-removal in the
+      framework figure committed on claude/the-framework-figure-names-the-working-memory,
+      draft PR #396 (base this branch).
+- [ ] README has a TODO placeholder for the anonymised data link (user to host the package)
