@@ -13,7 +13,7 @@ import pytest
 
 from ...pytest_environment import runs_in_continuous_integration
 
-from giskardpy.executor import Executor
+from giskardpy.executor import Executor, SteppedSimulationPacer
 from giskardpy.motion_statechart.context import MotionStatechartContext
 from giskardpy.motion_statechart.graph_node import EndMotion
 from giskardpy.motion_statechart.motion_statechart import MotionStatechart
@@ -61,7 +61,7 @@ def test_the_simulated_arm_reaches_the_pose_giskard_commands_live(parked_tracy):
     their set point and the physics steps in between.
     """
     control_frequency = 50
-    time_limit = 10.0
+    tick_limit = 500
     tracking_tolerance = 0.02
     world = parked_tracy._world
     tool_frame = parked_tracy.left_arm.end_effector.tool_frame
@@ -73,21 +73,18 @@ def test_the_simulated_arm_reaches_the_pose_giskard_commands_live(parked_tracy):
     motion_statechart = MotionStatechart()
     motion_statechart.add_nodes([reach, EndMotion.when_true(reach)])
     controller_config = QPControllerConfig(target_frequency=control_frequency)
-    executor = Executor(
-        context=MotionStatechartContext(
-            world=world, qp_controller_config=controller_config
-        )
-    )
-    executor.compile(motion_statechart=motion_statechart)
 
     with RealTimeSimulation(
         world=world, headless=True, real_time_factor=None
     ) as simulation:
-        for _ in range(round(time_limit * control_frequency)):
-            if motion_statechart.is_end_motion():
-                break
-            executor.tick()
-            simulation.advance(controller_config.control_dt)
+        executor = Executor(
+            context=MotionStatechartContext(
+                world=world, qp_controller_config=controller_config
+            ),
+            pacer=SteppedSimulationPacer(simulation),
+        )
+        executor.compile(motion_statechart=motion_statechart)
+        executor.tick_until_end(timeout=tick_limit)
         simulation.advance(1.0)
         simulated = numpy.array(
             simulation.mujoco_mirror.simulator.get_body_position(

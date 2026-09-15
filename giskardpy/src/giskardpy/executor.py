@@ -1,6 +1,9 @@
+from __future__ import annotations
+
 import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
 
 import numpy as np
 
@@ -21,6 +24,11 @@ from krrood.symbolic_math.symbolic_math import FloatVariable
 from semantic_digital_twin.world_description.world_state_trajectory_plotter import (
     WorldStateTrajectoryPlotter,
 )
+
+if TYPE_CHECKING:
+    from semantic_digital_twin.adapters.real_time_simulation import (
+        RealTimeSimulation,
+    )
 
 
 @dataclass
@@ -115,6 +123,27 @@ class SimulationPacer(ScheduledPacer):
     @property
     def cycle_duration(self) -> float:
         return 1 / (self.target_frequency * self.real_time_factor)
+
+
+@dataclass
+class SteppedSimulationPacer(Pacer):
+    """
+    Holds a loop by stepping a physically simulated world one cycle forward between two
+    ticks, so a controller ticking against the world runs in lockstep with its physics.
+
+    Every tick's command lands in the world state, the simulation's servos take it as
+    their set point, and the physics advances one cycle before the next tick reads the
+    world back. Whether the loop is also paced to the wall clock is the simulation's own
+    setting.
+    """
+
+    simulation: RealTimeSimulation
+    """
+    The running simulation to step; it has to be started already.
+    """
+
+    def sleep(self) -> None:
+        self.simulation.advance(1 / self.target_frequency)
 
 
 @dataclass
