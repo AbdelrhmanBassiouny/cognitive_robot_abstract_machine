@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""Render a single plan's dashboard HTML from its manifest + live GitHub data.
+"""
+Render a single plan's dashboard HTML from its manifest + live GitHub data.
 
 Generic, plan-agnostic: every plan-specific value (title, items, tracking
 link, ...) comes from the inputs below, never hardcoded here. This is the
@@ -54,16 +55,19 @@ from bastler.render_common import (
 )
 
 MAXIMUM_DEPENDENCY_STACK_LEVEL = 4
-"""Same-track dependency chains deeper than this wrap back to indent level 0."""
+"""
+Same-track dependency chains deeper than this wrap back to indent level 0.
+"""
 
 
 class LiveState(StrEnum):
-    """An item's live GitHub pull request state, classified fresh on every run.
+    """
+    An item's live GitHub pull request state, classified fresh on every run.
 
-    :attr:`NO_PULL_REQUEST` is a real member, not represented as ``None``:
-    "this item has no pull request yet" is itself a meaningful, displayable state
-    (with its own label and CSS class) rather than an absence value every
-    caller would otherwise have to special-case around the enum.
+    :attr:`NO_PULL_REQUEST` is a real member, not represented as ``None``: "this item
+    has no pull request yet" is itself a meaningful, displayable state (with its own
+    label and CSS class) rather than an absence value every caller would otherwise have
+    to special-case around the enum.
     """
 
     NO_PULL_REQUEST = "none"
@@ -75,7 +79,9 @@ class LiveState(StrEnum):
 
     @property
     def display_label(self) -> str:
-        """The human-readable label shown in the dashboard UI for this state."""
+        """
+        The human-readable label shown in the dashboard UI for this state.
+        """
         match self:
             case LiveState.NO_PULL_REQUEST:
                 return "No pull request yet"
@@ -91,17 +97,63 @@ class LiveState(StrEnum):
                 return "Not found on GitHub"
 
 
+class StallReason(StrEnum):
+    """
+    Why an item has stopped moving toward landing, so anything stacked on it is waiting
+    for a base that will never arrive.
+    """
+
+    DEFERRED = "deferred"
+    """
+    Deliberately paused, per its manifest status.
+    """
+
+    PULL_REQUEST_CLOSED_UNMERGED = "pull_request_closed_unmerged"
+    """
+    Its pull request was closed without merging.
+    """
+
+
+class DashboardCssClass(StrEnum):
+    """
+    A class ``dashboard.html`` gives an element that something outside the template
+    also has to name - this module when it composes an item card's class attribute,
+    and the tests when they read an element back out of a rendered page.
+
+    Only those classes are members. The template names every class it styles, so a
+    member here is a second spelling of one rather than its definition; what keeps
+    the two agreeing is that the tests find their elements by these values.
+    """
+
+    DRIFT = "drift"
+    """
+    One drift line on an item card.
+    """
+
+    DRIFT_BANNER = "drift-banner"
+    """
+    The sidebar banner reporting how many drift flags the plan carries.
+    """
+
+    HAS_DRIFT = "has-drift"
+    """
+    An item card carrying at least one drift flag.
+    """
+
+
 class PullRequestState(StrEnum):
-    """GitHub's own coarse-grained pull request state, as returned by its API."""
+    """
+    GitHub's own coarse-grained pull request state, as returned by its API.
+    """
 
     OPEN = "open"
     CLOSED = "closed"
 
 
 class PullRequestLabel(StrEnum):
-    """The GitHub labels this repo's own convention attaches to a pull
-    request by hand, that this codebase's logic or a session cares about
-    recognizing.
+    """
+    The GitHub labels this repo's own convention attaches to a pull request by hand,
+    that this codebase's logic or a session cares about recognizing.
 
     Not exhaustive of every label a real pull request can carry - GitHub's
     own label vocabulary is open-ended, and other automation on this repo
@@ -133,11 +185,14 @@ class ValidationProblem(ABC):
 
     @abstractmethod
     def error_message(self) -> str:
-        """The human-readable description of this problem, shown to the user."""
+        """
+        The human-readable description of this problem, shown to the user.
+        """
 
     def suggest_correction(self) -> str:
         """
-        Default implementation for suggesting a correction for manifest validation problems.
+        Default implementation for suggesting a correction for manifest validation
+        problems.
         """
         return ""
 
@@ -148,150 +203,218 @@ class InvalidManifestRoot(ValidationProblem):
     returns ``None``) or a manifest whose top level is a list or scalar."""
 
     actual_value: Any
-    """Whatever the manifest actually parsed to."""
+    """
+    Whatever the manifest actually parsed to.
+    """
 
     def error_message(self) -> str:
-        """See :meth:`ValidationProblem.describe`."""
+        """
+        See :meth:`ValidationProblem.describe`.
+        """
         return f"plan.yaml must parse to a mapping, got {type(self.actual_value).__name__}: {self.actual_value!r}"
 
 
 @dataclass
 class InvalidSchemaVersion(ValidationProblem):
-    """The manifest's ``schema_version`` is missing or not ``1``."""
+    """
+    The manifest's ``schema_version`` is missing or not ``1``.
+    """
 
     actual_value: Any
-    """Whatever ``schema_version`` actually held."""
+    """
+    Whatever ``schema_version`` actually held.
+    """
 
     def error_message(self) -> str:
-        """See :meth:`ValidationProblem.describe`."""
+        """
+        See :meth:`ValidationProblem.describe`.
+        """
         return f"schema_version must be 1, got {self.actual_value!r}"
 
 
 @dataclass
 class DuplicateItemId(ValidationProblem):
-    """Two or more items resolve to the same effective id."""
+    """
+    Two or more items resolve to the same effective id.
+    """
 
     duplicate_identifiers: list[str]
-    """Every identifier that occurred more than once."""
+    """
+    Every identifier that occurred more than once.
+    """
 
     def error_message(self) -> str:
-        """See :meth:`ValidationProblem.describe`."""
+        """
+        See :meth:`ValidationProblem.describe`.
+        """
         return f"duplicate item id(s): {sorted(self.duplicate_identifiers)}"
 
 
 @dataclass
 class UnknownTrack(ValidationProblem):
-    """An item's ``track`` doesn't resolve to a declared track."""
+    """
+    An item's ``track`` doesn't resolve to a declared track.
+    """
 
     item_identifier: str
-    """The offending item's effective id."""
+    """
+    The offending item's effective id.
+    """
 
     track: Any
-    """Whatever ``track`` actually held."""
+    """
+    Whatever ``track`` actually held.
+    """
 
     def error_message(self) -> str:
-        """See :meth:`ValidationProblem.describe`."""
+        """
+        See :meth:`ValidationProblem.describe`.
+        """
         return f"item {self.item_identifier!r} has unknown track {self.track!r}"
 
 
 @dataclass
 class UnknownStatus(ValidationProblem):
-    """An item's ``status`` isn't one of :class:`ItemStatus`'s values."""
+    """
+    An item's ``status`` isn't one of :class:`ItemStatus`'s values.
+    """
 
     item_identifier: str
-    """The offending item's effective id."""
+    """
+    The offending item's effective id.
+    """
 
     status: Any
-    """Whatever ``status`` actually held."""
+    """
+    Whatever ``status`` actually held.
+    """
 
     def error_message(self) -> str:
-        """See :meth:`ValidationProblem.describe`."""
+        """
+        See :meth:`ValidationProblem.describe`.
+        """
         return f"item {self.item_identifier!r} has unknown status {self.status!r}"
 
 
 @dataclass
 class InvalidDependsOn(ValidationProblem):
-    """An item's ``depends_on`` isn't a list.
+    """
+    An item's ``depends_on`` isn't a list.
 
-    A plain string is iterable character-by-character in Python, so without
-    this check a string ``depends_on`` would silently be misread as one
-    dependency per character instead of failing loudly.
+    A plain string is iterable character-by-character in Python, so without this check a
+    string ``depends_on`` would silently be misread as one dependency per character
+    instead of failing loudly.
     """
 
     item_identifier: str
-    """The offending item's effective id."""
+    """
+    The offending item's effective id.
+    """
 
     actual_type: type
-    """The type ``depends_on`` actually held, instead of ``list``."""
+    """
+    The type ``depends_on`` actually held, instead of ``list``.
+    """
 
     def error_message(self) -> str:
-        """See :meth:`ValidationProblem.describe`."""
+        """
+        See :meth:`ValidationProblem.describe`.
+        """
         return f"item {self.item_identifier!r} depends_on must be a list, got {self.actual_type.__name__}"
 
 
 @dataclass
 class InvalidBlockers(ValidationProblem):
-    """An item's ``blockers`` isn't a list.
+    """
+    An item's ``blockers`` isn't a list.
 
-    A plain string is iterable character-by-character in Python, so without
-    this check a string ``blockers`` would silently be misread as one
-    blocker per character instead of failing loudly.
+    A plain string is iterable character-by-character in Python, so without this check a
+    string ``blockers`` would silently be misread as one blocker per character instead
+    of failing loudly.
     """
 
     item_identifier: str
-    """The offending item's effective id."""
+    """
+    The offending item's effective id.
+    """
 
     actual_type: type
-    """The type ``blockers`` actually held, instead of ``list``."""
+    """
+    The type ``blockers`` actually held, instead of ``list``.
+    """
 
     def error_message(self) -> str:
-        """See :meth:`ValidationProblem.describe`."""
+        """
+        See :meth:`ValidationProblem.describe`.
+        """
         return f"item {self.item_identifier!r} blockers must be a list, got {self.actual_type.__name__}"
 
 
 @dataclass
 class UnknownDependency(ValidationProblem):
-    """An item's ``depends_on`` names an id that doesn't resolve to another item."""
+    """
+    An item's ``depends_on`` names an id that doesn't resolve to another item.
+    """
 
     item_identifier: str
-    """The offending item's effective id."""
+    """
+    The offending item's effective id.
+    """
 
     dependency_identifier: str
-    """The unresolvable id named in ``depends_on``."""
+    """
+    The unresolvable id named in ``depends_on``.
+    """
 
     def error_message(self) -> str:
-        """See :meth:`ValidationProblem.describe`."""
+        """
+        See :meth:`ValidationProblem.describe`.
+        """
         return f"item {self.item_identifier!r} depends_on unknown id {self.dependency_identifier!r}"
 
 
 @dataclass
 class UnknownWave(ValidationProblem):
-    """A track's ``wave`` doesn't resolve to a declared wave."""
+    """
+    A track's ``wave`` doesn't resolve to a declared wave.
+    """
 
     track_identifier: str
-    """The offending track's id."""
+    """
+    The offending track's id.
+    """
 
     wave: Any
-    """Whatever ``wave`` actually held."""
+    """
+    Whatever ``wave`` actually held.
+    """
 
     def error_message(self) -> str:
-        """See :meth:`ValidationProblem.describe`."""
+        """
+        See :meth:`ValidationProblem.describe`.
+        """
         return f"track {self.track_identifier!r} has unknown wave {self.wave!r}"
 
 
 @dataclass
 class DependencyCycle(ValidationProblem):
-    """A ``depends_on`` chain loops back on itself.
+    """
+    A ``depends_on`` chain loops back on itself.
 
-    Undetected, a cycle causes affected items to silently disappear from
-    the rendered dependency stack instead of being reported."""
+    Undetected, a cycle causes affected items to silently disappear from the rendered
+    dependency stack instead of being reported.
+    """
 
     cycle_identifiers: list[str]
-    """The item ids forming the cycle, in order, with the first id repeated
-    at the end to show where it closes."""
+    """
+    The item ids forming the cycle, in order, with the first id repeated at the end to
+    show where it closes.
+    """
 
     def error_message(self) -> str:
-        """See :meth:`ValidationProblem.describe`."""
+        """
+        See :meth:`ValidationProblem.describe`.
+        """
         return f"depends_on cycle: {' -> '.join(self.cycle_identifiers)}"
 
 
@@ -311,15 +434,15 @@ class PlanValidationError(Exception):
 def _find_dependency_cycle(
     item_identifiers: list[str], depends_on_by_identifier: dict[str, list[str]]
 ) -> list[str] | None:
-    """Find one cycle in the ``depends_on`` graph, if any exists.
+    """
+    Find one cycle in the ``depends_on`` graph, if any exists.
 
     :param item_identifiers: Every item's effective id.
-    :param depends_on_by_identifier: Each item id's own ``depends_on`` list,
-        already known-valid list ids (an id naming something outside
-        ``item_identifiers`` is a separate, already-reported problem and is
-        skipped here rather than followed).
-    :return: The cycle's item ids in order, with the first id repeated at
-        the end, or ``None`` if the graph is acyclic.
+    :param depends_on_by_identifier: Each item id's own ``depends_on`` list, already
+        known-valid list ids (an id naming something outside ``item_identifiers`` is a
+        separate, already-reported problem and is skipped here rather than followed).
+    :return: The cycle's item ids in order, with the first id repeated at the end, or
+        ``None`` if the graph is acyclic.
     """
     UNVISITED, IN_PROGRESS, DONE = 0, 1, 2
     state = {identifier: UNVISITED for identifier in item_identifiers}
@@ -351,17 +474,15 @@ def _find_dependency_cycle(
 
 
 def validate_plan(plan: dict[str, Any]) -> None:
-    """Check the same schema rules plan-create is required to produce
-    manifests that pass.
+    """
+    Check the same schema rules plan-create is required to produce manifests that pass.
 
-    :param plan: The raw, freshly-``yaml.safe_load``-ed plan.yaml content.
-        Deliberately a loosely-typed dict rather than the strongly-typed
-        :class:`Plan` dataclass: this function must tolerate partially
-        malformed input well enough to collect every problem in it, which
-        a dataclass constructor (failing outright on the first missing or
-        wrong-typed field) cannot do.
-    :raises PlanValidationError: If any rule is violated, carrying every
-        problem found.
+    :param plan: The raw, freshly-``yaml.safe_load``-ed plan.yaml content. Deliberately
+        a loosely-typed dict rather than the strongly-typed :class:`Plan` dataclass:
+        this function must tolerate partially malformed input well enough to collect
+        every problem in it, which a dataclass constructor (failing outright on the
+        first missing or wrong-typed field) cannot do.
+    :raises PlanValidationError: If any rule is violated, carrying every problem found.
     """
     if not isinstance(plan, dict):
         raise PlanValidationError([InvalidManifestRoot(plan)])
@@ -422,29 +543,42 @@ def validate_plan(plan: dict[str, Any]) -> None:
 
 
 class MissingMergeTimestampError(ValueError):
-    """Raised when a closed pull request's ``pr_data.json`` entry omits the
-    ``merged_at`` key altogether, which leaves no way to tell a merged pull
-    request from one closed unmerged."""
+    """
+    Raised when a closed pull request's ``pr_data.json`` entry omits the ``merged_at``
+    key altogether, which leaves no way to tell a merged pull request from one closed
+    unmerged.
+    """
 
 
 @dataclass
 class PullRequestRecord:
-    """The live GitHub state of one pull request, as gathered by the skill."""
+    """
+    The live GitHub state of one pull request, as gathered by the skill.
+    """
 
     state: PullRequestState
-    """GitHub's own coarse-grained state."""
+    """
+    GitHub's own coarse-grained state.
+    """
 
     draft: bool = False
-    """Whether the pull request is currently a draft."""
+    """
+    Whether the pull request is currently a draft.
+    """
 
     merged_at: datetime | None = None
-    """The pull request's merge timestamp, or ``None`` if GitHub never
-    recorded a merge through its own merge API."""
+    """
+    The pull request's merge timestamp, or ``None`` if GitHub never recorded a merge
+    through its own merge API.
+    """
 
     labels: list[str] = field(default_factory=list)
-    """The pull request's raw GitHub labels, exactly as GitHub reports them.
-    Kept as ``list[str]`` rather than ``list[PullRequestLabel]``: a real pull
-    request can carry labels this codebase has no reason to know about (other
+    """
+    The pull request's raw GitHub labels, exactly as GitHub reports them.
+
+    Kept as ``list[str]`` rather than ``list[PullRequestLabel]``: a real pull request can carry
+    labels this codebase has no reason to know about (other.
+
     automation's own labels, GitHub's defaults), so this field must tolerate
     anything - see :attr:`identified_labels` for the subset this codebase
     actually recognizes. Needed because :attr:`merged_at` alone misses a real
@@ -452,7 +586,8 @@ class PullRequestRecord:
     branch pushed directly, then the pull request closed by hand rather than
     through GitHub's merge button) never gets ``merged_at`` set, so the
     closer manually adds the :attr:`PullRequestLabel.MERGED` label to record
-    what actually happened - see :meth:`was_merged`."""
+    what actually happened - see :meth:`was_merged`.
+    """
 
     @property
     def identified_labels(self) -> frozenset[PullRequestLabel]:
@@ -468,12 +603,13 @@ class PullRequestRecord:
 
     @classmethod
     def from_mapping(cls, data: dict[str, Any]) -> PullRequestRecord:
-        """Build a record from one entry of ``pr_data.json``.
+        """
+        Build a record from one entry of ``pr_data.json``.
 
-        A closed entry must carry ``merged_at`` explicitly, ``null`` included:
-        a gatherer that never requested the field would otherwise be
-        indistinguishable from GitHub reporting no merge, silently turning
-        every merged pull request into a closed-unmerged one.
+        A closed entry must carry ``merged_at`` explicitly, ``null`` included: a
+        gatherer that never requested the field would otherwise be indistinguishable
+        from GitHub reporting no merge, silently turning every merged pull request into
+        a closed-unmerged one.
 
         :raises MissingMergeTimestampError: If a closed entry omits ``merged_at``.
         """
@@ -516,11 +652,12 @@ def classify_live_state(
     repository: str,
     pull_requests_by_repository: PullRequestsByRepository,
 ) -> LiveState:
-    """Classify one item's live GitHub state from its pull request number and repository.
+    """
+    Classify one item's live GitHub state from its pull request number and repository.
 
     Standalone so callers other than :class:`DashboardRenderer` (notably
-    ``sync_manifest_status.py``, which needs the same classification to
-    decide what to auto-correct) don't have to duplicate this logic.
+    ``sync_manifest_status.py``, which needs the same classification to decide what to
+    auto-correct) don't have to duplicate this logic.
 
     :param pull_request_number: The item's tracked pull request number, or ``None`` if
         it has no pull request yet.
@@ -550,13 +687,19 @@ class Wave:
     wave 1 has landed."""
 
     id: str
-    """The wave's stable identifier, referenced by :attr:`Track.wave`."""
+    """
+    The wave's stable identifier, referenced by :attr:`Track.wave`.
+    """
 
     name: str
-    """The wave's display name."""
+    """
+    The wave's display name.
+    """
 
     description: str | None = None
-    """An optional one-line note about the wave, shown in the dashboard header."""
+    """
+    An optional one-line note about the wave, shown in the dashboard header.
+    """
 
     @classmethod
     def from_mapping(cls, data: dict[str, Any]) -> Wave:
@@ -576,16 +719,24 @@ class Track:
     independently of other tracks in the same wave."""
 
     id: str
-    """The track's stable identifier, referenced by :attr:`Item.track`."""
+    """
+    The track's stable identifier, referenced by :attr:`Item.track`.
+    """
 
     name: str
-    """The track's display name."""
+    """
+    The track's display name.
+    """
 
     wave: str
-    """The :attr:`Wave.id` this track belongs to."""
+    """
+    The :attr:`Wave.id` this track belongs to.
+    """
 
     description: str | None = None
-    """Shown in place of an item list when the track has no items yet."""
+    """
+    Shown in place of an item list when the track has no items yet.
+    """
 
     @classmethod
     def from_mapping(cls, data: dict[str, Any]) -> Track:
@@ -608,12 +759,16 @@ class DependencyChip:
     to the raw identifier itself."""
 
     identifier: str
-    """The chip's display text: the dependency's own effective identifier,
-    or the raw ``depends_on`` entry if it doesn't resolve to a known item."""
+    """
+    The chip's display text: the dependency's own effective identifier, or the raw
+    ``depends_on`` entry if it doesn't resolve to a known item.
+    """
 
     tooltip: str
-    """The chip's hover title: the dependency's title, or its identifier
-    again if it doesn't resolve to a known item."""
+    """
+    The chip's hover title: the dependency's title, or its identifier again if it
+    doesn't resolve to a known item.
+    """
 
     is_ready: bool
     """Whether the dependency is actually safe to build on right now
@@ -637,13 +792,19 @@ class ItemAction(ABC):
     :class:`ResolveAction`."""
 
     label: str
-    """The button's text, e.g. ``"Start now"`` or ``"Resolve"``."""
+    """
+    The button's text, e.g. ``"Start now"`` or ``"Resolve"``.
+    """
 
     plan_id: str
-    """The plan this action's command targets."""
+    """
+    The plan this action's command targets.
+    """
 
     item_identifier: str
-    """The item this action's command targets."""
+    """
+    The item this action's command targets.
+    """
 
     skill_command_name: ClassVar[str]
     """The ``/plan-item-...`` skill this action invokes - fixed per
@@ -653,15 +814,17 @@ class ItemAction(ABC):
 
     @property
     def command(self) -> str:
-        """The full command copied to the clipboard when the button is
-        clicked."""
+        """
+        The full command copied to the clipboard when the button is clicked.
+        """
         return f"{self.skill_command_name} {self.plan_id} {self.item_identifier}"
 
 
 @dataclass(frozen=True)
 class StartNowAction(ItemAction):
-    """Routes a not-started item, once every dependency is ready, to
-    ``plan-item-kickoff``."""
+    """
+    Routes a not-started item, once every dependency is ready, to ``plan-item-kickoff``.
+    """
 
     skill_command_name: ClassVar[str] = "/plan-item-kickoff"
 
@@ -677,15 +840,21 @@ class ResolveAction(ItemAction):
 
 @dataclass(frozen=True)
 class ModelOption:
-    """One choice in a dashboard action button's model dropdown."""
+    """
+    One choice in a dashboard action button's model dropdown.
+    """
 
     value: str
-    """The model id to prepend as ``/model <value>`` before the copied
-    command, or ``""`` to copy the command alone and inherit whatever
-    model the pasted-into session is already running."""
+    """
+    The model id to prepend as ``/model <value>`` before the copied command, or ``""``
+    to copy the command alone and inherit whatever model the pasted-into session is
+    already running.
+    """
 
     label: str
-    """The human-readable label shown in the dropdown."""
+    """
+    The human-readable label shown in the dropdown.
+    """
 
 
 AVAILABLE_MODELS: list[ModelOption] = [
@@ -700,56 +869,294 @@ plan-specific, so declared once at module level rather than threaded through
 :class:`Plan`."""
 
 
+class ManifestDriftCause(StrEnum):
+    """
+    Which way an item's manually-maintained status disagrees with the live GitHub state
+    of the pull request it names.
+    """
+
+    PULL_REQUEST_NOT_FOUND = "pull_request_not_found"
+    """
+    The manifest names a pull request GitHub does not have.
+    """
+
+    MARKED_DONE_WHILE_OPEN = "marked_done_while_open"
+    """
+    The item claims to be finished; its pull request is still open.
+    """
+
+    MARKED_UNFINISHED_WHILE_MERGED = "marked_unfinished_while_merged"
+    """
+    The item claims not to be finished; its pull request has already landed.
+    """
+
+    MARKED_UNDER_WAY_WHILE_CLOSED = "marked_under_way_while_closed"
+    """
+    The item claims to still be worked on; its pull request is no longer open.
+    """
+
+    MARKED_DONE_WHILE_CLOSED_UNMERGED = "marked_done_while_closed_unmerged"
+    """
+    The item claims to be finished; its pull request was closed without merging.
+    """
+
+
+class NotStalledDependencyError(ValueError):
+    """
+    Raised when a drift flag is built for a dependency that has not stalled.
+    """
+
+
+@dataclass(frozen=True)
+class DriftFlag(ABC):
+    """One thing about an item that needs a human's attention - see
+    :attr:`Item.drift_flags`.
+
+    Structured rather than a bare sentence: what the dashboard renders is one
+    string, but which flag an item carries is a decision other code and tests
+    compare against, and a sentence is the one form of it that cannot be
+    compared without retyping it. Not instantiated directly - see
+    :class:`ManifestDrift`/:class:`StalledDependencyDrift`."""
+
+    @property
+    @abstractmethod
+    def description(self) -> str:
+        """
+        The sentence shown on the item's card and in the drift banner.
+        """
+
+
+@dataclass(frozen=True)
+class ManifestDrift(DriftFlag):
+    """
+    An item's manually-maintained :attr:`Item.status` disagreeing with the live GitHub
+    state of the pull request it names.
+    """
+
+    cause: ManifestDriftCause
+    """
+    Which way the two disagree.
+    """
+
+    status: ItemStatus
+    """
+    The status the manifest records.
+    """
+
+    live_state: LiveState
+    """
+    The live state GitHub reports.
+    """
+
+    pull_request_number: int | None
+    """
+    The pull request the disagreement is about.
+    """
+
+    @classmethod
+    def of(cls, item: Item) -> ManifestDrift | None:
+        """
+        One item's manifest drift, or ``None`` when its status and live state agree.
+        """
+        cause = cls._cause_of(item)
+        if cause is None:
+            return None
+        return cls(
+            cause=cause,
+            status=item.status,
+            live_state=item.live_state,
+            pull_request_number=item.pull_request_number,
+        )
+
+    @staticmethod
+    def _cause_of(item: Item) -> ManifestDriftCause | None:
+        """
+        Which way one item's status disagrees with its live state, if it does.
+        """
+        match item.live_state, item.status:
+            case LiveState.NOT_FOUND, _:
+                return ManifestDriftCause.PULL_REQUEST_NOT_FOUND
+            case (LiveState.OPEN_DRAFT | LiveState.OPEN_READY), ItemStatus.DONE:
+                return ManifestDriftCause.MARKED_DONE_WHILE_OPEN
+            case LiveState.MERGED, (
+                ItemStatus.NOT_STARTED | ItemStatus.BLOCKED | ItemStatus.DEFERRED
+            ):
+                return ManifestDriftCause.MARKED_UNFINISHED_WHILE_MERGED
+            case (LiveState.MERGED | LiveState.CLOSED_UNMERGED), (
+                ItemStatus.IN_PROGRESS | ItemStatus.BLOCKED
+            ):
+                return ManifestDriftCause.MARKED_UNDER_WAY_WHILE_CLOSED
+            case LiveState.CLOSED_UNMERGED, ItemStatus.DONE:
+                return ManifestDriftCause.MARKED_DONE_WHILE_CLOSED_UNMERGED
+            case _:
+                return None
+
+    @property
+    def description(self) -> str:
+        """
+        Why the manifest and GitHub disagree, in one sentence.
+        """
+        pull_request = f"pull request #{self.pull_request_number}"
+        match self.cause:
+            case ManifestDriftCause.PULL_REQUEST_NOT_FOUND:
+                return f"{pull_request} not found on GitHub"
+            case ManifestDriftCause.MARKED_DONE_WHILE_OPEN:
+                return f"marked done, but {pull_request} is still open"
+            case ManifestDriftCause.MARKED_UNFINISHED_WHILE_MERGED:
+                return (
+                    f"marked {self.status.value}, but {pull_request} is already merged"
+                )
+            case ManifestDriftCause.MARKED_UNDER_WAY_WHILE_CLOSED:
+                live_state = self.live_state.value.replace("_", " ")
+                return f"marked {self.status.value}, but {pull_request} is {live_state}"
+            case ManifestDriftCause.MARKED_DONE_WHILE_CLOSED_UNMERGED:
+                return f"marked done, but {pull_request} was closed without merging"
+
+
+@dataclass(frozen=True)
+class StalledDependencyDrift(DriftFlag):
+    """
+    An item still stacked on a dependency that has stalled, so the base it is waiting
+    for will never arrive.
+    """
+
+    dependency_identifier: str
+    """
+    The stalled dependency.
+    """
+
+    reason: StallReason
+    """
+    Why that dependency stopped.
+    """
+
+    pull_request_number: int | None = None
+    """
+    That dependency's pull request, named when it is what stalled.
+    """
+
+    reparent_targets: tuple[str, ...] = ()
+    """What the dependent could be stacked on instead - the stalled
+    dependency's own ``depends_on``, empty when it has none."""
+
+    @classmethod
+    def of(cls, dependency: Item) -> StalledDependencyDrift:
+        """
+        The flag one stalled dependency earns its dependents.
+
+        :raises NotStalledDependencyError: if the dependency has not stalled.
+        """
+        reason = dependency.stall_reason
+        if reason is None:
+            raise NotStalledDependencyError(dependency.identifier)
+        return cls(
+            dependency_identifier=dependency.identifier,
+            reason=reason,
+            pull_request_number=dependency.pull_request_number,
+            reparent_targets=tuple(dependency.depends_on),
+        )
+
+    @property
+    def description(self) -> str:
+        """Which dependency stalled, why, and what to reparent onto - the
+        suggestion omitted entirely when there is nothing to suggest."""
+        match self.reason:
+            case StallReason.DEFERRED:
+                stopped = "which is deferred"
+            case StallReason.PULL_REQUEST_CLOSED_UNMERGED:
+                stopped = (
+                    f"whose pull request #{self.pull_request_number} "
+                    "was closed without merging"
+                )
+        described = f"depends on {self.dependency_identifier!r}, {stopped}"
+        if not self.reparent_targets:
+            return described
+        return f"{described} - consider reparenting onto {', '.join(self.reparent_targets)}"
+
+
 @dataclass
 class Item:
-    """One tracked unit of work (typically one branch/pull request) within a plan."""
+    """
+    One tracked unit of work (typically one branch/pull request) within a plan.
+    """
 
     title: str
-    """The item's display title."""
+    """
+    The item's display title.
+    """
 
     branch: str
-    """The git branch this item is implemented on."""
+    """
+    The git branch this item is implemented on.
+    """
 
     track: str
-    """The :attr:`Track.id` this item belongs to."""
+    """
+    The :attr:`Track.id` this item belongs to.
+    """
 
     status: ItemStatus
     """The manually-maintained status - see :class:`ItemStatus`."""
 
     id: str | None = None
-    """The item's stable identifier, defaulting to :attr:`branch` if unset."""
+    """
+    The item's stable identifier, defaulting to :attr:`branch` if unset.
+    """
 
     pull_request_number: int | None = None
-    """The pull request number tracking this item, if one exists yet."""
+    """
+    The pull request number tracking this item, if one exists yet.
+    """
 
     repository: str | None = None
-    """Overrides the plan's ``default_repository`` for this item, if set."""
+    """
+    Overrides the plan's ``default_repository`` for this item, if set.
+    """
 
     session: str | None = None
-    """A link to the session that produced this item, if any."""
+    """
+    A link to the session that produced this item, if any.
+    """
 
     notes: str | None = None
-    """Free-text notes shown on the item's card."""
+    """
+    Free-text notes shown on the item's card.
+    """
 
     depends_on: list[str] = field(default_factory=list)
-    """The identifiers of items that must complete before this one can start."""
+    """
+    The identifiers of items that must complete before this one can start.
+    """
 
     blockers: list[str] = field(default_factory=list)
-    """Free-text descriptions of what's currently blocking this item."""
+    """
+    Free-text descriptions of what's currently blocking this item.
+    """
 
     live_state: LiveState = field(default=LiveState.NO_PULL_REQUEST, init=False)
-    """This item's live GitHub state, filled in by :meth:`DashboardRenderer.render`."""
+    """
+    This item's live GitHub state, filled in by :meth:`DashboardRenderer.render`.
+    """
 
-    drift_description: str | None = field(default=None, init=False)
-    """Why :attr:`status` disagrees with :attr:`live_state`, if it does."""
+    drift_flags: list[DriftFlag] = field(default_factory=list, init=False)
+    """
+    Everything about this item that needs a human's attention: why :attr:`status`
+    disagrees with :attr:`live_state`, and one entry per dependency that has stalled
+    under it.
+
+    A list because both can apply at once, and reporting only one of them would hide the
+    other.
+    """
 
     pull_request_url: str | None = field(default=None, init=False)
     """This item's pull request URL on GitHub, filled in by
     :meth:`DashboardRenderer.render` - ``None`` if it has no pull request yet."""
 
     dependency_chips: list[DependencyChip] = field(default_factory=list, init=False)
-    """Ready-to-render chips for :attr:`depends_on`, filled in by
-    :meth:`DashboardRenderer.render`."""
+    """
+    Ready-to-render chips for :attr:`depends_on`, filled in by
+    :meth:`DashboardRenderer.render`.
+    """
 
     action: ItemAction | None = field(default=None, init=False)
     """This item's dashboard action button, filled in by
@@ -759,15 +1166,21 @@ class Item:
     status always gets one: something is always actionable next."""
 
     is_bug_fix: bool = field(default=False, init=False)
-    """Whether this item's pull request carries :attr:`PullRequestLabel.BUG`,
-    filled in by :meth:`DashboardRenderer.render`. Marks the item wherever it
+    """
+    Whether this item's pull request carries :attr:`PullRequestLabel.BUG`, filled in by
+    :meth:`DashboardRenderer.render`.
+
+    Marks the item wherever it
     already appears rather than grouping it separately: fixing a bug is a
     property of the work, not a distinct next action, and it can apply to an
-    item in any of the sidebar's action groups."""
+    item in any of the sidebar's action groups.
+    """
 
     needs_review: bool = field(default=False, init=False)
-    """Whether this item's pull request is open, still a draft, and actually worth
+    """
+    Whether this item's pull request is open, still a draft, and actually worth
     reviewing right now, filled in by :meth:`DashboardRenderer.render`.
+
     This plan's convention keeps every pull request in draft until its author has
     reviewed it themselves - so a draft pull request is exactly the population that
     still needs that review, and flipping it to "ready for review" *is*
@@ -777,23 +1190,30 @@ class Item:
     "Review" button and the "ready to review" sidebar list - distinct from
     :attr:`Item.action`, since reviewing a draft pull request and resuming/resolving
     the underlying work are different next steps that can both apply to
-    the same item at once."""
+    the same item at once.
+    """
 
     @property
     def has_open_pull_request(self) -> bool:
-        """Whether this item currently has an open (draft or ready) pull request."""
+        """
+        Whether this item currently has an open (draft or ready) pull request.
+        """
         return self.live_state in (LiveState.OPEN_DRAFT, LiveState.OPEN_READY)
 
     @property
     def identifier(self) -> str:
-        """The item's effective identifier: :attr:`id`, or :attr:`branch` if unset."""
+        """
+        The item's effective identifier: :attr:`id`, or :attr:`branch` if unset.
+        """
         return self.id or self.branch
 
     @property
     def status_and_drift_css_class(self) -> str:
-        """The item card's dynamic CSS class suffix: ``status-<value>``,
-        plus ``has-drift`` once :attr:`drift_description` is set."""
-        drift_suffix = " has-drift" if self.drift_description else ""
+        """
+        The item card's dynamic CSS class suffix: ``status-<value>``, plus
+        :attr:`DashboardCssClass.HAS_DRIFT` once :attr:`drift_flags` is non-empty.
+        """
+        drift_suffix = f" {DashboardCssClass.HAS_DRIFT}" if self.drift_flags else ""
         return f"status-{self.status.value}{drift_suffix}"
 
     @classmethod
@@ -817,7 +1237,9 @@ class Item:
         )
 
     def is_effectively_done(self) -> bool:
-        """Whether this item can unblock a dependent, by manifest status or live state."""
+        """
+        Whether this item can unblock a dependent, by manifest status or live state.
+        """
         return self.status is ItemStatus.DONE or self.live_state is LiveState.MERGED
 
     def is_ready_to_unblock_dependents(self) -> bool:
@@ -830,10 +1252,11 @@ class Item:
         return self.is_effectively_done() or self.live_state is LiveState.OPEN_READY
 
     def is_ready_for_dependent_review(self) -> bool:
-        """Whether a dependent's pull request is worth reviewing yet: this item's
-        own pull request exists and has reached review, whether it is still open
-        or has already landed. Having no pull request at all is the one state
-        that makes a dependent premature to review.
+        """
+        Whether a dependent's pull request is worth reviewing yet: this item's own pull
+        request exists and has reached review, whether it is still open or has already
+        landed. Having no pull request at all is the one state that makes a dependent
+        premature to review.
 
         ..note:: Deliberately weaker than :meth:`is_ready_to_unblock_dependents`,
             which additionally requires being out of draft: building a branch on
@@ -842,38 +1265,82 @@ class Item:
         """
         return self.has_open_pull_request or self.is_effectively_done()
 
+    @property
+    def stall_reason(self) -> StallReason | None:
+        """Why this item has stopped moving toward landing, so anything stacked
+        on it is waiting for a base that will never arrive - ``None`` while it
+        can still land.
+
+        ..note:: Not the negation of :meth:`is_ready_to_unblock_dependents`,
+            which is also unset for a not-started dependency and for an open
+            draft - and stacking on an open draft is this repo's normal
+            workflow, well before that draft is safe to call finished.
+        """
+        if self.status is ItemStatus.DEFERRED:
+            return StallReason.DEFERRED
+        if self.live_state is LiveState.CLOSED_UNMERGED:
+            return StallReason.PULL_REQUEST_CLOSED_UNMERGED
+        return None
+
+    def is_stalled(self) -> bool:
+        """Whether this item has stopped moving toward landing - the third
+        sibling beside :meth:`is_ready_to_unblock_dependents` and
+        :meth:`is_ready_for_dependent_review`, answering only whether, where
+        :attr:`stall_reason` answers why."""
+        return self.stall_reason is not None
+
 
 @dataclass
 class Plan:
-    """A full initiative spanning multiple pull requests and sessions, as read from plan.yaml."""
+    """
+    A full initiative spanning multiple pull requests and sessions, as read from
+    plan.yaml.
+    """
 
     id: str
     """The plan's stable identifier - the directory name under ``plans/``."""
 
     title: str
-    """The plan's display title."""
+    """
+    The plan's display title.
+    """
 
     description: str
-    """A one-line description shown under the title."""
+    """
+    A one-line description shown under the title.
+    """
 
     default_repository: str
-    """The ``"owner/repo"`` items resolve pull requests against unless they override it."""
+    """
+    The ``"owner/repo"`` items resolve pull requests against unless they override it.
+    """
 
     waves: list[Wave]
-    """The plan's sequential phases, in order."""
+    """
+    The plan's sequential phases, in order.
+    """
 
     tracks: list[Track]
-    """The plan's parallel lines of work, each tagged with a wave."""
+    """
+    The plan's parallel lines of work, each tagged with a wave.
+    """
 
     items: list[Item]
-    """The plan's tracked units of work, each tagged with a track."""
+    """
+    The plan's tracked units of work, each tagged with a track.
+    """
 
     tracking_issue: int | None = None
-    """The coordination-mailbox issue or pull request number for structural changes, if any."""
+    """
+    The coordination-mailbox issue or pull request number for structural changes, if
+    any.
+    """
 
     @property
     def repository_url(self) -> str:
-        """:attr:`default_repository`'s GitHub URL, ready for the masthead link."""
+        """
+        :attr:`default_repository`'s GitHub URL, ready for the masthead link.
+        """
         return f"https://github.com/{self.default_repository}"
 
     @classmethod
@@ -894,31 +1361,51 @@ class Plan:
 
 @dataclass
 class DashboardSummary:
-    """The one-line JSON summary this script prints to stdout on success."""
+    """
+    The one-line JSON summary this script prints to stdout on success.
+    """
 
     status_counts: dict[ItemStatus, int]
-    """How many items carry each :class:`ItemStatus`."""
+    """
+    How many items carry each :class:`ItemStatus`.
+    """
 
     drift_items: list[str]
-    """Titles of items whose manifest status disagrees with live GitHub state."""
+    """
+    Titles of items carrying at least one drift flag.
+    """
+
+    drift_flag_count: int
+    """How many drift flags those items carry between them - more than one
+    per item where an item's manifest status and its dependencies both need
+    attention."""
 
     ready_to_start: list[str]
-    """Titles of not-started items whose dependencies are all ready."""
+    """
+    Titles of not-started items whose dependencies are all ready.
+    """
 
     blocker_maybe_cleared: list[str]
-    """Titles of blocked items with at least one dependency ready."""
+    """
+    Titles of blocked items with at least one dependency ready.
+    """
 
     ready_to_review: list[str]
-    """Titles of items with an open draft pull request, not blocked, whose
-    dependencies (if any) already have their own open pull request."""
+    """
+    Titles of items with an open draft pull request, not blocked, whose dependencies (if
+    any) already have their own open pull request.
+    """
 
     def to_json_dict(self) -> dict[str, Any]:
-        """Render to the plain-dict shape the calling skill expects."""
+        """
+        Render to the plain-dict shape the calling skill expects.
+        """
         return {
             "counts": {
                 status.value: count for status, count in self.status_counts.items()
             },
             "drift_count": len(self.drift_items),
+            "drift_flag_count": self.drift_flag_count,
             "drift_items": self.drift_items,
             "ready_to_start": self.ready_to_start,
             "blocker_maybe_cleared": self.blocker_maybe_cleared,
@@ -928,30 +1415,40 @@ class DashboardSummary:
 
 @dataclass
 class StackedItem:
-    """One item's position within its track's dependency stack, for the
-    ``item_card`` template macro to render.
+    """
+    One item's position within its track's dependency stack, for the ``item_card``
+    template macro to render.
 
     Carries two independent indent computations - as normally shown, and as
     shown once done items are hidden - so the page can switch between them
     client-side (see ``hide-done`` in dashboard.html) without a re-render:
     a done dependency, once hidden, no longer visually justifies indenting
     its dependents, so they dedent as if they had no dependency on it at
-    all rather than merely one level shallower."""
+    all rather than merely one level shallower.
+    """
 
     item: Item
-    """The item itself."""
+    """
+    The item itself.
+    """
 
     indent_level: int
-    """How deeply nested this item is under its same-track dependency chain,
-    capped at :data:`MAXIMUM_DEPENDENCY_STACK_LEVEL`."""
+    """
+    How deeply nested this item is under its same-track dependency chain, capped at
+    :data:`MAXIMUM_DEPENDENCY_STACK_LEVEL`.
+    """
 
     wrap_parent: Item | None
-    """The item this one visually continues from, if the chain wrapped back
-    to indent level 0 past the cap; ``None`` otherwise."""
+    """
+    The item this one visually continues from, if the chain wrapped back to indent level
+    0 past the cap; ``None`` otherwise.
+    """
 
     indent_level_with_done_hidden: int
-    """:attr:`indent_level`, recomputed as if every ``done`` item in the
-    same-track dependency chain weren't a dependency at all."""
+    """
+    :attr:`indent_level`, recomputed as if every ``done`` item in the same-track
+    dependency chain weren't a dependency at all.
+    """
 
     wrap_parent_with_done_hidden: Item | None
     """:attr:`wrap_parent`, recomputed the same way - never itself a
@@ -959,9 +1456,11 @@ class StackedItem:
 
     @property
     def indent_style(self) -> str:
-        """The card's ``style`` attribute value: both indent levels as CSS
-        custom properties, so plain CSS (keyed off the page's ``hide-done``
-        class) picks whichever applies without any per-toggle re-render."""
+        """
+        The card's ``style`` attribute value: both indent levels as CSS custom
+        properties, so plain CSS (keyed off the page's ``hide-done`` class) picks
+        whichever applies without any per-toggle re-render.
+        """
         return (
             f"--indent-level: {self.indent_level}; "
             f"--indent-level-hidden-done: {self.indent_level_with_done_hidden};"
@@ -970,11 +1469,15 @@ class StackedItem:
 
 @dataclass
 class TrackSection:
-    """One track's rendering context: its declared info plus its items,
-    already ordered into a dependency stack."""
+    """
+    One track's rendering context: its declared info plus its items, already ordered
+    into a dependency stack.
+    """
 
     track: Track
-    """The track itself."""
+    """
+    The track itself.
+    """
 
     stacked_items: list[StackedItem]
     """The track's items, stacked - empty if the track has none yet."""
@@ -988,19 +1491,26 @@ class TrackSection:
 
 @dataclass
 class WaveSection:
-    """One wave's rendering context: its declared info plus its tracks, in order."""
+    """
+    One wave's rendering context: its declared info plus its tracks, in order.
+    """
 
     wave: Wave
-    """The wave itself."""
+    """
+    The wave itself.
+    """
 
     tracks: list[TrackSection]
-    """The wave's tracks, in declaration order."""
+    """
+    The wave's tracks, in declaration order.
+    """
 
 
 @dataclass
 class DashboardRenderer:
-    """Renders one :class:`Plan` (plus its live pull request data and roadmap text)
-    into the dashboard's HTML.
+    """
+    Renders one :class:`Plan` (plus its live pull request data and roadmap text) into
+    the dashboard's HTML.
 
     A dataclass rather than a bag of closures over shared state: each
     concern (classifying live state, computing next steps, stacking a
@@ -1011,30 +1521,42 @@ class DashboardRenderer:
     """
 
     plan: Plan
-    """The plan being rendered."""
+    """
+    The plan being rendered.
+    """
 
     roadmap_text: str
-    """The plan's ``roadmap.md`` narrative content."""
+    """
+    The plan's ``roadmap.md`` narrative content.
+    """
 
     pull_requests_by_repository: PullRequestsByRepository
-    """Live pull request state for every repository referenced by the plan's items."""
+    """
+    Live pull request state for every repository referenced by the plan's items.
+    """
 
     tracking_url: str | None
-    """The tracking issue's or pull request's ``html_url``, if the plan has one."""
+    """
+    The tracking issue's or pull request's ``html_url``, if the plan has one.
+    """
 
     items_by_identifier: dict[str, Item] = field(init=False)
-    """Every item, keyed by :attr:`Item.identifier`."""
+    """
+    Every item, keyed by :attr:`Item.identifier`.
+    """
 
     def __post_init__(self) -> None:
         self.items_by_identifier = {item.identifier: item for item in self.plan.items}
 
     def render(self) -> tuple[str, DashboardSummary]:
-        """Classify live state/drift for every item, then render the full page.
+        """
+        Classify live state/drift for every item, then render the full page.
 
         :return: The rendered HTML, and the summary to print on stdout.
         """
         self._classify_items()
-        drift_items = [item for item in self.plan.items if item.drift_description]
+        drift_items = [item for item in self.plan.items if item.drift_flags]
+        drift_flag_count = sum(len(item.drift_flags) for item in drift_items)
         ready_to_start, blocker_maybe_cleared = self._compute_next_steps()
         ready_to_review = self._compute_ready_to_review()
         next_step_items = (
@@ -1052,6 +1574,7 @@ class DashboardRenderer:
             item_statuses=list(ItemStatus),
             status_counts=self._status_counts(),
             drift_items=drift_items,
+            drift_flag_count=drift_flag_count,
             ready_to_start=ready_to_start,
             blocker_maybe_cleared=blocker_maybe_cleared,
             ready_to_review=ready_to_review,
@@ -1064,6 +1587,7 @@ class DashboardRenderer:
         summary = DashboardSummary(
             status_counts=self._status_counts(),
             drift_items=[item.title for item in drift_items],
+            drift_flag_count=drift_flag_count,
             ready_to_start=[item.title for item in ready_to_start],
             blocker_maybe_cleared=[item.title for item in blocker_maybe_cleared],
             ready_to_review=[item.title for item in ready_to_review],
@@ -1071,19 +1595,20 @@ class DashboardRenderer:
         return output, summary
 
     def _classify_items(self) -> None:
-        """Fill in every item's :attr:`Item.live_state`,
-        :attr:`Item.drift_description`, :attr:`Item.pull_request_url`,
-        :attr:`Item.is_bug_fix`, :attr:`Item.needs_review`,
-        :attr:`Item.dependency_chips`, and :attr:`Item.action` from live pull
-        request data and the plan's other items, in place.
+        """
+        Fill in every item's :attr:`Item.live_state`, :attr:`Item.drift_flags`,
+        :attr:`Item.pull_request_url`, :attr:`Item.is_bug_fix`,
+        :attr:`Item.needs_review`, :attr:`Item.dependency_chips`, and
+        :attr:`Item.action` from live pull request data and the plan's other items, in
+        place.
 
         Runs in two passes: :attr:`Item.live_state` must be filled in for
-        every item before :meth:`_action_for` can check whether *another*
-        item's dependencies are ready, since dependencies can appear later
-        in :attr:`Plan.items` than their dependents."""
+        every item before anything can read *another* item's, since
+        dependencies can appear later in :attr:`Plan.items` than their
+        dependents.
+        """
         for item in self.plan.items:
             item.live_state = self._live_state_of(item)
-            item.drift_description = self._drift_description_of(item)
             item.pull_request_url = self._pull_request_url_of(item)
             item.is_bug_fix = self._is_bug_fix(item)
             item.needs_review = (
@@ -1091,19 +1616,23 @@ class DashboardRenderer:
                 and item.status is not ItemStatus.DEFERRED
             )
         for item in self.plan.items:
+            item.drift_flags = self._drift_flags_of(item)
             item.dependency_chips = self._dependency_chips_of(item)
             item.action = self._action_for(item)
 
     def _pull_request_url_of(self, item: Item) -> str | None:
-        """Build one item's pull request URL on GitHub, or ``None`` if it has no pull request yet."""
+        """
+        Build one item's pull request URL on GitHub, or ``None`` if it has no pull
+        request yet.
+        """
         if item.pull_request_number is None:
             return None
         repository = item.repository or self.plan.default_repository
         return f"https://github.com/{repository}/pull/{item.pull_request_number}"
 
     def _action_for(self, item: Item) -> ItemAction | None:
-        """Build one item's dashboard action button, or ``None`` if it
-        isn't applicable.
+        """
+        Build one item's dashboard action button, or ``None`` if it isn't applicable.
 
         A ``done`` item has nothing left to do. A not-started item only
         gets a button once every dependency is actually safe to build on -
@@ -1111,7 +1640,8 @@ class DashboardRenderer:
         state. Every other status (blocked, in progress, deferred) always
         gets one: there's always something actionable to investigate next,
         so each routes to the same ``/plan-item-resolve`` skill, worded to
-        match what that status actually calls for."""
+        match what that status actually calls for.
+        """
         match item.status:
             case ItemStatus.DONE:
                 return None
@@ -1136,21 +1666,23 @@ class DashboardRenderer:
         )
 
     def _dependencies_are_ready(self, item: Item) -> bool:
-        """Whether every entry in :attr:`Item.depends_on` names an item
+        """
+        Whether every entry in :attr:`Item.depends_on` names an item.
+
         that's itself ready to be built upon
         (:meth:`Item.is_ready_to_unblock_dependents`) - vacuously true for
-        an item with no dependencies."""
+        an item with no dependencies.
+        """
         return all(
-            self.items_by_identifier[
-                dependency_identifier
-            ].is_ready_to_unblock_dependents()
-            for dependency_identifier in item.depends_on
-            if dependency_identifier in self.items_by_identifier
+            dependency.is_ready_to_unblock_dependents()
+            for dependency in self._resolved_dependencies_of(item)
         )
 
     def _dependency_chips_of(self, item: Item) -> list[DependencyChip]:
-        """Build one ready-to-render :class:`DependencyChip` per entry in
-        :attr:`Item.depends_on`, resolving each against :attr:`items_by_identifier`."""
+        """
+        Build one ready-to-render :class:`DependencyChip` per entry in
+        :attr:`Item.depends_on`, resolving each against :attr:`items_by_identifier`.
+        """
         chips: list[DependencyChip] = []
         for dependency_identifier in item.depends_on:
             dependency = self.items_by_identifier.get(dependency_identifier)
@@ -1173,7 +1705,9 @@ class DashboardRenderer:
         return chips
 
     def _live_state_of(self, item: Item) -> LiveState:
-        """Classify one item's live GitHub state from :attr:`pull_requests_by_repository`."""
+        """
+        Classify one item's live GitHub state from :attr:`pull_requests_by_repository`.
+        """
         return classify_live_state(
             item.pull_request_number,
             item.repository or self.plan.default_repository,
@@ -1181,8 +1715,10 @@ class DashboardRenderer:
         )
 
     def _pull_request_record_of(self, item: Item) -> PullRequestRecord | None:
-        """Look up one item's live pull request record, or ``None`` if it has
-        no pull request yet or GitHub returned nothing for the one it names."""
+        """
+        Look up one item's live pull request record, or ``None`` if it has no pull
+        request yet or GitHub returned nothing for the one it names.
+        """
         if item.pull_request_number is None:
             return None
         repository = item.repository or self.plan.default_repository
@@ -1190,38 +1726,60 @@ class DashboardRenderer:
         return repository_pull_requests.get(str(item.pull_request_number))
 
     def _is_bug_fix(self, item: Item) -> bool:
-        """Whether one item's pull request is labelled as a bug fix."""
+        """
+        Whether one item's pull request is labelled as a bug fix.
+        """
         pull_request = self._pull_request_record_of(item)
         return (
             pull_request is not None
             and PullRequestLabel.BUG in pull_request.identified_labels
         )
 
-    @staticmethod
-    def _drift_description_of(item: Item) -> str | None:
-        """Describe why :attr:`Item.status` disagrees with its live state, if it does."""
-        live_state = item.live_state
-        match live_state, item.status:
-            case LiveState.NOT_FOUND, _:
-                return f"pull request #{item.pull_request_number} not found on GitHub"
-            case (LiveState.OPEN_DRAFT | LiveState.OPEN_READY), ItemStatus.DONE:
-                return f"marked done, but pull request #{item.pull_request_number} is still open"
-            case LiveState.MERGED, (
-                ItemStatus.NOT_STARTED | ItemStatus.BLOCKED | ItemStatus.DEFERRED
-            ):
-                return f"marked {item.status.value}, but pull request #{item.pull_request_number} is already merged"
-            case (LiveState.MERGED | LiveState.CLOSED_UNMERGED), (
-                ItemStatus.IN_PROGRESS | ItemStatus.BLOCKED
-            ):
-                return f"marked {item.status.value}, but pull request #{item.pull_request_number} is {live_state.value.replace('_', ' ')}"
-            case LiveState.CLOSED_UNMERGED, ItemStatus.DONE:
-                return f"marked done, but pull request #{item.pull_request_number} was closed without merging"
-            case _:
-                return None
+    def _drift_flags_of(self, item: Item) -> list[DriftFlag]:
+        """
+        Everything about one item that needs a human's attention: its own manifest
+        status disagreeing with live GitHub state, plus every dependency it is still
+        stacked on that has stalled.
+        """
+        manifest_drift = ManifestDrift.of(item)
+        stalled = self._stalled_dependency_drifts_of(item)
+        return ([manifest_drift] if manifest_drift else []) + stalled
+
+    def _stalled_dependency_drifts_of(self, item: Item) -> list[StalledDependencyDrift]:
+        """
+        Flag every dependency of one item that has stalled (:meth:`Item.is_stalled`),
+        naming what to reparent onto.
+
+        Only the item's own ``depends_on`` is checked, not the whole chain:
+        an item further up is stacked on a base that is itself alive, and
+        becomes correct as soon as its own dependency reparents, so flagging
+        it too would name one root cause once per link. A done or deferred
+        dependent is skipped - a landed item is past caring where it was
+        based, and a paused one is not waiting on anything.
+        """
+        if item.status in (ItemStatus.DONE, ItemStatus.DEFERRED):
+            return []
+        return [
+            StalledDependencyDrift.of(dependency)
+            for dependency in self._resolved_dependencies_of(item)
+            if dependency.is_stalled()
+        ]
+
+    def _resolved_dependencies_of(self, item: Item) -> list[Item]:
+        """
+        The items one item's :attr:`Item.depends_on` names, in that order, skipping any
+        identifier this plan doesn't know.
+        """
+        return [
+            self.items_by_identifier[dependency_identifier]
+            for dependency_identifier in item.depends_on
+            if dependency_identifier in self.items_by_identifier
+        ]
 
     def _compute_next_steps(self) -> tuple[list[Item], list[Item]]:
-        """Compute the "ready to start" and "blocker may be cleared" lists
-        for the sidebar, from each item's dependencies' effective status.
+        """
+        Compute the "ready to start" and "blocker may be cleared" lists for the sidebar,
+        from each item's dependencies' effective status.
 
         A blocked item never lands in "ready to start", even once every
         dependency is ready - it's still blocked, and its actionable next
@@ -1234,11 +1792,7 @@ class DashboardRenderer:
         ready_to_start: list[Item] = []
         blocker_maybe_cleared: list[Item] = []
         for item in self.plan.items:
-            dependencies = [
-                self.items_by_identifier[identifier]
-                for identifier in item.depends_on
-                if identifier in self.items_by_identifier
-            ]
+            dependencies = self._resolved_dependencies_of(item)
             if item.status not in (
                 ItemStatus.NOT_STARTED,
                 ItemStatus.BLOCKED,
@@ -1257,22 +1811,21 @@ class DashboardRenderer:
         return ready_to_start, blocker_maybe_cleared
 
     def _compute_ready_to_review(self) -> list[Item]:
-        """Items with an open draft pull request that are actually reviewable right
+        """
+        Items with an open draft pull request that are actually reviewable right.
+
         now: not blocked, and every dependency (if any) has itself reached review
         (:meth:`Item.is_ready_for_dependent_review`) - reviewing a stacked pull
         request before its base even has one open yet is premature, even though
         the base need not itself be past review, nor still be open once it has
         landed. A deferred item never reaches here in the first place -
-        :attr:`Item.needs_review` is already ``False`` for it."""
+        :attr:`Item.needs_review` is already ``False`` for it.
+        """
         ready_to_review: list[Item] = []
         for item in self.plan.items:
             if not item.needs_review or item.status is ItemStatus.BLOCKED:
                 continue
-            dependencies = [
-                self.items_by_identifier[identifier]
-                for identifier in item.depends_on
-                if identifier in self.items_by_identifier
-            ]
+            dependencies = self._resolved_dependencies_of(item)
             if all(
                 dependency.is_ready_for_dependent_review()
                 for dependency in dependencies
@@ -1281,15 +1834,19 @@ class DashboardRenderer:
         return ready_to_review
 
     def _status_counts(self) -> dict[ItemStatus, int]:
-        """Count the plan's items by :class:`ItemStatus`, including zero counts."""
+        """
+        Count the plan's items by :class:`ItemStatus`, including zero counts.
+        """
         counts = {status: 0 for status in ItemStatus}
         for item in self.plan.items:
             counts[item.status] += 1
         return counts
 
     def _build_wave_sections(self) -> list[WaveSection]:
-        """Group the plan's tracks by wave and its items by track, stacking
-        each track's items by dependency, ready for the template to render."""
+        """
+        Group the plan's tracks by wave and its items by track, stacking each track's
+        items by dependency, ready for the template to render.
+        """
         tracks_by_wave: dict[str, list[Track]] = {}
         for track in self.plan.tracks:
             tracks_by_wave.setdefault(track.wave, []).append(track)
@@ -1316,16 +1873,21 @@ class DashboardRenderer:
 
     @staticmethod
     def _build_track_stack(track_items: list[Item]) -> list[StackedItem]:
-        """Order a track's items into a dependency stack (same-track
-        depends_on only), assign an indent level per item capped at
-        :data:`MAXIMUM_DEPENDENCY_STACK_LEVEL`, wrapping back to level 0
-        (with a reference back to the real parent) past the cap. Also
-        computes each item's indent as it would be with done items hidden -
-        see :class:`StackedItem`."""
+        """
+        Order a track's items into a dependency stack (same-track depends_on only),
+        assign an indent level per item capped at
+        :data:`MAXIMUM_DEPENDENCY_STACK_LEVEL`, wrapping back to level 0 (with a
+        reference back to the real parent) past the cap.
+
+        Also computes each item's indent as it would be with done items hidden - see
+        :class:`StackedItem`.
+        """
         items_by_identifier = {item.identifier: item for item in track_items}
 
         def same_track_parent(item: Item) -> Item | None:
-            """The first same-track entry in :attr:`Item.depends_on`, if any."""
+            """
+            The first same-track entry in :attr:`Item.depends_on`, if any.
+            """
             for dependency_identifier in item.depends_on:
                 dependency = items_by_identifier.get(dependency_identifier)
                 if dependency is not None:
@@ -1367,8 +1929,10 @@ class DashboardRenderer:
         stacked_items: list[StackedItem] = []
 
         def walk(item: Item, level: int, wrap_parent: Item | None) -> None:
-            """Depth-first-visit one item and its same-track dependents,
-            appending a :class:`StackedItem` per visit."""
+            """
+            Depth-first-visit one item and its same-track dependents, appending a
+            :class:`StackedItem` per visit.
+            """
             next_level = level + 1
             wrap_for_children = None
             if next_level > MAXIMUM_DEPENDENCY_STACK_LEVEL:
@@ -1396,7 +1960,8 @@ class DashboardRenderer:
 def load_pull_requests_by_repository(
     raw_pull_request_data: dict[str, Any],
 ) -> PullRequestsByRepository:
-    """Parse ``pr_data.json``'s raw JSON into :class:`PullRequestRecord`\\ s.
+    """
+    Parse ``pr_data.json``'s raw JSON into :class:`PullRequestRecord`\\ s.
 
     :param raw_pull_request_data: The parsed JSON, keyed by ``"owner/repo"``
         then by pull request number as a string - see the module docstring for the
@@ -1422,8 +1987,11 @@ def load_pull_requests_by_repository(
 
 
 def main() -> int:
-    """Parse arguments, validate the manifest, render the dashboard, and
-    print its summary. See the module docstring for the CLI contract."""
+    """
+    Parse arguments, validate the manifest, render the dashboard, and print its summary.
+
+    See the module docstring for the CLI contract.
+    """
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
