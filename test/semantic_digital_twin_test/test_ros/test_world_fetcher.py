@@ -247,7 +247,12 @@ def test_get_payload_as_json(rclpy_node, pr2_world_state_reset):
     )
 
     payload = json.loads(fetcher.get_payload_as_json())
-    assert len(payload["modifications"][0]["modifications"]) == expected_payload_length
+    # Each block's own `modifications` field is generically serialized by
+    # DataclassJSONSerializer, which tags a list with its collection type.
+    assert (
+        len(payload["modifications"][0]["modifications"]["items"])
+        == expected_payload_length
+    )
 
 
 def test_pr2_semantic_annotation(rclpy_node, pr2_world_state_reset):
