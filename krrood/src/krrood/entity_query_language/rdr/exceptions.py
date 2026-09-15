@@ -415,3 +415,76 @@ class ConclusionWrongType(WrongConclusionProvided):
 
     def suggest_correction(self) -> str:
         return f"Provide a {self.domain.type_display}."
+
+
+# %% fitting
+
+
+@dataclass
+class ExpertRequired(DataclassException):
+    """
+    Raised when a case needs a new rule but no expert was supplied to author it.
+    """
+
+    case: Any
+    """
+    The case that could not be fitted.
+    """
+
+    def error_message(self) -> str:
+        return f"No expert was supplied to author a rule for {self.case!r}."
+
+    def suggest_correction(self) -> str:
+        return "Pass an `Expert` to `fit_case`/`fit`, or fit only cases the rule tree already classifies correctly."
+
+
+@dataclass
+class RDRDidNotConvergeError(DataclassException):
+    """
+    Raised when the fitting loop stops because the misclassified-case set repeated,
+    meaning the rule tree oscillates instead of converging.
+    """
+
+    clashing_cases: List[Any]
+    """
+    The cases still misclassified when the repeat was detected.
+    """
+
+    passes: int
+    """
+    How many passes had completed at that point.
+    """
+
+    def error_message(self) -> str:
+        cases = ", ".join(repr(case) for case in self.clashing_cases)
+        return f"Fitting stopped after {self.passes} pass(es) without converging. Clashing cases: {cases}."
+
+    def suggest_correction(self) -> str:
+        return (
+            "Supply conditions that distinguish the clashing cases from each other; a condition "
+            "shared by all of them lets every new rule intercept the previously fitted case."
+        )
+
+
+@dataclass
+class ConditionsNotInsertable(DataclassException):
+    """
+    Raised when a conditions answer is a well-formed expression that still cannot become
+    a rule, because it is the node the new rule would be anchored on.
+    """
+
+    anchor: SymbolicExpression
+    """
+    The condition node the new rule would have been spliced beneath.
+    """
+
+    answer_name: AnswerName = field(default=AnswerName.CONDITIONS, init=False)
+    """
+    Names the conditions answer, so a re-prompt can attribute the failure to it.
+    """
+
+    def error_message(self) -> str:
+        return f"The conditions are the rule's own anchor {self.anchor!r}, so the rule would refine itself."
+
+    def suggest_correction(self) -> str:
+        return "Give a condition that distinguishes this case from the one the anchored rule was written for."
