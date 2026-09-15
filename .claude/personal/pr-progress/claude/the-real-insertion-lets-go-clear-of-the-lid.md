@@ -55,7 +55,10 @@ Plan:
 - [ ] pipeline run 1 (without the control question): scratch worktree ~/Projects_2/cram-paper-pipeline
       (branch local/paper-pipeline = this branch + #386..#391 + #393 cherry-picked);
       generate_paper_artifacts.py re-scores, asks the long-term set (object per episode),
-      copies .tex/.json/.png into krrood-icra-2027/paper/figures/real. Rerun started with #393.
+      copies .tex/.json/.png into krrood-icra-2027/paper/figures/real. DONE 2026-09-15 with #393:
+      0 wrong answers; Remembering 70/1.0, Understanding 143/1.0, Applying 4/1.0; every bucket
+      1.0; 140 files (8 tex, 8 json, 124 png) in paper/figures/real, PDFs gone.
+      Run 2 started: #394 cherry-picked, ORM regen, --ask-the-control-program (log work/pipeline_run2.log).
 - [ ] run 2 (user ask 2026-09-15): a question querying the constraints the motions put on the
       controller, kept apart so the paper can use either run. User chose the recorded motion
       requests (MoveToolCenterPointMotion / MoveJointsMotion of the plans' MotionNodes); the
