@@ -182,7 +182,6 @@ def test_gripper_geometry_names_the_pads_and_the_driving_joint(mounted_tracy):
     assert gripper.left_fingertip.name.name == "left_robotiq_85_left_finger_tip_link"
     assert gripper.right_fingertip.name.name == "left_robotiq_85_right_finger_tip_link"
     assert gripper.knuckle_joint.name.name == TracyJoint.LEFT_GRIPPER_LEFT_KNUCKLE
-    assert gripper.knuckle_degree_of_freedom is gripper.knuckle_joint.raw_dof
     assert (
         mounted_tracy.right_arm.end_effector.knuckle_joint.name.name
         == TracyJoint.RIGHT_GRIPPER_LEFT_KNUCKLE
@@ -198,11 +197,9 @@ def test_knuckle_angle_closes_the_pads_to_a_width_between_open_and_closed(
     wider target closing less, and leaves the world untouched.
     """
     gripper = mounted_tracy.left_arm.end_effector
-    limits = gripper.knuckle_degree_of_freedom.limits
+    limits = gripper.knuckle_joint.raw_dof.limits
     open_angle, closed_angle = limits.lower.position, limits.upper.position
-    state_before = mounted_tracy._world.state[
-        gripper.knuckle_degree_of_freedom.id
-    ].position
+    state_before = mounted_tracy._world.state[gripper.knuckle_joint.raw_dof.id].position
 
     narrow = gripper.knuckle_angle_for_half_width(0.02)
     wide = gripper.knuckle_angle_for_half_width(0.03)
@@ -211,6 +208,6 @@ def test_knuckle_angle_closes_the_pads_to_a_width_between_open_and_closed(
     assert gripper.knuckle_angle_for_half_width(0.0) == closed_angle
     assert open_angle < wide < narrow < closed_angle
     assert (
-        mounted_tracy._world.state[gripper.knuckle_degree_of_freedom.id].position
+        mounted_tracy._world.state[gripper.knuckle_joint.raw_dof.id].position
         == state_before
     )

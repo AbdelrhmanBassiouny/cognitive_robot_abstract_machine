@@ -11,7 +11,7 @@ from datetime import timedelta
 import trimesh
 import PIL.ImageFile
 from abc import ABC, abstractmethod
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, fields
 from enum import IntEnum
 from types import NoneType
 from typing_extensions import (
@@ -46,6 +46,7 @@ from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.exceptions import (
     QuaternionConversionError,
     MujocoEntityNotFoundError,
+    SimulationAlreadyRunningError,
     SimulationNotStartedError,
 )
 from semantic_digital_twin.robots.robot_parts import AbstractRobot
@@ -759,48 +760,66 @@ class MujocoActuator(SimulatorAdditionalProperty):
     For more information, see: https://mujoco.readthedocs.io/en/stable/XMLreference.html#actuator-general
     """
 
-    activation_limited: mujoco.mjtLimited = mujoco.mjtLimited.mjLIMITED_AUTO
+    activation_limited: mujoco.mjtLimited = field(
+        default=mujoco.mjtLimited.mjLIMITED_AUTO, metadata={"mujoco_name": "actlimited"}
+    )
     """
     If mujoco.mjtLimited.mjLIMITED_TRUE, the internal state (activation) associated with this actuator is automatically clamped to actrange at runtime. 
     If mujoco.mjtLimited.mjLIMITED_FALSE, activation clamping is disabled. 
     If mujoco.mjtLimited.mjLIMITED_AUTO and autolimits is set in compiler, activation clamping will automatically be set to mujoco.mjtLimited.mjLIMITED_TRUE if activation_range is defined without explicitly setting this attribute to mujoco.mjtLimited.mjLIMITED_TRUE. 
     """
 
-    activation_range: List[float] = field(default_factory=lambda: [0.0, 0.0])
+    activation_range: List[float] = field(
+        default_factory=lambda: [0.0, 0.0], metadata={"mujoco_name": "actrange"}
+    )
     """
     Range for clamping the activation state. The first value must be no greater than the second value.
     """
 
-    control_limited: mujoco.mjtLimited = mujoco.mjtLimited.mjLIMITED_AUTO
+    control_limited: mujoco.mjtLimited = field(
+        default=mujoco.mjtLimited.mjLIMITED_AUTO,
+        metadata={"mujoco_name": "ctrllimited"},
+    )
     """
     If mujoco.mjtLimited.mjLIMITED_TRUE, the control input to this actuator is automatically clamped to ctrl_range at runtime. 
     If mujoco.mjtLimited.mjLIMITED_FALSE, control input clamping is disabled. 
     If mujoco.mjtLimited.mjLIMITED_AUTO and autolimits is set in compiler, control clamping will automatically be set to mujoco.mjtLimited.mjLIMITED_TRUE if ctrl_range is defined without explicitly setting this attribute to mujoco.mjtLimited.mjLIMITED_TRUE.
     """
 
-    control_range: List[float] = field(default_factory=lambda: [0.0, 0.0])
+    control_range: List[float] = field(
+        default_factory=lambda: [0.0, 0.0], metadata={"mujoco_name": "ctrlrange"}
+    )
     """
     The range of the control input.
     """
 
-    force_limited: mujoco.mjtLimited = mujoco.mjtLimited.mjLIMITED_AUTO
+    force_limited: mujoco.mjtLimited = field(
+        default=mujoco.mjtLimited.mjLIMITED_AUTO,
+        metadata={"mujoco_name": "forcelimited"},
+    )
     """
     If mujoco.mjtLimited.mjLIMITED_TRUE, the force output of this actuator is automatically clamped to force_range at runtime. 
     If mujoco.mjtLimited.mjLIMITED_FALSE, force clamping is disabled. 
     If mujoco.mjtLimited.mjLIMITED_AUTO and autolimits is set in compiler, force clamping will automatically be set to mujoco.mjtLimited.mjLIMITED_TRUE if force_range is defined without explicitly setting this attribute to mujoco.mjtLimited.mjLIMITED_TRUE.
     """
 
-    force_range: List[float] = field(default_factory=lambda: [0.0, 0.0])
+    force_range: List[float] = field(
+        default_factory=lambda: [0.0, 0.0], metadata={"mujoco_name": "forcerange"}
+    )
     """
     Range for clamping the force output. The first value must be no greater than the second value.
     """
 
-    bias_parameters: List[float] = field(default_factory=lambda: [0.0] * 10)
+    bias_parameters: List[float] = field(
+        default_factory=lambda: [0.0] * 10, metadata={"mujoco_name": "biasprm"}
+    )
     """
     Bias parameters. The affine bias type uses three parameters.
     """
 
-    bias_type: mujoco.mjtBias = mujoco.mjtBias.mjBIAS_NONE
+    bias_type: mujoco.mjtBias = field(
+        default=mujoco.mjtBias.mjBIAS_NONE, metadata={"mujoco_name": "biastype"}
+    )
     """
     The keywords have the following meaning:
     mujoco.mjtBias.mjBIAS_NONE:     bias_term = 0
@@ -809,12 +828,16 @@ class MujocoActuator(SimulatorAdditionalProperty):
     mujoco.mjtBias.mjBIAS_USER:     bias_term = mjcb_act_bias(…)
     """
 
-    dynamics_parameters: List[float] = field(default_factory=lambda: [1.0] + [0.0] * 9)
+    dynamics_parameters: List[float] = field(
+        default_factory=lambda: [1.0] + [0.0] * 9, metadata={"mujoco_name": "dynprm"}
+    )
     """
     Activation dynamics parameters.
     """
 
-    dynamics_type: mujoco.mjtDyn = mujoco.mjtDyn.mjDYN_NONE
+    dynamics_type: mujoco.mjtDyn = field(
+        default=mujoco.mjtDyn.mjDYN_NONE, metadata={"mujoco_name": "dyntype"}
+    )
     """
     Activation dynamics type for the actuator.
     The keywords have the following meaning:
@@ -826,12 +849,16 @@ class MujocoActuator(SimulatorAdditionalProperty):
     mujoco.mjtDyn.mjDYN_USER:           act_dot = mjcb_act_dyn(…)
     """
 
-    gain_parameters: List[float] = field(default_factory=lambda: [0.0] * 10)
+    gain_parameters: List[float] = field(
+        default_factory=lambda: [0.0] * 10, metadata={"mujoco_name": "gainprm"}
+    )
     """
     Gain parameters.
     """
 
-    gain_type: mujoco.mjtGain = mujoco.mjtGain.mjGAIN_FIXED
+    gain_type: mujoco.mjtGain = field(
+        default=mujoco.mjtGain.mjGAIN_FIXED, metadata={"mujoco_name": "gaintype"}
+    )
     """
     The gain and bias together determine the output of the force generation mechanism, which is currently assumed to be affine.
     The keywords have the following meaning:
@@ -867,21 +894,12 @@ class MujocoActuator(SimulatorAdditionalProperty):
     def to_dict(self) -> Dict[str, Any]:
         """
         :return: These properties under the names MuJoCo's own actuator attributes
-            carry, ready to be passed to ``MjSpec.add_actuator``.
+            carry (declared as each field's ``mujoco_name`` metadata), ready to be
+            passed to ``MjSpec.add_actuator``.
         """
         return {
-            "actlimited": self.activation_limited,
-            "actrange": self.activation_range,
-            "ctrllimited": self.control_limited,
-            "ctrlrange": self.control_range,
-            "forcelimited": self.force_limited,
-            "forcerange": self.force_range,
-            "biasprm": self.bias_parameters,
-            "biastype": self.bias_type,
-            "dynprm": self.dynamics_parameters,
-            "dyntype": self.dynamics_type,
-            "gainprm": self.gain_parameters,
-            "gaintype": self.gain_type,
+            declared_field.metadata["mujoco_name"]: getattr(self, declared_field.name)
+            for declared_field in fields(self)
         }
 
 
@@ -1272,7 +1290,7 @@ class MujocoGeom(SimulatorAdditionalProperty):
     An additional property declaring that a Shape is a MujocoGeom.
     """
 
-    contact_type: int = 1
+    contact_type: int = field(default=1, metadata={"mujoco_name": "contype"})
     """
     Which contact categories this geom offers when it presses into another geom, as a
     32-bit mask; MuJoCo's ``contype``.
@@ -1285,7 +1303,7 @@ class MujocoGeom(SimulatorAdditionalProperty):
     still collide into it.
     """
 
-    contact_affinity: int = 1
+    contact_affinity: int = field(default=1, metadata={"mujoco_name": "conaffinity"})
     """
     Which contact categories this geom accepts pressing into it, as a 32-bit mask;
     MuJoCo's ``conaffinity``. Clearing it makes nothing collide with the geom.
@@ -1293,12 +1311,13 @@ class MujocoGeom(SimulatorAdditionalProperty):
 
     def to_dict(self) -> Dict[str, Any]:
         """
-        :return: These properties under the names MuJoCo's own geom attributes carry,
-            ready to be passed to ``MjsBody.add_geom``.
+        :return: These properties under the names MuJoCo's own geom attributes carry
+            (declared as each field's ``mujoco_name`` metadata), ready to be passed to
+            ``MjsBody.add_geom``.
         """
         return {
-            "contype": self.contact_type,
-            "conaffinity": self.contact_affinity,
+            declared_field.metadata["mujoco_name"]: getattr(self, declared_field.name)
+            for declared_field in fields(self)
         }
 
 
@@ -1936,7 +1955,9 @@ class MujocoBuilder(MultiSimBuilder):
         tree.write(file_path, encoding="utf-8", xml_declaration=True)
 
     def _build_body(self, body: Body):
-        self._build_mujoco_body(body=body)
+        self._build_mujoco_body(
+            body=body, additional_properties={"gravcomp": body.gravity_compensation}
+        )
 
     def _build_region(self, region: Region):
         self._build_mujoco_body(body=region)
@@ -2328,17 +2349,23 @@ class MujocoBuilder(MultiSimBuilder):
                 action="add",
             )
 
-    def _build_mujoco_body(self, body: Union[Region, Body]):
+    def _build_mujoco_body(
+        self,
+        body: Union[Region, Body],
+        additional_properties: Optional[Dict[str, Any]] = None,
+    ):
         """
         Builds a body in the Mujoco spec. In Mujoco, regions are also represented as bodies.
 
         :param body: The body or region to build.
+        :param additional_properties: Properties only one of the two kinds carries,
+            such as a body's gravity compensation, merged in by the caller that knows
+            which kind it has.
         """
         if body.name.name == "world":
             return
         body_props = MujocoKinematicStructureEntityConverter.convert(body)
-        if isinstance(body, Body):
-            body_props["gravcomp"] = body.gravity_compensation
+        body_props.update(additional_properties or {})
         mujoco_body = body.simulator_property(MujocoBody)
         if mujoco_body is not None:
             body_props["mocap"] = mujoco_body.motion_capture
@@ -3682,10 +3709,11 @@ class MujocoSim(MultiSim):
 
         Every servo is handed the position its joint currently holds in the world, so
         nothing rushes towards zero the moment the physics starts.
+
+        :raises SimulationAlreadyRunningError: If the simulation is already running.
         """
-        assert (
-            self.simulator.state != SimulatorState.RUNNING
-        ), "Simulation is already running."
+        if self.simulator.state == SimulatorState.RUNNING:
+            raise SimulationAlreadyRunningError(self.world.root.name.name)
         self.synchronizer.sync_rate_hz = MujocoSynchronizer.UNTHROTTLED_SYNC_RATE_HZ
         self.simulator.start(simulate_in_thread=False, render_in_thread=False)
         self.synchronizer.command_actuators_from_world_state()

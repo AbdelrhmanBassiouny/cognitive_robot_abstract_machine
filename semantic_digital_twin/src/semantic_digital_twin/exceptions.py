@@ -1919,3 +1919,24 @@ class SimulationNotStartedError(UsageError):
 
     def suggest_correction(self) -> str:
         return "Call start() first, or drive the simulation inside a with block."
+
+
+@dataclass
+class SimulationAlreadyRunningError(UsageError):
+    """
+    Raised when a simulation is started while it is already running.
+    """
+
+    world_name: str
+    """
+    Name of the root of the world whose simulation was started twice.
+    """
+
+    def error_message(self) -> str:
+        return (
+            f"The simulation of the world rooted at {self.world_name} is already "
+            "running."
+        )
+
+    def suggest_correction(self) -> str:
+        return "Stop the simulation before starting it again."

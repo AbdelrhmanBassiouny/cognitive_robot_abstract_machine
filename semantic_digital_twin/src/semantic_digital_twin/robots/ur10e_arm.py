@@ -28,6 +28,14 @@ class UR10eArm(Arm[TGenericEndEffector], Generic[TGenericEndEffector], ABC):
 
     @staticmethod
     def _size_class(torque_limit: float, joint_damping: float) -> JointServo:
+        """
+        A servo at :attr:`servos_by_joint`'s shared stiffness and damping, sized to one
+        joint's own torque limit and passive damping.
+
+        :param torque_limit: The largest torque the servo may exert.
+        :param joint_damping: The joint's own passive damping, on top of the servo's.
+        :return: The servo.
+        """
         return JointServo(
             gains=ServoGains(
                 stiffness=5_000.0, damping=500.0, torque_limit=torque_limit

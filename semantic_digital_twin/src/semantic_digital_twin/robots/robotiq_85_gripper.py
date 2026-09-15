@@ -18,8 +18,55 @@ from semantic_digital_twin.world_description.connection_properties import (
     ServoGains,
 )
 from semantic_digital_twin.world_description.connections import ActiveConnection1DOF
+from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.degree_of_freedom import DegreeOfFreedom
 from semantic_digital_twin.world_description.world_entity import Body
+
+
+@dataclass
+class _KnuckleScan:
+    """
+    Where the left fingertip pad sits at a raw knuckle angle, on an isolated scratch
+    world moved directly rather than through the caller's own world.
+    """
+
+    scratch_world: World
+    """
+    The scratch copy of the world the scan moves; never the caller's own.
+    """
+
+    raw_dof: DegreeOfFreedom
+    """
+    The scratch gripper's knuckle degree of freedom.
+    """
+
+    left_fingertip: Body
+    """
+    The scratch gripper's left fingertip pad.
+    """
+
+    gripper_root: Body
+    """
+    The scratch gripper's root, the frame the pad's position is read in.
+    """
+
+    def inner_x(self, raw_angle: float) -> float:
+        """
+        The left pad's innermost point along the closing axis at one raw angle.
+
+        :param raw_angle: The knuckle angle to move the scratch world to.
+        :return: The pad's innermost x coordinate in the gripper's own frame.
+        """
+        self.scratch_world.state[self.raw_dof.id].position = raw_angle
+        self.scratch_world.notify_state_change()
+        self.scratch_world.update_forward_kinematics()
+        return (
+            self.left_fingertip.collision.as_bounding_box_collection_in_frame(
+                self.gripper_root
+            )
+            .bounding_box()
+            .min_x
+        )
 
 
 @dataclass(eq=False)
@@ -104,13 +151,6 @@ class Robotiq85Gripper(
         """
         return self.finger.tip
 
-    @property
-    def knuckle_degree_of_freedom(self) -> DegreeOfFreedom:
-        """
-        The raw degree of freedom driving the knuckle.
-        """
-        return self.knuckle_joint.raw_dof
-
     def knuckle_angle_for_half_width(
         self, target_half_width: float, iterations: int = 30
     ) -> float:
@@ -131,34 +171,22 @@ class Robotiq85Gripper(
         :return: The raw angle.
         """
         scratch_world = deepcopy(self._world)
-        [scratch_gripper] = scratch_world.get_semantic_annotations_by_type(type(self))
-        raw_dof = scratch_gripper.knuckle_degree_of_freedom
-        left_fingertip = scratch_gripper.left_fingertip
-
-        def inner_x(raw_angle: float) -> float:
-            """
-            The left pad's innermost point along the closing axis at one raw angle,
-            moving the scratch world's own state directly.
-            """
-            scratch_world.state[raw_dof.id].position = raw_angle
-            scratch_world.notify_state_change()
-            scratch_world.update_forward_kinematics()
-            return (
-                left_fingertip.collision.as_bounding_box_collection_in_frame(
-                    scratch_gripper.root
-                )
-                .bounding_box()
-                .min_x
-            )
-
-        lower, upper = raw_dof.limits.lower.position, raw_dof.limits.upper.position
-        if target_half_width >= inner_x(lower):
+        scratch_gripper = scratch_world.get_semantic_annotation_by_id(self.id)
+        scan = _KnuckleScan(
+            scratch_world=scratch_world,
+            raw_dof=scratch_gripper.knuckle_joint.raw_dof,
+            left_fingertip=scratch_gripper.left_fingertip,
+            gripper_root=scratch_gripper.root,
+        )
+        lower = scan.raw_dof.limits.lower.position
+        upper = scan.raw_dof.limits.upper.position
+        if target_half_width >= scan.inner_x(lower):
             return lower
-        if target_half_width <= inner_x(upper):
+        if target_half_width <= scan.inner_x(upper):
             return upper
         for _ in range(iterations):
             midpoint = (lower + upper) / 2
-            if inner_x(midpoint) > target_half_width:
+            if scan.inner_x(midpoint) > target_half_width:
                 lower = midpoint
             else:
                 upper = midpoint
