@@ -1132,6 +1132,36 @@ class TestCollisionRuleDistancesSurviveCopy:
         )
 
 
+# %% reading serializations recorded before the distances existed
+
+
+class TestAvoidExternalCollisionsReadsOldSerializations:
+    """
+    A world recorded before ``buffer_zone_distance`` and ``violated_distance`` were
+    added to ``AvoidExternalCollisions``'s JSON stores neither key.
+
+    Reading such a world back falls to the dataclass's own defaults for them, rather
+    than failing.
+    """
+
+    def test_missing_distances_fall_back_to_the_dataclass_defaults(
+        self, cylinder_bot_world
+    ):
+        robot = cylinder_bot_world.get_semantic_annotations_by_type(MinimalRobot)[0]
+        rule = AvoidExternalCollisions(robot=robot)
+        tracker = WorldEntityWithIDKwargsTracker.from_world(cylinder_bot_world)
+        data = to_json(rule)
+        del data["buffer_zone_distance"]
+        del data["violated_distance"]
+
+        restored = from_json(data, **tracker.create_kwargs())
+
+        assert (restored.buffer_zone_distance, restored.violated_distance) == (
+            rule.buffer_zone_distance,
+            rule.violated_distance,
+        )
+
+
 # %% external collisions of a body subset
 
 
