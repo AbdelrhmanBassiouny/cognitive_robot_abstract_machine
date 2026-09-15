@@ -20,6 +20,7 @@ import bastler.stack
 from bastler.stack import (
     AmbiguousForkRemoteError,
     CommitMoveAction,
+    BranchPriority,
     BranchStatus,
     Configuration,
     ContradictoryLabelWriteError,
@@ -76,6 +77,8 @@ def make_configuration(upstream_setup_command: str | None = None) -> Configurati
         rebase_label=DefaultLabel.REBASE,
         needs_resolution_label=DefaultLabel.NEEDS_RESOLUTION,
         integration_conflict_label=DefaultLabel.INTEGRATION_CONFLICT,
+        bug_label=DefaultLabel.BUG,
+        tooling_label=DefaultLabel.TOOLING,
         fork_repository=Repository("a-fork-owner", "a-fork"),
         fork_remote="origin",
         upstream_repository=Repository("an-upstream-owner", "a-project"),
@@ -240,6 +243,43 @@ def test_ci_and_session_carried_onto_branch():
     )
     assert stack.branches[0].ci == "failure"
     assert stack.branches[0].session == "https://claude.ai/code/session_x"
+
+
+# %% branch priority
+
+
+def test_a_bug_labelled_branch_is_bug_priority():
+    stack = build(
+        [PullRequest(1, "fix", "main", draft=False, labels=[DefaultLabel.BUG])]
+    )
+    assert stack.priority(stack.branches[0]) is BranchPriority.BUG
+
+
+def test_a_tooling_labelled_branch_is_tooling_priority():
+    stack = build(
+        [PullRequest(1, "tool", "main", draft=False, labels=[DefaultLabel.TOOLING])]
+    )
+    assert stack.priority(stack.branches[0]) is BranchPriority.TOOLING
+
+
+def test_an_unlabelled_branch_is_ordinary_priority():
+    stack = build([PullRequest(1, "feature", "main", draft=False)])
+    assert stack.priority(stack.branches[0]) is BranchPriority.ORDINARY
+
+
+def test_a_bug_label_outranks_a_tooling_label_on_the_same_branch():
+    stack = build(
+        [
+            PullRequest(
+                1,
+                "both",
+                "main",
+                draft=False,
+                labels=[DefaultLabel.TOOLING, DefaultLabel.BUG],
+            )
+        ]
+    )
+    assert stack.priority(stack.branches[0]) is BranchPriority.BUG
 
 
 # %% restack plan
@@ -586,6 +626,8 @@ def test_every_default_label_is_spelled_the_way_a_fork_creates_it():
         "REBASE": "rebase",
         "NEEDS_RESOLUTION": "needs-resolution",
         "INTEGRATION_CONFLICT": "integration-conflict",
+        "BUG": "bug",
+        "TOOLING": "tooling",
     }
 
 
@@ -603,6 +645,8 @@ def test_every_setting_is_printed_under_its_own_field_name(capsys):
         "rebase_label": DefaultLabel.REBASE,
         "needs_resolution_label": DefaultLabel.NEEDS_RESOLUTION,
         "integration_conflict_label": DefaultLabel.INTEGRATION_CONFLICT,
+        "bug_label": DefaultLabel.BUG,
+        "tooling_label": DefaultLabel.TOOLING,
         "fork_repository": "a-fork-owner/a-fork",
         "fork_remote": "origin",
         "upstream_repository": "an-upstream-owner/a-project",
