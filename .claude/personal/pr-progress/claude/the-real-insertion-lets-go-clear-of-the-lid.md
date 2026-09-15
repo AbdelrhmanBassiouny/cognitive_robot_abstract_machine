@@ -85,4 +85,7 @@ Plan:
       replaces --paper-repository). Pushed 2d6c356b54. Leftover bubble-removal in the
       framework figure committed on claude/the-framework-figure-names-the-working-memory,
       draft PR #396 (base this branch).
-- [ ] README has a TODO placeholder for the anonymised data link (user to host the package)
+- [x] data link: OSF https://osf.io/sc38m/?view_only=6d981619c6e24aea92df64df5e1f13d7
+      (reproduction_package_2.zip, 3.5 GB). Checked through the OSF API: project "ICRA2026",
+      private, contributors "anonymous": true, one contributor with no name - so the
+      view-only link is the anonymised kind. In the README as of the second push.
