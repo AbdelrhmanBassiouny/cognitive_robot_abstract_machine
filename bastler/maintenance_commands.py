@@ -17,6 +17,7 @@ from bastler.maintenance_fast_forward import fast_forward
 from bastler.maintenance_git_commands import MaintenanceGitCommandRunner
 from bastler.maintenance_github import GitHubRepository
 from bastler.maintenance_promotion import clear_spent_promotion_labels, promote
+from bastler.maintenance_tooling_label import label_tooling_changes
 from bastler.maintenance_report import (
     MaintenanceExitCode,
     MaintenanceReport,
@@ -29,7 +30,6 @@ from bastler.maintenance_report import (
     print_tooling_labels,
 )
 from bastler.maintenance_restack_procedure import restack
-from bastler.maintenance_tooling_label import label_tooling_changes
 from bastler.stack import BOARD_PATH, Configuration, Stack, load_stack
 
 
