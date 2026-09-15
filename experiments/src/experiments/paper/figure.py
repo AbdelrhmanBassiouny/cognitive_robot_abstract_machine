@@ -25,6 +25,7 @@ from experiments.experiment_definitions import (
     DEFAULT_CONFIDENCE_LEVEL,
     ExperimentResult,
     ExperimentsTable,
+    LatexRenderer,
     TypstRenderer,
     Unit,
 )
@@ -41,6 +42,11 @@ What one group of a figure's rows is gathered under, and what that row reports.
 """
 
 # %% which table of the paper a figure is
+
+TABLE_LABEL = "tab:%s"
+"""
+What the LaTeX paper refers to a table by, after the figure's name.
+"""
 
 
 class FigureName(StrEnum):
@@ -71,6 +77,11 @@ class FigureFile(StrEnum):
     The markup the paper includes, whether it holds a table or names pictures.
     """
 
+    LATEX_TABLE = ".tex"
+    """
+    The table as the LaTeX paper inputs it.
+    """
+
     ROW_MANIFEST = ".json"
     """
     The rows a table presents, so a number in the paper is traceable to them.
@@ -96,6 +107,11 @@ class WrittenFigure:
     table_path: Path
     """
     The Typst markup the paper includes.
+    """
+
+    latex_table_path: Path
+    """
+    The table as the LaTeX paper inputs it.
     """
 
     row_manifest_path: Path
@@ -156,6 +172,16 @@ class PaperFigure(ABC):
         """
         return TypstRenderer(self.table(trials)).render_figure(self.caption)
 
+    def render_latex(self, trials: Sequence[RecordedTrial]) -> str:
+        """
+        This table as a captioned LaTeX table, labelled after this figure's name.
+
+        :param trials: Every trial the tables are computed over.
+        """
+        return LatexRenderer(self.table(trials)).render_figure(
+            self.caption, TABLE_LABEL % self.name.value
+        )
+
     def file_name(self, figure_file: FigureFile) -> str:
         """
         What one of this figure's two files is called.
@@ -178,9 +204,16 @@ class PaperFigure(ABC):
         table = self.table(trials)
         table_path = output_directory / self.file_name(FigureFile.TYPST_TABLE)
         table_path.write_text(TypstRenderer(table).render_figure(self.caption))
+        latex_table_path = output_directory / self.file_name(FigureFile.LATEX_TABLE)
+        latex_table_path.write_text(
+            LatexRenderer(table).render_figure(
+                self.caption, TABLE_LABEL % self.name.value
+            )
+        )
         return WrittenFigure(
             figure=self.name,
             table_path=table_path,
+            latex_table_path=latex_table_path,
             row_manifest_path=table.write_manifest(
                 output_directory, self.file_name(FigureFile.ROW_MANIFEST)
             ),
