@@ -21,7 +21,7 @@ from typing_extensions import Any, Dict, List, Optional, Set, Tuple, Type
 from uuid import UUID
 
 from krrood.class_diagrams.utils import get_type_hints_of_object
-from krrood.code_generation.type_hints import value_to_source
+from krrood.code_generation.object_to_source import value_to_source
 from krrood.entity_query_language.core.base_expressions import SymbolicExpression
 from krrood.entity_query_language.rdr.exceptions import CaseNotSerializableError
 
