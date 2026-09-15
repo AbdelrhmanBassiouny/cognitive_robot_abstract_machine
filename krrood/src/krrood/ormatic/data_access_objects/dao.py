@@ -781,21 +781,6 @@ class DataAccessObject(HasGeneric[T]):
         )
         setattr(self, relationship.key, assignable_container_type(dao_collection))
 
-    @staticmethod
-    def _parametrization_of(source_object: Any) -> Optional[Type]:
-        """
-        The parametrized generic an object was created through, if any.
-
-        Constructing through a parametrized alias (``GenericClass[float](...)``) leaves
-        the alias on the instance, while a bare construction (``GenericClass(...)``)
-        leaves nothing. This is the object's own type argument, so it identifies the
-        parametrization no matter which field the object is reached through.
-
-        :param source_object: The object to read the parametrization off.
-        :return: The parametrized generic, or ``None`` if the object carries none.
-        """
-        return getattr(source_object, "__orig_class__", None)
-
     def _get_or_queue_dao(
         self,
         source_object: Any,
@@ -805,18 +790,19 @@ class DataAccessObject(HasGeneric[T]):
         """
         Resolve a source object to a DAO, queuing it if necessary.
 
-        An object that carries its own parametrization is resolved through that rather
-        than through ``expected_type``, which only describes the field the object is
-        reached through. A shared object therefore resolves to the same DAO class no
-        matter which field reaches it first, which matters because the first resolution
-        is the one this state keeps.
+        Constructing through a parametrized alias (``GenericClass[float](...)``) leaves
+        the alias on the instance, while a bare construction leaves nothing. That alias
+        is the object's own type argument, so it is preferred over ``expected_type``,
+        which only describes the field the object is reached through: a shared object
+        then resolves to the same DAO class no matter which field reaches it first,
+        which matters because the first resolution is the one this state keeps.
 
         :param source_object: The object to resolve.
         :param state: The conversion state.
         :param expected_type: The expected domain type of the field being filled.
         :return: The corresponding DAO instance.
         """
-        expected_type = self._parametrization_of(source_object) or expected_type
+        expected_type = getattr(source_object, "__orig_class__", None) or expected_type
 
         # Check if already built
         existing = state.get(source_object)
