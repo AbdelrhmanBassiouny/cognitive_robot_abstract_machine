@@ -7,6 +7,7 @@ import os
 from typing import Tuple
 
 import time
+from datetime import timedelta
 import trimesh
 import PIL.ImageFile
 from abc import ABC, abstractmethod
@@ -45,7 +46,9 @@ from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.exceptions import (
     QuaternionConversionError,
     MujocoEntityNotFoundError,
+    SimulationNotStartedError,
 )
+from semantic_digital_twin.robots.robot_parts import AbstractRobot
 from semantic_digital_twin.spatial_types.spatial_types import (
     HomogeneousTransformationMatrix,
     Point3,
@@ -55,6 +58,7 @@ from semantic_digital_twin.spatial_types.spatial_types import (
 )
 from semantic_digital_twin.spatial_types.math import inverse_frame
 from semantic_digital_twin.world import World
+from semantic_digital_twin.world_description.degree_of_freedom import DegreeOfFreedom
 from semantic_digital_twin.world_description.connections import (
     RevoluteConnection,
     PrismaticConnection,
@@ -837,6 +841,29 @@ class MujocoActuator(SimulatorAdditionalProperty):
     mujoco.mjtGain.mjGAIN_USER:     gain_term = mjcb_act_gain(…)
     """
 
+    @classmethod
+    def create_servo(cls, degree_of_freedom: DegreeOfFreedom) -> MujocoActuator:
+        """
+        The position servo of a degree of freedom, from the gains it declares: a PD law
+        clamped to the servo's torque limit and to the degree of freedom's own position
+        limits.
+
+        :param degree_of_freedom: The degree of freedom to servo; it has to declare its
+            servo gains.
+        :return: The servo's actuator.
+        """
+        gains = degree_of_freedom.servo_gains
+        limits = degree_of_freedom.limits
+        return cls(
+            dynamics_type=mujoco.mjtDyn.mjDYN_NONE,
+            gain_type=mujoco.mjtGain.mjGAIN_FIXED,
+            gain_parameters=[gains.stiffness] + [0.0] * 9,
+            bias_type=mujoco.mjtBias.mjBIAS_AFFINE,
+            bias_parameters=[0.0, -gains.stiffness, -gains.damping] + [0.0] * 7,
+            control_range=[limits.lower.position, limits.upper.position],
+            force_range=[-gains.torque_limit, gains.torque_limit],
+        )
+
     def to_dict(self) -> Dict[str, Any]:
         """
         :return: These properties under the names MuJoCo's own actuator attributes
@@ -856,6 +883,33 @@ class MujocoActuator(SimulatorAdditionalProperty):
             "gainprm": self.gain_parameters,
             "gaintype": self.gain_type,
         }
+
+
+@dataclass
+class MujocoServo:
+    """
+    The position servo a degree of freedom with servo gains is driven by in the MuJoCo
+    model.
+    """
+
+    degree_of_freedom: DegreeOfFreedom
+    """
+    The degree of freedom the servo drives; declares the servo's gains.
+    """
+
+    @property
+    def name(self) -> str:
+        """
+        The name of the servo's actuator in the MuJoCo model.
+        """
+        return f"{self.degree_of_freedom.name.name}_servo"
+
+    @property
+    def actuator(self) -> MujocoActuator:
+        """
+        The actuator that realises the servo.
+        """
+        return MujocoActuator.create_servo(self.degree_of_freedom)
 
 
 @dataclass
@@ -1212,90 +1266,10 @@ class MujocoTendon(SimulatorAdditionalProperty):
     """
 
 
-@dataclass(frozen=True)
-class MujocoSolverReference:
-    """
-    How stiff and how damped a MuJoCo constraint is, as the ``solref`` pair of a geom;
-    see https://mujoco.readthedocs.io/en/stable/modeling.html#solver-parameters.
-    """
-
-    time_constant: float = 0.02
-    """
-    Time, in seconds, the constraint takes to resolve a violation; a smaller value is a
-    stiffer contact.
-    """
-
-    damping_ratio: float = 1.0
-    """
-    Damping of that resolution; ``1`` is critically damped.
-    """
-
-    def to_list(self) -> List[float]:
-        """
-        :return: The pair in the order MuJoCo's own ``solref`` attribute expects it.
-        """
-        return [self.time_constant, self.damping_ratio]
-
-
-@dataclass(frozen=True)
-class MujocoSolverImpedance:
-    """
-    How hard a MuJoCo constraint pushes back as it is violated, as the ``solimp``
-    quintuple of a geom; see
-    https://mujoco.readthedocs.io/en/stable/modeling.html#solver-parameters.
-    """
-
-    minimum: float = 0.9
-    """
-    Impedance at zero violation, between 0 and 1; a higher value is a harder contact.
-    """
-
-    maximum: float = 0.95
-    """
-    Impedance once the violation reaches :attr:`width`.
-    """
-
-    width: float = 0.001
-    """
-    Violation, in metres, over which the impedance rises from minimum to maximum.
-    """
-
-    midpoint: float = 0.5
-    """
-    Where along that width the rise is steepest, as a fraction of it.
-    """
-
-    power: float = 2.0
-    """
-    How sharply the rise bends around the midpoint.
-    """
-
-    def to_list(self) -> List[float]:
-        """
-        :return: The quintuple in the order MuJoCo's own ``solimp`` attribute expects
-            it.
-        """
-        return [self.minimum, self.maximum, self.width, self.midpoint, self.power]
-
-
 @dataclass(eq=False)
 class MujocoGeom(SimulatorAdditionalProperty):
     """
     An additional property declaring that a Shape is a MujocoGeom.
-    """
-
-    solver_impedance: MujocoSolverImpedance = field(
-        default_factory=MujocoSolverImpedance
-    )
-    """
-    How hard the geom's contacts push back as they are violated.
-    """
-
-    solver_reference: MujocoSolverReference = field(
-        default_factory=MujocoSolverReference
-    )
-    """
-    How stiff and how damped the geom's contacts are.
     """
 
     contact_type: int = 1
@@ -1323,8 +1297,6 @@ class MujocoGeom(SimulatorAdditionalProperty):
             ready to be passed to ``MjsBody.add_geom``.
         """
         return {
-            "solimp": self.solver_impedance.to_list(),
-            "solref": self.solver_reference.to_list(),
             "contype": self.contact_type,
             "conaffinity": self.contact_affinity,
         }
@@ -1353,14 +1325,6 @@ class MujocoJoint(SimulatorAdditionalProperty):
 class MujocoBody(SimulatorAdditionalProperty):
     """
     Additional properties representing a MuJoCo body in the world model.
-    """
-
-    gravitation_compensation_factor: float = 0.0
-    """
-    Gravity compensation force, specified as fraction of body weight. 
-    This attribute creates an upwards force applied to the body’s center of mass, countering the force of gravity. 
-    As an example, a value of 1 creates an upward force equal to the body’s weight and compensates for gravity exactly. 
-    Values greater than 1 will create a net upwards force or buoyancy effect.
     """
 
     motion_capture: bool = False
@@ -1911,6 +1875,7 @@ class MujocoBuilder(MultiSimBuilder):
         self._thickened_mesh_paths = {}
 
     def _end_build(self, file_path: str):
+        self._build_servos()
         self._build_contact_exclusions()
         self._build_equalities()
         self._build_tendons()
@@ -2012,6 +1977,10 @@ class MujocoBuilder(MultiSimBuilder):
                 )
         if shape.friction is not None:
             geom_props["friction"] = shape.friction.to_list()
+        if shape.contact_stiffness is not None:
+            geom_props["solref"] = shape.contact_stiffness.to_list()
+        if shape.contact_impedance is not None:
+            geom_props["solimp"] = shape.contact_impedance.to_list()
         mujoco_geom = shape.simulator_property(MujocoGeom)
         if mujoco_geom is not None:
             mujoco_geom_props = mujoco_geom.to_dict()
@@ -2258,30 +2227,7 @@ class MujocoBuilder(MultiSimBuilder):
         actuator_props = MujocoActuatorConverter.convert(actuator)
         dof_names = actuator_props.pop("dof_names")
         assert len(dof_names) == 1, "Actuator must be associated with exactly one DOF."
-        dof_name = dof_names[0]
-        connection = next(
-            (
-                conn
-                for conn in actuator._world.connections
-                if dof_name in [dof.name.name for dof in conn.dofs]
-            ),
-            None,
-        )
-        if connection is not None:
-            connection_name = connection.name.name
-            joint_spec = self._find_entity(
-                entity_type=mujoco.mjtObj.mjOBJ_JOINT, entity_name=connection_name
-            )
-            if joint_spec is None:
-                raise MujocoEntityNotFoundError(
-                    entity_name=connection_name,
-                    entity_type=mujoco.mjtObj.mjOBJ_JOINT,
-                )
-            actuator_props["target"] = joint_spec.name
-            actuator_props["trntype"] = mujoco.mjtTrn.mjTRN_JOINT
-        else:
-            actuator_props["target"] = dof_name
-            actuator_props["trntype"] = mujoco.mjtTrn.mjTRN_TENDON
+        actuator_props.update(self._transmission_for_degree_of_freedom(dof_names[0]))
         actuator_name = actuator.name.name
         actuator_spec = self.spec.add_actuator(**actuator_props)
         if actuator_spec is None:
@@ -2290,6 +2236,54 @@ class MujocoBuilder(MultiSimBuilder):
                 entity_type=mujoco.mjtObj.mjOBJ_ACTUATOR,
                 action="add",
             )
+
+    def _build_servos(self):
+        """
+        Give every degree of freedom that declares servo gains, and that no actuator of
+        the world drives already, its own position servo (see :class:`MujocoServo`).
+        """
+        driven = {
+            degree_of_freedom.id
+            for actuator in self.world.actuators
+            for degree_of_freedom in actuator.dofs
+        }
+        for degree_of_freedom in self.world.degrees_of_freedom:
+            if degree_of_freedom.servo_gains is None or degree_of_freedom.id in driven:
+                continue
+            servo = MujocoServo(degree_of_freedom)
+            actuator_props = servo.actuator.to_dict()
+            actuator_props["name"] = servo.name
+            actuator_props.update(
+                self._transmission_for_degree_of_freedom(degree_of_freedom.name.name)
+            )
+            self.spec.add_actuator(**actuator_props)
+
+    def _transmission_for_degree_of_freedom(self, dof_name: str) -> Dict[str, Any]:
+        """
+        :param dof_name: The name of the degree of freedom an actuator drives.
+        :return: The actuator's transmission properties: the joint moving that degree
+            of freedom, or the tendon of that name if no joint does.
+        """
+        connection = next(
+            (
+                conn
+                for conn in self.world.connections
+                if dof_name in [dof.name.name for dof in conn.dofs]
+            ),
+            None,
+        )
+        if connection is None:
+            return {"target": dof_name, "trntype": mujoco.mjtTrn.mjTRN_TENDON}
+        connection_name = connection.name.name
+        joint_spec = self._find_entity(
+            entity_type=mujoco.mjtObj.mjOBJ_JOINT, entity_name=connection_name
+        )
+        if joint_spec is None:
+            raise MujocoEntityNotFoundError(
+                entity_name=connection_name,
+                entity_type=mujoco.mjtObj.mjOBJ_JOINT,
+            )
+        return {"target": joint_spec.name, "trntype": mujoco.mjtTrn.mjTRN_JOINT}
 
     def _build_camera(self, camera: MultiSimCamera):
         camera_name = camera.name
@@ -2343,9 +2337,10 @@ class MujocoBuilder(MultiSimBuilder):
         if body.name.name == "world":
             return
         body_props = MujocoKinematicStructureEntityConverter.convert(body)
+        if isinstance(body, Body):
+            body_props["gravcomp"] = body.gravity_compensation
         mujoco_body = body.simulator_property(MujocoBody)
         if mujoco_body is not None:
-            body_props["gravcomp"] = mujoco_body.gravitation_compensation_factor
             body_props["mocap"] = mujoco_body.motion_capture
         parent_body_name = body.parent_connection.parent.name.name
         parent_body_spec = self._find_entity(
@@ -3295,13 +3290,22 @@ class MujocoSynchronizer(MultiSimSynchronizer):
     def _actuator_names_by_degree_of_freedom(self) -> Dict[Any, str]:
         """
         :return: The name of the actuator driving each actuated degree of freedom, by
-            the degree of freedom's id.
+            the degree of freedom's id: the world's own actuators, and the servo every
+            degree of freedom with servo gains gets (see :class:`MujocoServo`).
         """
-        return {
-            degree_of_freedom.id: actuator.name.name
-            for actuator in self._world.actuators
-            for degree_of_freedom in actuator.dofs
+        actuator_names = {
+            degree_of_freedom.id: MujocoServo(degree_of_freedom).name
+            for degree_of_freedom in self._world.degrees_of_freedom
+            if degree_of_freedom.servo_gains is not None
         }
+        actuator_names.update(
+            {
+                degree_of_freedom.id: actuator.name.name
+                for actuator in self._world.actuators
+                for degree_of_freedom in actuator.dofs
+            }
+        )
+        return actuator_names
 
     def _command_actuator(
         self,
@@ -3340,12 +3344,14 @@ class MujocoSynchronizer(MultiSimSynchronizer):
         starts.
         """
         state = self._world.state
-        for actuator in self._world.actuators:
-            for degree_of_freedom in actuator.dofs:
-                self.simulator.set_actuator_control(
-                    actuator_name=actuator.name.name,
-                    value=float(state[degree_of_freedom.id].position),
-                )
+        for (
+            degree_of_freedom_id,
+            actuator_name,
+        ) in self._actuator_names_by_degree_of_freedom().items():
+            self.simulator.set_actuator_control(
+                actuator_name=actuator_name,
+                value=float(state[degree_of_freedom_id].position),
+            )
 
     def _read_6dof_from_qpos(
         self, connection: Connection6DoF, qpos_address: int
@@ -3564,6 +3570,11 @@ class MultiSim(ABC):
     The class of the MultiSimBuilder to use.
     """
 
+    world: World
+    """
+    The simulated world.
+    """
+
     simulator: BaseSimulator
     """
     The simulator instance.
@@ -3589,11 +3600,17 @@ class MultiSim(ABC):
         """
         Initializes the MultiSim class.
 
-        :param world: The world to simulate.
+        :param world: The world to simulate. Every robot in it is prepared for being
+            simulated physically (see
+            :meth:`~semantic_digital_twin.robots.robot_parts.AbstractRobot.prepare_for_physical_simulation`).
         :param viewer: The MultiverseViewer to read/write objects.
         :param headless: Whether to run the simulation in headless mode.
         :param step_size: The step size for the simulation.
         """
+        self.world = world
+        with world.modify_world():
+            for robot in world.get_semantic_annotations_by_type(AbstractRobot):
+                robot.prepare_for_physical_simulation()
         self.builder_class().build_world(world=world, file_path=self.default_file_path)
         self.simulator = self.simulator_class(
             file_path=self.default_file_path,
@@ -3653,5 +3670,36 @@ class MujocoSim(MultiSim):
     synchronizer_class: ClassVar[Type[MultiSimSynchronizer]] = MujocoSynchronizer
     builder_class: ClassVar[Type[MultiSimBuilder]] = MujocoBuilder
     simulator: MujocoSimulator
-    synchronizer: Type[MultiSimSynchronizer] = MujocoSynchronizer
+    synchronizer: MujocoSynchronizer
     default_file_path: str = "/tmp/scene.xml"
+
+    def start_stepped_simulation(self) -> None:
+        """
+        Start the simulation without a physics thread: the physics advances only in
+        :meth:`step_simulation`, so a controller can drive the world between steps, in
+        lockstep with the physics, and reads the world back after every step rather
+        than at the synchronizer's throttled rate.
+
+        Every servo is handed the position its joint currently holds in the world, so
+        nothing rushes towards zero the moment the physics starts.
+        """
+        assert (
+            self.simulator.state != SimulatorState.RUNNING
+        ), "Simulation is already running."
+        self.synchronizer.sync_rate_hz = MujocoSynchronizer.UNTHROTTLED_SYNC_RATE_HZ
+        self.simulator.start(simulate_in_thread=False, render_in_thread=False)
+        self.synchronizer.command_actuators_from_world_state()
+
+    def step_simulation(self, duration: timedelta) -> None:
+        """
+        Advance the physics of a simulation started with
+        :meth:`start_stepped_simulation` and refresh the viewer.
+
+        :param duration: How much simulated time to advance.
+        :raises SimulationNotStartedError: If the simulation is not running.
+        """
+        if self.simulator.state != SimulatorState.RUNNING:
+            raise SimulationNotStartedError(self.world.root.name.name)
+        for _ in range(round(duration.total_seconds() / self.simulator.step_size)):
+            self.simulator.step()
+        self.simulator.render()

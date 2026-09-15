@@ -14,7 +14,6 @@ from typing import (
     Set,
     List,
     DefaultDict,
-    Tuple,
     Type,
     Union,
     Any,
@@ -61,10 +60,6 @@ from semantic_digital_twin.spatial_types import (
 from semantic_digital_twin.spatial_types.spatial_types import Pose
 from semantic_digital_twin.spatial_types.derivatives import DerivativeMap
 from semantic_digital_twin.adapters.urdf import URDFParser
-from semantic_digital_twin.world_description.connection_properties import (
-    JointDynamics,
-    ServoGains,
-)
 from semantic_digital_twin.world_description.connections import (
     ActiveConnection,
     FixedConnection,
@@ -377,18 +372,21 @@ class AbstractRobotPart(HasRootBody, HasRobotParts, ABC):
             if isinstance(connection, ActiveConnection)
         ]
 
-    def servo_for(
-        self, connection: ActiveConnection1DOF
-    ) -> Optional[Tuple[ServoGains, JointDynamics]]:
+    def _setup_servos(self) -> None:
         """
-        The position servo and joint dynamics one of this part's joints gets when the
-        robot is simulated physically.
+        Declare, on this part's joints, the servos driving them in a physical
+        simulation (see
+        :meth:`~semantic_digital_twin.world_description.connection_properties.JointServo.apply_to`).
+        Does nothing by default: such a part is moved kinematically.
+        """
 
-        :param connection: One of this part's active 1-DOF connections.
-        :return: The servo's gains and the joint's dynamics, or ``None`` if this part
-            declares no servo for the joint.
+    def _compensate_gravity(self) -> None:
         """
-        return None
+        Let a physical simulation carry the weight of this part's bodies, as a servoed
+        part holds its own weight.
+        """
+        for body in self.bodies:
+            body.gravity_compensation = 1.0
 
     def prepare_for_physical_simulation(self) -> None:
         """
@@ -861,21 +859,13 @@ class AbstractRobot(Agent, HasRobotParts, ABC):
             world.merge_world(robot_world, mount)
         return cls.from_world(world)
 
-    def declare_servos(self) -> None:
+    def prepare_for_physical_simulation(self) -> None:
         """
-        Declare, on every degree of freedom one of this robot's parts knows a servo
-        for, the servo and joint dynamics that part gives it (see
-        :meth:`AbstractRobotPart.servo_for`), so a physical simulation can drive it.
+        Adjust every part of this robot for being simulated physically (see
+        :meth:`AbstractRobotPart.prepare_for_physical_simulation`).
         """
-        with self._world.modify_world():
-            for robot_part in self._robot_parts:
-                for connection in robot_part.active_connections:
-                    if not isinstance(connection, ActiveConnection1DOF):
-                        continue
-                    servo = robot_part.servo_for(connection)
-                    if servo is None:
-                        continue
-                    connection.raw_dof.servo_gains, connection.dynamics = servo
+        for robot_part in self._robot_parts:
+            robot_part.prepare_for_physical_simulation()
 
     @classmethod
     def from_branch_in_world(cls, branch_root: KinematicStructureEntity) -> Self:
@@ -898,6 +888,7 @@ class AbstractRobot(Agent, HasRobotParts, ABC):
             for robot_part in self._robot_parts:
                 robot_part.setup_hardware_interfaces()
                 robot_part.add_joint_states(robot_part.setup_joint_states())
+                robot_part._setup_servos()
             self._setup_collision_rules()
             self._setup_velocity_limits()
             return self

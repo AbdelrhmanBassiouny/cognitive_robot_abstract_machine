@@ -1,4 +1,13 @@
+from __future__ import annotations
+
 from dataclasses import dataclass
+
+from typing_extensions import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from semantic_digital_twin.world_description.connections import (
+        ActiveConnection1DOF,
+    )
 
 
 @dataclass
@@ -73,3 +82,31 @@ class ServoGains:
     """
     The largest torque, or force, the servo may exert.
     """
+
+
+@dataclass
+class JointServo:
+    """
+    The position servo a joint is driven by in a physical simulation, together with the
+    passive dynamics of the joint itself.
+    """
+
+    gains: ServoGains
+    """
+    How hard the servo pulls the joint towards the commanded position.
+    """
+
+    dynamics: JointDynamics
+    """
+    The joint's own inertia and friction, felt on top of the servo's torque.
+    """
+
+    def apply_to(self, connection: ActiveConnection1DOF) -> None:
+        """
+        Declare this servo on a joint: the gains on its degree of freedom, the dynamics
+        on the joint itself.
+
+        :param connection: The joint the servo drives.
+        """
+        connection.raw_dof.servo_gains = self.gains
+        connection.dynamics = self.dynamics

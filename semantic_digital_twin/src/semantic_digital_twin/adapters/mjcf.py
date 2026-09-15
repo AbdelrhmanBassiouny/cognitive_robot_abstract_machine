@@ -18,8 +18,6 @@ from semantic_digital_twin.adapters.multi_sim import (
     MujocoBody,
     MujocoJoint,
     MujocoLight,
-    MujocoSolverImpedance,
-    MujocoSolverReference,
     MujocoTendon,
 )
 from semantic_digital_twin.adapters.world_model_parser import WorldModelParser
@@ -44,9 +42,13 @@ from semantic_digital_twin.world_description.degree_of_freedom import (
     DegreeOfFreedom,
     DegreeOfFreedomLimits,
 )
+from semantic_digital_twin.world_description.contact import (
+    ContactFriction,
+    ContactImpedance,
+    ContactStiffness,
+)
 from semantic_digital_twin.world_description.geometry import (
     Box,
-    ContactFriction,
     Sphere,
     Cylinder,
     Scale,
@@ -167,14 +169,10 @@ class MJCFParser(WorldModelParser):
             shape = self.parse_geom(mujoco_geom=mujoco_geom)
             shape.origin.reference_frame = body
             shape.friction = ContactFriction(*mujoco_geom.friction.tolist())
+            shape.contact_stiffness = ContactStiffness(*mujoco_geom.solref.tolist())
+            shape.contact_impedance = ContactImpedance(*mujoco_geom.solimp.tolist())
             shape.simulator_additional_properties.append(
                 MujocoGeom(
-                    solver_impedance=MujocoSolverImpedance(
-                        *mujoco_geom.solimp.tolist()
-                    ),
-                    solver_reference=MujocoSolverReference(
-                        *mujoco_geom.solref.tolist()
-                    ),
                     contact_type=mujoco_geom.contype,
                     contact_affinity=mujoco_geom.conaffinity,
                 )
@@ -190,11 +188,9 @@ class MJCFParser(WorldModelParser):
         body.inertial = self.parse_inertial(mujoco_body=mujoco_body)
         body.visual = ShapeCollection(shapes=visuals, reference_frame=body)
         body.collision = ShapeCollection(shapes=collisions, reference_frame=body)
+        body.gravity_compensation = float(mujoco_body.gravcomp)
         body.simulator_additional_properties.append(
-            MujocoBody(
-                gravitation_compensation_factor=mujoco_body.gravcomp,
-                motion_capture=mujoco_body.mocap,
-            )
+            MujocoBody(motion_capture=mujoco_body.mocap)
         )
         self.world.add_kinematic_structure_entity(body)
         for mujoco_child_body in mujoco_body.bodies:

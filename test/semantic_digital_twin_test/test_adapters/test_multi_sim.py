@@ -1,5 +1,6 @@
 import logging
 import os
+from datetime import timedelta
 import threading
 import time
 from dataclasses import dataclass
@@ -14,7 +15,7 @@ from trimesh.visual.material import SimpleMaterial
 from semantic_digital_twin.adapters.mesh import STLParser
 from semantic_digital_twin.adapters.urdf import URDFParser
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
-from semantic_digital_twin.exceptions import ParsingError
+from semantic_digital_twin.exceptions import ParsingError, SimulationNotStartedError
 from semantic_digital_twin.robots.hsrb import HSRB
 from semantic_digital_twin.robots.tracy import Tracy
 from semantic_digital_twin.spatial_types.spatial_types import (
@@ -33,6 +34,7 @@ from semantic_digital_twin.world_description.degree_of_freedom import (
     DegreeOfFreedomLimits,
     DerivativeMap,
 )
+from semantic_digital_twin.world_description.contact import ContactParameters
 from semantic_digital_twin.world_description.geometry import (
     Box,
     Scale,
@@ -548,6 +550,39 @@ def test_builder_writes_a_geoms_contact_bitmasks(tmp_path):
     ]
     assert geom.contype == 2
     assert geom.conaffinity == 4
+
+
+def test_contact_declarations_and_gravity_compensation_survive_a_round_trip(tmp_path):
+    """
+    A shape's friction, contact stiffness and impedance and a body's gravity
+    compensation are written into the built model under MuJoCo's own attributes, and
+    read back into the same declarations when that model is parsed again.
+    """
+    world = World()
+    with world.modify_world():
+        root = Body(name=PrefixedName("root"))
+        world.add_body(root)
+        box_shape = Box(scale=Scale(1, 1, 1))
+        contact = ContactParameters.create_for_grasped_object(sliding_friction=0.4)
+        link = Body(
+            name=PrefixedName("link"),
+            collision=ShapeCollection([box_shape]),
+            gravity_compensation=0.5,
+        )
+        contact.apply_to([link])
+        world.add_kinematic_structure_entity(link)
+        world.add_connection(FixedConnection(parent=root, child=link))
+
+    builder = MujocoBuilder()
+    builder.build_world(world=world, file_path=str(tmp_path / "scene.xml"))
+    parsed_world = MJCFParser(str(tmp_path / "scene.xml")).parse()
+
+    parsed_link = parsed_world.get_body_by_name("link")
+    [parsed_shape] = parsed_link.collision.shapes
+    assert parsed_link.gravity_compensation == 0.5
+    assert parsed_shape.friction == contact.friction
+    assert parsed_shape.contact_stiffness == contact.stiffness
+    assert parsed_shape.contact_impedance == contact.impedance
 
 
 def test_builder_keeps_a_visual_only_geom_contactless_despite_its_bitmasks(tmp_path):
@@ -1520,3 +1555,64 @@ def test_prebuilt_world_multiple_free_bodies_start_at_authored_poses():
             )
     finally:
         stop_multisim_if_running(multi_sim)
+
+
+# %% stepped simulation
+
+
+@pytest.fixture
+def falling_box_world() -> World:
+    world = World()
+    with world.modify_world():
+        root = Body(name=PrefixedName("root"))
+        world.add_body(root)
+        box = Body(name=PrefixedName("box"))
+        geometry = ShapeCollection(
+            [
+                Box(
+                    origin=HomogeneousTransformationMatrix.from_xyz_rpy(
+                        reference_frame=box
+                    ),
+                    scale=Scale(0.1, 0.1, 0.1),
+                )
+            ],
+            reference_frame=box,
+        )
+        box.collision, box.visual = geometry, geometry
+        world.add_connection(
+            Connection6DoF.create_with_dofs(
+                world=world,
+                parent=root,
+                child=box,
+                parent_T_connection_expression=HomogeneousTransformationMatrix.from_xyz_rpy(
+                    z=1.0, reference_frame=root
+                ),
+            )
+        )
+    return world
+
+
+def test_stepping_before_start_raises(falling_box_world):
+    multi_sim = MujocoSim(world=falling_box_world, headless=headless)
+
+    with pytest.raises(SimulationNotStartedError):
+        multi_sim.step_simulation(timedelta(milliseconds=100))
+
+
+def test_a_stepped_simulation_advances_exactly_the_requested_time(falling_box_world):
+    """
+    A box dropped from a metre falls under gravity exactly as far as the requested steps
+    add up to, and no physics thread advances it in between.
+    """
+    multi_sim = MujocoSim(world=falling_box_world, headless=headless)
+    duration = timedelta(milliseconds=500)
+
+    multi_sim.start_stepped_simulation()
+    try:
+        multi_sim.step_simulation(duration)
+        height = multi_sim.simulator.get_body_position(body_name="box").result[2]
+    finally:
+        stop_multisim_if_running(multi_sim)
+
+    fallen = 0.5 * 9.81 * duration.total_seconds() ** 2
+    assert height == pytest.approx(1.0 - fallen, abs=0.01)

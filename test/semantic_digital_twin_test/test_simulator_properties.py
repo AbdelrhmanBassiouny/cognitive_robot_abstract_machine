@@ -26,7 +26,7 @@ def test_no_property_of_a_type_is_none(body):
 
 
 def test_the_attached_property_is_found(body):
-    attached = MujocoBody(gravitation_compensation_factor=1.0)
+    attached = MujocoBody(motion_capture=True)
     body.simulator_additional_properties.append(attached)
 
     assert body.simulator_property(MujocoBody) is attached

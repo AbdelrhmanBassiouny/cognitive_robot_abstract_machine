@@ -8,6 +8,8 @@ Skipped where Tracy's description is not installed.
 
 from __future__ import annotations
 
+from datetime import timedelta
+
 import numpy
 import pytest
 
@@ -19,8 +21,7 @@ from giskardpy.motion_statechart.graph_node import EndMotion
 from giskardpy.motion_statechart.motion_statechart import MotionStatechart
 from giskardpy.motion_statechart.tasks.cartesian_tasks import CartesianPosition
 from giskardpy.qp.qp_controller_config import QPControllerConfig
-from semantic_digital_twin.adapters.mujoco_tuning import equip_for_mujoco
-from semantic_digital_twin.adapters.real_time_simulation import RealTimeSimulation
+from semantic_digital_twin.adapters.multi_sim import MujocoSim
 from semantic_digital_twin.datastructures.definitions import StaticJointState
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.robots.tracy import Tracy
@@ -47,7 +48,6 @@ def parked_tracy() -> Tracy:
     with world.modify_world():
         world.add_kinematic_structure_entity(Body(name=PrefixedName("floor")))
     robot = Tracy.mount_stationary(world, tracy_world, mount_pose)
-    equip_for_mujoco(robot)
     for arm in robot.get_arms():
         arm.get_joint_state_by_type(StaticJointState.PARK).apply_to(world)
     world.notify_state_change()
@@ -74,9 +74,9 @@ def test_the_simulated_arm_reaches_the_pose_giskard_commands_live(parked_tracy):
     motion_statechart.add_nodes([reach, EndMotion.when_true(reach)])
     controller_config = QPControllerConfig(target_frequency=control_frequency)
 
-    with RealTimeSimulation(
-        world=world, headless=True, real_time_factor=None
-    ) as simulation:
+    simulation = MujocoSim(world=world, headless=True)
+    simulation.start_stepped_simulation()
+    try:
         executor = Executor(
             context=MotionStatechartContext(
                 world=world, qp_controller_config=controller_config
@@ -85,12 +85,14 @@ def test_the_simulated_arm_reaches_the_pose_giskard_commands_live(parked_tracy):
         )
         executor.compile(motion_statechart=motion_statechart)
         executor.tick_until_end(timeout=tick_limit)
-        simulation.advance(1.0)
+        simulation.step_simulation(timedelta(seconds=1))
         simulated = numpy.array(
-            simulation.mujoco_mirror.simulator.get_body_position(
+            simulation.simulator.get_body_position(
                 body_name=tool_frame.name.name
             ).result
         )
+    finally:
+        simulation.stop_simulation()
 
     assert motion_statechart.is_end_motion()
     assert numpy.linalg.norm(simulated - goal_point.to_np()[:3]) <= tracking_tolerance

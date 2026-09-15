@@ -17,7 +17,7 @@ from giskardpy.motion_statechart.graph_node import EndMotion
 from giskardpy.motion_statechart.monitors.payload_monitors import CountSeconds
 from giskardpy.motion_statechart.motion_statechart import MotionStatechart
 from giskardpy.qp.qp_controller_config import QPControllerConfig
-from semantic_digital_twin.adapters.real_time_simulation import RealTimeSimulation
+from semantic_digital_twin.adapters.multi_sim import MujocoSim
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.spatial_types.spatial_types import (
     HomogeneousTransformationMatrix,
@@ -130,16 +130,16 @@ def test_stepped_simulation_pacer_advances_the_physics_one_cycle_per_sleep():
         )
     cycles, frequency = 25, 50
 
-    with RealTimeSimulation(
-        world=world, headless=True, real_time_factor=None
-    ) as simulation:
+    simulation = MujocoSim(world=world, headless=True)
+    simulation.start_stepped_simulation()
+    try:
         pacer = SteppedSimulationPacer(simulation)
         pacer.target_frequency = frequency
         for _ in range(cycles):
             pacer.sleep()
-        height = simulation.mujoco_mirror.simulator.get_body_position(
-            body_name="box"
-        ).result[2]
+        height = simulation.simulator.get_body_position(body_name="box").result[2]
+    finally:
+        simulation.stop_simulation()
 
     fallen = 0.5 * 9.81 * (cycles / frequency) ** 2
     assert height == pytest.approx(1.0 - fallen, abs=0.01)

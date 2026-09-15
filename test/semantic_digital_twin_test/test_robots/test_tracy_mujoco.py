@@ -1,18 +1,17 @@
 """
-Tests for mounting Tracy into a world and equipping it for physical simulation in
-MuJoCo; skipped where Tracy's description is not installed.
+Tests for mounting Tracy into a world and simulating it physically in MuJoCo; skipped
+where Tracy's description is not installed.
 """
 
 from __future__ import annotations
 
+from datetime import timedelta
 
 import pytest
 
 from ...pytest_environment import runs_in_continuous_integration
 
-from semantic_digital_twin.adapters.multi_sim import MujocoBody, MujocoBuilder
-from semantic_digital_twin.adapters.mujoco_tuning import equip_for_mujoco
-from semantic_digital_twin.adapters.real_time_simulation import RealTimeSimulation
+from semantic_digital_twin.adapters.multi_sim import MujocoBuilder, MujocoSim
 from semantic_digital_twin.datastructures.definitions import StaticJointState
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.robots.tracy import Tracy, TracyJoint
@@ -57,32 +56,33 @@ def test_floor_mounted_tracy_has_its_table_legs_on_the_floor(mounted_tracy):
     assert mounted_tracy.table_top_z > 0.5
 
 
-def test_equipping_gives_every_arm_and_gripper_degree_of_freedom_one_servo(
-    mounted_tracy,
-):
-    actuators = equip_for_mujoco(mounted_tracy)
+def test_every_arm_and_gripper_joint_is_servoed_on_mounting(mounted_tracy, tmp_path):
+    """
+    A mounted Tracy declares each arm and gripper joint's own servo, so the compiled
+    model drives every one of those degrees of freedom with a servo.
+    """
+    world = mounted_tracy._world
+    shoulder = world.get_connection_by_name(TracyJoint.LEFT_SHOULDER_PAN)
+    knuckle = world.get_connection_by_name(TracyJoint.LEFT_GRIPPER_LEFT_KNUCKLE)
+    gripper = mounted_tracy.left_arm.end_effector
 
-    driven_degrees_of_freedom = {
+    expected_shoulder = mounted_tracy.left_arm.servos_by_joint["shoulder_pan_joint"]
+    assert shoulder.raw_dof.servo_gains == expected_shoulder.gains
+    assert shoulder.dynamics == expected_shoulder.dynamics
+    assert knuckle.raw_dof.servo_gains == gripper.finger_servo.gains
+    assert knuckle.dynamics == gripper.finger_servo.dynamics
+
+    builder = MujocoBuilder()
+    builder.build_world(world=world, file_path=str(tmp_path / "scene.xml"))
+    servoed_degrees_of_freedom = {
         connection.raw_dof.name.name
         for arm in mounted_tracy.get_arms()
         for connection in arm.active_connections + arm.end_effector.active_connections
     }
-    assert set(actuators) == driven_degrees_of_freedom
-    assert TracyJoint.LEFT_GRIPPER_LEFT_KNUCKLE in actuators
-    assert len(mounted_tracy._world.actuators) == len(actuators)
-
-
-def test_equipping_declares_each_joints_own_servo(mounted_tracy):
-    equip_for_mujoco(mounted_tracy)
-
-    world = mounted_tracy._world
-    shoulder = world.get_connection_by_name(TracyJoint.LEFT_SHOULDER_PAN)
-    knuckle = world.get_connection_by_name(TracyJoint.LEFT_GRIPPER_LEFT_KNUCKLE)
-    expected_gains, expected_dynamics = mounted_tracy.left_arm.servo_for(shoulder)
-    assert shoulder.raw_dof.servo_gains == expected_gains
-    assert shoulder.dynamics == expected_dynamics
-    gripper = mounted_tracy.left_arm.end_effector
-    assert (knuckle.raw_dof.servo_gains, knuckle.dynamics) == gripper.servo_for(knuckle)
+    assert {
+        actuator.target for actuator in builder.spec.actuators
+    } == servoed_degrees_of_freedom
+    assert TracyJoint.LEFT_GRIPPER_LEFT_KNUCKLE in servoed_degrees_of_freedom
 
 
 def test_mounting_alone_leaves_the_descriptions_own_finger_velocity_limit(
@@ -100,8 +100,10 @@ def test_mounting_alone_leaves_the_descriptions_own_finger_velocity_limit(
     assert knuckle.raw_dof.limits.upper.velocity != gripper.finger_velocity_limit
 
 
-def test_equipping_overwrites_the_descriptions_finger_velocity_limit(mounted_tracy):
-    equip_for_mujoco(mounted_tracy)
+def test_preparing_for_physical_simulation_overwrites_the_finger_velocity_limit(
+    mounted_tracy,
+):
+    mounted_tracy.prepare_for_physical_simulation()
 
     gripper = mounted_tracy.left_arm.end_effector
     knuckle = mounted_tracy._world.get_connection_by_name(
@@ -112,7 +114,7 @@ def test_equipping_overwrites_the_descriptions_finger_velocity_limit(mounted_tra
     assert knuckle.raw_dof.limits.lower.velocity == -gripper.finger_velocity_limit
 
 
-def test_equipping_compensates_gravity_and_lets_the_links_pass_through_each_other(
+def test_the_servoed_parts_carry_their_weight_and_the_links_pass_through_each_other(
     mounted_tracy, tmp_path
 ):
     """
@@ -123,14 +125,9 @@ def test_equipping_compensates_gravity_and_lets_the_links_pass_through_each_othe
     Pairs the description itself lists as adjacent, such as the table and the arm bases
     mounted on it, stay excluded.
     """
-    equip_for_mujoco(mounted_tracy)
-
     for arm in mounted_tracy.get_arms():
         for body in arm.bodies + arm.end_effector.bodies:
-            assert (
-                body.simulator_property(MujocoBody).gravitation_compensation_factor
-                == 1.0
-            )
+            assert body.gravity_compensation == 1.0
     builder = MujocoBuilder()
     builder.build_world(
         world=mounted_tracy._world, file_path=str(tmp_path / "scene.xml")
@@ -157,20 +154,21 @@ def test_the_servos_hold_the_parked_arms_up(mounted_tracy):
     weight between one control cycle and the next.
     """
     world = mounted_tracy._world
-    equip_for_mujoco(mounted_tracy)
     for arm in mounted_tracy.get_arms():
         arm.get_joint_state_by_type(StaticJointState.PARK).apply_to(world)
     world.notify_state_change()
     tool_frame = mounted_tracy.left_arm.end_effector.tool_frame
     parked = world.compute_forward_kinematics_np(world.root, tool_frame)[:3, 3]
 
-    with RealTimeSimulation(
-        world=world, headless=True, real_time_factor=None
-    ) as simulation:
-        simulation.advance(1.0)
-        simulated = simulation.mujoco_mirror.simulator.get_body_position(
+    simulation = MujocoSim(world=world, headless=True)
+    simulation.start_stepped_simulation()
+    try:
+        simulation.step_simulation(timedelta(seconds=1))
+        simulated = simulation.simulator.get_body_position(
             body_name=tool_frame.name.name
         ).result
+    finally:
+        simulation.stop_simulation()
 
     assert list(simulated) == pytest.approx(list(parked), abs=0.01)
 
@@ -183,12 +181,10 @@ def test_gripper_geometry_names_the_pads_and_the_driving_joint(mounted_tracy):
 
     assert gripper.left_fingertip.name.name == "left_robotiq_85_left_finger_tip_link"
     assert gripper.right_fingertip.name.name == "left_robotiq_85_right_finger_tip_link"
-    assert gripper.knuckle_joint == TracyJoint.LEFT_GRIPPER_LEFT_KNUCKLE
-    assert gripper.knuckle_degree_of_freedom.name.name == (
-        TracyJoint.LEFT_GRIPPER_LEFT_KNUCKLE
-    )
+    assert gripper.knuckle_joint.name.name == TracyJoint.LEFT_GRIPPER_LEFT_KNUCKLE
+    assert gripper.knuckle_degree_of_freedom is gripper.knuckle_joint.raw_dof
     assert (
-        mounted_tracy.right_arm.end_effector.knuckle_joint
+        mounted_tracy.right_arm.end_effector.knuckle_joint.name.name
         == TracyJoint.RIGHT_GRIPPER_LEFT_KNUCKLE
     )
 

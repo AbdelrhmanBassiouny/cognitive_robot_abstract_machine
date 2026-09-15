@@ -539,6 +539,13 @@ class Body(KinematicStructureEntity):
     Inertia properties of the body.
     """
 
+    gravity_compensation: float = 0.0
+    """
+    How much of this body's weight a physical simulation carries for it, between 0 and
+    1: a link a servo drives is carried by that servo in reality, so a simulation
+    compensates its gravity rather than making the servo spend torque holding it up.
+    """
+
     def __post_init__(self):
         if not self.name:
             self.name = PrefixedName(f"body_{self.id}")
@@ -617,6 +624,7 @@ class Body(KinematicStructureEntity):
             visual=self.visual.copy_without_reference_frame(),
             collision=self.collision.copy_without_reference_frame(),
             inertial=deepcopy(self.inertial),
+            gravity_compensation=self.gravity_compensation,
         )
 
 

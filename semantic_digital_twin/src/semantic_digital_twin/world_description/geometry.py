@@ -38,6 +38,11 @@ from random_events.product_algebra import SimpleEvent
 from semantic_digital_twin.datastructures.variables import SpatialVariables
 from semantic_digital_twin.exceptions import MalformedHexColor
 from semantic_digital_twin.mixin import HasSimulatorProperties
+from semantic_digital_twin.world_description.contact import (
+    ContactFriction,
+    ContactImpedance,
+    ContactStiffness,
+)
 from semantic_digital_twin.spatial_types import (
     HomogeneousTransformationMatrix,
     Point,
@@ -403,35 +408,6 @@ class Scale:
 
 
 @dataclass
-class ContactFriction:
-    """
-    The friction a shape's surface offers in a contact, in the three coefficients a
-    physics engine resolves a contact with.
-    """
-
-    sliding: float = 1.0
-    """
-    Friction along both axes of the tangent plane.
-    """
-
-    torsional: float = 0.005
-    """
-    Friction around the contact normal.
-    """
-
-    rolling: float = 0.0001
-    """
-    Friction around both axes of the tangent plane.
-    """
-
-    def to_list(self) -> List[float]:
-        """
-        :return: The coefficients as sliding, torsional and rolling.
-        """
-        return [self.sliding, self.torsional, self.rolling]
-
-
-@dataclass
 class Shape(ABC, SubclassJSONSerializer, HasSimulatorProperties):
     """
     Base class for all shapes in the world.
@@ -456,6 +432,18 @@ class Shape(ABC, SubclassJSONSerializer, HasSimulatorProperties):
     """
     The friction this shape's surface offers in a physical simulation, or ``None`` for
     the simulator's own default.
+    """
+
+    contact_stiffness: Optional[ContactStiffness] = None
+    """
+    How stiff and how damped this shape's contacts are in a physical simulation, or
+    ``None`` for the simulator's own default.
+    """
+
+    contact_impedance: Optional[ContactImpedance] = None
+    """
+    How hard this shape's contacts push back as they are penetrated in a physical
+    simulation, or ``None`` for the simulator's own default.
     """
 
     @property

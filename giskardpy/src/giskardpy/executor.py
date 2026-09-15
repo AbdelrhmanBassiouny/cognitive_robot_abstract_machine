@@ -3,6 +3,7 @@ from __future__ import annotations
 import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
+from datetime import timedelta
 from typing import TYPE_CHECKING
 
 import numpy as np
@@ -26,9 +27,7 @@ from semantic_digital_twin.world_description.world_state_trajectory_plotter impo
 )
 
 if TYPE_CHECKING:
-    from semantic_digital_twin.adapters.real_time_simulation import (
-        RealTimeSimulation,
-    )
+    from semantic_digital_twin.adapters.multi_sim import MujocoSim
 
 
 @dataclass
@@ -133,17 +132,18 @@ class SteppedSimulationPacer(Pacer):
 
     Every tick's command lands in the world state, the simulation's servos take it as
     their set point, and the physics advances one cycle before the next tick reads the
-    world back. Whether the loop is also paced to the wall clock is the simulation's own
-    setting.
+    world back.
     """
 
-    simulation: RealTimeSimulation
+    simulation: MujocoSim
     """
-    The running simulation to step; it has to be started already.
+    The simulation to step; it has to be started with
+    :meth:`~semantic_digital_twin.adapters.multi_sim.MujocoSim.start_stepped_simulation`
+    already.
     """
 
     def sleep(self) -> None:
-        self.simulation.advance(1 / self.target_frequency)
+        self.simulation.step_simulation(timedelta(seconds=1 / self.target_frequency))
 
 
 @dataclass
