@@ -46,6 +46,17 @@ def test_the_declaration_is_static_so_a_reader_needs_no_build():
     assert "dependencies" not in project["project"].get("dynamic", [])
 
 
+def test_a_declaration_naming_no_dependencies_is_read_as_needing_none(tmp_path):
+    """
+    Distinct from unreadable: a package that declares nothing needs nothing, so the
+    caller installs nothing rather than being told it could not check.
+    """
+    declaration = tmp_path / dependencies.DECLARATION_PATH.name
+    declaration.write_text(f'[{dependencies.PROJECT_TABLE}]\nname = "nothing"\n')
+
+    assert dependencies.declared_dependencies(declaration) == ()
+
+
 @pytest.mark.parametrize(
     ("specifier", "distribution_name"),
     [

@@ -413,6 +413,16 @@ SETUP_PERSONAL_NOTES_DIRECTORY=".claude/skills/setup-personal-notes"
 # the single source of truth for that question, so no caller re-implements
 # "is the notes branch there?" with its own git plumbing.
 CHECK_SETUP_SCRIPT=".claude/hooks/check-setup.sh"
+# CREATE_PERSONAL_NOTES_BRANCH_SCRIPT: the script that creates the notes
+# branch, named once here because nine scripts tell the user to run it when the
+# branch is missing. Defined-once for the same reason as every path above: a
+# rename otherwise has to find every message that spells it.
+CREATE_PERSONAL_NOTES_BRANCH_SCRIPT=".claude/hooks/create-personal-notes-branch.sh"
+# PLAN_SIZE_BUDGET_MODULE / PLAN_SIZE_REPORT_SCRIPT: the budget every plan is
+# measured against and the command that reports it, same defined-once reasoning
+# as every path above.
+PLAN_SIZE_BUDGET_MODULE="bastler.plan_size_budget"
+PLAN_SIZE_REPORT_SCRIPT=".claude/hooks/plan-size-report.sh"
 # prerequisite-check.md: the shared "run check-setup.sh, offer
 # /setup-personal-notes if it fails" procedure that plan-create,
 # plan-dashboard, plan-item-kickoff and plan-item-resolve each reference in
