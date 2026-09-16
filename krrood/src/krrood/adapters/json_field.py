@@ -3,7 +3,11 @@ from enum import StrEnum
 
 class JSONField(StrEnum):
     """
-    The keys a serialized object is written under in its JSON object.
+    The keys that give the JSON of a serialized object its structure, whatever class it
+    was serialized from.
+
+    What a class writes about itself beyond these is its own, and belongs to the
+    serializer that writes it.
     """
 
     TYPE = "__json_type__"
@@ -36,55 +40,4 @@ class JSONField(StrEnum):
     VALUES = "values"
     """
     The serialized values of a ``dict`` field, in the order of :attr:`KEYS`.
-    """
-
-    ATTRIBUTE_NAME = "attribute_name"
-    """
-    The name of the attribute a serialized diff describes.
-    """
-
-    ADDED_VALUES = "added_values"
-    """
-    The values a serialized diff appends to the attribute.
-    """
-
-    REMOVED_VALUES = "removed_values"
-    """
-    The values a serialized diff takes out of the attribute.
-    """
-
-    VALUE = "value"
-    """
-    The whole of an object that is written as a single value, such as a UUID or the
-    message of an exception.
-    """
-
-    DAYS = "days"
-    """
-    The whole days of a duration.
-    """
-
-    SECONDS = "seconds"
-    """
-    The seconds of a duration beyond its whole days.
-    """
-
-    MICROSECONDS = "microseconds"
-    """
-    The microseconds of a duration beyond its whole seconds.
-    """
-
-    MEMBER_NAME = "name"
-    """
-    The name of the enum member that was serialized.
-    """
-
-    ELEMENT_TYPE = "type"
-    """
-    The type the elements of a numpy array share.
-    """
-
-    ELEMENTS = "data"
-    """
-    The elements of a numpy array, nested as deeply as the array has dimensions.
     """

@@ -277,6 +277,27 @@ def to_json(obj: Union[SubclassJSONSerializer, Any], **kwargs) -> JSON_RETURN_TY
     return registered_json_serializer.to_json(obj, **kwargs)
 
 
+class AttributeDiffJSONKey(enum.StrEnum):
+    """
+    The keys of the JSON a shallow attribute diff is serialized to.
+    """
+
+    ATTRIBUTE_NAME = "attribute_name"
+    """
+    The name of the attribute the diff describes.
+    """
+
+    ADDED_VALUES = "added_values"
+    """
+    The values the diff appends to the attribute.
+    """
+
+    REMOVED_VALUES = "removed_values"
+    """
+    The values the diff takes out of the attribute.
+    """
+
+
 @dataclass
 class JSONAttributeDiff(SubclassJSONSerializer):
     """
@@ -323,17 +344,17 @@ class JSONAttributeDiff(SubclassJSONSerializer):
     def to_json(self, **kwargs) -> Dict[str, Any]:
         return {
             JSONField.TYPE: get_full_class_name(self.__class__),
-            JSONField.ATTRIBUTE_NAME: self.attribute_name,
-            JSONField.REMOVED_VALUES: self.removed_values,
-            JSONField.ADDED_VALUES: self.added_values,
+            AttributeDiffJSONKey.ATTRIBUTE_NAME: self.attribute_name,
+            AttributeDiffJSONKey.REMOVED_VALUES: self.removed_values,
+            AttributeDiffJSONKey.ADDED_VALUES: self.added_values,
         }
 
     @classmethod
     def _from_json(cls, data: Dict[str, Any], **kwargs) -> Self:
         return cls(
-            attribute_name=data[JSONField.ATTRIBUTE_NAME],
-            removed_values=data[JSONField.REMOVED_VALUES],
-            added_values=data[JSONField.ADDED_VALUES],
+            attribute_name=data[AttributeDiffJSONKey.ATTRIBUTE_NAME],
+            removed_values=data[AttributeDiffJSONKey.REMOVED_VALUES],
+            added_values=data[AttributeDiffJSONKey.ADDED_VALUES],
         )
 
 
@@ -482,6 +503,17 @@ class ReferenceWriter(SerializationKeywordArgument, HasGeneric[ReferencedType], 
         """
 
 
+class UUIDJSONKey(enum.StrEnum):
+    """
+    The keys of the JSON a UUID is serialized to.
+    """
+
+    VALUE = "value"
+    """
+    The UUID, in the form :class:`~uuid.UUID` reads back.
+    """
+
+
 @dataclass
 class UUIDJSONSerializer(ExternalClassJSONSerializer[uuid.UUID]):
 
@@ -489,14 +521,35 @@ class UUIDJSONSerializer(ExternalClassJSONSerializer[uuid.UUID]):
     def to_json(cls, obj: uuid.UUID, **kwargs) -> Dict[str, Any]:
         return {
             JSONField.TYPE: get_full_class_name(type(obj)),
-            JSONField.VALUE: str(obj),
+            UUIDJSONKey.VALUE: str(obj),
         }
 
     @classmethod
     def from_json(
         cls, data: Dict[str, Any], clazz: Type[uuid.UUID], **kwargs
     ) -> uuid.UUID:
-        return clazz(data[JSONField.VALUE])
+        return clazz(data[UUIDJSONKey.VALUE])
+
+
+class TimedeltaJSONKey(enum.StrEnum):
+    """
+    The keys of the JSON a duration is serialized to.
+    """
+
+    DAYS = "days"
+    """
+    The whole days of the duration.
+    """
+
+    SECONDS = "seconds"
+    """
+    The seconds of the duration beyond its whole days.
+    """
+
+    MICROSECONDS = "microseconds"
+    """
+    The microseconds of the duration beyond its whole seconds.
+    """
 
 
 @dataclass
@@ -512,9 +565,9 @@ class TimedeltaJSONSerializer(ExternalClassJSONSerializer[timedelta]):
     def to_json(cls, obj: timedelta, **kwargs) -> Dict[str, Any]:
         return {
             JSONField.TYPE: get_full_class_name(type(obj)),
-            JSONField.DAYS: obj.days,
-            JSONField.SECONDS: obj.seconds,
-            JSONField.MICROSECONDS: obj.microseconds,
+            TimedeltaJSONKey.DAYS: obj.days,
+            TimedeltaJSONKey.SECONDS: obj.seconds,
+            TimedeltaJSONKey.MICROSECONDS: obj.microseconds,
         }
 
     @classmethod
@@ -522,9 +575,9 @@ class TimedeltaJSONSerializer(ExternalClassJSONSerializer[timedelta]):
         cls, data: Dict[str, Any], clazz: Type[timedelta], **kwargs
     ) -> timedelta:
         return clazz(
-            days=data[JSONField.DAYS],
-            seconds=data[JSONField.SECONDS],
-            microseconds=data[JSONField.MICROSECONDS],
+            days=data[TimedeltaJSONKey.DAYS],
+            seconds=data[TimedeltaJSONKey.SECONDS],
+            microseconds=data[TimedeltaJSONKey.MICROSECONDS],
         )
 
 
@@ -553,6 +606,17 @@ class ClassJSONSerializer(ExternalClassJSONSerializer[None]):
         return clazz
 
 
+class EnumJSONKey(enum.StrEnum):
+    """
+    The keys of the JSON an enum member is serialized to.
+    """
+
+    MEMBER_NAME = "name"
+    """
+    The name of the member, which its class looks it up by.
+    """
+
+
 @dataclass
 class EnumJSONSerializer(ExternalClassJSONSerializer[enum.Enum]):
 
@@ -560,14 +624,25 @@ class EnumJSONSerializer(ExternalClassJSONSerializer[enum.Enum]):
     def to_json(cls, obj: enum.Enum, **kwargs) -> Dict[str, Any]:
         return {
             JSONField.TYPE: get_full_class_name(type(obj)),
-            JSONField.MEMBER_NAME: obj.name,
+            EnumJSONKey.MEMBER_NAME: obj.name,
         }
 
     @classmethod
     def from_json(
         cls, data: Dict[str, Any], clazz: Type[enum.Enum], **kwargs
     ) -> enum.Enum:
-        return clazz[data[JSONField.MEMBER_NAME]]
+        return clazz[data[EnumJSONKey.MEMBER_NAME]]
+
+
+class ExceptionJSONKey(enum.StrEnum):
+    """
+    The keys of the JSON an exception is serialized to.
+    """
+
+    MESSAGE = "value"
+    """
+    What the exception says, which its class is raised again with.
+    """
 
 
 @dataclass
@@ -576,14 +651,30 @@ class ExceptionJSONSerializer(ExternalClassJSONSerializer[Exception]):
     def to_json(cls, obj: Exception, **kwargs) -> Dict[str, Any]:
         return {
             JSONField.TYPE: get_full_class_name(type(obj)),
-            JSONField.VALUE: str(obj),
+            ExceptionJSONKey.MESSAGE: str(obj),
         }
 
     @classmethod
     def from_json(
         cls, data: Dict[str, Any], clazz: Type[Exception], **kwargs
     ) -> Exception:
-        return clazz(data[JSONField.VALUE])
+        return clazz(data[ExceptionJSONKey.MESSAGE])
+
+
+class NumpyArrayJSONKey(enum.StrEnum):
+    """
+    The keys of the JSON a numpy array is serialized to.
+    """
+
+    ELEMENT_TYPE = "type"
+    """
+    The type the elements of the array share.
+    """
+
+    ELEMENTS = "data"
+    """
+    The elements of the array, nested as deeply as the array has dimensions.
+    """
 
 
 @dataclass
@@ -596,15 +687,17 @@ class NumpyNDarrayJSONSerializer(ExternalClassJSONSerializer[np.ndarray]):
     def to_json(cls, obj: np.ndarray, **kwargs) -> Dict[str, Any]:
         return {
             JSONField.TYPE: get_full_class_name(type(obj)),
-            JSONField.ELEMENT_TYPE: str(obj.dtype),
-            JSONField.ELEMENTS: obj.tolist(),
+            NumpyArrayJSONKey.ELEMENT_TYPE: str(obj.dtype),
+            NumpyArrayJSONKey.ELEMENTS: obj.tolist(),
         }
 
     @classmethod
     def from_json(
         cls, data: Dict[str, Any], clazz: Type[np.ndarray], **kwargs
     ) -> np.ndarray:
-        return np.array(data[JSONField.ELEMENTS], dtype=data[JSONField.ELEMENT_TYPE])
+        return np.array(
+            data[NumpyArrayJSONKey.ELEMENTS], dtype=data[NumpyArrayJSONKey.ELEMENT_TYPE]
+        )
 
 
 @dataclass
@@ -699,6 +792,17 @@ class DataclassJSONSerializer(ExternalClassJSONSerializer[None]):
         return instance
 
 
+class NumpyFloatJSONKey(enum.StrEnum):
+    """
+    The keys of the JSON a numpy float is serialized to.
+    """
+
+    VALUE = "value"
+    """
+    The number the float holds.
+    """
+
+
 @dataclass
 class NumpyFloatJSONSerializer(ExternalClassJSONSerializer[np.float32]):
     """
@@ -709,9 +813,9 @@ class NumpyFloatJSONSerializer(ExternalClassJSONSerializer[np.float32]):
     def to_json(cls, obj: np.float32, **kwargs) -> Dict[str, Any]:
         return {
             JSONField.TYPE: get_full_class_name(type(obj)),
-            JSONField.VALUE: float(obj),
+            NumpyFloatJSONKey.VALUE: float(obj),
         }
 
     @classmethod
     def from_json(cls, data: Dict[str, Any], clazz: Type, **kwargs) -> Self:
-        return float(data[JSONField.VALUE])
+        return float(data[NumpyFloatJSONKey.VALUE])
