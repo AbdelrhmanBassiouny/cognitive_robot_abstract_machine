@@ -18,6 +18,7 @@ from probabilistic_model.probabilistic_circuit.causal.causal_circuit import (
 )
 from probabilistic_model.probabilistic_circuit.relational.causal import (
     RelationalCausalCircuit,
+    Stratification,
 )
 from probabilistic_model.probabilistic_circuit.relational.rspn import (
     GroundingMode,
@@ -174,7 +175,7 @@ def test_cause_on_an_aggregation_statistic_grounds_through_the_registry():
     RelationalCausalCircuit().fit(
         model,
         [to_dao(room) for room in rooms],
-        stratify_by=chair_count_variable._name_,
+        Stratification(class_columns=[chair_count_variable._name_]),
     )
 
     query = a(SceneRoom)(

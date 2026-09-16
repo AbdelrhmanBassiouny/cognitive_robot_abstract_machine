@@ -24,6 +24,7 @@ from experiments.causal_reasoning.mutagenesis.domain import (
 )
 from probabilistic_model.probabilistic_circuit.relational.causal import (
     RelationalCausalCircuit,
+    Stratification,
 )
 from probabilistic_model.probabilistic_circuit.relational.rspn import (
     RelationalProbabilisticCircuit,
@@ -202,7 +203,9 @@ class BranchingAtomCountCausalQuery:
         RelationalCausalCircuit().fit(
             model,
             [to_dao(molecule) for molecule in training_molecules],
-            stratify_by=branching_atom_count_variable_expression._name_,
+            Stratification(
+                class_columns=[branching_atom_count_variable_expression._name_]
+            ),
         )
 
         query = self._build_query(atom_count, bond_count)
