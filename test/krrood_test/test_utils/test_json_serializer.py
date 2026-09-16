@@ -22,6 +22,8 @@ from krrood.adapters.json_serializer import (
     JSONAttributeDiff,
     shallow_diff_json,
     DataclassJSONSerializer,
+    JSON_COLLECTION_TYPE,
+    JSON_COLLECTION_ITEMS,
 )
 from krrood.utils import get_full_class_name
 
@@ -411,8 +413,8 @@ def test_dataclass_list():
     cls = ClassWithList([3, 1, 2])
     data = to_json(cls)
     assert data["a"] == {
-        "collection_type": get_full_class_name(list),
-        "items": [3, 1, 2],
+        JSON_COLLECTION_TYPE: get_full_class_name(list),
+        JSON_COLLECTION_ITEMS: [3, 1, 2],
     }
     result = from_json(data)
     assert result == cls
@@ -422,8 +424,8 @@ def test_dataclass_list():
 def test_dataclass_set():
     cls = ClassWithSet({1, 2, 3})
     data = to_json(cls)
-    assert data["a"]["collection_type"] == get_full_class_name(set)
-    assert sorted(data["a"]["items"]) == [1, 2, 3]
+    assert data["a"][JSON_COLLECTION_TYPE] == get_full_class_name(set)
+    assert sorted(data["a"][JSON_COLLECTION_ITEMS]) == [1, 2, 3]
     result = from_json(data)
     assert result == cls
     assert isinstance(result.a, set)
@@ -433,8 +435,8 @@ def test_dataclass_tuple():
     cls = ClassWithTuple((3, 1, 2))
     data = to_json(cls)
     assert data["a"] == {
-        "collection_type": get_full_class_name(tuple),
-        "items": [3, 1, 2],
+        JSON_COLLECTION_TYPE: get_full_class_name(tuple),
+        JSON_COLLECTION_ITEMS: [3, 1, 2],
     }
     result = from_json(data)
     assert result == cls
@@ -445,8 +447,8 @@ def test_dataclass_sorted_set():
     cls = ClassWithSortedSet(SortedSet([3, 1, 2]))
     data = to_json(cls)
     assert data["a"] == {
-        "collection_type": get_full_class_name(SortedSet),
-        "items": [1, 2, 3],
+        JSON_COLLECTION_TYPE: get_full_class_name(SortedSet),
+        JSON_COLLECTION_ITEMS: [1, 2, 3],
     }
     result = from_json(data)
     assert result == cls

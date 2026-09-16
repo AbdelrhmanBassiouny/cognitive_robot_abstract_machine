@@ -36,7 +36,8 @@ list_like_classes = (
     list,
     tuple,
     set,
-)  # classes that can be serialized by the built-in JSON module
+    SortedSet,
+)  # classes that are serialized as a JSON array
 leaf_types = (
     int,
     float,
@@ -53,6 +54,17 @@ JSON_IS_CLASS = "__is_class__"
 """
 We need to remember if something is a class, because the type of a class is often just
 type.
+"""
+
+JSON_COLLECTION_TYPE = "__collection_type__"
+"""
+The key a serialized ``list``-like field records its collection class under, as a fully
+qualified class name, so that from_json restores that class instead of guessing.
+"""
+
+JSON_COLLECTION_ITEMS = "__items__"
+"""
+The key a serialized ``list``-like field keeps its serialized items under.
 """
 
 if TYPE_CHECKING:
@@ -617,17 +629,11 @@ class DataclassJSONSerializer(ExternalClassJSONSerializer[None]):
     Generic JSON serializer for dataclasses.
 
     It creates a dict where all fields are serialized using the to_json function. A
-    ``list``-like (see :data:`list_like_classes`) or :class:`~sortedcontainers.SortedSet`
-    field always serializes as a JSON object that also records its collection type as a
-    fully qualified class name, so ``from_json`` restores that same type on the way back
-    rather than guessing or defaulting to ``list``. If this is not enough, you still need
-    to implement a custom serializer.
-    """
-
-    collection_field_types = list_like_classes + (SortedSet,)
-    """
-    Types that a dataclass field is tagged with its collection type for, on
-    serialization.
+    ``list``-like field (see :data:`list_like_classes`) always serializes as a JSON
+    object that also records its collection type as a fully qualified class name, so
+    ``from_json`` restores that same type on the way back rather than guessing or
+    defaulting to ``list``. If this is not enough, you still need to implement a custom
+    serializer.
     """
 
     @classmethod
@@ -637,10 +643,10 @@ class DataclassJSONSerializer(ExternalClassJSONSerializer[None]):
         for field_ in introspector.discover(obj.__class__):
             value = getattr(obj, field_.public_name)
 
-            if isinstance(value, cls.collection_field_types):
+            if isinstance(value, list_like_classes):
                 current_result = {
-                    "collection_type": get_full_class_name(type(value)),
-                    "items": [to_json(item, **kwargs) for item in value],
+                    JSON_COLLECTION_TYPE: get_full_class_name(type(value)),
+                    JSON_COLLECTION_ITEMS: [to_json(item, **kwargs) for item in value],
                 }
             elif isinstance(value, dict):
                 keys = [to_json(k, **kwargs) for k in value.keys()]
@@ -673,12 +679,15 @@ class DataclassJSONSerializer(ExternalClassJSONSerializer[None]):
 
             if (
                 isinstance(current_data, dict)
-                and "collection_type" in current_data.keys()
-                and "items" in current_data.keys()
+                and JSON_COLLECTION_TYPE in current_data.keys()
+                and JSON_COLLECTION_ITEMS in current_data.keys()
             ):
-                items = [from_json(item, **kwargs) for item in current_data["items"]]
+                items = [
+                    from_json(item, **kwargs)
+                    for item in current_data[JSON_COLLECTION_ITEMS]
+                ]
                 collection_type = resolve_class_from_full_name(
-                    current_data["collection_type"]
+                    current_data[JSON_COLLECTION_TYPE]
                 )
                 current_result = collection_type(items)
             elif (

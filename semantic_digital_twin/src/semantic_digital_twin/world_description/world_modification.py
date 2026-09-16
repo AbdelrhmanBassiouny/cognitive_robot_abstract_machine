@@ -13,7 +13,6 @@ from typing_extensions import (
 
 from krrood.adapters.json_serializer import (
     SubclassJSONSerializer,
-    DataclassJSONSerializer,
     shallow_diff_json,
     JSONAttributeDiff,
     list_like_classes,
@@ -518,10 +517,6 @@ class WorldModelModificationBlock:
                 modification = modification.update_reference_for_world(world)
 
             modification.apply(world)
-
-    @classmethod
-    def from_json(cls, data: Dict[str, Any], **kwargs) -> Self:
-        return DataclassJSONSerializer.from_json(data, clazz=cls, **kwargs)
 
     def __iter__(self):
         return iter(self.modifications)
