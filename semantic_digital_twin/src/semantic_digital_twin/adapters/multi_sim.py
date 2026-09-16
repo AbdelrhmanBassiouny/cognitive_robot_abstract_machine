@@ -12,7 +12,7 @@ import trimesh
 import PIL.ImageFile
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from enum import IntEnum, IntFlag, KEEP
+from enum import IntEnum, IntFlag
 from types import NoneType
 from typing_extensions import (
     Dict,
@@ -1251,7 +1251,7 @@ class MujocoTendon(SimulatorAdditionalProperty):
     """
 
 
-class ContactCategories(IntFlag, boundary=KEEP):
+class ContactCategories(IntFlag):
     """
     A set of MuJoCo's 32 contact categories, one bit each.
 

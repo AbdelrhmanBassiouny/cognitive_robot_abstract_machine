@@ -211,28 +211,3 @@ def test_gripper_geometry_names_the_pads_and_the_driving_joint(mounted_tracy):
         mounted_tracy.right_arm.end_effector.knuckle_joint.name.name
         == TracyJoint.RIGHT_GRIPPER_LEFT_KNUCKLE
     )
-
-
-def test_knuckle_angle_closes_the_pads_to_a_width_between_open_and_closed(
-    mounted_tracy,
-):
-    """
-    A width the open gripper already spans needs no closing, a width the closed gripper
-    still spans needs the full close, and one in between is found by bisection, with a
-    wider target closing less, and leaves the world untouched.
-    """
-    gripper = mounted_tracy.left_arm.end_effector
-    limits = gripper.knuckle_joint.raw_dof.limits
-    open_angle, closed_angle = limits.lower.position, limits.upper.position
-    state_before = mounted_tracy._world.state[gripper.knuckle_joint.raw_dof.id].position
-
-    narrow = gripper.knuckle_angle_for_half_width(0.02)
-    wide = gripper.knuckle_angle_for_half_width(0.03)
-
-    assert gripper.knuckle_angle_for_half_width(1.0) == open_angle
-    assert gripper.knuckle_angle_for_half_width(0.0) == closed_angle
-    assert open_angle < wide < narrow < closed_angle
-    assert (
-        mounted_tracy._world.state[gripper.knuckle_joint.raw_dof.id].position
-        == state_before
-    )

@@ -32,8 +32,7 @@ class Robotiq85Gripper(
     the knuckle joint of the thumb.
 
     Knows what a grasp and a physical simulation need from it: the pads that meet an
-    object, the joint that drives the fingers, how far that joint has to turn to close
-    the pads to a given width, and the servo driving it.
+    object, the joint that drives the fingers, and the servo driving it.
 
     The servo is raised empirically, since no pre-tuned reference exists for the
     Robotiq 2F-85; its armature gives the coupled mechanism the numerical damping that
@@ -74,54 +73,3 @@ class Robotiq85Gripper(
         The right fingertip pad's body.
         """
         return self.finger.tip
-
-    def knuckle_angle_for_half_width(
-        self, target_half_width: float, iterations: int = 30
-    ) -> float:
-        """
-        The knuckle's raw angle at which the fingertip pads' inner faces first reach
-        ``target_half_width`` out from the gripper's own centreline: what to command the
-        knuckle to for closing the fingers on an object of twice that width.
-
-        Closing all the way on an object that is not perfectly centred between the
-        fingers wedges it sideways rather than gripping it, so a grasp closes to the
-        object's width instead. The pad's inner position decreases monotonically as the
-        knuckle closes, so bisection converges reliably; the world's state is moved for
-        the search and restored afterwards.
-
-        :param target_half_width: The half-width, in metres, to close to.
-        :param iterations: Bisection steps; 30 narrows the joint's own ~0.8 rad range to
-            well under a micro-radian.
-        :return: The raw angle.
-        """
-        limits = self.knuckle_joint.raw_dof.limits
-        lower, upper = limits.lower.position, limits.upper.position
-        with self._world.reset_state_context():
-            if target_half_width >= self._pad_inner_x_at(lower):
-                return lower
-            if target_half_width <= self._pad_inner_x_at(upper):
-                return upper
-            for _ in range(iterations):
-                midpoint = (lower + upper) / 2
-                if self._pad_inner_x_at(midpoint) > target_half_width:
-                    lower = midpoint
-                else:
-                    upper = midpoint
-        return upper
-
-    def _pad_inner_x_at(self, raw_angle: float) -> float:
-        """
-        Move the knuckle to a raw angle and read where the left pad's innermost point
-        then sits along the closing axis.
-
-        :param raw_angle: The knuckle angle to move to.
-        :return: The pad's innermost x coordinate in the gripper's own frame.
-        """
-        self._world.state[self.knuckle_joint.raw_dof.id].position = raw_angle
-        self._world.notify_state_change()
-        self._world.update_forward_kinematics()
-        return (
-            self.left_fingertip.collision.as_bounding_box_collection_in_frame(self.root)
-            .bounding_box()
-            .min_x
-        )
