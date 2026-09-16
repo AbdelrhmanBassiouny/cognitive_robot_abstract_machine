@@ -20,8 +20,8 @@ from krrood.adapters.exceptions import (
     UnknownModuleError,
     ClassNotFoundError,
     ClassNotSerializableError,
-    JSON_TYPE_NAME,
 )
+from krrood.adapters.json_field import JSONField
 from krrood.adapters.keyword_argument import SerializationKeywordArgument
 from krrood.class_diagrams.attribute_introspector import DataclassOnlyIntrospector
 from krrood.ormatic.data_access_objects.base import HasGeneric
@@ -50,23 +50,6 @@ JSON_DICT_TYPE = Dict[str, Any]  # Commonly referred JSON dict
 JSON_RETURN_TYPE = Union[
     JSON_DICT_TYPE, List[Any], *leaf_types
 ]  # Commonly referred JSON types
-JSON_IS_CLASS = "__is_class__"
-"""
-We need to remember if something is a class, because the type of a class is often just
-type.
-"""
-
-JSON_COLLECTION_TYPE = "__collection_type__"
-"""
-The key a serialized ``list``-like field records its collection class under, as a fully
-qualified class name, so that from_json restores that class instead of guessing.
-"""
-
-JSON_COLLECTION_ITEMS = "__items__"
-"""
-The key a serialized ``list``-like field keeps its serialized items under.
-"""
-
 if TYPE_CHECKING:
     JSONData: TypeAlias = JSON_RETURN_TYPE
 else:
@@ -151,7 +134,8 @@ class SubclassJSONSerializer:
     """
     Class for automatic (de)serialization of subclasses using importlib.
 
-    Stores the fully qualified class name in `type` during serialization and imports
+    Stores the fully qualified class name in
+    :attr:`~krrood.adapters.json_field.JSONField.TYPE` during serialization and imports
     that class during deserialization.
     """
 
@@ -161,7 +145,7 @@ class SubclassJSONSerializer:
             values this object holds.
         :return: The JSON dict
         """
-        return {JSON_TYPE_NAME: get_full_class_name(self.__class__)}
+        return {JSONField.TYPE: get_full_class_name(self.__class__)}
 
     @classmethod
     def _from_json(cls, data: Dict[str, Any], **kwargs) -> Self:
@@ -194,13 +178,13 @@ class SubclassJSONSerializer:
         if isinstance(data, list_like_classes):
             return [from_json(d, **kwargs) for d in data]
 
-        fully_qualified_class_name = data.get(JSON_TYPE_NAME)
+        fully_qualified_class_name = data.get(JSONField.TYPE)
         if not fully_qualified_class_name:
             raise MissingTypeError()
 
         target_cls = resolve_class_from_full_name(fully_qualified_class_name)
 
-        if data.get(JSON_IS_CLASS, False):
+        if data.get(JSONField.IS_CLASS, False):
             return ClassJSONSerializer.from_json(data, clazz=target_cls, **kwargs)
 
         if issubclass(target_cls, SubclassJSONSerializer):
@@ -266,7 +250,7 @@ def to_json(obj: Union[SubclassJSONSerializer, Any], **kwargs) -> JSON_RETURN_TY
     :return: The JSON string
     """
     if isinstance(obj, dict):
-        json_type = obj.get(JSON_TYPE_NAME, None)
+        json_type = obj.get(JSONField.TYPE, None)
         if json_type is not None:
             return obj
 
@@ -338,18 +322,18 @@ class JSONAttributeDiff(SubclassJSONSerializer):
 
     def to_json(self, **kwargs) -> Dict[str, Any]:
         return {
-            JSON_TYPE_NAME: get_full_class_name(self.__class__),
-            "attribute_name": self.attribute_name,
-            "removed_values": self.removed_values,
-            "added_values": self.added_values,
+            JSONField.TYPE: get_full_class_name(self.__class__),
+            JSONField.ATTRIBUTE_NAME: self.attribute_name,
+            JSONField.REMOVED_VALUES: self.removed_values,
+            JSONField.ADDED_VALUES: self.added_values,
         }
 
     @classmethod
     def _from_json(cls, data: Dict[str, Any], **kwargs) -> Self:
         return cls(
-            attribute_name=data["attribute_name"],
-            removed_values=data["removed_values"],
-            added_values=data["added_values"],
+            attribute_name=data[JSONField.ATTRIBUTE_NAME],
+            removed_values=data[JSONField.REMOVED_VALUES],
+            added_values=data[JSONField.ADDED_VALUES],
         )
 
 
@@ -504,15 +488,15 @@ class UUIDJSONSerializer(ExternalClassJSONSerializer[uuid.UUID]):
     @classmethod
     def to_json(cls, obj: uuid.UUID, **kwargs) -> Dict[str, Any]:
         return {
-            JSON_TYPE_NAME: get_full_class_name(type(obj)),
-            "value": str(obj),
+            JSONField.TYPE: get_full_class_name(type(obj)),
+            JSONField.VALUE: str(obj),
         }
 
     @classmethod
     def from_json(
         cls, data: Dict[str, Any], clazz: Type[uuid.UUID], **kwargs
     ) -> uuid.UUID:
-        return clazz(data["value"])
+        return clazz(data[JSONField.VALUE])
 
 
 @dataclass
@@ -527,10 +511,10 @@ class TimedeltaJSONSerializer(ExternalClassJSONSerializer[timedelta]):
     @classmethod
     def to_json(cls, obj: timedelta, **kwargs) -> Dict[str, Any]:
         return {
-            JSON_TYPE_NAME: get_full_class_name(type(obj)),
-            "days": obj.days,
-            "seconds": obj.seconds,
-            "microseconds": obj.microseconds,
+            JSONField.TYPE: get_full_class_name(type(obj)),
+            JSONField.DAYS: obj.days,
+            JSONField.SECONDS: obj.seconds,
+            JSONField.MICROSECONDS: obj.microseconds,
         }
 
     @classmethod
@@ -538,9 +522,9 @@ class TimedeltaJSONSerializer(ExternalClassJSONSerializer[timedelta]):
         cls, data: Dict[str, Any], clazz: Type[timedelta], **kwargs
     ) -> timedelta:
         return clazz(
-            days=data["days"],
-            seconds=data["seconds"],
-            microseconds=data["microseconds"],
+            days=data[JSONField.DAYS],
+            seconds=data[JSONField.SECONDS],
+            microseconds=data[JSONField.MICROSECONDS],
         )
 
 
@@ -560,8 +544,8 @@ class ClassJSONSerializer(ExternalClassJSONSerializer[None]):
         .. note:: We can't do type(obj) because that often returns just `type`.
         """
         return {
-            JSON_TYPE_NAME: get_full_class_name(obj),
-            JSON_IS_CLASS: inspect.isclass(obj),
+            JSONField.TYPE: get_full_class_name(obj),
+            JSONField.IS_CLASS: inspect.isclass(obj),
         }
 
     @classmethod
@@ -575,15 +559,15 @@ class EnumJSONSerializer(ExternalClassJSONSerializer[enum.Enum]):
     @classmethod
     def to_json(cls, obj: enum.Enum, **kwargs) -> Dict[str, Any]:
         return {
-            JSON_TYPE_NAME: get_full_class_name(type(obj)),
-            "name": obj.name,
+            JSONField.TYPE: get_full_class_name(type(obj)),
+            JSONField.MEMBER_NAME: obj.name,
         }
 
     @classmethod
     def from_json(
         cls, data: Dict[str, Any], clazz: Type[enum.Enum], **kwargs
     ) -> enum.Enum:
-        return clazz[data["name"]]
+        return clazz[data[JSONField.MEMBER_NAME]]
 
 
 @dataclass
@@ -591,15 +575,15 @@ class ExceptionJSONSerializer(ExternalClassJSONSerializer[Exception]):
     @classmethod
     def to_json(cls, obj: Exception, **kwargs) -> Dict[str, Any]:
         return {
-            JSON_TYPE_NAME: get_full_class_name(type(obj)),
-            "value": str(obj),
+            JSONField.TYPE: get_full_class_name(type(obj)),
+            JSONField.VALUE: str(obj),
         }
 
     @classmethod
     def from_json(
         cls, data: Dict[str, Any], clazz: Type[Exception], **kwargs
     ) -> Exception:
-        return clazz(data["value"])
+        return clazz(data[JSONField.VALUE])
 
 
 @dataclass
@@ -611,16 +595,16 @@ class NumpyNDarrayJSONSerializer(ExternalClassJSONSerializer[np.ndarray]):
     @classmethod
     def to_json(cls, obj: np.ndarray, **kwargs) -> Dict[str, Any]:
         return {
-            JSON_TYPE_NAME: get_full_class_name(type(obj)),
-            "type": str(obj.dtype),
-            "data": obj.tolist(),
+            JSONField.TYPE: get_full_class_name(type(obj)),
+            JSONField.ELEMENT_TYPE: str(obj.dtype),
+            JSONField.ELEMENTS: obj.tolist(),
         }
 
     @classmethod
     def from_json(
         cls, data: Dict[str, Any], clazz: Type[np.ndarray], **kwargs
     ) -> np.ndarray:
-        return np.array(data["data"], dtype=data["type"])
+        return np.array(data[JSONField.ELEMENTS], dtype=data[JSONField.ELEMENT_TYPE])
 
 
 @dataclass
@@ -638,20 +622,20 @@ class DataclassJSONSerializer(ExternalClassJSONSerializer[None]):
 
     @classmethod
     def to_json(cls, obj, **kwargs) -> Dict[str, Any]:
-        result = {JSON_TYPE_NAME: get_full_class_name(type(obj))}
+        result = {JSONField.TYPE: get_full_class_name(type(obj))}
         introspector = DataclassOnlyIntrospector()
         for field_ in introspector.discover(obj.__class__):
             value = getattr(obj, field_.public_name)
 
             if isinstance(value, list_like_classes):
                 current_result = {
-                    JSON_COLLECTION_TYPE: get_full_class_name(type(value)),
-                    JSON_COLLECTION_ITEMS: [to_json(item, **kwargs) for item in value],
+                    JSONField.COLLECTION_TYPE: get_full_class_name(type(value)),
+                    JSONField.ITEMS: [to_json(item, **kwargs) for item in value],
                 }
             elif isinstance(value, dict):
                 keys = [to_json(k, **kwargs) for k in value.keys()]
                 values = [to_json(v, **kwargs) for v in value.values()]
-                current_result = {"keys": keys, "values": values}
+                current_result = {JSONField.KEYS: keys, JSONField.VALUES: values}
             else:
                 current_result = to_json(value, **kwargs)
             result[field_.public_name] = current_result
@@ -679,24 +663,27 @@ class DataclassJSONSerializer(ExternalClassJSONSerializer[None]):
 
             if (
                 isinstance(current_data, dict)
-                and JSON_COLLECTION_TYPE in current_data.keys()
-                and JSON_COLLECTION_ITEMS in current_data.keys()
+                and JSONField.COLLECTION_TYPE in current_data.keys()
+                and JSONField.ITEMS in current_data.keys()
             ):
                 items = [
-                    from_json(item, **kwargs)
-                    for item in current_data[JSON_COLLECTION_ITEMS]
+                    from_json(item, **kwargs) for item in current_data[JSONField.ITEMS]
                 ]
                 collection_type = resolve_class_from_full_name(
-                    current_data[JSON_COLLECTION_TYPE]
+                    current_data[JSONField.COLLECTION_TYPE]
                 )
                 current_result = collection_type(items)
             elif (
                 isinstance(current_data, dict)
-                and "keys" in current_data.keys()
-                and "values" in current_data.keys()
+                and JSONField.KEYS in current_data.keys()
+                and JSONField.VALUES in current_data.keys()
             ):
-                keys = [from_json(item, **kwargs) for item in current_data["keys"]]
-                values = [from_json(item, **kwargs) for item in current_data["values"]]
+                keys = [
+                    from_json(item, **kwargs) for item in current_data[JSONField.KEYS]
+                ]
+                values = [
+                    from_json(item, **kwargs) for item in current_data[JSONField.VALUES]
+                ]
                 current_result = dict(zip(keys, values))
             else:
                 current_result = from_json(current_data, **kwargs)
@@ -720,8 +707,11 @@ class NumpyFloatJSONSerializer(ExternalClassJSONSerializer[np.float32]):
 
     @classmethod
     def to_json(cls, obj: np.float32, **kwargs) -> Dict[str, Any]:
-        return {JSON_TYPE_NAME: get_full_class_name(type(obj)), "value": float(obj)}
+        return {
+            JSONField.TYPE: get_full_class_name(type(obj)),
+            JSONField.VALUE: float(obj),
+        }
 
     @classmethod
     def from_json(cls, data: Dict[str, Any], clazz: Type, **kwargs) -> Self:
-        return float(data["value"])
+        return float(data[JSONField.VALUE])
