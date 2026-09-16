@@ -19,7 +19,7 @@ class PropertyWithOneRenamedField(SimulatorAdditionalProperty):
     spelled_alike: int = 1
 
     spelled_differently: int = field(
-        default=2, metadata={FieldMetadata.SIMULATOR_NAME: "diff"}
+        default=2, metadata={FieldMetadata.SIMULATOR_ATTRIBUTE_NAME: "diff"}
     )
 
 

@@ -767,7 +767,7 @@ class MujocoActuator(UniqueSimulatorProperty):
     """
 
     activation_limited: mujoco.mjtLimited = field(
-        default=mujoco.mjtLimited.mjLIMITED_AUTO, metadata={FieldMetadata.SIMULATOR_NAME: "actlimited"}
+        default=mujoco.mjtLimited.mjLIMITED_AUTO, metadata={FieldMetadata.SIMULATOR_ATTRIBUTE_NAME: "actlimited"}
     )
     """
     If mujoco.mjtLimited.mjLIMITED_TRUE, the internal state (activation) associated with this actuator is automatically clamped to actrange at runtime. 
@@ -776,7 +776,7 @@ class MujocoActuator(UniqueSimulatorProperty):
     """
 
     activation_range: List[float] = field(
-        default_factory=lambda: [0.0, 0.0], metadata={FieldMetadata.SIMULATOR_NAME: "actrange"}
+        default_factory=lambda: [0.0, 0.0], metadata={FieldMetadata.SIMULATOR_ATTRIBUTE_NAME: "actrange"}
     )
     """
     Range for clamping the activation state. The first value must be no greater than the second value.
@@ -784,7 +784,7 @@ class MujocoActuator(UniqueSimulatorProperty):
 
     control_limited: mujoco.mjtLimited = field(
         default=mujoco.mjtLimited.mjLIMITED_AUTO,
-        metadata={FieldMetadata.SIMULATOR_NAME: "ctrllimited"},
+        metadata={FieldMetadata.SIMULATOR_ATTRIBUTE_NAME: "ctrllimited"},
     )
     """
     If mujoco.mjtLimited.mjLIMITED_TRUE, the control input to this actuator is automatically clamped to ctrl_range at runtime. 
@@ -793,7 +793,7 @@ class MujocoActuator(UniqueSimulatorProperty):
     """
 
     control_range: List[float] = field(
-        default_factory=lambda: [0.0, 0.0], metadata={FieldMetadata.SIMULATOR_NAME: "ctrlrange"}
+        default_factory=lambda: [0.0, 0.0], metadata={FieldMetadata.SIMULATOR_ATTRIBUTE_NAME: "ctrlrange"}
     )
     """
     The range of the control input.
@@ -801,7 +801,7 @@ class MujocoActuator(UniqueSimulatorProperty):
 
     force_limited: mujoco.mjtLimited = field(
         default=mujoco.mjtLimited.mjLIMITED_AUTO,
-        metadata={FieldMetadata.SIMULATOR_NAME: "forcelimited"},
+        metadata={FieldMetadata.SIMULATOR_ATTRIBUTE_NAME: "forcelimited"},
     )
     """
     If mujoco.mjtLimited.mjLIMITED_TRUE, the force output of this actuator is automatically clamped to force_range at runtime. 
@@ -810,21 +810,21 @@ class MujocoActuator(UniqueSimulatorProperty):
     """
 
     force_range: List[float] = field(
-        default_factory=lambda: [0.0, 0.0], metadata={FieldMetadata.SIMULATOR_NAME: "forcerange"}
+        default_factory=lambda: [0.0, 0.0], metadata={FieldMetadata.SIMULATOR_ATTRIBUTE_NAME: "forcerange"}
     )
     """
     Range for clamping the force output. The first value must be no greater than the second value.
     """
 
     bias_parameters: List[float] = field(
-        default_factory=lambda: [0.0] * 10, metadata={FieldMetadata.SIMULATOR_NAME: "biasprm"}
+        default_factory=lambda: [0.0] * 10, metadata={FieldMetadata.SIMULATOR_ATTRIBUTE_NAME: "biasprm"}
     )
     """
     Bias parameters. The affine bias type uses three parameters.
     """
 
     bias_type: mujoco.mjtBias = field(
-        default=mujoco.mjtBias.mjBIAS_NONE, metadata={FieldMetadata.SIMULATOR_NAME: "biastype"}
+        default=mujoco.mjtBias.mjBIAS_NONE, metadata={FieldMetadata.SIMULATOR_ATTRIBUTE_NAME: "biastype"}
     )
     """
     The keywords have the following meaning:
@@ -835,14 +835,14 @@ class MujocoActuator(UniqueSimulatorProperty):
     """
 
     dynamics_parameters: List[float] = field(
-        default_factory=lambda: [1.0] + [0.0] * 9, metadata={FieldMetadata.SIMULATOR_NAME: "dynprm"}
+        default_factory=lambda: [1.0] + [0.0] * 9, metadata={FieldMetadata.SIMULATOR_ATTRIBUTE_NAME: "dynprm"}
     )
     """
     Activation dynamics parameters.
     """
 
     dynamics_type: mujoco.mjtDyn = field(
-        default=mujoco.mjtDyn.mjDYN_NONE, metadata={FieldMetadata.SIMULATOR_NAME: "dyntype"}
+        default=mujoco.mjtDyn.mjDYN_NONE, metadata={FieldMetadata.SIMULATOR_ATTRIBUTE_NAME: "dyntype"}
     )
     """
     Activation dynamics type for the actuator.
@@ -856,14 +856,14 @@ class MujocoActuator(UniqueSimulatorProperty):
     """
 
     gain_parameters: List[float] = field(
-        default_factory=lambda: [0.0] * 10, metadata={FieldMetadata.SIMULATOR_NAME: "gainprm"}
+        default_factory=lambda: [0.0] * 10, metadata={FieldMetadata.SIMULATOR_ATTRIBUTE_NAME: "gainprm"}
     )
     """
     Gain parameters.
     """
 
     gain_type: mujoco.mjtGain = field(
-        default=mujoco.mjtGain.mjGAIN_FIXED, metadata={FieldMetadata.SIMULATOR_NAME: "gaintype"}
+        default=mujoco.mjtGain.mjGAIN_FIXED, metadata={FieldMetadata.SIMULATOR_ATTRIBUTE_NAME: "gaintype"}
     )
     """
     The gain and bias together determine the output of the force generation mechanism, which is currently assumed to be affine.
@@ -1307,7 +1307,7 @@ class MujocoGeom(UniqueSimulatorProperty):
 
     contact_type: ContactCategories = field(
         default=ContactCategories.DEFAULT,
-        metadata={FieldMetadata.SIMULATOR_NAME: "contype"},
+        metadata={FieldMetadata.SIMULATOR_ATTRIBUTE_NAME: "contype"},
     )
     """
     Which contact categories this geom offers when it presses into another geom;
@@ -1321,7 +1321,7 @@ class MujocoGeom(UniqueSimulatorProperty):
 
     contact_affinity: ContactCategories = field(
         default=ContactCategories.DEFAULT,
-        metadata={FieldMetadata.SIMULATOR_NAME: "conaffinity"},
+        metadata={FieldMetadata.SIMULATOR_ATTRIBUTE_NAME: "conaffinity"},
     )
     """
     Which contact categories this geom accepts pressing into it; MuJoCo's

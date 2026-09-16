@@ -1,6 +1,7 @@
 import logging
 import os
 from dataclasses import dataclass, field
+from datetime import timedelta
 
 import mujoco
 import numpy
@@ -176,7 +177,10 @@ class MJCFParser(WorldModelParser):
             shape.add_simulator_property(
                 ContactParameters(
                     friction=ContactFriction(*mujoco_geom.friction.tolist()),
-                    stiffness=ContactStiffness(*mujoco_geom.solref.tolist()),
+                    stiffness=ContactStiffness(
+                        time_constant=timedelta(seconds=mujoco_geom.solref[0]),
+                        damping_ratio=mujoco_geom.solref[1],
+                    ),
                     impedance=ContactImpedance(*mujoco_geom.solimp.tolist()),
                 )
             )

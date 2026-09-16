@@ -24,7 +24,7 @@ from semantic_digital_twin.world_description.world_entity import Body
 
 
 @dataclass
-class _KnuckleScan:
+class KnuckleScan:
     """
     Where the left fingertip pad sits at a raw knuckle angle, on an isolated scratch
     world moved directly rather than through the caller's own world.
@@ -172,7 +172,7 @@ class Robotiq85Gripper(
         """
         scratch_world = deepcopy(self._world)
         scratch_gripper = scratch_world.get_semantic_annotation_by_id(self.id)
-        scan = _KnuckleScan(
+        scan = KnuckleScan(
             scratch_world=scratch_world,
             raw_dof=scratch_gripper.knuckle_joint.raw_dof,
             left_fingertip=scratch_gripper.left_fingertip,

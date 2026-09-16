@@ -9,6 +9,7 @@ gets the engine's own defaults.
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
+from datetime import timedelta
 
 from typing_extensions import TYPE_CHECKING, Iterable, List, Optional
 
@@ -54,10 +55,10 @@ class ContactStiffness:
     and the damping of that resolution.
     """
 
-    time_constant: float = 0.02
+    time_constant: timedelta = timedelta(milliseconds=20)
     """
-    Time, in seconds, the contact takes to resolve a penetration; a smaller value is a
-    stiffer contact.
+    Time the contact takes to resolve a penetration; a smaller value is a stiffer
+    contact.
     """
 
     damping_ratio: float = 1.0
@@ -67,9 +68,9 @@ class ContactStiffness:
 
     def to_list(self) -> List[float]:
         """
-        :return: The pair as time constant and damping ratio.
+        :return: The pair as time constant, in seconds, and damping ratio.
         """
-        return [self.time_constant, self.damping_ratio]
+        return [self.time_constant.total_seconds(), self.damping_ratio]
 
 
 @dataclass
@@ -128,13 +129,20 @@ class ContactParameters(UniqueSimulatorProperty):
 
     stiffness: Optional[ContactStiffness] = None
     """
-    How stiff and how damped the contacts are, or ``None`` to leave the geometry's own.
+    How stiff and how damped the contacts are.
+
+    ``None`` is not "unspecified, use a default": it deliberately leaves whatever a
+    geometry already declares untouched, so applying friction-only parameters (see
+    :meth:`create_for_surface`) never resets a stiffness declared elsewhere.
     """
 
     impedance: Optional[ContactImpedance] = None
     """
-    How hard the contacts push back as they are penetrated, or ``None`` to leave the
-    geometry's own.
+    How hard the contacts push back as they are penetrated.
+
+    ``None`` is not "unspecified, use a default": it deliberately leaves whatever a
+    geometry already declares untouched, so applying friction-only parameters (see
+    :meth:`create_for_surface`) never resets an impedance declared elsewhere.
     """
 
     @classmethod
@@ -143,7 +151,7 @@ class ContactParameters(UniqueSimulatorProperty):
         sliding_friction: float = 0.3,
         torsional_friction: float = 0.05,
         rolling_friction: float = 0.001,
-        resolution_time_constant: float = 0.008,
+        resolution_time_constant: timedelta = timedelta(milliseconds=8),
         minimum_impedance: float = 0.96,
         maximum_impedance: float = 0.99,
     ) -> ContactParameters:
@@ -161,8 +169,8 @@ class ContactParameters(UniqueSimulatorProperty):
             default so the object does not spin between the pads.
         :param rolling_friction: Friction around the tangent axes, ten times the default
             so the object does not roll out of the pads.
-        :param resolution_time_constant: Seconds a contact takes to resolve a
-            penetration; ``0.008`` is a stiff contact the fingers cannot sink into.
+        :param resolution_time_constant: How long a contact takes to resolve a
+            penetration; 8ms is a stiff contact the fingers cannot sink into.
         :param minimum_impedance: How hard the contact pushes back at zero penetration.
         :param maximum_impedance: How hard it pushes back once fully penetrated.
         :return: The parameters.
