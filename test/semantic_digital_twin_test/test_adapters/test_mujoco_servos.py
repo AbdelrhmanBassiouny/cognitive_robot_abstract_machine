@@ -1,6 +1,6 @@
 """
-Tests for the position servo a degree of freedom with servo gains gets in MuJoCo, and
-for a servoed joint being driven rather than teleported.
+Tests for the MuJoCo actuator a position servo becomes, and for a servoed joint being
+driven rather than teleported.
 """
 
 from __future__ import annotations
@@ -16,7 +16,6 @@ from ...pytest_environment import runs_in_continuous_integration
 from semantic_digital_twin.adapters.multi_sim import (
     MujocoActuator,
     MujocoBuilder,
-    MujocoServo,
     MujocoSim,
 )
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
@@ -37,7 +36,7 @@ from semantic_digital_twin.world_description.degree_of_freedom import (
 )
 from semantic_digital_twin.world_description.geometry import Box, Scale
 from semantic_digital_twin.world_description.shape_collection import ShapeCollection
-from semantic_digital_twin.world_description.world_entity import Body
+from semantic_digital_twin.world_description.world_entity import Body, PositionServo
 
 # %% the servo's actuator
 
@@ -49,10 +48,11 @@ def test_the_servo_actuator_is_a_pd_law_clamped_to_the_joints_range():
         limits=DegreeOfFreedomLimits(
             DerivativeMap(position=-1.0), DerivativeMap(position=1.0)
         ),
-        servo_gains=gains,
     )
+    servo = PositionServo(name=PrefixedName("hinge_servo"), gains=gains)
+    servo.add_dof(degree_of_freedom)
 
-    actuator = MujocoActuator.create_servo(degree_of_freedom)
+    actuator = MujocoActuator.create_servo(servo)
 
     assert actuator.gain_type == mujoco.mjtGain.mjGAIN_FIXED
     assert actuator.gain_parameters[0] == gains.stiffness
@@ -60,18 +60,6 @@ def test_the_servo_actuator_is_a_pd_law_clamped_to_the_joints_range():
     assert actuator.bias_parameters[:3] == [0.0, -gains.stiffness, -gains.damping]
     assert actuator.control_range == [-1.0, 1.0]
     assert actuator.force_range == [-gains.torque_limit, gains.torque_limit]
-
-
-def test_the_servo_is_named_after_its_degree_of_freedom():
-    degree_of_freedom = DegreeOfFreedom(
-        name=PrefixedName("hinge"),
-        servo_gains=ServoGains(stiffness=100.0, damping=10.0, torque_limit=5.0),
-    )
-
-    servo = MujocoServo(degree_of_freedom)
-
-    assert servo.name == "hinge_servo"
-    assert servo.actuator == MujocoActuator.create_servo(degree_of_freedom)
 
 
 # %% a servoed pendulum
@@ -151,13 +139,17 @@ def _pendulum_world() -> PendulumWorld:
 
 def _servoed_pendulum_world() -> PendulumWorld:
     pendulum = _pendulum_world()
-    pendulum.hinge.raw_dof.servo_gains = ServoGains(
-        stiffness=50.0, damping=5.0, torque_limit=2.0
+    servo = PositionServo(
+        name=PrefixedName("hinge_servo"),
+        gains=ServoGains(stiffness=50.0, damping=5.0, torque_limit=2.0),
     )
+    servo.add_dof(pendulum.hinge.raw_dof)
+    with pendulum.world.modify_world():
+        pendulum.world.add_actuator(servo)
     return pendulum
 
 
-def test_a_shared_degree_of_freedom_with_gains_gets_one_servo_on_its_own_joint(
+def test_a_position_servo_becomes_a_servo_actuator_on_the_degree_of_freedoms_joint(
     tmp_path,
 ):
     pendulum = _servoed_pendulum_world()
@@ -166,12 +158,14 @@ def test_a_shared_degree_of_freedom_with_gains_gets_one_servo_on_its_own_joint(
     builder.build_world(world=pendulum.world, file_path=str(tmp_path / "scene.xml"))
 
     [servo] = builder.spec.actuators
-    assert servo.name == MujocoServo(pendulum.hinge.raw_dof).name
+    assert servo.name == "hinge_servo"
     assert servo.target == "hinge"
     assert servo.trntype == mujoco.mjtTrn.mjTRN_JOINT
+    assert servo.gainprm[0] == 50.0
+    assert list(servo.forcerange) == [-2.0, 2.0]
 
 
-def test_a_degree_of_freedom_without_gains_gets_no_servo(tmp_path):
+def test_a_degree_of_freedom_without_a_servo_gets_no_actuator(tmp_path):
     pendulum = _pendulum_world()
 
     builder = MujocoBuilder()

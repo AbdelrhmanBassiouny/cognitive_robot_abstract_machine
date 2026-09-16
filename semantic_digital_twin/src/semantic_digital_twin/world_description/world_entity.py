@@ -49,6 +49,7 @@ from semantic_digital_twin.exceptions import (
     ReferenceFrameMismatchError,
 )
 from semantic_digital_twin.mixin import HasSimulatorProperties, UniqueSimulatorProperty
+from semantic_digital_twin.world_description.connection_properties import ServoGains
 from semantic_digital_twin.spatial_types.spatial_types import (
     HomogeneousTransformationMatrix,
     Point3,
@@ -1342,3 +1343,18 @@ class Actuator(WorldEntityWithSimulatorProperties):
         :param dof: The degree of freedom to add.
         """
         self._dofs.append(dof)
+
+
+@dataclass(eq=False)
+class PositionServo(Actuator):
+    """
+    An actuator that drives its degree of freedom towards a commanded position with a
+    PD law: the position the world holds for the degree of freedom is the servo's set
+    point, which the degree of freedom then reaches through the physics rather than
+    being teleported there.
+    """
+
+    gains: ServoGains = field(kw_only=True)
+    """
+    How hard the servo pulls the degree of freedom towards the set point.
+    """

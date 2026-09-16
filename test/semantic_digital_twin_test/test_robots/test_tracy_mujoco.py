@@ -12,6 +12,7 @@ import pytest
 from ...pytest_environment import runs_in_continuous_integration
 
 from semantic_digital_twin.adapters.multi_sim import MujocoBuilder, MujocoSim
+from semantic_digital_twin.adapters.urdf import URDFParser
 from semantic_digital_twin.api import RobotSpecification
 from semantic_digital_twin.datastructures.definitions import StaticJointState
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
@@ -26,6 +27,7 @@ from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.world_entity import (
     Body,
     GravityCompensation,
+    PositionServo,
 )
 
 pytestmark = pytest.mark.skipif(
@@ -81,62 +83,58 @@ def test_the_mounting_table_is_a_table_at_the_robots_root(mounted_tracy):
     assert table.top_z == pytest.approx(widest_slab.max_z)
 
 
-def test_every_arm_and_gripper_joint_is_servoed_on_mounting(mounted_tracy, tmp_path):
+def test_every_arm_and_gripper_degree_of_freedom_is_driven_by_one_servo(
+    mounted_tracy, tmp_path
+):
     """
-    A mounted Tracy declares each arm and gripper joint's own servo, so the compiled
-    model drives every one of those degrees of freedom with a servo.
+    A mounted Tracy declares a position servo on each arm and gripper degree of freedom,
+    with the joint's own dynamics on the joint, and the compiled model drives each of
+    those degrees of freedom with exactly one servo actuator.
     """
     world = mounted_tracy._world
     shoulder = world.get_connection_by_name(TracyJoint.LEFT_SHOULDER_PAN)
-    knuckle = world.get_connection_by_name(TracyJoint.LEFT_GRIPPER_LEFT_KNUCKLE)
-    gripper = mounted_tracy.left_arm.end_effector
-
     expected_shoulder = mounted_tracy.left_arm.servos_by_joint["shoulder_pan_joint"]
-    assert shoulder.raw_dof.servo_gains == expected_shoulder.gains
+    [shoulder_servo] = [
+        actuator for actuator in world.actuators if shoulder.raw_dof in actuator.dofs
+    ]
+    assert isinstance(shoulder_servo, PositionServo)
+    assert shoulder_servo.gains == expected_shoulder.gains
     assert shoulder.dynamics == expected_shoulder.dynamics
-    assert knuckle.raw_dof.servo_gains == gripper.finger_servo.gains
-    assert knuckle.dynamics == gripper.finger_servo.dynamics
 
-    builder = MujocoBuilder()
-    builder.build_world(world=world, file_path=str(tmp_path / "scene.xml"))
     servoed_degrees_of_freedom = {
-        connection.raw_dof.name.name
+        connection.raw_dof
         for arm in mounted_tracy.get_arms()
         for connection in arm.active_connections + arm.end_effector.active_connections
     }
-    assert {
-        actuator.target for actuator in builder.spec.actuators
-    } == servoed_degrees_of_freedom
-    assert TracyJoint.LEFT_GRIPPER_LEFT_KNUCKLE in servoed_degrees_of_freedom
+    driven_degrees_of_freedom = [
+        degree_of_freedom
+        for actuator in world.actuators
+        for degree_of_freedom in actuator.dofs
+    ]
+    assert set(driven_degrees_of_freedom) == servoed_degrees_of_freedom
+    assert len(driven_degrees_of_freedom) == len(servoed_degrees_of_freedom)
+
+    builder = MujocoBuilder()
+    builder.build_world(world=world, file_path=str(tmp_path / "scene.xml"))
+    assert {actuator.target for actuator in builder.spec.actuators} == {
+        degree_of_freedom.name.name for degree_of_freedom in servoed_degrees_of_freedom
+    }
 
 
-def test_mounting_alone_leaves_the_descriptions_own_finger_velocity_limit(
-    mounted_tracy,
-):
+def test_the_grippers_keep_the_descriptions_own_velocity_limit(mounted_tracy):
     """
-    Kinematic planning against a Tracy that is never physically simulated has no reason
-    to distrust the description's own, conservative velocity limit.
+    Slowing the arms down for safety must not slow the fingers down with them.
     """
-    knuckle = mounted_tracy._world.get_connection_by_name(
+    world = mounted_tracy._world
+    knuckle = world.get_connection_by_name(TracyJoint.LEFT_GRIPPER_LEFT_KNUCKLE)
+    wrist = world.get_connection_by_name(TracyJoint.LEFT_WRIST_3)
+    description = URDFParser.from_file(Tracy.get_ros_file_path()).parse()
+    described_knuckle_velocity = description.get_connection_by_name(
         TracyJoint.LEFT_GRIPPER_LEFT_KNUCKLE
-    )
-    gripper = mounted_tracy.left_arm.end_effector
+    ).raw_dof.limits.upper.velocity
 
-    assert knuckle.raw_dof.limits.upper.velocity != gripper.finger_velocity_limit
-
-
-def test_preparing_for_physical_simulation_overwrites_the_finger_velocity_limit(
-    mounted_tracy,
-):
-    mounted_tracy.prepare_for_physical_simulation()
-
-    gripper = mounted_tracy.left_arm.end_effector
-    knuckle = mounted_tracy._world.get_connection_by_name(
-        TracyJoint.LEFT_GRIPPER_LEFT_KNUCKLE
-    )
-
-    assert knuckle.raw_dof.limits.upper.velocity == gripper.finger_velocity_limit
-    assert knuckle.raw_dof.limits.lower.velocity == -gripper.finger_velocity_limit
+    assert knuckle.raw_dof.limits.upper.velocity == described_knuckle_velocity
+    assert wrist.raw_dof.limits.upper.velocity == pytest.approx(0.2)
 
 
 def test_the_servoed_parts_carry_their_weight_and_the_links_pass_through_each_other(

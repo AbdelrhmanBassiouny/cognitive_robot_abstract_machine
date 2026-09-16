@@ -3,7 +3,7 @@ from __future__ import annotations
 from copy import deepcopy
 from dataclasses import dataclass, field
 
-from typing_extensions import Generic, Optional, TypeVar
+from typing_extensions import Generic, TypeVar
 
 import krrood.symbolic_math.symbolic_math as sm
 from krrood.adapters.json_serializer import SubclassJSONSerializer
@@ -14,7 +14,6 @@ from semantic_digital_twin.exceptions import (
     MimicDofLimitOverwriteError,
 )
 from semantic_digital_twin.spatial_types.derivatives import Derivatives, DerivativeMap
-from semantic_digital_twin.world_description.connection_properties import ServoGains
 
 
 @dataclass(eq=False, init=False)
@@ -158,15 +157,6 @@ class DegreeOfFreedom(WorldEntityWithID, SubclassJSONSerializer):
     A door hinge also has a dof that cannot be controlled.
     """
 
-    servo_gains: Optional[ServoGains] = None
-    """
-    The position servo driving this degree of freedom in a physical simulation, or
-    ``None`` for one nothing drives.
-
-    A mimic linkage's joints share one degree of freedom, so one servo drives the whole
-    linkage.
-    """
-
     def __post_init__(self):
         self.limits = self.limits or DegreeOfFreedomLimits()
         lower = self.limits.lower.position
@@ -208,7 +198,6 @@ class DegreeOfFreedom(WorldEntityWithID, SubclassJSONSerializer):
             ),
             name=deepcopy(self.name),
             has_hardware_interface=self.has_hardware_interface,
-            servo_gains=self.servo_gains,
             id=self.id,
         )
         result._world = self._world

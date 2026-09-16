@@ -71,5 +71,5 @@ class UR10eArm(Arm[TGenericEndEffector], Generic[TGenericEndEffector], ABC):
                 continue
             joint_name = connection.raw_dof.name.name
             unprefixed = joint_name.removeprefix("left_").removeprefix("right_")
-            self.servos_by_joint[unprefixed].apply_to(connection)
+            self._declare_servo(connection, self.servos_by_joint[unprefixed])
         self._compensate_gravity()

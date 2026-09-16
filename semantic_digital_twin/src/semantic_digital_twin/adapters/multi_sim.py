@@ -49,7 +49,6 @@ from semantic_digital_twin.exceptions import (
     SimulationAlreadyRunningError,
     SimulationNotStartedError,
 )
-from semantic_digital_twin.robots.robot_parts import AbstractRobot
 from semantic_digital_twin.spatial_types.spatial_types import (
     HomogeneousTransformationMatrix,
     Point3,
@@ -59,7 +58,6 @@ from semantic_digital_twin.spatial_types.spatial_types import (
 )
 from semantic_digital_twin.spatial_types.math import inverse_frame
 from semantic_digital_twin.world import World
-from semantic_digital_twin.world_description.degree_of_freedom import DegreeOfFreedom
 from semantic_digital_twin.world_description.connections import (
     RevoluteConnection,
     PrismaticConnection,
@@ -86,6 +84,7 @@ from semantic_digital_twin.world_description.world_entity import (
     Connection,
     WorldEntity,
     Actuator,
+    PositionServo,
 )
 from semantic_digital_twin.mixin import (
     FieldMetadata,
@@ -875,17 +874,17 @@ class MujocoActuator(UniqueSimulatorProperty):
     """
 
     @classmethod
-    def create_servo(cls, degree_of_freedom: DegreeOfFreedom) -> MujocoActuator:
+    def create_servo(cls, servo: PositionServo) -> MujocoActuator:
         """
-        The position servo of a degree of freedom, from the gains it declares: a PD law
-        clamped to the servo's torque limit and to the degree of freedom's own position
-        limits.
+        The MuJoCo actuator realising a position servo: a PD law with the servo's
+        gains, clamped to its torque limit and to the driven degree of freedom's own
+        position limits.
 
-        :param degree_of_freedom: The degree of freedom to servo; it has to declare its
-            servo gains.
-        :return: The servo's actuator.
+        :param servo: The servo to realise; it drives exactly one degree of freedom.
+        :return: The actuator.
         """
-        gains = degree_of_freedom.servo_gains
+        gains = servo.gains
+        [degree_of_freedom] = servo.dofs
         limits = degree_of_freedom.limits
         return cls(
             dynamics_type=mujoco.mjtDyn.mjDYN_NONE,
@@ -896,33 +895,6 @@ class MujocoActuator(UniqueSimulatorProperty):
             control_range=[limits.lower.position, limits.upper.position],
             force_range=[-gains.torque_limit, gains.torque_limit],
         )
-
-
-@dataclass
-class MujocoServo:
-    """
-    The position servo a degree of freedom with servo gains is driven by in the MuJoCo
-    model.
-    """
-
-    degree_of_freedom: DegreeOfFreedom
-    """
-    The degree of freedom the servo drives; declares the servo's gains.
-    """
-
-    @property
-    def name(self) -> str:
-        """
-        The name of the servo's actuator in the MuJoCo model.
-        """
-        return f"{self.degree_of_freedom.name.name}_servo"
-
-    @property
-    def actuator(self) -> MujocoActuator:
-        """
-        The actuator that realises the servo.
-        """
-        return MujocoActuator.create_servo(self.degree_of_freedom)
 
 
 @dataclass
@@ -1597,6 +1569,22 @@ class MujocoGeneralActuatorConverter(MujocoActuatorConverter, ActuatorConverter)
 
 
 @dataclass
+class MujocoPositionServoConverter(MujocoActuatorConverter):
+    """
+    Converts a position servo to the properties of the MuJoCo actuator realising it
+    (see :meth:`MujocoActuator.create_servo`).
+    """
+
+    entity_type: ClassVar[Type[PositionServo]] = PositionServo
+
+    def _post_convert(
+        self, entity: PositionServo, actuator_props: Dict[str, Any], **kwargs
+    ) -> Dict[str, Any]:
+        actuator_props.update(MujocoActuator.create_servo(entity).to_dict())
+        return actuator_props
+
+
+@dataclass
 class MujocoCameraConverter(CameraConverter, ABC):
 
     entity_type: ClassVar[Type[MujocoCamera]] = MujocoCamera
@@ -1902,7 +1890,6 @@ class MujocoBuilder(MultiSimBuilder):
         self._thickened_mesh_paths = {}
 
     def _end_build(self, file_path: str):
-        self._build_servos()
         self._build_contact_exclusions()
         self._build_equalities()
         self._build_tendons()
@@ -2268,27 +2255,6 @@ class MujocoBuilder(MultiSimBuilder):
                 entity_type=mujoco.mjtObj.mjOBJ_ACTUATOR,
                 action="add",
             )
-
-    def _build_servos(self):
-        """
-        Give every degree of freedom that declares servo gains, and that no actuator of
-        the world drives already, its own position servo (see :class:`MujocoServo`).
-        """
-        driven = {
-            degree_of_freedom.id
-            for actuator in self.world.actuators
-            for degree_of_freedom in actuator.dofs
-        }
-        for degree_of_freedom in self.world.degrees_of_freedom:
-            if degree_of_freedom.servo_gains is None or degree_of_freedom.id in driven:
-                continue
-            servo = MujocoServo(degree_of_freedom)
-            actuator_props = servo.actuator.to_dict()
-            actuator_props["name"] = servo.name
-            actuator_props.update(
-                self._transmission_for_degree_of_freedom(degree_of_freedom.name.name)
-            )
-            self.spec.add_actuator(**actuator_props)
 
     def _transmission_for_degree_of_freedom(self, dof_name: str) -> Dict[str, Any]:
         """
@@ -3329,22 +3295,13 @@ class MujocoSynchronizer(MultiSimSynchronizer):
     def _actuator_names_by_degree_of_freedom(self) -> Dict[Any, str]:
         """
         :return: The name of the actuator driving each actuated degree of freedom, by
-            the degree of freedom's id: the world's own actuators, and the servo every
-            degree of freedom with servo gains gets (see :class:`MujocoServo`).
+            the degree of freedom's id.
         """
-        actuator_names = {
-            degree_of_freedom.id: MujocoServo(degree_of_freedom).name
-            for degree_of_freedom in self._world.degrees_of_freedom
-            if degree_of_freedom.servo_gains is not None
+        return {
+            degree_of_freedom.id: actuator.name.name
+            for actuator in self._world.actuators
+            for degree_of_freedom in actuator.dofs
         }
-        actuator_names.update(
-            {
-                degree_of_freedom.id: actuator.name.name
-                for actuator in self._world.actuators
-                for degree_of_freedom in actuator.dofs
-            }
-        )
-        return actuator_names
 
     def _command_actuator(
         self,
@@ -3639,17 +3596,12 @@ class MultiSim(ABC):
         """
         Initializes the MultiSim class.
 
-        :param world: The world to simulate. Every robot in it is prepared for being
-            simulated physically (see
-            :meth:`~semantic_digital_twin.robots.robot_parts.AbstractRobot.prepare_for_physical_simulation`).
+        :param world: The world to simulate.
         :param viewer: The MultiverseViewer to read/write objects.
         :param headless: Whether to run the simulation in headless mode.
         :param step_size: The step size for the simulation.
         """
         self.world = world
-        with world.modify_world():
-            for robot in world.get_semantic_annotations_by_type(AbstractRobot):
-                robot.prepare_for_physical_simulation()
         self.builder_class().build_world(world=world, file_path=self.default_file_path)
         self.simulator = self.simulator_class(
             file_path=self.default_file_path,
