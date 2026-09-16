@@ -520,14 +520,8 @@ class WorldModelModificationBlock:
             modification.apply(world)
 
     @classmethod
-    def apply_from_json(cls, world: World, data: Dict[str, Any], **kwargs) -> Self:
-        """
-        Apply the modifications in the given JSON data to the given world.
-        """
-        block = DataclassJSONSerializer.from_json(data, clazz=cls, **kwargs)
-
-        for modification in block.modifications:
-            modification.apply(world)
+    def from_json(cls, data: Dict[str, Any], **kwargs) -> Self:
+        return DataclassJSONSerializer.from_json(data, clazz=cls, **kwargs)
 
     def __iter__(self):
         return iter(self.modifications)

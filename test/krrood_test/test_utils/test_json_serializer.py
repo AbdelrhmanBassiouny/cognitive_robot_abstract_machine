@@ -178,6 +178,11 @@ class ClassWithSet(DataclassJSONSerializer):
 
 
 @dataclass
+class ClassWithTuple(DataclassJSONSerializer):
+    a: tuple
+
+
+@dataclass
 class ClassWithSortedSet(DataclassJSONSerializer):
     a: SortedSet
 
@@ -405,7 +410,10 @@ def test_dataclass_dict():
 def test_dataclass_list():
     cls = ClassWithList([3, 1, 2])
     data = to_json(cls)
-    assert data["a"] == {"collection_type": "LIST", "items": [3, 1, 2]}
+    assert data["a"] == {
+        "collection_type": get_full_class_name(list),
+        "items": [3, 1, 2],
+    }
     result = from_json(data)
     assert result == cls
     assert isinstance(result.a, list)
@@ -414,17 +422,32 @@ def test_dataclass_list():
 def test_dataclass_set():
     cls = ClassWithSet({1, 2, 3})
     data = to_json(cls)
-    assert data["a"]["collection_type"] == "SET"
+    assert data["a"]["collection_type"] == get_full_class_name(set)
     assert sorted(data["a"]["items"]) == [1, 2, 3]
     result = from_json(data)
     assert result == cls
     assert isinstance(result.a, set)
 
 
+def test_dataclass_tuple():
+    cls = ClassWithTuple((3, 1, 2))
+    data = to_json(cls)
+    assert data["a"] == {
+        "collection_type": get_full_class_name(tuple),
+        "items": [3, 1, 2],
+    }
+    result = from_json(data)
+    assert result == cls
+    assert isinstance(result.a, tuple)
+
+
 def test_dataclass_sorted_set():
     cls = ClassWithSortedSet(SortedSet([3, 1, 2]))
     data = to_json(cls)
-    assert data["a"] == {"collection_type": "SORTED_SET", "items": [1, 2, 3]}
+    assert data["a"] == {
+        "collection_type": get_full_class_name(SortedSet),
+        "items": [1, 2, 3],
+    }
     result = from_json(data)
     assert result == cls
     assert isinstance(result.a, SortedSet)

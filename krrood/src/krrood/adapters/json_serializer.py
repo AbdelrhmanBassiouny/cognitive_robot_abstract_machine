@@ -68,6 +68,31 @@ else:
         """
 
 
+def resolve_class_from_full_name(fully_qualified_class_name: str) -> Type:
+    """
+    Import and return the class named by a fully qualified name of the form
+    ``"module.submodule.ClassName"``, as written by
+    :func:`~krrood.utils.get_full_class_name`.
+
+    :param fully_qualified_class_name: The fully qualified class name.
+    :return: The resolved class.
+    """
+    try:
+        module_name, class_name = fully_qualified_class_name.rsplit(".", 1)
+    except ValueError as exc:
+        raise InvalidTypeFormatError(fully_qualified_class_name) from exc
+
+    try:
+        module = importlib.import_module(module_name)
+    except ModuleNotFoundError as exc:
+        raise UnknownModuleError(module_name) from exc
+
+    try:
+        return getattr(module, class_name)
+    except AttributeError as exc:
+        raise ClassNotFoundError(class_name, module_name) from exc
+
+
 @dataclass
 class JSONSerializableTypeRegistry(metaclass=SingletonMeta):
     """
@@ -161,20 +186,7 @@ class SubclassJSONSerializer:
         if not fully_qualified_class_name:
             raise MissingTypeError()
 
-        try:
-            module_name, class_name = fully_qualified_class_name.rsplit(".", 1)
-        except ValueError as exc:
-            raise InvalidTypeFormatError(fully_qualified_class_name) from exc
-
-        try:
-            module = importlib.import_module(module_name)
-        except ModuleNotFoundError as exc:
-            raise UnknownModuleError(module_name) from exc
-
-        try:
-            target_cls = getattr(module, class_name)
-        except AttributeError as exc:
-            raise ClassNotFoundError(class_name, module_name) from exc
+        target_cls = resolve_class_from_full_name(fully_qualified_class_name)
 
         if data.get(JSON_IS_CLASS, False):
             return ClassJSONSerializer.from_json(data, clazz=target_cls, **kwargs)
@@ -599,37 +611,23 @@ class NumpyNDarrayJSONSerializer(ExternalClassJSONSerializer[np.ndarray]):
         return np.array(data["data"], dtype=data["type"])
 
 
-class DataclassSerializerCollectionType(enum.Enum):
-    """
-    Collection types that :class:`DataclassJSONSerializer` tags a field with on
-    serialization, so ``from_json`` can restore the exact type on the way back instead
-    of guessing or defaulting to ``list``.
-    """
-
-    LIST = list
-    SET = set
-    SORTED_SET = SortedSet
-
-    @classmethod
-    def of(cls, value: object) -> "DataclassSerializerCollectionType":
-        """
-        :param value: A ``list``, ``set`` or :class:`~sortedcontainers.SortedSet`
-            instance.
-        :return: The member matching ``value``'s exact type.
-        """
-        return cls(type(value))
-
-
 @dataclass
 class DataclassJSONSerializer(ExternalClassJSONSerializer[None]):
     """
     Generic JSON serializer for dataclasses.
 
     It creates a dict where all fields are serialized using the to_json function. A
-    ``list``, ``set`` or :class:`~sortedcontainers.SortedSet` field always serializes as
-    a JSON object that also records its collection type, so ``from_json`` restores that
-    same type on the way back rather than guessing or defaulting to ``list``. If this is
-    not enough, you still need to implement a custom serializer.
+    ``list``-like (see :data:`list_like_classes`) or :class:`~sortedcontainers.SortedSet`
+    field always serializes as a JSON object that also records its collection type as a
+    fully qualified class name, so ``from_json`` restores that same type on the way back
+    rather than guessing or defaulting to ``list``. If this is not enough, you still need
+    to implement a custom serializer.
+    """
+
+    collection_field_types = list_like_classes + (SortedSet,)
+    """
+    Types that a dataclass field is tagged with its collection type for, on
+    serialization.
     """
 
     @classmethod
@@ -639,9 +637,9 @@ class DataclassJSONSerializer(ExternalClassJSONSerializer[None]):
         for field_ in introspector.discover(obj.__class__):
             value = getattr(obj, field_.public_name)
 
-            if isinstance(value, (list, set, SortedSet)):
+            if isinstance(value, cls.collection_field_types):
                 current_result = {
-                    "collection_type": DataclassSerializerCollectionType.of(value).name,
+                    "collection_type": get_full_class_name(type(value)),
                     "items": [to_json(item, **kwargs) for item in value],
                 }
             elif isinstance(value, dict):
@@ -679,9 +677,9 @@ class DataclassJSONSerializer(ExternalClassJSONSerializer[None]):
                 and "items" in current_data.keys()
             ):
                 items = [from_json(item, **kwargs) for item in current_data["items"]]
-                collection_type = DataclassSerializerCollectionType[
+                collection_type = resolve_class_from_full_name(
                     current_data["collection_type"]
-                ].value
+                )
                 current_result = collection_type(items)
             elif (
                 isinstance(current_data, dict)
