@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import enum
-import importlib
 import inspect
 import uuid
 from datetime import timedelta
@@ -30,6 +29,7 @@ from krrood.singleton import SingletonMeta
 from krrood.utils import (
     get_full_class_name,
     recursive_subclasses,
+    resolve_class_from_full_name as _resolve_class_from_full_name,
 )
 
 list_like_classes = (
@@ -74,22 +74,22 @@ def resolve_class_from_full_name(fully_qualified_class_name: str) -> Type:
     ``"module.submodule.ClassName"``, as written by
     :func:`~krrood.utils.get_full_class_name`.
 
+    Delegates the resolution itself to :func:`krrood.utils.resolve_class_from_full_name`
+    (also used by :class:`~krrood.ormatic.custom_types.TypeType`) and translates its
+    failures into the JSON-specific exceptions callers of this module expect.
+
     :param fully_qualified_class_name: The fully qualified class name.
     :return: The resolved class.
     """
     try:
-        module_name, class_name = fully_qualified_class_name.rsplit(".", 1)
+        return _resolve_class_from_full_name(fully_qualified_class_name)
     except ValueError as exc:
         raise InvalidTypeFormatError(fully_qualified_class_name) from exc
-
-    try:
-        module = importlib.import_module(module_name)
     except ModuleNotFoundError as exc:
+        module_name = fully_qualified_class_name.rsplit(".", 1)[0]
         raise UnknownModuleError(module_name) from exc
-
-    try:
-        return getattr(module, class_name)
     except AttributeError as exc:
+        module_name, class_name = fully_qualified_class_name.rsplit(".", 1)
         raise ClassNotFoundError(class_name, module_name) from exc
 
 
