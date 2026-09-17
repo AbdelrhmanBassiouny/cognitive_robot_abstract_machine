@@ -39,10 +39,6 @@ jobs:
           - lib: robokudo
           - lib: segmind
           - lib: experiments
-          # test/causal_reasoning_test: the tests of the experiments under
-          # experiments/causal_reasoning, kept out of test/experiments_test because
-          # its conftest needs ROS and the whole ORM chain, which these do not
-          - lib: causal_reasoning
           - lib: version
           - lib: cognitive_robot_abstract_machine
     uses: ./.github/workflows/ci_reusable.yml
