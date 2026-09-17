@@ -164,13 +164,5 @@ WorldSpecification.from_urdf(path, path_resolver=CompositePathResolver([server])
 ```
 
 Anything that serves a directory tree and answers a directory with a json listing can be
-the server. nginx does both without code:
-
-```nginx
-location /datasets/ {
-    alias /path/to/datasets/;
-    autoindex on;
-    autoindex_format json;
-    add_header Cache-Control "public, max-age=31536000, immutable";
-}
-```
+the server. nginx does both without code, through `autoindex` and `autoindex_format`,
+which its own documentation covers.
