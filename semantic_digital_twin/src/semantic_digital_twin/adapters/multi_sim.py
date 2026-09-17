@@ -1464,7 +1464,7 @@ class MujocoMeshConverter(MujocoGeomConverter, MeshConverter):
             entity.mesh.visual.material.name, str
         ):
             texture_file_path = self._resolve_texture_file_path(
-                entity.mesh.visual.material, os.path.dirname(entity.filename)
+                entity.mesh.visual.material, str(entity.local_file.parent)
             )
             if texture_file_path is not None:
                 shape_props["texture_file_path"] = texture_file_path
@@ -2122,7 +2122,7 @@ class MujocoBuilder(MultiSimBuilder):
         """
         mesh_entity = geom_props.pop("mesh")
         if isinstance(mesh_entity, Mesh):
-            mesh_file_path = mesh_entity.filename
+            mesh_file_path = str(mesh_entity.local_file)
         else:
             raise NotImplementedError(
                 f"Mesh type {type(mesh_entity)} not supported in Mujoco."

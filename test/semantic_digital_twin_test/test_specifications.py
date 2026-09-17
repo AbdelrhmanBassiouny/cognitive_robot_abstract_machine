@@ -1823,12 +1823,6 @@ def test_part_bindings_survive_orm_round_trip():
     assert [binding.field_name for binding in reconstructed.part_bindings] == ["handle"]
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="ormatic maps no specification-valued field, so a persisted specification "
-    "comes back without its root_specification and with empty part bindings. Remove "
-    "this marker once the generator maps those fields.",
-)
 def test_annotation_specification_survives_orm_round_trip(empty_world):
     reconstructed = to_dao(_drawer_specification_with_handle()).from_dao()
 
