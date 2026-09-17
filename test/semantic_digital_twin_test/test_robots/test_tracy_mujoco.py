@@ -43,10 +43,10 @@ def mounted_tracy() -> Tracy:
     return RobotSpecification(Tracy).spawn(world)
 
 
-def test_a_stationary_robot_is_bolted_to_the_world_through_a_fixed_odom():
+def test_a_stationary_robot_is_bolted_to_the_world_through_a_fixed_drive():
     """
-    Tracy has no mobile base, so both its odom and its drive are fixed connections, and
-    the localization pose it is spawned with is where its root ends up.
+    Tracy has no mobile base, so its drive is a fixed connection like every robot's
+    odom, and the localization pose it is spawned with is where its root ends up.
     """
     world = World()
     with world.modify_world():
@@ -161,7 +161,7 @@ def test_the_servoed_parts_carry_their_weight_and_the_links_pass_through_each_ot
         frozenset((exclude.bodyname1, exclude.bodyname2))
         for exclude in builder.spec.excludes
     }
-    fingertip = mounted_tracy.left_arm.end_effector.left_fingertip.name.name
+    fingertip = mounted_tracy.left_arm.end_effector.thumb.tip.name.name
     wrist = mounted_tracy._world.get_connection_by_name(
         TracyJoint.LEFT_WRIST_3
     ).child.name.name
@@ -204,8 +204,8 @@ def test_the_servos_hold_the_parked_arms_up(mounted_tracy):
 def test_gripper_geometry_names_the_pads_and_the_driving_joint(mounted_tracy):
     gripper = mounted_tracy.left_arm.end_effector
 
-    assert gripper.left_fingertip.name.name == "left_robotiq_85_left_finger_tip_link"
-    assert gripper.right_fingertip.name.name == "left_robotiq_85_right_finger_tip_link"
+    assert gripper.thumb.tip.name.name == "left_robotiq_85_left_finger_tip_link"
+    assert gripper.finger.tip.name.name == "left_robotiq_85_right_finger_tip_link"
     assert gripper.knuckle_joint.name.name == TracyJoint.LEFT_GRIPPER_LEFT_KNUCKLE
     assert (
         mounted_tracy.right_arm.end_effector.knuckle_joint.name.name

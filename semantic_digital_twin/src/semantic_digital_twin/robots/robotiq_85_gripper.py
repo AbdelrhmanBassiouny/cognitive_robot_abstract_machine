@@ -17,7 +17,6 @@ from semantic_digital_twin.world_description.connection_properties import (
     ServoGains,
 )
 from semantic_digital_twin.world_description.connections import ActiveConnection1DOF
-from semantic_digital_twin.world_description.world_entity import Body
 
 
 @dataclass(eq=False)
@@ -31,8 +30,9 @@ class Robotiq85Gripper(
     A Robotiq 2F-85 parallel gripper: two fingers coupled by a mimic linkage, driven by
     the knuckle joint of the thumb.
 
-    Knows what a grasp and a physical simulation need from it: the pads that meet an
-    object, the joint that drives the fingers, and the servo driving it.
+    Knows what a grasp and a physical simulation need from it: the joint that drives
+    the fingers and the servo driving it; the pads that meet an object are the tips of
+    its thumb and finger.
 
     The servo is raised empirically, since no pre-tuned reference exists for the
     Robotiq 2F-85; its armature gives the coupled mechanism the numerical damping that
@@ -59,17 +59,3 @@ class Robotiq85Gripper(
                 ),
             )
         self._compensate_gravity()
-
-    @property
-    def left_fingertip(self) -> Body:
-        """
-        The left fingertip pad's body.
-        """
-        return self.thumb.tip
-
-    @property
-    def right_fingertip(self) -> Body:
-        """
-        The right fingertip pad's body.
-        """
-        return self.finger.tip

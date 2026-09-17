@@ -546,7 +546,7 @@ def test_world_specification_with_robot():
 
     odom_body = world.get_body_by_name("odom")
     assert odom_body is not None
-    assert isinstance(odom_body.parent_connection, Connection6DoF)
+    assert isinstance(odom_body.parent_connection, FixedConnection)
     assert odom_body.parent_connection.parent is world.root
 
     drive = world.get_body_by_name("base_footprint").parent_connection
@@ -606,7 +606,7 @@ def test_world_specification_with_several_robots():
     assert len(odom_bodies) == 2
     assert odom_bodies[0].name != odom_bodies[1].name
     for odom_body in odom_bodies:
-        assert isinstance(odom_body.parent_connection, Connection6DoF)
+        assert isinstance(odom_body.parent_connection, FixedConnection)
         assert odom_body.parent_connection.parent is world.root
 
     odom_positions = sorted(

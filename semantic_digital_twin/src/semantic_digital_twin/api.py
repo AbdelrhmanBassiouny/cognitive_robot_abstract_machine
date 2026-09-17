@@ -1069,9 +1069,9 @@ class RobotSpecification:
     localization frame sits, and where the robot starts within it.
 
     Materialized via :meth:`spawn`, which merges the robot as ``world.root -> odom ->
-    drive -> robot``. A robot without a mobile base is bolted down: both its ``odom``
-    and its drive are then fixed connections, so a physical simulation holds it in
-    place.
+    drive -> robot``. The ``odom`` is fixed to the world root; whether the robot can
+    move is a matter of its drive alone, which is a fixed connection for a robot
+    without a mobile base.
     """
 
     semantic_annotation_type: Type[AbstractRobot]
@@ -1098,11 +1098,11 @@ class RobotSpecification:
         Parse the robot from its own description and merge it into ``world`` as
         ``world.root -> odom -> connection -> robot``.
 
-        The connection attaching the robot to its ``odom`` is the drive declared by the
-        robot's mobile base, or a fixed connection when the robot has no mobile base, in
-        which case the ``odom`` itself is fixed to the world root as well. An active
-        drive is marked as controlled; the localization and start poses of a mobile
-        robot are applied afterwards, those of a stationary one at creation.
+        The ``odom`` is fixed to the world root at the localization pose. The
+        connection attaching the robot to it is the drive declared by the robot's
+        mobile base, or a fixed connection when the robot has no mobile base. An active
+        drive is marked as controlled and its start pose is applied afterwards, that of
+        a fixed one at creation.
 
         The robot is annotated while it still owns the world it was parsed into, so that
         the annotation's name-based lookups cannot be confused by an equally named joint
@@ -1121,17 +1121,19 @@ class RobotSpecification:
 
         with world.modify_world():
             odom_body = self._create_odom_body()
-            if is_active:
-                root_C_odom = Connection6DoF.create_with_dofs(
-                    world=world, parent=cast(Body, world.root), child=odom_body
-                )
-            else:
-                root_C_odom = FixedConnection(
+            world.add_connection(
+                FixedConnection(
                     parent=cast(Body, world.root),
                     child=odom_body,
-                    parent_T_connection_expression=self.world_T_odom,
+                    parent_T_connection_expression=(
+                        None
+                        if self.world_T_odom is None
+                        else self.world_T_odom.copy_with_new_reference_frames(
+                            new_reference_frame=world.root, new_child_frame=odom_body
+                        )
+                    ),
                 )
-            world.add_connection(root_C_odom)
+            )
 
             # A fixed connection has no DoFs, so its start pose must be set at creation;
             # an active drive carries it as DoF state applied after the block.
@@ -1147,11 +1149,7 @@ class RobotSpecification:
             if is_active:
                 odom_C_robot.has_hardware_interface = True
 
-        # Poses touch DoF state, so they are set after the modification block.
-        if is_active and self.world_T_odom is not None:
-            root_C_odom.origin = self.world_T_odom.copy_with_new_reference_frames(
-                new_reference_frame=world.root, new_child_frame=odom_body
-            )
+        # The start pose touches DoF state, so it is set after the modification block.
         if is_active and self.odom_T_robot_start is not None:
             odom_C_robot.origin = self.odom_T_robot_start
 

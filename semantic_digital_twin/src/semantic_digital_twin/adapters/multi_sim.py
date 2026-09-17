@@ -87,7 +87,7 @@ from semantic_digital_twin.world_description.world_entity import (
     PositionServo,
 )
 from semantic_digital_twin.mixin import (
-    FieldMetadata,
+    SimulatorAttributeName,
     SimulatorAdditionalProperty,
     UniqueSimulatorProperty,
 )
@@ -766,7 +766,8 @@ class MujocoActuator(UniqueSimulatorProperty):
     """
 
     activation_limited: mujoco.mjtLimited = field(
-        default=mujoco.mjtLimited.mjLIMITED_AUTO, metadata={FieldMetadata.SIMULATOR_ATTRIBUTE_NAME: "actlimited"}
+        default=mujoco.mjtLimited.mjLIMITED_AUTO,
+        metadata=SimulatorAttributeName("actlimited").as_dict(),
     )
     """
     If mujoco.mjtLimited.mjLIMITED_TRUE, the internal state (activation) associated with this actuator is automatically clamped to actrange at runtime. 
@@ -775,7 +776,8 @@ class MujocoActuator(UniqueSimulatorProperty):
     """
 
     activation_range: List[float] = field(
-        default_factory=lambda: [0.0, 0.0], metadata={FieldMetadata.SIMULATOR_ATTRIBUTE_NAME: "actrange"}
+        default_factory=lambda: [0.0, 0.0],
+        metadata=SimulatorAttributeName("actrange").as_dict(),
     )
     """
     Range for clamping the activation state. The first value must be no greater than the second value.
@@ -783,7 +785,7 @@ class MujocoActuator(UniqueSimulatorProperty):
 
     control_limited: mujoco.mjtLimited = field(
         default=mujoco.mjtLimited.mjLIMITED_AUTO,
-        metadata={FieldMetadata.SIMULATOR_ATTRIBUTE_NAME: "ctrllimited"},
+        metadata=SimulatorAttributeName("ctrllimited").as_dict(),
     )
     """
     If mujoco.mjtLimited.mjLIMITED_TRUE, the control input to this actuator is automatically clamped to ctrl_range at runtime. 
@@ -792,7 +794,8 @@ class MujocoActuator(UniqueSimulatorProperty):
     """
 
     control_range: List[float] = field(
-        default_factory=lambda: [0.0, 0.0], metadata={FieldMetadata.SIMULATOR_ATTRIBUTE_NAME: "ctrlrange"}
+        default_factory=lambda: [0.0, 0.0],
+        metadata=SimulatorAttributeName("ctrlrange").as_dict(),
     )
     """
     The range of the control input.
@@ -800,7 +803,7 @@ class MujocoActuator(UniqueSimulatorProperty):
 
     force_limited: mujoco.mjtLimited = field(
         default=mujoco.mjtLimited.mjLIMITED_AUTO,
-        metadata={FieldMetadata.SIMULATOR_ATTRIBUTE_NAME: "forcelimited"},
+        metadata=SimulatorAttributeName("forcelimited").as_dict(),
     )
     """
     If mujoco.mjtLimited.mjLIMITED_TRUE, the force output of this actuator is automatically clamped to force_range at runtime. 
@@ -809,21 +812,24 @@ class MujocoActuator(UniqueSimulatorProperty):
     """
 
     force_range: List[float] = field(
-        default_factory=lambda: [0.0, 0.0], metadata={FieldMetadata.SIMULATOR_ATTRIBUTE_NAME: "forcerange"}
+        default_factory=lambda: [0.0, 0.0],
+        metadata=SimulatorAttributeName("forcerange").as_dict(),
     )
     """
     Range for clamping the force output. The first value must be no greater than the second value.
     """
 
     bias_parameters: List[float] = field(
-        default_factory=lambda: [0.0] * 10, metadata={FieldMetadata.SIMULATOR_ATTRIBUTE_NAME: "biasprm"}
+        default_factory=lambda: [0.0] * 10,
+        metadata=SimulatorAttributeName("biasprm").as_dict(),
     )
     """
     Bias parameters. The affine bias type uses three parameters.
     """
 
     bias_type: mujoco.mjtBias = field(
-        default=mujoco.mjtBias.mjBIAS_NONE, metadata={FieldMetadata.SIMULATOR_ATTRIBUTE_NAME: "biastype"}
+        default=mujoco.mjtBias.mjBIAS_NONE,
+        metadata=SimulatorAttributeName("biastype").as_dict(),
     )
     """
     The keywords have the following meaning:
@@ -834,14 +840,16 @@ class MujocoActuator(UniqueSimulatorProperty):
     """
 
     dynamics_parameters: List[float] = field(
-        default_factory=lambda: [1.0] + [0.0] * 9, metadata={FieldMetadata.SIMULATOR_ATTRIBUTE_NAME: "dynprm"}
+        default_factory=lambda: [1.0] + [0.0] * 9,
+        metadata=SimulatorAttributeName("dynprm").as_dict(),
     )
     """
     Activation dynamics parameters.
     """
 
     dynamics_type: mujoco.mjtDyn = field(
-        default=mujoco.mjtDyn.mjDYN_NONE, metadata={FieldMetadata.SIMULATOR_ATTRIBUTE_NAME: "dyntype"}
+        default=mujoco.mjtDyn.mjDYN_NONE,
+        metadata=SimulatorAttributeName("dyntype").as_dict(),
     )
     """
     Activation dynamics type for the actuator.
@@ -855,14 +863,16 @@ class MujocoActuator(UniqueSimulatorProperty):
     """
 
     gain_parameters: List[float] = field(
-        default_factory=lambda: [0.0] * 10, metadata={FieldMetadata.SIMULATOR_ATTRIBUTE_NAME: "gainprm"}
+        default_factory=lambda: [0.0] * 10,
+        metadata=SimulatorAttributeName("gainprm").as_dict(),
     )
     """
     Gain parameters.
     """
 
     gain_type: mujoco.mjtGain = field(
-        default=mujoco.mjtGain.mjGAIN_FIXED, metadata={FieldMetadata.SIMULATOR_ATTRIBUTE_NAME: "gaintype"}
+        default=mujoco.mjtGain.mjGAIN_FIXED,
+        metadata=SimulatorAttributeName("gaintype").as_dict(),
     )
     """
     The gain and bias together determine the output of the force generation mechanism, which is currently assumed to be affine.
@@ -1279,7 +1289,7 @@ class MujocoGeom(UniqueSimulatorProperty):
 
     contact_type: ContactCategories = field(
         default=ContactCategories.DEFAULT,
-        metadata={FieldMetadata.SIMULATOR_ATTRIBUTE_NAME: "contype"},
+        metadata=SimulatorAttributeName("contype").as_dict(),
     )
     """
     Which contact categories this geom offers when it presses into another geom;
@@ -1293,7 +1303,7 @@ class MujocoGeom(UniqueSimulatorProperty):
 
     contact_affinity: ContactCategories = field(
         default=ContactCategories.DEFAULT,
-        metadata={FieldMetadata.SIMULATOR_ATTRIBUTE_NAME: "conaffinity"},
+        metadata=SimulatorAttributeName("conaffinity").as_dict(),
     )
     """
     Which contact categories this geom accepts pressing into it; MuJoCo's
@@ -1954,7 +1964,9 @@ class MujocoBuilder(MultiSimBuilder):
         additional_properties = {}
         if gravity_compensation is not None:
             additional_properties["gravcomp"] = gravity_compensation.fraction
-        self._build_mujoco_body(entity=body, additional_properties=additional_properties)
+        self._build_mujoco_body(
+            entity=body, additional_properties=additional_properties
+        )
 
     def _build_region(self, region: Region):
         self._build_mujoco_body(entity=region)

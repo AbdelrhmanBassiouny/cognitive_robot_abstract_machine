@@ -20,17 +20,19 @@ class UR10eArm(Arm[TGenericEndEffector], Generic[TGenericEndEffector], ABC):
     """
     A Universal Robots UR10e arm.
 
-    Its joints' servos are taken from MuJoCo Menagerie's
+    The robot description the arm is parsed from is a URDF, which carries the joints but
+    nothing about what drives them. The servos a physical simulation needs are therefore
+    declared here, with the values MuJoCo Menagerie tuned for this arm in
     ``universal_robots_ur10e/ur10e.xml``: a stiffness of 5000, a servo damping of 500
-    and an armature of 0.1 apply to every joint regardless of size, and only the torque
-    limit and the joint's passive damping differ per size class.
+    and an armature of 0.1 apply to every joint, and only the torque limit and the
+    joint's passive damping differ between the shoulder, elbow and wrist joints.
     """
 
     @staticmethod
-    def _size_class(torque_limit: float, joint_damping: float) -> JointServo:
+    def _servo(torque_limit: float, joint_damping: float) -> JointServo:
         """
-        A servo at :attr:`servos_by_joint`'s shared stiffness and damping, sized to one
-        joint's own torque limit and passive damping.
+        A servo at the shared stiffness and damping, sized to one joint's own torque
+        limit and passive damping.
 
         :param torque_limit: The largest torque the servo may exert.
         :param joint_damping: The joint's own passive damping, on top of the servo's.
@@ -53,9 +55,9 @@ class UR10eArm(Arm[TGenericEndEffector], Generic[TGenericEndEffector], ABC):
         and passive damping to settle without ringing, the elbow less, and the three
         wrist joints, which carry only the gripper, the least.
         """
-        shoulder = self._size_class(torque_limit=330.0, joint_damping=10.0)
-        elbow = self._size_class(torque_limit=150.0, joint_damping=5.0)
-        wrist = self._size_class(torque_limit=56.0, joint_damping=2.0)
+        shoulder = self._servo(torque_limit=330.0, joint_damping=10.0)
+        elbow = self._servo(torque_limit=150.0, joint_damping=5.0)
+        wrist = self._servo(torque_limit=56.0, joint_damping=2.0)
         return {
             "shoulder_pan_joint": shoulder,
             "shoulder_lift_joint": shoulder,

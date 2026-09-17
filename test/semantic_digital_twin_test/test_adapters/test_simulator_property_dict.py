@@ -7,7 +7,10 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from semantic_digital_twin.adapters.multi_sim import ContactCategories, MujocoGeom
-from semantic_digital_twin.mixin import FieldMetadata, SimulatorAdditionalProperty
+from semantic_digital_twin.mixin import (
+    SimulatorAdditionalProperty,
+    SimulatorAttributeName,
+)
 
 
 @dataclass
@@ -19,7 +22,7 @@ class PropertyWithOneRenamedField(SimulatorAdditionalProperty):
     spelled_alike: int = 1
 
     spelled_differently: int = field(
-        default=2, metadata={FieldMetadata.SIMULATOR_ATTRIBUTE_NAME: "diff"}
+        default=2, metadata=SimulatorAttributeName("diff").as_dict()
     )
 
 

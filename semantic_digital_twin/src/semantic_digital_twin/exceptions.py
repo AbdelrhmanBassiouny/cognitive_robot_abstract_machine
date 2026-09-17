@@ -1882,15 +1882,10 @@ class DuplicateSimulatorPropertyError(UsageError):
     The type of property attached more than once.
     """
 
-    count: int
-    """
-    How many properties of that type the entity carries.
-    """
-
     def error_message(self) -> str:
         return (
-            f"Expected at most one {self.property_type.__name__} simulator property, "
-            f"found {self.count}."
+            f"The entity already carries a {self.property_type.__name__} simulator "
+            "property."
         )
 
     def suggest_correction(self) -> str:

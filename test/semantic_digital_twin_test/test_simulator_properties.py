@@ -60,10 +60,12 @@ def test_a_property_an_entity_may_carry_several_of_is_attached_again(body):
     assert body.simulator_additional_properties == [first, second]
 
 
-def test_two_properties_of_one_type_handed_in_whole_raise_on_lookup(body):
-    body.simulator_additional_properties = [MujocoBody(), MujocoBody()]
+def test_lookup_returns_the_first_of_two_properties_handed_in_whole(body):
+    """
+    Only attaching through ``add_simulator_property`` keeps a unique property from being
+    attached twice; a list handed in whole is read as it is.
+    """
+    first, second = MujocoBody(), MujocoBody(motion_capture=True)
+    body.simulator_additional_properties = [first, second]
 
-    with pytest.raises(DuplicateSimulatorPropertyError) as raised:
-        body.get_simulator_property_of_type(MujocoBody)
-    assert raised.value.property_type is MujocoBody
-    assert raised.value.count == 2
+    assert body.get_simulator_property_of_type(MujocoBody) is first
