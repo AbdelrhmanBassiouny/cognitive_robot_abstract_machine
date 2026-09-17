@@ -174,8 +174,3 @@ location /datasets/ {
     add_header Cache-Control "public, max-age=31536000, immutable";
 }
 ```
-
-The mount is read-only and nothing is ingested or indexed, so adding to the dataset stays
-a matter of copying files into it. Declaring the files immutable is only honest for a
-store that addresses its entries by content hash, which is also what lets the reader keep
-a cached entry without ever checking it again.

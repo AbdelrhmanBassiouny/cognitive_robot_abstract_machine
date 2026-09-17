@@ -57,11 +57,6 @@ class ListedItem:
 
 # %% reaching a dataset that is served over http
 
-CACHE_FOLDER_NAME = "dataset_server"
-"""
-The directory inside the package's cache that copied entries are kept in.
-"""
-
 
 class DatasetServerVariable(StrEnum):
     """
@@ -99,7 +94,7 @@ class DatasetServer(PathResolver):
     recorded against it are written relative to.
     """
 
-    cache: Path = field(default_factory=lambda: create_cache_dir(CACHE_FOLDER_NAME))
+    cache: Path = field(default_factory=lambda: create_cache_dir("dataset_server"))
     """
     The directory the dataset's files are copied into on this machine, defaulting to the
     one this package keeps everything else it downloads in.

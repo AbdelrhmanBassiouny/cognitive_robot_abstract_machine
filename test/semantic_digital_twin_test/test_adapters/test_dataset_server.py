@@ -11,7 +11,6 @@ import trimesh
 from PIL import Image
 
 from semantic_digital_twin.adapters.dataset_server import (
-    CACHE_FOLDER_NAME,
     DatasetServer,
     DatasetServerVariable,
     ListedItemKind,
@@ -25,7 +24,7 @@ from semantic_digital_twin.utils import create_cache_dir
 from semantic_digital_twin.world_description.geometry import Mesh
 from semantic_digital_twin.world_description.mesh_file_storage import MeshFileSources
 
-from .listing_file_server import ListingFileServer
+from .mock_dataset_file_server import MockDatasetFileServer
 
 # %% the dataset the tests serve
 
@@ -79,7 +78,7 @@ def served_dataset(tmp_path_factory):
 
 @pytest.fixture
 def file_server(served_dataset):
-    server = ListingFileServer(root=served_dataset)
+    server = MockDatasetFileServer(root=served_dataset)
     yield server
     server.stop()
 
@@ -286,4 +285,4 @@ class TestServerIsDescribedByTheEnvironment:
 
         server = DatasetServer.from_environment()
 
-        assert server.cache == create_cache_dir(CACHE_FOLDER_NAME)
+        assert server.cache == create_cache_dir("dataset_server")
