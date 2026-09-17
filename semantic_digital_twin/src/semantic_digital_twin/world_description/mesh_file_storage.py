@@ -10,28 +10,11 @@ from pathlib import Path
 
 import psutil
 from krrood.singleton import SingletonMeta
-from typing_extensions import ClassVar, List, Protocol, runtime_checkable
+from typing_extensions import ClassVar, List
+
+from semantic_digital_twin.adapters.package_resolver import PathResolver
 
 # %% where a mesh file is read from
-
-
-@runtime_checkable
-class MeshFileSource(Protocol):
-    """
-    Answers with a readable local path for a mesh file reference.
-    """
-
-    def supports(self, uri: str) -> bool:
-        """
-        :param uri: The reference to answer about.
-        :return: Whether this source claims the reference.
-        """
-
-    def resolve(self, uri: str) -> str:
-        """
-        :param uri: The reference to answer for.
-        :return: The path of a readable local file holding what the reference names.
-        """
 
 
 @dataclass
@@ -49,12 +32,12 @@ class MeshFileSources(metaclass=SingletonMeta):
         exist.
     """
 
-    sources: List[MeshFileSource] = field(default_factory=list)
+    sources: List[PathResolver] = field(default_factory=list)
     """
     The sources consulted, in order of precedence.
     """
 
-    def use(self, source: MeshFileSource) -> None:
+    def use(self, source: PathResolver) -> None:
         """
         Register a source, ahead of those registered before it.
 

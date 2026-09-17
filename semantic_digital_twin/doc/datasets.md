@@ -152,7 +152,8 @@ MeshFileSources().use(DatasetServer.from_environment())
 `DatasetServer.from_environment` reads the server's address from
 `SEMANTIC_DIGITAL_TWIN_DATASET_SERVER`, the dataset's location on the machine serving it
 from `SEMANTIC_DIGITAL_TWIN_DATASET_ROOT`, and where to keep its files from
-`SEMANTIC_DIGITAL_TWIN_MESH_CACHE`. A world loaded afterwards needs nothing further: a
+`SEMANTIC_DIGITAL_TWIN_MESH_CACHE`, which defaults to the directory this package keeps
+everything else it downloads in. A world loaded afterwards needs nothing further: a
 mesh's files are fetched the first time something asks for its geometry, and never again.
 
 For a description parsed from a file, pass the server as a path resolver instead, which

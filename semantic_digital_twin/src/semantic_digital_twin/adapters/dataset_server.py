@@ -2,16 +2,18 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass, field
+from datetime import timedelta
 from enum import StrEnum
 from http import HTTPStatus
 from pathlib import Path, PurePosixPath
 from urllib.parse import quote
 
 import requests
-from typing_extensions import Any, ClassVar, Dict, List, Optional, Self
+from typing_extensions import Any, Dict, List, Optional, Self
 
 from semantic_digital_twin.adapters.package_resolver import PathResolver
 from semantic_digital_twin.exceptions import DatasetServerError, PathResolutionError
+from semantic_digital_twin.utils import create_cache_dir
 
 # %% the listing the server answers a directory with
 
@@ -55,6 +57,11 @@ class ListedItem:
 
 # %% reaching a dataset that is served over http
 
+CACHE_FOLDER_NAME = "dataset_server"
+"""
+The directory inside the package's cache that copied entries are kept in.
+"""
+
 
 class DatasetServerVariable(StrEnum):
     """
@@ -92,9 +99,10 @@ class DatasetServer(PathResolver):
     recorded against it are written relative to.
     """
 
-    cache: Path
+    cache: Path = field(default_factory=lambda: create_cache_dir(CACHE_FOLDER_NAME))
     """
-    The directory the dataset's files are copied into on this machine.
+    The directory the dataset's files are copied into on this machine, defaulting to the
+    one this package keeps everything else it downloads in.
     """
 
     session: requests.Session = field(default_factory=requests.Session)
@@ -103,12 +111,12 @@ class DatasetServer(PathResolver):
     one handshake between them rather than one each.
     """
 
-    timeout: float = 30.0
+    timeout: timedelta = timedelta(seconds=30)
     """
-    Seconds to wait for a single request.
+    How long to wait for a single request.
     """
 
-    completion_marker: ClassVar[str] = ".entry-complete"
+    completion_marker: str = ".entry-complete"
     """
     Written into a cached directory once every file in it has arrived, so a directory
     left behind by an interrupted copy is fetched again rather than read short.
@@ -127,16 +135,11 @@ class DatasetServer(PathResolver):
         dataset_root = os.environ.get(
             DatasetServerVariable.DATASET_ROOT, "/raid/users/tom_sch/datasets"
         )
+        server = cls(base_url=base_url, dataset_root=PurePosixPath(dataset_root))
         cache = os.environ.get(DatasetServerVariable.CACHE_DIRECTORY)
-        return cls(
-            base_url=base_url,
-            dataset_root=PurePosixPath(dataset_root),
-            cache=(
-                Path(cache)
-                if cache
-                else Path.home() / ".cache" / "semantic_digital_twin" / "meshes"
-            ),
-        )
+        if cache:
+            server.cache = Path(cache)
+        return server
 
     def supports(self, uri: str) -> bool:
         return uri.startswith(f"{self.dataset_root}/")
@@ -200,7 +203,7 @@ class DatasetServer(PathResolver):
         :param url: The address to request.
         :return: The answer, which is an answer of success.
         """
-        response = self.session.get(url, timeout=self.timeout)
+        response = self.session.get(url, timeout=self.timeout.total_seconds())
         if response.status_code != HTTPStatus.OK:
             raise DatasetServerError(url=url, status_code=response.status_code)
         return response

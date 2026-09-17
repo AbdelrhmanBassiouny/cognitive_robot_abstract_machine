@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import os
+import shutil
 from http import HTTPStatus
+from importlib.resources import files
 from pathlib import Path, PurePosixPath
 
 import pytest
@@ -9,6 +11,7 @@ import trimesh
 from PIL import Image
 
 from semantic_digital_twin.adapters.dataset_server import (
+    CACHE_FOLDER_NAME,
     DatasetServer,
     DatasetServerVariable,
     ListedItemKind,
@@ -18,26 +21,27 @@ from semantic_digital_twin.adapters.package_resolver import (
     FileUriResolver,
 )
 from semantic_digital_twin.exceptions import DatasetServerError, PathResolutionError
+from semantic_digital_twin.utils import create_cache_dir
 from semantic_digital_twin.world_description.geometry import Mesh
 from semantic_digital_twin.world_description.mesh_file_storage import MeshFileSources
 
 from .listing_file_server import ListingFileServer
 
-# %% the dataset the fixture stands for
+# %% the dataset the tests serve
 
-FIXTURE_ROOT = Path(__file__).parent / "dataset_server_fixture"
+PLY_RESOURCES = Path(files("semantic_digital_twin")).parent.parent / "resources" / "ply"
 """
-The dataset tree served in these tests, laid out the way the real store is.
+The directory holding the chair the served entry is made from.
 """
 
 ENTRY = PurePosixPath("mesh_store/ab/ab5f1c3d9e2b4a6c8d0f1e2a3b4c5d6e7f809a1b")
 """
-The one entry the fixture holds, relative to the dataset root.
+The one entry the served dataset holds, relative to the dataset root.
 """
 
-MESH_NAME = "quad.obj"
+MESH_NAME = "chair.obj"
 """
-The mesh file inside that entry, which refers to the other two files by name.
+The mesh file inside that entry, which refers to the other files by name.
 """
 
 DATASET_ROOT = PurePosixPath("/raid/users/tom_sch/datasets")
@@ -48,13 +52,34 @@ against it are written relative to.
 
 REFERENCE = str(DATASET_ROOT / ENTRY / MESH_NAME)
 """
-The reference a mesh records for the fixture's mesh file.
+The reference a mesh records for the served mesh file.
 """
 
 
+@pytest.fixture(scope="module")
+def served_dataset(tmp_path_factory):
+    """
+    A dataset holding one entry, laid out the way the real store is.
+
+    The entry is the repository's chair exported as a mesh file with the material and
+    texture it names beside it, which is the several-files-per-mesh shape the copying is
+    about.
+    """
+    exported = Mesh.from_ply_file(
+        ply_file_path=str(PLY_RESOURCES / "chair.ply"),
+        texture_file_path=str(PLY_RESOURCES / "chair_texture.png"),
+    )
+    root = tmp_path_factory.mktemp("dataset")
+    entry = root / ENTRY
+    entry.parent.mkdir(parents=True)
+    shutil.copytree(Path(exported.filename).parent, entry)
+    (entry / Path(exported.filename).name).rename(entry / MESH_NAME)
+    return root
+
+
 @pytest.fixture
-def file_server():
-    server = ListingFileServer(root=FIXTURE_ROOT)
+def file_server(served_dataset):
+    server = ListingFileServer(root=served_dataset)
     yield server
     server.stop()
 
@@ -87,15 +112,15 @@ class TestEntryIsCopiedWhole:
     the whole directory is what has to arrive.
     """
 
-    def test_every_file_of_the_entry_is_copied(self, dataset_server):
+    def test_every_file_of_the_entry_is_copied(self, dataset_server, served_dataset):
         answered = Path(dataset_server.resolve(REFERENCE))
 
         copied = {
             item.name
             for item in answered.parent.iterdir()
-            if item.name != DatasetServer.completion_marker
+            if item.name != dataset_server.completion_marker
         }
-        assert copied == {item.name for item in (FIXTURE_ROOT / ENTRY).iterdir()}
+        assert copied == {item.name for item in (served_dataset / ENTRY).iterdir()}
 
     def test_answer_is_the_copy_and_not_the_reference(self, dataset_server):
         answered = Path(dataset_server.resolve(REFERENCE))
@@ -121,14 +146,16 @@ class TestCopiedMeshLoads:
     def test_texture_resolves_from_the_copied_entry(self, dataset_server):
         mesh = trimesh.load_mesh(dataset_server.resolve(REFERENCE), process=False)
 
-        with Image.open(FIXTURE_ROOT / ENTRY / "texture.png") as expected:
+        with Image.open(PLY_RESOURCES / "chair_texture.png") as expected:
             assert mesh.visual.material.image.size == expected.size
 
-    def test_reading_through_the_server_matches_reading_the_file(self, dataset_server):
+    def test_reading_through_the_server_matches_reading_the_file(
+        self, dataset_server, served_dataset
+    ):
         MeshFileSources().use(dataset_server)
 
         through_server = Mesh(filename=REFERENCE).mesh
-        directly = Mesh(filename=str(FIXTURE_ROOT / ENTRY / MESH_NAME)).mesh
+        directly = Mesh(filename=str(served_dataset / ENTRY / MESH_NAME)).mesh
 
         assert through_server.vertices.tolist() == directly.vertices.tolist()
         assert through_server.faces.tolist() == directly.faces.tolist()
@@ -153,7 +180,7 @@ class TestCachedEntryIsNotFetchedAgain:
 
     def test_copy_without_its_marker_is_made_again(self, dataset_server, file_server):
         answered = Path(dataset_server.resolve(REFERENCE))
-        (answered.parent / DatasetServer.completion_marker).unlink()
+        (answered.parent / dataset_server.completion_marker).unlink()
         after_first = len(file_server.requested_paths)
 
         dataset_server.resolve(REFERENCE)
@@ -250,3 +277,13 @@ class TestServerIsDescribedByTheEnvironment:
         assert server.base_url == "http://host:18080/datasets"
         assert server.dataset_root == DATASET_ROOT
         assert server.cache == tmp_path
+
+    def test_cache_defaults_to_the_directory_the_package_downloads_into(
+        self, monkeypatch
+    ):
+        monkeypatch.setenv(DatasetServerVariable.BASE_URL, "http://host:18080/datasets")
+        monkeypatch.delenv(DatasetServerVariable.CACHE_DIRECTORY, raising=False)
+
+        server = DatasetServer.from_environment()
+
+        assert server.cache == create_cache_dir(CACHE_FOLDER_NAME)
