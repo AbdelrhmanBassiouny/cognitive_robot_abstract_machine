@@ -41,10 +41,12 @@ class JointProbabilityTree(LearningMethod, SubclassJSONSerializer):
     Class that implements the JPT learning algorithm for probabilistic circuits.
     """
 
-    annotated_variables: Iterable[AnnotatedVariable] = field(default=())
+    annotated_variables: tuple[AnnotatedVariable, ...] = field(default_factory=tuple)
     """
-    The variables from initialization. Since variables will be overwritten as soon as the model is learned,
-    we need to store the variables from initialization here.
+    The variables from initialization, sorted.
+
+    Since variables will be overwritten as soon as the model is learned, we need to
+    store the variables from initialization here.
 
     Left empty when the variables are only known at :meth:`fit` time.
     """
@@ -259,9 +261,9 @@ class JointProbabilityTree(LearningMethod, SubclassJSONSerializer):
 
         :param data: The data to fit the model to.
         :param variables: The annotated variables to fit over, replacing the ones given
-            at initialization, with all of them as targets and features. ``None``
-            keeps the initialized ones, or infers them from the data if none were
-            given at initialization either.
+            at initialization, with all of them as targets and features. ``None`` keeps
+            the initialized ones, or infers them from the data if none were given at
+            initialization either.
         :return: The fitted model.
         """
         if variables is None and not self.annotated_variables:
