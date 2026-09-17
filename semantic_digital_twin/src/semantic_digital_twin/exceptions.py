@@ -1335,6 +1335,9 @@ class PathResolutionError(ParsingError):
             message += f" Details: {self.details}"
         return message
 
+    def suggest_correction(self) -> str:
+        return ""
+
 
 @dataclass
 class DatasetServerError(ParsingError):
@@ -1363,9 +1366,6 @@ class DatasetServerError(ParsingError):
         return (
             "check that the dataset server is reachable and serving the dataset root."
         )
-
-    def suggest_correction(self) -> str:
-        return ""
 
 
 @dataclass

@@ -229,6 +229,21 @@ class TestMissingEntryIsReported:
 
         assert raised.value.status_code == HTTPStatus.NOT_FOUND
 
+    def test_what_to_check_depends_on_the_status(self):
+        """
+        A path the server does not hold and a server that cannot be reached at all are
+        looked into in different places.
+        """
+        absent = DatasetServerError(
+            url="http://host/absent.obj", status_code=HTTPStatus.NOT_FOUND
+        )
+        unreachable = DatasetServerError(
+            url="http://host/absent.obj", status_code=HTTPStatus.BAD_GATEWAY
+        )
+
+        assert absent.suggest_correction() != unreachable.suggest_correction()
+        assert absent.suggest_correction() != ""
+
 
 # %% the sources a process reads through
 
