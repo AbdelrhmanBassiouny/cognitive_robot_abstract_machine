@@ -19,6 +19,7 @@ from probabilistic_model.probabilistic_circuit.relational.exceptions import (
     CircuitNotFittedError,
     InvalidMonteCarloSampleCountError,
 )
+from probabilistic_model.learning.learning_method import JointProbabilityTreeLearning
 from probabilistic_model.probabilistic_circuit.relational.rspn import (
     ExchangeablePartGrounder,
     GroundingMode,
@@ -243,7 +244,9 @@ def relational_probabilistic_circuit_with_ambiguous_total_count_4():
             SceneObject(type=SceneObjectType.CHAIR),
         ],
     )
-    model = RelationalProbabilisticCircuit(SceneRoom, min_samples_per_leaf=2)
+    model = RelationalProbabilisticCircuit(
+        SceneRoom, learning_method=JointProbabilityTreeLearning(min_samples_per_leaf=2)
+    )
     model.fit([to_dao(three_chairs_one_table), to_dao(two_chairs_two_tables)])
     return model
 

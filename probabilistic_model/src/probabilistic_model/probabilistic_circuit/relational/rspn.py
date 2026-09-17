@@ -14,7 +14,6 @@ from __future__ import annotations
 import enum
 import itertools
 import logging
-from collections.abc import Callable
 from dataclasses import dataclass, field
 
 import numpy as np
@@ -35,9 +34,11 @@ from krrood.parametrization.feature_extraction.feature_extractor import FeatureE
 if TYPE_CHECKING:
     from krrood.entity_query_language.query.match import Match
 from probabilistic_model.distributions.helper import make_dirac
-from probabilistic_model.learning.jpt.jpt import JointProbabilityTree
+from probabilistic_model.learning.learning_method import (
+    JointProbabilityTreeLearning,
+    LearningMethod,
+)
 from probabilistic_model.learning.jpt.variables import (
-    AnnotatedVariable,
     infer_variables_from_dataframe,
 )
 from probabilistic_model.probabilistic_circuit.relational.exceptions import (
@@ -145,8 +146,6 @@ class ExchangeableDistributionTemplate(RelationalDistributionTemplate):
         :return: A self-contained circuit ready to be mounted into the parent.
         """
         part_circuit = self.template_distribution.ground(part)
-        # preserve_structure=True: simplifying would merge a stratified attribute's
-        # sibling strata into one sum, losing what they were kept apart for.
         conditioning_result, _ = part_circuit.log_conditional_in_place(
             aggregation_statistics, preserve_structure=True
         )
@@ -665,37 +664,18 @@ class RelationalProbabilisticCircuit:
     Must be a positive integer.
     """
 
-    class_circuit_builder: Optional[
-        Callable[[pd.DataFrame, list[AnnotatedVariable]], ProbabilisticCircuit]
-    ] = None
+    learning_method: LearningMethod = field(
+        default_factory=JointProbabilityTreeLearning
+    )
     """
-    Builds the class-level circuit from the class dataframe and its inferred variables,
-    in place of ``fit``'s plain, unconstrained ``JointProbabilityTree`` fit.
-
-    Set this before calling ``fit`` when a specific circuit shape is needed -- for
-    instance one that is support-deterministic over a chosen variable -- rather than
-    ``fit`` knowing about that requirement itself. Leave ``None`` for the plain,
-    unconstrained fit.
+    What the class-level circuit is fitted with.
     """
 
-    min_samples_per_leaf: float = 1
+    part_learning_methods: dict[str, LearningMethod] = field(default_factory=dict)
     """
-    The fewest training rows a leaf of the class-level ``JointProbabilityTree`` may
-    hold, or, below one, that number as a fraction of the training rows; forwarded to
-    every exchangeable part's template fit as well.
-
-    The default lets the tree split down to one row per leaf, which pins every
-    continuous attribute to the training values it saw.
-    """
-
-    part_circuit_builders: dict[
-        str, Callable[[pd.DataFrame, list[AnnotatedVariable]], ProbabilisticCircuit]
-    ] = field(default_factory=dict)
-    """
-    Per exchangeable-part field name, the :attr:`class_circuit_builder` the part's
-    template distribution is fitted with instead of the plain, unconstrained fit.
-
-    A part absent from this mapping is fitted plainly.
+    Per exchangeable-part field name, what that part's template distribution is fitted
+    with. A part absent from the mapping is fitted with a plain
+    :class:`~probabilistic_model.learning.learning_method.JointProbabilityTreeLearning`.
     """
 
     schema_information: Optional[DataAccessObjectSchema] = field(
@@ -832,8 +812,9 @@ class RelationalProbabilisticCircuit:
         template = ExchangeableDistributionTemplate(
             RelationalProbabilisticCircuit(
                 child_type,
-                min_samples_per_leaf=self.min_samples_per_leaf,
-                class_circuit_builder=self.part_circuit_builders.get(exchangeable_part),
+                learning_method=self.part_learning_methods.get(
+                    exchangeable_part, JointProbabilityTreeLearning()
+                ),
             ),
             latent_variables,
         )
@@ -850,10 +831,10 @@ class RelationalProbabilisticCircuit:
         """
         Fit the relational probabilistic circuit from a list of DAO instances.
 
-        Builds a ``FeatureExtractor``, trains a ``JointProbabilityTree`` on the class-
-        level features (or runs :attr:`class_circuit_builder` instead, if set), and then
-        recursively fits one ``ExchangeableDistributionTemplate`` per exchangeable part
-        discovered in the schema.
+        Builds a ``FeatureExtractor``, fits the class-level circuit on the class-level
+        features with :attr:`learning_method`, and then recursively fits one
+        ``ExchangeableDistributionTemplate`` per exchangeable part discovered in the
+        schema.
 
         :param instances: Training instances; all must share the same DAO class.
         :param dataframe_from_parent: Pre-built dataframe supplied by a parent
@@ -866,15 +847,9 @@ class RelationalProbabilisticCircuit:
             self.feature_extractor, instances, dataframe_from_parent
         )
         variables = infer_variables_from_dataframe(class_dataframe)
-        if self.class_circuit_builder is None:
-            self.class_probabilistic_circuit = JointProbabilityTree(
-                annotated_variables=variables,
-                min_samples_per_leaf=self.min_samples_per_leaf,
-            ).fit(class_dataframe)
-        else:
-            self.class_probabilistic_circuit = self.class_circuit_builder(
-                class_dataframe, variables
-            )
+        self.class_probabilistic_circuit = self.learning_method.fit(
+            class_dataframe, variables
+        )
         self.schema_information = get_dao_schema(type(instances[0]))
         for collection_relationship in self.schema_information.collection_relationships:
             exchangeable_part = collection_relationship.key
@@ -892,7 +867,8 @@ class RelationalProbabilisticCircuit:
         latent_variables: list[Variable],
     ) -> tuple[ProbabilisticCircuit, list[ProductUnit]]:
         """
-        Condition the class circuit on aggregation statistics.
+        Condition the class circuit on aggregation statistics, keeping its structure so
+        that its leaf products stay the mounting points.
 
         :param circuit: The current working copy of the class circuit.
         :param aggregation_statistics: Observed aggregation values to condition on.
@@ -902,12 +878,6 @@ class RelationalProbabilisticCircuit:
             with the grounded exchangeable distribution.
         """
         if aggregation_statistics:
-            # Structure is preserved so a determined statistic's own leaves stay inside
-            # the class circuit's leaf products, which are then still the lowest
-            # products modelling every latent and so still the mounting points: a
-            # simplifying conditional would hang the statistic under a new root product
-            # and flatten the class circuit's branches, leaving only that root to mount
-            # on and cutting every class attribute loose from the retained latents.
             conditioning_result, _ = circuit.log_conditional_in_place(
                 aggregation_statistics, preserve_structure=True
             )
