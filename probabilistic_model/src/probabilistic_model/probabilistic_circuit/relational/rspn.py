@@ -34,10 +34,8 @@ from krrood.parametrization.feature_extraction.feature_extractor import FeatureE
 if TYPE_CHECKING:
     from krrood.entity_query_language.query.match import Match
 from probabilistic_model.distributions.helper import make_dirac
-from probabilistic_model.learning.learning_method import (
-    JointProbabilityTreeLearning,
-    LearningMethod,
-)
+from probabilistic_model.learning.jpt.jpt import JointProbabilityTree
+from probabilistic_model.learning.learning_method import LearningMethod
 from probabilistic_model.learning.jpt.variables import (
     infer_variables_from_dataframe,
 )
@@ -664,9 +662,7 @@ class RelationalProbabilisticCircuit:
     Must be a positive integer.
     """
 
-    learning_method: LearningMethod = field(
-        default_factory=JointProbabilityTreeLearning
-    )
+    learning_method: LearningMethod = field(default_factory=JointProbabilityTree)
     """
     What the class-level circuit is fitted with.
     """
@@ -675,7 +671,7 @@ class RelationalProbabilisticCircuit:
     """
     Per exchangeable-part field name, what that part's template distribution is fitted
     with. A part absent from the mapping is fitted with a plain
-    :class:`~probabilistic_model.learning.learning_method.JointProbabilityTreeLearning`.
+    :class:`~probabilistic_model.learning.jpt.jpt.JointProbabilityTree`.
     """
 
     schema_information: Optional[DataAccessObjectSchema] = field(
@@ -813,7 +809,7 @@ class RelationalProbabilisticCircuit:
             RelationalProbabilisticCircuit(
                 child_type,
                 learning_method=self.part_learning_methods.get(
-                    exchangeable_part, JointProbabilityTreeLearning()
+                    exchangeable_part, JointProbabilityTree()
                 ),
             ),
             latent_variables,

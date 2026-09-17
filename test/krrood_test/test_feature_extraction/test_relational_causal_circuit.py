@@ -13,10 +13,8 @@ from krrood.ormatic.data_access_objects.helper import to_dao
 from probabilistic_model.probabilistic_circuit.causal.causal_circuit import (
     CausalCircuit,
 )
-from probabilistic_model.learning.learning_method import (
-    JointProbabilityTreeLearning,
-    StratifiedLearning,
-)
+from probabilistic_model.learning.jpt.jpt import JointProbabilityTree
+from probabilistic_model.learning.learning_method import StratifiedLearning
 from probabilistic_model.probabilistic_circuit.relational.causal import (
     RelationalCausalCircuit,
 )
@@ -291,7 +289,7 @@ def test_fit_stratifies_the_class_circuit_by_the_given_variable(many_chair_count
     chair_count_variable = variable(SceneRoomAggregations).chair_count()
     model = RelationalProbabilisticCircuit(
         SceneRoom,
-        learning_method=StratifiedLearning(columns=[chair_count_variable._name_]),
+        learning_method=StratifiedLearning(variables=[chair_count_variable._name_], method=JointProbabilityTree()),
     )
     model.fit([to_dao(room) for room in many_chair_count_rooms])
     resolved_chair_count = next(
@@ -330,7 +328,7 @@ def test_verify_support_determinism_survives_a_stratified_partitions_own_further
     chair_count_variable = variable(SceneRoomAggregations).chair_count()
     model = RelationalProbabilisticCircuit(
         SceneRoom,
-        learning_method=StratifiedLearning(columns=[chair_count_variable._name_]),
+        learning_method=StratifiedLearning(variables=[chair_count_variable._name_], method=JointProbabilityTree()),
     )
     relational_causal_circuit = RelationalCausalCircuit()
     model.fit([to_dao(room) for room in many_chair_count_rooms])
@@ -374,10 +372,11 @@ def test_fit_stratifies_the_class_circuit_by_every_given_variable(
     model = RelationalProbabilisticCircuit(
         SceneRoom,
         learning_method=StratifiedLearning(
-            columns=[
+            variables=[
                 aggregations.chair_count()._name_,
                 aggregations.table_count()._name_,
-            ]
+            ],
+            method=JointProbabilityTree(),
         ),
     )
     model.fit([to_dao(room) for room in many_chair_count_rooms])
@@ -401,8 +400,8 @@ def test_fit_stratifies_an_exchangeable_parts_template_by_the_given_variable(
     chair_count_variable = variable(SceneRoomAggregations).chair_count()
     model = RelationalProbabilisticCircuit(
         SceneRoom,
-        learning_method=StratifiedLearning(columns=[chair_count_variable._name_]),
-        part_learning_methods={"objects": StratifiedLearning(columns=["type"])},
+        learning_method=StratifiedLearning(variables=[chair_count_variable._name_], method=JointProbabilityTree()),
+        part_learning_methods={"objects": StratifiedLearning(variables=["type"], method=JointProbabilityTree())},
     )
     model.fit([to_dao(room) for room in many_chair_count_rooms])
     object_types = {
@@ -434,7 +433,7 @@ def test_plain_fit_honours_the_minimum_samples_per_leaf(many_chair_count_rooms):
     """
     model = RelationalProbabilisticCircuit(
         SceneRoom,
-        learning_method=JointProbabilityTreeLearning(
+        learning_method=JointProbabilityTree(
             min_samples_per_leaf=len(many_chair_count_rooms)
         ),
     )
@@ -452,8 +451,8 @@ def test_stratified_fit_honours_the_minimum_samples_per_leaf(many_chair_count_ro
     model = RelationalProbabilisticCircuit(
         SceneRoom,
         learning_method=StratifiedLearning(
-            columns=[chair_count_variable._name_],
-            method=JointProbabilityTreeLearning(min_samples_per_leaf=20),
+            variables=[chair_count_variable._name_],
+            method=JointProbabilityTree(min_samples_per_leaf=20),
         ),
     )
     model.fit([to_dao(room) for room in many_chair_count_rooms])
@@ -469,7 +468,7 @@ def test_minimum_samples_per_leaf_reaches_an_exchangeable_parts_template(
     model = RelationalProbabilisticCircuit(
         SceneRoom,
         part_learning_methods={
-            "objects": JointProbabilityTreeLearning(min_samples_per_leaf=object_count)
+            "objects": JointProbabilityTree(min_samples_per_leaf=object_count)
         },
     )
     model.fit([to_dao(room) for room in many_chair_count_rooms])
@@ -496,7 +495,7 @@ def test_sampled_grounding_gives_every_stratum_its_own_latent_value(
     model = RelationalProbabilisticCircuit(
         SceneRoom,
         monte_carlo_sample_count=1,
-        learning_method=StratifiedLearning(columns=[chair_count_variable._name_]),
+        learning_method=StratifiedLearning(variables=[chair_count_variable._name_], method=JointProbabilityTree()),
     )
     relational_causal_circuit = RelationalCausalCircuit()
     model.fit([to_dao(room) for room in many_chair_count_rooms])
@@ -537,11 +536,11 @@ def test_a_part_attribute_of_a_stratified_template_registers_as_a_cause(
     """
     model = RelationalProbabilisticCircuit(
         SceneRoom,
-        learning_method=JointProbabilityTreeLearning(min_samples_per_leaf=5),
+        learning_method=JointProbabilityTree(min_samples_per_leaf=5),
         part_learning_methods={
             "objects": StratifiedLearning(
-                columns=["type"],
-                method=JointProbabilityTreeLearning(min_samples_per_leaf=5),
+                variables=["type"],
+                method=JointProbabilityTree(min_samples_per_leaf=5),
             )
         },
     )

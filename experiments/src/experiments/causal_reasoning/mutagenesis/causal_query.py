@@ -22,6 +22,7 @@ from experiments.causal_reasoning.mutagenesis.domain import (
     MutagenesisMolecule,
     MutagenesisMoleculeAggregations,
 )
+from probabilistic_model.learning.jpt.jpt import JointProbabilityTree
 from probabilistic_model.learning.learning_method import StratifiedLearning
 from probabilistic_model.probabilistic_circuit.relational.causal import (
     RelationalCausalCircuit,
@@ -202,7 +203,8 @@ class BranchingAtomCountCausalQuery:
             MutagenesisMolecule,
             monte_carlo_sample_count=monte_carlo_sample_count,
             learning_method=StratifiedLearning(
-                columns=[branching_atom_count_variable_expression._name_]
+                variables=[branching_atom_count_variable_expression._name_],
+                method=JointProbabilityTree(),
             ),
         )
         model.fit([to_dao(molecule) for molecule in training_molecules])

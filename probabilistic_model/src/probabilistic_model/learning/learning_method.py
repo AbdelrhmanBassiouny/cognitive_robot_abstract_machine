@@ -7,12 +7,11 @@ from __future__ import annotations
 
 import math
 from abc import ABC, abstractmethod
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 import pandas as pd
-from typing_extensions import List, Sequence
+from typing_extensions import Iterable, Sequence
 
-from probabilistic_model.learning.jpt.jpt import JointProbabilityTree
 from probabilistic_model.learning.jpt.variables import AnnotatedVariable
 from probabilistic_model.probabilistic_circuit.rx.probabilistic_circuit import (
     ProbabilisticCircuit,
@@ -28,13 +27,13 @@ class LearningMethod(ABC):
 
     @abstractmethod
     def fit(
-        self, dataframe: pd.DataFrame, variables: List[AnnotatedVariable]
+        self, data: pd.DataFrame, variables: Iterable[AnnotatedVariable]
     ) -> ProbabilisticCircuit:
         """
         Fit a circuit on the rows of a dataframe.
 
-        :param dataframe: The training rows, one column per variable.
-        :param variables: The variables inferred over the dataframe, one per column,
+        :param data: The training rows, one column per variable.
+        :param variables: The variables inferred over the rows, one per column,
             carrying the annotation (mean, standard deviation, split thresholds) the
             fit is guided by.
         :return: The fitted circuit.
@@ -42,57 +41,37 @@ class LearningMethod(ABC):
 
 
 @dataclass
-class JointProbabilityTreeLearning(LearningMethod):
-    """
-    Fits a :class:`~probabilistic_model.learning.jpt.jpt.JointProbabilityTree`.
-    """
-
-    min_samples_per_leaf: float = 1
-    """
-    The fewest training rows a leaf may hold, or, below one, that number as a fraction
-    of the training rows. The default lets the tree split down to one row per leaf,
-    which pins every continuous attribute to the training values it saw.
-    """
-
-    def fit(
-        self, dataframe: pd.DataFrame, variables: List[AnnotatedVariable]
-    ) -> ProbabilisticCircuit:
-        return JointProbabilityTree(
-            annotated_variables=variables, min_samples_per_leaf=self.min_samples_per_leaf
-        ).fit(dataframe)
-
-
-@dataclass
 class StratifiedLearning(LearningMethod):
     """
-    Fits one circuit per distinct joint value of some columns with another learning
+    Fits one circuit per distinct joint value of some variables with another learning
     method, and combines them under a sum weighted by each value's relative frequency.
 
-    Every row of one partition shares the same value of those columns, so within its
+    Every row of one partition shares the same value of those variables, so within its
     circuit their distribution is a single point by construction, however the wrapped
-    method splits on the remaining columns: the fitted circuit is support-deterministic
-    over the columns, the precondition a causal query on them needs. A single
-    unconstrained fit could instead spread rows sharing a value across sibling leaves.
+    method splits on the remaining variables: the fitted circuit is
+    support-deterministic over them, the precondition a causal query on them needs. A
+    single unconstrained fit could instead spread rows sharing a value across sibling
+    leaves.
     """
 
-    columns: Sequence[str]
+    variables: Sequence[str]
     """
-    The columns whose joint value the rows are partitioned by; a single column is a
-    one-element sequence.
+    The names of the variables whose joint value the rows are partitioned by; a single
+    variable is a one-element sequence.
     """
 
-    method: LearningMethod = field(default_factory=JointProbabilityTreeLearning)
+    method: LearningMethod
     """
     What every partition is fitted with.
     """
 
     def fit(
-        self, dataframe: pd.DataFrame, variables: List[AnnotatedVariable]
+        self, data: pd.DataFrame, variables: Iterable[AnnotatedVariable]
     ) -> ProbabilisticCircuit:
         result = ProbabilisticCircuit()
         root = SumUnit(probabilistic_circuit=result)
-        total_row_count = len(dataframe)
-        for _, partition in dataframe.groupby(list(self.columns), sort=False):
+        total_row_count = len(data)
+        for _, partition in data.groupby(list(self.variables), sort=False):
             partition_circuit = self.method.fit(
                 partition.reset_index(drop=True), variables
             )

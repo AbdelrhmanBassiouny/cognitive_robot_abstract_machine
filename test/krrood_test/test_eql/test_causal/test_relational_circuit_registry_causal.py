@@ -16,6 +16,7 @@ from krrood.parametrization.parameterizer import UnderspecifiedParameters
 from probabilistic_model.probabilistic_circuit.causal.causal_circuit import (
     CausalCircuit,
 )
+from probabilistic_model.learning.jpt.jpt import JointProbabilityTree
 from probabilistic_model.learning.learning_method import StratifiedLearning
 from probabilistic_model.probabilistic_circuit.relational.rspn import (
     GroundingMode,
@@ -170,7 +171,7 @@ def test_cause_on_an_aggregation_statistic_grounds_through_the_registry():
     chair_count_variable = variable(SceneRoomAggregations).chair_count()
     model = RelationalProbabilisticCircuit(
         SceneRoom,
-        learning_method=StratifiedLearning(columns=[chair_count_variable._name_]),
+        learning_method=StratifiedLearning(variables=[chair_count_variable._name_], method=JointProbabilityTree()),
     )
     model.fit([to_dao(room) for room in rooms])
 
