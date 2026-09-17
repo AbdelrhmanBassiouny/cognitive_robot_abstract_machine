@@ -67,6 +67,21 @@ def test_a_joint_probability_tree_fitted_with_given_variables_honours_the_leaf_m
     assert _tree_leaf_count(circuit.root) == 1
 
 
+def test_a_tree_without_variables_infers_them_from_the_data(two_groups):
+    circuit = JointProbabilityTree().fit(two_groups)
+
+    assert {variable.name for variable in circuit.variables} == set(two_groups.columns)
+
+
+def test_stratified_learning_infers_the_variables_when_none_are_given(two_groups):
+    circuit = StratifiedLearning(
+        variables=["group"], method=JointProbabilityTree()
+    ).fit(two_groups)
+
+    assert {variable.name for variable in circuit.variables} == set(two_groups.columns)
+    assert len(circuit.root.subcircuits) == 2
+
+
 def test_a_joint_probability_tree_fits_each_call_into_a_circuit_of_its_own(two_groups):
     """
     A stratified fit reuses one tree for every partition, so fitting again must not

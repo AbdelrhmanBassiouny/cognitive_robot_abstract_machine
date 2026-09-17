@@ -13,7 +13,10 @@ from random_events.product_algebra import VariableMap
 from random_events.variable import Variable, Continuous, Integer, Symbolic
 from typing_extensions import Self
 
-from probabilistic_model.learning.jpt.variables import AnnotatedVariable
+from probabilistic_model.learning.jpt.variables import (
+    AnnotatedVariable,
+    infer_variables_from_dataframe,
+)
 from probabilistic_model.learning.learning_method import LearningMethod
 from probabilistic_model.learning.nyga_induction import NygaInduction
 from probabilistic_model.distributions.distributions import (
@@ -257,9 +260,12 @@ class JointProbabilityTree(LearningMethod, SubclassJSONSerializer):
         :param data: The data to fit the model to.
         :param variables: The annotated variables to fit over, replacing the ones given
             at initialization, with all of them as targets and features. ``None``
-            keeps the initialized ones.
+            keeps the initialized ones, or infers them from the data if none were
+            given at initialization either.
         :return: The fitted model.
         """
+        if variables is None and not self.annotated_variables:
+            variables = infer_variables_from_dataframe(data)
         if variables is not None:
             self.annotated_variables = tuple(sorted(variables))
             self.set_targets_and_features(None, None)

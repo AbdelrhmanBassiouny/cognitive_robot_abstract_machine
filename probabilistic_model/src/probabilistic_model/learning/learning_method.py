@@ -10,9 +10,12 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 
 import pandas as pd
-from typing_extensions import Iterable, Sequence
+from typing_extensions import Iterable, Optional, Sequence
 
-from probabilistic_model.learning.jpt.variables import AnnotatedVariable
+from probabilistic_model.learning.jpt.variables import (
+    AnnotatedVariable,
+    infer_variables_from_dataframe,
+)
 from probabilistic_model.probabilistic_circuit.rx.probabilistic_circuit import (
     ProbabilisticCircuit,
     SumUnit,
@@ -27,7 +30,9 @@ class LearningMethod(ABC):
 
     @abstractmethod
     def fit(
-        self, data: pd.DataFrame, variables: Iterable[AnnotatedVariable]
+        self,
+        data: pd.DataFrame,
+        variables: Optional[Iterable[AnnotatedVariable]] = None,
     ) -> ProbabilisticCircuit:
         """
         Fit a circuit on the rows of a dataframe.
@@ -35,7 +40,7 @@ class LearningMethod(ABC):
         :param data: The training rows, one column per variable.
         :param variables: The variables inferred over the rows, one per column,
             carrying the annotation (mean, standard deviation, split thresholds) the
-            fit is guided by.
+            fit is guided by. ``None`` infers them from the data.
         :return: The fitted circuit.
         """
 
@@ -66,8 +71,12 @@ class StratifiedLearning(LearningMethod):
     """
 
     def fit(
-        self, data: pd.DataFrame, variables: Iterable[AnnotatedVariable]
+        self,
+        data: pd.DataFrame,
+        variables: Optional[Iterable[AnnotatedVariable]] = None,
     ) -> ProbabilisticCircuit:
+        if variables is None:
+            variables = infer_variables_from_dataframe(data)
         result = ProbabilisticCircuit()
         root = SumUnit(probabilistic_circuit=result)
         total_row_count = len(data)
