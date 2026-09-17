@@ -125,7 +125,7 @@ def cereal_perception_process(stretch_controller_process):
     cereal_origin = (0.0, 0.0, 0.0)
 
     with StandaloneProcess(
-        launcher_path=Path(__file__).parent.parent
+        launcher_path=Path(__file__).parent.parent.parent
         / "dataset"
         / "perception_pipeline_stand_in.py",
         is_ready=is_serving_queries,
