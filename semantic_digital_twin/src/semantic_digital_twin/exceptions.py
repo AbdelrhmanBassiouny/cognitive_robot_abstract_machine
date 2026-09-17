@@ -2,6 +2,7 @@ from __future__ import annotations, absolute_import
 
 from dataclasses import dataclass, field, Field
 from datetime import timedelta
+from http import HTTPStatus
 from pathlib import Path
 from typing import Dict, Set
 from uuid import UUID
@@ -1333,6 +1334,35 @@ class PathResolutionError(ParsingError):
         if self.details:
             message += f" Details: {self.details}"
         return message
+
+
+@dataclass
+class DatasetServerError(ParsingError):
+    """
+    Raised when a dataset server does not answer with what was asked of it.
+    """
+
+    url: str = field(kw_only=True)
+    """
+    The address that was requested.
+    """
+
+    status_code: int = field(kw_only=True)
+    """
+    The status the server answered with.
+    """
+
+    def error_message(self) -> str:
+        return f"The dataset server answered {self.status_code} for '{self.url}'."
+
+    def suggest_correction(self) -> str:
+        if self.status_code == HTTPStatus.NOT_FOUND:
+            return (
+                "check that the dataset server serves the directory this path is under."
+            )
+        return (
+            "check that the dataset server is reachable and serving the dataset root."
+        )
 
     def suggest_correction(self) -> str:
         return ""

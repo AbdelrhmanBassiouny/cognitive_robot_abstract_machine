@@ -10,7 +10,70 @@ from pathlib import Path
 
 import psutil
 from krrood.singleton import SingletonMeta
-from typing_extensions import ClassVar
+from typing_extensions import ClassVar, List, Protocol, runtime_checkable
+
+# %% where a mesh file is read from
+
+
+@runtime_checkable
+class MeshFileSource(Protocol):
+    """
+    Answers with a readable local path for a mesh file reference.
+    """
+
+    def supports(self, uri: str) -> bool:
+        """
+        :param uri: The reference to answer about.
+        :return: Whether this source claims the reference.
+        """
+
+    def resolve(self, uri: str) -> str:
+        """
+        :param uri: The reference to answer for.
+        :return: The path of a readable local file holding what the reference names.
+        """
+
+
+@dataclass
+class MeshFileSources(metaclass=SingletonMeta):
+    """
+    The sources this process reads mesh files from.
+
+    A mesh records where it came from, which is not always a file the machine reading it
+    has. Each source claims the references it recognises and answers with a readable
+    local path, so a reference to a file held elsewhere becomes a path every consumer of
+    a mesh -- the mesh loader, the collision detectors, the visualizer -- can open.
+
+    ..note:: With no source registered a reference is answered with itself, which is
+        what makes a process that reads only local files behave as though this did not
+        exist.
+    """
+
+    sources: List[MeshFileSource] = field(default_factory=list)
+    """
+    The sources consulted, in order of precedence.
+    """
+
+    def use(self, source: MeshFileSource) -> None:
+        """
+        Register a source, ahead of those registered before it.
+
+        :param source: The source to consult first from now on.
+        """
+        self.sources.insert(0, source)
+
+    def resolve(self, uri: str) -> Path:
+        """
+        :param uri: The reference a mesh records.
+        :return: The readable local path of the file it names.
+        """
+        for source in self.sources:
+            if source.supports(uri):
+                return Path(source.resolve(uri))
+        return Path(uri)
+
+
+# %% where a mesh file is written to
 
 
 class ProcessLiveness(ABC):

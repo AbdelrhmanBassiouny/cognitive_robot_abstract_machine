@@ -23,6 +23,9 @@ msg/_*.py
 !.claude/hooks/tests/fixtures/set-up-clone/**/*.txt
 *.png
 !.claude/skills/plan-dashboard/example/screenshots/*.png
+# The dataset server fixture is a real mesh entry: its texture is what proves the
+# files beside the mesh are fetched with it, so it has to be in the checkout.
+!test/semantic_digital_twin_test/test_adapters/dataset_server_fixture/**/*.png
 *.lprof
 tmp_data/
 tmp/
@@ -111,6 +114,7 @@ test/krrood_test/test_ripple_down_rules/test_generated_rdrs
 *.lo
 *.o
 *.obj
+!test/semantic_digital_twin_test/test_adapters/dataset_server_fixture/**/*.obj
 
 # Precompiled Headers
 *.gch
