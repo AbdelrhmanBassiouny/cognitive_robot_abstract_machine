@@ -10,6 +10,16 @@ from giskardpy.qp.qp_data import QPDataExplicit
 from giskardpy.qp.solvers.qp_solver import QPSolver
 from giskardpy.utils.math import fast_sparse_diagonal
 
+EQUILIBRATION_PASSES = 5
+"""
+Number of passes piqp spends on balancing the magnitudes in the problem.
+
+Each pass brings the problem closer to fully balanced, which piqp reaches at its default
+of ten. Measured over the problems of the test suites, a few of them then end at the
+iteration limit with the solution already optimal, while at five passes all of them
+solve.
+"""
+
 
 @dataclass
 class QPSolverPIQP(QPSolver[QPDataExplicit]):
@@ -33,6 +43,7 @@ class QPSolverPIQP(QPSolver[QPDataExplicit]):
         self.solver.settings.eps_duality_gap_abs = 1e-5
         self.solver.settings.eps_duality_gap_rel = 1e-5
         self.solver.settings.reg_lower_limit = 1e-11
+        self.solver.settings.preconditioner_iter = EQUILIBRATION_PASSES
         # self.solver.settings.kkt_solver = piqp.KKTSolver.sparse_multistage
 
     def solver_call_explicit_interface(self, qp_data: QPDataExplicit) -> np.ndarray:
