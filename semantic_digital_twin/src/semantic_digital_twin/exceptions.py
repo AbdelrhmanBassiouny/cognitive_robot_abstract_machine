@@ -18,8 +18,7 @@ from typing_extensions import (
     Any,
 )
 
-from krrood.adapters.exceptions import JSONSerializationError, UntrackedObjectError
-from krrood.symbolic_math.exceptions import SymbolicMathNotJsonSerializableError
+from krrood.adapters.exceptions import UntrackedObjectError
 from krrood.exceptions import DataclassException
 from semantic_digital_twin.datastructures.definitions import JointStateType
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
@@ -1475,18 +1474,6 @@ class DoesNotBelongToAWorldError(UsageError):
             "    with world.modify_world():\n"
             "        world.add_kinematic_structure_entity(entity)"
         )
-
-
-class NotJsonSerializable(JSONSerializationError): ...
-
-
-@dataclass
-class SpatialTypeNotJsonSerializable(
-    NotJsonSerializable, SymbolicMathNotJsonSerializableError
-):
-    """
-    Raised when a spatial type that depends on variables is serialized to JSON.
-    """
 
 
 @dataclass
