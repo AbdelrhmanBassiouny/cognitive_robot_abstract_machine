@@ -35,6 +35,13 @@ Profiling (asked for after the push, nothing changed in the branch)
   which the previous implementation had too. Asking once per (held, holder) type pair
   instead of once per reference measures 8x faster (89 ms -> 11 ms at 100k). Offered to
   the user, not implemented.
+- Implemented after all, on request: e9ab0ff collects the distinct (held type, holder
+  type) pairs and asks each once. 87ms -> 11.6ms at 100k references, 8.7ms -> 1.1ms at
+  10k. Deduping with a HoldingOrder per reference was measured at 3x the cost of a
+  tuple key, so the transient key is a tuple and HoldingOrder is still what the edge
+  carries. New test test_each_holder_of_the_same_type_is_handed_its_own_held_domain_object
+  guards it (it is the only test that fails if instances are collapsed per type).
+  test/krrood_test: 2086 passed, 5 skipped, same 2 graphviz failures.
 
 State
 - PR description rewritten to match; one PR comment posted answering both reviews.
