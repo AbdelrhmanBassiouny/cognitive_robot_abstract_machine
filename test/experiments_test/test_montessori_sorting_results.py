@@ -88,6 +88,6 @@ def test_events_are_persisted_under_their_own_attempt(montessori_results_session
     )
 
     assert pick_up_attempt.database_id != insertion_attempt.database_id
-    assert pick_up_attempt.plan_id != insertion_attempt.plan_id
-    assert pick_up_attempt.plan_id is not None
-    assert insertion_attempt.plan_id is not None
+    assert pick_up_attempt._plan_id != insertion_attempt._plan_id
+    assert pick_up_attempt._plan_id is not None
+    assert insertion_attempt._plan_id is not None
