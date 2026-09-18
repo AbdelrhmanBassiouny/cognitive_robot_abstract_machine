@@ -10,11 +10,12 @@ read as a legitimate value.
 
 This module is the command line onto the modules that perform those steps::
 
-    python -m bastler.maintenance board --write     # export the fork's open pull requests
-    python -m bastler.maintenance fast-forward      # move the fork's base onto the upstream
-    python -m bastler.maintenance restack           # integrate every moved parent, report every conflict
-    python -m bastler.maintenance promote           # record the upstream link on every ready branch
-    python -m bastler.maintenance run-report --json # the whole pass as one document
+    python -m bastler.maintenance board --write            # export the fork's open pull requests
+    python -m bastler.maintenance fast-forward             # move the fork's base onto the upstream
+    python -m bastler.maintenance restack                  # integrate every moved parent, report every conflict
+    python -m bastler.maintenance promote                  # record the upstream link on every ready branch
+    python -m bastler.maintenance pending-promotions       # the links waiting to be opened, as a table
+    python -m bastler.maintenance run-report --json        # the whole pass as one document
 
 It executes an already-derived plan: structure still comes from ``stack.py`` and from
 GitHub's own stack object. Retargeting a pull request's **base branch** is the one write
@@ -39,6 +40,7 @@ from bastler.maintenance_github import (
     GitHubCredentialUnavailableError,
     GitHubRequestFailed,
 )
+from bastler.maintenance_promotion import RecordedPromotionLinkMissingError
 from bastler.maintenance_report import MaintenanceExitCode
 from bastler.stack import (
     AmbiguousForkRemoteError,
@@ -112,6 +114,7 @@ def _dispatch() -> MaintenanceExitCode:
         MissingPullRequestFieldError,
         ContradictoryLabelWriteError,
         PromotionLinkTooLongError,
+        RecordedPromotionLinkMissingError,
     ) as error:
         print(f"{error}", file=sys.stderr)
         return MaintenanceExitCode.USAGE
