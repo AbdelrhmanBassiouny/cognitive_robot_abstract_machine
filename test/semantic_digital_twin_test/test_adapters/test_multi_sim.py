@@ -1018,6 +1018,28 @@ def test_world_sim_state_sync():
         stop_multisim_if_running(multi_sim)
 
 
+def test_stop_simulation_stops_simulator_before_tearing_down_synchronizer():
+    """
+    Regression test: ``MultiSim.stop_simulation`` used to call ``synchronizer.stop()``
+    (which nulls ``_state_callback``, read by the physics thread on every step) before
+    ``simulator.stop()`` (which stops the physics thread and joins it).
+
+    A still-running physics thread reading ``_state_callback`` in that window raised an
+    uncaught ``AttributeError`` on the now-``None`` callback, silently killing the
+    thread instead of surfacing to the caller. The simulator must therefore be stopped
+    (and its thread joined) *before* the synchronizer tears down the callback.
+    """
+    world = World()
+    multi_sim = MujocoSim(world=world, headless=headless)
+    call_order = []
+    multi_sim.simulator.stop = lambda: call_order.append("simulator")
+    multi_sim.synchronizer.stop = lambda: call_order.append("synchronizer")
+
+    multi_sim.stop_simulation()
+
+    assert call_order == ["simulator", "synchronizer"]
+
+
 def _write_thin_slab_mesh(directory) -> str:
     """
     Writes a minimal OBJ mesh for a closed box thin enough (1e-5 units) that MuJoCo's.
