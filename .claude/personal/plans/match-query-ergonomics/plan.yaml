@@ -376,6 +376,18 @@ items:
       identically outside any test run, so it is this container lacking whatever ROS-message
       resolution CI's docker image carries, not a regression from today's resolution. Pushed to
       claude/match-query-interface-refactor-l55jym at 00f41066dc.
+
+      CI red immediately after that push (roadmap section 33): git's own line-merge had
+      silently dropped two imports from plan_node.py that are still used -  Iterator
+      (UnderspecifiedNode._action_iterator) and UnderspecifiedExecutable (used in
+      parse()) - by picking main's version of two unrelated import lines that happened
+      to overlap with where this branch had added them. Invisible locally because
+      from __future__ import annotations defers the annotation to a string, but every
+      CI job shares one workspace ORM-generation step, and ORMatic's type-hint
+      resolution evaluates it eagerly: CouldNotResolveType: Iterator, in the hierarchy
+      of UnderspecifiedNode, breaking giskardpy, coraplex and every job downstream of
+      the shared step identically. Both imports restored; test_match.py re-verified
+      green. Pushed at d2eab48c66.
   - id: aggregate-signature-reads-a-missing-attribute
     title: "Bug: every aggregate of one kind gets the same structural signature"
     branch: claude/plan-item-kickoff-match-query-npzr78

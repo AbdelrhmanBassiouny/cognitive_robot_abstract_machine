@@ -1704,3 +1704,35 @@ on the same footing as the Graphviz gap.
 Pushed to `claude/match-query-interface-refactor-l55jym` at `00f41066dc`. No change to any
 item's status, dependencies or scope; the manifest's `blockers` is corrected to reflect the
 resolved conflict rather than the fifteen-day-stale text it carried. Dashboard republished.
+
+## 33. 2026-09-18: the merge itself broke CI, and every job shared the failure
+
+Pushing section 32's merge turned CI red on every job (`giskardpy`, `coraplex`, and
+everything downstream of the shared workspace ORM-generation step) with the same
+error: `CouldNotResolveType: Iterator, in the hierarchy of
+coraplex.plans.plan_node.UnderspecifiedNode`.
+
+**The cause was git's own merge, not a conflict.** The import block at the top of
+`plan_node.py` merged with no conflict markers at all, so it was never inspected line
+by line during section 32's resolution - but the two branches had each added their own
+import on lines that partially overlapped, and git's line-level merge picked `main`'s
+version outright, silently dropping two imports this branch's `UnderspecifiedNode`
+still uses: `Iterator` (`_action_iterator: Optional[Iterator[ActionDescription]]`) and
+`UnderspecifiedExecutable` (constructed in `parse()`).
+
+**Why it passed locally and failed on every CI job.** `from __future__ import
+annotations` defers every annotation to a string, so plain imports and the local test
+suite never evaluate `Iterator` at all. ORMatic's `get_type_hints_of_object` does,
+eagerly, to build the class diagram every package's `test_each_lib` job shares as a
+setup step - so a class this branch added in `coraplex` broke `giskardpy`'s job too,
+identically, confirmed by reading both jobs' logs side by side.
+
+Restored both imports. Verified directly, the way CI resolves them:
+`get_type_hints_of_object(UnderspecifiedNode)` now returns
+`Optional[Iterator[ActionDescription]]` for `_action_iterator` without raising, and
+`test_eql/test_match.py` (51 tests) stays green. Pushed at `d2eab48c66`.
+
+**The lesson for the next conflict this item hits**: a hunk that merges without
+conflict markers is not proof it merged correctly - the resolution has to at least
+grep the touched file's own usages for anything the auto-merge could have silently
+dropped, not just fix the marked hunks and trust the rest.
