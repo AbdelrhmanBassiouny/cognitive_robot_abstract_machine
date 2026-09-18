@@ -461,6 +461,11 @@
   .live-badge.live-closed_unmerged { color: var(--text-muted); text-decoration: line-through; }
   .live-badge.live-not_found { color: var(--drift); }
 
+  .board-chip { border: 1px solid var(--border); font-family: ui-monospace, "SF Mono", "Cascadia Code", monospace; text-transform: none; }
+  .board-chip.chip-positive { background: var(--status-done-tint); color: var(--status-done); }
+  .board-chip.chip-negative { background: var(--drift-tint); color: var(--drift); }
+  .board-chip.chip-pending { background: var(--status-blocked-tint); color: var(--status-blocked); }
+
   .item-meta {
     margin-top: 0.4rem;
     display: flex;
@@ -646,6 +651,9 @@
             <div class="item-badges">
               <span class="badge status-badge status-{{ item.status.value }}">{{ item.status | status_label }}</span>
               <span class="badge live-badge live-{{ item.live_state.value }}">{{ item.live_state.display_label }}</span>
+              {% for chip in item.board_chips %}
+              <span class="badge {{ chip.CSS_CLASS }} chip-{{ chip.tone.value }}" title="{{ chip.tooltip }}">{{ chip.label }}</span>
+              {% endfor %}
             </div>
           </div>
           <div class="item-meta">

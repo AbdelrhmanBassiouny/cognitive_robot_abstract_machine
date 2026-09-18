@@ -1,0 +1,20 @@
+schema_version: 1
+id: site-build-plan
+title: "Site Build Plan"
+description: "A plan for the site build test."
+default_repository: owner/repository
+tracking_issue: 9
+waves:
+  - id: wave-1
+    name: "Wave One"
+tracks:
+  - id: track-1
+    name: "Track One"
+    wave: wave-1
+items:
+  - id: an-item
+    branch: a-branch
+    title: "An item"
+    track: track-1
+    status: in_progress
+    pull_request_number: 1

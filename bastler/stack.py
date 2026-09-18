@@ -20,6 +20,7 @@ Commands (run from the repo root; ``--help`` on any of them for its flags)::
     python -m bastler.stack next           # which branches to submit upstream next
     python -m bastler.stack next --porcelain    # machine-readable: one 'name<TAB>pr' line per branch
     python -m bastler.stack restack-plan   # bottom-up restack plan as JSON
+    python -m bastler.stack export         # (re)write board.json from the fork's live open PRs
     python -m bastler.stack configuration  # every resolved setting, including the remotes
     python -m bastler.stack labels         # the complete label set a write must send
     python -m bastler.stack check-move      # may these commits move onto that branch?
@@ -31,7 +32,9 @@ The last five exist so the steps most easily got wrong by hand are computed rath
 label write replaces the whole set, a push whose two sides name different branches moves the wrong
 commits, an unencoded compare URL loses its prefill, and a landed parent is decided by git ancestry
 rather than by pull-request state. ``landed`` reports only - GitHub closes a pull request as merged
-by itself once its head is contained in its base, so nothing here has to close one.
+by itself once its head is contained in its base, so nothing here has to close one. ``export``
+writes the ``board.json`` the board-reading commands consume, through the package's shared
+:mod:`bastler.pull_request_state` layer.
 """
 
 from __future__ import annotations
@@ -48,22 +51,32 @@ from pathlib import Path
 from typing import ClassVar
 from urllib.parse import quote
 
+from bastler.personal_notes import PersonalNotesBranch
+from bastler.pull_request_state import (
+    BoardEntryKey,
+    GitHubAccessError,
+    GitHubApi,
+    PullRequestExport,
+    PullRequestFetcher,
+    PullRequestListFilter,
+)
+
 # %% configuration
 
 CONFIGURATION_PATH = Path(__file__).with_name("stack.toml")
 """The checked-in configuration every run starts from, before any per-user override."""
 
-BOARD_PATH = Path(__file__).with_name("board.json")
+BOARD_DOCUMENT_NAME = "board.json"
+"""The exported snapshot's file name, wherever it is written - the package's own copy or
+a test's scratch directory."""
+
+BOARD_PATH = Path(__file__).with_name(BOARD_DOCUMENT_NAME)
 """Where the exported snapshot of the fork's open pull requests is read from and written
 to - scratch state, never committed."""
 
 PERSONAL_STACK_CONFIGURATION_PATH = ".claude/personal/stack.toml"
 """Path, relative to the project root, of the per-user configuration override file on the personal-notes
 branch (see :func:`_personal_configuration_overrides`)."""
-
-PERSONAL_NOTES_CONFIGURATION_SCRIPT = ".claude/hooks/resolve-personal-notes-config.sh"
-"""Path, relative to the project root, of the shell file that owns which remote and branch the
-personal notes are on (see :func:`_fetch_personal_notes_branch`)."""
 
 
 @dataclass
@@ -400,30 +413,6 @@ def _remote_urls() -> dict[str, str]:
     return {name: _git("remote", "get-url", name) for name in listed if name}
 
 
-def _fetch_personal_notes_branch() -> bool:
-    """Fetch the personal-notes branch, leaving ``FETCH_HEAD`` pointing at it.
-
-    Sources the shell file and calls its own fetch function rather than re-deriving which remote
-    and branch the notes are on, so this and the hook scripts can never disagree about it. The
-    shell's answer is also the fuller one: it falls back to the current branch's upstream remote
-    when the configured one does not carry the branch, which this had no equivalent of.
-
-    :return: Whether the branch was fetched.
-    """
-    return (
-        subprocess.run(
-            [
-                "bash",
-                "-c",
-                f'source "{PERSONAL_NOTES_CONFIGURATION_SCRIPT}" && fetch_personal_notes_branch',
-            ],
-            capture_output=True,
-            text=True,
-        ).returncode
-        == 0
-    )
-
-
 def _personal_configuration_overrides() -> dict[str, object]:
     """Fetch the personal-notes branch and parse its configuration override file, if any.
 
@@ -431,7 +420,7 @@ def _personal_configuration_overrides() -> dict[str, object]:
         an empty mapping if the branch or the file doesn't exist (e.g. before it has ever been
         written).
     """
-    if not _fetch_personal_notes_branch():
+    if not PersonalNotesBranch(Path.cwd()).fetch():
         return {}
     if not _git_succeeds(
         "cat-file", "-e", f"FETCH_HEAD:{PERSONAL_STACK_CONFIGURATION_PATH}"
@@ -491,8 +480,9 @@ class PullRequest:
     labels: list[str] = field(default_factory=list)
     """Labels currently on the PR."""
 
-    ci: str | None = None
-    """Latest CI conclusion on the PR head: ``success`` / ``failure`` / ``pending`` / None."""
+    continuous_integration: str | None = None
+    """Latest check conclusion on the pull request head: ``success`` / ``failure`` /
+    ``pending`` / None."""
 
     session: str | None = None
     """URL of the Claude session working this PR, parsed from the PR body (None if none)."""
@@ -520,8 +510,8 @@ class Branch:
     labels: list[str]
     """Labels carried by the PR."""
 
-    ci: str | None = None
-    """Latest CI conclusion on the PR head."""
+    continuous_integration: str | None = None
+    """Latest check conclusion on the pull request head."""
 
     session: str | None = None
     """URL of the Claude session working this PR, if any."""
@@ -577,15 +567,15 @@ def load_board(path: Path = BOARD_PATH) -> list[PullRequest]:
     data = json.loads(path.read_text())
     return [
         PullRequest(
-            number=pr["number"],
-            head=pr["head"],
-            base=pr["base"],
-            draft=bool(pr["draft"]),
-            labels=list(pr.get("labels", [])),
-            ci=pr.get("ci"),
-            session=pr.get("session"),
+            number=pr[BoardEntryKey.NUMBER],
+            head=pr[BoardEntryKey.HEAD],
+            base=pr[BoardEntryKey.BASE],
+            draft=bool(pr[BoardEntryKey.DRAFT]),
+            labels=list(pr.get(BoardEntryKey.LABELS, [])),
+            continuous_integration=pr.get(BoardEntryKey.CONTINUOUS_INTEGRATION),
+            session=pr.get(BoardEntryKey.SESSION),
         )
-        for pr in data["pull_requests"]
+        for pr in data[BoardEntryKey.PULL_REQUESTS]
     ]
 
 
@@ -634,7 +624,7 @@ def build_stack(
                 else IntegrationStrategy.MERGE
             ),
             labels=pr.labels,
-            ci=pr.ci,
+            continuous_integration=pr.continuous_integration,
             session=pr.session,
         )
         for pr in prs
@@ -846,6 +836,25 @@ def _count(rev_range: str) -> int | None:
     :return: The number of commits in it, or ``None`` if a ref is missing."""
     out = _git("rev-list", "--count", rev_range)
     return int(out) if out.isdigit() else None
+
+
+# %% board export
+
+
+def export_board(repository: str, api: GitHubApi, path: Path = BOARD_PATH) -> int:
+    """Write ``board.json`` from the fork's live open pull requests.
+
+    :param repository: The fork's ``owner/repository``.
+    :param api: The GitHub transport to fetch through.
+    :param path: Where to write the board export.
+    :return: The number of pull requests exported.
+    """
+    states = PullRequestFetcher(repository, api).fetch(
+        listing=PullRequestListFilter.OPEN
+    )
+    document = PullRequestExport(repository, states).to_board_document()
+    path.write_text(json.dumps(document, indent=2) + "\n")
+    return len(states)
 
 
 # %% stack assembly
@@ -1398,12 +1407,15 @@ class Command(StrEnum):
     PROMOTION_LINK = "promotion-link"
     """Build the upstream compare-and-create link for one branch."""
 
+    EXPORT = "export"
+    """Write ``board.json`` from the fork's live open pull requests."""
+
     @property
     def needs_a_board(self) -> bool:
         """Whether answering this command means deriving the stack.
 
         The ones that do not are answerable from git and configuration alone, so they
-        run before a board has ever been exported.
+        run before a board has ever been exported - ``export`` is what writes one.
 
         :return: Whether ``board.json`` must exist.
         """
@@ -1411,6 +1423,7 @@ class Command(StrEnum):
             Command.CONFIGURATION,
             Command.LABELS,
             Command.PROMOTION_LINK,
+            Command.EXPORT,
         }
 
 
@@ -1441,6 +1454,9 @@ class ExitCode(IntEnum):
     MOVE_REFUSED = 5
     """The proposed move must not be made; the reasons are on stderr."""
 
+    GITHUB_UNAVAILABLE = 6
+    """No route to the GitHub API: neither the ``gh`` CLI nor a token is available."""
+
 
 def _argument_parser() -> argparse.ArgumentParser:
     """:return: The parser for every command and its own flags."""
@@ -1464,6 +1480,10 @@ def _argument_parser() -> argparse.ArgumentParser:
         help="print only 'name<TAB>pr' per branch to promote",
     )
     commands.add_parser(Command.RESTACK_PLAN, help="the bottom-up restack plan as JSON")
+    commands.add_parser(
+        Command.EXPORT,
+        help="(re)write board.json from the fork's live open pull requests",
+    )
     commands.add_parser(
         Command.REPARENTS, help="children whose base has landed, and the base they need"
     )
@@ -1559,6 +1579,11 @@ def _run_without_a_board(command: Command, arguments: argparse.Namespace) -> Exi
             )
         )
         return ExitCode.SUCCESS
+    if command is Command.EXPORT:
+        configuration = load_configuration()
+        count = export_board(str(configuration.fork_repository), GitHubApi.resolve())
+        print(f"Wrote {BOARD_PATH.name} ({count} open fork PRs).")
+        return ExitCode.SUCCESS
     print_promotion_link(
         PromotionLink.build(
             load_configuration(), arguments.branch, arguments.title, arguments.body
@@ -1639,6 +1664,9 @@ def main() -> ExitCode:
     except (ContradictoryLabelWriteError, PromotionLinkTooLongError) as error:
         print(f"{error}", file=sys.stderr)
         return ExitCode.USAGE
+    except GitHubAccessError as error:
+        print(f"{error}", file=sys.stderr)
+        return ExitCode.GITHUB_UNAVAILABLE
 
 
 if __name__ == "__main__":
