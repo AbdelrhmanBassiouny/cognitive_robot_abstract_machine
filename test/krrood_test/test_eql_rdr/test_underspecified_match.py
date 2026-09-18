@@ -22,7 +22,7 @@ from krrood.entity_query_language.rdr.exceptions import (
     UnsupportedInferenceTarget,
 )
 from krrood.entity_query_language.rdr.underspecified import (
-    UnderspecifiedMatch,
+    RDRMatchParser,
     is_ellipsis_target,
 )
 
@@ -74,10 +74,10 @@ def test_is_ellipsis_target_false_for_a_concrete_assignment():
 
 def test_case_type_and_variable_reflect_the_underlying_match():
     match = an(Animal)(species=...).from_(_animals())
-    underspecified = UnderspecifiedMatch(match)
+    parser = RDRMatchParser(match)
 
-    assert underspecified.case_type is Animal
-    assert underspecified.variable is match.variable
+    assert parser.case_type is Animal
+    assert parser.variable is match.variable
 
 
 # %% inference_targets / single_target / target_attribute_name
@@ -85,36 +85,36 @@ def test_case_type_and_variable_reflect_the_underlying_match():
 
 def test_single_ellipsis_attribute_is_the_sole_inference_target():
     match = an(Animal)(has_fur=True, species=...).from_(_animals())
-    underspecified = UnderspecifiedMatch(match)
+    parser = RDRMatchParser(match)
 
-    assert len(underspecified.inference_targets) == 1
-    assert underspecified.single_target() is underspecified.inference_targets[0]
-    assert underspecified.target_attribute_name == "species"
+    assert len(parser.inference_targets) == 1
+    assert parser.single_target() is parser.inference_targets[0]
+    assert parser.target_attribute_name == "species"
 
 
 def test_no_ellipsis_attribute_raises_no_inference_target():
     match = an(Animal)(has_fur=True).from_(_animals())
-    underspecified = UnderspecifiedMatch(match)
+    parser = RDRMatchParser(match)
 
     with pytest.raises(NoInferenceTarget):
-        underspecified.single_target()
+        parser.single_target()
 
 
 def test_multiple_ellipsis_attributes_raise_multiple_inference_targets():
     match = an(Animal)(species=..., diet=...).from_(_animals())
-    underspecified = UnderspecifiedMatch(match)
+    parser = RDRMatchParser(match)
 
     with pytest.raises(MultipleInferenceTargets) as error:
-        underspecified.single_target()
+        parser.single_target()
     assert set(error.value.attribute_names) == {"species", "diet"}
 
 
 def test_unbounded_iterable_ellipsis_attribute_raises_unsupported_inference_target():
     match = an(TaggedAnimal)(tags=...).from_([TaggedAnimal("cat", tags=["fluffy"])])
-    underspecified = UnderspecifiedMatch(match)
+    parser = RDRMatchParser(match)
 
     with pytest.raises(UnsupportedInferenceTarget) as error:
-        underspecified.single_target()
+        parser.single_target()
     assert error.value.case_type is TaggedAnimal
     assert error.value.attribute_name == "tags"
 
@@ -124,17 +124,17 @@ def test_unbounded_iterable_ellipsis_attribute_raises_unsupported_inference_targ
 
 def test_filtered_cases_keeps_only_instances_matching_the_concrete_constraints():
     match = an(Animal)(has_fur=True, species=...).from_(_animals())
-    underspecified = UnderspecifiedMatch(match)
+    parser = RDRMatchParser(match)
 
-    cases = list(underspecified.filtered_cases())
+    cases = list(parser.filtered_cases())
 
     assert cases == [Animal("cat", has_fur=True, species="mammal", diet="carnivore")]
 
 
 def test_filtered_cases_with_no_concrete_constraints_yields_the_whole_domain():
     match = an(Animal)(species=...).from_(_animals())
-    underspecified = UnderspecifiedMatch(match)
+    parser = RDRMatchParser(match)
 
-    cases = list(underspecified.filtered_cases())
+    cases = list(parser.filtered_cases())
 
     assert cases == _animals()
