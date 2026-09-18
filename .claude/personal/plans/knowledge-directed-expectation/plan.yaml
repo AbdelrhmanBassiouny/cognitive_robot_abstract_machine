@@ -38,28 +38,30 @@ items:
   status: in_progress
   session: https://claude.ai/code/session_01UdpwcAQGVFCKEy8VA2iFwv
   blockers:
-  - One of the four review threads of 2026-09-03 is left open deliberately, and it is the developer's
-    to close rather than work for this item. r3927219116 asked for docstrings everywhere they are
-    missing in the pull request; every file it touches was swept with an AST walk and two places
-    are left bare on purpose - the two new exceptions' error_message / suggest_correction overrides,
-    whose contracts DataclassException states on its own abstract methods and which no DataclassException
-    subclass anywhere in this workspace documents, and DataPlayer.__post_init__ / FilePlayer.__post_init__,
-    which this branch neither adds nor changes. Both are stated on the thread with an offer to add
-    them either way. The other three threads are answered exactly as asked and resolved.
-  notes: 'An expectation about where a thing now is comes from what was done to it, and on a
+    - >-
+      One of the four review threads of 2026-09-03 is left open deliberately, and it is the
+      developer's to close rather than work for this item. r3927219116 asked for docstrings
+      everywhere they are missing in the pull request; every file it touches was swept with an AST
+      walk and two places are left bare on purpose - the two new exceptions' error_message /
+      suggest_correction overrides, whose contracts DataclassException states on its own abstract
+      methods and which no DataclassException subclass anywhere in this workspace documents, and
+      DataPlayer.__post_init__ / FilePlayer.__post_init__, which this branch neither adds nor
+      changes. Both are stated on the thread with an offer to add them either way. The other three
+      threads are answered exactly as asked and resolved.
+  notes: >
+    An expectation about where a thing now is comes from what was done to it, and on a
 
     recording nothing has been done to anything until the recording is replayed. Segmind
 
     already has the extension point - `EpisodePlayer` -> `DataPlayer` -> `FilePlayer` - so a
 
-    player reading a rosbag''s transform tree and joint states is the same kind of member over
+    player reading a rosbag's transform tree and joint states is the same kind of member over
 
     a different file, and `EpisodeSegmenterExecutor` produces support/pick-up/placing/
 
     insertion events over it unchanged. Touches only segmind, so it started immediately, off
 
     `main`.
-
 
     A measured constraint that decides what this can be asked for: only one of the six
 
@@ -77,7 +79,6 @@ items:
 
     would remove the split entirely.
 
-
     Resolved 2026-09-03 in `auto` mode; green on all 23 checks throughout, `mergeable_state`
 
     clean. Answered as `3b3e3f53`/`f9a961fc`: the sampling generator became three named classes
@@ -88,11 +89,22 @@ items:
 
     every one against the type store. 53 passed, 1 skipped, against 48/1. One review thread
 
-    (docstrings on two pre-existing, undocumented methods) is left open at the developer''s
+    (docstrings on two pre-existing, undocumented methods) is left open at the developer's
 
     discretion.
 
-    '
+    2026-09-18: retargeted from #244 to #410 (segmind_numeric_hole_events) now that #244 has split
+    into per-package pull requests (#408 krrood, #409 semantic_digital_twin, #410 segmind stacked on
+    #409). This item only ever needed segmind's changes, confirmed by reading its own new files
+    (only pre-existing krrood.exceptions.DataclassException, no ormatic/krrood additions; no
+    semantic_digital_twin numeric imports either) - so it now sits directly on #410 rather than
+    dragging krrood's unrelated changes along, which a plain merge onto the new base would have done
+    (tried, reverted: the merge left 22 changed files against the new base instead of this item's
+    own ~8, because the branch still carried krrood's commit from when it was based on the whole of
+    old #244). Rebuilt the same way the split branches themselves were cut: reset to the new base,
+    checked out only this item's own paths from its previously-resolved tip, recommitted (73d5cb38,
+    then e668fdba once #409/#410 picked up a RotationMatrix.rotational_error to rotational_distance
+    rename fix). mergeable_state is clean against the new base.
 - id: expectations-from-events
   title: Expect what the action promised, and report the difference as a failure
   branch: claude/plan-item-kickoff-expectations-2zvpmn
