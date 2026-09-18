@@ -15,12 +15,12 @@ from dataclasses import asdict, dataclass
 from enum import IntEnum
 from pathlib import Path
 
-from bastler.changed_paths import PathSubject
 from bastler.maintenance_board import BoardExport
 from bastler.maintenance_fast_forward import FastForwardOutcome, FastForwardReport
+from bastler.changed_paths import PathSubject
 from bastler.maintenance_promotion import Promotion
-from bastler.maintenance_restack_steps import BranchOutcome, RestackOutcome
 from bastler.maintenance_tooling_label import ToolingLabelling
+from bastler.maintenance_restack_steps import BranchOutcome, RestackOutcome
 from bastler.stack import Reparent, Stack, landed_branches, promotion_order, reparents
 
 # %% the report a caller renders or emits
