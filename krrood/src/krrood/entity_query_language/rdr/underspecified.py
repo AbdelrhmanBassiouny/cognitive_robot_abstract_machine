@@ -60,7 +60,7 @@ def _is_unbounded_iterable(annotation: Any) -> bool:
 
 
 @dataclass
-class UnderspecifiedMatch:
+class RDRMatchParser:
     """Reads an underspecified :class:`Match` for RDR-based attribute inference."""
 
     match: Match
@@ -85,7 +85,9 @@ class UnderspecifiedMatch:
     def inference_targets(self) -> List[AttributeMatch]:
         """The ``...`` attribute leaves to infer (each validated as single-valued)."""
         targets = [
-            m for m in self.match.matches_with_variables if is_ellipsis_target(m)
+            attribute_match
+            for attribute_match in self.match.matches_with_variables
+            if is_ellipsis_target(attribute_match)
         ]
         for target in targets:
             self._guard_single_valued(target)
