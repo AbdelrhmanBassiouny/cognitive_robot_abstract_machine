@@ -413,7 +413,10 @@ class CausalCircuit:
         :param child_marginals: Marginal support events, one per SumUnit child.
         :returns: True if any two marginals differ.
         """
-        return any(marginal != child_marginals[0] for marginal in child_marginals[1:])
+        if len(child_marginals) < 2:
+            return False
+        first, *others = child_marginals
+        return any(other != first for other in others)
 
     @staticmethod
     def _has_extent(event: Event, query_variable: Variable) -> bool:
@@ -446,11 +449,8 @@ class CausalCircuit:
         :returns: True if any pair overlaps.
         """
         return any(
-            cls._has_extent(
-                child_marginals[i].intersection_with(child_marginals[j]),
-                query_variable,
-            )
-            for i, j in itertools.combinations(range(len(child_marginals)), 2)
+            cls._has_extent(first.intersection_with(second), query_variable)
+            for first, second in itertools.combinations(child_marginals, 2)
         )
 
     def _check_sum_unit_for_variable(
