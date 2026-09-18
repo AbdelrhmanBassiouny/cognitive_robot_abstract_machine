@@ -9,6 +9,7 @@ that was running when it was created turns that total into the list of tests to 
 from __future__ import annotations
 
 import gc
+import os
 import weakref
 from collections import Counter
 from dataclasses import dataclass, field
@@ -16,9 +17,14 @@ from dataclasses import dataclass, field
 from krrood.exceptions import DataclassException
 from typing_extensions import Any, List, Tuple
 
+from .pytest_environment import PytestEnvironmentVariable
+
 MAXIMUM_LIVING_WORLDS: int = 30
 """
-How many worlds may still be in memory when a test module has finished.
+How many worlds may still be in memory when a test module has finished, when the run is
+not split across pytest-xdist workers. A run with several workers divides this evenly
+between them, so their combined leftover worlds stay within the same budget however many
+of them are counting toward it at once.
 """
 
 BEFORE_THE_FIRST_TEST = "before the first test ran"
@@ -234,15 +240,33 @@ class LivingWorlds:
             for test, worlds in worlds_per_test.most_common()
         )
 
-    def enforce_limit(self, module: str, limit: int = MAXIMUM_LIVING_WORLDS) -> None:
+    @staticmethod
+    def default_limit() -> int:
+        """
+        How many worlds a finished test module may leave in memory by default.
+
+        :return: :data:`MAXIMUM_LIVING_WORLDS` split evenly across the pytest-xdist
+            workers this run reports through
+            :attr:`PytestEnvironmentVariable.XDIST_WORKER_COUNT`, or the whole budget
+            where the run reports none. Never less than one, so a run split across more
+            workers than the budget holds still enforces some limit rather than none.
+        """
+        worker_count = int(
+            os.environ.get(PytestEnvironmentVariable.XDIST_WORKER_COUNT, "1")
+        )
+        return max(1, MAXIMUM_LIVING_WORLDS // worker_count)
+
+    def enforce_limit(self, module: str, limit: int | None = None) -> None:
         """
         Report the worlds a finished test module left in memory, when there are more of
         them than it may leave.
 
         :param module: Name of the test module that has just finished.
-        :param limit: How many worlds it may leave behind.
+        :param limit: How many worlds it may leave behind; defaults to
+            :meth:`default_limit`.
         :raises LeakedWorldsError: When more worlds than that survived.
         """
+        limit = self.default_limit() if limit is None else limit
         gc.collect()
         self.forget_collected_worlds()
         if len(self.creations) <= limit:

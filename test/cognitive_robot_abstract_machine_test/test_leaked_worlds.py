@@ -10,6 +10,7 @@ ones that survived.
 from __future__ import annotations
 
 import copy
+from dataclasses import dataclass
 
 import pytest
 
@@ -21,22 +22,44 @@ from ..living_worlds import (
     UnwatchableWorldTypeError,
     WorldsLeftBehind,
 )
+from ..pytest_environment import PytestEnvironmentVariable
 from .dataset.leakable_object import LeakableObject, ObjectMakingItsOwnInstances
 
-FINISHED_MODULE = "test/semantic_digital_twin_test/test_world.py"
-"""
-Stands in for the module whose end the guard checks.
-"""
 
-LEAKING_TEST = f"{FINISHED_MODULE}::test_that_leaks"
-"""
-Stands in for a test whose worlds are still in memory afterwards.
-"""
+@dataclass(frozen=True)
+class StandInTestNames:
+    """
+    Names a test below attributes created and surviving worlds to, standing in for the
+    node ids a real test run would report.
+    """
 
-TIDY_TEST = f"{FINISHED_MODULE}::test_that_leaves_nothing"
-"""
-Stands in for a test that releases every world it created.
-"""
+    finished_module: str
+    """
+    Stands in for the module whose end the guard checks.
+    """
+
+    leaking_test: str
+    """
+    Stands in for a test whose worlds are still in memory afterwards.
+    """
+
+    tidy_test: str
+    """
+    Stands in for a test that releases every world it created.
+    """
+
+
+@pytest.fixture()
+def stand_in_test_names() -> StandInTestNames:
+    """
+    The stand-in names the tests below attribute worlds to.
+    """
+    finished_module = "test/semantic_digital_twin_test/test_world.py"
+    return StandInTestNames(
+        finished_module=finished_module,
+        leaking_test=f"{finished_module}::test_that_leaks",
+        tidy_test=f"{finished_module}::test_that_leaves_nothing",
+    )
 
 
 @pytest.fixture(scope="module")
@@ -59,109 +82,165 @@ def living_worlds(watched_objects: LivingWorlds) -> LivingWorlds:
     return watched_objects
 
 
+@pytest.fixture()
+def single_worker_run(monkeypatch: pytest.MonkeyPatch) -> None:
+    """
+    Pin the default limit to the whole, unsplit :data:`MAXIMUM_LIVING_WORLDS` budget,
+    whether or not the run driving these tests is itself split across xdist workers.
+    """
+    monkeypatch.delenv(PytestEnvironmentVariable.XDIST_WORKER_COUNT, raising=False)
+
+
 # %% which test the surviving worlds are attributed to
 
 
 def test_the_tests_that_created_the_surviving_worlds_are_named(
-    living_worlds: LivingWorlds,
+    living_worlds: LivingWorlds, stand_in_test_names: StandInTestNames
 ):
     """
     The report names the test the surviving worlds came from, not the one that happened
     to be running when the count was taken.
     """
-    living_worlds.current_test = LEAKING_TEST
+    living_worlds.current_test = stand_in_test_names.leaking_test
     leaked = [LeakableObject() for _ in range(3)]
-    living_worlds.current_test = TIDY_TEST
+    living_worlds.current_test = stand_in_test_names.tidy_test
 
     with pytest.raises(LeakedWorldsError) as leak:
-        living_worlds.enforce_limit(module=FINISHED_MODULE, limit=2)
+        living_worlds.enforce_limit(module=stand_in_test_names.finished_module, limit=2)
 
-    assert leak.value.left_behind == (WorldsLeftBehind(LEAKING_TEST, len(leaked)),)
+    assert leak.value.left_behind == (
+        WorldsLeftBehind(stand_in_test_names.leaking_test, len(leaked)),
+    )
 
 
-def test_a_test_whose_worlds_were_collected_is_not_named(living_worlds: LivingWorlds):
-    living_worlds.current_test = TIDY_TEST
+def test_a_test_whose_worlds_were_collected_is_not_named(
+    living_worlds: LivingWorlds, stand_in_test_names: StandInTestNames
+):
+    living_worlds.current_test = stand_in_test_names.tidy_test
     for _ in range(5):
         LeakableObject()
-    living_worlds.current_test = LEAKING_TEST
+    living_worlds.current_test = stand_in_test_names.leaking_test
     leaked = [LeakableObject() for _ in range(3)]
 
     with pytest.raises(LeakedWorldsError) as leak:
-        living_worlds.enforce_limit(module=FINISHED_MODULE, limit=2)
+        living_worlds.enforce_limit(module=stand_in_test_names.finished_module, limit=2)
 
     assert leak.value.worlds_in_memory == len(leaked)
     assert [left_behind.test for left_behind in leak.value.left_behind] == [
-        LEAKING_TEST
+        stand_in_test_names.leaking_test
     ]
 
 
-def test_the_test_that_left_the_most_worlds_is_named_first(living_worlds: LivingWorlds):
-    living_worlds.current_test = TIDY_TEST
+def test_the_test_that_left_the_most_worlds_is_named_first(
+    living_worlds: LivingWorlds, stand_in_test_names: StandInTestNames
+):
+    living_worlds.current_test = stand_in_test_names.tidy_test
     few = [LeakableObject()]
-    living_worlds.current_test = LEAKING_TEST
+    living_worlds.current_test = stand_in_test_names.leaking_test
     many = [LeakableObject() for _ in range(3)]
 
     with pytest.raises(LeakedWorldsError) as leak:
-        living_worlds.enforce_limit(module=FINISHED_MODULE, limit=2)
+        living_worlds.enforce_limit(module=stand_in_test_names.finished_module, limit=2)
 
     assert leak.value.left_behind == (
-        WorldsLeftBehind(LEAKING_TEST, len(many)),
-        WorldsLeftBehind(TIDY_TEST, len(few)),
+        WorldsLeftBehind(stand_in_test_names.leaking_test, len(many)),
+        WorldsLeftBehind(stand_in_test_names.tidy_test, len(few)),
     )
 
 
 def test_worlds_created_before_any_test_ran_are_not_blamed_on_a_test(
-    living_worlds: LivingWorlds,
+    living_worlds: LivingWorlds, stand_in_test_names: StandInTestNames
 ):
     leaked = [LeakableObject() for _ in range(3)]
 
     with pytest.raises(LeakedWorldsError) as leak:
-        living_worlds.enforce_limit(module=FINISHED_MODULE, limit=2)
+        living_worlds.enforce_limit(module=stand_in_test_names.finished_module, limit=2)
 
     assert leak.value.left_behind == (
         WorldsLeftBehind(BEFORE_THE_FIRST_TEST, len(leaked)),
     )
 
 
-def test_a_world_reaches_the_record_however_it_was_made(living_worlds: LivingWorlds):
-    living_worlds.current_test = LEAKING_TEST
+def test_a_world_reaches_the_record_however_it_was_made(
+    living_worlds: LivingWorlds, stand_in_test_names: StandInTestNames
+):
+    living_worlds.current_test = stand_in_test_names.leaking_test
     original = LeakableObject()
     copies = [copy.deepcopy(original), copy.copy(original)]
 
     with pytest.raises(LeakedWorldsError) as leak:
-        living_worlds.enforce_limit(module=FINISHED_MODULE, limit=2)
+        living_worlds.enforce_limit(module=stand_in_test_names.finished_module, limit=2)
 
-    assert leak.value.left_behind == (WorldsLeftBehind(LEAKING_TEST, len(copies) + 1),)
+    assert leak.value.left_behind == (
+        WorldsLeftBehind(stand_in_test_names.leaking_test, len(copies) + 1),
+    )
 
 
 # %% the limit the guard reports is the one it enforces
 
 
-def test_a_module_within_the_limit_is_let_through(living_worlds: LivingWorlds):
-    living_worlds.current_test = LEAKING_TEST
+def test_a_module_within_the_limit_is_let_through(
+    living_worlds: LivingWorlds,
+    stand_in_test_names: StandInTestNames,
+    single_worker_run: None,
+):
+    living_worlds.current_test = stand_in_test_names.leaking_test
     kept = [LeakableObject() for _ in range(MAXIMUM_LIVING_WORLDS)]
 
-    living_worlds.enforce_limit(module=FINISHED_MODULE)
+    living_worlds.enforce_limit(module=stand_in_test_names.finished_module)
 
     assert living_worlds.surviving_worlds() == (
-        WorldsLeftBehind(LEAKING_TEST, len(kept)),
+        WorldsLeftBehind(stand_in_test_names.leaking_test, len(kept)),
     )
 
 
-def test_the_reported_limit_is_the_enforced_one(living_worlds: LivingWorlds):
+def test_the_reported_limit_is_the_enforced_one(
+    living_worlds: LivingWorlds,
+    stand_in_test_names: StandInTestNames,
+    single_worker_run: None,
+):
     """
     The number the report states is the number that made it fail, so that a reader is
     not sent looking for a leak of a size the guard never enforced.
     """
-    living_worlds.current_test = LEAKING_TEST
+    living_worlds.current_test = stand_in_test_names.leaking_test
     leaked = [LeakableObject() for _ in range(MAXIMUM_LIVING_WORLDS + 1)]
 
     with pytest.raises(LeakedWorldsError) as leak:
-        living_worlds.enforce_limit(module=FINISHED_MODULE)
+        living_worlds.enforce_limit(module=stand_in_test_names.finished_module)
 
     assert leak.value.limit == MAXIMUM_LIVING_WORLDS
     assert leak.value.worlds_in_memory == len(leaked)
     assert str(MAXIMUM_LIVING_WORLDS) in str(leak.value)
+
+
+# %% the default limit is split across xdist workers
+
+
+def test_the_default_limit_is_the_whole_budget_without_xdist_workers(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    monkeypatch.delenv(PytestEnvironmentVariable.XDIST_WORKER_COUNT, raising=False)
+
+    assert LivingWorlds.default_limit() == MAXIMUM_LIVING_WORLDS
+
+
+def test_the_default_limit_is_split_evenly_across_xdist_workers(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    worker_count = 4
+    monkeypatch.setenv(PytestEnvironmentVariable.XDIST_WORKER_COUNT, str(worker_count))
+
+    assert LivingWorlds.default_limit() == MAXIMUM_LIVING_WORLDS // worker_count
+
+
+def test_the_default_limit_is_never_less_than_one(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setenv(
+        PytestEnvironmentVariable.XDIST_WORKER_COUNT,
+        str(MAXIMUM_LIVING_WORLDS * 2),
+    )
+
+    assert LivingWorlds.default_limit() == 1
 
 
 # %% the watched type goes on creating its objects
