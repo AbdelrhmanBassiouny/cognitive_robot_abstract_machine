@@ -18,11 +18,6 @@ class PytestEnvironmentVariable(StrEnum):
     Names the xdist worker a process is; absent in the controller.
     """
 
-    XDIST_WORKER_COUNT = "PYTEST_XDIST_WORKER_COUNT"
-    """
-    How many xdist workers this run split across; absent where it was not split at all.
-    """
-
     ORM_BUILD = "CRAM_ORM_BUILD"
     """
     Names when the run builds the ORM interfaces, for runs that state no ``--orm-build``

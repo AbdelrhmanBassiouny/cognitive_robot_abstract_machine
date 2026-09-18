@@ -22,7 +22,6 @@ from ..living_worlds import (
     UnwatchableWorldTypeError,
     WorldsLeftBehind,
 )
-from ..pytest_environment import PytestEnvironmentVariable
 from .dataset.leakable_object import LeakableObject, ObjectMakingItsOwnInstances
 
 
@@ -80,15 +79,6 @@ def living_worlds(watched_objects: LivingWorlds) -> LivingWorlds:
     watched_objects.creations.clear()
     watched_objects.current_test = BEFORE_THE_FIRST_TEST
     return watched_objects
-
-
-@pytest.fixture()
-def single_worker_run(monkeypatch: pytest.MonkeyPatch) -> None:
-    """
-    Pin the default limit to the whole, unsplit :data:`MAXIMUM_LIVING_WORLDS` budget,
-    whether or not the run driving these tests is itself split across xdist workers.
-    """
-    monkeypatch.delenv(PytestEnvironmentVariable.XDIST_WORKER_COUNT, raising=False)
 
 
 # %% which test the surviving worlds are attributed to
@@ -180,9 +170,7 @@ def test_a_world_reaches_the_record_however_it_was_made(
 
 
 def test_a_module_within_the_limit_is_let_through(
-    living_worlds: LivingWorlds,
-    stand_in_test_names: StandInTestNames,
-    single_worker_run: None,
+    living_worlds: LivingWorlds, stand_in_test_names: StandInTestNames
 ):
     living_worlds.current_test = stand_in_test_names.leaking_test
     kept = [LeakableObject() for _ in range(MAXIMUM_LIVING_WORLDS)]
@@ -195,9 +183,7 @@ def test_a_module_within_the_limit_is_let_through(
 
 
 def test_the_reported_limit_is_the_enforced_one(
-    living_worlds: LivingWorlds,
-    stand_in_test_names: StandInTestNames,
-    single_worker_run: None,
+    living_worlds: LivingWorlds, stand_in_test_names: StandInTestNames
 ):
     """
     The number the report states is the number that made it fail, so that a reader is
@@ -212,35 +198,6 @@ def test_the_reported_limit_is_the_enforced_one(
     assert leak.value.limit == MAXIMUM_LIVING_WORLDS
     assert leak.value.worlds_in_memory == len(leaked)
     assert str(MAXIMUM_LIVING_WORLDS) in str(leak.value)
-
-
-# %% the default limit is split across xdist workers
-
-
-def test_the_default_limit_is_the_whole_budget_without_xdist_workers(
-    monkeypatch: pytest.MonkeyPatch,
-):
-    monkeypatch.delenv(PytestEnvironmentVariable.XDIST_WORKER_COUNT, raising=False)
-
-    assert LivingWorlds.default_limit() == MAXIMUM_LIVING_WORLDS
-
-
-def test_the_default_limit_is_split_evenly_across_xdist_workers(
-    monkeypatch: pytest.MonkeyPatch,
-):
-    worker_count = 4
-    monkeypatch.setenv(PytestEnvironmentVariable.XDIST_WORKER_COUNT, str(worker_count))
-
-    assert LivingWorlds.default_limit() == MAXIMUM_LIVING_WORLDS // worker_count
-
-
-def test_the_default_limit_is_never_less_than_one(monkeypatch: pytest.MonkeyPatch):
-    monkeypatch.setenv(
-        PytestEnvironmentVariable.XDIST_WORKER_COUNT,
-        str(MAXIMUM_LIVING_WORLDS * 2),
-    )
-
-    assert LivingWorlds.default_limit() == 1
 
 
 # %% the watched type goes on creating its objects
