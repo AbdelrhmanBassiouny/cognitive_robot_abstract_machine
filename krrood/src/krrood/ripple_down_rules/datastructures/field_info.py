@@ -8,7 +8,7 @@ import sys
 import typing
 from dataclasses import dataclass, Field
 from datetime import datetime
-from krrood.utils import memoize
+from krrood.patterns.caching import memoize
 from types import NoneType
 
 from typing_extensions import Type, get_origin, Optional, get_type_hints, Tuple

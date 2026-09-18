@@ -266,6 +266,7 @@ class _CancelBecauseExternalCollisionViolated(_CancelBecauseCollisionViolated):
     """
     The list of external collision avoidance tasks to check for collisions.
     """
+
     exception: Exception = field(init=False, default=Exception)
     """
     Set to init=False, because this class creates its own exception.
@@ -383,10 +384,12 @@ class ExternalCollisionAvoidance(Goal):
     close.
 
     ..note:: This goal expands into one node pair per collision group, so its children are
-        left out of drawings. Set `plot_specs.collapse_children` to False to draw them.
+        left out of drawings. Set `plot_specifications.collapse_children` to False to draw them.
     """
 
-    plot_specifications: NodePlotSpec = plot_specification_field(NodePlotSpec.create_collapsed_goal_style)
+    plot_specifications: NodePlotSpec = plot_specification_field(
+        NodePlotSpec.create_collapsed_goal_style
+    )
 
     robot: AbstractRobot = field(kw_only=True, default=None)
     """
@@ -441,7 +444,7 @@ class ExternalCollisionAvoidance(Goal):
                     collision_index=index,
                     external_collision_manager=self.external_collision_manager,
                 )
-                self.add_node(distance_monitor)
+                self._add_child_to_motion_statechart(distance_monitor)
 
                 task = _ExternalCollisionAvoidanceTask(
                     name=f"{self.name}/task({group.root.name.name, index})",
@@ -450,12 +453,12 @@ class ExternalCollisionAvoidance(Goal):
                     collision_index=index,
                     external_collision_manager=self.external_collision_manager,
                 )
-                self.add_node(task)
+                self._add_child_to_motion_statechart(task)
                 task.pause_condition = distance_monitor.observation_variable
                 tasks.append(task)
 
         if self.cancel_if_collision_violated:
-            self.add_node(
+            self._add_child_to_motion_statechart(
                 _CancelBecauseExternalCollisionViolated(
                     tasks=tasks,
                     name="External Collision Violated",
@@ -653,6 +656,7 @@ class _CancelBecauseSelfCollisionViolated(_CancelBecauseCollisionViolated):
     """
     The list of self collision avoidance tasks to check for collisions.
     """
+
     exception: Exception = field(init=False, default=Exception)
     """
     Set to init=False, because this class creates its own exception.
@@ -699,11 +703,13 @@ class SelfCollisionAvoidance(Goal):
     active if the monitor detects that a collision is close.
 
     ..note:: This goal expands into one node pair per checked body combination, so its
-        children are left out of drawings. Set `plot_specs.collapse_children` to False to
+        children are left out of drawings. Set `plot_specifications.collapse_children` to False to
         draw them.
     """
 
-    plot_specs: NodePlotSpec = plot_specification_field(NodePlotSpec.create_collapsed_goal_style)
+    plot_specifications: NodePlotSpec = plot_specification_field(
+        NodePlotSpec.create_collapsed_goal_style
+    )
 
     robot: AbstractRobot = field(kw_only=True, default=None)
     """
@@ -790,7 +796,7 @@ class SelfCollisionAvoidance(Goal):
                 collision_group_b=group_b,
                 self_collision_manager=self.self_collision_manager,
             )
-            self.add_node(distance_monitor)
+            self._add_child_to_motion_statechart(distance_monitor)
 
             task = _SelfCollisionAvoidanceTask(
                 name=f"{self.name}/{group_a.root.name.name, group_b.root.name.name}/task",
@@ -799,12 +805,12 @@ class SelfCollisionAvoidance(Goal):
                 max_velocity=self.max_velocity,
                 self_collision_manager=self.self_collision_manager,
             )
-            self.add_node(task)
+            self._add_child_to_motion_statechart(task)
             task.pause_condition = distance_monitor.observation_variable
             tasks.append(task)
 
         if self.cancel_if_collision_violated:
-            self.add_node(
+            self._add_child_to_motion_statechart(
                 _CancelBecauseSelfCollisionViolated(
                     name="self collision violated", tasks=tasks
                 )

@@ -4,6 +4,9 @@ from krrood.entity_query_language.core.base_expressions import SymbolicExpressio
 from krrood.entity_query_language.core.mapped_variable import (
     MappedVariable,
 )
+from krrood.entity_query_language.core.expression_structure import (
+    boolean_terminal_attribute,
+)
 from krrood.entity_query_language.core.variable import Variable
 from krrood.entity_query_language.verbalization.attribute_predicates import (
     boolean_alternative_clause,
@@ -171,6 +174,6 @@ class ChainAssembler(Assembler[MappedVariable, ChainPlan]):
         >>> verbalize_expression(variable(Worker, []).tasks[0].completed)
         'the first task of a Worker is completed'
         """
-        terminal = plan.chain[-1]
+        terminal = boolean_terminal_attribute(plan.chain)
         navigation_fragment = self.context.child(terminal._child_, inline=True)
         return navigation_fragment, terminal
