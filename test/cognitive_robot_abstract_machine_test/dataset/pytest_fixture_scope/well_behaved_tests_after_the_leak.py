@@ -1,5 +1,5 @@
 """
-A clean module that runs after ``leaking_test.py``, proving that an already-reported
+A clean module that runs after ``leaking_module.py``, proving that an already-reported
 leak does not spill over and misattribute itself to a later, innocent module.
 
 Copied into an isolated pytest run by ``test_leaked_worlds_pytest_integration.py``.

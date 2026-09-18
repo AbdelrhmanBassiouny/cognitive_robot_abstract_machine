@@ -61,7 +61,7 @@ def test_a_module_of_well_behaved_tests_passes(isolated_run: pytest.Pytester):
 
 
 def test_a_genuine_leak_is_caught_and_named(isolated_run: pytest.Pytester):
-    _copy_dataset_file(isolated_run, "test_leaky", "leaking_test.py")
+    _copy_dataset_file(isolated_run, "test_leaky", "leaking_module.py")
 
     result = isolated_run.runpytest()
 
@@ -81,7 +81,7 @@ def test_a_genuine_leak_is_caught_and_named(isolated_run: pytest.Pytester):
 def test_a_reported_leak_does_not_recur_for_a_later_module(
     isolated_run: pytest.Pytester,
 ):
-    _copy_dataset_file(isolated_run, "test_a_leaky", "leaking_test.py")
+    _copy_dataset_file(isolated_run, "test_a_leaky", "leaking_module.py")
     _copy_dataset_file(
         isolated_run, "test_b_clean", "well_behaved_tests_after_the_leak.py"
     )
