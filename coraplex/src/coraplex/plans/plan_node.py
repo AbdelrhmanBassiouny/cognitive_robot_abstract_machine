@@ -5,7 +5,7 @@ from abc import abstractmethod, ABC
 from collections import deque
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Optional, Any, List, Type, TYPE_CHECKING, Iterable
+from typing import Optional, Any, List, Type, TYPE_CHECKING, Iterable, Iterator
 
 from typing_extensions import Union
 
@@ -18,6 +18,7 @@ from coraplex.datastructures.execution_data import ExecutionData
 from coraplex.plans.executables import (
     Executable,
     GiskardExecutable,
+    UnderspecifiedExecutable,
 )
 from coraplex.plans.failures import PlanFailure
 from coraplex.plans.motion_state_chart_building import BuildsMotionStateChart
