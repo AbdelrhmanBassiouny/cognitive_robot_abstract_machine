@@ -2581,4 +2581,3 @@ clean merge, re-tested after.
 was exercised against the robot this session (it was off) -- both are reasoned fixes
 plus plan-construction/unit tests, not a confirmed cure for the `retract_and_park`
 hang. Next real run is what actually tells.
-

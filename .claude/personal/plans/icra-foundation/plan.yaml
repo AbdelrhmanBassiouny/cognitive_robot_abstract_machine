@@ -221,57 +221,62 @@ items:
     ShapeCollection.to_json raised TypeError for any shape of a body serialized with a
     ReferenceWriter - the standing hazard's fourth instance, and the first that is a changed
     signature rather than a renamed field, which the recorded field-diff sweep cannot find. A test
-    pins it. Full detail in roadmap.md.
-    2026-09-11 (evening): the ~0.2 m live position offset is the Tracy URDF's stale camera_link
-    calibration (2026-04-30): measured off every capture's depth the camera is pitched 22.9 deg off the
-    table's normal, not 11.0, and stands 0.894 m up, not 0.935. The seven captures now state the fitted
-    pose (746f8ea3c), a test fails on any capture whose pose does not level its table, the board is the
-    size of its mesh (0.865 was the foreshortening), the workspace reaches the table's far edge, and a
-    look is handed the set of pieces on the table (the smaller 0.8 set with its own hues since
-    September). scaled_pieces_in_a_row, taken off the live camera and tape-measured, has all four pieces
-    reported within 15 mm. Montessori suite 775 passed, 11 xfailed. Still the developer's: recalibrate
-    the URDF; the lid measures 73 mm above the table where the twin says 80.
+    pins it. Full detail in roadmap.md. 2026-09-11 (evening): the ~0.2 m live position offset is the
+    Tracy URDF's stale camera_link calibration (2026-04-30): measured off every capture's depth the
+    camera is pitched 22.9 deg off the table's normal, not 11.0, and stands 0.894 m up, not 0.935.
+    The seven captures now state the fitted pose (746f8ea3c), a test fails on any capture whose pose
+    does not level its table, the board is the size of its mesh (0.865 was the foreshortening), the
+    workspace reaches the table's far edge, and a look is handed the set of pieces on the table (the
+    smaller 0.8 set with its own hues since September). scaled_pieces_in_a_row, taken off the live
+    camera and tape-measured, has all four pieces reported within 15 mm. Montessori suite 775
+    passed, 11 xfailed. Still the developer's: recalibrate the URDF; the lid measures 73 mm above
+    the table where the twin says 80.
 
     2026-09-12: the pickup demo runs on the perception pipeline (97223f4f1, on the branch as
-    e4b8167d8). pickup_demo_real places nothing by hand: the look stands the board and the
-    pieces in the live world (scene_publishing.py) and PerceivedSorting sorts each into the
-    perceived board's hole, tested on the tape-measured capture. pickup_demo_mujoco is the same
-    run in MuJoCo with a belief holding Tracy alone, the camera on camera_link at the captures'
-    optical pose, and the belief's joints following the simulation; cube, cylinder and
-    rectangular prism go through their holes, the triangular prism slips out of the parallel
-    pads on the carry (strict xfail). Three simulation fixes: the shoulder links sunk into the
-    table pinned the pan joint; the simulated close aims at the narrowest width and stops on
-    any shared fingertip contact; loose pieces get torsional friction
-    (MujocoGeom.contact_dimensionality). #316 was merged into this branch by its own session
-    the same night and its branch fast-forwarded to this tip. Full detail in roadmap.md.
+    e4b8167d8). pickup_demo_real places nothing by hand: the look stands the board and the pieces in
+    the live world (scene_publishing.py) and PerceivedSorting sorts each into the perceived board's
+    hole, tested on the tape-measured capture. pickup_demo_mujoco is the same run in MuJoCo with a
+    belief holding Tracy alone, the camera on camera_link at the captures' optical pose, and the
+    belief's joints following the simulation; cube, cylinder and rectangular prism go through their
+    holes, the triangular prism slips out of the parallel pads on the carry (strict xfail). Three
+    simulation fixes: the shoulder links sunk into the table pinned the pan joint; the simulated
+    close aims at the narrowest width and stops on any shared fingertip contact; loose pieces get
+    torsional friction (MujocoGeom.contact_dimensionality). #316 was merged into this branch by its
+    own session the same night and its branch fast-forwarded to this tip. Full detail in roadmap.md.
 
-    2026-09-12 (day): record_episode --scene perceived. A run on the robot is set in the
-    world fetched from it with the board and the pieces stood by its own camera
-    (TracyLookingAtItsOwnTable over PerceivedScene), its layout read off what was found
-    (LayoutAsFound), and carried by no simulation (RealScene); the three scripts whose
-    steps need the simulation refuse to run on the robot. --execution real used to build
-    the scene from the URDF and simulate it. One connection to the robot (LiveTracy) is
-    shared by the real demo, the perception node and the recorder; the live node no
-    longer serves a look taken before the board's lid was handed to it. Tested offline
-    end to end on the tape capture in Tracy's own parsed world. Still the developer's:
-    a perceived run answers its questions from the model the perturbation moved, not
-    from a second look. Full detail in roadmap.md.
+    2026-09-12 (day): record_episode --scene perceived. A run on the robot is set in the world
+    fetched from it with the board and the pieces stood by its own camera (TracyLookingAtItsOwnTable
+    over PerceivedScene), its layout read off what was found (LayoutAsFound), and carried by no
+    simulation (RealScene); the three scripts whose steps need the simulation refuse to run on the
+    robot. --execution real used to build the scene from the URDF and simulate it. One connection to
+    the robot (LiveTracy) is shared by the real demo, the perception node and the recorder; the live
+    node no longer serves a look taken before the board's lid was handed to it. Tested offline end
+    to end on the tape capture in Tracy's own parsed world. Still the developer's: a perceived run
+    answers its questions from the model the perturbation moved, not from a second look. Full detail
+    in roadmap.md.
 
-    2026-09-12 (afternoon): that open point is closed, by a change of what a
-    perturbation is. A perturbation of the scene is an event someone other than the
-    robot brings about: segmind's events gain reproduce(world) (ReproducibleEvent, a
-    motion event reproduced by putting the object where the motion ended, through the
-    new World.move_branch_to), the shove and the slid board are events brought about
-    (EventBroughtAbout), the run reproduces the event in simulation, and on the robot
-    the person at the table (Person, replacing the operator prompt) brings it about and
-    the scenario looks at its scene again (Scenario.perceive) -- the model is never
-    written by hand. A run on the robot therefore needs a scene it can look at again
-    (PerceivingWorldBuilder; record_episode defaults --scene to perceived under
-    --execution real and refuses built), and a second look at the perceived scene keeps
-    the pieces it finds again as the bodies they were and moves the held board to where
-    the camera finds it now. Motion detectors were labelling world-frame poses with the
-    tracked body as frame; fixed. #319 merged in from the fork on the way. Still not run
-    on the robot. Full detail in roadmap.md.
+    2026-09-12 (afternoon): that open point is closed, by a change of what a perturbation is. A
+    perturbation of the scene is an event someone other than the robot brings about: segmind's
+    events gain reproduce(world) (ReproducibleEvent, a motion event reproduced by putting the object
+    where the motion ended, through the new World.move_branch_to), the shove and the slid board are
+    events brought about (EventBroughtAbout), the run reproduces the event in simulation, and on the
+    robot the person at the table (Person, replacing the operator prompt) brings it about and the
+    scenario looks at its scene again (Scenario.perceive) -- the model is never written by hand. A
+    run on the robot therefore needs a scene it can look at again (PerceivingWorldBuilder;
+    record_episode defaults --scene to perceived under --execution real and refuses built), and a
+    second look at the perceived scene keeps the pieces it finds again as the bodies they were and
+    moves the held board to where the camera finds it now. Motion detectors were labelling
+    world-frame poses with the tracked body as frame; fixed. #319 merged in from the fork on the
+    way. Still not run on the robot. Full detail in roadmap.md.
+
+    2026-09-18: this item merges montessori-eql-stack's #256 as a plain git merge rather than a
+    stacked pull-request base, so nothing here needed to change when #256 was retargeted from #244
+    to #410 as part of splitting #244 into per-package pull requests (#408 krrood, #409
+    semantic_digital_twin, #410 segmind). But this branch's own #256 merge is now stale relative to
+    #256's restack (its content still comes from old #244, unresolved against current main), and it
+    will need a follow-up re-merge of #256's updated tip once #256 finishes restacking and is
+    pushed. Not done as part of that session's work - flagged here rather than fixed, since it
+    belongs to this item's own branch.
 - id: segmind-detectors-on-the-demo-branch
   title: >-
     The demo branch takes its own segmind detectors, grasp events and gripper feedback
