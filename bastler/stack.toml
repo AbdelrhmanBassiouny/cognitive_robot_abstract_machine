@@ -19,6 +19,9 @@
 #   * integration-conflict = the `integration_conflict_label` on the fork PR (set when a branch is
 #                            found to break a sibling it merges cleanly with; withholds the branch
 #                            the same way, and is never cleared automatically).
+#   * integrated           = the `integrated_label` on the fork PR (set when a build carrying the
+#                            branch is published, removed when one that drops it is; read by a
+#                            person, and blocking nothing).
 
 in_review_label = "in-review"  # fork-PR label marking "promoted to cram2, under review"
 rebase_label = "rebase"        # fork-PR label opting a branch into rebase instead of the default merge
@@ -27,6 +30,11 @@ needs_resolution_label = "needs-resolution"  # set by the routine on a delegated
 # mergeable state that clears `needs_resolution_label` says nothing about it. A separate label keeps
 # the automatic clearing keyed to the case it actually describes; both labels block through one path.
 integration_conflict_label = "integration-conflict"
+# integrated_label: says, on the pull request itself, that the integration branch a developer works
+# from currently carries this branch. Written when a build is published rather than when one is
+# assembled - a build that is assembled may go red and never be adopted - and reconciled across every
+# open pull request, so a branch a later build drops loses it again.
+integrated_label = "integrated"
 # fork_repository: deliberately unset - the fork is derived from `fork_remote`'s URL, so this file
 # names nobody's fork. Set it (here or in a personal override) only for a checkout whose fork remote
 # is not the fork. `ROUTINE.md` reads the resolved value rather than naming an owner.
