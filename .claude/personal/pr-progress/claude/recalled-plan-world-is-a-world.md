@@ -24,6 +24,18 @@ What shipped
 - test/krrood_test: 2085 passed, 5 skipped; 2 failures are the sandbox missing the
   graphviz dot binary.
 
+Profiling (asked for after the push, nothing changed in the branch)
+- digraph_find_cycle runs on the graph of mapping *types* (a handful per conversion),
+  so it is 1-4 us per conversion and flat in the number of references: 0.26 us at 2
+  nodes, 0.75 us at 10, 6.7 us at 100, 54 us at 1000. Whole test_ormatic run: 0.167 ms
+  total over 51 conversions.
+- Ordering totals old vs new at 100k references: 90.7 ms vs 91.3 ms - the check costs
+  nothing measurable.
+- The time is in the per-reference has_path loop (~0.9 us per reference, 89 ms at 100k),
+  which the previous implementation had too. Asking once per (held, holder) type pair
+  instead of once per reference measures 8x faster (89 ms -> 11 ms at 100k). Offered to
+  the user, not implemented.
+
 State
 - PR description rewritten to match; one PR comment posted answering both reviews.
 - Left ready-for-review (not re-drafted): the owner marked it ready themselves and it
