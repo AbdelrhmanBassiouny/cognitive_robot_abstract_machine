@@ -23,10 +23,14 @@ that krrood's test ORM mapped enums natively was wrong.
 - PR description rewritten; PR converted back to draft (the `in-review` label takes
   precedence in `derive_status`, so stack status is unaffected).
 
+**Suite verified**: krrood suite run on the branch and on `origin/main` with the same
+selection; failure sets are byte-identical (24 failed, all in test_rustworkx_utils
+graph visualizers and test_ripple_down_rules/test_object_diagram.py - graphviz/flask
+gaps in this container). Branch 2062 passed vs main 2060: the two added tests.
+Three modules cannot collect here for missing optional deps (casadi, mypy,
+semantic_digital_twin).
+
 **Outstanding**
-- Full krrood suite was still running at push time; the two affected directories
-  passed (101 tests). Three modules cannot collect in this container for missing
-  optional deps (casadi, mypy, semantic_digital_twin) - environment, not the change.
 - The upstream thread needs a reply from the user; AGENTS.md forbids commenting on
   upstream from here. Draft reply text is in the session chat.
 
