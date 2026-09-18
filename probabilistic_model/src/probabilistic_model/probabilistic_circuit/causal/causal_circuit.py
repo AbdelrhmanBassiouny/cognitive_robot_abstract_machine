@@ -9,7 +9,7 @@ from typing import Any, Dict, List, Optional, Set, Tuple, Union
 
 from anytree import NodeMixin, PreOrderIter, findall
 from scipy.special import logsumexp
-from random_events.interval import Interval, closed
+from random_events.interval import closed
 from random_events.product_algebra import SimpleEvent, Event
 from random_events.sigma_algebra import AbstractCompositeSet, AbstractSimpleSet
 from random_events.variable import Variable
@@ -419,37 +419,18 @@ class CausalCircuit:
         return any(other != first for other in others)
 
     @staticmethod
-    def _has_extent(event: Event, query_variable: Variable) -> bool:
-        """
-        :param event: An event over ``query_variable`` alone.
-        :param query_variable: The variable the event restricts.
-        :return: Whether the event carries more than a boundary. A simple event never
-            holds an empty assignment, so a set of symbols always does; an interval
-            does unless every piece of it is a single point, which is all two
-            continuous regions that touch at an endpoint, as neighbouring leaves of a
-            fitted tree do, have in common.
-        """
-        for simple_event in event.simple_sets:
-            value = simple_event[query_variable]
-            if not isinstance(value, Interval):
-                return True
-            if any(not interval.is_singleton() for interval in value.simple_sets):
-                return True
-        return False
-
-    @classmethod
-    def _overlapping_pair_exists(
-        cls, child_marginals: List[Any], query_variable: Variable
-    ) -> bool:
+    def _overlapping_pair_exists(child_marginals: List[Any]) -> bool:
         """
         Return True if any pair of child marginals intersects in more than a boundary.
 
+        Two continuous regions that only touch at an endpoint, as neighbouring leaves of
+        a fitted tree do, intersect in a set of size zero and do not overlap.
+
         :param child_marginals: Marginal support events, one per SumUnit child.
-        :param query_variable: The variable the marginals are restricted to.
         :returns: True if any pair overlaps.
         """
         return any(
-            cls._has_extent(first.intersection_with(second), query_variable)
+            first.intersection_with(second).size > 0
             for first, second in itertools.combinations(child_marginals, 2)
         )
 
@@ -474,7 +455,7 @@ class CausalCircuit:
         """
         if not self._child_marginals_split_on_variable(child_marginals):
             return None
-        if self._overlapping_pair_exists(child_marginals, query_variable):
+        if self._overlapping_pair_exists(child_marginals):
             return OverlappingChildSupportsViolation(
                 sum_unit_index=node.index,
                 query_variable=query_variable,
