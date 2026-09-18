@@ -69,13 +69,29 @@ no world), and the message said "more than 20 worlds" while the check was `> 30`
    the combined budget, failed with exit code 1 and the aggregate message when it
    didn't. This is the thing the unit tests alone could not have caught, per the
    lesson from step 6.
-9. [next] **Needs the developer's call, not this session's**: how to respond to
-   Tigul upstream about the worker-count ask now that both the per-worker-divisor
-   attempt (reverted, step 6) and the combined-across-workers addition (step 8)
-   have been tried - which one, if either, actually answers what Tigul meant is a
-   decision for a human on the upstream thread, not something to guess a third
-   time. CI on commit ac40bfb02 was pending as of last check, not yet confirmed
-   green.
+9. [done] Told the combined budget should be a flat total, not the per-worker
+   figure times worker count (I had scaled it in step 8, same shape of mistake
+   as the reverted step-6 divisor, just inverted). Commit 2de5219fb:
+   `enforce_combined_limit`'s parameter renamed `limit_per_worker` ->
+   `limit`, no more `* len(tallies)` - it now compares the summed total
+   straight against one shared `MAXIMUM_LIVING_WORLDS` (30), whatever number
+   of processes reported. Added a test pinning that two processes each within
+   the per-module budget can still combine to more than the flat total, which
+   is exactly what distinguishes this from the reverted shape. Updated every
+   existing ledger test for the renamed parameter.
+10. [next] **Needs real CI data, not a guess**: whether flat 30 actually holds
+    once real xdist workers report their tallies in is unverified - CI on
+    commit 2de5219fb has not run yet (heavy account-wide runner contention;
+    commit ac40bfb02 before it never got a CI run at all, 0 statuses). If the
+    real combined total comes back over 30, per direct instruction: raise
+    `MAXIMUM_LIVING_WORLDS` to roughly double that *observed* number rather
+    than inventing one - i.e. wait for the actual `LeakedWorldsAcrossWorkersError`
+    (or a passing run) to report the true summed total, then act on that
+    number. Also still open from step 9's predecessor: how to respond to Tigul
+    upstream now that three different implementations of "depend on the
+    workers" have been tried (reverted divisor, worker-scaled combined check,
+    now flat-total combined check) - a decision for a human on the upstream
+    thread, not something to guess a fourth time.
 
 **Verification notes**
 - The workspace packages are not installed in this container (no `semantic_digital_twin`,
