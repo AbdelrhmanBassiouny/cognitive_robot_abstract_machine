@@ -116,11 +116,33 @@ items:
   depends_on:
   - D-core-aid
   status: in_progress
-  notes: '2026-08-12 steward cascade: restacked onto its cascaded base, which now carries main be377fdf
-    (#41 merged 2026-08-10). Full account in roadmap.md section 21. Merged D-core-aid (1ad96142); one
-    conflict, an add/add on rdr/exceptions.py between this branch''s underspecified-target exceptions
-    and main''s AmbiguousBranchSemanticsError. Unioned - no class name collides - and given %% section
-    headers.'
+  notes: >
+    2026-08-12 steward cascade: restacked onto its cascaded base, which now carries main be377fdf
+    (#41 merged 2026-08-10). Full account in roadmap.md section 21. Merged D-core-aid (1ad96142);
+    one conflict, an add/add on rdr/exceptions.py between this branch's underspecified-target
+    exceptions and main's AmbiguousBranchSemanticsError. Unioned - no class name collides - and
+    given %% section headers.
+
+    2026-09-18 review round: the developer's own self-review left two fresh threads on
+    `underspecified.py` — de-abbreviate `inference_targets`' comprehension variable, and rename
+    `UnderspecifiedMatch` to `RDRMatchParser` with a cascade to every branch stacked on it. Both
+    applied (`afeeee5bd`) and pushed; both threads replied to and resolved.
+
+    The cascade only needed a real fixup on the two branches that actually import the class by name:
+    `D-core-single-class` (single_class.py, `63d16e69e`) and `D-core-backend` (backend.py +
+    test_rdr_backend.py, `fa0fbe535`). `D-core-corner-case`, `D-core-serialization`,
+    `D-core-support` and `D-core-expert` don't reference it at all, so their merges (`70e002b03`,
+    `95a13582a`, `8dc331148`, `4633d3016`) carried the commit forward with no conflict and no
+    follow-up needed. Verification was static (grep for the old name, `py_compile` on every touched
+    file) rather than a pytest run: `random_events_lib` is still an unbuilt compiled extension in
+    this container, so `krrood`'s EQL package cannot be imported here at all, matching every other
+    resolution recorded on this stack. CI is the load-bearing check.
+
+    The pre-existing, unrelated blockers on `d-core-single-class` (CI queuing nothing since
+    2026-08-13) and `d-core-backend` (the `semantic_digital_twin` flaky-test check, stuck until a
+    full `main` steward cascade brings `pytest-rerunfailures` down the stack) are untouched by this
+    round — this was a scoped rename cascade, not the 342-commits-behind restack those blockers ask
+    for.
 - id: D-core-corner-case
   title: 'RDR engine: corner-case provenance store'
   branch: D-core-corner-case
