@@ -288,7 +288,7 @@ def test_clearing_a_ledger_that_was_never_written_to_does_not_raise(
 # %% the ledger enforces a limit on every worker's tally combined
 
 
-def test_a_combined_total_within_the_per_worker_limit_times_the_worker_count_passes(
+def test_a_combined_total_within_the_limit_passes(
     ledger: WorldTallyLedger, stand_in_test_names: StandInTestNames
 ):
     ledger.record(
@@ -304,10 +304,10 @@ def test_a_combined_total_within_the_per_worker_limit_times_the_worker_count_pas
         )
     )
 
-    ledger.enforce_combined_limit(limit_per_worker=2)
+    ledger.enforce_combined_limit(limit=4)
 
 
-def test_a_combined_total_over_the_per_worker_limit_times_the_worker_count_raises(
+def test_a_combined_total_over_the_limit_raises(
     ledger: WorldTallyLedger, stand_in_test_names: StandInTestNames
 ):
     ledger.record(
@@ -324,7 +324,7 @@ def test_a_combined_total_over_the_per_worker_limit_times_the_worker_count_raise
     )
 
     with pytest.raises(LeakedWorldsAcrossWorkersError) as leak:
-        ledger.enforce_combined_limit(limit_per_worker=2)
+        ledger.enforce_combined_limit(limit=4)
 
     assert leak.value.worlds_in_memory == 5
     assert leak.value.limit == 4
@@ -345,7 +345,7 @@ def test_the_combined_error_names_the_worker_that_held_the_most_first(
     ledger.record(many)
 
     with pytest.raises(LeakedWorldsAcrossWorkersError) as leak:
-        ledger.enforce_combined_limit(limit_per_worker=2)
+        ledger.enforce_combined_limit(limit=2)
 
     ranked_worker_lines = str(leak.value).splitlines()[2:4]
     assert ranked_worker_lines == [
@@ -355,7 +355,39 @@ def test_the_combined_error_names_the_worker_that_held_the_most_first(
 
 
 def test_an_empty_ledger_enforces_nothing(ledger: WorldTallyLedger):
-    ledger.enforce_combined_limit(limit_per_worker=2)
+    ledger.enforce_combined_limit(limit=2)
+
+
+def test_the_default_combined_limit_is_the_same_budget_the_per_module_check_uses(
+    ledger: WorldTallyLedger, stand_in_test_names: StandInTestNames
+):
+    """
+    The combined limit is a total across every process, not each process's own share
+    of it multiplied by how many processes there are - two processes that would each
+    individually pass the per-module check can still combine to more than the run's
+    one shared budget.
+    """
+    ledger.record(
+        WorkerTally(
+            worker="gw0",
+            left_behind=(
+                WorldsLeftBehind(
+                    stand_in_test_names.leaking_test, MAXIMUM_LIVING_WORLDS
+                ),
+            ),
+        )
+    )
+    ledger.record(
+        WorkerTally(
+            worker="gw1",
+            left_behind=(WorldsLeftBehind(stand_in_test_names.tidy_test, 1),),
+        )
+    )
+
+    with pytest.raises(LeakedWorldsAcrossWorkersError) as leak:
+        ledger.enforce_combined_limit()
+
+    assert leak.value.limit == MAXIMUM_LIVING_WORLDS
 
 
 # %% the watched type goes on creating its objects

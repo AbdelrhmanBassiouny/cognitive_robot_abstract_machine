@@ -21,7 +21,11 @@ from typing_extensions import Any, List, Tuple
 
 MAXIMUM_LIVING_WORLDS: int = 30
 """
-How many worlds one process may still have in memory when a test module has finished.
+The default budget of worlds still in memory: how many one process may still have
+when a test module has finished, and separately, how many every process of a run may
+add up to together - :meth:`LivingWorlds.enforce_limit` and
+:meth:`WorldTallyLedger.enforce_combined_limit` each default to this same number for
+their own, unrelated budget.
 """
 
 BEFORE_THE_FIRST_TEST = "before the first test ran"
@@ -431,25 +435,21 @@ class WorldTallyLedger:
         for tally_path in self.directory.glob("*.json"):
             tally_path.unlink()
 
-    def enforce_combined_limit(
-        self, limit_per_worker: int = MAXIMUM_LIVING_WORLDS
-    ) -> None:
+    def enforce_combined_limit(self, limit: int = MAXIMUM_LIVING_WORLDS) -> None:
         """
         Report the worlds every process recorded, combined, when they add up to more
         than the run's combined budget.
 
-        :param limit_per_worker: How many worlds one process may leave behind; the
-            budget enforced is this times how many processes recorded a tally.
-        :raises LeakedWorldsAcrossWorkersError: When the combined total exceeds that
-            budget.
+        :param limit: How many worlds every process's tally may add up to across the
+            whole run, whatever number of processes reported one.
+        :raises LeakedWorldsAcrossWorkersError: When the combined total exceeds it.
         """
         tallies = self.read_all()
-        combined_limit = limit_per_worker * max(1, len(tallies))
         worlds_in_memory = sum(tally.worlds_in_memory for tally in tallies)
-        if worlds_in_memory <= combined_limit:
+        if worlds_in_memory <= limit:
             return
         raise LeakedWorldsAcrossWorkersError(
             worlds_in_memory=worlds_in_memory,
-            limit=combined_limit,
+            limit=limit,
             tallies=tallies,
         )
