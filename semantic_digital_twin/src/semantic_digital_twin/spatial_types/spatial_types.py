@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from abc import ABC
+from abc import ABC, abstractmethod
 from copy import deepcopy, copy
 from dataclasses import dataclass, field
 from enum import Enum, StrEnum
@@ -79,7 +79,7 @@ class SpatialFrameKey(StrEnum):
 
 
 @dataclass(eq=False, repr=False)
-class SpatialType:
+class SpatialType(ABC):
     """
     Provides functionality to associate a reference frame with an object.
 
@@ -142,11 +142,11 @@ class SpatialType:
                 data, self.reference_frame
             )
 
+    @abstractmethod
     def _constant_to_json(self) -> Dict[str, Any]:
         """
         :return: The json entries holding the numbers of this constant value.
         """
-        raise NotImplementedError
 
     @classmethod
     def _from_json(cls, data: Dict[str, Any], **kwargs) -> Self:
@@ -170,13 +170,13 @@ class SpatialType:
         )
 
     @classmethod
+    @abstractmethod
     def _from_constant_json(cls, data: Dict[str, Any], **kwargs) -> Self:
         """
         :param data: The json of a constant value, as :meth:`_constant_to_json` wrote it.
         :param kwargs: The kwargs of the ``_from_json`` that is reading it.
         :return: The constant value.
         """
-        raise NotImplementedError
 
     @classmethod
     def _parse_optional_frame_from_json(
