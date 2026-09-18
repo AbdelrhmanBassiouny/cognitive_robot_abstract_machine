@@ -153,13 +153,7 @@ items:
     depends_on: [segmind_numeric_hole_events]
     status: in_progress
     session: https://claude.ai/code/session_01PQvyunW5okcgiEHmJZAu8N
-    blockers:
-      - >-
-          2026-09-18: base retargeted from #244 to #410 (segmind_numeric_hole_events) as part of
-          #244's split into per-package pull requests. Restacking this branch's own content
-          (coraplex/giskardpy changes vs main's independent rework of the same files) is in
-          progress in session https://claude.ai/code/session_018BRw6aQGWWkAfdikDGE4iq; not yet
-          pushed. Clears once pushed and the pull request reports clean.
+    blockers: []
     notes: >
       Split out of #169 on 2026-09-03 at the developer's request, so `icra-experiments` can take
       what it needs without taking the console: its foot item names the segmind event monitor, the
@@ -188,6 +182,31 @@ items:
       knowledge-directed-perception item `montessori-classes-in-the-orm` (#223) records for the
       perception classes.
 
+      2026-09-18: restacked onto #410 (segmind_numeric_hole_events), retargeted from #244 as part
+      of its split into per-package pull requests. This branch had not merged main since
+      2026-09-03, so it hit the same shape of conflict montessori_fast_inline_monitor's round 27
+      already resolved once: main's independent rework of coraplex's plan executables (motion
+      state chart, `ReAttachNode`, a `Context.ticks_per_motion` field replacing the old
+      `GiskardExecutable.max_ticks_per_motion_mapping` ClassVar) against this branch's own
+      `Context.update_world_model_attachment` gating and tick-budget/pacer machinery. Eight
+      conflicts, all combined rather than one side taken wholesale - notably `pick_up.py`, where
+      main's new `allow_gripper_collision=True` and this branch's `grasped_object` sizing plus the
+      `ReAttachNode` gating all coexist - and one consequential fix outside the flagged 8:
+      `execution_environment.py`'s dead `max_ticks_per_motion_mapping` ClassVar wiring was removed
+      to match main's `Context.ticks_per_motion` replacement, which a new test on main's side
+      (`test_the_tick_budget_is_not_class_state`) asserts must not exist. `test_pacer.py` (12
+      passed, 1 skipped), `test_montessori_results_recording.py` (8 passed) and the krrood/sdt/
+      segmind suites confirmed green; `test_montessori_event_monitoring.py` and
+      `test_montessori_semantics.py` fail to collect for reasons pre-existing and unrelated to
+      this restack (missing `board.stl`/`montessori_board.py`, absent on this branch's own
+      pre-merge tip too). The `PickUpAction` merge and the tick-budget/pacer interaction are
+      unverified by direct execution - this container has no real robot URDF to build the worlds
+      those tests need - so left flagged rather than claimed tested. Also caught in review: the
+      restack agent was given a stale sha for the segmind base (missing a `rotational_error` ->
+      `rotational_distance` rename fix found on #409/#410 afterward); merged the fix in separately
+      (`7e782de375`) once found. Native stack recreated as #411:
+      `409, 410, 256, 169, 170, 164, 165, 167, 168`.
+
   - id: montessori_fast_inline_monitor
     title: "A monitor tick cheap enough to stay on the planning thread"
     branch: montessori_fast_inline_monitor
@@ -196,15 +215,7 @@ items:
     depends_on: [montessori_monitor_and_recording]
     status: in_progress
     session: https://claude.ai/code/session_01PQvyunW5okcgiEHmJZAu8N
-    blockers:
-      - >-
-          2026-09-18: native GitHub stack #258 (main <- 244, 256, 169, 170, 164, 165, 167, 168) was
-          dissolved as part of splitting #244 into per-package pull requests (#408 krrood, #409
-          semantic_digital_twin, #410 segmind). #256's base is retargeted to #410 and its content
-          restack is in progress; once pushed and clean, the stack is recreated with #409 and #410
-          at the foot in place of #244. This branch's own base/content is unaffected either way -
-          it stacks on #256, not on #244 directly - but it stays unmergeable via the native stack
-          API until the recreate call runs. Session: https://claude.ai/code/session_018BRw6aQGWWkAfdikDGE4iq
+    blockers: []
     notes: >
       Base of the stack. On 2026-08-18 main was merged in twice. The first merge (608bc7fe6) cleared
       the conflicts that had left it dirty, plus the two integration breaks it exposed: the
@@ -336,6 +347,14 @@ items:
       `main` removed the monitors and the executor property that carried it, and says the rework is
       in progress. Nothing here depends on it - the montessori demo pauses between plans through
       `wait_while_paused` - so the merge follows `main` rather than reviving half a mechanism.
+
+      2026-09-18: native GitHub stack #258 (main <- 244, 256, 169, 170, 164, 165, 167, 168) was
+      dissolved as part of splitting #244 into per-package pull requests (#408 krrood, #409
+      semantic_digital_twin, #410 segmind). #256 was restacked onto #410 (its own
+      coraplex/giskardpy conflicts against main's independent rework resolved - see
+      montessori_monitor_and_recording's notes) and the stack recreated as #411:
+      409, 410, 256, 169, 170, 164, 165, 167, 168. This branch's own base/content was unaffected
+      throughout - it stacks on #256, not on #244 directly.
 
   - id: cramera_eql_autocomplete
     title: "Name any class of the workspace in a query, and complete as you type"

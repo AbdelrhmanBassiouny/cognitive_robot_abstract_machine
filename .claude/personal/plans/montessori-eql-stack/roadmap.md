@@ -1936,3 +1936,51 @@ as part of this session's work; flagged on `icra-foundation`'s own item.
 
 Third dissolve on this plan; the `stacked-pr-maintenance` unstack/retarget/restack/recreate sequence
 worked verbatim again.
+
+## 2026-09-18: #256 restacked onto #410, and the native stack recreated as #411
+
+Following the #244 split (previous section), #256 (`montessori_monitor_and_recording`)
+needed its own restack: its base moved from `sdt_segmind_krrood_from_fast_monitor` to
+`segmind_numeric_hole_events` (#410), and #256 had not merged `main` since 2026-09-03, so it
+hit the coraplex/giskardpy rework `montessori_fast_inline_monitor`'s round 27 already
+resolved once for a sibling branch -- main's motion-state-chart rework, `ReAttachNode`, and
+a new `Context.ticks_per_motion` field replacing the old `GiskardExecutable
+.max_ticks_per_motion_mapping` ClassVar -- against this branch's own
+`Context.update_world_model_attachment` gating and tick-budget/pacer machinery.
+
+Eight conflicts, resolved by combining rather than picking one side wholesale wherever both
+sides had added something real: `pick_up.py` keeps main's new `allow_gripper_collision=True`,
+this branch's `grasped_object` sizing, and the `ReAttachNode` gating together.
+`plans/executables.py` took main's `Context.ticks_per_motion` design over this branch's own
+ClassVar mechanism -- confirmed as the right call by a test on main's side asserting the
+ClassVar approach must not exist (`test_the_tick_budget_is_not_class_state`) -- and kept
+this branch's pacer work untouched on top, since pacing and the tick budget are independent
+knobs. One consequential fix outside the flagged 8: `execution_environment.py`'s dead
+`max_ticks_per_motion_mapping` wiring was removed to match, since leaving it would have
+referenced attributes that no longer exist.
+
+Verified as far as the container allows: `test_pacer.py` (12 passed, 1 skipped),
+`test_montessori_results_recording.py` (8 passed), and the krrood/sdt/segmind suites all
+green. Two test files fail to collect for reasons pre-existing and unrelated to this restack
+(missing `board.stl` / `montessori_board.py`, confirmed absent on #256's own pre-merge tip
+too via `git log --all` / `git merge-base --is-ancestor`). Left honestly unverified: the
+`PickUpAction` merge and the tick-budget/pacer interaction, since this container has no real
+robot URDF to build the worlds those tests need -- reading both diffs says the resolution is
+internally consistent, but it has not been exercised end to end.
+
+**A mistake caught in review, not by the agent itself.** The session that kicked off this
+restack gave the delegated agent a literal commit sha for the segmind base
+(`39537034fc`) instead of the branch name, which turned out to be the tip *before* a
+`RotationMatrix.rotational_error` -> `rotational_distance` fix landed on #409/#410 (see the
+previous section). The restack agent had no way to know a newer tip existed; caught by
+checking `git ls-remote` against what the agent actually built from before pushing, and
+fixed with one more merge (`7e782de375`) of the updated segmind tip. Worth keeping as a
+lesson: hand a delegated agent a branch name to track, not a sha frozen at dispatch time,
+when the branch might move before the agent reports back.
+
+### The stack recreated
+
+Stack #258 stayed dissolved from the previous section's split. Recreated as **#411** once
+#256 was clean: `409, 410, 256, 169, 170, 164, 165, 167, 168` -- #409 and #410 at the foot in
+place of #244, every other member unchanged. Confirmed by reading the creation response back:
+all nine members present, in order, each with the right head/base pair.
