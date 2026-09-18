@@ -739,6 +739,15 @@ class VerifySupportDeterminismDisjointnessTestCase(unittest.TestCase):
             [violation.query_variable for violation in ctx.exception.violations], [x]
         )
 
+    def test_fewer_than_two_children_do_not_split(self):
+        """
+        A sum unit with no children, or one, has nothing to split on.
+        """
+        x = Continuous("x")
+        one_child = [SimpleEvent.from_data({x: closed(0, 1)}).as_composite_set()]
+        self.assertFalse(CausalCircuit._child_marginals_split_on_variable([]))
+        self.assertFalse(CausalCircuit._child_marginals_split_on_variable(one_child))
+
 
 class VerifySupportDeterminismSharedSubcircuitTestCase(unittest.TestCase):
     """

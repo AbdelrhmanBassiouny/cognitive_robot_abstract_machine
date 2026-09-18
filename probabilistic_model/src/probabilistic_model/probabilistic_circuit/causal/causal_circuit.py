@@ -405,15 +405,15 @@ class CausalCircuit:
         children differ in their support on that Variable, whether or not any pair of
         them is disjoint: children that overlap without coinciding, as a mixture of one
         copy of a template per sampled value builds, leave no disjoint regions to
-        intervene on either. SumUnits whose children all share the same marginal (e.g.
-        a sibling SumUnit in a ProductUnit that has no relationship to this variable)
-        are not split nodes and must be skipped to avoid false positives.
+        intervene on either. SumUnits whose children all share the same marginal (for
+        example a sibling SumUnit in a ProductUnit that has no relationship to this
+        variable) are not split nodes and must be skipped to avoid false positives. A
+        SumUnit with fewer than two children has nothing to split on.
 
         :param child_marginals: Marginal support events, one per SumUnit child.
         :returns: True if any two marginals differ.
         """
-        first, *others = child_marginals
-        return any(other != first for other in others)
+        return any(marginal != child_marginals[0] for marginal in child_marginals[1:])
 
     @staticmethod
     def _has_extent(event: Event, query_variable: Variable) -> bool:
