@@ -1851,3 +1851,88 @@ One thing to keep: `scripts/format_docstrings.py` wrapped the
 `:py:attr:` cross-reference to `GiskardExecutable.max_ticks_per_motion_mapping` across a
 line break again — the third time this file has recorded that damage. Reverted on #256 so
 both branches keep the same text.
+
+## 2026-09-18: #244 resolved and split into #408, #409, #410 -- and the tracking issue's split plan corrected
+
+`#244` had been merge-conflicted against `main` since 2026-09-07, growing from one file to six
+(`atomic_event_detectors_nodes.py`, `multi_sim.py`, `geometry.py`, `shape_collection.py`,
+`world_entity.py`, `test_planar_bounding_box.py`) as `main` moved on, reported `needs-resolution`
+on every stacked-pr-maintenance pass since. Resolved by merging `main` in: `main`'s independent
+structural reworks (`AxisAlignedBox` genericised over `PointT`, `JointBackedConnection`/direct-actuator
+dispatch in `MultiSim`) were taken as the base structure, with this branch's additions (numeric
+methods, `axis_bounds` returning `Bounds`, `ControlSetpointRamp`) layered on top -- the same pattern
+`montessori_fast_inline_monitor`'s own round 27 used for the equivalent conflict shape. Full krrood
+suite green (2423 passed); segmind and semantic_digital_twin verified as far as the container allows
+(ROS2/`iai_pr2_description`/no-display gaps are pre-existing and unrelated). One real regression the
+merge introduced silently (no conflict marker, since the rename and the call site are different
+files): `main` renamed `RotationMatrix.rotational_error` to `rotational_distance`;
+`test_numeric_pose.py` still called the old name and broke at runtime. Fixed.
+
+One landing hazard is left flagged rather than resolved: `main`'s new direct-actuator dispatch in
+`multi_sim.py` now intercepts a DOF that is both `physically_simulated` and directly actuated before
+it reaches this branch's ramped, contact-aware write path. No test exercises that combination, so
+it is a real open question rather than an invented resolution.
+
+### The split, and where the 2026-09-02 plan was wrong
+
+The 2026-09-02 note on #244 recorded the natural cut as "one pull request per package... each off
+`main`" and said only the `semantic_digital_twin` half was load-bearing downstream. Read against the
+actual code rather than re-asserted, both halves of that were wrong:
+
+- **`segmind` is not independent of `semantic_digital_twin`.** Its split-commit imports `NumericPose`,
+  `.numeric_global_pose` and `.numeric_global_transform` from `semantic_digital_twin.spatial_types.numeric`
+  -- confirmed by reading the commit's actual diff, not by assuming from the description. So it has to
+  stack on the `semantic_digital_twin` pull request, not sit beside it off `main`.
+- **The downstream stack needs `segmind` too, not only `semantic_digital_twin`.** #256's and #169's own
+  new files (`event_monitoring.py`, `database_evaluation.py`, `segmind_event_query_examples.py`,
+  `querying.py`) import `HoleContactDetector`/`LossOfHoleContactDetector` directly, and #246 needs the
+  `geometry_msgs`-import removal from `segmind/datastructures/events.py`. The 2026-09-02 note predates
+  #256 (cut the next day) and was never re-checked against it.
+- **`krrood` really is independent**, the one part of the original plan that held: its commit touches
+  no other package, and nothing downstream imports its additions (checked the same way -- grepped
+  #256's, #169's and #246's own new files for `ormatic.eql_interface`/`ormatic.wrapped_table`/the
+  verbalization additions and found none, only pre-existing `krrood.exceptions.DataclassException`).
+
+Cut the same way #244 itself was originally cut: checked each package's paths out of the resolved
+`#244` tip (`c45fb05dc1`) onto a fresh base, one commit each, verified byte-identical over those paths
+(`git diff <resolved-tip> HEAD -- <paths>` empty) before pushing. Three pull requests:
+
+- **#408 `krrood_eql_orm_fixes`** -- off `main`, standalone.
+- **#409 `sdt_numeric_geometry_and_panda`** -- off `main`, the real foot of the chain.
+- **#410 `segmind_numeric_hole_events`** -- stacked on #409, not on `main`.
+
+The `rotational_error`/`rotational_distance` fix was found after the split branches were already cut
+and pushed, so it had to be propagated forward rather than folded in from the start: added to #409,
+merged into #410, and #246's rebuild redone on the updated tip.
+
+### #246 needed a rebuild, not a merge
+
+Retargeting #246's base via the API (from `sdt_segmind_krrood_from_fast_monitor` to
+`segmind_numeric_hole_events`) left it `dirty`, as expected -- its branch still carried the entire
+unresolved `#244` history. Merging the new base in was tried first and technically worked (`clean`),
+but the diff against the new base then showed 22 files, not #246's own ~8: its branch still carried
+`krrood`'s commit from when it was based on the whole of old `#244`, and the new base doesn't have
+`krrood` in it (that split into its own standalone #408). A merge can't drop content, only add to it.
+Rebuilt the same way the three split branches were: reset to the new base, check out only #246's own
+paths from its previously-resolved tip, recommit. Diff against the new base is now exactly #246's own
+8 files.
+
+### The native stack, dissolved a third time
+
+Stack **#258** (`main` <- `244, 256, 169, 170, 164, 165, 167, 168`) was dissolved
+(`POST /stacks/258/unstack`) to retarget #256's base from `#244` to `#410`. Restacking #256's own
+content -- it hasn't merged `main` since 2026-09-03, so it hits the same `main`-independent reworks
+`montessori_fast_inline_monitor`'s round 27 already resolved once (the motion state chart, dropped
+pause/interrupt monitors, `AttachNode`/`DetachNode` -> `ReAttachNode`) on top of its own
+`Context.update_world_model_attachment` gating -- is in progress; the stack recreate call
+(`POST /stacks` with `[409, 410, 256, 169, 170, 164, 165, 167, 168]`) follows once it's pushed clean.
+
+### Cross-plan: `icra-foundation`'s #265 merged #256's content directly
+
+`integrated-simulation-pipeline` (#265, `icra-foundation`) merged #256 in as a regular git merge
+rather than a stacked base, so its own base pointer is untouched by any of this -- but its content is
+now stale relative to #256's restack and will need a follow-up re-merge once #256 is pushed. Not done
+as part of this session's work; flagged on `icra-foundation`'s own item.
+
+Third dissolve on this plan; the `stacked-pr-maintenance` unstack/retarget/restack/recreate sequence
+worked verbatim again.

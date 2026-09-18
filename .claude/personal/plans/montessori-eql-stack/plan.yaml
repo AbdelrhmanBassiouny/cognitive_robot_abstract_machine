@@ -57,41 +57,109 @@ tracks:
       and the window management to arrange those tabs freely.
 
 items:
-  - id: sdt_segmind_krrood_from_fast_monitor
-    title: "The library half of the fast inline monitor: numeric geometry, hole events and EQL fixes"
-    branch: sdt_segmind_krrood_from_fast_monitor
-    pull_request_number: 244
+  - id: krrood_eql_orm_fixes
+    title: "ORMatic EQL interface and verbalization fixes"
+    branch: krrood_eql_orm_fixes
+    pull_request_number: 408
     track: montessori-eql
     depends_on: []
     status: in_progress
-    session: https://claude.ai/code/session_01UdpwcAQGVFCKEy8VA2iFwv
+    session: https://claude.ai/code/session_018BRw6aQGWWkAfdikDGE4iq
     blockers: []
     notes: >
-      Split out of #169 on 2026-09-01 at the developer's request: everything #169 changes under
-      semantic_digital_twin, segmind and krrood, plus the one physics_simulators change the Mujoco
-      adapter needs and the Armar7 fixtures in test/conftest.py the new sdt tests use. Three commits,
-      one per package, every file byte-identical to #169's tip daeddaf6, so #169 re-based onto it
-      changes nothing in its tree. Now the foot of the stack: #169 depends on it, and the
-      knowledge-directed-perception item episode-replayed-into-the-world (#246) is based on it too.
-      Landing hazard: #229 rewrites reasoning/predicates.py and edits geometry.py, both changed here.
-      2026-09-02 review round: the Body | Region union in segmind's events.py restated as their
-      common base KinematicStructureEntity, and AxisAlignedBox.axis_bounds returns the existing
-      Bounds dataclass per axis rather than positional (float, float) pairs.
-      Should be split further before it is reviewed in earnest: at 54 files it carries three
-      unrelated topics - sdt's numeric geometry and the Panda, segmind's hole events, and krrood's
-      EQL/ORM fixes - and only the sdt half is what #169, #246 and the rest of stack #247 are
-      waiting on. Not split yet because #169, #246 and #247 are all based on this branch, so
-      splitting it now means re-cutting the whole stack a second time.
+      One of three pull requests #244 (sdt_segmind_krrood_from_fast_monitor) split into on
+      2026-09-18, so each package could be reviewed on its own instead of under one 54-file
+      review. The krrood third: the ORMatic entity query language interface and wrapped-table
+      fixes, the aggregator fix, and the conditional verbalization rules (CaseWhenRule) with
+      their vocabulary. Fully independent - nothing here imports from segmind or
+      semantic_digital_twin, and nothing downstream of #244 imports anything this pull request
+      adds (confirmed by reading #256's and #169's own new files: neither references
+      ormatic.eql_interface, ormatic.wrapped_table or the verbalization additions). Based on
+      main directly. Byte-identical to #244's resolved tip (c45fb05dc1) over its paths.
+
+  - id: sdt_numeric_geometry_and_panda
+    title: "Numeric poses, bounds and the Panda"
+    branch: sdt_numeric_geometry_and_panda
+    pull_request_number: 409
+    track: montessori-eql
+    depends_on: []
+    status: in_progress
+    session: https://claude.ai/code/session_018BRw6aQGWWkAfdikDGE4iq
+    blockers: []
+    notes: >
+      One of three pull requests #244 split into on 2026-09-18. The semantic_digital_twin
+      third, and the real foot of the montessori-eql-stack chain going forward (not the whole
+      of #244 as the pre-split notes assumed): numeric (non-CasADi) poses, transforms and
+      bounds, AxisAlignedBox.from_points/empty/overlaps/contains and axis_bounds returning
+      Bounds per axis, an analytic Shape.surface_area, bounds-based rejection in
+      InsideOf/is_supported_by/is_body_in_region, the Mujoco adapter's ControlSetpointRamp and
+      real_time_factor pacing, and the Panda robot with its mesh assets. Based on main
+      directly. Byte-identical to #244's resolved tip (c45fb05dc1) over its paths, plus one
+      follow-up fix (99f36f74) for a RotationMatrix.rotational_error to rotational_distance
+      rename that main made independently and the merge carried through silently (no conflict
+      marker, since the rename and the call site are different files) - found by running
+      test_numeric_pose.py during verification, not by review.
+
+      Landing hazard, left flagged rather than resolved: main's independent rework of
+      MultiSim's joint syncing (JointBackedConnection, direct-actuator dispatch) now intercepts
+      a degree of freedom that is both physically_simulated and driven by a direct (non-tendon)
+      actuator before it reaches this branch's ramped, contact-aware _write_1dof_to_qpos path -
+      only tendon-driven physically-simulated DOFs (e.g. a gripper) still take the old path. No
+      existing test exercises physically_simulated_dofs at all, so this is currently unverified
+      either way; a genuine design question between the two sides' independent additions, not
+      resolved by the merge itself.
+
+  - id: segmind_numeric_hole_events
+    title: "Numeric detector poses and hole contact events"
+    branch: segmind_numeric_hole_events
+    pull_request_number: 410
+    track: montessori-eql
+    depends_on: [sdt_numeric_geometry_and_panda]
+    status: in_progress
+    session: https://claude.ai/code/session_018BRw6aQGWWkAfdikDGE4iq
+    blockers: []
+    notes: >
+      One of three pull requests #244 split into on 2026-09-18. The segmind third: detectors
+      read poses numerically instead of through CasADi, regions can be tracked beside bodies,
+      and hole contact gets its own detectors and events (HoleContactDetector,
+      LossOfHoleContactDetector). The geometry_msgs import in datastructures/events.py goes
+      with it, so segmind imports, and its tests run, without a ROS installation.
+
+      **Correction to the pre-split note on #244** (which said "only the sdt half is what
+      #169, #246 and the rest of stack #247 are waiting on"): that was wrong, or at least
+      predated #256, which was cut after it. Verified by reading actual imports rather than
+      assuming: #256's and #169's own new files (event_monitoring.py, README.md,
+      database_evaluation.py, segmind_event_query_examples.py, querying.py) import
+      HoleContactDetector/LossOfHoleContactDetector directly, and #246 needs this package's
+      geometry_msgs-import removal. So this pull request, not just sdt_numeric_geometry_and_panda,
+      is load-bearing for everything downstream.
+
+      Not independent of sdt_numeric_geometry_and_panda either, despite the tracking issue's
+      2026-09-02 assumption that all three splits would sit "each off main": this package's
+      split-commit directly imports NumericPose, .numeric_global_pose and
+      .numeric_global_transform from semantic_digital_twin.spatial_types.numeric, which the sdt
+      pull request adds - confirmed by reading the commit's actual diff. So it's based on #409,
+      not on main. krrood remains genuinely independent (verified the same way: its commit
+      touches no other package, and nothing downstream imports its additions).
+
+      Byte-identical to #244's resolved tip (c45fb05dc1) over its own paths, plus #409's
+      rotational_error/rotational_distance follow-up merged in (81a24f21).
 
   - id: montessori_monitor_and_recording
     title: "The event monitor, the grasp attachment and the results recording, without the viewer"
     branch: montessori_monitor_and_recording
     pull_request_number: 256
     track: montessori-eql
-    depends_on: [sdt_segmind_krrood_from_fast_monitor]
+    depends_on: [segmind_numeric_hole_events]
     status: in_progress
     session: https://claude.ai/code/session_01PQvyunW5okcgiEHmJZAu8N
-    blockers: []
+    blockers:
+      - >-
+          2026-09-18: base retargeted from #244 to #410 (segmind_numeric_hole_events) as part of
+          #244's split into per-package pull requests. Restacking this branch's own content
+          (coraplex/giskardpy changes vs main's independent rework of the same files) is in
+          progress in session https://claude.ai/code/session_018BRw6aQGWWkAfdikDGE4iq; not yet
+          pushed. Clears once pushed and the pull request reports clean.
     notes: >
       Split out of #169 on 2026-09-03 at the developer's request, so `icra-experiments` can take
       what it needs without taking the console: its foot item names the segmind event monitor, the
@@ -128,7 +196,15 @@ items:
     depends_on: [montessori_monitor_and_recording]
     status: in_progress
     session: https://claude.ai/code/session_01PQvyunW5okcgiEHmJZAu8N
-    blockers: []
+    blockers:
+      - >-
+          2026-09-18: native GitHub stack #258 (main <- 244, 256, 169, 170, 164, 165, 167, 168) was
+          dissolved as part of splitting #244 into per-package pull requests (#408 krrood, #409
+          semantic_digital_twin, #410 segmind). #256's base is retargeted to #410 and its content
+          restack is in progress; once pushed and clean, the stack is recreated with #409 and #410
+          at the foot in place of #244. This branch's own base/content is unaffected either way -
+          it stacks on #256, not on #244 directly - but it stays unmergeable via the native stack
+          API until the recreate call runs. Session: https://claude.ai/code/session_018BRw6aQGWWkAfdikDGE4iq
     notes: >
       Base of the stack. On 2026-08-18 main was merged in twice. The first merge (608bc7fe6) cleared
       the conflicts that had left it dirty, plus the two integration breaks it exposed: the
