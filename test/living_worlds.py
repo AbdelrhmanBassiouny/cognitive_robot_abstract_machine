@@ -12,21 +12,13 @@ import gc
 import json
 import weakref
 from collections import Counter
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from enum import StrEnum
 from pathlib import Path
 
 from krrood.exceptions import DataclassException
-from typing_extensions import Any, List, Tuple
-
-MAXIMUM_LIVING_WORLDS: int = 30
-"""
-The default budget of worlds still in memory: how many one process may still have
-when a test module has finished, and separately, how many every process of a run may
-add up to together - :meth:`LivingWorlds.enforce_limit` and
-:meth:`WorldTallyLedger.enforce_combined_limit` each default to this same number for
-their own, unrelated budget.
-"""
+from typing_extensions import Any, Iterator, List, Tuple
 
 BEFORE_THE_FIRST_TEST = "before the first test ran"
 """
@@ -38,6 +30,27 @@ CREATION_ATTRIBUTE = "__new__"
 """
 What a type creates its instances with, and what the record replaces to see them.
 """
+
+
+class FixtureScope(StrEnum):
+    """
+    A pytest fixture's scope, named the way pytest itself names it.
+    """
+
+    FUNCTION = "function"
+    CLASS = "class"
+    MODULE = "module"
+    PACKAGE = "package"
+    SESSION = "session"
+
+    @property
+    def outlives_a_single_test(self) -> bool:
+        """
+        Whether a fixture of this scope is still being held open once the test that
+        happened to trigger its setup has finished - so a world created while it is
+        being set up is expected to still be alive then, not a leak.
+        """
+        return self in (FixtureScope.MODULE, FixtureScope.PACKAGE, FixtureScope.SESSION)
 
 
 @dataclass
@@ -72,6 +85,15 @@ class WorldCreation:
     """
     Reference to the world that does not keep it alive, so that recording a world never
     turns into the leak it reports.
+    """
+
+    reported: bool = False
+    """
+    Whether a previous module's check already reported this creation as a leak.
+
+    A later module is not blamed for a world an earlier one actually left behind, even
+    though the world is still in memory either way and still counts toward the combined
+    total every process's tally adds up to.
     """
 
     @property
@@ -180,6 +202,31 @@ class LivingWorlds:
     Name of the test the worlds created now are attributed to.
     """
 
+    durable_fixture_depth: int = 0
+    """
+    How many fixtures whose scope outlives a single test are currently being set up,
+    nested or otherwise.
+
+    A world created while this is above zero is not recorded:
+    whatever holds that fixture open is expected to keep the world alive past the
+    test that happened to trigger its creation, so it is not a leak.
+    """
+
+    @contextmanager
+    def ignore_worlds_created_here(self) -> Iterator[None]:
+        """
+        Do not record any world created while this is active.
+
+        Wrap the setup of a fixture whose scope outlives a single test with this, so
+        the worlds it creates or keeps alive - directly, or through whatever it calls
+        - are never mistaken for something a test leaked.
+        """
+        self.durable_fixture_depth += 1
+        try:
+            yield
+        finally:
+            self.durable_fixture_depth -= 1
+
     def watch(self) -> None:
         """
         Record every world the watched type creates from now on.
@@ -217,10 +264,13 @@ class LivingWorlds:
 
     def record(self, world: Any) -> None:
         """
-        Attribute a world to the test running now.
+        Attribute a world to the test running now, unless a fixture whose scope outlives
+        it is why the world exists.
 
         :param world: The world that was just created.
         """
+        if self.durable_fixture_depth > 0:
+            return
         self.creations.append(WorldCreation(self.current_test, weakref.ref(world)))
 
     def forget_collected_worlds(self) -> None:
@@ -234,8 +284,24 @@ class LivingWorlds:
     def surviving_worlds(self) -> Tuple[WorldsLeftBehind, ...]:
         """
         The tests whose worlds are still in memory, the test that left the most first.
+
+        Includes worlds a previous check already reported as a leak: the memory they
+        hold is still there either way.
         """
         worlds_per_test = Counter(creation.test for creation in self.creations)
+        return tuple(
+            WorldsLeftBehind(test, worlds)
+            for test, worlds in worlds_per_test.most_common()
+        )
+
+    def newly_surviving_worlds(self) -> Tuple[WorldsLeftBehind, ...]:
+        """
+        The tests whose worlds are still in memory and have not already been reported as
+        a leak, the test that left the most first.
+        """
+        worlds_per_test = Counter(
+            creation.test for creation in self.creations if not creation.reported
+        )
         return tuple(
             WorldsLeftBehind(test, worlds)
             for test, worlds in worlds_per_test.most_common()
@@ -245,26 +311,37 @@ class LivingWorlds:
         """
         Collect garbage, drop the worlds that have gone, and read back what survived.
 
-        :return: The tests whose worlds are still in memory, the test that left the
-            most first.
+        :return: The tests whose worlds are still in memory, the test that left the most
+            first.
         """
         gc.collect()
         self.forget_collected_worlds()
         return self.surviving_worlds()
 
-    def enforce_limit(self, module: str, limit: int = MAXIMUM_LIVING_WORLDS) -> None:
+    def enforce_limit(self, module: str, limit: int = 0) -> None:
         """
-        Report the worlds a finished test module left in memory, when there are more of
-        them than it may leave.
+        Report the worlds a finished test module left in memory, when there are more
+        of them - not already reported for an earlier module - than it may leave.
 
         :param module: Name of the test module that has just finished.
-        :param limit: How many worlds it may leave behind.
+        :param limit: How many worlds it may leave behind. Defaults to none: every world
+            a fixture whose scope outlives a single test is why it exists was never
+            recorded in the first place, so anything still here has no such excuse.
         :raises LeakedWorldsError: When more worlds than that survived.
+
+        ..note:: Everything this reports is marked reported, so a later module is
+            never blamed for a world this one actually left behind, even though the
+            world stays in memory and keeps counting toward the combined total every
+            process's tally adds up to.
         """
-        left_behind = self.collect_surviving_worlds()
+        gc.collect()
+        self.forget_collected_worlds()
+        left_behind = self.newly_surviving_worlds()
         worlds_in_memory = sum(entry.worlds for entry in left_behind)
         if worlds_in_memory <= limit:
             return
+        for creation in self.creations:
+            creation.reported = True
         raise LeakedWorldsError(
             module=module,
             worlds_in_memory=worlds_in_memory,
@@ -348,9 +425,9 @@ class WorkerTally:
 @dataclass
 class LeakedWorldsAcrossWorkersError(DataclassException, MemoryError):
     """
-    Raised when the worlds still in memory across every process of a run add up to
-    more than the run's combined budget, even where no single process went over its
-    own share.
+    Raised when the worlds still in memory across every process of a run add up to more
+    than the run's combined budget, even where no single process went over its own
+    share.
     """
 
     worlds_in_memory: int
@@ -394,14 +471,14 @@ class LeakedWorldsAcrossWorkersError(DataclassException, MemoryError):
 class WorldTallyLedger:
     """
     Where every process of a run writes its final :class:`WorkerTally`, so whichever
-    process finishes last can read every other process's tally back and enforce a
-    limit on their combined total.
+    process finishes last can read every other process's tally back and enforce a limit
+    on their combined total.
     """
 
     directory: Path
     """
-    Directory each tally is written into and read back from, shared by every process
-    of one run rather than a per-process temporary directory.
+    Directory each tally is written into and read back from, shared by every process of
+    one run rather than a per-process temporary directory.
     """
 
     def record(self, tally: WorkerTally) -> None:
@@ -435,13 +512,14 @@ class WorldTallyLedger:
         for tally_path in self.directory.glob("*.json"):
             tally_path.unlink()
 
-    def enforce_combined_limit(self, limit: int = MAXIMUM_LIVING_WORLDS) -> None:
+    def enforce_combined_limit(self, limit: int = 0) -> None:
         """
         Report the worlds every process recorded, combined, when they add up to more
         than the run's combined budget.
 
         :param limit: How many worlds every process's tally may add up to across the
-            whole run, whatever number of processes reported one.
+            whole run, whatever number of processes reported one. Defaults to none,
+            matching :meth:`LivingWorlds.enforce_limit`'s own default.
         :raises LeakedWorldsAcrossWorkersError: When the combined total exceeds it.
         """
         tallies = self.read_all()
