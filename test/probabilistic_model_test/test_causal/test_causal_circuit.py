@@ -204,6 +204,48 @@ def _build_correlated_circuit() -> tuple:
     return circuit, x, w, y
 
 
+def _build_nested_overlap_circuit() -> tuple:
+    """
+    SumUnit-rooted mixture whose components all overlap on x without being identical:
+    the kind of circuit Monte-Carlo grounding builds when it mixes one copy of a part
+    template per sampled aggregation value.
+
+    Three equal-weight components:
+        Wide:   x∈[0,3], y∈[0,1]
+        Narrow: x∈[0,1], y∈[1,2]
+        Middle: x∈[1,3], y∈[0,2]
+
+    Wide overlaps both others, so no pair of components is disjoint, yet the
+    components do not share one support either: x∈[0,1] lies in Wide and Narrow but
+    not Middle, so the mixture is not support-deterministic over x.
+    """
+    x, y = Continuous("x"), Continuous("y")
+    circuit = ProbabilisticCircuit()
+    root = SumUnit(probabilistic_circuit=circuit)
+
+    for x_range, y_range in [((0, 3), (0, 1)), ((0, 1), (1, 2)), ((1, 3), (0, 2))]:
+        component = ProductUnit(probabilistic_circuit=circuit)
+        component.add_subcircuit(
+            leaf(
+                UniformDistribution(
+                    variable=x, interval=closed(*x_range).simple_sets[0]
+                ),
+                circuit,
+            )
+        )
+        component.add_subcircuit(
+            leaf(
+                UniformDistribution(
+                    variable=y, interval=closed(*y_range).simple_sets[0]
+                ),
+                circuit,
+            )
+        )
+        root.add_subcircuit(component, math.log(1 / 3))
+
+    return circuit, x, y
+
+
 def _build_confounded_circuit() -> tuple:
     """
     Circuit with confounder z that drives both x and y.
@@ -681,6 +723,30 @@ class VerifySupportDeterminismDisjointnessTestCase(unittest.TestCase):
         cc = CausalCircuit.from_probabilistic_circuit(circuit, tree, [x], [y])
         result = cc.verify_support_determinism()
         self.assertTrue(result.passed, msg=f"Violations: {result.violations}")
+
+    def test_components_overlapping_without_a_disjoint_pair_fail(self):
+        """
+        A sum unit splits on a variable as soon as its children's supports on it differ,
+        not only once two of them are disjoint; overlapping children that differ still
+        leave no disjoint regions to intervene on.
+        """
+        circuit, x, y = _build_nested_overlap_circuit()
+        tree = MarginalDeterminismTreeNode.from_causal_graph([x], [y])
+        cc = CausalCircuit.from_probabilistic_circuit(circuit, tree, [x], [y])
+        with self.assertRaises(SupportDeterminismVerificationResult) as ctx:
+            cc.verify_support_determinism()
+        self.assertEqual(
+            [violation.query_variable for violation in ctx.exception.violations], [x]
+        )
+
+    def test_fewer_than_two_children_do_not_split(self):
+        """
+        A sum unit with no children, or one, has nothing to split on.
+        """
+        x = Continuous("x")
+        one_child = [SimpleEvent.from_data({x: closed(0, 1)}).as_composite_set()]
+        self.assertFalse(CausalCircuit._child_marginals_split_on_variable([]))
+        self.assertFalse(CausalCircuit._child_marginals_split_on_variable(one_child))
 
 
 class VerifySupportDeterminismSharedSubcircuitTestCase(unittest.TestCase):
