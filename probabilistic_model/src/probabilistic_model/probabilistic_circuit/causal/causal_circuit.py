@@ -420,19 +420,17 @@ class CausalCircuit:
         """
         :param event: An event over ``query_variable`` alone.
         :param query_variable: The variable the event restricts.
-        :return: Whether the event carries more than a boundary: a set of symbols that
-            is not empty, or an interval of positive length. Two continuous regions
-            that only touch at an endpoint, as neighbouring leaves of a fitted tree
-            do, share no extent.
+        :return: Whether the event carries more than a boundary. A simple event never
+            holds an empty assignment, so a set of symbols always does; an interval
+            does unless every piece of it is a single point, which is all two
+            continuous regions that touch at an endpoint, as neighbouring leaves of a
+            fitted tree do, have in common.
         """
         for simple_event in event.simple_sets:
             value = simple_event[query_variable]
-            if isinstance(value, Interval):
-                if any(
-                    interval.lower < interval.upper for interval in value.simple_sets
-                ):
-                    return True
-            elif not value.is_empty():
+            if not isinstance(value, Interval):
+                return True
+            if any(not interval.is_singleton() for interval in value.simple_sets):
                 return True
         return False
 
