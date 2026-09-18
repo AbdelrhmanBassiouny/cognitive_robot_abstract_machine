@@ -399,33 +399,39 @@ class CausalCircuit:
         child_marginals: List[Any],
     ) -> bool:
         """
-        Return True if at least one pair of child marginals is disjoint.
+        Return True if the child marginals are not all the same.
 
-        A SumUnit is treated as a split node for a query Variable only when at least one
-        pair of its children has disjoint support on that Variable. SumUnits whose
-        children all share the same marginal (e.g. a sibling SumUnit in a ProductUnit
-        that has no relationship to this variable) are not split nodes and must be
-        skipped to avoid false positives.
+        A SumUnit is treated as a split node for a query Variable as soon as its
+        children differ in their support on that Variable, whether or not any pair of
+        them is disjoint: children that overlap without coinciding, as a mixture of one
+        copy of a template per sampled value builds, leave no disjoint regions to
+        intervene on either. SumUnits whose children all share the same marginal (for
+        example a sibling SumUnit in a ProductUnit that has no relationship to this
+        variable) are not split nodes and must be skipped to avoid false positives. A
+        SumUnit with fewer than two children has nothing to split on.
 
         :param child_marginals: Marginal support events, one per SumUnit child.
-        :returns: True if any pair of marginals is disjoint.
+        :returns: True if any two marginals differ.
         """
-        return any(
-            child_marginals[i].intersection_with(child_marginals[j]).is_empty()
-            for i, j in itertools.combinations(range(len(child_marginals)), 2)
-        )
+        if len(child_marginals) < 2:
+            return False
+        first, *others = child_marginals
+        return any(other != first for other in others)
 
     @staticmethod
     def _overlapping_pair_exists(child_marginals: List[Any]) -> bool:
         """
-        Return True if any pair of child marginals has non-empty intersection.
+        Return True if any pair of child marginals intersects in more than a boundary.
+
+        Two continuous regions that only touch at an endpoint, as neighbouring leaves of
+        a fitted tree do, intersect in a set of size zero and do not overlap.
 
         :param child_marginals: Marginal support events, one per SumUnit child.
         :returns: True if any pair overlaps.
         """
         return any(
-            not child_marginals[i].intersection_with(child_marginals[j]).is_empty()
-            for i, j in itertools.combinations(range(len(child_marginals)), 2)
+            first.intersection_with(second).size > 0
+            for first, second in itertools.combinations(child_marginals, 2)
         )
 
     def _check_sum_unit_for_variable(
