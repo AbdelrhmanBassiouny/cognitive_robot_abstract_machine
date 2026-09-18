@@ -79,19 +79,54 @@ no world), and the message said "more than 20 worlds" while the check was `> 30`
    the per-module budget can still combine to more than the flat total, which
    is exactly what distinguishes this from the reverted shape. Updated every
    existing ledger test for the renamed parameter.
-10. [next] **Needs real CI data, not a guess**: whether flat 30 actually holds
-    once real xdist workers report their tallies in is unverified - CI on
-    commit 2de5219fb has not run yet (heavy account-wide runner contention;
-    commit ac40bfb02 before it never got a CI run at all, 0 statuses). If the
-    real combined total comes back over 30, per direct instruction: raise
-    `MAXIMUM_LIVING_WORLDS` to roughly double that *observed* number rather
-    than inventing one - i.e. wait for the actual `LeakedWorldsAcrossWorkersError`
-    (or a passing run) to report the true summed total, then act on that
-    number. Also still open from step 9's predecessor: how to respond to Tigul
-    upstream now that three different implementations of "depend on the
-    workers" have been tried (reverted divisor, worker-scaled combined check,
-    now flat-total combined check) - a decision for a human on the upstream
-    thread, not something to guess a fourth time.
+10. [done] Asked to get rid of the magic number entirely and know the *expected*
+    count instead of guessing one. Answered: the real answer is knowable - a
+    world is expected to survive past its own test exactly when a fixture
+    whose scope outlives a single test (module/package/session) is why it
+    exists; everything else still alive at module end has no such excuse.
+    Asked to build it and prove it actually catches real leaks.
+11. [done] Built and validated the fixture-scope-owner redesign (commit
+    8489a2579), replacing `MAXIMUM_LIVING_WORLDS` entirely:
+    - `FixtureScope` (`living_worlds.py`) names a pytest scope and says whether
+      it `outlives_a_single_test`. `LivingWorlds.ignore_worlds_created_here()`
+      is a nesting-safe context manager stopping `record()` while active. A new
+      `pytest_fixture_setup` hookwrapper in `conftest.py` wraps a durable-scope
+      fixture's setup with it. `enforce_limit`'s default budget is now `0`.
+    - Validated against a **real, separate pytest run** (the `pytester` plugin,
+      now enabled via `-p pytester` in `pytest.ini`), not just unit tests - and
+      it caught two real bugs the unit tests could never have shown:
+      (a) checking at the original module-scoped fixture's teardown flagged
+      the *last* test of every module using a function-scoped fixture, leak or
+      not, since pytest keeps a finished test's own fixture arguments
+      referenced on its item until the next test starts setting up - fixed by
+      deferring the check to the next module boundary (moved into
+      `pytest_runtest_setup`) plus `pytest_sessionfinish` for the last module,
+      both reporting through the terminal reporter + exit status rather than
+      raising (which would misattribute to an unrelated next test); (b) with
+      that fixed, a real leak's own module reported correctly but the *next*
+      module then reported the *same* stale leak again as its own - fixed by
+      marking a `WorldCreation.reported` once raised (`newly_surviving_worlds()`
+      excludes it from later per-module checks; the combined-across-workers
+      ledger still counts it via the unfiltered `surviving_worlds()`, since
+      the memory is genuinely still there).
+    - New permanent regression coverage:
+      `test_leaked_worlds_pytest_integration.py` runs three real isolated
+      pytest sessions via `pytester` against a stand-in conftest mirroring the
+      real hooks (`dataset/pytest_fixture_scope/`), proving: a durable
+      fixture's world is never flagged, a genuine leak is caught and named,
+      and an already-reported leak does not recur for a later module - none of
+      which the existing in-process unit tests could verify, since they only
+      exist at the level of how pytest itself schedules fixture/item teardown.
+      Plus new unit tests for `ignore_worlds_created_here()` and the zero
+      default in `test_leaked_worlds.py`. All 27 tests pass locally.
+12. [next] Still open from step 9's predecessor: how to respond to Tigul
+    upstream about the original "depend on the workers" ask, now that it has
+    been answered four different ways (reverted per-worker divisor,
+    worker-scaled combined check, flat-total combined check, and now removing
+    the threshold concept entirely) - a decision for a human on the upstream
+    thread, not something to guess a fifth time. CI on commit 8489a2579 has
+    not been confirmed green yet (heavy account-wide runner contention has
+    meant no CI run has completed against this branch since commit aca39e582).
 
 **Verification notes**
 - The workspace packages are not installed in this container (no `semantic_digital_twin`,
