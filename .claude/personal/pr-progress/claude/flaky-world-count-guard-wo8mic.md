@@ -119,14 +119,57 @@ no world), and the message said "more than 20 worlds" while the check was `> 30`
       exist at the level of how pytest itself schedules fixture/item teardown.
       Plus new unit tests for `ignore_worlds_created_here()` and the zero
       default in `test_leaked_worlds.py`. All 27 tests pass locally.
-12. [next] Still open from step 9's predecessor: how to respond to Tigul
+12. [done] "Ci has alot of failures" on commit 8489a2579's first real CI run
+    (run 35403465461): `ConftestImportFailure: AttributeError: module pytest
+    has no attribute FixtureDef`, breaking collection for every lib.
+    `pytest_fixture_setup`'s `fixturedef: pytest.FixtureDef` annotation isn't
+    part of pytest's public API in the version CI pins (7.4.4) - confirmed by
+    downloading the real 7.4.4 wheel and checking its `__init__.py`:
+    `FixtureRequest`/`Pytester`/`StashKey`/`ExitCode` are public,
+    `FixtureDef` is not. My local pytester-based validation had used pip's
+    pytest 9.1.1, which does expose `FixtureDef` publicly, masking this the
+    whole time. Fixed with `from __future__ import annotations` in
+    `conftest.py` (commit 26686b87b) - it was the one touched file missing
+    it. Verified precisely against the extracted 7.4.4 package directly (not
+    the sandbox's 9.1.1), then re-ran every unit and pytester-integration
+    test for this guard under a real pytest 7.4.4 install (via a throwaway
+    venv + sandbox mirroring the dataset tree): all pass.
+13. [done] That fix exposed a second, narrower collection bug in the same CI
+    run: `dataset/pytest_fixture_scope/leaking_test.py` matches pytest's own
+    default `*_test.py` collection pattern, so the real suite collected and
+    ran it directly in every lib whose job covers this tree - not only
+    through the isolated `pytester` copy `test_leaked_worlds_pytest_integration.py`
+    makes of it - and its `test_that_leaks_a_world` failed for real with
+    "fixture 'function_world' not found" (that fixture only exists in the
+    nested run's stand-in conftest). Renamed to `leaking_module.py` (commit
+    37cbf0a61); confirmed under the sandbox that `pytest test/ --collect-only`
+    no longer picks it up directly, and the isolated-run tests still pass.
+14. [next - needs a human decision] With both of those fixed, CI now collects
+    and runs everywhere, and surfaces a real, systemic finding rather than a
+    guard bug: the combined-across-workers check (budget 0) reports worlds
+    still alive at session end in every lib that draws on
+    semantic_digital_twin's world fixtures, roughly proportional to how much
+    of that fixture suite each lib's tests touch: semantic_digital_twin 25,
+    giskardpy 14, coraplex 9, robokudo 3, segmind 2, experiments 1. These
+    land in the same range this session's own step-6 investigation already
+    called "legitimate session-scoped residual" (PR2/HSR/apartment/kitchen
+    worlds) - which `ignore_worlds_created_here()` is meant to exempt but
+    evidently isn't fully catching for this codebase's real fixture graph
+    (suspect: fixtures with several layers of session-scoped dependencies,
+    e.g. `pr2_apartment_world` depending on
+    `_pr2_world_setup`/`_apartment_world_setup` - read but not run, since the
+    workspace packages aren't installed here). Documented in the PR
+    description's new "CI round" section. Left open rather than guessed at a
+    fifth time, per the same reasoning as the worker-count question below -
+    needs either a deeper dive into the exemption mechanism against this
+    specific fixture graph, or a decision on an interim non-zero combined
+    budget grounded in this real data.
+15. [next] Still open from step 9's predecessor: how to respond to Tigul
     upstream about the original "depend on the workers" ask, now that it has
     been answered four different ways (reverted per-worker divisor,
-    worker-scaled combined check, flat-total combined check, and now removing
-    the threshold concept entirely) - a decision for a human on the upstream
-    thread, not something to guess a fifth time. CI on commit 8489a2579 has
-    not been confirmed green yet (heavy account-wide runner contention has
-    meant no CI run has completed against this branch since commit aca39e582).
+    worker-scaled combined check, flat-total combined check, and removing the
+    threshold concept entirely) - a decision for a human on the upstream
+    thread, not something to guess a fifth time.
 
 **Verification notes**
 - The workspace packages are not installed in this container (no `semantic_digital_twin`,
