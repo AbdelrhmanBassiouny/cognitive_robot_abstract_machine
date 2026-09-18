@@ -39,12 +39,43 @@ no world), and the message said "more than 20 worlds" while the check was `> 30`
      the worker-split behavior removed, `PYTEST_XDIST_WORKER_COUNT` enum member
      removed (unused after the revert). Documented the finding in the PR description's
      "Review round" section since this session cannot comment on the upstream PR.
-7. [next] **Needs the developer's call, not this session's**: how to respond to Tigul
-   upstream about the worker-count ask, since the literal implementation is
-   technically unsound for this design (see above) - a different way to honor the
-   spirit of the request, or a reply explaining why it doesn't apply, is a decision
-   for a human on the upstream thread. CI on commit aca39e582 was queued as of last
-   check, not yet confirmed green.
+7. [done] Asked whether the per-worker check should also detect a leak as the
+   *combination* of all workers rather than only thresholding each worker on its
+   own; answered no (per-worker was always independent, never summed, both before
+   and after the revert) and explained why a naive sum-and-threshold would be
+   either redundant with the per-worker check (if scaled by worker count) or
+   reintroduce the exact regression from step 6 (if not). Asked to build it anyway.
+8. [done] Built the combined-across-workers check as a genuinely separate,
+   additive mechanism (commit 211af96d9, merged with a routine main-sync in
+   ac40bfb02 - no conflicts, unrelated files): `WorkerTally` (one process's final
+   surviving-worlds breakdown, JSON round-trip) and `WorldTallyLedger` (a shared
+   directory every process writes its tally into at `pytest_sessionfinish` and
+   reads back from) in `living_worlds.py`; `LeakedWorldsAcrossWorkersError` when
+   the summed total exceeds `MAXIMUM_LIVING_WORLDS * how-many-processes-reported`.
+   Wired into `conftest.py`: `pytest_configure` clears the ledger once (the one
+   process not itself an xdist worker, before any tally is written);
+   `pytest_sessionfinish` records this process's tally and, on the controller (or
+   the sole process of a non-distributed run), enforces the combined limit -
+   caught and reported through the terminal reporter plus `session.exitstatus`
+   rather than left to raise (which would otherwise surface as an internal error
+   rather than a clean test-run failure). `collect_surviving_worlds()` factored
+   out of `LivingWorlds.enforce_limit` so both the per-module and the
+   session-finish path share one "collect garbage, drop the dead, read back what
+   survived" step. 15 new unit tests (ledger record/read/clear, JSON round-trip,
+   combined-limit pass/raise/ranking/empty-ledger) plus an actual multi-process
+   verification: a small sandbox package run under real `pytest -n 2` confirmed
+   the whole wiring (worker/controller detection, ledger clearing, sessionfinish
+   ordering) end-to-end - passed when each worker's leak stayed under its share of
+   the combined budget, failed with exit code 1 and the aggregate message when it
+   didn't. This is the thing the unit tests alone could not have caught, per the
+   lesson from step 6.
+9. [next] **Needs the developer's call, not this session's**: how to respond to
+   Tigul upstream about the worker-count ask now that both the per-worker-divisor
+   attempt (reverted, step 6) and the combined-across-workers addition (step 8)
+   have been tried - which one, if either, actually answers what Tigul meant is a
+   decision for a human on the upstream thread, not something to guess a third
+   time. CI on commit ac40bfb02 was pending as of last check, not yet confirmed
+   green.
 
 **Verification notes**
 - The workspace packages are not installed in this container (no `semantic_digital_twin`,
@@ -60,3 +91,5 @@ no world), and the message said "more than 20 worlds" while the check was `> 30`
   copy has no `semantic_digital_twin` session fixtures to exercise, so it couldn't have
   shown this. Worth remembering next time a "should depend on X" review ask touches
   this guard: verify against real CI before calling it done, not just the unit tests.
+  Applied that lesson in step 8 by additionally verifying against real `pytest-xdist`
+  multi-process runs in a throwaway sandbox, not only in-process unit tests.
