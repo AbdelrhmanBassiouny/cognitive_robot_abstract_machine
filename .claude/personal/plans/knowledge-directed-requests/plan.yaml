@@ -451,28 +451,68 @@ items:
   depends_on: []
   status: in_progress
   session: https://claude.ai/code/session_019FYgjdCK7BStm7KdSDyrwY
-  notes: 'The digital twin models a surface''s colour but not its finish, which is the property that
-    decides whether colour segmentation works at all: the brushed steel table throws a diffuse, piece-coloured
-    reflection with no sharp boundary anywhere, which is why the edge fit had to be written. A matte
-    / glossy / mirror finish annotation is what turns "the steel table and the wooden lid need different
-    pipelines" into something the robot knows rather than a branch somebody wrote. Touches only semantic_digital_twin,
-    so it can start off main immediately.
+  notes: >
+    The digital twin models a surface's colour but not its finish, which is the property that
+    decides whether colour segmentation works at all: the brushed steel table throws a diffuse,
+    piece-coloured reflection with no sharp boundary anywhere, which is why the edge fit had to be
+    written. A matte / glossy / mirror finish annotation is what turns "the steel table and the
+    wooden lid need different pipelines" into something the robot knows rather than a branch
+    somebody wrote. Touches only semantic_digital_twin, so it can start off main immediately.
 
     Built 2026-08-29 as 80100bd4 on #216: SurfaceFinish (matte / glossy / mirror) beside Color and
-    Texture, and Shape.finish carrying it, optional so that None means the finish has not been stated
-    rather than that it is matte. Adding it forced Shape''s own constructor arguments to be read
-    once by Shape.arguments_from_json instead of a fourth time in each of Sphere, Cylinder and Box,
-    and Mesh.from_trimesh to carry a finish, which is the only appearance property a mesh has no
-    other carrier for. 45 tests pass in test_shape.py against 25 on the parent, the whole semantic_digital_twin
-    suite''s failing and erroring set is unchanged, and the regenerated ORM maps the field as Mapped[Optional[SurfaceFinish]]
-    on PolymorphicEnumType.
+    Texture, and Shape.finish carrying it, optional so that None means the finish has not been
+    stated rather than that it is matte. Adding it forced Shape's own constructor arguments to be
+    read once by Shape.arguments_from_json instead of a fourth time in each of Sphere, Cylinder and
+    Box, and Mesh.from_trimesh to carry a finish, which is the only appearance property a mesh has
+    no other carrier for. 45 tests pass in test_shape.py against 25 on the parent, the whole
+    semantic_digital_twin suite's failing and erroring set is unchanged, and the regenerated ORM
+    maps the field as Mapped[Optional[SurfaceFinish]] on PolymorphicEnumType.
 
-    The developer took #216 out of draft on 2026-08-29, which ends the building session''s work on
+    The developer took #216 out of draft on 2026-08-29, which ends the building session's work on
     it: CI was green on 21 of 23 checks with the other two still running and none red, and the pull
     request now waits on review rather than on this plan. Two decisions are recorded rather than
-    left implicit, both in roadmap.md: no adapter infers a finish from MuJoCo specular/shininess/reflectance,
-    and a derived supporting-surface Region does not inherit its body''s finish - detect-per-supporting-surface
-    has to declare it on the region it builds.'
+    left implicit, both in roadmap.md: no adapter infers a finish from MuJoCo
+    specular/shininess/reflectance, and a derived supporting-surface Region does not inherit its
+    body's finish - detect-per-supporting-surface has to declare it on the region it builds.
+
+    Resolved 2026-09-18: `sdt_surface_finish_annotation` (#216) had drifted behind `main` since
+    2026-09-10, reported by the integration routine's "NEEDS RESOLUTION" bot on every pass (22
+    comments) as a merge conflict in `geometry.py`. The conflict was `main`'s own later, larger
+    refactor of `Shape` (#650-era): `Shape.to_json`/`_from_json` became fully generic over
+    `_serialized_fields()` (every `init=True` dataclass field), and `Sphere`/`Cylinder`/ `Box`
+    dropped their per-class `to_json`/`_from_json` overrides entirely, relying on the generic base
+    implementation.
+
+    Resolution: merged `main` into the branch and re-based this item's JSON glue onto the
+    now-generic mechanism rather than keeping its own manual one. Concretely:
+
+    - Dropped `Shape.finish_from_json`/`Shape.arguments_from_json` and the hand-written   `to_json`
+    dict in `Shape.to_json` - the generic `_serialized_fields()` loop already   serializes `finish`
+    (as `Optional[SurfaceFinish]`) with no code needed, since   `krrood.adapters.json_serializer`
+    already round-trips a bare `enum.Enum` generically   via `EnumJSONSerializer`. - Dropped
+    `Sphere`/`Cylinder`/`Box`'s `to_json`/`_from_json` overrides to match `main` -  they are
+    redundant with the base class's generic serialization. - Kept the `finish` parameter this item
+    added to `Mesh.from_trimesh` (a mesh has no other   carrier for the finish, unlike
+    colour/texture which live in the trimesh visual) and   fixed `Mesh._from_json`'s one remaining
+    call site to read `finish` back with the   generic `from_json(data.get("finish"))` instead of
+    the removed `finish_from_json`.
+
+    Net effect: the feature is unchanged (`Shape.finish`, `SurfaceFinish`, the `Mesh` carrier), but
+    the JSON glue this item originally wrote for it is now gone - `main`'s own refactor made it
+    unnecessary. Verified by reading the actual `krrood.adapters .json_serializer` mechanism
+    (`EnumJSONSerializer`, `SubclassJSONSerializer.to_json`/ `from_json`) directly rather than
+    assuming; a standalone script exercising that exact code confirmed `None` round-trips as `None`
+    (`NoneType` is a leaf type). A full pytest run of `test_shape.py` was not possible in this
+    container - `random_events`'s compiled extension (`random_events_lib`) is not buildable here,
+    and the generic deserializer path for any non-`SubclassJSONSerializer` type (enums included)
+    unconditionally imports the whole `krrood.entity_query_language` stack, which pulls it in - the
+    same ROS-less/compiled-extension-less constraint the item's own notes already recorded for the
+    ORM/conftest path. CI (which has the full toolchain) is the actual gate here; pushed and left
+    for it to validate rather than reproducing the whole native stack locally.
+
+    Pushed as `fb537e10d` (merge commit). PR left out of draft - the developer already took it out
+    of draft themselves on 2026-08-29, and this was a mechanical merge-conflict fix that did not
+    change the previously-accepted diff's behaviour, not new work needing re-review.
 - id: surfaces-found-by-looking
   title: Find a surface in the image from what the world says it is like
   branch: claude/plan-item-kickoff-kdp-34snn0
