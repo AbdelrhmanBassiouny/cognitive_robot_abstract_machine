@@ -75,7 +75,7 @@ class StackConfigurationPath(StrEnum):
     the personal override the notes branch may add on top.
     """
 
-    COMMITTED = f"{PACKAGE_DIRECTORY.name}/{bastler.stack.CONFIGURATION_PATH.name}"
+    COMMITTED = f"{PACKAGE_DIRECTORY.name}/{basstler.stack.CONFIGURATION_PATH.name}"
     PERSONAL = ".claude/personal/stack.toml"
 
 
