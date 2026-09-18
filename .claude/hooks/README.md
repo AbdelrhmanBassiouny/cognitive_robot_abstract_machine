@@ -69,6 +69,23 @@ this branch* — the second being the cue to add the item before starting work, 
 `git identity:` line names whose commits this clone will author. All three lines appear only
 once a personal-notes branch exists, so a clone that uses none of this stays silent.
 
+## Setting up the stacked-PR workflow
+
+Separate setup, same shape: `/setup-stacked-prs`, or without a session,
+
+```bash
+"$CLAUDE_PROJECT_DIR/.claude/hooks/setup-stacked-prs.sh" --fork <repository> \
+  --upstream <repository> [--mode fork-overlay] [--personal-config <key>=<value>]... \
+  [--create-labels]
+```
+
+`--fork` and `--upstream` are required, for the same reason `--remote` is above. It names the
+remotes, records only the overrides that differ from `.claude/stack/stack.toml`'s defaults,
+checks the workflow's labels, and prints the Routine prompt to paste — the one part no command
+can finish. `--mode fork-overlay` installs the tooling onto a never-merged branch of your fork
+instead, for a repository that won't carry it on its own default branch; re-running is the
+update. `check-stack-setup.sh` is its read-only counterpart to `check-setup.sh`.
+
 ## Editing your notes
 
 - **Ask Claude** — *"add \<X\> to my personal notes"*, *"edit my personal notes"*. Nothing else to
