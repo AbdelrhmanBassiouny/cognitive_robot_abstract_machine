@@ -1,8 +1,6 @@
 import os
 from functools import lru_cache
 
-from krrood.utils import memoize
-
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import sessionmaker
 

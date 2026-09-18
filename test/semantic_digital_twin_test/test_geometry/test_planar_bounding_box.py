@@ -210,7 +210,7 @@ def test_two_planar_boxes_at_different_origins_are_unequal():
     )
 
 
-# %% BoundingBoxCollection[PlanarBoundingBox]
+# %% BoundingBoxCollection[PlanarBoundingBox, Point2]
 
 
 def test_planar_bounding_box_collection_merge():

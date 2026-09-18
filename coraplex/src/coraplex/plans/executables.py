@@ -1,9 +1,7 @@
 from __future__ import annotations
 
 import logging
-import time
 from dataclasses import dataclass, field
-from datetime import timedelta
 
 from typing_extensions import List, Dict, ClassVar, Optional, TYPE_CHECKING
 
@@ -17,6 +15,7 @@ from giskardpy.motion_statechart.context import MotionStatechartContext
 from giskardpy.motion_statechart.data_types import LifeCycleValues
 from giskardpy.motion_statechart.goals.collision_avoidance import (
     ExternalCollisionAvoidance,
+    SelfCollisionAvoidance,
 )
 from giskardpy.motion_statechart.graph_node import CancelMotion
 from giskardpy.motion_statechart.graph_node import EndMotion, Goal, Task
@@ -25,35 +24,15 @@ from giskardpy.executor import NoPacing, Pacer, RealTimePacer, SimulationTimePac
 from giskardpy.qp.qp_controller_config import QPControllerConfig
 from giskardpy.ros_executor import Ros2Executor
 from krrood.entity_query_language.factories import evaluate_condition
-from coraplex.datastructures.enums import ExecutionType
-from coraplex.exceptions import (
-    MotionDidNotFinish,
-    ConditionNotSatisfied,
-    UnknownExecutionType,
-)
-from semantic_digital_twin.world_description.connections import (
-    Connection6DoF,
-    FixedConnection,
-)
-from semantic_digital_twin.world_description.world_entity import Body
-
-from giskardpy.motion_statechart.graph_node import CancelMotion
 from krrood.symbolic_math.symbolic_math import Scalar, trinary_logic_not
-from krrood.symbolic_math.symbolic_math import (
-    trinary_logic_and,
-    trinary_logic_not,
-    trinary_logic_or,
-)
-from semantic_digital_twin.world_description.connections import (
-    Connection6DoF,
-)
 from semantic_digital_twin.world_description.world_entity import Body
 
 if TYPE_CHECKING:
     from coraplex.robot_plans.actions.base import ActionDescription
 
     from coraplex.plans.condition_nodes import ConditionNode
-    from coraplex.plans.plan_node import MotionNode, UnderspecifiedNode
+    from coraplex.plans.plan_node import MotionNode
+    from coraplex.plans.underspecified import UnderspecifiedNode
     from coraplex.datastructures.dataclasses import Context
 
 logger = logging.getLogger(__name__)
@@ -92,12 +71,6 @@ class Executable:
         """
         for executable in self.execution_list:
             executable.execute()
-
-
-DEFAULT_MAX_TICKS_PER_MOTION_MAPPING: int = 2000
-"""
-Ticks a single motion mapping is given before the simulated tick loop gives up on it.
-"""
 
 
 @dataclass
@@ -153,9 +126,14 @@ class GiskardExecutable(Executable):
 
     collision_avoidance: ClassVar[bool] = False
     """
-    Whether an :class:`~giskardpy.motion_statechart.goals.collision_avoidance.ExternalCo
-    llisionAvoidance` is added to the motion state chart, managed by
+    Whether the robot avoids colliding with its surroundings and with itself, managed by
     :py:class:`pycram.motion_executor.ExecutionEnvironment`.
+
+    Adds an
+    :class:`~giskardpy.motion_statechart.goals.collision_avoidance.ExternalCollisionAvoidance`
+    and a
+    :class:`~giskardpy.motion_statechart.goals.collision_avoidance.SelfCollisionAvoidance`
+    to the motion state chart.
     """
 
     real_time_pacing: ClassVar[bool] = False
@@ -163,21 +141,6 @@ class GiskardExecutable(Executable):
     Whether the simulated tick loop is paced to wall-clock time (via
     :class:`~giskardpy.executor.SimulationPacer`) instead of running as fast as the QP
     solve allows, managed by :py:class:`pycram.motion_executor.ExecutionEnvironment`.
-    """
-
-    max_ticks_per_motion_mapping: ClassVar[int] = DEFAULT_MAX_TICKS_PER_MOTION_MAPPING
-    """
-    Per-motion tick budget for :meth:`_execute_simulation`'s tick loop, managed by
-    :py:class:`pycram.motion_executor.ExecutionEnvironment`.
-
-    A motion that never reaches its end monitor gives up after
-    :attr:`tick_limit` ticks and raises :class:`MotionDidNotFinish`, so it can
-    never run forever.
-
-    Matters most together with ``real_time_pacing``: a paced tick sleeps for a
-    full control period, so the default budget is ~40 s of wall clock *per
-    mapping* before a stuck motion gives up, during which the robot simply
-    appears frozen. Keep it low when pacing is on.
     """
 
     @property
@@ -195,9 +158,10 @@ class GiskardExecutable(Executable):
         execution type is only known once an
         :py:class:`~coraplex.execution_environment.ExecutionEnvironment` is entered.
         """
-        end_trigger = self.root_node.observation_variable
+        end_trigger = self.root_node.goal_reached
         if GiskardExecutable.collision_avoidance:
             self.motion_state_chart.add_node(ExternalCollisionAvoidance())
+            self.motion_state_chart.add_node(SelfCollisionAvoidance())
 
         end_motion = EndMotion()
         end_motion.start_condition = end_trigger
@@ -303,16 +267,6 @@ class GiskardExecutable(Executable):
             return RealTimePacer()
         return NoPacing()
 
-    @property
-    def tick_limit(self) -> int:
-        """
-        Ticks the simulated loop gives this executable's motions in total before it
-        gives up on them.
-        """
-        return (
-            len(self.motion_mappings) * GiskardExecutable.max_ticks_per_motion_mapping
-        )
-
     def _execute_simulation(self) -> None:
         """
         Compiles the motion state chart and ticks it in the world of the context until
@@ -332,7 +286,7 @@ class GiskardExecutable(Executable):
         executor.compile(motion_state_chart)
 
         counter = 0
-        while counter < self.tick_limit:
+        while counter < len(self.motion_mappings) * self.context.ticks_per_motion:
             executor.tick()
             executor.pacer.sleep()
             counter += 1
@@ -344,14 +298,15 @@ class GiskardExecutable(Executable):
         executor.context.cleanup()
 
         if not executor.motion_statechart.is_end_motion():
-            failed_nodes = [
+            unfinished_nodes = [
                 node
                 for node in motion_state_chart.nodes
                 if node.life_cycle_state
-                not in [LifeCycleValues.DONE, LifeCycleValues.NOT_STARTED]
+                not in [LifeCycleValues.SUCCEEDED, LifeCycleValues.NOT_STARTED]
             ]
-            logger.error(f"Failed Nodes: {failed_nodes}")
-            raise MotionDidNotFinish(failed_nodes)
+            motion_did_not_finish = MotionDidNotFinish(unfinished_nodes)
+            logger.error(motion_did_not_finish.error_message())
+            raise motion_did_not_finish
 
     def _execute_real(self) -> None:
         """
