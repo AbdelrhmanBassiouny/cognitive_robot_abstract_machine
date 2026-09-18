@@ -1,3 +1,4 @@
+import dataclasses
 from copy import deepcopy
 
 import numpy as np
@@ -20,7 +21,8 @@ from semantic_digital_twin.spatial_types import (
     Point3,
     HomogeneousTransformationMatrix,
 )
-from semantic_digital_twin.spatial_types.spatial_types import Pose
+from semantic_digital_twin.spatial_types.spatial_types import Pose, Point2, Pose2D
+from semantic_digital_twin.spatial_types.spatial_types import Pose, SpatialType
 from semantic_digital_twin.world_description.world_entity import Body
 from .reference_implementations import (
     rotation_matrix_from_quaternion,
@@ -55,7 +57,9 @@ class TestRotationMatrix:
         m1 = rotation_matrix_from_quaternion(*q1)
         m2 = rotation_matrix_from_quaternion(*q2)
         RotationMatrix()
-        actual_angle = RotationMatrix(data=m1).rotational_error(RotationMatrix(data=m2))
+        actual_angle = RotationMatrix(data=m1).rotational_distance(
+            RotationMatrix(data=m2)
+        )
         _, expected_angle = axis_angle_from_rotation_matrix(m1.T.dot(m2))
         try:
             assert np.allclose(
@@ -103,12 +107,13 @@ class TestRotationMatrix:
             rotation_matrix,
             HomogeneousTransformationMatrix(),
             Pose(),
+            Quaternion(),
         ]
         does_not_work = [
             sm.FloatVariable(name="s"),
             sm.Scalar(1),
+            np.eye(3),
             Point3(x=1, y=1, z=1),
-            Quaternion(),
         ]
 
         for other in works:
@@ -598,6 +603,24 @@ class TestPoint3:
         actual = p.norm()
         expected = np.linalg.norm(v)
         assert np.allclose(actual, expected)
+
+    def test_from_iterable_copies_a_symbolic_math_type_input(self):
+        """
+        `from_iterable` must not alias a SymbolicMathType input's casadi_sx: the result
+        must own an independent container from the source.
+        """
+        source = Point3(x=1, y=2, z=3)
+        result = Point3.from_iterable(source)
+        assert result.casadi_sx is not source.casadi_sx
+
+    def test_from_iterable_copies_a_raw_casadi_sx_input(self):
+        """
+        `from_iterable` must not alias a raw casadi_sx input: the result must own its
+        own container rather than the one passed in.
+        """
+        source = Point3(x=1, y=2, z=3)
+        result = Point3.from_iterable(source.casadi_sx)
+        assert result.casadi_sx is not source.casadi_sx
 
     def test_init(self):
         l = [1, 2, 3]
@@ -1229,6 +1252,24 @@ class TestVector3:
         new_vector = Vector3.from_iterable(existing_vector)
         assert new_vector.reference_frame == existing_vector.reference_frame
 
+    def test_from_iterable_copies_a_symbolic_math_type_input(self):
+        """
+        `from_iterable` must not alias a SymbolicMathType input's casadi_sx: the result
+        must own an independent container from the source.
+        """
+        source = Vector3(x=1, y=2, z=3)
+        result = Vector3.from_iterable(source)
+        assert result.casadi_sx is not source.casadi_sx
+
+    def test_from_iterable_copies_a_raw_casadi_sx_input(self):
+        """
+        `from_iterable` must not alias a raw casadi_sx input: the result must own its
+        own container rather than the one passed in.
+        """
+        source = Vector3(x=1, y=2, z=3)
+        result = Vector3.from_iterable(source.casadi_sx)
+        assert result.casadi_sx is not source.casadi_sx
+
     def test_compilation_and_execution(self):
         """
         Test that Vector3 operations compile and execute correctly.
@@ -1351,11 +1392,16 @@ class TestTransformationMatrix:
             RotationMatrix(),
             Pose(),
             Point3(x=1, y=1, z=1),
+            Quaternion(),
         ]
+        # A 2D type is transformable, but multiplying a 4x4 by a 2- or 3-vector is not
+        # an operation, so only its transform() answers -- not the operator.
         does_not_work = [
             sm.FloatVariable(name="s"),
             sm.Scalar(1),
-            Quaternion(),
+            np.eye(4),
+            Point2(x=1, y=1),
+            Pose2D(x=1, y=1, yaw=1),
         ]
 
         for other in works:
@@ -1364,6 +1410,83 @@ class TestTransformationMatrix:
             with pytest.raises(UnsupportedOperationError):
                 # noinspection PyTypeChecker
                 transform @ other
+
+    # %% re-expressing a spatial type in another frame
+
+    @staticmethod
+    def _transformation() -> HomogeneousTransformationMatrix:
+        """
+        A transformation that rotates about all three axes, so that dropping z, roll or
+        pitch is visible in the result.
+        """
+        return HomogeneousTransformationMatrix.from_xyz_rpy(
+            1, 2, 3, roll=0.3, pitch=-0.2, yaw=0.5
+        )
+
+    def test_transforming_a_quaternion_composes_the_rotations(self):
+        """
+        Composing a rotation onto a quaternion is the Hamilton product, so that is what
+        the operator means.
+        """
+        transformation = self._transformation()
+        quaternion = Quaternion.from_rpy(0.1, 0.2, 0.3)
+
+        composed = transformation @ quaternion
+
+        assert isinstance(composed, Quaternion)
+        np.testing.assert_allclose(
+            composed.to_np(),
+            transformation.to_quaternion().multiply(quaternion).to_np(),
+            atol=1e-12,
+        )
+
+    def test_a_quaternion_transforms_the_way_the_operator_multiplies(self):
+        """
+        The frame change and the algebraic product are written for different reasons but
+        must not drift apart.
+        """
+        transformation = self._transformation()
+        quaternion = Quaternion.from_rpy(0.1, 0.2, 0.3)
+
+        np.testing.assert_allclose(
+            quaternion.transform(transformation).to_np(),
+            (transformation @ quaternion).to_np(),
+            atol=1e-12,
+        )
+
+    def test_transforming_a_point_2d_projects_onto_the_target_plane(self):
+        """
+        A Point2 carries no z, so it comes back as the transformed 3D point with its z
+        dropped.
+        """
+        transformation = self._transformation()
+        point = Point2(x=1, y=2)
+
+        transformed = point.transform(transformation)
+
+        assert isinstance(transformed, Point2)
+        np.testing.assert_allclose(
+            transformed.to_np(),
+            (transformation @ point.to_point3()).to_np()[:2],
+            atol=1e-12,
+        )
+
+    def test_transforming_a_pose_2d_projects_onto_the_target_plane(self):
+        """
+        A Pose2D carries no z, roll or pitch, so it comes back as the transformed 3D
+        pose with those dropped.
+        """
+        transformation = self._transformation()
+        pose_2d = Pose2D(x=1, y=2, yaw=0.4)
+
+        transformed = pose_2d.transform(transformation)
+
+        assert isinstance(transformed, Pose2D)
+        np.testing.assert_allclose(
+            transformed.to_np(),
+            Pose2D.from_pose(transformation @ pose_2d.to_pose()).to_np(),
+            atol=1e-12,
+        )
 
     @pytest.mark.parametrize("x", numbers)
     @pytest.mark.parametrize("y", numbers)
@@ -1985,6 +2108,24 @@ class TestPose:
 
 class TestQuaternion:
 
+    def test_from_iterable_copies_a_symbolic_math_type_input(self):
+        """
+        `from_iterable` must not alias a SymbolicMathType input's casadi_sx: the result
+        must own an independent container from the source.
+        """
+        source = Quaternion(x=0, y=0, z=0, w=1)
+        result = Quaternion.from_iterable(source)
+        assert result.casadi_sx is not source.casadi_sx
+
+    def test_from_iterable_copies_a_raw_casadi_sx_input(self):
+        """
+        `from_iterable` must not alias a raw casadi_sx input: the result must own its
+        own container rather than the one passed in.
+        """
+        source = Quaternion(x=0, y=0, z=0, w=1)
+        result = Quaternion.from_iterable(source.casadi_sx)
+        assert result.casadi_sx is not source.casadi_sx
+
     @pytest.mark.parametrize("q1", quaternions)
     @pytest.mark.parametrize("q2", quaternions)
     @pytest.mark.parametrize("t", numbers)
@@ -2064,6 +2205,32 @@ class TestQuaternion:
         expected = np.dot(q1.T, q2)
         assert np.allclose(result, expected)
 
+    @pytest.mark.parametrize("q1", quaternions)
+    @pytest.mark.parametrize("q2", quaternions)
+    def test_rotational_distance_matches_the_rotation_matrices(self, q1, q2):
+        """
+        Two orientations are the same angle apart however they are described.
+        """
+        actual = Quaternion.from_iterable(q1).rotational_distance(
+            Quaternion.from_iterable(q2)
+        )
+        expected = RotationMatrix(
+            data=rotation_matrix_from_quaternion(*q1)
+        ).rotational_distance(RotationMatrix(data=rotation_matrix_from_quaternion(*q2)))
+        assert np.allclose(
+            shortest_angular_distance(actual.to_np()[0], expected.to_np()[0]), 0
+        )
+
+    @pytest.mark.parametrize("q", quaternions)
+    def test_rotational_distance_of_the_two_quaternions_of_one_rotation(self, q):
+        """
+        A quaternion and its negation describe the same rotation, so there is no angle
+        between them.
+        """
+        quaternion = Quaternion.from_iterable(q)
+        assert np.allclose(quaternion.rotational_distance(-quaternion).to_np(), 0)
+        assert np.allclose(quaternion.rotational_distance(quaternion).to_np(), 0)
+
 
 def test_underspecification_of_vector():
     q = a(Vector3)(x=1, y=2, z=3)
@@ -2124,3 +2291,36 @@ class TestConstantEntriesAreNormalised:
             sm.to_sx(self._matrix_with_wrong_constant_entries())
         )
         np.testing.assert_array_equal(rotation.to_np()[:3, 3], [0.0, 0.0, 0.0])
+
+
+# %% the reference frame every spatial type inherits
+
+
+class TestTheReferenceFrameIsInheritedAsAField:
+    """
+    ``SpatialType`` declares the reference frame once, and only a dataclass turns that
+    declaration into a field of the types inheriting it.
+
+    Where it stays a plain class attribute, whoever reads it off the class finds the
+    declaration itself instead of a frame.
+    """
+
+    spatial_types = [
+        Point3,
+        Vector3,
+        RotationMatrix,
+        Quaternion,
+        HomogeneousTransformationMatrix,
+        Pose,
+    ]
+
+    @pytest.mark.parametrize("spatial_type", spatial_types)
+    def test_a_spatial_type_inherits_what_spatial_type_declares(self, spatial_type):
+        """
+        Every field of ``SpatialType`` is a field of the type inheriting from it.
+        """
+        declared = {declaration.name for declaration in dataclasses.fields(SpatialType)}
+        inherited = {
+            declaration.name for declaration in dataclasses.fields(spatial_type)
+        }
+        assert declared <= inherited

@@ -9,6 +9,8 @@ is exercised against a motion that really does stop making progress.
 
 from datetime import timedelta
 
+import pytest
+
 from giskardpy.executor import Executor
 from giskardpy.motion_statechart.context import MotionStatechartContext
 from giskardpy.motion_statechart.data_types import (
@@ -25,6 +27,7 @@ from giskardpy.motion_statechart.monitors.payload_monitors import (
 from giskardpy.motion_statechart.nodes_for_testing.nodes_for_testing import (
     ConstFalseNode,
     ConstTrueNode,
+    TestNodeAssertionError,
 )
 from giskardpy.motion_statechart.tasks.cartesian_tasks import CartesianPosition
 from semantic_digital_twin.spatial_types.spatial_types import Point3
@@ -50,7 +53,7 @@ def _repeat_on_timeout(
         name="loop",
         task=task,
         stop_retry_monitor=CountNodeResets(name="counter", node=task, target=target),
-        retry_trigger_monitor=CountControlCycles(
+        failure_monitor=CountControlCycles(
             name="timeout", control_cycles=ATTEMPT_CYCLES
         ),
     )
@@ -142,6 +145,34 @@ def test_repeat_until_does_not_retry_after_giving_up():
     assert loop.observation_state == ObservationStateValues.FALSE
 
 
+def test_repeat_until_ends_the_motion_with_its_exception_once_retrying_stops():
+    """
+    A loop handed an exception reports running out of attempts by ending the motion with
+    it, rather than only observing False.
+    """
+    task = ConstFalseNode(name="task")
+    exception = TestNodeAssertionError(reason="attempts exhausted")
+    loop = RepeatUntil(
+        name="loop",
+        task=task,
+        stop_retry_monitor=CountNodeResets(name="counter", node=task, target=2),
+        failure_monitor=CountControlCycles(
+            name="timeout", control_cycles=ATTEMPT_CYCLES
+        ),
+        exception=exception,
+    )
+    motion_statechart = MotionStatechart()
+    motion_statechart.add_node(loop)
+    motion_statechart.add_node(EndMotion.when_true(loop))
+    executor = Executor(MotionStatechartContext(world=World()))
+    executor.compile(motion_statechart=motion_statechart)
+
+    with pytest.raises(type(exception)) as error:
+        executor.tick_until_end(SETTLE_CYCLES)
+
+    assert error.value is exception
+
+
 # %% the stall timeout
 
 
@@ -159,16 +190,15 @@ def _repeat_on_stall(**timeout_argument) -> RepeatOnStall:
     )
 
 
-def test_stall_timeout_is_measured_in_seconds():
+def test_stall_timeout_reaches_the_progress_monitor():
     """
-    A window longer than a day reaches the progress monitor whole, rather than losing
-    its days on the way.
+    The window the loop was configured with is what its progress monitor watches.
     """
     timeout = timedelta(days=1, seconds=30)
 
     loop = _repeat_on_stall(timeout=timeout)
 
-    assert loop.retry_trigger_monitor.timeout == timeout.total_seconds()
+    assert loop.failure_monitor.timeout == timeout
 
 
 def test_default_stall_timeout_leaves_an_attempt_time_to_converge():
@@ -178,7 +208,7 @@ def test_default_stall_timeout_leaves_an_attempt_time_to_converge():
     """
     loop = _repeat_on_stall()
 
-    assert loop.retry_trigger_monitor.timeout == timedelta(seconds=5).total_seconds()
+    assert loop.failure_monitor.timeout == timedelta(seconds=5)
 
 
 # %% retrying a motion that stops making progress
