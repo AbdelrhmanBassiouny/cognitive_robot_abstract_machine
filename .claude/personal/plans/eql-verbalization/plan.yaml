@@ -149,9 +149,31 @@ items:
   pull_request_number: 264
   track: framework-migration
   session: https://claude.ai/code/session_01Hwf7n1eUMVXD4vLdQwMYvP
+  blockers:
+    - >-
+      integration-conflict-triage: Sequence collision with PR #196
+      (`claude/plan-item-kickoff-match-query-npzr78`, `match-query-ergonomics`). Both branches
+      independently pass their own suites and are correct on their own; combined on the integration
+      branch, `test_set_of_ranking.py` turns because both change the same expected string.
+
+      This branch's `RankedRow`/`group_label` change (`ccb7a780a`) renames the ranked frame from the
+      entity to the group key for every grouped ranked report — e.g. "For the ProfitAndLossStatement
+      with the highest sum ..." becomes "For the month with the highest sum ...". #196 adds
+      `test_ranking_names_the_ordered_by_aggregate_not_the_first_selected` to the same file,
+      asserting the pre-existing entity-frame wording ("For the Invoice with the highest sum of the
+      amount of its tax, ..."), which this branch's change also rewords to name the group instead.
+
+      Already documented on PR #264 itself (its "## Scope" section): "Whichever merges second needs
+      that one string updated — a wording collision, not a logic one." Verdict: sequence. Nothing to
+      fix on either branch now; once one lands, updating the other's one expectation string is
+      ordinary follow-up work on a normal base. Neither branch is defective and neither should adapt
+      to the other pre-emptively, since #196's own fix (`_expression_signature` reading the
+      aggregator's `_child_`) and this branch's fix (`AggregatorRule.build` +
+      `_assemble_ranked_report`) are unrelated mechanisms that both happen to touch one shared test
+      file.
   depends_on:
   - p2-operand-naming
-  status: in_progress
+  status: blocked
   notes: >
     Found and measured on match-query-ergonomics's PR #196
     (aggregate-signature-reads-a-missing-attribute) self-review round: a ranked
