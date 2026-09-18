@@ -53,6 +53,41 @@ def test_an_alternative_mapping_is_handed_the_domain_object_it_holds():
     assert owner.holder.entrypoint is state.resolve_alternative_mapping(held)
 
 
+def test_each_holder_of_the_same_type_is_handed_its_own_held_domain_object():
+    """
+    The order between two mapping types is decided once for all of their instances, and
+    every holder is still handed the domain object of the mapping it holds itself.
+    """
+    build_first = BuildFirst("first")
+    first_held = EntryPointMapping(build_first, BuildFirstAssociation(build_first))
+    second_held = EntryPointMapping(build_first, BuildFirstAssociation(build_first))
+    first_holder = HoldsAnEntrypointMapping(first_held)
+    second_holder = HoldsAnEntrypointMapping(second_held)
+    first_owner = OwnsAHolder(first_holder)
+    second_owner = OwnsAHolder(second_holder)
+    state = FromDataAccessObjectState()
+    state._build_class_dependencies(
+        [BuildFirstMapping, HoldsAnEntrypointMapping, EntryPointMapping]
+    )
+    for held, holder in ((first_held, first_holder), (second_held, second_holder)):
+        state._alternative_mappings_being_referenced[held].append(
+            (holder, Attribute(_attribute_name_="entrypoint", _child_=None))
+        )
+    for holder, owner in ((first_holder, first_owner), (second_holder, second_owner)):
+        state._alternative_mappings_being_referenced[holder].append(
+            (owner, Attribute(_attribute_name_="holder", _child_=None))
+        )
+
+    state.convert_alternative_mappings_to_domain_objects()
+
+    assert first_owner.holder.entrypoint is state.resolve_alternative_mapping(
+        first_held
+    )
+    assert second_owner.holder.entrypoint is state.resolve_alternative_mapping(
+        second_held
+    )
+
+
 def test_mappings_that_hold_each_other_have_no_conversion_order():
     """
     Mappings holding one another leave no order that converts each of them after what it

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Tuple, Type, TYPE_CHECKING
+from typing import Any, Dict, List, Set, Tuple, Type, TYPE_CHECKING
 
 import rustworkx
 
@@ -119,9 +119,24 @@ class ConversionOrder:
         index_of_type = {
             self.graph[index]: index for index in self.graph.node_indices()
         }
+        for held, holder in self._held_and_holder_types():
+            self._order_held_before_holder(held, holder, index_of_type)
+
+    def _held_and_holder_types(self) -> Set[Tuple[Type, Type]]:
+        """
+        The distinct pairs of the type of a held mapping and the type holding it.
+
+        The types are what the order is asked of, so a conversion holding the same pair
+        a thousand times asks once.
+
+        :return: Pairs of the held type and the type holding it.
+        """
+        held_and_holder_types = set()
         for held, references_to_held in self.references.items():
+            held_type = type(held)
             for holder, _ in references_to_held:
-                self._order_held_before_holder(type(held), type(holder), index_of_type)
+                held_and_holder_types.add((held_type, type(holder)))
+        return held_and_holder_types
 
     def _order_held_before_holder(
         self,
