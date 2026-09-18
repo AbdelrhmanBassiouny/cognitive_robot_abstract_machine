@@ -189,13 +189,10 @@ items:
     session: https://claude.ai/code/session_01Hg8944NTdj8WMSGFqV4mq8
     blockers:
       - >-
-          One review thread open, answered with a measurement and needing no change from this side:
-          the .resolve() calls in the feature-extraction tests stay, being load-bearing, and making
-          ground() resolve its own argument is a probabilistic_model change the developer should
-          choose. The _variable_ thread is resolved - the developer took the Query._type_ fix as its
-          own pull request (#254, query-reports-its-selection-type), which is merged in here and let
-          the last six bindings go. The conflict against main is resolved and the round's other
-          threads are closed.
+          None. One review thread stays open by design, answered with a measurement and needing no
+          change from this side: the .resolve() calls in the feature-extraction tests stay, being
+          load-bearing, and making ground() resolve its own argument is a probabilistic_model change
+          the developer should choose.
     notes: >
       Implemented ahead of order by an independent IDE-typing session on
       claude/ide-type-inference-instances-dc6l6e (commit 147d098d2), which converged on this item's
@@ -348,6 +345,37 @@ items:
       name and (Body).size differs from Body.size, so the translator re-roots - the rule
       number_like_field and #182 both already applied inline, now written once as
       query.variable_rooted. test/krrood_test 1930 passed, 5 skipped.
+
+      Resolved 2026-09-18 (roadmap section 32): an automated integration routine had been
+      reporting the same conflict against main, unresolved, on every pass from 2026-08-28 through
+      today - about twice a day for three weeks, each comment just restating which files
+      conflicted and skipping the branch, with no session actually merging main in during that
+      whole span. The conflicting file set grew as main moved: mapped_variable.py and match.py at
+      first, then coraplex/plans/plan_node.py and krrood/patterns/factory_and_kwargs.py joined
+      from 2026-09-09 onward. All four resolved by taking both sides, the same rule every earlier
+      round in this item's history already established: factory_and_kwargs.py keeps this branch's
+      underscore-sandwiched _factory_/_kwargs_ fields combined with main's new
+      parameter-name-filtering logic; mapped_variable.py's Call._update_type_ keeps this branch's
+      callable-return-type lookup (with the __call__ fallback) as the primary path and adds main's
+      get_method_return_type fallback for when the child is an Attribute whose own _type_ is
+      unknown; match.py's Match base list is this branch's own list, already a strict superset of
+      main's; plan_node.py's UnderspecifiedNode exists only on this branch, main's side of the
+      conflict was empty. One thing the merge surfaced that was not a textual conflict: main added
+      test_relational_circuit_registry_causal.py, whose two causes_effect(...) calls read
+      query.variable.objects[0].type - the detour spelling this item removed - which the missing
+      compatibility property turns into a silently-wrong symbolic attribute instead of an error
+      (query._type_ ends up None, chain name literally embeds the word "variable"). Migrated both
+      sites to query.objects[0].type, the same pattern test_causes_effect.py already established.
+      test/krrood_test 2143 passed, 5 skipped (up from 1930, main's own tests arriving with it),
+      excluding test_rustworkx_utils and test_symbolic_math (flask/casadi); the two
+      test_object_diagram failures are this container's missing Graphviz dot binary, unchanged
+      from every earlier round. A coraplex test run (test_plan/test_underspecified_node_type_resolution.py
+      and siblings) failed at ORM-interface generation on an unrelated class
+      (semantic_digital_twin.exceptions.WorldUpdateReferencesUnknownEntityError, CouldNotResolveType:
+      MetaData) - not touched by this merge's four files, and scripts/regenerate_all_orm.py fails
+      identically outside any test run, so it is this container lacking whatever ROS-message
+      resolution CI's docker image carries, not a regression from today's resolution. Pushed to
+      claude/match-query-interface-refactor-l55jym at 00f41066dc.
   - id: aggregate-signature-reads-a-missing-attribute
     title: "Bug: every aggregate of one kind gets the same structural signature"
     branch: claude/plan-item-kickoff-match-query-npzr78

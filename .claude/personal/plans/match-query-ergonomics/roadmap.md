@@ -1640,3 +1640,67 @@ raise - it quietly builds an `Attribute` expression for a field of that name. Th
 reads were found by making `Match._is_own_name_` refuse the retired spellings
 temporarily, running the suites, and migrating every hit; the guard was then removed,
 since #192 deliberately leaves every public name to the matched class.
+
+## 32. 2026-09-18: three weeks of the same unresolved conflict, and what main had grown
+
+`match-underscore-rename-and-forwarding` (#192) had been carrying the `needs-resolution`
+label since 2026-08-28. An automated integration routine posted the same message on every
+pass since - roughly twice a day, three weeks - restating which files conflicted against
+`main` and skipping the branch untouched, because nothing ever resolved and pushed. The
+conflict set grew as `main` moved: `mapped_variable.py` and `match.py` from the first report,
+`coraplex/plans/plan_node.py` and `krrood/patterns/factory_and_kwargs.py` joining from
+2026-09-09 onward. The manifest's own `blockers` still read "the conflict against main is
+resolved" the whole time - accurate on 2026-09-03 when it was written, stale for the next
+fifteen days, and exactly the kind of drift `plan-item-resolve` exists to catch rather than
+trust.
+
+All four resolved by the rule this item has applied at every earlier conflict in its
+history - take both sides, since each side add something the other lacks:
+
+- **`factory_and_kwargs.py`**: this branch renamed `factory`/`kwargs` to the
+  underscore-sandwiched `_factory_`/`_kwargs_`; `main` independently taught
+  `construct_instance` to drop a keyword naming no parameter of the factory unless it
+  accepts `**kwargs`. Combined: the filtering logic, reading the renamed fields.
+- **`mapped_variable.py`**: both sides rewrote `Call._update_type_` for the same bug class
+  (a called value's return type), from different angles. This branch reads the return
+  hint off the called value itself, falling back to `__call__` for a callable instance -
+  the fix `KeyError('return')` needed. `main` added a second path for when the child is an
+  `Attribute` whose own `_type_` is unknown (a bound method reached through attribute
+  access), reading the return type off the method via `get_method_return_type`. Neither
+  subsumes the other, so the combined method tries this branch's path first and falls back
+  to main's for the attribute case.
+- **`match.py`**: `Match`'s base list conflicted because both sides touched the same class
+  statement; `main`'s list (`Evaluable, AbstractMatchExpression[T], HasFactoryAndKwargs[T],
+  HasExpression`) is a subset of this branch's own (which additionally gives `Match`
+  `HasQueryModifiers`/`HasSymbolicOperations`), so this branch's list is what stands.
+- **`plan_node.py`**: `UnderspecifiedNode` exists only on this branch; `main`'s side of the
+  conflict was empty, so nothing to combine.
+
+**One thing the merge surfaced that git could not flag as a conflict, because the file was
+new.** `main` had added `test_relational_circuit_registry_causal.py`, and two of its
+`causes_effect(...)` calls read `query.variable.objects[0].type` - the `.variable` detour
+this item removed in section 28. With the compatibility property gone, that spelling is not
+an error; `variable` is not an underscore-sandwiched name, so it is captured as a plain
+symbolic attribute of the query, named literally `SceneRoom.variable.objects[0].type`. The
+random-events translator then raised `TypeError: issubclass() arg 1 must be a class`,
+because a symbolic attribute rooted through a phantom `variable` step reports no type - the
+same failure shape section 6's guard exists to produce, on a caller that never got the
+memo. Migrated both sites to `query.objects[0].type`, the spelling
+`test_causes_effect.py` already established for the same class of site in section 30.
+
+Verification: `test/krrood_test` **2143 passed, 5 skipped** (up from section 31's 1930 -
+the difference is `main`'s own tests arriving with it, `test_relational_circuit_registry_causal.py`
+among them), excluding `test_rustworkx_utils` and `test_symbolic_math` (`flask`/`casadi`
+unavailable in this container); the two `test_object_diagram` failures are this container's
+missing Graphviz `dot` binary, unchanged from every prior round. A `coraplex` run
+touching `UnderspecifiedNode` (`test_plan/test_underspecified_node_type_resolution.py` and
+its siblings) failed during ORM-interface generation on a class this merge's four files
+never touch (`semantic_digital_twin.exceptions.WorldUpdateReferencesUnknownEntityError`,
+`CouldNotResolveType: MetaData`); `scripts/regenerate_all_orm.py` fails identically outside
+any test run, which is this container missing whatever ROS-message resolution CI's docker
+image carries, not something today's merge caused - recorded rather than chased further,
+on the same footing as the Graphviz gap.
+
+Pushed to `claude/match-query-interface-refactor-l55jym` at `00f41066dc`. No change to any
+item's status, dependencies or scope; the manifest's `blockers` is corrected to reflect the
+resolved conflict rather than the fifteen-day-stale text it carried. Dashboard republished.
