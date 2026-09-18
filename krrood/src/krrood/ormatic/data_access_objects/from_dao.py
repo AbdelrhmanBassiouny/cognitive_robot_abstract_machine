@@ -29,6 +29,10 @@ from krrood.ormatic.data_access_objects.base import (
 )
 
 from krrood.ormatic.data_access_objects.alternative_mappings import AlternativeMapping
+from krrood.ormatic.data_access_objects.conversion_order import (
+    ConversionOrder,
+    DeclaredOrder,
+)
 from krrood.ormatic.data_access_objects.helper import get_dao_class
 
 if TYPE_CHECKING:
@@ -343,39 +347,8 @@ class FromDataAccessObjectState(DataAccessObjectState[FromDataAccessObjectWorkIt
                 self._class_dependencies.add_edge(
                     types_to_index[concrete_alternative_mapping],
                     types_to_index[alternative_mapping],
-                    None,
+                    DeclaredOrder(concrete_alternative_mapping, alternative_mapping),
                 )
-
-    def _conversion_order(self) -> rustworkx.PyDiGraph:
-        """
-        The order the alternative mappings of this conversion are converted in: the
-        declared dependencies, and every mapping after the mappings it holds.
-
-        A mapping builds its domain object out of what it holds, so a held mapping not
-        yet converted would end up inside that domain object as a mapping. Where holding
-        and a declared dependency point opposite ways, the declared one is kept.
-
-        :return: A graph over the mapping types whose edge (source, target) means that
-            ``source`` is converted before ``target``.
-        """
-        conversion_order = self._class_dependencies.copy()
-        index_of_type = {
-            conversion_order[index]: index for index in conversion_order.node_indices()
-        }
-        for held, references in self._alternative_mappings_being_referenced.items():
-            for holder, _ in references:
-                if not isinstance(holder, AlternativeMapping):
-                    continue
-                held_index = index_of_type.get(type(held))
-                holder_index = index_of_type.get(type(holder))
-                if held_index is None or holder_index is None:
-                    continue
-                if held_index == holder_index or rustworkx.has_path(
-                    conversion_order, holder_index, held_index
-                ):
-                    continue
-                conversion_order.add_edge(held_index, holder_index, None)
-        return conversion_order
 
     def convert_alternative_mappings_to_domain_objects(self):
         """
@@ -390,13 +363,11 @@ class FromDataAccessObjectState(DataAccessObjectState[FromDataAccessObjectWorkIt
         for instance in self._alternative_mappings_being_referenced:
             instances_by_type[type(instance)].append(instance)
 
-        # types in dependency order first, then any referenced types not in the graph
+        # types in conversion order first, then any referenced types not in the graph
         # (e.g. instances that were already converted in a previous conversion)
-        conversion_order = self._conversion_order()
-        ordered_types = [
-            conversion_order[type_index]
-            for type_index in rustworkx.topological_sort(conversion_order)
-        ]
+        ordered_types = ConversionOrder(
+            self._class_dependencies, self._alternative_mappings_being_referenced
+        ).sort_types()
         ordered_types += [
             type_ for type_ in instances_by_type if type_ not in set(ordered_types)
         ]
