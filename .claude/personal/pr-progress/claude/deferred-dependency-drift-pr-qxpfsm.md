@@ -163,7 +163,7 @@ stacked on a dependency that will never land was never flagged.
   point-cloud clustering, 1 of 830 tests. Unreachable from a diff confined to
   `.claude/skills/plan-dashboard/`, and green at `40d9d6dd`.
 - **Landing hazard, deliberately not pre-resolved**: decision 13 names #184 among the
-  pull requests touching files the `bastler` migration moves. #185 is open, draft and
+  pull requests touching files the `basstler` migration moves. #185 is open, draft and
   unmerged, and that decision's doctrine is *"don't pre-resolve against it before it
   exists"* — so #184 merges `main` and re-applies its delta inside the package once
   #185 lands.

@@ -235,7 +235,7 @@ items:
     Fifteen resolved. One is answered differently and stays open: whether one git runner should
     serve
 
-    every caller, which is `bastler-notes-core-python`'s seam by name and now has five callers
+    every caller, which is `basstler-notes-core-python`'s seam by name and now has five callers
     waiting.
 
     `--name`/`--email` (the user's call, offered against two alternatives) is what lets a full run
@@ -554,7 +554,7 @@ items:
 
     from `.claude/hooks/tests/` it cannot without a production `sys.path` insert, which is
 
-    `bastler-notes-core-python`'s seam. The third is whether the `git remote add` line `stack.py`
+    `basstler-notes-core-python`'s seam. The third is whether the `git remote add` line `stack.py`
     prints
 
     should come from a command factory, when nothing ever runs it.

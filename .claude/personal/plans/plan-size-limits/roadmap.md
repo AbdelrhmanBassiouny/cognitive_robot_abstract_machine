@@ -96,9 +96,9 @@ no item in any of the eight plans covers it.
   `main`, rather than as a third copy of a file that exists only on #151 and
   #154 - the #106/#110 failure. Moving it into `.claude/shared/` once that
   module lands is a rename, not a merge.
-- **#185 (bastler-package) relocates the ground.** It moves
-  `plan_manifest_tools.py` to `bastler/plan_manifest_tools.py` and its tests to
-  `test/bastler_test/`, and edits `save-plan.sh` plus the `add-plan-item`,
+- **#185 (basstler-package) relocates the ground.** It moves
+  `plan_manifest_tools.py` to `basstler/plan_manifest_tools.py` and its tests to
+  `test/basstler_test/`, and edits `save-plan.sh` plus the `add-plan-item`,
   `plan-item-kickoff` and `plan-item-resolve` skill documents. Whichever lands
   second rebases.
 - **#151, #154 and #156 all edit `plan-create/SKILL.md`** and the kickoff/resolve
@@ -202,7 +202,7 @@ straight by-track split leaves two of the five plans still over:
 | personal-data | 16 | 798 | 3,531 | 4,329 | over both halves |
 | stack-tooling | 18 | 2,598 | 5,735 | 8,333 | over both halves |
 | dashboards | 12 | 533 | 1,246 | 1,779 | within |
-| bastler | 10 | 491 | 669 | 1,160 | within |
+| basstler | 10 | 491 | 669 | 1,160 | within |
 | cutover | 3 | 138 | 134 | 272 | within |
 
 Roadmap lines are attributed by counting each `## Update` section's mentions of item ids
@@ -229,7 +229,7 @@ draw; the other three tracks become plans unchanged.
 4. `session-notes-infrastructure` (10) — the session-start hook, notes, git identity,
    settings sync and the conventions that ride in them.
 5. `plan-dashboards` (12) — the `dashboards` track unchanged.
-6. `bastler-package` (10) — the `bastler` track unchanged.
+6. `basstler-package` (10) — the `basstler` track unchanged.
 7. `workflow-cutover` (3) — the `cutover` track unchanged.
 
 The seams were chosen to keep live dependency edges inside one plan, not by subject alone:
@@ -247,9 +247,9 @@ in the depending item's `notes` instead.
 Three name live items and cannot be kept without merging plans that would then be over
 budget again:
 
-- `shared-pr-state-chips` → `bastler-package`
-- `bastler-github-api-unification` → `setup-personal-notes-script`
-- `bastler-github-api-unification` → `shared-pr-state-chips`
+- `shared-pr-state-chips` → `basstler-package`
+- `basstler-github-api-unification` → `setup-personal-notes-script`
+- `basstler-github-api-unification` → `shared-pr-state-chips`
 
 These become `blockers` entries naming the other plan and item. The cost is real and worth
 recording: those three items lose their dependency chips and their automatic readiness
@@ -303,7 +303,7 @@ on tracking issue #102.
 | `plan-tracking-skills` | 6 | 299 | `personal-data`, plan-item skills |
 | `session-notes-infrastructure` | 10 | 415 | `personal-data`, hook and notes |
 | `plan-dashboards` | 12 | 419 | `dashboards`, unchanged |
-| `bastler-package` | 10 | 413 | `bastler`, unchanged |
+| `basstler-package` | 10 | 413 | `basstler`, unchanged |
 | `workflow-cutover` | 3 | 198 | `cutover`, unchanged |
 
 Measured against the live notes branch afterwards: every plan in the directory is now within the

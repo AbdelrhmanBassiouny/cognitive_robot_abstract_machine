@@ -15,7 +15,7 @@ seven plans. Item marked `done`; structural record on tracking issue #102.
 | `plan-tracking-skills` | 6 | 299 | 63aac9c6-66e1-485b-a40f-f5302cff054d |
 | `session-notes-infrastructure` | 10 | 415 | a35f0207-226c-4a96-a766-c9c11638fb6c |
 | `plan-dashboards` | 12 | 419 | a3b7aea9-cb03-4a5c-a57c-fe9c44581257 |
-| `bastler-package` | 10 | 413 | 53c38b8e-e4ae-4dea-91a0-36a5faa78ccd |
+| `basstler-package` | 10 | 413 | 53c38b8e-e4ae-4dea-91a0-36a5faa78ccd |
 | `workflow-cutover` | 3 | 198 | 2bfad2c4-a7a0-42a4-a6ea-f75ed043a8f4 |
 
 16,917 lines to 2,916. Every plan in the directory is now within the 15-item / 2,000-line budget
@@ -40,7 +40,7 @@ except `rdr-refactor` (49 items, 4,282 lines), which is `split-rdr-refactor`.
 
 - `depends_on` cannot cross a plan (`UnknownDependency` is fatal): five edges onto merged items
   dropped into `notes`, three live ones recorded as `blockers` (`shared-pr-state-chips` →
-  `bastler-package`; `bastler-github-api-unification` → `setup-personal-notes-script` and →
+  `basstler-package`; `basstler-github-api-unification` → `setup-personal-notes-script` and →
   `shared-pr-state-chips`).
 - Roadmaps rewritten, not sliced. The 11,788-line original is in the notes branch's history.
 - All seven keep `tracking_issue: 102`.

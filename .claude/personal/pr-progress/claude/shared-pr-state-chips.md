@@ -13,7 +13,7 @@ is not covered by that run. Every review thread is resolved except the two from
 ## Two rounds this session (2026-09-03)
 
 **Morning round, `9dc34b3a`** - reached through `/plan-item-resolve` in auto
-mode. The recorded blockers named the bastler dependency and a `main` conflict
+mode. The recorded blockers named the basstler dependency and a `main` conflict
 on #185; both were stale, and the real stall was an unrecorded review round of
 seven naming-rule threads. Recorded the real blocker and republished the
 dashboard *before* resolving, then applied all seven: `pr_state.py` ->

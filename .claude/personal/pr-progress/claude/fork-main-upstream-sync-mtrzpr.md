@@ -44,7 +44,7 @@ already exists on main, and the harness holding them together was a plain class.
   test builds on byte-identical to main, and gives the fork-specific setup a home
   that can use the runner. Using it for my new methods alone would have left two
   conventions in one class; converting `ScratchRepository` wholesale is 66 call
-  sites across seven modules and belongs to the bastler migration.
+  sites across seven modules and belongs to the basstler migration.
 - `ForkedScratchRepository` and `GitHubRepositoryStandIn` are frozen dataclasses
   built by a `laid_out_in` classmethod - the `ToolingCheckout` shape from #158.
 - Every git call goes through `GitCommandRunner`; the push is a `ProposedPush`;

@@ -259,7 +259,7 @@ items:
     anywhere on the page was a proxy for the done item's own card having no button, and a page-level
     button legitimately introduces one, so it narrows to the item commands the test actually names.
 
-    Landing order rather than a dependency: the bastler migration moves this file verbatim, so whichever
+    Landing order rather than a dependency: the basstler migration moves this file verbatim, so whichever
     of the two lands second carries the other's change through the merge it already needs. Deliberately
     not done: the overview screenshot predates the button, and re-rendering it headlessly would leave it
     visually inconsistent with the two beside it.
@@ -298,12 +298,12 @@ items:
 
     references first.
 
-    **Re-scoped 2026-08-20 by the bastler pivot.** This pull request no longer creates the tooling
+    **Re-scoped 2026-08-20 by the basstler pivot.** This pull request no longer creates the tooling
 
-    package - `bastler-package` does, off `main` - and the dependency inverted: once that branch
+    package - `basstler-package` does, off `main` - and the dependency inverted: once that branch
     exists,
 
-    #111 rebases onto it and folds its `development_tooling` modules and test suite into `bastler`
+    #111 rebases onto it and folds its `development_tooling` modules and test suite into `basstler`
     under
 
     its naming, deleting the repository-root `sys.path` insert. What stays this item's own is the
@@ -312,30 +312,30 @@ items:
 
     Its dependency on `stack-tooling-on-main` is merged and now lives in the `stack-tooling-install`
 
-    plan, so it is dropped from `depends_on`. The live dependency on `bastler-package` crosses a
+    plan, so it is dropped from `depends_on`. The live dependency on `basstler-package` crosses a
     plan
 
     boundary and is recorded as a blocker instead.
 
     **Resolved 2026-09-02 on the state actually found, not the state recorded.** The manifest called
-    this item blocked on the bastler dependency and on a main conflict; the stall was the 2026-08-30
-    review round, which the manifest never mentioned. The two "rebase onto bastler" threads are
+    this item blocked on the basstler dependency and on a main conflict; the stall was the 2026-08-30
+    review round, which the manifest never mentioned. The two "rebase onto basstler" threads are
     answered by decision 13 itself, so the resolution is the fold: base moved to #185's head,
-    `development_tooling` deleted and its two modules re-homed as `bastler.pr_state` and
-    `bastler.personal_notes`, `build_site.py` re-homed as `bastler.build_site`, the four test
-    modules and two stubs into `test/bastler_test`, the repository-root `sys.path` inserts and the
+    `development_tooling` deleted and its two modules re-homed as `basstler.pr_state` and
+    `basstler.personal_notes`, `build_site.py` re-homed as `basstler.build_site`, the four test
+    modules and two stubs into `test/basstler_test`, the repository-root `sys.path` inserts and the
     second CI invocation deleted. The seventeen code-quality threads are applied in the same pass,
     since each one reshapes code the fold is already moving.
 
     **Folded 2026-09-02** (23f54b22, d6b8035a): #185's head merged in, base retargeted to
-    `claude/plan-item-kickoff-workflow-cuare2`, `development_tooling` gone - `bastler.pr_state`,
-    `bastler.personal_notes`, `bastler.build_site`, tests and stubs in `test/bastler_test`, 698
-    tests in `test_bastler`'s one invocation. The seventeen code-quality threads are applied and
+    `claude/plan-item-kickoff-workflow-cuare2`, `development_tooling` gone - `basstler.pr_state`,
+    `basstler.personal_notes`, `basstler.build_site`, tests and stubs in `test/basstler_test`, 698
+    tests in `test_basstler`'s one invocation. The seventeen code-quality threads are applied and
     resolved: pr_state's loose functions are the classes `CheckRollup`, `ClaudeSessionLink`,
     `ChangeSize`, `PullRequestExport`, `RepositoryEndpoints`, `PullRequestFetcher` and
     `LocalGitProbe`; every payload key, list filter, check state, board key and pr_data key is a
     StrEnum; constants are ClassVars; `PersonalNotesBranch` fetches through the shell function
-    `bastler.stack` already used, which moved there; `build_site` parses the manifest through the
+    `basstler.stack` already used, which moved there; `build_site` parses the manifest through the
     dashboard's validated `Plan` and reports through dataclasses with to_json/from_json; tests build
     payloads through `PullRequestDetailPayload`, use `ScratchRepository`, read the plan from a
     dataset file, and every fake is a dataclass. `CredentialVariable` in `maintenance_constants` is
@@ -362,8 +362,8 @@ items:
     the fold left the pull request healthy: all 23 checks pass on bfc1e9b7 and it is `clean`
     against its new base.
 
-    **Resolved 2026-09-03** (9dc34b3a). All seven are applied: `bastler/pr_state.py` is
-    `bastler/pull_request_state.py` with its three test modules renamed after it, `ci` is
+    **Resolved 2026-09-03** (9dc34b3a). All seven are applied: `basstler/pr_state.py` is
+    `basstler/pull_request_state.py` with its three test modules renamed after it, `ci` is
     `continuous_integration` on `BoardEntryKey`, `PullRequestDataKey`,
     `PullRequestLiveState` and `PullRequestRecord`, `PullRequestDetailPayload` is
     `PullRequestPayload`, and the last hand-spelled strings that already had enums read
@@ -382,7 +382,7 @@ items:
     renamed as well, and their readers in `stack.py` and `maintenance_board.py` follow.
     Both documents' schemas are re-spelled where they are written down:
     `.claude/stack/README.md` and `pr-data-fetching.md`. No `ci` identifier or key is left
-    in `bastler/` or `test/bastler_test/`.
+    in `basstler/` or `test/basstler_test/`.
 
     `pr_data.json` had no test holding its writer and its reader to the same keys - they
     sit in different modules, and every other test builds its mapping *through* the key
@@ -414,7 +414,7 @@ items:
   blockers:
     - >-
       Cross-plan dependency, not representable in depends_on: this branch is stacked on
-      bastler-package (#185, bastler-package plan) since 2026-09-02 - its base is that branch and
+      basstler-package (#185, basstler-package plan) since 2026-09-02 - its base is that branch and
       its modules are folded into the package. #185 is open, out of draft and promoted upstream
       (cram2-link-sent) but unmerged. Its main conflict is gone as of 2026-09-03: it is mergeable,
       with one unrelated robotics check red (test_each_lib (giskardpy)). This item lands only after
@@ -423,7 +423,7 @@ items:
     - >-
       Two review threads from the 2026-08-30 round are left open on purpose, each answered on the
       thread and waiting on the user: GitCommandRunner in the tests (answered with
-      ScratchRepository, because GitCommandRunner imports bastler.stack, which imports
+      ScratchRepository, because GitCommandRunner imports basstler.stack, which imports
       pull_request_state) and the "discuss the rebase options" thread (three options and the one
       taken are on it). These are the item's only open threads: every thread of both 2026-09-03
       rounds is applied and resolved.
@@ -482,7 +482,7 @@ items:
     icra-experiments' integrated-simulation-pipeline ->
     montessori-eql-stack/montessori_fast_inline_monitor, its failure-taxonomy-and-typing and
     experiment-c-in-simulation -> knowledge-directed-perception/expectations-from-events,
-    this plan's shared-pr-state-chips -> the bastler-package item carrying #185, and
+    this plan's shared-pr-state-chips -> the basstler-package item carrying #185, and
     rdr-explanation's rdr-why-answer -> the rdr-core-engine item carrying #210. Tests: the
     validation cases, resolution against a second fixture manifest, a foreign draft versus a
     foreign ready dependency in the ready-to-start lists, the chip, the readiness script, and

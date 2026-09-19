@@ -54,7 +54,7 @@ items:
     This item also establishes the git plumbing for reading revisions across branches, which
     `common-parent` then reuses rather than writing a second time.
   blockers:
-  - '#185 moves every `.claude/` Python module into the `bastler` package. Whichever lands
+  - '#185 moves every `.claude/` Python module into the `basstler` package. Whichever lands
     second re-applies its delta in the new location - the pattern #111 already exercised. Worth
     checking #185''s state before starting rather than after.'
 - id: overlap-detector

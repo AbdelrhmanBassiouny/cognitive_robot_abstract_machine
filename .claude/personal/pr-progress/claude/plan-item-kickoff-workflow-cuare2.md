@@ -1,6 +1,6 @@
-## PR #185 - bastler package extraction
+## PR #185 - basstler package extraction
 
-Resolving what stalled it, per `/plan-item-resolve bastler-package bastler-package`
+Resolving what stalled it, per `/plan-item-resolve basstler-package basstler-package`
 (auto mode). The pull request itself was finished and approved: out of draft since
 2026-08-23, CI green, both original dependencies merged. What held it was the
 `needs-resolution` label, which withholds a branch from promotion, live since
@@ -18,21 +18,21 @@ and 2026-09-03.
   `test_no_python_module_remains_under_the_claude_directory`. Third occurrence of the
   hazard the pull request body already names twice.
 
-Both arrive from `bastler-first-time-setup`, which landed as upstream #577 (`017be2aa2`)
+Both arrive from `basstler-first-time-setup`, which landed as upstream #577 (`017be2aa2`)
 on 2026-09-01 while the manifest still called it `in_progress`.
 
 ### Done
 
-- Merged `origin/main`; placed the new suite at `test/bastler_test/test_setup_steps.py`.
-- `git mv .claude/hooks/setup_steps.py bastler/setup_steps.py`; its `PROJECT_ROOT`
-  hand-counted `.parent` chain becomes `bastler.package_layout.REPOSITORY_ROOT`, and its
-  usage line becomes `python3 -m bastler.setup_steps`.
+- Merged `origin/main`; placed the new suite at `test/basstler_test/test_setup_steps.py`.
+- `git mv .claude/hooks/setup_steps.py basstler/setup_steps.py`; its `PROJECT_ROOT`
+  hand-counted `.parent` chain becomes `basstler.package_layout.REPOSITORY_ROOT`, and its
+  usage line becomes `python3 -m basstler.setup_steps`.
 - Repointed `.claude/SETUP.md` and `.claude/hooks/README.md` at the module's new home.
 - Converted the moved suite off the `sys.path` hackery this branch deletes: package
   imports, relative imports of the shared test modules, `PythonModuleRunner` +
   `install_package()` in place of a hand-built `subprocess.run`.
 - Recorded the real blocker in `plan.yaml`/`roadmap.md` before starting, and corrected
-  `bastler-first-time-setup` to `done`.
+  `basstler-first-time-setup` to `done`.
 
 ### Next
 

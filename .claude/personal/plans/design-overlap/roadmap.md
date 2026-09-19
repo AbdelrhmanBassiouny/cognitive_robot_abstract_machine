@@ -109,7 +109,7 @@ data, which is the drift this system exists to avoid.
 Recorded because this plan is about exactly this, and running the check on its own
 creation is the honest thing to do.
 
-- **#185** moves every `.claude/` Python module into the `bastler` package. Every Python
+- **#185** moves every `.claude/` Python module into the `basstler` package. Every Python
   item here lands in files it moves. Whichever lands second re-applies its delta in the new
   location - the pattern #111 already exercised. Check #185's state before starting
   `definition-catalogue`, not after.

@@ -43,7 +43,7 @@ Personal configuration lives on the notes branch and is written into the clone a
 **12. The hook tier.** `session-start.sh` is bash so it degrades rather than disappears: with
 `python3` off `PATH` entirely it still prints every line and exits 0, losing only one row - measured
 rather than asserted, and the reason it was not converted when a review round asked. The Python floor
-of 3.11 is taken deliberately by `bastler-session-start-python`, behind a shim that probes for it.
+of 3.11 is taken deliberately by `basstler-session-start-python`, behind a shim that probes for it.
 
 ## Rules this track settled
 

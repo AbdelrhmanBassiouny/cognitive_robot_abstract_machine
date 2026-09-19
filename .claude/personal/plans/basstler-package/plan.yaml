@@ -1,10 +1,10 @@
 schema_version: 1
-id: bastler-package
-title: 'The bastler package: every tooling module and its bash entry points move into it'
+id: basstler-package
+title: 'The basstler package: every tooling module and its bash entry points move into it'
 description: The workflow tooling grew as loose Python under .claude/ across three separate sys.path
   entries, so nothing in one directory could import another and the same code was written out repeatedly.
   This moves all of it into one importable package, then converts the bash entry points into thin
-  shims over it, one layer at a time. The package is named bastler, after the user's surname and the
+  shims over it, one layer at a time. The package is named basstler, after the user's surname and the
   German word for a tinkerer.
 default_repository: AbdelrhmanBassiouny/cognitive_robot_abstract_machine
 tracking_issue: 102
@@ -24,8 +24,8 @@ tracks:
   name: Bash to Python conversion
   wave: conversion
 items:
-- id: bastler-package
-  title: 'Create the bastler package: the .claude Python and its tests move into it'
+- id: basstler-package
+  title: 'Create the basstler package: the .claude Python and its tests move into it'
   branch: claude/plan-item-kickoff-workflow-cuare2
   pull_request_number: 185
   status: in_progress
@@ -41,15 +41,15 @@ items:
     Moves every Python file already on main under `.claude/` into one package: `.claude/stack/`
     (`stack.py`, the maintenance modules, `class_property.py`), `.claude/skills/plan-dashboard/`'s seven
     modules, and `.claude/hooks/`'s `plan_item_bootstrap.py`, `plan_manifest_tools.py`,
-    `plan_updates_since_support.py`, `plan_item_mode.py` - with their tests under `test/bastler_test/`
-    and the CI job repointed and renamed `test_bastler`. Boundaries, unchanged from decisions 8 and 12:
+    `plan_updates_since_support.py`, `plan_item_mode.py` - with their tests under `test/basstler_test/`
+    and the CI job repointed and renamed `test_basstler`. Boundaries, unchanged from decisions 8 and 12:
     `SKILL.md` files, `settings.json` and the bash entry points stay in `.claude/`, since Claude Code
     discovers them by path, as thin wrappers calling `python -m` into the package; zero-install survives
     (importable from the repository root, `pyproject` for optional install).
 
     **Re-scoped, renamed and moved to the front 2026-08-20 (decision 13, the user's call.)** This item
     now creates the package itself off `main` instead of inheriting the one #111 carries, so #111
-    rebases onto this branch and folds its modules in under the `bastler` name, and the original
+    rebases onto this branch and folds its modules in under the `basstler` name, and the original
     "sequence it last" constraint is reversed. The cost was measured rather than guessed - every open
     tooling pull request except #155 touches Python this moves - and accepted: each merges `main` across
     the move and re-applies its delta in the package, which is the resolution pattern #111 already
@@ -61,7 +61,7 @@ items:
     the other without the hackery decision 8 ends: `run_git` written out three times, the command-class
     base plus `classproperty` twice (#139's `MaintenanceCommand`, #151's `Subcommand`), `ItemStatus`, and
     the personal-notes precedence rules' second Python copy. The GitHub backend rule stays with
-    `bastler-github-api-unification`; the `run_git` seam stays `bastler-notes-core-python`'s.
+    `basstler-github-api-unification`; the `run_git` seam stays `basstler-notes-core-python`'s.
 
     **Dependency tiers were built, then deleted entirely, and the reasoning binds later items.** Three
     successive shapes - a declared tier table, a set of modules that may need the requirements, and an
@@ -71,15 +71,15 @@ items:
     gated on the notes-branch fetch the hook already exits on, reporting a failure on a `dependencies:`
     summary line and finishing the run regardless. Actions runners install the package themselves.
     `package_layout.py` writes nothing down at all now. The two installers diverge on purpose: a session
-    installs the missing *specifiers*, because `pip install ./bastler` would leave a second copy beside
+    installs the missing *specifiers*, because `pip install ./basstler` would leave a second copy beside
     the clone's own and the clone's copy is what a caller imports; a runner has no such contract and
-    installs `./bastler`. `bastler/requirements.txt` is deleted and the four distributions are declared
-    in `bastler/pyproject.toml`'s `[project] dependencies`, matching what `main` did for every other
-    workspace member; `bastler` stays out of `[tool.uv.workspace] members`, since membership would put
+    installs `./basstler`. `basstler/requirements.txt` is deleted and the four distributions are declared
+    in `basstler/pyproject.toml`'s `[project] dependencies`, matching what `main` did for every other
+    workspace member; `basstler` stays out of `[tool.uv.workspace] members`, since membership would put
     it in the default `uv sync`, which decision 12 rules out. No bash entry point carries embedded
     Python any more.
 
-    **Recorded for a later item, not acted on here:** bastler is to depend on `krrood`, to cut
+    **Recorded for a later item, not acted on here:** basstler is to depend on `krrood`, to cut
     duplication rather than mirror its idioms (the user, 2026-08-23). That makes decision 12's
     version-1 independence a stage rather than a permanent state.
 
@@ -90,7 +90,7 @@ items:
     assertion offered for deletion. Both are the user's to close.
 
     **Resolved 2026-09-03** at `674f1507f`: `main` merged, `setup_steps.py` folded into the package
-    as `bastler/setup_steps.py` and its suite converted off the `sys.path` hackery, 664 tests passing.
+    as `basstler/setup_steps.py` and its suite converted off the `sys.path` hackery, 664 tests passing.
 
     **The "still a draft" this note carried was wrong, and so was the absence of a blocker.** #185 has
     been out of draft since the 2026-08-23 round - which in this workflow is the promotion approval, not
@@ -102,7 +102,7 @@ items:
     anchor to the next also deleted a test that sat between them, and the suite stayed green, so nothing
     flagged it. A green run after a deletion says nothing about what the deletion took with it - the
     check is the mutation that used to fail, or the test count.
-- id: bastler-first-time-setup
+- id: basstler-first-time-setup
   title: One-page first-time setup, with the fork/GitHub/Claude steps printed for the reader
   branch: claude/bastler-setup-first-time-6tfcun
   pull_request_number: 203
@@ -148,20 +148,20 @@ items:
     `GitCommandRunner` stays out, measured rather than assumed: importing it from a hook costs a
     production `sys.path.insert` into `.claude/stack/`, which #185 is deleting the last of, and it
     carries no config or remote method. Recorded as a fourth caller waiting on
-    `bastler-notes-core-python`'s `git_interface.py`. 561 tests pass. One thread is left open, answered
+    `basstler-notes-core-python`'s `git_interface.py`. 561 tests pass. One thread is left open, answered
     differently from what it asked.
 
     **Landed 2026-09-01** as upstream pull request #577, merged into `main` at `017be2aa2`; the manifest
     had carried it as `in_progress` since. `.claude/SETUP.md`, `.claude/hooks/setup_steps.py` and
     `.claude/hooks/tests/test_setup_steps.py` are on `main` now, which is what makes them
-    `bastler-package`'s to fold in under the whichever-lands-second convention.
-- id: bastler-notes-core-python
+    `basstler-package`'s to fold in under the whichever-lands-second convention.
+- id: basstler-notes-core-python
   title: 'Bash→Python 1: notes-core modules (config, git seam, writer, markers)'
   branch: null
   status: not_started
   track: conversion
   depends_on:
-  - bastler-package
+  - basstler-package
   notes: |-
     Pure addition to the package, no bash file changes (decision 12). Six modules: `errors.py` (a
     standard-library dataclass-exception base mirroring krrood's idiom - typed context fields, abstract
@@ -181,16 +181,16 @@ items:
     a duplicate - its attempt/run split and named methods exist because a push that silently did nothing
     must not read as one that worked, and #135's script never writes - but #143's `plan_item_bootstrap`
     `run_git` and #135's are near-identical, both generic and both raising, differing only in error type
-    and parameter order, and `bastler-first-time-setup` is a fourth. The precedent that let #143 keep
+    and parameter order, and `basstler-first-time-setup` is a fourth. The precedent that let #143 keep
     `stack.py`'s overlap does not cover these: that one was accepted because the contracts were
     deliberately opposite (`_git` returns `""` where `run_git` raises), and these are not.
-- id: bastler-save-commands-python
+- id: basstler-save-commands-python
   title: 'Bash→Python 2: the four notes writers become python -m subcommands'
   branch: null
   status: not_started
   track: conversion
   depends_on:
-  - bastler-notes-core-python
+  - basstler-notes-core-python
   notes: |-
     `save-personal-notes.sh`, `save-pr-progress.sh`, `write-personal-notes-file.sh` and
     `create-personal-notes-branch.sh` become three-line shims; their bodies move onto the core modules,
@@ -205,26 +205,26 @@ items:
     Flag names, stdout lines and exit codes are external API and stay unchanged, pinned by shim-level
     subprocess contract tests. Sequence after the in-flight bash-touching pull requests land: a
     wholesale body rewrite cannot be merged by the whichever-lands-second-merges convention.
-- id: bastler-save-plan-python
+- id: basstler-save-plan-python
   title: 'Bash→Python 3: save-plan and the plan manifest tools'
   branch: null
   status: not_started
   track: conversion
   depends_on:
-  - bastler-save-commands-python
+  - basstler-save-commands-python
   notes: |-
     `save-plan.sh` becomes a shim; `plan_manifest_tools.py` is absorbed as `plan_manifest.py`. New
     validation with curated errors instead of `cp`/traceback noise: the roadmap marker block must be
     non-empty, since today an empty block silently overwrites `roadmap.md`, and the
     `--manifest`/`--roadmap` source files must exist. Both existing test files carry over, one with an
     import change and one as the shim contract test.
-- id: bastler-session-start-python
+- id: basstler-session-start-python
   title: 'Bash→Python 4: session-start behind an inert probing shim'
   branch: null
   status: not_started
   track: conversion
   depends_on:
-  - bastler-notes-core-python
+  - basstler-notes-core-python
   notes: |-
     `session-start.sh` keeps its path, so `settings.json` stays byte-identical, but its body becomes the
     one guarded shim: `command -v python3` plus a >= 3.11 version probe, exiting 0 with a single
@@ -240,13 +240,13 @@ items:
     `git-identity-from-personal-notes`, are merged and now live in the `session-notes-infrastructure`
     plan, so they are dropped from `depends_on`; what mattered about them is that their
     `run_hook_script` subprocess tests carry over here as the shim contract tests rather than colliding.
-- id: bastler-setup-checks-python
+- id: basstler-setup-checks-python
   title: 'Bash→Python 5: check-setup as typed rows'
   branch: null
   status: not_started
   track: conversion
   depends_on:
-  - bastler-notes-core-python
+  - basstler-notes-core-python
   notes: |-
     `check-setup.sh` becomes a shim over `setup_checks.py`: `SetupCheckIdentifier` and
     `SetupCheckStatus` StrEnums, a frozen `SetupCheckRow`, and a `SetupReport` preserving the exact TSV
@@ -258,13 +258,13 @@ items:
     command rather than grepping for a substring anywhere in the file, and the inline `python3` heredoc
     becomes a `missing_requirements()` call through `importlib.metadata`. Runs parallel to the other
     conversions off the core item.
-- id: bastler-dashboard-refresh-python
+- id: basstler-dashboard-refresh-python
   title: 'Bash→Python 6: refresh_dashboard orchestration in-process'
   branch: null
   status: not_started
   track: conversion
   depends_on:
-  - bastler-save-commands-python
+  - basstler-save-commands-python
   notes: |-
     `refresh_dashboard.sh` becomes a shim over `dashboard_refresh.py`, which calls
     `sync_manifest_status`/`build_dashboard` in-process - the package extraction has moved them by this
@@ -273,17 +273,17 @@ items:
     deleted along with its constant, and its two operations become internal functions. The merged
     single-JSON stdout contract and the `--plan-id` flag stay unchanged; the existing shell test carries
     over as the shim contract test.
-- id: bastler-config-shim-slimming
+- id: basstler-config-shim-slimming
   title: 'Bash→Python 7: slim the sourced config file to constants'
   branch: null
   status: not_started
   track: conversion
   depends_on:
-  - bastler-save-commands-python
-  - bastler-save-plan-python
-  - bastler-session-start-python
-  - bastler-setup-checks-python
-  - bastler-dashboard-refresh-python
+  - basstler-save-commands-python
+  - basstler-save-plan-python
+  - basstler-session-start-python
+  - basstler-setup-checks-python
+  - basstler-dashboard-refresh-python
   notes: |-
     `resolve-personal-notes-config.sh` keeps its sourcing contract - ten documentation locations plus
     `ci.yml` twice source it for its variables and its cd-to-root side effect, so no `SKILL.md` change
@@ -296,13 +296,13 @@ items:
     Python copies to hold equal, not one: `stack.py` already reimplements the same precedence, and its
     own docstrings concede as much. `plan_item_bootstrap.py` deliberately adds no third - it sources the
     shell file and calls its fetch function rather than restating the rules.
-- id: bastler-github-api-unification
+- id: basstler-github-api-unification
   title: 'One github backend: the gh-CLI-else-token rule implemented once'
   branch: null
   status: not_started
   track: conversion
   depends_on:
-  - bastler-notes-core-python
+  - basstler-notes-core-python
   notes: |-
     `github-api.sh` (decision 9, arriving with #107) and `pr_state` (arriving with #111) implement the
     same gh-CLI-else-token-and-curl dual-backend rule twice - the strongest concrete duplication on

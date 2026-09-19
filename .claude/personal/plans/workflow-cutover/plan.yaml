@@ -201,7 +201,7 @@ items:
     residue is reparents (base retargets), which nothing today posts a notice for.
 
     **The interim pointer prompt is superseded twice over.** ROUTINE.md no longer exists anywhere
-    (renamed away in the bastler-package rename); the live Routine's own registered prompt
+    (renamed away in the basstler-package rename); the live Routine's own registered prompt
     (trig_01N79jHmLo3bSbg8pLM6MNTB, per .claude/skills/stacked-pr-maintenance/routine-prompt.md
     merged 2026-08-13) already invokes `/stacked-pr-maintenance --non-interactive` directly rather
     than pointing at a doctrine file. The two dead-weight deletions the old note flagged (the

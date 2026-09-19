@@ -98,7 +98,7 @@ items:
     session: https://claude.ai/code/session_019636yuByUTH6aFiEQdDztc
     notes: >
       55 items / 14,259 lines becomes several under-budget plans. Its existing
-      tracks - personal-data, stack-tooling, dashboards, bastler, cutover -
+      tracks - personal-data, stack-tooling, dashboards, basstler, cutover -
       already name the natural seams. Personal-notes data only, so branch stays
       null and no pull request is opened; the precedent is that plan's own
       eql-roadmap-migration item. The split rewrites _generated/branch-index.tsv

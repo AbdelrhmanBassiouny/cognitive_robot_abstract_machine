@@ -407,12 +407,12 @@ items:
     the user was asked to close, not work owed; the three others the description calls open were
     resolved on 2026-08-13. What is actually outstanding is the base merge above.
 
-    Resolved on 2026-09-06. The base #158 had been rebased onto the bastler package move, so
+    Resolved on 2026-09-06. The base #158 had been rebased onto the basstler package move, so
     this branch's own delta still sat at `.claude/stack/` and the two conflicted on nine files.
-    Merged and re-applied inside `bastler/` in `50b8752e`; the two files only this branch
+    Merged and re-applied inside `basstler/` in `50b8752e`; the two files only this branch
     introduces - `github_links.py` and the promotion-summaries fixture - had no counterpart for
-    git to rename them onto and were moved by hand. 692 tests pass in `test/bastler_test`, the
-    suite CI's `test_bastler` job runs, and GitHub reports the pull request mergeable again.
+    git to rename them onto and were moved by hand. 692 tests pass in `test/basstler_test`, the
+    suite CI's `test_basstler` job runs, and GitHub reports the pull request mergeable again.
 
 - id: integration-branch
   title: 'Regenerated personal integration branch: build, check, resolve, report'
@@ -659,7 +659,7 @@ items:
 
     **Both threads the 2026-08-30 round left open are answered, and the recorded blocker had the first
 
-    one wrong.** The repeated string was never the `sys.path` insertion `bastler-package` owns: asked
+    one wrong.** The repeated string was never the `sys.path` insertion `basstler-package` owns: asked
 
     again, the author said it is the measured check timing, written out at four of the designs it
 
@@ -959,7 +959,7 @@ items:
     The git-command-vocabulary thread is answered with measurements and left open, because the question is
     owned elsewhere: no git command name is spelled twice for the same operation, so an enum would be 16
     members with one reader each, and the class-per-command hierarchy is what the method signature already
-    is. It goes to `bastler-notes-core-python`, which owns the git seam by name and has four callers
+    is. It goes to `basstler-notes-core-python`, which owns the git seam by name and has four callers
     waiting - deciding the ergonomics before the raise-versus-answer-nothing question is settled means
     deciding them twice.
 - id: per-plan-integration-branches

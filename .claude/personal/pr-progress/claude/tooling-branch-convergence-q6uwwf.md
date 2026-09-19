@@ -1,4 +1,4 @@
-## Tooling branch convergence across the bastler move (decision 13)
+## Tooling branch convergence across the basstler move (decision 13)
 
 This session opened no pull request of its own. It brought every open
 `.claude/`-side tooling branch across #185's package move so an integration
@@ -7,7 +7,7 @@ declaration, and then finished the four items left outstanding.
 
 ### Done
 
-Crossed and pushed, each with the bastler suite green, all bases retargeted to
+Crossed and pushed, each with the basstler suite green, all bases retargeted to
 #185's branch or to their crossed parent:
 
 | pull request | tests |
@@ -19,13 +19,13 @@ Crossed and pushed, each with the bastler suite green, all bases retargeted to
 | #282, #285, #291 (on #211) | 1184, 1160, 1161 |
 
 **The unification is done, on #207.** `.claude/hooks/requirements.txt` and
-`bastler/missing_requirements.py` are gone; `plan-size-report.sh` asks the
+`basstler/missing_requirements.py` are gone; `plan-size-report.sh` asks the
 `missing_dependencies` helper that `check-setup.sh` and `session-start.sh`
-already share, so `bastler/pyproject.toml` is the one declaration.
+already share, so `basstler/pyproject.toml` is the one declaration.
 
 **`integration_test_command` is fixed, on #154 rather than #185.** #185's
-`bastler/stack.toml` never had the key - #154 introduces it. It names
-`test/bastler_test` with the `--confcutdir` CI's `test_bastler` job passes, and
+`basstler/stack.toml` never had the key - #154 introduces it. It names
+`test/basstler_test` with the `--confcutdir` CI's `test_basstler` job passes, and
 a contract test in `test_package_contract.py` holds the shipped command to
 naming paths this repository has, so the next relocation fails the suite rather
 than a build. 910 tests.
@@ -49,7 +49,7 @@ and no `.claude/**/*.py` left on any tip.
 - #293's crossing left two things git could not carry: `integration_fixtures.py`
   importing `integration_tooling` by bare name, and `test_tooling_label.py`
   computing `REPOSITORY_ROOT` as `parents[3]`, right at `.claude/stack/tests/`
-  and one level too high at `test/bastler_test/`. Both fixed.
+  and one level too high at `test/basstler_test/`. Both fixed.
 - A `git merge --no-commit` whose commit comes many steps later can lose
   MERGE_HEAD: #293's first crossing commit carried the merged tree with one
   parent. Re-merged with the same tree and both parents.

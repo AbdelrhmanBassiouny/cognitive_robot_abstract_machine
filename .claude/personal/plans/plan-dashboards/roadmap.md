@@ -38,8 +38,8 @@ dependencies. Only the fetch and render layer unifies, which is what `shared-pr-
 **3. Portability.** A plan without an upstream configured renders no promotion group and no links;
 no repository is named outside configuration defaults.
 
-**13. The bastler pivot inverted one dependency.** `shared-pr-state-chips` no longer creates the
-tooling package - `bastler-package` does, off main - so that branch rebases onto it and folds its
+**13. The basstler pivot inverted one dependency.** `shared-pr-state-chips` no longer creates the
+tooling package - `basstler-package` does, off main - so that branch rebases onto it and folds its
 modules in under the package's naming. What stays this item's own is the feature half.
 
 ## Conventions this track settled
@@ -84,9 +84,9 @@ modules in under the package's naming. What stays this item's own is the feature
   stays a `blockers` entry, as `shared-pr-state-chips`, rdr-explanation's `rdr-why-answer` and
   three items of `icra-experiments` record today.
 
-## shared-pr-state-chips: the fold onto bastler, 2026-09-02
+## shared-pr-state-chips: the fold onto basstler, 2026-09-02
 
-The manifest called this item blocked on the bastler dependency and on a `main` conflict; what
+The manifest called this item blocked on the basstler dependency and on a `main` conflict; what
 had actually stalled it was the 2026-08-30 review round - nineteen threads the manifest never
 mentioned. Recorded first, resolved second.
 
@@ -155,11 +155,11 @@ tooling from its own checkout, so a manifest carrying `<plan-id>/<item-id>` befo
 can resolve it fails validation on every `/plan-dashboard` run for those plans. All five
 target ids were checked to resolve: `montessori-eql-stack/montessori_fast_inline_monitor`,
 `knowledge-directed-perception/expectations-from-events`,
-`bastler-package/bastler-package` (#185) and `rdr-core-engine/d-core-backend` (#210).
+`basstler-package/basstler-package` (#185) and `rdr-core-engine/d-core-backend` (#210).
 
 ### Landing hazards, both recorded rather than pre-resolved
 
-`#185` moves every `.claude/` Python module into the `bastler` package, and `#184`, `#157`,
+`#185` moves every `.claude/` Python module into the `basstler` package, and `#184`, `#157`,
 `#206` and `#111` also edit `build_dashboard.py`. The track's rule is that whichever lands
 second merges, so this is based off `main`.
 
@@ -223,7 +223,7 @@ are named in code, because an id is how a test points at a fixture at all.
 ## shared-pr-state-chips: the 2026-09-03 naming round
 
 Recorded before it was resolved, because the manifest again did not say what was wrong. The
-item read `in_progress` with two blockers, both about the bastler fold and both stale: #185's
+item read `in_progress` with two blockers, both about the basstler fold and both stale: #185's
 `main` conflict had cleared, and #111's own state was healthy - all 23 checks green, `clean`
 against its new base, out of nothing. What had stalled it was a review round from that morning
 that nothing recorded: seven threads, none of them a defect, all naming rules.

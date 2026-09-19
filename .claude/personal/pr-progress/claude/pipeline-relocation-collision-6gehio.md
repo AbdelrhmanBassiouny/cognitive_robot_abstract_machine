@@ -4,7 +4,7 @@ Status: done, opened as draft against PR #211's branch
 (claude/plan-item-kickoff-workflow-unification-wg4w4x), labeled `bug`.
 
 What happened: the scheduled Integration refresh was crashing 6 runs in a
-row because #111 (the .claude -> bastler relocation) merges cleanly and
+row because #111 (the .claude -> basstler relocation) merges cleanly and
 takes .claude/stack/integration.py etc. out of the assembled tree; the
 existing CarriedPipeline guard only checks after assembly finishes, by
 which point every subsequent step already runs against the broken tree.

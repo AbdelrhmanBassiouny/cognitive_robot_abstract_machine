@@ -26,7 +26,7 @@ could not reply into had been submitted, turning two invisible threads into 27 w
 
 Two threads, both answered differently from what they asked, both about `GitCommandRunner`:
 whether it should serve callers under `.claude/hooks/tests/` (needs a production `sys.path`
-insert — `bastler-notes-core-python`'s seam), and whether the `git remote add` line
+insert — `basstler-notes-core-python`'s seam), and whether the `git remote add` line
 `stack.py` prints for a person to paste should come from a command factory when nothing
 runs it. Neither is resolvable inside this pull request; both are the user's call.
 

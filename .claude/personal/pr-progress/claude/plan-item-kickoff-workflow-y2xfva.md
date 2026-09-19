@@ -51,7 +51,7 @@ The two `SKILL.md` paths have no such place — grepped: nothing in the repo def
 `SKILL.md` path as a shared constant, and `PROJECT_ROOT` is computed three ways in three
 modules. Not created here, on landing order rather than principle: the shell config is
 the only candidate, Python cannot read it without sourcing shell, and #185 rewrites it
-and introduces `test/bastler_test/constants.py`, which *is* that one place. Offered to
+and introduces `test/basstler_test/constants.py`, which *is* that one place. Offered to
 add it anyway.
 
 **Thread left open**: one part done, the rest answered differently from what it asked.
@@ -65,7 +65,7 @@ Nothing outstanding. CI on #194 has not been read yet. The PR stays a draft.
 - **Test location corrected against the roadmap's carried note.** It said to add a
   `plan-item-resolve/tests/` directory plus a constant and a `ci.yml` path. #185 deletes
   `.claude/hooks/tests/` and `.claude/stack/tests/`, collapses the four-directory job into
-  one `test_bastler` job, and rewrites both of those files — so that route builds what #185
+  one `test_basstler` job, and rewrites both of those files — so that route builds what #185
   removes, in the two files it conflicts with most.
 - **No wording assertions.** #121's review round cut exactly that kind of test; the step 5
   rewording is covered by review, and the roadmap says so rather than pretending a test

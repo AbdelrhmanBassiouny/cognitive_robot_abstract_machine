@@ -50,7 +50,7 @@ Deletions: `integration_test_command`, `ConfigurationKey.INTEGRATION_TEST_COMMAN
 
 - #154 is `dirty` against `main` and carries `needs-resolution`; this branch inherits that
   until #154 takes its base merge. Not ours to fix.
-- Crosses #185's bastler move (`.claude/stack/` → `bastler/`) and #158's pin. Whichever is
+- Crosses #185's basstler move (`.claude/stack/` → `basstler/`) and #158's pin. Whichever is
   still open when the other lands merges `main` and re-applies inside the package.
 - The marked job runs with tooling dependencies only — a reproduction test inside a
   robotics package needing the docker matrix would not be collectible there.

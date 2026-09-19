@@ -13,20 +13,20 @@ began. A session credential is refused there (HTTP 403), so `integration.py buil
 not be run from a session at all. It now writes through `git.attempt`: a refused write
 costs the reuse, says so on stderr, and leaves the set as it stood.
 
-Diff is 3 files, +93/-3: `bastler/integration_pass_record.py`,
-`test/bastler_test/test_integration_pass_record.py` (three new tests, all failing against
-the old code), `test/bastler_test/test_integration_selection.py` (the `attempt` seam on
+Diff is 3 files, +93/-3: `basstler/integration_pass_record.py`,
+`test/basstler_test/test_integration_pass_record.py` (three new tests, all failing against
+the old code), `test/basstler_test/test_integration_selection.py` (the `attempt` seam on
 `GitWithOneBranchPublished`).
 
 ## 2026-09-08: conflict and CI pass
 
-- The base landed the `.claude/` -> `bastler/` relocation, so #291 was `dirty`. Merged the
+- The base landed the `.claude/` -> `basstler/` relocation, so #291 was `dirty`. Merged the
   base in (`1a3f3b7380`). One conflict: the import line in `test_integration_selection.py`
-  - my `GitCommandResult` addition against the base's `bastler.` package prefix. Resolved
-  to `from bastler.git_commands import GitCommandResult, ReferenceUpdate`. Everything else
+  - my `GitCommandResult` addition against the base's `basstler.` package prefix. Resolved
+  to `from basstler.git_commands import GitCommandResult, ReferenceUpdate`. Everything else
   auto-merged; git carried the renames, so the diff is unchanged at +93/-3.
-- `python -m pytest test/bastler_test --confcutdir=test/bastler_test`: **1160 passed**.
-  (The tooling CI job is now `test_bastler`, not `test_claude_dev_tooling`.)
+- `python -m pytest test/basstler_test --confcutdir=test/basstler_test`: **1160 passed**.
+  (The tooling CI job is now `test_basstler`, not `test_claude_dev_tooling`.)
 - `mergeable_state` went `dirty` -> `unstable`. Cleared `needs-resolution`, re-drafted,
   updated the description's stale `.claude/stack/tests/` paths.
 
@@ -42,7 +42,7 @@ selection does not count it against a branch. Same failure as every scheduled re
 Two things worth knowing about it:
 - `integration_suite.run_tests` uses `capture_output=True` and discards the output, so a
   failing integration suite reports `tests-failed` with no diagnostic in the job log at all.
-- `bastler/stack.toml`'s `integration_test_command` still reads
+- `basstler/stack.toml`'s `integration_test_command` still reads
   `.claude/skills/plan-dashboard/tests .claude/hooks/tests .claude/stack/tests`. After the
   relocation that last path is gone, so any build carrying the relocation tip errors out of
   pytest before running anything. On this run the relocation was not among the merged tips,

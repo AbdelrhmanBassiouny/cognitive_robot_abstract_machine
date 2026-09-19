@@ -1,4 +1,4 @@
-# bastler-package — Roadmap
+# basstler-package — Roadmap
 
 Narrative companion to `plan.yaml`. Kept short on purpose: the size budget this split was made
 under counts these lines.
@@ -9,7 +9,7 @@ Split out of `workflow-unification` on 2026-08-30, under `plan-size-limits`'
 `split-workflow-unification`. That plan had reached 59 items and 16,917 lines across its manifest
 and roadmap, well past the 15-item / 2,000-line budget, and became seven plans seamed on subject.
 
-This plan is the `bastler` track, carried across unchanged. Every item keeps its branch, pull
+This plan is the `basstler` track, carried across unchanged. Every item keeps its branch, pull
 request number, status and session verbatim. **The full predecessor roadmap remains in the
 personal-notes branch's history**; what is kept here is what binds future work.
 
@@ -45,7 +45,7 @@ existing paths, a slimmed configuration file, and the environment-configuration 
 since it is pasted by reference into cloud environment setup fields this repository cannot update.
 `settings.json` stays byte-identical. The Python floor is 3.11.
 
-**13. The package is named `bastler`, and the migration goes first.** From the first letters of the
+**13. The package is named `basstler`, and the migration goes first.** From the first letters of the
 user's surname and the German word for a tinkerer; it supersedes `development_tooling`, and keeps
 that name's abbreviation-free property. Decision 8 had sequenced the migration *last*, to avoid
 moving files under in-flight pull requests; it moves to the front because the duplication carriers
@@ -54,7 +54,7 @@ open tooling pull request but one touches Python this moves - and accepted: each
 the move and re-applies its delta in the package.
 
 **14. Derive rather than declare, and depend on krrood eventually.** What the package knows about
-itself is computed from the directory and the modules rather than written down. And bastler is to
+itself is computed from the directory and the modules rather than written down. And basstler is to
 depend on `krrood`, to cut duplication rather than mirror its idioms - which makes decision 12's
 version-1 independence a stage rather than a permanent state.
 
@@ -83,7 +83,7 @@ put it in the default sync.
 - **The conversion items must follow the in-flight bash-touching pull requests**, not lead them: a
   wholesale body rewrite cannot be merged by the whichever-lands-second convention.
 - **Two carriers are unreachable from the migration branch** and stay with
-  `bastler-github-api-unification`, whose two remaining carriers live on other plans' branches.
+  `basstler-github-api-unification`, whose two remaining carriers live on other plans' branches.
 
 ## Process notes worth keeping
 
@@ -96,7 +96,7 @@ put it in the default sync.
 
 ## What actually stalled the extraction, found 2026-09-03
 
-The manifest called `bastler-package` in progress and still a draft. Both were wrong, and the second
+The manifest called `basstler-package` in progress and still a draft. Both were wrong, and the second
 one is what hid the first: **#185 has been out of draft since 2026-08-23**, which in this workflow is
 the promotion approval rather than a loose end, and it has carried `needs-resolution` since
 2026-08-22, which withholds a branch from promotion. So the work was finished and approved, and held
@@ -117,7 +117,7 @@ chain became `package_layout.REPOSITORY_ROOT` and its suite lost all three shape
 to end at once - a bare module import, a bare sibling import, and a `sys.path.insert` reaching the
 plan-dashboard directory for `build_dashboard.PullRequestLabel`. 664 tests pass, against 632.
 
-`bastler-first-time-setup` landing is what produced both files: upstream #577, merged into `main` at
+`basstler-first-time-setup` landing is what produced both files: upstream #577, merged into `main` at
 `017be2aa2` on 2026-09-01, while the manifest carried it as `in_progress`. This is the
 whichever-lands-second convention working exactly as the landing hazards section says it does.
 

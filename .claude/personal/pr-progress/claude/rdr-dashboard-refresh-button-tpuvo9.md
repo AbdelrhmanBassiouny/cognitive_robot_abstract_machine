@@ -31,5 +31,5 @@ already are, rather than a second copy-a-command mechanism.
   regenerated.
 - The master index (`/plan-dashboard` with no argument) was not refreshed.
 - PR #185 moves `build_dashboard.py` and `templates/dashboard.html` into
-  `bastler/`; this is landing order, not a dependency - whoever lands second
+  `basstler/`; this is landing order, not a dependency - whoever lands second
   re-applies the delta in the package.

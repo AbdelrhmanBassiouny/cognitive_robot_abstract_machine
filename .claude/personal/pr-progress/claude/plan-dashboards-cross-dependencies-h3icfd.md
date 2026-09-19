@@ -43,7 +43,7 @@ round settled, 2026-09-03".
 Verified: plan-dashboard 288 tests (242 before) on 3.11 and 3.12, the other three
 CI suites 318; `black --check` clean, `format_docstrings.py` a no-op except
 `build_dashboard.py`, which stays black-only as on `main`. Live smoke test still
-renders the intended `bastler-package/bastler-package` chip.
+renders the intended `basstler-package/basstler-package` chip.
 
 ## Next
 
@@ -56,11 +56,11 @@ Nothing on this branch. It is a draft waiting on review.
   `montessori-eql-stack/montessori_fast_inline_monitor`, its
   `failure-taxonomy-and-typing` and `experiment-c-in-simulation` →
   `knowledge-directed-perception/expectations-from-events`, this plan's
-  `shared-pr-state-chips` → `bastler-package/bastler-package`, and
+  `shared-pr-state-chips` → `basstler-package/basstler-package`, and
   `rdr-explanation`'s `rdr-why-answer` → `rdr-core-engine/d-core-backend`. Not
   before: a manifest carrying a reference `main` cannot resolve fails validation
   on every dashboard run for those plans.
-- Landing hazard: #185 moves this file into `bastler`, and #184/#157/#206/#111
+- Landing hazard: #185 moves this file into `basstler`, and #184/#157/#206/#111
   also edit it. Whichever lands second merges. #184's `_resolved_dependencies_of`
   and this branch's `DependencyResolver` should become one path in that merge.
 - `main`'s `plan_item_bootstrap.py` mis-indents fields when a manifest writes its

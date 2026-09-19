@@ -1,7 +1,7 @@
 
-# First-time setup for the Bastler system (PR #203)
+# First-time setup for the Basstler system (PR #203)
 
-Plan item: workflow-unification / bastler-first-time-setup.
+Plan item: workflow-unification / basstler-first-time-setup.
 
 ## Plan
 

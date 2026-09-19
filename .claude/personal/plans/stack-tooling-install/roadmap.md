@@ -136,7 +136,7 @@ Run as a live prototype rather than read off documentation, and it re-scoped fou
 - **One review thread stays open by the standing rule**, answered differently from what it asked:
   whether one git runner should serve every caller. The raw calls are gone onto the scratch repository,
   but the shared runner lives under `.claude/stack/`, so reaching it costs a production `sys.path`
-  insert the package migration is deleting the last of. That seam is `bastler-notes-core-python`'s by
+  insert the package migration is deleting the last of. That seam is `basstler-notes-core-python`'s by
   name and now has five callers waiting; the deciding question - whether one runner can serve a caller
   that must never raise and one for which a silent failure is the bug - would be settled in the wrong
   item here.

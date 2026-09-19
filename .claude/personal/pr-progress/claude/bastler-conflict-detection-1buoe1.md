@@ -28,7 +28,7 @@ it directly or transitively. Start it with
 `/plan-item-kickoff design-overlap definition-catalogue`, from a branch cut off
 `main`, not off this one.
 
-Check #185's state first - it moves every `.claude/` Python module into `bastler`,
+Check #185's state first - it moves every `.claude/` Python module into `basstler`,
 and every Python item in this plan lands in files it moves.
 
 ## Hazards recorded on the plan

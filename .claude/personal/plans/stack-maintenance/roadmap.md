@@ -200,12 +200,12 @@ and re-applies its delta.
   lands, every command is a plain property and the converted one is the consistent one.
 
 - **A package move renames the files both branches carry, and abandons the ones only one of them
-  has.** #158 was rebased onto the bastler move while #162 was still written against
+  has.** #158 was rebased onto the basstler move while #162 was still written against
   `.claude/stack/`, and git's rename detection carried every module both branches hold across to
-  `bastler/` by itself. The two files #162 alone introduces - `github_links.py` and its
+  `basstler/` by itself. The two files #162 alone introduces - `github_links.py` and its
   promotion-summaries fixture - had no counterpart on the other side to be renamed onto, so they
   landed at the old paths with the imports still pointing at them. Nothing failed: the suite is
-  collected from `test/bastler_test`, which the stranded fixture is not in, and the stranded module
+  collected from `test/basstler_test`, which the stranded fixture is not in, and the stranded module
   is imported by a name that still resolved. The check that finds them is looking at what is left
   under the old directory after the merge, not at whether the tests pass.
 
@@ -296,7 +296,7 @@ green build was otherwise the one that would have ended the automation.
   the 2026-09-01 resolve cleared that item's integration block and answered its rebase question, and
   touched neither this nor the item's own remaining work.
 - The git-command vocabulary question, answered with measurements and deliberately left to
-  `bastler-notes-core-python`, which owns the git seam by name and has four callers waiting - one with
+  `basstler-notes-core-python`, which owns the git seam by name and has four callers waiting - one with
   a deliberately opposite contract. Deciding the ergonomics before the raise-versus-answer-nothing
   question is settled means deciding them twice.
 - The wire format of the integration reports is deliberately unguarded, recorded rather than quietly
@@ -413,13 +413,13 @@ fork's open pull requests; it only ever runs inside the pipeline, which provisio
 
 Resolved from `/plan-item-resolve` in `auto` mode. The manifest called the item healthy and
 `in_progress` with no blocker; GitHub called #162 `dirty`. The cause was neither a review thread
-nor a check: **#158 had been rebased onto the bastler package move**, so the base this branch is
+nor a check: **#158 had been rebased onto the basstler package move**, so the base this branch is
 stacked on stopped being the base it had merged. Both dependencies read ready, and all 23 checks
 were green on the commit before the merge.
 
 The merge is decision 13 doing what it says - each open branch merges across the move and
 re-applies its delta inside the package - rather than anything specific to this item. Nine files
-conflicted and every hunk was the same two shapes: a bare import against an absolute `bastler.*`
+conflicted and every hunk was the same two shapes: a bare import against an absolute `basstler.*`
 one, and an in-tree invocation against a pinned one. `SKILL.md` is where the two actually had to be
 reconciled rather than chosen between: it keeps this branch's step 2, its `--summaries` flag and
 its `pending-promotions` table, written in #158's pinned form, so every `maintenance.py` line now

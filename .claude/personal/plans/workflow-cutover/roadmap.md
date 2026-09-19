@@ -9,7 +9,7 @@ Split out of `workflow-unification` on 2026-08-30, under `plan-size-limits`'
 `split-workflow-unification`. That plan had reached 59 items and 16,917 lines across its manifest
 and roadmap, well past the 15-item / 2,000-line budget, and became seven plans seamed on subject:
 `stack-tooling-install`, `stack-maintenance`, `plan-tracking-skills`,
-`session-notes-infrastructure`, `plan-dashboards`, `bastler-package` and this one.
+`session-notes-infrastructure`, `plan-dashboards`, `basstler-package` and this one.
 
 This plan is the `cutover` track, carried across unchanged. Every item keeps its branch, pull
 request number, status and session verbatim.
@@ -85,7 +85,7 @@ this one:
 
 - **The vocabulary this branch should use already exists on #111.** `RefreshArgument`,
   `RefreshSummaryKey`, `SitePath`, `RepositoryEndpoints`, `PullRequestListFilter` and `IssueField`
-  are all in `bastler/build_site.py` and `bastler/pull_request_state.py`, and #111 names a decoded
+  are all in `basstler/build_site.py` and `basstler/pull_request_state.py`, and #111 names a decoded
   response `detail` and a request body `body` - which is the answer to "rename payload". Adopting
   those names here makes the eventual merge an adoption rather than a conflict, so the overlap the
   item's notes already record stays a single-file one.
@@ -95,7 +95,7 @@ this one:
   vocabulary here is deliberately sized to these tests and named after its equivalents, and the
   richer version wins whenever the two meet.
 - **Bash to Python is the settled direction, and `publish_site.sh` was the last new bash.**
-  `bastler-package` carries a seven-item Bash→Python series; none of its items covers this file,
+  `basstler-package` carries a seven-item Bash→Python series; none of its items covers this file,
   because the file does not exist on `main`. Converting it here is the answer to the review's
   question rather than a new claim on that plan's scope.
 
@@ -125,11 +125,11 @@ Pushed as `d61619ac`. The four recurring asks are answered across the branch's o
 answer to the largest of them came from reading #111 rather than from inventing names: every
 vocabulary this branch needed - `RefreshArgument`, `RefreshSummaryKey`, `SitePath`,
 `RepositoryEndpoints`, `PullRequestListFilter`, `IssueField`, and `detail`/`body` in place of
-`payload` - already exists in `bastler/build_site.py` and `bastler/pull_request_state.py`. Taking
+`payload` - already exists in `basstler/build_site.py` and `basstler/pull_request_state.py`. Taking
 those names makes the single-file overlap the item's notes record an adoption rather than a rename.
 
 `publish_site.sh` is now `publish_site.py` on a `GitCommandRunner` that `PersonalNotesBranch` reads
-through too. That answers two threads at once, and it is where `bastler-package`'s Bash-to-Python
+through too. That answers two threads at once, and it is where `basstler-package`'s Bash-to-Python
 series was going anyway - none of its seven items covers this file only because the file does not
 exist on `main`.
 
@@ -139,7 +139,7 @@ being resolved:
 - **The git command runner** is this package's own, not `.claude/stack/maintenance_git_commands.py`'s.
   That module imports `stack`, and reaching it at all depends on another skill directory's conftest
   having inserted its path - which happens to hold under CI's single pytest run and is not a
-  dependency worth taking. #111's `bastler/personal_notes.py` runs git through a private method for
+  dependency worth taking. #111's `basstler/personal_notes.py` runs git through a private method for
   the same reason.
 - **The error base** covers the errors this branch introduces. `build_dashboard.py`'s
   `MissingMergeTimestampError`, `MalformedPullRequestDataError` and `PlanValidationError` predate the
