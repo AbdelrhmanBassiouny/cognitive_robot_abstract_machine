@@ -37,11 +37,40 @@ question. Dispatched against #652:
 - giskardpy: four in `test_integration_daisy.py` - two joint goals off at
   2-decimal tolerance, two self-collisions violated by ~2mm.
 
-The same commit runs the same 821 tests on the fork and passes all of them.
-Same code, same workflow, same test set - the difference is the container
-image, `ghcr.io/${GITHUB_REPOSITORY,,}:jazzy`, per repository and rebuilt only
-when `.github/docker/` changes on that repository's main. The fix is
-`update_docker` on cram2, which needs upstream access.
+The same commit runs the same 821 tests on the fork and passes all of them:
+fork CI on `1e06fe9fa6` - byte-identical to cram2's main - was green on
+2026-09-18T14:44Z. Same code, same `ubuntu-latest`, same workflow, so the
+per-repository container image `ghcr.io/${GITHUB_REPOSITORY,,}:jazzy` is the
+remaining variable.
+
+Corrected on Abdelrhman's challenge: the image is *not* stale on cram2 - it is
+stale on the fork. The fork's last `update_docker` was 2026-08-31T21:43Z (16
+runs, none since), and its image blob is dated 2026-08-31T21:47Z on a
+`ros:jazzy` base layer from 2026-08-17. Tigul rebuilt cram2's yesterday by
+`workflow_dispatch`, which leaves no git trace - `.github/docker/` has not
+changed since f879be4f6c on 2026-08-31, which is why inferring staleness from
+the push-path trigger was wrong. So the green result is the *old* image and
+the red one is the *new* image. Do not run `update_docker` on cram2 as a fix:
+it rebuilds from the same unpinned inputs.
+
+Nothing in the build is pinned. `FROM ros:jazzy` is a moving tag, already
+moved from the fork's 2026-08-17 base to 2026-09-16. apt and the
+`pip install poetry objgraph treon jupytext jupyterquiz jupyter-book
+pytest-xdist uv` line carry no versions. `setup_workspace.py` clones 17
+external repositories with `git clone -b <branch> --single-branch` and no
+commit pin, so each rebuild takes whatever those branches point at - among
+them `Universal_Robots_ROS2_Description@jazzy` and
+`iai_weiss_wpg_300-120-gripper@main` (Daisy is the UR + Weiss gripper) and
+`robokudo_msgs@ros2_jazzy`. A moved robot description is the natural reading
+of joint goals off at 2 decimals and self-collisions violated by ~2mm, and of
+a robokudo query interface flipping to `assert True is False`.
+
+Unverified, because cram2's API and its GHCR package both refuse this session
+(403 / 401): the exact rebuild time versus the failing run I read. If the run
+predates the rebuild the direction above could still flip. `ci.yml` has a
+`workflow_run` trigger on `update_docker` completion, so the rebuild will have
+re-run CI on cram2's main - that run's colour settles it, and Abdelrhman can
+see it.
 
 ## Left for Abdelrhman
 
