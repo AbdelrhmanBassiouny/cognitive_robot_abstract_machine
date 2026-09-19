@@ -194,14 +194,26 @@ A drafted predicates-land item was REJECTED by the branch index: #229's branch i
 already knowledge-directed-requests' predicates-answer-whether-they-hold. Dropped;
 recorded as a cross-plan blocker on perception-join instead.
 
-## MISTAKE FOUND: I pushed two commits onto a CLOSED pull request
-#244 closed unmerged 2026-09-18 23:55; its 4255 insertions are NOT on main
-(spatial_types/numeric.py absent). On 2026-09-19 I pushed b5be1a30ad and 223e532824
-(ex-#415) onto its branch WITHOUT CHECKING ITS STATE. Both are now in no open PR.
-Label cram2-link-sent suggests a deliberate upstream hand-off. Tracked as the plan's
-foldins-rehomed item, status blocked, needs the user's answer.
-LESSON: check a PR's state before pushing to it, every time. My fold-in targets were
-#256/#244/#294/#295 and only #244 had closed - a single state check would have caught it.
+## RESOLVED: the two commits pushed onto closed #244 are rehomed
+Another session had already split #244 into #408 (krrood, off main), #409 (sdt, off
+main) and #410 (segmind, stacked on #409 - segmind imports sdt's numeric module), and
+retargeted #256/#246, recreated the native stack as #411, closed #244.
+Both of my orphaned commits touch ONLY segmind, so both went onto #410 as 952397cd7f
+and 30a1f994fe: clean cherry-picks, import- AND attribute-verified, and
+`git diff origin/sdt_segmind_krrood_from_fast_monitor HEAD -- segmind test/segmind_test`
+empty (#410 still byte-identical to #244's branch over the segmind paths). #410 left a
+draft; description updated; comment posted. It is montessori-eql-stack's item, so my
+plan item claims neither its branch nor its number.
+LESSON STILL STANDS: check a PR's state before pushing to it. Four fold-in targets that
+day, only #244 had closed, one state check would have caught it.
+
+## RESOLVED: #296 -> go with main's direction (user, 2026-09-19)
+main's _grasp_description is the one name; #296's stated-grasp preference folds in as
+its first branch; grasp_description field kept. #422 already carries it. If #296 is
+rebased onto main in place instead, #422's second commit becomes empty.
+Blocker cleared on the plan item; comment posted on #296.
+
+## RESOLVED: #286 - the user will review it themselves. Off my plate.
 
 ## Also learned this pass
 - collide.py's pairwise scan is near-useless alone (staleness hubs) and cannot see a
