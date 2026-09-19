@@ -77,6 +77,35 @@ jobs:
           bazel build //test:test_all
           bazel test //test:test_all
 
+      - name: Debug ORM double-import investigation
+        # Temporary: pin down why experiments.orm.ormatic_interface's classes end up
+        # "already defined" during collection. Remove once diagnosed.
+        if: ${{ inputs.lib == 'experiments' }}
+        continue-on-error: true
+        run: |
+          source /opt/ros/cram-env/bin/activate
+          source /opt/ros/overlay_ws/install/setup.bash
+          cd cognitive_robot_abstract_machine
+          echo "=== building the ORM interfaces up front (conftest normally does this) ==="
+          python -c "from cognitive_robot_abstract_machine.orm_interfaces import WORKSPACE_ORM_INTERFACES; WORKSPACE_ORM_INTERFACES.regenerate(show_generator_output=True)"
+          cd ..
+          echo "=== sys.path probe (mimicking pytest's rootdir insertion) ==="
+          python - <<'PYEOF'
+          import sys
+          sys.path.insert(0, "cognitive_robot_abstract_machine")
+          import experiments
+          print("experiments.__path__ =", list(experiments.__path__))
+          print("experiments.__file__ =", getattr(experiments, "__file__", None))
+          import experiments.orm.ormatic_interface as m1
+          print("m1 id:", id(m1), m1.__file__)
+          import experiments.orm.ormatic_interface as m2
+          print("m2 id:", id(m2), "same object as m1:", m1 is m2)
+          print("'experiments.orm.ormatic_interface' in sys.modules:", 'experiments.orm.ormatic_interface' in sys.modules)
+          PYEOF
+          echo "=== serial (no xdist) collect-only ==="
+          python -m pytest --collect-only -q cognitive_robot_abstract_machine/test/experiments_test > /tmp/serial_collect.log 2>&1 || true
+          tail -n 150 /tmp/serial_collect.log
+
       - name: Run tests
         run: |
           source /opt/ros/cram-env/bin/activate
@@ -101,7 +130,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: experiments-ormatic-interface
-          path: cognitive_robot_abstract_machine/experiments/src/experiments/orm/ormatic_interface.py
+          path: |
+            cognitive_robot_abstract_machine/experiments/src/experiments/orm/ormatic_interface.py
+            /tmp/serial_collect.log
           if-no-files-found: warn
 
       - name: Save cache
