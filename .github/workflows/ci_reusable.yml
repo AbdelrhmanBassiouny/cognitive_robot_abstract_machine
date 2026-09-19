@@ -77,58 +77,6 @@ jobs:
           bazel build //test:test_all
           bazel test //test:test_all
 
-      - name: Debug ORM double-import investigation
-        # Temporary: pin down why experiments.orm.ormatic_interface's classes end up
-        # "already defined" during collection. Remove once diagnosed.
-        if: ${{ inputs.lib == 'experiments' }}
-        continue-on-error: true
-        run: |
-          source /opt/ros/cram-env/bin/activate
-          source /opt/ros/overlay_ws/install/setup.bash
-          cd cognitive_robot_abstract_machine
-          echo "=== building the ORM interfaces up front (conftest normally does this) ==="
-          python -c "from cognitive_robot_abstract_machine.orm_interfaces import WORKSPACE_ORM_INTERFACES; WORKSPACE_ORM_INTERFACES.regenerate(show_generator_output=True)"
-          cd ..
-          echo "=== step-by-step dependency-interface import probe ==="
-          python - <<'PYEOF'
-          import sys
-          sys.path.insert(0, "cognitive_robot_abstract_machine")
-          from krrood.ormatic.base import Base
-
-          def report(label):
-              tables = Base.metadata.tables
-              print(f"[{label}] {len(tables)} tables; has ServoGainsDAO: {'ServoGainsDAO' in tables}")
-              if "ServoGainsDAO" in tables:
-                  table = tables["ServoGainsDAO"]
-                  for mapper in Base.registry.mappers:
-                      if mapper.local_table is table:
-                          print("  ServoGainsDAO owned by class:", mapper.class_, "module:", mapper.class_.__module__)
-
-          report("baseline")
-
-          for module_name in (
-              "semantic_digital_twin.orm.ormatic_interface",
-              "giskardpy.orm.ormatic_interface",
-              "coraplex.orm.ormatic_interface",
-          ):
-              try:
-                  __import__(module_name)
-                  report(f"after {module_name}")
-              except Exception as error:
-                  print(f"[after {module_name}] import FAILED: {error!r}")
-                  report(f"after {module_name} (failed)")
-
-          try:
-              import experiments.orm.ormatic_interface
-              report("after experiments.orm.ormatic_interface")
-          except Exception as error:
-              print(f"experiments.orm.ormatic_interface import FAILED: {error!r}")
-              report("after experiments.orm.ormatic_interface (failed)")
-          PYEOF
-          echo "=== serial (no xdist) collect-only ==="
-          python -m pytest --collect-only -q cognitive_robot_abstract_machine/test/experiments_test > /tmp/serial_collect.log 2>&1 || true
-          tail -n 150 /tmp/serial_collect.log
-
       - name: Run tests
         run: |
           source /opt/ros/cram-env/bin/activate
@@ -145,18 +93,6 @@ jobs:
             export MUJOCO_GL=egl
           fi
           python -m pytest -n auto cognitive_robot_abstract_machine/test/${{ inputs.lib }}_test
-
-      - name: Upload generated ORM interface (debug)
-        # Temporary: capture the generated experiments interface to diagnose the
-        # "Table already defined" collection failure. Remove once diagnosed.
-        if: ${{ always() && inputs.lib == 'experiments' }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: experiments-ormatic-interface
-          path: |
-            cognitive_robot_abstract_machine/experiments/src/experiments/orm/ormatic_interface.py
-            /tmp/serial_collect.log
-          if-no-files-found: warn
 
       - name: Save cache
         uses: actions/cache/save@v4
