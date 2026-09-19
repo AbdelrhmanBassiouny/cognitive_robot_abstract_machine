@@ -1736,3 +1736,87 @@ Restored both imports. Verified directly, the way CI resolves them:
 conflict markers is not proof it merged correctly - the resolution has to at least
 grep the touched file's own usages for anything the auto-merge could have silently
 dropped, not just fix the marked hunks and trust the rest.
+
+## 34. 2026-09-18/19: section 32's own resolution was the bug - a class main had moved, not added
+
+The developer's "Ci failed", then "Ci has alot of failures" - two prompts, since section 33's
+fix cleared several jobs (`krrood`, `random_events`, `probabilistic_model`,
+`physics_simulators`, `robokudo`, `segmind`, `version`,
+`cognitive_robot_abstract_machine`, `test_claude_dev_tooling`,
+`check_generated_orm_interfaces_are_untracked`) but left `experiments`, `coraplex`,
+`semantic_digital_twin`, `giskardpy` and several demo/notebook/script jobs red, so the
+second prompt was about a different failure, not a report that the first fix hadn't
+landed.
+
+**All of them failed at the same import, with a new error.**
+`experiments/scripts/generate_orm.py:7`, `import coraplex.orm.ormatic_interface`, raised
+`sqlalchemy.exc.InvalidRequestError: Table 'UnderspecifiedNodeDAO' is already defined for
+this MetaData instance`, preceded by an `SAWarning` naming the same class. Confirmed
+across three jobs' logs (`semantic_digital_twin`, `giskardpy`, `coraplex`) that all fail at
+the identical line - the shared workspace ORM-generation setup step section 33 already
+established every `test_each_lib` job runs, so one root cause was breaking all of them.
+
+**Section 32's own conflict note was the misdiagnosis, not just an incomplete one.** It
+reads: *"`plan_node.py`: `UnderspecifiedNode` exists only on this branch; `main`'s side of
+the conflict was empty, so nothing to combine."* That is true and was read backwards -
+`main`'s side was empty because `main` had *moved* the class, not because it never touched
+it. Checked directly: `git show origin/main:coraplex/src/coraplex/plans/plan_node.py` has
+no `UnderspecifiedNode` at all, and `git show
+origin/main:coraplex/src/coraplex/plans/underspecified.py` has it, with an
+`ActionTrial`-backed `advance()` this branch's copy never grew (this branch's copy predates
+that addition, going back to `150024e673`, the branch tip section 17 started stacking
+from). So "take both sides" - the rule this item has correctly applied at every earlier
+conflict - was the wrong move for the first time: there were not two independent
+additions to reconcile, there was one relocation this branch's history had never
+executed, misread as a no-op because the diff on `main`'s side of that hunk showed nothing.
+
+`grep -rn "class UnderspecifiedNode\b"` confirmed the shape directly: the identical class
+name, both inheriting `ExecutionBoundaryNode`, in `plan_node.py` and in
+`underspecified.py`. `classes_of_package(coraplex)` (the exact scan
+`ORMatic.from_package` performs) found it twice before the fix - which is what two DAO
+classes named `UnderspecifiedNodeDAO` means at the SQLAlchemy layer - and once after.
+
+**The fix removes the stale copy rather than merging it**, since `underspecified.py`'s
+version is the one every real consumer already imports (`factories.py`, `executables.py`,
+`training_environment.py`, both `coraplex_test` files) and is strictly ahead
+(`ActionTrial`, `_pull_next_action`/`_attach` split from the plain `_next_candidate`).
+Deleted `plan_node.py`'s `UnderspecifiedNode` along with the two imports (`Iterator`,
+`UnderspecifiedExecutable`) that existed only for it - the same two section 33 restored
+after the merge, now gone again because there is no longer a second copy to need them.
+
+**One thing the deletion could not just discard.** `underspecified.py`'s surviving
+copy reads `self.underspecified_action.type` - the pre-rename detour this item removed
+everywhere else - because it arrived from `main` never having gone through this branch's
+rename. `Match` claims no name it doesn't underscore-prefix, so that spelling was not an
+`AttributeError`, it was a silently-wrong symbolic attribute of the matched class, the
+identical failure shape sections 26, 27, 30 and 32 each already found once in a file
+arriving fresh from `main`. Fixed to `._type_`, the same substitution every one of those
+sections made.
+
+**A second dangling reference, found by grepping for the class name rather than trusting
+the two files were the only readers.**
+`experiments/src/experiments/ormatic_experiments/scalability.py:386` (inside `main()`,
+never called by `test_scalability.py`, which only exercises `build_cram_class_sets` and
+the plotting helpers) reads `coraplex.plans.plan_node.UnderspecifiedNode` - confirmed
+present on `origin/main` too, so it has been a dead reference to a nonexistent attribute
+on `main` itself since the class moved, just never executed by anything that would
+notice. Repointed the import and the reference at `coraplex.plans.underspecified`, since
+leaving a knowingly-broken reference in place because "it was already broken on main" is
+not a reason to leave it broken here.
+
+**Verification, given the same ROS gap every earlier round in this item's history has
+hit.** `classes_of_package(coraplex)` now returns `UnderspecifiedNode` exactly once, from
+`coraplex.plans.underspecified` - checked directly rather than inferred, since that is the
+mechanism the bug lived in. `ast.parse` on all three edited files, a direct import of
+`coraplex.plans.plan_node` and `coraplex.plans.underspecified` (both succeed, the former no
+longer exposing the class), and `test_eql/test_match.py` (51 passed) are what stayed
+reachable in this sandbox; a full local ORM-generation run still fails at
+`semantic_digital_twin.exceptions`'s `MetaData` hint for lack of the ROS `geometry_msgs`
+package, identically to every prior round and unrelated to this fix. Pushed to
+`claude/match-query-interface-refactor-l55jym` at `0e458ac4b3`.
+
+**The lesson, sitting next to section 33's.** That section's lesson was to grep a
+non-conflicted hunk's usages before trusting it merged correctly; this one is the same
+caution one level up - a conflict side that resolves to "empty, nothing to combine" is
+worth one `git show <base>:<path>` to confirm the class really vanished rather than moved,
+before applying "take both sides" to what looks like an addition on one side only.
