@@ -10,7 +10,7 @@ import pytest
 
 from experiments.video.figure import (
     FrameworkFigure,
-    GraspBar,
+    GraspChartBar,
     RunReadings,
     Slot,
 )
@@ -35,7 +35,7 @@ def test_the_input_carries_the_stage_the_focus_and_the_readings() -> None:
         focus=Slot.PROBABILISTIC,
         readings=RunReadings(
             resolved_lines={Slot.PERCEPTION: ["cube_1", "  at (1, 2, 3) m,"]},
-            grasps=[GraspBar("LEFT", "TOP", 0.3, chosen=True)],
+            grasps=[GraspChartBar("LEFT", "TOP", 0.3, chosen=True)],
             support_reading="overlap 2 mm ≤ 0.1 m",
         ),
     )

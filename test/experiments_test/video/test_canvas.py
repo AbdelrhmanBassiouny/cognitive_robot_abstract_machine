@@ -10,7 +10,7 @@ import pytest
 
 from experiments.video.canvas import (
     Anchor,
-    Rectangle,
+    Area,
     Typesetting,
     dimmed,
     fitted,
@@ -24,12 +24,12 @@ RESOLUTION = Resolution(width=200, height=100)
 
 
 def test_a_rectangle_moves_part_of_the_way_towards_another() -> None:
-    halfway = Rectangle(0, 0, 10, 10).towards(Rectangle(100, 50, 30, 20), 0.5)
+    halfway = Area(0, 0, 10, 10).towards(Area(100, 50, 30, 20), 0.5)
     assert (halfway.x, halfway.y, halfway.width, halfway.height) == (50, 25, 20, 15)
 
 
 def test_fitting_keeps_the_aspect_and_centres_in_the_room() -> None:
-    room = Rectangle(0, 0, 200, 100)
+    room = Area(0, 0, 200, 100)
     square = room.fitting(1.0)
     assert (square.x, square.y, square.width, square.height) == (50, 0, 100, 100)
     wide = room.fitting(4.0)
@@ -37,7 +37,7 @@ def test_fitting_keeps_the_aspect_and_centres_in_the_room() -> None:
 
 
 def test_inset_shrinks_all_round() -> None:
-    assert Rectangle(10, 10, 100, 50).inset(5) == Rectangle(15, 15, 90, 40)
+    assert Area(10, 10, 100, 50).inset(5) == Area(15, 15, 90, 40)
 
 
 # %% pasting
@@ -46,7 +46,7 @@ def test_inset_shrinks_all_round() -> None:
 def test_pasting_resizes_the_picture_into_the_rectangle() -> None:
     frame = RESOLUTION.blank(0)
     picture = np.full((10, 10, 3), 200, dtype=np.uint8)
-    result = pasted(frame, picture, Rectangle(20, 30, 40, 20))
+    result = pasted(frame, picture, Area(20, 30, 40, 20))
     assert result[30:50, 20:60].min() == 200
     assert result[29, 20].max() == 0 and result[30, 19].max() == 0
     assert frame.max() == 0
@@ -55,7 +55,7 @@ def test_pasting_resizes_the_picture_into_the_rectangle() -> None:
 def test_pasting_crops_what_falls_outside_the_frame() -> None:
     frame = RESOLUTION.blank(0)
     picture = np.full((10, 10, 3), 200, dtype=np.uint8)
-    result = pasted(frame, picture, Rectangle(180, -10, 40, 30))
+    result = pasted(frame, picture, Area(180, -10, 40, 30))
     assert result[0:20, 180:200].min() == 200
     assert result.shape == frame.shape
 
@@ -63,7 +63,7 @@ def test_pasting_crops_what_falls_outside_the_frame() -> None:
 def test_fitting_a_picture_keeps_its_aspect() -> None:
     frame = RESOLUTION.blank(0)
     picture = np.full((10, 40, 3), 200, dtype=np.uint8)
-    result = fitted(frame, picture, Rectangle(0, 0, 200, 100))
+    result = fitted(frame, picture, Area(0, 0, 200, 100))
     assert result[25:75, :].min() == 200
     assert result[24, :].max() == 0 and result[75, :].max() == 0
 

@@ -67,7 +67,7 @@ class Slot(StrEnum):
 
 
 @dataclass(frozen=True)
-class GraspBar:
+class GraspChartBar:
     """
     One bar of the figure's grasp chart.
     """
@@ -104,7 +104,7 @@ class RunReadings:
     The lines each answered slot of the resolved plan shows.
     """
 
-    grasps: List[GraspBar] = field(default_factory=list)
+    grasps: List[GraspChartBar] = field(default_factory=list)
     """
     The grasp chart's bars, or none to keep the source's.
     """
@@ -146,7 +146,7 @@ class RunReadings:
 
 
 @dataclass(frozen=True)
-class Box:
+class FigureBox:
     """
     A stretch of the figure, in centimetres from its top left corner.
     """
@@ -172,7 +172,7 @@ class Box:
     """
 
     @classmethod
-    def from_query(cls, given: Dict[str, float]) -> Box:
+    def from_query(cls, given: Dict[str, float]) -> FigureBox:
         """
         :param given: A box as the figure's geometry metadata states it.
         """
@@ -195,17 +195,17 @@ class FigureGeometry:
     The figure's height, in centimetres.
     """
 
-    plan: Box
+    plan: FigureBox
     """
     The column of the underspecified plan.
     """
 
-    resolved: Box
+    resolved: FigureBox
     """
     The column of the resolved plan.
     """
 
-    panels: Dict[Slot, Box]
+    panels: Dict[Slot, FigureBox]
     """
     Each backend's panel, by the slot it answers.
     """
@@ -218,9 +218,9 @@ class FigureGeometry:
         return cls(
             width=given["width"],
             height=given["height"],
-            plan=Box.from_query(given["plan"]),
-            resolved=Box.from_query(given["resolved"]),
-            panels={slot: Box.from_query(given["panels"][slot.value]) for slot in Slot},
+            plan=FigureBox.from_query(given["plan"]),
+            resolved=FigureBox.from_query(given["resolved"]),
+            panels={slot: FigureBox.from_query(given["panels"][slot.value]) for slot in Slot},
         )
 
 

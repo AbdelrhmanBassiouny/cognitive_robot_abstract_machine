@@ -63,7 +63,7 @@ class Ink(Enum):
 
 
 @dataclass(frozen=True)
-class Rectangle:
+class Area:
     """
     A stretch of a frame, in pixels from its top left corner.
     """
@@ -107,30 +107,30 @@ class Rectangle:
         """
         return self.width / self.height
 
-    def towards(self, other: Rectangle, progress: float) -> Rectangle:
+    def towards(self, other: Area, progress: float) -> Area:
         """
         The rectangle part of the way from this one to another.
 
         :param other: Where it ends up.
         :param progress: How far along, from zero to one.
         """
-        return Rectangle(
+        return Area(
             x=self.x + (other.x - self.x) * progress,
             y=self.y + (other.y - self.y) * progress,
             width=self.width + (other.width - self.width) * progress,
             height=self.height + (other.height - self.height) * progress,
         )
 
-    def inset(self, by: float) -> Rectangle:
+    def inset(self, by: float) -> Area:
         """
         :param by: How far in from every edge, in pixels.
         :return: The rectangle shrunk by that much all round.
         """
-        return Rectangle(
+        return Area(
             self.x + by, self.y + by, self.width - 2 * by, self.height - 2 * by
         )
 
-    def fitting(self, aspect: float) -> Rectangle:
+    def fitting(self, aspect: float) -> Area:
         """
         The largest rectangle of the given aspect centred in this one.
 
@@ -142,7 +142,7 @@ class Rectangle:
         else:
             width = self.width
             height = width / aspect
-        return Rectangle(
+        return Area(
             self.x + (self.width - width) / 2,
             self.y + (self.height - height) / 2,
             width,
@@ -157,7 +157,7 @@ class Rectangle:
         return left, top, int(round(self.right)) - left, int(round(self.bottom)) - top
 
     @classmethod
-    def whole(cls, resolution: Resolution) -> Rectangle:
+    def whole(cls, resolution: Resolution) -> Area:
         """
         :return: The rectangle covering a frame of the given size.
         """
@@ -167,7 +167,7 @@ class Rectangle:
 # %% pasting
 
 
-def pasted(frame: Frame, picture: Frame, into: Rectangle) -> Frame:
+def pasted(frame: Frame, picture: Frame, into: Area) -> Frame:
     """
     A copy of the frame with a picture resized into a rectangle of it, cropped to the
     frame where the rectangle leaves it.
@@ -190,7 +190,7 @@ def pasted(frame: Frame, picture: Frame, into: Rectangle) -> Frame:
     return result
 
 
-def fitted(frame: Frame, picture: Frame, into: Rectangle) -> Frame:
+def fitted(frame: Frame, picture: Frame, into: Area) -> Frame:
     """
     A copy of the frame with a picture pasted as large as it goes into a rectangle
     without distorting it, centred there.
@@ -213,7 +213,7 @@ def dimmed(frame: Frame, by: float) -> Frame:
     return np.clip(faded + 0.5, 0, 255).astype(np.uint8)
 
 
-def framed(frame: Frame, around: Rectangle, color: Rgb, thickness: int = 3) -> Frame:
+def framed(frame: Frame, around: Area, color: Rgb, thickness: int = 3) -> Frame:
     """
     A copy of the frame with a rectangle outlined on it.
     """
@@ -223,7 +223,7 @@ def framed(frame: Frame, around: Rectangle, color: Rgb, thickness: int = 3) -> F
     return result
 
 
-def filled(frame: Frame, around: Rectangle, color: Rgb) -> Frame:
+def filled(frame: Frame, around: Area, color: Rgb) -> Frame:
     """
     A copy of the frame with a rectangle painted over it.
     """

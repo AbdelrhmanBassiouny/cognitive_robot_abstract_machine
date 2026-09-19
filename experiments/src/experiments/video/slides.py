@@ -7,12 +7,14 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from typing_extensions import List
+
 from experiments.paper.lettering import Face
 from experiments.video.canvas import (
     VIDEO_RESOLUTION,
     Anchor,
     Ink,
-    Rectangle,
+    Area,
     Typesetting,
     filled,
 )
@@ -66,7 +68,7 @@ class TitleSlide(Scene):
         rule_y = title_top + lines * 54 + 30
         frame = filled(
             frame,
-            Rectangle(centre_x - RULE_WIDTH / 2, rule_y, RULE_WIDTH, 3),
+            Area(centre_x - RULE_WIDTH / 2, rule_y, RULE_WIDTH, 3),
             Ink.PERCEPTION.rgb,
         )
         frame = Typesetting(size=28, color=Ink.MUTED.rgb).written(
@@ -129,4 +131,39 @@ class ClosingSlide(Scene):
             (centre[0], centre[1] + 20),
             Anchor.CENTRE_MIDDLE,
         )
+        return frame
+
+
+@dataclass
+class TextSlide(Scene):
+    """
+    A few lines of text, held for a while.
+    """
+
+    lines: List[str]
+    """
+    The lines, the first set larger.
+    """
+
+    held_for: float = 4.0
+    """
+    How long the slide is shown, in seconds.
+    """
+
+    resolution: Resolution = VIDEO_RESOLUTION
+    """
+    The size of the slide.
+    """
+
+    @property
+    def duration(self) -> float:
+        return self.held_for
+
+    def picture_at(self, seconds: float) -> Frame:
+        frame = self.resolution.blank(255)
+        centre_x = self.resolution.width / 2
+        top = self.resolution.height / 2 - 30 * len(self.lines)
+        for number, line in enumerate(self.lines):
+            setting = Typesetting(size=40, face=Face.BOLD) if number == 0 else Typesetting(size=26, color=Ink.MUTED.rgb)
+            frame = setting.written(frame, line, (centre_x, top + number * 60 + (20 if number else 0)), Anchor.CENTRE_MIDDLE)
         return frame

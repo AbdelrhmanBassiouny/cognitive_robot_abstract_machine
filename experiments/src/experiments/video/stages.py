@@ -18,7 +18,7 @@ from experiments.video.canvas import (
     VIDEO_RESOLUTION,
     Anchor,
     Ink,
-    Rectangle,
+    Area,
     Rgb,
     Typesetting,
     dimmed,
@@ -70,12 +70,12 @@ class FigureOnCanvas:
     """
 
     @cached_property
-    def placement(self) -> Rectangle:
+    def placement(self) -> Area:
         """
         Where the figure lies on the canvas: as tall as the room above the caption
         allows, centred.
         """
-        room = Rectangle(
+        room = Area(
             0,
             FIGURE_MARGIN,
             self.resolution.width,
@@ -108,7 +108,7 @@ class FigureOnCanvas:
             )
         return frame
 
-    def panel(self, slot: Slot) -> Rectangle:
+    def panel(self, slot: Slot) -> Area:
         """
         Where a backend's panel lies on the canvas.
 
@@ -116,7 +116,7 @@ class FigureOnCanvas:
         """
         box = self.figure.geometry.panels[slot]
         scale = self.placement.width / self.figure.geometry.width
-        return Rectangle(
+        return Area(
             self.placement.x + box.x * scale,
             self.placement.y + box.y * scale,
             box.width * scale,
@@ -198,14 +198,14 @@ class Spotlight(Scene):
         return self.grow + self.work.duration + self.shrink
 
     @cached_property
-    def close_up(self) -> Rectangle:
+    def close_up(self) -> Area:
         """
         Where the work plays when fully grown: centred, as large as its own aspect
         allows within the screen's share.
         """
         resolution = self.before.resolution
         sample = self.work.frame_at(0.0)
-        room = Rectangle(
+        room = Area(
             resolution.width * (1 - CLOSE_UP_SHARE) / 2,
             resolution.height * (1 - CLOSE_UP_SHARE) / 2,
             resolution.width * CLOSE_UP_SHARE,
