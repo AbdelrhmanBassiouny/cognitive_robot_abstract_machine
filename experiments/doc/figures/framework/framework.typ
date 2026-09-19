@@ -46,7 +46,9 @@
 // JSON `video` input: how many backends are filled in (`stage`), which open slot is being
 // answered right now (`focus`), whether only the thought bubble is drawn (`bubble_only`),
 // and the run's own readings in place of the values stated below (`resolved_lines`,
-// `grasps`, `support_reading`, `support_verdict`). With no input the figure is the paper's.
+// `grasps`, `support_reading`, `support_verdict`), and what the panels are titled where
+// the video calls the backends by their class names (`panel_titles`). With no input the
+// figure is the paper's.
 
 #let video = json(bytes(sys.inputs.at("video", default: "{}")))
 #let given(name, default) = video.at(name, default: default)
@@ -176,7 +178,7 @@
 #let title-open = "Underspecified plan"
 #let title-backends = "Resolved by"
 #let title-resolved = "Resolved plan"
-#let panel-titles = (perception: "PerceptionBackend", simulation: "Working memory backend", probabilistic: "ProbabilisticBackend", rules: "Ripple-down rules")
+#let panel-titles = given("panel_titles", (perception: "PerceptionBackend", simulation: "Working memory backend", probabilistic: "ProbabilisticBackend", rules: "Ripple-down rules"))
 #let panel-order = ("perception", "simulation", "probabilistic", "rules")
 #let stage = given("stage", panel-order.len())          // how many backends have answered
 #let focus = given("focus", none)                        // the open slot being answered now

@@ -1,10 +1,12 @@
 """
-The perturbation experiments, all playing at once.
+The perturbation experiments, all playing at once, and long-term memory asked about them.
 
 Each episode the robot recorded under a perturbation is one tile of a grid; every tile
 plays the robot's own camera at the same speed-up, and while the robot stands still --
 which is when the look is asked -- what the look finds is drawn over the picture, the
-way the perception pipeline draws it.
+way the perception pipeline draws it. A tile whose recording has ended stands on its
+last frame, and once every one has, the questions long-term memory answers about these
+runs are put over the grid and the episodes each answer names are lit.
 """
 
 from __future__ import annotations
@@ -35,10 +37,20 @@ from experiments.montessori.perception.recordings import (
 )
 from experiments.paper.lettering import Face
 from experiments.video.cache import SceneCache
-from experiments.video.canvas import Anchor, Area, Ink, Typesetting, filled, fitted
+from experiments.video.canvas import (
+    Anchor,
+    Area,
+    Ink,
+    Typesetting,
+    dimmed,
+    filled,
+    fitted,
+    framed,
+)
 from experiments.video.footage import CameraFilm
+from experiments.video.long_term import RememberedQuestion
 from experiments.video.sources import RecordedRun
-from experiments.video.timeline import Frame, Resolution, Scene
+from experiments.video.timeline import Frame, Resolution, Scene, eased
 
 CLOSE_UP = Resolution(width=1600, height=900)
 """
@@ -48,6 +60,17 @@ The size the grid draws itself at.
 IDLE_MARGIN = 0.5
 """
 Seconds either side of a recorded motion the robot is not counted as standing still.
+"""
+
+BAND_HEIGHT = 224
+"""
+How tall the band over the grid is, in pixels, where long-term memory is named and its
+questions are put.
+"""
+
+BACKEND_NAME = "LongTermMemoryBackend"
+"""
+What the band calls the backend that answers over the grid.
 """
 
 
@@ -229,11 +252,10 @@ class PerturbationTile:
         """
         The film at a moment, with the look's findings drawn where it ran near then.
 
-        :param seconds: The moment of the recording, wrapped round its length.
+        :param seconds: The moment of the recording; past its end, the last frame stands.
         :return: The picture, and whether findings are drawn on it.
         """
-        wrapped = seconds % self.film.length if self.film.length else 0.0
-        image = self.film.at(wrapped)
+        image = self.film.at(seconds)
         drawn = self.detections.picture_at(image.seconds)
         if drawn is not None:
             return drawn, True
@@ -257,11 +279,82 @@ class GridLabels:
     rows: Sequence[str] = ("scene stands still", "robot sorts")
 
 
+@dataclass(frozen=True)
+class GridLayout:
+    """
+    Where everything of the grid lies, at the size it draws itself.
+    """
+
+    resolution: Resolution
+    """
+    The size the grid draws itself at.
+    """
+
+    rows: int
+    """
+    How many rows of tiles.
+    """
+
+    columns: int
+    """
+    How many columns of tiles.
+    """
+
+    margin: int = 16
+    header: int = 54
+    row_label: int = 200
+    gap: int = 12
+    footer: int = 44
+
+    @property
+    def band(self) -> Area:
+        """
+        The band over the grid, where long-term memory is named and asked.
+        """
+        return Area(self.margin, self.margin, self.resolution.width - 2 * self.margin, BAND_HEIGHT)
+
+    @property
+    def tile_width(self) -> float:
+        return (self.resolution.width - 2 * self.margin - self.row_label - (self.columns - 1) * self.gap) / self.columns
+
+    @property
+    def tile_height(self) -> float:
+        # every tile keeps the camera's own aspect, so none is letterboxed
+        return self.tile_width * 9 / 16
+
+    @property
+    def header_y(self) -> float:
+        """
+        The middle of the line the column names are written on.
+        """
+        return self.band.bottom + self.header / 2
+
+    @property
+    def rows_top(self) -> float:
+        return self.band.bottom + self.header
+
+    def tile(self, row: int, column: int) -> Area:
+        return Area(
+            self.margin + self.row_label + column * (self.tile_width + self.gap),
+            self.rows_top + row * (self.tile_height + self.gap),
+            self.tile_width,
+            self.tile_height,
+        )
+
+    @property
+    def footer_y(self) -> float:
+        """
+        The middle of the line under the grid.
+        """
+        return self.resolution.height - self.footer / 2 - 6
+
+
 @dataclass
 class PerturbationMatrix(Scene):
     """
     The six episodes playing together at one speed-up, the look's findings drawn on
-    each while its robot stands still.
+    each while its robot stands still; then, every recording ended, long-term memory
+    asked which of them the cube moved in and which the robot picked it up in.
     """
 
     tiles: List[List[PerturbationTile]]
@@ -274,14 +367,25 @@ class PerturbationMatrix(Scene):
     What the rows and columns are called.
     """
 
-    speed: float = 6.0
+    questions: List[RememberedQuestion] = field(default_factory=list)
+    """
+    What long-term memory is asked once the recordings have ended, in order.
+    """
+
+    speed: float = 10.0
     """
     How many recorded seconds pass per second played.
     """
 
-    played_for: float = 40.0
+    question_for: float = 6.0
     """
-    How long the grid plays, in seconds.
+    Seconds each question takes, from arriving to its answer having been read.
+    """
+
+    settle_for: float = 1.0
+    """
+    Seconds the grid stands still after the last recording ends, before the first
+    question.
     """
 
     resolution: Resolution = CLOSE_UP
@@ -290,36 +394,122 @@ class PerturbationMatrix(Scene):
     """
 
     @property
+    def layout(self) -> GridLayout:
+        return GridLayout(self.resolution, rows=len(self.tiles), columns=len(self.labels.columns))
+
+    @cached_property
+    def runs_for(self) -> float:
+        """
+        Seconds the recordings play, until the longest has ended.
+        """
+        longest = max(tile.film.length for row in self.tiles for tile in row)
+        return longest / self.speed
+
+    @property
     def duration(self) -> float:
-        return self.played_for
+        return self.runs_for + self.settle_for + self.question_for * len(self.questions)
+
+    def question_at(self, seconds: float) -> Optional[Tuple[RememberedQuestion, float]]:
+        """
+        The question up at a moment and how far along it is, or None while the
+        recordings still play.
+        """
+        since = seconds - self.runs_for - self.settle_for
+        if since < 0 or not self.questions:
+            return None
+        index = min(int(since / self.question_for), len(self.questions) - 1)
+        return self.questions[index], min((since - index * self.question_for) / self.question_for, 1.0)
 
     def picture_at(self, seconds: float) -> Frame:
         frame = self.resolution.blank(255)
-        margin, header, row_label, gap, footer = 16, 54, 160, 12, 44
-        columns, rows = len(self.labels.columns), len(self.labels.rows)
-        width = (self.resolution.width - margin - row_label - (columns - 1) * gap - margin) / columns
-        # every tile keeps the camera's own aspect, so none is letterboxed
-        height = width * 9 / 16
-        room = self.resolution.height - margin - header - footer
-        margin_top = margin + header + (room - rows * height - (rows - 1) * gap) / 2
+        asked = self.question_at(seconds)
+        lit = eased((asked[1] - 0.55) / 0.2) if asked else 0.0
+        frame = self._band(frame, asked)
+        frame = self._grid(frame, seconds, asked[0] if asked else None, lit)
+        return self._footer(frame)
+
+    # %% the grid itself
+
+    def _grid(self, frame: Frame, seconds: float, question: Optional[RememberedQuestion], lit: float) -> Frame:
+        """
+        The tiles, each named by row and column, the look's findings badged where they
+        are drawn, and the episodes a question's answer names lit.
+
+        :param frame: The frame drawn on.
+        :param seconds: The moment of the scene.
+        :param question: The question whose answer lights tiles, or None.
+        :param lit: How far the answer has lit its tiles, from zero to one.
+        """
+        layout = self.layout
         heading = Typesetting(size=28, face=Face.BOLD, color=Ink.TEXT.rgb)
         for column, name in enumerate(self.labels.columns):
-            x = margin + row_label + column * (width + gap) + width / 2
-            frame = heading.written(frame, name, (x, margin + header / 2), Anchor.CENTRE_MIDDLE)
+            frame = heading.written(frame, name, (layout.tile(0, column).centre[0], layout.header_y), Anchor.CENTRE_MIDDLE)
         for row, name in enumerate(self.labels.rows):
-            y = margin_top + row * (height + gap) + height / 2
-            frame = heading.written(frame, name.replace(" ", "\n", 1), (margin + row_label / 2, y), Anchor.CENTRE_MIDDLE)
+            cell = layout.tile(row, 0)
+            frame = heading.written(frame, name.replace(" ", "\n", 1), (layout.margin + layout.row_label / 2, cell.centre[1]), Anchor.CENTRE_MIDDLE)
             for column, tile in enumerate(self.tiles[row]):
-                cell = Area(margin + row_label + column * (width + gap), margin_top + row * (height + gap), width, height)
-                picture, perceiving = tile.picture_at(seconds * self.speed)
+                cell = layout.tile(row, column)
+                picture, perceiving = tile.picture_at(min(seconds, self.runs_for) * self.speed)
+                named = question is not None and question.names(tile.run.episode_identifier)
+                if lit > 0 and not named:
+                    picture = dimmed(picture, 0.55 * lit)
                 frame = filled(frame, cell, Ink.TEXT.rgb)
                 frame = fitted(frame, picture, cell)
                 if perceiving:
-                    badge = Area(cell.x + 8, cell.y + 8, 132, 34)
-                    frame = filled(frame, badge, Ink.PERCEPTION.rgb)
-                    frame = Typesetting(size=20, face=Face.BOLD, color=Ink.PAPER.rgb).written(
-                        frame, "perceiving", badge.centre, Anchor.CENTRE_MIDDLE
-                    )
+                    frame = self._badge(frame, cell, "perceiving", Ink.PERCEPTION.rgb)
+                if lit > 0 and named:
+                    frame = framed(frame, cell.inset(-3), Ink.ANSWER.rgb, thickness=6)
+                    frame = self._badge(frame, cell, question.lit_as, Ink.ANSWER.rgb)
+        return frame
+
+    @staticmethod
+    def _badge(frame: Frame, cell: Area, text: str, color) -> Frame:
+        lettering = Typesetting(size=20, face=Face.BOLD, color=Ink.PAPER.rgb)
+        badge = Area(cell.x + 8, cell.y + 8, lettering.width_of(text) + 24, 34)
+        frame = filled(frame, badge, color)
+        return lettering.written(frame, text, badge.centre, Anchor.CENTRE_MIDDLE)
+
+    # %% the band over it
+
+    def _band(self, frame: Frame, asked: Optional[Tuple[RememberedQuestion, float]]) -> Frame:
+        """
+        Long-term memory named over the grid, and while a question is up, the question,
+        the query behind it and, in its turn, the answer.
+
+        :param frame: The frame drawn on.
+        :param asked: The question up and how far along it is, or None.
+        """
+        band = self.layout.band
+        name = Typesetting(size=26, face=Face.BOLD, color=Ink.MEMORY.rgb)
+        if asked is None:
+            frame = name.written(frame, BACKEND_NAME, (band.x + 4, band.y + 24), Anchor.LEFT_MIDDLE)
+            return Typesetting(size=24, color=Ink.MUTED.rgb).written(
+                frame,
+                "every run is recorded to the results database as it happens; once these have ended, it is asked about them",
+                (band.x + 4, band.y + 62),
+                Anchor.LEFT_MIDDLE,
+            )
+        question, progress = asked
+        card = band
+        frame = filled(frame, card, Ink.PAPER.rgb)
+        frame = framed(frame, card, Ink.ASKED.rgb, thickness=3)
+        frame = name.written(frame, BACKEND_NAME, (card.x + 24, card.y + 28), Anchor.LEFT_MIDDLE)
+        frame = Typesetting(size=30, face=Face.BOLD).written(
+            frame, question.english, (card.x + 24, card.y + 68), Anchor.LEFT_MIDDLE
+        )
+        code = Typesetting(size=20, face=Face.MONO, color=Ink.MUTED.rgb)
+        for number, line in enumerate(question.statement):
+            frame = code.written(frame, line, (card.x + 24, card.y + 108 + number * 27), Anchor.LEFT_MIDDLE)
+        if eased((progress - 0.45) / 0.15) > 0:
+            on_screen = sum(question.names(tile.run.episode_identifier) for row in self.tiles for tile in row)
+            answer = f"→ {len(question.episodes)} episodes; {on_screen} of them are on screen"
+            frame = Typesetting(size=28, face=Face.BOLD, color=Ink.ANSWER.rgb).written(
+                frame, answer, (card.right - 24, card.y + 68), Anchor.RIGHT_MIDDLE
+            )
+        return frame
+
+    def _footer(self, frame: Frame) -> Frame:
+        layout = self.layout
         badge = Area(self.resolution.width - 150, self.resolution.height - 52, 130, 40)
         frame = filled(frame, badge, Ink.TEXT.rgb)
         frame = Typesetting(size=26, face=Face.BOLD, color=Ink.PAPER.rgb).written(
@@ -327,5 +517,5 @@ class PerturbationMatrix(Scene):
         )
         return Typesetting(size=24, color=Ink.MUTED.rgb).written(
             frame, "the robot's own camera; what the look finds is drawn while the robot stands still",
-            (margin + row_label, self.resolution.height - 32), Anchor.LEFT_MIDDLE,
+            (layout.margin + layout.row_label, layout.footer_y), Anchor.LEFT_MIDDLE,
         )

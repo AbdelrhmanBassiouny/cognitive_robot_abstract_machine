@@ -14,6 +14,7 @@ from functools import cached_property
 
 from typing_extensions import Dict, Optional
 
+from experiments.paper.lettering import Face
 from experiments.video.canvas import (
     VIDEO_RESOLUTION,
     Anchor,
@@ -42,6 +43,11 @@ Air above the figure, in pixels.
 CLOSE_UP_SHARE = 0.86
 """
 How much of the screen's width and height a close-up may take.
+"""
+
+TAB_HEIGHT = 36
+"""
+How tall the tab naming the backend over its close-up is, in pixels.
 """
 
 # %% the figure on the canvas
@@ -183,6 +189,11 @@ class Spotlight(Scene):
     The colour the close-up is framed in.
     """
 
+    title: str = ""
+    """
+    What the backend at work is called, on a tab over the close-up; nothing for no tab.
+    """
+
     grow: float = 1.2
     """
     How long the close-up takes to grow out, in seconds.
@@ -233,7 +244,24 @@ class Spotlight(Scene):
         where = panel.towards(self.close_up, progress)
         frame = dimmed(base, 0.55 * progress)
         frame = filled(frame, where.inset(-4), self.hue)
-        return pasted(frame, work, where)
+        frame = pasted(frame, work, where)
+        return self._tabbed(frame, where, progress)
+
+    def _tabbed(self, frame: Frame, where: Area, progress: float) -> Frame:
+        """
+        The backend's name on a tab over the close-up, there once it has grown out.
+
+        :param frame: The frame the close-up is on.
+        :param where: Where the close-up lies.
+        :param progress: How far the close-up has grown, from zero to one.
+        """
+        if not self.title or progress < 1.0:
+            return frame
+        lettering = Typesetting(size=22, face=Face.BOLD, color=Ink.PAPER.rgb)
+        width = lettering.width_of(self.title) + 36
+        tab = Area(where.x - 4, where.y - 4 - TAB_HEIGHT, width, TAB_HEIGHT)
+        frame = filled(frame, tab, self.hue)
+        return lettering.written(frame, self.title, (tab.x + 18, tab.centre[1]), Anchor.LEFT_MIDDLE)
 
 
 # %% a scene drawn at its own size, shown full screen

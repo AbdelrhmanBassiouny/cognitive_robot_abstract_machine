@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from experiments.video.script import PAPER_ID_PLACEHOLDER, VideoScript
+from experiments.video.script import PAPER_ID, VideoScript
 from experiments.video.slides import ClosingSlide, TitleSlide
 from experiments.video.timeline import Resolution
 
@@ -26,9 +26,16 @@ def test_the_title_slide_lasts_as_long_as_asked() -> None:
     )
 
 
-def test_the_submission_line_carries_the_placeholder_until_the_id_is_known() -> None:
-    assert PAPER_ID_PLACEHOLDER in VideoScript().submission_line
+def test_the_submission_line_carries_the_papers_number() -> None:
+    assert f"Paper ID {PAPER_ID}" in VideoScript().submission_line
     assert "Paper ID 1234" in VideoScript(paper_id="1234").submission_line
+
+
+def test_the_title_is_the_submitted_papers() -> None:
+    assert VideoScript().title == (
+        "A Unified Knowledge Representation and Reasoning Framework for "
+        "Cognitive Architectures"
+    )
 
 
 def test_the_closing_slide_is_drawn_at_the_asked_size() -> None:

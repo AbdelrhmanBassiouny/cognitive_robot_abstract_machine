@@ -2,10 +2,10 @@
 The look, watched narrowing itself on the robot's own camera, frame after frame.
 
 The plan's statement about the piece it sorts is read one stated condition at a time
-over every frame the camera took while the robot stood still, and each condition's two
-pictures -- what the camera still has to read, and the plane the detectors read there
--- play live in a row of a grid, all conditions at once, until the statement is read
-whole and the cube it found is boxed in the camera's picture.
+over every frame the camera took while the robot stood still, and each condition's
+picture -- the plane the detectors read, with what is left to read on it -- plays live
+in a tile of a grid, all conditions at once, until the statement is read whole and the
+cube it found is boxed in the last tile.
 """
 
 from __future__ import annotations
@@ -280,11 +280,6 @@ class PerceptionNarrowing(Scene):
     Seconds all four views play once every one is up.
     """
 
-    answer_for: float = 7.0
-    """
-    Seconds the found cube is shown close up at the end.
-    """
-
     resolution: Resolution = CLOSE_UP
     """
     The size the scene draws itself at.
@@ -295,15 +290,11 @@ class PerceptionNarrowing(Scene):
         return self.reel.all_narrowed()
 
     @property
-    def grid_for(self) -> float:
+    def duration(self) -> float:
         """
         Seconds the grid is on screen, views appearing and then all running.
         """
         return self.tile_every * len(View) + self.run_for
-
-    @property
-    def duration(self) -> float:
-        return self.grid_for + self.answer_for
 
     def frame_index_at(self, seconds: float) -> int:
         """
@@ -328,13 +319,6 @@ class PerceptionNarrowing(Scene):
         )
 
     def picture_at(self, seconds: float) -> Frame:
-        if seconds < self.grid_for:
-            return self._grid(seconds)
-        return self._answer(seconds - self.grid_for)
-
-    # %% the grid
-
-    def _grid(self, seconds: float) -> Frame:
         frame = self.resolution.blank(255)
         narrowed = self.frames[self.frame_index_at(seconds)]
         title = Typesetting(size=24, face=Face.BOLD, color=Ink.PERCEPTION.rgb)
@@ -366,33 +350,3 @@ class PerceptionNarrowing(Scene):
         The picture faded up from black.
         """
         return (picture.astype(np.float32) * weight + 0.5).astype(np.uint8)
-
-    # %% the answer
-
-    def _answer(self, seconds: float) -> Frame:
-        narrowed = self.frames[self.frame_index_at(self.grid_for + seconds)]
-        picture = narrowed.pictures[View.ANSWER]
-        source = Area(0, 0, picture.shape[1], picture.shape[0])
-        target = source
-        if narrowed.found_box is not None:
-            centre = narrowed.found_box.centre
-            close = Area(
-                centre[0] - source.width * 0.2,
-                centre[1] - source.height * 0.2,
-                source.width * 0.4,
-                source.height * 0.4,
-            ).towards(source, 0.0)
-            target = source.towards(close, eased((seconds - 1.0) / 3.0))
-        left, top, width, height = target.rounded()
-        left, top = max(left, 0), max(top, 0)
-        cropped = picture[top : top + height, left : left + width]
-        frame = self.resolution.blank(255)
-        room = Area(0, 0, self.resolution.width, self.resolution.height - 80)
-        frame = fitted(frame, cropped, room)
-        frame = Typesetting(size=28, color=Ink.TEXT.rgb).written(
-            frame,
-            "The statement read whole: one cyan cube, resting on the lid.",
-            (self.resolution.width / 2, self.resolution.height - 40),
-            Anchor.CENTRE_MIDDLE,
-        )
-        return frame

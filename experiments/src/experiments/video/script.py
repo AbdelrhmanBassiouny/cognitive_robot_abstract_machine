@@ -11,9 +11,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-PAPER_ID_PLACEHOLDER = "####"
+PAPER_ID = "3889"
 """
-Stands where the paper's submission number goes until it is known.
+The paper's submission number, as the conference assigned it.
 """
 
 
@@ -24,8 +24,8 @@ class VideoScript:
     """
 
     title: str = (
-        "A Common Query Interface to Heterogeneous Knowledge and Computation in "
-        "Cognitive Robot Architectures"
+        "A Unified Knowledge Representation and Reasoning Framework for "
+        "Cognitive Architectures"
     )
     """
     The paper's title, as submitted.
@@ -36,7 +36,7 @@ class VideoScript:
     The conference the paper is submitted to.
     """
 
-    paper_id: str = PAPER_ID_PLACEHOLDER
+    paper_id: str = PAPER_ID
     """
     The paper's submission number.
     """

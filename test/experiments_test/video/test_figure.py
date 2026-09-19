@@ -8,6 +8,9 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
+from experiments.video.stages import TAB_HEIGHT, FigureOnCanvas, Spotlight
+from experiments.video.timeline import Resolution, Still
+
 from experiments.video.figure import (
     FrameworkFigure,
     GraspChartBar,
@@ -49,6 +52,18 @@ def test_the_input_carries_the_stage_the_focus_and_the_readings() -> None:
     }
 
 
+def test_the_input_names_the_panels_only_when_asked_to() -> None:
+    assert "panel_titles" not in FrameworkFigure().as_input()
+    named = FrameworkFigure(panel_titles={Slot.RULES: "RippleDownRulesBackend"})
+    assert named.as_input()["panel_titles"] == {"rules": "RippleDownRulesBackend"}
+
+
+def test_the_figure_compiles_with_the_panels_renamed() -> None:
+    titles = {slot: f"{slot.value.title()}Backend" for slot in Slot}
+    picture = FrameworkFigure(stage=1, panel_titles=titles).drawn(width=400)
+    assert picture.shape[1] == 400
+
+
 def test_the_figure_compiles_to_a_picture_of_the_asked_width() -> None:
     picture = FrameworkFigure(stage=0, focus=Slot.PERCEPTION).drawn(width=400)
     assert picture.shape[1] == 400
@@ -71,3 +86,19 @@ def test_the_geometry_places_the_panels_in_one_column_between_the_plans() -> Non
     assert panels[0].x + panels[0].width < geometry.resolved.x
     assert [panel.y for panel in panels] == sorted(panel.y for panel in panels)
     assert geometry.height < geometry.width
+
+
+# %% the close-up over the figure
+
+
+def test_the_close_up_carries_the_backends_name_on_a_tab_once_grown() -> None:
+    shown = FigureOnCanvas(FrameworkFigure(stage=0, focus=Slot.RULES), resolution=Resolution(width=640, height=360))
+    work = Still(np.full((90, 160, 3), 200, dtype=np.uint8), held_for=2.0)
+    hue = (0x6D, 0x28, 0xD9)
+    named = Spotlight(shown, shown, Slot.RULES, work, hue, title="RippleDownRulesBackend", grow=0.5, shrink=0.5)
+    bare = Spotlight(shown, shown, Slot.RULES, work, hue, grow=0.5, shrink=0.5)
+    where = named.close_up
+    on_tab = (int(where.y - 4 - TAB_HEIGHT / 2), int(where.x + 4))
+    assert tuple(named.frame_at(1.0)[on_tab]) == hue
+    assert tuple(bare.frame_at(1.0)[on_tab]) != hue
+    assert tuple(named.frame_at(0.0)[on_tab]) != hue

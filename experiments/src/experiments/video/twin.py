@@ -17,12 +17,18 @@ import cv2
 import numpy as np
 from typing_extensions import List, Optional, Tuple
 
+from experiments.montessori.hole_geometry import BOARD_MESH_PATH
 from experiments.paper.lettering import Face
 from experiments.video.cache import SceneCache
 from experiments.video.canvas import Anchor, Area, Ink, Typesetting, filled, fitted
 from experiments.video.sources import RecordedRun
 from experiments.video.timeline import Frame, Resolution, Scene, eased
-from semantic_digital_twin.adapters.picture import Viewpoint, WorldPicture
+from semantic_digital_twin.adapters.picture import (
+    AsStated,
+    Recolored,
+    Viewpoint,
+    WorldPicture,
+)
 from semantic_digital_twin.datastructures.variables import SpatialVariables
 from semantic_digital_twin.reasoning.predicates import SupportedBy
 from semantic_digital_twin.spatial_types.numeric import NumericTransform
@@ -31,6 +37,7 @@ from semantic_digital_twin.spatial_types.spatial_types import (
 )
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.connections import FixedConnection
+from semantic_digital_twin.world_description.geometry import Color, Mesh
 from semantic_digital_twin.world_description.world_entity import Body
 
 CLOSE_UP = Resolution(width=1600, height=900)
@@ -41,6 +48,16 @@ The size the scene draws itself at.
 INPAINT_RADIUS = 5
 """
 How far around a painted-out pixel the picture is read to fill it, in pixels.
+"""
+
+WOOD = Color(0.86, 0.76, 0.58, 1.0)
+"""
+The pale wood the board is made of, for the board to be drawn in.
+"""
+
+ALUMINIUM = Color(0.66, 0.68, 0.71, 1.0)
+"""
+The brushed metal the table top is, for the table to be drawn in.
 """
 
 # %% what the predicate reads
@@ -203,6 +220,23 @@ def stood_at(world: World, body: Body, pose: np.ndarray) -> None:
         )
 
 
+def dressed_as_itself(world: World, board: Body) -> None:
+    """
+    Show the board as the board it is: the look spawns it as a plain box, and the box is
+    what the relation is read off, but the board is drawn from its own mesh, its holes
+    cut through the lid and standing empty.
+
+    The mesh's holes lie where the look put the board's hole regions, so the drawing
+    stands exactly where the box did.
+
+    :param world: The world the board stands in.
+    :param board: The board, seen as a box.
+    """
+    box = board.visual.shapes[0]
+    with world.modify_world():
+        board.visual.shapes = [Mesh(filename=str(BOARD_MESH_PATH), origin=box.origin)]
+
+
 @dataclass
 class TwinPictures:
     """
@@ -223,6 +257,17 @@ class TwinPictures:
     board_name: str = "perceived/board"
     """
     The body it rests on.
+    """
+
+    table_name: str = "table"
+    """
+    The table the board stands on.
+    """
+
+    dressed: bool = True
+    """
+    Whether the board is drawn from its own mesh in its wood and the table in its metal,
+    rather than as the plain white shapes the look spawned.
     """
 
     flight_pictures: int = 60
@@ -260,6 +305,8 @@ class TwinPictures:
         self.run.kept.trial(self.run.trial.number).joint_trace.at(0.0).restore_into(world)
         cube = self.run.body(self.cube_name)
         stood_at(world, cube, self.run.pose_before_it_moved(cube))
+        if self.dressed:
+            dressed_as_itself(world, self.run.body(self.board_name))
         return world
 
     @cached_property
@@ -311,13 +358,20 @@ class TwinPictures:
         What draws the world, kept for every picture since it holds the meshes it
         loaded.
         """
-        return WorldPicture(world=self.world)
+        appearance = AsStated()
+        if self.dressed:
+            appearance = Recolored(
+                colors={self.board: WOOD, self.run.body(self.table_name): ALUMINIUM},
+                otherwise=AsStated(),
+            )
+        return WorldPicture(world=self.world, appearance=appearance)
 
     def _key(self, part: str) -> str:
         flight = "_".join(
             f"{value:+.2f}" for value in (*self.overview_from, *self.close_from)
         )
-        return f"{self.run.episode_identifier}_{self.resolution.width}_{flight}_{part}"
+        dressing = "dressed_" if self.dressed else ""
+        return f"{self.run.episode_identifier}_{self.resolution.width}_{flight}_{dressing}{part}"
 
     def _drawn(self, key: str, viewpoint: Viewpoint) -> Frame:
         kept = self.cache.picture(key)

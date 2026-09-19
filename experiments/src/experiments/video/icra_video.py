@@ -3,7 +3,7 @@ The supplementary video, cut from the framework demo the robot recorded and the
 perturbation episodes, and written out within the conference's limits.
 
 Usage:
-    python -m experiments.video.icra_video --output <video.mp4> [--paper-id ####]
+    python -m experiments.video.icra_video --output <video.mp4> [--paper-id 3889]
         [--preview]
 
 Needs the results database and the episode artifacts the reproduction package restores
@@ -42,6 +42,7 @@ from experiments.video.grasp import (
     GraspOptionsOnThePicture,
     GraspSampling,
 )
+from experiments.video.long_term import RememberedPiece
 from experiments.video.perception import NarrowingReel, PerceptionNarrowing
 from experiments.video.perturbations import (
     GridLabels,
@@ -55,6 +56,7 @@ from experiments.video.sources import FRAMEWORK_DEMO_EPISODE, RecordedRun
 from experiments.video.stages import FigureOnCanvas, FigureScene, OnCanvas, Spotlight
 from experiments.video.timeline import Scene, Timeline
 from experiments.video.twin import TwinPictures, WorkingMemoryCheck
+from experiments.episodes.long_term_memory import LongTermMemory
 from krrood.entity_query_language.backends import ProbabilisticBackend
 
 logger = logging.getLogger(__name__)
@@ -99,6 +101,17 @@ The two trials the paper sets against each other: the robot moving the pieces it
 and a person moving one while the robot stands idle.
 """
 
+GRID_SPEED = 11.0
+"""
+How many recorded seconds pass per second played in the perturbation grid: the longest
+of the six recordings is over in under half a minute.
+"""
+
+GRID_QUESTION_FOR = 6.0
+"""
+Seconds each question put to long-term memory over the grid takes.
+"""
+
 GRASP_PRIOR_SHARE = 0.55
 """
 The probability the prior over the approach gives the direction the run took; the
@@ -115,6 +128,41 @@ EXECUTION_FROM_SECOND = 8.0
 """
 Where in the framework demo's recording the film of the execution starts: once the
 look has been answered and the arm sets off.
+"""
+
+@dataclass(frozen=True)
+class BackendName:
+    """
+    What a backend is called on screen while it answers its slot.
+    """
+
+    name: str
+    """
+    The backend's class name.
+    """
+
+    role: str = ""
+    """
+    What kind of reasoning it does, where the name alone does not say.
+    """
+
+    @property
+    def tab(self) -> str:
+        """
+        The name and the role, as the tab over the close-up carries them.
+        """
+        return f"{self.name}  ·  {self.role}" if self.role else self.name
+
+
+BACKENDS: Dict[Slot, BackendName] = {
+    Slot.PERCEPTION: BackendName("PerceptionBackend"),
+    Slot.SIMULATION: BackendName("WorkingMemory (default)"),
+    Slot.PROBABILISTIC: BackendName("ProbabilisticBackend"),
+    Slot.RULES: BackendName("RippleDownRulesBackend", "rule-based reasoning / logical inference"),
+}
+"""
+What each slot's backend is called: on the figure's panel and on the tab over its
+close-up.
 """
 
 HUES: Dict[Slot, Ink] = {
@@ -228,7 +276,9 @@ class VideoAssembly:
         )
 
     def figure(self, stage: int, focus: Optional[Slot], caption: str) -> FigureOnCanvas:
-        return FigureOnCanvas(FrameworkFigure(stage=stage, focus=focus, readings=self.readings), caption=caption)
+        titles = {slot: backend.name for slot, backend in BACKENDS.items()}
+        figure = FrameworkFigure(stage=stage, focus=focus, readings=self.readings, panel_titles=titles)
+        return FigureOnCanvas(figure, caption=caption)
 
     def work_of(self, slot: Slot) -> Scene:
         """
@@ -238,7 +288,7 @@ class VideoAssembly:
             reel = NarrowingReel(self.demo, frame_indices=list(range(IDLE_FRAMES_READ)))
             scene = PerceptionNarrowing(reel)
             if self.preview:
-                scene.tile_every, scene.run_for, scene.answer_for = 1.0, 2.0, 2.0
+                scene.tile_every, scene.run_for = 1.0, 2.0
             return scene
         if slot is Slot.SIMULATION:
             scene = WorkingMemoryCheck(self.twin)
@@ -264,11 +314,14 @@ class VideoAssembly:
         after = self.figure(slot.stage, None, CAPTIONS[slot])
         return [
             FigureScene(before, held_for=1.5),
-            Spotlight(before, after, slot, self.work_of(slot), HUES[slot].rgb),
+            Spotlight(before, after, slot, self.work_of(slot), HUES[slot].rgb, title=BACKENDS[slot].tab),
             FigureScene(after, held_for=1.0),
         ]
 
     def perturbation_matrix(self) -> PerturbationMatrix:
+        """
+        The six episodes playing out, then long-term memory asked about them.
+        """
         # one recording kept no transforms; the camera stood the same way for every run that day
         tiles = [
             [
@@ -277,7 +330,14 @@ class VideoAssembly:
             ]
             for row in PERTURBATION_EPISODES
         ]
-        return PerturbationMatrix(tiles, GridLabels(), played_for=8.0 if self.preview else 30.0)
+        remembered = RememberedPiece(LongTermMemory(self.demo.database)).both()
+        return PerturbationMatrix(
+            tiles,
+            GridLabels(),
+            questions=remembered,
+            speed=GRID_SPEED * (4.0 if self.preview else 1.0),
+            question_for=2.0 if self.preview else GRID_QUESTION_FOR,
+        )
 
     def attribution_scenes(self) -> List[Scene]:
         """
@@ -302,7 +362,7 @@ class VideoAssembly:
         Every scene, in order.
         """
         scenes: List[Scene] = [
-            TitleSlide(self.script, held_for=6.0),
+            TitleSlide(self.script, held_for=5.5),
             FigureScene(self.figure(0, None, "The plan states what it wants and leaves four things open, each answered by a backend."), held_for=4.0),
         ]
         for slot in Slot:
@@ -318,13 +378,13 @@ class VideoAssembly:
                 )
             )
         )
-        scenes.append(TextSlide(["Did you move it?", "The event segmentation reports what happened to each object;",
+        scenes.append(TextSlide(["Temporal & Attribution Queries", "The event segmentation reports what happened to each object;",
                                  "the plan history records which action ran when."], held_for=3.5))
         scenes.extend(self.attribution_scenes())
-        scenes.append(TextSlide(["Perturbation experiments", "Six episodes on the robot: the scene standing still or the robot sorting,",
+        scenes.append(TextSlide(["Perturbation experiments & Long-term memory", "Six episodes on the robot: the scene standing still or the robot sorting,",
                                  "unperturbed, with a person shoving a piece, or moving the board."], held_for=3.5))
         scenes.append(OnCanvas(self.perturbation_matrix()))
-        scenes.append(ClosingSlide(self.script, held_for=5.0))
+        scenes.append(ClosingSlide(self.script, held_for=4.0))
         return scenes
 
     def timeline(self) -> Timeline:

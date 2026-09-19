@@ -256,6 +256,11 @@ class FrameworkFigure:
     Whether to draw only the thought bubble, without the robot below it.
     """
 
+    panel_titles: Optional[Dict[Slot, str]] = None
+    """
+    What each backend's panel is titled, or None to keep the source's titles.
+    """
+
     source: Path = FIGURE_SOURCE
     """
     The figure's typst source.
@@ -271,6 +276,10 @@ class FrameworkFigure:
         }
         if self.focus is not None:
             given["focus"] = self.focus.value
+        if self.panel_titles is not None:
+            given["panel_titles"] = {
+                slot.value: title for slot, title in self.panel_titles.items()
+            }
         given.update(self.readings.as_input())
         return given
 
