@@ -33,9 +33,16 @@ from bastler.workflow_document import CALLED_JOB_SEPARATOR, WorkflowFile  # noqa
 PIPELINE_WORKFLOWS = (
     WorkflowFile.INTEGRATION_REFRESH,
     WorkflowFile.INTEGRATION_PROBE,
+    WorkflowFile.INTEGRATION_CHECKS,
+    WorkflowFile.STACK_MAINTENANCE,
 )
 """
 The workflows this pipeline runs about its own work rather than about a tree.
+
+Every one of them answers about the fork - the branches in flight, the breaks recorded
+between them - so each attaches its answer to whichever branch happened to trigger it.
+A build carries them, so a candidate triggers them on itself and is judged by them
+unless they are named here.
 """
 
 
@@ -171,11 +178,13 @@ class ChecksAboutTheBuild:
     """
     The checks this pipeline reports about its own work.
 
-    A rebuild runs on the branch whose ready-flip asked for it and a probe runs on the
-    reference carrying the pipeline, so both attach checks to a branch they say nothing
-    about: the rebuild's answers for the build it assembled, and a probe's failing is how
-    a localisation finds what it is looking for. Counting either would let the pipeline
-    decide that a branch is unfit to carry because the pipeline itself had a bad run.
+    A rebuild runs on the branch whose ready-flip asked for it, a probe runs on the
+    reference carrying the pipeline, and a maintenance pass and a reproduction run
+    answer about the whole fork - so each attaches a check to a branch it says nothing
+    about: the rebuild's answers for the build it assembled, and a probe's failing is
+    how a localisation finds what it is looking for. Counting any of them would let the
+    pipeline decide that a branch is unfit to carry because the pipeline itself had a
+    bad run.
     """
 
     job_names: tuple[str, ...]
@@ -191,12 +200,18 @@ class ChecksAboutTheBuild:
         A workflow cannot import a constant, so the names are its own to state - and one
         retyped here would go on matching a job that had since been renamed.
 
+        The pipeline's workflows and its tooling are in flight on branches of their own,
+        so one this checkout does not hold is read past: its checks go on counting until
+        a tree carrying both arrives, where failing here would take down every rebuild
+        instead of the one check it could not name.
+
         :return: What the pipeline reports about itself.
         """
         return cls(
             tuple(
                 job.name
                 for workflow in PIPELINE_WORKFLOWS
+                if workflow.is_in_this_checkout
                 for job in workflow.read().jobs
             )
         )

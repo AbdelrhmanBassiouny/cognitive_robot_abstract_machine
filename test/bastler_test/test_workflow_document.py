@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import pytest
 
+from bastler.integration_verdict import PIPELINE_WORKFLOWS
 from bastler.matrix_libraries import LibraryUnderTest
 from bastler.workflow_document import (
     Action,
@@ -24,17 +25,23 @@ from bastler.workflow_document import (
 
 
 @pytest.mark.parametrize("named", list(WorkflowFile))
-def test_every_workflow_this_tooling_names_is_one_the_repository_has(
+def test_a_workflow_this_checkout_lacks_is_one_the_pipeline_only_tells_checks_apart_by(
     named: WorkflowFile,
 ):
     """
     A file name is what the dispatch endpoint takes, so one that names nothing is a
     request GitHub answers with a 404 at the far end of a runner.
+
+    The pipeline's own workflows are exempt because they are in flight on branches of
+    their own: a checkout carrying the tooling need not carry them, and one named only
+    so that its checks can be read out of a verdict is never dispatched.
     """
-    assert named.path.is_file()
+    assert named.is_in_this_checkout or named in PIPELINE_WORKFLOWS
 
 
-@pytest.mark.parametrize("named", list(WorkflowFile))
+@pytest.mark.parametrize(
+    "named", [named for named in WorkflowFile if named.is_in_this_checkout]
+)
 def test_every_named_workflow_parses_and_declares_a_trigger(named: WorkflowFile):
     """
     A workflow's trigger block is read under ``True`` rather than ``"on"``, because YAML

@@ -120,6 +120,14 @@ def a_rebuild_check_name() -> str:
     return refresh.job_whose_script_holds(RefreshCommand().invoked_as).name
 
 
+def a_reproduction_check_name() -> str:
+    """
+    :return: What the recorded-reproduction run reports its check as, read off the
+        workflow.
+    """
+    return WorkflowFile.INTEGRATION_CHECKS.read().job("reproductions").name
+
+
 def a_probe_check_name() -> str:
     """
     :return: What a probe reports its library job's check as, which is the calling job's
@@ -338,6 +346,40 @@ def test_a_branch_carrying_nothing_but_the_pipeline_s_own_checks_is_unjudged():
     assert ReportedChecks.of([a_check(name=a_rebuild_check_name())]).verdict is (
         ChecksVerdict.ABSENT
     )
+
+
+def test_the_recorded_reproductions_check_does_not_decide_it_either():
+    """
+    It runs on every pull request a candidate included, and on a healthy tree records
+    nothing at all - so it answers about the breaks the fork has stored rather than
+    about the build, and a red one would throw away a build whose own matrix is green.
+    """
+    checks = ReportedChecks.of(
+        [a_check(name=a_reproduction_check_name(), conclusion="failure")]
+    )
+
+    assert checks.verdict is ChecksVerdict.ABSENT
+
+
+def test_the_maintenance_pass_is_one_of_the_workflows_the_pipeline_runs_about_itself():
+    """
+    A pass sweeps every branch in the fork and exits non-zero while any is left
+    unpublished, so its check is attached to a candidate whose tree it never looked at -
+    and the build carries the workflow, so every candidate triggers one on itself.
+    """
+    assert WorkflowFile.STACK_MAINTENANCE in PIPELINE_WORKFLOWS
+
+
+def test_a_pipeline_workflow_this_checkout_lacks_leaves_the_others_still_read():
+    """
+    The pipeline's workflows and its tooling are in flight on branches of their own, so
+    a checkout holds one without the other - and reading the absent one would fail the
+    whole rebuild rather than the single check it could not put a name to.
+    """
+    reported = ChecksAboutTheBuild.read()
+
+    assert reported.reports(a_rebuild_check_name())
+    assert reported.reports(a_reproduction_check_name())
 
 
 def test_the_pipeline_s_own_check_names_are_read_off_the_workflows_that_report_them():
@@ -576,7 +618,9 @@ def test_each_verdict_leaves_the_status_a_caller_acts_on(
     discard a build nothing had judged.
     """
     assert (
-        bastler.integration_candidate_commands._verdict_exit_code(verdict, published=True)
+        bastler.integration_candidate_commands._verdict_exit_code(
+            verdict, published=True
+        )
         is expected
     )
 
@@ -587,7 +631,9 @@ def test_every_verdict_is_mapped_to_a_status():
     silently take whichever branch happens to be last rather than one chosen for it.
     """
     assert {
-        bastler.integration_candidate_commands._verdict_exit_code(verdict, published=True)
+        bastler.integration_candidate_commands._verdict_exit_code(
+            verdict, published=True
+        )
         for verdict in ChecksVerdict
     } <= set(IntegrationExitCode)
 
@@ -753,7 +799,9 @@ def test_the_rebuild_runs_the_suite_before_it_pushes_anything():
     line's shape, since that is the one edit that would give the duplication back its
     cost without giving back what it buys.
     """
-    assert not any("--no-test" in str(flag) for flag in bastler.tool_runner.CommandLineFlag)
+    assert not any(
+        "--no-test" in str(flag) for flag in bastler.tool_runner.CommandLineFlag
+    )
 
 
 # %% how long a candidate's checks take, said once
