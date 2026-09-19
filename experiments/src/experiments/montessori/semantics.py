@@ -28,7 +28,6 @@ from semantic_digital_twin.semantic_annotations.part_whole import (
 from semantic_digital_twin.semantic_annotations.semantic_annotations import Aperture
 from semantic_digital_twin.spatial_types import Vector3
 from semantic_digital_twin.spatial_types.spatial_types import Point3, Pose
-from semantic_digital_twin.world_description.world_entity import Region
 
 
 class MontessoriShapeCategory(StrEnum):
@@ -244,15 +243,6 @@ class ShapeSortingHole(Aperture):
     """
     The geometric shape of this hole, matched against
     :attr:`MontessoriShape.shape_category` to decide which pieces fit through it.
-    """
-
-    landing_region: Optional[Region] = field(kw_only=True, default=None)
-    """
-    The space under this hole, which a shape that has gone through it is inside and a
-    shape resting on the board is not.
-
-    Optional because a hole can be described without one -- a hole detected in a camera
-    image has no space measured under it.
     """
 
     @property
