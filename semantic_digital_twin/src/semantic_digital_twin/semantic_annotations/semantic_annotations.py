@@ -721,6 +721,8 @@ class ShelfLayer(HasSupportingSurface):
     walls.
     """
 
+    _synonyms = {"level", "board"}
+
 
 @dataclass(eq=False)
 class Table(Furniture, HasSupportingSurface):
@@ -734,6 +736,8 @@ class CounterTop(Furniture, HasSupportingSurface, HasSink):
     """
     A semantic annotation that represents a counter top.
     """
+
+    _synonyms = {"countertop"}
 
 
 @dataclass(eq=False)
@@ -887,6 +891,8 @@ class Wall(HasApertures):
     Doors are a computed property.
     """
 
+    _synonyms = {"walls"}
+
     @property
     def doors(self) -> Iterable[Door]:
         return [
@@ -948,7 +954,7 @@ class Wall(HasApertures):
         origin: HomogeneousTransformationMatrix,
         bloat_amount: float,
         obstacle_height_clearance: float = 0.01,
-    ) -> BoundingBoxCollection[VolumetricBoundingBox]:
+    ) -> BoundingBoxCollection[VolumetricBoundingBox, Point3]:
         """
         Bloat this wall's bounding boxes along their thinner dimension only -- the
         side that faces the room -- rather than symmetrically in x and y.
@@ -1264,6 +1270,8 @@ class SideTable(Table):
     A side table.
     """
 
+    _synonyms = {"bedside"}
+
 
 @dataclass(eq=False)
 class Desk(Table, HasLegs):
@@ -1509,7 +1517,7 @@ class SemanticEnvironmentAnnotation(HasRootBody):
     """
 
     def obstacle_entities(
-        self, search_space: BoundingBoxCollection[VolumetricBoundingBox]
+        self, search_space: BoundingBoxCollection[VolumetricBoundingBox, Point3]
     ) -> List[Body]:
         """
         Collect the obstacle bodies to consider within ``search_space``.
@@ -1530,12 +1538,12 @@ class SemanticEnvironmentAnnotation(HasRootBody):
 
     def build_bloated_obstacle_collection(
         self,
-        search_space: BoundingBoxCollection[VolumetricBoundingBox],
+        search_space: BoundingBoxCollection[VolumetricBoundingBox, Point3],
         semantic_wall_annotation: Optional[Wall] = None,
         bloat_obstacles: float = 0.0,
         bloat_walls: float = 0.0,
         obstacle_height_clearance: float = 0.01,
-    ) -> BoundingBoxCollection[VolumetricBoundingBox]:
+    ) -> BoundingBoxCollection[VolumetricBoundingBox, Point3]:
         """
         Collect and bloat this annotation's obstacle bounding boxes.
 
@@ -1828,3 +1836,5 @@ class CoffeeMachine(HasRootBody):
     """
     A countertop appliance that brews coffee.
     """
+
+    _synonyms = {"coffe"}
