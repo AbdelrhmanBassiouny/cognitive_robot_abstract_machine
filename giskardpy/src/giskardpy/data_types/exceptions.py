@@ -105,6 +105,35 @@ class DuplicateNameException(GiskardException):
 
 
 @dataclass
+class SimulationStoppedError(GiskardException):
+    """
+    Raised when a control loop is left waiting for a simulation that has ended.
+    """
+
+    simulation_time: float
+    """
+    The simulated time the simulation stopped at.
+    """
+
+    next_cycle_time: float
+    """
+    The simulated time the control loop was waiting to reach.
+    """
+
+    def error_message(self) -> str:
+        return (
+            f"The simulation stopped at {self.simulation_time}s, so its time will never "
+            f"reach the {self.next_cycle_time}s this control loop is pacing to."
+        )
+
+    def suggest_correction(self) -> str:
+        return (
+            "Keep the simulation running for as long as the motion is executed, or pace "
+            "the loop on the wall clock with RealTimePacer."
+        )
+
+
+@dataclass
 class NoControlledJointsError(SetupException):
     """
     Raised when no joint is flagged as controlled.
