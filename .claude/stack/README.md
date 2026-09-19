@@ -28,7 +28,7 @@ You never hand-edit a ledger. The stack is read from **GitHub itself** plus git:
 
 ## Files
 
-Every module named below lives in the `bastler` package at the repository root, importable
+Every module named below lives in the `basstler` package at the repository root, importable
 with no install; `stack.toml` and `board.json` sit beside them. This document stays here,
 next to the workflow it describes, because it is read rather than run.
 
@@ -43,39 +43,39 @@ next to the workflow it describes, because it is read rather than run.
   `session`) that `stack.py` reads. Written from GitHub as scratch by whatever refreshes it -
   never committed.
 - **`stack.py`** - read-only status tool (never mutates branches). Reads `board.json` + git:
-  - `python -m bastler.stack status` - the whole stack, with ahead/behind drift per parent.
-  - `python -m bastler.stack check` - would each branch integrate cleanly onto its parent
+  - `python -m basstler.stack status` - the whole stack, with ahead/behind drift per parent.
+  - `python -m basstler.stack check` - would each branch integrate cleanly onto its parent
     *now* (fast, non-mutating `git merge-tree` probe)?
-  - `python -m bastler.stack next` - every branch ready to submit to cram2 next: approved,
+  - `python -m basstler.stack next` - every branch ready to submit to cram2 next: approved,
     parent landed, not withheld. **This is your "what goes to cram2 next" answer.**
-  - `python -m bastler.stack next --porcelain` - machine-readable `next`: one
+  - `python -m basstler.stack next --porcelain` - machine-readable `next`: one
     `name<TAB>pr` line per branch to promote (or nothing).
-  - `python -m bastler.stack restack-plan` - the bottom-up restack plan as JSON (one
+  - `python -m basstler.stack restack-plan` - the bottom-up restack plan as JSON (one
     `{branch, parent, strategy}` per not-yet-`merged` branch, in-review ones included so they
     pick up a moved parent via a conflict-free `merge`).
-  - `python -m bastler.stack configuration` - every resolved setting as `key<TAB>value`
+  - `python -m basstler.stack configuration` - every resolved setting as `key<TAB>value`
     lines, keyed by `Configuration`'s own field names: the labels, the upstream base, which
     remote is the fork and which is the upstream, plus the exact `git remote add` command when
     no upstream remote exists yet. Answerable from git alone, so it runs before `board.json`
     exists. It takes `--fork`/`--upstream` for a caller that already knows the answer, and exits
     `4` rather than guessing when nothing does. This is the one surface shell tooling reads
     configuration through - parsing `stack.toml` directly would miss the personal override.
-  - `python -m bastler.stack labels --current <label> --add <label> --remove <label>` - the
+  - `python -m basstler.stack labels --current <label> --add <label> --remove <label>` - the
     **complete** label set to write back, one per line. GitHub's label write replaces the whole set,
     so computing it from the intended change alone silently strips the rest; this is what the
     maintenance skill passes to every label write rather than working it out itself.
-  - `python -m bastler.stack check-move --action push --source B --destination B
+  - `python -m basstler.stack check-move --action push --source B --destination B
     --destination-remote <remote>` - exits `0` when the move is safe and `5` with its reasons on
     stderr when it is not: wrong branch checked out, a push naming different branches on each
     side, a destination that is not the fork, or a push that would make a child an ancestor of its
     own parent (which GitHub reads as a merged pull request).
-  - `python -m bastler.stack promotion-link --branch B --title T --body ...` - the upstream
+  - `python -m basstler.stack promotion-link --branch B --title T --body ...` - the upstream
     compare-and-create URL, encoded and within the length limit, warning on stderr when the body had
     to be shortened.
-  - `python -m bastler.stack reparents` - one `branch<TAB>pr<TAB>current base<TAB>target base`
+  - `python -m basstler.stack reparents` - one `branch<TAB>pr<TAB>current base<TAB>target base`
     line per open PR whose base has already landed, including a base whose own PR was *closed* and
     which is therefore absent from `board.json`.
-  - `python -m bastler.stack landed` - one `name<TAB>pr` line per open fork PR whose branch
+  - `python -m basstler.stack landed` - one `name<TAB>pr` line per open fork PR whose branch
     is already in the upstream base. Reporting only: fast-forwarding the fork's copy of the
     upstream base is what actually closes them.
 - **`maintenance.py`** - the executor: the half of a pass that moves commits, where `stack.py`
@@ -95,13 +95,13 @@ next to the workflow it describes, because it is read rather than run.
 - **`integration.py`** - builds the branch you *work from* while the review queue lags: the
   upstream base with every reviewed in-flight stack tip merged on top, regenerated from scratch
   each time. It writes to no branch and pushes nothing.
-  - `python -m bastler.integration build` - assemble it, then run the suite on the result.
+  - `python -m basstler.integration build` - assemble it, then run the suite on the result.
     `--restack` brings stale tips forward first, which pushes to other people's branches and is
     why it is opt-in; `--no-test` skips the suite; `--json` emits the whole build as one document;
     `--plan <id>` carries only the tips belonging to that plan, repeatable or comma-separated, for
     finding out whether one plan holds together when the full build is red. A branch the plan
     index names no plan for is reported rather than dropped or carried.
-  - `python -m bastler.integration locate-failure` - when the branch builds and the suite fails on
+  - `python -m basstler.integration locate-failure` - when the branch builds and the suite fails on
     it, add the tips back one at a time until it turns, and name the pair. A semantic collision
     leaves no conflict to attribute, so there is nothing else to go on.
   - `stage-conflict` / `record-resolution` - reproduce one collision, and record what was chosen
@@ -148,7 +148,7 @@ next to the workflow it describes, because it is read rather than run.
 
 1. Code at full speed on top of your stack tip; open each PR with **`base` = its parent branch**.
 2. **Self-review the bottom fork PR.** If good, **un-draft it** on GitHub. ← the gate.
-3. `python -m bastler.stack next` → it names every approved, unblocked branch. Open its
+3. `python -m basstler.stack next` → it names every approved, unblocked branch. Open its
    cram2 PR and add the **`in-review`** label to the fork PR.
 4. When cram2 merges it: nothing to edit - it becomes `merged` automatically. Run a maintenance
    pass to cascade the new base up the stack; `status`/`check` confirm it's clean again.
@@ -181,7 +181,7 @@ unlanded features at once. `integration.py build` assembles them into one branch
 and moves `integration` to whatever it just built:
 
 ```bash
-python -m bastler.integration build
+python -m basstler.integration build
 ```
 
 It gates nothing. Promotion asks whether one branch is ready for review; integration asks whether
