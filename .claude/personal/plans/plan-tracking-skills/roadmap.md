@@ -94,3 +94,40 @@ report base would live and why `report-document-naming` is best done inside or a
 - **Upstream review threads cannot be answered from this fork.** Sessions cannot write to the upstream
   repository, so reply text is handed to the user. Two threads on the execution-modes work stay open
   on purpose, each answered differently from what it asked.
+
+## Propagating a resolve's fix downstream
+
+`/plan-item-resolve` fixes the pull request it was pointed at and stops. Whatever is stacked on
+that pull request keeps the broken parent until a `/stacked-pr-maintenance` pass happens to run,
+and that pass is whole-board: `order()` is topological over every branch and `restack_plan()`
+emits every not-yet-merged one, with no way to name a single subtree. A resolve therefore leaves
+its own descendants stale by construction.
+
+`resolve-propagates-downstream` closes that: a descendants selector over `Stack`, built on the
+`is_ancestor` predicate already there; the existing `restack()` and its `RESTACK_STEPS` reused
+rather than a second propagation path; and a conflict outcome that hands the collision back for
+judgement instead of only refusing the move and leaving a comment.
+
+The judgement is the part a script cannot do, and it is not the one
+`/integration-conflict-triage` already makes. That skill weighs **sibling** collisions on the
+integration branch, where neither branch is wrong and the rule is that the fix belongs in the
+feature branch. This is **parent to descendant**, where there is a correct answer and it belongs
+in the descendant - so the vocabulary carries over but the verdicts do not.
+
+### Placement, and why
+
+Decided through `/add-plan-item` rather than by default. `check_scope_overlap.py` against `main`
+over nineteen unlanded tooling branches found no branch building this, under this name or another;
+the only shared paths are `basstler-package`'s relocation itself, which is what makes this work on
+top of an unlanded parent rather than a fold into it. It lands here rather than in
+`stack-maintenance` because its subject is the resolve skill's duties and the restack machinery is
+the means - and because `stack-maintenance` is already the plan `integration-tip-selection` was
+split out of for size.
+
+### Landing hazard
+
+`.claude/skills/plan-item-resolve/SKILL.md` is contended: thirteen unlanded branches edit it, most
+inserting `manifest-currency-first`'s "Record what you found" block in the same region. This item's
+footprint in that file has to stay a reference line pointing at a document of its own, the way
+`scope-decision.md` and `prerequisite-check.md` are referenced. A block inserted beside #151's is
+how it becomes an integration collision instead of a clean merge.

@@ -214,3 +214,10 @@ items:
     Split out rather than folded into `plan-item-execution-modes` because every divergent file is already
     on main, so the rename stands on its own. Best done inside or after the package extraction, which
     moves all six files into one home and is where a shared `Report` base would live.
+
+- id: resolve-propagates-downstream
+  title: "Merge a resolved item's fix down into the pull requests stacked on it"
+  branch: null
+  track: skills
+  depends_on: []
+  status: not_started
