@@ -125,7 +125,7 @@ jobs:
       - name: Install the tooling dependencies
         run: |
           source .claude/hooks/resolve-personal-notes-config.sh
-          pip install pytest "./${BASTLER_PACKAGE_DIRECTORY}"
+          pip install pytest "./${BASSTLER_PACKAGE_DIRECTORY}"
 
       # A pull request's run is pinned to the default branch, and that branch is the one
       # this pipeline publishes: it only moves when a build goes green, so it lags every
