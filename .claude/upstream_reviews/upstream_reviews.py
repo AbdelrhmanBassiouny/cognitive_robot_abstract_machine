@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Report the review threads a fork's pull request has collected upstream.
+Report the checks and review threads a fork's pull request has collected upstream.
 
 Thread resolved-state is only exposed by GitHub's GraphQL API, which is unreachable from
 a Claude session, so this runs in the fork's own GitHub Actions runner and the session
@@ -33,7 +33,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "stack"))
 import tomllib  # noqa: E402
 from stack import CONFIGURATION_PATH, Repository  # noqa: E402
 
-
 QUERY_DIRECTORY = Path(__file__).resolve().parent / "queries"
 """
 Where the ``.graphql`` documents live.
@@ -53,7 +52,7 @@ class JSONModel(ABC):
     only when something happened to parse that field.
 
     ..note:: A reader needing more than the object itself cannot state this
-        contract, so :class:`PullRequestReviewSnapshot`, which is assembled from
+        contract, so :class:`UpstreamPullRequestSnapshot`, which is assembled from
         threads gathered across several responses, does not implement it.
     """
 
@@ -114,6 +113,16 @@ class PullRequestJSONKey(StrEnum):
     NUMBER = "number"
     TITLE = "title"
     HEAD_REPOSITORY_OWNER = "headRepositoryOwner"
+    COMMITS = "commits"
+    COMMIT = "commit"
+    STATUS_CHECK_ROLLUP = "statusCheckRollup"
+    CONTEXTS = "contexts"
+    TYPE_NAME = "__typename"
+    NAME = "name"
+    CONCLUSION = "conclusion"
+    DETAILS_URL = "detailsUrl"
+    CONTEXT = "context"
+    TARGET_URL = "targetUrl"
     QUERY = "query"
     VARIABLES = "variables"
 
@@ -196,6 +205,63 @@ class PullRequestState(StrEnum):
     MERGED = "MERGED"
 
 
+class CheckContextType(StrEnum):
+    """
+    The two shapes GitHub returns inside a status check rollup.
+
+    A pull request can carry both at once: Actions jobs arrive as check runs, while
+    anything reporting through the older commit-status API arrives as a status
+    context, and each spells its outcome with its own field.
+    """
+
+    CHECK_RUN = "CheckRun"
+    STATUS_CONTEXT = "StatusContext"
+
+
+class CheckOutcome(StrEnum):
+    """
+    Where one check stands, over both shapes a rollup can hold.
+
+    A check run that has not finished reports no conclusion at all, which reads here
+    as :attr:`PENDING` so an unfinished check is never mistaken for a passing one.
+    """
+
+    SUCCESS = "SUCCESS"
+    FAILURE = "FAILURE"
+    ERROR = "ERROR"
+    CANCELLED = "CANCELLED"
+    TIMED_OUT = "TIMED_OUT"
+    ACTION_REQUIRED = "ACTION_REQUIRED"
+    NEUTRAL = "NEUTRAL"
+    SKIPPED = "SKIPPED"
+    STALE = "STALE"
+    STARTUP_FAILURE = "STARTUP_FAILURE"
+    PENDING = "PENDING"
+    EXPECTED = "EXPECTED"
+
+    @property
+    def spoken(self) -> str:
+        """:return: The outcome as it reads in a sentence."""
+        return self.replace("_", " ").lower()
+
+
+class RollupState(StrEnum):
+    """
+    The verdict GitHub itself computes over all of a pull request's checks.
+    """
+
+    SUCCESS = "SUCCESS"
+    FAILURE = "FAILURE"
+    ERROR = "ERROR"
+    PENDING = "PENDING"
+    EXPECTED = "EXPECTED"
+
+    @property
+    def spoken(self) -> str:
+        """:return: The verdict as it reads in a sentence."""
+        return self.lower()
+
+
 class ThreadMarker(StrEnum):
     """
     The annotations a thread can carry in the report.
@@ -209,7 +275,7 @@ class ThreadMarker(StrEnum):
 
 
 @dataclass
-class UpstreamReviewError(Exception, ABC):
+class UpstreamReadError(Exception, ABC):
     """
     Base class for every failure this script raises.
     """
@@ -223,7 +289,7 @@ class UpstreamReviewError(Exception, ABC):
 
 
 @dataclass
-class GitHubCommandFailed(UpstreamReviewError):
+class GitHubCommandFailed(UpstreamReadError):
     """
     Raised when the ``gh`` invocation itself exits non-zero.
     """
@@ -249,7 +315,7 @@ class GitHubCommandFailed(UpstreamReviewError):
 
 
 @dataclass
-class GraphQLErrorsReturned(UpstreamReviewError):
+class GraphQLErrorsReturned(UpstreamReadError):
     """
     Raised when GitHub answers with an ``errors`` array instead of data.
     """
@@ -265,7 +331,7 @@ class GraphQLErrorsReturned(UpstreamReviewError):
 
 
 @dataclass
-class UpstreamPullRequestNotFound(UpstreamReviewError):
+class UpstreamPullRequestNotFound(UpstreamReadError):
     """
     Raised when a branch has no pull request open on the upstream.
     """
@@ -561,7 +627,96 @@ class ReviewThreadPage(JSONModel):
 
 
 @dataclass(frozen=True)
-class PullRequestReviewSnapshot:
+class CheckResult(JSONModel):
+    """
+    One check reported against the pull request's head commit.
+    """
+
+    name: str
+    """
+    What the check calls itself.
+    """
+
+    outcome: CheckOutcome
+    """
+    Where the check stands.
+    """
+
+    url: str
+    """
+    Where the check's own output is, empty when it reported none.
+    """
+
+    @classmethod
+    def from_json(cls, data: dict[str, Any]) -> CheckResult:
+        """
+        Read one check out of a rollup context node.
+
+        :param data: The node to read.
+        :return: The parsed check.
+        :raises ValueError: If the node is neither shape a rollup can hold.
+        """
+        if (
+            CheckContextType(data[PullRequestJSONKey.TYPE_NAME])
+            is CheckContextType.CHECK_RUN
+        ):
+            conclusion = data[PullRequestJSONKey.CONCLUSION]
+            return cls(
+                name=data[PullRequestJSONKey.NAME],
+                outcome=(
+                    CheckOutcome(conclusion) if conclusion else CheckOutcome.PENDING
+                ),
+                url=data[PullRequestJSONKey.DETAILS_URL] or "",
+            )
+        return cls(
+            name=data[PullRequestJSONKey.CONTEXT],
+            outcome=CheckOutcome(data[PullRequestJSONKey.STATE]),
+            url=data[PullRequestJSONKey.TARGET_URL] or "",
+        )
+
+    @property
+    def succeeded(self) -> bool:
+        """:return: Whether this check reported success."""
+        return self.outcome is CheckOutcome.SUCCESS
+
+
+@dataclass(frozen=True)
+class CheckStatus(JSONModel):
+    """
+    Every check reported against the pull request, with GitHub's verdict over them.
+    """
+
+    state: RollupState
+    """
+    The verdict GitHub computed over all of them.
+    """
+
+    results: list[CheckResult]
+    """
+    Every check, in the order GitHub returned them.
+    """
+
+    @classmethod
+    def from_json(cls, data: dict[str, Any]) -> CheckStatus:
+        """
+        Read the rollup out of a ``statusCheckRollup`` object.
+
+        :param data: The rollup to read.
+        :return: The parsed status.
+        """
+        return cls(
+            state=RollupState(data[PullRequestJSONKey.STATE]),
+            results=PullRequestJSONKey.CONTEXTS.read_list(data, CheckResult),
+        )
+
+    @property
+    def unsuccessful(self) -> list[CheckResult]:
+        """:return: The checks that did not report success."""
+        return [result for result in self.results if not result.succeeded]
+
+
+@dataclass(frozen=True)
+class UpstreamPullRequestSnapshot:
     """
     Everything read from one upstream pull request in a single run.
     """
@@ -591,10 +746,15 @@ class PullRequestReviewSnapshot:
     Every review thread, in the order GitHub returned them.
     """
 
+    checks: CheckStatus | None
+    """
+    The checks reported against the head commit, absent when none have reported.
+    """
+
     @classmethod
     def from_json(
         cls, data: dict[str, Any], threads: list[ReviewThread]
-    ) -> PullRequestReviewSnapshot:
+    ) -> UpstreamPullRequestSnapshot:
         """
         Build a snapshot from a ``pullRequest`` node and its collected threads.
 
@@ -608,7 +768,27 @@ class PullRequestReviewSnapshot:
             url=data[PullRequestJSONKey.URL],
             reviews=PullRequestJSONKey.REVIEWS.read_list(data, Review),
             threads=threads,
+            checks=cls._read_checks(data),
         )
+
+    @staticmethod
+    def _read_checks(data: dict[str, Any]) -> CheckStatus | None:
+        """
+        Read the checks reported against the pull request's head commit.
+
+        GitHub hangs the rollup off the commit rather than the pull request, and
+        leaves it null while nothing has reported against that commit.
+
+        :param data: The ``pullRequest`` node to read.
+        :return: The checks, or ``None`` when nothing has reported.
+        """
+        commits = data[PullRequestJSONKey.COMMITS][PullRequestJSONKey.NODES]
+        if not commits:
+            return None
+        rollup = commits[-1][PullRequestJSONKey.COMMIT][
+            PullRequestJSONKey.STATUS_CHECK_ROLLUP
+        ]
+        return CheckStatus.from_json(rollup) if rollup else None
 
     @property
     def unresolved_threads(self) -> list[ReviewThread]:
@@ -664,13 +844,13 @@ class RepositoryJSON(JSONModel):
         return ReviewThreadPage.from_json(self.pull_request)
 
     @property
-    def pull_request_reviews(self) -> PullRequestReviewSnapshot:
-        """:return: The pull request's review state, from this response alone.
+    def pull_request_snapshot(self) -> UpstreamPullRequestSnapshot:
+        """:return: The pull request's state, from this response alone.
 
         Only complete when the response carried every page of threads; a paged
         read assembles the snapshot itself from the threads it accumulated.
         """
-        return PullRequestReviewSnapshot.from_json(
+        return UpstreamPullRequestSnapshot.from_json(
             self.pull_request, self.review_thread_page.threads
         )
 
@@ -786,9 +966,9 @@ class GitHubCommandLineClient(GraphQLClient):
 
 
 @dataclass
-class UpstreamReviewReader:
+class UpstreamPullRequestReader:
     """
-    Reads one upstream pull request's review state through a client.
+    Reads one upstream pull request's checks and review state through a client.
     """
 
     client: GraphQLClient
@@ -845,9 +1025,11 @@ class UpstreamReviewReader:
         ]
         return (open_candidates or candidates)[0].number
 
-    def read_current_state(self, pull_request_number: int) -> PullRequestReviewSnapshot:
+    def read_current_state(
+        self, pull_request_number: int
+    ) -> UpstreamPullRequestSnapshot:
         """
-        Read every review and review thread on one upstream pull request.
+        Read the checks, reviews and review threads on one upstream pull request.
 
         :param pull_request_number: The upstream pull request's number.
         :return: The assembled snapshot.
@@ -870,7 +1052,7 @@ class UpstreamReviewReader:
             if not page.has_next_page:
                 break
             cursor = page.end_cursor
-        return PullRequestReviewSnapshot.from_json(repository.pull_request, threads)
+        return UpstreamPullRequestSnapshot.from_json(repository.pull_request, threads)
 
 
 # %% configuration
@@ -910,6 +1092,8 @@ class ReportText(StrEnum):
     The fixed lines the report states rather than computes.
     """
 
+    CHECKS_HEADING = "## Checks"
+    NO_CHECKS = "No checks have reported."
     REVIEWS_HEADING = "## Reviews"
     NO_REVIEWS = "No reviews submitted."
     NO_UNRESOLVED_HEADING = "## No unresolved review threads"
@@ -917,15 +1101,15 @@ class ReportText(StrEnum):
 
 
 @dataclass
-class UnresolvedThreadReport:
+class UpstreamPullRequestReport:
     """
-    Renders a pull request's current review state as the markdown a session or a phone
+    Renders a pull request's current upstream state as the markdown a session or a phone
     reads.
     """
 
-    current_pull_request_reviews: PullRequestReviewSnapshot
+    snapshot: UpstreamPullRequestSnapshot
     """
-    The review state to describe.
+    The upstream state to describe.
     """
 
     include_resolved: bool = False
@@ -936,11 +1120,12 @@ class UnresolvedThreadReport:
     def render(self) -> str:
         """:return: The report as markdown."""
         lines = [
-            f"# Upstream review: #{self.current_pull_request_reviews.number} {self.current_pull_request_reviews.title}",
+            f"# Upstream pull request: #{self.snapshot.number} {self.snapshot.title}",
             "",
-            self.current_pull_request_reviews.url,
+            self.snapshot.url,
             "",
         ]
+        lines.extend(self._render_checks())
         lines.extend(self._render_reviews())
         lines.extend(self._render_threads())
         return "\n".join(lines)
@@ -952,7 +1137,7 @@ class UnresolvedThreadReport:
         :param shown_count: How many threads the section goes on to list.
         :return: The section heading.
         """
-        unresolved_count = len(self.current_pull_request_reviews.unresolved_threads)
+        unresolved_count = len(self.snapshot.unresolved_threads)
         if not unresolved_count:
             return ReportText.NO_UNRESOLVED_HEADING
         if self.include_resolved:
@@ -963,15 +1148,33 @@ class UnresolvedThreadReport:
     def shown_threads(self) -> list[ReviewThread]:
         """:return: The threads this report lists."""
         if self.include_resolved:
-            return self.current_pull_request_reviews.threads
-        return self.current_pull_request_reviews.unresolved_threads
+            return self.snapshot.threads
+        return self.snapshot.unresolved_threads
+
+    def _render_checks(self) -> list[str]:
+        """:return: The checks section."""
+        checks = self.snapshot.checks
+        if checks is None:
+            return [ReportText.CHECKS_HEADING, "", ReportText.NO_CHECKS, ""]
+        unsuccessful = checks.unsuccessful
+        succeeded = len(checks.results) - len(unsuccessful)
+        lines = [
+            f"{ReportText.CHECKS_HEADING}: {checks.state.spoken} "
+            f"({succeeded}/{len(checks.results)} passed)",
+            "",
+        ]
+        for result in unsuccessful:
+            location = f" <{result.url}>" if result.url else ""
+            lines.append(f"- **{result.name}** — {result.outcome.spoken}{location}")
+        lines.append("")
+        return lines
 
     def _render_reviews(self) -> list[str]:
         """:return: The submitted-reviews section."""
-        if not self.current_pull_request_reviews.reviews:
+        if not self.snapshot.reviews:
             return [ReportText.REVIEWS_HEADING, "", ReportText.NO_REVIEWS, ""]
         lines = [ReportText.REVIEWS_HEADING, ""]
-        for review in self.current_pull_request_reviews.reviews:
+        for review in self.snapshot.reviews:
             lines.append(
                 f"- **{review.author.login}** — {review.state.spoken} "
                 f"({review.submitted_at})"
@@ -1057,7 +1260,7 @@ def main(argv: list[str] | None = None) -> int:
     arguments = _parse_arguments(argv)
     try:
         report = _build_report(arguments)
-    except UpstreamReviewError as failure:
+    except UpstreamReadError as failure:
         print(failure, file=sys.stderr)
         return 1
     print(report)
@@ -1074,7 +1277,7 @@ def _build_report(arguments: argparse.Namespace) -> str:
     :param arguments: The parsed command line.
     :return: The rendered markdown.
     """
-    reader = UpstreamReviewReader(
+    reader = UpstreamPullRequestReader(
         GitHubCommandLineClient(),
         resolve_upstream_repository(override=arguments.upstream),
         arguments.fork_owner,
@@ -1082,7 +1285,7 @@ def _build_report(arguments: argparse.Namespace) -> str:
     number = arguments.pull_request or reader.resolve_pull_request_number(
         arguments.branch
     )
-    return UnresolvedThreadReport(
+    return UpstreamPullRequestReport(
         reader.read_current_state(number), include_resolved=arguments.include_resolved
     ).render()
 

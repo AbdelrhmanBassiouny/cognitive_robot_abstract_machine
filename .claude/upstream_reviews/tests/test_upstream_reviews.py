@@ -1,6 +1,6 @@
 """
-Tests for upstream_reviews.py's data parsing, thread pagination, pull request
-resolution, report rendering, and the gh-backed client.
+Tests for upstream_reviews.py's data parsing, check reading, thread pagination, pull
+request resolution, report rendering, and the gh-backed client.
 """
 
 import json
@@ -14,21 +14,25 @@ import pytest
 from conftest import FixtureName, RecordedCall, ReplayingClient
 
 from upstream_reviews import (
+    CheckOutcome,
+    CheckResult,
+    CheckStatus,
     GitHubCommandFailed,
     GitHubCommandLineClient,
     GraphQLErrorsReturned,
     JSONModel,
     PullRequestJSONKey,
-    PullRequestReviewSnapshot,
+    UpstreamPullRequestSnapshot,
     QueryVariable,
     ReportText,
     Repository,
     ReviewState,
     ReviewThread,
+    RollupState,
     ThreadMarker,
-    UnresolvedThreadReport,
+    UpstreamPullRequestReport,
     UpstreamPullRequestNotFound,
-    UpstreamReviewReader,
+    UpstreamPullRequestReader,
     main,
     resolve_upstream_repository,
 )
@@ -57,6 +61,17 @@ class ThreadIdentifier(StrEnum):
     UNRESOLVED_OUTDATED = "THREAD_UNRESOLVED_OUTDATED"
 
 
+class RecordedCheck(StrEnum):
+    """
+    The checks the recorded pull request carries, named by what each one shows.
+    """
+
+    PASSING = "test (krrood)"
+    FAILING = "test (robokudo)"
+    UNFINISHED = "test (coraplex)"
+    LEGACY = "continuous-integration/legacy"
+
+
 class ThreadCursor(StrEnum):
     """
     The cursors the recorded pages hand back.
@@ -81,14 +96,26 @@ GRAPHQL_ERROR_MESSAGE = "Could not resolve to a Repository"
 UPSTREAM_SETTING_TEMPLATE = 'upstream_repository = "{repository}"\n'
 
 
-def make_reader(client: ReplayingClient) -> UpstreamReviewReader:
+def make_reader(client: ReplayingClient) -> UpstreamPullRequestReader:
     """
     Build a reader wired to *client* and the recorded upstream.
 
     :param client: The client to replay responses from.
     :return: The reader under test.
     """
-    return UpstreamReviewReader(client, UPSTREAM, Example.FORK_OWNER)
+    return UpstreamPullRequestReader(client, UPSTREAM, Example.FORK_OWNER)
+
+
+def recorded_rollup() -> dict:
+    """:return: The status check rollup the last recorded page carries."""
+    pull_request = FixtureName.PULL_REQUEST_PAGE_TWO.recorded().pull_request
+    [commit] = pull_request[PullRequestJSONKey.COMMITS][PullRequestJSONKey.NODES]
+    return commit[PullRequestJSONKey.COMMIT][PullRequestJSONKey.STATUS_CHECK_ROLLUP]
+
+
+def recorded_check_nodes() -> list[dict]:
+    """:return: The rollup context nodes the last recorded page carries."""
+    return recorded_rollup()[PullRequestJSONKey.CONTEXTS][PullRequestJSONKey.NODES]
 
 
 def recorded_thread(fixture: FixtureName, identifier: ThreadIdentifier) -> ReviewThread:
@@ -155,7 +182,7 @@ def test_the_snapshot_identifies_the_pull_request_it_read(paginated_client):
         RECORDED_PULL_REQUEST_NUMBER
     )
 
-    recorded = FixtureName.PULL_REQUEST_PAGE_ONE.recorded().pull_request_reviews
+    recorded = FixtureName.PULL_REQUEST_PAGE_ONE.recorded().pull_request_snapshot
     assert snapshot.number == recorded.number
     assert snapshot.title == recorded.title
     assert snapshot.url == recorded.url
@@ -204,6 +231,95 @@ def test_a_thread_anchored_to_a_line_is_located_by_it(paginated_client):
 
     anchored = snapshot.thread(ThreadIdentifier.UNRESOLVED_MIDDLE)
     assert anchored.location == f"{anchored.path}:{anchored.line}"
+
+
+# %% checks
+
+
+@pytest.fixture
+def current_checks(paginated_client) -> CheckStatus:
+    """:return: The checks of the recorded pull request."""
+    return (
+        make_reader(paginated_client)
+        .read_current_state(RECORDED_PULL_REQUEST_NUMBER)
+        .checks
+    )
+
+
+def test_the_rollup_verdict_is_read_rather_than_recomputed(current_checks):
+    assert current_checks.state is RollupState(
+        recorded_rollup()[PullRequestJSONKey.STATE]
+    )
+
+
+def test_every_recorded_check_is_read(current_checks):
+    assert len(current_checks.results) == len(recorded_check_nodes())
+
+
+def test_a_finished_check_run_carries_its_conclusion(current_checks):
+    [failed] = [
+        result
+        for result in current_checks.results
+        if result.outcome is CheckOutcome.FAILURE
+    ]
+
+    assert failed.name == RecordedCheck.FAILING
+
+
+def test_a_check_run_links_to_its_own_output(current_checks):
+    [recorded] = [
+        node
+        for node in recorded_check_nodes()
+        if node.get(PullRequestJSONKey.NAME) == RecordedCheck.FAILING
+    ]
+    [failed] = [
+        result
+        for result in current_checks.results
+        if result.name == RecordedCheck.FAILING
+    ]
+
+    assert failed.url == recorded[PullRequestJSONKey.DETAILS_URL]
+
+
+def test_an_unfinished_check_run_reads_as_pending(current_checks):
+    [pending] = [
+        result
+        for result in current_checks.results
+        if result.name == RecordedCheck.UNFINISHED
+    ]
+
+    assert pending.outcome is CheckOutcome.PENDING
+
+
+def test_a_status_context_is_read_alongside_the_check_runs(current_checks):
+    [legacy] = [
+        result
+        for result in current_checks.results
+        if result.name == RecordedCheck.LEGACY
+    ]
+
+    assert legacy.outcome is CheckOutcome.ERROR
+
+
+def test_only_the_checks_that_did_not_pass_are_unsuccessful(current_checks):
+    assert [result.name for result in current_checks.unsuccessful] == [
+        RecordedCheck.FAILING,
+        RecordedCheck.UNFINISHED,
+        RecordedCheck.LEGACY,
+    ]
+
+
+def test_a_rollup_shape_this_script_cannot_read_is_rejected():
+    with pytest.raises(ValueError):
+        CheckResult.from_json({PullRequestJSONKey.TYPE_NAME: "SomeNewContextShape"})
+
+
+def test_a_head_commit_nothing_reported_against_has_no_checks():
+    client = ReplayingClient([FixtureName.PULL_REQUEST_WITHOUT_CHECKS.load()])
+
+    current_state = make_reader(client).read_current_state(RECORDED_PULL_REQUEST_NUMBER)
+
+    assert current_state.checks is None
 
 
 # %% thread pagination
@@ -257,7 +373,7 @@ def test_the_report_omits_a_resolved_thread(paginated_client):
         RECORDED_PULL_REQUEST_NUMBER
     )
 
-    report = UnresolvedThreadReport(snapshot)
+    report = UpstreamPullRequestReport(snapshot)
 
     assert ThreadIdentifier.RESOLVED not in {
         thread.identifier for thread in report.shown_threads
@@ -272,7 +388,7 @@ def test_including_resolved_threads_restores_it(paginated_client):
         RECORDED_PULL_REQUEST_NUMBER
     )
 
-    rendered = UnresolvedThreadReport(snapshot, include_resolved=True).render()
+    rendered = UpstreamPullRequestReport(snapshot, include_resolved=True).render()
 
     assert snapshot.thread(ThreadIdentifier.RESOLVED).comments[0].body in rendered
 
@@ -282,7 +398,7 @@ def test_including_resolved_threads_counts_what_is_shown(paginated_client):
         RECORDED_PULL_REQUEST_NUMBER
     )
 
-    report = UnresolvedThreadReport(snapshot, include_resolved=True)
+    report = UpstreamPullRequestReport(snapshot, include_resolved=True)
 
     assert report.heading(len(snapshot.threads)) in report.render()
     assert len(report.shown_threads) == len(snapshot.threads)
@@ -336,7 +452,7 @@ def test_a_branch_never_promoted_upstream_is_reported_clearly():
 def test_the_configured_upstream_reaches_the_query():
     client = ReplayingClient([FixtureName.BRANCH_PULL_REQUESTS.load()])
     elsewhere = Repository("another-organization", "another-repository")
-    reader = UpstreamReviewReader(client, elsewhere, Example.FOREIGN_OWNER)
+    reader = UpstreamPullRequestReader(client, elsewhere, Example.FOREIGN_OWNER)
 
     reader.resolve_pull_request_number(Example.BRANCH)
 
@@ -365,7 +481,7 @@ def test_an_explicit_override_outranks_the_configuration_file(tmp_path):
 
 
 @pytest.fixture
-def current_state(paginated_client) -> PullRequestReviewSnapshot:
+def current_state(paginated_client) -> UpstreamPullRequestSnapshot:
     """:return: The snapshot parsed from both recorded pages."""
     return make_reader(paginated_client).read_current_state(
         RECORDED_PULL_REQUEST_NUMBER
@@ -373,14 +489,14 @@ def current_state(paginated_client) -> PullRequestReviewSnapshot:
 
 
 def test_each_unresolved_thread_is_located_by_file_and_line(current_state):
-    rendered = UnresolvedThreadReport(current_state).render()
+    rendered = UpstreamPullRequestReport(current_state).render()
 
     for thread in current_state.unresolved_threads:
         assert thread.location in rendered
 
 
 def test_comment_bodies_are_reproduced(current_state):
-    rendered = UnresolvedThreadReport(current_state).render()
+    rendered = UpstreamPullRequestReport(current_state).render()
 
     for thread in current_state.unresolved_threads:
         for comment in thread.comments:
@@ -388,26 +504,67 @@ def test_comment_bodies_are_reproduced(current_state):
 
 
 def test_each_thread_links_back_to_its_first_comment(current_state):
-    rendered = UnresolvedThreadReport(current_state).render()
+    rendered = UpstreamPullRequestReport(current_state).render()
 
     for thread in current_state.unresolved_threads:
         assert thread.comments[0].url in rendered
 
 
 def test_an_outdated_thread_is_marked_as_such(current_state):
-    rendered = UnresolvedThreadReport(current_state).render()
+    rendered = UpstreamPullRequestReport(current_state).render()
 
     assert ThreadMarker.OUTDATED in rendered
 
 
 def test_the_unresolved_count_is_stated(current_state):
-    report = UnresolvedThreadReport(current_state)
+    report = UpstreamPullRequestReport(current_state)
 
     assert report.heading(len(report.shown_threads)) in report.render()
 
 
+def test_the_checks_section_states_the_verdict_and_how_many_passed(current_state):
+    rendered = UpstreamPullRequestReport(current_state).render()
+    checks = current_state.checks
+    passed = len(checks.results) - len(checks.unsuccessful)
+
+    assert (
+        f"{ReportText.CHECKS_HEADING}: {checks.state.spoken} "
+        f"({passed}/{len(checks.results)} passed)" in rendered
+    )
+
+
+def test_every_check_that_did_not_pass_is_named_with_its_outcome(current_state):
+    rendered = UpstreamPullRequestReport(current_state).render()
+
+    for result in current_state.checks.unsuccessful:
+        assert f"**{result.name}** — {result.outcome.spoken}" in rendered
+
+
+def test_a_passing_check_is_not_listed_individually(current_state):
+    rendered = UpstreamPullRequestReport(current_state).render()
+
+    [passed] = [result for result in current_state.checks.results if result.succeeded]
+
+    assert f"**{passed.name}**" not in rendered
+
+
+def test_a_pull_request_without_checks_says_so(current_state):
+    unchecked = UpstreamPullRequestSnapshot(
+        number=current_state.number,
+        title=current_state.title,
+        url=current_state.url,
+        reviews=current_state.reviews,
+        threads=current_state.threads,
+        checks=None,
+    )
+
+    rendered = UpstreamPullRequestReport(unchecked).render()
+
+    assert ReportText.NO_CHECKS in rendered
+
+
 def test_every_reviewer_and_verdict_is_listed(current_state):
-    rendered = UnresolvedThreadReport(current_state).render()
+    rendered = UpstreamPullRequestReport(current_state).render()
 
     for review in current_state.reviews:
         assert review.author.login in rendered
@@ -415,15 +572,16 @@ def test_every_reviewer_and_verdict_is_listed(current_state):
 
 
 def test_a_pull_request_with_nothing_outstanding_says_so(current_state):
-    settled = PullRequestReviewSnapshot(
+    settled = UpstreamPullRequestSnapshot(
         number=current_state.number,
         title=current_state.title,
         url=current_state.url,
         reviews=current_state.reviews,
         threads=[thread for thread in current_state.threads if thread.is_resolved],
+        checks=current_state.checks,
     )
 
-    rendered = UnresolvedThreadReport(settled).render()
+    rendered = UpstreamPullRequestReport(settled).render()
 
     assert ReportText.NO_UNRESOLVED_HEADING in rendered
     assert ReportText.NOTHING_TO_ACT_ON in rendered
