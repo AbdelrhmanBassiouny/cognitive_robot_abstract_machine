@@ -32,7 +32,6 @@ from semantic_digital_twin.world_description.geometry import Box, Scale
 from semantic_digital_twin.world_description.shape_collection import ShapeCollection
 from semantic_digital_twin.world_description.world_entity import Body, Region
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -232,6 +231,36 @@ def test_pickup(_simple_apartment_setup):
         yaw=np.pi,
         reference_frame=segmind_executor.context.world.root,
     )
+
+
+def test_a_translation_event_states_its_poses_in_the_world_frame(
+    _simple_apartment_setup,
+):
+    """
+    The poses a motion event carries are read in the world frame, so that is the frame
+    they are stated in -- what reproducing the event elsewhere reads them against.
+    """
+    segmind_executor, segmind_context, milk, _, box2 = _build_executor(
+        _simple_apartment_setup
+    )
+    world = segmind_executor.context.world
+    segmind_executor.compile(
+        SegmindStatechart().build_statechart([TranslationDetector()])
+    )
+    segmind_executor.tick()
+    for i in range(5):
+        milk.parent_connection.origin = HomogeneousTransformationMatrix.from_xyz_rpy(
+            x=box2.global_pose.x,
+            y=box2.global_pose.y,
+            z=box2.global_pose.z + 0.56 + i * 0.1,
+            reference_frame=world.root,
+        )
+        segmind_executor.tick()
+
+    [event] = events_of(segmind_context, TranslationEvent)
+    assert event.start_pose.reference_frame is world.root
+    assert event.current_pose.reference_frame is world.root
+
 
 def test_placing(_simple_apartment_setup):
     segmind_executor, segmind_context, milk, box1, box2 = _build_executor(_simple_apartment_setup)
@@ -453,7 +482,9 @@ def test_detect_holes_uses_apertures_not_body_names(_simple_apartment_setup):
     annotation is not a hole, and an ``Aperture`` annotated on a body whose name does
     not mention "hole" at all is still one.
     """
-    segmind_executor, segmind_context, milk, box1, box2 = _build_executor(_simple_apartment_setup)
+    segmind_executor, segmind_context, milk, box1, box2 = _build_executor(
+        _simple_apartment_setup
+    )
 
     with segmind_executor.context.world.modify_world():
         decoy_body = Body(name=PrefixedName("decoy_hole"))
@@ -537,6 +568,130 @@ def test_stop_rotation(_simple_apartment_setup):
     for _ in range(5):
         segmind_executor.tick()
     assert len([i for i in segmind_context.logger.get_events() if isinstance(i, StopRotationEvent)]) >= 1
+
+
+# %% a change of place nobody reported
+
+
+def _place_milk_at(segmind_executor, milk, x: float) -> None:
+    """
+    Stand the milk at the given x on the apartment's floor plane, facing as it was.
+    """
+    milk.parent_connection.origin = HomogeneousTransformationMatrix.from_xyz_rpy(
+        x=x, y=-3, z=0.25, reference_frame=segmind_executor.context.world.root
+    )
+
+
+def _restore_milk(segmind_executor, milk) -> None:
+    """
+    Put the milk back where the shared fixture keeps it.
+    """
+    milk.parent_connection.origin = HomogeneousTransformationMatrix.from_xyz_rpy(
+        -1.7, 0, 1.07, yaw=np.pi, reference_frame=segmind_executor.context.world.root
+    )
+
+
+def _translation_watch(_simple_apartment_setup):
+    """
+    An executor watching the milk for translations and their ends, ticked once so the
+    milk has been seen where it rests.
+    """
+    segmind_executor, segmind_context, milk, _, _ = _build_executor(
+        _simple_apartment_setup
+    )
+    segmind_executor.compile(
+        SegmindStatechart().build_statechart(
+            [TranslationDetector(), StopTranslationDetector()]
+        )
+    )
+    _place_milk_at(segmind_executor, milk, x=1.0)
+    segmind_executor.tick()
+    return segmind_executor, segmind_context, milk
+
+
+def test_a_sudden_change_of_place_is_a_translation_from_where_the_body_rested(
+    _simple_apartment_setup,
+):
+    """
+    A body seen at rest and then seen somewhere else has moved, whether or not the
+    window has ticks enough to have seen it move: the translation runs from where it
+    rested to where it is.
+    """
+    segmind_executor, segmind_context, milk = _translation_watch(
+        _simple_apartment_setup
+    )
+    rested_at = milk.numeric_global_pose
+
+    _place_milk_at(segmind_executor, milk, x=1.1)
+    segmind_executor.tick()
+
+    [event] = events_of(segmind_context, TranslationEvent)
+    assert np.allclose(event.start_pose.to_position().to_np()[:3], rested_at.position)
+    assert np.allclose(
+        event.current_pose.to_position().to_np()[:3], milk.numeric_global_pose.position
+    )
+    _restore_milk(segmind_executor, milk)
+
+
+def test_a_body_seen_where_it_rests_is_not_translated(_simple_apartment_setup):
+    segmind_executor, segmind_context, milk = _translation_watch(
+        _simple_apartment_setup
+    )
+
+    for _ in range(6):
+        segmind_executor.tick()
+
+    assert events_of(segmind_context, TranslationEvent) == []
+    _restore_milk(segmind_executor, milk)
+
+
+def test_a_change_of_place_a_translation_under_way_claims_is_not_reported_again(
+    _simple_apartment_setup,
+):
+    """
+    A jump while the body is already being reported moving is that motion going on, not
+    a second one.
+    """
+    segmind_executor, segmind_context, milk = _translation_watch(
+        _simple_apartment_setup
+    )
+    _place_milk_at(segmind_executor, milk, x=1.1)
+    segmind_executor.tick()
+    assert len(events_of(segmind_context, TranslationEvent)) == 1
+
+    _place_milk_at(segmind_executor, milk, x=1.3)
+    segmind_executor.tick()
+
+    assert len(events_of(segmind_context, TranslationEvent)) == 1
+    _restore_milk(segmind_executor, milk)
+
+
+def test_a_change_of_place_after_a_translation_ended_runs_from_where_it_ended(
+    _simple_apartment_setup,
+):
+    """
+    Where a reported translation ended is where the body rests from then on, so a later
+    change of place is measured from there rather than from where the body first stood,
+    which the earlier translation already accounted for.
+    """
+    segmind_executor, segmind_context, milk = _translation_watch(
+        _simple_apartment_setup
+    )
+    _place_milk_at(segmind_executor, milk, x=1.1)
+    for _ in range(8):
+        segmind_executor.tick()
+    [stopped] = events_of(segmind_context, StopTranslationEvent)
+    assert len(events_of(segmind_context, TranslationEvent)) == 1
+
+    _place_milk_at(segmind_executor, milk, x=1.3)
+    segmind_executor.tick()
+
+    [_, later] = events_of(segmind_context, TranslationEvent)
+    assert np.allclose(
+        later.start_pose.to_position().to_np(),
+        stopped.current_pose.to_position().to_np(),
+    )
+    _restore_milk(segmind_executor, milk)
 
 
 def test_slow_motion_with_all_motion_detectors(_simple_apartment_setup):
