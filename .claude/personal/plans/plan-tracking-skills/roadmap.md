@@ -131,3 +131,39 @@ inserting `manifest-currency-first`'s "Record what you found" block in the same 
 footprint in that file has to stay a reference line pointing at a document of its own, the way
 `scope-decision.md` and `prerequisite-check.md` are referenced. A block inserted beside #151's is
 how it becomes an integration collision instead of a clean merge.
+
+### The plan this item is being built to (kickoff, 2026-09-19)
+
+Three pieces of code and one of prose, in that order, tests first.
+
+- **`branches_stacked_on(stack, branch)` in `basstler/stack.py`**, beside `order()`,
+  `reparents()` and `landed_branches()`: every not-yet-merged branch whose parent chain
+  reaches the named one, parent before child, excluding the branch itself.
+  **It walks `Branch.parent` rather than git containment**, which departs from this
+  section's "built on the `is_ancestor` predicate already there". The stack's parent
+  relation is what `restack_plan()` consumes and what a pull request's base declares, so
+  it is what "stacked on" means; git containment answers a different question - whether
+  the fix is already in - and `SkipBranchAlreadyCurrent` already asks it, per branch,
+  during the restack. Selecting by containment would also drop exactly the branches that
+  need the propagation, since a descendant stops containing its parent's tip the moment
+  the parent is fixed.
+- **`restack_plan(stack, stacked_on=None)` and `restack(..., stacked_on=None)`**: the
+  subtree the plan is limited to, so the existing `RESTACK_STEPS` do the work and there
+  is no second propagation path.
+- **A conflict response, chosen by that same argument**: `TellTheBranchOwner` (today's
+  behaviour - the `needs-resolution` label plus the comment) for a whole-board pass, and
+  `LeaveItToTheCaller` (the outcome and its conflicting paths, nothing written to GitHub)
+  when a subtree was named. One argument rather than two knobs, because naming the
+  subtree *is* the statement that the caller is present and will judge the collision:
+  labelling the descendant would withhold it from later passes, and telling its owner to
+  resolve what the session is about to resolve is noise on their pull request.
+- **`.claude/skills/plan-item-resolve/propagating-a-fix.md`**, referenced by one line
+  from that skill's `SKILL.md`, per this section's landing hazard: thirteen unlanded
+  branches edit that file, so the footprint stays a reference. Referenced by its path
+  rather than through a new `resolve-personal-notes-config.sh` constant - the document
+  has one reader, and the constants exist for paths several skills share; it also keeps
+  this item out of a second contended file.
+
+Verified with the package's own suite (`python -m pytest test/basstler_test
+--confcutdir=test/basstler_test`), against the real-git `ForkCheckout` fixture and the
+`RecordingPullRequests` fake that already exist for the restack tests.

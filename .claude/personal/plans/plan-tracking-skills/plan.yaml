@@ -217,7 +217,9 @@ items:
 
 - id: resolve-propagates-downstream
   title: "Merge a resolved item's fix down into the pull requests stacked on it"
-  branch: null
+  branch: claude/plan-item-kickoff-resolve-ic3qnu
+  pull_request_number: 430
+  session: https://claude.ai/code/session_01Mkoj43S6gvqMaFzRpiGwHX
   track: skills
   notes: >
     Placed by `/add-plan-item` rather than by default, against nineteen unlanded tooling branches:
@@ -233,4 +235,4 @@ items:
     dependency is real and is carried by the branch's base until #253 lands, at which point it
     should become a named `depends_on`.
   depends_on: []
-  status: not_started
+  status: in_progress
