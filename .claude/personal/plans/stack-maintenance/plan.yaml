@@ -505,6 +505,16 @@ items:
 
     Its recorded dependency was corrected once already, from the executor to `manifest-currency-first`,
     after the chain became linear; the executor stays a dependency transitively.
+
+    **Restacked onto #185's head on 2026-09-19, and that is what finally carried the
+    rename.** This branch merged cuare2 at 5b332d6a59 - one commit before 213ad791c7
+    renamed the package there - so the modules it went on to add never carried the new
+    name, and nor did anything stacked on it. Redone here as the same case-preserving
+    substitution over the whole tree, with cuare2's head merged on top, so every conflict
+    is the two sides renaming to a target they already agree on. Checked rather than
+    argued: of the 2435 paths on cuare2's head 2405 are byte-identical here, and each of
+    the 72 that differ holds this branch's own edit on one side and the version
+    5b332d6a59 already carried on the other. 910 tests pass.
 - id: integration-branch-ci-verdict
   title: Move the integration branch's verdict to CI, with a stable branch and a targeted job
   branch: claude/plan-item-kickoff-workflow-unification-wg4w4x
@@ -893,6 +903,47 @@ items:
     which carries `verdict`, `published` and `missing_pipeline`, is printed on every path except the one where
     a build was actually published. The run that finally moved the pointer said nothing about having moved it;
     the only line in its log naming any of this is the build''s own `"tests_passed": true`. Not fixed here.
+
+
+    **#425 folded in on 2026-09-19, and this branch restacked onto #185 through #154.**
+    Every integration candidate was dying on `Run the maintenance pass`: a build carries
+    `stack-maintenance.yml`, GitHub runs a `pull_request` workflow from the merge commit,
+    so a candidate triggers a full maintenance pass on itself - which judges the whole
+    fork and exits 10 while any branch is withheld. `ChecksAboutTheBuild` is the mechanism
+    that should have excluded it and could not: it read the pipeline''s job names out of
+    the workflow files in whichever checkout was doing the reading, and the tree being
+    judged carries a workflow the reading checkout does not. There was no file there to
+    read the names from, so adding the member alone would have left the gate shut until
+    some ref carried both.
+
+    **The exclusion goes by workflow identity now.** GitHub reports which workflow file
+    each run ran from, named against the tree that ran it, and gives every run its own
+    check suite - so reading the runs started on the head under judgement says which
+    checks the pipeline reported about itself, with no file read at all. Measured against
+    candidate #421''s head before anything was built on it: 25 check runs across exactly 4
+    check suites, one per workflow run, two of them separate `stack-maintenance.yml` runs.
+    New client call `runs_started_on`; `WorkflowRunField` moves to `maintenance_github`
+    beside `WorkflowRunRecord`. `integration-checks.yml` was a second instance of the same
+    root cause, already in the tree and already saying in its own header that it is not a
+    build''s verdict - nothing had told the verdict reader.
+
+    Three consequences worth carrying: a renamed job in a pipeline workflow goes on being
+    recognised; a repository job sharing a name with a pipeline job is now judged rather
+    than silently ignored, which is the opposite defect the by-name scheme needed a test
+    to guard against; and the exclusion moves out of `ReportedChecks.of` into
+    `read_checks`, so a probe''s own runs are no longer filtered where a localisation reads
+    them back as its answer.
+
+    **The fold is the scope check being honoured late.** #425 only ever edited this
+    branch''s files - it was stacked because the session that wrote it was pinned to its own
+    branch, not because anything depended on it. Folded as one commit, `b9de8d0200`, whose
+    eleven files are byte-identical to #425''s; its own rename is dropped as redundant,
+    this branch now carrying that rename directly.
+
+    **One defect the fold found in #425 itself**: its rename had missed
+    `test/basstler_test/dataset/set-up-clone/bastler/`, two fixture files, and the check
+    that cleared it grepped file *contents* - which cannot see a stale directory name.
+    **A rename is verified over paths as well as over contents.** 1165 tests pass.
 
     '
 - id: red-candidate-localisation

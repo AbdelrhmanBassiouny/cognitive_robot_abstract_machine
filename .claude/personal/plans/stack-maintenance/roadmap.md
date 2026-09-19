@@ -432,3 +432,51 @@ reporting the conflict, so nothing here removes it.
 The item's remaining work is untouched by any of this: the notification question in **Open** above
 is still open, and the one review thread left unresolved is the deferral the user was asked to
 close.
+
+## The rename restack and the #425 fold, 2026-09-19
+
+Three branches moved: #154 and #211 were restacked onto #185's head, and #425 was folded
+into #211 and closed.
+
+**Why the rename had not reached most of the package.** #185 renamed `bastler` to
+`basstler` in `213ad791c7`. #154 had merged #185 one commit earlier, at `5b332d6a59`, so
+that commit is not an ancestor of #154 or of anything above it - and the roughly 68
+modules those branches went on to add were never covered by it. #185 read as renamed and
+everything above it read as not, which is what the review was reacting to.
+
+**Merging #185's head is the expensive way to fix it, and the reason is instructive.**
+Straight off, `git merge-tree` reported 128 conflicting paths: 38 "file location"
+conflicts from git's directory-rename detection wanting to move each newly added
+`bastler/` file into `basstler/`, plus 12 content conflicts and 2 rename/deletes. Every
+one of them comes from a single commit whose entire content is a case-preserving
+substitution.
+
+**So the substitution was applied to each branch first, and the merge was made second.**
+With both sides renaming to the same target, what is left is a merge over content only.
+That is what turned 128 conflicts into 18 on #154 and 7 on #211, all of them mechanical.
+
+**The rule the round produced: a transformation you can characterise is one you can
+verify, and characterising it first is what makes the merge cheap.** `213ad791c7` was
+proven to be exactly the substitution before anything was built on that claim - every
+changed line pairs with its counterpart once the substitution is undone - and the same
+proof was then run over each branch's own rename commit. The merge result was checked
+against the tree the rename produced rather than against the absence of conflict markers:
+on #154, 2405 of #185's 2435 paths byte-identical and every one of the 72 that differ
+explained as that branch's own edit.
+
+**A rename is verified over paths as well as over contents.** #425's own rename had
+missed `test/basstler_test/dataset/set-up-clone/bastler/`, two fixture files, and the
+check that cleared it grepped file *contents*. A file whose path carries the old name and
+whose body does not is exactly what that check cannot see - and the naive path filter that
+looks for `bastler` and excludes `basstler` cannot see it either, because
+`basstler_test` earlier in the same path matches the exclusion. Splitting the path on `/`
+and testing each component is what finds them.
+
+**The fold is the scope check being honoured late.** #425 only ever edited #211's files.
+It was opened stacked because the session that wrote it was pinned to its own branch - an
+ordering that recorded how the work was reached rather than any dependency. Folded as one
+commit whose eleven files are byte-identical to #425's, with #425's own rename dropped as
+redundant once #211 carried it.
+
+**Left standing**: merging #280 into this stack still conflicts on six files, the
+`.claude/stack/` to `basstler/` relocation, which belongs to an integration triage pass.
