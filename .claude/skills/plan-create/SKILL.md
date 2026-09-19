@@ -101,16 +101,18 @@ to read it.
 For a single piece of work rather than a whole plan, `/add-plan-item` runs that
 same decision on its own and is the lighter-weight way in.
 
-If migrating a source doc: preserve its detail rather than compressing it
-away. Structured facts (branch, PR, base, status, blockers) become
-`plan.yaml` items; everything else (design rationale, history, "why",
-standing conventions) becomes `roadmap.md`'s narrative — don't drop
-content just because it doesn't fit a YAML field. If the source doc has
-its own per-branch detail files (this repo's convention:
-`.claude/personal/pr-progress/<branch>.md`), you do not need to fold their
-full content into `roadmap.md` — that mechanism keeps working independently
-of the plan; link to it in spirit (mention it exists) rather than
-duplicating it.
+If migrating a source doc: apply `${ROADMAP_WRITING_DOCUMENT}`'s rule from
+the start, rather than carrying over everything the source said. Structured
+facts (branch, PR, base, status, blockers) become `plan.yaml` items; what
+binds future work (design rationale, standing conventions, open questions)
+becomes `roadmap.md`'s narrative — compress the rest (per-round
+implementation history on work already merged) to a line naming the
+outcome, per that document, rather than dropping it silently or keeping it
+in full. If the source doc has its own per-branch detail files (this repo's
+convention: `.claude/personal/pr-progress/<branch>.md`), you do not need to
+fold their full content into `roadmap.md` — that mechanism keeps working
+independently of the plan; link to it in spirit (mention it exists) rather
+than duplicating it.
 
 ## 4. Cross-check every named branch/PR against live GitHub state
 
