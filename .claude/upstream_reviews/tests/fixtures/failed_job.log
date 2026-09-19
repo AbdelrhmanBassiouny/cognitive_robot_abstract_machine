@@ -1,0 +1,12 @@
+2026-09-18T16:02:04.1120000Z ##[group]Run the test suite
+2026-09-18T16:02:04.1120400Z pytest test/robokudo_test
+2026-09-18T16:02:04.1120900Z ##[endgroup]
+2026-09-18T16:02:06.4410000Z ============================= test session starts ==============================
+2026-09-18T16:02:06.4410800Z collected 839 items
+2026-09-18T16:03:44.3879824Z 
+2026-09-18T16:03:44.3880039Z -- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+2026-09-18T16:03:44.3880486Z =========================== short test summary info ============================
+2026-09-18T16:03:44.3881235Z FAILED test/robokudo_test/test_plane.py::test_a_seeded_annotator_finds_the_same_plane_every_time - AssertionError: assert False
+2026-09-18T16:03:44.3902130Z  +  where False = np.array_equal(array([-0.00339324, 0.00108526]), array([-4.58525936e-04, 4.50618702e-05]))
+2026-09-18T16:03:44.3908395Z ============ 1 failed, 820 passed, 18 skipped, 8 warnings in 37.73s ============
+2026-09-18T16:03:45.2716890Z ##[error]Process completed with exit code 1.

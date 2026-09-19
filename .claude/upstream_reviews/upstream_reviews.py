@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """
-Report the checks and review threads a fork's pull request has collected upstream.
+Report the checks, failing job logs and review threads a fork's pull request has
+collected upstream.
 
 Thread resolved-state is only exposed by GitHub's GraphQL API, which is unreachable from
 a Claude session, so this runs in the fork's own GitHub Actions runner and the session
@@ -17,6 +18,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import subprocess
 import sys
 from abc import ABC, abstractmethod
@@ -903,7 +905,154 @@ class GraphQLResponse:
         return self.data or {}
 
 
+# %% the log behind a failed check
+
+
+JOB_IDENTIFIER_GROUP = "identifier"
+"""
+What the job's number is called inside :data:`JOB_URL_PATTERN`.
+"""
+
+JOB_URL_PATTERN = re.compile(rf"/actions/runs/\d+/job/(?P<{JOB_IDENTIFIER_GROUP}>\d+)")
+"""
+Where a check's own output link carries the job that produced it.
+"""
+
+LOG_TIMESTAMP_PATTERN = re.compile(r"^\S+Z ")
+"""
+The timestamp a runner writes in front of every line it records.
+"""
+
+EXCERPT_LINE_LIMIT = 40
+"""
+How many lines of one job's log the report is willing to quote.
+"""
+
+
+class LogMarker(StrEnum):
+    """
+    The lines in a runner's log that say where a failure is described.
+    """
+
+    PYTEST_SUMMARY = "short test summary info"
+    """
+    Opens pytest's own list of what failed, which is the answer wherever there is one.
+    """
+
+    ERROR_ANNOTATION = "##[error]"
+    """
+    Marks a line the runner itself flagged, which is all a job that died before pytest
+    leaves behind.
+    """
+
+
+@dataclass(frozen=True)
+class FailedJob:
+    """
+    The Actions job behind a check that did not pass.
+    """
+
+    identifier: int
+    """
+    The job's own number, which is what a log read asks for.
+    """
+
+    @classmethod
+    def behind(cls, result: CheckResult) -> FailedJob | None:
+        """
+        Find the job a check's output link points at.
+
+        A rollup also carries contexts posted by services that are not Actions at all,
+        and those link somewhere with no job behind them.
+
+        :param result: The check to locate.
+        :return: The job, or ``None`` where the link names none.
+        """
+        match = JOB_URL_PATTERN.search(result.url)
+        if match is None:
+            return None
+        return cls(int(match.group(JOB_IDENTIFIER_GROUP)))
+
+
+@dataclass(frozen=True)
+class FailureLog:
+    """
+    The part of a failed job's log that says what went wrong.
+    """
+
+    check_name: str
+    """
+    The check whose job this came from.
+    """
+
+    lines: list[str]
+    """
+    The excerpt, oldest line first, with the runner's timestamps taken off.
+    """
+
+    @classmethod
+    def excerpt(cls, check_name: str, log: str) -> FailureLog:
+        """
+        Cut one whole job log down to the lines worth reading.
+
+        pytest's own summary is preferred where the job ran that far, the runner's error
+        annotations where it did not, and the log's last lines where neither marker
+        appears at all.
+
+        :param check_name: The check the job reported for.
+        :param log: The job log, exactly as the runner recorded it.
+        :return: The excerpt.
+        """
+        lines = [LOG_TIMESTAMP_PATTERN.sub("", line) for line in log.splitlines()]
+        summary = cls._from_marker(lines, LogMarker.PYTEST_SUMMARY)
+        if summary:
+            return cls(check_name, summary[:EXCERPT_LINE_LIMIT])
+        annotations = [line for line in lines if LogMarker.ERROR_ANNOTATION in line]
+        if annotations:
+            return cls(check_name, annotations[:EXCERPT_LINE_LIMIT])
+        return cls(check_name, lines[-EXCERPT_LINE_LIMIT:])
+
+    @staticmethod
+    def _from_marker(lines: list[str], marker: LogMarker) -> list[str]:
+        """
+        :param lines: The log's lines.
+        :param marker: What opens the part worth keeping.
+        :return: That line and everything after it, empty where it never appears.
+        """
+        for index, line in enumerate(lines):
+            if marker in line:
+                return lines[index:]
+        return []
+
+
 # %% client
+
+
+class GitHubEndpoint(StrEnum):
+    """
+    The REST paths this script asks ``gh`` for.
+    """
+
+    JOB_LOG = "repos/{repository}/actions/jobs/{job}/logs"
+    """
+    One Actions job's whole recorded log.
+    """
+
+
+class JobLogReader(ABC):
+    """
+    Reads the log one Actions job recorded.
+    """
+
+    @abstractmethod
+    def read_job_log(self, repository: Repository, job_identifier: int) -> str:
+        """
+        Read one job's whole log.
+
+        :param repository: The repository the job ran in.
+        :param job_identifier: The job to read.
+        :return: The log, exactly as the runner recorded it.
+        """
 
 
 class GraphQLClient(ABC):
@@ -923,7 +1072,7 @@ class GraphQLClient(ABC):
 
 
 @dataclass
-class GitHubCommandLineClient(GraphQLClient):
+class GitHubCommandLineClient(GraphQLClient, JobLogReader):
     """
     A client that shells out to ``gh api graphql``.
 
@@ -949,9 +1098,43 @@ class GitHubCommandLineClient(GraphQLClient):
         request = json.dumps(
             {PullRequestJSONKey.QUERY: query, PullRequestJSONKey.VARIABLES: variables}
         )
+        return GraphQLResponse.from_json(
+            self._run(["api", "graphql", "--input", "-"], request)
+        ).result()
+
+    def read_job_log(self, repository: Repository, job_identifier: int) -> str:
+        """
+        Read one job's log through ``gh``.
+
+        The upstream is a different repository from the one the runner is running in,
+        which its token reads as anyone else does.
+
+        :param repository: The repository the job ran in.
+        :param job_identifier: The job to read.
+        :return: The log, exactly as the runner recorded it.
+        :raises GitHubCommandFailed: If ``gh`` exits non-zero.
+        """
+        return self._run(
+            [
+                "api",
+                GitHubEndpoint.JOB_LOG.format(
+                    repository=repository, job=job_identifier
+                ),
+            ]
+        )
+
+    def _run(self, arguments: list[str], standard_input: str | None = None) -> str:
+        """
+        Invoke ``gh`` once and hand back what it wrote.
+
+        :param arguments: The arguments to pass.
+        :param standard_input: What to write to its standard input, if anything.
+        :return: Its standard output.
+        :raises GitHubCommandFailed: If it exits non-zero.
+        """
         completed = subprocess.run(
-            [self.executable, "api", "graphql", "--input", "-"],
-            input=request,
+            [self.executable, *arguments],
+            input=standard_input,
             capture_output=True,
             text=True,
         )
@@ -959,7 +1142,7 @@ class GitHubCommandLineClient(GraphQLClient):
             raise GitHubCommandFailed(
                 self.executable, completed.returncode, completed.stderr.strip()
             )
-        return GraphQLResponse.from_json(completed.stdout).result()
+        return completed.stdout
 
 
 # %% reading
@@ -1055,6 +1238,52 @@ class UpstreamPullRequestReader:
         return UpstreamPullRequestSnapshot.from_json(repository.pull_request, threads)
 
 
+@dataclass
+class FailureLogReader:
+    """
+    Reads the log behind every check a pull request did not pass.
+    """
+
+    job_logs: JobLogReader
+    """
+    How one job's log is fetched.
+    """
+
+    upstream_repository: Repository
+    """
+    The repository whose jobs are read.
+    """
+
+    def read(self, checks: CheckStatus | None) -> list[FailureLog]:
+        """
+        Excerpt the log behind each check that failed.
+
+        A check still running has no failure to describe, and one whose link names no
+        job has no log to read, so both are left out rather than reported empty.
+
+        :param checks: The head commit's checks, where it reported any.
+        :return: One excerpt per failed check with a job behind it.
+        """
+        if checks is None:
+            return []
+        excerpts = []
+        for result in checks.unsuccessful:
+            if result.outcome is CheckOutcome.PENDING:
+                continue
+            job = FailedJob.behind(result)
+            if job is None:
+                continue
+            excerpts.append(
+                FailureLog.excerpt(
+                    result.name,
+                    self.job_logs.read_job_log(
+                        self.upstream_repository, job.identifier
+                    ),
+                )
+            )
+        return excerpts
+
+
 # %% configuration
 
 
@@ -1094,6 +1323,7 @@ class ReportText(StrEnum):
 
     CHECKS_HEADING = "## Checks"
     NO_CHECKS = "No checks have reported."
+    FAILURE_LOGS_HEADING = "## The log behind each failed check"
     REVIEWS_HEADING = "## Reviews"
     NO_REVIEWS = "No reviews submitted."
     NO_UNRESOLVED_HEADING = "## No unresolved review threads"
@@ -1117,6 +1347,11 @@ class UpstreamPullRequestReport:
     Whether threads already marked resolved are shown too.
     """
 
+    failure_logs: list[FailureLog] = field(default_factory=list)
+    """
+    The excerpts to quote under the checks, empty where none were read.
+    """
+
     def render(self) -> str:
         """:return: The report as markdown."""
         lines = [
@@ -1126,6 +1361,7 @@ class UpstreamPullRequestReport:
             "",
         ]
         lines.extend(self._render_checks())
+        lines.extend(self._render_failure_logs())
         lines.extend(self._render_reviews())
         lines.extend(self._render_threads())
         return "\n".join(lines)
@@ -1167,6 +1403,17 @@ class UpstreamPullRequestReport:
             location = f" <{result.url}>" if result.url else ""
             lines.append(f"- **{result.name}** — {result.outcome.spoken}{location}")
         lines.append("")
+        return lines
+
+    def _render_failure_logs(self) -> list[str]:
+        """:return: The quoted-log section, empty where nothing was read."""
+        if not self.failure_logs:
+            return []
+        lines = [ReportText.FAILURE_LOGS_HEADING, ""]
+        for failure in self.failure_logs:
+            lines.extend([f"### {failure.check_name}", "", "```"])
+            lines.extend(failure.lines)
+            lines.extend(["```", ""])
         return lines
 
     def _render_reviews(self) -> list[str]:
@@ -1243,6 +1490,11 @@ def _parse_arguments(argv: list[str] | None) -> argparse.Namespace:
         action="store_true",
         help="show threads already marked resolved as well",
     )
+    parser.add_argument(
+        "--failure-logs",
+        action="store_true",
+        help="quote the log behind each check that failed",
+    )
     return parser.parse_args(argv)
 
 
@@ -1277,16 +1529,22 @@ def _build_report(arguments: argparse.Namespace) -> str:
     :param arguments: The parsed command line.
     :return: The rendered markdown.
     """
-    reader = UpstreamPullRequestReader(
-        GitHubCommandLineClient(),
-        resolve_upstream_repository(override=arguments.upstream),
-        arguments.fork_owner,
-    )
+    client = GitHubCommandLineClient()
+    upstream = resolve_upstream_repository(override=arguments.upstream)
+    reader = UpstreamPullRequestReader(client, upstream, arguments.fork_owner)
     number = arguments.pull_request or reader.resolve_pull_request_number(
         arguments.branch
     )
+    snapshot = reader.read_current_state(number)
+    failure_logs = (
+        FailureLogReader(client, upstream).read(snapshot.checks)
+        if arguments.failure_logs
+        else []
+    )
     return UpstreamPullRequestReport(
-        reader.read_current_state(number), include_resolved=arguments.include_resolved
+        snapshot,
+        include_resolved=arguments.include_resolved,
+        failure_logs=failure_logs,
     ).render()
 
 
