@@ -17,7 +17,7 @@ from enum import StrEnum
 from pathlib import Path
 
 from krrood.exceptions import DataclassException
-from typing_extensions import Any, List, Tuple
+from typing_extensions import Any, ClassVar, List, Tuple
 
 MAXIMUM_LIVING_WORLDS: int = 30
 """
@@ -396,6 +396,13 @@ class WorldTallyLedger:
     Where every process of a run writes its final :class:`WorkerTally`, so whichever
     process finishes last can read every other process's tally back and enforce a
     limit on their combined total.
+    """
+
+    DIRECTORY_NAME: ClassVar[str] = ".living_worlds_tally"
+    """
+    Name of the directory each tally is written into and read back from, relative to
+    the run's root directory so every process - however xdist started it - resolves
+    the same path.
     """
 
     directory: Path

@@ -183,12 +183,6 @@ LIVING_WORLDS = pytest.StashKey[LivingWorlds]()
 Where a run keeps the record of which test created each world.
 """
 
-WORLD_TALLY_DIRECTORY_NAME = ".living_worlds_tally"
-"""
-Where each process of a run writes its final world tally, relative to the run's root
-directory so every process - however xdist started it - resolves the same path.
-"""
-
 
 def world_tally_ledger(config: pytest.Config) -> WorldTallyLedger:
     """
@@ -196,7 +190,7 @@ def world_tally_ledger(config: pytest.Config) -> WorldTallyLedger:
     :return: The ledger every process of this run shares to combine their tallies.
     """
     return WorldTallyLedger(
-        directory=Path(config.rootpath) / WORLD_TALLY_DIRECTORY_NAME
+        directory=Path(config.rootpath) / WorldTallyLedger.DIRECTORY_NAME
     )
 
 
