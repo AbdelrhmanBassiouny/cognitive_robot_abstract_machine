@@ -44,8 +44,8 @@ fi
 # them, so adding one there is enough for this check to start covering it. The
 # lookup is missing_dependencies, which check-setup.sh and session-start.sh
 # also read, so all three judge the one declaration the same way.
-if [ ! -f "${BASTLER_PYPROJECT_FILE}" ]; then
-  echo "${BASTLER_PYPROJECT_FILE} is missing, so its dependencies cannot be read." >&2
+if [ ! -f "${BASSTLER_PYPROJECT_FILE}" ]; then
+  echo "${BASSTLER_PYPROJECT_FILE} is missing, so its dependencies cannot be read." >&2
   exit 1
 fi
 MISSING_DEPENDENCIES="$(missing_dependencies)"
