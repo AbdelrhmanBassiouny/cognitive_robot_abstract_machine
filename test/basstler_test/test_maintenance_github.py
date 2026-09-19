@@ -172,6 +172,12 @@ API_CALLS = {
         method=HttpMethod.POST,
         path=f"/actions/workflows/{A_WORKFLOW}/dispatches",
     ),
+    "runs_started_on": ApiCall(
+        make=lambda client: client.runs_started_on("a-commit"),
+        method=HttpMethod.GET,
+        path=f"/actions/runs?head_sha=a-commit&per_page={A_PAGE_SIZE}&page=1",
+        answer={"workflow_runs": []},
+    ),
     "workflow_runs": ApiCall(
         make=lambda client: client.workflow_runs(A_WORKFLOW),
         method=HttpMethod.GET,

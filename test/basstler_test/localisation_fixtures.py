@@ -16,7 +16,12 @@ from pathlib import Path
 from basstler.git_commands import BRANCH_REFERENCE_PREFIX
 from basstler.stack import PullRequest
 
-from basstler.maintenance_github import DispatchedWorkflowRuns, WorkflowRunRecord
+from basstler.maintenance_github import (
+    CheckSuiteField,
+    DispatchedWorkflowRuns,
+    WorkflowRunField,
+    WorkflowRunRecord,
+)
 
 import basstler.integration_localisation_commands
 from basstler.integration_exit_codes import IntegrationExitCode
@@ -31,7 +36,7 @@ from basstler.integration_localisation import (
     LocalisationStage,
     TipUnderSuspicion,
 )
-from basstler.integration_probes import DispatchedProbe, WorkflowRunField, probe_run_name
+from basstler.integration_probes import DispatchedProbe, probe_run_name
 
 from .test_maintenance import (
     ForkCheckout,
@@ -135,6 +140,18 @@ def a_run(
     }
 
 
+A_CANDIDATE_HEAD = "a-head"
+"""
+The commit a candidate's checks are reported against, which is also what says which
+workflow runs to ask about when telling the pipeline's own checks from the build's.
+"""
+
+THE_MATRIX_S_SUITE = 1
+"""
+The suite the matrix reported its checks under, GitHub giving every run one of its own.
+"""
+
+
 def a_failing_check(name: str) -> dict:
     """
     :param name: The check's name.
@@ -144,6 +161,8 @@ def a_failing_check(name: str) -> dict:
         CheckRunField.NAME: name,
         CheckRunField.STATUS: "completed",
         CheckRunField.CONCLUSION: "failure",
+        CheckRunField.HEAD_SHA: A_CANDIDATE_HEAD,
+        CheckRunField.CHECK_SUITE: {CheckSuiteField.IDENTIFIER: THE_MATRIX_S_SUITE},
     }
 
 
@@ -204,6 +223,12 @@ class RecordingFork(RecordingPullRequests, DispatchedWorkflowRuns):
     What it answers a workflow-run read with.
     """
 
+    runs_on_the_head: list[WorkflowRunRecord] = field(default_factory=list)
+    """
+    What it answers a read of the runs started on one head with, which is what says
+    which of a candidate's checks the pipeline reported about itself.
+    """
+
     dispatched: list[dict] = field(default_factory=list)
     """
     Every dispatch made on it.
@@ -215,6 +240,13 @@ class RecordingFork(RecordingPullRequests, DispatchedWorkflowRuns):
         :return: The candidate's checks.
         """
         return self.checks
+
+    def runs_started_on(self, head: str) -> list[WorkflowRunRecord]:
+        """
+        :param head: The commit read.
+        :return: The runs started on it, which a candidate's checks are told apart by.
+        """
+        return self.runs_on_the_head
 
     def dispatch_workflow(self, workflow, reference, inputs) -> None:
         """
@@ -345,7 +377,7 @@ def published(checkout: ForkCheckout, probes: Sequence[DispatchedProbe]) -> list
 
 
 def locate(
-    run: LocalisingRun, state: Path, head: str = "a-head"
+    run: LocalisingRun, state: Path, head: str = A_CANDIDATE_HEAD
 ) -> IntegrationExitCode:
     """
     Take one step of a localisation against the scratch fork.
@@ -355,9 +387,11 @@ def locate(
     :param head: The commit the candidate's checks are on.
     :return: The status the step left.
     """
-    return basstler.integration_localisation_commands.LocateCandidateFailureCommand().run(
-        run,
-        argparse.Namespace(
-            head=head, state=state, dispatch_on=THE_PIPELINE_REFERENCE, json=True
-        ),
+    return (
+        basstler.integration_localisation_commands.LocateCandidateFailureCommand().run(
+            run,
+            argparse.Namespace(
+                head=head, state=state, dispatch_on=THE_PIPELINE_REFERENCE, json=True
+            ),
+        )
     )

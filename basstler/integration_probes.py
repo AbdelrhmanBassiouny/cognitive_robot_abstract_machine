@@ -19,6 +19,7 @@ from typing import Any
 
 from basstler.maintenance_github import (  # noqa: E402
     DispatchedWorkflowRuns,
+    WorkflowRunField,
     WorkflowRunRecord,
 )
 from basstler.integration_verdict import (  # noqa: E402
@@ -157,25 +158,6 @@ class ProbeKey(StrEnum):
 
 
 # %% what a probe's run says
-
-
-class WorkflowRunField(StrEnum):
-    """
-    The fields of a workflow run this module reads.
-    """
-
-    NAME = "display_title"
-    """
-    What the run is called, which is its ``run-name`` evaluated.
-    """
-    STATUS = "status"
-    """
-    Whether it has finished.
-    """
-    CONCLUSION = "conclusion"
-    """
-    How it finished, absent until it has.
-    """
 
 
 def verdict_of(runs: Sequence[WorkflowRunRecord], build_branch: str) -> ChecksVerdict:

@@ -25,9 +25,7 @@ from basstler.workflow_document import (
 if TYPE_CHECKING:
     from basstler.git_commands import GitCommandRunner
 
-REFRESH_WORKFLOW_PATH = str(
-    WorkflowFile.INTEGRATION_REFRESH.path.relative_to(REPOSITORY_ROOT)
-)
+REFRESH_WORKFLOW_PATH = WorkflowFile.INTEGRATION_REFRESH.path_in_a_tree
 """
 Where the workflow a schedule starts the rebuild from is filed, as a tree names it.
 """

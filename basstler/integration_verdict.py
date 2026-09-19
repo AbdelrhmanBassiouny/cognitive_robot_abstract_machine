@@ -26,16 +26,33 @@ from basstler.maintenance_board import PullRequestField  # noqa: E402
 from basstler.maintenance_github import (  # noqa: E402
     CandidatePullRequests,
     CheckRunRecord,
+    CheckSuiteField,
     PullRequestReader,
+    WorkflowRunField,
+    WorkflowRunRecord,
 )
-from basstler.workflow_document import CALLED_JOB_SEPARATOR, WorkflowFile  # noqa: E402
+from basstler.workflow_document import WorkflowFile  # noqa: E402
 
 PIPELINE_WORKFLOWS = (
     WorkflowFile.INTEGRATION_REFRESH,
     WorkflowFile.INTEGRATION_PROBE,
+    WorkflowFile.INTEGRATION_CHECKS,
+    WorkflowFile.STACK_MAINTENANCE,
 )
 """
 The workflows this pipeline runs about its own work rather than about a tree.
+
+Every one of them answers about the fork - the branches in flight, the breaks recorded
+between them - so each attaches its answer to whichever branch happened to trigger it.
+A build carries them, so a candidate triggers them on itself and is judged by them
+unless they are named here.
+"""
+
+PIPELINE_WORKFLOW_PATHS = frozenset(
+    workflow.path_in_a_tree for workflow in PIPELINE_WORKFLOWS
+)
+"""
+Where those workflows are filed, which is how a run names the one it ran from.
 """
 
 
@@ -90,6 +107,12 @@ class CheckRunField(StrEnum):
 
     CONCLUSION = "conclusion"
     """How it finished, absent until it has."""
+
+    HEAD_SHA = "head_sha"
+    """The commit it was reported against, which a branch read resolves to."""
+
+    CHECK_SUITE = "check_suite"
+    """The suite it belongs to, which is what says which run reported it."""
 
 
 class CheckRunStatus(StrEnum):
@@ -169,46 +192,56 @@ reading an absent check as an answer acts on a build nothing has judged.
 @dataclass(frozen=True)
 class ChecksAboutTheBuild:
     """
-    The checks this pipeline reports about its own work.
+    The checks this pipeline reported about its own work against one head.
 
-    A rebuild runs on the branch whose ready-flip asked for it and a probe runs on the
-    reference carrying the pipeline, so both attach checks to a branch they say nothing
-    about: the rebuild's answers for the build it assembled, and a probe's failing is how
-    a localisation finds what it is looking for. Counting either would let the pipeline
-    decide that a branch is unfit to carry because the pipeline itself had a bad run.
+    A rebuild runs on the branch whose ready-flip asked for it, a probe runs on the
+    reference carrying the pipeline, and a maintenance pass and a reproduction run
+    answer about the whole fork - so each attaches a check to a branch it says nothing
+    about: the rebuild's answers for the build it assembled, and a probe's failing is
+    how a localisation finds what it is looking for. Counting any of them would let the
+    pipeline decide that a branch is unfit to carry because the pipeline itself had a
+    bad run.
     """
 
-    job_names: tuple[str, ...]
+    check_suites: frozenset[int]
     """
-    What each of those workflows calls the jobs it reports checks for.
+    The suites those runs reported their checks under.
     """
 
     @classmethod
-    def read(cls) -> ChecksAboutTheBuild:
+    def of(cls, runs: Sequence[WorkflowRunRecord]) -> ChecksAboutTheBuild:
         """
-        Read the names off the workflows that report them.
+        Pick out the runs the pipeline started about itself.
 
-        A workflow cannot import a constant, so the names are its own to state - and one
-        retyped here would go on matching a job that had since been renamed.
+        Told apart by the workflow file GitHub says each ran from rather than by the
+        names of the jobs declared in it. The file is named against the very tree that
+        ran it, so a workflow a branch in flight brought into a build is recognised on
+        the candidate carrying it whatever the checkout doing the reading holds - which
+        the names could not be, since they can only be read out of a file this checkout
+        has. A job renamed in one of them also goes on being recognised, and a job of
+        this repository's that happens to share a name with one of theirs goes on being
+        judged.
 
-        :return: What the pipeline reports about itself.
+        :param runs: Every workflow run started on the head being judged, as the API
+            answers them.
+        :return: What the pipeline reported about itself there.
         """
         return cls(
-            tuple(
-                job.name
-                for workflow in PIPELINE_WORKFLOWS
-                for job in workflow.read().jobs
+            frozenset(
+                int(run[WorkflowRunField.CHECK_SUITE])
+                for run in runs
+                if str(run[WorkflowRunField.PATH]) in PIPELINE_WORKFLOW_PATHS
             )
         )
 
-    def reports(self, check_name: str) -> bool:
+    def reports(self, record: CheckRunRecord) -> bool:
         """
-        :param check_name: A check reported against some commit or branch.
+        :param record: One check run, as the API answers it.
         :return: Whether this pipeline is what reported it.
         """
-        return any(
-            check_name == name or check_name.startswith(f"{name}{CALLED_JOB_SEPARATOR}")
-            for name in self.job_names
+        return (
+            int(record[CheckRunField.CHECK_SUITE][CheckSuiteField.IDENTIFIER])
+            in self.check_suites
         )
 
 
@@ -264,24 +297,12 @@ class ReportedChecks:
     """The checks that judge the tree, in the order the API reported them."""
 
     @classmethod
-    def of(cls, records: list[CheckRunRecord]) -> ReportedChecks:
+    def of(cls, records: Sequence[CheckRunRecord]) -> ReportedChecks:
         """
-        Read what the checks say, leaving out the ones the pipeline reports about its
-        own work: those are about the build rather than about the tree they are attached
-        to, so a rebuild that failed for its own reasons must not make the branch that
-        triggered it unfit to carry.
-
-        :param records: The check runs, as the API answers them.
+        :param records: The check runs to read, as the API answers them.
         :return: The checks they make up.
         """
-        about_the_build = ChecksAboutTheBuild.read()
-        return cls(
-            tuple(
-                CheckRun.from_json(record)
-                for record in records
-                if not about_the_build.reports(str(record[CheckRunField.NAME]))
-            )
-        )
+        return cls(tuple(CheckRun.from_json(record) for record in records))
 
     @property
     def failed(self) -> tuple[CheckRun, ...]:
@@ -490,11 +511,27 @@ def open_candidate(
 
 def read_checks(fork: CandidatePullRequests, reference: str) -> ReportedChecks:
     """
+    Read what the checks say, leaving out the ones the pipeline reports about its own
+    work: those are about the build rather than about the tree they are attached to, so
+    a rebuild that failed for its own reasons must not make the branch that triggered it
+    unfit to carry.
+
+    Which runs those were is asked of the head they were reported against, so a head
+    nothing has reported on at all is not asked about twice.
+
     :param fork: The fork to read.
     :param reference: The commit or branch to read the checks reported against.
     :return: What they say so far.
     """
-    return ReportedChecks.of(fork.check_runs(reference))
+    records = fork.check_runs(reference)
+    if not records:
+        return ReportedChecks(())
+    about_the_build = ChecksAboutTheBuild.of(
+        fork.runs_started_on(str(records[0][CheckRunField.HEAD_SHA]))
+    )
+    return ReportedChecks.of(
+        [record for record in records if not about_the_build.reports(record)]
+    )
 
 
 # %% what a run of it reports
