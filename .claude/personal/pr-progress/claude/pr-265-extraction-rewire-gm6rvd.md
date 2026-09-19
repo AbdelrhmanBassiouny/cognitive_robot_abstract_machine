@@ -176,7 +176,39 @@ definition-catalogue and overlap-detector items are not_started. The two scripts
 above are a manual run of them and should seed those items. (b) needs
 design-overlap updated, not a new plan.
 
-## Plan verdict
-A new cross-plan recovery plan IS needed, because the missing work is the join and
-by construction no existing plan can own it. Blocked on ONE user decision: which
-of the six predicate-refactor PRs wins.
+## Plan created: review-reaches-main (tracking issue #426)
+10 items, 5 tracks, 3 waves. Dashboard https://claude.ai/artifact/LXJsqkfwEQ3pseLdh9ezRG
+Index refreshed https://claude.ai/artifact/29a5BV5VXkvchY6CAujih4
+Subscribed to #426. Comments posted on #426 and on #201.
+Setup was run first: pip-installed markdown+nh3, and re-cut this branch off main
+(it was on integration, empty and never pushed, so the re-cut was free).
+
+## CORRECTION 2: the predicate collision was ALREADY DECIDED
+#229's and #33's own bodies record the user's 2026-08-31 decision: #229 carries the
+predicate classes, #33/#35 rebase onto it, tracked as eql-verbalization's
+p4-sdt-migration. #33 states the blocker: "#229 has not merged yet, so that rebase
+cannot start." So my "recommendation" was a rediscovery, not news - good check on the
+method, but say so rather than presenting it as a finding. #229's merge now gates
+THREE things: #33, #35 and perception-join.
+A drafted predicates-land item was REJECTED by the branch index: #229's branch is
+already knowledge-directed-requests' predicates-answer-whether-they-hold. Dropped;
+recorded as a cross-plan blocker on perception-join instead.
+
+## MISTAKE FOUND: I pushed two commits onto a CLOSED pull request
+#244 closed unmerged 2026-09-18 23:55; its 4255 insertions are NOT on main
+(spatial_types/numeric.py absent). On 2026-09-19 I pushed b5be1a30ad and 223e532824
+(ex-#415) onto its branch WITHOUT CHECKING ITS STATE. Both are now in no open PR.
+Label cram2-link-sent suggests a deliberate upstream hand-off. Tracked as the plan's
+foldins-rehomed item, status blocked, needs the user's answer.
+LESSON: check a PR's state before pushing to it, every time. My fold-in targets were
+#256/#244/#294/#295 and only #244 had closed - a single state check would have caught it.
+
+## Also learned this pass
+- collide.py's pairwise scan is near-useless alone (staleness hubs) and cannot see a
+  PR colliding with MAIN. divergence.py + attribute.py is the pair that works.
+- 31 candidate duplication pairs -> 9 real, all one collision. Five "clusters" I
+  reported first were inherited removals. Retracted in the plan's roadmap.md.
+- Only 5 of the 36 closed sub-PRs are tracked plan items (#298 #301 #303 #304 #311).
+- 119 of 148 open PRs already bottom out on main; 36 are based on main directly.
+- #362 and #357 are now in-review and NOT drafts - the user marked them ready, so
+  they are finished for their sessions.
