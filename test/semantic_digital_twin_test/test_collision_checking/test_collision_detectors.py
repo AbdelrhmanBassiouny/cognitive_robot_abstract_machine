@@ -1,4 +1,6 @@
 import itertools
+import threading
+from unittest.mock import patch
 
 import pytest
 
@@ -12,8 +14,13 @@ from semantic_digital_twin.collision_checking.pybullet_collision_detector import
 from semantic_digital_twin.collision_checking.trimesh_collision_detector import (
     FCLCollisionDetector,
 )
+from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.spatial_types import HomogeneousTransformationMatrix
 from semantic_digital_twin.testing import world_setup_simple
+from semantic_digital_twin.world_description.connections import Connection6DoF
+from semantic_digital_twin.world_description.geometry import Box, Scale
+from semantic_digital_twin.world_description.shape_collection import ShapeCollection
+from semantic_digital_twin.world_description.world_entity import Body
 import numpy as np
 
 collision_detectors = [BulletCollisionDetector, FCLCollisionDetector]
@@ -142,3 +149,87 @@ def test_all_collisions(world_setup_simple, collision_detector):
     ).contacts
     assert len(collisions) == 1
     assert {collisions[0].body_a, collisions[0].body_b} == {body1, body2}
+
+
+def test_a_collision_query_does_not_race_a_concurrent_world_model_rebuild(
+    world_setup_simple,
+):
+    """
+    A grasp's ReAttachNode reparenting a body under the gripper -- or, as here, any
+    other thread adding a new body -- rebuilds
+    :meth:`BulletCollisionDetector.sync_world_model` from scratch: it empties
+    ``body_to_bullet_object`` and repopulates it one body at a time.
+
+    If a background thread (SegMind's own event monitor, live) queries a collision in
+    that window, it used to find its body missing from the dict and raise a bare
+    ``KeyError`` instead of waiting for the rebuild to finish.
+    """
+    world, body1, body2, body3, body4, body5 = world_setup_simple
+    detector = world.collision_manager.collision_detector
+    assert isinstance(detector, BulletCollisionDetector)
+
+    reached_rebuild = threading.Event()
+    resume_rebuild = threading.Event()
+    reader_attempted = threading.Event()
+    errors = []
+
+    def paused_sync_world_model(self):
+        self.reset_cache()
+        self.clear()
+        self.body_to_bullet_object = {}
+        reached_rebuild.set()
+        resume_rebuild.wait(timeout=5)
+        if self._world.is_empty():
+            return
+        for body in self._world.bodies_with_collision:
+            self.add_body(body)
+        self._ordered_bullet_objects = list(self.body_to_bullet_object.values())
+
+    def reader():
+        reached_rebuild.wait(timeout=5)
+        reader_attempted.set()
+        try:
+            detector.check_collision_between_bodies(body1, body2)
+        except KeyError as exception:
+            errors.append(exception)
+
+    def writer():
+        new_body = Body(
+            name=PrefixedName("new_box", prefix="test"),
+            collision=ShapeCollection(
+                [
+                    Box(
+                        origin=HomogeneousTransformationMatrix.from_xyz_rpy(),
+                        scale=Scale(0.2, 0.2, 0.2),
+                    )
+                ]
+            ),
+        )
+        with world.modify_world():
+            world.add_kinematic_structure_entity(new_body)
+            world.add_connection(
+                Connection6DoF.create_with_dofs(
+                    parent=world.root, child=new_body, world=world
+                )
+            )
+
+    with patch.object(
+        BulletCollisionDetector, "sync_world_model", paused_sync_world_model
+    ):
+        reader_thread = threading.Thread(target=reader)
+        writer_thread = threading.Thread(target=writer)
+        reader_thread.start()
+        writer_thread.start()
+
+        reader_attempted.wait(timeout=5)
+        # Give the reader a moment to either raise (unfixed) or block on the lock
+        # (fixed) before the rebuild is allowed to finish.
+        reader_thread.join(timeout=0.2)
+        resume_rebuild.set()
+
+        writer_thread.join(timeout=5)
+        reader_thread.join(timeout=5)
+
+    assert not reader_thread.is_alive()
+    assert not writer_thread.is_alive()
+    assert errors == []
