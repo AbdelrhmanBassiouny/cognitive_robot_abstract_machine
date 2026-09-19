@@ -26,9 +26,7 @@ from semantic_digital_twin.world_description.degree_of_freedom import (
 )
 
 from .living_worlds import (
-    FixtureScope,
     LeakedWorldsAcrossWorkersError,
-    LeakedWorldsError,
     LivingWorlds,
     WorkerTally,
     WorldTallyLedger,
@@ -56,7 +54,7 @@ from semantic_digital_twin.adapters.package_resolver import PathResolver
 from semantic_digital_twin.collision_checking.collision_matrix import (
     MaxAvoidedCollisionsOverride,
 )
-from typing_extensions import List, Type, TypeVar
+from typing_extensions import Iterator, List, Type, TypeVar
 
 CallbackT = TypeVar("CallbackT", bound=Callback)
 """
@@ -185,12 +183,6 @@ LIVING_WORLDS = pytest.StashKey[LivingWorlds]()
 Where a run keeps the record of which test created each world.
 """
 
-CURRENT_MODULE = pytest.StashKey[str]()
-"""
-Which test module the tests running now belong to, so a hook can tell when a run
-moves on to a new one and check the module it is leaving behind.
-"""
-
 WORLD_TALLY_DIRECTORY_NAME = ".living_worlds_tally"
 """
 Where each process of a run writes its final world tally, relative to the run's root
@@ -255,95 +247,35 @@ def pytest_configure(config: pytest.Config) -> None:
     config.stash[LIVING_WORLDS] = living_worlds
 
 
-def _report_and_fail(session: pytest.Session, error: Exception) -> None:
-    """
-    Report an error through the terminal reporter and the exit status, rather than
-    raising it as a fixture or item outcome.
-
-    :param error: A :class:`~krrood.exceptions.DataclassException` whose message is
-        the whole report. Raising it as a test or fixture outcome would attribute it
-        to whatever pytest happens to be setting up or tearing down at the time - the
-        first test of the next module, once the deferred check in
-        :func:`pytest_runtest_setup` finds a problem, which has nothing to do with
-        the module that actually left worlds behind - so it is printed and the run
-        failed directly instead.
-    """
-    terminal_reporter = session.config.pluginmanager.get_plugin("terminalreporter")
-    if terminal_reporter is not None:
-        terminal_reporter.write_line(str(error), red=True)
-    session.exitstatus = pytest.ExitCode.TESTS_FAILED
-
-
 def pytest_runtest_setup(item: pytest.Item) -> None:
     """
-    Check the module being left behind once every one of its tests has run, then
-    attribute the worlds created from now on to the test that is about to run.
-
-    ..note:: The check happens here, one test into the next module, rather than in
-        that module's own scope-based teardown. pytest keeps a finished test's
-        fixture arguments referenced on its own collected item until it moves on to
-        setting up the next one; checking any earlier catches that reference too and
-        misreports it as something the last test itself left behind.
+    Attribute the worlds created from now on to the test that is about to run.
     """
-    living_worlds = item.config.stash[LIVING_WORLDS]
-    module = item.nodeid.split("::", 1)[0]
-    previous_module = item.config.stash.get(CURRENT_MODULE, None)
-    if previous_module is not None and previous_module != module:
-        try:
-            living_worlds.enforce_limit(module=previous_module)
-        except LeakedWorldsError as error:
-            _report_and_fail(item.session, error)
-    item.config.stash[CURRENT_MODULE] = module
-    living_worlds.current_test = item.nodeid
-
-
-@pytest.hookimpl(hookwrapper=True)
-def pytest_fixture_setup(fixturedef: pytest.FixtureDef, request: pytest.FixtureRequest):
-    """
-    Stop recording worlds while a fixture whose scope outlives a single test is
-    setting up, since whatever it builds or holds open is expected to survive past
-    the test that happened to trigger it - not a leak.
-
-    ..note:: Nothing here inspects what the fixture does; a world created anywhere
-        underneath its call - directly, or by something it calls - is covered for as
-        long as this wraps it.
-    """
-    scope = FixtureScope(getattr(fixturedef.scope, "value", fixturedef.scope))
-    if not scope.outlives_a_single_test:
-        yield
-        return
-    living_worlds = request.config.stash[LIVING_WORLDS]
-    with living_worlds.ignore_worlds_created_here():
-        yield
+    item.config.stash[LIVING_WORLDS].current_test = item.nodeid
 
 
 def pytest_sessionfinish(session: pytest.Session) -> None:
     """
-    Check the last module that ran, write this process's final world tally where
-    every process of the run can read it back, and once every process has, enforce a
-    limit on their combined total.
-
-    ..note:: The last module's own check has no next test's setup left to run it
-        from, the way :func:`pytest_runtest_setup` runs it for every other module, so
-        it happens here instead.
+    Write this process's final world tally where every process of the run can read it
+    back, and once every process has, enforce a limit on their combined total.
 
     ..note:: An xdist worker only writes its tally, since the combined limit needs
         every worker's tally to be meaningful. The controller of a distributed run
         never ran a test, so it only enforces the combined limit, once every worker
         has written its own. A run that was not distributed at all does both: it is
         the only process, so its own tally already is the combined total.
-    """
-    living_worlds = session.config.stash[LIVING_WORLDS]
-    last_module = session.config.stash.get(CURRENT_MODULE, None)
-    if last_module is not None:
-        try:
-            living_worlds.enforce_limit(module=last_module)
-        except LeakedWorldsError as error:
-            _report_and_fail(session, error)
 
+    ..note:: The limit is enforced here rather than in a fixture, since there is no
+        fixture left to tear down once the session is finishing. Raising the
+        combined-limit error would still fail the run, but as an uncaught exception
+        during hook teardown, reported as an internal error rather than a clean
+        test-run failure - so it is caught here and turned into a terminal message
+        plus a failing exit status instead.
+    """
     ledger = world_tally_ledger(session.config)
 
     if not is_xdist_controller(session):
+        living_worlds = session.config.stash[LIVING_WORLDS]
         ledger.record(
             WorkerTally(
                 worker=get_xdist_worker_id(session),
@@ -357,7 +289,10 @@ def pytest_sessionfinish(session: pytest.Session) -> None:
     try:
         ledger.enforce_combined_limit()
     except LeakedWorldsAcrossWorkersError as error:
-        _report_and_fail(session, error)
+        terminal_reporter = session.config.pluginmanager.get_plugin("terminalreporter")
+        if terminal_reporter is not None:
+            terminal_reporter.write_line(str(error), red=True)
+        session.exitstatus = pytest.ExitCode.TESTS_FAILED
 
 
 @pytest.fixture(scope="session")
@@ -381,6 +316,16 @@ def cleanup_after_test(_session_class_diagram):
     yield
     # runs AFTER each test (even if the test fails or errors)
     SymbolGraph.clear_instance()
+
+
+@pytest.fixture(autouse=True, scope="module")
+def check_for_leaked_worlds(request: pytest.FixtureRequest) -> Iterator[None]:
+    """
+    Fail a test module that leaves too many worlds in memory, naming the tests that
+    created the ones that survived.
+    """
+    yield
+    request.config.stash[LIVING_WORLDS].enforce_limit(module=request.node.nodeid)
 
 
 #############################################

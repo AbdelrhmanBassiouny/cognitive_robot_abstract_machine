@@ -17,6 +17,7 @@ import pytest
 
 from ..living_worlds import (
     BEFORE_THE_FIRST_TEST,
+    MAXIMUM_LIVING_WORLDS,
     LeakedWorldsAcrossWorkersError,
     LeakedWorldsError,
     LivingWorlds,
@@ -172,31 +173,17 @@ def test_a_world_reaches_the_record_however_it_was_made(
 # %% the limit the guard reports is the one it enforces
 
 
-def test_the_default_limit_is_zero(
-    living_worlds: LivingWorlds, stand_in_test_names: StandInTestNames
-):
-    """
-    The default limit is none at all: a world is only ever recorded when no fixture
-    whose scope outlives a single test was why it was created, so anything still
-    recorded when a module finishes has no such excuse.
-    """
-    living_worlds.current_test = stand_in_test_names.leaking_test
-    leaked = LeakableObject()
-
-    with pytest.raises(LeakedWorldsError) as leak:
-        living_worlds.enforce_limit(module=stand_in_test_names.finished_module)
-
-    assert leak.value.limit == 0
-    assert leak.value.worlds_in_memory == 1
-    assert leaked is not None
-
-
-def test_a_module_that_leaves_nothing_behind_passes_by_default(
+def test_a_module_within_the_limit_is_let_through(
     living_worlds: LivingWorlds, stand_in_test_names: StandInTestNames
 ):
     living_worlds.current_test = stand_in_test_names.leaking_test
+    kept = [LeakableObject() for _ in range(MAXIMUM_LIVING_WORLDS)]
 
     living_worlds.enforce_limit(module=stand_in_test_names.finished_module)
+
+    assert living_worlds.surviving_worlds() == (
+        WorldsLeftBehind(stand_in_test_names.leaking_test, len(kept)),
+    )
 
 
 def test_the_reported_limit_is_the_enforced_one(
@@ -207,61 +194,14 @@ def test_the_reported_limit_is_the_enforced_one(
     not sent looking for a leak of a size the guard never enforced.
     """
     living_worlds.current_test = stand_in_test_names.leaking_test
-    leaked = [LeakableObject() for _ in range(3)]
+    leaked = [LeakableObject() for _ in range(MAXIMUM_LIVING_WORLDS + 1)]
 
     with pytest.raises(LeakedWorldsError) as leak:
-        living_worlds.enforce_limit(module=stand_in_test_names.finished_module, limit=2)
+        living_worlds.enforce_limit(module=stand_in_test_names.finished_module)
 
-    assert leak.value.limit == 2
+    assert leak.value.limit == MAXIMUM_LIVING_WORLDS
     assert leak.value.worlds_in_memory == len(leaked)
-    assert "2" in str(leak.value)
-
-
-# %% a world a durably-scoped fixture is why it exists is not a leak
-
-
-def test_a_world_created_while_ignoring_is_not_recorded(
-    living_worlds: LivingWorlds, stand_in_test_names: StandInTestNames
-):
-    living_worlds.current_test = stand_in_test_names.leaking_test
-
-    with living_worlds.ignore_worlds_created_here():
-        LeakableObject()
-
-    assert living_worlds.surviving_worlds() == ()
-
-
-def test_a_world_created_after_ignoring_ends_is_recorded_again(
-    living_worlds: LivingWorlds, stand_in_test_names: StandInTestNames
-):
-    living_worlds.current_test = stand_in_test_names.leaking_test
-    with living_worlds.ignore_worlds_created_here():
-        LeakableObject()
-
-    created = LeakableObject()
-
-    assert living_worlds.surviving_worlds() == (
-        WorldsLeftBehind(stand_in_test_names.leaking_test, 1),
-    )
-    assert created is not None
-
-
-def test_ignoring_nests(
-    living_worlds: LivingWorlds, stand_in_test_names: StandInTestNames
-):
-    """
-    A fixture whose setup calls another fixture of the same kind - a session-scoped
-    fixture depending on another - must not stop being ignored just because the inner
-    one finished; the outer one is still open.
-    """
-    living_worlds.current_test = stand_in_test_names.leaking_test
-
-    with living_worlds.ignore_worlds_created_here():
-        with living_worlds.ignore_worlds_created_here():
-            LeakableObject()
-        LeakableObject()
-
-    assert living_worlds.surviving_worlds() == ()
+    assert str(MAXIMUM_LIVING_WORLDS) in str(leak.value)
 
 
 # %% a worker's tally round-trips through the ledger
@@ -418,26 +358,36 @@ def test_an_empty_ledger_enforces_nothing(ledger: WorldTallyLedger):
     ledger.enforce_combined_limit(limit=2)
 
 
-def test_the_default_combined_limit_is_zero(
+def test_the_default_combined_limit_is_the_same_budget_the_per_module_check_uses(
     ledger: WorldTallyLedger, stand_in_test_names: StandInTestNames
 ):
     """
-    Every world a durably-scoped fixture is why it exists was already excluded before.
-
-    it ever reached a tally, so the combined default, like the per-module default, is
-    none at all - not each process's own share multiplied by how many there are.
+    The combined limit is a total across every process, not each process's own share
+    of it multiplied by how many processes there are - two processes that would each
+    individually pass the per-module check can still combine to more than the run's
+    one shared budget.
     """
     ledger.record(
         WorkerTally(
             worker="gw0",
-            left_behind=(WorldsLeftBehind(stand_in_test_names.leaking_test, 1),),
+            left_behind=(
+                WorldsLeftBehind(
+                    stand_in_test_names.leaking_test, MAXIMUM_LIVING_WORLDS
+                ),
+            ),
+        )
+    )
+    ledger.record(
+        WorkerTally(
+            worker="gw1",
+            left_behind=(WorldsLeftBehind(stand_in_test_names.tidy_test, 1),),
         )
     )
 
     with pytest.raises(LeakedWorldsAcrossWorkersError) as leak:
         ledger.enforce_combined_limit()
 
-    assert leak.value.limit == 0
+    assert leak.value.limit == MAXIMUM_LIVING_WORLDS
 
 
 # %% the watched type goes on creating its objects
