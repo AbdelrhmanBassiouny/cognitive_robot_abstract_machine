@@ -154,11 +154,31 @@ Both debug commits' logs/artifacts uploaded as `experiments-ormatic-interface`
 **Debug scaffolding must be removed from `ci_reusable.yml` once the real
 fix lands** — do not let it merge as-is.
 
-Next: read the run-`313b88f4b` artifact/logs once CI finishes, decide from
-the serial-vs-xdist result and the sys.path probe output what's actually
-double-importing the module, then push the real fix (likely somewhere in
-how the pytest process resolves `experiments.orm.ormatic_interface` the
-first time vs. the second, not in generator content) and revert the debug
-step. The developer said "Check it" and expects a report once this run
-completes; per standing rules I'm not polling — checked this once and will
-check again when prompted.
+**Read `313b88f4b`'s results (developer prompted "Check it"): the double-import
+theory was wrong.** The sys.path probe showed `experiments.__path__` resolving
+to exactly one location (no shadowing), and then a **fresh, first-ever, plain
+`import experiments.orm.ormatic_interface` in a brand-new interpreter — no
+pytest, no xdist, nothing imported it before** — crashed immediately with the
+same `Table 'ServoGainsDAO' is already defined`. Since the file only defines
+`ServoGainsDAO` once (confirmed earlier), the only way this fails on its
+*first* execution is if a table named `ServoGainsDAO` already exists in the
+shared `krrood.ormatic.base.Base` metadata *before* line 3641 even runs —
+meaning one of the three dependency interfaces this file imports at its own
+top (`coraplex.orm.ormatic_interface`, `giskardpy.orm.ormatic_interface`,
+`semantic_digital_twin.orm.ormatic_interface`) must independently define a
+table under that same name. A genuine cross-package table-name collision,
+not a double-import.
+
+- `545e48b51` — rewrote the probe to import each of the three dependency
+  interfaces one at a time (in the same order `experiments.orm.ormatic_interface`
+  itself imports them) and report, after each step, whether `ServoGainsDAO`
+  exists in `Base.metadata.tables` and which class owns it. This should name
+  the exact dependency interface (and therefore the exact class in that
+  package) that collides with `experiments.tracy_experiments.equipment.ServoGains`.
+
+Next: read `545e48b51`'s run once it finishes, identify the colliding class,
+then decide the real fix — almost certainly renaming one of the two
+`ServoGains`-named classes (this PR's own, or whatever the other package
+calls its own), not touching generator internals. Revert all debug scaffolding
+from `ci_reusable.yml` once fixed. Checked once per developer prompt; not
+polling per standing rules.
