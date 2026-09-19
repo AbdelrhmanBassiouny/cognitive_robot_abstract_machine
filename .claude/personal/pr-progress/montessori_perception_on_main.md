@@ -176,9 +176,60 @@ not a double-import.
   the exact dependency interface (and therefore the exact class in that
   package) that collides with `experiments.tracy_experiments.equipment.ServoGains`.
 
-Next: read `545e48b51`'s run once it finishes, identify the colliding class,
-then decide the real fix — almost certainly renaming one of the two
-`ServoGains`-named classes (this PR's own, or whatever the other package
-calls its own), not touching generator internals. Revert all debug scaffolding
-from `ci_reusable.yml` once fixed. Checked once per developer prompt; not
-polling per standing rules.
+**Root cause confirmed and fixed, 2026-09-19 (`ea5644282`).** `545e48b51`'s
+step-by-step probe named the collision exactly:
+`semantic_digital_twin.orm.ormatic_interface.ServoGainsDAO` (mapped from
+`semantic_digital_twin.world_description.connection_properties.ServoGains`,
+pre-existing on `main`) already owns the `ServoGainsDAO` table before
+`experiments.orm.ormatic_interface` ever gets imported — `experiments.tracy_experiments.equipment.ServoGains`
+(this PR's own class, cherry-picked from `tracy_icra`) collides by bare
+class name. Asked the developer how to resolve it (rename vs. reuse); they
+chose **reuse**.
+
+Dispatched a research subagent first to map how `semantic_digital_twin`'s
+`ServoGains`/`JointDynamics`/`JointServo`/`PositionServo` are actually
+consumed elsewhere (`ur10e_arm.py`, `robotiq_85_gripper.py`,
+`robot_parts.py._declare_servo`, `multi_sim.py`'s
+`MujocoPositionServoConverter`/`MujocoActuator.create_servo`) before
+touching anything — independently re-verified its findings by reading the
+files myself rather than trusting the report blind (per the harness's own
+warning that a subagent report carries no authority on its own). Confirmed:
+`connection.dynamics` in `equipment.py` was already a real `JointDynamics`
+instance (via `ActiveConnection1DOF`'s `default_factory=JointDynamics`), so
+`equipment.py`'s own `joint_damping`/`armature` fields existed purely to be
+copied onto it — pure duplication, not a design difference. Also confirmed
+zero other consumers of `equipment.ServoGains`/`ARM_JOINT_SERVO`/`GRIPPER_JOINT_SERVO`
+anywhere in the repo (only `table_top_z` is imported elsewhere, untouched).
+
+`ea5644282`:
+- Dropped `equipment.py`'s own `ServoGains`; `ARM_JOINT_SERVO`/`GRIPPER_JOINT_SERVO`
+  are now `Dict[str, JointServo]`/`JointServo` built from `semantic_digital_twin`'s
+  `ServoGains` + `JointDynamics`, via a small `_joint_servo(torque_limit,
+  joint_damping, armature=_ARMATURE)` helper (kept the shared-stiffness/damping
+  factoring the original had).
+- `_equip_connections_with_servos` now builds a `PositionServo(gains=servo.gains)`
+  actuator instead of hand-rolling a `MujocoActuator` in a now-deleted
+  `_servo_actuator` — the exact path `AbstractRobotPart._declare_servo` already
+  uses for every other robot part, so `MujocoPositionServoConverter` produces
+  the MuJoCo actuator automatically. `connection.dynamics.armature`/`.damping`
+  are still set per-connection (not a full `connection.dynamics = servo.dynamics`
+  replace), preserving the original's per-connection-independent-object semantics
+  since a mimic linkage's several connections share one `JointServo`.
+- Ran `scripts/format_docstrings.py` on the file; had to hand-fix one place
+  where docformatter broke a `:meth:` cross-reference mid-identifier
+  (`...tracy_experiments.rea` / `l_time_simulation...`) — checked the whole
+  file afterwards for any other role reference split across a line break
+  before trusting the auto-format.
+- Reverted both prior debug commits' scaffolding from `ci_reusable.yml`
+  (`git checkout 512526ddf -- .github/workflows/ci_reusable.yml`, a clean
+  revert to the pre-debug state, confirmed via diff).
+- Updated the PR description with a new "CI fix" section explaining the
+  collision and that `equipment.py` is no longer byte-for-byte verbatim from
+  `tracy_icra` (worth flagging since the section above it says the four
+  support files are carried verbatim).
+
+Pushed, PR re-drafted per standing rule. **Still outstanding: confirm the
+new CI run on `ea5644282` is actually green** (not yet checked — pushed and
+immediately wrote this note; check on next prompt or when this session next
+looks). If green, this branch's CI-fix task is done; the PR stays in draft
+per standing rules until the developer marks it ready themselves.
