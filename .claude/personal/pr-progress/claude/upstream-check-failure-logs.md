@@ -52,6 +52,13 @@ when `.github/docker/` changes on that repository's main. The fix is
 - Candidate #421 also breaks `test_each_lib (krrood)`: #192 renames
   `Match.matches_with_variables` to `_matches_with_variables_`, #65 carries
   tests calling the old public name. Both 23/23 green alone.
-- `f6fb64e686` on #420's branch carries a `Co-Authored-By: Claude Opus 5
-  <noreply@anthropic.com>` trailer, which AGENTS.md forbids. #420 is finished,
-  so nothing was pushed to fix it.
+- Fixed on request: `f6fb64e686` on #420's branch carried a `Co-Authored-By:
+  Claude Opus 5 <noreply@anthropic.com>` trailer, which AGENTS.md forbids.
+  Amended to `c5eaefeb50` (message only, identical tree, author and dates kept),
+  and this branch replayed onto it as `74f0b9fa91..42843342b1` - also identical
+  trees, so #424's diff is unchanged. Both force-pushed with lease.
+- krrood pair triaged: #192's `_..._` convention is the intended interface, so
+  #64 is the half that adapts. The eight sites are listed on #64; the change
+  cannot land until one of cram2 #658 / #662 merges, because `main` still has
+  the old names. `integration-conflict` deliberately left on #192 - withholding
+  it costs one branch, withholding #64 costs thirteen.
