@@ -89,18 +89,41 @@ jobs:
           echo "=== building the ORM interfaces up front (conftest normally does this) ==="
           python -c "from cognitive_robot_abstract_machine.orm_interfaces import WORKSPACE_ORM_INTERFACES; WORKSPACE_ORM_INTERFACES.regenerate(show_generator_output=True)"
           cd ..
-          echo "=== sys.path probe (mimicking pytest's rootdir insertion) ==="
+          echo "=== step-by-step dependency-interface import probe ==="
           python - <<'PYEOF'
           import sys
           sys.path.insert(0, "cognitive_robot_abstract_machine")
-          import experiments
-          print("experiments.__path__ =", list(experiments.__path__))
-          print("experiments.__file__ =", getattr(experiments, "__file__", None))
-          import experiments.orm.ormatic_interface as m1
-          print("m1 id:", id(m1), m1.__file__)
-          import experiments.orm.ormatic_interface as m2
-          print("m2 id:", id(m2), "same object as m1:", m1 is m2)
-          print("'experiments.orm.ormatic_interface' in sys.modules:", 'experiments.orm.ormatic_interface' in sys.modules)
+          from krrood.ormatic.base import Base
+
+          def report(label):
+              tables = Base.metadata.tables
+              print(f"[{label}] {len(tables)} tables; has ServoGainsDAO: {'ServoGainsDAO' in tables}")
+              if "ServoGainsDAO" in tables:
+                  table = tables["ServoGainsDAO"]
+                  for mapper in Base.registry.mappers:
+                      if mapper.local_table is table:
+                          print("  ServoGainsDAO owned by class:", mapper.class_, "module:", mapper.class_.__module__)
+
+          report("baseline")
+
+          for module_name in (
+              "semantic_digital_twin.orm.ormatic_interface",
+              "giskardpy.orm.ormatic_interface",
+              "coraplex.orm.ormatic_interface",
+          ):
+              try:
+                  __import__(module_name)
+                  report(f"after {module_name}")
+              except Exception as error:
+                  print(f"[after {module_name}] import FAILED: {error!r}")
+                  report(f"after {module_name} (failed)")
+
+          try:
+              import experiments.orm.ormatic_interface
+              report("after experiments.orm.ormatic_interface")
+          except Exception as error:
+              print(f"experiments.orm.ormatic_interface import FAILED: {error!r}")
+              report("after experiments.orm.ormatic_interface (failed)")
           PYEOF
           echo "=== serial (no xdist) collect-only ==="
           python -m pytest --collect-only -q cognitive_robot_abstract_machine/test/experiments_test > /tmp/serial_collect.log 2>&1 || true
