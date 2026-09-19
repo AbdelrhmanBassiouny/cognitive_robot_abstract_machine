@@ -1,0 +1,233 @@
+schema_version: 1
+id: review-reaches-main
+title: Getting a review back to main
+description: >
+  The pull request queue has 148 open entries whose median distance from main is 124
+  commits, and #265 -- an integration branch that will never merge -- is the base of
+  three pull requests and a nineteen-deep chain. The cause is not #265: four plans each
+  stack over the same files and none of them owns the join, because depends_on cannot
+  cross a plan boundary. #265 was that join, made off-review. This plan owns the joins,
+  the orphaned work stranded with #265, and the rule that stops it recurring. It does
+  not re-cut work that is already tracked elsewhere.
+default_repository: AbdelrhmanBassiouny/cognitive_robot_abstract_machine
+tracking_issue: 426
+
+waves:
+- id: front-line
+  name: Land what is already reviewable
+  description: >
+    Thirty-six pull requests are based directly on main, several within ten commits of
+    it. Every one that lands shortens every chain above it, so this is the only work
+    with compounding returns and it comes first.
+- id: joins
+  name: The joins nobody owns
+  description: >
+    Where two unlanded lineages have to meet, or where a branch has diverged from main
+    rather than from another branch. Each collision gets one pull request whose single
+    job is to settle it.
+- id: orphans
+  name: Work stranded with the integration branch
+  description: >
+    The closed sub-pull-requests, the commits that reached no pull request, and the
+    queue hygiene that makes the remainder readable.
+
+tracks:
+- id: landing
+  name: Driving the front line to main
+  wave: front-line
+- id: collisions
+  name: Branches that diverged from main
+  wave: joins
+- id: perception-join
+  name: Joining the perception lineages
+  wave: joins
+- id: orphan-recovery
+  name: Recovering the stranded work
+  wave: orphans
+- id: prevention
+  name: Stopping it recurring
+  wave: orphans
+
+items:
+- id: predicates-land
+  title: Land the predicate classes so the branches waiting on them can rebase
+  branch: sdt_predicates_answer_whether_they_hold
+  pull_request_number: 229
+  track: landing
+  depends_on: []
+  status: in_progress
+  notes: >
+    Nothing here is undecided. A collision scan run on 2026-09-19 independently
+    rediscovered that predicates.py was converted from functions to classes twice --
+    #229's InContactWith/SupportedBy/VisibleTo naming against #33 and #35's
+    Contact/IsSupportedBy/Visible -- and both pull requests already record the
+    developer's 2026-08-31 decision in #229's favour, with #33's rebase tracked as
+    eql-verbalization's p4-sdt-migration. The only outstanding thing is the merge:
+    #33 states plainly that its rebase cannot start until #229 lands. #229 is off main,
+    mergeable_state clean, labelled in-review, 717 insertions over 5 files.
+    So this item is a merge, not a design question, and it blocks the perception join.
+  blockers:
+  - '#33 and #35 cannot rebase until this lands, and #33''s own coverage test forbids it
+    taking main''s predicates.py before then.'
+- id: front-line-landed
+  title: Drive the thirty-six pull requests based on main to landing, shallowest first
+  branch: null
+  pull_request_number: null
+  track: landing
+  depends_on: []
+  status: not_started
+  notes: >
+    Measured 2026-09-19: of 148 open pull requests, 119 already bottom out on main and
+    36 are based on it directly -- #408 at +1 commit, #409 and #405 at +2, #365 at +6,
+    #367/#371/#372/#362 at +10, #357 at +11. This item is not one pull request: it is
+    the decision to spend review capacity here before anywhere else, and to re-measure
+    chain depth after each landing. Most of these belong to other plans; this item
+    tracks the ordering, not the work.
+- id: place-grasp-rebased
+  title: Settle how a place learns the grasp it carries, against main rather than a branch
+  branch: claude/the-place-an-insertion-builds-on
+  pull_request_number: 422
+  track: collisions
+  depends_on: []
+  status: in_progress
+  session: https://claude.ai/code/session_01RyWyuVvJYP9E3gWEw7Z8qF
+  notes: >
+    main gained PlaceAction._grasp_description in 98d847a776. #295 and #296 both forked
+    before that, and #296 meanwhile built _how_the_object_is_held for the same job plus
+    the grasp_description field that feeds it. So this is #296 diverging from main, not
+    from another branch -- a shape only a per-pull-request scan against main can see,
+    and the reason a pairwise scan missed it. #422 resolves it by keeping main's method
+    and folding #296's stated-grasp preference in as its first branch, which is how #355
+    resolved it on the integration branch. If #296 is instead rebased onto main first
+    and makes the same decision, #422's second commit becomes empty and this item closes
+    with #296 rather than with #422.
+  blockers:
+  - 'Needs the developer to confirm that dropping #296''s _how_the_object_is_held in
+    favour of main''s _grasp_description is the wanted direction; asked on #296.'
+- id: insertion-action
+  title: An insertion is an action of its own
+  branch: claude/an-insertion-is-an-action-of-its-own
+  pull_request_number: 423
+  track: collisions
+  depends_on: [place-grasp-rebased]
+  status: in_progress
+  session: https://claude.ai/code/session_01RyWyuVvJYP9E3gWEw7Z8qF
+  notes: >
+    Extracted from #355's 8483223f69: the InsertAction designator, the landing_region
+    move from the montessori ShapeSortingHole up to Aperture, the coraplex test datasets
+    and 295 lines of tests. Import- and attribute-verified against its base tree by AST.
+    That check is what found the two dependencies a file-level one misses --
+    InsideOf(minimum_containment_ratio=...) needs #229 and PlaceAction(grasp_description=...)
+    needs #296, both keywords whose fields live in files the commit never touches.
+- id: perception-join
+  title: Join the two perception lineages, in the pull request that already is the join
+  branch: claude/detector-consolidation-analysis-rgg3xg
+  pull_request_number: 299
+  track: perception-join
+  depends_on: [predicates-land]
+  status: blocked
+  notes: >
+    #299's 9c4840bf94 already is the join commit -- its own message says the two
+    detectors "arrived on the same detector from different branches of #231, onto the
+    rewrite #236 had already landed" -- sitting on #265 because no other base held both
+    lineages. knowledge-directed-grounding's chain (#202 to #270) is correctly stacked
+    and is one side; knowledge-directed-requests' (#231 to #275, plus #259) is the other.
+    Merging the tips leaves roughly 23 conflict hunks over 1,100 lines, 13 of them in
+    pipeline.py. Those are pre-existing conflicts between the two chains and belong in
+    this pull request, which is what a join pull request is for. Reparenting was tried
+    and reverted twice before this was understood; see the pr-progress note for the two
+    wrong outcomes that produced.
+  blockers:
+  - 'Eleven commits on #265 touch #299''s own eight files and are on no lineage branch.
+    Four are convergence glue a correctly ordered stack does not need; the other seven
+    are perception-direct-commits.'
+- id: perception-direct-commits
+  title: Replay the seven perception features that reached no pull request
+  branch: null
+  pull_request_number: null
+  track: perception-join
+  depends_on: [perception-join]
+  status: not_started
+  notes: >
+    6c968260eb, 9ab3729019, 746f8ea3c6, 280832645d, 3d6504f7d9, 4bf6694f1d and
+    54b4ec5848 -- real features pushed straight onto #265, in no pull request's diff.
+    The other four of the eleven (0e4d632b3f, a3acc06fbe, 83c3eae1b7, 5f63f0f503) are
+    reconciliation glue that exists only because the lineages were merged all at once,
+    and a correctly ordered stack should not need them.
+- id: foldins-rehomed
+  title: Rehome the work pushed onto a closed pull request's branch
+  branch: sdt_segmind_krrood_from_fast_monitor
+  pull_request_number: 244
+  track: orphan-recovery
+  depends_on: []
+  status: blocked
+  session: https://claude.ai/code/session_01RyWyuVvJYP9E3gWEw7Z8qF
+  notes: >
+    #244 was closed unmerged on 2026-09-18, and its 4,255 insertions are not on main --
+    spatial_types/numeric.py is absent there. It carries the cram2-link-sent label, so
+    it looks like a deliberate hand-off upstream rather than an abandonment. On
+    2026-09-19, before noticing it was closed, this session pushed two commits onto its
+    branch: b5be1a30ad (a motion event's poses stated in the world frame they were read
+    in) and 223e532824 (the former #415, whose base.py needs
+    spatial_types.numeric.NumericPose and so cannot sit on main). Both are now in no
+    open pull request. They need either the upstream pull request to pick them up or a
+    fork pull request whose base carries #244's content; neither is this session's to
+    choose.
+  blockers:
+  - 'Needs the developer to say whether #244 was closed because it landed upstream, and
+    where the two commits should go.'
+- id: orphan-subprs-triaged
+  title: Triage the thirty-one closed sub-pull-requests nothing tracks
+  branch: null
+  pull_request_number: null
+  track: orphan-recovery
+  depends_on: []
+  status: not_started
+  notes: >
+    Thirty-six pull requests were merged into #265 and closed; only five are tracked
+    plan items (#298, #301, #303, #304, #311). A merged pull request cannot be reopened,
+    so the assets are the branches, which still exist, and the descriptions, which are
+    good -- #344's is a full problem/fix/tests writeup with the production stack trace.
+    Per orphan: harvest the description, decide re-cut or drop, record the branch SHA.
+- id: tracy-demo-recut
+  title: Re-cut the tracy demo from its final tree rather than replaying it
+  branch: null
+  pull_request_number: null
+  track: orphan-recovery
+  depends_on: [perception-join]
+  status: not_started
+  notes: >
+    perceived_sorting.py, pickup_demo_real.py, pickup_demo_mujoco.py,
+    pick_and_place_action.py, perception/scene_publishing.py and the framework figure
+    sources exist on no open pull request; on #265 they carry 61 commits back to
+    36696eb02a. This is the one place where re-cutting is right rather than wrong: the
+    work is untracked, so no item's review history is lost, and the history is a demo
+    evolving rather than a sequence of reviewable changes. The final tree and its tests
+    are what carry the value. Contrast perception, where re-cutting was considered and
+    rejected because eight tracked items already hold that work.
+- id: dead-weight-closed
+  title: Close what the recovery supersedes, naming the replacement
+  branch: null
+  pull_request_number: null
+  track: orphan-recovery
+  depends_on: [perception-join, tracy-demo-recut]
+  status: not_started
+  notes: >
+    Twenty-seven open pull requests bottom out on a #265-family branch and cannot be
+    reviewed as they stand. Closing each with the replacement named and the branch SHA
+    recorded is the cheapest item here and the one that makes the queue readable, which
+    is the precondition for review being fast at all.
+- id: base-rule
+  title: Write down that a pull request is based on main or on an approved pull request
+  branch: null
+  pull_request_number: null
+  track: prevention
+  depends_on: []
+  status: not_started
+  notes: >
+    The rule whose absence produced #265: a pull request may only be based on main or on
+    a pull request that has been approved; to build on unapproved work you merge the
+    dependency into your branch and say so in the description. That forces every
+    convergence decision to happen at write time, in one pull request, in front of a
+    reviewer, instead of silently at integration time on a branch that then cannot
+    merge. Belongs in AGENTS.md, so it is a reviewed change rather than a personal note.
