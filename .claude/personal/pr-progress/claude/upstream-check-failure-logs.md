@@ -8,25 +8,42 @@ runner, for the same reason.
 
 - `--failure-logs` / the `failure_logs` workflow input: reads each failed
   check's Actions job log through `gh` on the runner and quotes an excerpt.
-- Excerpting has three named rules - pytest's `short test summary info` block,
-  the runner's `##[error]` annotations, the log's last lines - so a job that
-  died before pytest still says why. Timestamps come off; 40 lines is the cap.
-- A check with no Actions job behind it (a commit status from another service)
-  and a check still running are both skipped rather than read.
+- Three named excerpting rules - pytest's `short test summary info` block
+  (stopping at the runner's error annotation), the `##[error]` annotations for
+  a job that died before pytest, the log's last lines otherwise. Timestamps and
+  the test runner's colour come off; 40 lines is the cap.
+- `gh` needs `--allow-escape-sequences` or it returns the log and then refuses
+  to write it, because pytest colours its own output.
+- A check with no Actions job behind it, and a check still running, are both
+  skipped rather than read.
 - `.claude/upstream_reviews/tests` was in no CI job at all. Added it to
   `test_claude_dev_tooling` through a resolved path.
-- 62 tests pass in the suite (15 new); 561 in the CI tooling suite.
+- 64 tests pass in the suite (17 new); 561 in the CI tooling suite.
 - Draft pull request #424, based on #420's branch.
+
+## Verified, and what it found
+
+The runner's own `GITHUB_TOKEN` *can* read a cram2 job log - that was the open
+question and the answer is yes. Dispatched against #652 it named both failures:
+
+- robokudo: `test_query.py::TestQueryInterface::test_query - assert True is
+  False`. Not the seeded-RANSAC flake at all, so #405/#652 was never going to
+  clear it.
+- giskardpy: four in `test_integration_daisy.py` - `TestJointGoals::test_joints1`
+  and `test_joints2` off at 2-decimal tolerance, and two
+  `TestCollisionAvoidanceGoals` self-collisions violated by ~2mm.
+
+The same commit runs the same 821 tests on the fork and passes all of them,
+both libraries. Same code, same workflow, same test set, different verdict - and
+the one known difference is the container image, `ghcr.io/${GITHUB_REPOSITORY,,}:jazzy`,
+which is per repository and rebuilt only when `.github/docker/` changes on that
+repository's main. Numeric drift at 2 decimals and 2mm collision margins is what
+a differently built solver stack looks like.
 
 ## Next
 
-- Verify the runner's `GITHUB_TOKEN` can actually read a cram2 job log. The
-  dispatch is queued behind the integration candidate's matrix. If it answers
-  403, the excerpting still stands but the read needs a credential that can see
-  the upstream, and that is the thing to report rather than work around.
-- Then: name the actual error behind `test_each_lib (giskardpy)` and
-  `test_each_lib (robokudo)`, which are red on all 17 promoted branches while
-  the identical commits pass on the fork.
+- Nothing outstanding on this branch. The upstream fix is `update_docker` on
+  cram2, which needs upstream access.
 
 ## Note for later
 
