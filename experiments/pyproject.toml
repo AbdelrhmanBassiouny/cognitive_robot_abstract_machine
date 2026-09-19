@@ -14,6 +14,7 @@ dependencies = [
     "giskardpy",
     "krrood",
     "probabilistic_model",
+    "pymysql",
     "random_events",
     "segmind",
     "semantic_digital_twin",
