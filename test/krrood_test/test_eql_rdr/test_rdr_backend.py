@@ -35,7 +35,7 @@ from krrood.entity_query_language.rdr.serialization import (
     save_rdr,
 )
 from krrood.entity_query_language.rdr.single_class import EQLSingleClassRDR
-from krrood.entity_query_language.rdr.underspecified import UnderspecifiedMatch
+from krrood.entity_query_language.rdr.underspecified import RDRMatchParser
 
 from .animal import Animal, Species, make_bird, make_mammal
 from .expert_doubles import labelling_expert, maximally_specific_expert
@@ -114,7 +114,7 @@ class CountingModelSaver(ModelSaver):
 
 
 def test_a_key_names_the_attributes_owner_type_and_name():
-    target = UnderspecifiedMatch(an(Animal)(species=...)).single_target()
+    target = RDRMatchParser(an(Animal)(species=...)).single_target()
 
     assert ModelKey.from_attribute(target.attribute) == ModelKey(Animal, "species")
 

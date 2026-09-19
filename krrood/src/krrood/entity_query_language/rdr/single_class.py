@@ -80,7 +80,7 @@ from krrood.entity_query_language.rdr.serialization import (
     ModelSaver,
     TemporaryModelSaver,
 )
-from krrood.entity_query_language.rdr.underspecified import UnderspecifiedMatch
+from krrood.entity_query_language.rdr.underspecified import RDRMatchParser
 from krrood.entity_query_language.scope import (
     attach_definition_scope,
     capture_caller_scope,
@@ -184,7 +184,7 @@ class EQLSingleClassRDR:
         :param underspecified_query: For example ``an(Animal)(species=...)``.
         :return: An RDR predicting the query's single underspecified attribute.
         """
-        statement = UnderspecifiedMatch(underspecified_query)
+        statement = RDRMatchParser(underspecified_query)
         return cls(statement.case_type, statement.target_attribute_name)
 
     # %% classification
