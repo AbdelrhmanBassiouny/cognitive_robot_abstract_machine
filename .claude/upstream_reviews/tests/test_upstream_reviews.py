@@ -1,6 +1,6 @@
 """
-Tests for upstream_reviews.py's data parsing, check reading, thread pagination, pull
-request resolution, report rendering, and the gh-backed client.
+Tests for upstream_reviews.py's data parsing, check reading, failure-log excerpting,
+thread pagination, pull request resolution, report rendering, and the gh-backed client.
 """
 
 import json
@@ -11,14 +11,27 @@ from enum import StrEnum
 from pathlib import Path
 
 import pytest
-from conftest import FixtureName, RecordedCall, ReplayingClient
+from conftest import (
+    FixtureName,
+    JobLogFixtureName,
+    RecordedCall,
+    ReplayingClient,
+    ReplayingJobLogReader,
+)
 
 from upstream_reviews import (
+    EXCERPT_LINE_LIMIT,
     CheckOutcome,
     CheckResult,
     CheckStatus,
+    FailedJob,
+    FailureLog,
+    FailureLogReader,
+    LogMarker,
+    TERMINAL_ESCAPE_PATTERN,
     GitHubCommandFailed,
     GitHubCommandLineClient,
+    GitHubEndpoint,
     GraphQLErrorsReturned,
     JSONModel,
     PullRequestJSONKey,
@@ -86,6 +99,7 @@ class StubEnvironmentVariable(StrEnum):
     """
 
     GRAPHQL_JSON = "STUB_GH_GRAPHQL_JSON"
+    JOB_LOG = "STUB_GH_JOB_LOG"
     EXIT_CODE = "STUB_GH_EXIT_CODE"
     CALL_LOG = "STUB_GH_CALL_LOG"
 
@@ -93,6 +107,7 @@ class StubEnvironmentVariable(StrEnum):
 UPSTREAM = Repository(Example.UPSTREAM_OWNER, Example.UPSTREAM_NAME)
 RECORDED_PULL_REQUEST_NUMBER = 513
 GRAPHQL_ERROR_MESSAGE = "Could not resolve to a Repository"
+RECORDED_JOB_IDENTIFIER = 105780443397
 UPSTREAM_SETTING_TEMPLATE = 'upstream_repository = "{repository}"\n'
 
 
@@ -663,6 +678,38 @@ def test_graphql_errors_are_raised_rather_than_returned(stubbed_gh, monkeypatch)
     assert raised.value.messages == [GRAPHQL_ERROR_MESSAGE]
 
 
+def test_a_job_log_is_asked_for_by_the_job_s_own_endpoint(
+    stubbed_gh, monkeypatch, tmp_path
+):
+    call_log = tmp_path / "calls.txt"
+    monkeypatch.setenv(StubEnvironmentVariable.CALL_LOG, str(call_log))
+    monkeypatch.setenv(StubEnvironmentVariable.JOB_LOG, "")
+
+    GitHubCommandLineClient().read_job_log(UPSTREAM, RECORDED_JOB_IDENTIFIER)
+
+    assert call_log.read_text().strip() == GitHubEndpoint.JOB_LOG.format(
+        repository=UPSTREAM, job=RECORDED_JOB_IDENTIFIER
+    )
+
+
+def test_a_job_log_comes_back_as_the_runner_recorded_it(stubbed_gh, monkeypatch):
+    recorded = JobLogFixtureName.FAILED_JOB_WITHOUT_SUMMARY.load()
+    monkeypatch.setenv(StubEnvironmentVariable.JOB_LOG, recorded)
+
+    read = GitHubCommandLineClient().read_job_log(UPSTREAM, RECORDED_JOB_IDENTIFIER)
+
+    assert read == recorded
+
+
+def test_a_failing_job_log_read_is_raised(stubbed_gh, monkeypatch):
+    monkeypatch.setenv(StubEnvironmentVariable.EXIT_CODE, "1")
+
+    with pytest.raises(GitHubCommandFailed) as raised:
+        GitHubCommandLineClient().read_job_log(UPSTREAM, RECORDED_JOB_IDENTIFIER)
+
+    assert raised.value.exit_code == 1
+
+
 def test_a_branch_without_an_upstream_pull_request_exits_without_a_traceback(
     stubbed_gh, monkeypatch, capsys
 ):
@@ -687,3 +734,188 @@ def test_a_branch_without_an_upstream_pull_request_exits_without_a_traceback(
 
     assert status == 1
     assert str(Example.UNPROMOTED_BRANCH) in capsys.readouterr().err
+
+
+# %% the log behind a failed check
+
+
+def recorded_check(name: RecordedCheck) -> CheckResult:
+    """
+    Read one recorded check through the model the production code parses into.
+
+    :param name: The check to find.
+    :return: The parsed check.
+    """
+    [node] = [
+        node
+        for node in recorded_check_nodes()
+        if node.get(PullRequestJSONKey.NAME) == name
+        or node.get(PullRequestJSONKey.CONTEXT) == name
+    ]
+    return CheckResult.from_json(node)
+
+
+def test_a_check_link_names_the_job_behind_it():
+    failing = recorded_check(RecordedCheck.FAILING)
+
+    assert FailedJob.behind(failing) == FailedJob(
+        int(failing.url.rsplit("/", maxsplit=1)[-1])
+    )
+
+
+def test_a_link_that_names_no_job_has_no_job_behind_it():
+    assert FailedJob.behind(recorded_check(RecordedCheck.LEGACY)) is None
+
+
+def test_an_excerpt_starts_at_pytest_s_own_summary():
+    excerpt = FailureLog.excerpt(
+        str(RecordedCheck.FAILING), JobLogFixtureName.FAILED_JOB.load()
+    )
+
+    assert LogMarker.PYTEST_SUMMARY in excerpt.lines[0]
+
+
+def test_an_excerpt_keeps_the_line_naming_the_failed_test():
+    excerpt = FailureLog.excerpt(
+        str(RecordedCheck.FAILING), JobLogFixtureName.FAILED_JOB.load()
+    )
+
+    assert [line for line in excerpt.lines if line.startswith("FAILED ")]
+
+
+def test_an_excerpt_drops_the_runner_s_timestamps():
+    log = JobLogFixtureName.FAILED_JOB.load()
+    [recorded] = [line for line in log.splitlines() if LogMarker.PYTEST_SUMMARY in line]
+
+    excerpt = FailureLog.excerpt(str(RecordedCheck.FAILING), log)
+
+    assert excerpt.lines[0] == recorded.split(" ", maxsplit=1)[1]
+
+
+def test_an_excerpt_stops_where_the_step_failed():
+    excerpt = FailureLog.excerpt(
+        str(RecordedCheck.FAILING), JobLogFixtureName.FAILED_JOB.load()
+    )
+
+    assert LogMarker.ERROR_ANNOTATION in excerpt.lines[-1]
+
+
+def test_an_excerpt_drops_the_colour_a_test_runner_wrote():
+    excerpt = FailureLog.excerpt(
+        str(RecordedCheck.FAILING), JobLogFixtureName.FAILED_JOB.load()
+    )
+
+    assert TERMINAL_ESCAPE_PATTERN.search("\n".join(excerpt.lines)) is None
+
+
+def test_a_job_that_died_before_pytest_is_excerpted_from_its_error_annotations():
+    excerpt = FailureLog.excerpt(
+        str(RecordedCheck.FAILING), JobLogFixtureName.FAILED_JOB_WITHOUT_SUMMARY.load()
+    )
+
+    assert all(LogMarker.ERROR_ANNOTATION in line for line in excerpt.lines)
+
+
+def test_a_log_with_neither_marker_falls_back_to_its_last_lines():
+    log = "\n".join(f"line {number}" for number in range(EXCERPT_LINE_LIMIT + 10))
+
+    excerpt = FailureLog.excerpt(str(RecordedCheck.FAILING), log)
+
+    assert excerpt.lines[-1] == f"line {EXCERPT_LINE_LIMIT + 9}"
+
+
+def test_an_excerpt_is_capped_at_the_line_limit():
+    log = "\n".join(f"line {number}" for number in range(EXCERPT_LINE_LIMIT + 10))
+
+    excerpt = FailureLog.excerpt(str(RecordedCheck.FAILING), log)
+
+    assert len(excerpt.lines) == EXCERPT_LINE_LIMIT
+
+
+def test_an_excerpt_names_the_check_its_job_reported_for():
+    excerpt = FailureLog.excerpt(
+        str(RecordedCheck.FAILING), JobLogFixtureName.FAILED_JOB.load()
+    )
+
+    assert excerpt.check_name == RecordedCheck.FAILING
+
+
+# %% reading the logs a pull request's failures left
+
+
+def make_failure_log_reader(logs: dict[int, str]) -> FailureLogReader:
+    """
+    :param logs: The log each job identifier answers with.
+    :return: A reader answering from those logs.
+    """
+    return FailureLogReader(ReplayingJobLogReader(logs), UPSTREAM)
+
+
+def failing_job_identifier() -> int:
+    """:return: The job the recorded failing check links to."""
+    return FailedJob.behind(recorded_check(RecordedCheck.FAILING)).identifier
+
+
+def test_every_failed_check_with_a_job_behind_it_is_read(current_checks):
+    reader = make_failure_log_reader(
+        {failing_job_identifier(): JobLogFixtureName.FAILED_JOB.load()}
+    )
+
+    excerpts = reader.read(current_checks)
+
+    assert [excerpt.check_name for excerpt in excerpts] == [str(RecordedCheck.FAILING)]
+
+
+def test_a_check_still_running_has_no_log_read_for_it(current_checks):
+    reader = make_failure_log_reader(
+        {failing_job_identifier(): JobLogFixtureName.FAILED_JOB.load()}
+    )
+
+    reader.read(current_checks)
+
+    assert [call.job_identifier for call in reader.job_logs.calls] == [
+        failing_job_identifier()
+    ]
+
+
+def test_a_job_log_is_read_from_the_upstream_repository(current_checks):
+    reader = make_failure_log_reader(
+        {failing_job_identifier(): JobLogFixtureName.FAILED_JOB.load()}
+    )
+
+    reader.read(current_checks)
+
+    assert [call.repository for call in reader.job_logs.calls] == [UPSTREAM]
+
+
+def test_a_commit_with_no_checks_has_no_logs_to_read():
+    reader = make_failure_log_reader({})
+
+    assert reader.read(None) == []
+
+
+# %% quoting the logs in the report
+
+
+def test_the_report_quotes_each_log_it_was_given(paginated_client):
+    snapshot = make_reader(paginated_client).read_current_state(
+        RECORDED_PULL_REQUEST_NUMBER
+    )
+    excerpt = FailureLog.excerpt(
+        str(RecordedCheck.FAILING), JobLogFixtureName.FAILED_JOB.load()
+    )
+
+    rendered = UpstreamPullRequestReport(snapshot, failure_logs=[excerpt]).render()
+
+    assert ReportText.FAILURE_LOGS_HEADING in rendered
+    assert excerpt.lines[0] in rendered
+
+
+def test_a_report_given_no_logs_leaves_the_section_out(paginated_client):
+    snapshot = make_reader(paginated_client).read_current_state(
+        RECORDED_PULL_REQUEST_NUMBER
+    )
+
+    rendered = UpstreamPullRequestReport(snapshot).render()
+
+    assert ReportText.FAILURE_LOGS_HEADING not in rendered

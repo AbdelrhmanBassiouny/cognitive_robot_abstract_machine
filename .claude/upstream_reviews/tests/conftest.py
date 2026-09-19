@@ -20,7 +20,12 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import pytest  # noqa: E402
 
-from upstream_reviews import GraphQLClient, RepositoryJSON  # noqa: E402
+from upstream_reviews import (  # noqa: E402
+    GraphQLClient,
+    JobLogReader,
+    Repository,
+    RepositoryJSON,
+)
 
 FIXTURE_DIRECTORY = Path(__file__).parent / "fixtures"
 """
@@ -113,3 +118,64 @@ def paginated_client() -> ReplayingClient:
             FixtureName.PULL_REQUEST_PAGE_TWO.load(),
         ]
     )
+
+
+class JobLogFixtureName(StrEnum):
+    """
+    The recorded job logs the tests read, named by their filename stem.
+    """
+
+    FAILED_JOB = "failed_job"
+    FAILED_JOB_WITHOUT_SUMMARY = "failed_job_without_summary"
+
+    def load(self) -> str:
+        """:return: The recorded log this fixture holds, exactly as recorded."""
+        return (FIXTURE_DIRECTORY / f"{self}.log").read_text()
+
+
+@dataclass(frozen=True)
+class RecordedJobLogCall:
+    """
+    One job log the reader asked for, kept so a test can assert on it.
+    """
+
+    repository: Repository
+    """
+    The repository it was asked of.
+    """
+
+    job_identifier: int
+    """
+    The job it named.
+    """
+
+
+@dataclass
+class ReplayingJobLogReader(JobLogReader):
+    """
+    A log reader that answers from recorded logs instead of calling GitHub.
+
+    Records every read, so a test can assert which job the reader went after and in
+    which repository.
+    """
+
+    logs: dict[int, str] = field(default_factory=dict)
+    """
+    The log each job identifier answers with.
+    """
+
+    calls: list[RecordedJobLogCall] = field(default_factory=list)
+    """
+    Every read that was asked for, oldest first.
+    """
+
+    def read_job_log(self, repository: Repository, job_identifier: int) -> str:
+        """
+        Answer with the recorded log for *job_identifier*.
+
+        :param repository: The repository, recorded for assertions.
+        :param job_identifier: The job whose log to answer with.
+        :return: The recorded log.
+        """
+        self.calls.append(RecordedJobLogCall(repository, job_identifier))
+        return self.logs[job_identifier]
