@@ -89,9 +89,9 @@ class WorkflowFile(StrEnum):
     The pass that reparents, restacks and promotes the branches a build is assembled
     from.
 
-    Carried by a branch of its own rather than by every checkout the tooling runs in,
-    so this is one of the names the pipeline holds to tell a check apart rather than to
-    read a file by.
+    Carried by a branch of its own rather than by every checkout the tooling runs in, so
+    this is one of the names the pipeline holds to recognise a run by rather than to read
+    a file by.
     """
 
     @property
@@ -100,9 +100,15 @@ class WorkflowFile(StrEnum):
         return WORKFLOW_DIRECTORY / str(self)
 
     @property
+    def path_in_a_tree(self) -> str:
+        """:return: Where this workflow is filed, as a tree names it - which is also how
+        a run reports the workflow it ran from."""
+        return str(self.path.relative_to(REPOSITORY_ROOT))
+
+    @property
     def is_in_this_checkout(self) -> bool:
-        """:return: Whether this checkout holds the file, which one carrying the
-        tooling without the workflow does not."""
+        """:return: Whether this checkout holds the file, which one carrying the tooling
+        without the workflow does not."""
         return self.path.is_file()
 
     def read(self) -> WorkflowDocument:

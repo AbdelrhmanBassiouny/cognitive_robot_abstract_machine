@@ -25,7 +25,7 @@ from bastler.workflow_document import (
 
 
 @pytest.mark.parametrize("named", list(WorkflowFile))
-def test_a_workflow_this_checkout_lacks_is_one_the_pipeline_only_tells_checks_apart_by(
+def test_a_workflow_this_checkout_lacks_is_one_the_pipeline_only_recognises_runs_by(
     named: WorkflowFile,
 ):
     """
@@ -34,7 +34,7 @@ def test_a_workflow_this_checkout_lacks_is_one_the_pipeline_only_tells_checks_ap
 
     The pipeline's own workflows are exempt because they are in flight on branches of
     their own: a checkout carrying the tooling need not carry them, and one named only
-    so that its checks can be read out of a verdict is never dispatched.
+    so that the runs it reports can be recognised is never read or dispatched here.
     """
     assert named.is_in_this_checkout or named in PIPELINE_WORKFLOWS
 

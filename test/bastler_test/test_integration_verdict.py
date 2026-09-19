@@ -23,8 +23,11 @@ from .integration_fixtures import the_pipeline_this_checkout_carries
 from bastler.maintenance_github import (
     CandidatePullRequests,
     CheckRunRecord,
+    CheckSuiteField,
     PullRequestReader,
     PullRequestRecord,
+    WorkflowRunField,
+    WorkflowRunRecord,
 )
 
 import bastler.integration_candidate_commands
@@ -42,17 +45,13 @@ from .test_maintenance import UPSTREAM_BASE, an_api_record, make_configuration
 from bastler.integration_pipeline_commands import RefreshCommand
 from bastler.workflow_document import (
     CALLED_JOB_SEPARATOR,
-    WorkflowDocument,
     WorkflowFile,
-    every_workflow_file,
 )
 
 from bastler.integration_verdict import (
     MEASURED_CANDIDATE_CHECK_TIMING,
-    PIPELINE_WORKFLOWS,
     Candidate,
     CandidateCheckTiming,
-    ChecksAboutTheBuild,
     ReportedChecks,
     ChecksVerdict,
     CheckRunConclusion,
@@ -93,22 +92,63 @@ A_HEAD = "933161a263"
 The build's head, which its checks are reported against.
 """
 
+THE_MAINTENANCE_PASS_S_CHECK = "Run the maintenance pass"
+"""
+What the maintenance pass calls its job.
+
+Spelled out rather than read off the workflow, because the whole point of the test using
+it is that the file declaring it is in flight on a branch of its own and so is not in
+this checkout to be read - and by then the name no longer decides anything either way.
+"""
+
+
+THE_MATRIX_S_SUITE = 1
+"""
+The suite this repository's own matrix reported its checks under.
+
+GitHub gives every workflow run a check suite of its own, so a suite is what says which
+run reported a check.
+"""
+
+THE_PIPELINE_S_SUITE = 2
+"""
+The suite a run of one of the pipeline's own workflows reported its checks under.
+"""
+
 
 def a_check(
     name: str = "test_bastler",
     status: str = CheckRunStatus.COMPLETED,
     conclusion: str | None = CheckRunConclusion.SUCCESS,
+    check_suite: int = THE_MATRIX_S_SUITE,
 ) -> CheckRunRecord:
     """
     :param name: What the check is called.
     :param status: Whether it has finished.
     :param conclusion: How it finished.
+    :param check_suite: The suite of the run that reported it.
     :return: One check run, as the API answers it.
     """
     return {
         CheckRunField.NAME: name,
         CheckRunField.STATUS: status,
         CheckRunField.CONCLUSION: conclusion,
+        CheckRunField.HEAD_SHA: A_HEAD,
+        CheckRunField.CHECK_SUITE: {CheckSuiteField.IDENTIFIER: check_suite},
+    }
+
+
+def a_run(
+    workflow: WorkflowFile, check_suite: int = THE_PIPELINE_S_SUITE
+) -> WorkflowRunRecord:
+    """
+    :param workflow: The workflow file the run ran from.
+    :param check_suite: The suite it reported its checks under.
+    :return: One workflow run, as the API answers it.
+    """
+    return {
+        WorkflowRunField.PATH: workflow.path_in_a_tree,
+        WorkflowRunField.CHECK_SUITE: check_suite,
     }
 
 
@@ -172,6 +212,9 @@ class RecordingCandidates(CandidatePullRequests, PullRequestReader):
     checks: list[CheckRunRecord] = field(default_factory=list)
     """What it answers a check-run read with."""
 
+    runs: list[WorkflowRunRecord] = field(default_factory=list)
+    """What it answers a read of the runs started on a head with."""
+
     number: int = 4242
     """The number it gives a pull request it opens."""
 
@@ -183,6 +226,9 @@ class RecordingCandidates(CandidatePullRequests, PullRequestReader):
 
     read_references: list[str] = field(default_factory=list)
     """Every commit or branch whose checks were read from it."""
+
+    read_heads: list[str] = field(default_factory=list)
+    """Every head whose workflow runs were read from it."""
 
     def open_pull_request(self, title: str, head: str, base: str, body: str) -> int:
         """
@@ -211,6 +257,14 @@ class RecordingCandidates(CandidatePullRequests, PullRequestReader):
         """
         self.read_references.append(reference)
         return self.checks
+
+    def runs_started_on(self, head: str) -> list[WorkflowRunRecord]:
+        """
+        :param head: The commit read.
+        :return: The runs this stand-in was given.
+        """
+        self.read_heads.append(head)
+        return self.runs
 
     def open_pull_requests(self) -> list[PullRequestRecord]:
         """:return: The open pull requests this stand-in was given."""
@@ -317,9 +371,19 @@ def test_the_rebuild_s_own_check_does_not_decide_whether_a_branch_is_fit_to_carr
     own reasons exclude the branch whose ready-flip asked for it - which is how the
     branch that triggered a build was left out of it.
     """
-    checks = ReportedChecks.of(
-        [a_check(), a_check(name=a_rebuild_check_name(), conclusion="failure")]
+    fork = RecordingCandidates(
+        checks=[
+            a_check(),
+            a_check(
+                name=a_rebuild_check_name(),
+                conclusion="failure",
+                check_suite=THE_PIPELINE_S_SUITE,
+            ),
+        ],
+        runs=[a_run(WorkflowFile.INTEGRATION_REFRESH)],
     )
+
+    checks = read_checks(fork, A_HEAD)
 
     assert checks.verdict is ChecksVerdict.PASSED
     assert checks.failed == ()
@@ -331,21 +395,18 @@ def test_a_probe_s_check_does_not_decide_it_either():
     that branch - and a probe *failing* is how a localisation finds what it is looking
     for, so reading one as the branch's own red is backwards.
     """
-    checks = ReportedChecks.of(
-        [a_check(name=a_probe_check_name(), conclusion="failure")]
+    fork = RecordingCandidates(
+        checks=[
+            a_check(
+                name=a_probe_check_name(),
+                conclusion="failure",
+                check_suite=THE_PIPELINE_S_SUITE,
+            )
+        ],
+        runs=[a_run(WorkflowFile.INTEGRATION_PROBE)],
     )
 
-    assert checks.verdict is ChecksVerdict.ABSENT
-
-
-def test_a_branch_carrying_nothing_but_the_pipeline_s_own_checks_is_unjudged():
-    """
-    Told apart from a pass rather than folded into one: nothing has said anything about
-    this tree, and answering "passed" would publish a build no matrix had looked at.
-    """
-    assert ReportedChecks.of([a_check(name=a_rebuild_check_name())]).verdict is (
-        ChecksVerdict.ABSENT
-    )
+    assert read_checks(fork, A_HEAD).verdict is ChecksVerdict.ABSENT
 
 
 def test_the_recorded_reproductions_check_does_not_decide_it_either():
@@ -354,64 +415,99 @@ def test_the_recorded_reproductions_check_does_not_decide_it_either():
     nothing at all - so it answers about the breaks the fork has stored rather than
     about the build, and a red one would throw away a build whose own matrix is green.
     """
-    checks = ReportedChecks.of(
-        [a_check(name=a_reproduction_check_name(), conclusion="failure")]
+    fork = RecordingCandidates(
+        checks=[
+            a_check(
+                name=a_reproduction_check_name(),
+                conclusion="failure",
+                check_suite=THE_PIPELINE_S_SUITE,
+            )
+        ],
+        runs=[a_run(WorkflowFile.INTEGRATION_CHECKS)],
     )
 
-    assert checks.verdict is ChecksVerdict.ABSENT
+    assert read_checks(fork, A_HEAD).verdict is ChecksVerdict.ABSENT
 
 
-def test_the_maintenance_pass_is_one_of_the_workflows_the_pipeline_runs_about_itself():
+def test_a_branch_carrying_nothing_but_the_pipeline_s_own_checks_is_unjudged():
     """
-    A pass sweeps every branch in the fork and exits non-zero while any is left
-    unpublished, so its check is attached to a candidate whose tree it never looked at -
-    and the build carries the workflow, so every candidate triggers one on itself.
+    Told apart from a pass rather than folded into one: nothing has said anything about
+    this tree, and answering "passed" would publish a build no matrix had looked at.
     """
-    assert WorkflowFile.STACK_MAINTENANCE in PIPELINE_WORKFLOWS
-
-
-def test_a_pipeline_workflow_this_checkout_lacks_leaves_the_others_still_read():
-    """
-    The pipeline's workflows and its tooling are in flight on branches of their own, so
-    a checkout holds one without the other - and reading the absent one would fail the
-    whole rebuild rather than the single check it could not put a name to.
-    """
-    reported = ChecksAboutTheBuild.read()
-
-    assert reported.reports(a_rebuild_check_name())
-    assert reported.reports(a_reproduction_check_name())
-
-
-def test_the_pipeline_s_own_check_names_are_read_off_the_workflows_that_report_them():
-    """
-    A workflow cannot import a constant, so the names are its own to state - and a name
-    retyped here would keep matching a job that had been renamed.
-    """
-    reported = ChecksAboutTheBuild.read()
-
-    assert reported.reports(a_rebuild_check_name())
-    assert not reported.reports(
-        WorkflowFile.CONTINUOUS_INTEGRATION.read().job_fanning_out_over_a_matrix.name
+    fork = RecordingCandidates(
+        checks=[a_check(name=a_rebuild_check_name(), check_suite=THE_PIPELINE_S_SUITE)],
+        runs=[a_run(WorkflowFile.INTEGRATION_REFRESH)],
     )
 
+    assert read_checks(fork, A_HEAD).verdict is ChecksVerdict.ABSENT
 
-def test_no_other_workflow_reports_a_check_the_pipeline_would_claim_as_its_own():
-    """
-    The exclusion is by name, so a job of this repository's sharing one with a job of
-    the pipeline's would have its failures silently ignored - which is the opposite
-    defect, and the one a shared ``to-lowercase`` key would have caused.
-    """
-    reported = ChecksAboutTheBuild.read()
-    the_pipeline_s_own = {workflow.path for workflow in PIPELINE_WORKFLOWS}
-    elsewhere = [
-        job.name
-        for workflow in every_workflow_file()
-        if workflow not in the_pipeline_s_own
-        for job in WorkflowDocument.at(workflow).jobs
-    ]
 
-    assert elsewhere
-    assert [name for name in elsewhere if reported.reports(name)] == []
+def test_a_workflow_this_checkout_lacks_is_still_read_out_of_a_verdict():
+    """
+    The maintenance pass rides into a build on a branch of its own, so every candidate
+    triggers one on itself while the checkout judging that candidate holds no such file.
+    A pass sweeps the whole fork and exits non-zero while any branch is left unpublished,
+    so counting it fails every candidate over some other branch's conflict.
+
+    Nothing here reads the file: the run says which workflow it ran from, against the
+    very tree that ran it, so the check is recognised whatever this checkout holds.
+    """
+    fork = RecordingCandidates(
+        checks=[
+            a_check(
+                name=THE_MAINTENANCE_PASS_S_CHECK,
+                conclusion="failure",
+                check_suite=THE_PIPELINE_S_SUITE,
+            )
+        ],
+        runs=[a_run(WorkflowFile.STACK_MAINTENANCE)],
+    )
+
+    assert not WorkflowFile.STACK_MAINTENANCE.is_in_this_checkout
+    assert read_checks(fork, A_HEAD).verdict is ChecksVerdict.ABSENT
+
+
+def test_a_check_sharing_a_name_with_a_pipeline_job_still_decides_the_build():
+    """
+    The exclusion is by the run that reported a check, so a job of this repository's
+    that happens to share a name with one of the pipeline's is judged rather than
+    silently ignored - which is the opposite defect, and the one a shared
+    ``to-lowercase`` key would have caused.
+    """
+    fork = RecordingCandidates(
+        checks=[a_check(name=a_rebuild_check_name(), conclusion="failure")],
+        runs=[a_run(WorkflowFile.INTEGRATION_REFRESH)],
+    )
+
+    assert read_checks(fork, A_HEAD).verdict is ChecksVerdict.FAILED
+
+
+def test_a_workflow_of_this_repository_s_own_is_not_read_as_the_pipeline_s():
+    """
+    Every run on a candidate's head is read, so the matrix the verdict exists to collect
+    has to survive the pass that drops the pipeline's own.
+    """
+    fork = RecordingCandidates(
+        checks=[a_check(conclusion="failure")],
+        runs=[
+            a_run(WorkflowFile.CONTINUOUS_INTEGRATION, check_suite=THE_MATRIX_S_SUITE),
+            a_run(WorkflowFile.STACK_MAINTENANCE),
+        ],
+    )
+
+    assert read_checks(fork, A_HEAD).verdict is ChecksVerdict.FAILED
+
+
+def test_a_head_nothing_has_reported_on_is_not_asked_which_workflows_ran():
+    """
+    A candidate collects no check for its first several minutes, and asking a second
+    time what could only answer about checks that do not exist spends a call per read
+    over every branch a rebuild considers.
+    """
+    fork = RecordingCandidates()
+
+    assert read_checks(fork, A_HEAD).verdict is ChecksVerdict.ABSENT
+    assert fork.read_heads == []
 
 
 # %% the candidate itself

@@ -34,7 +34,7 @@ from bastler.integration_pass_record import (
     RecordedSubject,
 )
 
-from .test_integration_verdict import RecordingCandidates
+from .test_integration_verdict import RecordingCandidates, a_check
 from .test_maintenance import (
     ForkCheckout,
     fork_checkout,  # noqa: F401  (imported so pytest finds the fixture by name)
@@ -322,15 +322,7 @@ def test_a_candidate_that_passed_records_the_tree_it_passed_over(
         RunAgainstAGivenFork(
             configuration=make_configuration(),
             git=fork_checkout.git,
-            given=RecordingCandidates(
-                checks=[
-                    {
-                        "name": "test_each_lib",
-                        "status": "completed",
-                        "conclusion": "success",
-                    }
-                ]
-            ),
+            given=RecordingCandidates(checks=[a_check(name="test_each_lib")]),
         ),
         argparse.Namespace(candidate=213, build=build_branch, head=head, json=True),
     )

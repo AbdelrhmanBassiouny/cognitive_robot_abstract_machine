@@ -36,6 +36,52 @@ WorkflowRunRecord = Mapping[str, Any]
 One workflow run as the REST API answers it, before any field is read.
 """
 
+
+class WorkflowRunField(StrEnum):
+    """
+    The fields of a workflow run this tooling reads.
+    """
+
+    NAME = "display_title"
+    """
+    What the run is called, which is its ``run-name`` evaluated.
+    """
+
+    STATUS = "status"
+    """
+    Whether it has finished.
+    """
+
+    CONCLUSION = "conclusion"
+    """
+    How it finished, absent until it has.
+    """
+
+    PATH = "path"
+    """
+    The workflow file this run ran from, as the tree it ran over names it.
+
+    Answered against that tree rather than against any checkout, so it names a workflow
+    a branch in flight brought with it just as readily as one the default branch holds.
+    """
+
+    CHECK_SUITE = "check_suite_id"
+    """
+    The suite this run reports its checks under, which no other run shares.
+    """
+
+
+class CheckSuiteField(StrEnum):
+    """
+    The fields of the check suite a check run says it belongs to.
+    """
+
+    IDENTIFIER = "id"
+    """
+    Which suite it is, which is what ties a check to the run that reported it.
+    """
+
+
 DISPATCH_EVENT = "workflow_dispatch"
 """
 How the API names a run that a dispatch started, which is the only kind read back here.
@@ -139,6 +185,11 @@ class CandidatePullRequests(ABC):
         """:param reference: The commit or branch to read the checks of.
         :return: Every check run reported against it."""
 
+    @abstractmethod
+    def runs_started_on(self, head: str) -> list[WorkflowRunRecord]:
+        """:param head: The commit the runs were started on.
+        :return: Every workflow run started on it, whichever workflow each ran from."""
+
 
 class DispatchField(StrEnum):
     """
@@ -237,6 +288,12 @@ class ApiResource(StrEnum):
     RUNS = "runs"
     """
     The runs of one workflow.
+    """
+
+    WORKFLOW_RUNS = "actions/runs"
+    """
+    Every workflow run of the repository, which is where the ones on one commit are
+    asked for without naming the workflow each ran from.
     """
 
 
@@ -491,6 +548,22 @@ class GitHubRepository(ForkPullRequests, CandidatePullRequests, DispatchedWorkfl
                 DispatchField.INPUTS: dict(inputs),
             },
         )
+
+    def runs_started_on(self, head: str) -> list[WorkflowRunRecord]:
+        """
+        Read every workflow run started on one commit.
+
+        Asked for the commit rather than for a workflow, because what is wanted is which
+        workflow reported each check - including one this checkout does not carry, and so
+        one nothing here could have named.
+
+        :param head: The commit the runs were started on.
+        :return: The runs, newest first.
+        """
+        collection = self._collection(ApiResource.WORKFLOW_RUNS)
+        query = self._page(1, head_sha=head)
+        answered = self._call(HttpMethod.GET, f"{collection}?{query}")
+        return list(answered["workflow_runs"])
 
     def workflow_runs(self, workflow: str) -> list[WorkflowRunRecord]:
         """

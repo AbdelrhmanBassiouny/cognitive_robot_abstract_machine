@@ -17,7 +17,13 @@ import pytest
 
 from bastler.stack import BranchStatus, Configuration, PullRequest, Stack
 from bastler.integration_pass_record import PassRecord, RecordedSubject
-from bastler.integration_verdict import ChecksVerdict
+from bastler.integration_verdict import (
+    CheckRunConclusion,
+    CheckRunField,
+    CheckRunStatus,
+    ChecksVerdict,
+)
+from bastler.maintenance_github import CheckSuiteField
 
 import bastler.integration_selection
 from bastler.integration_constants import POINTER_BRANCH
@@ -49,6 +55,27 @@ One of the labels that withholds a branch, read from the configuration that name
 """
 
 
+A_BRANCH_HEAD = "0f1e2d3c"
+"""
+The commit a branch's checks are reported against, which is what says which runs to ask
+about when telling the pipeline's own checks from the branch's.
+"""
+
+
+def a_library_check(conclusion: str) -> dict[str, str]:
+    """
+    :param conclusion: How the check finished.
+    :return: One of the matrix's check runs, as the API answers it.
+    """
+    return {
+        CheckRunField.NAME: "test_each_lib",
+        CheckRunField.STATUS: str(CheckRunStatus.COMPLETED),
+        CheckRunField.CONCLUSION: conclusion,
+        CheckRunField.HEAD_SHA: A_BRANCH_HEAD,
+        CheckRunField.CHECK_SUITE: {CheckSuiteField.IDENTIFIER: 1},
+    }
+
+
 @dataclass
 class ForkReportingChecks:
     """
@@ -61,6 +88,9 @@ class ForkReportingChecks:
     read_branches: list[str] = field(default_factory=list)
     """Every branch whose checks were read from it."""
 
+    runs_on_the_head: list[dict[str, str]] = field(default_factory=list)
+    """What a read of the runs started on a branch's head answers with."""
+
     def check_runs(self, reference: str) -> list[dict[str, str]]:
         """
         :param reference: The commit or branch read.
@@ -68,6 +98,14 @@ class ForkReportingChecks:
         """
         self.read_branches.append(reference)
         return self.runs
+
+    def runs_started_on(self, head: str) -> list[dict[str, str]]:
+        """
+        :param head: The commit read.
+        :return: The runs this stand-in was given, which a branch's checks are told
+            apart by.
+        """
+        return self.runs_on_the_head
 
 
 A_FORK = ForkReportingChecks()
@@ -399,7 +437,9 @@ def test_a_build_that_restacks_is_made_from_the_stack_the_restack_left_behind(
         [create_branch_object("a-branch", 1, labels=[BLOCKING_LABEL])]
     )
     run = RunReadingStacksInTurn([before, after])
-    monkeypatch.setattr(bastler.integration_selection, "restack", lambda *arguments: None)
+    monkeypatch.setattr(
+        bastler.integration_selection, "restack", lambda *arguments: None
+    )
 
     assert stack_to_build(run, A_FORK, restack_first=True) is after
 
@@ -515,9 +555,7 @@ def test_the_stack_a_build_is_made_from_carries_each_branch_s_own_checks():
     branch rather than a commit, so it answers for whatever a restack left it pointing at.
     """
     red = create_branch_object("red", 1)
-    fork = ForkReportingChecks(
-        runs=[{"name": "test_each_lib", "status": "completed", "conclusion": "failure"}]
-    )
+    fork = ForkReportingChecks(runs=[a_library_check("failure")])
     run = RunReadingStacksInTurn([create_stack_object([red])])
 
     built_from = stack_to_build(run, fork, restack_first=False)
@@ -595,9 +633,7 @@ def test_a_branch_whose_checks_have_just_passed_is_recorded_so_the_next_rebuild_
     a pass is the only place that knows one happened.
     """
     moved = create_branch_object("moved", 1)
-    fork = ForkReportingChecks(
-        runs=[{"name": "test_each_lib", "status": "completed", "conclusion": "success"}]
-    )
+    fork = ForkReportingChecks(runs=[a_library_check(str(CheckRunConclusion.SUCCESS))])
     git = GitWithOneBranchPublished(
         branch=moved.name, head="0f1e2d3c", already_passed=False
     )
