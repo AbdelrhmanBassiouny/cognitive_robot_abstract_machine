@@ -1,0 +1,236 @@
+"""
+The figure on screen, and a backend's work brought to the front of it.
+
+The video's spine is the framework figure, drawn a little fuller after each backend has
+answered. While a backend works, its panel of the figure grows out into a close-up that
+fills the screen, the work plays there, and the close-up shrinks back into the panel,
+which is filled in by the time it lands.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from functools import cached_property
+
+from typing_extensions import Dict, Optional
+
+from experiments.video.canvas import (
+    VIDEO_RESOLUTION,
+    Anchor,
+    Ink,
+    Rectangle,
+    Rgb,
+    Typesetting,
+    dimmed,
+    filled,
+    framed,
+    pasted,
+)
+from experiments.video.figure import FrameworkFigure, Slot
+from experiments.video.timeline import Frame, Resolution, Scene, eased
+
+CAPTION_HEIGHT = 64
+"""
+The strip under the figure a caption is written in, in pixels at the video's size.
+"""
+
+FIGURE_MARGIN = 12
+"""
+Air above the figure, in pixels.
+"""
+
+CLOSE_UP_SHARE = 0.86
+"""
+How much of the screen's width and height a close-up may take.
+"""
+
+# %% the figure on the canvas
+
+
+@dataclass
+class FigureOnCanvas:
+    """
+    One stage of the figure, drawn once and placed on the video's canvas with a caption
+    under it.
+    """
+
+    figure: FrameworkFigure
+    """
+    The figure at its stage.
+    """
+
+    caption: str = ""
+    """
+    The line written under it.
+    """
+
+    resolution: Resolution = VIDEO_RESOLUTION
+    """
+    The size of the canvas.
+    """
+
+    @cached_property
+    def placement(self) -> Rectangle:
+        """
+        Where the figure lies on the canvas: as tall as the room above the caption
+        allows, centred.
+        """
+        room = Rectangle(
+            0,
+            FIGURE_MARGIN,
+            self.resolution.width,
+            self.resolution.height - CAPTION_HEIGHT - FIGURE_MARGIN,
+        )
+        return room.fitting(self.figure.geometry.width / self.figure.geometry.height)
+
+    @cached_property
+    def picture(self) -> Frame:
+        """
+        The figure compiled at the width it is placed at.
+        """
+        return self.figure.drawn(width=int(round(self.placement.width)))
+
+    @cached_property
+    def frame(self) -> Frame:
+        """
+        The canvas with the figure and the caption on it.
+        """
+        frame = pasted(self.resolution.blank(255), self.picture, self.placement)
+        if self.caption:
+            frame = Typesetting(size=26, color=Ink.TEXT.rgb).written(
+                frame,
+                self.caption,
+                (
+                    self.resolution.width / 2,
+                    self.resolution.height - CAPTION_HEIGHT / 2,
+                ),
+                Anchor.CENTRE_MIDDLE,
+            )
+        return frame
+
+    def panel(self, slot: Slot) -> Rectangle:
+        """
+        Where a backend's panel lies on the canvas.
+
+        :param slot: The slot the backend answers.
+        """
+        box = self.figure.geometry.panels[slot]
+        scale = self.placement.width / self.figure.geometry.width
+        return Rectangle(
+            self.placement.x + box.x * scale,
+            self.placement.y + box.y * scale,
+            box.width * scale,
+            box.height * scale,
+        )
+
+
+@dataclass
+class FigureScene(Scene):
+    """
+    The figure held on screen for a while.
+    """
+
+    shown: FigureOnCanvas
+    """
+    The figure at its stage.
+    """
+
+    held_for: float = 3.0
+    """
+    How long, in seconds.
+    """
+
+    @property
+    def duration(self) -> float:
+        return self.held_for
+
+    def picture_at(self, seconds: float) -> Frame:
+        return self.shown.frame
+
+
+# %% a backend's work brought to the front
+
+
+@dataclass
+class Spotlight(Scene):
+    """
+    A backend's work grown out of its panel to fill the screen, played, and shrunk back
+    into the panel once the backend has answered.
+    """
+
+    before: FigureOnCanvas
+    """
+    The figure as it stands while the backend works, with its slot ringed.
+    """
+
+    after: FigureOnCanvas
+    """
+    The figure once the backend has answered, which the close-up shrinks back onto.
+    """
+
+    slot: Slot
+    """
+    The slot being answered, whose panel the close-up grows out of.
+    """
+
+    work: Scene
+    """
+    What plays in the close-up.
+    """
+
+    hue: Rgb
+    """
+    The colour the close-up is framed in.
+    """
+
+    grow: float = 1.2
+    """
+    How long the close-up takes to grow out, in seconds.
+    """
+
+    shrink: float = 1.2
+    """
+    How long it takes to shrink back, in seconds.
+    """
+
+    @property
+    def duration(self) -> float:
+        return self.grow + self.work.duration + self.shrink
+
+    @cached_property
+    def close_up(self) -> Rectangle:
+        """
+        Where the work plays when fully grown: centred, as large as its own aspect
+        allows within the screen's share.
+        """
+        resolution = self.before.resolution
+        sample = self.work.frame_at(0.0)
+        room = Rectangle(
+            resolution.width * (1 - CLOSE_UP_SHARE) / 2,
+            resolution.height * (1 - CLOSE_UP_SHARE) / 2,
+            resolution.width * CLOSE_UP_SHARE,
+            resolution.height * CLOSE_UP_SHARE,
+        )
+        return room.fitting(sample.shape[1] / sample.shape[0])
+
+    def picture_at(self, seconds: float) -> Frame:
+        panel = self.before.panel(self.slot)
+        if seconds < self.grow:
+            progress = eased(seconds / self.grow)
+            base = self.before.frame
+            work = self.work.frame_at(0.0)
+        elif seconds < self.grow + self.work.duration:
+            progress = 1.0
+            base = self.before.frame
+            work = self.work.frame_at(seconds - self.grow)
+        else:
+            progress = 1.0 - eased(
+                (seconds - self.grow - self.work.duration) / self.shrink
+            )
+            base = self.after.frame
+            panel = self.after.panel(self.slot)
+            work = self.work.frame_at(self.work.duration - 1e-6)
+        where = panel.towards(self.close_up, progress)
+        frame = dimmed(base, 0.55 * progress)
+        frame = filled(frame, where.inset(-4), self.hue)
+        return pasted(frame, work, where)

@@ -41,6 +41,16 @@
 #let probabilistic = hues.probabilistic
 #let rules = hues.rules
 
+// %% CONFIG: the video ------------------------------------------------------------------
+// The video builds the figure up one backend at a time, so it compiles this file with a
+// JSON `video` input: how many backends are filled in (`stage`), which open slot is being
+// answered right now (`focus`), whether only the thought bubble is drawn (`bubble_only`),
+// and the run's own readings in place of the values stated below (`resolved_lines`,
+// `grasps`, `support_reading`, `support_verdict`). With no input the figure is the paper's.
+
+#let video = json(bytes(sys.inputs.at("video", default: "{}")))
+#let given(name, default) = video.at(name, default: default)
+
 // %% CONFIG: fonts ------------------------------------------------------------------
 
 #let text-font = ("Liberation Sans", "Arial", "Helvetica")
@@ -138,8 +148,8 @@
 
 #let world-title = "imagined world"
 #let spawn-label = "spawn"
-#let support-reading = "overlap 3 mm ≤ 0.1 m"
-#let support-verdict = "SupportedBy(cube_1, lid) → True"
+#let support-reading = given("support_reading", "overlap 3 mm ≤ 0.1 m")
+#let support-verdict = given("support_verdict", "SupportedBy(cube_1, lid) → True")
 #let board-color = rgb("#e9dcbd")
 #let cube-color = rgb("#bfe6ea")
 
@@ -147,12 +157,12 @@
 // Placeholder values until the model is read from the recorded trials.
 
 #let grasp-title = "P(grasp | success)"
-#let grasps = (
+#let grasps = given("grasps", (
   (approach: "FRONT", alignment: "TOP", p: 0.58),
   (approach: "LEFT", alignment: "TOP", p: 0.24),
   (approach: "RIGHT", alignment: "TOP", p: 0.13),
   (approach: "BACK", alignment: "TOP", p: 0.05),
-)
+))
 
 // %% CONFIG: panel 4, the rules -------------------------------------------------------
 // A ripple-down tree: a rule, its exception and its alternative below it.
@@ -168,6 +178,11 @@
 #let title-resolved = "Resolved plan"
 #let panel-titles = (perception: "PerceptionBackend", simulation: "Working memory backend", probabilistic: "ProbabilisticBackend", rules: "Ripple-down rules")
 #let panel-order = ("perception", "simulation", "probabilistic", "rules")
+#let stage = given("stage", panel-order.len())          // how many backends have answered
+#let focus = given("focus", none)                        // the open slot being answered now
+#let bubble-only = given("bubble_only", false)           // the thought bubble without the robot below it
+#let resolved-lines = given("resolved_lines", (:))       // a run's own answer, per slot
+#let reached(slot) = panel-order.position(name => name == slot) < stage
 #let robot-name = "Robot"                     // named generically for double anonymous review
 #let execute-label = "executes the resolved plan"
 
@@ -233,6 +248,14 @@
 // %% DRAWING: a plan as a column of code with its slots boxed ---------------------------
 
 // Where every entry of a plan lands, and where each slot's box is, for arrows to aim at.
+// an entry of the resolved plan with the lines a run's own answer gives it, if any
+#let answered(entry) = {
+  if "slot" not in entry { return entry }
+  let own = entry + (lines: resolved-lines.at(entry.slot, default: entry.lines))
+  let nested = entry.at("nested", default: none)
+  if nested == none { own } else { own + (nested: nested + (lines: resolved-lines.at(nested.slot, default: nested.lines))) }
+}
+
 #let lay-out-plan(entries, x, y0, width) = {
   let y = y0
   let rows = ()
@@ -270,20 +293,42 @@
   }
 }
 
-#let draw-plan(laid-out) = {
+// a slot still to be answered: its outline, dashed, with nothing in it
+#let open-slot-box(x, y, w, h, hue) = place(dx: x, dy: y, box(width: w, height: h, stroke: (paint: hue.stroke, thickness: stroke-width, dash: "dashed"), radius: 0.08cm))
+
+#let draw-plan(laid-out, answered-only: false) = {
   for row in laid-out.rows {
     let entry = row.entry
     if "slot" in entry {
-      slot-box(row.x, row.y, row.w, row.h, hues.at(entry.slot), entry.lines)
       let nested = entry.at("nested", default: none)
+      if answered-only and not reached(entry.slot) {
+        open-slot-box(row.x, row.y, row.w, row.h, hues.at(entry.slot))
+      } else {
+        slot-box(row.x, row.y, row.w, row.h, hues.at(entry.slot), entry.lines)
+      }
       if nested != none {
         let where = laid-out.slots.at(nested.slot)
-        slot-box(where.left, where.top, where.right - where.left, where.bottom - where.top, hues.at(nested.slot), nested.lines)
+        if answered-only and not reached(nested.slot) {
+          open-slot-box(where.left, where.top, where.right - where.left, where.bottom - where.top, hues.at(nested.slot))
+        } else {
+          slot-box(where.left, where.top, where.right - where.left, where.bottom - where.top, hues.at(nested.slot), nested.lines)
+        }
       }
     } else {
       place(dx: row.x, dy: row.y, mono(entry.text))
     }
   }
+}
+
+// the slot being answered right now, ringed in its own hue
+#let draw-focus(laid-out) = {
+  if focus == none { return }
+  let where = laid-out.slots.at(focus)
+  let hue = hues.at(focus)
+  let halo = 0.1cm
+  place(dx: where.left - halo, dy: where.top - halo,
+    rect(width: where.right - where.left + 2 * halo, height: where.bottom - where.top + 2 * halo,
+      stroke: 1.6pt + hue.stroke, fill: hue.stroke.transparentize(88%), radius: 0.14cm))
 }
 
 // %% DRAWING: panel 1, detection stages ---------------------------------------------------
@@ -357,7 +402,7 @@
   for (i, g) in grasps.enumerate() {
     let bar-h = (base - top) * g.p / pmax
     let bx = chart-x + i * slot-w + (slot-w - bar-w) / 2
-    let best = g.p == pmax
+    let best = g.at("chosen", default: g.p == pmax)   // the video says which grasp was taken; the paper marks the likeliest
     place(dx: bx, dy: base - bar-h, rect(width: bar-w, height: bar-h, radius: (top: 0.04cm),
       fill: if best { probabilistic.stroke } else { probabilistic.fill },
       stroke: if best { none } else { 0.4pt + probabilistic.stroke }))
@@ -430,9 +475,19 @@
 #let bubble-h = 0.75cm + panels-h + margin
 #let floor-y = bubble-y + bubble-h + 0.75cm          // the row with both robot images
 #let floor-h = calc.max(robot-size.at(1), execution-size.at(1))
-#let H = floor-y + floor-h + 0.45cm
+#let H = if bubble-only { bubble-y + bubble-h + 0.2cm } else { floor-y + floor-h + 0.45cm }
 
 #let panel-y(i) = columns-y + panel-order.slice(0, i).map(name => panel-heights.at(name)).sum(default: 0cm) + i * panel-gap
+
+// where the columns and the panels lie, in centimetres from the page's top left corner, for
+// the video to aim its close-ups at: `typst query framework.typ "<geometry>"`
+#metadata((
+  width: W / 1cm,
+  height: H / 1cm,
+  plan: (x: plan-x / 1cm, y: columns-y / 1cm, w: plan-w / 1cm, h: panels-h / 1cm),
+  resolved: (x: resolved-x / 1cm, y: columns-y / 1cm, w: resolved-w / 1cm, h: panels-h / 1cm),
+  panels: panel-order.enumerate().map(((i, name)) => (name, (x: panel-x / 1cm, y: panel-y(i) / 1cm, w: panel-w / 1cm, h: panel-heights.at(name) / 1cm))).to-dict(),
+)) <geometry>
 
 // %% DRAWING: the page ---------------------------------------------------------------------
 
@@ -445,11 +500,12 @@
 
   // the plan with its open slots, and the plan with them filled
   let open = lay-out-plan(open-plan, plan-x + 0.15cm, columns-y + 0.15cm, plan-w - 0.3cm)
-  let resolved = lay-out-plan(resolved-plan, resolved-x + 0.15cm, columns-y + 0.15cm, resolved-w - 0.3cm)
+  let resolved = lay-out-plan(resolved-plan.map(answered), resolved-x + 0.15cm, columns-y + 0.15cm, resolved-w - 0.3cm)
   card(plan-x, columns-y, plan-w, panels-h, none)
   card(resolved-x, columns-y, resolved-w, panels-h, none)
   draw-plan(open)
-  draw-plan(resolved)
+  draw-focus(open)
+  if stage > 0 { draw-plan(resolved, answered-only: true) }
 
   // the backends, one per slot, and the arrows in and out of them
   for (i, name) in panel-order.enumerate() {
@@ -457,6 +513,7 @@
     let y = panel-y(i)
     let h = panel-heights.at(name)
     card(panel-x, y, panel-w, h, none)
+    if not reached(name) { continue }
     place(dx: panel-x + 0.15cm, dy: y + 0.1cm, text(size: label-size, fill: hue.stroke, weight: "bold", panel-titles.at(name)))
     (panel-drawers.at(name))(panel-x, y, panel-w, h)
     let turn = 0.2cm + i * 0.12cm
@@ -468,8 +525,11 @@
   // the look's finding is spawned into the imagined world before the relation is read
   let spawn-x = panel-x + panel-w * 0.5
   let look-bottom = panel-y(0) + panel-heights.at(panel-order.at(0))
-  arrow((spawn-x, look-bottom), (spawn-x, panel-y(1)), stroke: simulation.stroke, head: 0.12cm)
-  place(dx: spawn-x + 0.12cm, dy: look-bottom + 0.01cm, text(size: 4.8pt, fill: simulation.stroke, spawn-label))
+  if reached(panel-order.at(1)) {
+    arrow((spawn-x, look-bottom), (spawn-x, panel-y(1)), stroke: simulation.stroke, head: 0.12cm)
+    place(dx: spawn-x + 0.12cm, dy: look-bottom + 0.01cm, text(size: 4.8pt, fill: simulation.stroke, spawn-label))
+  }
+  if not bubble-only {
 
   // the robot, thinking: the bubble above is its thought
   let robot-x = 0.35cm
@@ -502,4 +562,5 @@
   let arrow-to = execution-x - 0.3cm
   arrow((arrow-from, arrow-y), (arrow-to, arrow-y))
   place(dx: arrow-from, dy: arrow-y - 0.36cm, box(width: arrow-to - arrow-from, align(center, small(execute-label))))
+  }
 })
