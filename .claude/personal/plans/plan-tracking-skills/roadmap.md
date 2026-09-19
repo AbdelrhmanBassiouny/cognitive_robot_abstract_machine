@@ -167,3 +167,8 @@ Three pieces of code and one of prose, in that order, tests first.
 Verified with the package's own suite (`python -m pytest test/basstler_test
 --confcutdir=test/basstler_test`), against the real-git `ForkCheckout` fixture and the
 `RecordingPullRequests` fake that already exist for the restack tests.
+
+What shipped on #430, added to the plan above: a chain **stops at a branch that has landed** -
+whatever sits above one needs a reparent onto the upstream base, which the whole-board pass owns,
+so it is not part of the subtree below it. 679 tests pass against 664 on the base; the selector's
+departure from `is_ancestor` is the one call a review should check.
