@@ -20,7 +20,20 @@ from semantic_digital_twin.reasoning.predicates import (
     is_supported_by,
     reachable,
     is_place_occupied,
+    InsideOf,
+    InsideRegion,
+    InContactWith,
+    PlaceIsOccupied,
+    Reachable,
+    Stable,
+    SupportedBy,
+    Supports,
+    ViewDependentSpatialRelation,
+    VisibleTo,
 )
+from krrood.entity_query_language.backends import StatedRelation
+from krrood.entity_query_language.factories import variable
+from krrood.entity_query_language.predicate import Predicate
 from semantic_digital_twin.reasoning.robot_predicates import (
     robot_in_collision,
     robot_holds_body,
@@ -396,8 +409,10 @@ def test_body_in_region(two_block_world):
             ),
         )
         center._world.add_connection(connection)
-    assert is_body_in_region(center, region) == 0.5
-    assert is_body_in_region(top, region) == 0.0
+    assert InsideRegion(center, region).compute_contained_fraction() == 0.5
+    assert InsideRegion(top, region).compute_contained_fraction() == 0.0
+    assert is_body_in_region(center, region)
+    assert not is_body_in_region(top, region)
 
 
 def test_supporting(two_block_world):
@@ -757,3 +772,106 @@ def test_nothing_occludes_a_body_in_clear_line_of_sight():
         world.add_semantic_annotation(camera)
 
     assert occluding_bodies(camera, target) == []
+
+
+# %% a spatial relation is something a query can state
+
+
+def test_a_view_dependent_spatial_relation_is_a_predicate():
+    """
+    A relation a statement asserts has to be a predicate rather than a bare symbol, so a
+    query can state it and a search can be devised from it rather than only evaluating
+    it after the fact.
+    """
+    assert issubclass(ViewDependentSpatialRelation, Predicate)
+
+
+@pytest.mark.parametrize(
+    "relation",
+    [
+        Stable,
+        InContactWith,
+        VisibleTo,
+        Reachable,
+        SupportedBy,
+        Supports,
+        InsideOf,
+        InsideRegion,
+        PlaceIsOccupied,
+        ViewDependentSpatialRelation,
+    ],
+)
+def test_every_relation_is_a_predicate(relation):
+    """
+    A relation belongs in the vocabulary a statement can assert, so it is a predicate
+    even where what it reads is a measurement.
+    """
+    assert issubclass(relation, Predicate)
+
+
+def test_containment_answers_whether_it_holds_rather_than_by_how_much(two_block_world):
+    center, top = two_block_world
+
+    assert InsideOf(top, center)() in (True, False)
+
+
+def test_containment_reports_the_fraction_it_measured(two_block_world):
+    """
+    The judgement is a threshold over a measurement, and the measurement stays readable
+    on its own for the callers that compare it against a threshold of their own.
+    """
+    center, top = two_block_world
+    relation = InsideOf(top, center)
+
+    assert relation.compute_containment_ratio() == pytest.approx(
+        InsideOf(top, center).compute_containment_ratio()
+    )
+
+
+def test_the_threshold_is_what_turns_the_measurement_into_a_verdict(two_block_world):
+    """
+    The same pair reads either way depending only on how much containment is asked for,
+    which is what makes the threshold the statement of intent rather than a tuned
+    constant hidden in the caller.
+    """
+    center, top = two_block_world
+    measured = InsideOf(top, center).compute_containment_ratio()
+
+    assert InsideOf(top, center, minimum_containment_ratio=measured)()
+    assert not InsideOf(top, center, minimum_containment_ratio=measured + 0.01)()
+
+
+def test_support_relates_the_supported_thing_to_what_holds_it_up():
+    supported = Body(name=PrefixedName("supported"))
+    supporting = Body(name=PrefixedName("supporting"))
+
+    relation = SupportedBy(supported=supported, supporting=supporting)
+
+    assert relation.subject is supported
+    assert relation.object is supporting
+
+
+def test_support_asserted_of_a_variable_is_carried_as_a_symbolic_expression():
+    """
+    A statement asserts support about the thing it is looking for, which has no value
+    yet, so constructing the relation over it has to yield an expression a backend can
+    read rather than an instance that would have to be evaluated at once.
+    """
+    supporting = Body(name=PrefixedName("supporting"))
+    sought = variable(Body, [])
+
+    relation = SupportedBy(supported=sought, supporting=supporting)
+
+    assert StatedRelation.read_from(relation, sought) == StatedRelation(
+        relation_type=SupportedBy, related_thing=supporting
+    )
+
+
+def test_support_holds_exactly_where_the_geometric_reading_says_it_does(
+    two_block_world,
+):
+    center, top = two_block_world
+
+    assert SupportedBy(supported=top, supporting=center)() is is_supported_by(
+        top, center
+    )
