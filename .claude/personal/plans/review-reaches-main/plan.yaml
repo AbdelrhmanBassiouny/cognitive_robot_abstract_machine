@@ -49,26 +49,6 @@ tracks:
   wave: orphans
 
 items:
-- id: predicates-land
-  title: Land the predicate classes so the branches waiting on them can rebase
-  branch: sdt_predicates_answer_whether_they_hold
-  pull_request_number: 229
-  track: landing
-  depends_on: []
-  status: in_progress
-  notes: >
-    Nothing here is undecided. A collision scan run on 2026-09-19 independently
-    rediscovered that predicates.py was converted from functions to classes twice --
-    #229's InContactWith/SupportedBy/VisibleTo naming against #33 and #35's
-    Contact/IsSupportedBy/Visible -- and both pull requests already record the
-    developer's 2026-08-31 decision in #229's favour, with #33's rebase tracked as
-    eql-verbalization's p4-sdt-migration. The only outstanding thing is the merge:
-    #33 states plainly that its rebase cannot start until #229 lands. #229 is off main,
-    mergeable_state clean, labelled in-review, 717 insertions over 5 files.
-    So this item is a merge, not a design question, and it blocks the perception join.
-  blockers:
-  - '#33 and #35 cannot rebase until this lands, and #33''s own coverage test forbids it
-    taking main''s predicates.py before then.'
 - id: front-line-landed
   title: Drive the thirty-six pull requests based on main to landing, shallowest first
   branch: null
@@ -81,8 +61,10 @@ items:
     36 are based on it directly -- #408 at +1 commit, #409 and #405 at +2, #365 at +6,
     #367/#371/#372/#362 at +10, #357 at +11. This item is not one pull request: it is
     the decision to spend review capacity here before anywhere else, and to re-measure
-    chain depth after each landing. Most of these belong to other plans; this item
-    tracks the ordering, not the work.
+    chain depth after each landing. Most of these belong to other plans -- #229 in
+    particular is knowledge-directed-requests' predicates-answer-whether-they-hold, and
+    both #33/#35 and this plan's perception-join wait on it -- so this item tracks the
+    ordering, not the work.
 - id: place-grasp-rebased
   title: Settle how a place learns the grasp it carries, against main rather than a branch
   branch: claude/the-place-an-insertion-builds-on
@@ -124,7 +106,7 @@ items:
   branch: claude/detector-consolidation-analysis-rgg3xg
   pull_request_number: 299
   track: perception-join
-  depends_on: [predicates-land]
+  depends_on: []
   status: blocked
   notes: >
     #299's 9c4840bf94 already is the join commit -- its own message says the two
@@ -138,6 +120,12 @@ items:
     and reverted twice before this was understood; see the pr-progress note for the two
     wrong outcomes that produced.
   blockers:
+  - 'Waits on #229 landing, which is knowledge-directed-requests'' own item
+    predicates-answer-whether-they-hold (tracking issue #201) -- a cross-plan edge
+    depends_on cannot express. #33 and #35 wait on the same merge, tracked as
+    eql-verbalization''s p4-sdt-migration. The 2026-08-31 decision settling
+    predicates.py in #229''s favour is already recorded on both #229 and #33, so nothing
+    is undecided; only the merge is outstanding.'
   - 'Eleven commits on #265 touch #299''s own eight files and are on no lineage branch.
     Four are convergence glue a correctly ordered stack does not need; the other seven
     are perception-direct-commits.'
