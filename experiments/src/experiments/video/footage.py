@@ -35,7 +35,10 @@ The size a film draws itself at.
 @dataclass(frozen=True)
 class TimedImage:
     """
-    One colour image and when it was taken.
+    One colour image of a recording and when it was taken.
+
+    The image itself is read from the cache when asked for, so a film of thousands of
+    images does not hold them all at once.
     """
 
     seconds: float
@@ -43,10 +46,22 @@ class TimedImage:
     Seconds since the recording began.
     """
 
-    image: Frame
+    cache: SceneCache
     """
-    The image, as red, green and blue.
+    Where the image is kept.
     """
+
+    key: str
+    """
+    What it is kept as.
+    """
+
+    @property
+    def image(self) -> Frame:
+        """
+        The image, as red, green and blue.
+        """
+        return self.cache.picture(self.key)
 
 
 @dataclass
@@ -75,7 +90,7 @@ class CameraFilm:
         if stamps is None:
             stamps = self._decode_and_keep(key)
         return [
-            TimedImage(seconds=seconds, image=self.cache.picture(self._image_key(index)))
+            TimedImage(seconds=seconds, cache=self.cache, key=self._image_key(index))
             for index, seconds in enumerate(stamps["seconds"])
         ]
 

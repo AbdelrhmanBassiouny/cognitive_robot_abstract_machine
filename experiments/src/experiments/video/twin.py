@@ -305,6 +305,14 @@ class TwinPictures:
             height=self.resolution.height,
         )
 
+    @cached_property
+    def drawing(self) -> WorldPicture:
+        """
+        What draws the world, kept for every picture since it holds the meshes it
+        loaded.
+        """
+        return WorldPicture(world=self.world)
+
     def _key(self, part: str) -> str:
         flight = "_".join(
             f"{value:+.2f}" for value in (*self.overview_from, *self.close_from)
@@ -314,7 +322,7 @@ class TwinPictures:
     def _drawn(self, key: str, viewpoint: Viewpoint) -> Frame:
         kept = self.cache.picture(key)
         if kept is None:
-            kept = WorldPicture(world=self.world).taken_from(viewpoint).colors
+            kept = self.drawing.taken_from(viewpoint).colors
             self.cache.keep_picture(key, kept)
         return kept
 
@@ -325,7 +333,7 @@ class TwinPictures:
         key = self._key("before")
         kept = self.cache.picture(key)
         if kept is None:
-            picture = WorldPicture(world=self.world).taken_from(self.viewpoint(0.0))
+            picture = self.drawing.taken_from(self.viewpoint(0.0))
             mask = cv2.dilate(
                 picture.mask_of(self.cube).astype(np.uint8), np.ones((5, 5), np.uint8)
             )

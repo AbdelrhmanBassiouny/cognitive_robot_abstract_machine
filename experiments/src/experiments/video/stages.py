@@ -23,7 +23,7 @@ from experiments.video.canvas import (
     Typesetting,
     dimmed,
     filled,
-    framed,
+    fitted,
     pasted,
 )
 from experiments.video.figure import FrameworkFigure, Slot
@@ -234,3 +234,34 @@ class Spotlight(Scene):
         frame = dimmed(base, 0.55 * progress)
         frame = filled(frame, where.inset(-4), self.hue)
         return pasted(frame, work, where)
+
+
+# %% a scene drawn at its own size, shown full screen
+
+
+@dataclass
+class OnCanvas(Scene):
+    """
+    A scene that draws itself at its own size, fitted onto the video's canvas.
+    """
+
+    work: Scene
+    """
+    The scene shown.
+    """
+
+    resolution: Resolution = VIDEO_RESOLUTION
+    """
+    The size of the canvas.
+    """
+
+    @property
+    def duration(self) -> float:
+        return self.work.duration
+
+    def picture_at(self, seconds: float) -> Frame:
+        return fitted(
+            self.resolution.blank(255),
+            self.work.frame_at(seconds),
+            Area.whole(self.resolution),
+        )

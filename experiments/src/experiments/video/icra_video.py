@@ -46,7 +46,7 @@ from experiments.video.rules import HoleOnThePicture, HoleRuleTrace, RuleTreeEva
 from experiments.video.script import VideoScript
 from experiments.video.slides import ClosingSlide, TextSlide, TitleSlide
 from experiments.video.sources import FRAMEWORK_DEMO_EPISODE, RecordedRun
-from experiments.video.stages import FigureOnCanvas, FigureScene, Spotlight
+from experiments.video.stages import FigureOnCanvas, FigureScene, OnCanvas, Spotlight
 from experiments.video.timeline import Scene, Timeline
 from experiments.video.twin import TwinPictures, WorkingMemoryCheck
 
@@ -215,7 +215,14 @@ class VideoAssembly:
         ]
 
     def perturbation_matrix(self) -> PerturbationMatrix:
-        tiles = [[PerturbationTile(RecordedRun(episode)) for episode in row] for row in PERTURBATION_EPISODES]
+        # one recording kept no transforms; the camera stood the same way for every run that day
+        tiles = [
+            [
+                PerturbationTile(RecordedRun(episode, camera_pose_from=self.demo.bag))
+                for episode in row
+            ]
+            for row in PERTURBATION_EPISODES
+        ]
         return PerturbationMatrix(tiles, GridLabels(), played_for=8.0 if self.preview else 40.0)
 
     def scenes(self) -> List[Scene]:
@@ -229,11 +236,19 @@ class VideoAssembly:
         for slot in Slot:
             scenes.extend(self.backend_scenes(slot))
         scenes.append(FigureScene(self.figure(len(Slot), None, "Every open field answered: the resolved plan is carried out on the robot."), held_for=2.5))
-        scenes.append(ExecutionFootage(CameraFilm(self.demo), from_second=EXECUTION_FROM_SECOND, speed=8.0 if self.preview else 4.0,
-                                       caption="the robot's own camera: the cube picked up and put through the square hole"))
+        scenes.append(
+            OnCanvas(
+                ExecutionFootage(
+                    CameraFilm(self.demo),
+                    from_second=EXECUTION_FROM_SECOND,
+                    speed=8.0 if self.preview else 4.0,
+                    caption="the robot's own camera: the cube picked up and put through the square hole",
+                )
+            )
+        )
         scenes.append(TextSlide(["Perturbation experiments", "Six episodes on the robot: the scene standing still or the robot sorting,",
                                  "unperturbed, with a person shoving a piece, or moving the board."], held_for=4.0))
-        scenes.append(self.perturbation_matrix())
+        scenes.append(OnCanvas(self.perturbation_matrix()))
         scenes.append(ClosingSlide(self.script, held_for=5.0))
         return scenes
 

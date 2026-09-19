@@ -1,0 +1,42 @@
+# The supplementary video
+
+`experiments.video` cuts the paper's supplementary video from what the robot recorded:
+the framework demo episode and the six perturbation episodes, read back from the
+results database and the episode artifacts, and writes it out as an mp4 within the
+conference's limits.
+
+## Rendering it
+
+```bash
+export MONTESSORI_SORTING_DATABASE_URI=postgresql+psycopg://semantic_digital_twin:montessori@localhost:5432/montessori_sorting_results
+export EPISODE_ARTIFACTS_DIRECTORY=/path/to/reproduction_package/episode-artifacts
+python -m experiments.video.icra_video --output video.mp4 --paper-id 1234
+```
+
+`--preview` renders a shorter, rougher version for looking at. Everything that takes a
+while -- the look run over the recordings' frames, the pictures of the twin, the
+decoded camera streams -- is kept under `EXPERIMENTS_VIDEO_CACHE`
+(`~/.cache/experiments/video` by default), so a second render is mostly encoding.
+
+The words the slides carry, including the submission number and what the robot is
+called on screen, are `VideoScript` in `script.py`.
+
+## How it is built
+
+- `timeline.py` -- a `Scene` says how long it lasts and what it shows at any moment;
+  a `Timeline` lays scenes end to end, dissolving each into the next, and reads them
+  out as frames at one rate.
+- `encoding.py` -- `H264Encoder` writes a timeline to an mp4 no larger than a byte
+  budget, in two passes; `SubmissionLimits` checks the file the way the call for
+  papers states the limits.
+- `figure.py` and `stages.py` -- the paper's framework figure, compiled from its own
+  typst source with a `video` input that says how many backends have answered and
+  which slot is being answered now; `Spotlight` grows a backend's work out of its
+  panel of the figure and shrinks it back once answered.
+- `perception.py`, `twin.py`, `grasp.py`, `rules.py` -- one scene per backend, each
+  driving the backend's own code on the recorded run: the narrowing, the predicate's
+  boxes, the model's samples, the rule tree's trace.
+- `footage.py` and `perturbations.py` -- the robot's camera played as a time-lapse,
+  alone and as a grid of the perturbation episodes with the look's findings drawn
+  while the robot stands still.
+- `icra_video.py` -- the scenes in order, and the command line.

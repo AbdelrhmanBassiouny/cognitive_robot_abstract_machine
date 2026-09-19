@@ -10,7 +10,8 @@ from functools import cached_property
 from pathlib import Path
 
 import numpy as np
-from typing_extensions import List
+import yaml
+from typing_extensions import List, Optional
 
 from experiments.episodes.artifacts import ArtifactDirectory, EpisodeArtifacts
 from experiments.episodes.episode import RecordedTrial
@@ -19,6 +20,7 @@ from experiments.montessori.perception.camera import RgbdFrame
 from experiments.montessori.perception.recordings import (
     REFERENCE_FRAME,
     RecordedCamera,
+    TransformTopic,
 )
 from experiments.montessori.results_database import ResultsDatabase
 from coraplex.datastructures.grasp import GraspDescription
@@ -54,6 +56,12 @@ class RecordedRun:
     artifacts: ArtifactDirectory = field(default_factory=ArtifactDirectory)
     """
     Where its files were kept.
+    """
+
+    camera_pose_from: Optional[Path] = None
+    """
+    A recording to read the camera's pose from where this episode's own recording
+    carries no transforms, or None to insist on this episode's.
     """
 
     @cached_property
@@ -127,12 +135,32 @@ class RecordedRun:
         """
         return self.kept.camera_recording
 
+    @property
+    def carries_camera_pose(self) -> bool:
+        """
+        Whether the recording holds the static transforms the camera's pose is read
+        from.
+        """
+        metadata = yaml.safe_load((self.bag / "metadata.yaml").read_text())
+        return any(
+            topic["topic_metadata"]["name"] == str(TransformTopic.STATIC)
+            and topic["message_count"] > 0
+            for topic in metadata["rosbag2_bagfile_information"][
+                "topics_with_message_count"
+            ]
+        )
+
     @cached_property
     def camera(self) -> RecordedCamera:
         """
-        The robot's camera, as the recording holds it.
+        The robot's camera, as the recording holds it, its pose borrowed from another
+        recording where this one kept none.
         """
-        return RecordedCamera(bag=self.bag, reference_frame=REFERENCE_FRAME)
+        return RecordedCamera(
+            bag=self.bag,
+            reference_frame=REFERENCE_FRAME,
+            camera_bag=None if self.carries_camera_pose else self.camera_pose_from,
+        )
 
     def frame(self, index: int) -> RgbdFrame:
         """

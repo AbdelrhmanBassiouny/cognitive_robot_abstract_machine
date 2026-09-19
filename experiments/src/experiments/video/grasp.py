@@ -174,7 +174,7 @@ class GraspOptionsOnThePicture:
             self.frame, self.cube_at[:2].reshape(1, 2), float(self.cube_at[2])
         )
         ends = np.array([end for direction in ApproachDirection for end in self.arrow(direction)])
-        radius = float(np.abs(ends - centre).max()) * 1.6
+        radius = float(np.abs(ends - centre).max()) * 1.9
         return Area(centre[0] - radius, centre[1] - radius, 2 * radius, 2 * radius)
 
     def drawn(self, highlighted: Optional[ApproachDirection], weight: float) -> Frame:
@@ -198,10 +198,13 @@ class GraspOptionsOnThePicture:
                 cv2.LINE_AA,
                 tipLength=0.35,
             )
+            # the name sits just beyond the arrow's tail, clear of the arrow itself
+            beyond = tail + (tail - head) * 0.5
+            (text_width, text_height), _ = cv2.getTextSize(direction.name, cv2.FONT_HERSHEY_SIMPLEX, 0.55, 2)
             cv2.putText(
                 picture,
                 direction.name,
-                tuple((tail + (tail - head) * 0.35 - np.array([18.0, -6.0])).round().astype(int)),
+                (int(beyond[0] - text_width / 2), int(beyond[1] + text_height / 2)),
                 cv2.FONT_HERSHEY_SIMPLEX,
                 0.55,
                 color,

@@ -9,9 +9,9 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
+from experiments.video.cache import SceneCache
 from experiments.video.footage import CameraFilm, ExecutionFootage, TimedImage
-from experiments.video.perturbations import IdleStretches, Stretch
-from experiments.video.timeline import Resolution
+from experiments.video.perturbations import IdleStretches, RecordingStretch
 from experiments.video.twin import BoxCorners, SupportReading
 
 # %% boxes
@@ -52,13 +52,13 @@ def test_the_reading_line_states_the_comparison_the_predicate_makes(overlap: flo
 
 
 def test_a_stretch_holds_its_ends() -> None:
-    stretch = Stretch(1.0, 2.0)
+    stretch = RecordingStretch(1.0, 2.0)
     assert stretch.holds(1.0) and stretch.holds(2.0) and not stretch.holds(2.01)
 
 
 def test_the_robot_stands_still_outside_its_motions_with_a_margin(monkeypatch: pytest.MonkeyPatch) -> None:
     idle = IdleStretches.__new__(IdleStretches)
-    monkeypatch.setattr(IdleStretches, "moving", [Stretch(9.5, 22.5)], raising=False)
+    monkeypatch.setattr(IdleStretches, "moving", [RecordingStretch(9.5, 22.5)], raising=False)
     assert idle.idle_at(5.0)
     assert not idle.idle_at(10.0)
     assert not idle.idle_at(22.0)
@@ -68,10 +68,16 @@ def test_the_robot_stands_still_outside_its_motions_with_a_margin(monkeypatch: p
 # %% the film
 
 
+def timed(seconds: float) -> TimedImage:
+    """
+    An image stamp with nothing behind it.
+    """
+    return TimedImage(seconds, SceneCache("unused"), "none")
+
+
 def test_a_film_answers_the_image_taken_last_before_a_moment() -> None:
     film = CameraFilm.__new__(CameraFilm)
-    blank = Resolution(4, 4).blank()
-    film.__dict__["images"] = [TimedImage(0.0, blank), TimedImage(0.3, blank), TimedImage(0.7, blank)]
+    film.__dict__["images"] = [timed(0.0), timed(0.3), timed(0.7)]
     assert film.at(0.5).seconds == 0.3
     assert film.at(0.0).seconds == 0.0
     assert film.length == 0.7
@@ -79,6 +85,6 @@ def test_a_film_answers_the_image_taken_last_before_a_moment() -> None:
 
 def test_the_footage_lasts_the_stretch_divided_by_the_speed() -> None:
     film = CameraFilm.__new__(CameraFilm)
-    film.__dict__["images"] = [TimedImage(0.0, Resolution(4, 4).blank()), TimedImage(40.0, Resolution(4, 4).blank())]
+    film.__dict__["images"] = [timed(0.0), timed(40.0)]
     assert ExecutionFootage(film, from_second=8.0, speed=4.0).duration == 8.0
     assert ExecutionFootage(film, from_second=0.0, to_second=20.0, speed=2.0).duration == 10.0

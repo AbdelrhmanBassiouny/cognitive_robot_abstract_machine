@@ -57,7 +57,7 @@ Seconds either side of a recorded motion the robot is not counted as standing st
 
 
 @dataclass(frozen=True)
-class Stretch:
+class RecordingStretch:
     """
     A stretch of a recording, in seconds from its start.
     """
@@ -93,7 +93,7 @@ class IdleStretches:
         return datetime.datetime.fromtimestamp(nanoseconds / 1e9)
 
     @cached_property
-    def moving(self) -> List[Stretch]:
+    def moving(self) -> List[RecordingStretch]:
         """
         Every stretch the robot moved through, in recording time, widened by the margin.
         """
@@ -102,7 +102,7 @@ class IdleStretches:
             offset = (trial.began_at - self.recording_began).total_seconds()
             for motion in trial.motions:
                 stretches.append(
-                    Stretch(
+                    RecordingStretch(
                         offset + motion.start_moment - IDLE_MARGIN,
                         offset + motion.end_moment + IDLE_MARGIN,
                     )
@@ -309,19 +309,22 @@ class PerturbationMatrix(Scene):
 
     def picture_at(self, seconds: float) -> Frame:
         frame = self.resolution.blank(255)
-        margin, header, row_label, gap = 16, 54, 150, 14
+        margin, header, row_label, gap, footer = 16, 54, 160, 12, 44
         columns, rows = len(self.labels.columns), len(self.labels.rows)
         width = (self.resolution.width - margin - row_label - (columns - 1) * gap - margin) / columns
-        height = (self.resolution.height - margin - header - (rows - 1) * gap - margin - 40) / rows
+        # every tile keeps the camera's own aspect, so none is letterboxed
+        height = width * 9 / 16
+        room = self.resolution.height - margin - header - footer
+        margin_top = margin + header + (room - rows * height - (rows - 1) * gap) / 2
         heading = Typesetting(size=28, face=Face.BOLD, color=Ink.TEXT.rgb)
         for column, name in enumerate(self.labels.columns):
             x = margin + row_label + column * (width + gap) + width / 2
             frame = heading.written(frame, name, (x, margin + header / 2), Anchor.CENTRE_MIDDLE)
         for row, name in enumerate(self.labels.rows):
-            y = margin + header + row * (height + gap) + height / 2
+            y = margin_top + row * (height + gap) + height / 2
             frame = heading.written(frame, name.replace(" ", "\n", 1), (margin + row_label / 2, y), Anchor.CENTRE_MIDDLE)
             for column, tile in enumerate(self.tiles[row]):
-                cell = Area(margin + row_label + column * (width + gap), margin + header + row * (height + gap), width, height)
+                cell = Area(margin + row_label + column * (width + gap), margin_top + row * (height + gap), width, height)
                 picture, perceiving = tile.picture_at(seconds * self.speed)
                 frame = filled(frame, cell, Ink.TEXT.rgb)
                 frame = fitted(frame, picture, cell)
