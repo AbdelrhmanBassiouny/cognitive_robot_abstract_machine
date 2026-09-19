@@ -164,12 +164,74 @@ no world), and the message said "more than 20 worlds" while the check was `> 30`
     needs either a deeper dive into the exemption mechanism against this
     specific fixture graph, or a decision on an interim non-zero combined
     budget grounded in this real data.
-15. [next] Still open from step 9's predecessor: how to respond to Tigul
+15. [done] Asked to pursue real-environment investigation of the systemic
+    finding (semantic_digital_twin: 25, giskardpy: 14, coraplex: 9, etc.)
+    before deciding: "Install docker and run the docker setup or build file
+    to install ros and everything needed, then test there, if that didn't
+    work out then deepdive and depend on CI roundtrips." Docker worked:
+    started `dockerd` in this container (root, full capabilities), pulled
+    `ghcr.io/abdelrhmanbassiouny/cognitive_robot_abstract_machine:jazzy` (the
+    exact CI image) directly rather than building `.github/docker/Dockerfile`
+    from scratch, ran it with `--network host` so it could reach this
+    session's own HTTPS proxy at `127.0.0.1:36191` (a bridge network's
+    `host.docker.internal` could not reach it - proxy is loopback-only), gave
+    it a local clone of the pushed branch, and ran `uv sync --extra dev
+    --active` + `uv pip install drake` exactly as `ci_reusable.yml` does. Ran
+    the real `semantic_digital_twin` suite under `-n auto`
+    (`python -m pytest -n auto cognitive_robot_abstract_machine/test/semantic_digital_twin_test`,
+    ~21 minutes on this machine's 4 workers) and read the real per-worker
+    `.living_worlds_tally/*.json` files the combined-across-workers ledger
+    writes - ground truth, not just the aggregate console message. Found two
+    concrete, distinct, both-legitimate root causes the fixture-scope-owner
+    mechanism couldn't see:
+    - `test_robot_joint_names.py::parse_robot_description` is decorated
+      `@lru_cache(maxsize=None)` and called directly from parametrized test
+      bodies (`world = parse_robot_description(robot_type)`) - a plain
+      Python-level, process-lifetime memoization with no pytest fixture
+      involved at all, so `ignore_worlds_created_here()` never wraps it.
+      Exactly 11 of the local run's surviving worlds, one per robot type,
+      matching the parametrization one-to-one - conclusive, not
+      circumstantial.
+    - Tests going through `WorldReasoner(...).infer_semantic_annotations()`
+      or `explain_inference(...)` (`test_a_robot_in_the_apartment_is_left_alone`,
+      `test_explain_inferred_semantic_annotations`, several collision-rule
+      tests) each left 1-4 worlds. `WorldReasoner.reason()` calls
+      `self.reasoner.rdr.classify(self.world)` (`krrood.ripple_down_rules`'
+      `CaseReasoner`) - `explain_inference` needs to look up *past*
+      classifications, which strongly suggests the rule engine retains case
+      history somewhere outside the test's own scope. Not traced to the
+      exact retention point inside `krrood.ripple_down_rules` (a different
+      foundational package) - circumstantial, not conclusive like the first
+      one.
+    - Also found, independently, while reading the fixture graph: `FixtureScope
+      .outlives_a_single_test` omits `CLASS` scope, which does outlive a
+      single test same as module/package/session - wrong as written, though
+      nothing in this codebase uses `scope="class"` today so it wasn't
+      contributing to these numbers.
+    Presented both findings and asked how to proceed (extend the exemption
+    mechanism further, add a per-test/per-module explicit allowance, or hold
+    off pending the other libs) rather than picking one unilaterally.
+16. [done] Told to revert to the single manually-set threshold instead of
+    pursuing any of the above. Reverted the fixture-scope-owner redesign
+    entirely: `git revert --no-edit 37cbf0a61 26686b87b 8489a2579` (newest
+    first) produced commits `4873feae1`, `40dab0219`, `350ce29dd`, restoring
+    the tree to exactly commit `2de5219fb` - confirmed with an empty
+    `git diff 2de5219fb HEAD`. That commit already had both checks (per-module
+    `enforce_limit` and the combined-across-workers `enforce_combined_limit`)
+    comparing against one shared `MAXIMUM_LIVING_WORLDS` constant, and was the
+    last commit with a real, CI-confirmed green run (`run 35363733920`) before
+    the redesign was tried. Re-ran the unit test suite in a sandbox against a
+    real pytest 7.4.4 install: 20 passed. Fetched (no new remote commits) and
+    pushed. Updated the PR description's "Review round" section to record the
+    full sequence (tried, then reverted) rather than describing the abandoned
+    design as current.
+17. [next] Still open from step 9's predecessor: how to respond to Tigul
     upstream about the original "depend on the workers" ask, now that it has
-    been answered four different ways (reverted per-worker divisor,
-    worker-scaled combined check, flat-total combined check, and removing the
-    threshold concept entirely) - a decision for a human on the upstream
-    thread, not something to guess a fifth time.
+    been tried five different ways (reverted per-worker divisor,
+    worker-scaled combined check, flat-total combined check, removing the
+    threshold concept entirely, then reverting back to the flat threshold) -
+    a decision for a human on the upstream thread, not something to guess a
+    sixth time.
 
 **Verification notes**
 - The workspace packages are not installed in this container (no `semantic_digital_twin`,
