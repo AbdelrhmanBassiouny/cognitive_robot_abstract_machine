@@ -83,9 +83,8 @@ items:
     resolved it on the integration branch. If #296 is instead rebased onto main first
     and makes the same decision, #422's second commit becomes empty and this item closes
     with #296 rather than with #422.
-  blockers:
-  - 'Needs the developer to confirm that dropping #296''s _how_the_object_is_held in
-    favour of main''s _grasp_description is the wanted direction; asked on #296.'
+    Direction confirmed by the developer on 2026-09-19: keep main's _grasp_description.
+    Recorded on #296. Nothing is waiting on an answer here any more.
 - id: insertion-action
   title: An insertion is an action of its own
   branch: claude/an-insertion-is-an-action-of-its-own
@@ -144,26 +143,29 @@ items:
     and a correctly ordered stack should not need them.
 - id: foldins-rehomed
   title: Rehome the work pushed onto a closed pull request's branch
-  branch: sdt_segmind_krrood_from_fast_monitor
-  pull_request_number: 244
+  branch: null
+  pull_request_number: null
   track: orphan-recovery
   depends_on: []
-  status: blocked
+  status: done
   session: https://claude.ai/code/session_01RyWyuVvJYP9E3gWEw7Z8qF
   notes: >
-    #244 was closed unmerged on 2026-09-18, and its 4,255 insertions are not on main --
-    spatial_types/numeric.py is absent there. It carries the cram2-link-sent label, so
-    it looks like a deliberate hand-off upstream rather than an abandonment. On
-    2026-09-19, before noticing it was closed, this session pushed two commits onto its
-    branch: b5be1a30ad (a motion event's poses stated in the world frame they were read
-    in) and 223e532824 (the former #415, whose base.py needs
-    spatial_types.numeric.NumericPose and so cannot sit on main). Both are now in no
-    open pull request. They need either the upstream pull request to pick them up or a
-    fork pull request whose base carries #244's content; neither is this session's to
-    choose.
-  blockers:
-  - 'Needs the developer to say whether #244 was closed because it landed upstream, and
-    where the two commits should go.'
+    Resolved 2026-09-19. #244 was closed unmerged on 2026-09-18 and split by another
+    session into #408 (krrood, off main), #409 (semantic_digital_twin, off main) and
+    #410 (segmind, stacked on #409 because segmind imports sdt's numeric module). Before
+    noticing the closure, this session had pushed two commits onto #244's branch:
+    a motion event's poses stated in the world frame they were read in, and the former
+    #415, whose base.py needs spatial_types.numeric.NumericPose and so cannot sit on
+    main. Both touch only segmind, so both were cherry-picked onto #410 as 952397cd7f
+    and 30a1f994fe -- no conflict, import- and attribute-verified by AST against that
+    branch's tree, and `git diff origin/sdt_segmind_krrood_from_fast_monitor HEAD --
+    segmind test/segmind_test` empty, so #410 is still byte-identical to #244's branch
+    over the segmind paths as it finally stood. #410 is left a draft and is
+    montessori-eql-stack's item from here, which is why this one claims neither its
+    branch nor its number.
+    The lesson is worth keeping: check a pull request's state before pushing to it. Four
+    fold-in targets were used that day and only this one had closed; one state check
+    would have caught it.
 - id: orphan-subprs-triaged
   title: Triage the thirty-one closed sub-pull-requests nothing tracks
   branch: null

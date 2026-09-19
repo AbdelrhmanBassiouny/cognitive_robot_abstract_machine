@@ -106,8 +106,17 @@ clearest evidence for this plan's ordering: the queue is blocked on landing.
   `PlaceAction._grasp_description`. #229 does not touch `placing.py` at all. Corrected on
   both pull requests and in #422's commit messages; the resolution itself was always
   right, only its rationale was wrong.
+- **#296 against `main`: settled 2026-09-19, in `main`'s favour.** `_grasp_description`
+  is the one name; #296's `_how_the_object_is_held` folds into it as its first branch and
+  its `grasp_description` field is kept. #422 already carries that resolution, so if #296
+  is instead rebased onto `main` in place, #422's second commit becomes empty.
 - **Two commits were pushed onto #244's branch after #244 had closed.** Its state was not
-  checked first. See `foldins-rehomed`.
+  checked first — and by then another session had already split #244 into #408 (krrood),
+  #409 (`semantic_digital_twin`) and #410 (segmind, stacked on #409 because segmind imports
+  sdt's numeric module). Both commits touch only segmind, so both were rehomed onto #410 on
+  2026-09-19 and `foldins-rehomed` is done. The split is the better shape for the same
+  reason this plan exists: one reviewable package per pull request, with the one real
+  dependency between them made explicit instead of assumed away.
 
 ## The method lesson, worth carrying beyond this plan
 
