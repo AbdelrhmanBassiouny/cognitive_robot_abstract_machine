@@ -78,6 +78,16 @@ class ToolingDirectory(StrEnum):
     The maintenance pass's own instructions.
     """
 
+    PLAN_ITEM_RESOLVE_SKILL = ".claude/skills/plan-item-resolve"
+    """
+    The resolve skill's instructions, and the documents cited beside them.
+    """
+
+    @classmethod
+    def skills(cls) -> tuple[ToolingDirectory, ...]:
+        """:return: Every member that is a skill rather than another kind of home."""
+        return tuple(member for member in cls if member.startswith(".claude/skills/"))
+
     @property
     def path(self) -> Path:
         """:return: This directory inside the repository under test."""

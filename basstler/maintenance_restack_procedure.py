@@ -18,6 +18,7 @@ from basstler.maintenance_github import ForkPullRequests
 from basstler.maintenance_restack_steps import (
     BranchOutcome,
     BranchUnderRestack,
+    ConflictResponse,
     IntegrateParent,
     PublishBranch,
     RefuseAnUnsafeMove,
@@ -182,7 +183,10 @@ class RestackWorktree:
 
 
 def restack(
-    stack: Stack, git: GitCommandRunner, fork: ForkPullRequests
+    stack: Stack,
+    git: GitCommandRunner,
+    fork: ForkPullRequests,
+    stacked_on: str | None = None,
 ) -> list[BranchOutcome]:
     """
     Put every branch whose parent moved through :data:`RESTACK_STEPS`, bottom up.
@@ -192,11 +196,19 @@ def restack(
     own files still in place. The worktree goes first so it is gone before the branch is
     wanted again.
 
+    Naming a branch in *stacked_on* carries whatever that branch now holds into the
+    branches stacked on it, and leaves the rest of the board alone. It also decides who
+    answers a collision: naming a subtree says the caller is present and will judge it,
+    where a whole-board pass has to tell each branch's owner - see
+    :class:`maintenance_restack_steps.ConflictResponse`.
+
     :param stack: The derived stack, whose plan this executes.
     :param git: The runner naming the checkout to add the worktree to.
     :param fork: The fork, read for conflict state and written to when reporting.
+    :param stacked_on: The branch whose subtree to restack, or ``None`` for every branch.
     :return: One outcome per branch in the plan, parent before child.
     """
+    conflict_response = ConflictResponse.chosen_for(stacked_on)
     with DetachedCheckout.of(git), RestackWorktree.added_to(git) as switching:
         checks = CommitMoveChecks(
             stack=stack,
@@ -214,9 +226,10 @@ def restack(
                     git=switching,
                     fork=fork,
                     checks=checks,
+                    conflict_response=conflict_response,
                 )
             )
-            for entry in restack_plan(stack)
+            for entry in restack_plan(stack, stacked_on)
         ]
 
 

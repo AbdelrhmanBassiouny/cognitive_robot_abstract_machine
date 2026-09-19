@@ -45,6 +45,7 @@ from basstler.stack import (
     print_configuration,
     reparents,
     resolve_remotes,
+    branches_stacked_on,
     order,
     promotion_order,
     restack_plan,
@@ -262,6 +263,89 @@ def test_restack_plan_reparents_child_of_merged_parent_onto_base():
     ]
     plan = restack_plan(build(prs, merged={"parent"}))
     assert plan == [{"branch": "child", "parent": "main", "strategy": "merge"}]
+
+
+# %% what is stacked on one branch
+
+
+def a_stack_three_deep():
+    """
+    :return: A stack of ``root`` -> ``middle`` -> ``leaf``, beside an unrelated branch.
+    """
+    return build(
+        [
+            PullRequest(1, "root", "main", draft=True),
+            PullRequest(2, "middle", "root", draft=True),
+            PullRequest(3, "leaf", "middle", draft=True),
+            PullRequest(4, "unrelated", "main", draft=True),
+        ]
+    )
+
+
+def test_every_branch_along_the_chain_is_stacked_on_the_named_one():
+    stacked = branches_stacked_on(a_stack_three_deep(), "root")
+    assert [branch.name for branch in stacked] == ["middle", "leaf"]
+
+
+def test_the_named_branch_is_not_stacked_on_itself():
+    stacked = branches_stacked_on(a_stack_three_deep(), "root")
+    assert "root" not in [branch.name for branch in stacked]
+
+
+def test_a_branch_on_another_parent_is_not_stacked_on_the_named_one():
+    stacked = branches_stacked_on(a_stack_three_deep(), "root")
+    assert "unrelated" not in [branch.name for branch in stacked]
+
+
+def test_a_branch_with_nothing_above_it_has_nothing_stacked_on_it():
+    assert branches_stacked_on(a_stack_three_deep(), "leaf") == []
+
+
+def test_a_chain_is_stacked_only_up_to_the_branch_that_has_landed():
+    # A merged branch has nothing to take from the branch below it, and whatever sits on
+    # it is no longer reached from below either: its parent has landed, so what it needs
+    # is a reparent onto the upstream base, which a whole-board pass owns.
+    stack = build(
+        [
+            PullRequest(1, "root", "main", draft=True),
+            PullRequest(2, "middle", "root", draft=False),
+            PullRequest(3, "leaf", "middle", draft=True),
+        ],
+        merged={"middle"},
+    )
+    assert branches_stacked_on(stack, "root") == []
+
+
+# %% the restack plan for one subtree
+
+
+def test_a_named_subtree_plans_only_what_is_stacked_on_it():
+    plan = restack_plan(a_stack_three_deep(), stacked_on="root")
+    assert plan == [
+        {"branch": "middle", "parent": "root", "strategy": "merge"},
+        {"branch": "leaf", "parent": "middle", "strategy": "merge"},
+    ]
+
+
+def test_naming_no_subtree_plans_the_whole_board():
+    assert [entry["branch"] for entry in restack_plan(a_stack_three_deep())] == [
+        "root",
+        "middle",
+        "leaf",
+        "unrelated",
+    ]
+
+
+def test_a_subtree_carries_each_branch_own_integration_strategy():
+    stack = build(
+        [
+            PullRequest(1, "root", "main", draft=True),
+            PullRequest(2, "rewritten", "root", draft=True, labels=["rebase"]),
+        ]
+    )
+    assert restack_plan(stack, stacked_on="root") == [
+        {"branch": "rewritten", "parent": "root", "strategy": "rebase"}
+    ]
 
 
 # %% landed parents that no open pull request describes

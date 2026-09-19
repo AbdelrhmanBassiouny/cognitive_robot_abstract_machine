@@ -78,7 +78,11 @@ from basstler.maintenance_report import (
     exit_code_for,
 )
 from basstler.maintenance_restack_procedure import restack
-from basstler.maintenance_restack_steps import BranchOutcome, RestackOutcome, RestackStep
+from basstler.maintenance_restack_steps import (
+    BranchOutcome,
+    RestackOutcome,
+    RestackStep,
+)
 
 from .scratch_repository import initialize_bare_repository, install_package_into
 from .constants import REPOSITORY_ROOT
@@ -269,6 +273,15 @@ class ForkCheckout:
         :return: The commit that branch points at on that remote.
         """
         return self.run_git("rev-parse", f"{remote}/{branch}")
+
+    def published_file(self, remote: str, branch: str, name: str) -> str:
+        """
+        :param remote: The remote to read from.
+        :param branch: The branch to read.
+        :param name: The file to read out of it.
+        :return: That file's contents on that branch.
+        """
+        return self.run_git("show", f"{remote}/{branch}:{name}") + "\n"
 
     def commit_on_the_fork(self, branch: str) -> str:
         """
@@ -750,6 +763,120 @@ def test_a_push_the_move_checks_refuse_is_not_made(fork_checkout: ForkCheckout):
     assert parent.outcome == RestackOutcome.REFUSED
     assert RefusalReason.FALSE_MERGE in parent.refusals
     assert fork_checkout.published_commit("origin", "a-parent") == before
+
+
+# %% restacking one subtree, for a fix just made below it
+
+
+def a_stack_three_deep(fork_checkout: ForkCheckout) -> None:
+    """
+    Publish ``a-parent`` on the base, ``a-child`` on it, and ``a-grandchild`` above that,
+    beside ``an-unrelated-branch`` cut straight from the base.
+
+    :param fork_checkout: The checkout to build the branches in.
+    """
+    a_parent_and_child(fork_checkout)
+    fork_checkout.branch_from("a-grandchild", "a-child")
+    fork_checkout.branch_from("an-unrelated-branch", UPSTREAM_BASE)
+
+
+def the_deeper_board() -> list[PullRequest]:
+    """
+    :return: The four-branch board matching :func:`a_stack_three_deep`.
+    """
+    return the_board() + [
+        PullRequest(number=42, head="a-grandchild", base="a-child", draft=False),
+        PullRequest(
+            number=43, head="an-unrelated-branch", base=UPSTREAM_BASE, draft=False
+        ),
+    ]
+
+
+def test_naming_a_branch_restacks_everything_stacked_on_it(
+    fork_checkout: ForkCheckout,
+):
+    a_stack_three_deep(fork_checkout)
+    fork_checkout.commit_on("a-parent", "a-parent-file", "the fix\n")
+
+    outcomes = restack(
+        a_stack(fork_checkout, the_deeper_board()),
+        fork_checkout.git,
+        RecordingPullRequests(),
+        stacked_on="a-parent",
+    )
+
+    assert [outcome.branch for outcome in outcomes] == ["a-child", "a-grandchild"]
+    assert (
+        fork_checkout.published_file("origin", "a-grandchild", "a-parent-file")
+        == "the fix\n"
+    )
+
+
+def test_naming_a_branch_leaves_the_rest_of_the_board_where_it_was(
+    fork_checkout: ForkCheckout,
+):
+    a_stack_three_deep(fork_checkout)
+    fork_checkout.commit_on(UPSTREAM_BASE, "a-base-file", "the base moved\n")
+    before = fork_checkout.published_commit("origin", "an-unrelated-branch")
+
+    restack(
+        a_stack(fork_checkout, the_deeper_board()),
+        fork_checkout.git,
+        RecordingPullRequests(),
+        stacked_on="a-parent",
+    )
+
+    assert fork_checkout.published_commit("origin", "an-unrelated-branch") == before
+
+
+def test_a_collision_with_the_fix_is_handed_back_rather_than_reported_to_its_owner(
+    fork_checkout: ForkCheckout,
+):
+    """
+    Whoever named the subtree is present and makes the parent-to-descendant judgement
+    themselves, so the descendant is left unlabelled and its owner is not asked to
+    resolve what the caller is about to.
+    """
+    a_parent_and_child(fork_checkout)
+    fork_checkout.commit_on("a-parent", "a-contested-file", "the fix\n")
+    fork_checkout.commit_on("a-child", "a-contested-file", "the child's version\n")
+    fork = RecordingPullRequests()
+
+    outcomes = restack(
+        a_stack(fork_checkout, the_board()),
+        fork_checkout.git,
+        fork,
+        stacked_on="a-parent",
+    )
+
+    collision = outcomes[0]
+    assert collision.branch == "a-child"
+    assert collision.parent == "a-parent"
+    assert collision.outcome == RestackOutcome.CONFLICT
+    assert collision.conflicting_paths == ("a-contested-file",)
+    assert collision.reported_at is None
+    assert fork.label_writes == []
+    assert fork.comments == []
+
+
+def test_the_restack_command_passes_the_subtree_it_was_given(
+    fork_checkout: ForkCheckout,
+):
+    """
+    The flag is what a session carrying a fix down its own stack invokes, so what it
+    names has to reach the pass rather than only the parser.
+    """
+    a_stack_three_deep(fork_checkout)
+    fork_checkout.commit_on(UPSTREAM_BASE, "a-base-file", "the base moved\n")
+    before = fork_checkout.published_commit("origin", "an-unrelated-branch")
+
+    status = RestackCommand().run(
+        AlreadyResolvedPass.over(fork_checkout, the_deeper_board()),
+        argparse.Namespace(stacked_on="a-parent"),
+    )
+
+    assert status == MaintenanceExitCode.SUCCESS
+    assert fork_checkout.published_commit("origin", "an-unrelated-branch") == before
 
 
 # %% the checkout the pass was invoked in

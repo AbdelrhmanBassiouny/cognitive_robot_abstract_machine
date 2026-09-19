@@ -160,5 +160,9 @@ item is already underway rather than being started:
   convention, unless they marked it ready themselves — in which case the
   item was finished and this skill should not have been resolving it.
 
+Once the fix is pushed, carry it into the pull requests stacked on this item's
+branch, which a resolve otherwise leaves holding the state it replaced — follow
+[`propagating-a-fix.md`](./propagating-a-fix.md).
+
 Finish by reporting what was wrong, what was changed, and what was decided —
 in `auto` mode this report is the user's first look at the resolution.
