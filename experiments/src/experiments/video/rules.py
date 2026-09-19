@@ -64,6 +64,31 @@ STATUS_INK: Dict[RuleStatus, Tuple[Rgb, Rgb]] = {
 The stroke and fill a rule is drawn in, by what happened to it.
 """
 
+EVALUATING_INK: Tuple[Rgb, Rgb] = ((0xD9, 0x77, 0x06), (0xFE, 0xF3, 0xC7))
+"""
+The stroke and fill of a rule while its condition is being checked.
+"""
+
+STATUS_WORD: Dict[RuleStatus, str] = {
+    RuleStatus.FIRED: "holds → fired",
+    RuleStatus.EVALUATED_NOT_FIRED: "does not hold",
+    RuleStatus.NOT_EVALUATED: "not reached",
+}
+"""
+What is written beside a rule once the case has reached it.
+"""
+
+ELSE_BRANCH = "else"
+"""
+What the branch to the next rule is called: taken when the condition does not hold.
+"""
+
+EXCEPT_BRANCH = "except"
+"""
+What the branch hanging off a rule that fired is called: where a rule correcting it
+would be added, and empty while none has been.
+"""
+
 # %% the rules, run on the recorded piece
 
 
@@ -246,8 +271,14 @@ class HoleOnThePicture:
 @dataclass
 class RuleTreeEvaluation(Scene):
     """
-    The rule tree drawn, the case arriving, each rule coloured as the trace says, and
-    the concluded hole ringed on the board.
+    The rule tree drawn as ripple-down rules, the case arriving, each rule coloured as
+    the trace says, and the concluded hole ringed on the board.
+
+    Every rule is one node with its condition over its conclusion. Two branches leave
+    it: ``else`` downward, to the rule tried when the condition does not hold, and
+    ``except`` to the side, where a rule correcting this one would hang once an expert
+    adds it. The case walks the ``else`` branches until a condition holds, and that
+    rule's conclusion is the answer.
     """
 
     trace: HoleRuleTrace
@@ -270,6 +301,12 @@ class RuleTreeEvaluation(Scene):
     Seconds between one rule being evaluated and the next.
     """
 
+    checking_share: float = 0.4
+    """
+    The share of :attr:`rule_every` a rule is shown being checked before its outcome
+    shows.
+    """
+
     answer_for: float = 5.0
     """
     Seconds the conclusion is shown at the end.
@@ -280,9 +317,21 @@ class RuleTreeEvaluation(Scene):
     The size the scene draws itself at.
     """
 
+    tree_area: Area = field(default_factory=lambda: Area(120, 150, 660, 660))
+    """
+    Where the nodes stand, from the first node's top edge to the last node's bottom.
+    """
+
     @property
     def duration(self) -> float:
         return self.tree_for + self.rule_every * len(self.trace.evaluation_order) + self.answer_for
+
+    @property
+    def evaluation_ends(self) -> float:
+        """
+        Seconds into the scene the last rule has been evaluated.
+        """
+        return self.tree_for + self.rule_every * len(self.trace.evaluation_order)
 
     def evaluated_by(self, seconds: float) -> int:
         """
@@ -292,23 +341,43 @@ class RuleTreeEvaluation(Scene):
             return 0
         return min(int((seconds - self.tree_for) / self.rule_every) + 1, len(self.trace.evaluation_order))
 
+    def checking_at(self, seconds: float) -> bool:
+        """
+        Whether, at a moment, the rule last reached is still being checked rather than
+        settled.
+        """
+        if seconds < self.tree_for or seconds >= self.evaluation_ends:
+            return False
+        return (seconds - self.tree_for) % self.rule_every < self.rule_every * self.checking_share
+
+    def node_area(self, index: int) -> Area:
+        """
+        Where one rule's node stands.
+
+        :param index: The rule's place in the tree's walk.
+        """
+        count = len(self.trace.traced)
+        pitch = self.tree_area.height / count
+        height = pitch * 0.72
+        return Area(self.tree_area.x, self.tree_area.y + index * pitch, self.tree_area.width, height)
+
     def picture_at(self, seconds: float) -> Frame:
         frame = self.resolution.blank(255)
         frame = Typesetting(size=26, face=Face.BOLD, color=Ink.RULES.rgb).written(
             frame, STATEMENT, (40, 40), Anchor.LEFT_MIDDLE
         )
         evaluated = self.evaluated_by(seconds)
-        done = evaluated == len(self.trace.evaluation_order)
-        frame = self._tree(frame, evaluated)
+        done = seconds >= self.evaluation_ends
+        frame = self._tree(frame, evaluated, self.checking_at(seconds), done)
         concluded = self.trace.concluded if done else None
-        weight = eased((seconds - self.tree_for - self.rule_every * len(self.trace.evaluation_order) + self.rule_every) / 0.8) if done else 0.0
+        weight = eased((seconds - self.evaluation_ends) / 0.8) if done else 0.0
         frame = fitted(frame, self.board.drawn(concluded, weight), Area(900, 100, 660, 600))
         frame = Typesetting(size=22, color=Ink.MUTED.rgb).written(
             frame, "the board's holes on the robot's own picture", (1230, 730), Anchor.CENTRE_MIDDLE
         )
-        caption = "the rule tree, one rule per shape the board sorts"
+        caption = "the rule tree: one rule per shape the board sorts, read top down"
         if evaluated:
-            caption = f"the case: {self.trace.piece.shape_category.value} piece · rules read top down until one fires"
+            caption = "the case walks the else branches until a condition holds"
         if done:
             caption = f"concluded: hole.shape_category = {self.trace.concluded.value.upper()}"
         colour = Ink.FIRED.rgb if done else Ink.TEXT.rgb
@@ -316,30 +385,91 @@ class RuleTreeEvaluation(Scene):
             frame, caption, (self.resolution.width / 2, self.resolution.height - 40), Anchor.CENTRE_MIDDLE
         )
 
-    def _tree(self, frame: Frame, evaluated: int) -> Frame:
-        left, top, width = 60, 110, 780
-        node_height, gap = 74, 18
-        code = Typesetting(size=22, face=Face.BOLD)
-        small = Typesetting(size=18, color=Ink.MUTED.rgb)
-        reached = set(self.trace.evaluation_order[:evaluated])
+    def _tree(self, frame: Frame, evaluated: int, checking: bool, done: bool) -> Frame:
+        """
+        The nodes and their branches, coloured by how far the case has got.
+
+        :param frame: What to draw on.
+        :param evaluated: How many rules the case has reached.
+        :param checking: Whether the last rule reached is still being checked.
+        :param done: Whether the evaluation has ended.
+        """
+        reached = self.trace.evaluation_order[:evaluated]
+        frame = self._branches(frame, reached, done)
         for index, rule in enumerate(self.trace.traced):
             status = rule.status if index in reached else RuleStatus.NOT_EVALUATED
-            stroke, fill = STATUS_INK[status]
-            node = Area(left + 40, top + index * (node_height + gap), width - 40, node_height)
-            frame = filled(frame, node, fill)
-            frame = framed(frame, node, stroke, thickness=3)
-            text_colour = Ink.TEXT.rgb if index in reached else Ink.MUTED.rgb
-            frame = Typesetting(size=22, face=Face.BOLD, color=text_colour).written(
-                frame, f"if {rule.condition}", (node.x + 16, node.y + 26), Anchor.LEFT_MIDDLE
+            being_checked = checking and reached and index == reached[-1]
+            frame = self._node(frame, index, rule, status, being_checked)
+        if evaluated:
+            frame = self._case(frame)
+        return frame
+
+    def _branches(self, frame: Frame, reached: List[int], done: bool) -> Frame:
+        """
+        The else branch from each rule to the next and the except branch off its side,
+        with the branches the case walked drawn strong.
+        """
+        small = Typesetting(size=18, color=Ink.MUTED.rgb)
+        for index in range(len(self.trace.traced)):
+            node = self.node_area(index)
+            # the except branch: a stub off the side, ending where a correction would hang
+            stub_y = int(node.y + node.height * 0.28)
+            cv2.line(frame, (int(node.right), stub_y), (int(node.right) + 60, stub_y), Ink.HAIRLINE.rgb, 2, cv2.LINE_AA)
+            cv2.circle(frame, (int(node.right) + 68, stub_y), 7, Ink.HAIRLINE.rgb, 2, cv2.LINE_AA)
+            if index == 0:
+                frame = small.written(frame, EXCEPT_BRANCH, (node.right + 84, stub_y), Anchor.LEFT_MIDDLE)
+            if index + 1 == len(self.trace.traced):
+                continue
+            # the else branch: down the left to the next rule
+            below = self.node_area(index + 1)
+            x = int(node.x + 40)
+            walked = index in reached and (index + 1) in reached
+            colour = Ink.FIRED.rgb if walked else Ink.HAIRLINE.rgb
+            cv2.arrowedLine(frame, (x, int(node.bottom)), (x, int(below.y)), colour, 3 if walked else 2, cv2.LINE_AA, tipLength=0.3)
+            frame = small.written(frame, ELSE_BRANCH, (x - 14, (node.bottom + below.y) / 2), Anchor.RIGHT_MIDDLE)
+        return frame
+
+    def _node(self, frame: Frame, index: int, rule: TracedRule, status: RuleStatus, being_checked: bool) -> Frame:
+        """
+        One rule: its condition over its conclusion, coloured by its status.
+        """
+        node = self.node_area(index)
+        stroke, fill = EVALUATING_INK if being_checked else STATUS_INK[status]
+        reached = status is not RuleStatus.NOT_EVALUATED or being_checked
+        text_colour = Ink.TEXT.rgb if reached else Ink.MUTED.rgb
+        divider = node.y + node.height * 0.55
+        frame = filled(frame, node, fill if status is RuleStatus.FIRED else Ink.PAPER.rgb)
+        frame = filled(frame, Area(node.x, node.y, node.width, divider - node.y), fill)
+        cv2.line(frame, (int(node.x), int(divider)), (int(node.right), int(divider)), stroke, 1, cv2.LINE_AA)
+        frame = framed(frame, node, stroke, thickness=3)
+        frame = Typesetting(size=21, face=Face.BOLD, color=text_colour).written(
+            frame, f"if {rule.condition}", (node.x + 16, (node.y + divider) / 2), Anchor.LEFT_MIDDLE
+        )
+        frame = Typesetting(size=19, face=Face.BOLD if status is RuleStatus.FIRED else Face.REGULAR, color=text_colour).written(
+            frame, f"then {rule.conclusion}", (node.x + 16, (divider + node.bottom) / 2), Anchor.LEFT_MIDDLE
+        )
+        word = "checking…" if being_checked else STATUS_WORD.get(status, "")
+        if reached and word:
+            frame = Typesetting(size=18, face=Face.BOLD, color=stroke).written(
+                frame, word, (node.right - 14, (node.y + divider) / 2), Anchor.RIGHT_MIDDLE
             )
-            frame = Typesetting(size=20, color=text_colour).written(
-                frame, f"→ {rule.conclusion}", (node.x + 16, node.y + 52), Anchor.LEFT_MIDDLE
-            )
-            if index > 0:
-                frame = small.written(frame, rule.kind, (left, node.y + node_height / 2), Anchor.LEFT_MIDDLE)
-            if index in reached:
-                word = {RuleStatus.FIRED: "fired", RuleStatus.EVALUATED_NOT_FIRED: "did not hold"}.get(status, "")
-                frame = Typesetting(size=20, face=Face.BOLD, color=stroke).written(
-                    frame, word, (node.right - 16, node.y + node_height / 2), Anchor.RIGHT_MIDDLE
-                )
+        return frame
+
+    def _case(self, frame: Frame) -> Frame:
+        """
+        The case the rules are run on, written above the first rule with a pointer into
+        it.
+        """
+        first = self.node_area(0)
+        chip = Area(first.x, first.y - 62, first.width, 40)
+        frame = filled(frame, chip, Ink.PERCEPTION_FILL.rgb)
+        frame = framed(frame, chip, Ink.PERCEPTION.rgb, thickness=2)
+        piece = self.trace.piece
+        frame = Typesetting(size=20, face=Face.BOLD, color=Ink.TEXT.rgb).written(
+            frame,
+            f"case: {piece.name.name}  ·  shape_category = {piece.shape_category.name}",
+            (chip.x + 16, chip.centre[1]),
+            Anchor.LEFT_MIDDLE,
+        )
+        cv2.arrowedLine(frame, (int(first.x + 40), int(chip.bottom)), (int(first.x + 40), int(first.y)), Ink.FIRED.rgb, 3, cv2.LINE_AA, tipLength=0.4)
         return frame

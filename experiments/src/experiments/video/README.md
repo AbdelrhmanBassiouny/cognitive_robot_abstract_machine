@@ -35,7 +35,17 @@ called on screen, are `VideoScript` in `script.py`.
   panel of the figure and shrinks it back once answered.
 - `perception.py`, `twin.py`, `grasp.py`, `rules.py` -- one scene per backend, each
   driving the backend's own code on the recorded run: the narrowing, the predicate's
-  boxes, the model's samples, the rule tree's trace.
+  boxes, the model's samples, the rule tree's trace. The grasp scene samples under an
+  `ApproachPrior`, a model registry that favours the direction the run took (the run
+  itself sampled under the backend's uniform default); the rule tree is drawn as
+  ripple-down rules, each node its condition over its conclusion, an `else` branch
+  down to the next rule and an `except` branch off the side where a correction would
+  hang.
+- `attribution.py` -- the robot's camera beside the two timelines of a trial, the
+  events the monitor reported over the actions the plan ran, growing together until
+  the recorded questions "Which objects recently moved?" and "Did you move them?"
+  take the screen and are answered off the events, checked against the recorded
+  answers.
 - `footage.py` and `perturbations.py` -- the robot's camera played as a time-lapse,
   alone and as a grid of the perturbation episodes with the look's findings drawn
   while the robot stands still.

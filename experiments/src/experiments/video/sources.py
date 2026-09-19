@@ -5,6 +5,7 @@ database and the artifacts kept beside it.
 
 from __future__ import annotations
 
+import datetime
 from dataclasses import dataclass, field
 from functools import cached_property
 from pathlib import Path
@@ -135,19 +136,42 @@ class RecordedRun:
         """
         return self.kept.camera_recording
 
+    @cached_property
+    def metadata(self) -> dict:
+        """
+        What the recording says of itself.
+        """
+        return yaml.safe_load((self.bag / "metadata.yaml").read_text())[
+            "rosbag2_bagfile_information"
+        ]
+
+    @property
+    def recording_began(self) -> datetime.datetime:
+        """
+        When the recording began, on the machine's own clock.
+        """
+        nanoseconds = self.metadata["starting_time"]["nanoseconds_since_epoch"]
+        return datetime.datetime.fromtimestamp(nanoseconds / 1e9)
+
+    def recording_second_of(self, trial: RecordedTrial, moment: float) -> float:
+        """
+        A moment of a trial as seconds into the recording.
+
+        :param trial: The trial, whose start the moment is counted from.
+        :param moment: Seconds into the trial.
+        """
+        return (trial.began_at - self.recording_began).total_seconds() + moment
+
     @property
     def carries_camera_pose(self) -> bool:
         """
         Whether the recording holds the static transforms the camera's pose is read
         from.
         """
-        metadata = yaml.safe_load((self.bag / "metadata.yaml").read_text())
         return any(
             topic["topic_metadata"]["name"] == str(TransformTopic.STATIC)
             and topic["message_count"] > 0
-            for topic in metadata["rosbag2_bagfile_information"][
-                "topics_with_message_count"
-            ]
+            for topic in self.metadata["topics_with_message_count"]
         )
 
     @cached_property

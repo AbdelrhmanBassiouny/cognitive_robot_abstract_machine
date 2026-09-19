@@ -9,13 +9,11 @@ way the perception pipeline draws it.
 
 from __future__ import annotations
 
-import datetime
 from dataclasses import dataclass, field
 from functools import cached_property
 
 import cv2
 import numpy as np
-import yaml
 from rclpy.serialization import deserialize_message
 from sensor_msgs.msg import CompressedImage
 from typing_extensions import Dict, List, Optional, Sequence, Tuple
@@ -82,29 +80,17 @@ class IdleStretches:
     """
 
     @cached_property
-    def recording_began(self) -> datetime.datetime:
-        """
-        When the recording began, on the machine's own clock.
-        """
-        metadata = yaml.safe_load((self.run.bag / "metadata.yaml").read_text())
-        nanoseconds = metadata["rosbag2_bagfile_information"]["starting_time"][
-            "nanoseconds_since_epoch"
-        ]
-        return datetime.datetime.fromtimestamp(nanoseconds / 1e9)
-
-    @cached_property
     def moving(self) -> List[RecordingStretch]:
         """
         Every stretch the robot moved through, in recording time, widened by the margin.
         """
         stretches = []
         for trial in self.run.trials:
-            offset = (trial.began_at - self.recording_began).total_seconds()
             for motion in trial.motions:
                 stretches.append(
                     RecordingStretch(
-                        offset + motion.start_moment - IDLE_MARGIN,
-                        offset + motion.end_moment + IDLE_MARGIN,
+                        self.run.recording_second_of(trial, motion.start_moment) - IDLE_MARGIN,
+                        self.run.recording_second_of(trial, motion.end_moment) + IDLE_MARGIN,
                     )
                 )
         return stretches

@@ -28,6 +28,7 @@ class Face(StrEnum):
 
     REGULAR = "DejaVu Sans"
     BOLD = "DejaVu Sans:bold"
+    MONO = "DejaVu Sans Mono"
 
 
 def drawn(color: Color) -> Tuple[int, int, int]:

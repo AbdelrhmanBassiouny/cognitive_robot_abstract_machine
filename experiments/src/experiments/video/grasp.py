@@ -34,7 +34,16 @@ from experiments.video.sources import RecordedRun
 from experiments.video.timeline import Frame, Resolution, Scene, eased
 from krrood.entity_query_language.backends import ProbabilisticBackend
 from krrood.entity_query_language.factories import a
-from krrood.parametrization.parameterizer import UnderspecifiedParameters
+from krrood.parametrization.model_registries import ModelRegistry
+from krrood.parametrization.parameterizer import (
+    ModelQueryParameters,
+    UnderspecifiedParameters,
+)
+from probabilistic_model.probabilistic_circuit.rx.helper import fully_factorized
+from probabilistic_model.probabilistic_circuit.rx.probabilistic_circuit import (
+    ProbabilisticCircuit,
+)
+from probabilistic_model.utils import MissingDict
 
 CLOSE_UP = Resolution(width=1600, height=900)
 """
@@ -47,6 +56,78 @@ STATEMENT = (
 """
 The open slot, as the plan writes it.
 """
+
+# %% the prior over the approach
+
+APPROACH_ATTRIBUTE = "GraspDescription.approach_direction"
+"""
+How the parameterizer names the variable of the approach direction.
+"""
+
+
+@dataclass
+class ApproachPrior(ModelRegistry):
+    """
+    A registry whose model favours some approach directions over others.
+
+    The backend's default registry hands out a uniform model, under which every direction
+    is as likely as the next and the first sample wins. This one keeps that model for
+    everything but the approach direction, and gives the approach the distribution stated
+    here, so the direction the robot goes with is the one the prior favours.
+    """
+
+    probabilities: Dict[ApproachDirection, float]
+    """
+    The probability given to each direction; they are normalised before use, and a
+    direction left out gets nothing.
+    """
+
+    @classmethod
+    def favouring(cls, direction: ApproachDirection, share: float = 0.55) -> ApproachPrior:
+        """
+        A prior that gives one direction a share of the probability and splits the rest
+        evenly among the others.
+
+        :param direction: The direction favoured.
+        :param share: How much of the probability it gets.
+        """
+        others = [other for other in ApproachDirection if other is not direction]
+        probabilities = {other: (1.0 - share) / len(others) for other in others}
+        probabilities[direction] = share
+        return cls(probabilities)
+
+    @property
+    def favoured(self) -> ApproachDirection:
+        """
+        The direction given the most probability.
+        """
+        return max(self.probabilities, key=self.probabilities.get)
+
+    def get_model(self, parameters: ModelQueryParameters) -> ProbabilisticCircuit:
+        circuit = fully_factorized(parameters.variables.values())
+        for leaf in circuit.leaves:
+            if leaf.variable.name == APPROACH_ATTRIBUTE:
+                leaf.distribution.probabilities = self._probabilities_of(leaf.variable)
+        return circuit
+
+    def _probabilities_of(self, variable) -> MissingDict:
+        """
+        The stated distribution, keyed the way the leaf keys its own.
+
+        :param variable: The approach variable, whose domain lists the directions in the
+            same order as the members of the enumeration.
+        """
+        total = sum(self.probabilities.values())
+        elements = variable.domain.simple_sets
+        directions = variable.domain.simple_set_example.all_elements
+        return MissingDict(
+            float,
+            {
+                hash(element): self.probabilities.get(direction, 0.0) / total
+                for element, direction in zip(elements, directions)
+            },
+        )
+
 
 # %% what the backend does
 
@@ -286,10 +367,22 @@ class GraspDistribution(Scene):
         if arrived > 0:
             caption = f"{arrived} of {len(self.sampling.samples)} samples drawn, sorted by likelihood"
         if answering:
-            caption = f"every option equally likely under this model; this run's draw: {self.sampling.answered.name}"
+            caption = self.answer_caption
         return Typesetting(size=28, color=Ink.TEXT.rgb).written(
             frame, caption, (self.resolution.width / 2, self.resolution.height - 40), Anchor.CENTRE_MIDDLE
         )
+
+    @property
+    def answer_caption(self) -> str:
+        """
+        What the answer says of the model: whether it favoured the direction taken or
+        left the choice to the draw.
+        """
+        probabilities = self.sampling.probabilities
+        likeliest = max(probabilities, key=probabilities.get)
+        if len(set(probabilities.values())) == 1:
+            return f"every option equally likely under this model; this run's draw: {self.sampling.answered.name}"
+        return f"the prior favours {likeliest.name}; the likeliest sample is handed to the plan: {self.sampling.answered.name}"
 
     def _chart(self, frame: Frame, arrived: int, answering: bool) -> Frame:
         left, top, width, height = 80, 120, 780, 620
@@ -298,8 +391,9 @@ class GraspDistribution(Scene):
         tally = self.sampling.tally(arrived)
         slot = width / len(probabilities)
         bar = slot * 0.5
-        # a share of half the samples reaches the top; the first few samples' shares are wilder and are clipped
-        top_scale = (base - top) / 0.5
+        # the tallest model bar, or a share of half the samples, reaches the top; the
+        # first few samples' shares are wilder and are clipped
+        top_scale = (base - top) / max(0.7, max(probabilities.values()) * 1.25)
         label = Typesetting(size=24, face=Face.BOLD, color=Ink.TEXT.rgb)
         small = Typesetting(size=22, color=Ink.MUTED.rgb)
         frame = filled(frame, Area(left, base, width, 2), Ink.HAIRLINE.rgb)
@@ -314,8 +408,8 @@ class GraspDistribution(Scene):
             strong = answering and direction is self.sampling.answered
             frame = filled(frame, Area(x, base - sample_height, bar, sample_height), Ink.PROBABILISTIC.rgb if strong or not answering else Ink.MUTED.rgb)
             frame = label.written(frame, direction.name, (x + bar / 2, base + 24), Anchor.CENTRE_MIDDLE)
-            frame = small.written(frame, f"P = {probability:.2f}", (x + bar / 2, base - model_height - 18), Anchor.CENTRE_MIDDLE)
+            frame = small.written(frame, f"P = {probability:.2f}", (x + bar / 2, max(base - max(model_height, sample_height) - 18, top - 16)), Anchor.CENTRE_MIDDLE)
             if arrived:
                 frame = small.written(frame, f"{tally[direction]}", (x + bar / 2, base + 52), Anchor.CENTRE_MIDDLE)
-        frame = small.written(frame, "bar: the model's probability   ·   filled: share of the samples so far", (left, top - 20), Anchor.LEFT_MIDDLE)
+        frame = small.written(frame, "pale bar: the model's probability   ·   filled: share of the samples so far", (left + width / 2, base + 84), Anchor.CENTRE_MIDDLE)
         return frame

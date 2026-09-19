@@ -22,6 +22,11 @@ from pathlib import Path
 from typing_extensions import Dict, List, Optional, Sequence
 
 from experiments.montessori.semantics import MontessoriShape, MontessoriShapeCategory
+from experiments.video.attribution import (
+    AttributionScene,
+    MovedQuestions,
+    TrialTimelines,
+)
 from experiments.video.canvas import Ink
 from experiments.video.encoding import H264Encoder, SubmissionLimits, VideoFile
 from experiments.video.figure import (
@@ -32,6 +37,7 @@ from experiments.video.figure import (
 )
 from experiments.video.footage import CameraFilm, ExecutionFootage
 from experiments.video.grasp import (
+    ApproachPrior,
     GraspDistribution,
     GraspOptionsOnThePicture,
     GraspSampling,
@@ -49,6 +55,7 @@ from experiments.video.sources import FRAMEWORK_DEMO_EPISODE, RecordedRun
 from experiments.video.stages import FigureOnCanvas, FigureScene, OnCanvas, Spotlight
 from experiments.video.timeline import Scene, Timeline
 from experiments.video.twin import TwinPictures, WorkingMemoryCheck
+from krrood.entity_query_language.backends import ProbabilisticBackend
 
 logger = logging.getLogger(__name__)
 
@@ -59,6 +66,43 @@ PERTURBATION_EPISODES = (
 """
 The perturbation episodes, row by row as the grid shows them: the scene standing still
 and the robot sorting, each unperturbed, with a piece shoved and with the board moved.
+"""
+
+@dataclass(frozen=True)
+class AttributionRun:
+    """
+    One episode the questions about who moved what are shown being answered in.
+    """
+
+    episode: str
+    """
+    The episode's identifier.
+    """
+
+    scenario: str
+    """
+    What was going on, as written under the film.
+    """
+
+    speed: float
+    """
+    How many recorded seconds pass per second played while the film runs.
+    """
+
+
+ATTRIBUTION_RUNS = (
+    AttributionRun("25f5161da5584bac9554b686711a01fe", "the robot sorts the pieces it saw", 24.0),
+    AttributionRun("0a793ded6dd54da7b64171ab78638d38", "the scene stands still; a person pushes the cube", 3.0),
+)
+"""
+The two trials the paper sets against each other: the robot moving the pieces itself,
+and a person moving one while the robot stands idle.
+"""
+
+GRASP_PRIOR_SHARE = 0.55
+"""
+The probability the prior over the approach gives the direction the run took; the
+rest is split evenly among the other three.
 """
 
 IDLE_FRAMES_READ = 24
@@ -142,7 +186,17 @@ class VideoAssembly:
 
     @cached_property
     def sampling(self) -> GraspSampling:
-        return GraspSampling(answered=self.demo.recorded_grasp().approach_direction)
+        """
+        The backend's sampling, under a prior that favours the direction the run took.
+
+        The run itself sampled under the backend's uniform default, where every
+        direction is as likely as the next and the first sample wins; the video shows
+        the same machinery with a prior stated, so the direction handed to the plan is
+        the one the model favours rather than the luck of the draw.
+        """
+        taken = self.demo.recorded_grasp().approach_direction
+        prior = ApproachPrior.favouring(taken, share=GRASP_PRIOR_SHARE)
+        return GraspSampling(answered=taken, backend=ProbabilisticBackend(prior))
 
     @cached_property
     def rule_trace(self) -> HoleRuleTrace:
@@ -223,7 +277,25 @@ class VideoAssembly:
             ]
             for row in PERTURBATION_EPISODES
         ]
-        return PerturbationMatrix(tiles, GridLabels(), played_for=8.0 if self.preview else 40.0)
+        return PerturbationMatrix(tiles, GridLabels(), played_for=8.0 if self.preview else 30.0)
+
+    def attribution_scenes(self) -> List[Scene]:
+        """
+        The questions about who moved what, answered in each of the two trials.
+        """
+        scenes: List[Scene] = []
+        for run in ATTRIBUTION_RUNS:
+            timelines = TrialTimelines(RecordedRun(run.episode))
+            scene = AttributionScene(
+                timelines,
+                CameraFilm(timelines.run),
+                MovedQuestions(timelines).both(),
+                scenario=run.scenario,
+                speed=run.speed * (3.0 if self.preview else 1.0),
+                question_for=2.0 if self.preview else 4.0,
+            )
+            scenes.append(OnCanvas(scene))
+        return scenes
 
     def scenes(self) -> List[Scene]:
         """
@@ -246,8 +318,11 @@ class VideoAssembly:
                 )
             )
         )
+        scenes.append(TextSlide(["Did you move it?", "The event segmentation reports what happened to each object;",
+                                 "the plan history records which action ran when."], held_for=3.5))
+        scenes.extend(self.attribution_scenes())
         scenes.append(TextSlide(["Perturbation experiments", "Six episodes on the robot: the scene standing still or the robot sorting,",
-                                 "unperturbed, with a person shoving a piece, or moving the board."], held_for=4.0))
+                                 "unperturbed, with a person shoving a piece, or moving the board."], held_for=3.5))
         scenes.append(OnCanvas(self.perturbation_matrix()))
         scenes.append(ClosingSlide(self.script, held_for=5.0))
         return scenes

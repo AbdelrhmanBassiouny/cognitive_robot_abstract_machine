@@ -50,6 +50,9 @@ class Ink(Enum):
     RULES_FILL = (0xEB, 0xE4, 0xFB)
     FIRED = (0x15, 0x80, 0x3D)
     FAILED = (0xB9, 0x1C, 0x1C)
+    REPORTED = (0x9E, 0xA8, 0xB8)
+    ANSWER = (0xD9, 0x1A, 0x99)
+    ASKED = (0xD9, 0x29, 0x38)
 
     @property
     def rgb(self) -> Rgb:
@@ -295,7 +298,7 @@ class Typesetting:
             align="center" if anchor.value[0] == "m" else "left",
             spacing=self.size * 0.35,
         )
-        return np.asarray(picture)
+        return np.array(picture)
 
     def width_of(self, text: str) -> float:
         """
