@@ -135,7 +135,11 @@ pushed. It then runs `build_dashboard.py`, which validates the manifest
 (schema version, unique ids, track/wave/depends_on references — the exact
 checks `plan-create` must also satisfy), classifies every item's live state
 (`merged` | `open_draft` | `open_ready` | `closed_unmerged` | `not_found`),
-computes drift, builds the "ready to start"/"blocker may be cleared" lists
+computes drift — both an item's own status disagreeing with that live
+state, and any dependency it is still stacked on that has stalled
+(deferred, or its pull request closed without merging), which is flagged
+with what to reparent onto instead — builds the "ready to start"/"blocker
+may be cleared" lists
 (a blocked item whose dependency becomes ready always lands in "blocker may
 be cleared", never "ready to start" — it's still blocked, not fresh),
 stacks items by dependency depth (indented, capped at 4 levels, wrapping
