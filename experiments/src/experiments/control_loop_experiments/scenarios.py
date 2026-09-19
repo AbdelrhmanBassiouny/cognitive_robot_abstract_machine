@@ -5,7 +5,7 @@ from abc import ABC, abstractmethod
 from contextlib import AbstractContextManager
 from dataclasses import dataclass, field
 from enum import StrEnum
-from typing import ClassVar, Dict, List, Type
+from typing import ClassVar, Dict, List, Type, TYPE_CHECKING
 
 import numpy as np
 
@@ -42,6 +42,12 @@ from giskardpy.motion_statechart.tasks.joint_tasks import JointPositionList, Joi
 from giskardpy.motion_statechart.tasks.pointing import Pointing
 from giskardpy.qp.qp_controller_config import QPControllerConfig
 from krrood.class_diagrams.class_diagram import ClassDiagram
+from krrood.entity_query_language.verbalization.vocabulary.parts_of_speech import (
+    Adjective,
+    clause,
+    Copula,
+    Noun,
+)
 from krrood.ontomatic.property_descriptor.attribute_introspector import (
     DescriptorAwareIntrospector,
 )
@@ -61,6 +67,12 @@ from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.world_entity import (
     KinematicStructureEntity,
 )
+
+if TYPE_CHECKING:
+    from krrood.entity_query_language.predicate import RenderedFields
+    from krrood.entity_query_language.verbalization.fragments.base import (
+        VerbalizationFragment,
+    )
 
 # %% how much the measurement records
 
@@ -304,7 +316,7 @@ class PerformMotion(ScenarioStep[World]):
         self.benchmark_robot.api.execute(self.motion_statechart)
 
 
-@dataclass
+@dataclass(eq=False)
 class MotionRanToItsEnd(Goal[World]):
     """
     Success is the motion having ended.
@@ -313,8 +325,12 @@ class MotionRanToItsEnd(Goal[World]):
     as far as asking this goal ran its motion to the end.
     """
 
-    def is_reached(self, world: World) -> bool:
+    def __call__(self) -> bool:
         return True
+
+    @classmethod
+    def _verbalization_fragment_(cls, fields: RenderedFields) -> VerbalizationFragment:
+        return clause(Noun(fields["world"]), Copula(), Adjective("done moving"))
 
 
 @dataclass
@@ -326,11 +342,6 @@ class BenchmarkScenario(Scenario[World, PR2], ABC):
     name: ClassVar[str]
     """
     Name the scenario is reported under.
-    """
-
-    goal: Goal[World] = field(default_factory=MotionRanToItsEnd, kw_only=True)
-    """
-    A measured motion succeeds by running to its end.
     """
 
     plotter_mode: PlotterMode = PlotterMode.DEBUG
@@ -376,6 +387,14 @@ class BenchmarkScenario(Scenario[World, PR2], ABC):
                 benchmark_robot=self.benchmark_robot,
             )
         ]
+
+    def goal(self, world: World) -> Goal[World]:
+        """
+        A measured motion succeeds by running to its end.
+
+        :param world: The world the measured motion ran in.
+        """
+        return MotionRanToItsEnd(world=world)
 
     @abstractmethod
     def seed_joint_state(self, robot: BenchmarkRobot) -> Dict[str, float]:

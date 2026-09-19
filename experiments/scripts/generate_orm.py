@@ -4,6 +4,7 @@ from pathlib import Path
 import experiments
 import experiments.control_loop_experiments.benchmark
 import experiments.control_loop_experiments.scenarios
+import experiments.montessori.scenarios
 import experiments.scenarios.report
 import experiments.scenarios.runner
 import experiments.scenarios.scenario
@@ -48,6 +49,11 @@ for episode_database_module in (
     experiments.episodes.long_term_memory,
 ):
     ignored_classes |= set(classes_of_module(episode_database_module))
+
+# the Montessori scenes and scripts are the same kind of description one level down:
+# they say how a sorting run is set up and what is done to it, and what a run then
+# recorded is the episode model's, not theirs
+ignored_classes |= set(classes_of_module(experiments.montessori.scenarios))
 
 # a question is asked rather than recorded: it holds the query that answers it and the
 # memory it is put to, neither of which is anything to store

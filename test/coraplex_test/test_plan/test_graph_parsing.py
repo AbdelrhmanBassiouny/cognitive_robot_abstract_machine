@@ -56,7 +56,10 @@ from giskardpy.motion_statechart.context import MotionStatechartContext
 from giskardpy.motion_statechart.goals.templates import (
     Parallel,
     RepeatOnStall,
-    Sequence, TryAll, TryInOrder, CancelledWhenTrue,
+    Sequence,
+    TryAll,
+    TryInOrder,
+    CancelledWhenTrue,
 )
 from giskardpy.motion_statechart.graph_node import CancelMotion
 from giskardpy.motion_statechart.monitors.payload_monitors import CountNodeResets
@@ -73,6 +76,7 @@ from semantic_digital_twin.datastructures.definitions import TorsoState
 from semantic_digital_twin.semantic_annotations.semantic_annotations import Milk
 from semantic_digital_twin.spatial_types import HomogeneousTransformationMatrix
 from semantic_digital_twin.spatial_types.spatial_types import Pose, Point3
+from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.geometry import VolumetricBoundingBox
 
 
@@ -790,6 +794,120 @@ def test_pick_up_motions_follow_the_object_moved_after_expansion(immutable_model
             position_before + displacement,
             atol=1e-9,
         )
+
+
+# %% what a place knows about the grasp it is releasing
+
+
+def _where_a_place_takes_the_tool_center_point(
+    plan: PlanNode, world: World
+) -> List[np.ndarray]:
+    """
+    Every pose the place in an expanded plan takes the tool frame to, in the world root
+    frame.
+
+    :param plan: The expanded plan holding one place.
+    :param world: The world its poses are read in.
+    """
+    [place] = [
+        node
+        for node in plan.descendants
+        if isinstance(node, ActionNode) and isinstance(node.designator, PlaceAction)
+    ]
+    return [
+        np.asarray(world.transform(node.designator.target, world.root).to_np())
+        for node in place.descendants
+        if isinstance(node, MotionNode)
+        and isinstance(node.designator, MoveToolCenterPointMotion)
+    ]
+
+
+def test_a_place_told_how_the_object_is_held_plans_it_like_one_that_found_the_pick_up(
+    immutable_model_world,
+):
+    """
+    A place works out where to take the gripper from the grasp the object is held by,
+    which it can only read off a pick-up performed in the same plan.
+
+    Told the grasp instead, a place performed on its own plans the very same motions.
+    """
+    world, view, context = immutable_model_world
+    milk = world.get_semantic_annotations_by_type(Milk)[0]
+    grasp_description = GraspDescription(
+        ApproachDirection.FRONT, VerticalAlignment.TOP, view.right_arm.end_effector
+    )
+    target_location = Pose.from_xyz_rpy(2.37, 2.5, 1.05, reference_frame=world.root)
+    after_its_own_pick_up = sequential(
+        [
+            PickUpAction(milk, Arms.RIGHT, grasp_description),
+            PlaceAction(milk.root, target_location, Arms.RIGHT),
+        ],
+        context=context,
+    )
+    told_how_it_is_held = sequential(
+        [
+            PlaceAction(
+                milk.root,
+                target_location,
+                Arms.RIGHT,
+                grasp_description=grasp_description,
+            )
+        ],
+        context=context,
+    )
+
+    after_its_own_pick_up.notify()
+    told_how_it_is_held.notify()
+
+    np.testing.assert_allclose(
+        _where_a_place_takes_the_tool_center_point(told_how_it_is_held, world),
+        _where_a_place_takes_the_tool_center_point(after_its_own_pick_up, world),
+    )
+
+
+def test_a_place_told_how_the_object_is_held_reads_that_over_the_pick_up_before_it(
+    immutable_model_world,
+):
+    """
+    What a place is told wins over what it can find, so a plan that picks an object up
+    one way and hands it on to be placed as held another way places it the way it was
+    told.
+    """
+    world, view, context = immutable_model_world
+    milk = world.get_semantic_annotations_by_type(Milk)[0]
+    from_above = GraspDescription(
+        ApproachDirection.FRONT, VerticalAlignment.TOP, view.right_arm.end_effector
+    )
+    from_the_front = GraspDescription(
+        ApproachDirection.FRONT,
+        VerticalAlignment.NoAlignment,
+        view.right_arm.end_effector,
+    )
+    target_location = Pose.from_xyz_rpy(2.37, 2.5, 1.05, reference_frame=world.root)
+    told_it_is_held_from_above = sequential(
+        [
+            PickUpAction(milk, Arms.RIGHT, from_the_front),
+            PlaceAction(
+                milk.root, target_location, Arms.RIGHT, grasp_description=from_above
+            ),
+        ],
+        context=context,
+    )
+    picked_up_from_above = sequential(
+        [
+            PickUpAction(milk, Arms.RIGHT, from_above),
+            PlaceAction(milk.root, target_location, Arms.RIGHT),
+        ],
+        context=context,
+    )
+
+    told_it_is_held_from_above.notify()
+    picked_up_from_above.notify()
+
+    np.testing.assert_allclose(
+        _where_a_place_takes_the_tool_center_point(told_it_is_held_from_above, world),
+        _where_a_place_takes_the_tool_center_point(picked_up_from_above, world),
+    )
 
 
 # %% splitting helper
