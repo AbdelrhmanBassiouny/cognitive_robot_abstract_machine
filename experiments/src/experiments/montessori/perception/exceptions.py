@@ -151,6 +151,48 @@ class WorkspaceOutOfView(DataclassException):
 
 
 @dataclass
+class SurfaceHasNothingToMeasure(DataclassException):
+    """
+    Raised when the world describes a surface with no shape at all, so neither how far
+    it reaches nor how high it lies can be read from it.
+    """
+
+    surface_name: str
+    """
+    What the world calls the thing that carries no shape.
+    """
+
+    def error_message(self) -> str:
+        return (
+            f"{self.surface_name} has no shape, so its extent and height cannot be read "
+            "from the world."
+        )
+
+    def suggest_correction(self) -> str:
+        return (
+            "Give it collision geometry in the world description, or annotate it with "
+            "the supporting surface region it offers."
+        )
+
+
+@dataclass
+class BoardMissingFromWorld(DataclassException):
+    """
+    Raised when the world perception was built against describes no shape-sorting board,
+    so the height of the lid its holes lie in is not there to be read.
+    """
+
+    def error_message(self) -> str:
+        return "The world describes no shape-sorting board."
+
+    def suggest_correction(self) -> str:
+        return (
+            "Spawn the board into the world the robot publishes, so the height of its "
+            "lid is read from the scene rather than assumed."
+        )
+
+
+@dataclass
 class CaptureIncomplete(DataclassException):
     """
     Raised when a saved look at the scene is missing one of the files it is written as,
