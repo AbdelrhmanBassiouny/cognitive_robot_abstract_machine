@@ -18,12 +18,12 @@ minus each closed sub-PR's commits found via its merge commit in 265.
 - 61 blocked on files that exist only on 265
 
 ## Done
-New draft PRs off main (all labelled `bug` except #418):
+New draft PRs off main (all labelled `bug`):
 - #414 collision query waits for a world-model rebuild   (8bbeba2f74)
 - #415 place change with no translation claim            (c77d938735)
 - #416 annotation read in its own module                 (f5c383a8a5)
 - #417 relationship in a buildable collection            (47af620250)
-- #418 postgres setup script documented                  (0f7f206f45)   [no bug label]
+- #418 postgres setup script documented                  (0f7f206f45)
 Fold-ins pushed:
 - #256 <- 798a172d98, 06e7af3eb8, a8c66997f3 (clean)
 - #244 <- 31c0f3a67e (resolved; dropped 265-only LiftDetector tail)
