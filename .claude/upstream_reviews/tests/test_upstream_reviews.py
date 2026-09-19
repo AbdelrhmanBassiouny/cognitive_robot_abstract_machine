@@ -757,6 +757,14 @@ def test_an_excerpt_drops_the_runner_s_timestamps():
     assert excerpt.lines[0] == recorded.split(" ", maxsplit=1)[1]
 
 
+def test_an_excerpt_stops_where_the_step_failed():
+    excerpt = FailureLog.excerpt(
+        str(RecordedCheck.FAILING), JobLogFixtureName.FAILED_JOB.load()
+    )
+
+    assert LogMarker.ERROR_ANNOTATION in excerpt.lines[-1]
+
+
 def test_an_excerpt_drops_the_colour_a_test_runner_wrote():
     excerpt = FailureLog.excerpt(
         str(RecordedCheck.FAILING), JobLogFixtureName.FAILED_JOB.load()

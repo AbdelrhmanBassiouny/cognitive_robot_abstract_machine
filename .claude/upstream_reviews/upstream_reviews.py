@@ -1015,7 +1015,8 @@ class FailureLog:
         ]
         summary = cls._from_marker(lines, LogMarker.PYTEST_SUMMARY)
         if summary:
-            return cls(check_name, summary[:EXCERPT_LINE_LIMIT])
+            ended = cls._until_marker(summary, LogMarker.ERROR_ANNOTATION)
+            return cls(check_name, ended[:EXCERPT_LINE_LIMIT])
         annotations = [line for line in lines if LogMarker.ERROR_ANNOTATION in line]
         if annotations:
             return cls(check_name, annotations[:EXCERPT_LINE_LIMIT])
@@ -1032,6 +1033,20 @@ class FailureLog:
             if marker in line:
                 return lines[index:]
         return []
+
+    @staticmethod
+    def _until_marker(lines: list[str], marker: LogMarker) -> list[str]:
+        """
+        Stop where the failure has been stated, before the steps that run afterwards.
+
+        :param lines: The lines kept so far.
+        :param marker: What the runner writes once the step has failed.
+        :return: Everything through that line, or all of them where it never appears.
+        """
+        for index, line in enumerate(lines):
+            if marker in line:
+                return lines[: index + 1]
+        return lines
 
 
 # %% client
