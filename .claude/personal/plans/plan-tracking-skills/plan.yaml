@@ -219,5 +219,18 @@ items:
   title: "Merge a resolved item's fix down into the pull requests stacked on it"
   branch: null
   track: skills
+  notes: >
+    Placed by `/add-plan-item` rather than by default, against nineteen unlanded tooling branches:
+    nothing in flight builds downstream propagation, under this name or any other, so it is new work
+    rather than a fold.
+
+    **Based on `basstler-package`'s `basstler-package` (#185,
+    `claude/plan-item-kickoff-workflow-cuare2`), not on `main`.** The new code is Python, and on
+    #185 every `.claude/` Python module has moved into `basstler/` with its tests in
+    `test/basstler_test/`; writing it against `main`'s `.claude/stack/` layout would mean writing it
+    twice. `depends_on` stays empty only because that item is in another plan and cross-plan
+    `depends_on` is `plan-dashboards`' `cross-plan-dependencies` (#253), still in flight - the
+    dependency is real and is carried by the branch's base until #253 lands, at which point it
+    should become a named `depends_on`.
   depends_on: []
   status: not_started
