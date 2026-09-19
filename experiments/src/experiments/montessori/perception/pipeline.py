@@ -49,6 +49,7 @@ from experiments.montessori.perception.orthophoto import (
     WorkspaceBox,
 )
 from experiments.montessori.perception.piece_matcher import PieceMatcher
+from experiments.montessori.perception.scene_request import SceneRequest
 from experiments.montessori.perception.surfaces import SurfaceSearch, WorkspaceSurface
 from experiments.montessori.pieces import HUE_RANGE, HUE_TOLERANCE, PIECE_HUES
 from experiments.montessori.semantics import ShapeSortingBoard
@@ -893,51 +894,67 @@ class MontessoriPerceptionPipeline:
         return OrthophotoProjector(region=self.table.region).project(frame, height)
 
     def searched_surfaces(
-        self, board: Optional[MontessoriBoardDetection]
+        self,
+        board: Optional[MontessoriBoardDetection],
+        request: SceneRequest = SceneRequest(),
     ) -> List[SurfaceSearch]:
         """
         The surfaces one look searches, each with the part of its plane it may claim.
 
         The table is everything but where the board stands; the board's lid is the board
-        itself, and only where it was actually seen.
+        itself, and only where it was actually seen. A request naming one of them drops
+        the other, so a look asked about one surface rectifies and searches one plane.
 
         :param board: The board, or None if it was not in view.
-        :return: One entry per surface a piece can be found on.
+        :param request: What the look was asked for.
+        :return: One entry per surface a piece can be found on and the request asked
+            about.
         """
         if board is None:
-            return [SurfaceSearch(surface=self.table)]
-        return [
-            SurfaceSearch(surface=self.table, supported_surfaces=(board,)),
-            SurfaceSearch(surface=self.lid, boundary=board),
-        ]
+            searches = [SurfaceSearch(surface=self.table)]
+        else:
+            searches = [
+                SurfaceSearch(surface=self.table, supported_surfaces=(board,)),
+                SurfaceSearch(surface=self.lid, boundary=board),
+            ]
+        return [search for search in searches if request.searches(search.surface.name)]
 
-    def detect(self, frame: RgbdFrame) -> MontessoriScene:
+    def detect(
+        self, frame: RgbdFrame, request: SceneRequest = SceneRequest()
+    ) -> MontessoriScene:
         """
-        Recognise everything in one frame.
+        Recognise what one frame was asked about.
 
-        Every surface of the scene is searched on its own plane, so a piece standing on
-        the board's lid is rectified from the lid rather than from the table eighty
-        millimetres below it, where parallax would have pushed its two silhouettes past
-        each other.
+        Every surface the request asks about is searched on its own plane, so a piece
+        standing on the board's lid is rectified from the lid rather than from the table
+        eighty millimetres below it, where parallax would have pushed its two silhouettes
+        past each other.
+
+        The board is found whatever was asked for: it is the answer to a request about
+        the board itself or its holes, and it is what says how far each surface reaches
+        for a request about the pieces.
 
         :param frame: The camera data to search.
-        :return: The pieces, the board, and its holes.
+        :param request: What the look was asked for, unnarrowed by default.
+        :return: The pieces, the board, and its holes, as far as the request asked for
+            them.
         """
         board = self.board_detector.detect(
             self.rectify(frame, self.lid.height), self.reference_frame
         )
         pieces = []
-        for search in self.searched_surfaces(board):
-            pieces.extend(
-                self.piece_detector.detect(
-                    self.rectify(frame, search.surface.height),
-                    self.rectify(
+        if request.wants(MontessoriShapeDetection):
+            for search in self.searched_surfaces(board, request):
+                pieces.extend(
+                    self.piece_detector.detect(
+                        self.rectify(frame, search.surface.height),
+                        self.rectify(
+                            frame,
+                            search.surface.height + self.piece_detector.piece_height,
+                        ),
                         frame,
-                        search.surface.height + self.piece_detector.piece_height,
-                    ),
-                    frame,
-                    self.reference_frame,
-                    search,
+                        self.reference_frame,
+                        search,
+                    )
                 )
-            )
         return MontessoriScene(shapes=pieces, board=board)

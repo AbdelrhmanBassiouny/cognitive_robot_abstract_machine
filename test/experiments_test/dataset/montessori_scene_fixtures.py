@@ -62,3 +62,24 @@ def scene(
     placed_pieces: list[PlacedPiece],
 ) -> MontessoriScene:
     return pipeline.detect(renderer.render(placed_pieces))
+
+
+@pytest.fixture
+def piece_on_the_lid(renderer: MontessoriSceneRenderer) -> PlacedPiece:
+    """
+    A cube standing on the board's lid, clear of the holes cut through it.
+    """
+    x, y = renderer.clear_lid_position()
+    return PlacedPiece(
+        MontessoriShapeCategory.CUBE, x=x, y=y, surface_height=renderer.lid_height
+    )
+
+
+@pytest.fixture
+def scene_with_a_piece_on_the_lid(
+    pipeline: MontessoriPerceptionPipeline,
+    renderer: MontessoriSceneRenderer,
+    placed_pieces: list[PlacedPiece],
+    piece_on_the_lid: PlacedPiece,
+) -> MontessoriScene:
+    return pipeline.detect(renderer.render([*placed_pieces, piece_on_the_lid]))
