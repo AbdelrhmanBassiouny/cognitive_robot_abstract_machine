@@ -918,6 +918,11 @@ JOB_URL_PATTERN = re.compile(rf"/actions/runs/\d+/job/(?P<{JOB_IDENTIFIER_GROUP}
 Where a check's own output link carries the job that produced it.
 """
 
+TERMINAL_ESCAPE_PATTERN = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
+"""
+The colour a test runner writes around its own output.
+"""
+
 LOG_TIMESTAMP_PATTERN = re.compile(r"^\S+Z ")
 """
 The timestamp a runner writes in front of every line it records.
@@ -997,13 +1002,17 @@ class FailureLog:
 
         pytest's own summary is preferred where the job ran that far, the runner's error
         annotations where it did not, and the log's last lines where neither marker
-        appears at all.
+        appears at all. A runner's timestamps and a test runner's colour both come off,
+        since neither survives being quoted under the check that produced it.
 
         :param check_name: The check the job reported for.
         :param log: The job log, exactly as the runner recorded it.
         :return: The excerpt.
         """
-        lines = [LOG_TIMESTAMP_PATTERN.sub("", line) for line in log.splitlines()]
+        lines = [
+            LOG_TIMESTAMP_PATTERN.sub("", TERMINAL_ESCAPE_PATTERN.sub("", line))
+            for line in log.splitlines()
+        ]
         summary = cls._from_marker(lines, LogMarker.PYTEST_SUMMARY)
         if summary:
             return cls(check_name, summary[:EXCERPT_LINE_LIMIT])
@@ -1037,6 +1046,13 @@ class GitHubEndpoint(StrEnum):
     """
     One Actions job's whole recorded log.
     """
+
+
+ALLOW_ESCAPE_SEQUENCES = "--allow-escape-sequences"
+"""
+What ``gh`` wants before it will print a log at all: a test runner colours its own
+output, and ``gh`` refuses to write terminal escape sequences it was not asked for.
+"""
 
 
 class JobLogReader(ABC):
@@ -1117,6 +1133,7 @@ class GitHubCommandLineClient(GraphQLClient, JobLogReader):
         return self._run(
             [
                 "api",
+                ALLOW_ESCAPE_SEQUENCES,
                 GitHubEndpoint.JOB_LOG.format(
                     repository=repository, job=job_identifier
                 ),

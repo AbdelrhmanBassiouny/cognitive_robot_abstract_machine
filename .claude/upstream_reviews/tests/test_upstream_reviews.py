@@ -28,6 +28,7 @@ from upstream_reviews import (
     FailureLog,
     FailureLogReader,
     LogMarker,
+    TERMINAL_ESCAPE_PATTERN,
     GitHubCommandFailed,
     GitHubCommandLineClient,
     GraphQLErrorsReturned,
@@ -754,6 +755,14 @@ def test_an_excerpt_drops_the_runner_s_timestamps():
     excerpt = FailureLog.excerpt(str(RecordedCheck.FAILING), log)
 
     assert excerpt.lines[0] == recorded.split(" ", maxsplit=1)[1]
+
+
+def test_an_excerpt_drops_the_colour_a_test_runner_wrote():
+    excerpt = FailureLog.excerpt(
+        str(RecordedCheck.FAILING), JobLogFixtureName.FAILED_JOB.load()
+    )
+
+    assert TERMINAL_ESCAPE_PATTERN.search("\n".join(excerpt.lines)) is None
 
 
 def test_a_job_that_died_before_pytest_is_excerpted_from_its_error_annotations():
