@@ -1,38 +1,47 @@
+
 # PR #425 - side-branch build gate
 
-Every integration candidate dies on `Run the maintenance pass`, from
+Every integration candidate died on `Run the maintenance pass`, from
 `stack-maintenance.yml` (#280), which a build carries and which GitHub therefore
 runs on the candidate itself. It judges the whole fork (a branch withheld as
-conflicted -> exit 10) and `PIPELINE_WORKFLOWS` did not exclude it, so
-`ChecksVerdict` answered FAILED before the matrix finished.
+conflicted -> exit 10) and the verdict counted it.
 
 ## Plan
-- Add `INTEGRATION_CHECKS` and `STACK_MAINTENANCE` to `WorkflowFile` and to
-  `PIPELINE_WORKFLOWS`, so neither votes on a build.
-- Read past a pipeline workflow this checkout does not hold, since no tree today
-  carries both `bastler/integration_verdict.py` (#211) and `stack-maintenance.yml`
-  (#280) and `.read()` would otherwise crash the whole rebuild.
+- Stop the pipeline's own workflows deciding a build, in a way that does not
+  depend on the reading checkout carrying their files.
+- Carry out the review's rename of the package.
 
 ## Done
-- Branch re-cut from #211's head (`claude/plan-item-kickoff-workflow-unification-wg4w4x`),
-  which owns the verdict module; PR #425 opened as a draft against it, labelled `bug`.
-- Three tests written failing first, then the fix. Full suite: 1164 passed.
-- `WorkflowFile`'s file-exists invariant narrowed to exempt the pipeline's own
-  workflows, with the reason recorded in the test docstring.
+- Round 1: added `INTEGRATION_CHECKS` and `STACK_MAINTENANCE` to
+  `PIPELINE_WORKFLOWS`, with a presence guard so an absent file did not crash
+  the rebuild. Left a known limit: it only bit from a checkout holding
+  `stack-maintenance.yml`, and nothing published carries both.
+- Round 2 (`926c5f8712`): closed that limit properly. The exclusion now goes by
+  the workflow file GitHub says each run ran from, read off the runs started on
+  the head under judgement, instead of by job names read out of a local file.
+  Verified against candidate #421's head: 25 check runs, exactly 4 check suites,
+  one per workflow run. New client call `runs_started_on`; the exclusion moved
+  from `ReportedChecks.of` into `read_checks`.
+- Round 2 (`ad6adfffdc`): renamed `bastler` -> `basstler` across the whole tree,
+  169 paths and 130 files. Both review threads replied to and resolved.
+- 1165 tests pass; formatter and `black --check` clean. PR back in draft.
 
 ## Decisions
-- Asked before starting; chose "relax the file-exists invariant on #211" over
-  merging #280 in (its `.claude/stack/` -> `bastler/` relocation conflicts on six
-  files - that resolution belongs to the integration build, not to this fix).
-- Stacked rather than folded into #211 because this session is pinned to its own
-  branch. It is a fold candidate if you would rather squash it into #211.
+- Went by workflow identity rather than by reading the workflow out of the judged
+  tree via git: no fetch dependency, no YAML, and it cannot mistake a repository
+  job for a pipeline one just because they share a name.
+- Redid the rename over the whole tree rather than merging #185's head, whose
+  rename commit predates the file set this stack added.
 
 ## Next
-- Nothing outstanding in this session. CI on #425 was left unwatched by standing
+- Nothing outstanding in this session. CI on #425 left unwatched by standing
   preference.
-- The fix only bites from a checkout holding `stack-maintenance.yml`; today's
-  `integration` pointer does not. First pass needs a `workflow_dispatch` of the
-  refresh on a ref carrying both, or the first publish after #280 lands.
-- Open question if the gate needs to close without that: read the workflow out of
-  the tree the checks were reported against instead of out of the tooling's
-  checkout. Larger change, not attempted.
+- The rename is still missing from #185's other descendants: `ixbvxl` and #211
+  were cut from #185 before its rename commit, so they want restacking onto its
+  current head. Only this branch is fixed.
+- #425 remains a fold candidate for #211 - it only edits #211's files. Folding
+  means pushing to #211's branch, which this session is not allowed to do and
+  which would re-draft a PR you have marked ready. Say the word and I will.
+- Merging #280 into this stack conflicts on six files (the `.claude/stack/` ->
+  `basstler/` relocation). That belongs to an integration triage pass.
+
