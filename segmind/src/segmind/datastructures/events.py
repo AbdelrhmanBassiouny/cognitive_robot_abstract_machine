@@ -8,6 +8,7 @@ from functools import cached_property
 from geometry_msgs.msg import PoseStamped
 from typing_extensions import Optional, List
 
+from krrood.symbol_graph.symbol_graph import Symbol
 from segmind.datastructures.object_tracker import (
     ObjectEventTracker,
     ObjectTrackerFactory,
@@ -19,7 +20,14 @@ from semantic_digital_twin.world_description.world_entity import Body
 
 
 @dataclass
-class DetectionEvent(ABC):
+class DetectionEvent(Symbol, ABC):
+    """
+    Something the segmentation saw happen.
+
+    A symbol, so that what the robot has seen is part of what it can be asked about
+    without anyone having to hand the events to the question.
+    """
+
     timestamp: datetime = field(default_factory=datetime.now)
     """
     The time at which the event occurred, defaults to current time.
@@ -248,26 +256,35 @@ class LossOfContactEvent(AbstractContactEvent):
     ...
 
 
+@dataclass
+class AgentInteractionEvent(EventWithTrackedObjects, ABC):
+    """
+    An event in which an agent acted on the tracked object rather than one where the
+    object was only observed.
+
+    What separates what the agent did from what merely happened around it, which is the
+    difference an agency question is about. The object acted on is the one the event
+    already tracks, so asking which objects an agent acted on is asking these events for
+    their :attr:`tracked_object`.
+    """
+
+
 @dataclass(unsafe_hash=True)
-class PickUpEvent(EventWithTrackedObjects):
+class PickUpEvent(AgentInteractionEvent):
     """
     Represents an event where an object is picked up by another object.
     """
 
-    ...
-
 
 @dataclass(unsafe_hash=True)
-class PlacingEvent(EventWithTrackedObjects):
+class PlacingEvent(AgentInteractionEvent):
     """
     Represents an event where an object is placed on another object.
     """
 
-    ...
-
 
 @dataclass(unsafe_hash=True)
-class InsertionEvent(EventWithTrackedObjects):
+class InsertionEvent(AgentInteractionEvent):
     """
     Represents an event where an object is inserted into another object.
     """

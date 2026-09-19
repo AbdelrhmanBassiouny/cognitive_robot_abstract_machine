@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from typing_extensions import Any, Dict
+from typing_extensions import Any, Dict, List
 
 from krrood.entity_query_language.core.base_expressions import SymbolicExpression
 from krrood.entity_query_language.core.variable import Variable
@@ -34,11 +34,12 @@ from semantic_digital_twin.reasoning.predicates import allclose
 from semantic_digital_twin.reasoning.robot_predicates import is_body_in_gripper
 from semantic_digital_twin.robots.robot_part_mixins import HasMobileBase
 from semantic_digital_twin.world_description.connections import ActiveConnection1DOF
+from coraplex.robot_plans.mixins import ManipulatesBodies
 from semantic_digital_twin.world_description.world_entity import Body
 
 
 @dataclass
-class OpenAction(ActionDescription):
+class OpenAction(ActionDescription, ManipulatesBodies):
     """
     Opens a container like object.
     """
@@ -56,6 +57,13 @@ class OpenAction(ActionDescription):
     """
     The distance in meters the gripper should be at in the x-axis away from the handle.
     """
+
+    @property
+    def manipulated_bodies(self) -> List[Body]:
+        """
+        The body this action acts on.
+        """
+        return [self.object_designator]
 
     @property
     def _action_plan(self) -> PlanNode:
@@ -134,7 +142,7 @@ class OpenAction(ActionDescription):
 
 
 @dataclass
-class CloseAction(ActionDescription):
+class CloseAction(ActionDescription, ManipulatesBodies):
     """
     Closes a container like object.
     """
@@ -154,6 +162,13 @@ class CloseAction(ActionDescription):
     The distance in meters between the gripper and the handle before approaching to
     grasp.
     """
+
+    @property
+    def manipulated_bodies(self) -> List[Body]:
+        """
+        The body this action acts on.
+        """
+        return [self.object_designator]
 
     @property
     def _action_plan(self) -> PlanNode:
