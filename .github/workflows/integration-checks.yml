@@ -39,7 +39,7 @@ jobs:
       - name: Install the tooling dependencies
         run: |
           source .claude/hooks/resolve-personal-notes-config.sh
-          pip install pytest "./${BASTLER_PACKAGE_DIRECTORY}"
+          pip install pytest "./${BASSTLER_PACKAGE_DIRECTORY}"
 
       # Collected over the package's test directory rather than the repository root:
       # the root loads every conftest, the robotics stack's included, and that one
@@ -54,10 +54,10 @@ jobs:
           source .claude/hooks/resolve-personal-notes-config.sh
           set +e
           python -m pytest \
-            -p bastler.integration_reproduction \
+            -p basstler.integration_reproduction \
             --reproduction-report="${RUNNER_TEMP}/reproductions.json" \
             -m integration_conflict \
-            "${BASTLER_TESTS_DIRECTORY}" --confcutdir="${BASTLER_TESTS_DIRECTORY}"
+            "${BASSTLER_TESTS_DIRECTORY}" --confcutdir="${BASSTLER_TESTS_DIRECTORY}"
           status=$?
           set -e
           # 0: every recorded break is fixed. 1: at least one still reproduces, which

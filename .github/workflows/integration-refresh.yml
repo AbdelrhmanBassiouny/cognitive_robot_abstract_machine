@@ -84,7 +84,7 @@ jobs:
       - name: Install the tooling dependencies
         run: |
           source .claude/hooks/resolve-personal-notes-config.sh
-          pip install pytest "./${BASTLER_PACKAGE_DIRECTORY}"
+          pip install pytest "./${BASSTLER_PACKAGE_DIRECTORY}"
 
       - name: Add the upstream the build is based on
         env:

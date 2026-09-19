@@ -30,12 +30,12 @@ and deciding that is not something a script can do.
 
 ## Step 0 - make the tooling present rather than assuming it
 
-Every step below shells out to the `bastler` package. If `ls bastler/integration.py` fails,
+Every step below shells out to the `basstler` package. If `ls basstler/integration.py` fails,
 `git fetch` the ref you were told to resolve this document from and restore it **into the
 working tree only**:
 
 ```bash
-git restore --source=<ref> --worktree -- bastler/
+git restore --source=<ref> --worktree -- basstler/
 ```
 
 Never reach for `git checkout` with a ref and a path here. That form writes the index as well,
@@ -47,7 +47,7 @@ made on that branch would carry them in.
 Either you were handed one, or you make one:
 
 ```bash
-python -m bastler.integration build --json
+python -m basstler.integration build --json
 ```
 
 Act on the status the document leads with and the process exits with:
@@ -113,9 +113,9 @@ and rebuilt.
 write the resolution into the conflicted files, and record it:
 
 ```bash
-python -m bastler.integration stage-conflict --tip <skipped> --against <other>
+python -m basstler.integration stage-conflict --tip <skipped> --against <other>
 # resolve the conflicted files it names, in the worktree it names, then:
-python -m bastler.integration record-resolution \
+python -m basstler.integration record-resolution \
     --tip <skipped> --worktree <the worktree> --author skill
 ```
 
@@ -143,7 +143,7 @@ catch this: neither branch is wrong, and the failure exists only in a tree neith
 **Find the pair before judging it.** A failing suite over ten merged tips names nothing:
 
 ```bash
-python -m bastler.integration locate-failure --json
+python -m basstler.integration locate-failure --json
 ```
 
 It re-assembles the tips in the same order and runs the suite after each, so what it reports
@@ -211,7 +211,7 @@ A failure nobody acts on is carried by every later build. So the branch that cau
 by hand:
 
 ```bash
-python -m bastler.integration block-branch --json
+python -m basstler.integration block-branch --json
 ```
 
 It applies the `integration-conflict` label to the breaking branch's pull request and comments
