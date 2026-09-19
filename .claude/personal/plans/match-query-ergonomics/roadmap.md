@@ -1820,3 +1820,56 @@ non-conflicted hunk's usages before trusting it merged correctly; this one is th
 caution one level up - a conflict side that resolves to "empty, nothing to combine" is
 worth one `git show <base>:<path>` to confirm the class really vanished rather than moved,
 before applying "take both sides" to what looks like an addition on one side only.
+
+## 35. 2026-09-19: the fifth file to arrive from main with a retired name, in one job
+
+Section 34's fix cleared 22 of 23 checks. The last one, `test_each_lib (experiments)`,
+still failed - `4 failed, ... 4 errors` in pytest's own count, which is the number the
+developer reported ("There are 4 errors in CI"). All eight failing tests traced back to
+two files, neither touched by this branch before, each still reading a name `Match` no
+longer defines as a compatibility property - the fifth and sixth such files this item's
+history has found (after `test_relational_circuit_registry_causal.py`, three sites in
+`exceptions.py`/`factories.py`/`operators/probabilistic_queries.py`/`rules.py`,
+`test_markov_chain.py`/`template.py`, and `test_causes_effect.py`'s six construction
+tests), each one caught only once something finally executed the line.
+
+**`experiments/causal_reasoning/mutagenesis/causal_query.py:359`** built its
+`causes_effect` condition as `query.variable.mutagenic == True`. `query` is a `Match`
+(`a(MutagenesisMolecule)(...)`), so `.variable` is captured as a symbolic attribute named
+literally `"variable"` rather than raising, and the chain built under it -
+`MutagenesisMolecule.variable.mutagenic` - has no type, the same shape section 6's hazard
+has now produced five times. `WhereExpressionToRandomEventTranslator` (via
+`random_events.variable.variable_from_name_and_type`) then hit
+`TypeError: issubclass() arg 1 must be a class` trying to build a random-events variable
+from a `None` type - one failure and four errors, all four in
+`causal_reasoning_test/test_causal_query.py`, since every test in that module calls
+`UnderspecifiedParameters` on a query built the same broken way.
+
+**`experiments/confidence_aware_eql/data_generation.py:50`** called
+`query.expression.limit(self.number_of_samples)`. Unlike the attribute case, this one
+raised nothing at all: `.expression` builds a phantom `Attribute`, and `.limit` on *that*
+builds a second phantom symbolic call rather than an `AttributeError`, because
+`HasSymbolicOperations.__getattr__` forwards unknown non-underscore names on every
+symbolic expression, not only on a match. The whole statement is therefore an inert
+sub-expression tree nothing ever reads, and the real query's limit is never set - three
+tests in `confidence_aware_eql/test_data_generation.py` failed on unlimited (100-row)
+output where 40 was expected, with no exception to point at the cause.
+
+**One candidate ruled out by reading rather than assumed.**
+`confidence_guard.py:72`'s `conclusion.variable._id_` looked like the same shape at a
+glance, but `conclusion` here is a `rules/conclusion.py` `Conclusion`, whose own `variable`
+is a real `@property` returning `self.left` - unrelated to `Match` and not part of this
+item's rename at all. The lesson from section 6 onward is to check the type before
+assuming the name, and this is the first round where that check turned up a genuine
+non-match.
+
+**Fixed to the direct spellings `Match`'s own forwarding and modifiers exist for**:
+`query.mutagenic` and `query.limit(self.number_of_samples)`. Verified directly, since the
+sandbox still cannot run the full suite (the same ROS `geometry_msgs` gap every earlier
+round has hit): `UnderspecifiedParameters(BranchingAtomCountCausalQuery._build_query(2,
+1))` - the exact call CI's traceback named - now succeeds and names its variable
+`MutagenesisMolecule.mutagenic` rather than the phantom
+`MutagenesisMolecule.variable.mutagenic`; a fresh match's `.limit(5)` sets the lowered
+query's `_limit_` field directly, confirmed by reading it back.
+`test_eql/test_match.py` 51 passed. Pushed to `claude/match-query-interface-refactor-l55jym`
+at `de250551ba`.

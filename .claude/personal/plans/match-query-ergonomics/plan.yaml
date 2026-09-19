@@ -411,6 +411,26 @@ items:
       returning exactly one UnderspecifiedNode, test_eql/test_match.py 51 passed, and syntax/
       import checks on all three edited files; the full local ORM pipeline still can't run in
       this sandbox (missing ROS geometry_msgs), unchanged since section 32. Pushed at 0e458ac4b3.
+
+      CI green except one job after that push (roadmap section 35): all 23 checks passed except
+      experiments, which failed with 4 failed + 4 errors, all one root cause read a fifth time -
+      two more files arrived from main untouched by this branch's rename, each reading a name
+      Match no longer defines as a compatibility property. causal_query.py built its
+      causes_effect condition as query.variable.mutagenic, resolving to a phantom symbolic
+      attribute chain named literally "variable" with no type, which the random-events translator
+      turned into TypeError: issubclass() arg 1 must be a class (4 errors + 1 failure, all in
+      causal_reasoning_test/test_causal_query.py); data_generation.py called
+      query.expression.limit(n), which built an inert throwaway symbolic sub-expression instead
+      of touching the real query, so the sampled population came back unlimited - 100 rows
+      instead of 40 - with no exception at all (3 failures in
+      confidence_aware_eql/test_data_generation.py). A third candidate,
+      confidence_guard.py's conclusion.variable, is not this bug: Conclusion.variable is a real
+      property Conclusion itself defines. Fixed to query.mutagenic and query.limit(n). Verified
+      directly (the sandbox still can't run the full suite - same ROS gap):
+      UnderspecifiedParameters(BranchingAtomCountCausalQuery._build_query(2, 1)) now succeeds and
+      names its variable MutagenesisMolecule.mutagenic rather than
+      MutagenesisMolecule.variable.mutagenic; query.limit(5) on a fresh match sets the lowered
+      query's limit field directly. test_eql/test_match.py 51 passed. Pushed at de250551ba.
   - id: aggregate-signature-reads-a-missing-attribute
     title: "Bug: every aggregate of one kind gets the same structural signature"
     branch: claude/plan-item-kickoff-match-query-npzr78
