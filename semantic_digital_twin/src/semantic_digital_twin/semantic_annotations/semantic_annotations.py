@@ -63,6 +63,7 @@ from semantic_digital_twin.world_description.shape_collection import (
 from semantic_digital_twin.world_description.world_entity import (
     SemanticAnnotation,
     Body,
+    Region,
 )
 from semantic_digital_twin.api import (
     BodySpecification,
@@ -171,6 +172,15 @@ class Aperture(HasRootRegion):
     An opening in a physical entity.
 
     An example is like a hole in a wall that can be used to enter a room.
+    """
+
+    landing_region: Optional[Region] = field(kw_only=True, default=None)
+    """
+    The space behind this opening, which something that has gone through it is inside
+    and something still resting against the opening is not.
+
+    Optional because an opening can be described without one -- a hole detected in a
+    camera image has no space measured behind it.
     """
 
     @classmethod
