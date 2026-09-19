@@ -94,6 +94,16 @@ jobs:
           fi
           python -m pytest -n auto cognitive_robot_abstract_machine/test/${{ inputs.lib }}_test
 
+      - name: Upload generated ORM interface (debug)
+        # Temporary: capture the generated experiments interface to diagnose the
+        # "Table already defined" collection failure. Remove once diagnosed.
+        if: ${{ always() && inputs.lib == 'experiments' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: experiments-ormatic-interface
+          path: cognitive_robot_abstract_machine/experiments/src/experiments/orm/ormatic_interface.py
+          if-no-files-found: warn
+
       - name: Save cache
         uses: actions/cache/save@v4
         if: always()
