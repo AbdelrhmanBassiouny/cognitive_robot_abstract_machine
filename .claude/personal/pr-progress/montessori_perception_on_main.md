@@ -105,3 +105,60 @@ pure form; the assumption is stated on `KnownPiece.color`.
   neither scene constant already.
 - `detector-parameters-from-knowledge` now has a second reason to move the
   piece hues onto the objects: the twin reads them too, not only the detector.
+
+### 2026-09-19: `test_each_lib (experiments)` deterministically red, unrelated to this PR's diff
+
+Asked by the developer to "resolve PR 202 and fix the CI". The only red check
+is `test_each_lib (experiments)`, failing identically across two prior CI
+attempts (before this session touched anything) and a third I triggered to
+rule out a flake: `sqlalchemy.exc.InvalidRequestError: Table already
+defined`, for `ServoGainsDAO` (from this PR's own new
+`tracy_experiments/equipment.py`) *and*, independently,
+`MutagenesisCausalQueryResultDAO_effects_association` (a pre-existing,
+untouched causal-reasoning association table). Confirmed green on `main` at
+this PR's exact base commit, so it's something this PR's larger/changed
+class set exposes in the generated `experiments.orm.ormatic_interface`, not
+a base-branch issue.
+
+Per `AGENTS.md`'s explicit "avoid ormatic_interface.py, consult the
+developer" rule, asked the developer how to proceed rather than guessing a
+fix inside shared `krrood/ormatic` internals. They chose "add a debug CI
+step to dump the generated file."
+
+Pushed two temporary debug commits directly to this branch (re-drafted the
+PR after each, per standing rule):
+- `26c458c96` — uploads the generated `ormatic_interface.py` as a build
+  artifact. Downloaded and inspected it: **each class is defined exactly
+  once in the file** (`grep -c` confirms). This rules out "the generator
+  writes duplicate content" and confirms the module is being
+  imported/executed *twice within one process* — something no plain
+  `import X` should ever do, since `sys.modules` caches it.
+- `313b88f4b` — adds a second debug step (`if: inputs.lib == 'experiments'`,
+  `continue-on-error: true`) that: (1) builds the ORM interfaces up front
+  via `WORKSPACE_ORM_INTERFACES.regenerate()`, (2) probes
+  `experiments.__path__` after inserting `cognitive_robot_abstract_machine`
+  onto `sys.path` the way pytest's rootdir insertion would (checking whether
+  the checkout's own `experiments/` project folder, which has no
+  `__init__.py`, is shadowing the properly-installed package — read through
+  `PathFinder`'s namespace-package rules and think it shouldn't, but wanted
+  it verified live rather than trusted from reasoning), and re-imports
+  `experiments.orm.ormatic_interface` twice in the same interpreter to
+  confirm plain re-import is safe outside pytest, (3) runs a *serial*
+  (`--collect-only`, no `-n auto`) collection of `test/experiments_test` to
+  see whether the bug reproduces without xdist at all — narrows whether
+  xdist's per-worker collection is involved or whether it's a plain
+  double-import bug that would show up even in serial pytest.
+
+Both debug commits' logs/artifacts uploaded as `experiments-ormatic-interface`
+(now containing both the generated file and `/tmp/serial_collect.log`).
+**Debug scaffolding must be removed from `ci_reusable.yml` once the real
+fix lands** — do not let it merge as-is.
+
+Next: read the run-`313b88f4b` artifact/logs once CI finishes, decide from
+the serial-vs-xdist result and the sys.path probe output what's actually
+double-importing the module, then push the real fix (likely somewhere in
+how the pytest process resolves `experiments.orm.ormatic_interface` the
+first time vs. the second, not in generator content) and revert the debug
+step. The developer said "Check it" and expects a report once this run
+completes; per standing rules I'm not polling — checked this once and will
+check again when prompted.
