@@ -232,6 +232,23 @@ no world), and the message said "more than 20 worlds" while the check was `> 30`
     threshold concept entirely, then reverting back to the flat threshold) -
     a decision for a human on the upstream thread, not something to guess a
     sixth time.
+18. [done] "Read and handle latest reviews" - ran `/upstream-reviews` first,
+    which reported Tigul's upstream "changes requested" (general commit
+    message feedback, no unresolved threads) - relayed to chat since this
+    session cannot act on the upstream PR at all. Corrected: "I meant the
+    ones in my fork" - checked PR #267 directly instead and found one
+    unresolved review thread from the user themselves on `test/conftest.py:186`:
+    "This should be defined inside the WorldTallyLedger class", against
+    `WORLD_TALLY_DIRECTORY_NAME` (a standalone module constant next to the
+    `WorldTallyLedger` class it exists only to configure). Confirmed the
+    comment's line still matches current `conftest.py` after all the
+    reverts (unchanged since it predates the fixture-scope-owner detour).
+    Fixed (commit bbf9f71ec): moved it onto the class as
+    `WorldTallyLedger.DIRECTORY_NAME` (`ClassVar[str]`) in `living_worlds.py`,
+    updated `conftest.py`'s `world_tally_ledger()` to reference it there.
+    Verified against a fresh sandbox + real pytest 7.4.4 install: 20 passed.
+    Fetched (no new remote commits), pushed, replied on the thread naming
+    the commit, then resolved it. Re-drafted the PR after the push.
 
 **Verification notes**
 - The workspace packages are not installed in this container (no `semantic_digital_twin`,
