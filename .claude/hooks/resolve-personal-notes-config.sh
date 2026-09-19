@@ -286,7 +286,7 @@ PLAN_BRANCH_INDEX_PATH="${PLANS_DIR}/_generated/branch-index.tsv"
 # same defined-once reasoning as PLAN_BRANCH_INDEX_PATH above.
 DASHBOARD_URL_CACHE_PATH="${PLANS_DIR}/_generated/dashboard-urls.yaml"
 
-# BASTLER_PACKAGE_DIRECTORY / *_MODULE / *_FILE: every Python entry point in
+# BASSTLER_PACKAGE_DIRECTORY / *_MODULE / *_FILE: every Python entry point in
 # this system, and the package holding them - defined once, here, so
 # refresh_dashboard.sh, every plan-*/SKILL.md, and .github/workflows/ci.yml
 # source this file and use these variables instead of each carrying its own
@@ -300,72 +300,72 @@ DASHBOARD_URL_CACHE_PATH="${PLANS_DIR}/_generated/dashboard-urls.yaml"
 # `python3 -m "${SOME_MODULE}"`. Running one by its file path instead would
 # put the package's own directory on sys.path in place of the project root,
 # so its absolute imports of its siblings would not resolve.
-BASTLER_PACKAGE_DIRECTORY="bastler"
+BASSTLER_PACKAGE_DIRECTORY="basstler"
 # build_dashboard: renders one plan's dashboard HTML from its manifest
 # and live GitHub data - see the module's own docstring.
-BUILD_DASHBOARD_MODULE="bastler.build_dashboard"
+BUILD_DASHBOARD_MODULE="basstler.build_dashboard"
 # build_index: renders the master index page listing every plan.
-BUILD_INDEX_MODULE="bastler.build_index"
+BUILD_INDEX_MODULE="basstler.build_index"
 # sync_manifest_status: auto-corrects a plan.yaml's item statuses to
 # "done" wherever GitHub confirms the item's pull request is merged.
-SYNC_MANIFEST_STATUS_MODULE="bastler.sync_manifest_status"
+SYNC_MANIFEST_STATUS_MODULE="basstler.sync_manifest_status"
 # check_dependency_readiness: classifies one item's dependencies as
 # ready or not-ready to build on - see dependency-readiness.md below.
-CHECK_DEPENDENCY_READINESS_MODULE="bastler.check_dependency_readiness"
+CHECK_DEPENDENCY_READINESS_MODULE="basstler.check_dependency_readiness"
 # refresh_dashboard_support: the JSON-plumbing helpers
 # refresh_dashboard.sh calls between its two module calls.
-REFRESH_DASHBOARD_SUPPORT_MODULE="bastler.refresh_dashboard_support"
+REFRESH_DASHBOARD_SUPPORT_MODULE="basstler.refresh_dashboard_support"
 # record_dashboard_url: writes one key's published Artifact URL into
 # DASHBOARD_URL_CACHE_PATH, resolving that URL from the account's live
 # Artifact listing so a URL nobody published cannot be recorded.
-RECORD_DASHBOARD_URL_MODULE="bastler.record_dashboard_url"
+RECORD_DASHBOARD_URL_MODULE="basstler.record_dashboard_url"
 # plan_item_bootstrap: opens an item's branch and draft pull request and
 # records its manifest entry - invoked from plan-item-kickoff/SKILL.md and
 # add-plan-item/SKILL.md.
-PLAN_ITEM_BOOTSTRAP_MODULE="bastler.plan_item_bootstrap"
+PLAN_ITEM_BOOTSTRAP_MODULE="basstler.plan_item_bootstrap"
 # plan_item_mode: resolves whether a plan-item skill asks, plans, or
 # implements on its own - invoked from plan-item-mode/SKILL.md and from
 # plan-item-kickoff/plan-item-resolve via execution-modes.md.
-PLAN_ITEM_MODE_MODULE="bastler.plan_item_mode"
+PLAN_ITEM_MODE_MODULE="basstler.plan_item_mode"
 # plan_manifest_tools: reads a plan id out of a manifest and regenerates
 # the branch index - the manifest plumbing save-plan.sh calls.
-PLAN_MANIFEST_TOOLS_MODULE="bastler.plan_manifest_tools"
+PLAN_MANIFEST_TOOLS_MODULE="basstler.plan_manifest_tools"
 # plan_updates_since_support: renders the plan-state delta
 # plan-updates-since.sh reports.
-PLAN_UPDATES_SINCE_SUPPORT_MODULE="bastler.plan_updates_since_support"
+PLAN_UPDATES_SINCE_SUPPORT_MODULE="basstler.plan_updates_since_support"
 # stack: read-only stacked-PR status tool (status/check/next/restack-plan)
 # - see its own module docstring and STACK_DIRECTORY/README.md.
-STACK_MODULE="bastler.stack"
+STACK_MODULE="basstler.stack"
 # maintenance: the deterministic maintenance executor a stacked-PR pass
 # runs - board export, fast-forward, restack, promote, run-report.
-MAINTENANCE_MODULE="bastler.maintenance"
+MAINTENANCE_MODULE="basstler.maintenance"
 # check_scope_overlap: reports which of an item's paths a given branch
 # already touches - the mechanical half of add-plan-item's scope decision.
-CHECK_SCOPE_OVERLAP_MODULE="bastler.check_scope_overlap"
+CHECK_SCOPE_OVERLAP_MODULE="basstler.check_scope_overlap"
 # upstream_reviews: reports the review threads a fork branch's upstream
 # pull request has collected, run by the upstream-reviews Action.
-UPSTREAM_REVIEWS_MODULE="bastler.upstream_reviews"
+UPSTREAM_REVIEWS_MODULE="basstler.upstream_reviews"
 # dependencies: prints the package's declared dependencies this environment
 # does not have - what missing_dependencies below calls.
-BASTLER_DEPENDENCIES_MODULE="bastler.dependencies"
+BASSTLER_DEPENDENCIES_MODULE="basstler.dependencies"
 # pyproject.toml: the package's own metadata, and the one place its
 # PyYAML/Jinja2/markdown/nh3 dependencies are declared - installed by CI, by an
 # Actions workflow running a module, and by ./session-start.sh on every session
 # start (see install_dependencies below).
-BASTLER_PYPROJECT_FILE="${BASTLER_PACKAGE_DIRECTORY}/pyproject.toml"
+BASSTLER_PYPROJECT_FILE="${BASSTLER_PACKAGE_DIRECTORY}/pyproject.toml"
 # stack.toml: the committed defaults stack.py's load_configuration layers a
 # personal-notes .claude/personal/stack.toml override on top of.
-STACK_CONFIG_FILE="${BASTLER_PACKAGE_DIRECTORY}/stack.toml"
+STACK_CONFIG_FILE="${BASSTLER_PACKAGE_DIRECTORY}/stack.toml"
 # plan-item-modes.toml: the committed execution-mode defaults plan_item_mode
 # layers a personal-notes .claude/personal/plan-item-modes.toml override on
 # top of - the same committed-defaults/personal-override split as stack.toml.
-PLAN_ITEM_MODES_CONFIG_FILE="${BASTLER_PACKAGE_DIRECTORY}/plan-item-modes.toml"
+PLAN_ITEM_MODES_CONFIG_FILE="${BASSTLER_PACKAGE_DIRECTORY}/plan-item-modes.toml"
 PERSONAL_PLAN_ITEM_MODES_PATH=".claude/personal/plan-item-modes.toml"
-# test/bastler_test/: the one pytest suite covering every module above -
+# test/basstler_test/: the one pytest suite covering every module above -
 # the exact directory CI and a session both run against. One directory
 # rather than the three this suite was merged from, since one package has
 # one test tree.
-BASTLER_TESTS_DIRECTORY="test/bastler_test"
+BASSTLER_TESTS_DIRECTORY="test/basstler_test"
 
 # PLAN_DASHBOARD_DIRECTORY / REFRESH_DASHBOARD_SCRIPT: what the
 # plan-dashboard skill still keeps outside the package - Claude Code
@@ -422,9 +422,9 @@ CREATE_PERSONAL_NOTES_BRANCH_SCRIPT=".claude/hooks/create-personal-notes-branch.
 # the budget every plan is measured against, the command that reports it, and
 # the check that refuses a save over it - same defined-once reasoning as every
 # path above.
-PLAN_SIZE_BUDGET_MODULE="bastler.plan_size_budget"
+PLAN_SIZE_BUDGET_MODULE="basstler.plan_size_budget"
 PLAN_SIZE_REPORT_SCRIPT=".claude/hooks/plan-size-report.sh"
-PLAN_SIZE_GATE_MODULE="bastler.plan_size_gate"
+PLAN_SIZE_GATE_MODULE="basstler.plan_size_gate"
 # prerequisite-check.md: the shared "run check-setup.sh, offer
 # /setup-personal-notes if it fails" procedure that plan-create,
 # plan-dashboard, plan-item-kickoff and plan-item-resolve each reference in
@@ -548,21 +548,21 @@ tracked_plan_count() {
 # %% the package's own dependencies
 
 # missing_dependencies: prints the requirement specifiers
-# BASTLER_PYPROJECT_FILE declares that are not installed, space separated, and
+# BASSTLER_PYPROJECT_FILE declares that are not installed, space separated, and
 # nothing at all when every one of them is. Returns 1 without printing when the
 # file or python3 is missing, which is a caller's problem to word rather than
 # this function's.
 #
-# The reading is BASTLER_DEPENDENCIES_MODULE's rather than a snippet written
+# The reading is BASSTLER_DEPENDENCIES_MODULE's rather than a snippet written
 # out here: it parses a declaration, and parsing embedded in a shell string is
 # code nothing can run on its own or test.
 missing_dependencies() {
   command -v python3 > /dev/null 2>&1 || return 1
-  [ -f "${BASTLER_PYPROJECT_FILE}" ] || return 1
+  [ -f "${BASSTLER_PYPROJECT_FILE}" ] || return 1
   local missing
   # Its failure is reported rather than echoed, since an empty answer is what
   # a caller reads as "nothing to install".
-  missing="$(python3 -m "${BASTLER_DEPENDENCIES_MODULE}")" || return 1
+  missing="$(python3 -m "${BASSTLER_DEPENDENCIES_MODULE}")" || return 1
   # Unquoted so the module's one-specifier-per-line output is word split and
   # printed back as one space separated line.
   # shellcheck disable=SC2086
@@ -573,7 +573,7 @@ missing_dependencies() {
 # output (both streams) in DEPENDENCY_INSTALL_OUTPUT for a caller to report,
 # and returning pip's exit status.
 #
-# The specifiers rather than the package itself: installing ./bastler would put
+# The specifiers rather than the package itself: installing ./basstler would put
 # a second copy of these modules in site-packages beside the clone's own, and
 # the clone's copy is what the zero-install contract says a caller imports.
 install_dependencies() {
