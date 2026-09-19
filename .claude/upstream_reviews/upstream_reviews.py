@@ -1063,13 +1063,6 @@ class GitHubEndpoint(StrEnum):
     """
 
 
-ALLOW_ESCAPE_SEQUENCES = "--allow-escape-sequences"
-"""
-What ``gh`` wants before it will print a log at all: a test runner colours its own
-output, and ``gh`` refuses to write terminal escape sequences it was not asked for.
-"""
-
-
 class JobLogReader(ABC):
     """
     Reads the log one Actions job recorded.
@@ -1116,6 +1109,12 @@ class GitHubCommandLineClient(GraphQLClient, JobLogReader):
     The command to invoke, overridable for testing.
     """
 
+    ALLOW_ESCAPE_SEQUENCES: ClassVar[str] = "--allow-escape-sequences"
+    """
+    What ``gh`` wants before it will print a log at all: a test runner colours its own
+    output, and ``gh`` refuses to write terminal escape sequences it was not asked for.
+    """
+
     def execute(self, query: str, variables: dict[str, Any]) -> dict[str, Any]:
         """
         Run one GraphQL query through ``gh``.
@@ -1148,7 +1147,7 @@ class GitHubCommandLineClient(GraphQLClient, JobLogReader):
         return self._run(
             [
                 "api",
-                ALLOW_ESCAPE_SEQUENCES,
+                self.ALLOW_ESCAPE_SEQUENCES,
                 GitHubEndpoint.JOB_LOG.format(
                     repository=repository, job=job_identifier
                 ),

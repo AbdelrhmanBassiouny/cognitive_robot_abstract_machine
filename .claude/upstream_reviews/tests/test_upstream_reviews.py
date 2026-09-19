@@ -31,6 +31,7 @@ from upstream_reviews import (
     TERMINAL_ESCAPE_PATTERN,
     GitHubCommandFailed,
     GitHubCommandLineClient,
+    GitHubEndpoint,
     GraphQLErrorsReturned,
     JSONModel,
     PullRequestJSONKey,
@@ -98,6 +99,7 @@ class StubEnvironmentVariable(StrEnum):
     """
 
     GRAPHQL_JSON = "STUB_GH_GRAPHQL_JSON"
+    JOB_LOG = "STUB_GH_JOB_LOG"
     EXIT_CODE = "STUB_GH_EXIT_CODE"
     CALL_LOG = "STUB_GH_CALL_LOG"
 
@@ -105,6 +107,7 @@ class StubEnvironmentVariable(StrEnum):
 UPSTREAM = Repository(Example.UPSTREAM_OWNER, Example.UPSTREAM_NAME)
 RECORDED_PULL_REQUEST_NUMBER = 513
 GRAPHQL_ERROR_MESSAGE = "Could not resolve to a Repository"
+RECORDED_JOB_IDENTIFIER = 105780443397
 UPSTREAM_SETTING_TEMPLATE = 'upstream_repository = "{repository}"\n'
 
 
@@ -673,6 +676,38 @@ def test_graphql_errors_are_raised_rather_than_returned(stubbed_gh, monkeypatch)
         GitHubCommandLineClient().execute("query {}", {})
 
     assert raised.value.messages == [GRAPHQL_ERROR_MESSAGE]
+
+
+def test_a_job_log_is_asked_for_by_the_job_s_own_endpoint(
+    stubbed_gh, monkeypatch, tmp_path
+):
+    call_log = tmp_path / "calls.txt"
+    monkeypatch.setenv(StubEnvironmentVariable.CALL_LOG, str(call_log))
+    monkeypatch.setenv(StubEnvironmentVariable.JOB_LOG, "")
+
+    GitHubCommandLineClient().read_job_log(UPSTREAM, RECORDED_JOB_IDENTIFIER)
+
+    assert call_log.read_text().strip() == GitHubEndpoint.JOB_LOG.format(
+        repository=UPSTREAM, job=RECORDED_JOB_IDENTIFIER
+    )
+
+
+def test_a_job_log_comes_back_as_the_runner_recorded_it(stubbed_gh, monkeypatch):
+    recorded = JobLogFixtureName.FAILED_JOB_WITHOUT_SUMMARY.load()
+    monkeypatch.setenv(StubEnvironmentVariable.JOB_LOG, recorded)
+
+    read = GitHubCommandLineClient().read_job_log(UPSTREAM, RECORDED_JOB_IDENTIFIER)
+
+    assert read == recorded
+
+
+def test_a_failing_job_log_read_is_raised(stubbed_gh, monkeypatch):
+    monkeypatch.setenv(StubEnvironmentVariable.EXIT_CODE, "1")
+
+    with pytest.raises(GitHubCommandFailed) as raised:
+        GitHubCommandLineClient().read_job_log(UPSTREAM, RECORDED_JOB_IDENTIFIER)
+
+    assert raised.value.exit_code == 1
 
 
 def test_a_branch_without_an_upstream_pull_request_exits_without_a_traceback(
