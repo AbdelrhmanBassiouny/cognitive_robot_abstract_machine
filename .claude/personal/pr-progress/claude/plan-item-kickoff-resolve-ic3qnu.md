@@ -25,10 +25,24 @@ Suite: `python -m pytest test/basstler_test --confcutdir=test/basstler_test`.
 ## Done
 
 - Branch cut from #185's head, draft PR #430 opened, manifest and roadmap written.
+- All five steps implemented and pushed as one commit; PR description rewritten to match.
+  679 tests pass (664 on the base), `python3 -m pytest test/basstler_test --confcutdir=test/basstler_test`.
 
 ## Next
 
-- Step 1's tests, then the selector.
+- Nothing outstanding on the branch. It waits on review, and on #185 landing before it can.
+
+## Decisions made while implementing
+
+- The selector walks `Branch.parent`, not git containment, against the roadmap's wording.
+  Reasons in the roadmap section and the PR description; it is the one call a reviewer
+  should check.
+- A chain stops at a branch that has landed: what sits above it needs a reparent onto the
+  upstream base, which the whole-board pass owns.
+- `ConflictResponse.chosen_for()` couples the response to the subtree argument rather than
+  adding a second knob, so there is no way to run a whole-board pass that swallows conflicts.
+- The document is linked from SKILL.md rather than named by a new config constant: one
+  reader, and it keeps the item out of a second contended file.
 
 ## Worth knowing
 
