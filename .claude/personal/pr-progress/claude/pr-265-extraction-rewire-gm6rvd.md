@@ -86,28 +86,58 @@ Measured against main, not #265, it is 11 commits. 4 already on main
 - No test suite runnable here: no numpy/pytest importable, no venv. CI only.
 
 ## Collision scans (2026-09-19) - scripts in the session scratchpad
-Two scans, because they catch different things. BOTH are needed.
+THREE passes, and the third is what makes the result trustworthy.
 1. collide.py - pairwise trial merge (git merge-tree) between chain tips whose own
-   diffs share a .py file. 78 tips, 166 candidate pairs, 119 collide. LOW VALUE on
-   its own: dominated by staleness hubs (#257 collides with 14 PRs over the same 5
-   files because it is 200+ commits behind, not because 14 designs duplicate).
-   BLIND SPOT: cannot see a PR colliding with MAIN. It missed #296 entirely.
-2. divergence.py - per PR, which of main's symbols it REMOVES (ast, top-level plus
-   Class.method), and how far behind main it is. This is the one that works.
-   122 PRs scanned: 82 up to date, 40 behind >50, 35 behind >200, 33 remove a
-   symbol main has. Grouping by shared (file, symbol) removals -> 31 true pairs,
-   which collapse into CLUSTERS:
-   - predicates.py "predicates become classes": #227 #229 #33 #35 #238 #257 all
-     delete the same 7 functions (contact, is_body_in_region, is_place_occupied,
-     is_supported_by, is_supporting, ...) and each adds its own class version.
-     SIX PRs doing one refactor. The biggest single duplication in the repo.
-   - world.py/test_world.py: #232 #238 #257 delete the same 29-33 symbols.
-   - base_expressions.py: #34 #142 (#35 #192 adjacent) delete HasExpression,
-     RuleTreeContext.
-   - example_classes.py: #36 #257.
-   - setup scripts: #107 #110 both delete SetupPrerequisiteFile, CheckResult,
-     CheckStatus (the known #106/#110/#117 family).
-   - placing.py: #296 vs MAIN, single-sided, only scan 2 sees it.
+   diffs share a .py file. 78 tips, 166 pairs, 119 collide. LOW VALUE alone:
+   dominated by staleness hubs (#257 collides with 14 PRs over the same 5 files
+   because it is 200+ behind). BLIND to a PR colliding with MAIN: missed #296.
+2. divergence.py - per PR, which of main's symbols it REMOVES (ast: top-level plus
+   Class.method) and how far behind main it is. 122 PRs: 82 up to date, 40 behind
+   >50, 35 behind >200, 33 remove a main symbol. Shared (file, symbol) removals
+   between non-nested PRs -> 31 candidate pairs.
+3. attribute.py - THE ESSENTIAL FILTER. For each shared removal, find the commit on
+   each branch that removed it (git log -1 -S). Same commit = the two branches
+   INHERIT one removal from a shared ancestor, which is not duplication. This cuts
+   31 pairs to 9, and the 9 are all ONE collision.
+   WITHOUT this filter the scan reports a whole chain as a cluster. My first read of
+   the output did exactly that and was wrong - see the correction below.
+
+## CORRECTED FINDING: one real duplication, not six clusters
+predicates.py was converted from functions to classes TWICE, independently, under
+two naming conventions, and the two collide:
+- Family A, commit cbf45ab529 "Let a predicate answer whether it holds, with the
+  measurement behind it": InContactWith, InsideRegion, PlaceIsOccupied, Reachable,
+  Stable, SupportedBy, Supports, VisibleTo.
+  On #229 (base main, behind 0), INHERITED by #227, #238, #257 - so those are one
+  piece of work on four branches, NOT four duplicates.
+  #238/#257 extend it: Between, Colored, Near, PlacementRelation, Turned,
+  position_of, space_between, yaw_of.
+- Family B, commits 9da08b2cfb / 8c584bef0f / 84b0d096b6: Contact, IsSupportedBy,
+  IsSupporting, IsPlaceOccupied, Visible, AllClose, OccludingBodies,
+  BodyInRegionFraction, EuclideanPlanarDistance, and ALSO robot_predicates.py's 8
+  functions (BlockingBodies, BodiesInGripper, IsBodyGripped, ...).
+  On #33 (behind 413) and #35 (behind 2103), which are two versions of it.
+RETRACTED (all were inherited removals, i.e. one piece of work on several branches,
+not duplication): the world.py/test_world.py "cluster" (#232 #238 #257), the
+base_expressions.py one (#34 #142), example_classes.py (#36 #257), and the setup
+scripts one (#107 #110) - that last was wrongly tied to the #106/#110/#117
+precedent.
+STILL STANDING as its own thing: placing.py, #296 vs MAIN (single-sided; only
+scan 2 sees it).
+LOW CONFIDENCE: per-symbol commit attribution (git log -S is noisy for short names
+like `contact`), and whether #33/#35 are independent or one reworks the other.
+
+## RECOMMENDATION on the predicate collision: #229's convention wins
+- currency: #229 is based on main and behind 0. #33 is 413 behind, #35 is 2103.
+- dependents: Family A carries the whole knowledge-directed-* programme
+  (#227 #238 #255 #257 #270 #275). Family B carries the eql-symbolic-function /
+  performatives family (#33 #34 #35 #36 #14 #15 #82), none near landing.
+- scope: Family B additionally converts robot_predicates.py and the measurement
+  helpers, which A lacks. That is real coverage and must be PORTED onto A's
+  naming as a follow-up, not lost.
+- AGENTS.md's "classes are noun phrases" arguably favours B's Contact over A's
+  InContactWith; currency and dependents outweigh it, and A's names read as the
+  claim the predicate makes, which is what these objects are.
 
 ## CORRECTION (2026-09-19): the #229/#296 collision was misattributed
 I told #229 and #296 they collided over PlaceAction._grasp_description. WRONG.
