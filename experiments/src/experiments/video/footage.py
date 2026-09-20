@@ -29,6 +29,39 @@ CLOSE_UP = Resolution(width=1600, height=900)
 The size a film draws itself at.
 """
 
+# %% what of a picture is shown
+
+
+@dataclass(frozen=True)
+class Framing:
+    """
+    The margins cut off a camera picture before it is shown, in the picture's pixels.
+
+    It is applied to the drawn picture, after any findings are drawn on it, so nothing
+    drawn in the camera's pixel coordinates has to move.
+    """
+
+    top: int = 0
+    left: int = 0
+    right: int = 0
+    bottom: int = 0
+
+    def of(self, picture: Frame) -> Frame:
+        """
+        :param picture: A picture.
+        :return: What is left of it inside the margins.
+        """
+        height, width = picture.shape[:2]
+        return picture[self.top : height - self.bottom, self.left : width - self.right]
+
+
+TABLE_FRAMING = Framing(top=170, left=100, right=202)
+"""
+The framing of the robot's camera that shows the table alone, the floor and the stand
+around it cut off: the table's near edge lies 170 pixels down a full HD picture, and
+the right margin keeps the picture at sixteen by nine.
+"""
+
 # %% the colour images of a recording
 
 
@@ -169,6 +202,11 @@ class ExecutionFootage(Scene):
     The size the scene draws itself at.
     """
 
+    framing: Framing = TABLE_FRAMING
+    """
+    What of each picture is shown.
+    """
+
     @property
     def end(self) -> float:
         return self.film.length if self.to_second is None else self.to_second
@@ -178,14 +216,15 @@ class ExecutionFootage(Scene):
         return (self.end - self.from_second) / self.speed
 
     def picture_at(self, seconds: float) -> Frame:
-        image = self.film.at(self.from_second + seconds * self.speed).image
+        image = self.framing.of(self.film.at(self.from_second + seconds * self.speed).image)
         frame = self.resolution.blank(255)
-        frame = fitted(frame, image, Area(0, 0, self.resolution.width, self.resolution.height - 80))
+        stage = self.resolution.stage_height
+        frame = fitted(frame, image, Area(0, 0, self.resolution.width, stage - 80))
         badge = Area(self.resolution.width - 150, 20, 130, 48)
         frame = filled(frame, badge, Ink.TEXT.rgb)
         frame = Typesetting(size=28, face=Face.BOLD, color=Ink.PAPER.rgb).written(
             frame, f"×{self.speed:g}", badge.centre, Anchor.CENTRE_MIDDLE
         )
         return Typesetting(size=28, color=Ink.TEXT.rgb).written(
-            frame, self.caption, (self.resolution.width / 2, self.resolution.height - 40), Anchor.CENTRE_MIDDLE
+            frame, self.caption, (self.resolution.width / 2, stage - 40), Anchor.CENTRE_MIDDLE
         )

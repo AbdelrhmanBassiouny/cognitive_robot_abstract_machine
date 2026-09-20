@@ -131,11 +131,12 @@ def test_the_questions_come_after_the_grid_has_settled() -> None:
     assert asked is second and progress == 1.0
 
 
-def test_the_tiles_lie_under_the_band_within_the_frame() -> None:
+def test_the_tiles_lie_under_the_band_above_the_subtitles() -> None:
     layout = GridLayout(CLOSE_UP, rows=2, columns=3)
     assert layout.tile(0, 0).y >= BAND_HEIGHT
-    assert layout.tile(1, 2).bottom <= layout.footer_y - 20
+    assert layout.tile(1, 2).bottom <= CLOSE_UP.stage_height - layout.margin
     assert layout.tile(1, 2).right <= CLOSE_UP.width
+    assert layout.tile(0, 0).width == pytest.approx(layout.tile(0, 0).height * 16 / 9)
 
 
 def test_the_answer_lights_the_tiles_it_names_and_dims_the_rest() -> None:

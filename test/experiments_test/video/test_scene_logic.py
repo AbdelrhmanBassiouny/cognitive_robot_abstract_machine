@@ -1,16 +1,24 @@
 """
 Tests for the parts of the video's scenes that need no recording: when the robot
 counts as standing still, what the support reading says, how a box's edges are found,
-and how a film's speed-up sets a scene's length.
+how a film's speed-up sets a scene's length, and what a framing cuts off a picture.
 """
 
 from __future__ import annotations
+
+from dataclasses import dataclass
 
 import numpy as np
 import pytest
 
 from experiments.video.cache import SceneCache
-from experiments.video.footage import CameraFilm, ExecutionFootage, TimedImage
+from experiments.video.footage import (
+    TABLE_FRAMING,
+    CameraFilm,
+    ExecutionFootage,
+    Framing,
+    TimedImage,
+)
 from experiments.video.perturbations import IdleStretches, RecordingStretch
 from experiments.video.twin import BoxCorners, SupportReading
 
@@ -88,3 +96,48 @@ def test_the_footage_lasts_the_stretch_divided_by_the_speed() -> None:
     film.__dict__["images"] = [timed(0.0), timed(40.0)]
     assert ExecutionFootage(film, from_second=8.0, speed=4.0).duration == 8.0
     assert ExecutionFootage(film, from_second=0.0, to_second=20.0, speed=2.0).duration == 10.0
+
+
+# %% framing
+
+
+def test_a_framing_cuts_the_margins_it_names_off_a_picture() -> None:
+    picture = np.arange(6 * 8 * 3, dtype=np.uint8).reshape(6, 8, 3)
+    framed = Framing(top=1, left=2, right=1, bottom=0).of(picture)
+    assert framed.shape == (5, 5, 3)
+    assert (framed == picture[1:6, 2:7]).all()
+
+
+def test_the_tables_framing_keeps_a_full_hd_recording_at_sixteen_by_nine() -> None:
+    recording = np.zeros((1080, 1920, 3), dtype=np.uint8)
+    height, width = TABLE_FRAMING.of(recording).shape[:2]
+    assert (height, width) == (910, 1618)
+    assert width / height == pytest.approx(16 / 9, abs=0.002)
+
+
+@dataclass
+class StillImage:
+    image: np.ndarray
+
+
+@dataclass
+class StillFilm:
+    """
+    A film of one picture, whatever the moment.
+    """
+
+    picture: np.ndarray
+    length: float = 1.0
+
+    def at(self, seconds: float) -> StillImage:
+        return StillImage(self.picture)
+
+
+def test_the_footage_shows_the_recording_through_its_framing() -> None:
+    picture = np.zeros((1080, 1920, 3), dtype=np.uint8)
+    picture[:170, :, :] = 255  # what lies above the table is white
+    footage = ExecutionFootage(StillFilm(picture), speed=1.0)  # type: ignore[arg-type]
+    frame = footage.picture_at(0.0)
+    assert (frame[2:40, frame.shape[1] // 2] == 0).all()
+    unframed = ExecutionFootage(StillFilm(picture), speed=1.0, framing=Framing())  # type: ignore[arg-type]
+    assert (unframed.picture_at(0.0)[2:40, frame.shape[1] // 2] == 255).all()

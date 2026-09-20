@@ -28,7 +28,7 @@ from experiments.video.canvas import (
     pasted,
 )
 from experiments.video.figure import FrameworkFigure, Slot
-from experiments.video.timeline import Frame, Resolution, Scene, eased
+from experiments.video.timeline import SUBTITLE_BAND_SHARE, Frame, Resolution, Scene, eased
 
 CAPTION_HEIGHT = 64
 """
@@ -85,7 +85,7 @@ class FigureOnCanvas:
             0,
             FIGURE_MARGIN,
             self.resolution.width,
-            self.resolution.height - CAPTION_HEIGHT - FIGURE_MARGIN,
+            self.resolution.stage_height - CAPTION_HEIGHT - FIGURE_MARGIN,
         )
         return room.fitting(self.figure.geometry.width / self.figure.geometry.height)
 
@@ -108,7 +108,7 @@ class FigureOnCanvas:
                 self.caption,
                 (
                     self.resolution.width / 2,
-                    self.resolution.height - CAPTION_HEIGHT / 2,
+                    self.resolution.stage_height - CAPTION_HEIGHT / 2,
                 ),
                 Anchor.CENTRE_MIDDLE,
             )
@@ -211,18 +211,22 @@ class Spotlight(Scene):
     @cached_property
     def close_up(self) -> Area:
         """
-        Where the work plays when fully grown: centred, as large as its own aspect
-        allows within the screen's share.
+        Where the work plays when fully grown: as large as its own aspect allows
+        within the screen's share, centred across, and set so that the band the work
+        leaves for subtitles lies over the band the screen leaves for them.
         """
         resolution = self.before.resolution
         sample = self.work.frame_at(0.0)
         room = Area(
             resolution.width * (1 - CLOSE_UP_SHARE) / 2,
-            resolution.height * (1 - CLOSE_UP_SHARE) / 2,
+            resolution.stage_height * (1 - CLOSE_UP_SHARE) / 2,
             resolution.width * CLOSE_UP_SHARE,
-            resolution.height * CLOSE_UP_SHARE,
+            resolution.stage_height * CLOSE_UP_SHARE,
         )
-        return room.fitting(sample.shape[1] / sample.shape[0])
+        window = room.fitting(sample.shape[1] / sample.shape[0])
+        works_stage = window.height * (1 - SUBTITLE_BAND_SHARE)
+        top = max(resolution.stage_height - works_stage, resolution.stage_height * (1 - CLOSE_UP_SHARE) / 2)
+        return Area(window.x, top, window.width, window.height)
 
     def picture_at(self, seconds: float) -> Frame:
         panel = self.before.panel(self.slot)

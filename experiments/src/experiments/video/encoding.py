@@ -311,3 +311,64 @@ class H264Encoder:
             shared + ["-pass", "1", "-an", "-f", "mp4", "/dev/null"], check=True
         )
         subprocess.run(shared + ["-pass", "2", "-an", str(path)], check=True)
+
+
+# %% the voice and the subtitles, joined to the picture
+
+AUDIO_BIT_RATE = 64_000
+"""
+Bits per second the narration is encoded at: one channel of speech needs no more.
+"""
+
+SUBTITLE_ALLOWANCE = 40_000
+"""
+Bytes set aside for the subtitle track and what joining the streams adds to the file.
+"""
+
+
+def bytes_for_sound(duration: float) -> int:
+    """
+    :param duration: How long the video plays, in seconds.
+    :return: The bytes the narration and the subtitles take over it, to keep out of the
+        picture's budget.
+    """
+    return int(AUDIO_BIT_RATE / 8 * duration) + SUBTITLE_ALLOWANCE
+
+
+@dataclass
+class Muxer:
+    """
+    Joins a silent video, its narration and its subtitles into one mp4.
+
+    The picture is copied as it is; the narration is encoded as AAC, the codec every
+    player decodes; the subtitles go in as a text track the viewer can switch off, on
+    by default.
+    """
+
+    ffmpeg: Path = field(default_factory=lambda: Path(imageio_ffmpeg.get_ffmpeg_exe()))
+    """
+    The encoder binary.
+    """
+
+    def joined(self, video: VideoFile, soundtrack: Path, subtitles: Path, path: Path) -> VideoFile:
+        """
+        :param video: The silent video.
+        :param soundtrack: The narration, as a wave file as long as the video.
+        :param subtitles: The subtitles, as a SubRip file.
+        :param path: Where the joined mp4 goes.
+        :return: The file written.
+        """
+        command = [
+            str(self.ffmpeg), "-y", "-loglevel", "error",
+            "-i", str(video.path), "-i", str(soundtrack), "-i", str(subtitles),
+            "-map", "0:v:0", "-map", "1:a:0", "-map", "2:s:0",
+            "-c:v", "copy",
+            "-c:a", "aac", "-b:a", str(AUDIO_BIT_RATE), "-ac", "1",
+            "-c:s", "mov_text",
+            "-metadata:s:a:0", "language=eng", "-metadata:s:s:0", "language=eng",
+            "-disposition:s:0", "default",
+            "-movflags", "+faststart",
+            str(path),
+        ]
+        subprocess.run(command, check=True)
+        return VideoFile(path=path)

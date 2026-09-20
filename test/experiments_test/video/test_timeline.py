@@ -101,3 +101,11 @@ def test_easing_starts_and_ends_slowly() -> None:
 def test_easing_clamps_beyond_its_range() -> None:
     assert eased(-1.0) == 0.0
     assert eased(2.0) == 1.0
+
+
+def test_a_scene_may_draw_down_to_the_band_left_for_subtitles() -> None:
+    from experiments.video.timeline import SUBTITLE_BAND_SHARE
+
+    resolution = Resolution(width=1600, height=900)
+    assert resolution.stage_height == pytest.approx(900 * (1 - SUBTITLE_BAND_SHARE))
+    assert 0.10 <= SUBTITLE_BAND_SHARE <= 0.15

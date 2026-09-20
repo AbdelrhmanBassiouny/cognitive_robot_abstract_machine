@@ -507,8 +507,9 @@ class WorkingMemoryCheck(Scene):
 
     def _captioned(self, frame: Frame, caption: str, verdict: bool = False) -> Frame:
         canvas = self.resolution.blank(255)
-        canvas = fitted(canvas, frame, Area(0, 0, self.resolution.width, self.resolution.height - 80))
+        stage = self.resolution.stage_height
+        canvas = fitted(canvas, frame, Area(0, 0, self.resolution.width, stage - 80))
         colour = Ink.FIRED.rgb if verdict else Ink.SIMULATION.rgb
         return Typesetting(size=30, face=Face.BOLD if verdict else Face.REGULAR, color=colour).written(
-            canvas, caption, (self.resolution.width / 2, self.resolution.height - 40), Anchor.CENTRE_MIDDLE
+            canvas, caption, (self.resolution.width / 2, stage - 40), Anchor.CENTRE_MIDDLE
         )

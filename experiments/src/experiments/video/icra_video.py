@@ -4,7 +4,11 @@ perturbation episodes, and written out within the conference's limits.
 
 Usage:
     python -m experiments.video.icra_video --output <video.mp4> [--paper-id 3889]
-        [--preview]
+        [--voice af_heart] [--speech-speed 1.05] [--preview]
+
+The narration is spoken by the Kokoro model on this machine (``--voice`` picks any of
+its voices) and goes into the mp4 with subtitles the viewer can switch off; the same
+subtitles are written next to the mp4 as a SubRip file.
 
 Needs the results database and the episode artifacts the reproduction package restores
 (``MONTESSORI_SORTING_DATABASE_URI``, ``EPISODE_ARTIFACTS_DIRECTORY``). What takes a
@@ -19,7 +23,7 @@ from dataclasses import dataclass, field
 from functools import cached_property
 from pathlib import Path
 
-from typing_extensions import Dict, List, Optional, Sequence
+from typing_extensions import Callable, Dict, List, Optional, Sequence, Tuple
 
 from experiments.montessori.semantics import MontessoriShape, MontessoriShapeCategory
 from experiments.video.attribution import (
@@ -28,7 +32,13 @@ from experiments.video.attribution import (
     TrialTimelines,
 )
 from experiments.video.canvas import Ink
-from experiments.video.encoding import H264Encoder, SubmissionLimits, VideoFile
+from experiments.video.encoding import (
+    H264Encoder,
+    Muxer,
+    SubmissionLimits,
+    VideoFile,
+    bytes_for_sound,
+)
 from experiments.video.figure import (
     FrameworkFigure,
     GraspChartBar,
@@ -43,6 +53,14 @@ from experiments.video.grasp import (
     GraspSampling,
 )
 from experiments.video.long_term import RememberedPiece
+from experiments.video.narration import (
+    KokoroVoice,
+    Line,
+    NarratedScene,
+    Narration,
+    Storyboard,
+    Voice,
+)
 from experiments.video.perception import NarrowingReel, PerceptionNarrowing
 from experiments.video.perturbations import (
     GridLabels,
@@ -50,7 +68,7 @@ from experiments.video.perturbations import (
     PerturbationTile,
 )
 from experiments.video.rules import HoleOnThePicture, HoleRuleTrace, RuleTreeEvaluation
-from experiments.video.script import VideoScript
+from experiments.video.script import NarrationLines, VideoScript
 from experiments.video.slides import ClosingSlide, TextSlide, TitleSlide
 from experiments.video.sources import FRAMEWORK_DEMO_EPISODE, RecordedRun
 from experiments.video.stages import FigureOnCanvas, FigureScene, OnCanvas, Spotlight
@@ -93,15 +111,36 @@ class AttributionRun:
 
 
 ATTRIBUTION_RUNS = (
-    AttributionRun("25f5161da5584bac9554b686711a01fe", "the robot sorts the pieces it saw", 24.0),
-    AttributionRun("0a793ded6dd54da7b64171ab78638d38", "the scene stands still; a person pushes the cube", 3.0),
+    AttributionRun("25f5161da5584bac9554b686711a01fe", "the robot sorts the pieces it saw", 40.0),
+    AttributionRun("0a793ded6dd54da7b64171ab78638d38", "the scene stands still; a person pushes the cube", 5.0),
 )
 """
 The two trials the paper sets against each other: the robot moving the pieces itself,
 and a person moving one while the robot stands idle.
 """
 
-GRID_SPEED = 11.0
+DISSOLVE = 0.4
+"""
+Seconds each scene dissolves into the next.
+"""
+
+NARRATED_BY: Dict[Slot, Callable[[NarrationLines], Line]] = {
+    Slot.PERCEPTION: lambda lines: lines.perception,
+    Slot.SIMULATION: lambda lines: lines.working_memory,
+    Slot.PROBABILISTIC: lambda lines: lines.probabilistic,
+    Slot.RULES: lambda lines: lines.rules,
+}
+"""
+The line said over each backend's close-up.
+"""
+
+PERCEPTION_LINE_DELAY = 16.0
+"""
+Seconds into the perception close-up its line starts: the line about choosing backends
+is still being said over its beginning.
+"""
+
+GRID_SPEED = 18.0
 """
 How many recorded seconds pass per second played in the perturbation grid: the longest
 of the six recordings is over in under half a minute.
@@ -216,6 +255,16 @@ class VideoAssembly:
     down.
     """
 
+    voice: Voice = field(default_factory=KokoroVoice)
+    """
+    What says the narration.
+    """
+
+    lines: NarrationLines = field(default_factory=NarrationLines)
+    """
+    What the narration says.
+    """
+
     @cached_property
     def cube(self) -> MontessoriShape:
         """
@@ -286,36 +335,45 @@ class VideoAssembly:
         """
         if slot is Slot.PERCEPTION:
             reel = NarrowingReel(self.demo, frame_indices=list(range(IDLE_FRAMES_READ)))
-            scene = PerceptionNarrowing(reel)
+            scene = PerceptionNarrowing(reel, tile_every=3.5, run_for=10.5)
             if self.preview:
                 scene.tile_every, scene.run_for = 1.0, 2.0
             return scene
         if slot is Slot.SIMULATION:
-            scene = WorkingMemoryCheck(self.twin)
+            scene = WorkingMemoryCheck(self.twin, boxes_for=4.0)
             if self.preview:
                 scene.flight_for, scene.boxes_for = 2.0, 4.0
             return scene
         if slot is Slot.PROBABILISTIC:
-            scene = GraspDistribution(self.sampling, GraspOptionsOnThePicture(self.demo, self.twin.cube_at + [0.0, 0.0, 0.01]))
+            scene = GraspDistribution(self.sampling, GraspOptionsOnThePicture(self.demo, self.twin.cube_at + [0.0, 0.0, 0.01]), sampling_for=5.5)
             if self.preview:
                 scene.sampling_for, scene.answer_for = 3.0, 2.0
             return scene
-        scene = RuleTreeEvaluation(self.rule_trace, HoleOnThePicture(self.demo))
+        scene = RuleTreeEvaluation(self.rule_trace, HoleOnThePicture(self.demo), answer_for=6.0)
         if self.preview:
             scene.answer_for = 2.0
         return scene
 
-    def backend_scenes(self, slot: Slot) -> List[Scene]:
+    def backend_scenes(self, slot: Slot) -> List[NarratedScene]:
         """
         The figure with the slot ringed, the backend's close-up, and the figure with the
-        slot answered.
+        slot answered; the ring carries the line about choosing backends the first time,
+        the close-up the line about its backend.
         """
         before = self.figure(slot.stage - 1, slot, CAPTIONS[slot])
         after = self.figure(slot.stage, None, CAPTIONS[slot])
         return [
-            FigureScene(before, held_for=1.5),
-            Spotlight(before, after, slot, self.work_of(slot), HUES[slot].rgb, title=BACKENDS[slot].tab),
-            FigureScene(after, held_for=1.0),
+            NarratedScene(
+                FigureScene(before, held_for=1.5 if slot is Slot.PERCEPTION else 1.2),
+                (self.lines.backend_choice,) if slot is Slot.PERCEPTION else (),
+                runs_on=True,
+            ),
+            NarratedScene(
+                Spotlight(before, after, slot, self.work_of(slot), HUES[slot].rgb, title=BACKENDS[slot].tab),
+                (NARRATED_BY[slot](self.lines),),
+                delay=PERCEPTION_LINE_DELAY if slot is Slot.PERCEPTION else 0.0,
+            ),
+            NarratedScene(FigureScene(after, held_for=0.8)),
         ]
 
     def perturbation_matrix(self) -> PerturbationMatrix:
@@ -352,43 +410,85 @@ class VideoAssembly:
                 MovedQuestions(timelines).both(),
                 scenario=run.scenario,
                 speed=run.speed * (3.0 if self.preview else 1.0),
-                question_for=2.0 if self.preview else 4.0,
+                question_for=2.0 if self.preview else 3.0,
             )
             scenes.append(OnCanvas(scene))
         return scenes
+
+    def storyboard(self) -> Storyboard:
+        """
+        Every scene, in order, with the line that starts with it.
+        """
+        lines = self.lines
+        narrated: List[NarratedScene] = [
+            NarratedScene(TitleSlide(self.script, held_for=5.5), (lines.title, lines.framework)),
+            NarratedScene(
+                FigureScene(self.figure(0, None, "The plan states what it wants and leaves four things open, each answered by a backend."), held_for=4.0),
+                (lines.plan,),
+            ),
+        ]
+        for slot in Slot:
+            narrated.extend(self.backend_scenes(slot))
+        narrated.append(
+            NarratedScene(
+                FigureScene(self.figure(len(Slot), None, "Every open field answered: the resolved plan is carried out on the robot."), held_for=2.5),
+                (lines.resolved,),
+                runs_on=True,
+            )
+        )
+        narrated.append(
+            NarratedScene(
+                OnCanvas(
+                    ExecutionFootage(
+                        CameraFilm(self.demo),
+                        from_second=EXECUTION_FROM_SECOND,
+                        speed=16.0 if self.preview else 8.0,
+                        caption="the robot's own camera: the cube picked up and put through the square hole",
+                    )
+                )
+            )
+        )
+        narrated.append(
+            NarratedScene(
+                TextSlide(["Temporal & Attribution Queries", "The event segmentation reports what happened to each object;",
+                           "the plan history records which action ran when."], held_for=3.5),
+                (lines.attribution,),
+                runs_on=True,
+            )
+        )
+        narrated.extend(NarratedScene(scene) for scene in self.attribution_scenes())
+        narrated.append(
+            NarratedScene(
+                TextSlide(["Perturbation experiments & Long-term memory", "Six episodes on the robot: the scene standing still or the robot sorting,",
+                           "unperturbed, with a person shoving a piece, or moving the board."], held_for=3.5),
+                (lines.perturbations,),
+                runs_on=True,
+            )
+        )
+        narrated.append(NarratedScene(OnCanvas(self.perturbation_matrix())))
+        narrated.append(NarratedScene(ClosingSlide(self.script, held_for=2.5), (lines.closing,)))
+        return Storyboard(narrated)
 
     def scenes(self) -> List[Scene]:
         """
         Every scene, in order.
         """
-        scenes: List[Scene] = [
-            TitleSlide(self.script, held_for=5.5),
-            FigureScene(self.figure(0, None, "The plan states what it wants and leaves four things open, each answered by a backend."), held_for=4.0),
-        ]
-        for slot in Slot:
-            scenes.extend(self.backend_scenes(slot))
-        scenes.append(FigureScene(self.figure(len(Slot), None, "Every open field answered: the resolved plan is carried out on the robot."), held_for=2.5))
-        scenes.append(
-            OnCanvas(
-                ExecutionFootage(
-                    CameraFilm(self.demo),
-                    from_second=EXECUTION_FROM_SECOND,
-                    speed=8.0 if self.preview else 4.0,
-                    caption="the robot's own camera: the cube picked up and put through the square hole",
-                )
-            )
-        )
-        scenes.append(TextSlide(["Temporal & Attribution Queries", "The event segmentation reports what happened to each object;",
-                                 "the plan history records which action ran when."], held_for=3.5))
-        scenes.extend(self.attribution_scenes())
-        scenes.append(TextSlide(["Perturbation experiments & Long-term memory", "Six episodes on the robot: the scene standing still or the robot sorting,",
-                                 "unperturbed, with a person shoving a piece, or moving the board."], held_for=3.5))
-        scenes.append(OnCanvas(self.perturbation_matrix()))
-        scenes.append(ClosingSlide(self.script, held_for=4.0))
-        return scenes
+        return self.storyboard().scenes
 
     def timeline(self) -> Timeline:
-        return Timeline(self.scenes(), frames_per_second=self.frames_per_second, dissolve=0.4)
+        return Timeline(self.scenes(), frames_per_second=self.frames_per_second, dissolve=DISSOLVE)
+
+    def narrated_timeline(self) -> Tuple[Timeline, Narration]:
+        """
+        The timeline with its slides grown to hold their lines, and the narration
+        placed on it, checked to run clear of itself and of the video's end.
+        """
+        board = self.storyboard()
+        board.fitted_to(self.voice)
+        timeline = Timeline(board.scenes, frames_per_second=self.frames_per_second, dissolve=DISSOLVE)
+        narration = board.narrated_by(self.voice, dissolve=DISSOLVE)
+        narration.check(runs_for=timeline.duration)
+        return timeline, narration
 
     def written_to(self, path: Path) -> VideoFile:
         """
@@ -397,12 +497,19 @@ class VideoAssembly:
         :param path: Where the mp4 goes.
         """
         limits = SubmissionLimits.icra_2027()
-        timeline = self.timeline()
+        timeline, narration = self.narrated_timeline()
         logger.info("%.1f s of video in %d scenes", timeline.duration, len(timeline.scenes))
-        budget = int(limits.largest * min(timeline.duration / limits.longest, 1.0))
-        video = H264Encoder(size_budget=budget, preset="fast" if self.preview else "slow").encode(timeline, path)
+        budget = int(limits.largest * min(timeline.duration / limits.longest, 1.0)) - bytes_for_sound(timeline.duration)
+        silent = H264Encoder(size_budget=budget, preset="fast" if self.preview else "slow").encode(
+            timeline, path.with_name(path.stem + "_silent.mp4")
+        )
+        soundtrack = narration.soundtrack(runs_for=timeline.duration).written_to(path.with_suffix(".wav"))
+        subtitles = narration.written_to(path.with_suffix(".srt"))
+        video = Muxer().joined(silent, soundtrack, subtitles, path)
+        silent.path.unlink()
+        soundtrack.unlink()
         limits.check(video)
-        logger.info("%s: %.1f s, %d bytes", video.path, video.duration, video.size)
+        logger.info("%s: %.1f s, %d bytes; subtitles in %s", video.path, video.duration, video.size, subtitles)
         return video
 
 
@@ -413,6 +520,8 @@ def parse_arguments(argument_list: Optional[Sequence[str]] = None) -> argparse.N
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", type=Path, required=True, help="where the mp4 is written")
     parser.add_argument("--paper-id", default=None, help="the paper's submission number for the title slide")
+    parser.add_argument("--voice", default=KokoroVoice.voice, help="which of the speech model's voices narrates")
+    parser.add_argument("--speech-speed", type=float, default=KokoroVoice.speed, help="how fast it speaks, 1 being its own pace")
     parser.add_argument("--preview", action="store_true", help="render a short rough version for looking at")
     return parser.parse_args(argument_list)
 
@@ -420,7 +529,8 @@ def parse_arguments(argument_list: Optional[Sequence[str]] = None) -> argparse.N
 def main(argument_list: Optional[Sequence[str]] = None) -> None:
     arguments = parse_arguments(argument_list)
     script = VideoScript() if arguments.paper_id is None else VideoScript(paper_id=arguments.paper_id)
-    VideoAssembly(script=script, preview=arguments.preview).written_to(arguments.output)
+    voice = KokoroVoice(voice=arguments.voice, speed=arguments.speech_speed)
+    VideoAssembly(script=script, preview=arguments.preview, voice=voice).written_to(arguments.output)
 
 
 if __name__ == "__main__":

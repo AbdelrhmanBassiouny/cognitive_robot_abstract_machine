@@ -359,9 +359,9 @@ class GraspDistribution(Scene):
         highlighted = self.sampling.answered if answering else None
         weight = eased((seconds - self.statement_for - self.sampling_for) / 0.8) if answering else 0.0
         picture = self.options.drawn(highlighted, weight)
-        frame = fitted(frame, picture, Area(940, 90, 620, 620))
+        frame = fitted(frame, picture, Area(940, 80, 620, 590))
         frame = Typesetting(size=22, color=Ink.MUTED.rgb).written(
-            frame, "the four options on the robot's own picture of the cube", (1250, 740), Anchor.CENTRE_MIDDLE
+            frame, "the four options on the robot's own picture of the cube", (1250, 696), Anchor.CENTRE_MIDDLE
         )
         caption = "the model over what the plan left open, asked from the backend's registry"
         if arrived > 0:
@@ -369,7 +369,7 @@ class GraspDistribution(Scene):
         if answering:
             caption = self.answer_caption
         return Typesetting(size=28, color=Ink.TEXT.rgb).written(
-            frame, caption, (self.resolution.width / 2, self.resolution.height - 40), Anchor.CENTRE_MIDDLE
+            frame, caption, (self.resolution.width / 2, self.resolution.stage_height - 40), Anchor.CENTRE_MIDDLE
         )
 
     @property
@@ -385,7 +385,7 @@ class GraspDistribution(Scene):
         return f"the prior favours {likeliest.name}; the likeliest sample is handed to the plan: {self.sampling.answered.name}"
 
     def _chart(self, frame: Frame, arrived: int, answering: bool) -> Frame:
-        left, top, width, height = 80, 120, 780, 620
+        left, top, width, height = 80, 100, 780, 580
         base = top + height - 70
         probabilities = self.sampling.probabilities
         tally = self.sampling.tally(arrived)

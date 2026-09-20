@@ -140,6 +140,46 @@ class TestOpeningADatabaseRecordedToEarlier:
             for column in ResultsDatabase._schema().tables[OLDER_TABLE].columns
         }
 
+    def test_the_tables_a_gained_column_refers_to_exist_before_it_is_added(
+        self, tmp_path
+    ):
+        """
+        A gained column may refer to a table the schema gained at the same time; the
+        database has to hold that table before the column's constraint can name it.
+        """
+        uri = "sqlite:///%s" % (tmp_path / "results.db")
+        ResultsDatabase(uri=uri).open_session().close()
+        schema = ResultsDatabase._schema()
+        referred = {
+            foreign_key.column.table.name
+            for foreign_key in schema.tables[OLDER_TABLE].c[COLUMN_GAINED].foreign_keys
+        }
+        assert referred
+        with create_results_engine(uri).begin() as connection:
+            schema.tables[OLDER_TABLE].drop(connection)
+            for name in referred:
+                schema.tables[name].drop(connection)
+            Table(
+                OLDER_TABLE,
+                MetaData(),
+                *[
+                    Column(column.name, column.type, primary_key=column.primary_key)
+                    for column in schema.tables[OLDER_TABLE].columns
+                    if column.name != COLUMN_GAINED
+                ],
+            ).create(connection)
+        present_when_adding = []
+
+        class WatchedDatabase(ResultsDatabase):
+            @classmethod
+            def _add_missing_columns(cls, engine, tables):
+                present_when_adding.extend(inspect(engine).get_table_names())
+                super()._add_missing_columns(engine, tables)
+
+        WatchedDatabase(uri=uri).open_session().close()
+
+        assert referred <= set(present_when_adding)
+
     def test_the_rows_recorded_earlier_are_kept(self, database_recorded_to_earlier):
         table = ResultsDatabase._schema().tables[OLDER_TABLE]
         with create_results_engine(

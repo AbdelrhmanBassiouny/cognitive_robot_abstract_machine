@@ -309,7 +309,7 @@ class PerceptionNarrowing(Scene):
         """
         margin, gap, title = 20, 20, 62
         width = (self.resolution.width - 2 * margin - gap) / 2
-        height = (self.resolution.height - 2 * margin - gap) / 2
+        height = (self.resolution.stage_height - 2 * margin - gap) / 2
         column, row = list(View).index(view) % 2, list(View).index(view) // 2
         return Area(
             margin + column * (width + gap),

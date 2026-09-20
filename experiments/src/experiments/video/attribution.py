@@ -42,7 +42,7 @@ from experiments.video.canvas import (
     fitted,
     framed,
 )
-from experiments.video.footage import CameraFilm
+from experiments.video.footage import TABLE_FRAMING, CameraFilm, Framing
 from experiments.video.sources import RecordedRun
 from experiments.video.timeline import Frame, Resolution, Scene, eased
 from krrood.exceptions import DataclassException
@@ -544,6 +544,11 @@ class AttributionScene(Scene):
     The size the scene draws itself at.
     """
 
+    framing: Framing = TABLE_FRAMING
+    """
+    What of each picture of the film is shown.
+    """
+
     film_area: Area = field(default_factory=lambda: Area(40, 96, 780, 439))
     """
     Where the film plays.
@@ -650,11 +655,11 @@ class AttributionScene(Scene):
         if question is not None:
             frame = self._asked(frame, question, progress)
         return Typesetting(size=26, color=Ink.TEXT.rgb).written(
-            frame, self.scenario, (self.film_area.centre[0], self.resolution.height - 40), Anchor.CENTRE_MIDDLE
+            frame, self.scenario, (self.film_area.centre[0], self.resolution.stage_height - 40), Anchor.CENTRE_MIDDLE
         )
 
     def _film(self, frame: Frame, now: float, held: bool) -> Frame:
-        image = self.film.at(self.timelines.run.recording_second_of(self.timelines.trial, now)).image
+        image = self.framing.of(self.film.at(self.timelines.run.recording_second_of(self.timelines.trial, now)).image)
         if held:
             image = dimmed(image, 0.6)
         frame = fitted(frame, image, self.film_area)

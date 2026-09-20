@@ -47,7 +47,7 @@ from experiments.video.canvas import (
     fitted,
     framed,
 )
-from experiments.video.footage import CameraFilm
+from experiments.video.footage import TABLE_FRAMING, CameraFilm, Framing
 from experiments.video.long_term import RememberedQuestion
 from experiments.video.sources import RecordedRun
 from experiments.video.timeline import Frame, Resolution, Scene, eased
@@ -244,6 +244,11 @@ class PerturbationTile:
     What the look found while the robot stood still.
     """
 
+    framing: Framing = TABLE_FRAMING
+    """
+    What of each picture is shown.
+    """
+
     def __post_init__(self) -> None:
         self.film = CameraFilm(self.run)
         self.detections = DetectionsOnTheFilm(self.run, IdleStretches(self.run))
@@ -258,12 +263,12 @@ class PerturbationTile:
         image = self.film.at(seconds)
         drawn = self.detections.picture_at(image.seconds)
         if drawn is not None:
-            return drawn, True
+            return self.framing.of(drawn), True
         # the look ran on one idle frame in a few; the frame before carries its findings on
         earlier = [moment for moment in self.detections.drawn_at if 0 <= image.seconds - moment < 0.7]
         if earlier:
-            return self.detections.picture_at(earlier[-1]), True
-        return image.image, False
+            return self.framing.of(self.detections.picture_at(earlier[-1])), True
+        return self.framing.of(image.image), False
 
 
 # %% the grid
@@ -304,7 +309,6 @@ class GridLayout:
     header: int = 54
     row_label: int = 200
     gap: int = 12
-    footer: int = 44
 
     @property
     def band(self) -> Area:
@@ -314,13 +318,25 @@ class GridLayout:
         return Area(self.margin, self.margin, self.resolution.width - 2 * self.margin, BAND_HEIGHT)
 
     @property
-    def tile_width(self) -> float:
-        return (self.resolution.width - 2 * self.margin - self.row_label - (self.columns - 1) * self.gap) / self.columns
+    def room(self) -> Area:
+        """
+        Where the tiles may lie: right of the row labels, under the header, above the
+        band left for subtitles.
+        """
+        left = self.margin + self.row_label
+        return Area(left, self.rows_top, self.resolution.width - self.margin - left, self.resolution.stage_height - self.margin - self.rows_top)
 
     @property
     def tile_height(self) -> float:
-        # every tile keeps the camera's own aspect, so none is letterboxed
-        return self.tile_width * 9 / 16
+        # every tile keeps the camera's own aspect, so none is letterboxed; the room's
+        # width or its height sets the size, whichever runs out first
+        by_width = (self.room.width - (self.columns - 1) * self.gap) / self.columns * 9 / 16
+        by_height = (self.room.height - (self.rows - 1) * self.gap) / self.rows
+        return min(by_width, by_height)
+
+    @property
+    def tile_width(self) -> float:
+        return self.tile_height * 16 / 9
 
     @property
     def header_y(self) -> float:
@@ -334,19 +350,15 @@ class GridLayout:
         return self.band.bottom + self.header
 
     def tile(self, row: int, column: int) -> Area:
+        # the tiles sit together in the middle of the room's width
+        across = self.columns * self.tile_width + (self.columns - 1) * self.gap
+        left = self.room.x + (self.room.width - across) / 2
         return Area(
-            self.margin + self.row_label + column * (self.tile_width + self.gap),
+            left + column * (self.tile_width + self.gap),
             self.rows_top + row * (self.tile_height + self.gap),
             self.tile_width,
             self.tile_height,
         )
-
-    @property
-    def footer_y(self) -> float:
-        """
-        The middle of the line under the grid.
-        """
-        return self.resolution.height - self.footer / 2 - 6
 
 
 @dataclass
@@ -426,7 +438,7 @@ class PerturbationMatrix(Scene):
         lit = eased((asked[1] - 0.55) / 0.2) if asked else 0.0
         frame = self._band(frame, asked)
         frame = self._grid(frame, seconds, asked[0] if asked else None, lit)
-        return self._footer(frame)
+        return self._speed_badge(frame)
 
     # %% the grid itself
 
@@ -465,7 +477,8 @@ class PerturbationMatrix(Scene):
     @staticmethod
     def _badge(frame: Frame, cell: Area, text: str, color) -> Frame:
         lettering = Typesetting(size=20, face=Face.BOLD, color=Ink.PAPER.rgb)
-        badge = Area(cell.x + 8, cell.y + 8, lettering.width_of(text) + 24, 34)
+        # low in the tile: the board lies along its top edge
+        badge = Area(cell.x + 8, cell.bottom - 8 - 34, lettering.width_of(text) + 24, 34)
         frame = filled(frame, badge, color)
         return lettering.written(frame, text, badge.centre, Anchor.CENTRE_MIDDLE)
 
@@ -508,14 +521,14 @@ class PerturbationMatrix(Scene):
             )
         return frame
 
-    def _footer(self, frame: Frame) -> Frame:
+    def _speed_badge(self, frame: Frame) -> Frame:
+        """
+        The speed-up, in the band's top right corner.
+        """
         layout = self.layout
-        badge = Area(self.resolution.width - 150, self.resolution.height - 52, 130, 40)
+        # the band's top right corner is free whether or not a question is up
+        badge = Area(layout.band.right - 12 - 130, layout.band.y + 12, 130, 40)
         frame = filled(frame, badge, Ink.TEXT.rgb)
-        frame = Typesetting(size=26, face=Face.BOLD, color=Ink.PAPER.rgb).written(
+        return Typesetting(size=26, face=Face.BOLD, color=Ink.PAPER.rgb).written(
             frame, f"×{self.speed:g}", badge.centre, Anchor.CENTRE_MIDDLE
-        )
-        return Typesetting(size=24, color=Ink.MUTED.rgb).written(
-            frame, "the robot's own camera; what the look finds is drawn while the robot stands still",
-            (layout.margin + layout.row_label, layout.footer_y), Anchor.LEFT_MIDDLE,
         )

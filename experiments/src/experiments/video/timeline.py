@@ -24,6 +24,14 @@ One picture of the video: red, green and blue bytes, rows by columns by channel.
 # %% the picture a video is
 
 
+SUBTITLE_BAND_SHARE = 0.12
+"""
+The share of a frame's height, at its bottom, left clear for the subtitles a player
+draws there: one row of its text and its margin, with room for the larger text some
+players default to.
+"""
+
+
 @dataclass(frozen=True)
 class Resolution:
     """
@@ -46,6 +54,13 @@ class Resolution:
         The array shape of one frame this size.
         """
         return (self.height, self.width, 3)
+
+    @property
+    def stage_height(self) -> float:
+        """
+        How far down a scene may draw: the rows above the band left for subtitles.
+        """
+        return self.height * (1.0 - SUBTITLE_BAND_SHARE)
 
     @classmethod
     def of(cls, frame: Frame) -> Resolution:

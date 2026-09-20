@@ -317,7 +317,7 @@ class RuleTreeEvaluation(Scene):
     The size the scene draws itself at.
     """
 
-    tree_area: Area = field(default_factory=lambda: Area(120, 150, 660, 660))
+    tree_area: Area = field(default_factory=lambda: Area(120, 130, 660, 580))
     """
     Where the nodes stand, from the first node's top edge to the last node's bottom.
     """
@@ -371,9 +371,9 @@ class RuleTreeEvaluation(Scene):
         frame = self._tree(frame, evaluated, self.checking_at(seconds), done)
         concluded = self.trace.concluded if done else None
         weight = eased((seconds - self.evaluation_ends) / 0.8) if done else 0.0
-        frame = fitted(frame, self.board.drawn(concluded, weight), Area(900, 100, 660, 600))
+        frame = fitted(frame, self.board.drawn(concluded, weight), Area(900, 90, 660, 570))
         frame = Typesetting(size=22, color=Ink.MUTED.rgb).written(
-            frame, "the board's holes on the robot's own picture", (1230, 730), Anchor.CENTRE_MIDDLE
+            frame, "the board's holes on the robot's own picture", (1230, 690), Anchor.CENTRE_MIDDLE
         )
         caption = "the rule tree: one rule per shape the board sorts, read top down"
         if evaluated:
@@ -382,7 +382,7 @@ class RuleTreeEvaluation(Scene):
             caption = f"concluded: hole.shape_category = {self.trace.concluded.value.upper()}"
         colour = Ink.FIRED.rgb if done else Ink.TEXT.rgb
         return Typesetting(size=28, face=Face.BOLD if done else Face.REGULAR, color=colour).written(
-            frame, caption, (self.resolution.width / 2, self.resolution.height - 40), Anchor.CENTRE_MIDDLE
+            frame, caption, (self.resolution.width / 2, self.resolution.stage_height - 40), Anchor.CENTRE_MIDDLE
         )
 
     def _tree(self, frame: Frame, evaluated: int, checking: bool, done: bool) -> Frame:
