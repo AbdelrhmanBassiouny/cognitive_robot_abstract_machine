@@ -235,6 +235,12 @@ class FigureGeometry:
     resolved plan boxes it.
     """
 
+    open_fields: Dict[Slot, FigureBox]
+    """
+    Each ``...`` of the plan, by the slot whose sub-query leaves that field open; a slot
+    whose sub-query is open as a whole, with no ``...`` in it, is absent.
+    """
+
     @classmethod
     def from_query(cls, given: Dict[str, object]) -> FigureGeometry:
         """
@@ -249,6 +255,11 @@ class FigureGeometry:
             slots={slot: FigureBox.from_query(given["slots"][slot.value]) for slot in Slot},
             actions={action: FigureBox.from_query(given["actions"][action.value]) for action in PlanAction},
             answers={slot: FigureBox.from_query(given["answers"][slot.value]) for slot in Slot},
+            open_fields={
+                slot: FigureBox.from_query(given["open_fields"][slot.value])
+                for slot in Slot
+                if slot.value in given["open_fields"]
+            },
         )
 
 

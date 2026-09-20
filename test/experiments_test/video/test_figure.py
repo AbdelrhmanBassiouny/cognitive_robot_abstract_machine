@@ -8,10 +8,24 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from experiments.video.stages import MAGNIFIED_SHARE, TAB_HEIGHT, FigureOnCanvas, Magnified, ReadingStop, Scrolled, Spotlight
+from experiments.video.canvas import Area, Ink
+from experiments.video.stages import (
+    MAGNIFIED_SHARE,
+    MARK_FADE,
+    TAB_HEIGHT,
+    FigureOnCanvas,
+    Magnified,
+    Mark,
+    ReadingStop,
+    Scrolled,
+    Spotlight,
+    highlighted,
+    marked,
+)
 from experiments.video.timeline import Resolution, Still
 
 from experiments.video.figure import (
+    FigureBox,
     FrameworkFigure,
     GraspChartBar,
     PlanAction,
@@ -122,6 +136,17 @@ def test_the_geometry_boxes_every_answer_inside_the_resolved_plan_in_the_slots_o
     assert tops == sorted(tops)
 
 
+def test_the_geometry_boxes_each_ellipsis_of_the_plan_inside_the_slot_that_leaves_the_field_open() -> None:
+    geometry = FrameworkFigure(stage=0).geometry
+    assert set(geometry.open_fields) == {Slot.PROBABILISTIC, Slot.RULES}
+    for slot, field in geometry.open_fields.items():
+        sub_query = geometry.slots[slot]
+        assert sub_query.x < field.x and field.x + field.width < sub_query.x + sub_query.width
+        assert sub_query.y < field.y and field.y + field.height < sub_query.y + sub_query.height
+        # three characters of code, wider than tall but not by much
+        assert field.height < field.width < field.height * 2
+
+
 # %% the close-up over the figure
 
 
@@ -226,3 +251,79 @@ def test_a_scrolled_stretch_grows_from_its_place_to_its_window_and_back() -> Non
     on_frame = (int(window.y - 2), int(window.centre[0]))
     assert tuple(scrolled.frame_at(1.0)[on_frame]) == hue
     assert scrolled.frame_at(0.0).shape == scrolled.frame_at(1.0).shape
+
+
+# %% a part of a stretch pointed to
+
+
+def test_a_highlighter_turns_the_paper_yellow_and_leaves_the_ink() -> None:
+    picture = np.full((20, 30, 3), 255, dtype=np.uint8)
+    picture[10, 10] = (0, 0, 0)
+    drawn = highlighted(picture, Area(5, 5, 10, 10))
+    assert tuple(drawn[7, 7]) == Ink.MARKER.rgb
+    assert tuple(drawn[10, 10]) == (0, 0, 0)
+    assert tuple(drawn[2, 2]) == (255, 255, 255)
+    assert tuple(picture[7, 7]) == (255, 255, 255)
+
+
+def test_a_mark_appears_at_its_moment_ringed_in_its_hue_where_the_picture_places_the_part() -> None:
+    picture = np.full((100, 100, 3), 255, dtype=np.uint8)
+    hue = (0xD9, 0x29, 0x38)
+    mark = Mark(FigureBox(2.0, 3.0, 0.5, 0.25), hue, from_second=1.0)
+    # the picture starts at figure (1, 2) cm, at 40 pixels per centimetre: the part lies at (40, 40)-(60, 50)
+    before = marked(picture, (1.0, 2.0), 40.0, (mark,), 0.5)
+    assert tuple(before[45, 50]) == (255, 255, 255)
+    after = marked(picture, (1.0, 2.0), 40.0, (mark,), 1.0 + MARK_FADE)
+    assert tuple(after[45, 50]) == Ink.MARKER.rgb
+    assert tuple(after[45, 60 + 1]) == hue
+    assert tuple(after[45, 90]) == (255, 255, 255)
+    half = marked(picture, (1.0, 2.0), 40.0, (mark,), 1.0 + MARK_FADE / 2)
+    assert Ink.MARKER.rgb[2] < half[45, 50][2] < 255
+
+
+def test_a_mark_outside_the_picture_leaves_it_as_it_is() -> None:
+    picture = np.full((20, 20, 3), 255, dtype=np.uint8)
+    mark = Mark(FigureBox(9.0, 9.0, 0.5, 0.25), (0, 0, 0))
+    assert np.array_equal(marked(picture, (0.0, 0.0), 10.0, (mark,), 5.0), picture)
+
+
+def highlighter_over(before: np.ndarray, after: np.ndarray) -> bool:
+    """
+    Whether a patch has had the highlighter drawn over it: its blue has dropped out
+    and its red stayed, the ink in it aside.
+    """
+    return float(after[..., 2].mean()) < float(before[..., 2].mean()) - 40 and float(after[..., 0].mean()) >= float(before[..., 0].mean()) - 15
+
+
+def patch_of(frame: np.ndarray, window: Area, stretch: FigureBox, scale: float, part: FigureBox) -> np.ndarray:
+    """
+    The pixels of a part of a stretch read through a window at a scale.
+    """
+    top, left = window.y + (part.y - stretch.y) * scale, window.x + (part.x - stretch.x) * scale
+    return frame[int(top) : int(top + part.height * scale), int(left) : int(left + part.width * scale)]
+
+
+def test_a_magnified_sub_query_rings_its_open_field_once_the_mark_has_appeared() -> None:
+    shown = FigureOnCanvas(FrameworkFigure(stage=0), resolution=Resolution(width=640, height=360))
+    geometry = shown.figure.geometry
+    field = geometry.open_fields[Slot.RULES]
+    magnified = Magnified(shown, geometry.slots[Slot.RULES], hue=(0, 0, 0), held_for=2.0, grow=0.0, shrink=0.0)
+    magnified.marks = (Mark(field, (0xD9, 0x29, 0x38), from_second=1.0),)
+    window, scale, box = magnified.window, magnified.scale, magnified.box
+    before = patch_of(magnified.frame_at(0.5), window, box, scale, field)
+    after = patch_of(magnified.frame_at(1.9), window, box, scale, field)
+    assert highlighter_over(before, after)
+
+
+def test_a_scrolled_plan_rings_an_open_field_where_the_scroll_has_put_it() -> None:
+    shown = FigureOnCanvas(FrameworkFigure(stage=0), resolution=Resolution(width=640, height=360))
+    box, _, _ = plan_stretch(shown)
+    field = shown.figure.geometry.open_fields[Slot.RULES]
+    scrolled = Scrolled(shown, box, hue=(0, 0, 0), held_for=2.0, grow=0.0, shrink=0.0, magnification_up_to=100.0)
+    scrolled.stops = (ReadingStop(0.0, scrolled.lowest_top),)
+    window, scale = scrolled.window, scrolled.scale
+    in_view = FigureBox(box.x, scrolled.lowest_top, box.width, box.height)
+    before = patch_of(scrolled.frame_at(1.0), window, in_view, scale, field)
+    scrolled.marks = (Mark(field, (0, 0, 0)),)
+    after = patch_of(scrolled.frame_at(1.0), window, in_view, scale, field)
+    assert highlighter_over(before, after)

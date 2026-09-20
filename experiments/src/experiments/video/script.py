@@ -102,7 +102,10 @@ class NarrationLines:
     )
     plan_pick_up: Line = Line(
         "We demonstrate this with an under-specified plan in the query interface over "
-        "an action domain language: pick up the cyan cube resting on the board,"
+        "an action domain language: pick up the cyan cube resting on the board,",
+        # hyphenated, the voice says the three words in one breath
+        spoken="We demonstrate this with an under-specified plan in the query interface "
+        "over an action-domain language: pick up the cyan cube resting on the board,",
     )
     plan_insertion: Line = Line(
         "and insert it into a hole. The cube's pose, the grasp approach direction and "

@@ -8,7 +8,7 @@ from __future__ import annotations
 import numpy as np
 
 from experiments.video.canvas import Ink
-from experiments.video.script import PAPER_ID, VideoScript
+from experiments.video.script import PAPER_ID, NarrationLines, VideoScript
 from experiments.video.slides import ClosingSlide, TitleSlide
 from experiments.video.taxonomy import STEP_FADE, TaxonomySlide
 from experiments.video.timeline import Resolution
@@ -48,6 +48,13 @@ def test_the_closing_slide_is_drawn_at_the_asked_size() -> None:
 
 def test_the_script_names_no_robot_by_default() -> None:
     assert VideoScript().robot_name == "the robot"
+
+
+def test_the_plan_line_is_written_in_words_and_spoken_with_the_domains_name_in_one_breath() -> None:
+    line = NarrationLines().plan_pick_up
+    assert "action domain language" in line.written and "-" not in line.written.split("action")[1].split("language")[0]
+    assert "action-domain language" in line.said
+    assert line.said.replace("action-domain", "action domain") == line.written
 
 
 # %% the taxonomy slide

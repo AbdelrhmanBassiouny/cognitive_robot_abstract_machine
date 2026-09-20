@@ -488,6 +488,29 @@
 // the resolved plan laid out the same way, for each answer written into a slot's place to magnify
 #let resolved-laid-out = lay-out-plan(resolved-plan.map(answered), resolved-x + 0.15cm, columns-y + 0.15cm, resolved-w - 0.3cm)
 #let box-of(left, top, right, bottom) = (x: left / 1cm, y: top / 1cm, w: (right - left) / 1cm, h: (bottom - top) / 1cm)
+// where a slot's lines leave a field open with `...`: the box around the `...` of the slot's
+// own lines, and of its nested slot's, keyed by the slot each lies in
+#let open-fields(laid-out) = {
+  let fields = (:)
+  for row in laid-out.rows {
+    if "slot" not in row.entry { continue }
+    let entry = row.entry
+    let boxed = ((slot: entry.slot, at: laid-out.slots.at(entry.slot), lines: entry.lines),)
+    let nested = entry.at("nested", default: none)
+    if nested != none { boxed.push((slot: nested.slot, at: laid-out.slots.at(nested.slot), lines: nested.lines)) }
+    for each in boxed {
+      for (i, line) in each.lines.enumerate() {
+        let column = line.position("...")
+        if column == none { continue }
+        let left = each.at.left + inset + column * char-width
+        let top = each.at.top + inset + i * line-height
+        // the glyphs' own height, not the line's pitch: air over the next line stays clear
+        fields.insert(each.slot, box-of(left, top, left + 3 * char-width, top + 1.15 * code-size))
+      }
+    }
+  }
+  fields
+}
 // the rows from the one whose text holds `from` up to the next whose text is `to`, trimmed
 #let action-box(laid-out, from, to) = {
   let rows = laid-out.rows
@@ -505,6 +528,7 @@
   panels: panel-order.enumerate().map(((i, name)) => (name, (x: panel-x / 1cm, y: panel-y(i) / 1cm, w: panel-w / 1cm, h: panel-heights.at(name) / 1cm))).to-dict(),
   slots: open-laid-out.slots.pairs().map(((name, at)) => (name, box-of(at.left, at.top, at.right, at.bottom))).to-dict(),
   answers: resolved-laid-out.slots.pairs().map(((name, at)) => (name, box-of(at.left, at.top, at.right, at.bottom))).to-dict(),
+  open_fields: open-fields(open-laid-out),
   actions: (
     pick_up: action-box(open-laid-out, "PickUpAction", "),"),
     insertion: action-box(open-laid-out, "InsertionAction", ")"),

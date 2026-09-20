@@ -12,7 +12,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from functools import cached_property
 
-from typing_extensions import Dict, Optional, Tuple
+import numpy as np
+from typing_extensions import Dict, Optional, Sequence, Tuple
 
 from experiments.paper.lettering import Face
 from experiments.video.canvas import (
@@ -25,10 +26,11 @@ from experiments.video.canvas import (
     dimmed,
     filled,
     fitted,
+    framed,
     pasted,
 )
 from experiments.video.figure import FigureBox, FrameworkFigure, Slot
-from experiments.video.timeline import SUBTITLE_BAND_SHARE, Frame, Resolution, Scene, eased
+from experiments.video.timeline import SUBTITLE_BAND_SHARE, Frame, Resolution, Scene, blended, eased
 
 CAPTION_HEIGHT = 64
 """
@@ -385,6 +387,11 @@ class Magnified(Scene):
     one scale.
     """
 
+    marks: Tuple[Mark, ...] = ()
+    """
+    The parts of the stretch pointed to while it is read, if any.
+    """
+
     @property
     def duration(self) -> float:
         return self.grow + self.held_for + self.shrink
@@ -423,7 +430,96 @@ class Magnified(Scene):
         where = self.shown.area_of(self.box).towards(self.window, progress)
         frame = dimmed(self.shown.frame, 0.55 * progress)
         frame = filled(frame, where.inset(-4), self.hue)
-        return pasted(frame, self.picture, where)
+        picture = marked(self.picture, (self.box.x, self.box.y), self.scale, self.marks, seconds)
+        return pasted(frame, picture, where)
+
+
+# %% a part of a magnified stretch pointed to
+
+
+MARK_FADE = 0.3
+"""
+Seconds a mark takes to appear.
+"""
+
+MARK_AIR = 0.04
+"""
+Centimetres of the figure a mark's ring stands off what it rings, on every side.
+"""
+
+
+@dataclass(frozen=True)
+class Mark:
+    """
+    A part of a magnified stretch a reader is pointed to: highlighted and ringed from a
+    moment on.
+    """
+
+    box: FigureBox
+    """
+    The part, in the figure's centimetres.
+    """
+
+    hue: Rgb
+    """
+    The colour it is ringed in.
+    """
+
+    from_second: float = 0.0
+    """
+    Seconds into the scene it appears; before, nothing marks the part.
+    """
+
+    def appeared_at(self, seconds: float) -> float:
+        """
+        How far the mark has appeared at a moment, from zero to one.
+        """
+        return eased((seconds - self.from_second) / MARK_FADE)
+
+
+def marked(picture: Frame, origin: Tuple[float, float], scale: float, marks: Sequence[Mark], seconds: float) -> Frame:
+    """
+    A picture of a stretch of the figure with every mark that has appeared by a moment
+    drawn onto it: a highlighter's yellow over the part, ringed in the mark's hue.
+
+    :param picture: The stretch, compiled crisp.
+    :param origin: The figure's x and y, in centimetres, at the picture's top left corner.
+    :param scale: The picture's pixels per centimetre.
+    :param marks: What is pointed to, anywhere in the figure; a mark outside the picture
+        leaves it as it is.
+    :param seconds: The moment.
+    """
+    for mark in marks:
+        weight = mark.appeared_at(seconds)
+        if weight <= 0.0:
+            continue
+        around = Area(
+            (mark.box.x - origin[0] - MARK_AIR) * scale,
+            (mark.box.y - origin[1] - MARK_AIR) * scale,
+            (mark.box.width + 2 * MARK_AIR) * scale,
+            (mark.box.height + 2 * MARK_AIR) * scale,
+        )
+        drawn = highlighted(picture, around)
+        drawn = framed(drawn, around, mark.hue, thickness=max(2, int(round(scale * 0.02))))
+        picture = blended(picture, drawn, weight)
+    return picture
+
+
+def highlighted(picture: Frame, around: Area) -> Frame:
+    """
+    A copy of the picture with a highlighter drawn over a rectangle of it: the paper
+    turns the highlighter's yellow and the ink stays.
+    """
+    left, top, width, height = around.rounded()
+    result = picture.copy()
+    frame_height, frame_width = picture.shape[:2]
+    x0, y0 = max(left, 0), max(top, 0)
+    x1, y1 = min(left + width, frame_width), min(top + height, frame_height)
+    if x1 <= x0 or y1 <= y0:
+        return result
+    tint = np.asarray(Ink.MARKER.rgb, dtype=np.float32) / 255.0
+    result[y0:y1, x0:x1] = (result[y0:y1, x0:x1].astype(np.float32) * tint + 0.5).astype(np.uint8)
+    return result
 
 
 # %% a stretch of the figure read through, scrolling
@@ -495,6 +591,11 @@ class Scrolled(Scene):
     """
     The most the stretch grows by, over the scale the figure is placed at, where the
     screen's width would allow more.
+    """
+
+    marks: Tuple[Mark, ...] = ()
+    """
+    The parts of the stretch pointed to while it is read, if any.
     """
 
     @property
@@ -569,7 +670,8 @@ class Scrolled(Scene):
         last = int(round((top - self.box.y + where.height / scale) * self.scale))
         frame = dimmed(self.shown.frame, 0.55 * progress)
         frame = filled(frame, where.inset(-4), self.hue)
-        return pasted(frame, self.picture[first:last], where)
+        picture = marked(self.picture[first:last], (self.box.x, self.box.y + first / self.scale), self.scale, self.marks, seconds)
+        return pasted(frame, picture, where)
 
 
 # %% a scene drawn at its own size, shown full screen

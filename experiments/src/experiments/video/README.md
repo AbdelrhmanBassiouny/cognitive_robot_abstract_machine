@@ -73,7 +73,11 @@ holds it and shrinks it back: each backend's sub-query is magnified before its
 close-up, and its answer in the resolved plan after. `Scrolled` grows the whole plan
 out to a window it is read through and scrolls it down at `ReadingStop`s the assembly
 times to the lines about the plan: the plan rests at its top while the line introduces
-it, and has scrolled to its end once the insertion has been named.
+it, rests again with every `...` in view while the line names what is left open, and
+has scrolled to its end as the line ends. The source also states where each `...`
+lies (`open_fields`), and a `Mark` points to it from the moment the line names its
+field -- a highlighter's yellow over it, ringed -- on the scrolled plan and again on
+the sub-query magnified before its close-up.
 
 The queries put to long-term memory over the grid are written in the match syntax,
 `a(Type)` for each class with the event named where it is matched
@@ -105,7 +109,8 @@ The queries put to long-term memory over the grid are written in the match synta
   calls the backends by their class names; `Spotlight` grows a backend's work out of
   its panel of the figure, names the backend on a tab over it, and shrinks it back
   once answered; `Magnified` does the same for a stretch of the figure itself, and
-  `Scrolled` for one too tall to read at once.
+  `Scrolled` for one too tall to read at once; a `Mark` on either points to a part
+  of the stretch from a moment on.
 - `perception.py`, `twin.py`, `grasp.py`, `rules.py` -- one scene per backend, each
   driving the backend's own code on the recorded run: the narrowing, the predicate's
   boxes, the model's samples, the rule tree's trace. The twin is drawn dressed as
@@ -121,7 +126,9 @@ The queries put to long-term memory over the grid are written in the match synta
   events the monitor reported over the actions the plan ran, growing together until
   the recorded questions "Which objects recently moved?" and "Did you move them?"
   take the screen and are answered off the events, checked against the recorded
-  answers.
+  answers. The assembly says the sorting trial's line as its questions come up, and
+  the pushed trial's while its film plays, paced so that the hand reaches in as the
+  line reaches it.
 - `footage.py`, `perturbations.py` and `long_term.py` -- the robot's camera played as
   a time-lapse, beside a hand-held film of the same run where there is one, and as a
   grid of the perturbation episodes with the look's

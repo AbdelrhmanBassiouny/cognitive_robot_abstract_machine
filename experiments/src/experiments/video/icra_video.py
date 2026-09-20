@@ -85,7 +85,16 @@ from experiments.video.rules import HoleOnThePicture, HoleRuleTrace, RuleTreeEva
 from experiments.video.script import NarrationLines, VideoScript
 from experiments.video.slides import ClosingSlide, TextSlide, TitleSlide
 from experiments.video.sources import FRAMEWORK_DEMO_EPISODE, RecordedRun
-from experiments.video.stages import FigureOnCanvas, FigureScene, Magnified, OnCanvas, ReadingStop, Scrolled, Spotlight
+from experiments.video.stages import (
+    FigureOnCanvas,
+    FigureScene,
+    Magnified,
+    Mark,
+    OnCanvas,
+    ReadingStop,
+    Scrolled,
+    Spotlight,
+)
 from experiments.video.taxonomy import TaxonomySlide
 from experiments.video.timeline import Scene, Timeline
 from experiments.video.twin import TwinPictures, WorkingMemoryCheck
@@ -102,6 +111,13 @@ PERTURBATION_EPISODES = (
 The perturbation episodes, row by row as the grid shows them: the scene standing still
 and the robot sorting, each unperturbed, with a piece shoved and with the board moved.
 """
+
+ATTRIBUTION_QUESTION_FOR = 5.0
+"""
+Seconds each question about who moved what takes: long enough to read the query, see
+the asking ruled onto the timelines, and the events lit.
+"""
+
 
 @dataclass(frozen=True)
 class AttributionRun:
@@ -124,20 +140,33 @@ class AttributionRun:
     How many recorded seconds pass per second played while the film runs.
     """
 
+    told_while_watched: bool = False
+    """
+    Whether the trial's line is said while its film plays, so that it tells what is
+    about to be seen, rather than as its questions come up.
+    """
+
+    question_for: float = ATTRIBUTION_QUESTION_FOR
+    """
+    Seconds each question about the trial takes.
+    """
+
 
 ATTRIBUTION_RUNS = (
     AttributionRun("25f5161da5584bac9554b686711a01fe", "the robot sorts the pieces it saw", 50.0),
-    AttributionRun("0a793ded6dd54da7b64171ab78638d38", "the scene stands still; a person pushes the cube", 6.0),
+    # at this pace the hand reaches in as the line reaches "a person pushes the cube";
+    # its answers are one object and none, read in less time than the sorting's four
+    AttributionRun(
+        "0a793ded6dd54da7b64171ab78638d38",
+        "the scene stands still; a person pushes the cube",
+        4.0,
+        told_while_watched=True,
+        question_for=4.0,
+    ),
 )
 """
 The two trials the paper sets against each other: the robot moving the pieces itself,
 and a person moving one while the robot stands idle.
-"""
-
-ATTRIBUTION_QUESTION_FOR = 5.0
-"""
-Seconds each question about who moved what takes: long enough to read the query, see
-the asking ruled onto the timelines, and the events lit.
 """
 
 DISSOLVE = 0.4
@@ -206,9 +235,26 @@ reaches what the pick-up asks for, having introduced the plan.
 
 PLAN_SCROLL_UNTIL = 1.5
 """
-Seconds into the line about the insertion by which the insertion has scrolled into the
-middle of the window: once the line has named it; the plan then drifts on to its end
-as the line ends.
+Seconds into the line about the insertion by which the plan's open fields, the
+insertion's among them, have scrolled into view: once the line has named the insertion.
+"""
+
+OPEN_FIELD_NAMED_AT: Dict[Slot, float] = {Slot.PROBABILISTIC: 2.85, Slot.RULES: 4.2}
+"""
+Seconds into the line about the insertion that the field each slot leaves open is
+named — "the grasp approach direction", "and the hole" — measured on the spoken line;
+the slot's ``...`` is marked then.
+"""
+
+OPEN_FIELDS_IN_VIEW_UNTIL = 5.5
+"""
+Seconds into the line about the insertion the reading rests with every open field in
+view: until "left open" has been said, before the reading drifts on to the plan's end.
+"""
+
+OPEN_FIELD_HUE = Ink.ASKED.rgb
+"""
+What a ``...`` of the plan is ringed in when it is pointed to.
 """
 
 ANSWER_FOR = 0.8
@@ -497,11 +543,21 @@ class VideoAssembly:
         starts = self.starts_of(lines)
         pick_up_said, insertion_said = (self.voice.speaks(line.said).duration for line in lines)
         scrolled = Scrolled(shown, whole, Ink.TEXT.rgb)
+        fields = geometry.open_fields
+        # the open fields, from the first `...` to the last, in the middle of the window
         rows = scrolled.window.height / scrolled.scale
+        first = min(field.y for field in fields.values())
+        last = max(field.y + field.height for field in fields.values())
+        fields_in_view = (first + last) / 2 - rows / 2
         scrolled.stops = (
             ReadingStop(LEAD + starts[0] + PLAN_SCROLL_FROM * pick_up_said, whole.y),
-            ReadingStop(LEAD + starts[1] + PLAN_SCROLL_UNTIL, insertion.y - rows / 2),
+            ReadingStop(LEAD + starts[1] + PLAN_SCROLL_UNTIL, fields_in_view),
+            ReadingStop(LEAD + starts[1] + OPEN_FIELDS_IN_VIEW_UNTIL, fields_in_view),
             ReadingStop(LEAD + starts[1] + insertion_said, scrolled.lowest_top),
+        )
+        scrolled.marks = tuple(
+            Mark(fields[slot], OPEN_FIELD_HUE, from_second=LEAD + starts[1] + named_at)
+            for slot, named_at in OPEN_FIELD_NAMED_AT.items()
         )
         return NarratedScene(scrolled, lines)
 
@@ -516,7 +572,10 @@ class VideoAssembly:
         after = self.figure(slot.stage, None, CAPTIONS[slot])
         close_up = Spotlight(before, after, slot, self.work_of(slot), HUES[slot].rgb, title=BACKENDS[slot].tab)
         asked = ASKED_BY[slot](self.lines)
-        sub_query = Magnified(before, before.figure.geometry.slots[slot], HUES[slot].rgb, shrink=0.3)
+        geometry = before.figure.geometry
+        sub_query = Magnified(before, geometry.slots[slot], HUES[slot].rgb, shrink=0.3)
+        if slot in geometry.open_fields:
+            sub_query.marks = (Mark(geometry.open_fields[slot], OPEN_FIELD_HUE),)
         sub_query.held_for = self.sub_query_hold(asked, sub_query, close_up)
         return [
             NarratedScene(sub_query, (asked,), runs_on=True),
@@ -621,9 +680,10 @@ class VideoAssembly:
                 MovedQuestions(timelines).both(),
                 scenario=run.scenario,
                 speed=run.speed * (3.0 if self.preview else 1.0),
-                question_for=2.0 if self.preview else ATTRIBUTION_QUESTION_FOR,
+                question_for=2.0 if self.preview else run.question_for,
             )
-            scenes.append(NarratedScene(OnCanvas(scene), (line,), delay=max(scene.watching_for - LEAD, 0.0)))
+            delay = 0.0 if run.told_while_watched else max(scene.watching_for - LEAD, 0.0)
+            scenes.append(NarratedScene(OnCanvas(scene), (line,), delay=delay))
         return scenes
 
     def storyboard(self) -> Storyboard:
