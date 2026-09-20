@@ -12,7 +12,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from functools import cached_property
 
-from typing_extensions import Dict, Optional
+from typing_extensions import Dict, Optional, Tuple
 
 from experiments.paper.lettering import Face
 from experiments.video.canvas import (
@@ -304,6 +304,37 @@ How much of the screen's width and height a magnified stretch of the figure may 
 """
 
 
+def grown(seconds: float, grow: float, held_for: float, shrink: float) -> float:
+    """
+    How far something that grows out, is held and shrinks back has grown at a moment,
+    from zero to one.
+
+    :param seconds: The moment, into the growing.
+    :param grow: Seconds the growing out takes; none to start fully grown.
+    :param held_for: Seconds it is held fully grown.
+    :param shrink: Seconds the shrinking back takes; none to end fully grown.
+    """
+    if grow and seconds < grow:
+        return eased(seconds / grow)
+    if shrink and seconds > grow + held_for:
+        return 1.0 - eased((seconds - grow - held_for) / shrink)
+    return 1.0
+
+
+def magnifying_room(resolution: Resolution) -> Area:
+    """
+    The room a magnified stretch of the figure may take: its share of the stage, centred.
+
+    :param resolution: The size of the canvas.
+    """
+    return Area(
+        resolution.width * (1 - MAGNIFIED_SHARE) / 2,
+        resolution.stage_height * (1 - MAGNIFIED_SHARE) / 2,
+        resolution.width * MAGNIFIED_SHARE,
+        resolution.stage_height * MAGNIFIED_SHARE,
+    )
+
+
 @dataclass
 class Magnified(Scene):
     """
@@ -363,13 +394,7 @@ class Magnified(Scene):
         """
         Where the stretch lies fully grown: at its scale, centred on the stage.
         """
-        resolution = self.shown.resolution
-        room = Area(
-            resolution.width * (1 - MAGNIFIED_SHARE) / 2,
-            resolution.stage_height * (1 - MAGNIFIED_SHARE) / 2,
-            resolution.width * MAGNIFIED_SHARE,
-            resolution.stage_height * MAGNIFIED_SHARE,
-        ).fitting(self.box.width / self.box.height)
+        room = magnifying_room(self.shown.resolution).fitting(self.box.width / self.box.height)
         scale = self.pixels_per_centimetre
         if scale is None:
             scale = min(room.width / self.box.width, self.shown.pixels_per_centimetre * self.magnification_up_to)
@@ -391,11 +416,7 @@ class Magnified(Scene):
         """
         How far the stretch has grown at a moment, from zero to one.
         """
-        if self.grow and seconds < self.grow:
-            return eased(seconds / self.grow)
-        if self.shrink and seconds > self.grow + self.held_for:
-            return 1.0 - eased((seconds - self.grow - self.held_for) / self.shrink)
-        return 1.0
+        return grown(seconds, self.grow, self.held_for, self.shrink)
 
     def picture_at(self, seconds: float) -> Frame:
         progress = self.grown_at(seconds)
@@ -403,6 +424,152 @@ class Magnified(Scene):
         frame = dimmed(self.shown.frame, 0.55 * progress)
         frame = filled(frame, where.inset(-4), self.hue)
         return pasted(frame, self.picture, where)
+
+
+# %% a stretch of the figure read through, scrolling
+
+
+@dataclass(frozen=True)
+class ReadingStop:
+    """
+    Where a reading of a scrolled stretch of the figure has got to at a moment.
+    """
+
+    seconds: float
+    """
+    The moment, into the scene.
+    """
+
+    top: float
+    """
+    The figure's y, in centimetres, that lies at the window's top edge then.
+    """
+
+
+@dataclass
+class Scrolled(Scene):
+    """
+    A stretch of the figure too tall to read at once, grown out of its place into a
+    window it is read through, scrolled down as it is read, and shrunk back; the rest
+    of the figure dims behind it.
+    """
+
+    shown: FigureOnCanvas
+    """
+    The figure at its stage.
+    """
+
+    box: FigureBox
+    """
+    The stretch read, in the figure's centimetres.
+    """
+
+    hue: Rgb
+    """
+    The colour the window is framed in.
+    """
+
+    stops: Tuple[ReadingStop, ...] = ()
+    """
+    Where the reading has got to at some moments, in order: the window's top moves
+    evenly from each to the next and rests before the first and after the last; none
+    to rest at the top of the stretch throughout.
+    """
+
+    held_for: float = 6.0
+    """
+    Seconds the window is held fully grown.
+    """
+
+    grow: float = 0.8
+    """
+    Seconds it takes to grow out.
+    """
+
+    shrink: float = 0.6
+    """
+    Seconds it takes to shrink back.
+    """
+
+    magnification_up_to: float = 2.5
+    """
+    The most the stretch grows by, over the scale the figure is placed at, where the
+    screen's width would allow more.
+    """
+
+    @property
+    def duration(self) -> float:
+        return self.grow + self.held_for + self.shrink
+
+    @cached_property
+    def scale(self) -> float:
+        """
+        The pixels per centimetre the stretch is read at: as wide as the room allows,
+        up to the magnification.
+        """
+        room = magnifying_room(self.shown.resolution)
+        return min(room.width / self.box.width, self.shown.pixels_per_centimetre * self.magnification_up_to)
+
+    @cached_property
+    def window(self) -> Area:
+        """
+        Where the stretch is read fully grown: at its scale, as tall as the room allows
+        or the stretch is, centred on the stage.
+        """
+        room = magnifying_room(self.shown.resolution)
+        width = self.box.width * self.scale
+        height = min(room.height, self.box.height * self.scale)
+        return Area(room.centre[0] - width / 2, room.centre[1] - height / 2, width, height)
+
+    @cached_property
+    def picture(self) -> Frame:
+        return self.shown.cut_out(self.box, self.scale)
+
+    @property
+    def lowest_top(self) -> float:
+        """
+        The figure's y at the window's top when the stretch's bottom edge lies at its
+        bottom: as far as the reading can scroll.
+        """
+        return self.box.y + self.box.height - self.window.height / self.scale
+
+    def top_at(self, seconds: float) -> float:
+        """
+        The figure's y at the window's top at a moment, fully grown.
+        """
+        top = self.box.y
+        for earlier, later in zip(self.stops, self.stops[1:]):
+            if seconds >= later.seconds:
+                continue
+            if seconds > earlier.seconds:
+                share = (seconds - earlier.seconds) / (later.seconds - earlier.seconds)
+                top = earlier.top + (later.top - earlier.top) * share
+            else:
+                top = earlier.top
+            break
+        else:
+            if self.stops:
+                top = self.stops[-1].top
+        return min(max(top, self.box.y), self.lowest_top)
+
+    def grown_at(self, seconds: float) -> float:
+        """
+        How far the window has grown at a moment, from zero to one.
+        """
+        return grown(seconds, self.grow, self.held_for, self.shrink)
+
+    def picture_at(self, seconds: float) -> Frame:
+        progress = self.grown_at(seconds)
+        placed = self.shown.area_of(self.box)
+        where = placed.towards(self.window, progress)
+        # the window opens from the whole stretch at its place to its share of it, read at its scale
+        scale = self.shown.pixels_per_centimetre + (self.scale - self.shown.pixels_per_centimetre) * progress
+        top = self.box.y + (self.top_at(seconds) - self.box.y) * progress
+        first = int(round((top - self.box.y) * self.scale))
+        last = int(round((top - self.box.y + where.height / scale) * self.scale))
+        frame = dimmed(self.shown.frame, 0.55 * progress)
+        frame = filled(frame, where.inset(-4), self.hue)
+        return pasted(frame, self.picture[first:last], where)
 
 
 # %% a scene drawn at its own size, shown full screen

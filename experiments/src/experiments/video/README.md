@@ -57,12 +57,28 @@ the robot carrying the plan out keeps `ACTING_FRAMING`, which trims less so the 
 stays in. A framing is applied to the drawn picture, after any findings are drawn on
 it, so nothing in the camera's pixel coordinates has to move.
 
+Where someone filmed the framework demo by hand from beside the table, the film is
+kept among the run's files as `hand_held_camera.mp4` (`HandHeldFilm.beside` finds it),
+and `SideBySide` plays it next to the robot's own camera in step, both at one speed
+from one moment of the run: `HAND_HELD_OFFSET` in `icra_video.py` says how long after
+the robot's recording the hand-held one started, read off the moment the gripper is
+lowered into the hole in both. Without such a film the robot's camera plays alone.
+
 ### Reading the plan
 
 The figure's typst source states, with its geometry, where each open slot of the plan
-and each of its two actions lie. `Magnified` grows such a stretch out of the figure to
-where it can be read, holds it and shrinks it back: the plan is read action by action
-after the title, and each backend's sub-query is magnified before its close-up.
+and each of its two actions lie, and where each answer is written into the resolved
+plan. `Magnified` grows such a stretch out of the figure to where it can be read,
+holds it and shrinks it back: each backend's sub-query is magnified before its
+close-up, and its answer in the resolved plan after. `Scrolled` grows the whole plan
+out to a window it is read through and scrolls it down at `ReadingStop`s the assembly
+times to the lines about the plan: the plan rests at its top while the line introduces
+it, and has scrolled to its end once the insertion has been named.
+
+The queries put to long-term memory over the grid are written in the match syntax,
+`a(Type)` for each class with the event named where it is matched
+(`pickup := a(PickUpEvent)`); the second question marks what changed from the first
+(`changed_spans` in `canvas.py`), so the one variable that differs is seen at a glance.
 
 ## How it is built
 
@@ -81,13 +97,15 @@ after the title, and each backend's sub-query is magnified before its close-up.
   that shows an example query, the tree of backend kinds under it and the choice
   between them, building up as the narration reaches each.
 - `canvas.py` -- where things go and how they are drawn and written; `CodeTypesetting`
-  writes a line of Python coloured piece by piece as an editor would.
+  writes a line of Python coloured piece by piece as an editor would, with any stretch
+  marked behind as a highlighter would.
 - `figure.py` and `stages.py` -- the paper's framework figure, compiled from its own
   typst source with a `video` input that says how many backends have answered and
   which slot is being answered now, and what the panels are titled where the video
   calls the backends by their class names; `Spotlight` grows a backend's work out of
   its panel of the figure, names the backend on a tab over it, and shrinks it back
-  once answered; `Magnified` does the same for a stretch of the figure itself.
+  once answered; `Magnified` does the same for a stretch of the figure itself, and
+  `Scrolled` for one too tall to read at once.
 - `perception.py`, `twin.py`, `grasp.py`, `rules.py` -- one scene per backend, each
   driving the backend's own code on the recorded run: the narrowing, the predicate's
   boxes, the model's samples, the rule tree's trace. The twin is drawn dressed as
@@ -105,7 +123,8 @@ after the title, and each backend's sub-query is magnified before its close-up.
   take the screen and are answered off the events, checked against the recorded
   answers.
 - `footage.py`, `perturbations.py` and `long_term.py` -- the robot's camera played as
-  a time-lapse, alone and as a grid of the perturbation episodes with the look's
+  a time-lapse, beside a hand-held film of the same run where there is one, and as a
+  grid of the perturbation episodes with the look's
   findings drawn while the robot stands still. Each tile stands on its last frame once
   its recording has ended; long-term memory is asked over the grid which episodes the
   cube moved in and which the robot picked it up in, as the narration reaches the

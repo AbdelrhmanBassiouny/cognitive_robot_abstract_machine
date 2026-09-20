@@ -11,10 +11,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from krrood.entity_query_language.factories import an, contains, entity, variable
+from krrood.entity_query_language.factories import a, contains
 from krrood.entity_query_language.query.query import Query
 from segmind.datastructures.events import DetectionEvent, MotionEvent, PickUpEvent
 from typing_extensions import List, Tuple, Type
+
+from experiments.video.canvas import Span, changed_spans
 
 from experiments.episodes.episode import RecordedTrial, Tick
 from experiments.episodes.long_term_memory import LongTermMemory
@@ -60,6 +62,18 @@ class RememberedQuestion:
         """
         return episode_identifier in self.episodes
 
+    def changed_from(self, earlier: RememberedQuestion) -> Tuple[List[Span], ...]:
+        """
+        What of the statement differs from an earlier question's, line by line: the
+        stretches to mark when this question follows that one on screen.
+
+        :param earlier: The question asked before this one.
+        """
+        return tuple(
+            changed_spans(before, after)
+            for before, after in zip(earlier.statement, self.statement)
+        )
+
 
 @dataclass
 class RememberedPiece:
@@ -86,6 +100,7 @@ class RememberedPiece:
         return self._asked(
             f"In which episodes did the {self.piece} move?",
             MotionEvent,
+            "motion",
             f"the {self.piece} moved",
         )
 
@@ -96,6 +111,7 @@ class RememberedPiece:
         return self._asked(
             f"In which episodes did you pick the {self.piece} up?",
             PickUpEvent,
+            "pickup",
             f"picked the {self.piece} up",
         )
 
@@ -106,19 +122,20 @@ class RememberedPiece:
         return [self.where_it_moved(), self.where_the_robot_picked_it_up()]
 
     def _asked(
-        self, english: str, kind: Type[DetectionEvent], lit_as: str
+        self, english: str, kind: Type[DetectionEvent], named: str, lit_as: str
     ) -> RememberedQuestion:
         """
         One question, answered from the database.
 
         :param english: The question as a person would ask it.
         :param kind: The kind of event an episode has to have recorded of the piece.
+        :param named: What the event is called in the statement on screen.
         :param lit_as: What an episode the answer names is badged with.
         """
         found = self.memory.answer_with_identifiers(self.query(kind))
         return RememberedQuestion(
             english=english,
-            statement=self.statement(kind),
+            statement=self.statement(kind, named),
             episodes=tuple(sorted(set(found))),
             lit_as=lit_as,
         )
@@ -126,30 +143,28 @@ class RememberedPiece:
     def query(self, kind: Type[DetectionEvent]) -> Query:
         """
         The episode of every trial whose ticks recorded an event of the given kind about
-        a piece of this kind.
+        a piece of this kind: each of the three matched by its class, the event named
+        where it is matched.
 
         :param kind: The kind of event.
         """
-        trial = variable(RecordedTrial, domain=[])
-        tick = variable(Tick, domain=[])
-        event = variable(kind, domain=[])
-        return an(
-            entity(trial.episode).where(
-                contains(trial.ticks, tick),
-                contains(tick.events, event),
-                contains(event.tracked_object.name.name, self.piece),
-            )
+        trial, tick = a(RecordedTrial), a(Tick)
+        return a(trial.episode).where(
+            contains(trial.ticks, tick),
+            contains(tick.events, event := a(kind)),
+            contains(event.tracked_object.name.name, self.piece),
         )
 
-    def statement(self, kind: Type[DetectionEvent]) -> Tuple[str, ...]:
+    def statement(self, kind: Type[DetectionEvent], named: str) -> Tuple[str, ...]:
         """
         :meth:`query`, as it is written on screen: the same lines that build it.
 
         :param kind: The kind of event.
+        :param named: What the event is called.
         """
         return (
-            f"trial, tick, event = variable(RecordedTrial), variable(Tick), variable({kind.__name__})",
-            "an(entity(trial.episode).where(",
-            "    contains(trial.ticks, tick), contains(tick.events, event),",
-            f'    contains(event.tracked_object.name.name, "{self.piece}")))',
+            "trial, tick = a(RecordedTrial), a(Tick)",
+            "a(trial.episode).where(contains(trial.ticks, tick),",
+            f"    contains(tick.events, {named} := a({kind.__name__})),",
+            f'    contains({named}.tracked_object.name.name, "{self.piece}"))',
         )

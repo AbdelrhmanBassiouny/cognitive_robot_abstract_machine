@@ -42,13 +42,21 @@ from experiments.video.encoding import (
     bytes_for_sound,
 )
 from experiments.video.figure import (
+    FigureBox,
     FrameworkFigure,
     GraspChartBar,
     PlanAction,
     RunReadings,
     Slot,
 )
-from experiments.video.footage import CameraFilm, ExecutionFootage
+from experiments.video.footage import (
+    CameraFilm,
+    ExecutionFootage,
+    Framing,
+    HandHeldFilm,
+    SideBySide,
+    ViewOfTheRun,
+)
 from experiments.video.grasp import (
     ApproachPrior,
     GraspDistribution,
@@ -77,7 +85,7 @@ from experiments.video.rules import HoleOnThePicture, HoleRuleTrace, RuleTreeEva
 from experiments.video.script import NarrationLines, VideoScript
 from experiments.video.slides import ClosingSlide, TextSlide, TitleSlide
 from experiments.video.sources import FRAMEWORK_DEMO_EPISODE, RecordedRun
-from experiments.video.stages import FigureOnCanvas, FigureScene, Magnified, OnCanvas, Spotlight
+from experiments.video.stages import FigureOnCanvas, FigureScene, Magnified, OnCanvas, ReadingStop, Scrolled, Spotlight
 from experiments.video.taxonomy import TaxonomySlide
 from experiments.video.timeline import Scene, Timeline
 from experiments.video.twin import TwinPictures, WorkingMemoryCheck
@@ -168,7 +176,7 @@ How many recorded seconds pass per second played in the perturbation grid: slow 
 for the perturbations to be seen; the recordings need not end before the questions.
 """
 
-GRID_QUESTION_FOR = 5.0
+GRID_QUESTION_FOR = 4.5
 """
 Seconds each question put to long-term memory over the grid takes.
 """
@@ -190,6 +198,31 @@ PLAN_CAPTION = "The plan states what it wants and leaves four things open, each 
 What is written under the figure while the plan is read.
 """
 
+PLAN_SCROLL_FROM = 0.65
+"""
+How far into the line about the pick-up the plan starts scrolling down: where the line
+reaches what the pick-up asks for, having introduced the plan.
+"""
+
+PLAN_SCROLL_UNTIL = 1.5
+"""
+Seconds into the line about the insertion by which the insertion has scrolled into the
+middle of the window: once the line has named it; the plan then drifts on to its end
+as the line ends.
+"""
+
+ANSWER_FOR = 0.8
+"""
+Seconds each answer, written into the resolved plan, is held magnified once its
+backend has given it.
+"""
+
+ANSWER_MAGNIFICATION = 3.0
+"""
+How much an answer grows by: less than a sub-query, so that the resolved plan it grew
+out of is still seen around it.
+"""
+
 GRASP_PRIOR_SHARE = 0.55
 """
 The probability the prior over the approach gives the direction the run took; the
@@ -202,10 +235,33 @@ How many of the recording's first frames, taken while the robot stood still, the
 is watched over.
 """
 
-EXECUTION_FROM_SECOND = 8.0
+EXECUTION_STRETCH = (19.5, 47.5)
 """
-Where in the framework demo's recording the film of the execution starts: once the
-look has been answered and the arm sets off.
+The seconds of the framework demo's recording shown while the robot acts: from the arm
+setting off for the cube to its withdrawing from the hole.
+"""
+
+EXECUTION_SPEED = 6.0
+"""
+How many recorded seconds pass per second played while the robot acts.
+"""
+
+EXECUTION_CAPTION = "the cube picked up and put through the square hole"
+"""
+What is written under the film of the robot acting.
+"""
+
+HAND_HELD_OFFSET = 15.5
+"""
+Seconds after the robot's own recording started that the hand-held film of the
+framework demo started: read off both films at the moment the gripper is lowered
+into the square hole.
+"""
+
+HAND_HELD_FRAMING = Framing(top=450, bottom=570)
+"""
+What of the hand-held film is shown: it stands upright, and the arm and the board take
+its middle.
 """
 
 @dataclass(frozen=True)
@@ -403,12 +459,12 @@ class VideoAssembly:
         if slot is Slot.PERCEPTION:
             reel = NarrowingReel(self.demo, frame_indices=list(range(IDLE_FRAMES_READ)))
             # each view comes up as its line starts
-            scene = PerceptionNarrowing(reel, appears_at=tuple(self.starts_of(self.lines.perception_views)), run_for=3.5)
+            scene = PerceptionNarrowing(reel, appears_at=tuple(self.starts_of(self.lines.perception_views)), run_for=3.0)
             if self.preview:
                 scene.appears_at, scene.run_for = (0.0, 1.0, 2.0, 3.0), 2.0
             return scene
         if slot is Slot.SIMULATION:
-            scene = WorkingMemoryCheck(self.twin, flight_from=3.0, flight_for=4.0, boxes_for=3.5)
+            scene = WorkingMemoryCheck(self.twin, flight_from=3.0, flight_for=4.0, boxes_for=2.5)
             if self.preview:
                 scene.flight_for, scene.boxes_for = 2.0, 4.0
             return scene
@@ -418,37 +474,43 @@ class VideoAssembly:
                 GraspOptionsOnThePicture(self.demo, self.twin.cube_at + [0.0, 0.0, 0.01]),
                 statement_for=1.5,
                 sampling_for=4.5,
-                answer_for=3.5,
+                answer_for=3.0,
             )
             if self.preview:
                 scene.sampling_for, scene.answer_for = 3.0, 2.0
             return scene
-        scene = RuleTreeEvaluation(self.rule_trace, HoleOnThePicture(self.demo), tree_for=2.0, answer_for=4.5)
+        scene = RuleTreeEvaluation(self.rule_trace, HoleOnThePicture(self.demo), tree_for=2.0, answer_for=4.0)
         if self.preview:
             scene.answer_for = 2.0
         return scene
 
-    def plan_readings(self) -> List[NarratedScene]:
+    def plan_reading(self) -> NarratedScene:
         """
-        The plan read action by action, each magnified out of the figure at one scale:
-        the pick-up grows out, the insertion follows it and shrinks back.
+        The whole plan magnified out of the figure and read from the top, scrolling
+        down as the lines about it reach the pick-up and then the insertion.
         """
         shown = self.figure(0, None, PLAN_CAPTION)
-        actions = shown.figure.geometry.actions
-        scale = min(Magnified(shown, box, Ink.TEXT.rgb).scale for box in actions.values())
-        pick_up = Magnified(shown, actions[PlanAction.PICK_UP], Ink.TEXT.rgb, held_for=3.0, shrink=0.0, pixels_per_centimetre=scale)
-        insertion = Magnified(shown, actions[PlanAction.INSERTION], Ink.TEXT.rgb, held_for=3.0, grow=0.0, pixels_per_centimetre=scale)
-        return [
-            NarratedScene(pick_up, (self.lines.plan_pick_up,)),
-            NarratedScene(insertion, (self.lines.plan_insertion,)),
-        ]
+        geometry = shown.figure.geometry
+        pick_up, insertion = geometry.actions[PlanAction.PICK_UP], geometry.actions[PlanAction.INSERTION]
+        whole = FigureBox(geometry.plan.x, pick_up.y, geometry.plan.width, insertion.y + insertion.height - pick_up.y)
+        lines = (self.lines.plan_pick_up, self.lines.plan_insertion)
+        starts = self.starts_of(lines)
+        pick_up_said, insertion_said = (self.voice.speaks(line.said).duration for line in lines)
+        scrolled = Scrolled(shown, whole, Ink.TEXT.rgb)
+        rows = scrolled.window.height / scrolled.scale
+        scrolled.stops = (
+            ReadingStop(LEAD + starts[0] + PLAN_SCROLL_FROM * pick_up_said, whole.y),
+            ReadingStop(LEAD + starts[1] + PLAN_SCROLL_UNTIL, insertion.y - rows / 2),
+            ReadingStop(LEAD + starts[1] + insertion_said, scrolled.lowest_top),
+        )
+        return NarratedScene(scrolled, lines)
 
     def backend_scenes(self, slot: Slot) -> List[NarratedScene]:
         """
         The slot's sub-query magnified out of the plan with the slot ringed, the
-        backend's close-up, and the figure with the slot answered; the sub-query
-        carries the line about what is asked, the close-up the lines about how the
-        backend answers it.
+        backend's close-up, and the answer magnified out of the resolved plan; the
+        sub-query carries the line about what is asked, the close-up the lines about
+        how the backend answers it.
         """
         before = self.figure(slot.stage - 1, slot, CAPTIONS[slot])
         after = self.figure(slot.stage, None, CAPTIONS[slot])
@@ -460,8 +522,35 @@ class VideoAssembly:
             NarratedScene(sub_query, (asked,), runs_on=True),
             # the lines over the close-up start as its work does, once it has grown out
             NarratedScene(close_up, NARRATED_BY[slot](self.lines), delay=max(close_up.grow - LEAD, 0.0)),
-            NarratedScene(FigureScene(after, held_for=0.6)),
+            NarratedScene(
+                Magnified(
+                    after,
+                    after.figure.geometry.answers[slot],
+                    HUES[slot].rgb,
+                    held_for=ANSWER_FOR,
+                    grow=0.5,
+                    shrink=0.4,
+                    magnification_up_to=ANSWER_MAGNIFICATION,
+                )
+            ),
         ]
+
+    def execution(self) -> Scene:
+        """
+        The robot carrying out the resolved plan: from its own camera and, where someone
+        filmed the run by hand, from beside the table in step with it.
+        """
+        start, end = EXECUTION_STRETCH
+        speed = 16.0 if self.preview else EXECUTION_SPEED
+        by_hand = HandHeldFilm.beside(self.demo)
+        if by_hand is None:
+            return ExecutionFootage(CameraFilm(self.demo), from_second=start, to_second=end, speed=speed, caption=EXECUTION_CAPTION)
+        views = (
+            # the gripper reaches the cube at the very top of the robot's picture, so none is cut off
+            ViewOfTheRun(CameraFilm(self.demo), start, Framing(), "the robot's own camera"),
+            ViewOfTheRun(by_hand, start - HAND_HELD_OFFSET, HAND_HELD_FRAMING, "a camera held by hand beside the table"),
+        )
+        return SideBySide(views, length=end - start, speed=speed, caption=EXECUTION_CAPTION)
 
     def sub_query_hold(self, asked: Line, sub_query: Magnified, close_up: Spotlight) -> float:
         """
@@ -550,7 +639,7 @@ class VideoAssembly:
                 introduction,
             ),
         ]
-        narrated.extend(self.plan_readings())
+        narrated.append(self.plan_reading())
         for slot in Slot:
             narrated.extend(self.backend_scenes(slot))
         narrated.append(
@@ -560,18 +649,7 @@ class VideoAssembly:
                 runs_on=True,
             )
         )
-        narrated.append(
-            NarratedScene(
-                OnCanvas(
-                    ExecutionFootage(
-                        CameraFilm(self.demo),
-                        from_second=EXECUTION_FROM_SECOND,
-                        speed=16.0 if self.preview else 10.0,
-                        caption="the robot's own camera: the cube picked up and put through the square hole",
-                    )
-                )
-            )
-        )
+        narrated.append(NarratedScene(OnCanvas(self.execution())))
         narrated.append(
             NarratedScene(
                 TextSlide(["Temporal & Attribution Queries", "The event segmentation reports what happened to each object;",

@@ -10,7 +10,9 @@ import pytest
 
 from experiments.paper.lettering import Face
 from experiments.video.canvas import (
+    changed_spans,
     CODE_INK,
+    Ink,
     CodeTypesetting,
     Token,
     tokenised,
@@ -118,3 +120,24 @@ def test_coloured_code_is_as_wide_as_the_same_line_in_one_ink_and_carries_its_in
     frame = code.written(np.full((60, 400, 3), 255, dtype=np.uint8), line, (10, 30))
     inks = {tuple(pixel) for pixel in frame.reshape(-1, 3)}
     assert CODE_INK[Token.CLASS] in inks and CODE_INK[Token.STRING] in inks and CODE_INK[Token.CALL] in inks
+
+
+def test_the_changed_spans_of_a_line_are_the_pieces_that_differ_from_the_earlier_line() -> None:
+    before = "    contains(tick.events, motion := a(MotionEvent)()),"
+    after = "    contains(tick.events, pickup := a(PickUpEvent)()),"
+    spans = changed_spans(before, after)
+    assert [after[first:after_last] for first, after_last in spans] == ["pickup", "PickUpEvent"]
+    assert changed_spans(after, after) == []
+    assert changed_spans("", "a(Tick)()") == [(0, 9)]
+
+
+def test_a_marked_stretch_of_code_is_filled_behind_in_the_marker_and_nothing_else_is() -> None:
+    line = "pickup := a(PickUpEvent)()"
+    code = CodeTypesetting(size=24)
+    blank = np.full((60, 600, 3), 255, dtype=np.uint8)
+    marked = code.written(blank, line, (10, 30), marked=[(10, 24)])
+    plain = code.written(blank, line, (10, 30))
+    assert tuple(marked[30, int(10 + code.width_of(line[:12]))]) in {Ink.MARKER.rgb, CODE_INK[Token.CLASS]}
+    assert tuple(marked[30, int(10 + code.width_of("pi") + 1)]) != Ink.MARKER.rgb
+    assert Ink.MARKER.rgb in {tuple(pixel) for pixel in marked.reshape(-1, 3)}
+    assert Ink.MARKER.rgb not in {tuple(pixel) for pixel in plain.reshape(-1, 3)}

@@ -8,7 +8,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from experiments.video.stages import MAGNIFIED_SHARE, TAB_HEIGHT, FigureOnCanvas, Magnified, Spotlight
+from experiments.video.stages import MAGNIFIED_SHARE, TAB_HEIGHT, FigureOnCanvas, Magnified, ReadingStop, Scrolled, Spotlight
 from experiments.video.timeline import Resolution, Still
 
 from experiments.video.figure import (
@@ -111,6 +111,17 @@ def test_the_geometry_cuts_the_plan_into_its_two_actions_one_over_the_other() ->
     assert insertion.y < geometry.slots[Slot.RULES].y
 
 
+def test_the_geometry_boxes_every_answer_inside_the_resolved_plan_in_the_slots_order() -> None:
+    geometry = FrameworkFigure(stage=len(Slot)).geometry
+    resolved = geometry.resolved
+    for slot in Slot:
+        answer = geometry.answers[slot]
+        assert resolved.x <= answer.x and answer.x + answer.width <= resolved.x + resolved.width
+        assert resolved.y <= answer.y and answer.y + answer.height <= resolved.y + resolved.height
+    tops = [geometry.answers[slot].y for slot in Slot]
+    assert tops == sorted(tops)
+
+
 # %% the close-up over the figure
 
 
@@ -164,3 +175,54 @@ def test_a_magnified_stretch_without_growing_starts_fully_grown_and_framed_in_it
     window = magnified.window
     on_frame = (int(window.y - 2), int(window.centre[0]))
     assert tuple(magnified.frame_at(0.0)[on_frame]) == hue
+
+
+# %% a stretch of the figure read through
+
+
+def plan_stretch(shown: FigureOnCanvas) -> tuple:
+    """
+    The whole plan, from the pick-up's first line to the insertion's last, and its actions.
+    """
+    actions = shown.figure.geometry.actions
+    pick_up, insertion = actions[PlanAction.PICK_UP], actions[PlanAction.INSERTION]
+    plan = shown.figure.geometry.plan
+    return plan.__class__(plan.x, pick_up.y, plan.width, insertion.y + insertion.height - pick_up.y), pick_up, insertion
+
+
+def test_a_scrolled_stretch_reads_at_the_rooms_width_and_shows_what_the_room_is_tall() -> None:
+    shown = FigureOnCanvas(FrameworkFigure(stage=0), resolution=Resolution(width=640, height=360))
+    box, _, _ = plan_stretch(shown)
+    scrolled = Scrolled(shown, box, hue=(0, 0, 0), magnification_up_to=100.0)
+    assert scrolled.window.width == pytest.approx(640 * MAGNIFIED_SHARE)
+    assert scrolled.window.height == pytest.approx(shown.resolution.stage_height * MAGNIFIED_SHARE)
+    assert scrolled.picture.shape[0] > scrolled.window.height
+    assert scrolled.lowest_top == pytest.approx(box.y + box.height - scrolled.window.height / scrolled.scale)
+    capped = Scrolled(shown, box, hue=(0, 0, 0), magnification_up_to=2.0)
+    assert capped.scale == pytest.approx(shown.pixels_per_centimetre * 2.0)
+
+
+def test_a_scrolled_stretch_rests_moves_evenly_between_its_stops_and_rests_again() -> None:
+    shown = FigureOnCanvas(FrameworkFigure(stage=0), resolution=Resolution(width=640, height=360))
+    box, _, insertion = plan_stretch(shown)
+    scrolled = Scrolled(shown, box, hue=(0, 0, 0), held_for=8.0, magnification_up_to=100.0)
+    scrolled.stops = (ReadingStop(2.0, box.y), ReadingStop(6.0, scrolled.lowest_top))
+    assert scrolled.top_at(0.0) == scrolled.top_at(2.0) == box.y
+    assert scrolled.top_at(4.0) == pytest.approx((box.y + scrolled.lowest_top) / 2)
+    assert scrolled.top_at(6.0) == scrolled.top_at(9.0) == scrolled.lowest_top
+    # a stop past the stretch's bottom is read at the bottom
+    scrolled.stops = (ReadingStop(0.0, insertion.y + insertion.height),)
+    assert scrolled.top_at(1.0) == scrolled.lowest_top
+
+
+def test_a_scrolled_stretch_grows_from_its_place_to_its_window_and_back() -> None:
+    shown = FigureOnCanvas(FrameworkFigure(stage=0), resolution=Resolution(width=640, height=360))
+    box, _, _ = plan_stretch(shown)
+    hue = (0x1F, 0x23, 0x28)
+    scrolled = Scrolled(shown, box, hue=hue, held_for=1.0, grow=0.5, shrink=0.5)
+    assert scrolled.duration == pytest.approx(2.0)
+    assert scrolled.grown_at(0.0) == 0.0 and scrolled.grown_at(0.5) == 1.0 and scrolled.grown_at(2.0) == pytest.approx(0.0)
+    window = scrolled.window
+    on_frame = (int(window.y - 2), int(window.centre[0]))
+    assert tuple(scrolled.frame_at(1.0)[on_frame]) == hue
+    assert scrolled.frame_at(0.0).shape == scrolled.frame_at(1.0).shape

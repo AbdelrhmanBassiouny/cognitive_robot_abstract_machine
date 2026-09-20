@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field, replace
+from difflib import SequenceMatcher
 from enum import Enum
 
 import cv2
@@ -55,6 +56,10 @@ class Ink(Enum):
     ANSWER = (0xD9, 0x1A, 0x99)
     ASKED = (0xD9, 0x29, 0x38)
     MEMORY = (0x0E, 0x74, 0x90)
+    MARKER = (0xFF, 0xEE, 0x8C)
+    """
+    What a highlighter leaves behind a stretch of code that a reader is pointed to.
+    """
 
     @property
     def rgb(self) -> Rgb:
@@ -412,11 +417,37 @@ def tokenised(line: str) -> List[Tuple[str, Token]]:
     return kinds
 
 
+Span = Tuple[int, int]
+"""
+A stretch of a line: the index of its first character and of the one after its last.
+"""
+
+
+def changed_spans(before: str, after: str) -> List[Span]:
+    """
+    The stretches of a line of code that differ from an earlier line, as spans of the
+    later one: what a reader comparing the two would find changed, piece by piece.
+
+    :param before: The earlier line.
+    :param after: The later line.
+    """
+    earlier = [piece for piece, _ in tokenised(before)]
+    later = [piece for piece, _ in tokenised(after)]
+    starts = [0]
+    for piece in later:
+        starts.append(starts[-1] + len(piece))
+    return [
+        (starts[first], starts[after_last])
+        for tag, _, _, first, after_last in SequenceMatcher(a=earlier, b=later, autojunk=False).get_opcodes()
+        if tag != "equal" and after_last > first
+    ]
+
+
 @dataclass(frozen=True)
 class CodeTypesetting:
     """
     How a line of Python is written on a frame: in the mono face, coloured piece by
-    piece as an editor would.
+    piece as an editor would, with any stretch a reader is pointed to marked behind it.
     """
 
     size: int = 22
@@ -433,15 +464,24 @@ class CodeTypesetting:
     def face(self) -> Typesetting:
         return Typesetting(size=self.size, face=Face.MONO)
 
-    def written(self, frame: Frame, line: str, at: Tuple[float, float]) -> Frame:
+    marker: Rgb = Ink.MARKER.rgb
+    """
+    What a marked stretch is filled behind with.
+    """
+
+    def written(self, frame: Frame, line: str, at: Tuple[float, float], marked: Sequence[Span] = ()) -> Frame:
         """
         A copy of the frame with the line written on it, from its left middle.
 
         :param frame: The frame written on.
         :param line: One line of code.
         :param at: Where its left middle goes, in pixels.
+        :param marked: The stretches of the line marked behind, if any.
         """
         x, y = at
+        for first, after_last in marked:
+            left, right = x + self.width_of(line[:first]), x + self.width_of(line[:after_last])
+            frame = filled(frame, Area(left - 3, y - self.size * 0.62, right - left + 6, self.size * 1.24), self.marker)
         for piece, kind in tokenised(line):
             if not piece.isspace():
                 frame = replace(self.face, color=self.inks[kind]).written(frame, piece, (x, y), Anchor.LEFT_MIDDLE)

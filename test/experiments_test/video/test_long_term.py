@@ -64,6 +64,22 @@ def test_the_two_questions_ask_after_motions_and_pick_ups_of_the_piece() -> None
     assert '"cube"' in moved.statement[-1]
 
 
+def test_the_statements_match_each_class_and_name_the_event_where_it_is_matched() -> None:
+    moved, picked_up = RememberedPiece(MemoryThatAnswers([]), piece="cube").both()  # type: ignore[arg-type]
+    assert moved.statement[0] == "trial, tick = a(RecordedTrial), a(Tick)"
+    assert "motion := a(MotionEvent)" in moved.statement[2] and "motion." in moved.statement[3]
+    assert "pickup := a(PickUpEvent)" in picked_up.statement[2] and "pickup." in picked_up.statement[3]
+    assert "variable(" not in " ".join(moved.statement) and "entity(" not in " ".join(moved.statement)
+
+
+def test_the_second_question_marks_only_what_changed_from_the_first() -> None:
+    moved, picked_up = RememberedPiece(MemoryThatAnswers([]), piece="cube").both()  # type: ignore[arg-type]
+    marked = picked_up.changed_from(moved)
+    assert marked[0] == [] and marked[1] == []
+    assert [picked_up.statement[2][first:last] for first, last in marked[2]] == ["pickup", "PickUpEvent"]
+    assert [picked_up.statement[3][first:last] for first, last in marked[3]] == ["pickup"]
+
+
 # %% the grid they play over
 
 
@@ -163,3 +179,16 @@ def test_the_answer_lights_the_tiles_it_names_and_dims_the_rest() -> None:
     assert answered[inside_unnamed].mean() > before[inside_unnamed].mean()
     inside_named = (int(named.centre[1]) + 20, int(named.centre[0]))
     assert tuple(answered[inside_named]) == tuple(before[inside_named])
+
+
+def test_the_band_marks_the_second_question_where_it_differs_from_the_first() -> None:
+    first = RememberedQuestion("moved?", ("x := a(MotionEvent)",), ("01",), "lit")
+    second = RememberedQuestion("picked up?", ("x := a(PickUpEvent)",), ("01",), "lit")
+    grid = matrix([first, second])
+    assert grid.marked_in(first) == ([],)
+    assert grid.marked_in(second) == ([(7, 18)],)
+    band = grid.layout.band
+    first_up = grid.picture_at(grid.asked_at + 0.5)[int(band.y) : int(band.bottom), int(band.x) : int(band.right)]
+    second_up = grid.picture_at(grid.asked_at + grid.question_for + 0.5)[int(band.y) : int(band.bottom), int(band.x) : int(band.right)]
+    assert Ink.MARKER.rgb not in {tuple(pixel) for pixel in first_up.reshape(-1, 3)}
+    assert Ink.MARKER.rgb in {tuple(pixel) for pixel in second_up.reshape(-1, 3)}

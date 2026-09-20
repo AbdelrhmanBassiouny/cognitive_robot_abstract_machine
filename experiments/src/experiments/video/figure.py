@@ -229,6 +229,12 @@ class FigureGeometry:
     The stretch of the plan each of its actions takes, from its first line to its last.
     """
 
+    answers: Dict[Slot, FigureBox]
+    """
+    Each slot of the resolved plan: the answer written in the sub-query's place, as the
+    resolved plan boxes it.
+    """
+
     @classmethod
     def from_query(cls, given: Dict[str, object]) -> FigureGeometry:
         """
@@ -242,6 +248,7 @@ class FigureGeometry:
             panels={slot: FigureBox.from_query(given["panels"][slot.value]) for slot in Slot},
             slots={slot: FigureBox.from_query(given["slots"][slot.value]) for slot in Slot},
             actions={action: FigureBox.from_query(given["actions"][action.value]) for action in PlanAction},
+            answers={slot: FigureBox.from_query(given["answers"][slot.value]) for slot in Slot},
         )
 
 

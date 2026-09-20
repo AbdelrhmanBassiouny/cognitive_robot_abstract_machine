@@ -485,6 +485,8 @@
 // the video to aim its close-ups at: `typst query framework.typ "<geometry>"`; with them, each
 // open slot of the plan and the stretch of the plan each action takes, for it to magnify
 #let open-laid-out = lay-out-plan(open-plan, plan-x + 0.15cm, columns-y + 0.15cm, plan-w - 0.3cm)
+// the resolved plan laid out the same way, for each answer written into a slot's place to magnify
+#let resolved-laid-out = lay-out-plan(resolved-plan.map(answered), resolved-x + 0.15cm, columns-y + 0.15cm, resolved-w - 0.3cm)
 #let box-of(left, top, right, bottom) = (x: left / 1cm, y: top / 1cm, w: (right - left) / 1cm, h: (bottom - top) / 1cm)
 // the rows from the one whose text holds `from` up to the next whose text is `to`, trimmed
 #let action-box(laid-out, from, to) = {
@@ -502,6 +504,7 @@
   resolved: (x: resolved-x / 1cm, y: columns-y / 1cm, w: resolved-w / 1cm, h: panels-h / 1cm),
   panels: panel-order.enumerate().map(((i, name)) => (name, (x: panel-x / 1cm, y: panel-y(i) / 1cm, w: panel-w / 1cm, h: panel-heights.at(name) / 1cm))).to-dict(),
   slots: open-laid-out.slots.pairs().map(((name, at)) => (name, box-of(at.left, at.top, at.right, at.bottom))).to-dict(),
+  answers: resolved-laid-out.slots.pairs().map(((name, at)) => (name, box-of(at.left, at.top, at.right, at.bottom))).to-dict(),
   actions: (
     pick_up: action-box(open-laid-out, "PickUpAction", "),"),
     insertion: action-box(open-laid-out, "InsertionAction", ")"),

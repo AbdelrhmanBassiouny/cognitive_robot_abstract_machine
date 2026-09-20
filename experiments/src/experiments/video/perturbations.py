@@ -42,6 +42,7 @@ from experiments.video.canvas import (
     Area,
     CodeTypesetting,
     Ink,
+    Span,
     Typesetting,
     dimmed,
     filled,
@@ -532,8 +533,8 @@ class PerturbationMatrix(Scene):
             frame, question.english, (card.x + 24, card.y + 68), Anchor.LEFT_MIDDLE
         )
         code = CodeTypesetting(size=20)
-        for number, line in enumerate(question.statement):
-            frame = code.written(frame, line, (card.x + 24, card.y + 108 + number * 27))
+        for number, (line, marked) in enumerate(zip(question.statement, self.marked_in(question))):
+            frame = code.written(frame, line, (card.x + 24, card.y + 108 + number * 27), marked)
         if eased((progress - 0.45) / 0.15) > 0:
             on_screen = sum(question.names(tile.run.episode_identifier) for row in self.tiles for tile in row)
             answer = f"→ {len(question.episodes)} episodes; {on_screen} of them are on screen"
@@ -541,6 +542,19 @@ class PerturbationMatrix(Scene):
                 frame, answer, (card.right - 24, card.y + 68), Anchor.RIGHT_MIDDLE
             )
         return frame
+
+    def marked_in(self, question: RememberedQuestion) -> Tuple[List[Span], ...]:
+        """
+        What of a question's statement is marked on screen: what changed from the
+        question before it, so that the difference is seen at a glance; nothing in the
+        first.
+
+        :param question: One of the questions.
+        """
+        number = self.questions.index(question)
+        if number == 0:
+            return tuple([] for _ in question.statement)
+        return question.changed_from(self.questions[number - 1])
 
     def _speed_badge(self, frame: Frame) -> Frame:
         """

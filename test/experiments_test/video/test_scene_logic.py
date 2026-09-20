@@ -6,7 +6,7 @@ how a film's speed-up sets a scene's length, and what a framing cuts off a pictu
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import numpy as np
 import pytest
@@ -14,11 +14,14 @@ import pytest
 from experiments.video.cache import SceneCache
 from experiments.video.footage import (
     ACTING_FRAMING,
+    SIDE_BY_SIDE_GAP,
     TABLE_FRAMING,
     CameraFilm,
     ExecutionFootage,
     Framing,
+    SideBySide,
     TimedImage,
+    ViewOfTheRun,
 )
 from experiments.video.perturbations import IdleStretches, RecordingStretch
 from experiments.video.twin import BoxCorners, SupportReading
@@ -147,3 +150,57 @@ def test_the_footage_shows_the_recording_through_its_framing() -> None:
     assert (frame[2:40, frame.shape[1] // 2] == 0).all()
     unframed = ExecutionFootage(StillFilm(picture), speed=1.0, framing=Framing())  # type: ignore[arg-type]
     assert (unframed.picture_at(0.0)[2:40, frame.shape[1] // 2] == 255).all()
+
+
+# %% two cameras side by side
+
+
+@dataclass
+class CountingFilm:
+    """
+    A film whose every picture says which second it was asked for, in its red byte.
+    """
+
+    shape: tuple
+    length: float = 100.0
+    asked: list = field(default_factory=list)
+
+    def image_at(self, seconds: float) -> np.ndarray:
+        self.asked.append(seconds)
+        picture = np.zeros(self.shape, dtype=np.uint8)
+        picture[..., 0] = int(seconds)
+        return picture
+
+
+def test_a_view_reads_its_film_from_where_its_stretch_starts_through_its_framing() -> None:
+    film = CountingFilm((100, 200, 3))
+    view = ViewOfTheRun(film, from_second=15.5, framing=Framing(top=10, bottom=10), caption="by hand")
+    picture = view.image_at(2.0)
+    assert film.asked == [17.5]
+    assert picture.shape == (80, 200, 3) and picture[0, 0, 0] == 17
+
+
+def test_the_views_play_in_step_at_one_speed_beside_each_other_at_one_height() -> None:
+    own = ViewOfTheRun(CountingFilm((90, 160, 3)), from_second=19.5, caption="the robot's own camera")
+    by_hand = ViewOfTheRun(CountingFilm((150, 100, 3)), from_second=4.0, caption="a camera held by hand")
+    scene = SideBySide((own, by_hand), length=28.0, speed=7.0)
+    assert scene.duration == pytest.approx(4.0)
+    left, right = scene.panels
+    assert left.height == pytest.approx(right.height)
+    assert left.right + SIDE_BY_SIDE_GAP == pytest.approx(right.x)
+    assert left.width / left.height == pytest.approx(160 / 90, rel=1e-3)
+    assert right.width / right.height == pytest.approx(100 / 150, rel=1e-3)
+    assert right.right <= scene.resolution.width - SIDE_BY_SIDE_GAP
+    scene.picture_at(2.0)
+    assert own.film.asked[-1] == pytest.approx(19.5 + 14.0)
+    assert by_hand.film.asked[-1] == pytest.approx(4.0 + 14.0)
+
+
+def test_the_side_by_side_keeps_the_subtitle_band_clear_and_states_its_speed() -> None:
+    own = ViewOfTheRun(CountingFilm((90, 160, 3)), from_second=0.0)
+    by_hand = ViewOfTheRun(CountingFilm((90, 160, 3)), from_second=0.0)
+    scene = SideBySide((own, by_hand), length=8.0, speed=4.0, caption="the cube put through the hole")
+    frame = scene.picture_at(0.0)
+    stage = scene.resolution.stage_height
+    assert (frame[int(stage) :, :, :] == 255).all()
+    assert max(panel.bottom for panel in scene.panels) < stage - 60
