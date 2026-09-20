@@ -12,7 +12,7 @@ import numpy as np
 import pytest
 from krrood.entity_query_language.query.query import Query
 from segmind.datastructures.events import MotionEvent, PickUpEvent
-from typing_extensions import List
+from typing_extensions import List, Optional
 
 from experiments.video.canvas import Ink
 from experiments.video.long_term import RememberedPiece, RememberedQuestion
@@ -91,7 +91,7 @@ class StandingTile:
         return np.full((9, 16, 3), self.shade, dtype=np.uint8), False
 
 
-def matrix(questions: List[RememberedQuestion]) -> PerturbationMatrix:
+def matrix(questions: List[RememberedQuestion], asked_from: Optional[float] = None) -> PerturbationMatrix:
     tiles = [
         [
             StandingTile(StandingRun(f"{row}{column}"), StandingFilm(20.0 + row))
@@ -106,6 +106,7 @@ def matrix(questions: List[RememberedQuestion]) -> PerturbationMatrix:
         speed=10.0,
         question_for=4.0,
         settle_for=1.0,
+        asked_from=asked_from,
         resolution=CLOSE_UP,
     )
 
@@ -129,6 +130,17 @@ def test_the_questions_come_after_the_grid_has_settled() -> None:
     assert asked is second and progress == pytest.approx(0.1)
     asked, progress = grid.question_at(100.0)
     assert asked is second and progress == 1.0
+
+
+def test_asked_early_the_questions_come_while_the_recordings_play_to_the_end() -> None:
+    first = RememberedQuestion("first?", (), ("00",), "lit")
+    second = RememberedQuestion("second?", (), (), "lit")
+    grid = matrix([first, second], asked_from=1.5)
+    assert grid.duration == pytest.approx(1.5 + 8.0)
+    assert grid.runs_for == pytest.approx(grid.duration)
+    assert grid.question_at(1.4) is None
+    asked, progress = grid.question_at(3.5)
+    assert asked is first and progress == pytest.approx(0.5)
 
 
 def test_the_tiles_lie_under_the_band_above_the_subtitles() -> None:

@@ -4,11 +4,12 @@ perturbation episodes, and written out within the conference's limits.
 
 Usage:
     python -m experiments.video.icra_video --output <video.mp4> [--paper-id 3889]
-        [--voice af_heart] [--speech-speed 1.05] [--preview]
+        [--voice af_heart] [--speech-speed 1.15] [--subtitles burned-in|soft] [--preview]
 
 The narration is spoken by the Kokoro model on this machine (``--voice`` picks any of
-its voices) and goes into the mp4 with subtitles the viewer can switch off; the same
-subtitles are written next to the mp4 as a SubRip file.
+its voices) and goes into the mp4 with its subtitles burned into the picture; with
+``--subtitles soft`` they go in as a track the viewer can switch off instead, and are
+written next to the mp4 as a SubRip file too.
 
 Needs the results database and the episode artifacts the reproduction package restores
 (``MONTESSORI_SORTING_DATABASE_URI``, ``EPISODE_ARTIFACTS_DIRECTORY``). What takes a
@@ -20,6 +21,7 @@ from __future__ import annotations
 import argparse
 import logging
 from dataclasses import dataclass, field
+from enum import StrEnum
 from functools import cached_property
 from pathlib import Path
 
@@ -42,6 +44,7 @@ from experiments.video.encoding import (
 from experiments.video.figure import (
     FrameworkFigure,
     GraspChartBar,
+    PlanAction,
     RunReadings,
     Slot,
 )
@@ -54,12 +57,15 @@ from experiments.video.grasp import (
 )
 from experiments.video.long_term import RememberedPiece
 from experiments.video.narration import (
+    LEAD,
     KokoroVoice,
     Line,
     NarratedScene,
     Narration,
     Storyboard,
+    Subtitled,
     Voice,
+    starts_of,
 )
 from experiments.video.perception import NarrowingReel, PerceptionNarrowing
 from experiments.video.perturbations import (
@@ -71,7 +77,8 @@ from experiments.video.rules import HoleOnThePicture, HoleRuleTrace, RuleTreeEva
 from experiments.video.script import NarrationLines, VideoScript
 from experiments.video.slides import ClosingSlide, TextSlide, TitleSlide
 from experiments.video.sources import FRAMEWORK_DEMO_EPISODE, RecordedRun
-from experiments.video.stages import FigureOnCanvas, FigureScene, OnCanvas, Spotlight
+from experiments.video.stages import FigureOnCanvas, FigureScene, Magnified, OnCanvas, Spotlight
+from experiments.video.taxonomy import TaxonomySlide
 from experiments.video.timeline import Scene, Timeline
 from experiments.video.twin import TwinPictures, WorkingMemoryCheck
 from experiments.episodes.long_term_memory import LongTermMemory
@@ -111,12 +118,18 @@ class AttributionRun:
 
 
 ATTRIBUTION_RUNS = (
-    AttributionRun("25f5161da5584bac9554b686711a01fe", "the robot sorts the pieces it saw", 40.0),
-    AttributionRun("0a793ded6dd54da7b64171ab78638d38", "the scene stands still; a person pushes the cube", 5.0),
+    AttributionRun("25f5161da5584bac9554b686711a01fe", "the robot sorts the pieces it saw", 50.0),
+    AttributionRun("0a793ded6dd54da7b64171ab78638d38", "the scene stands still; a person pushes the cube", 6.0),
 )
 """
 The two trials the paper sets against each other: the robot moving the pieces itself,
 and a person moving one while the robot stands idle.
+"""
+
+ATTRIBUTION_QUESTION_FOR = 5.0
+"""
+Seconds each question about who moved what takes: long enough to read the query, see
+the asking ruled onto the timelines, and the events lit.
 """
 
 DISSOLVE = 0.4
@@ -124,31 +137,57 @@ DISSOLVE = 0.4
 Seconds each scene dissolves into the next.
 """
 
-NARRATED_BY: Dict[Slot, Callable[[NarrationLines], Line]] = {
-    Slot.PERCEPTION: lambda lines: lines.perception,
-    Slot.SIMULATION: lambda lines: lines.working_memory,
-    Slot.PROBABILISTIC: lambda lines: lines.probabilistic,
-    Slot.RULES: lambda lines: lines.rules,
+PAUSE = 0.5
+"""
+Seconds between two lines said over one scene.
+"""
+
+ASKED_BY: Dict[Slot, Callable[[NarrationLines], Line]] = {
+    Slot.PERCEPTION: lambda lines: lines.perception_query,
+    Slot.SIMULATION: lambda lines: lines.working_memory_query,
+    Slot.PROBABILISTIC: lambda lines: lines.probabilistic_query,
+    Slot.RULES: lambda lines: lines.rules_query,
 }
 """
-The line said over each backend's close-up.
+The line said over each slot's sub-query, magnified out of the plan.
 """
 
-PERCEPTION_LINE_DELAY = 16.0
+NARRATED_BY: Dict[Slot, Callable[[NarrationLines], Tuple[Line, ...]]] = {
+    Slot.PERCEPTION: lambda lines: lines.perception_views,
+    Slot.SIMULATION: lambda lines: (lines.working_memory,),
+    Slot.PROBABILISTIC: lambda lines: (lines.probabilistic,),
+    Slot.RULES: lambda lines: (lines.rules,),
+}
 """
-Seconds into the perception close-up its line starts: the line about choosing backends
-is still being said over its beginning.
-"""
-
-GRID_SPEED = 18.0
-"""
-How many recorded seconds pass per second played in the perturbation grid: the longest
-of the six recordings is over in under half a minute.
+The lines said over each backend's close-up.
 """
 
-GRID_QUESTION_FOR = 6.0
+GRID_SPEED = 6.0
+"""
+How many recorded seconds pass per second played in the perturbation grid: slow enough
+for the perturbations to be seen; the recordings need not end before the questions.
+"""
+
+GRID_QUESTION_FOR = 5.0
 """
 Seconds each question put to long-term memory over the grid takes.
+"""
+
+QUESTIONS_INTO_THE_LINE = 0.55
+"""
+How far into the line about long-term memory its questions are reached: the first
+question comes up on the grid then.
+"""
+
+SUB_QUERY_MARGIN = 0.5
+"""
+Seconds between a sub-query's line ending and the first line over its close-up: the
+sub-query's line runs on while the close-up grows out over it.
+"""
+
+PLAN_CAPTION = "The plan states what it wants and leaves four things open, each answered by a backend."
+"""
+What is written under the figure while the plan is read.
 """
 
 GRASP_PRIOR_SHARE = 0.55
@@ -225,6 +264,23 @@ What is written under the figure while each backend answers.
 """
 
 
+class Subtitling(StrEnum):
+    """
+    How the subtitles go into the video.
+    """
+
+    BURNED_IN = "burned-in"
+    """
+    Drawn into the picture, in the band every scene keeps clear: part of the video.
+    """
+
+    SOFT = "soft"
+    """
+    A text track the viewer can switch off, with the same cues as a SubRip file next to
+    the mp4 for players that take one.
+    """
+
+
 # %% the video
 
 
@@ -263,6 +319,11 @@ class VideoAssembly:
     lines: NarrationLines = field(default_factory=NarrationLines)
     """
     What the narration says.
+    """
+
+    subtitling: Subtitling = Subtitling.BURNED_IN
+    """
+    How the subtitles go in.
     """
 
     @cached_property
@@ -329,52 +390,92 @@ class VideoAssembly:
         figure = FrameworkFigure(stage=stage, focus=focus, readings=self.readings, panel_titles=titles)
         return FigureOnCanvas(figure, caption=caption)
 
+    def starts_of(self, lines: Sequence[Line]) -> List[float]:
+        """
+        Seconds after the first of some lines starts that each starts, said in turn.
+        """
+        return starts_of(self.voice, lines, PAUSE)
+
     def work_of(self, slot: Slot) -> Scene:
         """
         The close-up that plays while a backend answers its slot.
         """
         if slot is Slot.PERCEPTION:
             reel = NarrowingReel(self.demo, frame_indices=list(range(IDLE_FRAMES_READ)))
-            scene = PerceptionNarrowing(reel, tile_every=3.5, run_for=10.5)
+            # each view comes up as its line starts
+            scene = PerceptionNarrowing(reel, appears_at=tuple(self.starts_of(self.lines.perception_views)), run_for=3.5)
             if self.preview:
-                scene.tile_every, scene.run_for = 1.0, 2.0
+                scene.appears_at, scene.run_for = (0.0, 1.0, 2.0, 3.0), 2.0
             return scene
         if slot is Slot.SIMULATION:
-            scene = WorkingMemoryCheck(self.twin, boxes_for=4.0)
+            scene = WorkingMemoryCheck(self.twin, flight_from=3.0, flight_for=4.0, boxes_for=3.5)
             if self.preview:
                 scene.flight_for, scene.boxes_for = 2.0, 4.0
             return scene
         if slot is Slot.PROBABILISTIC:
-            scene = GraspDistribution(self.sampling, GraspOptionsOnThePicture(self.demo, self.twin.cube_at + [0.0, 0.0, 0.01]), sampling_for=5.5)
+            scene = GraspDistribution(
+                self.sampling,
+                GraspOptionsOnThePicture(self.demo, self.twin.cube_at + [0.0, 0.0, 0.01]),
+                statement_for=1.5,
+                sampling_for=4.5,
+                answer_for=3.5,
+            )
             if self.preview:
                 scene.sampling_for, scene.answer_for = 3.0, 2.0
             return scene
-        scene = RuleTreeEvaluation(self.rule_trace, HoleOnThePicture(self.demo), answer_for=6.0)
+        scene = RuleTreeEvaluation(self.rule_trace, HoleOnThePicture(self.demo), tree_for=2.0, answer_for=4.5)
         if self.preview:
             scene.answer_for = 2.0
         return scene
 
+    def plan_readings(self) -> List[NarratedScene]:
+        """
+        The plan read action by action, each magnified out of the figure at one scale:
+        the pick-up grows out, the insertion follows it and shrinks back.
+        """
+        shown = self.figure(0, None, PLAN_CAPTION)
+        actions = shown.figure.geometry.actions
+        scale = min(Magnified(shown, box, Ink.TEXT.rgb).scale for box in actions.values())
+        pick_up = Magnified(shown, actions[PlanAction.PICK_UP], Ink.TEXT.rgb, held_for=3.0, shrink=0.0, pixels_per_centimetre=scale)
+        insertion = Magnified(shown, actions[PlanAction.INSERTION], Ink.TEXT.rgb, held_for=3.0, grow=0.0, pixels_per_centimetre=scale)
+        return [
+            NarratedScene(pick_up, (self.lines.plan_pick_up,)),
+            NarratedScene(insertion, (self.lines.plan_insertion,)),
+        ]
+
     def backend_scenes(self, slot: Slot) -> List[NarratedScene]:
         """
-        The figure with the slot ringed, the backend's close-up, and the figure with the
-        slot answered; the ring carries the line about choosing backends the first time,
-        the close-up the line about its backend.
+        The slot's sub-query magnified out of the plan with the slot ringed, the
+        backend's close-up, and the figure with the slot answered; the sub-query
+        carries the line about what is asked, the close-up the lines about how the
+        backend answers it.
         """
         before = self.figure(slot.stage - 1, slot, CAPTIONS[slot])
         after = self.figure(slot.stage, None, CAPTIONS[slot])
+        close_up = Spotlight(before, after, slot, self.work_of(slot), HUES[slot].rgb, title=BACKENDS[slot].tab)
+        asked = ASKED_BY[slot](self.lines)
+        sub_query = Magnified(before, before.figure.geometry.slots[slot], HUES[slot].rgb, shrink=0.3)
+        sub_query.held_for = self.sub_query_hold(asked, sub_query, close_up)
         return [
-            NarratedScene(
-                FigureScene(before, held_for=1.5 if slot is Slot.PERCEPTION else 1.2),
-                (self.lines.backend_choice,) if slot is Slot.PERCEPTION else (),
-                runs_on=True,
-            ),
-            NarratedScene(
-                Spotlight(before, after, slot, self.work_of(slot), HUES[slot].rgb, title=BACKENDS[slot].tab),
-                (NARRATED_BY[slot](self.lines),),
-                delay=PERCEPTION_LINE_DELAY if slot is Slot.PERCEPTION else 0.0,
-            ),
-            NarratedScene(FigureScene(after, held_for=0.8)),
+            NarratedScene(sub_query, (asked,), runs_on=True),
+            # the lines over the close-up start as its work does, once it has grown out
+            NarratedScene(close_up, NARRATED_BY[slot](self.lines), delay=max(close_up.grow - LEAD, 0.0)),
+            NarratedScene(FigureScene(after, held_for=0.6)),
         ]
+
+    def sub_query_hold(self, asked: Line, sub_query: Magnified, close_up: Spotlight) -> float:
+        """
+        Seconds the magnified sub-query is held so that its line, running on while the
+        close-up grows out over it, ends a margin before the close-up's own lines start.
+
+        :param asked: The line said over the sub-query.
+        :param sub_query: The sub-query magnified.
+        :param close_up: The close-up that follows it.
+        """
+        said = self.voice.speaks(asked.said).duration
+        ends = LEAD + said + SUB_QUERY_MARGIN
+        # the close-up's lines start its grow after it starts, which is a dissolve before the sub-query ends
+        return max(ends + DISSOLVE - close_up.grow - sub_query.grow - sub_query.shrink, 1.5)
 
     def perturbation_matrix(self) -> PerturbationMatrix:
         """
@@ -389,20 +490,41 @@ class VideoAssembly:
             for row in PERTURBATION_EPISODES
         ]
         remembered = RememberedPiece(LongTermMemory(self.demo.database)).both()
+        lines = (self.lines.episodic_memory, self.lines.long_term_memory)
+        # the first question comes up as the line reaches its questions
+        asked_from = LEAD + self.grid_lines_delay() + self.starts_of(lines)[1] + QUESTIONS_INTO_THE_LINE * self.voice.speaks(lines[1].said).duration
         return PerturbationMatrix(
             tiles,
             GridLabels(),
             questions=remembered,
             speed=GRID_SPEED * (4.0 if self.preview else 1.0),
             question_for=2.0 if self.preview else GRID_QUESTION_FOR,
+            asked_from=asked_from,
         )
 
-    def attribution_scenes(self) -> List[Scene]:
+    def perturbations_slide(self) -> TextSlide:
+        return TextSlide(
+            ["Perturbation experiments & Long-term memory", "Six episodes on the robot: the scene standing still or the robot sorting,",
+             "unperturbed, with a person shoving a piece, or moving the board."],
+            held_for=3.5,
+        )
+
+    def grid_lines_delay(self) -> float:
         """
-        The questions about who moved what, answered in each of the two trials.
+        Seconds the grid's lines wait, beyond the lead, for the slide's line before it
+        to end: that line runs on over the grid's beginning.
         """
-        scenes: List[Scene] = []
-        for run in ATTRIBUTION_RUNS:
+        said = self.voice.speaks(self.lines.perturbations.said).duration
+        return max(said + PAUSE - (self.perturbations_slide().held_for - DISSOLVE), 0.0)
+
+    def attribution_scenes(self) -> List[NarratedScene]:
+        """
+        The questions about who moved what, answered in each of the two trials; each
+        trial's line starts as its questions do.
+        """
+        scenes: List[NarratedScene] = []
+        lines = (self.lines.attribution_sorting, self.lines.attribution_pushed)
+        for run, line in zip(ATTRIBUTION_RUNS, lines):
             timelines = TrialTimelines(RecordedRun(run.episode))
             scene = AttributionScene(
                 timelines,
@@ -410,9 +532,9 @@ class VideoAssembly:
                 MovedQuestions(timelines).both(),
                 scenario=run.scenario,
                 speed=run.speed * (3.0 if self.preview else 1.0),
-                question_for=2.0 if self.preview else 3.0,
+                question_for=2.0 if self.preview else ATTRIBUTION_QUESTION_FOR,
             )
-            scenes.append(OnCanvas(scene))
+            scenes.append(NarratedScene(OnCanvas(scene), (line,), delay=max(scene.watching_for - LEAD, 0.0)))
         return scenes
 
     def storyboard(self) -> Storyboard:
@@ -420,13 +542,15 @@ class VideoAssembly:
         Every scene, in order, with the line that starts with it.
         """
         lines = self.lines
+        introduction = (lines.framework, lines.taxonomy, lines.backend_choice)
         narrated: List[NarratedScene] = [
-            NarratedScene(TitleSlide(self.script, held_for=5.5), (lines.title, lines.framework)),
+            NarratedScene(TitleSlide(self.script, held_for=5.5), (lines.title,)),
             NarratedScene(
-                FigureScene(self.figure(0, None, "The plan states what it wants and leaves four things open, each answered by a backend."), held_for=4.0),
-                (lines.plan,),
+                TaxonomySlide(steps_at=tuple(LEAD + start for start in self.starts_of(introduction)), held_for=8.0),
+                introduction,
             ),
         ]
+        narrated.extend(self.plan_readings())
         for slot in Slot:
             narrated.extend(self.backend_scenes(slot))
         narrated.append(
@@ -442,7 +566,7 @@ class VideoAssembly:
                     ExecutionFootage(
                         CameraFilm(self.demo),
                         from_second=EXECUTION_FROM_SECOND,
-                        speed=16.0 if self.preview else 8.0,
+                        speed=16.0 if self.preview else 10.0,
                         caption="the robot's own camera: the cube picked up and put through the square hole",
                     )
                 )
@@ -451,23 +575,22 @@ class VideoAssembly:
         narrated.append(
             NarratedScene(
                 TextSlide(["Temporal & Attribution Queries", "The event segmentation reports what happened to each object;",
-                           "the plan history records which action ran when."], held_for=3.5),
+                           "the plan history records which action ran when."], held_for=4.0),
                 (lines.attribution,),
                 runs_on=True,
             )
         )
-        narrated.extend(NarratedScene(scene) for scene in self.attribution_scenes())
+        narrated.extend(self.attribution_scenes())
+        narrated.append(NarratedScene(self.perturbations_slide(), (lines.perturbations,), runs_on=True))
         narrated.append(
             NarratedScene(
-                TextSlide(["Perturbation experiments & Long-term memory", "Six episodes on the robot: the scene standing still or the robot sorting,",
-                           "unperturbed, with a person shoving a piece, or moving the board."], held_for=3.5),
-                (lines.perturbations,),
-                runs_on=True,
+                OnCanvas(self.perturbation_matrix()),
+                (lines.episodic_memory, lines.long_term_memory),
+                delay=self.grid_lines_delay(),
             )
         )
-        narrated.append(NarratedScene(OnCanvas(self.perturbation_matrix())))
         narrated.append(NarratedScene(ClosingSlide(self.script, held_for=2.5), (lines.closing,)))
-        return Storyboard(narrated)
+        return Storyboard(narrated, pause=PAUSE)
 
     def scenes(self) -> List[Scene]:
         """
@@ -500,16 +623,18 @@ class VideoAssembly:
         timeline, narration = self.narrated_timeline()
         logger.info("%.1f s of video in %d scenes", timeline.duration, len(timeline.scenes))
         budget = int(limits.largest * min(timeline.duration / limits.longest, 1.0)) - bytes_for_sound(timeline.duration)
+        burned_in = self.subtitling is Subtitling.BURNED_IN
+        picture = Subtitled.over(timeline, narration.cues()) if burned_in else timeline
         silent = H264Encoder(size_budget=budget, preset="fast" if self.preview else "slow").encode(
-            timeline, path.with_name(path.stem + "_silent.mp4")
+            picture, path.with_name(path.stem + "_silent.mp4")
         )
         soundtrack = narration.soundtrack(runs_for=timeline.duration).written_to(path.with_suffix(".wav"))
-        subtitles = narration.written_to(path.with_suffix(".srt"))
-        video = Muxer().joined(silent, soundtrack, subtitles, path)
+        subtitles = None if burned_in else narration.written_to(path.with_suffix(".srt"))
+        video = Muxer().joined(silent, soundtrack, path, subtitles=subtitles)
         silent.path.unlink()
         soundtrack.unlink()
         limits.check(video)
-        logger.info("%s: %.1f s, %d bytes; subtitles in %s", video.path, video.duration, video.size, subtitles)
+        logger.info("%s: %.1f s, %d bytes; subtitles %s", video.path, video.duration, video.size, "burned in" if burned_in else f"in {subtitles}")
         return video
 
 
@@ -523,6 +648,7 @@ def parse_arguments(argument_list: Optional[Sequence[str]] = None) -> argparse.N
     parser.add_argument("--voice", default=KokoroVoice.voice, help="which of the speech model's voices narrates")
     parser.add_argument("--speech-speed", type=float, default=KokoroVoice.speed, help="how fast it speaks, 1 being its own pace")
     parser.add_argument("--preview", action="store_true", help="render a short rough version for looking at")
+    parser.add_argument("--subtitles", type=Subtitling, choices=list(Subtitling), default=Subtitling.BURNED_IN, help="burned into the picture, or a track the viewer can switch off")
     return parser.parse_args(argument_list)
 
 
@@ -530,7 +656,7 @@ def main(argument_list: Optional[Sequence[str]] = None) -> None:
     arguments = parse_arguments(argument_list)
     script = VideoScript() if arguments.paper_id is None else VideoScript(paper_id=arguments.paper_id)
     voice = KokoroVoice(voice=arguments.voice, speed=arguments.speech_speed)
-    VideoAssembly(script=script, preview=arguments.preview, voice=voice).written_to(arguments.output)
+    VideoAssembly(script=script, preview=arguments.preview, voice=voice, subtitling=arguments.subtitles).written_to(arguments.output)
 
 
 if __name__ == "__main__":

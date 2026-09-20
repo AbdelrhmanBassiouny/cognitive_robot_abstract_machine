@@ -5,13 +5,14 @@ figure already uses, so every scene of the video looks like one piece with the p
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+import re
+from dataclasses import dataclass, field, replace
 from enum import Enum
 
 import cv2
 import numpy as np
 from PIL import Image, ImageDraw
-from typing_extensions import Optional, Sequence, Tuple
+from typing_extensions import List, Optional, Sequence, Tuple
 
 from experiments.paper.lettering import Face, font
 from experiments.video.timeline import Frame, Resolution
@@ -237,6 +238,29 @@ def filled(frame: Frame, around: Area, color: Rgb) -> Frame:
     return result
 
 
+def lined(frame: Frame, start: Tuple[float, float], end: Tuple[float, float], color: Rgb, thickness: int = 2) -> Frame:
+    """
+    A copy of the frame with a straight line drawn on it.
+    """
+    result = frame.copy()
+    cv2.line(result, _point(start), _point(end), color, thickness, cv2.LINE_AA)
+    return result
+
+
+def arrowed(frame: Frame, start: Tuple[float, float], end: Tuple[float, float], color: Rgb, thickness: int = 2) -> Frame:
+    """
+    A copy of the frame with an arrow drawn on it, its head at the end.
+    """
+    result = frame.copy()
+    length = max(((end[0] - start[0]) ** 2 + (end[1] - start[1]) ** 2) ** 0.5, 1.0)
+    cv2.arrowedLine(result, _point(start), _point(end), color, thickness, cv2.LINE_AA, tipLength=min(12.0 / length, 0.5))
+    return result
+
+
+def _point(at: Tuple[float, float]) -> Tuple[int, int]:
+    return int(round(at[0])), int(round(at[1]))
+
+
 # %% writing
 
 
@@ -327,3 +351,102 @@ class Typesetting:
         if line:
             lines.append(line)
         return "\n".join(lines)
+
+
+# %% writing code
+
+
+class Token(Enum):
+    """
+    The kinds of piece a line of Python is coloured by.
+    """
+
+    CALL = "call"
+    CLASS = "class"
+    STRING = "string"
+    NUMBER = "number"
+    NAME = "name"
+    PUNCTUATION = "punctuation"
+
+
+CODE_INK: dict[Token, Rgb] = {
+    Token.CALL: (0x1D, 0x4E, 0xD8),
+    Token.CLASS: (0x6D, 0x28, 0xD9),
+    Token.STRING: (0x15, 0x80, 0x3D),
+    Token.NUMBER: (0xB4, 0x53, 0x09),
+    Token.NAME: Ink.TEXT.rgb,
+    Token.PUNCTUATION: Ink.MUTED.rgb,
+}
+"""
+What each kind of piece is written in: the figure's own hues, as an editor would colour
+calls, classes, strings and numbers.
+"""
+
+CODE_PIECE = re.compile(r"\"[^\"]*\"|'[^']*'|\d+(?:\.\d+)?|[A-Za-z_]\w*|\s+|.")
+"""
+How a line of code comes apart: a string, a number, a name, a run of spaces, or one
+other character at a time.
+"""
+
+
+def tokenised(line: str) -> List[Tuple[str, Token]]:
+    """
+    A line of Python cut into pieces, each with the kind it is coloured by: a name is a
+    class when it is capitalised, a call when a parenthesis follows it.
+
+    :param line: The line.
+    """
+    pieces = CODE_PIECE.findall(line)
+    kinds: List[Tuple[str, Token]] = []
+    for index, piece in enumerate(pieces):
+        following = next((later for later in pieces[index + 1 :] if not later.isspace()), "")
+        if piece[0] in "\"'":
+            kind = Token.STRING
+        elif piece[0].isdigit():
+            kind = Token.NUMBER
+        elif piece[0].isalpha() or piece[0] == "_":
+            kind = Token.CLASS if piece[0].isupper() else Token.CALL if following == "(" else Token.NAME
+        else:
+            kind = Token.PUNCTUATION
+        kinds.append((piece, kind))
+    return kinds
+
+
+@dataclass(frozen=True)
+class CodeTypesetting:
+    """
+    How a line of Python is written on a frame: in the mono face, coloured piece by
+    piece as an editor would.
+    """
+
+    size: int = 22
+    """
+    The height of the letters, in pixels.
+    """
+
+    inks: dict[Token, Rgb] = field(default_factory=lambda: dict(CODE_INK))
+    """
+    What each kind of piece is written in.
+    """
+
+    @property
+    def face(self) -> Typesetting:
+        return Typesetting(size=self.size, face=Face.MONO)
+
+    def written(self, frame: Frame, line: str, at: Tuple[float, float]) -> Frame:
+        """
+        A copy of the frame with the line written on it, from its left middle.
+
+        :param frame: The frame written on.
+        :param line: One line of code.
+        :param at: Where its left middle goes, in pixels.
+        """
+        x, y = at
+        for piece, kind in tokenised(line):
+            if not piece.isspace():
+                frame = replace(self.face, color=self.inks[kind]).written(frame, piece, (x, y), Anchor.LEFT_MIDDLE)
+            x += self.face.width_of(piece)
+        return frame
+
+    def width_of(self, line: str) -> float:
+        return self.face.width_of(line)

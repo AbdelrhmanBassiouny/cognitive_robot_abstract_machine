@@ -34,6 +34,7 @@ from experiments.questions.working_memory import (
 from experiments.video.canvas import (
     Anchor,
     Area,
+    CodeTypesetting,
     Ink,
     Rgb,
     Typesetting,
@@ -685,9 +686,9 @@ class AttributionScene(Scene):
         frame = Typesetting(size=30, face=Face.BOLD).written(
             frame, question.english, (card.x + 30, card.y + 48), Anchor.LEFT_MIDDLE
         )
-        code = Typesetting(size=21, face=Face.MONO, color=Ink.MUTED.rgb)
+        code = CodeTypesetting(size=21)
         for number, line in enumerate(question.statement):
-            frame = code.written(frame, line, (card.x + 30, card.y + 100 + number * 30), Anchor.LEFT_MIDDLE)
+            frame = code.written(frame, line, (card.x + 30, card.y + 100 + number * 30))
         ruled = eased((progress - 0.12) / 0.15)
         lit = eased((progress - 0.35) / 0.2)
         answered = eased((progress - 0.6) / 0.15)

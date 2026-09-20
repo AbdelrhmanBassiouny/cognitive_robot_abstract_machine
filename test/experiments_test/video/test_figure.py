@@ -8,12 +8,13 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from experiments.video.stages import TAB_HEIGHT, FigureOnCanvas, Spotlight
+from experiments.video.stages import MAGNIFIED_SHARE, TAB_HEIGHT, FigureOnCanvas, Magnified, Spotlight
 from experiments.video.timeline import Resolution, Still
 
 from experiments.video.figure import (
     FrameworkFigure,
     GraspChartBar,
+    PlanAction,
     RunReadings,
     Slot,
 )
@@ -88,6 +89,28 @@ def test_the_geometry_places_the_panels_in_one_column_between_the_plans() -> Non
     assert geometry.height < geometry.width
 
 
+def test_the_geometry_boxes_every_open_slot_inside_the_plan_in_the_choices_order() -> None:
+    geometry = FrameworkFigure(stage=0).geometry
+    plan = geometry.plan
+    for slot in Slot:
+        box = geometry.slots[slot]
+        assert plan.x <= box.x and box.x + box.width <= plan.x + plan.width
+        assert plan.y <= box.y and box.y + box.height <= plan.y + plan.height
+    tops = [geometry.slots[slot].y for slot in Slot]
+    assert tops == sorted(tops)
+    nested, outer = geometry.slots[Slot.SIMULATION], geometry.slots[Slot.PERCEPTION]
+    assert outer.y < nested.y and nested.y + nested.height <= outer.y + outer.height
+
+
+def test_the_geometry_cuts_the_plan_into_its_two_actions_one_over_the_other() -> None:
+    geometry = FrameworkFigure(stage=0).geometry
+    pick_up, insertion = geometry.actions[PlanAction.PICK_UP], geometry.actions[PlanAction.INSERTION]
+    assert pick_up.y + pick_up.height == pytest.approx(insertion.y)
+    assert pick_up.width == insertion.width == geometry.plan.width
+    assert geometry.slots[Slot.PROBABILISTIC].y + geometry.slots[Slot.PROBABILISTIC].height < insertion.y
+    assert insertion.y < geometry.slots[Slot.RULES].y
+
+
 # %% the close-up over the figure
 
 
@@ -102,3 +125,42 @@ def test_the_close_up_carries_the_backends_name_on_a_tab_once_grown() -> None:
     assert tuple(named.frame_at(1.0)[on_tab]) == hue
     assert tuple(bare.frame_at(1.0)[on_tab]) != hue
     assert tuple(named.frame_at(0.0)[on_tab]) != hue
+
+
+# %% a stretch of the figure magnified
+
+
+def test_a_magnified_stretch_grows_from_its_place_to_the_screens_share_and_back() -> None:
+    shown = FigureOnCanvas(FrameworkFigure(stage=0), resolution=Resolution(width=640, height=360))
+    box = shown.figure.geometry.slots[Slot.RULES]
+    magnified = Magnified(shown, box, hue=(0x6D, 0x28, 0xD9), held_for=1.0, grow=0.5, shrink=0.5)
+    assert magnified.duration == pytest.approx(2.0)
+    assert magnified.grown_at(0.0) == 0.0 and magnified.grown_at(0.5) == 1.0
+    assert magnified.grown_at(1.5) == 1.0 and magnified.grown_at(2.0) == pytest.approx(0.0)
+    window = magnified.window
+    assert window.aspect == pytest.approx(box.width / box.height, rel=1e-3)
+    assert magnified.scale == pytest.approx(shown.pixels_per_centimetre * magnified.magnification_up_to)
+    uncapped = Magnified(shown, box, hue=(0, 0, 0), magnification_up_to=100.0).window
+    assert uncapped.width == pytest.approx(640 * MAGNIFIED_SHARE) or uncapped.height == pytest.approx(shown.resolution.stage_height * MAGNIFIED_SHARE)
+    assert uncapped.centre == pytest.approx(window.centre)
+
+
+def test_a_stated_scale_sets_the_magnified_window_and_the_picture_is_cut_at_it() -> None:
+    shown = FigureOnCanvas(FrameworkFigure(stage=0), resolution=Resolution(width=640, height=360))
+    box = shown.figure.geometry.actions[PlanAction.INSERTION]
+    magnified = Magnified(shown, box, hue=(0, 0, 0), pixels_per_centimetre=50.0)
+    assert magnified.window.width == pytest.approx(box.width * 50.0)
+    assert magnified.window.centre[0] == pytest.approx(320.0)
+    height, width = magnified.picture.shape[:2]
+    assert width == pytest.approx(box.width * 50.0, abs=1.5)
+    assert height == pytest.approx(box.height * 50.0, abs=1.5)
+
+
+def test_a_magnified_stretch_without_growing_starts_fully_grown_and_framed_in_its_hue() -> None:
+    shown = FigureOnCanvas(FrameworkFigure(stage=0), resolution=Resolution(width=640, height=360))
+    hue = (0x0F, 0x76, 0x6E)
+    magnified = Magnified(shown, shown.figure.geometry.slots[Slot.PERCEPTION], hue=hue, held_for=1.0, grow=0.0, shrink=0.0)
+    assert magnified.duration == pytest.approx(1.0)
+    window = magnified.window
+    on_frame = (int(window.y - 2), int(window.centre[0]))
+    assert tuple(magnified.frame_at(0.0)[on_frame]) == hue

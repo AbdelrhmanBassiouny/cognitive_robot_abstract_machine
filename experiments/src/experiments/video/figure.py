@@ -66,6 +66,15 @@ class Slot(StrEnum):
         return list(Slot).index(self) + 1
 
 
+class PlanAction(StrEnum):
+    """
+    The two actions the plan sequences, in their order.
+    """
+
+    PICK_UP = "pick_up"
+    INSERTION = "insertion"
+
+
 @dataclass(frozen=True)
 class GraspChartBar:
     """
@@ -210,6 +219,16 @@ class FigureGeometry:
     Each backend's panel, by the slot it answers.
     """
 
+    slots: Dict[Slot, FigureBox]
+    """
+    Each open slot of the plan: the sub-query its backend answers, as the plan boxes it.
+    """
+
+    actions: Dict[PlanAction, FigureBox]
+    """
+    The stretch of the plan each of its actions takes, from its first line to its last.
+    """
+
     @classmethod
     def from_query(cls, given: Dict[str, object]) -> FigureGeometry:
         """
@@ -221,6 +240,8 @@ class FigureGeometry:
             plan=FigureBox.from_query(given["plan"]),
             resolved=FigureBox.from_query(given["resolved"]),
             panels={slot: FigureBox.from_query(given["panels"][slot.value]) for slot in Slot},
+            slots={slot: FigureBox.from_query(given["slots"][slot.value]) for slot in Slot},
+            actions={action: FigureBox.from_query(given["actions"][action.value]) for action in PlanAction},
         )
 
 

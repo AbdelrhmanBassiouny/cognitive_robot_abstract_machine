@@ -8,7 +8,12 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
+from experiments.paper.lettering import Face
 from experiments.video.canvas import (
+    CODE_INK,
+    CodeTypesetting,
+    Token,
+    tokenised,
     Anchor,
     Area,
     Typesetting,
@@ -90,3 +95,26 @@ def test_wrapping_breaks_at_spaces_to_fit_the_width() -> None:
     assert wrapped.count("\n") >= 1
     assert all(setting.width_of(line) <= wide / 2 for line in wrapped.split("\n"))
     assert wrapped.replace("\n", " ") == "one two three four"
+
+
+# %% code, coloured
+
+
+def test_a_line_of_code_comes_apart_into_calls_classes_names_strings_and_numbers() -> None:
+    pieces = tokenised('an(entity(trial.episode).where(contains(name, "cube"), 3))')
+    kinds = {piece: kind for piece, kind in pieces}
+    assert kinds["an"] is Token.CALL and kinds["where"] is Token.CALL
+    assert kinds["trial"] is Token.NAME and kinds["episode"] is Token.NAME
+    assert kinds['"cube"'] is Token.STRING and kinds["3"] is Token.NUMBER
+    assert kinds["("] is Token.PUNCTUATION
+    assert tokenised("a(MotionEvent)")[2][1] is Token.CLASS
+    assert "".join(piece for piece, _ in pieces) == 'an(entity(trial.episode).where(contains(name, "cube"), 3))'
+
+
+def test_coloured_code_is_as_wide_as_the_same_line_in_one_ink_and_carries_its_inks() -> None:
+    line = 'a(MotionEvent)("x")'
+    code = CodeTypesetting(size=24)
+    assert code.width_of(line) == Typesetting(size=24, face=Face.MONO).width_of(line)
+    frame = code.written(np.full((60, 400, 3), 255, dtype=np.uint8), line, (10, 30))
+    inks = {tuple(pixel) for pixel in frame.reshape(-1, 3)}
+    assert CODE_INK[Token.CLASS] in inks and CODE_INK[Token.STRING] in inks and CODE_INK[Token.CALL] in inks

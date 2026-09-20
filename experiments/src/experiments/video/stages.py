@@ -27,7 +27,7 @@ from experiments.video.canvas import (
     fitted,
     pasted,
 )
-from experiments.video.figure import FrameworkFigure, Slot
+from experiments.video.figure import FigureBox, FrameworkFigure, Slot
 from experiments.video.timeline import SUBTITLE_BAND_SHARE, Frame, Resolution, Scene, eased
 
 CAPTION_HEIGHT = 64
@@ -114,20 +114,47 @@ class FigureOnCanvas:
             )
         return frame
 
-    def panel(self, slot: Slot) -> Area:
+    @property
+    def pixels_per_centimetre(self) -> float:
         """
-        Where a backend's panel lies on the canvas.
+        The scale the figure is placed at.
+        """
+        return self.placement.width / self.figure.geometry.width
 
-        :param slot: The slot the backend answers.
+    def area_of(self, box: FigureBox) -> Area:
         """
-        box = self.figure.geometry.panels[slot]
-        scale = self.placement.width / self.figure.geometry.width
+        Where a stretch of the figure lies on the canvas.
+
+        :param box: The stretch, in the figure's centimetres.
+        """
+        scale = self.pixels_per_centimetre
         return Area(
             self.placement.x + box.x * scale,
             self.placement.y + box.y * scale,
             box.width * scale,
             box.height * scale,
         )
+
+    def panel(self, slot: Slot) -> Area:
+        """
+        Where a backend's panel lies on the canvas.
+
+        :param slot: The slot the backend answers.
+        """
+        return self.area_of(self.figure.geometry.panels[slot])
+
+    def cut_out(self, box: FigureBox, pixels_per_centimetre: float) -> Frame:
+        """
+        A stretch of the figure compiled crisp at a larger scale.
+
+        :param box: The stretch, in the figure's centimetres.
+        :param pixels_per_centimetre: The scale it is compiled at.
+        """
+        whole = self.figure.drawn(width=int(round(self.figure.geometry.width * pixels_per_centimetre)))
+        scale = whole.shape[1] / self.figure.geometry.width
+        left, top = int(round(box.x * scale)), int(round(box.y * scale))
+        right, bottom = int(round((box.x + box.width) * scale)), int(round((box.y + box.height) * scale))
+        return whole[top:bottom, left:right]
 
 
 @dataclass
@@ -266,6 +293,116 @@ class Spotlight(Scene):
         tab = Area(where.x - 4, where.y - 4 - TAB_HEIGHT, width, TAB_HEIGHT)
         frame = filled(frame, tab, self.hue)
         return lettering.written(frame, self.title, (tab.x + 18, tab.centre[1]), Anchor.LEFT_MIDDLE)
+
+
+# %% a stretch of the figure magnified
+
+
+MAGNIFIED_SHARE = 0.8
+"""
+How much of the screen's width and height a magnified stretch of the figure may take.
+"""
+
+
+@dataclass
+class Magnified(Scene):
+    """
+    A stretch of the figure grown out of its place to where it can be read, held, and
+    shrunk back; the rest of the figure dims behind it.
+    """
+
+    shown: FigureOnCanvas
+    """
+    The figure at its stage.
+    """
+
+    box: FigureBox
+    """
+    The stretch magnified, in the figure's centimetres.
+    """
+
+    hue: Rgb
+    """
+    The colour the magnified stretch is framed in.
+    """
+
+    held_for: float = 3.0
+    """
+    Seconds the stretch is held fully grown.
+    """
+
+    grow: float = 0.8
+    """
+    Seconds it takes to grow out; none to start fully grown.
+    """
+
+    shrink: float = 0.6
+    """
+    Seconds it takes to shrink back; none to end fully grown.
+    """
+
+    magnification_up_to: float = 4.0
+    """
+    The most the stretch grows by, over the scale the figure is placed at, where the
+    screen's share would allow more.
+    """
+
+    pixels_per_centimetre: Optional[float] = None
+    """
+    The scale the stretch is read at, or None for as large as the screen's share and
+    the magnification allow; stated so that stretches read one after the other read at
+    one scale.
+    """
+
+    @property
+    def duration(self) -> float:
+        return self.grow + self.held_for + self.shrink
+
+    @cached_property
+    def window(self) -> Area:
+        """
+        Where the stretch lies fully grown: at its scale, centred on the stage.
+        """
+        resolution = self.shown.resolution
+        room = Area(
+            resolution.width * (1 - MAGNIFIED_SHARE) / 2,
+            resolution.stage_height * (1 - MAGNIFIED_SHARE) / 2,
+            resolution.width * MAGNIFIED_SHARE,
+            resolution.stage_height * MAGNIFIED_SHARE,
+        ).fitting(self.box.width / self.box.height)
+        scale = self.pixels_per_centimetre
+        if scale is None:
+            scale = min(room.width / self.box.width, self.shown.pixels_per_centimetre * self.magnification_up_to)
+        width, height = self.box.width * scale, self.box.height * scale
+        return Area(room.centre[0] - width / 2, room.centre[1] - height / 2, width, height)
+
+    @property
+    def scale(self) -> float:
+        """
+        The pixels per centimetre the stretch is read at.
+        """
+        return self.window.width / self.box.width
+
+    @cached_property
+    def picture(self) -> Frame:
+        return self.shown.cut_out(self.box, self.scale)
+
+    def grown_at(self, seconds: float) -> float:
+        """
+        How far the stretch has grown at a moment, from zero to one.
+        """
+        if self.grow and seconds < self.grow:
+            return eased(seconds / self.grow)
+        if self.shrink and seconds > self.grow + self.held_for:
+            return 1.0 - eased((seconds - self.grow - self.held_for) / self.shrink)
+        return 1.0
+
+    def picture_at(self, seconds: float) -> Frame:
+        progress = self.grown_at(seconds)
+        where = self.shown.area_of(self.box).towards(self.window, progress)
+        frame = dimmed(self.shown.frame, 0.55 * progress)
+        frame = filled(frame, where.inset(-4), self.hue)
+        return pasted(frame, self.picture, where)
 
 
 # %% a scene drawn at its own size, shown full screen

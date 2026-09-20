@@ -13,6 +13,7 @@ import pytest
 
 from experiments.video.cache import SceneCache
 from experiments.video.footage import (
+    ACTING_FRAMING,
     TABLE_FRAMING,
     CameraFilm,
     ExecutionFootage,
@@ -108,11 +109,16 @@ def test_a_framing_cuts_the_margins_it_names_off_a_picture() -> None:
     assert (framed == picture[1:6, 2:7]).all()
 
 
-def test_the_tables_framing_keeps_a_full_hd_recording_at_sixteen_by_nine() -> None:
+@pytest.mark.parametrize("framing, size", [(TABLE_FRAMING, (910, 1618)), (ACTING_FRAMING, (1020, 1813))])
+def test_a_framing_keeps_a_full_hd_recording_at_sixteen_by_nine(framing: Framing, size: tuple) -> None:
     recording = np.zeros((1080, 1920, 3), dtype=np.uint8)
-    height, width = TABLE_FRAMING.of(recording).shape[:2]
-    assert (height, width) == (910, 1618)
+    height, width = framing.of(recording).shape[:2]
+    assert (height, width) == size
     assert width / height == pytest.approx(16 / 9, abs=0.002)
+
+
+def test_the_acting_framing_keeps_more_of_the_top_and_the_left_than_the_tables() -> None:
+    assert ACTING_FRAMING.top < TABLE_FRAMING.top and ACTING_FRAMING.left < TABLE_FRAMING.left
 
 
 @dataclass
@@ -136,7 +142,7 @@ class StillFilm:
 def test_the_footage_shows_the_recording_through_its_framing() -> None:
     picture = np.zeros((1080, 1920, 3), dtype=np.uint8)
     picture[:170, :, :] = 255  # what lies above the table is white
-    footage = ExecutionFootage(StillFilm(picture), speed=1.0)  # type: ignore[arg-type]
+    footage = ExecutionFootage(StillFilm(picture), speed=1.0, framing=TABLE_FRAMING)  # type: ignore[arg-type]
     frame = footage.picture_at(0.0)
     assert (frame[2:40, frame.shape[1] // 2] == 0).all()
     unframed = ExecutionFootage(StillFilm(picture), speed=1.0, framing=Framing())  # type: ignore[arg-type]

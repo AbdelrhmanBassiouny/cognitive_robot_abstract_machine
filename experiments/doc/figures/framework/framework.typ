@@ -482,13 +482,30 @@
 #let panel-y(i) = columns-y + panel-order.slice(0, i).map(name => panel-heights.at(name)).sum(default: 0cm) + i * panel-gap
 
 // where the columns and the panels lie, in centimetres from the page's top left corner, for
-// the video to aim its close-ups at: `typst query framework.typ "<geometry>"`
+// the video to aim its close-ups at: `typst query framework.typ "<geometry>"`; with them, each
+// open slot of the plan and the stretch of the plan each action takes, for it to magnify
+#let open-laid-out = lay-out-plan(open-plan, plan-x + 0.15cm, columns-y + 0.15cm, plan-w - 0.3cm)
+#let box-of(left, top, right, bottom) = (x: left / 1cm, y: top / 1cm, w: (right - left) / 1cm, h: (bottom - top) / 1cm)
+// the rows from the one whose text holds `from` up to the next whose text is `to`, trimmed
+#let action-box(laid-out, from, to) = {
+  let rows = laid-out.rows
+  let first = rows.position(row => "text" in row.entry and row.entry.text.contains(from))
+  let last = first + 1 + rows.slice(first + 1).position(row => "text" in row.entry and row.entry.text.trim() == to)
+  // a row's letters stand at its top, ascenders above it; the cut runs through the air over them
+  let row-air = 0.08cm
+  box-of(plan-x, rows.at(first).y - row-air, plan-x + plan-w, rows.at(last).y + rows.at(last).h - row-air)
+}
 #metadata((
   width: W / 1cm,
   height: H / 1cm,
   plan: (x: plan-x / 1cm, y: columns-y / 1cm, w: plan-w / 1cm, h: panels-h / 1cm),
   resolved: (x: resolved-x / 1cm, y: columns-y / 1cm, w: resolved-w / 1cm, h: panels-h / 1cm),
   panels: panel-order.enumerate().map(((i, name)) => (name, (x: panel-x / 1cm, y: panel-y(i) / 1cm, w: panel-w / 1cm, h: panel-heights.at(name) / 1cm))).to-dict(),
+  slots: open-laid-out.slots.pairs().map(((name, at)) => (name, box-of(at.left, at.top, at.right, at.bottom))).to-dict(),
+  actions: (
+    pick_up: action-box(open-laid-out, "PickUpAction", "),"),
+    insertion: action-box(open-laid-out, "InsertionAction", ")"),
+  ),
 )) <geometry>
 
 // %% DRAWING: the page ---------------------------------------------------------------------

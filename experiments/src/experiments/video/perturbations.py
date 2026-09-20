@@ -40,6 +40,7 @@ from experiments.video.cache import SceneCache
 from experiments.video.canvas import (
     Anchor,
     Area,
+    CodeTypesetting,
     Ink,
     Typesetting,
     dimmed,
@@ -397,7 +398,14 @@ class PerturbationMatrix(Scene):
     settle_for: float = 1.0
     """
     Seconds the grid stands still after the last recording ends, before the first
-    question.
+    question, where the questions wait for the recordings.
+    """
+
+    asked_from: Optional[float] = None
+    """
+    Seconds into the scene the first question comes, the recordings still playing under
+    it and to the scene's end; None for the questions to wait until the longest
+    recording has ended and the grid has settled.
     """
 
     resolution: Resolution = CLOSE_UP
@@ -410,23 +418,36 @@ class PerturbationMatrix(Scene):
         return GridLayout(self.resolution, rows=len(self.tiles), columns=len(self.labels.columns))
 
     @cached_property
+    def longest(self) -> float:
+        """
+        Seconds the longest recording plays for at the grid's speed.
+        """
+        return max(tile.film.length for row in self.tiles for tile in row) / self.speed
+
+    @property
     def runs_for(self) -> float:
         """
-        Seconds the recordings play, until the longest has ended.
+        Seconds the recordings play: until the longest has ended, or to the scene's end
+        where the questions do not wait for them.
         """
-        longest = max(tile.film.length for row in self.tiles for tile in row)
-        return longest / self.speed
+        return self.longest if self.asked_from is None else self.duration
+
+    @property
+    def asked_at(self) -> float:
+        """
+        Seconds into the scene the first question comes.
+        """
+        return self.longest + self.settle_for if self.asked_from is None else self.asked_from
 
     @property
     def duration(self) -> float:
-        return self.runs_for + self.settle_for + self.question_for * len(self.questions)
+        return self.asked_at + self.question_for * len(self.questions)
 
     def question_at(self, seconds: float) -> Optional[Tuple[RememberedQuestion, float]]:
         """
-        The question up at a moment and how far along it is, or None while the
-        recordings still play.
+        The question up at a moment and how far along it is, or None before the first.
         """
-        since = seconds - self.runs_for - self.settle_for
+        since = seconds - self.asked_at
         if since < 0 or not self.questions:
             return None
         index = min(int(since / self.question_for), len(self.questions) - 1)
@@ -498,7 +519,7 @@ class PerturbationMatrix(Scene):
             frame = name.written(frame, BACKEND_NAME, (band.x + 4, band.y + 24), Anchor.LEFT_MIDDLE)
             return Typesetting(size=24, color=Ink.MUTED.rgb).written(
                 frame,
-                "every run is recorded to the results database as it happens; once these have ended, it is asked about them",
+                "every run is recorded to the results database as it happens, and asked about",
                 (band.x + 4, band.y + 62),
                 Anchor.LEFT_MIDDLE,
             )
@@ -510,9 +531,9 @@ class PerturbationMatrix(Scene):
         frame = Typesetting(size=30, face=Face.BOLD).written(
             frame, question.english, (card.x + 24, card.y + 68), Anchor.LEFT_MIDDLE
         )
-        code = Typesetting(size=20, face=Face.MONO, color=Ink.MUTED.rgb)
+        code = CodeTypesetting(size=20)
         for number, line in enumerate(question.statement):
-            frame = code.written(frame, line, (card.x + 24, card.y + 108 + number * 27), Anchor.LEFT_MIDDLE)
+            frame = code.written(frame, line, (card.x + 24, card.y + 108 + number * 27))
         if eased((progress - 0.45) / 0.15) > 0:
             on_screen = sum(question.names(tile.run.episode_identifier) for row in self.tiles for tile in row)
             answer = f"→ {len(question.episodes)} episodes; {on_screen} of them are on screen"

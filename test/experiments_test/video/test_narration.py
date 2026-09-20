@@ -22,6 +22,8 @@ from experiments.video.narration import (
     Storyboard,
     SubtitleCue,
     SubtitleRoom,
+    Subtitled,
+    starts_of,
 )
 from experiments.video.slides import TextSlide
 from experiments.video.timeline import Frame, Resolution, Scene
@@ -215,3 +217,22 @@ def test_a_cue_is_written_on_two_even_rows_when_it_needs_two() -> None:
     assert SubtitleCue(0.0, 1.0, "short").rows(42) == ["short"]
     narration = Narration([SpokenLine(Line("A row. And another."), 0.0, Speech(np.zeros(100, dtype=np.float32), 100))])
     assert narration.srt().count("\n") == 4  # number, times, one row, a blank line
+
+
+def test_lines_said_in_turn_start_a_pause_after_the_one_before_ends() -> None:
+    lines = [Line("one two"), Line("three four five six"), Line("seven")]
+    assert starts_of(VoiceThatTakes(), lines, pause=0.5) == pytest.approx([0.0, 1.5, 4.0])
+    assert starts_of(VoiceThatTakes(), [], pause=0.5) == []
+
+
+def test_a_subtitled_timeline_draws_the_cue_of_the_moment_into_the_band_and_nothing_else() -> None:
+    resolution = Resolution(width=320, height=180)
+    timeline = Timeline([Still(resolution.blank(255), held_for=4.0)], frames_per_second=10, dissolve=0.0)
+    subtitled = Subtitled.over(timeline, [SubtitleCue(1.0, 2.0, "hello there")])
+    assert subtitled.duration == timeline.duration and subtitled.frame_count == timeline.frame_count
+    assert subtitled.cue_at(1.5) is not None and subtitled.cue_at(2.0) is None
+    band = slice(int(resolution.stage_height), resolution.height)
+    assert subtitled.frame_at(0.5).min() == 255
+    written = subtitled.frame_at(1.5)
+    assert written[band].min() < 128
+    assert written[: int(resolution.stage_height)].min() == 255

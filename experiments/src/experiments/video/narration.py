@@ -20,10 +20,11 @@ from pathlib import Path
 
 import numpy as np
 from krrood.exceptions import DataclassException
-from typing_extensions import Callable, Iterator, List, Protocol, Sequence, Tuple
+from typing_extensions import Callable, Iterator, List, Optional, Protocol, Sequence, Tuple
 
 from experiments.video.cache import SceneCache
-from experiments.video.timeline import Scene, Timeline
+from experiments.video.canvas import Anchor, Ink, Typesetting
+from experiments.video.timeline import Frame, Resolution, Scene, Timeline
 
 SUBTITLE_ROW = 42
 """
@@ -527,6 +528,50 @@ class Narration:
         return path
 
 
+SUBTITLE_SIZE = 27
+"""
+The height of the letters of a subtitle burned into the picture, in pixels.
+"""
+
+
+@dataclass
+class Subtitled(Timeline):
+    """
+    A timeline with its subtitles drawn into the band every scene keeps clear at the
+    bottom of the picture, so they are part of the video itself.
+    """
+
+    cues: List[SubtitleCue] = field(default_factory=list)
+    """
+    The subtitles, in order.
+    """
+
+    @classmethod
+    def over(cls, timeline: Timeline, cues: List[SubtitleCue]) -> Subtitled:
+        """
+        :param timeline: The timeline as it stands.
+        :param cues: What to draw on it.
+        """
+        return cls(timeline.scenes, timeline.frames_per_second, timeline.dissolve, cues=list(cues))
+
+    def cue_at(self, seconds: float) -> Optional[SubtitleCue]:
+        """
+        The subtitle shown at a moment, if one is.
+        """
+        return next((cue for cue in self.cues if cue.start <= seconds < cue.end), None)
+
+    def frame_at(self, seconds: float) -> Frame:
+        frame = super().frame_at(seconds)
+        cue = self.cue_at(seconds)
+        if cue is None:
+            return frame
+        resolution = Resolution.of(frame)
+        middle = (resolution.stage_height + resolution.height) / 2
+        return Typesetting(size=SUBTITLE_SIZE, color=Ink.TEXT.rgb).written(
+            frame, "\n".join(cue.rows(SUBTITLE_ROW)), (resolution.width / 2, middle), Anchor.CENTRE_MIDDLE
+        )
+
+
 def _timestamp(seconds: float) -> str:
     """
     :param seconds: A moment.
@@ -568,6 +613,23 @@ class NarratedScene:
     Whether the line may run on into the scenes that follow instead of the scene
     growing to hold it; a close-up never grows, whatever this says.
     """
+
+
+def starts_of(voice: Voice, lines: Sequence[Line], pause: float) -> List[float]:
+    """
+    Seconds after the first of some lines starts that each of them starts, said one
+    after the other with a pause between: for a scene to time itself to its lines.
+
+    :param voice: What says the lines.
+    :param lines: The lines, in order.
+    :param pause: Seconds between one line and the next.
+    """
+    starts: List[float] = []
+    at = 0.0
+    for line in lines:
+        starts.append(at)
+        at += voice.speaks(line.said).duration + pause
+    return starts
 
 
 @dataclass

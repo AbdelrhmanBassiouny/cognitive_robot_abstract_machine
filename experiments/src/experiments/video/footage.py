@@ -62,6 +62,12 @@ around it cut off: the table's near edge lies 170 pixels down a full HD picture,
 the right margin keeps the picture at sixteen by nine.
 """
 
+ACTING_FRAMING = Framing(top=60, left=40, right=67)
+"""
+The framing of the robot's camera that keeps the arm in the picture: the table with the
+edge of the room it reaches in from, trimmed to sixteen by nine.
+"""
+
 # %% the colour images of a recording
 
 
@@ -202,9 +208,9 @@ class ExecutionFootage(Scene):
     The size the scene draws itself at.
     """
 
-    framing: Framing = TABLE_FRAMING
+    framing: Framing = ACTING_FRAMING
     """
-    What of each picture is shown.
+    What of each picture is shown: the robot acts in this film, so its arm stays in.
     """
 
     @property

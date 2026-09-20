@@ -16,7 +16,7 @@ from functools import cached_property
 
 import cv2
 import numpy as np
-from typing_extensions import Dict, List, Optional, Sequence
+from typing_extensions import Dict, List, Optional, Sequence, Tuple
 
 from experiments.montessori.perception.detections import DetectedMontessoriShape
 from experiments.montessori.perception.node import ROBOT_TABLE_PIECES
@@ -270,9 +270,10 @@ class PerceptionNarrowing(Scene):
     The narrowed frames that play.
     """
 
-    tile_every: float = 3.0
+    appears_at: Tuple[float, ...] = (0.0, 3.0, 6.0, 9.0)
     """
-    Seconds between one view appearing and the next.
+    Seconds into the scene each view appears, in their order: set from the narration,
+    so each view comes up as it is spoken of.
     """
 
     run_for: float = 10.0
@@ -294,7 +295,7 @@ class PerceptionNarrowing(Scene):
         """
         Seconds the grid is on screen, views appearing and then all running.
         """
-        return self.tile_every * len(View) + self.run_for
+        return self.appears_at[-1] + self.run_for
 
     def frame_index_at(self, seconds: float) -> int:
         """
@@ -324,7 +325,7 @@ class PerceptionNarrowing(Scene):
         title = Typesetting(size=24, face=Face.BOLD, color=Ink.PERCEPTION.rgb)
         reading = Typesetting(size=20, color=Ink.MUTED.rgb)
         for number, view in enumerate(View):
-            appeared = seconds - number * self.tile_every
+            appeared = seconds - self.appears_at[number]
             if appeared < 0:
                 continue
             weight = eased(appeared / 0.6)
