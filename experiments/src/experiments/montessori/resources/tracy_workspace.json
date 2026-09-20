@@ -1,0 +1,8 @@
+{
+  "__json_type__": "experiments.montessori.perception.orthophoto.WorkspaceRegion",
+  "minimum_x": 0.35,
+  "maximum_x": 0.915,
+  "minimum_y": -0.45,
+  "maximum_y": 0.674,
+  "resolution": 0.001
+}
