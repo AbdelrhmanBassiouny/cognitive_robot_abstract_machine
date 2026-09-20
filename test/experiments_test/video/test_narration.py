@@ -26,7 +26,7 @@ from experiments.video.narration import (
     starts_of,
 )
 from experiments.video.slides import TextSlide
-from experiments.video.timeline import Frame, Resolution, Scene
+from experiments.video.timeline import Frame, Resolution, Scene, Still, Timeline
 
 
 @dataclass
