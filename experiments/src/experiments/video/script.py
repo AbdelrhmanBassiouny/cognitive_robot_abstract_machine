@@ -50,6 +50,14 @@ class VideoScript:
     What the video is, under the title.
     """
 
+    summary: str = (
+        "One query interface connects perception, memory, probabilistic reasoning, "
+        "logical inference, and robot action."
+    )
+    """
+    What the video shows, in a sentence under the title: its sections, in order.
+    """
+
     robot_name: str = "the robot"
     """
     What the robot is called on screen; the paper names no robot, so neither does the
@@ -88,6 +96,10 @@ class NarrationLines:
         "and Reasoning Framework for Cognitive Architectures.",
         spoken="This video accompanies paper thirty-eight eighty-nine: A Unified "
         "Knowledge Representation and Reasoning Framework for Cognitive Architectures.",
+    )
+    summary: Line = Line(
+        "It shows how one query interface connects perception, memory, probabilistic "
+        "reasoning, logical inference, and robot action."
     )
     framework: Line = Line(
         "A query's representation and grounded meaning are kept apart from its "

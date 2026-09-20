@@ -205,7 +205,7 @@ How many recorded seconds pass per second played in the perturbation grid: slow 
 for the perturbations to be seen; the recordings need not end before the questions.
 """
 
-GRID_QUESTION_FOR = 4.5
+GRID_QUESTION_FOR = 4.0
 """
 Seconds each question put to long-term memory over the grid takes.
 """
@@ -505,12 +505,12 @@ class VideoAssembly:
         if slot is Slot.PERCEPTION:
             reel = NarrowingReel(self.demo, frame_indices=list(range(IDLE_FRAMES_READ)))
             # each view comes up as its line starts
-            scene = PerceptionNarrowing(reel, appears_at=tuple(self.starts_of(self.lines.perception_views)), run_for=3.0)
+            scene = PerceptionNarrowing(reel, appears_at=tuple(self.starts_of(self.lines.perception_views)), run_for=2.0)
             if self.preview:
                 scene.appears_at, scene.run_for = (0.0, 1.0, 2.0, 3.0), 2.0
             return scene
         if slot is Slot.SIMULATION:
-            scene = WorkingMemoryCheck(self.twin, flight_from=3.0, flight_for=4.0, boxes_for=2.5)
+            scene = WorkingMemoryCheck(self.twin, flight_from=2.0, flight_for=3.5, boxes_for=2.0)
             if self.preview:
                 scene.flight_for, scene.boxes_for = 2.0, 4.0
             return scene
@@ -519,13 +519,13 @@ class VideoAssembly:
                 self.sampling,
                 GraspOptionsOnThePicture(self.demo, self.twin.cube_at + [0.0, 0.0, 0.01]),
                 statement_for=1.5,
-                sampling_for=4.5,
-                answer_for=3.0,
+                sampling_for=4.0,
+                answer_for=2.0,
             )
             if self.preview:
                 scene.sampling_for, scene.answer_for = 3.0, 2.0
             return scene
-        scene = RuleTreeEvaluation(self.rule_trace, HoleOnThePicture(self.demo), tree_for=2.0, answer_for=4.0)
+        scene = RuleTreeEvaluation(self.rule_trace, HoleOnThePicture(self.demo), tree_for=2.0, answer_for=3.0)
         if self.preview:
             scene.answer_for = 2.0
         return scene
@@ -692,8 +692,10 @@ class VideoAssembly:
         """
         lines = self.lines
         introduction = (lines.framework, lines.taxonomy, lines.backend_choice)
+        opening = (lines.title, lines.summary)
         narrated: List[NarratedScene] = [
-            NarratedScene(TitleSlide(self.script, held_for=5.5), (lines.title,)),
+            # the summary comes up under the title as its line starts
+            NarratedScene(TitleSlide(self.script, held_for=5.5, summary_at=LEAD + self.starts_of(opening)[1]), opening),
             NarratedScene(
                 TaxonomySlide(steps_at=tuple(LEAD + start for start in self.starts_of(introduction)), held_for=8.0),
                 introduction,

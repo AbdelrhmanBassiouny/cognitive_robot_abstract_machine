@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from typing_extensions import List
+from typing_extensions import List, Optional
 
 from experiments.paper.lettering import Face
 from experiments.video.canvas import (
@@ -25,6 +25,33 @@ RULE_WIDTH = 120
 """
 How wide the short rule under the title is, in pixels.
 """
+
+TITLE_TYPESETTING = Typesetting(size=40, face=Face.BOLD)
+"""
+What the paper's title is set in.
+"""
+
+
+@dataclass(frozen=True)
+class TitleLayout:
+    """
+    Where the title slide's title sits.
+    """
+
+    wrapped: str
+    """
+    The title broken into lines that fit the slide.
+    """
+
+    top: float
+    """
+    The top of its first line, in pixels.
+    """
+
+    rule_y: float
+    """
+    Where the rule under it lies, in pixels from the top.
+    """
 
 
 @dataclass
@@ -48,6 +75,12 @@ class TitleSlide(Scene):
     How long the words take to appear, in seconds.
     """
 
+    summary_at: Optional[float] = None
+    """
+    Seconds into the slide the script's summary fades in under the submission line, as
+    its line is said; None for the slide never to show it.
+    """
+
     resolution: Resolution = VIDEO_RESOLUTION
     """
     The size of the slide.
@@ -58,14 +91,21 @@ class TitleSlide(Scene):
         return self.held_for
 
     def picture_at(self, seconds: float) -> Frame:
+        frame = self._faded_in(self._heading(), seconds)
+        if self.summary_at is None:
+            return frame
+        summarised = self._summarised(frame)
+        return self._blended(frame, summarised, eased((seconds - self.summary_at) / self.fade))
+
+    def _heading(self) -> Frame:
+        """
+        The title, the rule, what the video is and the submission line.
+        """
         frame = self.resolution.blank(255)
         centre_x = self.resolution.width / 2
-        title = Typesetting(size=40, face=Face.BOLD)
-        wrapped = title.wrapped(self.script.title, self.resolution.width * 0.78)
-        lines = wrapped.count("\n") + 1
-        title_top = self.resolution.height * 0.30 - lines * 27
-        frame = title.written(frame, wrapped, (centre_x, title_top), Anchor.CENTRE_TOP)
-        rule_y = title_top + lines * 54 + 30
+        laid_out = self._title_laid_out()
+        frame = TITLE_TYPESETTING.written(frame, laid_out.wrapped, (centre_x, laid_out.top), Anchor.CENTRE_TOP)
+        rule_y = laid_out.rule_y
         frame = filled(
             frame,
             Area(centre_x - RULE_WIDTH / 2, rule_y, RULE_WIDTH, 3),
@@ -80,15 +120,42 @@ class TitleSlide(Scene):
             (centre_x, rule_y + 110),
             Anchor.CENTRE_MIDDLE,
         )
-        return self._faded_in(frame, seconds)
+        return frame
+
+    def _summarised(self, frame: Frame) -> Frame:
+        """
+        The frame with the script's summary written under the submission line.
+        """
+        summary = Typesetting(size=28, color=Ink.TEXT.rgb)
+        wrapped = summary.wrapped(self.script.summary, self.resolution.width * 0.78)
+        return summary.written(
+            frame,
+            wrapped,
+            (self.resolution.width / 2, self._title_laid_out().rule_y + 190),
+            Anchor.CENTRE_TOP,
+        )
+
+    def _title_laid_out(self) -> TitleLayout:
+        """
+        The title wrapped to the slide, and where it and its rule go.
+        """
+        wrapped = TITLE_TYPESETTING.wrapped(self.script.title, self.resolution.width * 0.78)
+        lines = wrapped.count("\n") + 1
+        top = self.resolution.height * 0.30 - lines * 27
+        return TitleLayout(wrapped, top, top + lines * 54 + 30)
 
     def _faded_in(self, frame: Frame, seconds: float) -> Frame:
         """
         The frame faded up from white over the first moments.
         """
-        weight = eased(seconds / self.fade)
-        blank = self.resolution.blank(255)
-        return (blank * (1 - weight) + frame * weight + 0.5).astype("uint8")
+        return self._blended(self.resolution.blank(255), frame, eased(seconds / self.fade))
+
+    @staticmethod
+    def _blended(before: Frame, after: Frame, weight: float) -> Frame:
+        """
+        The first frame giving way to the second by the weight.
+        """
+        return (before * (1 - weight) + after * weight + 0.5).astype("uint8")
 
 
 @dataclass

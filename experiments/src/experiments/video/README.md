@@ -18,9 +18,10 @@ while -- the look run over the recordings' frames, the pictures of the twin, the
 decoded camera streams -- is kept under `EXPERIMENTS_VIDEO_CACHE`
 (`~/.cache/experiments/video` by default), so a second render is mostly encoding.
 
-The words the slides carry -- the paper's title and submission number, and what the
-robot is called on screen -- are `VideoScript` in `script.py`; `--paper-id` overrides
-the number. What the narrator says is `NarrationLines` in the same file.
+The words the slides carry -- the paper's title and submission number, the one-sentence
+summary of what the video shows that comes up under the title as its line is said, and
+what the robot is called on screen -- are `VideoScript` in `script.py`; `--paper-id`
+overrides the number. What the narrator says is `NarrationLines` in the same file.
 
 ### The narration
 
