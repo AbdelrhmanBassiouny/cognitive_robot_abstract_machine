@@ -38,9 +38,11 @@ line that is still being said when the next begins is refused (`NarrationOverrun
 so the scene lengths in `icra_video.py` are tuned to the lines.
 `Narration.report()` prints where each line falls and the silence after it. Where a
 scene has steps that should come as the narration reaches them -- the views of the
-look, the steps of the taxonomy slide, the questions over the grid -- the assembly
+look, the parts of the query slide, the questions over the grid -- the assembly
 measures the lines with the voice (`starts_of`) and times the scene to them, so the
-picture and the speech cannot drift apart.
+picture and the speech cannot drift apart. Where a part must come up at a word inside
+a line (the example's lines as each is named, its `...` at "three dots"), the moment
+is measured on the spoken line once and kept as a constant beside the scene.
 
 The narration goes into the mp4 as AAC. The subtitles are burned into the picture by
 default (`Subtitled`, drawn into the band every scene leaves clear at the bottom,
@@ -98,9 +100,11 @@ The queries put to long-term memory over the grid are written in the match synta
   `Storyboard` pairing scenes with the lines that start with them, `Narration`,
   every line placed in time, checked, laid on a soundtrack and cut into subtitles,
   and `Subtitled`, a timeline with those subtitles drawn in.
-- `slides.py` and `taxonomy.py` -- the title, text and closing slides, and the slide
-  that shows an example query, the tree of backend kinds under it and the choice
-  between them, building up as the narration reaches each.
+- `slides.py` and `query_slide.py` -- the title, text and closing slides, and the
+  slide that explains what a query is on the plan's grasp query (the template with its
+  parts named, the example typed in as it is said, its intended meaning, grounding and
+  computation), then the tree of backend kinds under it and the choice between them,
+  each part coming up as the narration reaches it.
 - `canvas.py` -- where things go and how they are drawn and written; `CodeTypesetting`
   writes a line of Python coloured piece by piece as an editor would, with any stretch
   marked behind as a highlighter would.

@@ -95,7 +95,7 @@ from experiments.video.stages import (
     Scrolled,
     Spotlight,
 )
-from experiments.video.taxonomy import TaxonomySlide
+from experiments.video.query_slide import QuerySlide, SlideMoments
 from experiments.video.timeline import Scene, Timeline
 from experiments.video.twin import TwinPictures, WorkingMemoryCheck
 from experiments.episodes.long_term_memory import LongTermMemory
@@ -255,6 +255,37 @@ view: until "left open" has been said, before the reading drifts on to the plan'
 OPEN_FIELD_HUE = Ink.ASKED.rgb
 """
 What a ``...`` of the plan is ringed in when it is pointed to.
+"""
+
+QUERY_PARTS_NAMED_AT = (1.1, 3.4, 4.2, 5.5)
+"""
+Seconds into the line defining a query that each part of the template is named —
+"under-specified", "its type", "the fields already known", "further conditions" —
+measured on the spoken line.
+"""
+
+EXAMPLE_LINES_NAMED_AT = (0.6, 3.1, 2.3, 1.7)
+"""
+Seconds into the line about the example that each of its lines is named, in the
+example's order — "a grasp description", "the approach direction", "from the top",
+"left hand" — measured on the spoken line.
+"""
+
+OPEN_FIELD_WRITTEN_AT = 5.0
+"""
+Seconds into the line about the example that "three dots" is said, when its open field
+is marked.
+"""
+
+GROUNDING_NAMED_AT = 3.5
+"""
+Seconds into the line about what the example means that "grounded" is said; its
+intended meaning is named as the line starts.
+"""
+
+COMPUTATION_NAMED_AT = 9.0
+"""
+Seconds into that line that "computed" is said.
 """
 
 ANSWER_FOR = 0.8
@@ -691,15 +722,12 @@ class VideoAssembly:
         Every scene, in order, with the line that starts with it.
         """
         lines = self.lines
-        introduction = (lines.framework, lines.taxonomy, lines.backend_choice)
+        introduction = (lines.definition, lines.example, lines.meaning, lines.taxonomy, lines.backend_choice)
         opening = (lines.title, lines.summary)
         narrated: List[NarratedScene] = [
             # the summary comes up under the title as its line starts
             NarratedScene(TitleSlide(self.script, held_for=5.5, summary_at=LEAD + self.starts_of(opening)[1]), opening),
-            NarratedScene(
-                TaxonomySlide(steps_at=tuple(LEAD + start for start in self.starts_of(introduction)), held_for=8.0),
-                introduction,
-            ),
+            NarratedScene(QuerySlide(moments=self.query_slide_moments(introduction), held_for=8.0), introduction),
         ]
         narrated.append(self.plan_reading())
         for slot in Slot:
@@ -731,6 +759,26 @@ class VideoAssembly:
         )
         narrated.append(NarratedScene(ClosingSlide(self.script, held_for=2.5), (lines.closing,)))
         return Storyboard(narrated, pause=PAUSE)
+
+    def query_slide_moments(self, introduction: Sequence[Line]) -> SlideMoments:
+        """
+        When each part of the query slide comes up: as the words naming it are said.
+
+        :param introduction: The lines said over the slide, in order: the definition,
+            the example, its meaning, the kinds of backend, the choice.
+        """
+        definition, example, meaning, taxonomy, choice = (LEAD + start for start in self.starts_of(introduction))
+        return SlideMoments(
+            template=0.0,
+            parts=tuple(definition + named_at for named_at in QUERY_PARTS_NAMED_AT),
+            lines=tuple(example + named_at for named_at in EXAMPLE_LINES_NAMED_AT),
+            open_field=example + OPEN_FIELD_WRITTEN_AT,
+            meaning=meaning,
+            grounding=meaning + GROUNDING_NAMED_AT,
+            computation=meaning + COMPUTATION_NAMED_AT,
+            tree=taxonomy,
+            choice=choice,
+        )
 
     def scenes(self) -> List[Scene]:
         """

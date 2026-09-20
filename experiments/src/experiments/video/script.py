@@ -91,19 +91,32 @@ class NarrationLines:
     code refuses a line that is still being said when the next begins.
     """
 
+    # the title is on the slide; reading it out took eight seconds
     title: Line = Line(
-        f"This video accompanies paper {PAPER_ID}: A Unified Knowledge Representation "
-        "and Reasoning Framework for Cognitive Architectures.",
-        spoken="This video accompanies paper thirty-eight eighty-nine: A Unified "
-        "Knowledge Representation and Reasoning Framework for Cognitive Architectures.",
+        f"This video accompanies paper {PAPER_ID}.",
+        spoken="This video accompanies paper thirty-eight eighty-nine.",
     )
     summary: Line = Line(
         "It shows how one query interface connects perception, memory, probabilistic "
         "reasoning, logical inference, and robot action."
     )
-    framework: Line = Line(
-        "A query's representation and grounded meaning are kept apart from its "
-        "computation, so any capable backend can answer it."
+    definition: Line = Line(
+        "A query is an under-specified description of an entity: its type, the fields "
+        "already known, and further conditions."
+    )
+    example: Line = Line(
+        "Here, a grasp description: left hand, from the top; the approach direction is "
+        "written as `...`: a field the answering backend fills.",
+        spoken="Here, a grasp description: left hand, from the top; the approach "
+        "direction is written as three dots: a field the answering backend fills.",
+    )
+    meaning: Line = Line(
+        "Its intended meaning is a grasp that fits what is stated. It is grounded in the "
+        "program's own classes, so the answer is an instance of GraspDescription, "
+        "computed by any backend whose capability holds.",
+        spoken="Its intended meaning is a grasp that fits what is stated. It is grounded "
+        "in the program's own classes, so the answer is an instance of grasp "
+        "description, computed by any backend whose capability holds.",
     )
     taxonomy: Line = Line(
         "Selective backends retrieve what is known; generative backends compute."
@@ -113,11 +126,8 @@ class NarrationLines:
         "in an order of preference."
     )
     plan_pick_up: Line = Line(
-        "We demonstrate this with an under-specified plan in the query interface over "
-        "an action domain language: pick up the cyan cube resting on the board,",
-        # hyphenated, the voice says the three words in one breath
-        spoken="We demonstrate this with an under-specified plan in the query interface "
-        "over an action-domain language: pick up the cyan cube resting on the board,",
+        "We demonstrate this with a plan written as a nested query that means: pick up "
+        "the cyan cube resting on the board,"
     )
     plan_insertion: Line = Line(
         "and insert it into a hole. The cube's pose, the grasp approach direction and "
