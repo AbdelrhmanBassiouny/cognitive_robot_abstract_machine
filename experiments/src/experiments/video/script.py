@@ -111,12 +111,12 @@ class NarrationLines:
         "direction is written as three dots: a field the answering backend fills.",
     )
     meaning: Line = Line(
-        "Its intended meaning is a grasp that fits what is stated. It is grounded in the "
-        "program's own classes, so the answer is an instance of GraspDescription, "
-        "computed by any backend whose capability holds.",
-        spoken="Its intended meaning is a grasp that fits what is stated. It is grounded "
-        "in the program's own classes, so the answer is an instance of grasp "
-        "description, computed by any backend whose capability holds.",
+        "Its intended meaning is a grasp that fits what is stated. Its grounding is the "
+        "program's own class, so the answer is a GraspDescription instance, computed by "
+        "any capable backend.",
+        spoken="Its intended meaning is a grasp that fits what is stated. Its grounding "
+        "is the program's own class, so the answer is a grasp description instance, "
+        "computed by any capable backend.",
     )
     taxonomy: Line = Line(
         "Selective backends retrieve what is known; generative backends compute."
@@ -130,8 +130,8 @@ class NarrationLines:
         "the cyan cube resting on the board,"
     )
     plan_insertion: Line = Line(
-        "and insert it into a hole. The cube's pose, the grasp approach direction and "
-        "the hole are left open, and resolved from the innermost sub-query outward."
+        "and insert it into a hole. The cube, the approach direction and the hole are "
+        "left open, and resolved from the innermost query outward."
     )
     perception_query: Line = Line("Finding the cube falls to the perception backend.")
     perception_views: Tuple[Line, ...] = (
@@ -164,7 +164,7 @@ class NarrationLines:
         "and selects the hole whose outline fits."
     )
     resolved: Line = Line(
-        "With every open field answered, the resolved plan is executed on the robot."
+        "With every field answered, the resolved plan is executed on the robot."
     )
     attribution: Line = Line(
         "Next, temporal and action-attribution queries, enabled by an event "

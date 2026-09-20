@@ -85,17 +85,16 @@ from experiments.video.rules import HoleOnThePicture, HoleRuleTrace, RuleTreeEva
 from experiments.video.script import NarrationLines, VideoScript
 from experiments.video.slides import ClosingSlide, TextSlide, TitleSlide
 from experiments.video.sources import FRAMEWORK_DEMO_EPISODE, RecordedRun
+from experiments.video.query_slide import QuerySlide, SlideMoments
 from experiments.video.stages import (
+    Answering,
     FigureOnCanvas,
     FigureScene,
-    Magnified,
     Mark,
     OnCanvas,
     ReadingStop,
     Scrolled,
-    Spotlight,
 )
-from experiments.video.query_slide import QuerySlide, SlideMoments
 from experiments.video.timeline import Scene, Timeline
 from experiments.video.twin import TwinPictures, WorkingMemoryCheck
 from experiments.episodes.long_term_memory import LongTermMemory
@@ -161,7 +160,7 @@ ATTRIBUTION_RUNS = (
         "the scene stands still; a person pushes the cube",
         4.0,
         told_while_watched=True,
-        question_for=4.0,
+        question_for=3.0,
     ),
 )
 """
@@ -205,7 +204,7 @@ How many recorded seconds pass per second played in the perturbation grid: slow 
 for the perturbations to be seen; the recordings need not end before the questions.
 """
 
-GRID_QUESTION_FOR = 4.0
+GRID_QUESTION_FOR = 3.5
 """
 Seconds each question put to long-term memory over the grid takes.
 """
@@ -216,10 +215,9 @@ How far into the line about long-term memory its questions are reached: the firs
 question comes up on the grid then.
 """
 
-SUB_QUERY_MARGIN = 0.5
+QUERY_HELD_AT_LEAST = 0.5
 """
-Seconds between a sub-query's line ending and the first line over its close-up: the
-sub-query's line runs on while the close-up grows out over it.
+Seconds a sub-query is held alone at the least, however short the line over it.
 """
 
 PLAN_CAPTION = "The plan states what it wants and leaves four things open, each answered by a backend."
@@ -239,14 +237,14 @@ Seconds into the line about the insertion by which the plan's open fields, the
 insertion's among them, have scrolled into view: once the line has named the insertion.
 """
 
-OPEN_FIELD_NAMED_AT: Dict[Slot, float] = {Slot.PROBABILISTIC: 2.85, Slot.RULES: 4.2}
+OPEN_FIELD_NAMED_AT: Dict[Slot, float] = {Slot.PROBABILISTIC: 2.55, Slot.RULES: 3.45}
 """
 Seconds into the line about the insertion that the field each slot leaves open is
-named — "the grasp approach direction", "and the hole" — measured on the spoken line;
-the slot's ``...`` is marked then.
+named — "the approach direction", "and the hole" — measured on the spoken line; the
+slot's ``...`` is marked then.
 """
 
-OPEN_FIELDS_IN_VIEW_UNTIL = 5.5
+OPEN_FIELDS_IN_VIEW_UNTIL = 5.0
 """
 Seconds into the line about the insertion the reading rests with every open field in
 view: until "left open" has been said, before the reading drifts on to the plan's end.
@@ -279,25 +277,13 @@ is marked.
 
 GROUNDING_NAMED_AT = 3.5
 """
-Seconds into the line about what the example means that "grounded" is said; its
+Seconds into the line about what the example means that "its grounding" is said; its
 intended meaning is named as the line starts.
 """
 
-COMPUTATION_NAMED_AT = 9.0
+COMPUTATION_NAMED_AT = 8.5
 """
 Seconds into that line that "computed" is said.
-"""
-
-ANSWER_FOR = 0.8
-"""
-Seconds each answer, written into the resolved plan, is held magnified once its
-backend has given it.
-"""
-
-ANSWER_MAGNIFICATION = 3.0
-"""
-How much an answer grows by: less than a sub-query, so that the resolved plan it grew
-out of is still seen around it.
 """
 
 GRASP_PRIOR_SHARE = 0.55
@@ -318,7 +304,7 @@ The seconds of the framework demo's recording shown while the robot acts: from t
 setting off for the cube to its withdrawing from the hole.
 """
 
-EXECUTION_SPEED = 6.0
+EXECUTION_SPEED = 7.0
 """
 How many recorded seconds pass per second played while the robot acts.
 """
@@ -516,6 +502,17 @@ class VideoAssembly:
             ],
             support_reading=self.twin.reading.reading_line,
             support_verdict=f"SupportedBy(cube_1, lid) → {self.twin.reading.holds}",
+            # the plan as written, with each `...` replaced by what was read; a description
+            # left open as a whole is replaced by what was found, and a relation checked
+            # is ticked
+            filled_values={
+                Slot.PROBABILISTIC: grasp.approach_direction.name,
+                Slot.RULES: self.rule_trace.concluded.name,
+            },
+            filled_lines={
+                Slot.PERCEPTION: ["cube_1  # CYAN, CUBE", f"  at ({at[0]:.2f}, {at[1]:.2f}, {at[2]:.2f}) m,"],
+                Slot.SIMULATION: [f"SupportedBy(shape, lid)),  {'✓' if self.twin.reading.holds else '✗'}"],
+            },
         )
 
     def figure(self, stage: int, focus: Optional[Slot], caption: str) -> FigureOnCanvas:
@@ -536,12 +533,12 @@ class VideoAssembly:
         if slot is Slot.PERCEPTION:
             reel = NarrowingReel(self.demo, frame_indices=list(range(IDLE_FRAMES_READ)))
             # each view comes up as its line starts
-            scene = PerceptionNarrowing(reel, appears_at=tuple(self.starts_of(self.lines.perception_views)), run_for=2.0)
+            scene = PerceptionNarrowing(reel, appears_at=tuple(self.starts_of(self.lines.perception_views)), run_for=1.0)
             if self.preview:
                 scene.appears_at, scene.run_for = (0.0, 1.0, 2.0, 3.0), 2.0
             return scene
         if slot is Slot.SIMULATION:
-            scene = WorkingMemoryCheck(self.twin, flight_from=2.0, flight_for=3.5, boxes_for=2.0)
+            scene = WorkingMemoryCheck(self.twin, flight_from=1.5, flight_for=3.0, boxes_for=1.5)
             if self.preview:
                 scene.flight_for, scene.boxes_for = 2.0, 4.0
             return scene
@@ -551,7 +548,7 @@ class VideoAssembly:
                 GraspOptionsOnThePicture(self.demo, self.twin.cube_at + [0.0, 0.0, 0.01]),
                 statement_for=1.5,
                 sampling_for=4.0,
-                answer_for=2.0,
+                answer_for=1.5,
             )
             if self.preview:
                 scene.sampling_for, scene.answer_for = 3.0, 2.0
@@ -592,38 +589,32 @@ class VideoAssembly:
         )
         return NarratedScene(scrolled, lines)
 
-    def backend_scenes(self, slot: Slot) -> List[NarratedScene]:
+    def backend_scene(self, slot: Slot) -> NarratedScene:
         """
-        The slot's sub-query magnified out of the plan with the slot ringed, the
-        backend's close-up, and the answer magnified out of the resolved plan; the
-        sub-query carries the line about what is asked, the close-up the lines about
-        how the backend answers it.
+        The backend answering its slot: the sub-query held beside the close-up of the
+        backend's work, the answer written into it. The line about what is asked is
+        said over the sub-query alone; the lines about how the backend answers start as
+        its work does.
         """
         before = self.figure(slot.stage - 1, slot, CAPTIONS[slot])
         after = self.figure(slot.stage, None, CAPTIONS[slot])
-        close_up = Spotlight(before, after, slot, self.work_of(slot), HUES[slot].rgb, title=BACKENDS[slot].tab)
         asked = ASKED_BY[slot](self.lines)
         geometry = before.figure.geometry
-        sub_query = Magnified(before, geometry.slots[slot], HUES[slot].rgb, shrink=0.3)
-        if slot in geometry.open_fields:
-            sub_query.marks = (Mark(geometry.open_fields[slot], OPEN_FIELD_HUE),)
-        sub_query.held_for = self.sub_query_hold(asked, sub_query, close_up)
-        return [
-            NarratedScene(sub_query, (asked,), runs_on=True),
-            # the lines over the close-up start as its work does, once it has grown out
-            NarratedScene(close_up, NARRATED_BY[slot](self.lines), delay=max(close_up.grow - LEAD, 0.0)),
-            NarratedScene(
-                Magnified(
-                    after,
-                    after.figure.geometry.answers[slot],
-                    HUES[slot].rgb,
-                    held_for=ANSWER_FOR,
-                    grow=0.5,
-                    shrink=0.4,
-                    magnification_up_to=ANSWER_MAGNIFICATION,
-                )
-            ),
-        ]
+        marks = (Mark(geometry.open_fields[slot], OPEN_FIELD_HUE),) if slot in geometry.open_fields else ()
+        scene = Answering(before, after, slot, self.work_of(slot), HUES[slot].rgb, title=BACKENDS[slot].tab, marks=marks)
+        scene.query_for = self.query_hold(asked, scene)
+        return NarratedScene(scene, (asked, *NARRATED_BY[slot](self.lines)))
+
+    def query_hold(self, asked: Line, scene: Answering) -> float:
+        """
+        Seconds the sub-query is held alone so that the work starts as the first line
+        over it does: once the line about what is asked and the pause after it are over.
+
+        :param asked: The line said over the sub-query.
+        :param scene: The backend answering it.
+        """
+        said = self.voice.speaks(asked.said).duration
+        return max(LEAD + said + PAUSE - scene.grow - scene.close_up_grow, QUERY_HELD_AT_LEAST)
 
     def execution(self) -> Scene:
         """
@@ -641,20 +632,6 @@ class VideoAssembly:
             ViewOfTheRun(by_hand, start - HAND_HELD_OFFSET, HAND_HELD_FRAMING, "a camera held by hand beside the table"),
         )
         return SideBySide(views, length=end - start, speed=speed, caption=EXECUTION_CAPTION)
-
-    def sub_query_hold(self, asked: Line, sub_query: Magnified, close_up: Spotlight) -> float:
-        """
-        Seconds the magnified sub-query is held so that its line, running on while the
-        close-up grows out over it, ends a margin before the close-up's own lines start.
-
-        :param asked: The line said over the sub-query.
-        :param sub_query: The sub-query magnified.
-        :param close_up: The close-up that follows it.
-        """
-        said = self.voice.speaks(asked.said).duration
-        ends = LEAD + said + SUB_QUERY_MARGIN
-        # the close-up's lines start its grow after it starts, which is a dissolve before the sub-query ends
-        return max(ends + DISSOLVE - close_up.grow - sub_query.grow - sub_query.shrink, 1.5)
 
     def perturbation_matrix(self) -> PerturbationMatrix:
         """
@@ -731,10 +708,10 @@ class VideoAssembly:
         ]
         narrated.append(self.plan_reading())
         for slot in Slot:
-            narrated.extend(self.backend_scenes(slot))
+            narrated.append(self.backend_scene(slot))
         narrated.append(
             NarratedScene(
-                FigureScene(self.figure(len(Slot), None, "Every open field answered: the resolved plan is carried out on the robot."), held_for=2.5),
+                FigureScene(self.figure(len(Slot), None, "Every open field answered: the resolved plan is carried out on the robot."), held_for=1.5),
                 (lines.resolved,),
                 runs_on=True,
             )
@@ -757,7 +734,7 @@ class VideoAssembly:
                 delay=self.grid_lines_delay(),
             )
         )
-        narrated.append(NarratedScene(ClosingSlide(self.script, held_for=2.5), (lines.closing,)))
+        narrated.append(NarratedScene(ClosingSlide(self.script, held_for=2.0), (lines.closing,)))
         return Storyboard(narrated, pause=PAUSE)
 
     def query_slide_moments(self, introduction: Sequence[Line]) -> SlideMoments:

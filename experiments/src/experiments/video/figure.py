@@ -128,6 +128,18 @@ class RunReadings:
     What the working-memory panel concludes.
     """
 
+    filled_values: Dict[Slot, str] = field(default_factory=dict)
+    """
+    What takes the place of each ``...`` of the plan once its backend has answered,
+    written into the plan's own lines.
+    """
+
+    filled_lines: Dict[Slot, List[str]] = field(default_factory=dict)
+    """
+    The lines that take the place of a description the plan leaves open as a whole
+    once its backend has answered.
+    """
+
     def as_input(self) -> Dict[str, object]:
         """
         The readings as the figure's input carries them.
@@ -137,6 +149,10 @@ class RunReadings:
             given["resolved_lines"] = {
                 slot.value: lines for slot, lines in self.resolved_lines.items()
             }
+        if self.filled_values:
+            given["filled_values"] = {slot.value: value for slot, value in self.filled_values.items()}
+        if self.filled_lines:
+            given["filled_lines"] = {slot.value: lines for slot, lines in self.filled_lines.items()}
         if self.grasps:
             given["grasps"] = [
                 {
@@ -221,7 +237,9 @@ class FigureGeometry:
 
     slots: Dict[Slot, FigureBox]
     """
-    Each open slot of the plan: the sub-query its backend answers, as the plan boxes it.
+    Each open slot of the plan: the sub-query its backend answers, as the plan boxes
+    it; filled in, at this stage, where its backend has answered and the readings say
+    with what.
     """
 
     actions: Dict[PlanAction, FigureBox]
@@ -238,7 +256,15 @@ class FigureGeometry:
     open_fields: Dict[Slot, FigureBox]
     """
     Each ``...`` of the plan, by the slot whose sub-query leaves that field open; a slot
-    whose sub-query is open as a whole, with no ``...`` in it, is absent.
+    whose sub-query is open as a whole, with no ``...`` in it, is absent, and so is one
+    whose ``...`` has been filled in at this stage.
+    """
+
+    filled_fields: Dict[Slot, FigureBox]
+    """
+    Where the plan has been filled in at this stage, by slot: the box around the value
+    that took the slot's ``...``, or around the lines that took a description left open
+    as a whole; a slot not yet answered is absent.
     """
 
     @classmethod
@@ -259,6 +285,11 @@ class FigureGeometry:
                 slot: FigureBox.from_query(given["open_fields"][slot.value])
                 for slot in Slot
                 if slot.value in given["open_fields"]
+            },
+            filled_fields={
+                slot: FigureBox.from_query(given["filled_fields"][slot.value])
+                for slot in Slot
+                if slot.value in given["filled_fields"]
             },
         )
 

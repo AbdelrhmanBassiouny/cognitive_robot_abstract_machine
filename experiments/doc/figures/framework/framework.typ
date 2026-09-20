@@ -46,9 +46,12 @@
 // JSON `video` input: how many backends are filled in (`stage`), which open slot is being
 // answered right now (`focus`), whether only the thought bubble is drawn (`bubble_only`),
 // and the run's own readings in place of the values stated below (`resolved_lines`,
-// `grasps`, `support_reading`, `support_verdict`), and what the panels are titled where
-// the video calls the backends by their class names (`panel_titles`). With no input the
-// figure is the paper's.
+// `grasps`, `support_reading`, `support_verdict`), what the panels are titled where
+// the video calls the backends by their class names (`panel_titles`), and how the
+// underspecified plan itself is filled in once a backend has answered: the value that
+// takes the place of a slot's `...` (`filled_values`) or the lines that take the place
+// of a description left open as a whole (`filled_lines`). With no input the figure is
+// the paper's.
 
 #let video = json(bytes(sys.inputs.at("video", default: "{}")))
 #let given(name, default) = video.at(name, default: default)
@@ -184,6 +187,8 @@
 #let focus = given("focus", none)                        // the open slot being answered now
 #let bubble-only = given("bubble_only", false)           // the thought bubble without the robot below it
 #let resolved-lines = given("resolved_lines", (:))       // a run's own answer, per slot
+#let filled-values = given("filled_values", (:))         // what takes the place of a slot's `...`, once answered
+#let filled-lines = given("filled_lines", (:))           // what takes the place of a slot left open as a whole
 #let reached(slot) = panel-order.position(name => name == slot) < stage
 #let robot-name = "Robot"                     // named generically for double anonymous review
 #let execute-label = "executes the resolved plan"
@@ -256,6 +261,21 @@
   let own = entry + (lines: resolved-lines.at(entry.slot, default: entry.lines))
   let nested = entry.at("nested", default: none)
   if nested == none { own } else { own + (nested: nested + (lines: resolved-lines.at(nested.slot, default: nested.lines))) }
+}
+
+// an entry of the underspecified plan with its slot filled in, once its backend has answered:
+// its `...` replaced by the value read, or its lines by the description's answer
+#let filled-slot(slot, lines) = {
+  if not reached(slot) { return lines }
+  if slot in filled-lines { return filled-lines.at(slot) }
+  if slot in filled-values { return lines.map(line => line.replace("...", filled-values.at(slot))) }
+  lines
+}
+#let filled(entry) = {
+  if "slot" not in entry { return entry }
+  let own = entry + (lines: filled-slot(entry.slot, entry.lines))
+  let nested = entry.at("nested", default: none)
+  if nested == none { own } else { own + (nested: nested + (lines: filled-slot(nested.slot, nested.lines))) }
 }
 
 #let lay-out-plan(entries, x, y0, width) = {
@@ -484,7 +504,7 @@
 // where the columns and the panels lie, in centimetres from the page's top left corner, for
 // the video to aim its close-ups at: `typst query framework.typ "<geometry>"`; with them, each
 // open slot of the plan and the stretch of the plan each action takes, for it to magnify
-#let open-laid-out = lay-out-plan(open-plan, plan-x + 0.15cm, columns-y + 0.15cm, plan-w - 0.3cm)
+#let open-laid-out = lay-out-plan(open-plan.map(filled), plan-x + 0.15cm, columns-y + 0.15cm, plan-w - 0.3cm)
 // the resolved plan laid out the same way, for each answer written into a slot's place to magnify
 #let resolved-laid-out = lay-out-plan(resolved-plan.map(answered), resolved-x + 0.15cm, columns-y + 0.15cm, resolved-w - 0.3cm)
 #let box-of(left, top, right, bottom) = (x: left / 1cm, y: top / 1cm, w: (right - left) / 1cm, h: (bottom - top) / 1cm)
@@ -511,6 +531,39 @@
   }
   fields
 }
+// where the underspecified plan has been filled in: the box around the value that took a
+// slot's `...`, or around the lines that took a description left open as a whole, keyed by slot
+// (`plan` is the plan as stated, row for row; the value stands where its `...` stood)
+#let filled-fields(laid-out, plan) = {
+  let fields = (:)
+  for (index, row) in laid-out.rows.enumerate() {
+    if "slot" not in row.entry { continue }
+    let entry = row.entry
+    let stated = plan.at(index)
+    let boxed = ((slot: entry.slot, at: laid-out.slots.at(entry.slot), lines: entry.lines, stated: stated.lines),)
+    let nested = entry.at("nested", default: none)
+    if nested != none { boxed.push((slot: nested.slot, at: laid-out.slots.at(nested.slot), lines: nested.lines, stated: stated.nested.lines)) }
+    for each in boxed {
+      if not reached(each.slot) { continue }
+      if each.slot in filled-lines {
+        let widest = calc.max(..each.lines.map(line => line.len()))
+        let left = each.at.left + inset
+        let top = each.at.top + inset
+        fields.insert(each.slot, box-of(left, top, left + widest * char-width, top + (each.lines.len() - 1) * line-height + 1.15 * code-size))
+      } else if each.slot in filled-values {
+        let value = filled-values.at(each.slot)
+        for (i, line) in each.stated.enumerate() {
+          let column = line.position("...")
+          if column == none { continue }
+          let left = each.at.left + inset + column * char-width
+          let top = each.at.top + inset + i * line-height
+          fields.insert(each.slot, box-of(left, top, left + value.len() * char-width, top + 1.15 * code-size))
+        }
+      }
+    }
+  }
+  fields
+}
 // the rows from the one whose text holds `from` up to the next whose text is `to`, trimmed
 #let action-box(laid-out, from, to) = {
   let rows = laid-out.rows
@@ -529,6 +582,7 @@
   slots: open-laid-out.slots.pairs().map(((name, at)) => (name, box-of(at.left, at.top, at.right, at.bottom))).to-dict(),
   answers: resolved-laid-out.slots.pairs().map(((name, at)) => (name, box-of(at.left, at.top, at.right, at.bottom))).to-dict(),
   open_fields: open-fields(open-laid-out),
+  filled_fields: filled-fields(open-laid-out, open-plan),
   actions: (
     pick_up: action-box(open-laid-out, "PickUpAction", "),"),
     insertion: action-box(open-laid-out, "InsertionAction", ")"),
@@ -545,7 +599,7 @@
   place(dx: resolved-x, dy: columns-y - 0.32cm, caption(title-resolved))
 
   // the plan with its open slots, and the plan with them filled
-  let open = lay-out-plan(open-plan, plan-x + 0.15cm, columns-y + 0.15cm, plan-w - 0.3cm)
+  let open = lay-out-plan(open-plan.map(filled), plan-x + 0.15cm, columns-y + 0.15cm, plan-w - 0.3cm)
   let resolved = lay-out-plan(resolved-plan.map(answered), resolved-x + 0.15cm, columns-y + 0.15cm, resolved-w - 0.3cm)
   card(plan-x, columns-y, plan-w, panels-h, none)
   card(resolved-x, columns-y, resolved-w, panels-h, none)

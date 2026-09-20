@@ -60,7 +60,7 @@ def test_the_example_is_the_plans_grasp_query_and_the_lines_say_what_it_says() -
     query, lines = ExampleQuery(), NarrationLines()
     assert "GraspDescription" in query.lines[0]
     assert "..." in lines.example.written and "three dots" in lines.example.said
-    assert "intended meaning" in lines.meaning.written and "grounded" in lines.meaning.written
+    assert "intended meaning" in lines.meaning.written and "grounding" in lines.meaning.written
 
 
 def test_the_lines_of_the_example_come_up_each_at_its_own_moment() -> None:

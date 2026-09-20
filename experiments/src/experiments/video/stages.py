@@ -9,7 +9,7 @@ which is filled in by the time it lands.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from functools import cached_property
 
 import numpy as np
@@ -23,6 +23,7 @@ from experiments.video.canvas import (
     Area,
     Rgb,
     Typesetting,
+    arrowed,
     dimmed,
     filled,
     fitted,
@@ -240,22 +241,16 @@ class Spotlight(Scene):
     @cached_property
     def close_up(self) -> Area:
         """
-        Where the work plays when fully grown: as large as its own aspect allows
-        within the screen's share, centred across, and set so that the band the work
-        leaves for subtitles lies over the band the screen leaves for them.
+        Where the work plays when fully grown: within the screen's share, centred.
         """
         resolution = self.before.resolution
-        sample = self.work.frame_at(0.0)
         room = Area(
             resolution.width * (1 - CLOSE_UP_SHARE) / 2,
             resolution.stage_height * (1 - CLOSE_UP_SHARE) / 2,
             resolution.width * CLOSE_UP_SHARE,
             resolution.stage_height * CLOSE_UP_SHARE,
         )
-        window = room.fitting(sample.shape[1] / sample.shape[0])
-        works_stage = window.height * (1 - SUBTITLE_BAND_SHARE)
-        top = max(resolution.stage_height - works_stage, resolution.stage_height * (1 - CLOSE_UP_SHARE) / 2)
-        return Area(window.x, top, window.width, window.height)
+        return close_up_window(room, self.work.frame_at(0.0), resolution)
 
     def picture_at(self, seconds: float) -> Frame:
         panel = self.before.panel(self.slot)
@@ -290,11 +285,42 @@ class Spotlight(Scene):
         """
         if not self.title or progress < 1.0:
             return frame
-        lettering = Typesetting(size=22, face=Face.BOLD, color=Ink.PAPER.rgb)
-        width = lettering.width_of(self.title) + 36
-        tab = Area(where.x - 4, where.y - 4 - TAB_HEIGHT, width, TAB_HEIGHT)
-        frame = filled(frame, tab, self.hue)
-        return lettering.written(frame, self.title, (tab.x + 18, tab.centre[1]), Anchor.LEFT_MIDDLE)
+        return tabbed(frame, where, self.title, self.hue)
+
+
+def close_up_window(room: Area, sample: Frame, resolution: Resolution) -> Area:
+    """
+    Where a close-up plays fully grown: as large as its own aspect allows within the
+    room, centred across it, and set so that the band the work leaves for subtitles
+    lies over the band the screen leaves for them.
+
+    :param room: The most of the screen the close-up may take.
+    :param sample: A frame of the work, for its aspect.
+    :param resolution: The size of the screen.
+    """
+    window = room.fitting(sample.shape[1] / sample.shape[0])
+    works_stage = window.height * (1 - SUBTITLE_BAND_SHARE)
+    top = max(resolution.stage_height - works_stage, room.y)
+    return Area(window.x, top, window.width, window.height)
+
+
+def tabbed(frame: Frame, where: Area, title: str, hue: Rgb) -> Frame:
+    """
+    A backend's name on a tab over its close-up.
+
+    :param frame: The frame the close-up is on.
+    :param where: Where the close-up lies.
+    :param title: The name.
+    :param hue: What the tab is filled in.
+    """
+    lettering = Typesetting(size=22, face=Face.BOLD, color=Ink.PAPER.rgb)
+    # a long name is set smaller, so the tab is no wider than the close-up
+    while lettering.width_of(title) + 36 > where.width + 8 and lettering.size > 14:
+        lettering = replace(lettering, size=lettering.size - 1)
+    width = lettering.width_of(title) + 36
+    tab = Area(where.x - 4, where.y - 4 - TAB_HEIGHT, width, TAB_HEIGHT)
+    frame = filled(frame, tab, hue)
+    return lettering.written(frame, title, (tab.x + 18, tab.centre[1]), Anchor.LEFT_MIDDLE)
 
 
 # %% a stretch of the figure magnified
@@ -520,6 +546,340 @@ def highlighted(picture: Frame, around: Area) -> Frame:
     tint = np.asarray(Ink.MARKER.rgb, dtype=np.float32) / 255.0
     result[y0:y1, x0:x1] = (result[y0:y1, x0:x1].astype(np.float32) * tint + 0.5).astype(np.uint8)
     return result
+
+
+# %% a backend answering its sub-query beside it
+
+
+QUERY_COLUMN_WIDTH = 380
+"""
+Pixels wide the column is that holds a sub-query beside the close-up answering it.
+"""
+
+COLUMN_GAP = 24
+"""
+Pixels between the screen's edges and the sub-query's column or the close-up.
+"""
+
+ARROW_ROOM = 64
+"""
+Pixels between the sub-query's column and the close-up: room for the arrow from the
+work to what it answered.
+"""
+
+QUERY_MAGNIFICATION_UP_TO = 4.0
+"""
+The most a held sub-query grows by over the scale the figure is placed at, where its
+column would allow more.
+"""
+
+ARROW_FADE = 0.3
+"""
+Seconds the arrow from the work to what it answered takes to appear.
+"""
+
+ARROW_AIR = 10
+"""
+Pixels the arrow's head stops short of the sub-query's edge.
+"""
+
+
+@dataclass
+class Answering(Scene):
+    """
+    A backend answering its sub-query: the sub-query grows out of the plan into a
+    column on the left and is held there while the work grows out of the backend's
+    panel beside it and plays; then an arrow from the work points to what it answered
+    and the answer is written into the sub-query as written, its ``...`` replaced,
+    which shrinks back into its place in the plan as the work shrinks back into its
+    panel, both filled in by the time they land.
+    """
+
+    before: FigureOnCanvas
+    """
+    The figure as it stands while the backend works, with its slot ringed.
+    """
+
+    after: FigureOnCanvas
+    """
+    The figure once the backend has answered, which everything shrinks back onto.
+    """
+
+    slot: Slot
+    """
+    The slot being answered.
+    """
+
+    work: Scene
+    """
+    What plays in the close-up.
+    """
+
+    hue: Rgb
+    """
+    The colour the sub-query, the close-up and the arrow are drawn in.
+    """
+
+    title: str = ""
+    """
+    What the backend at work is called, on a tab over the close-up; nothing for no tab.
+    """
+
+    marks: Tuple[Mark, ...] = ()
+    """
+    The parts of the sub-query pointed to while it is held: its open field, if it has
+    one, which the arrow then aims at.
+    """
+
+    filled_hue: Rgb = Ink.ASKED.rgb
+    """
+    The colour what was filled in is ringed in, once written.
+    """
+
+    query_for: float = 1.5
+    """
+    Seconds the sub-query is held alone, grown out, before the close-up grows out.
+    """
+
+    grow: float = 0.8
+    """
+    Seconds the sub-query takes to grow out.
+    """
+
+    close_up_grow: float = 1.2
+    """
+    Seconds the close-up takes to grow out.
+    """
+
+    fill_for: float = 0.8
+    """
+    Seconds the answer takes to be written into the sub-query.
+    """
+
+    filled_for: float = 0.6
+    """
+    Seconds the answer is held, written in.
+    """
+
+    shrink: float = 0.6
+    """
+    Seconds the answer and the close-up take to shrink back.
+    """
+
+    # %% when things happen
+
+    @property
+    def close_up_from(self) -> float:
+        """
+        Seconds into the scene the close-up starts growing out.
+        """
+        return self.grow + self.query_for
+
+    @property
+    def work_from(self) -> float:
+        """
+        Seconds into the scene the work starts playing, the close-up fully grown.
+        """
+        return self.close_up_from + self.close_up_grow
+
+    @property
+    def fill_from(self) -> float:
+        """
+        Seconds into the scene the answer starts being written in, the work over.
+        """
+        return self.work_from + self.work.duration
+
+    @property
+    def shrink_from(self) -> float:
+        """
+        Seconds into the scene everything starts shrinking back.
+        """
+        return self.fill_from + self.fill_for + self.filled_for
+
+    @property
+    def duration(self) -> float:
+        return self.shrink_from + self.shrink
+
+    # %% where things lie
+
+    @cached_property
+    def close_up(self) -> Area:
+        """
+        Where the work plays fully grown: right of the sub-query's column, as large as
+        the work's stage allows there, centred; the band the work leaves clear for
+        subtitles is cut off, since the close-up stays above the screen's.
+        """
+        resolution = self.before.resolution
+        left = COLUMN_GAP + QUERY_COLUMN_WIDTH + ARROW_ROOM
+        room = Area(
+            left,
+            resolution.stage_height * (1 - CLOSE_UP_SHARE) / 2,
+            resolution.width - left - COLUMN_GAP,
+            resolution.stage_height * CLOSE_UP_SHARE,
+        )
+        sample = self._works_stage(self.work.frame_at(0.0))
+        return room.fitting(sample.shape[1] / sample.shape[0])
+
+    @staticmethod
+    def _works_stage(frame: Frame) -> Frame:
+        """
+        A frame of the work without the band it leaves clear for subtitles.
+        """
+        return frame[: int(round(frame.shape[0] * (1 - SUBTITLE_BAND_SHARE)))]
+
+    @property
+    def query_box(self) -> FigureBox:
+        """
+        The sub-query, in the figure's centimetres.
+        """
+        return self.before.figure.geometry.slots[self.slot]
+
+    @property
+    def filled_box(self) -> FigureBox:
+        """
+        The sub-query with its answer written in, where it lies in the plan once its
+        backend has answered, in the figure's centimetres.
+        """
+        return self.after.figure.geometry.slots[self.slot]
+
+    @cached_property
+    def scale(self) -> float:
+        """
+        The pixels per centimetre the sub-query and its answer are read at.
+        """
+        return min(QUERY_COLUMN_WIDTH / self.query_box.width, self.before.pixels_per_centimetre * QUERY_MAGNIFICATION_UP_TO)
+
+    @cached_property
+    def query_window(self) -> Area:
+        """
+        Where the sub-query lies fully grown: in its column, level with the middle of
+        the close-up.
+        """
+        width, height = self.query_box.width * self.scale, self.query_box.height * self.scale
+        return Area(COLUMN_GAP + (QUERY_COLUMN_WIDTH - width) / 2, self.close_up.centre[1] - height / 2, width, height)
+
+    @cached_property
+    def filled_window(self) -> Area:
+        """
+        Where the sub-query lies with its answer written in: from its own top left
+        corner.
+        """
+        query = self.query_window
+        return Area(query.x, query.y, self.filled_box.width * self.scale, self.filled_box.height * self.scale)
+
+    @property
+    def aimed_at(self) -> Tuple[float, float]:
+        """
+        Where the arrow from the work points: just outside the sub-query's right edge,
+        level with its open field if it has one, else with its middle, so that the
+        arrow never lies over the writing.
+        """
+        window = self.query_window
+        x = max(window.right, self.filled_window.right) + ARROW_AIR
+        if not self.marks:
+            return x, window.centre[1]
+        field = self.marks[0].box
+        return x, window.y + (field.y + field.height / 2 - self.query_box.y) * self.scale
+
+    # %% drawing
+
+    @cached_property
+    def query_picture(self) -> Frame:
+        return self.before.cut_out(self.query_box, self.scale)
+
+    @cached_property
+    def filled_picture(self) -> Frame:
+        return self.after.cut_out(self.filled_box, self.scale)
+
+    @property
+    def filled_marks(self) -> Tuple[Mark, ...]:
+        """
+        What was filled in, marked as the answer is written: the value that took the
+        ``...``, or the lines that took the whole description.
+        """
+        fields = self.after.figure.geometry.filled_fields
+        if self.slot not in fields:
+            return ()
+        return (Mark(fields[self.slot], self.filled_hue, from_second=self.fill_from),)
+
+    def filled_picture_at(self, seconds: float) -> Frame:
+        """
+        The sub-query with its answer written in, what was filled in marked.
+        """
+        return marked(self.filled_picture, (self.filled_box.x, self.filled_box.y), self.scale, self.filled_marks, seconds)
+
+    def query_grown_at(self, seconds: float) -> float:
+        """
+        How far the sub-query's column has grown at a moment, from zero to one.
+        """
+        return grown(seconds, self.grow, self.shrink_from - self.grow, self.shrink)
+
+    def close_up_grown_at(self, seconds: float) -> float:
+        """
+        How far the close-up has grown at a moment, from zero to one.
+        """
+        return grown(seconds - self.close_up_from, self.close_up_grow, self.shrink_from - self.work_from, self.shrink)
+
+    def filled_at(self, seconds: float) -> float:
+        """
+        How far the answer has been written in at a moment, from zero to one.
+        """
+        return eased((seconds - self.fill_from) / self.fill_for)
+
+    def picture_at(self, seconds: float) -> Frame:
+        shrinking = seconds >= self.shrink_from
+        shown = self.after if shrinking else self.before
+        query_progress = self.query_grown_at(seconds)
+        close_up_progress = self.close_up_grown_at(seconds) if seconds >= self.close_up_from else 0.0
+        frame = dimmed(shown.frame, 0.55 * max(query_progress, close_up_progress))
+        frame = self._column_drawn(frame, shown, seconds, query_progress, shrinking)
+        if close_up_progress > 0.0:
+            frame = self._close_up_drawn(frame, shown, seconds, close_up_progress)
+        return self._arrow_drawn(frame, seconds)
+
+    def _column_drawn(self, frame: Frame, shown: FigureOnCanvas, seconds: float, progress: float, shrinking: bool) -> Frame:
+        """
+        The sub-query, or the answer written into it, where it lies at a moment.
+        """
+        filled_in = self.filled_at(seconds)
+        if shrinking:
+            where = shown.area_of(self.filled_box).towards(self.filled_window, progress)
+            return self._pasted(frame, self.filled_picture_at(seconds), where)
+        where = shown.area_of(self.query_box).towards(self.query_window, progress)
+        picture = marked(self.query_picture, (self.query_box.x, self.query_box.y), self.scale, self.marks, seconds)
+        with_query = self._pasted(frame, picture, where)
+        if filled_in <= 0.0:
+            return with_query
+        return blended(with_query, self._pasted(frame, self.filled_picture_at(seconds), self.filled_window), filled_in)
+
+    def _close_up_drawn(self, frame: Frame, shown: FigureOnCanvas, seconds: float, progress: float) -> Frame:
+        """
+        The work, where it lies at a moment, with its tab once fully grown.
+        """
+        where = shown.panel(self.slot).towards(self.close_up, progress)
+        played = min(max(seconds - self.work_from, 0.0), self.work.duration - 1e-6)
+        frame = self._pasted(frame, self._works_stage(self.work.frame_at(played)), where)
+        if self.title and progress >= 1.0:
+            frame = tabbed(frame, where, self.title, self.hue)
+        return frame
+
+    def _arrow_drawn(self, frame: Frame, seconds: float) -> Frame:
+        """
+        The arrow from the work's left middle to what it answered, from the moment the
+        answer is written in until everything shrinks back.
+        """
+        if seconds < self.fill_from or seconds >= self.shrink_from:
+            return frame
+        weight = eased((seconds - self.fill_from) / ARROW_FADE)
+        start = (self.close_up.x - 8, self.close_up.centre[1])
+        return blended(frame, arrowed(frame, start, self.aimed_at, self.hue, thickness=4), weight)
+
+    def _pasted(self, frame: Frame, picture: Frame, where: Area) -> Frame:
+        """
+        A picture framed in the hue and pasted where it lies.
+        """
+        frame = filled(frame, where.inset(-4), self.hue)
+        return pasted(frame, picture, where)
 
 
 # %% a stretch of the figure read through, scrolling

@@ -72,15 +72,26 @@ lowered into the hole in both. Without such a film the robot's camera plays alon
 The figure's typst source states, with its geometry, where each open slot of the plan
 and each of its two actions lie, and where each answer is written into the resolved
 plan. `Magnified` grows such a stretch out of the figure to where it can be read,
-holds it and shrinks it back: each backend's sub-query is magnified before its
-close-up, and its answer in the resolved plan after. `Scrolled` grows the whole plan
+holds it and shrinks it back. `Answering` is how each backend is watched: its
+sub-query grows out of the plan into a column on the left and is held there while
+the line says what is asked; the backend's work grows out of its panel beside it and
+plays; then an arrow from the work points to the `...` (or the whole sub-query) and
+the answer is written into it -- the sub-query exactly as written with its `...`
+replaced by what was read, or, for a description left open as a whole, what was
+found (`RunReadings.filled_values` and `filled_lines`, which the figure's typst
+source writes into the underspecified plan once that slot's backend has answered),
+what was filled in marked the way the `...` was (`filled_fields` in the geometry) --
+before the filled sub-query shrinks back into its place in the plan and the work into
+its panel, both filled in by the time they land. So the plan on the left fills in as
+the backends answer, and the resolved plan on the right is never zoomed into on its
+own. `Scrolled` grows the whole plan
 out to a window it is read through and scrolls it down at `ReadingStop`s the assembly
 times to the lines about the plan: the plan rests at its top while the line introduces
 it, rests again with every `...` in view while the line names what is left open, and
 has scrolled to its end as the line ends. The source also states where each `...`
 lies (`open_fields`), and a `Mark` points to it from the moment the line names its
 field -- a highlighter's yellow over it, ringed -- on the scrolled plan and again on
-the sub-query magnified before its close-up.
+the sub-query held beside its close-up.
 
 The queries put to long-term memory over the grid are written in the match syntax,
 `a(Type)` for each class with the event named where it is matched
@@ -111,11 +122,13 @@ The queries put to long-term memory over the grid are written in the match synta
 - `figure.py` and `stages.py` -- the paper's framework figure, compiled from its own
   typst source with a `video` input that says how many backends have answered and
   which slot is being answered now, and what the panels are titled where the video
-  calls the backends by their class names; `Spotlight` grows a backend's work out of
-  its panel of the figure, names the backend on a tab over it, and shrinks it back
-  once answered; `Magnified` does the same for a stretch of the figure itself, and
-  `Scrolled` for one too tall to read at once; a `Mark` on either points to a part
-  of the stretch from a moment on.
+  calls the backends by their class names; `Answering` holds a backend's sub-query
+  beside its work grown out of its panel, names the backend on a tab over the work,
+  writes the answer into the sub-query as written and shrinks both back once answered
+  (`Spotlight` is the work alone, grown out to the whole screen); `Magnified` grows a
+  stretch of the figure itself out to where it can be read, and `Scrolled` one too
+  tall to read at once; a `Mark` on any of them points to a part of the stretch from
+  a moment on.
 - `perception.py`, `twin.py`, `grasp.py`, `rules.py` -- one scene per backend, each
   driving the backend's own code on the recorded run: the narrowing, the predicate's
   boxes, the model's samples, the rule tree's trace. The twin is drawn dressed as

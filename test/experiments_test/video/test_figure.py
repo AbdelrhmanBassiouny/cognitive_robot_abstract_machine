@@ -10,9 +10,14 @@ import pytest
 
 from experiments.video.canvas import Area, Ink
 from experiments.video.stages import (
+    ARROW_AIR,
+    ARROW_ROOM,
+    COLUMN_GAP,
     MAGNIFIED_SHARE,
     MARK_FADE,
+    QUERY_COLUMN_WIDTH,
     TAB_HEIGHT,
+    Answering,
     FigureOnCanvas,
     Magnified,
     Mark,
@@ -147,6 +152,36 @@ def test_the_geometry_boxes_each_ellipsis_of_the_plan_inside_the_slot_that_leave
         assert field.height < field.width < field.height * 2
 
 
+def test_the_plan_is_filled_in_where_its_backend_has_answered_and_the_readings_say_with_what() -> None:
+    readings = RunReadings(
+        filled_values={Slot.PROBABILISTIC: "LEFT", Slot.RULES: "CUBE"},
+        filled_lines={Slot.PERCEPTION: ["cube_1  # CYAN, CUBE", "  at (1, 2, 3) m,"]},
+    )
+    assert readings.as_input() == {
+        "filled_values": {"probabilistic": "LEFT", "rules": "CUBE"},
+        "filled_lines": {"perception": ["cube_1  # CYAN, CUBE", "  at (1, 2, 3) m,"]},
+    }
+    open_plan = FrameworkFigure(stage=0, readings=readings).geometry
+    grasp_answered = FrameworkFigure(stage=Slot.PROBABILISTIC.stage, readings=readings).geometry
+    # the grasp's `...` is gone, its box as wide and tall as before; the hole's is still open
+    assert Slot.PROBABILISTIC in open_plan.open_fields and Slot.PROBABILISTIC not in grasp_answered.open_fields
+    assert Slot.RULES in grasp_answered.open_fields
+    filled, open_ = grasp_answered.slots[Slot.PROBABILISTIC], open_plan.slots[Slot.PROBABILISTIC]
+    assert (filled.width, filled.height) == (open_.width, open_.height)
+    # the cube's description, two lines in place of four, leaves a shorter box
+    assert grasp_answered.slots[Slot.PERCEPTION].height < open_plan.slots[Slot.PERCEPTION].height
+    # what was filled in is boxed: the value where the `...` was, the lines of the cube
+    assert not open_plan.filled_fields
+    assert set(grasp_answered.filled_fields) == {Slot.PERCEPTION, Slot.PROBABILISTIC}
+    value, was = grasp_answered.filled_fields[Slot.PROBABILISTIC], open_plan.open_fields[Slot.PROBABILISTIC]
+    # where the dots stood (the box above has shrunk, so the rows lie higher), four letters wide
+    assert (value.x, value.height) == (was.x, was.height) and value.width > was.width
+    assert value.y - grasp_answered.slots[Slot.PROBABILISTIC].y == pytest.approx(was.y - open_plan.slots[Slot.PROBABILISTIC].y)
+    lines, box = grasp_answered.filled_fields[Slot.PERCEPTION], grasp_answered.slots[Slot.PERCEPTION]
+    assert box.x < lines.x and lines.x + lines.width < box.x + box.width
+    assert box.y < lines.y and lines.y + lines.height < box.y + box.height
+
+
 # %% the close-up over the figure
 
 
@@ -161,6 +196,91 @@ def test_the_close_up_carries_the_backends_name_on_a_tab_once_grown() -> None:
     assert tuple(named.frame_at(1.0)[on_tab]) == hue
     assert tuple(bare.frame_at(1.0)[on_tab]) != hue
     assert tuple(named.frame_at(0.0)[on_tab]) != hue
+
+
+# %% a backend answering its sub-query beside it
+
+
+def answering(slot: Slot, marks=()) -> Answering:
+    before = FigureOnCanvas(FrameworkFigure(stage=slot.stage - 1, focus=slot))
+    after = FigureOnCanvas(FrameworkFigure(stage=slot.stage))
+    work = Still(np.full((90, 160, 3), 200, dtype=np.uint8), held_for=2.0)
+    return Answering(
+        before, after, slot, work, hue=(0x6D, 0x28, 0xD9), title="RippleDownRulesBackend", marks=marks,
+        query_for=1.0, grow=0.5, close_up_grow=0.5, fill_for=0.5, filled_for=0.5, shrink=0.5,
+    )
+
+
+def test_the_answering_runs_query_then_close_up_then_work_then_fill_then_shrink() -> None:
+    scene = answering(Slot.RULES)
+    assert scene.close_up_from == pytest.approx(1.5)
+    assert scene.work_from == pytest.approx(2.0)
+    assert scene.fill_from == pytest.approx(4.0)
+    assert scene.shrink_from == pytest.approx(5.0)
+    assert scene.duration == pytest.approx(5.5)
+    assert scene.query_grown_at(0.0) == 0.0 and scene.query_grown_at(0.5) == 1.0 and scene.query_grown_at(4.9) == 1.0
+    assert scene.query_grown_at(5.5) == pytest.approx(0.0)
+    assert scene.close_up_grown_at(1.5) == 0.0 and scene.close_up_grown_at(2.0) == 1.0
+    assert scene.close_up_grown_at(4.9) == 1.0 and scene.close_up_grown_at(5.5) == pytest.approx(0.0)
+    assert scene.filled_at(3.9) == 0.0 and scene.filled_at(4.5) == 1.0
+
+
+def test_the_sub_query_is_held_in_its_column_and_the_close_up_right_of_it() -> None:
+    scene = answering(Slot.RULES)
+    query, close_up = scene.query_window, scene.close_up
+    assert COLUMN_GAP <= query.x and query.right <= COLUMN_GAP + QUERY_COLUMN_WIDTH
+    assert close_up.x >= COLUMN_GAP + QUERY_COLUMN_WIDTH + ARROW_ROOM
+    assert close_up.bottom <= scene.before.resolution.stage_height
+    assert close_up.right <= scene.before.resolution.width - COLUMN_GAP
+    assert query.width == pytest.approx(scene.query_box.width * scene.scale)
+    assert scene.filled_window.x == query.x and scene.filled_window.y == query.y
+    assert scene.filled_window.width == pytest.approx(scene.filled_box.width * scene.scale)
+
+
+def test_what_was_filled_in_is_marked_once_the_answer_is_written() -> None:
+    readings = RunReadings(filled_values={Slot.RULES: "CUBE"})
+    before = FigureOnCanvas(FrameworkFigure(stage=Slot.RULES.stage - 1, focus=Slot.RULES, readings=readings))
+    after = FigureOnCanvas(FrameworkFigure(stage=Slot.RULES.stage, readings=readings))
+    work = Still(np.full((90, 160, 3), 200, dtype=np.uint8), held_for=2.0)
+    scene = Answering(before, after, Slot.RULES, work, hue=(0, 0, 0), query_for=1.0, grow=0.5, close_up_grow=0.5, fill_for=0.5, filled_for=0.5, shrink=0.5)
+    assert len(scene.filled_marks) == 1 and scene.filled_marks[0].from_second == scene.fill_from
+    field = after.figure.geometry.filled_fields[Slot.RULES]
+    box = scene.filled_box
+    on_value = (int((field.y + field.height / 2 - box.y) * scene.scale), int((field.x + field.width / 2 - box.x) * scene.scale))
+    plain = scene.filled_picture[on_value]
+    marked_at = scene.filled_picture_at(scene.fill_from + MARK_FADE)[on_value]
+    assert not np.array_equal(plain, marked_at)
+    assert np.array_equal(scene.filled_picture_at(scene.fill_from - 0.1)[on_value], plain)
+
+
+def test_the_arrow_aims_at_the_open_field_when_there_is_one_else_at_the_sub_query() -> None:
+    geometry = FrameworkFigure(stage=0).geometry
+    with_field = answering(Slot.RULES, marks=(Mark(geometry.open_fields[Slot.RULES], (255, 0, 0)),))
+    without = answering(Slot.RULES)
+    query = with_field.query_window
+    # outside the writing, level with the field
+    assert with_field.aimed_at[0] >= max(query.right, with_field.filled_window.right) + ARROW_AIR
+    assert query.y < with_field.aimed_at[1] < query.centre[1]
+    assert without.aimed_at[0] == with_field.aimed_at[0] and without.aimed_at[1] == query.centre[1]
+
+
+def test_the_answer_is_written_in_while_the_work_is_still_shown_and_the_column_lands_on_the_resolved_plan() -> None:
+    scene = answering(Slot.RULES)
+    on_query = (int(scene.query_window.y + 2), int(scene.query_window.x + 2))
+    on_close_up = (int(scene.close_up.y + 10), int(scene.close_up.x + 10))
+    held = scene.frame_at(1.0)
+    assert np.array_equal(held[on_query], scene.query_picture[2, 2])
+    assert tuple(held[on_close_up]) != (200, 200, 200)
+    filled_in = scene.frame_at(4.9)
+    # blended in fully, give or take the resampling onto the window
+    assert np.abs(filled_in[on_query].astype(int) - scene.filled_picture[2, 2].astype(int)).max() <= 8
+    assert tuple(filled_in[on_close_up]) == (200, 200, 200)
+    # landed: the filled sub-query over its own place in the plan
+    landed = scene.frame_at(scene.duration - 1e-3)
+    x, y, width, height = scene.after.area_of(scene.filled_box).rounded()
+    over_the_box = (slice(y, y + height), slice(x, x + width))
+    # the same writing, resampled: alike on average, whatever single glyph edges do
+    assert np.abs(landed[over_the_box].astype(int) - scene.after.frame[over_the_box].astype(int)).mean() < 12
 
 
 # %% a stretch of the figure magnified
