@@ -864,6 +864,24 @@ class SceneObject:
 
 
 @dataclass
+class ApproachSceneObject:
+    """
+    An action standing for one whose argument is a whole entity carrying an enum, so a
+    query over it has to describe that entity's own kind as well as its own fields.
+    """
+
+    target: SceneObject
+    """
+    The object approached, named outright rather than described.
+    """
+
+    speed: float
+    """
+    How fast it is approached, which a query may leave underspecified.
+    """
+
+
+@dataclass
 class SceneRoom:
     position: KRROODPosition
     orientation: KRROODOrientation
@@ -1004,6 +1022,55 @@ class PickingRobotAggregations(AggregationStatistic[PickingRobot]):
         Total number of grasp attempts.
         """
         [result] = count(variable(GraspAttempt, self.instance.attempts)).tolist()
+        return result
+
+
+class RobotStation(Enum):
+    """
+    Where a picking robot is stationed.
+    """
+
+    LAB = auto()
+    FACTORY = auto()
+
+
+@dataclass
+class StationedPickingRobot:
+    """
+    A picking robot with a class-level enum attribute -- its station -- alongside its
+    exchangeable grasp attempts.
+    """
+
+    station: RobotStation
+    """
+    Where the robot is stationed.
+    """
+
+    skill: float
+    """
+    The robot's skill level.
+    """
+
+    attempts: List[GraspAttempt]
+    """
+    The robot's grasp attempts.
+    """
+
+
+@dataclass
+class StationedPickingRobotAggregations(AggregationStatistic[StationedPickingRobot]):
+    """
+    Aggregation statistics for :class:`StationedPickingRobot` over its ``attempts``
+    field.
+    """
+
+    @aggregation_statistic("attempts")
+    def success_count(self) -> int:
+        """
+        Count of successful grasp attempts.
+        """
+        grasped_var = variable(GraspAttempt, self.instance.attempts).grasped
+        [result] = entity(count_range(grasped_var)).where(grasped_var == True).tolist()
         return result
 
 

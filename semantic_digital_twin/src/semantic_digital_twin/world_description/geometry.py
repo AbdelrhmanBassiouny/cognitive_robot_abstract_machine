@@ -9,6 +9,7 @@ import shutil
 from abc import ABC, abstractmethod
 from copy import deepcopy
 from dataclasses import dataclass, field, fields, Field
+from enum import StrEnum, auto
 from functools import cached_property
 from pathlib import Path
 
@@ -45,7 +46,10 @@ from semantic_digital_twin.spatial_types import (
     Point3,
     Vector3,
 )
-from semantic_digital_twin.world_description.mesh_file_storage import MeshFileStorage
+from semantic_digital_twin.world_description.mesh_file_storage import (
+    MeshFileSources,
+    MeshFileStorage,
+)
 
 if TYPE_CHECKING:
     from semantic_digital_twin.world_description.world_entity import (
@@ -300,6 +304,30 @@ class Texture:
         self.repeat = tuple(float(value) for value in self.repeat)
 
 
+class SurfaceFinish(StrEnum):
+    """
+    How a surface reflects the light that falls on it.
+    """
+
+    MATTE = auto()
+    """
+    Scatters light evenly in every direction, so the surface shows its own color and
+    keeps a sharp boundary against whatever rests on it.
+    """
+
+    GLOSSY = auto()
+    """
+    Scatters light unevenly, so the surface shows its own color under a highlight that
+    moves with the viewpoint.
+    """
+
+    MIRROR = auto()
+    """
+    Reflects light directionally, so the surface shows what stands on and above it
+    rather than its own color.
+    """
+
+
 @dataclass
 class Scale:
     """
@@ -421,6 +449,15 @@ class Shape(ABC, SubclassJSONSerializer, HasSimulatorProperties):
     Only meaningful for primitive shapes (:class:`Box`, :class:`Cylinder`,
     :class:`Sphere`); :class:`Mesh` shapes carry their own texture as part of their
     trimesh visual instead.
+    """
+
+    finish: Optional[SurfaceFinish] = None
+    """
+    How this shape's surface takes light, or ``None`` where nobody has stated it.
+
+    ..note:: ``None`` is deliberately distinct from :attr:`SurfaceFinish.MATTE`, so a
+        reader deciding how to look at the surface can tell a surface nobody described
+        from one described as matte.
     """
 
     @property
@@ -665,7 +702,11 @@ class Mesh(Shape):
         if vertex_colors is not None:
             file_type = "obj"
         return cls.from_trimesh(
-            mesh=mesh, origin=origin, scale=scale, file_type=file_type
+            mesh=mesh,
+            origin=origin,
+            scale=scale,
+            file_type=file_type,
+            finish=from_json(data.get("finish"), **kwargs),
         )
 
     @classmethod
@@ -705,11 +746,22 @@ class Mesh(Shape):
         return copy_mesh
 
     @property
+    def local_file(self) -> Path:
+        """
+        The mesh's file on this machine.
+
+        A :attr:`filename` naming a file this machine does not hold is answered by
+        whichever registered source claims it, which copies it here first. The material
+        and texture files the mesh refers to by name sit beside the answer.
+        """
+        return MeshFileSources().resolve(self.filename)
+
+    @property
     def unscaled_mesh(self) -> trimesh.Trimesh:
         """
         The mesh exactly as the file describes it, before this shape's scale is applied.
         """
-        mesh = self._load_in_meters(self.filename, process=False)
+        mesh = self._load_in_meters(str(self.local_file), process=False)
         if mesh.visual.kind != "vertex":
             # Welding duplicate vertices is what makes a mesh watertight, which volume
             # and boolean operations require; formats like STL give every face its own
@@ -817,6 +869,7 @@ class Mesh(Shape):
         texture_file_path: Optional[str] = None,
         directory: Optional[Path] = None,
         file_type: str = "obj",
+        finish: Optional[SurfaceFinish] = None,
     ) -> "Mesh":
         """
         Create a Mesh by exporting a trimesh to a file.
@@ -835,6 +888,7 @@ class Mesh(Shape):
         :param directory: Where to place the mesh's own directory inside of /tmp, defaulting to a root
             that is removed when this process exits.
         :param file_type: Format to export the mesh in.
+        :param finish: How the exported mesh's surface takes light.
         :return: Mesh reading from the exported file.
         """
         file_type = file_type.lower()
@@ -864,6 +918,7 @@ class Mesh(Shape):
             origin=origin,
             scale=scale,
             filename=str(mesh_file_path),
+            finish=finish,
         )
 
     @classmethod
