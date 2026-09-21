@@ -930,7 +930,9 @@ def test_gcs_navigation_arrives_at_each_waypoint_facing_the_next_one(
     """
     world, robot, context = immutable_multiple_robot_apartment
 
-    action = PathPlanningNavigateAction(Pose.from_xyz_rpy(5, 1, 0, reference_frame=world.root))
+    action = PathPlanningNavigateAction(
+        Pose.from_xyz_rpy(5, 1, 0, reference_frame=world.root)
+    )
     execute_single(action, context=context)
 
     waypoints = action._waypoints()
@@ -961,7 +963,9 @@ def test_gcs_navigation_plans_on_the_floor_the_robot_stands_on(
     """
     world, robot, context = immutable_multiple_robot_apartment
 
-    action = PathPlanningNavigateAction(Pose.from_xyz_rpy(5, 1, 0, reference_frame=world.root))
+    action = PathPlanningNavigateAction(
+        Pose.from_xyz_rpy(5, 1, 0, reference_frame=world.root)
+    )
     execute_single(action, context=context)
 
     floor = action._floor
@@ -990,7 +994,9 @@ def test_gcs_navigation_takes_a_waypoints_height_from_that_waypoints_frame(
     """
     world, robot, context = immutable_multiple_robot_apartment
 
-    action = PathPlanningNavigateAction(Pose.from_xyz_rpy(5, 1, 0, reference_frame=world.root))
+    action = PathPlanningNavigateAction(
+        Pose.from_xyz_rpy(5, 1, 0, reference_frame=world.root)
+    )
     execute_single(action, context=context)
 
     # The last pose is the requested target, which carries the caller's own height.
@@ -1014,7 +1020,9 @@ def test_gcs_navigation_needs_a_floor_below_the_robot(
     )
     world.notify_state_change()
 
-    action = PathPlanningNavigateAction(Pose.from_xyz_rpy(5, 1, 0, reference_frame=world.root))
+    action = PathPlanningNavigateAction(
+        Pose.from_xyz_rpy(5, 1, 0, reference_frame=world.root)
+    )
     execute_single(action, context=context)
 
     with pytest.raises(NoFloorBelowRobot) as raised:
