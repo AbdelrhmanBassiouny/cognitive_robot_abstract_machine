@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import logging
+from contextlib import nullcontext
+from datetime import datetime
 from dataclasses import dataclass, field
 
 from typing_extensions import List, Dict, ClassVar, Optional, TYPE_CHECKING
@@ -30,11 +32,70 @@ if TYPE_CHECKING:
     from coraplex.robot_plans.actions.base import ActionDescription
 
     from coraplex.plans.condition_nodes import ConditionNode
-    from coraplex.plans.plan_node import MotionNode
+    from coraplex.plans.plan_node import MotionNode, PlanNode
     from coraplex.plans.underspecified import UnderspecifiedNode
     from coraplex.datastructures.dataclasses import Context
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class MotionLifeCycleTracker:
+    """
+    Report native task transitions as their corresponding plan-node events.
+    """
+
+    motion_mappings: dict[MotionNode, Task]
+    """
+    The plan nodes and tasks realizing their motions.
+    """
+
+    _last_states: dict[MotionNode, LifeCycleValues] = field(init=False)
+    """
+    The last reported lifecycle state of each task.
+    """
+
+    def __post_init__(self) -> None:
+        """
+        Initialize observation before any task has begun execution.
+        """
+        self._last_states = {
+            node: LifeCycleValues.NOT_STARTED for node in self.motion_mappings
+        }
+
+    def emit_transitions(self) -> None:
+        """
+        Publish changed states and exactly one start/end per executed motion.
+        """
+        for node, task in self.motion_mappings.items():
+            previous = self._last_states[node]
+            current = task.life_cycle_state
+            if current == previous:
+                continue
+            self._last_states[node] = current
+            if previous == LifeCycleValues.NOT_STARTED:
+                node.status = LifeCycleValues.RUNNING
+                node.start_time = datetime.now()
+                node.end_time = None
+                node.plan.notify_node_started(node)
+            node.status = current
+            if current.is_terminal:
+                node.end_time = datetime.now()
+                node.plan.notify_node_ended(node)
+
+    def end_active_motions(self, outcome: LifeCycleValues) -> None:
+        """
+        Close started observations when the executor aborts.
+
+        :param outcome: Failed or interrupted outcome of the aborted execution.
+        """
+        for node, state in self._last_states.items():
+            if state not in (LifeCycleValues.RUNNING, LifeCycleValues.PAUSED):
+                continue
+            self._last_states[node] = outcome
+            node.status = outcome
+            node.end_time = datetime.now()
+            node.plan.notify_node_ended(node)
 
 
 @dataclass
@@ -243,6 +304,16 @@ class GiskardExecutable(Executable):
             case _:
                 raise UnknownExecutionType(GiskardExecutable.execution_type)
 
+    def _notify_motion_tick(self, statechart: MotionStatechart) -> None:
+        """
+        Deliver a tick once to each plan represented in this executable.
+
+        :param statechart: The chart after the executor tick.
+        """
+        plans = {id(node.plan): node.plan for node in self.motion_mappings}
+        for plan in plans.values():
+            plan.notify_motion_tick(statechart)
+
     def _execute_simulation(self) -> None:
         """
         Compiles the motion state chart and ticks it in the world of the context until
@@ -258,20 +329,33 @@ class GiskardExecutable(Executable):
             ros_node=self.context.ros_node,
         )
         motion_state_chart = self.motion_state_chart
-        executor.compile(motion_state_chart)
-
-        counter = 0
-        while counter < len(self.motion_mappings) * self.context.ticks_per_motion:
-            executor.tick()
-            counter += 1
-            if executor.motion_statechart.is_end_motion():
-                break
+        tracker = MotionLifeCycleTracker(self.motion_mappings)
+        try:
+            executor.compile(motion_state_chart)
+            tracker.emit_transitions()
+            counter = 0
+            while counter < len(self.motion_mappings) * self.context.ticks_per_motion:
+                executor.tick()
+                counter += 1
+                tracker.emit_transitions()
+                self._notify_motion_tick(executor.motion_statechart)
+                if executor.motion_statechart.is_end_motion():
+                    break
+        except BaseException as error:
+            tracker.emit_transitions()
+            tracker.end_active_motions(
+                LifeCycleValues.FAILED
+                if isinstance(error, Exception)
+                else LifeCycleValues.INTERRUPTED
+            )
+            raise
 
         executor.set_velocity_acceleration_jerk_to_zero()
         executor.motion_statechart.cleanup_nodes(context=executor.context)
         executor.context.cleanup()
 
         if not executor.motion_statechart.is_end_motion():
+            tracker.end_active_motions(LifeCycleValues.FAILED)
             unfinished_nodes = [
                 node
                 for node in motion_state_chart.nodes
@@ -331,8 +415,18 @@ class MoveBranchExecutable(Executable):
     The new parent to which the branch is moved.
     """
 
+    node: Optional[PlanNode] = field(default=None, kw_only=True)
+    """
+    The plan node whose execution boundary includes this model change.
+    """
+
     def execute(self) -> None:
-        self.context.world.move_branch(self.body, self.new_parent)
+        """
+        Move the branch and report the attached node's execution outcome.
+        """
+        scope = self.node.execution_scope() if self.node is not None else nullcontext()
+        with scope:
+            self.context.world.move_branch(self.body, self.new_parent)
 
 
 @dataclass

@@ -3,11 +3,12 @@ from __future__ import annotations
 import logging
 from abc import abstractmethod, ABC
 from collections import deque
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Optional, Any, List, Type, TYPE_CHECKING, Iterable
 
-from typing_extensions import Union
+from typing_extensions import Union, Iterator
 
 from coraplex.plans.designator import Designator
 from giskardpy.motion_statechart.goals.templates import NodeListGoal
@@ -70,6 +71,13 @@ class PlanNode(PlanEntity):
     result: Optional[Any] = None
     """
     Result from the execution of this node.
+    """
+
+    _execution_in_progress: bool = field(
+        default=False, init=False, repr=False, compare=False
+    )
+    """
+    Whether this node already owns an active execution boundary.
     """
 
     index: Optional[int] = field(default=None, init=False, repr=False)
@@ -287,17 +295,43 @@ class PlanNode(PlanEntity):
                 self.status = LifeCycleValues.INTERRUPTED
                 return
 
-        self.status = LifeCycleValues.RUNNING
-        try:
+        with self.execution_scope():
             self.notify()
             self.result = self.parse().execute()
-        except PlanFailure as e:
+
+    @contextmanager
+    def execution_scope(self) -> Iterator[None]:
+        """
+        Report one execution boundary, including nested executable calls.
+        """
+        if self._execution_in_progress:
+            yield
+            return
+        self._execution_in_progress = True
+        self.status = LifeCycleValues.RUNNING
+        self.start_time = datetime.now()
+        self.end_time = None
+        self.reason = None
+        try:
+            self.plan.notify_node_started(self)
+            yield
+            if self.status == LifeCycleValues.RUNNING:
+                self.status = LifeCycleValues.SUCCEEDED
+        except PlanFailure as error:
             self.status = LifeCycleValues.FAILED
-            self.reason = e
-            raise e
+            self.reason = error
+            raise
+        except BaseException as error:
+            self.status = (
+                LifeCycleValues.FAILED
+                if isinstance(error, Exception)
+                else LifeCycleValues.INTERRUPTED
+            )
+            raise
         finally:
+            self._execution_in_progress = False
             self.end_time = datetime.now()
-        self.status = LifeCycleValues.SUCCEEDED
+            self.plan.notify_node_ended(self)
 
     def mount_subplan(self, root: PlanNode):
         """
@@ -567,7 +601,8 @@ class ActionNode(DesignatorNode, BuildsMotionStateChart):
         return executable
 
     def execute(self):
-        self.parse().execute()
+        with self.execution_scope():
+            self.parse().execute()
 
 
 @dataclass(eq=False, repr=False)

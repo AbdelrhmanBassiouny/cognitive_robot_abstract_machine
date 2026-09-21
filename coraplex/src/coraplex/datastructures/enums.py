@@ -4,7 +4,7 @@ Module holding all enums of CoraPlex.
 
 from __future__ import annotations
 
-from enum import Enum, auto, IntEnum
+from enum import Enum, auto, IntEnum, StrEnum
 
 
 class VisualizationLayout(Enum):
@@ -84,6 +84,19 @@ class ExecutionType(Enum):
     SIMULATED = auto()
     SEMI_REAL = auto()
     NO_EXECUTION = auto()
+
+
+class VisualizationBackend(StrEnum):
+    """The renderer selected for a simulated world."""
+
+    NONE = "none"
+    """Run without a renderer."""
+    RVIZ = "rviz"
+    """Publish native ROS visualization markers."""
+    RERUN = "rerun"
+    """Use the native Rerun adapter."""
+    CRAMERA = "cramera"
+    """Use an installed browser visualization provider."""
 
 
 class Arms(IntEnum):
