@@ -608,6 +608,7 @@ def test_every_setting_is_printed_under_its_own_field_name(capsys):
         "upstream_repository": "an-upstream-owner/a-project",
         "upstream_remote": "cram2",
         "upstream_base": "main",
+        "push_window": str(make_configuration().push_window),
     }
 
 

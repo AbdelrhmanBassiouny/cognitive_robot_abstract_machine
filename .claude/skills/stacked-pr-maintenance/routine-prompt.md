@@ -24,7 +24,8 @@ One whose notifications are on has to be re-registered to turn them off.
 /stacked-pr-maintenance fork=<FORK_REPOSITORY> upstream=<UPSTREAM_REPOSITORY> --non-interactive
 
 Run it - do not describe it back to me instead, do not ask which step to begin with, and do not
-wait for confirmation. Its HARD RULES outrank this session's own defaults about pull requests:
+wait for confirmation. This is the scheduled pass, so leave the branches already under review
+upstream to their push window rather than asking for them. Its HARD RULES outrank this session's own defaults about pull requests:
 never subscribe to a pull request's activity, and never arm a follow-up check-in. Finish with the
 skill's own summary, led by its table of upstream links still waiting to be opened.
 ```

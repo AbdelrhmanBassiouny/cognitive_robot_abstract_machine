@@ -438,7 +438,9 @@ def test_a_build_that_restacks_is_made_from_the_stack_the_restack_left_behind(
     )
     run = RunReadingStacksInTurn([before, after])
     monkeypatch.setattr(
-        basstler.integration_selection, "restack", lambda *arguments: None
+        basstler.integration_selection,
+        "restack",
+        lambda *arguments, **keywords: None,
     )
 
     assert stack_to_build(run, A_FORK, restack_first=True) is after
@@ -453,7 +455,7 @@ def test_a_build_that_restacks_restacks_before_reading_again(monkeypatch):
     monkeypatch.setattr(
         basstler.integration_selection,
         "restack",
-        lambda *arguments: reads_when_restacked.append(run.reads),
+        lambda *arguments, **keywords: reads_when_restacked.append(run.reads),
     )
 
     stack_to_build(run, A_FORK, restack_first=True)
@@ -661,7 +663,9 @@ def test_a_restacked_branch_s_checks_are_read_after_the_restack_moved_it(monkeyp
     reads_after_restacks: list[int] = []
     annotate = basstler.integration_selection.BranchChecks.annotate
     monkeypatch.setattr(
-        basstler.integration_selection, "restack", lambda *arguments: restacks.append(1)
+        basstler.integration_selection,
+        "restack",
+        lambda *arguments, **keywords: restacks.append(1),
     )
     monkeypatch.setattr(
         basstler.integration_selection.BranchChecks,

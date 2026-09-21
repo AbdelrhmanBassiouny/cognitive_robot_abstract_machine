@@ -177,6 +177,17 @@ It performs the fast-forward, the restack and the promotion, and emits the whole
 document. Read that document and render it into the finish summary below. Do not re-derive any of
 it, and do not run the individual commands as well - that does the same work twice.
 
+**A branch already under review upstream is pushed only inside its window** - at night where its
+reviewers are, and not within hours of its last push, both set in `stack.toml`. A restack moves
+such a branch under whoever is reading it and starts its checks again, so a pass nobody asked for
+leaves it until the window opens; it follows its moved parent at the next pass that runs inside
+one, and nothing is reported to anybody meanwhile.
+
+Somebody who invoked this by hand has decided the branches should move now, so add
+`--push-branches-under-review-now` to the command above. Leave it off when the routine invoked you
+- it hands you `--non-interactive`, and a scheduled pass is exactly the one with nobody behind it
+to have decided that.
+
 **Act on the status, which the document leads with and the process exits with:**
 
 | status | what you do |
@@ -192,8 +203,14 @@ A non-zero run also prints its status in words, so you never have to look a numb
 change is the one write this credential is refused, so step 1 of the next pass is where it gets
 made. Everything else - `fast_forward`, `landed`, `restacked`, `promoted`,
 `promotion_labels_cleared` - is what happened, for the summary. A `restacked` entry other than
-`pushed` or `up-to-date` is a branch the pass could not publish; the executor has already labelled
-and commented on it, so name it in the summary and move on.
+`pushed`, `up-to-date` or `held` is a branch the pass could not publish; the executor has already
+labelled and commented on it, so name it in the summary and move on.
+
+`held` is not one of those: it is a branch under upstream review that the window is shut for, which
+the next pass inside one picks up by itself. Its `wait_reasons` say whether that is the hour
+(`daytime`) or how recently it moved (`pushed-recently`). Nothing was written to the branch or its
+pull request, and nobody has to do anything, so report it as waiting rather than as needing
+attention.
 
 The one exception is `integration-failed`: integrating the parent failed without conflicting on
 anything, so the branch is not what needs fixing and its owner was deliberately not told. Its
@@ -301,6 +318,7 @@ when a single step has to be re-run:
 python -m basstler.maintenance board --write   # export the fork's open pull requests
 python -m basstler.maintenance fast-forward    # move the fork's base onto the upstream
 python -m basstler.maintenance restack         # integrate every moved parent, publish, report
+#   ... --push-branches-under-review-now       # ... including the branches the window holds
 python -m basstler.maintenance promote         # build and record every upstream link
 ```
 
