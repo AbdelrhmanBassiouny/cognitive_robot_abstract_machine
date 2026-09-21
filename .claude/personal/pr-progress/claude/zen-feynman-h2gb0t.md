@@ -39,3 +39,27 @@ fails with `ModuleNotFoundError: No module named 'basstler'`.
 - A build should now be able to carry #437. Not triggered from here.
 - `integration`'s own direct commits (8927b828dc, 6c49cd2411) are superseded and
   will be erased by the next successful build.
+
+### Candidate #438 is red, and it is stale rather than broken
+One failing check of 24 (19 still queued): **"Run the maintenance pass"**, exit
+10 = `branch-needs-attention`. Not a test failure.
+
+- It exited 10 because three branches conflicted, the first being
+  `claude/plan-item-kickoff-workflow-cuare2` = **#185** - fixed ~20 minutes
+  after that pass ran. Others: `claude/icra-experiments-ormatic-episodes-ib9lr3`,
+  `claude/auto-run-setup-notes-02nhxv`. Plus 28 withheld.
+- #438 was assembled 16:48 from a stack where #185 was blocked, so it carries
+  **none** of #185/#154/#211/#437, and its tree lacks #211's `runs_started_on`
+  fix - the one that stops a candidate being graded on the whole fork's health
+  by a `pull_request`-triggered maintenance pass.
+- **That pass pushed 5 branches**, two of them `in-review`: #262
+  `montessori-results-recording-jnrgfy` and #264
+  `eql-verbalization-aggregate-repeat-gdz9g2`, at 17:09 UTC = 19:09 Berlin.
+  That is exactly what #437's window exists to stop. All three of the other
+  pushed branches carry `integration-conflict`, which the running version does
+  not withhold on either.
+
+**Not done:** no rebuild triggered. `integration-refresh.yml` is dispatchable
+and a fresh build would now carry the whole green chain - but opening a
+candidate re-triggers that self-judging maintenance pass, which pushes
+branches, so it needs the user's go-ahead.
