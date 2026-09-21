@@ -27,7 +27,7 @@ class QPSolverPIQP(QPSolver[QPDataExplicit]):
         when you are certain the problem is feasible.
     """
 
-    equilibrium_passes = 5
+    equilibrium_passes: int = 5
     """
     Number of passes piqp spends on balancing the magnitudes in the problem.
 
