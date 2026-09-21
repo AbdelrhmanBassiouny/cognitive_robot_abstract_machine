@@ -29,6 +29,7 @@ __all__ = [
     "WORK_BRANCH",
     "PersonalNotesPath",
     "StackBranch",
+    "StackLabel",
     "ToolingDirectory",
 ]
 
@@ -83,6 +84,37 @@ class StackBranch(StrEnum):
     OFF_THE_CHAIN = "off-the-chain"
     """
     Cut from the base beside the chain, so nothing stacks it on the parent.
+    """
+
+
+class StackLabel(StrEnum):
+    """
+    The labels the workflow under test reads and writes, named once for every suite that
+    puts one on a pull request.
+
+    A label is written into a board entry, handed to a command and read back in an
+    assertion, so a suite that spells it is holding the code to a name nothing else in
+    the suite has to agree with.
+    """
+
+    IN_REVIEW = "in-review"
+    """
+    Carried by a branch that has reached the upstream review queue.
+    """
+
+    REBASE = "rebase"
+    """
+    Authorises rewriting a branch's published history rather than merging into it.
+    """
+
+    NEEDS_RESOLUTION = "needs-resolution"
+    """
+    Put on a branch whose owner has been asked to resolve a conflict.
+    """
+
+    BUG = "bug"
+    """
+    Carried by a fix, and never acted on by this tooling - a label it reads past.
     """
 
 

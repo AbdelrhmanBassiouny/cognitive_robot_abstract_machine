@@ -86,7 +86,7 @@ from basstler.maintenance_restack_steps import (
 )
 
 from .scratch_repository import initialize_bare_repository, install_package_into
-from .constants import REPOSITORY_ROOT, StackBranch
+from .constants import REPOSITORY_ROOT, StackBranch, StackLabel
 from .script_runner import PythonModuleRunner
 
 MAINTENANCE_MODULE = basstler.maintenance.__name__
@@ -128,6 +128,12 @@ class FixtureFile(StrEnum):
     """
 
 
+A_SESSION_LINK = "https://claude.ai/code/session_01ABCdef"
+"""
+The session a pull request's description names, written into one and read back out of
+another wherever a test follows that link through the pass.
+"""
+
 A_LABEL_THIS_TOOL_NEVER_WRITES = "a-label-somebody-else-put-here"
 """
 Stands for whatever else a pull request happens to carry - the labels a write must
@@ -140,9 +146,9 @@ def make_configuration() -> Configuration:
     :return: The configuration a scratch fork checkout resolves to.
     """
     return Configuration(
-        in_review_label="in-review",
-        rebase_label="rebase",
-        needs_resolution_label="needs-resolution",
+        in_review_label=StackLabel.IN_REVIEW,
+        rebase_label=StackLabel.REBASE,
+        needs_resolution_label=StackLabel.NEEDS_RESOLUTION,
         fork_repository=Repository("a-fork-owner", "a-fork"),
         fork_remote="origin",
         upstream_repository=Repository("an-upstream-owner", "a-project"),
@@ -433,8 +439,8 @@ def test_the_export_reads_each_field_out_of_the_shape_the_api_returns_it_in():
                 head=StackBranch.CHILD,
                 base=StackBranch.PARENT,
                 draft=True,
-                labels=["rebase"],
-                body="see https://claude.ai/code/session_01ABCdef",
+                labels=[StackLabel.REBASE],
+                body=f"see {A_SESSION_LINK}",
             )
         ]
     )
@@ -444,8 +450,8 @@ def test_the_export_reads_each_field_out_of_the_shape_the_api_returns_it_in():
     assert exported.head == StackBranch.CHILD
     assert exported.base == StackBranch.PARENT
     assert exported.draft is True
-    assert exported.labels == ["rebase"]
-    assert exported.session == "https://claude.ai/code/session_01ABCdef"
+    assert exported.labels == [StackLabel.REBASE]
+    assert exported.session == A_SESSION_LINK
 
 
 def test_the_written_board_parses_back_into_the_records_it_was_built_from(
@@ -504,9 +510,9 @@ def test_the_board_snapshot_is_never_committable():
 
 
 def test_a_session_link_is_read_out_of_the_description():
-    body = "Some prose.\n\nSession: https://claude.ai/code/session_01ABCdef\n"
+    body = f"Some prose.\n\nSession: {A_SESSION_LINK}\n"
 
-    assert get_session_link_in(body) == "https://claude.ai/code/session_01ABCdef"
+    assert get_session_link_in(body) == A_SESSION_LINK
 
 
 def test_a_description_naming_no_session_yields_none():
@@ -714,7 +720,7 @@ def test_a_rebase_labelled_branch_is_rebased_rather_than_merged(
     )
 
     outcomes = restack(
-        a_stack(fork_checkout, the_board(labels=["rebase"])),
+        a_stack(fork_checkout, the_board(labels=[StackLabel.REBASE])),
         fork_checkout.git,
         RecordingPullRequests(),
     )
@@ -806,7 +812,7 @@ def test_a_rebase_whose_lease_has_expired_is_rejected_rather_than_forced_through
     )
 
     outcomes = restack(
-        a_stack(fork_checkout, the_board(labels=["rebase"])),
+        a_stack(fork_checkout, the_board(labels=[StackLabel.REBASE])),
         fork_checkout.git,
         RecordingPullRequests(),
     )
@@ -1369,7 +1375,7 @@ def test_a_conflict_labels_the_branch_and_tells_its_owner(
         StackBranch.CHILD, FixtureFile.CONTESTED, "the child's version\n"
     )
     board = the_board()
-    board[1].session = "https://claude.ai/code/session_01ABCdef"
+    board[1].session = A_SESSION_LINK
     fork = RecordingPullRequests()
 
     outcomes = restack(a_stack(fork_checkout, board), fork_checkout.git, fork)
@@ -1382,7 +1388,7 @@ def test_a_conflict_labels_the_branch_and_tells_its_owner(
     comment = fork.comments[0]
     assert comment.pull_request_number == 41
     assert FixtureFile.CONTESTED in comment.body
-    assert "https://claude.ai/code/session_01ABCdef" in comment.body
+    assert A_SESSION_LINK in comment.body
     assert child.reported_at == "https://example.invalid/comment/1"
 
 
