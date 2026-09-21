@@ -406,6 +406,17 @@ CHECK_SCOPE_OVERLAP_SCRIPT="${ADD_PLAN_ITEM_DIRECTORY}/check_scope_overlap.py"
 # directory CI and a session both run against.
 ADD_PLAN_ITEM_TESTS_DIRECTORY="${ADD_PLAN_ITEM_DIRECTORY}/tests"
 
+# UPSTREAM_REVIEWS_DIRECTORY / *_SCRIPT / *_TESTS_DIRECTORY: the reader the
+# upstream-reviews Action runs, which reports a promoted branch's upstream
+# checks, failing job logs and review threads. Same defined-once reasoning as
+# every path above, so the workflow and CI name the directory once each.
+UPSTREAM_REVIEWS_DIRECTORY=".claude/upstream_reviews"
+# upstream_reviews.py: the reader itself - see its own module docstring.
+UPSTREAM_REVIEWS_SCRIPT="${UPSTREAM_REVIEWS_DIRECTORY}/upstream_reviews.py"
+# tests/: the pytest suite covering it - the exact directory CI and a session
+# both run against.
+UPSTREAM_REVIEWS_TESTS_DIRECTORY="${UPSTREAM_REVIEWS_DIRECTORY}/tests"
+
 # SAVE_PLAN_SCRIPT: same reasoning as the block above, extended to
 # save-plan.sh - unlike the other hook scripts in this directory (which are
 # always run directly by a human, once, per hooks/README.md's own setup
