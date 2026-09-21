@@ -27,7 +27,7 @@ from experiments.video.narration import (
     Subtitled,
     starts_of,
 )
-from experiments.video.slides import TextSlide
+from experiments.video.script import NarrationLines
 from experiments.video.timeline import Frame, Resolution, Scene, Still, Timeline
 
 
@@ -123,8 +123,24 @@ def test_the_soundtrack_lays_each_line_where_it_starts() -> None:
 # %% the storyboard
 
 
-def slide(held_for: float) -> TextSlide:
-    return TextSlide(["a", "b"], held_for=held_for)
+@dataclass
+class Page(Scene):
+    """
+    A held slide that dissolves in, like most.
+    """
+
+    held_for: float
+
+    @property
+    def duration(self) -> float:
+        return self.held_for
+
+    def picture_at(self, seconds: float) -> Frame:
+        return Resolution(16, 9).blank(255)
+
+
+def slide(held_for: float) -> Page:
+    return Page(held_for)
 
 
 @dataclass
@@ -195,6 +211,25 @@ def test_a_line_that_runs_on_leaves_its_slide_alone_and_a_delay_moves_its_start(
     assert "free" in narration.report(runs_for=100.0)
 
 
+def test_a_later_line_waits_beyond_the_pause_for_what_it_speaks_of() -> None:
+    board = Storyboard(
+        [NarratedScene(slide(1.0), (Line("one"), Line("two"), Line("three")), waits=(1.5, 0.0))],
+        pause=0.5,
+    )
+    voice = VoiceThatTakes(1.0)
+    board.fitted_to(voice)
+    assert board.scenes[0].held_for == pytest.approx(LEAD + 3.0 + 2 * 0.5 + 1.5 + board.tail)
+    starts = [line.starts for line in board.narrated_by(voice, dissolve=0.0).lines]
+    assert starts == pytest.approx([LEAD, LEAD + 1.0 + 0.5 + 1.5, LEAD + 1.0 + 0.5 + 1.5 + 1.0 + 0.5])
+
+
+def test_the_papers_sentence_telling_backends_apart_is_one_burned_in_subtitle() -> None:
+    text = NarrationLines().principle.written
+    cues = Narration([spoken(text, 0.0, 7.0)]).cues(BURNED_IN_ROOM)
+    assert [cue.text for cue in cues] == [text]
+    assert len(cues[0].rows(BURNED_IN_ROOM.characters_per_row)) == 2
+
+
 def test_a_sentence_too_long_for_a_subtitle_is_cut_evenly_at_a_clause_end_where_one_lies_near() -> None:
     room = SubtitleRoom(characters_per_row=42, rows=2)
     sentence = (
@@ -243,6 +278,23 @@ def test_burned_in_subtitles_show_a_whole_clause_on_two_rows_of_the_band() -> No
     # two rows of letters, a gap between them, inside the band with air above and below
     assert inked_rows[0] > 4 and inked_rows[-1] < band.shape[0] - 5
     assert np.any(np.diff(inked_rows) > 4)
+    # one row hangs from the same baseline as the first of two
+    short = Subtitled.over(timeline, Narration([spoken("A short line.", 0.0, 9.0)]))
+    short_rows = np.flatnonzero(short.frame_at(0.5)[int(resolution.stage_height) :].min(axis=(1, 2)) < 128)
+    assert short_rows[0] == inked_rows[0]
+
+
+def test_over_footage_the_caption_is_white_on_a_band_shaded_towards_black() -> None:
+    resolution = Resolution(width=320, height=180)
+    footage = Still(resolution.blank(120), held_for=4.0)
+    subtitled = Subtitled(
+        [footage], frames_per_second=10, dissolve=0.0, cues=[SubtitleCue(1.0, 2.0, "hello there")]
+    )
+    written = subtitled.frame_at(1.5)
+    band = written[int(resolution.stage_height) :]
+    assert band.max() == 255  # white letters
+    assert band[-1].mean() < 120  # shaded at the bottom
+    assert (written[: int(resolution.stage_height) - 30] == 120).all()  # untouched above the band
 
 
 def test_lines_said_in_turn_start_a_pause_after_the_one_before_ends() -> None:

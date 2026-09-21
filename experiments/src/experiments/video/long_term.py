@@ -4,7 +4,9 @@ What long-term memory is asked over the perturbation grid, once the runs have pl
 Every episode the robot recorded went into the results database, and the database is
 asked in the same query language a live world is: which episodes the cube moved in, and
 which of those the robot picked it up in. The answers are read from the database when
-the scene is built, never written down here, and the grid lights the episodes they name.
+the scene is built, never written down here, and the grid lights the episodes they name;
+how many episodes the questions range over, in simulation and on the robot, is read the
+same way.
 """
 
 from __future__ import annotations
@@ -14,7 +16,7 @@ from dataclasses import dataclass, field
 from krrood.entity_query_language.factories import a, contains
 from krrood.entity_query_language.query.query import Query
 from segmind.datastructures.events import DetectionEvent, MotionEvent, PickUpEvent
-from typing_extensions import List, Tuple, Type
+from typing_extensions import FrozenSet, List, Optional, Tuple, Type
 
 from experiments.video.canvas import Span, changed_spans
 
@@ -93,6 +95,14 @@ class RememberedPiece:
     The kind of piece asked about.
     """
 
+    over: Optional[FrozenSet[str]] = None
+    """
+    The identifiers of the episodes the questions are asked over, or None for every
+    episode the memory holds: the query is run over the memory and its answer kept to
+    these, which is what running it over a memory holding these alone would give, the
+    query naming episodes one by one.
+    """
+
     def where_it_moved(self) -> RememberedQuestion:
         """
         Which episodes recorded a motion of the piece, whoever moved it.
@@ -132,11 +142,13 @@ class RememberedPiece:
         :param named: What the event is called in the statement on screen.
         :param lit_as: What an episode the answer names is badged with.
         """
-        found = self.memory.answer_with_identifiers(self.query(kind))
+        found = set(self.memory.answer_with_identifiers(self.query(kind)))
+        if self.over is not None:
+            found &= self.over
         return RememberedQuestion(
             english=english,
             statement=self.statement(kind, named),
-            episodes=tuple(sorted(set(found))),
+            episodes=tuple(sorted(found)),
             lit_as=lit_as,
         )
 

@@ -12,6 +12,7 @@ import pytest
 
 from experiments.paper.chart import TimelineSpan
 from experiments.video.attribution import (
+    HEADER_CLEAR,
     AnswerDisagreesWithTheRecord,
     AskedQuestion,
     AttributionScene,
@@ -22,7 +23,7 @@ from experiments.video.attribution import (
     TrialTimelines,
     shown_name,
 )
-from experiments.video.canvas import Area, Ink
+from experiments.video.canvas import MARGIN, Area, Ink
 from segmind.datastructures.events import (
     PickUpEvent,
     SupportEvent,
@@ -70,6 +71,8 @@ class TrialStandIn:
 @dataclass
 class TimelinesStandIn:
     trial: TrialStandIn
+    event_rows: tuple = ()
+    robot_spans: tuple = ()
 
 
 @pytest.fixture
@@ -78,7 +81,7 @@ def scene() -> AttributionScene:
         AskedQuestion("Which objects recently moved?", (), "cube_2", asked_at=20.0),
         AskedQuestion("Did you move them?", (), "none", asked_at=20.0),
     )
-    return AttributionScene(TimelinesStandIn(TrialStandIn()), film=None, questions=questions, scenario="", speed=4.0, question_for=3.0)
+    return AttributionScene(TimelinesStandIn(TrialStandIn()), film=None, questions=questions, speed=4.0, question_for=3.0)
 
 
 def test_the_film_plays_up_to_the_asking_then_each_question_takes_its_turn(scene: AttributionScene) -> None:
@@ -97,6 +100,15 @@ def test_the_last_question_stays_on_screen_past_its_time(scene: AttributionScene
     question, progress = scene.question_at(30.0)
     assert question is scene.questions[1]
     assert progress == 1.0
+
+
+def test_the_question_card_is_as_tall_as_its_words_and_stands_left_of_the_timelines_panel(scene: AttributionScene) -> None:
+    short = scene.card_for(scene.questions[0])
+    long = scene.card_for(AskedQuestion("Did you move them?", ("one", "two", "three"), "cube_2, cylinder_3, rectangular_prism_0, triangular_prism_0", asked_at=20.0))
+    assert short.x == MARGIN and short.y == HEADER_CLEAR
+    assert long.height > short.height
+    assert short.right < scene.panel.x
+    assert scene.panel.right == scene.resolution.width - MARGIN
 
 
 # %% the questions answered off the events

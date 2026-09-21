@@ -1,24 +1,28 @@
 """
-The perturbation experiments, all playing at once, and long-term memory asked about them.
+The perturbation experiments, all playing at once, two of them brought to the front in
+turn, and long term memory asked about them.
 
 Each episode the robot recorded under a perturbation is one tile of a grid; every tile
-plays the robot's own camera at the same speed-up, and while the robot stands still --
-which is when the look is asked -- what the look finds is drawn over the picture, the
-way the perception pipeline draws it. A tile whose recording has ended stands on its
-last frame, and once every one has, the questions long-term memory answers about these
-runs are put over the grid and the episodes each answer names are lit.
+plays the robot's own camera at the same speed-up, badged with the phase the run is in:
+a person perturbing the scene, the robot perceiving it -- while it stands still, which
+is when the look is asked, what the look finds is drawn over the picture, the way the
+perception pipeline draws it -- or the robot executing. A tile whose recording has
+ended stands on its last frame. The question long term memory answers about these runs
+is put over the grid and the episodes its answer names are outlined.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from enum import Enum
 from functools import cached_property
 
 import cv2
 import numpy as np
 from rclpy.serialization import deserialize_message
+from segmind.datastructures.events import MotionEvent
 from sensor_msgs.msg import CompressedImage
-from typing_extensions import Dict, List, Optional, Sequence, Tuple
+from typing_extensions import List, Optional, Sequence, Tuple
 
 from experiments.montessori.perception.camera import RgbdFrame, decode_compressed_color_image
 from experiments.montessori.perception.detections import MontessoriScene
@@ -38,43 +42,61 @@ from experiments.montessori.perception.recordings import (
 from experiments.paper.lettering import Face
 from experiments.video.cache import SceneCache
 from experiments.video.canvas import (
+    BODY_SIZE,
+    DIM,
+    LABEL_SIZE,
+    MARGIN,
+    VIDEO_RESOLUTION,
     Anchor,
     Area,
     CodeTypesetting,
     Ink,
-    Span,
     Typesetting,
     dimmed,
     filled,
     fitted,
     framed,
 )
-from experiments.video.footage import TABLE_FRAMING, CameraFilm, Framing
+from experiments.video.footage import (
+    BADGE_HEIGHT,
+    BADGE_PADDING,
+    TABLE_FRAMING,
+    CameraFilm,
+    Framing,
+    TimedImage,
+    badged,
+    speed_badged,
+)
 from experiments.video.long_term import RememberedQuestion
 from experiments.video.sources import RecordedRun
 from experiments.video.timeline import Frame, Resolution, Scene, eased
-
-CLOSE_UP = Resolution(width=1600, height=900)
-"""
-The size the grid draws itself at.
-"""
 
 IDLE_MARGIN = 0.5
 """
 Seconds either side of a recorded motion the robot is not counted as standing still.
 """
 
-BAND_HEIGHT = 224
+MOTION_THRESHOLD = 1.0
 """
-How tall the band over the grid is, in pixels, where long-term memory is named and its
-questions are put.
+The mean difference between two frames of the film, in grey levels, over which
+something in the scene is moving: a still scene differs by half a level from frame to
+frame, a hand moving a piece by several.
 """
 
 BACKEND_NAME = "LongTermMemoryBackend"
 """
-What the band calls the backend that answers over the grid.
+What the card calls the backend that answers over the grid.
 """
 
+HEADER_CLEAR = 96
+"""
+Pixels from the top kept clear for the chapter's pill and the speed badge.
+"""
+
+ZOOM = 0.45
+"""
+Seconds a tile takes to grow to the front, and to shrink back.
+"""
 
 # %% when the robot stood still
 
@@ -125,6 +147,124 @@ class IdleStretches:
         Whether the robot stood still at a moment of the recording.
         """
         return not any(stretch.holds(seconds) for stretch in self.moving)
+
+
+# %% when a person was perturbing the scene
+
+
+@dataclass
+class PerturbingStretches:
+    """
+    When, in a recording, a person was moving something in the scene: from the moment
+    the trial told them what to move until the film shows the scene still again, before
+    the event segmentation reported the thing moved -- which it does once the robot has
+    looked again, so the robot perceives between the two.
+    """
+
+    run: RecordedRun
+    """
+    The run.
+    """
+
+    film: CameraFilm
+    """
+    The robot's camera, whose frames show when the scene went still.
+    """
+
+    framing: Framing = TABLE_FRAMING
+    """
+    What of each frame is watched for motion: the table, not the room's edge.
+    """
+
+    cache: SceneCache = field(default_factory=lambda: SceneCache("perturbations"))
+    """
+    Where the stretches are kept between renders.
+    """
+
+    @cached_property
+    def perturbing(self) -> List[RecordingStretch]:
+        """
+        Every stretch a person was moving something through, in recording time.
+        """
+        key = f"{self.run.episode_identifier}_perturbing"
+        kept = self.cache.record(key)
+        if kept is None:
+            kept = {"stretches": [[stretch.start, stretch.end] for stretch in self._measured()]}
+            self.cache.keep_record(key, kept)
+        return [RecordingStretch(start, end) for start, end in kept["stretches"]]
+
+    def perturbing_at(self, seconds: float) -> bool:
+        """
+        Whether a person was moving something at a moment of the recording.
+        """
+        return any(stretch.holds(seconds) for stretch in self.perturbing)
+
+    def told_and_reported(self) -> List[RecordingStretch]:
+        """
+        Every stretch from a trial telling a person what to move until the event
+        segmentation reported the thing moved, in recording time.
+        """
+        stretches = []
+        for trial in self.run.trials:
+            for moved in trial.moved_by_someone_else:
+                names = {str(name) for name in moved.things_moved}
+                reported = [
+                    tick.moment
+                    for tick in trial.ticks
+                    if tick.moment > moved.moment
+                    and any(isinstance(event, MotionEvent) and str(event.tracked_object.name) in names for event in tick.events)
+                ]
+                end = min(reported) if reported else trial.duration
+                stretches.append(
+                    RecordingStretch(
+                        self.run.recording_second_of(trial, moved.moment),
+                        self.run.recording_second_of(trial, end),
+                    )
+                )
+        return stretches
+
+    def _measured(self) -> List[RecordingStretch]:
+        """
+        Each told-and-reported stretch cut short where the film last shows motion
+        before the report.
+        """
+        return [
+            RecordingStretch(stretch.start, self._still_from(stretch))
+            for stretch in self.told_and_reported()
+        ]
+
+    def _still_from(self, stretch: RecordingStretch) -> float:
+        """
+        The moment after which nothing moves in the film until the stretch's end.
+        """
+        watched = [image for image in self.film.images if stretch.holds(image.seconds)]
+        last_moving = stretch.start
+        previous = None
+        for image in watched:
+            small = cv2.resize(cv2.cvtColor(self.framing.of(image.image), cv2.COLOR_RGB2GRAY), (240, 135))
+            if previous is not None and float(np.mean(np.abs(small.astype(np.int16) - previous.astype(np.int16)))) > MOTION_THRESHOLD:
+                last_moving = image.seconds
+            previous = small
+        return last_moving
+
+
+class Phase(Enum):
+    """
+    What a run is doing at a moment, as its tile is badged: the values are the badge's
+    word and its colour.
+    """
+
+    PERTURBATION = ("perturbation", Ink.ANSWER)
+    PERCEIVING = ("perceiving", Ink.TEXT)
+    EXECUTING = ("executing", Ink.TEXT)
+
+    @property
+    def word(self) -> str:
+        return self.value[0]
+
+    @property
+    def color(self) -> Ink:
+        return self.value[1]
 
 
 # %% what the look found, drawn on the film
@@ -241,6 +381,16 @@ class PerturbationTile:
     The robot's camera, decoded.
     """
 
+    idle: IdleStretches = field(init=False)
+    """
+    When the robot stood still.
+    """
+
+    perturbing: PerturbingStretches = field(init=False)
+    """
+    When a person was moving something.
+    """
+
     detections: DetectionsOnTheFilm = field(init=False)
     """
     What the look found while the robot stood still.
@@ -253,16 +403,33 @@ class PerturbationTile:
 
     def __post_init__(self) -> None:
         self.film = CameraFilm(self.run)
-        self.detections = DetectionsOnTheFilm(self.run, IdleStretches(self.run))
+        self.idle = IdleStretches(self.run)
+        self.perturbing = PerturbingStretches(self.run, self.film)
+        self.detections = DetectionsOnTheFilm(self.run, self.idle)
 
-    def picture_at(self, seconds: float) -> Tuple[Frame, bool]:
+    def picture_at(self, seconds: float) -> Tuple[Frame, Optional[Phase]]:
         """
-        The film at a moment, with the look's findings drawn where it ran near then.
+        The film at a moment, with the look's findings drawn where it ran near then, and
+        the phase the run is in: a person perturbing the scene before anything else, the
+        robot executing while it moves, else perceiving where findings are drawn.
 
         :param seconds: The moment of the recording; past its end, the last frame stands.
-        :return: The picture, and whether findings are drawn on it.
+        :return: The picture, and the phase, or None where nothing is going on.
         """
         image = self.film.at(seconds)
+        picture, perceiving = self._drawn_at(image)
+        if self.perturbing.perturbing_at(image.seconds):
+            return picture, Phase.PERTURBATION
+        if not self.idle.idle_at(image.seconds):
+            return picture, Phase.EXECUTING
+        return picture, Phase.PERCEIVING if perceiving else None
+
+    def _drawn_at(self, image: TimedImage) -> Tuple[Frame, bool]:
+        """
+        The image with the look's findings drawn on it where the look ran near then.
+
+        :return: The picture, framed, and whether findings are drawn on it.
+        """
         drawn = self.detections.picture_at(image.seconds)
         if drawn is not None:
             return self.framing.of(drawn), True
@@ -279,17 +446,33 @@ class PerturbationTile:
 @dataclass(frozen=True)
 class GridLabels:
     """
-    The words the grid carries: one per column and one per row, as few as will do.
+    The words the grid carries: one per column, one per row, one header line over it,
+    and what the question put to long term memory is asked over.
     """
 
     columns: Sequence[str] = ("no perturbation", "piece shoved", "board moved")
     rows: Sequence[str] = ("scene stands still", "robot sorts")
+    header: str = ""
+    """
+    The one line over the grid: what the trials are, and what of them is shown.
+    """
+
+    long_term_header: str = ""
+    """
+    What the question is asked over, on its card.
+    """
+
+    def tag(self, row: int, column: int) -> str:
+        """
+        What a tile is called while it stands enlarged: its column and its row.
+        """
+        return f"{self.columns[column]} · {self.rows[row]}"
 
 
 @dataclass(frozen=True)
 class GridLayout:
     """
-    Where everything of the grid lies, at the size it draws itself.
+    Where everything of the grid lies, at the video's size.
     """
 
     resolution: Resolution
@@ -307,31 +490,45 @@ class GridLayout:
     How many columns of tiles.
     """
 
-    margin: int = 16
-    header: int = 54
-    row_label: int = 200
+    band_height: int = 200
+    """
+    Pixels the band over the grid takes: the header line, or the question's card.
+    """
+
+    row_label: int = 150
+    """
+    Pixels the row labels take, left of the tiles.
+    """
+
+    column_label: int = 36
+    """
+    Pixels the column names take, over the tiles.
+    """
+
     gap: int = 12
 
     @property
     def band(self) -> Area:
         """
-        The band over the grid, where long-term memory is named and asked.
+        The band over the grid, where the trials are named and long term memory asked.
         """
-        return Area(self.margin, self.margin, self.resolution.width - 2 * self.margin, BAND_HEIGHT)
+        return Area(MARGIN, HEADER_CLEAR, self.resolution.width - 2 * MARGIN, self.band_height)
+
+    @property
+    def rows_top(self) -> float:
+        return self.band.bottom + self.column_label
 
     @property
     def room(self) -> Area:
         """
-        Where the tiles may lie: right of the row labels, under the header, above the
-        band left for subtitles.
+        Where the tiles may lie: right of the row labels, under the column names, above
+        the band left for captions.
         """
-        left = self.margin + self.row_label
-        return Area(left, self.rows_top, self.resolution.width - self.margin - left, self.resolution.stage_height - self.margin - self.rows_top)
+        left = MARGIN + self.row_label
+        return Area(left, self.rows_top, self.resolution.width - MARGIN - left, self.resolution.stage_height - MARGIN / 2 - self.rows_top)
 
     @property
     def tile_height(self) -> float:
-        # every tile keeps the camera's own aspect, so none is letterboxed; the room's
-        # width or its height sets the size, whichever runs out first
         by_width = (self.room.width - (self.columns - 1) * self.gap) / self.columns * 9 / 16
         by_height = (self.room.height - (self.rows - 1) * self.gap) / self.rows
         return min(by_width, by_height)
@@ -340,19 +537,7 @@ class GridLayout:
     def tile_width(self) -> float:
         return self.tile_height * 16 / 9
 
-    @property
-    def header_y(self) -> float:
-        """
-        The middle of the line the column names are written on.
-        """
-        return self.band.bottom + self.header / 2
-
-    @property
-    def rows_top(self) -> float:
-        return self.band.bottom + self.header
-
     def tile(self, row: int, column: int) -> Area:
-        # the tiles sit together in the middle of the room's width
         across = self.columns * self.tile_width + (self.columns - 1) * self.gap
         left = self.room.x + (self.room.width - across) / 2
         return Area(
@@ -362,13 +547,56 @@ class GridLayout:
             self.tile_height,
         )
 
+    @property
+    def front(self) -> Area:
+        """
+        Where a tile lies enlarged: near the full frame, over the grid, above the
+        captions.
+        """
+        room = Area(MARGIN, HEADER_CLEAR, self.resolution.width - 2 * MARGIN, self.resolution.stage_height - MARGIN / 2 - HEADER_CLEAR)
+        return room.fitting(16 / 9)
+
+
+@dataclass(frozen=True)
+class Zoom:
+    """
+    One tile brought to the front: which, from where in its recording it replays, how
+    fast, and for how long it is held.
+    """
+
+    row: int
+    column: int
+    replay_from: float
+    """
+    Seconds into the recording the tile replays from: just before the person moves.
+    """
+
+    held_for: float
+    """
+    Seconds the tile is held at the front.
+    """
+
+    speed: float = 3.0
+    """
+    How many recorded seconds pass per second played while it is held.
+    """
+
+    @property
+    def lasts(self) -> float:
+        """
+        Seconds the zoom takes in all: growing, held, and shrinking back.
+        """
+        return 2 * ZOOM + self.held_for
+
 
 @dataclass
-class PerturbationMatrix(Scene):
+class GridSequence(Scene):
     """
-    The six episodes playing together at one speed-up, the look's findings drawn on
-    each while its robot stands still; then, every recording ended, long-term memory
-    asked which of them the cube moved in and which the robot picked it up in.
+    The six episodes playing together at one speed-up, each badged with what it is
+    doing; then one tile after another brought to the front and replayed slower from
+    just before the person moves, the rest paused and dimmed; then the grid playing on
+    with long term memory asked which episodes the robot picked the cube up in, the
+    episodes it names outlined.
     """
 
     tiles: List[List[PerturbationTile]]
@@ -376,40 +604,42 @@ class PerturbationMatrix(Scene):
     The tiles, row by row, matching the labels.
     """
 
-    labels: GridLabels = GridLabels()
+    labels: GridLabels
     """
-    What the rows and columns are called.
-    """
-
-    questions: List[RememberedQuestion] = field(default_factory=list)
-    """
-    What long-term memory is asked once the recordings have ended, in order.
+    What the rows and columns are called, and the lines over the grid.
     """
 
-    speed: float = 10.0
+    zooms: Tuple[Zoom, ...]
     """
-    How many recorded seconds pass per second played.
+    The tiles brought to the front, in order.
+    """
+
+    question: RememberedQuestion
+    """
+    What long term memory is asked once the grid plays on.
+    """
+
+    speed: float = 6.0
+    """
+    How many recorded seconds pass per second played while the grid plays.
+    """
+
+    play_for: float = 4.0
+    """
+    Seconds the grid plays before the first zoom.
+    """
+
+    asked_after: float = 0.5
+    """
+    Seconds the grid plays on after the last zoom before the question comes up.
     """
 
     question_for: float = 6.0
     """
-    Seconds each question takes, from arriving to its answer having been read.
+    Seconds the question takes, from arriving to its answer having been read.
     """
 
-    settle_for: float = 1.0
-    """
-    Seconds the grid stands still after the last recording ends, before the first
-    question, where the questions wait for the recordings.
-    """
-
-    asked_from: Optional[float] = None
-    """
-    Seconds into the scene the first question comes, the recordings still playing under
-    it and to the scene's end; None for the questions to wait until the longest
-    recording has ended and the grid has settled.
-    """
-
-    resolution: Resolution = CLOSE_UP
+    resolution: Resolution = VIDEO_RESOLUTION
     """
     The size the grid draws itself at.
     """
@@ -418,152 +648,165 @@ class PerturbationMatrix(Scene):
     def layout(self) -> GridLayout:
         return GridLayout(self.resolution, rows=len(self.tiles), columns=len(self.labels.columns))
 
-    @cached_property
-    def longest(self) -> float:
+    # %% when things happen
+
+    def zoom_starts(self, number: int) -> float:
         """
-        Seconds the longest recording plays for at the grid's speed.
+        Seconds into the scene a zoom starts growing.
         """
-        return max(tile.film.length for row in self.tiles for tile in row) / self.speed
+        return self.play_for + sum(zoom.lasts for zoom in self.zooms[:number])
 
     @property
-    def runs_for(self) -> float:
+    def resumes_at(self) -> float:
         """
-        Seconds the recordings play: until the longest has ended, or to the scene's end
-        where the questions do not wait for them.
+        Seconds into the scene the grid plays on after the last zoom.
         """
-        return self.longest if self.asked_from is None else self.duration
+        return self.zoom_starts(len(self.zooms))
 
     @property
     def asked_at(self) -> float:
-        """
-        Seconds into the scene the first question comes.
-        """
-        return self.longest + self.settle_for if self.asked_from is None else self.asked_from
+        return self.resumes_at + self.asked_after
 
     @property
     def duration(self) -> float:
-        return self.asked_at + self.question_for * len(self.questions)
+        return self.asked_at + self.question_for
 
-    def question_at(self, seconds: float) -> Optional[Tuple[RememberedQuestion, float]]:
+    @property
+    def dissolves_in(self) -> bool:
+        # the scene before writes text where this one does: a cut, not a crossfade
+        return False
+
+    def recording_at(self, seconds: float) -> float:
         """
-        The question up at a moment and how far along it is, or None before the first.
+        The moment of the recordings the grid shows at a moment of the scene: playing,
+        paused through the zooms, playing on after them.
+        """
+        if seconds < self.play_for:
+            return seconds * self.speed
+        if seconds < self.resumes_at:
+            return self.play_for * self.speed
+        return (self.play_for + seconds - self.resumes_at) * self.speed
+
+    def zoom_at(self, seconds: float) -> Optional[Tuple[Zoom, float, float]]:
+        """
+        The zoom under way at a moment, how far its tile is out at the front, from
+        zero to one, and how long it has been held there.
+        """
+        for number, zoom in enumerate(self.zooms):
+            since = seconds - self.zoom_starts(number)
+            if 0.0 <= since < zoom.lasts:
+                if since < ZOOM:
+                    return zoom, eased(since / ZOOM), 0.0
+                if since < ZOOM + zoom.held_for:
+                    return zoom, 1.0, since - ZOOM
+                return zoom, 1.0 - eased((since - ZOOM - zoom.held_for) / ZOOM), zoom.held_for
+        return None
+
+    def question_progress(self, seconds: float) -> Optional[float]:
+        """
+        How far the question has got at a moment, from zero to one, or None before it.
         """
         since = seconds - self.asked_at
-        if since < 0 or not self.questions:
+        if since < 0:
             return None
-        index = min(int(since / self.question_for), len(self.questions) - 1)
-        return self.questions[index], min((since - index * self.question_for) / self.question_for, 1.0)
+        return min(since / self.question_for, 1.0)
+
+    # %% drawing
 
     def picture_at(self, seconds: float) -> Frame:
         frame = self.resolution.blank(255)
-        asked = self.question_at(seconds)
-        lit = eased((asked[1] - 0.55) / 0.2) if asked else 0.0
-        frame = self._band(frame, asked)
-        frame = self._grid(frame, seconds, asked[0] if asked else None, lit)
-        return self._speed_badge(frame)
+        zoom = self.zoom_at(seconds)
+        progress = self.question_progress(seconds)
+        lit = eased((progress - 0.55) / 0.2) if progress is not None else 0.0
+        frame = self._band(frame, progress)
+        frame = self._grid(frame, self.recording_at(seconds), zoom, lit)
+        speed = zoom[0].speed if zoom is not None and zoom[1] >= 1.0 else self.speed
+        return speed_badged(frame, speed)
 
-    # %% the grid itself
-
-    def _grid(self, frame: Frame, seconds: float, question: Optional[RememberedQuestion], lit: float) -> Frame:
+    def _grid(self, frame: Frame, recording: float, zoom: Optional[Tuple[Zoom, float, float]], lit: float) -> Frame:
         """
-        The tiles, each named by row and column, the look's findings badged where they
-        are drawn, and the episodes a question's answer names lit.
-
-        :param frame: The frame drawn on.
-        :param seconds: The moment of the scene.
-        :param question: The question whose answer lights tiles, or None.
-        :param lit: How far the answer has lit its tiles, from zero to one.
+        The tiles, named by row and column, each badged with its phase; the ones the
+        answer names outlined once lit; and the zoomed tile drawn last, at the front.
         """
         layout = self.layout
-        heading = Typesetting(size=28, face=Face.BOLD, color=Ink.TEXT.rgb)
+        heading = Typesetting(size=BODY_SIZE, face=Face.BOLD, color=Ink.TEXT.rgb)
         for column, name in enumerate(self.labels.columns):
-            frame = heading.written(frame, name, (layout.tile(0, column).centre[0], layout.header_y), Anchor.CENTRE_MIDDLE)
+            frame = heading.written(frame, name, (layout.tile(0, column).centre[0], layout.band.bottom + layout.column_label / 2), Anchor.CENTRE_MIDDLE)
         for row, name in enumerate(self.labels.rows):
             cell = layout.tile(row, 0)
-            frame = heading.written(frame, name.replace(" ", "\n", 1), (layout.margin + layout.row_label / 2, cell.centre[1]), Anchor.CENTRE_MIDDLE)
-            for column, tile in enumerate(self.tiles[row]):
+            frame = heading.written(frame, name.replace(" ", "\n", 1), (MARGIN + layout.row_label / 2 - 8, cell.centre[1]), Anchor.CENTRE_MIDDLE)
+        front = None
+        for row, tiles in enumerate(self.tiles):
+            for column, tile in enumerate(tiles):
                 cell = layout.tile(row, column)
-                picture, perceiving = tile.picture_at(min(seconds, self.runs_for) * self.speed)
-                named = question is not None and question.names(tile.run.episode_identifier)
-                if lit > 0 and not named:
-                    picture = dimmed(picture, 0.55 * lit)
-                frame = filled(frame, cell, Ink.TEXT.rgb)
-                frame = fitted(frame, picture, cell)
-                if perceiving:
-                    frame = self._badge(frame, cell, "perceiving", Ink.PERCEPTION.rgb)
+                zoomed = zoom is not None and (zoom[0].row, zoom[0].column) == (row, column)
+                if zoomed:
+                    front = (tile, cell, zoom)
+                    continue
+                picture, phase = tile.picture_at(recording)
+                named = self.question.names(tile.run.episode_identifier)
+                faded = DIM if zoom is not None and zoom[1] > 0.0 else (0.55 * lit if lit > 0 and not named else 0.0)
+                frame = self._tile_drawn(frame, cell, dimmed(picture, faded) if faded else picture, phase, tag="")
                 if lit > 0 and named:
                     frame = framed(frame, cell.inset(-3), Ink.ANSWER.rgb, thickness=6)
-                    frame = self._badge(frame, cell, question.lit_as, Ink.ANSWER.rgb)
+        if front is not None:
+            tile, cell, (zoom, out, held) = front
+            where = cell.towards(layout.front, out)
+            moment = zoom.replay_from + held * zoom.speed if out >= 1.0 else self.play_for * self.speed
+            picture, phase = tile.picture_at(moment)
+            frame = self._tile_drawn(frame, where, picture, phase, tag=self.labels.tag(zoom.row, zoom.column) if out >= 1.0 else "")
         return frame
 
     @staticmethod
-    def _badge(frame: Frame, cell: Area, text: str, color) -> Frame:
-        lettering = Typesetting(size=20, face=Face.BOLD, color=Ink.PAPER.rgb)
-        # low in the tile: the board lies along its top edge
-        badge = Area(cell.x + 8, cell.bottom - 8 - 34, lettering.width_of(text) + 24, 34)
-        frame = filled(frame, badge, color)
-        return lettering.written(frame, text, badge.centre, Anchor.CENTRE_MIDDLE)
+    def _tile_drawn(frame: Frame, cell: Area, picture: Frame, phase: Optional[Phase], tag: str) -> Frame:
+        frame = filled(frame, cell, Ink.TEXT.rgb)
+        frame = fitted(frame, picture, cell)
+        if phase is not None:
+            frame = _phase_badged(frame, cell, phase)
+        if tag:
+            frame = badged(frame, tag, (cell.x + 8, cell.y + 8))
+        return frame
 
-    # %% the band over it
-
-    def _band(self, frame: Frame, asked: Optional[Tuple[RememberedQuestion, float]]) -> Frame:
+    def _band(self, frame: Frame, progress: Optional[float]) -> Frame:
         """
-        Long-term memory named over the grid, and while a question is up, the question,
-        the query behind it and, in its turn, the answer.
-
-        :param frame: The frame drawn on.
-        :param asked: The question up and how far along it is, or None.
+        The header line over the grid while no question is up; the question's card
+        once it is: what it is asked over, the question, the query behind it and, in
+        its turn, the answer.
         """
         band = self.layout.band
-        name = Typesetting(size=26, face=Face.BOLD, color=Ink.MEMORY.rgb)
-        if asked is None:
-            frame = name.written(frame, BACKEND_NAME, (band.x + 4, band.y + 24), Anchor.LEFT_MIDDLE)
-            return Typesetting(size=24, color=Ink.MUTED.rgb).written(
-                frame,
-                "every run is recorded to the results database as it happens, and asked about",
-                (band.x + 4, band.y + 62),
-                Anchor.LEFT_MIDDLE,
+        if progress is None:
+            return Typesetting(size=LABEL_SIZE, color=Ink.MUTED.rgb).written(
+                frame, self.labels.header, (band.x, band.y + 14), Anchor.LEFT_MIDDLE
             )
-        question, progress = asked
-        card = band
-        frame = filled(frame, card, Ink.PAPER.rgb)
-        frame = framed(frame, card, Ink.ASKED.rgb, thickness=3)
-        frame = name.written(frame, BACKEND_NAME, (card.x + 24, card.y + 28), Anchor.LEFT_MIDDLE)
-        frame = Typesetting(size=30, face=Face.BOLD).written(
-            frame, question.english, (card.x + 24, card.y + 68), Anchor.LEFT_MIDDLE
+        question = self.question
+        frame = framed(frame, band, Ink.HAIRLINE.rgb, thickness=2)
+        frame = Typesetting(size=LABEL_SIZE, face=Face.BOLD, color=Ink.MEMORY.rgb).written(
+            frame, BACKEND_NAME, (band.x + 16, band.y + 18), Anchor.LEFT_MIDDLE
         )
-        code = CodeTypesetting(size=20)
-        for number, (line, marked) in enumerate(zip(question.statement, self.marked_in(question))):
-            frame = code.written(frame, line, (card.x + 24, card.y + 108 + number * 27), marked)
+        frame = Typesetting(size=LABEL_SIZE, color=Ink.MUTED.rgb).written(
+            frame, self.labels.long_term_header, (band.x + 16 + Typesetting(size=LABEL_SIZE, face=Face.BOLD).width_of(BACKEND_NAME) + 16, band.y + 18), Anchor.LEFT_MIDDLE
+        )
+        frame = Typesetting(size=BODY_SIZE, face=Face.BOLD).written(
+            frame, question.english, (band.x + 16, band.y + 46), Anchor.LEFT_MIDDLE
+        )
+        code = CodeTypesetting(size=LABEL_SIZE)
+        for number, line in enumerate(question.statement):
+            frame = code.written(frame, line, (band.x + 16, band.y + 76 + number * 24))
         if eased((progress - 0.45) / 0.15) > 0:
             on_screen = sum(question.names(tile.run.episode_identifier) for row in self.tiles for tile in row)
             answer = f"→ {len(question.episodes)} episodes; {on_screen} of them are on screen"
-            frame = Typesetting(size=28, face=Face.BOLD, color=Ink.ANSWER.rgb).written(
-                frame, answer, (card.right - 24, card.y + 68), Anchor.RIGHT_MIDDLE
+            frame = Typesetting(size=BODY_SIZE, face=Face.BOLD, color=Ink.ANSWER.rgb).written(
+                frame, answer, (band.right - 16, band.bottom - 22), Anchor.RIGHT_MIDDLE
             )
         return frame
 
-    def marked_in(self, question: RememberedQuestion) -> Tuple[List[Span], ...]:
-        """
-        What of a question's statement is marked on screen: what changed from the
-        question before it, so that the difference is seen at a glance; nothing in the
-        first.
 
-        :param question: One of the questions.
-        """
-        number = self.questions.index(question)
-        if number == 0:
-            return tuple([] for _ in question.statement)
-        return question.changed_from(self.questions[number - 1])
-
-    def _speed_badge(self, frame: Frame) -> Frame:
-        """
-        The speed-up, in the band's top right corner.
-        """
-        layout = self.layout
-        # the band's top right corner is free whether or not a question is up
-        badge = Area(layout.band.right - 12 - 130, layout.band.y + 12, 130, 40)
-        frame = filled(frame, badge, Ink.TEXT.rgb)
-        return Typesetting(size=26, face=Face.BOLD, color=Ink.PAPER.rgb).written(
-            frame, f"×{self.speed:g}", badge.centre, Anchor.CENTRE_MIDDLE
-        )
+def _phase_badged(frame: Frame, cell: Area, phase: Phase) -> Frame:
+    """
+    A tile's phase on a badge low in the tile, where the board is not: neutral dark,
+    the perturbation in the accent.
+    """
+    lettering = Typesetting(size=LABEL_SIZE, face=Face.BOLD, color=Ink.PAPER.rgb)
+    badge = Area(cell.x + 8, cell.bottom - 8 - BADGE_HEIGHT, lettering.width_of(phase.word) + 2 * BADGE_PADDING, BADGE_HEIGHT)
+    frame = filled(frame, badge, phase.color.rgb)
+    return lettering.written(frame, phase.word, badge.centre, Anchor.CENTRE_MIDDLE)

@@ -32,20 +32,23 @@ from experiments.questions.working_memory import (
     ObjectsTheRobotMoved,
 )
 from experiments.video.canvas import (
+    BODY_SIZE,
+    LABEL_SIZE,
+    MARGIN,
+    VIDEO_RESOLUTION,
     Anchor,
     Area,
     CodeTypesetting,
     Ink,
     Rgb,
     Typesetting,
-    dimmed,
     filled,
-    fitted,
     framed,
+    pasted,
 )
-from experiments.video.footage import TABLE_FRAMING, CameraFilm, Framing
+from experiments.video.footage import TABLE_FRAMING, CameraFilm, Framing, badged, speed_badged
 from experiments.video.sources import RecordedRun
-from experiments.video.timeline import Frame, Resolution, Scene, eased
+from experiments.video.timeline import Frame, Resolution, Scene, blended, eased
 from krrood.exceptions import DataclassException
 from segmind.datastructures.events import (
     AgentInteractionEvent,
@@ -53,24 +56,14 @@ from segmind.datastructures.events import (
     MotionEvent,
 )
 
-CLOSE_UP = Resolution(width=1600, height=900)
+ROBOT_ACTION = "robot action"
 """
-The size the scene draws itself at.
-"""
-
-REPORTED_TITLE = "what the monitor reported"
-"""
-What is written over the chart of events.
+What the one strip merging everything the robot was running is called.
 """
 
-RUNNING_TITLE = "what the robot was running"
+NO_PLAN_RAN = "none"
 """
-What is written over the chart of the plan.
-"""
-
-NO_PLAN_RAN = "no action ran"
-"""
-What is written in the chart of the plan when the trial ran none.
+What is written in the robot's strip when the trial ran no action.
 """
 
 BODY_PREFIX = "perceived/"
@@ -83,19 +76,44 @@ NAMED_BODY = re.compile(r"PrefixedName\('([^']+)'\)")
 How a body is named in the answer a query recorded.
 """
 
-TITLE_HEIGHT = 34
+ROW_PITCH = 34
 """
-Pixels a chart keeps for its title.
-"""
-
-AXIS_HEIGHT = 56
-"""
-Pixels the lower chart keeps under its rows for the seconds.
+Pixels one row of the timeline takes.
 """
 
-CHART_GAP = 20
+AXIS_HEIGHT = 44
 """
-Pixels between the two charts.
+Pixels the timeline keeps under its rows for the seconds.
+"""
+
+PANEL_WIDTH = 560
+"""
+Pixels the timeline's panel over the footage is wide.
+"""
+
+PANEL_OPACITY = 0.9
+"""
+How far the timeline's panel covers the footage under it.
+"""
+
+HEADER_CLEAR = 96
+"""
+Pixels from the top kept clear for the chapter's pill and the badges.
+"""
+
+CARD_PADDING = 24
+"""
+Pixels between a question's card and its words.
+"""
+
+CARD_ROW = 36
+"""
+Pixels one row of a question or its answer takes.
+"""
+
+CODE_PITCH = 28
+"""
+Pixels one line of a question's statement takes.
 """
 
 
@@ -142,9 +160,11 @@ class TrialTimelines:
     @cached_property
     def event_rows(self) -> Tuple[TimelineRow, ...]:
         """
-        One row per kind of event the trial reported, in the order they were first seen.
+        One row per kind of event the questions are about -- the motions, and what
+        the robot did to a body -- in the order they were first seen.
         """
-        return EventTimeline().rows_of(self.trial, ())
+        kinds = {event.kind.__name__ for event in self.reported if issubclass(event.kind, (MotionEvent, AgentInteractionEvent))}
+        return tuple(row for row in EventTimeline().rows_of(self.trial, ()) if row.label in kinds)
 
     @cached_property
     def plan_rows(self) -> Tuple[PlanRow, ...]:
@@ -154,6 +174,13 @@ class TrialTimelines:
         if not plans_of(self.trial):
             return ()
         return PlanTimeline.rows_of(RunPlan.of(self.trial, identity=SamePiece()), ())
+
+    @cached_property
+    def robot_spans(self) -> Tuple[TimelineSpan, ...]:
+        """
+        Every stretch the robot was running some action over, as one strip.
+        """
+        return tuple(span for row in self.plan_rows for span in row.spans)
 
     @cached_property
     def reported(self) -> List[ReportedEvent]:
@@ -387,12 +414,12 @@ class TimelineChart:
     What is written over the rows.
     """
 
-    label_width: float = 210
+    label_width: float = 190
     """
     Pixels kept for the labels down the side.
     """
 
-    title_height: float = 34
+    title_height: float = 0
     """
     Pixels kept for the title.
     """
@@ -441,10 +468,10 @@ class TimelineChart:
         The chart on a frame, its stretches cut off at a moment.
         """
         if self.title:
-            frame = Typesetting(size=22, face=Face.BOLD).written(
+            frame = Typesetting(size=LABEL_SIZE, face=Face.BOLD).written(
                 frame, self.title, (self.area.x, self.area.y + self.title_height / 2), Anchor.LEFT_MIDDLE
             )
-        label = Typesetting(size=18, color=Ink.TEXT.rgb)
+        label = Typesetting(size=LABEL_SIZE, color=Ink.TEXT.rgb)
         frame = filled(frame, Area(self.bars.x, self.bars.y, 2, self.bars.height), Ink.HAIRLINE.rgb)
         for index, row in enumerate(self.rows):
             middle = self.bars.y + index * self.row_height + self.row_height / 2
@@ -453,25 +480,19 @@ class TimelineChart:
                 area = self.row_area(index, span, up_to)
                 if area is not None:
                     frame = filled(frame, area, row.color)
-        if not self.rows:
-            frame = Typesetting(size=20, color=Ink.MUTED.rgb).written(
-                frame, NO_PLAN_RAN, self.bars.centre, Anchor.CENTRE_MIDDLE
-            )
         return self._axis(frame) if self.axis_height else frame
 
     def _axis(self, frame: Frame) -> Frame:
         baseline = self.bars.bottom
         frame = filled(frame, Area(self.bars.x, baseline, self.bars.width, 2), Ink.HAIRLINE.rgb)
         step = 50.0 if self.length > 100 else 10.0 if self.length > 30 else 5.0
-        small = Typesetting(size=17, color=Ink.MUTED.rgb)
+        small = Typesetting(size=LABEL_SIZE, color=Ink.MUTED.rgb)
         tick = 0.0
         while tick <= self.length:
             frame = filled(frame, Area(self.x_of(tick) - 1, baseline, 2, 8), Ink.HAIRLINE.rgb)
-            frame = small.written(frame, f"{tick:g}", (self.x_of(tick), baseline + 22), Anchor.CENTRE_MIDDLE)
+            frame = small.written(frame, f"{tick:g} s" if tick == 0.0 else f"{tick:g}", (self.x_of(tick), baseline + 24), Anchor.CENTRE_MIDDLE)
             tick += step
-        return small.written(
-            frame, "seconds into the trial", (self.bars.right, baseline + 46), Anchor.RIGHT_MIDDLE
-        )
+        return frame
 
     def emphasised(self, frame: Frame, events: Sequence[ReportedEvent], weight: float) -> Frame:
         """
@@ -505,9 +526,9 @@ class TimelineChart:
 @dataclass
 class AttributionScene(Scene):
     """
-    The robot's camera and its two timelines playing together up to the moment a
-    question was asked, then each question taking the screen and being answered off
-    the timelines.
+    The robot's camera filling the frame, its timeline over it playing up to the
+    moment a question was asked, then each question over the footage, answered off
+    the timeline.
     """
 
     timelines: TrialTimelines
@@ -525,11 +546,6 @@ class AttributionScene(Scene):
     The questions, in the order they are asked.
     """
 
-    scenario: str
-    """
-    What is written under the film: what was going on in this trial.
-    """
-
     speed: float = 20.0
     """
     How many recorded seconds pass per second played while the film runs.
@@ -540,29 +556,14 @@ class AttributionScene(Scene):
     Seconds each question takes, from arriving to its answer having been read.
     """
 
-    resolution: Resolution = CLOSE_UP
+    resolution: Resolution = VIDEO_RESOLUTION
     """
-    The size the scene draws itself at.
+    The size the scene draws itself at: the video's own, the footage filling it.
     """
 
     framing: Framing = TABLE_FRAMING
     """
     What of each picture of the film is shown.
-    """
-
-    film_area: Area = field(default_factory=lambda: Area(40, 96, 780, 439))
-    """
-    Where the film plays.
-    """
-
-    charts_area: Area = field(default_factory=lambda: Area(880, 90, 680, 730))
-    """
-    Where the two charts stand, one over the other.
-    """
-
-    row_pitch: float = 40.0
-    """
-    The most pixels one row of a chart takes.
     """
 
     @property
@@ -596,41 +597,49 @@ class AttributionScene(Scene):
         return self.watching_for + self.question_for * len(self.questions)
 
     @property
-    def pitch(self) -> float:
+    def panel(self) -> Area:
         """
-        Pixels one row takes, the same on both charts: as much as the charts' room
-        allows, up to :attr:`row_pitch`; a chart with no rows keeps room for two.
+        Where the timeline lies: over the footage, at the right, under the badges.
         """
-        rows = len(self.timelines.event_rows) + max(len(self.timelines.plan_rows), 2)
-        return min(self.row_pitch, (self.charts_area.height - 2 * TITLE_HEIGHT - AXIS_HEIGHT - CHART_GAP) / rows)
+        rows = len(self.timelines.event_rows) + 1
+        height = ROW_PITCH * rows + AXIS_HEIGHT + 16
+        return Area(self.resolution.width - MARGIN - PANEL_WIDTH, HEADER_CLEAR, PANEL_WIDTH, height)
+
+    @property
+    def card_width(self) -> float:
+        return self.panel.x - MARGIN - 24
+
+    def card_for(self, question: AskedQuestion) -> Area:
+        """
+        Where a question stands: over the footage, at the left, as tall as its words,
+        its statement and its answer need.
+        """
+        asked = Typesetting(size=BODY_SIZE, face=Face.BOLD)
+        width = self.card_width - 2 * CARD_PADDING
+        question_rows = asked.wrapped(question.english, width).count("\n") + 1
+        answer_rows = asked.wrapped(f"→ {question.answer}", width).count("\n") + 1
+        height = (
+            CARD_PADDING
+            + question_rows * CARD_ROW
+            + 12
+            + len(question.statement) * CODE_PITCH
+            + 12
+            + answer_rows * CARD_ROW
+            + CARD_PADDING
+        )
+        return Area(MARGIN, HEADER_CLEAR, self.card_width, height)
 
     @cached_property
-    def reported_chart(self) -> TimelineChart:
+    def chart(self) -> TimelineChart:
         rows = tuple(
             ChartRowDrawn(row.label, row.spans, Ink.REPORTED.rgb) for row in self.timelines.event_rows
         )
-        height = TITLE_HEIGHT + self.pitch * len(rows)
+        rows += (ChartRowDrawn(ROBOT_ACTION, self.timelines.robot_spans, Ink.TEXT.rgb),)
+        panel = self.panel
         return TimelineChart(
-            Area(self.charts_area.x, self.charts_area.y, self.charts_area.width, height),
+            Area(panel.x + 8, panel.y + 8, panel.width - 16, panel.height - 16),
             self.timelines.trial.duration,
             rows,
-            title=REPORTED_TITLE,
-            title_height=TITLE_HEIGHT,
-        )
-
-    @cached_property
-    def running_chart(self) -> TimelineChart:
-        rows = tuple(
-            ChartRowDrawn(row.label, row.spans, Ink.FIRED.rgb) for row in self.timelines.plan_rows
-        )
-        top = self.reported_chart.area.bottom + CHART_GAP
-        height = TITLE_HEIGHT + self.pitch * max(len(rows), 2) + AXIS_HEIGHT
-        return TimelineChart(
-            Area(self.charts_area.x, top, self.charts_area.width, height),
-            self.timelines.trial.duration,
-            rows,
-            title=RUNNING_TITLE,
-            title_height=TITLE_HEIGHT,
             axis_height=AXIS_HEIGHT,
         )
 
@@ -648,66 +657,71 @@ class AttributionScene(Scene):
     def picture_at(self, seconds: float) -> Frame:
         now = min(seconds * self.speed, self.horizon)
         question, progress = self.question_at(seconds)
-        frame = self.resolution.blank(255)
-        frame = self._film(frame, now, question is not None)
-        for chart in (self.reported_chart, self.running_chart):
-            frame = chart.drawn(frame, now)
-            frame = chart.ruled(frame, now, Ink.TEXT.rgb)
+        frame = self._film(frame=self.resolution.blank(0), now=now)
+        frame = self._panel_drawn(frame, now)
         if question is not None:
             frame = self._asked(frame, question, progress)
-        return Typesetting(size=26, color=Ink.TEXT.rgb).written(
-            frame, self.scenario, (self.film_area.centre[0], self.resolution.stage_height - 40), Anchor.CENTRE_MIDDLE
-        )
+        return frame
 
-    def _film(self, frame: Frame, now: float, held: bool) -> Frame:
+    def _film(self, frame: Frame, now: float) -> Frame:
         image = self.framing.of(self.film.at(self.timelines.run.recording_second_of(self.timelines.trial, now)).image)
-        if held:
-            image = dimmed(image, 0.6)
-        frame = fitted(frame, image, self.film_area)
-        badge = Area(self.film_area.right - 130, self.film_area.y + 16, 114, 44)
-        frame = filled(frame, badge, Ink.TEXT.rgb)
-        frame = Typesetting(size=26, face=Face.BOLD, color=Ink.PAPER.rgb).written(
-            frame, f"×{self.speed:g}", badge.centre, Anchor.CENTRE_MIDDLE
-        )
-        clock = Area(self.film_area.x + 16, self.film_area.y + 16, 150, 44)
-        frame = filled(frame, clock, Ink.TEXT.rgb)
-        return Typesetting(size=24, face=Face.BOLD, color=Ink.PAPER.rgb).written(
-            frame, f"{now:5.1f} s", clock.centre, Anchor.CENTRE_MIDDLE
-        )
+        frame = pasted(frame, image, Area.whole(self.resolution))
+        frame = speed_badged(frame, self.speed)
+        return badged(frame, f"{now:5.1f} s", (self.resolution.width - MARGIN - 90, MARGIN), Anchor.RIGHT_TOP)
+
+    def _panel_drawn(self, frame: Frame, now: float) -> Frame:
+        """
+        The timeline on its panel over the footage, played up to a moment.
+        """
+        panel = self.panel
+        drawn = filled(frame, panel, Ink.PAPER.rgb)
+        drawn = self.chart.drawn(drawn, now)
+        drawn = self.chart.ruled(drawn, now, Ink.TEXT.rgb)
+        if not self.timelines.robot_spans:
+            drawn = Typesetting(size=LABEL_SIZE, color=Ink.MUTED.rgb).written(
+                drawn, NO_PLAN_RAN, (self.chart.bars.x + 12, self.chart.bars.bottom - self.chart.row_height / 2), Anchor.LEFT_MIDDLE
+            )
+        return blended(frame, drawn, PANEL_OPACITY)
 
     def _asked(self, frame: Frame, question: AskedQuestion, progress: float) -> Frame:
         """
-        The question over the film, the asking ruled onto the charts, the events its
-        answer rests on lit, and the answer -- each in its turn.
+        The question over the footage, the asking ruled onto the timeline, the events
+        its answer rests on lit, and the answer -- each in its turn.
         """
-        card = self.film_area.inset(40)
+        card = self.card_for(question)
         frame = filled(frame, card, Ink.PAPER.rgb)
-        frame = framed(frame, card, Ink.ASKED.rgb, thickness=3)
-        frame = Typesetting(size=30, face=Face.BOLD).written(
-            frame, question.english, (card.x + 30, card.y + 48), Anchor.LEFT_MIDDLE
-        )
-        code = CodeTypesetting(size=21)
+        frame = framed(frame, card, Ink.HAIRLINE.rgb, thickness=2)
+        asked = Typesetting(size=BODY_SIZE, face=Face.BOLD)
+        width = card.width - 2 * CARD_PADDING
+        words = asked.wrapped(question.english, width)
+        frame = asked.written(frame, words, (card.x + CARD_PADDING, card.y + CARD_PADDING), Anchor.LEFT_TOP)
+        code = CodeTypesetting(size=LABEL_SIZE)
+        code_top = card.y + CARD_PADDING + (words.count("\n") + 1) * CARD_ROW + 12
         for number, line in enumerate(question.statement):
-            frame = code.written(frame, line, (card.x + 30, card.y + 100 + number * 30))
+            frame = code.written(frame, line, (card.x + CARD_PADDING, code_top + (number + 0.5) * CODE_PITCH))
         ruled = eased((progress - 0.12) / 0.15)
         lit = eased((progress - 0.35) / 0.2)
         answered = eased((progress - 0.6) / 0.15)
         if ruled > 0:
-            for chart in (self.reported_chart, self.running_chart):
-                frame = chart.ruled(frame, question.asked_at, Ink.ASKED.rgb, thickness=4)
-            frame = Typesetting(size=20, face=Face.BOLD, color=Ink.ASKED.rgb).written(
+            frame = self.chart.ruled(frame, question.asked_at, Ink.ANSWER.rgb, thickness=4)
+            frame = Typesetting(size=LABEL_SIZE, face=Face.BOLD, color=Ink.ANSWER.rgb).written(
                 frame,
                 f"asked at {question.asked_at:.1f} s",
-                (self.reported_chart.x_of(question.asked_at) - 8, self.reported_chart.area.y + 16),
-                Anchor.RIGHT_MIDDLE,
+                (self.chart.x_of(question.asked_at) - 8, self.chart.bars.y - 2),
+                Anchor.RIGHT_TOP,
             )
-        frame = self.reported_chart.emphasised(frame, question.emphasised, lit)
+        frame = self.chart.emphasised(frame, question.emphasised, lit)
+        if lit > 0 and len(question.emphasised) == 1:
+            [event] = question.emphasised
+            frame = Typesetting(size=LABEL_SIZE, face=Face.BOLD, color=Ink.ANSWER.rgb).written(
+                frame, f"reported at {event.span.start:.1f} s", (self.chart.x_of(event.span.start) + 8, self.chart.bars.y - 2), Anchor.LEFT_TOP
+            )
         if answered > 0:
-            answer = Typesetting(size=28, face=Face.BOLD, color=Ink.ANSWER.rgb)
+            answer = Typesetting(size=BODY_SIZE, face=Face.BOLD, color=Ink.ANSWER.rgb)
             frame = answer.written(
                 frame,
-                answer.wrapped(f"→ {question.answer}", card.width - 60),
-                (card.x + 30, card.bottom - 76),
-                Anchor.LEFT_MIDDLE,
+                answer.wrapped(f"→ {question.answer}", width),
+                (card.x + CARD_PADDING, code_top + len(question.statement) * CODE_PITCH + 12),
+                Anchor.LEFT_TOP,
             )
         return frame

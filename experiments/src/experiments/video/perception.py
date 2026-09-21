@@ -37,15 +37,16 @@ from semantic_digital_twin.world_description.world_entity import Body
 from experiments.paper.lettering import Face
 from experiments.video.cache import SceneCache
 from experiments.video.canvas import (
+    LABEL_SIZE,
     Anchor,
     Ink,
     Area,
     Typesetting,
     filled,
     fitted,
-    framed,
 )
 from experiments.video.sources import RecordedRun
+from experiments.video.stages import PANEL_VISUAL
 from experiments.video.timeline import Frame, Resolution, Scene, eased
 
 class View(StrEnum):
@@ -59,14 +60,14 @@ class View(StrEnum):
     ANSWER = "answer"
 
 
-TILE_TITLES = {
-    View.RECTIFIED: "the table, rectified to the plane the detectors read",
-    View.LID: "SupportedBy(shape, lid)  →  only the lid is left to read",
-    View.COLOR: "Colored(shape, CYAN)  →  only cyan is left to fit",
-    View.ANSWER: "category=CUBE  →  the cube the statement found",
+TILE_LABELS = {
+    View.RECTIFIED: "rectified",
+    View.LID: "on lid",
+    View.COLOR: "cyan",
+    View.ANSWER: "cube",
 }
 """
-What each tile says above itself.
+What each picture is called, under it, in a word or two.
 """
 
 
@@ -85,9 +86,9 @@ def piece_to_sort_support_first(
         SupportedBy(piece, lid), Colored(piece, pieces.by_category[SORTED_PIECE].color)
     )
 
-CLOSE_UP = Resolution(width=1600, height=900)
+LABEL_ROOM = 36
 """
-The size the scene draws itself at before it is fitted into the close-up.
+Pixels under the row of pictures their labels take.
 """
 
 # %% what one frame's narrowing comes to
@@ -261,8 +262,8 @@ class NarrowingReel:
 @dataclass
 class PerceptionNarrowing(Scene):
     """
-    The four views of the look playing live over the recording, appearing one after
-    another, ending on the cube the statement found.
+    The four views of the look playing live over the recording in one row, appearing
+    one after another, ending on the cube the statement found.
     """
 
     reel: NarrowingReel
@@ -281,9 +282,14 @@ class PerceptionNarrowing(Scene):
     Seconds all four views play once every one is up.
     """
 
-    resolution: Resolution = CLOSE_UP
+    resolution: Resolution = PANEL_VISUAL
     """
     The size the scene draws itself at.
+    """
+
+    gap: int = 12
+    """
+    Pixels between two pictures.
     """
 
     @cached_property
@@ -293,7 +299,7 @@ class PerceptionNarrowing(Scene):
     @property
     def duration(self) -> float:
         """
-        Seconds the grid is on screen, views appearing and then all running.
+        Seconds the row is on screen, views appearing and then all running.
         """
         return self.appears_at[-1] + self.run_for
 
@@ -306,43 +312,29 @@ class PerceptionNarrowing(Scene):
 
     def tile(self, view: View) -> Area:
         """
-        Where a view's tile lies in the grid, two by two.
+        Where a view's picture lies in the row: four equal pictures, the row centred
+        with its labels under it.
         """
-        margin, gap, title = 20, 20, 62
-        width = (self.resolution.width - 2 * margin - gap) / 2
-        height = (self.resolution.stage_height - 2 * margin - gap) / 2
-        column, row = list(View).index(view) % 2, list(View).index(view) // 2
-        return Area(
-            margin + column * (width + gap),
-            margin + row * (height + gap) + title,
-            width,
-            height - title,
-        )
+        count = len(View)
+        width = (self.resolution.width - (count - 1) * self.gap) / count
+        sample = self.frames[0].pictures[view]
+        height = width * sample.shape[0] / sample.shape[1]
+        top = (self.resolution.height - height - LABEL_ROOM) / 2
+        return Area(list(View).index(view) * (width + self.gap), top, width, height)
 
     def picture_at(self, seconds: float) -> Frame:
         frame = self.resolution.blank(255)
         narrowed = self.frames[self.frame_index_at(seconds)]
-        title = Typesetting(size=24, face=Face.BOLD, color=Ink.PERCEPTION.rgb)
-        reading = Typesetting(size=20, color=Ink.MUTED.rgb)
+        label = Typesetting(size=LABEL_SIZE, face=Face.BOLD, color=Ink.PERCEPTION.rgb)
         for number, view in enumerate(View):
             appeared = seconds - self.appears_at[number]
             if appeared < 0:
                 continue
-            weight = eased(appeared / 0.6)
+            weight = eased(appeared / 0.25)
             tile = self.tile(view)
-            frame = title.written(
-                frame, TILE_TITLES[view], (tile.x, tile.y - 44), Anchor.LEFT_MIDDLE
-            )
             frame = filled(frame, tile, Ink.TEXT.rgb)
             frame = fitted(frame, self._faded(narrowed.pictures[view], weight), tile)
-            what = (
-                f"{narrowed.found} piece(s) answer"
-                if view is View.ANSWER
-                else f"{narrowed.searched_areas[view]:.2f} m² left to read"
-            )
-            frame = reading.written(
-                frame, what, (tile.x, tile.y - 16), Anchor.LEFT_MIDDLE
-            )
+            frame = label.written(frame, TILE_LABELS[view], (tile.centre[0], tile.bottom + LABEL_ROOM / 2), Anchor.CENTRE_MIDDLE)
         return frame
 
     @staticmethod

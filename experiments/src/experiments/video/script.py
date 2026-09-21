@@ -22,6 +22,43 @@ The paper's submission number, as the conference assigned it.
 
 
 @dataclass(frozen=True)
+class Chapter:
+    """
+    One of the video's chapters: a contribution of the paper, stated as its claim.
+    """
+
+    number: int
+    """
+    Which chapter, from one.
+    """
+
+    claim: str
+    """
+    The claim, as it is shown large when the chapter starts and then kept in its pill.
+    """
+
+
+CHAPTERS: Tuple[Chapter, ...] = (
+    Chapter(1, "Backends complete what an underspecified query leaves open"),
+    Chapter(2, "One query language reaches events and plans, without integration code"),
+    Chapter(3, "Evaluated on a real robot"),
+)
+"""
+The three chapters, in order: the paper's contributions.
+"""
+
+
+@dataclass(frozen=True)
+class ResultRow:
+    """
+    One row of the results table: what was measured and its value with its unit.
+    """
+
+    measure: str
+    value: str
+
+
+@dataclass(frozen=True)
 class VideoScript:
     """
     The words the video's slides carry.
@@ -40,22 +77,9 @@ class VideoScript:
     The conference the paper is submitted to.
     """
 
-    paper_id: str = PAPER_ID
-    """
-    The paper's submission number.
-    """
-
     kind: str = "Supplementary video"
     """
     What the video is, under the title.
-    """
-
-    summary: str = (
-        "One query interface connects perception, memory, probabilistic reasoning, "
-        "logical inference, and robot action."
-    )
-    """
-    What the video shows, in a sentence under the title: its sections, in order.
     """
 
     robot_name: str = "the robot"
@@ -71,12 +95,75 @@ class VideoScript:
     Where the code is, anonymised as the paper links it.
     """
 
-    @property
-    def submission_line(self) -> str:
-        """
-        The conference and the paper's number, on one line.
-        """
-        return f"{self.conference}  ·  Paper ID {self.paper_id}"
+    chapters: Tuple[Chapter, ...] = CHAPTERS
+    """
+    The chapters, in order.
+    """
+
+    principle: str = "Backends differ in source and mechanism, never in the description."
+    """
+    The paper's principle, as the hero frame carries it in large type; the narrator
+    says the paper's full sentence.
+    """
+
+    statement_label: str = "the statement"
+    """
+    What stands above the divider of the hero frame: the query.
+    """
+
+    backends_label: str = "backends"
+    """
+    What stands below the divider of the hero frame.
+    """
+
+    grasp_gloss: str = (
+        "a grasp with the left hand, from the top, approach direction still to be chosen"
+    )
+    """
+    The example query in plain words, unlabelled beside it.
+    """
+
+    backend_choice: str = (
+        "holds backends in an order of preference and answers with the first capable one"
+    )
+    """
+    What a backend choice does, under its name in the taxonomy (Section IV-B).
+    """
+
+    run_values_note: str = "values from the recorded run; Fig. 1 in the paper is illustrative"
+    """
+    The footnote on the resolved plan: the grasp the probabilistic backend chose and the
+    cube's pose are the recorded run's, and the paper's figure shows stand-ins.
+    """
+
+    grid_header: str = "13 trials in 7 episodes on the real robot; six conditions shown"
+    """
+    The one line over the grid of perturbed runs (Section VI-E).
+    """
+
+    long_term_header: str = "asked of long term memory, over the 7 episodes recorded on the real robot"
+    """
+    What the long term memory query is asked over.
+    """
+
+    results_title: str = "On the real robot: 13 trials in 7 episodes"
+    """
+    Over the results table.
+    """
+
+    results: Tuple[ResultRow, ...] = (
+        ResultRow("Executed plans that reached their goal", "4 of 4"),
+        ResultRow("Questions answered correctly", "213 of 213"),
+        ResultRow("Mean latency per predicate, working memory", "0.10 s"),
+    )
+    """
+    The results table (Table V and Section VI): every number is the paper's.
+    """
+
+    code_label: str = "Code and recorded episodes"
+    """
+    Over the link on the end card.
+    """
 
 
 # %% what is said
@@ -91,49 +178,30 @@ class NarrationLines:
     code refuses a line that is still being said when the next begins.
     """
 
-    # the title is on the slide; reading it out took eight seconds
-    title: Line = Line(
-        f"This video accompanies paper {PAPER_ID}.",
-        spoken="This video accompanies paper thirty-eight eighty-nine.",
+    # said over the title, which is not read out, and running on into the first chapter
+    opening: Line = Line(
+        "One query interface connects perception, memory, probabilistic reasoning, "
+        "logical inference, and robot action."
     )
-    summary: Line = Line(
-        "It shows how one query interface connects perception, memory, probabilistic "
-        "reasoning, logical inference, and robot action."
+    query: Line = Line(
+        "Here, a query for a grasp: left hand, from the top; the approach direction, "
+        "written as `...`, is left open.",
+        spoken="Here, a query for a grasp: left hand, from the top; the approach "
+        "direction, written as three dots, is left open.",
     )
-    definition: Line = Line(
-        "A query is an under-specified description of an entity: its type, the fields "
-        "already known, and further conditions."
-    )
-    example: Line = Line(
-        "Here, a grasp description: left hand, from the top; the approach direction is "
-        "written as `...`: a field the answering backend fills.",
-        spoken="Here, a grasp description: left hand, from the top; the approach "
-        "direction is written as three dots: a field the answering backend fills.",
-    )
-    meaning: Line = Line(
-        "Its intended meaning is a grasp that fits what is stated. Its grounding is the "
-        "program's own class, so the answer is a GraspDescription instance, computed by "
-        "any capable backend.",
-        spoken="Its intended meaning is a grasp that fits what is stated. Its grounding "
-        "is the program's own class, so the answer is a grasp description instance, "
-        "computed by any capable backend.",
-    )
-    taxonomy: Line = Line(
+    # what a backend choice does is written under its name on the slide, not read out
+    backends: Line = Line(
         "Selective backends retrieve what is known; generative backends infer new "
-        "instances."
+        "instances; a backend choice orders them."
     )
-    backend_choice: Line = Line(
-        "A backend choice picks among the capable ones by meta-queries over the task, "
-        "in an order of preference."
+    # the paper's own sentence (Section IV-A), said whole over the hero frame
+    principle: Line = Line(
+        "Backends differ in their source of information and their mechanism, never in "
+        "the description, so the query representation stays unchanged."
     )
-    # "that means:" made the voice break before "that"; the bare colon pauses once, after it
-    plan_pick_up: Line = Line(
-        "We demonstrate this with a plan written as a nested query: pick up the "
-        "cyan cube resting on the board,"
-    )
-    plan_insertion: Line = Line(
-        "and insert it into a hole. The cube, the approach direction and the hole are "
-        "left open, and resolved from the innermost query outward."
+    plan: Line = Line(
+        "The plan is one nested query: pick up the cyan cube resting on the board, and "
+        "insert it into a hole. Cube, approach direction and hole are left open."
     )
     perception_query: Line = Line("Finding the cube falls to the perception backend.")
     perception_views: Tuple[Line, ...] = (
@@ -142,13 +210,9 @@ class NarrationLines:
         Line("colour segments what is cyan on it;"),
         Line("and the cube is what remains."),
     )
-    working_memory_query: Line = Line(
-        "The working-memory backend verifies the support condition again, in "
-        "simulation."
-    )
     working_memory: Line = Line(
-        "A geometric check for interference between the cube's bottom and the board's "
-        "top confirms that the cube rests on the lid."
+        "The working memory backend verifies in simulation that the cube rests on the "
+        "lid."
     )
     probabilistic_query: Line = Line(
         "Only the probabilistic backend is capable of choosing the grasp approach "
@@ -158,42 +222,67 @@ class NarrationLines:
         "From its model registry it selects the model fitting the query — a prior "
         "over approach directions — and samples from it."
     )
-    rules_query: Line = Line(
-        "The hole is inferred by the rule-based reasoning backend."
-    )
+    rules_query: Line = Line("The hole is inferred by the ripple down rules backend.")
     rules: Line = Line(
-        "It matches the cube's known shape against the holes held in working memory "
-        "and selects the hole whose outline fits."
+        "It matches the cube's known shape against the holes in working memory and "
+        "selects the one whose outline fits."
     )
     resolved: Line = Line(
         "With every field answered, the resolved plan is executed on the robot."
     )
+    # said over the film of the robot acting, each as what it names is seen; the last
+    # is the paper's result (Section VI-E)
+    execution_perceived: Line = Line(
+        "The robot perceives the scene as it stands and reaches for the cube it found,"
+    )
+    execution_grasp: Line = Line("grasps it from the left, as the backend sampled,")
+    execution_carry: Line = Line("carries it over the board,")
+    execution_insertion: Line = Line("and inserts it through the square hole the rules concluded.")
+    execution_outcome: Line = Line("Every executed plan reached its goal.")
     attribution: Line = Line(
-        "Next, temporal and action-attribution queries, enabled by an event "
-        "segmentation framework running alongside the agent program."
+        "Who moved what is answered from an event segmentation framework running "
+        "alongside the agent program."
+    )
+    # said as the first query over event classes comes up (contribution 2)
+    event_classes: Line = Line(
+        "These are classes of the event segmentation itself. The classes of the control "
+        "programs are the concepts of the knowledge base, so the query needs no code "
+        "written for integration."
     )
     attribution_sorting: Line = Line(
-        "Which objects moved is answered from the motion events and their tracked "
-        "objects; which of them the robot moved, from the agent-interaction events "
-        "restricted to those objects."
+        "Which objects moved comes from the motion events; which of them the robot "
+        "moved, from the agent interaction events over those objects."
     )
     attribution_pushed: Line = Line(
-        "In a second trial the robot stands idle while a person pushes the cube: it "
-        "moved, but not by the robot."
+        "In a second trial the robot stands idle while a person pushes the cube."
     )
-    perturbations: Line = Line(
-        "Finally, we evaluate the system over many real-world runs in which the "
-        "objects are perturbed during execution, and the program adapts."
+    attribution_pushed_answer: Line = Line(
+        "The cube moved, and no action of the robot moved it."
     )
-    episodic_memory: Line = Line(
-        "Every run is recorded by the architecture's episodic memory: environment, "
-        "sensor readings, tasks, plan and detected events."
+    grid: Line = Line(
+        "We evaluate the system over 13 trials on the real robot.",
+        spoken="We evaluate the system over thirteen trials on the real robot.",
+    )
+    stands_still: Line = Line(
+        "A person moves the board while the robot stands still: the scene moved, but "
+        "the robot did not move it."
+    )
+    # the perturbations come before the robot acts; the plan is completed from the
+    # scene as perception then finds it, and nothing is re-planned
+    shoved: Line = Line(
+        "Before the robot acts, a person shoves a piece. Perception captures the scene "
+        "as it then stands, and the plan is completed from that."
     )
     long_term_memory: Line = Line(
-        "The same queries then go to the long-term memory backend over all recorded "
-        "episodes: in which did the cube move, and in which did the robot pick it up?"
+        "Every run is recorded as an episode, and the same kind of query goes to long "
+        "term memory: in which episodes did the robot pick the cube up?"
     )
-    closing: Line = Line("Thank you for watching.")
+    # the results table: the paper's numbers are on screen, not read out as numerals
+    results: Line = Line(
+        "Every executed plan reached its goal, and every scored question was answered "
+        "correctly."
+    )
+    closing: Line = Line("Code and recorded episodes are at the link.")
 
     @property
     def every(self) -> Tuple[Line, ...]:

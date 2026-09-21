@@ -109,3 +109,26 @@ def test_a_scene_may_draw_down_to_the_band_left_for_subtitles() -> None:
     resolution = Resolution(width=1600, height=900)
     assert resolution.stage_height == pytest.approx(900 * (1 - SUBTITLE_BAND_SHARE))
     assert 0.10 <= SUBTITLE_BAND_SHARE <= 0.15
+
+
+# %% a scene that cuts in
+
+
+class Cut(Still):
+    """
+    A still that cuts in rather than dissolving.
+    """
+
+    @property
+    def dissolves_in(self) -> bool:
+        return False
+
+
+def test_a_scene_that_cuts_in_takes_no_dissolve_from_the_scene_before() -> None:
+    timeline = Timeline(scenes=[Still(flat(10), 1.0), Cut(flat(20), 1.0), Still(flat(30), 1.0)], frames_per_second=10, dissolve=0.5)
+    assert timeline.dissolve_into(1) == 0.0 and timeline.dissolve_into(2) == 0.5 and timeline.dissolve_into(0) == 0.0
+    assert timeline.duration == pytest.approx(2.5)
+    assert timeline.starts() == pytest.approx([0.0, 1.0, 1.5])
+    assert int(timeline.frame_at(1.0)[0, 0, 0]) == 20  # no blend at the cut
+    assert int(timeline.frame_at(0.9)[0, 0, 0]) == 10
+    assert 20 < int(timeline.frame_at(1.75)[0, 0, 0]) < 30  # the dissolve after it as usual

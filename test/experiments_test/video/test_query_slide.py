@@ -1,38 +1,33 @@
 """
-Tests for :mod:`experiments.video.query_slide`: the slide explains a query on one of
-the plan's own, a part at a time as the narration names it, and the backends fit under
-it.
+Tests for :mod:`experiments.video.query_slide`: the introduction in three beats on one
+slide, each coming up as the narration reaches it.
 """
 
 from __future__ import annotations
 
 import numpy as np
 
-from experiments.video.canvas import Area, CodeTypesetting, Ink
+from experiments.video.canvas import CLAIM_SIZE, Area, CodeTypesetting, Ink
 from experiments.video.query_slide import (
-    QUERY_PARTS,
-    QUERY_TEMPLATE,
+    CODE_SIZE,
+    MOVE,
     STEP_FADE,
+    BackendKind,
     ExampleQuery,
-    QuerySlide,
-    SlideMoments,
+    IntroductionMoments,
+    IntroductionSlide,
 )
-from experiments.video.script import NarrationLines
+from experiments.video.script import NarrationLines, VideoScript
 
-MOMENTS = SlideMoments(
-    template=0.0,
-    parts=(0.5, 1.0, 2.0, 3.0),
-    lines=(4.0, 7.0, 6.0, 5.0),
-    open_field=8.0,
-    meaning=9.0,
-    grounding=10.0,
-    computation=11.0,
-    tree=12.0,
-    choice=13.0,
-)
+MOMENTS = IntroductionMoments(example=0.0, open_field=2.0, gloss=3.0, backends=6.0, hero=12.0)
 
 
-def drawn(slide: QuerySlide, area, seconds: float) -> bool:
+def slide_with(moments: IntroductionMoments = MOMENTS) -> IntroductionSlide:
+    script = VideoScript()
+    return IntroductionSlide(script.backend_choice, script.principle, script.statement_label, script.backends_label, moments=moments, held_for=16.0)
+
+
+def drawn(slide: IntroductionSlide, area: Area, seconds: float) -> bool:
     """
     Whether anything darker than a card is drawn in an area of the slide at a moment.
     """
@@ -44,79 +39,73 @@ def drawn(slide: QuerySlide, area, seconds: float) -> bool:
 def test_the_example_leaves_one_field_open_where_it_is_written() -> None:
     query = ExampleQuery()
     assert query.open_field_line == 1
-    first, after_last = query.open_field_span
-    assert query.lines[1][first:after_last] == "..."
+    first, last = query.open_field_span
+    assert query.lines[1][first:last] == "..."
 
 
-def test_the_template_names_every_part_the_definition_line_names() -> None:
-    line = NarrationLines().definition.written
-    assert "..." in QUERY_TEMPLATE
-    for part in QUERY_PARTS:
-        assert part.placeholder in QUERY_TEMPLATE
-        assert part.named_by in line
+def test_the_example_is_the_plans_grasp_query_and_the_line_says_what_it_shows() -> None:
+    query = ExampleQuery()
+    assert query.lines[0] == "a(GraspDescription)("
+    said = NarrationLines().query.written
+    assert "left hand" in said and "from the top" in said and "`...`" in said and "left open" in said
+    assert "GraspDescription" not in said
 
 
-def test_the_example_is_the_plans_grasp_query_and_the_lines_say_what_it_says() -> None:
-    query, lines = ExampleQuery(), NarrationLines()
-    assert "GraspDescription" in query.lines[0]
-    assert "..." in lines.example.written and "three dots" in lines.example.said
-    assert "intended meaning" in lines.meaning.written and "grounding" in lines.meaning.written
-
-
-def test_the_lines_of_the_example_come_up_each_at_its_own_moment() -> None:
-    slide = QuerySlide(moments=MOMENTS, held_for=14.0)
-    lines = [
-        Area(slide.line_at(number)[0], slide.line_at(number)[1] - 10, 300, 20)
-        for number in range(len(slide.query.lines))
-    ]
-    # at 5.6 s the first and last lines are typed, the middle two not yet
-    assert drawn(slide, lines[0], 5.0 + STEP_FADE) and drawn(slide, lines[3], 5.0 + STEP_FADE)
-    assert not drawn(slide, lines[1], 5.0 + STEP_FADE) and not drawn(slide, lines[2], 5.0 + STEP_FADE)
-    assert all(drawn(slide, line, 7.0 + STEP_FADE) for line in lines)
+def test_the_gloss_is_unlabelled_plain_words_naming_no_meaning_or_grounding() -> None:
+    query = ExampleQuery()
+    assert query.gloss.startswith("a grasp with the left hand")
+    for word in ("meaning", "grounding", "grounded"):
+        assert word not in query.gloss
 
 
 def test_the_open_field_is_marked_only_once_it_is_said() -> None:
-    slide = QuerySlide(moments=MOMENTS, held_for=14.0)
-    before, after = slide.frame_at(7.9), slide.frame_at(8.0 + STEP_FADE)
-    x, y = slide.line_at(slide.query.open_field_line)
+    slide = slide_with()
+    card = slide.middle_card
+    x, y = card.x + CODE_SIZE, card.y + CODE_SIZE / 2 + CODE_SIZE * 1.4 * 1.5
     first, _ = slide.query.open_field_span
-    on_field = (int(y), int(x + CodeTypesetting(size=22).width_of(slide.query.lines[1][:first]) + 4))
-    assert tuple(before[on_field]) == Ink.BUBBLE.rgb
-    assert tuple(after[on_field]) == Ink.MARKER.rgb
+    on_field = (int(y), int(x + CodeTypesetting(size=CODE_SIZE).width_of(slide.query.lines[1][:first]) + 4))
+    assert tuple(slide.frame_at(1.9)[on_field]) == Ink.BUBBLE.rgb
+    assert tuple(slide.frame_at(2.0 + STEP_FADE)[on_field]) == Ink.MARKER.rgb
 
 
-def test_the_query_the_backends_and_the_choice_come_up_in_that_order() -> None:
-    slide = QuerySlide(moments=MOMENTS, held_for=14.0)
-    assert slide.duration == 14.0
-    on_card = (int(slide.card.y + 4), int(slide.card.x + 4))
-    on_root = (int(slide.root.y + 1), int(slide.root.centre[0]))
-    on_pill = (int(slide.choice.y + 1), int(slide.choice.centre[0]))
-    after_card = slide.frame_at(4.0 + STEP_FADE)
-    assert tuple(after_card[on_card]) == Ink.BUBBLE.rgb
-    assert tuple(after_card[on_root]) == (255, 255, 255) and tuple(after_card[on_pill]) == (255, 255, 255)
-    assert not drawn(slide, slide.meaning_block, 8.9) and drawn(slide, slide.meaning_block, 9.0 + STEP_FADE)
-    assert not drawn(slide, slide.grounding_block, 9.9) and drawn(slide, slide.grounding_block, 10.0 + STEP_FADE)
-    after_tree = slide.frame_at(12.0 + STEP_FADE)
-    assert tuple(after_tree[on_root]) == Ink.TEXT.rgb and tuple(after_tree[on_pill]) == (255, 255, 255)
-    assert tuple(slide.frame_at(13.0 + STEP_FADE)[on_pill]) == Ink.ASKED.rgb
+def test_the_query_then_the_gloss_then_the_backends_then_the_hero_come_up_in_turn() -> None:
+    slide = slide_with()
+    assert slide.duration == 16.0
+    gloss = Area(slide.resolution.width / 2 - 300, slide.middle_card.bottom + 30, 600, 60)
+    assert not drawn(slide, gloss, 2.9) and drawn(slide, gloss, 3.0 + STEP_FADE)
+    x, y = slide.backend(1, 2)
+    choice = Area(x, y - 12, 300, 24)
+    assert not drawn(slide, choice, 5.9) and drawn(slide, choice, 6.0 + MOVE + STEP_FADE)
+    # the query has shrunk to the top: its middle card's place is clear
+    middle = slide.middle_card
+    assert drawn(slide, Area(middle.x, middle.y + 32, 40, 16), 5.9)
+    assert not drawn(slide, Area(middle.x, middle.y + 32, 40, 16), 6.0 + MOVE + STEP_FADE)
+    assert drawn(slide, Area(slide.top_card.x + 20, slide.top_card.y + 12, 120, 24), 6.0 + MOVE + STEP_FADE)
+    divider = Area(slide.choice.right + 8, slide.divider_y - 3, 40, 6)
+    assert not drawn(slide, divider, 11.9) and drawn(slide, divider, 12.0 + STEP_FADE)
+    # the backends have given way to the hero
+    box_edge = Area(300, slide.choice.y - 2, 200, 4)
+    assert drawn(slide, box_edge, 11.9) and not drawn(slide, box_edge, 12.0 + STEP_FADE)
+    hero = Area(slide.resolution.width / 2 - 200, (slide.divider_y + 40 + slide.resolution.stage_height) / 2 - CLAIM_SIZE, 400, 2 * CLAIM_SIZE)
+    assert drawn(slide, hero, 12.0 + STEP_FADE)
 
 
-def test_the_template_and_its_parts_come_up_before_the_example() -> None:
-    slide = QuerySlide(moments=MOMENTS, held_for=14.0)
-    left, right = slide.part_span(QUERY_PARTS[1])
-    label = Area(left, slide.template_at[1] + 20, right - left, 24)
-    assert not drawn(slide, label, 0.9) and drawn(slide, label, 1.0 + STEP_FADE)
-    left, right = slide.part_span(QUERY_PARTS[0])
-    assert drawn(slide, Area(left, slide.template_at[1] + 20, right - left, 24), 0.5 + STEP_FADE)
-    assert not drawn(slide, slide.card, 3.9)
+def test_the_hero_frame_names_the_statement_above_the_divider_and_the_backends_below() -> None:
+    script = VideoScript()
+    assert script.statement_label == "the statement" and script.backends_label == "backends"
+    assert script.principle == "Backends differ in source and mechanism, never in the description."
+    assert NarrationLines().principle.written.startswith("Backends differ in their source of information and their mechanism")
 
 
-def test_every_leaf_of_the_tree_lies_under_its_kind_and_above_the_subtitles() -> None:
-    slide = QuerySlide()
-    for kind_index, kind in enumerate(slide.tree.children):
+def test_the_backends_lie_under_their_kinds_above_the_captions_in_the_figures_colours() -> None:
+    slide = slide_with()
+    names = {name for kind in slide.kinds for name, _ in kind.backends}
+    assert names == {"WorkingMemory", "LongTermMemory", "PerceptionBackend", "RippleDownRulesBackend", "ProbabilisticBackend"}
+    for kind_index, kind in enumerate(slide.kinds):
         box = slide.kind(kind_index)
-        for index in range(len(kind.children)):
-            leaf = slide.leaf(kind_index, index)
-            assert leaf.y > box.bottom and box.x <= leaf.x
-            assert leaf.bottom <= slide.resolution.stage_height
-    assert np.all(slide.frame_at(slide.moments.choice + STEP_FADE)[int(slide.resolution.stage_height) :] == 255)
+        for index in range(len(kind.backends)):
+            x, y = slide.backend(kind_index, index)
+            assert y > box.bottom and box.x <= x
+            assert y + 20 <= slide.resolution.stage_height
+    assert np.all(slide.frame_at(MOMENTS.backends + MOVE + STEP_FADE)[int(slide.resolution.stage_height) :] == 255)
+    assert isinstance(slide.kinds[0], BackendKind) and [kind.name for kind in slide.kinds] == ["Selective", "Generative"]

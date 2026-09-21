@@ -24,11 +24,10 @@ One picture of the video: red, green and blue bytes, rows by columns by channel.
 # %% the picture a video is
 
 
-SUBTITLE_BAND_SHARE = 0.12
+SUBTITLE_BAND_SHARE = 0.14
 """
-The share of a frame's height, at its bottom, left clear for the subtitles a player
-draws there: one row of its text and its margin, with room for the larger text some
-players default to.
+The share of a frame's height, at its bottom, left clear for the captions: two rows of
+them on a fixed baseline, with their margin.
 """
 
 
@@ -122,6 +121,14 @@ class Scene(ABC):
         """
         return seconds / self.duration
 
+    @property
+    def dissolves_in(self) -> bool:
+        """
+        Whether the scene before dissolves into this one, or this one cuts in: a cut
+        where the two would write different text in one place.
+        """
+        return True
+
 
 @dataclass
 class Still(Scene):
@@ -204,8 +211,16 @@ class Timeline:
         """
         How long the whole video lasts, in seconds.
         """
-        overlaps = self.dissolve * max(len(self.scenes) - 1, 0)
+        overlaps = sum(self.dissolve_into(index) for index in range(1, len(self.scenes)))
         return sum(scene.duration for scene in self.scenes) - overlaps
+
+    def dissolve_into(self, index: int) -> float:
+        """
+        Seconds the scene before dissolves into a scene: none where it cuts in.
+
+        :param index: Which scene, from zero.
+        """
+        return self.dissolve if index > 0 and self.scenes[index].dissolves_in else 0.0
 
     @property
     def frame_count(self) -> int:
@@ -220,9 +235,9 @@ class Timeline:
         """
         starts = []
         start = 0.0
-        for scene in self.scenes:
+        for index, scene in enumerate(self.scenes):
             starts.append(start)
-            start += scene.duration - self.dissolve
+            start += scene.duration - (self.dissolve_into(index + 1) if index + 1 < len(self.scenes) else 0.0)
         return starts
 
     def frame_at(self, seconds: float) -> Frame:
@@ -241,14 +256,15 @@ class Timeline:
         scene = self.scenes[current]
         local = min(seconds - starts[current], scene.duration - 1e-9)
         frame = scene.frame_at(max(local, 0.0))
-        if current == 0 or local >= self.dissolve:
+        dissolve = self.dissolve_into(current)
+        if current == 0 or local >= dissolve:
             return frame
         previous = self.scenes[current - 1]
         earlier = previous.frame_at(
             min(seconds - starts[current - 1], previous.duration - 1e-9)
         )
         self._same_size(earlier, frame)
-        return blended(earlier, frame, eased(local / self.dissolve))
+        return blended(earlier, frame, eased(local / dissolve))
 
     def frames(self) -> Iterator[Frame]:
         """

@@ -20,7 +20,8 @@ from typing_extensions import List, Optional, Tuple
 from experiments.montessori.hole_geometry import BOARD_MESH_PATH
 from experiments.paper.lettering import Face
 from experiments.video.cache import SceneCache
-from experiments.video.canvas import Anchor, Area, Ink, Typesetting, filled, fitted
+from experiments.video.canvas import BODY_SIZE, Anchor, Area, Ink, Typesetting, filled, fitted
+from experiments.video.stages import PANEL_VISUAL
 from experiments.video.sources import RecordedRun
 from experiments.video.timeline import Frame, Resolution, Scene, eased
 from semantic_digital_twin.adapters.picture import (
@@ -40,7 +41,10 @@ from semantic_digital_twin.world_description.connections import FixedConnection
 from semantic_digital_twin.world_description.geometry import Color, Mesh
 from semantic_digital_twin.world_description.world_entity import Body
 
-CLOSE_UP = Resolution(width=1600, height=900)
+TWIN_PICTURE = Resolution(width=1712, height=800)
+"""
+The size the twin is drawn at: twice its room on the panel, at its aspect.
+"""
 """
 The size the scene draws itself at.
 """
@@ -194,10 +198,11 @@ class SupportReading:
         """
         The comparison the predicate makes, as text.
         """
-        sign = "<" if self.vertical_overlap < self.maximum else "≥"
+        # written as the paper's figure writes it
+        sign = "≤" if self.vertical_overlap < self.maximum else ">"
         millimetres = self.vertical_overlap * 1000
         shown = f"{millimetres:.1f}" if millimetres < 1 else f"{millimetres:.0f}"
-        return f"vertical overlap {shown} mm {sign} {self.maximum:.1f} m"
+        return f"overlap {shown} mm {sign} {self.maximum:.1f} m"
 
 
 # %% pictures of the twin
@@ -292,7 +297,7 @@ class TwinPictures:
     Where the flight ends, in metres from the cube.
     """
 
-    resolution: Resolution = CLOSE_UP
+    resolution: Resolution = TWIN_PICTURE
     """
     The size each picture is drawn at.
     """
@@ -418,8 +423,8 @@ class TwinPictures:
 @dataclass
 class WorkingMemoryCheck(Scene):
     """
-    The cube spawned into the twin, the view flying onto it, and the relation read off
-    the two boxes.
+    The view close over the cube in the twin, the two bounding boxes drawn on it, the
+    band where they interfere with the overlap read off, and the result.
     """
 
     pictures: TwinPictures
@@ -427,115 +432,82 @@ class WorkingMemoryCheck(Scene):
     The twin, drawn.
     """
 
-    spawn_at: float = 1.5
+    held_for: float = 6.0
     """
-    When the cube appears, in seconds.
-    """
-
-    flight_from: float = 3.5
-    """
-    When the view starts flying, in seconds.
+    How long the close-up is shown, in seconds.
     """
 
-    flight_for: float = 5.0
+    boxes_at: Tuple[float, float] = (0.4, 1.0)
     """
-    How long the flight takes, in seconds.
-    """
-
-    boxes_for: float = 8.0
-    """
-    How long the boxes and the reading are shown once the view has landed.
+    Seconds into the scene the box around the lid, then the one around the cube, are
+    drawn.
     """
 
-    boxes_at: Tuple[float, float] = (0.5, 1.2)
+    band_at: float = 2.0
     """
-    Seconds after the view has landed that the box around the lid, then the one around
-    the cube, are drawn.
-    """
-
-    band_at: float = 2.4
-    """
-    Seconds after the landing that the band where the two boxes interfere is drawn, and
-    the overlap read out.
+    Seconds into the scene the band where the two boxes interfere is drawn, and the
+    overlap read out.
     """
 
-    verdict_at: float = 4.5
+    verdict_at: float = 3.4
     """
-    Seconds after the landing that the verdict is given.
+    Seconds into the scene the result is given.
     """
 
-    resolution: Resolution = CLOSE_UP
+    resolution: Resolution = PANEL_VISUAL
     """
     The size the scene draws itself at.
     """
 
     @property
     def duration(self) -> float:
-        return self.flight_from + self.flight_for + self.boxes_for
+        return self.held_for
 
     def picture_at(self, seconds: float) -> Frame:
-        if seconds < self.flight_from:
-            return self._spawning(seconds)
-        progress = (seconds - self.flight_from) / self.flight_for
-        frame = self.pictures.along_the_flight(progress)
-        if progress < 1.0:
-            return self._captioned(frame, "the cube the look found, spawned into working memory")
-        return self._read(frame, seconds - self.flight_from - self.flight_for)
-
-    def _spawning(self, seconds: float) -> Frame:
-        before = self.pictures.before_the_spawn()
-        after = self.pictures.along_the_flight(0.0)
-        weight = eased((seconds - self.spawn_at) / 0.8) if seconds >= self.spawn_at else 0.0
-        frame = (before * (1 - weight) + after * weight + 0.5).astype(np.uint8)
-        caption = "working memory, as the robot believes the table stands"
-        if weight > 0.5:
-            caption = "the cube the look found, spawned into working memory"
-        return self._captioned(frame, caption)
-
-    def _read(self, frame: Frame, seconds: float) -> Frame:
         reading = self.pictures.reading
         viewpoint = self.pictures.viewpoint(1.0)
-        drawn = frame.copy()
+        drawn = self.pictures.along_the_flight(1.0).copy()
         supporting_at, supported_at = self.boxes_at
         if seconds > supporting_at:
-            self._draw_box(drawn, reading.supporting, viewpoint, Ink.SIMULATION.rgb, eased((seconds - supporting_at) / 0.6))
+            self._draw_box(drawn, reading.supporting, viewpoint, Ink.TEXT.rgb, eased((seconds - supporting_at) / 0.25))
         if seconds > supported_at:
-            self._draw_box(drawn, reading.supported, viewpoint, Ink.PERCEPTION.rgb, eased((seconds - supported_at) / 0.6))
+            self._draw_box(drawn, reading.supported, viewpoint, Ink.TEXT.rgb, eased((seconds - supported_at) / 0.25))
         overlap = reading.supported.intersected(reading.supporting)
         if seconds > self.band_at and overlap is not None:
             self._draw_band(drawn, overlap, viewpoint)
-        caption = "SupportedBy(cube, lid): the two bounding boxes"
-        if seconds > self.band_at:
-            caption = reading.reading_line
+        frame = fitted(self.resolution.blank(255), drawn, Area.whole(self.resolution))
         if seconds > self.verdict_at:
-            caption = f"SupportedBy(cube, lid) → {reading.holds}"
-        return self._captioned(drawn, caption, verdict=seconds > self.verdict_at)
+            return self._lined(frame, f"SupportedBy(cube_1, lid) → {reading.holds}", bold=True)
+        if seconds > self.band_at:
+            return self._lined(frame, reading.reading_line, bold=False)
+        return frame
 
     @staticmethod
     def _draw_box(frame: Frame, box: BoxCorners, viewpoint: Viewpoint, color, weight: float) -> None:
         corners = viewpoint.project(box.corners)
         overlay = frame.copy()
         for a, b in box.edges:
-            cv2.line(overlay, tuple(corners[a].round().astype(int)), tuple(corners[b].round().astype(int)), color, 3, cv2.LINE_AA)
+            cv2.line(overlay, tuple(corners[a].round().astype(int)), tuple(corners[b].round().astype(int)), color, 4, cv2.LINE_AA)
         cv2.addWeighted(overlay, weight, frame, 1 - weight, 0, frame)
 
     @staticmethod
     def _draw_band(frame: Frame, band: BoxCorners, viewpoint: Viewpoint) -> None:
-        # the band is thin; draw it as its own box, filled and outlined in the hue that
-        # points things out, so the interference is seen at all
+        # the band is thin; draw it as its own box, filled and outlined in the accent,
+        # so the interference is seen at all
         thick = BoxCorners(lower=band.lower - np.array([0.0, 0.0, BAND_PADDING]), upper=band.upper + np.array([0.0, 0.0, BAND_PADDING]))
         corners = viewpoint.project(thick.corners)
         overlay = frame.copy()
         hull = cv2.convexHull(corners.astype(np.float32).reshape(-1, 1, 2)).astype(int)
-        cv2.fillPoly(overlay, [hull], Ink.ASKED.rgb)
+        cv2.fillPoly(overlay, [hull], Ink.ANSWER.rgb)
         cv2.addWeighted(overlay, 0.6, frame, 0.4, 0, frame)
-        cv2.polylines(frame, [hull], True, Ink.ASKED.rgb, 2, cv2.LINE_AA)
+        cv2.polylines(frame, [hull], True, Ink.ANSWER.rgb, 2, cv2.LINE_AA)
 
-    def _captioned(self, frame: Frame, caption: str, verdict: bool = False) -> Frame:
-        canvas = self.resolution.blank(255)
-        stage = self.resolution.stage_height
-        canvas = fitted(canvas, frame, Area(0, 0, self.resolution.width, stage - 80))
-        colour = Ink.FIRED.rgb if verdict else Ink.SIMULATION.rgb
-        return Typesetting(size=30, face=Face.BOLD if verdict else Face.REGULAR, color=colour).written(
-            canvas, caption, (self.resolution.width / 2, stage - 40), Anchor.CENTRE_MIDDLE
-        )
+    def _lined(self, frame: Frame, line: str, bold: bool) -> Frame:
+        """
+        A line written on a dark badge along the bottom of the picture.
+        """
+        lettering = Typesetting(size=BODY_SIZE, face=Face.BOLD if bold else Face.REGULAR, color=Ink.PAPER.rgb)
+        width = lettering.width_of(line) + 32
+        badge = Area(self.resolution.width / 2 - width / 2, self.resolution.height - 56, width, 44)
+        frame = filled(frame, badge, Ink.TEXT.rgb)
+        return lettering.written(frame, line, badge.centre, Anchor.CENTRE_MIDDLE)

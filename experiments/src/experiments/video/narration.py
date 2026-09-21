@@ -23,7 +23,7 @@ from krrood.exceptions import DataclassException
 from typing_extensions import Callable, Iterator, List, Optional, Protocol, Sequence, Tuple
 
 from experiments.video.cache import SceneCache
-from experiments.video.canvas import Anchor, Ink, Typesetting
+from experiments.video.canvas import BODY_SIZE, Anchor, Area, Ink, Typesetting, darkened
 from experiments.video.timeline import Frame, Resolution, Scene, Timeline
 
 SUBTITLE_ROW = 42
@@ -334,11 +334,12 @@ class SubtitleRoom:
         return words
 
 
-BURNED_IN_ROOM = SubtitleRoom(characters_per_row=58, rows=2)
+BURNED_IN_ROOM = SubtitleRoom(characters_per_row=72, rows=2)
 """
 How much a subtitle burned into the picture shows: two rows of the band the scenes keep
 clear, the letters' size being the video's own, so that a whole clause is read at a
-time rather than pieces that switch faster than they are read.
+time rather than pieces that switch faster than they are read; the rows are as wide as
+the longest sentence said whole needs.
 """
 
 CUTS_TRIED = 3
@@ -538,17 +539,35 @@ class Narration:
         return path
 
 
-SUBTITLE_SIZE = 27
+CAPTION_TOP = 12
 """
-The height of the letters of a subtitle burned into the picture, in pixels.
+Pixels under the stage the first row of a caption hangs from: the rows keep one
+baseline whether one or two are written.
+"""
+
+CAPTION_ROW = 38
+"""
+Pixels from one caption row to the next.
+"""
+
+FOOTAGE_BRIGHTNESS = 235
+"""
+The mean brightness under which the band of a frame is footage rather than the white
+page: the caption is then written in white on a band shaded towards black.
+"""
+
+BAND_SHADE = 0.72
+"""
+How dark the band over footage is shaded at its bottom.
 """
 
 
 @dataclass
 class Subtitled(Timeline):
     """
-    A timeline with its subtitles drawn into the band every scene keeps clear at the
-    bottom of the picture, so they are part of the video itself.
+    A timeline with its captions drawn into the band every scene keeps clear at the
+    bottom of the picture, so they are part of the video itself: dark on the page, and
+    white on a band shaded towards black wherever footage fills the frame.
     """
 
     cues: List[SubtitleCue] = field(default_factory=list)
@@ -581,11 +600,25 @@ class Subtitled(Timeline):
         cue = self.cue_at(seconds)
         if cue is None:
             return frame
-        resolution = Resolution.of(frame)
-        middle = (resolution.stage_height + resolution.height) / 2
-        return Typesetting(size=SUBTITLE_SIZE, color=Ink.TEXT.rgb).written(
-            frame, "\n".join(cue.rows(self.room.characters_per_row)), (resolution.width / 2, middle), Anchor.CENTRE_MIDDLE
-        )
+        return captioned(frame, cue.rows(self.room.characters_per_row))
+
+
+def captioned(frame: Frame, rows: Sequence[str]) -> Frame:
+    """
+    A copy of the frame with caption rows written in its band, from one fixed baseline.
+
+    :param frame: The frame.
+    :param rows: The rows, at most two.
+    """
+    resolution = Resolution.of(frame)
+    band = Area(0, resolution.stage_height, resolution.width, resolution.height - resolution.stage_height)
+    on_footage = float(frame[int(band.y) :, :].mean()) < FOOTAGE_BRIGHTNESS
+    if on_footage:
+        frame = darkened(frame, Area(0, band.y - CAPTION_TOP * 2, resolution.width, band.height + CAPTION_TOP * 2), BAND_SHADE)
+    lettering = Typesetting(size=BODY_SIZE, color=Ink.PAPER.rgb if on_footage else Ink.TEXT.rgb)
+    for number, row in enumerate(rows):
+        frame = lettering.written(frame, row, (resolution.width / 2, band.y + CAPTION_TOP + number * CAPTION_ROW), Anchor.CENTRE_TOP)
+    return frame
 
 
 def _timestamp(seconds: float) -> str:
@@ -624,11 +657,24 @@ class NarratedScene:
     Seconds into the scene the line starts, beyond the lead every line has.
     """
 
+    waits: Tuple[float, ...] = ()
+    """
+    Seconds each line after the first waits beyond the pause, for what it speaks of to
+    come up; nothing for every line to follow the one before at once.
+    """
+
     runs_on: bool = False
     """
     Whether the line may run on into the scenes that follow instead of the scene
     growing to hold it; a close-up never grows, whatever this says.
     """
+
+    def wait_before(self, number: int) -> float:
+        """
+        :param number: Which of the lines, from zero.
+        :return: Seconds it waits beyond the pause after the line before it.
+        """
+        return self.waits[number - 1] if 0 < number <= len(self.waits) else 0.0
 
 
 def starts_of(voice: Voice, lines: Sequence[Line], pause: float) -> List[float]:
@@ -686,7 +732,7 @@ class Storyboard:
             if not each.lines or each.runs_on or not hasattr(each.scene, "held_for"):
                 continue
             said = sum(voice.speaks(line.said).duration for line in each.lines)
-            needed = LEAD + each.delay + said + self.pause * (len(each.lines) - 1) + self.tail
+            needed = LEAD + each.delay + said + self.pause * (len(each.lines) - 1) + sum(each.waits) + self.tail
             each.scene.held_for = max(each.scene.held_for, needed)
 
     def narrated_by(self, voice: Voice, dissolve: float) -> Narration:
@@ -699,7 +745,7 @@ class Storyboard:
         spoken: List[SpokenLine] = []
         for each, start in zip(self.narrated, Timeline(self.scenes, dissolve=dissolve).starts()):
             at = start + LEAD + each.delay
-            for line in each.lines:
-                spoken.append(SpokenLine(line, at, voice.speaks(line.said)))
+            for number, line in enumerate(each.lines):
+                spoken.append(SpokenLine(line, at + each.wait_before(number), voice.speaks(line.said)))
                 at = spoken[-1].ends + self.pause
         return Narration(spoken)

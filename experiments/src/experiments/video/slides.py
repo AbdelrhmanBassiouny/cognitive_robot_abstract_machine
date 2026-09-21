@@ -1,84 +1,59 @@
 """
-The slides the video opens and closes with: the paper's title and number at the start,
-and where its code is at the end.
+The slides of plain text: the results table, and the end card with the chapters'
+claims and the link to the code.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
-from typing_extensions import List, Optional
+from typing_extensions import Sequence
 
 from experiments.paper.lettering import Face
 from experiments.video.canvas import (
+    BODY_SIZE,
+    LABEL_SIZE,
     VIDEO_RESOLUTION,
     Anchor,
     Ink,
-    Area,
     Typesetting,
-    filled,
+    lined,
 )
-from experiments.video.script import VideoScript
-from experiments.video.timeline import Frame, Resolution, Scene, eased
+from experiments.video.script import ResultRow, VideoScript
+from experiments.video.timeline import Frame, Resolution, Scene
 
-RULE_WIDTH = 120
+TABLE_WIDTH = 900
 """
-How wide the short rule under the title is, in pixels.
-"""
-
-TITLE_TYPESETTING = Typesetting(size=40, face=Face.BOLD)
-"""
-What the paper's title is set in.
+Pixels the results table is wide.
 """
 
-
-@dataclass(frozen=True)
-class TitleLayout:
-    """
-    Where the title slide's title sits.
-    """
-
-    wrapped: str
-    """
-    The title broken into lines that fit the slide.
-    """
-
-    top: float
-    """
-    The top of its first line, in pixels.
-    """
-
-    rule_y: float
-    """
-    Where the rule under it lies, in pixels from the top.
-    """
+ROW_PITCH = 64
+"""
+Pixels from one row of the table to the next.
+"""
 
 
 @dataclass
-class TitleSlide(Scene):
+class ResultsTable(Scene):
     """
-    The paper's title, the conference and the submission number, fading in.
-    """
-
-    script: VideoScript
-    """
-    The words.
+    The results on the real robot as a table: a plain title over it, one hairline over
+    each row, the values bold and right-aligned with their units, centred on a white
+    frame with nothing else on it.
     """
 
-    held_for: float = 6.0
+    title: str
     """
-    How long the slide is shown, in seconds.
-    """
-
-    fade: float = 1.0
-    """
-    How long the words take to appear, in seconds.
+    What the table is of, over it.
     """
 
-    summary_at: Optional[float] = None
+    rows: Sequence[ResultRow]
     """
-    Seconds into the slide the script's summary fades in under the submission line, as
-    its line is said; None for the slide never to show it.
+    The rows.
+    """
+
+    held_for: float = 4.0
+    """
+    How long the table is shown, in seconds.
     """
 
     resolution: Resolution = VIDEO_RESOLUTION
@@ -90,78 +65,33 @@ class TitleSlide(Scene):
     def duration(self) -> float:
         return self.held_for
 
+    @property
+    def dissolves_in(self) -> bool:
+        # the scene before writes text where this one does: a cut, not a crossfade
+        return False
+
     def picture_at(self, seconds: float) -> Frame:
-        frame = self._faded_in(self._heading(), seconds)
-        if self.summary_at is None:
-            return frame
-        summarised = self._summarised(frame)
-        return self._blended(frame, summarised, eased((seconds - self.summary_at) / self.fade))
-
-    def _heading(self) -> Frame:
-        """
-        The title, the rule, what the video is and the submission line.
-        """
         frame = self.resolution.blank(255)
-        centre_x = self.resolution.width / 2
-        laid_out = self._title_laid_out()
-        frame = TITLE_TYPESETTING.written(frame, laid_out.wrapped, (centre_x, laid_out.top), Anchor.CENTRE_TOP)
-        rule_y = laid_out.rule_y
-        frame = filled(
-            frame,
-            Area(centre_x - RULE_WIDTH / 2, rule_y, RULE_WIDTH, 3),
-            Ink.PERCEPTION.rgb,
-        )
-        frame = Typesetting(size=28, color=Ink.MUTED.rgb).written(
-            frame, self.script.kind, (centre_x, rule_y + 60), Anchor.CENTRE_MIDDLE
-        )
-        frame = Typesetting(size=28, color=Ink.TEXT.rgb).written(
-            frame,
-            self.script.submission_line,
-            (centre_x, rule_y + 110),
-            Anchor.CENTRE_MIDDLE,
-        )
-        return frame
-
-    def _summarised(self, frame: Frame) -> Frame:
-        """
-        The frame with the script's summary written under the submission line.
-        """
-        summary = Typesetting(size=28, color=Ink.TEXT.rgb)
-        wrapped = summary.wrapped(self.script.summary, self.resolution.width * 0.78)
-        return summary.written(
-            frame,
-            wrapped,
-            (self.resolution.width / 2, self._title_laid_out().rule_y + 190),
-            Anchor.CENTRE_TOP,
-        )
-
-    def _title_laid_out(self) -> TitleLayout:
-        """
-        The title wrapped to the slide, and where it and its rule go.
-        """
-        wrapped = TITLE_TYPESETTING.wrapped(self.script.title, self.resolution.width * 0.78)
-        lines = wrapped.count("\n") + 1
-        top = self.resolution.height * 0.30 - lines * 27
-        return TitleLayout(wrapped, top, top + lines * 54 + 30)
-
-    def _faded_in(self, frame: Frame, seconds: float) -> Frame:
-        """
-        The frame faded up from white over the first moments.
-        """
-        return self._blended(self.resolution.blank(255), frame, eased(seconds / self.fade))
-
-    @staticmethod
-    def _blended(before: Frame, after: Frame, weight: float) -> Frame:
-        """
-        The first frame giving way to the second by the weight.
-        """
-        return (before * (1 - weight) + after * weight + 0.5).astype("uint8")
+        left = self.resolution.width / 2 - TABLE_WIDTH / 2
+        right = left + TABLE_WIDTH
+        height = ROW_PITCH * len(self.rows)
+        top = (self.resolution.stage_height - height) / 2 + 30
+        frame = Typesetting(size=BODY_SIZE, face=Face.BOLD).written(frame, self.title, (self.resolution.width / 2, top - 50), Anchor.CENTRE_MIDDLE)
+        measure = Typesetting(size=BODY_SIZE)
+        value = Typesetting(size=BODY_SIZE, face=Face.BOLD)
+        for number, row in enumerate(self.rows):
+            y = top + number * ROW_PITCH
+            frame = lined(frame, (left, y), (right, y), Ink.HAIRLINE.rgb, thickness=2)
+            frame = measure.written(frame, row.measure, (left + 8, y + ROW_PITCH / 2), Anchor.LEFT_MIDDLE)
+            frame = value.written(frame, row.value, (right - 8, y + ROW_PITCH / 2), Anchor.RIGHT_MIDDLE)
+        return lined(frame, (left, top + height), (right, top + height), Ink.HAIRLINE.rgb, thickness=2)
 
 
 @dataclass
-class ClosingSlide(Scene):
+class EndCard(Scene):
     """
-    Where the code is, on the last frames.
+    The three chapters' claims as a numbered list, and the link to the code and the
+    recorded episodes under them.
     """
 
     script: VideoScript
@@ -171,7 +101,7 @@ class ClosingSlide(Scene):
 
     held_for: float = 5.0
     """
-    How long the slide is shown, in seconds.
+    How long the card is shown, in seconds.
     """
 
     resolution: Resolution = VIDEO_RESOLUTION
@@ -183,54 +113,23 @@ class ClosingSlide(Scene):
     def duration(self) -> float:
         return self.held_for
 
-    def picture_at(self, seconds: float) -> Frame:
-        frame = self.resolution.blank(255)
-        centre = (self.resolution.width / 2, self.resolution.height / 2)
-        frame = Typesetting(size=30, face=Face.BOLD).written(
-            frame,
-            "Code and recorded episodes",
-            (centre[0], centre[1] - 40),
-            Anchor.CENTRE_MIDDLE,
-        )
-        frame = Typesetting(size=24, color=Ink.SIMULATION.rgb).written(
-            frame,
-            self.script.repository_link,
-            (centre[0], centre[1] + 20),
-            Anchor.CENTRE_MIDDLE,
-        )
-        return frame
-
-
-@dataclass
-class TextSlide(Scene):
-    """
-    A few lines of text, held for a while.
-    """
-
-    lines: List[str]
-    """
-    The lines, the first set larger.
-    """
-
-    held_for: float = 4.0
-    """
-    How long the slide is shown, in seconds.
-    """
-
-    resolution: Resolution = VIDEO_RESOLUTION
-    """
-    The size of the slide.
-    """
-
     @property
-    def duration(self) -> float:
-        return self.held_for
+    def dissolves_in(self) -> bool:
+        # the scene before writes text where this one does: a cut, not a crossfade
+        return False
 
     def picture_at(self, seconds: float) -> Frame:
         frame = self.resolution.blank(255)
-        centre_x = self.resolution.width / 2
-        top = self.resolution.height / 2 - 30 * len(self.lines)
-        for number, line in enumerate(self.lines):
-            setting = Typesetting(size=40, face=Face.BOLD) if number == 0 else Typesetting(size=26, color=Ink.MUTED.rgb)
-            frame = setting.written(frame, line, (centre_x, top + number * 60 + (20 if number else 0)), Anchor.CENTRE_MIDDLE)
-        return frame
+        claim = Typesetting(size=BODY_SIZE, face=Face.BOLD)
+        left = 120
+        for chapter in self.script.chapters:
+            y = 130 + (chapter.number - 1) * 72
+            frame = Typesetting(size=BODY_SIZE, color=Ink.MUTED.rgb).written(frame, f"{chapter.number}", (left, y), Anchor.LEFT_MIDDLE)
+            frame = claim.written(frame, claim.wrapped(chapter.claim, self.resolution.width - left - 44 - 100), (left + 44, y), Anchor.LEFT_MIDDLE)
+        frame = lined(frame, (left, 372), (self.resolution.width - left, 372), Ink.HAIRLINE.rgb, thickness=2)
+        frame = Typesetting(size=LABEL_SIZE, face=Face.BOLD, color=Ink.MUTED.rgb).written(
+            frame, self.script.code_label, (self.resolution.width / 2, 420), Anchor.CENTRE_MIDDLE
+        )
+        return Typesetting(size=BODY_SIZE).written(
+            frame, self.script.repository_link, (self.resolution.width / 2, 466), Anchor.CENTRE_MIDDLE
+        )

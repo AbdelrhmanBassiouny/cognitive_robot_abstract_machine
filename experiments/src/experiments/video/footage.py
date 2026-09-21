@@ -1,6 +1,7 @@
 """
-What the robot's camera recorded, played back as film, and beside it what a camera held
-by hand recorded of the same run.
+What the robot's camera recorded, played back as film, and what a camera held by hand
+recorded of the same run, filling the frame with the robot's own view small in its
+corner.
 
 A recording keeps one colour image in ten, so played at its own pace it would be a
 slide show; a stretch of it is played faster instead, and says by how much.
@@ -13,24 +14,31 @@ from functools import cached_property
 
 import cv2
 import numpy as np
-from typing_extensions import List, Optional, Protocol, Sequence, Tuple
+from typing_extensions import List, Optional, Protocol, Tuple
 
 from experiments.montessori.perception.camera import decode_compressed_color_image
 from experiments.montessori.perception.recordings import CameraTopic, open_bag
 from experiments.paper.lettering import Face
 from experiments.episodes.artifacts import EpisodeArtifact
 from experiments.video.cache import SceneCache
-from experiments.video.canvas import Anchor, Area, Ink, Typesetting, fitted, filled, pasted
+from experiments.video.canvas import (
+    BODY_SIZE,
+    CLAIM_SIZE,
+    LABEL_SIZE,
+    MARGIN,
+    VIDEO_RESOLUTION,
+    Anchor,
+    Area,
+    Ink,
+    Typesetting,
+    filled,
+    pasted,
+)
 from experiments.video.encoding import VideoFile
 from experiments.video.sources import RecordedRun
-from experiments.video.timeline import Frame, Resolution, Scene
+from experiments.video.timeline import Frame, Resolution, Scene, blended, eased
 from rclpy.serialization import deserialize_message
 from sensor_msgs.msg import CompressedImage
-
-CLOSE_UP = Resolution(width=1600, height=900)
-"""
-The size a film draws itself at.
-"""
 
 # %% what of a picture is shown
 
@@ -65,10 +73,11 @@ around it cut off: the table's near edge lies 170 pixels down a full HD picture,
 the right margin keeps the picture at sixteen by nine.
 """
 
-ACTING_FRAMING = Framing(top=60, left=40, right=67)
+FULL_BLEED_FRAMING = Framing(top=730, bottom=583)
 """
-The framing of the robot's camera that keeps the arm in the picture: the table with the
-edge of the room it reaches in from, trimmed to sixteen by nine.
+What of the hand-held film fills the frame: it stands upright, 1080 by 1920, and the
+widest sixteen-by-nine window of it, 1080 by 607, is laid over the gripper, the pieces
+and the board.
 """
 
 # %% the colour images of a recording
@@ -234,75 +243,7 @@ class HandHeldFilm:
         return self.video.frame_at(min(seconds, self.length))
 
 
-# %% the scene
-
-
-@dataclass
-class ExecutionFootage(Scene):
-    """
-    A stretch of the robot's own camera played faster than it was recorded, with the
-    speed-up written on it.
-    """
-
-    film: CameraFilm
-    """
-    The recording.
-    """
-
-    from_second: float = 0.0
-    """
-    Where in the recording the stretch starts.
-    """
-
-    to_second: Optional[float] = None
-    """
-    Where it ends, or None for the recording's end.
-    """
-
-    speed: float = 4.0
-    """
-    How many recorded seconds pass per second played.
-    """
-
-    caption: str = "executes the resolved plan"
-    """
-    The line written under the film.
-    """
-
-    resolution: Resolution = CLOSE_UP
-    """
-    The size the scene draws itself at.
-    """
-
-    framing: Framing = ACTING_FRAMING
-    """
-    What of each picture is shown: the robot acts in this film, so its arm stays in.
-    """
-
-    @property
-    def end(self) -> float:
-        return self.film.length if self.to_second is None else self.to_second
-
-    @property
-    def duration(self) -> float:
-        return (self.end - self.from_second) / self.speed
-
-    def picture_at(self, seconds: float) -> Frame:
-        image = self.framing.of(self.film.at(self.from_second + seconds * self.speed).image)
-        frame = self.resolution.blank(255)
-        stage = self.resolution.stage_height
-        frame = fitted(frame, image, Area(0, 0, self.resolution.width, stage - 80))
-        badge = Area(self.resolution.width - 150, 20, 130, 48)
-        frame = filled(frame, badge, Ink.TEXT.rgb)
-        frame = Typesetting(size=28, face=Face.BOLD, color=Ink.PAPER.rgb).written(
-            frame, f"×{self.speed:g}", badge.centre, Anchor.CENTRE_MIDDLE
-        )
-        return Typesetting(size=28, color=Ink.TEXT.rgb).written(
-            frame, self.caption, (self.resolution.width / 2, stage - 40), Anchor.CENTRE_MIDDLE
-        )
-
-
-# %% two cameras side by side
+# %% the run seen from beside the table, with the robot's own view
 
 
 @dataclass
@@ -327,11 +268,6 @@ class ViewOfTheRun:
     What of each picture is shown.
     """
 
-    caption: str = ""
-    """
-    What the camera is called, written under its view.
-    """
-
     def image_at(self, into: float) -> Frame:
         """
         :param into: Seconds into the stretch.
@@ -340,91 +276,204 @@ class ViewOfTheRun:
         return self.framing.of(self.film.image_at(self.from_second + into))
 
 
-SIDE_BY_SIDE_GAP = 24
+# %% the frame filled with footage
+
+
+INSET_WIDTH = 300
 """
-Pixels between two views shown beside each other, and around them.
+Pixels wide the robot's own view is in the corner of the footage, at the video's size.
 """
+
+BADGE_HEIGHT = 36
+"""
+Pixels a badge on the footage is tall: the speed-up, and a label of an inset.
+"""
+
+BADGE_PADDING = 14
+"""
+Pixels between a badge's edge and its text.
+"""
+
+
+def badged(frame: Frame, text: str, at: Tuple[float, float], anchor: Anchor = Anchor.LEFT_TOP) -> Frame:
+    """
+    A copy of the frame with a dark badge carrying a short text, its top left, top
+    right or bottom right corner at a point.
+
+    :param frame: The frame.
+    :param text: What the badge says.
+    :param at: Where its corner goes.
+    :param anchor: Which corner: the left top, the right top or the right middle
+        standing for the right bottom.
+    """
+    lettering = Typesetting(size=LABEL_SIZE, face=Face.BOLD, color=Ink.PAPER.rgb)
+    width = lettering.width_of(text) + 2 * BADGE_PADDING
+    if anchor is Anchor.LEFT_TOP:
+        badge = Area(at[0], at[1], width, BADGE_HEIGHT)
+    elif anchor is Anchor.RIGHT_TOP:
+        badge = Area(at[0] - width, at[1], width, BADGE_HEIGHT)
+    else:
+        badge = Area(at[0] - width, at[1] - BADGE_HEIGHT, width, BADGE_HEIGHT)
+    frame = filled(frame, badge, Ink.TEXT.rgb)
+    return lettering.written(frame, text, badge.centre, Anchor.CENTRE_MIDDLE)
+
+
+def speed_badged(frame: Frame, speed: float) -> Frame:
+    """
+    A copy of the frame with the speed-up in its top right corner.
+    """
+    resolution = Resolution.of(frame)
+    return badged(frame, f"×{speed:g}", (resolution.width - MARGIN, MARGIN), Anchor.RIGHT_TOP)
+
+
+@dataclass(frozen=True)
+class HeldInset:
+    """
+    A picture the inset holds before it runs: what the robot's camera saw at one
+    moment, with what was found on it drawn, and for how long it is held.
+    """
+
+    picture: Frame
+    """
+    The picture.
+    """
+
+    held_for: float
+    """
+    Seconds it is held, from the scene's start.
+    """
 
 
 @dataclass
-class SideBySide(Scene):
+class FullBleedFootage(Scene):
     """
-    One stretch of the run seen from two or more cameras at once, played in step and
-    faster than it was recorded, with the speed-up written on it.
+    A stretch of a run filling the whole frame, played faster than recorded with the
+    speed-up badged in the top right corner, and the robot's own view of the same
+    stretch small in the bottom right corner, in step.
     """
 
-    views: Tuple[ViewOfTheRun, ...]
+    main: ViewOfTheRun
     """
-    The cameras' views, left to right.
+    The camera that fills the frame.
     """
 
     length: float
     """
-    Recorded seconds shown.
+    Seconds of the recording the stretch runs for.
     """
 
-    speed: float = 4.0
+    speed: float = 2.0
     """
     How many recorded seconds pass per second played.
     """
 
-    caption: str = ""
+    inset: Optional[ViewOfTheRun] = None
     """
-    The line written under the views.
+    The robot's own view, or None to show the one camera.
     """
 
-    resolution: Resolution = CLOSE_UP
+    inset_held: Optional[HeldInset] = None
     """
-    The size the scene draws itself at.
+    What the inset holds before it runs, if anything.
+    """
+
+    resolution: Resolution = VIDEO_RESOLUTION
+    """
+    The size the scene draws itself at: the video's own, the footage filling it.
     """
 
     @property
     def duration(self) -> float:
         return self.length / self.speed
 
-    @cached_property
-    def aspects(self) -> List[float]:
+    @property
+    def inset_panel(self) -> Area:
         """
-        How wide each view is for its height, read off its first picture.
+        Where the inset lies: the bottom right corner of the footage, above the band
+        the captions are read on.
         """
-        aspects = []
-        for view in self.views:
-            height, width = view.image_at(0.0).shape[:2]
-            aspects.append(width / height)
-        return aspects
+        sample = self.inset.image_at(0.0)
+        height = INSET_WIDTH * sample.shape[0] / sample.shape[1]
+        return Area(self.resolution.width - MARGIN - INSET_WIDTH, self.resolution.stage_height - MARGIN / 2 - height, INSET_WIDTH, height)
 
-    @cached_property
-    def panels(self) -> List[Area]:
+    def inset_picture_at(self, seconds: float) -> Frame:
         """
-        Where each view lies: all one height, as tall as the room over the captions
-        allows, in a row centred on the stage.
+        What the inset shows at a moment: what it holds first, else the robot's view.
         """
-        gap = SIDE_BY_SIDE_GAP
-        stage = self.resolution.stage_height
-        room_height = stage - 2 * gap - 36 - 60
-        room_width = self.resolution.width - 2 * gap - gap * (len(self.views) - 1)
-        height = min(room_height, room_width / sum(self.aspects))
-        widths = [aspect * height for aspect in self.aspects]
-        x = (self.resolution.width - sum(widths) - gap * (len(self.views) - 1)) / 2
-        y = gap + (room_height - height) / 2
-        panels = []
-        for width in widths:
-            panels.append(Area(x, y, width, height))
-            x += width + gap
-        return panels
+        if self.inset_held is not None and seconds < self.inset_held.held_for:
+            return self.inset_held.picture
+        return self.inset.image_at(seconds * self.speed)
 
     def picture_at(self, seconds: float) -> Frame:
-        frame = self.resolution.blank(255)
-        into = seconds * self.speed
-        label = Typesetting(size=24, color=Ink.MUTED.rgb)
-        for view, panel in zip(self.views, self.panels):
-            frame = pasted(frame, view.image_at(into), panel)
-            frame = label.written(frame, view.caption, (panel.centre[0], panel.bottom + 20), Anchor.CENTRE_MIDDLE)
-        badge = Area(self.resolution.width - 150, 20, 130, 48)
-        frame = filled(frame, badge, Ink.TEXT.rgb)
-        frame = Typesetting(size=28, face=Face.BOLD, color=Ink.PAPER.rgb).written(
-            frame, f"×{self.speed:g}", badge.centre, Anchor.CENTRE_MIDDLE
+        frame = pasted(self.resolution.blank(0), self.main.image_at(seconds * self.speed), Area.whole(self.resolution))
+        if self.inset is not None:
+            panel = self.inset_panel
+            frame = filled(frame, panel.inset(-3), Ink.PAPER.rgb)
+            frame = pasted(frame, self.inset_picture_at(seconds), panel)
+        # footage at its own pace carries no badge
+        return speed_badged(frame, self.speed) if self.speed != 1.0 else frame
+
+
+@dataclass
+class TitleOverFootage(Scene):
+    """
+    The paper's title over footage of the robot, the footage shaded so the title is
+    what is read; the title fades out at the end.
+    """
+
+    footage: Scene
+    """
+    What plays under the title, for the scene's whole duration.
+    """
+
+    title: str
+    """
+    The paper's title.
+    """
+
+    line: str
+    """
+    What stands under the title: what the video is, and for which conference.
+    """
+
+    title_for: float
+    """
+    Seconds the title stands, before it fades out.
+    """
+
+    fade: float = 0.25
+    """
+    Seconds the title takes to fade out.
+    """
+
+    shade: float = 0.55
+    """
+    How far the footage is shaded under the title.
+    """
+
+    @property
+    def duration(self) -> float:
+        return self.footage.duration
+
+    def title_at(self, seconds: float) -> float:
+        """
+        How far the title is up at a moment, from zero to one.
+        """
+        return 1.0 - eased((seconds - self.title_for) / self.fade)
+
+    def picture_at(self, seconds: float) -> Frame:
+        frame = self.footage.picture_at(seconds)
+        weight = self.title_at(seconds)
+        if weight <= 0.0:
+            return frame
+        resolution = Resolution.of(frame)
+        shaded = np.clip(frame.astype(np.float32) * (1.0 - self.shade) + 0.5, 0, 255).astype(np.uint8)
+        heading = Typesetting(size=CLAIM_SIZE, face=Face.BOLD, color=Ink.PAPER.rgb)
+        text = heading.wrapped(self.title, resolution.width - 2 * MARGIN - 120)
+        rows = text.count("\n") + 1
+        middle = resolution.stage_height / 2 - 20
+        written = heading.written(shaded, text, (resolution.width / 2, middle), Anchor.CENTRE_MIDDLE)
+        written = Typesetting(size=BODY_SIZE, color=Ink.PAPER.rgb).written(
+            written, self.line, (resolution.width / 2, middle + rows * CLAIM_SIZE * 0.7 + 44), Anchor.CENTRE_MIDDLE
         )
-        return Typesetting(size=28, color=Ink.TEXT.rgb).written(
-            frame, self.caption, (self.resolution.width / 2, self.resolution.stage_height - 40), Anchor.CENTRE_MIDDLE
-        )
+        return blended(frame, written, weight)

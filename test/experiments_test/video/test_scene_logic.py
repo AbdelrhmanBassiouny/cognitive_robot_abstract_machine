@@ -12,18 +12,27 @@ import numpy as np
 import pytest
 
 from experiments.video.cache import SceneCache
+from experiments.video.canvas import MARGIN, VIDEO_RESOLUTION
 from experiments.video.footage import (
-    ACTING_FRAMING,
-    SIDE_BY_SIDE_GAP,
+    FULL_BLEED_FRAMING,
+    INSET_WIDTH,
     TABLE_FRAMING,
     CameraFilm,
-    ExecutionFootage,
     Framing,
-    SideBySide,
+    FullBleedFootage,
+    HeldInset,
     TimedImage,
+    TitleOverFootage,
     ViewOfTheRun,
 )
-from experiments.video.perturbations import IdleStretches, RecordingStretch
+from experiments.video.perturbations import (
+    IdleStretches,
+    PerturbationTile,
+    PerturbingStretches,
+    Phase,
+    RecordingStretch,
+)
+from experiments.video.stages import PANEL_VISUAL
 from experiments.video.timeline import Resolution
 from experiments.video.twin import BoxCorners, SupportReading, WorkingMemoryCheck
 
@@ -89,7 +98,7 @@ def test_boxes_intersect_where_they_overlap_and_not_otherwise() -> None:
 
 @pytest.mark.parametrize(
     "overlap, expected",
-    [(0.0021, "vertical overlap 2 mm < 0.1 m"), (0.00012, "vertical overlap 0.1 mm < 0.1 m"), (0.15, "vertical overlap 150 mm ≥ 0.1 m")],
+    [(0.0021, "overlap 2 mm ≤ 0.1 m"), (0.00012, "overlap 0.1 mm ≤ 0.1 m"), (0.15, "overlap 150 mm > 0.1 m")],
 )
 def test_the_reading_line_states_the_comparison_the_predicate_makes(overlap: float, expected: str) -> None:
     box = BoxCorners(lower=np.zeros(3), upper=np.ones(3))
@@ -100,25 +109,28 @@ def test_the_reading_line_states_the_comparison_the_predicate_makes(overlap: flo
 # %% standing still
 
 
-def test_the_check_draws_the_boxes_the_band_and_the_verdict_at_the_moments_it_is_given() -> None:
+def test_the_check_draws_the_boxes_the_band_and_the_result_at_the_moments_it_is_given() -> None:
     check = WorkingMemoryCheck(
-        TwinStandIn(), flight_from=1.0, flight_for=1.0, boxes_for=3.0, boxes_at=(0.2, 0.6), band_at=1.2, verdict_at=2.0,
+        TwinStandIn(), held_for=5.0, boxes_at=(0.2, 0.6), band_at=1.2, verdict_at=2.0,
         resolution=Resolution(width=400, height=240),
     )
     assert check.duration == pytest.approx(5.0)
-    landed = check.flight_from + check.flight_for
 
     def inked(seconds: float) -> int:
-        picture = check.frame_at(seconds)[: int(check.resolution.stage_height) - 80]
-        return int((picture.min(axis=2) < 250).sum())
+        return int((check.frame_at(seconds).min(axis=2) < 250).sum())
 
-    assert inked(landed + 0.1) == 0  # nothing drawn yet
-    lid_box = inked(landed + 0.5)
-    both_boxes = inked(landed + 1.1)
-    banded = inked(landed + 1.5)
+    assert inked(0.1) == 0  # nothing drawn yet
+    lid_box = inked(0.5)
+    both_boxes = inked(1.1)
+    banded = inked(1.5)
     assert 0 < lid_box < both_boxes < banded
-    verdict = check.frame_at(landed + 2.5)
-    assert not np.array_equal(verdict, check.frame_at(landed + 1.5))
+    assert not np.array_equal(check.frame_at(2.5), check.frame_at(1.5))
+
+
+def test_the_check_draws_at_the_panels_size_and_starts_on_the_landed_view() -> None:
+    check = WorkingMemoryCheck(TwinStandIn())
+    assert check.resolution == PANEL_VISUAL
+    assert check.frame_at(0.0).shape == (PANEL_VISUAL.height, PANEL_VISUAL.width, 3)
 
 
 def test_a_stretch_holds_its_ends() -> None:
@@ -133,6 +145,44 @@ def test_the_robot_stands_still_outside_its_motions_with_a_margin(monkeypatch: p
     assert not idle.idle_at(10.0)
     assert not idle.idle_at(22.0)
     assert idle.idle_at(30.0)
+
+
+def test_a_person_is_perturbing_through_the_stretches_measured(monkeypatch: pytest.MonkeyPatch) -> None:
+    perturbing = PerturbingStretches.__new__(PerturbingStretches)
+    monkeypatch.setattr(PerturbingStretches, "perturbing", [RecordingStretch(9.1, 25.3)], raising=False)
+    assert not perturbing.perturbing_at(9.0)
+    assert perturbing.perturbing_at(9.1) and perturbing.perturbing_at(25.3)
+    assert not perturbing.perturbing_at(25.4)
+
+
+@dataclass
+class StretchesStandIn:
+    """
+    Stretches that hold the moments they are given.
+    """
+
+    held: list
+
+    def idle_at(self, seconds: float) -> bool:
+        return not self.perturbing_at(seconds)
+
+    def perturbing_at(self, seconds: float) -> bool:
+        return any(start <= seconds <= end for start, end in self.held)
+
+
+def test_a_tile_is_badged_perturbation_over_executing_over_perceiving(monkeypatch: pytest.MonkeyPatch) -> None:
+    tile = PerturbationTile.__new__(PerturbationTile)
+    tile.film = StillFilm(np.zeros((1080, 1920, 3), dtype=np.uint8))  # type: ignore[assignment]
+    tile.framing = Framing()
+    tile.perturbing = StretchesStandIn([(5.0, 19.0)])  # type: ignore[assignment]
+    tile.idle = StretchesStandIn([(0.0, 20.0)])  # type: ignore[assignment]
+    monkeypatch.setattr(PerturbationTile, "_drawn_at", lambda self, image: (image.image, image.seconds > 30.0))
+    assert tile.picture_at(10.0)[1] is Phase.PERTURBATION
+    assert tile.picture_at(15.0)[1] is Phase.PERTURBATION  # robot idle, but a person is at the scene
+    assert tile.picture_at(25.0)[1] is None  # idle, nothing drawn
+    assert tile.picture_at(35.0)[1] is Phase.PERCEIVING
+    tile.idle = StretchesStandIn([(0.0, 40.0)])  # type: ignore[assignment]
+    assert tile.picture_at(35.0)[1] is Phase.EXECUTING
 
 
 # %% the film
@@ -154,10 +204,9 @@ def test_a_film_answers_the_image_taken_last_before_a_moment() -> None:
 
 
 def test_the_footage_lasts_the_stretch_divided_by_the_speed() -> None:
-    film = CameraFilm.__new__(CameraFilm)
-    film.__dict__["images"] = [timed(0.0), timed(40.0)]
-    assert ExecutionFootage(film, from_second=8.0, speed=4.0).duration == 8.0
-    assert ExecutionFootage(film, from_second=0.0, to_second=20.0, speed=2.0).duration == 10.0
+    film = CountingFilm((90, 160, 3))
+    assert FullBleedFootage(ViewOfTheRun(film, 8.0), length=32.0, speed=4.0).duration == 8.0
+    assert FullBleedFootage(ViewOfTheRun(film, 0.0), length=20.0, speed=2.0).duration == 10.0
 
 
 # %% framing
@@ -170,21 +219,24 @@ def test_a_framing_cuts_the_margins_it_names_off_a_picture() -> None:
     assert (framed == picture[1:6, 2:7]).all()
 
 
-@pytest.mark.parametrize("framing, size", [(TABLE_FRAMING, (910, 1618)), (ACTING_FRAMING, (1020, 1813))])
-def test_a_framing_keeps_a_full_hd_recording_at_sixteen_by_nine(framing: Framing, size: tuple) -> None:
+def test_the_table_framing_keeps_a_full_hd_recording_at_sixteen_by_nine() -> None:
     recording = np.zeros((1080, 1920, 3), dtype=np.uint8)
-    height, width = framing.of(recording).shape[:2]
-    assert (height, width) == size
+    height, width = TABLE_FRAMING.of(recording).shape[:2]
+    assert (height, width) == (910, 1618)
     assert width / height == pytest.approx(16 / 9, abs=0.002)
 
 
-def test_the_acting_framing_keeps_more_of_the_top_and_the_left_than_the_tables() -> None:
-    assert ACTING_FRAMING.top < TABLE_FRAMING.top and ACTING_FRAMING.left < TABLE_FRAMING.left
+def test_the_full_bleed_framing_cuts_an_upright_film_to_sixteen_by_nine() -> None:
+    upright = np.zeros((1920, 1080, 3), dtype=np.uint8)
+    height, width = FULL_BLEED_FRAMING.of(upright).shape[:2]
+    assert width == 1080
+    assert width / height == pytest.approx(16 / 9, abs=0.002)
 
 
 @dataclass
 class StillImage:
     image: np.ndarray
+    seconds: float = 0.0
 
 
 @dataclass
@@ -197,20 +249,10 @@ class StillFilm:
     length: float = 1.0
 
     def at(self, seconds: float) -> StillImage:
-        return StillImage(self.picture)
+        return StillImage(self.picture, seconds)
 
 
-def test_the_footage_shows_the_recording_through_its_framing() -> None:
-    picture = np.zeros((1080, 1920, 3), dtype=np.uint8)
-    picture[:170, :, :] = 255  # what lies above the table is white
-    footage = ExecutionFootage(StillFilm(picture), speed=1.0, framing=TABLE_FRAMING)  # type: ignore[arg-type]
-    frame = footage.picture_at(0.0)
-    assert (frame[2:40, frame.shape[1] // 2] == 0).all()
-    unframed = ExecutionFootage(StillFilm(picture), speed=1.0, framing=Framing())  # type: ignore[arg-type]
-    assert (unframed.picture_at(0.0)[2:40, frame.shape[1] // 2] == 255).all()
-
-
-# %% two cameras side by side
+# %% the run seen from beside the table, with the robot's own view
 
 
 @dataclass
@@ -232,33 +274,43 @@ class CountingFilm:
 
 def test_a_view_reads_its_film_from_where_its_stretch_starts_through_its_framing() -> None:
     film = CountingFilm((100, 200, 3))
-    view = ViewOfTheRun(film, from_second=15.5, framing=Framing(top=10, bottom=10), caption="by hand")
+    view = ViewOfTheRun(film, from_second=15.5, framing=Framing(top=10, bottom=10))
     picture = view.image_at(2.0)
     assert film.asked == [17.5]
     assert picture.shape == (80, 200, 3) and picture[0, 0, 0] == 17
 
 
-def test_the_views_play_in_step_at_one_speed_beside_each_other_at_one_height() -> None:
-    own = ViewOfTheRun(CountingFilm((90, 160, 3)), from_second=19.5, caption="the robot's own camera")
-    by_hand = ViewOfTheRun(CountingFilm((150, 100, 3)), from_second=4.0, caption="a camera held by hand")
-    scene = SideBySide((own, by_hand), length=28.0, speed=7.0)
-    assert scene.duration == pytest.approx(4.0)
-    left, right = scene.panels
-    assert left.height == pytest.approx(right.height)
-    assert left.right + SIDE_BY_SIDE_GAP == pytest.approx(right.x)
-    assert left.width / left.height == pytest.approx(160 / 90, rel=1e-3)
-    assert right.width / right.height == pytest.approx(100 / 150, rel=1e-3)
-    assert right.right <= scene.resolution.width - SIDE_BY_SIDE_GAP
-    scene.picture_at(2.0)
-    assert own.film.asked[-1] == pytest.approx(19.5 + 14.0)
-    assert by_hand.film.asked[-1] == pytest.approx(4.0 + 14.0)
+def test_the_footage_fills_the_frame_with_the_inset_in_the_corner_in_step() -> None:
+    own = ViewOfTheRun(CountingFilm((90, 160, 3)), from_second=18.0)
+    by_hand = ViewOfTheRun(CountingFilm((90, 160, 3)), from_second=2.5)
+    scene = FullBleedFootage(by_hand, length=30.0, speed=2.0, inset=own)
+    assert scene.duration == pytest.approx(15.0)
+    frame = scene.picture_at(2.0)
+    assert frame.shape == (VIDEO_RESOLUTION.height, VIDEO_RESOLUTION.width, 3)
+    assert own.film.asked[-1] == pytest.approx(18.0 + 4.0)
+    assert by_hand.film.asked[-1] == pytest.approx(2.5 + 4.0)
+    inset = scene.inset_panel
+    assert inset.width == INSET_WIDTH and inset.right == VIDEO_RESOLUTION.width - MARGIN
+    assert inset.bottom <= VIDEO_RESOLUTION.stage_height
+    # the main view fills the frame: the footage's second is in every corner's red byte
+    assert frame[VIDEO_RESOLUTION.height - 1, 0, 0] == 6 and frame[VIDEO_RESOLUTION.height - 1, 0, 1] == 0
 
 
-def test_the_side_by_side_keeps_the_subtitle_band_clear_and_states_its_speed() -> None:
-    own = ViewOfTheRun(CountingFilm((90, 160, 3)), from_second=0.0)
+def test_the_inset_holds_what_it_is_given_before_it_runs() -> None:
+    own = ViewOfTheRun(CountingFilm((90, 160, 3)), from_second=18.0)
     by_hand = ViewOfTheRun(CountingFilm((90, 160, 3)), from_second=0.0)
-    scene = SideBySide((own, by_hand), length=8.0, speed=4.0, caption="the cube put through the hole")
-    frame = scene.picture_at(0.0)
-    stage = scene.resolution.stage_height
-    assert (frame[int(stage) :, :, :] == 255).all()
-    assert max(panel.bottom for panel in scene.panels) < stage - 60
+    held = np.full((90, 160, 3), 200, dtype=np.uint8)
+    scene = FullBleedFootage(by_hand, length=10.0, speed=1.0, inset=own, inset_held=HeldInset(held, 3.0))
+    assert (scene.inset_picture_at(1.0) == 200).all()
+    assert scene.inset_picture_at(4.0)[0, 0, 0] == 22
+
+
+def test_the_title_stands_over_the_footage_and_fades_out_when_told() -> None:
+    footage = FullBleedFootage(ViewOfTheRun(CountingFilm((90, 160, 3)), 0.0), length=6.0, speed=1.0)
+    titled = TitleOverFootage(footage, "A Title", "a line", title_for=4.0, fade=0.5)
+    assert titled.duration == pytest.approx(6.0)
+    assert titled.title_at(1.0) == 1.0 and titled.title_at(4.5) == 0.0
+    with_title = titled.picture_at(1.0)
+    without = titled.picture_at(5.0)
+    assert not np.array_equal(with_title, without)
+    assert np.array_equal(without, footage.picture_at(5.0))

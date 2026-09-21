@@ -29,6 +29,33 @@ The size the video is drawn at: the conference asks for at least 480 rows, and 7
 what the byte limit leaves room for over three minutes.
 """
 
+CLAIM_SIZE = 40
+"""
+The letters of a claim or the hero text, in pixels of the video's own size: the largest
+of the video's three sizes.
+"""
+
+BODY_SIZE = 28
+"""
+The letters of captions, body text and table cells.
+"""
+
+LABEL_SIZE = 20
+"""
+The letters of labels: the smallest size the video writes in.
+"""
+
+MARGIN = 32
+"""
+The margin every frame keeps all round, in pixels.
+"""
+
+DIM = 0.7
+"""
+How far what is not being looked at is faded towards white: everything else is dimmed
+rather than anything outlined.
+"""
+
 # %% the colours
 
 
@@ -223,6 +250,31 @@ def dimmed(frame: Frame, by: float) -> Frame:
     return np.clip(faded + 0.5, 0, 255).astype(np.uint8)
 
 
+def darkened(frame: Frame, over: Area, by: float) -> Frame:
+    """
+    A copy of the frame with a rectangle of it shaded towards black, fading in from its
+    top edge to its full darkness a third of the way down: a band a caption is read on
+    over footage.
+
+    :param frame: The frame.
+    :param over: The band.
+    :param by: How dark the band is at the bottom, from zero to one.
+    """
+    result = frame.copy()
+    left, top, width, height = over.rounded()
+    frame_height, frame_width = frame.shape[:2]
+    top, bottom = max(top, 0), min(top + height, frame_height)
+    left, right = max(left, 0), min(left + width, frame_width)
+    if bottom <= top or right <= left:
+        return result
+    rows = np.arange(bottom - top, dtype=np.float32)
+    weight = np.clip(rows / max((bottom - top) / 3.0, 1.0), 0.0, 1.0) * by
+    band = result[top:bottom, left:right].astype(np.float32)
+    band *= 1.0 - weight[:, None, None]
+    result[top:bottom, left:right] = np.clip(band + 0.5, 0, 255).astype(np.uint8)
+    return result
+
+
 def framed(frame: Frame, around: Area, color: Rgb, thickness: int = 3) -> Frame:
     """
     A copy of the frame with a rectangle outlined on it.
@@ -280,6 +332,7 @@ class Anchor(Enum):
     RIGHT_MIDDLE = "rm"
     LEFT_TOP = "lt"
     CENTRE_TOP = "mt"
+    RIGHT_TOP = "rt"
 
 
 @dataclass(frozen=True)
