@@ -1,6 +1,6 @@
 """
-The slides of plain text: the results table, and the end card with the chapters'
-claims and the link to the code.
+The slides of plain text: the results table, and the end card with the link to the
+code.
 """
 
 from __future__ import annotations
@@ -12,7 +12,6 @@ from typing_extensions import Sequence
 from experiments.paper.lettering import Face
 from experiments.video.canvas import (
     BODY_SIZE,
-    LABEL_SIZE,
     VIDEO_RESOLUTION,
     Anchor,
     Ink,
@@ -90,8 +89,7 @@ class ResultsTable(Scene):
 @dataclass
 class EndCard(Scene):
     """
-    The three chapters' claims as a numbered list, and the link to the code and the
-    recorded episodes under them.
+    The link to the code and the recorded episodes.
     """
 
     script: VideoScript
@@ -120,16 +118,10 @@ class EndCard(Scene):
 
     def picture_at(self, seconds: float) -> Frame:
         frame = self.resolution.blank(255)
-        claim = Typesetting(size=BODY_SIZE, face=Face.BOLD)
-        left = 120
-        for chapter in self.script.chapters:
-            y = 130 + (chapter.number - 1) * 72
-            frame = Typesetting(size=BODY_SIZE, color=Ink.MUTED.rgb).written(frame, f"{chapter.number}", (left, y), Anchor.LEFT_MIDDLE)
-            frame = claim.written(frame, claim.wrapped(chapter.claim, self.resolution.width - left - 44 - 100), (left + 44, y), Anchor.LEFT_MIDDLE)
-        frame = lined(frame, (left, 372), (self.resolution.width - left, 372), Ink.HAIRLINE.rgb, thickness=2)
-        frame = Typesetting(size=LABEL_SIZE, face=Face.BOLD, color=Ink.MUTED.rgb).written(
-            frame, self.script.code_label, (self.resolution.width / 2, 420), Anchor.CENTRE_MIDDLE
+        middle = self.resolution.stage_height / 2
+        frame = Typesetting(size=BODY_SIZE, face=Face.BOLD).written(
+            frame, self.script.code_label, (self.resolution.width / 2, middle - 30), Anchor.CENTRE_MIDDLE
         )
         return Typesetting(size=BODY_SIZE).written(
-            frame, self.script.repository_link, (self.resolution.width / 2, 466), Anchor.CENTRE_MIDDLE
+            frame, self.script.repository_link, (self.resolution.width / 2, middle + 24), Anchor.CENTRE_MIDDLE
         )

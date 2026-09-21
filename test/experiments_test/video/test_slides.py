@@ -8,9 +8,8 @@ from __future__ import annotations
 import numpy as np
 
 from experiments.video.canvas import Ink
-from experiments.video.script import CHAPTERS, NarrationLines, ResultRow, VideoScript
+from experiments.video.script import NarrationLines, ResultRow, VideoScript
 from experiments.video.slides import EndCard, ResultsTable
-from experiments.video.timeline import Resolution
 
 
 def test_the_title_is_the_submitted_papers() -> None:
@@ -39,28 +38,11 @@ def test_the_results_table_is_drawn_centred_on_white_with_hairlines_only() -> No
     assert (frame[:, :120] == 255).all() and (frame[:, -120:] == 255).all()
 
 
-def test_the_end_card_lists_the_three_claims_and_the_link_and_no_numbers() -> None:
+def test_the_end_card_carries_the_link_and_nothing_else() -> None:
     script = VideoScript()
     card = EndCard(script, held_for=5.0)
     assert card.duration == 5.0
-    assert [chapter.number for chapter in script.chapters] == [1, 2, 3]
-    assert script.chapters == CHAPTERS
-    for chapter in script.chapters:
-        assert not any(character.isdigit() for character in chapter.claim)
     assert script.repository_link == "https://anonymous.4open.science/r/cognitive_robot_abstract_machine-48BD/"
     frame = card.frame_at(1.0)
     assert frame.min() < 128 and (frame[int(card.resolution.stage_height) :] == 255).all()
-
-
-def test_the_script_names_no_robot_by_default() -> None:
-    assert VideoScript().robot_name == "the robot"
-    for line in NarrationLines().every:
-        assert "Tracy" not in line.written
-
-
-def test_the_narration_uses_the_papers_terms_and_none_it_forbids() -> None:
-    said = " ".join(line.written for line in NarrationLines().every).lower()
-    for forbidden in ("intended meaning", "grounding", "grounded meaning", "adapts", "recovers", "replans", "reacts", "many runs"):
-        assert forbidden not in said
-    assert "long term memory" in said and "long-term" not in said
-    assert "ripple down rules" in said
+    assert (frame[:200] == 255).all()

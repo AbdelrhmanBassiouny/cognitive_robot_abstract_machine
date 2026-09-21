@@ -69,7 +69,7 @@ from experiments.video.footage import (
 )
 from experiments.video.long_term import RememberedQuestion
 from experiments.video.sources import RecordedRun
-from experiments.video.timeline import Frame, Resolution, Scene, eased
+from experiments.video.timeline import Frame, Resolution, Scene, blended, eased
 
 IDLE_MARGIN = 0.5
 """
@@ -90,12 +90,17 @@ What the card calls the backend that answers over the grid.
 
 HEADER_CLEAR = 96
 """
-Pixels from the top kept clear for the chapter's pill and the speed badge.
+Pixels from the top kept clear for the header line and the speed badge.
 """
 
 ZOOM = 0.45
 """
 Seconds a tile takes to grow to the front, and to shrink back.
+"""
+
+ANSWER_FADE = 0.25
+"""
+Seconds the answer to the question takes to come up.
 """
 
 # %% when the robot stood still
@@ -639,6 +644,12 @@ class GridSequence(Scene):
     Seconds the question takes, from arriving to its answer having been read.
     """
 
+    answered_after: float = 4.0
+    """
+    Seconds after the question arrives that its answer is given: as the line asking it
+    ends.
+    """
+
     resolution: Resolution = VIDEO_RESOLUTION
     """
     The size the grid draws itself at.
@@ -702,23 +713,27 @@ class GridSequence(Scene):
                 return zoom, 1.0 - eased((since - ZOOM - zoom.held_for) / ZOOM), zoom.held_for
         return None
 
-    def question_progress(self, seconds: float) -> Optional[float]:
+    def asked_since(self, seconds: float) -> Optional[float]:
         """
-        How far the question has got at a moment, from zero to one, or None before it.
+        Seconds the question has been up at a moment, or None before it.
         """
         since = seconds - self.asked_at
-        if since < 0:
-            return None
-        return min(since / self.question_for, 1.0)
+        return since if since >= 0 else None
+
+    def answered_at(self, seconds: float) -> float:
+        """
+        How far the answer has come up at a moment, from zero to one.
+        """
+        since = self.asked_since(seconds)
+        return eased((since - self.answered_after) / ANSWER_FADE) if since is not None else 0.0
 
     # %% drawing
 
     def picture_at(self, seconds: float) -> Frame:
         frame = self.resolution.blank(255)
         zoom = self.zoom_at(seconds)
-        progress = self.question_progress(seconds)
-        lit = eased((progress - 0.55) / 0.2) if progress is not None else 0.0
-        frame = self._band(frame, progress)
+        lit = self.answered_at(seconds)
+        frame = self._band(frame, self.asked_since(seconds), lit)
         frame = self._grid(frame, self.recording_at(seconds), zoom, lit)
         speed = zoom[0].speed if zoom is not None and zoom[1] >= 1.0 else self.speed
         return speed_badged(frame, speed)
@@ -752,7 +767,8 @@ class GridSequence(Scene):
         if front is not None:
             tile, cell, (zoom, out, held) = front
             where = cell.towards(layout.front, out)
-            moment = zoom.replay_from + held * zoom.speed if out >= 1.0 else self.play_for * self.speed
+            # from the moment it replays from as soon as it comes forward, not the grid's paused moment
+            moment = zoom.replay_from + held * zoom.speed
             picture, phase = tile.picture_at(moment)
             frame = self._tile_drawn(frame, where, picture, phase, tag=self.labels.tag(zoom.row, zoom.column) if out >= 1.0 else "")
         return frame
@@ -767,14 +783,18 @@ class GridSequence(Scene):
             frame = badged(frame, tag, (cell.x + 8, cell.y + 8))
         return frame
 
-    def _band(self, frame: Frame, progress: Optional[float]) -> Frame:
+    def _band(self, frame: Frame, since: Optional[float], lit: float) -> Frame:
         """
         The header line over the grid while no question is up; the question's card
         once it is: what it is asked over, the question, the query behind it and, in
         its turn, the answer.
+
+        :param frame: The frame.
+        :param since: Seconds the question has been up, or None before it.
+        :param lit: How far the answer has come up, from zero to one.
         """
         band = self.layout.band
-        if progress is None:
+        if since is None:
             return Typesetting(size=LABEL_SIZE, color=Ink.MUTED.rgb).written(
                 frame, self.labels.header, (band.x, band.y + 14), Anchor.LEFT_MIDDLE
             )
@@ -792,12 +812,13 @@ class GridSequence(Scene):
         code = CodeTypesetting(size=LABEL_SIZE)
         for number, line in enumerate(question.statement):
             frame = code.written(frame, line, (band.x + 16, band.y + 76 + number * 24))
-        if eased((progress - 0.45) / 0.15) > 0:
+        if lit > 0:
             on_screen = sum(question.names(tile.run.episode_identifier) for row in self.tiles for tile in row)
             answer = f"→ {len(question.episodes)} episodes; {on_screen} of them are on screen"
-            frame = Typesetting(size=BODY_SIZE, face=Face.BOLD, color=Ink.ANSWER.rgb).written(
+            written = Typesetting(size=BODY_SIZE, face=Face.BOLD, color=Ink.ANSWER.rgb).written(
                 frame, answer, (band.right - 16, band.bottom - 22), Anchor.RIGHT_MIDDLE
             )
+            frame = blended(frame, written, lit)
         return frame
 
 

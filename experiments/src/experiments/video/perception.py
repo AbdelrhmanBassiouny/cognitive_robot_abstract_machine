@@ -34,19 +34,11 @@ from krrood.entity_query_language.factories import a
 from krrood.entity_query_language.query.match import Match
 from semantic_digital_twin.reasoning.predicates import Colored, SupportedBy
 from semantic_digital_twin.world_description.world_entity import Body
-from experiments.paper.lettering import Face
 from experiments.video.cache import SceneCache
-from experiments.video.canvas import (
-    LABEL_SIZE,
-    Anchor,
-    Ink,
-    Area,
-    Typesetting,
-    filled,
-    fitted,
-)
+from experiments.video.canvas import Area, Ink, filled, fitted
+from experiments.video.footage import badged
 from experiments.video.sources import RecordedRun
-from experiments.video.stages import PANEL_VISUAL
+from experiments.video.stages import CLOSE_UP_VISUAL
 from experiments.video.timeline import Frame, Resolution, Scene, eased
 
 class View(StrEnum):
@@ -67,7 +59,7 @@ TILE_LABELS = {
     View.ANSWER: "cube",
 }
 """
-What each picture is called, under it, in a word or two.
+What each picture is called, on a badge in its corner, in a word or two.
 """
 
 
@@ -86,9 +78,9 @@ def piece_to_sort_support_first(
         SupportedBy(piece, lid), Colored(piece, pieces.by_category[SORTED_PIECE].color)
     )
 
-LABEL_ROOM = 36
+COLUMNS = 2
 """
-Pixels under the row of pictures their labels take.
+How many pictures stand side by side: the four views in two rows of two.
 """
 
 # %% what one frame's narrowing comes to
@@ -282,7 +274,7 @@ class PerceptionNarrowing(Scene):
     Seconds all four views play once every one is up.
     """
 
-    resolution: Resolution = PANEL_VISUAL
+    resolution: Resolution = CLOSE_UP_VISUAL
     """
     The size the scene draws itself at.
     """
@@ -312,29 +304,34 @@ class PerceptionNarrowing(Scene):
 
     def tile(self, view: View) -> Area:
         """
-        Where a view's picture lies in the row: four equal pictures, the row centred
-        with its labels under it.
+        Where a view's picture lies: four equal pictures in two rows of two, as large
+        as the scene's width and height allow, centred.
         """
-        count = len(View)
-        width = (self.resolution.width - (count - 1) * self.gap) / count
+        rows = -(-len(View) // COLUMNS)
         sample = self.frames[0].pictures[view]
-        height = width * sample.shape[0] / sample.shape[1]
-        top = (self.resolution.height - height - LABEL_ROOM) / 2
-        return Area(list(View).index(view) * (width + self.gap), top, width, height)
+        aspect = sample.shape[1] / sample.shape[0]
+        width = (self.resolution.width - (COLUMNS - 1) * self.gap) / COLUMNS
+        height = (self.resolution.height - (rows - 1) * self.gap) / rows
+        width, height = (width, width / aspect) if width / aspect <= height else (height * aspect, height)
+        left = (self.resolution.width - COLUMNS * width - (COLUMNS - 1) * self.gap) / 2
+        top = (self.resolution.height - rows * height - (rows - 1) * self.gap) / 2
+        number = list(View).index(view)
+        row, column = divmod(number, COLUMNS)
+        return Area(left + column * (width + self.gap), top + row * (height + self.gap), width, height)
 
     def picture_at(self, seconds: float) -> Frame:
         frame = self.resolution.blank(255)
         narrowed = self.frames[self.frame_index_at(seconds)]
-        label = Typesetting(size=LABEL_SIZE, face=Face.BOLD, color=Ink.PERCEPTION.rgb)
         for number, view in enumerate(View):
             appeared = seconds - self.appears_at[number]
             if appeared < 0:
                 continue
-            weight = eased(appeared / 0.25)
+            # the first view is up as the scene comes up; the others fade in as they are named
+            weight = eased(appeared / 0.25) if self.appears_at[number] > 0 else 1.0
             tile = self.tile(view)
             frame = filled(frame, tile, Ink.TEXT.rgb)
             frame = fitted(frame, self._faded(narrowed.pictures[view], weight), tile)
-            frame = label.written(frame, TILE_LABELS[view], (tile.centre[0], tile.bottom + LABEL_ROOM / 2), Anchor.CENTRE_MIDDLE)
+            frame = badged(frame, TILE_LABELS[view], (tile.x + 8, tile.y + 8))
         return frame
 
     @staticmethod

@@ -136,6 +136,7 @@ def sequence(zooms=(Zoom(0, 2, 20.0, 2.0), Zoom(1, 1, 8.0, 3.0))) -> GridSequenc
         play_for=4.0,
         asked_after=0.5,
         question_for=6.0,
+        answered_after=4.0,
     )
 
 
@@ -185,8 +186,9 @@ def test_the_zoomed_tile_grows_to_the_front_and_the_rest_dim() -> None:
 
 def test_the_question_comes_once_the_grid_plays_on_and_its_answer_outlines_the_tiles_it_names() -> None:
     grid = sequence()
-    assert grid.question_progress(grid.asked_at - 0.1) is None
-    assert grid.question_progress(grid.asked_at + 3.0) == pytest.approx(0.5)
+    assert grid.asked_since(grid.asked_at - 0.1) is None
+    assert grid.asked_since(grid.asked_at + 3.0) == pytest.approx(3.0)
+    assert grid.answered_at(grid.asked_at + 3.9) == 0.0 and grid.answered_at(grid.asked_at + 4.3) == 1.0
     named, unnamed = grid.layout.tile(0, 1), grid.layout.tile(0, 0)
     answered = grid.picture_at(grid.asked_at + 6.0 * 0.95)
     before = grid.picture_at(grid.resumes_at)

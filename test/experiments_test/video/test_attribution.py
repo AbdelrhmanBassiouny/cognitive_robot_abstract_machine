@@ -81,7 +81,7 @@ def scene() -> AttributionScene:
         AskedQuestion("Which objects recently moved?", (), "cube_2", asked_at=20.0),
         AskedQuestion("Did you move them?", (), "none", asked_at=20.0),
     )
-    return AttributionScene(TimelinesStandIn(TrialStandIn()), film=None, questions=questions, speed=4.0, question_for=3.0)
+    return AttributionScene(TimelinesStandIn(TrialStandIn()), film=None, questions=questions, speed=4.0, question_for=(3.0, 3.0))
 
 
 def test_the_film_plays_up_to_the_asking_then_each_question_takes_its_turn(scene: AttributionScene) -> None:
@@ -171,3 +171,14 @@ def test_an_answer_that_disagrees_with_the_record_is_refused() -> None:
 def test_a_bodys_name_is_shown_without_the_twins_prefix() -> None:
     assert shown_name("perceived/cube_2") == "cube_2"
     assert shown_name("board") == "board"
+
+
+def test_each_question_is_held_for_its_own_time_and_the_next_starts_after_it(scene: AttributionScene) -> None:
+    scene.question_for = (2.0, 5.0)
+    assert scene.duration == pytest.approx(scene.watching_for + 7.0)
+    assert scene.question_starts(0) == pytest.approx(scene.watching_for)
+    assert scene.question_starts(1) == pytest.approx(scene.watching_for + 2.0)
+    first, progress = scene.question_at(scene.watching_for + 1.0)
+    assert first is scene.questions[0] and progress == pytest.approx(0.5)
+    second, progress = scene.question_at(scene.watching_for + 4.5)
+    assert second is scene.questions[1] and progress == pytest.approx(0.5)

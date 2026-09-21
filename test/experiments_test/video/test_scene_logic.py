@@ -32,7 +32,7 @@ from experiments.video.perturbations import (
     Phase,
     RecordingStretch,
 )
-from experiments.video.stages import PANEL_VISUAL
+from experiments.video.stages import CLOSE_UP_VISUAL
 from experiments.video.timeline import Resolution
 from experiments.video.twin import BoxCorners, SupportReading, WorkingMemoryCheck
 
@@ -129,8 +129,8 @@ def test_the_check_draws_the_boxes_the_band_and_the_result_at_the_moments_it_is_
 
 def test_the_check_draws_at_the_panels_size_and_starts_on_the_landed_view() -> None:
     check = WorkingMemoryCheck(TwinStandIn())
-    assert check.resolution == PANEL_VISUAL
-    assert check.frame_at(0.0).shape == (PANEL_VISUAL.height, PANEL_VISUAL.width, 3)
+    assert check.resolution == CLOSE_UP_VISUAL
+    assert check.frame_at(0.0).shape == (CLOSE_UP_VISUAL.height, CLOSE_UP_VISUAL.width, 3)
 
 
 def test_a_stretch_holds_its_ends() -> None:

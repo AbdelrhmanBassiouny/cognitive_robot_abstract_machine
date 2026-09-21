@@ -21,7 +21,7 @@ from __future__ import annotations
 
 import argparse
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from enum import StrEnum
 from functools import cached_property
 from pathlib import Path
@@ -35,7 +35,6 @@ from experiments.video.attribution import (
     TrialTimelines,
 )
 from experiments.video.canvas import Ink
-from experiments.video.chapters import ChapterMark, InChapter, chaptered
 from experiments.video.encoding import (
     H264Encoder,
     Muxer,
@@ -43,7 +42,7 @@ from experiments.video.encoding import (
     VideoFile,
     bytes_for_sound,
 )
-from experiments.video.figure import GraspChartBar, RunReadings, Slot
+from experiments.video.figure import FigureBox, FigureGeometry, FrameworkFigure, GraspChartBar, PlanAction, RunReadings, Slot
 from experiments.video.footage import (
     FULL_BLEED_FRAMING,
     TABLE_FRAMING,
@@ -69,6 +68,7 @@ from experiments.video.narration import (
 )
 from experiments.video.perception import NarrowingReel, PerceptionNarrowing
 from experiments.video.perturbations import (
+    ZOOM,
     DetectionsOnTheFilm,
     GridLabels,
     GridSequence,
@@ -80,10 +80,7 @@ from experiments.video.rules import HoleOnThePicture, HoleRuleTrace, RuleTreeEva
 from experiments.video.script import NarrationLines, VideoScript
 from experiments.video.slides import EndCard, ResultsTable
 from experiments.video.sources import FRAMEWORK_DEMO_EPISODE, RecordedRun
-from experiments.video.query_slide import IntroductionMoments, IntroductionSlide
-from experiments.video.plan import resolved_plan, stated_plan
-from experiments.video.stages import BackendAtWork, PlanOverview
-from experiments.video.statements import statements_of
+from experiments.video.stages import Answering, FigureOnCanvas, Magnified, Mark, Pointer
 from experiments.video.timeline import Scene, Timeline
 from experiments.video.twin import TwinPictures, WorkingMemoryCheck
 from experiments.episodes.long_term_memory import LongTermMemory
@@ -112,10 +109,11 @@ ZOOMS = (
     Zoom(row=0, column=2, replay_from=20.0, held_for=5.0),
     # the robot sorts after a piece is shoved: the shove, the robot looking again, and
     # the robot acting on what it then found
-    Zoom(row=1, column=1, replay_from=8.0, held_for=7.0),
+    Zoom(row=1, column=1, replay_from=8.0, held_for=6.5),
 )
 """
-The two tiles brought to the front of the grid, in order.
+The two tiles brought to the front of the grid, in order; each is held for as long as
+the line said over it, at the least for this.
 """
 
 
@@ -136,19 +134,20 @@ class AttributionRun:
     slow as the lines said over the film before its questions need.
     """
 
-    question_for: float
+    question_for: Optional[Tuple[float, ...]]
     """
-    Seconds each question about the trial takes.
+    Seconds each question about the trial takes, one per question; None for as long
+    as the line said over each needs.
     """
 
 
 ATTRIBUTION_RUNS = (
     # the robot sorts the pieces it saw; the section's line is said over the film, and
     # the questions come up as it ends, each held for the line said over it
-    AttributionRun("25f5161da5584bac9554b686711a01fe", None, 9.0),
+    AttributionRun("25f5161da5584bac9554b686711a01fe", None, None),
     # the scene stands still while a person pushes the cube; at this pace the hand
     # reaches in as the line reaches "a person pushes the cube"
-    AttributionRun("0a793ded6dd54da7b64171ab78638d38", 5.0, 3.0),
+    AttributionRun("0a793ded6dd54da7b64171ab78638d38", 5.0, (2.0, 2.5)),
 )
 """
 The two trials the paper sets against each other: the robot moving the pieces itself,
@@ -160,24 +159,19 @@ DISSOLVE = 0.25
 Seconds each scene dissolves into the next, where it does not cut in.
 """
 
-PAUSE = 0.5
+PAUSE = 0.25
 """
 Seconds between two lines said over one scene.
 """
 
-TAIL = 0.4
+TAIL = 0.3
 """
 Seconds a slide is held after its last line has ended.
 """
 
-TITLE_FOR = 4.0
+TITLE_FOR = 2.6
 """
-Seconds the title stands over the footage; the first chapter's claim follows it there.
-"""
-
-CLAIM_FOR = 2.0
-"""
-Seconds a chapter's claim is shown large.
+Seconds the title stands over the footage before the summary is said under it.
 """
 
 TITLE_FOOTAGE_FROM = 20.5
@@ -186,56 +180,86 @@ Seconds into the hand-held film the title's footage starts: the gripper carrying
 cube over the board and putting it through the square hole.
 """
 
-OPEN_FIELD_NAMED_AT = 4.9
+PLAN_SHARE = 0.96
 """
-Seconds into the line about the query that "three dots" is said, when its open field
-is marked -- measured on the spoken line.
-"""
-
-GLOSSED_AFTER = 0.9
-"""
-Seconds after the open field is marked that what the query says in words comes up.
+How much of the stage the whole plan takes while it is read: as tall as the stage
+allows, so that all of it is in view while its parts are pointed to in turn.
 """
 
-LEFT_OPEN_NAMED_AT = 6.1
+RESOLVED_SHARE = 0.96
 """
-Seconds into the line about the plan that "Cube, approach direction and hole are left
-open" starts -- measured on the spoken line; the open parts are emphasised then.
-"""
-
-PLAN_FOR = 4.0
-"""
-Seconds the plan is held at the least, as stated and resolved; the stated one grows to
-hold its line.
+How much of the room the resolved plan takes, over its footnote.
 """
 
-PERCEIVED_FOR = 0.5
+PICK_UP_NAMED_AT = 6.0
 """
-Seconds the last view of the look stands before the perception backend's answer chip
-comes up.
-"""
-
-BAND_DRAWN_AT = 2.2
-"""
-Seconds into the line about working memory that "in simulation" is said, when the band
-where the boxes interfere is drawn -- measured on the spoken line.
+Seconds into the line about the pick-up that "pick up" is said, after the pause that
+follows "domain language:" -- measured on the spoken line; the pick-up action is
+pointed to then. The insertion action is pointed to as the line about it starts.
 """
 
-VERDICT_AT = 3.7
+OPEN_PART_NAMED_AT: Dict[Slot, float] = {Slot.PERCEPTION: 1.8, Slot.PROBABILISTIC: 2.55, Slot.RULES: 3.45}
 """
-Seconds into that line that "rests on the lid" is said, when the result is given.
-"""
-
-SAMPLING_FOR = 4.0
-"""
-Seconds the probabilistic backend's samples take to arrive, from the line about the
-sampling starting.
+Seconds into the line about the insertion that what each slot leaves open is named --
+"The cube", "the approach direction", "and the hole" -- measured on the spoken line;
+the part is pointed to and highlighted then.
 """
 
-CHECKING_FOR = 1.5
+QUERY_HELD_AT_LEAST = 0.5
 """
-Seconds the rule that fired is checked before it is highlighted, from the line about
-the matching starting.
+Seconds a sub-query is held alone at the least, however short the line over it.
+"""
+
+PERCEIVED_FOR = 0.3
+"""
+Seconds the last view of the look stands before the perception backend's answer is
+written in.
+"""
+
+BOXES_DRAWN_AT = (3.2, 4.0)
+"""
+Seconds into the line about the geometric check that "the cube's bottom" and "the
+board's top" are said, when each box is drawn -- measured on the spoken line.
+"""
+
+BAND_DRAWN_AT = 4.35
+"""
+Seconds into that line that "confirms" starts, when the band where the boxes interfere
+is drawn.
+"""
+
+VERDICT_AT = 4.9
+"""
+Seconds into that line that "confirms" has been said, when the result is given.
+"""
+
+SAMPLES_FROM = 3.8
+"""
+Seconds into the line about the model that "and samples from it" starts, when the
+samples start arriving -- measured on the spoken line.
+"""
+
+SAMPLING_FOR = 1.0
+"""
+Seconds the probabilistic backend's samples take to arrive.
+"""
+
+ANSWER_SHOWN_FOR = 0.6
+"""
+Seconds a backend's answer stands out in its close-up at the least before it is
+written into the sub-query.
+"""
+
+SELECTS_AT = 4.1
+"""
+Seconds into the line about the rules that "and selects the one" starts, when the rule
+that fired is highlighted -- measured on the spoken line.
+"""
+
+ANSWER_SETTLE = 0.1
+"""
+Seconds a backend's close-up is held after its last line before the answer is written
+into the sub-query.
 """
 
 EXECUTION_STRETCH = (0.5, 30.5)
@@ -251,11 +275,11 @@ How many recorded seconds pass per second played while the robot acts: slow enou
 the grasp and the insertion to be seen as motion.
 """
 
-EXECUTION_LINES_AT = (0.0, 5.5, 9.4, 12.2, 16.5)
+EXECUTION_LINES_AT = (0.0, 8.25, 14.1, 18.3, 24.75)
 """
-Seconds into the film of the robot acting, beyond the lead, that each line said over
-it starts: as the robot sets off, as it closes on the cube, as it lifts it, as the
-gripper reaches the hole, and as it withdraws.
+Seconds into the stretch of the film shown while the robot acts, as recorded, at which
+each line said over it starts: as the robot sets off, as it closes on the cube, as it
+lifts it, as the gripper reaches the hole, and as it withdraws.
 """
 
 PERCEIVED_INSET_FOR = 3.0
@@ -271,10 +295,22 @@ framework demo started: read off both films at the moment the gripper is lowered
 into the square hole.
 """
 
-PUSHED_ANSWER_AT = 6.0
+PUSHED_ANSWER_AT = 5.5
 """
 Seconds into the second trial's scene, beyond the lead, that the line answering it
-starts: as the first question's answer comes up.
+starts: as the first question's answer comes up; the first question is held for less
+than the second so that "no action of the robot" falls with the second's answer.
+"""
+
+QUERY_NAMED_AT = 2.4
+"""
+Seconds into the line about long term memory that "the same kind of query" starts,
+when its card comes up over the grid -- measured on the spoken line.
+"""
+
+ANSWER_READ_FOR = 1.5
+"""
+Seconds the answer to long term memory stands after its line ends.
 """
 
 GRID_SPEED = 6.0
@@ -282,22 +318,6 @@ GRID_SPEED = 6.0
 How many recorded seconds pass per second played in the perturbation grid.
 """
 
-GRID_PLAY_FOR = 4.0
-"""
-Seconds the grid plays before the first tile is brought to the front.
-"""
-
-GRID_LINES_AT = (0.0, 4.6, 10.5, 18.1)
-"""
-Seconds into the grid, beyond the lead, that each line said over it starts: as it
-plays, as the first tile is at the front, as the second is, and as the grid plays on
-with the question up.
-"""
-
-GRID_ASKED_AFTER = 0.3
-"""
-Seconds the grid plays on after the last zoom before the question comes up.
-"""
 
 IDLE_FRAMES_READ = 24
 """
@@ -305,17 +325,12 @@ How many of the recording's first frames, taken while the robot stood still, the
 is watched over.
 """
 
-ANSWER_SETTLE = 0.6
-"""
-Seconds a backend's scene is held at the least after its sub-query reads answered.
-"""
-
 RESULTS_FOR = 4.0
 """
 Seconds the results table is held at the least.
 """
 
-END_CARD_FOR = 4.0
+END_CARD_FOR = 3.5
 """
 Seconds the end card is held at the least.
 """
@@ -327,7 +342,8 @@ BACKENDS: Dict[Slot, str] = {
     Slot.RULES: "RippleDownRulesBackend",
 }
 """
-What each slot's backend is called, on the title bar of its panel.
+What each slot's backend is called, on its panel of the figure and on the tab over its
+close-up.
 """
 
 HUES: Dict[Slot, Ink] = {
@@ -337,7 +353,13 @@ HUES: Dict[Slot, Ink] = {
     Slot.RULES: Ink.RULES,
 }
 """
-The colour each backend's panel carries, the figure's own.
+The colour each backend's close-up is framed in, the figure's own.
+"""
+
+ACCENT = Ink.ANSWER.rgb
+"""
+What a part of the plan is ringed in when it is pointed to, and what an answer written
+into it is ringed in: the video's one accent.
 """
 
 
@@ -467,96 +489,146 @@ class VideoAssembly:
             },
         )
 
-    @cached_property
-    def marks(self) -> Tuple[ChapterMark, ...]:
-        chapters = self.script.chapters
-        return tuple(ChapterMark(chapter, len(chapters)) for chapter in chapters)
+    # %% the backends completing the plan
 
-    # %% chapter one: the backends completing the plan
+    def figure(self, stage: int, focus: Optional[Slot] = None) -> FigureOnCanvas:
+        """
+        The framework figure at a stage, its panels named after the backends.
+
+        :param stage: How many backends have answered.
+        :param focus: The slot being answered, ringed, if any.
+        """
+        figure = FrameworkFigure(stage=stage, focus=focus, readings=self.readings, panel_titles=dict(BACKENDS))
+        return FigureOnCanvas(figure)
 
     def title(self) -> NarratedScene:
         """
-        The title over the footage of the insertion, then the first chapter's claim
-        there; the opening line is said over both and runs on.
+        The title over the footage of the insertion, unspoken; what the video shows is
+        said over it.
         """
         by_hand = HandHeldFilm.beside(self.demo)
+        summary_for = self.said_for(self.lines.summary) + TAIL
         footage = FullBleedFootage(
             ViewOfTheRun(by_hand, TITLE_FOOTAGE_FROM, FULL_BLEED_FRAMING),
-            length=TITLE_FOR + CLAIM_FOR,
+            length=TITLE_FOR + summary_for,
             speed=1.0,
         )
         line = f"{self.script.kind}  ·  {self.script.conference}"
-        titled = TitleOverFootage(footage, self.script.title, line, title_for=TITLE_FOR)
-        opened = InChapter(titled, self.marks[0], opens=True, claim_from=TITLE_FOR, claim_for=CLAIM_FOR)
-        return NarratedScene(opened, (self.lines.opening,), runs_on=True)
+        titled = TitleOverFootage(footage, self.script.title, line, title_for=TITLE_FOR + summary_for)
+        return NarratedScene(titled, (self.lines.summary,), delay=TITLE_FOR - LEAD)
 
-    def introduction(self) -> NarratedScene:
+    def plan_reading(self) -> NarratedScene:
         """
-        The three beats of the introduction, each coming up as its line starts.
+        The whole plan magnified out of the figure and read with an arrow: the pick-up
+        and then the insertion pointed to as the lines describe them, then each part
+        left open as it is named, highlighted as the arrow moves on.
         """
-        lines = (self.lines.query, self.lines.backends, self.lines.principle)
-        delay = self.delay_after((self.lines.opening,), TITLE_FOR + CLAIM_FOR)
-        query, backends, hero = (LEAD + delay + start for start in self.starts_of(lines))
-        open_field = query + OPEN_FIELD_NAMED_AT
-        # the query is up from the slide's start, while the opening line still runs
-        moments = IntroductionMoments(example=0.0, open_field=open_field, gloss=open_field + GLOSSED_AFTER, backends=backends, hero=hero)
-        slide = IntroductionSlide(
-            self.script.backend_choice, self.script.principle, self.script.statement_label, self.script.backends_label, moments=moments
+        shown = self.figure(0)
+        geometry = shown.figure.geometry
+        pick_up, insertion = geometry.actions[PlanAction.PICK_UP], geometry.actions[PlanAction.INSERTION]
+        lines = (self.lines.plan_pick_up, self.lines.plan_insertion)
+        pick_up_from, insertion_from = (LEAD + start for start in self.starts_of(lines))
+        open_parts = {slot: insertion_from + named_at for slot, named_at in OPEN_PART_NAMED_AT.items()}
+        # the storyboard grows the hold to the lines; the growing out is the settle after them
+        magnified = Magnified(shown, self.whole_plan(geometry), Ink.TEXT.rgb, grow=0.6, shrink=0.4, share=PLAN_SHARE)
+        magnified.pointers = (
+            Pointer(pick_up, ACCENT, from_second=pick_up_from + PICK_UP_NAMED_AT),
+            Pointer(insertion, ACCENT, from_second=insertion_from),
+            *(Pointer(self.left_open(geometry, slot), ACCENT, from_second=named_at, framed=False) for slot, named_at in open_parts.items()),
         )
-        return NarratedScene(slide, lines, delay=delay)
-
-    def plan_stated(self) -> NarratedScene:
-        """
-        The plan as stated, its three open parts emphasised as the line names them.
-        """
-        overview = PlanOverview(stated_plan(), held_for=PLAN_FOR, emphasis_from=LEAD + LEFT_OPEN_NAMED_AT)
-        return NarratedScene(overview, (self.lines.plan,))
+        magnified.marks = tuple(Mark(self.left_open(geometry, slot), ACCENT, from_second=named_at) for slot, named_at in open_parts.items())
+        return NarratedScene(magnified, lines)
 
     def plan_resolved(self) -> NarratedScene:
         """
-        The plan resolved, with the footnote on where its values come from.
+        The plan with every field answered, magnified out of the finished figure over
+        the footnote on where its values come from.
         """
-        overview = PlanOverview(resolved_plan(self.readings), held_for=PLAN_FOR, footnote=self.script.run_values_note)
-        return NarratedScene(overview, (self.lines.resolved,))
+        shown = self.figure(len(Slot))
+        magnified = Magnified(
+            shown, self.whole_plan(shown.figure.geometry), Ink.TEXT.rgb, grow=0.6, shrink=0.0,
+            share=RESOLVED_SHARE, footnote=self.script.run_values_note,
+        )
+        return NarratedScene(magnified, (self.lines.resolved,))
+
+    @staticmethod
+    def whole_plan(geometry: FigureGeometry) -> FigureBox:
+        """
+        The plan from the pick-up's first line to the insertion's last, in the figure's
+        centimetres.
+        """
+        pick_up, insertion = geometry.actions[PlanAction.PICK_UP], geometry.actions[PlanAction.INSERTION]
+        return FigureBox(geometry.plan.x, pick_up.y, geometry.plan.width, insertion.y + insertion.height - pick_up.y)
+
+    @staticmethod
+    def left_open(geometry: FigureGeometry, slot: Slot) -> FigureBox:
+        """
+        What the plan leaves open for a slot: the field written as ``...`` where there
+        is one, else the whole description the slot answers.
+        """
+        return geometry.open_fields.get(slot, geometry.slots[slot])
 
     def backend_scenes(self) -> List[NarratedScene]:
         """
-        Each backend at work on its sub-query, in the order the plan is resolved.
+        Each backend answering its slot, in the order the plan is resolved.
         """
-        statements = statements_of(self.readings)
-        scenes = []
-        for slot in Slot:
-            work, answered_at, lines = self.work_of(slot)
-            scene = BackendAtWork(statements[slot], BACKENDS[slot], HUES[slot].rgb, work, answered_at)
-            scene.held_for = scene.answered_read_at + ANSWER_SETTLE
-            scenes.append(NarratedScene(scene, lines))
-        return scenes
+        return [self.backend_scene(slot) for slot in Slot]
 
-    def work_of(self, slot: Slot) -> Tuple[Scene, float, Tuple[Line, ...]]:
+    def backend_scene(self, slot: Slot) -> NarratedScene:
         """
-        The visual that plays on a backend's panel, the moment its answer is known, and
-        the lines said over it.
+        The backend answering its slot: the sub-query held beside the close-up of the
+        backend's work, the answer written into it. The line about what is asked is
+        said over the sub-query alone; the lines about how the backend answers start as
+        its work does.
+        """
+        before, after = self.figure(slot.stage - 1, slot), self.figure(slot.stage)
+        asked, told, work = self.work_of(slot)
+        geometry = before.figure.geometry
+        marks = (Mark(geometry.open_fields[slot], ACCENT),) if slot in geometry.open_fields else ()
+        scene = Answering(before, after, slot, work, HUES[slot].rgb, title=BACKENDS[slot], marks=marks)
+        scene.query_for = self.query_hold(asked, scene)
+        return NarratedScene(scene, (asked, *told))
+
+    def query_hold(self, asked: Line, scene: Answering) -> float:
+        """
+        Seconds the sub-query is held alone so that the work starts as the first line
+        over it does: once the line about what is asked and the pause after it are over.
+
+        :param asked: The line said over the sub-query.
+        :param scene: The backend answering it.
+        """
+        said = self.said_for(asked)
+        return max(LEAD + said + PAUSE - scene.grow - scene.close_up_grow, QUERY_HELD_AT_LEAST)
+
+    def work_of(self, slot: Slot) -> Tuple[Line, Tuple[Line, ...], Scene]:
+        """
+        The line asking a backend's sub-query, the lines said over its work, and the
+        work: what plays in the close-up, from the moment the first of those lines
+        starts, and long enough to hold them.
         """
         lines = self.lines
         if slot is Slot.PERCEPTION:
-            said = (lines.perception_query, *lines.perception_views)
-            starts = [LEAD + start for start in self.starts_of(said)]
+            told = lines.perception_views
             reel = NarrowingReel(self.demo, frame_indices=list(range(IDLE_FRAMES_READ)))
-            # the rectified table is up from the start; the other views come up as their lines do
-            scene = PerceptionNarrowing(reel, appears_at=(0.0, *starts[2:]), run_for=8.0)
-            return scene, starts[-1] + PERCEIVED_FOR, said
+            # each view comes up as its line starts
+            starts = self.starts_of(told)
+            scene = PerceptionNarrowing(reel, appears_at=tuple(starts), run_for=self.said_for(told[-1]) + PERCEIVED_FOR)
+            return lines.perception_query, told, scene
         if slot is Slot.SIMULATION:
-            scene = WorkingMemoryCheck(self.twin, held_for=12.0, boxes_at=(LEAD + 0.4, LEAD + 1.1), band_at=LEAD + BAND_DRAWN_AT, verdict_at=LEAD + VERDICT_AT)
-            return scene, scene.verdict_at + 0.3, (lines.working_memory,)
+            told = (lines.working_memory,)
+            scene = WorkingMemoryCheck(
+                self.twin, held_for=self.said_for(told[0]) + ANSWER_SETTLE, boxes_at=BOXES_DRAWN_AT, band_at=BAND_DRAWN_AT, verdict_at=VERDICT_AT
+            )
+            return lines.working_memory_query, told, scene
         if slot is Slot.PROBABILISTIC:
-            said = (lines.probabilistic_query, lines.probabilistic)
-            sampling_from = LEAD + self.starts_of(said)[1]
-            scene = GraspDistribution(self.sampling, statement_for=sampling_from, sampling_for=SAMPLING_FOR, answer_for=8.0)
-            return scene, scene.answers_at + 0.3, said
-        said = (lines.rules_query, lines.rules)
-        matching_from = LEAD + self.starts_of(said)[1]
-        scene = RuleTreeEvaluation(self.rule_trace, HoleOnThePicture(self.demo), tree_for=matching_from, checking_for=CHECKING_FOR, answer_for=8.0)
-        return scene, scene.answers_at + 0.3, said
+            told = (lines.probabilistic,)
+            answer_for = max(self.said_for(told[0]) + ANSWER_SETTLE - SAMPLES_FROM - SAMPLING_FOR, ANSWER_SHOWN_FOR)
+            scene = GraspDistribution(self.sampling, statement_for=SAMPLES_FROM, sampling_for=SAMPLING_FOR, answer_for=answer_for)
+            return lines.probabilistic_query, told, scene
+        told = (lines.rules,)
+        answer_for = max(self.said_for(told[0]) + ANSWER_SETTLE - SELECTS_AT, ANSWER_SHOWN_FOR)
+        scene = RuleTreeEvaluation(self.rule_trace, HoleOnThePicture(self.demo), tree_for=SELECTS_AT, checking_for=0.0, answer_for=answer_for)
+        return lines.rules_query, told, scene
 
     def perceived_picture(self):
         """
@@ -585,7 +657,8 @@ class VideoAssembly:
             self.lines.execution_insertion,
             self.lines.execution_outcome,
         )
-        return NarratedScene(footage, lines, waits=self.waits_for(lines, EXECUTION_LINES_AT))
+        played_at = tuple(recorded / speed for recorded in EXECUTION_LINES_AT)
+        return NarratedScene(footage, lines, waits=self.waits_for(lines, played_at))
 
     def waits_for(self, lines: Sequence[Line], starts_at: Sequence[float]) -> Tuple[float, ...]:
         """
@@ -605,7 +678,7 @@ class VideoAssembly:
             ends = start + self.said_for(line)
         return tuple(waits)
 
-    # %% chapter two: the queries over events
+    # %% the queries over events
 
     def attribution_scenes(self) -> List[NarratedScene]:
         """
@@ -617,45 +690,55 @@ class VideoAssembly:
         """
         sorting, pushed = ATTRIBUTION_RUNS
         lines = self.lines
-        first = self.attribution_scene(sorting, lines.attribution)
-        second = self.attribution_scene(pushed, lines.attribution_pushed)
         first_lines = (lines.attribution, lines.event_classes, lines.attribution_sorting)
-        first_at = (0.0, first.watching_for - LEAD, first.watching_for - LEAD + first.question_for)
+        first = self.attribution_scene(sorting, *first_lines)
+        second = self.attribution_scene(pushed, lines.attribution_pushed)
+        first_at = (0.0, first.watching_for - LEAD, first.question_starts(1) - LEAD)
         second_lines = (lines.attribution_pushed, lines.attribution_pushed_answer)
         return [
             NarratedScene(first, first_lines, waits=self.waits_for(first_lines, first_at)),
             NarratedScene(second, second_lines, waits=self.waits_for(second_lines, (0.0, PUSHED_ANSWER_AT))),
         ]
 
-    def attribution_scene(self, run: AttributionRun, *before_questions: Line) -> AttributionScene:
+    def attribution_scene(self, run: AttributionRun, watched: Line, *asked: Line) -> AttributionScene:
         """
-        One trial's scene, its film played so that its questions come up as the last of
-        the lines said before them ends, where the run leaves the pace open.
+        One trial's scene, its film played so that its questions come up as the line
+        said over the film ends, where the run leaves the pace open, and each question
+        held for the line said over it, where the run leaves that open.
 
         :param run: The trial.
-        :param before_questions: The lines said over the film before its questions.
+        :param watched: The line said over the film before its questions.
+        :param asked: The lines said over the questions, one each, where the run
+            leaves how long they are held open.
         """
         timelines = TrialTimelines(RecordedRun(run.episode))
+        questions = MovedQuestions(timelines).both()
+        question_for = run.question_for
+        if question_for is None:
+            question_for = tuple(self.said_for(line) + PAUSE for line in asked)
         scene = AttributionScene(
             timelines,
             CameraFilm(timelines.run),
-            MovedQuestions(timelines).both(),
+            questions,
             speed=1.0,
-            question_for=2.0 if self.preview else run.question_for,
+            question_for=tuple(2.0 for _ in questions) if self.preview else question_for,
         )
         speed = run.speed
         if speed is None:
-            watched_for = LEAD + sum(self.said_for(line) + PAUSE for line in before_questions)
+            watched_for = LEAD + self.said_for(watched) + PAUSE
             speed = round(scene.horizon / watched_for)
         scene.speed = speed * (3.0 if self.preview else 1.0)
         return scene
 
-    # %% chapter three: the real robot
+    # %% the real robot
 
     def grid(self) -> NarratedScene:
         """
         The six episodes playing out, two brought to the front in turn, then long term
-        memory asked which the robot picked the cube up in.
+        memory asked which the robot picked the cube up in. The lines set the pace:
+        each tile comes to the front as its line starts and goes back as the next
+        starts, the grid plays on as the last line starts, the question comes up as
+        that line names the query, and the answer as it ends.
         """
         # one recording kept no transforms; the camera stood the same way for every run that day
         tiles = [
@@ -666,17 +749,24 @@ class VideoAssembly:
         question = RememberedPiece(memory, over=PAPER_EPISODES).where_the_robot_picked_it_up()
         labels = GridLabels(header=self.script.grid_header, long_term_header=self.script.long_term_header)
         lines = (self.lines.grid, self.lines.stands_still, self.lines.shoved, self.lines.long_term_memory)
+        plays, first, second, resumes = (LEAD + start for start in self.starts_of(lines))
+        zooms = tuple(
+            replace(zoom, held_for=max(zoom.held_for, next_at - at - 2 * ZOOM))
+            for zoom, at, next_at in zip(ZOOMS, (first, second), (second, resumes))
+        )
+        said = self.said_for(self.lines.long_term_memory)
         scene = GridSequence(
             tiles,
             labels,
-            ZOOMS,
+            zooms,
             question,
             speed=GRID_SPEED * (4.0 if self.preview else 1.0),
-            play_for=GRID_PLAY_FOR,
-            asked_after=GRID_ASKED_AFTER,
-            question_for=self.said_for(self.lines.long_term_memory) + TAIL,
+            play_for=first,
+            asked_after=QUERY_NAMED_AT,
+            question_for=said - QUERY_NAMED_AT + ANSWER_READ_FOR,
+            answered_after=said - QUERY_NAMED_AT,
         )
-        return NarratedScene(scene, lines, waits=self.waits_for(lines, GRID_LINES_AT))
+        return NarratedScene(scene, lines)
 
     def results(self) -> NarratedScene:
         table = ResultsTable(self.script.results_title, self.script.results, held_for=RESULTS_FOR)
@@ -689,17 +779,19 @@ class VideoAssembly:
 
     def storyboard(self) -> Storyboard:
         """
-        Every scene, in order, with the lines said over it, in three chapters.
+        Every scene, in order, with the lines said over it.
         """
-        one = [self.introduction(), self.plan_stated(), *self.backend_scenes(), self.plan_resolved(), self.execution()]
-        two = self.attribution_scenes()
-        three = [self.grid(), self.results(), self.end_card()]
-        narrated = [self.title()]
-        for chapter, scenes in zip(self.marks, (one, two, three)):
-            for number, each in enumerate(scenes):
-                # the first chapter opens over the title, so its own first scene does not
-                each.scene = InChapter(each.scene, chapter, opens=number == 0 and chapter is not self.marks[0], claim_for=CLAIM_FOR)
-                narrated.append(each)
+        narrated = [
+            self.title(),
+            self.plan_reading(),
+            *self.backend_scenes(),
+            self.plan_resolved(),
+            self.execution(),
+            *self.attribution_scenes(),
+            self.grid(),
+            self.results(),
+            self.end_card(),
+        ]
         return Storyboard(narrated, tail=TAIL, pause=PAUSE)
 
     def scenes(self) -> List[Scene]:

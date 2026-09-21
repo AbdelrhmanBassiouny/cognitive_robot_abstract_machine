@@ -98,7 +98,7 @@ How far the timeline's panel covers the footage under it.
 
 HEADER_CLEAR = 96
 """
-Pixels from the top kept clear for the chapter's pill and the badges.
+Pixels from the top kept clear for the badges.
 """
 
 CARD_PADDING = 24
@@ -551,9 +551,10 @@ class AttributionScene(Scene):
     How many recorded seconds pass per second played while the film runs.
     """
 
-    question_for: float = 4.5
+    question_for: Tuple[float, ...] = (4.5, 4.5)
     """
-    Seconds each question takes, from arriving to its answer having been read.
+    Seconds each question takes, from arriving to its answer having been read, one
+    per question.
     """
 
     resolution: Resolution = VIDEO_RESOLUTION
@@ -594,7 +595,13 @@ class AttributionScene(Scene):
 
     @property
     def duration(self) -> float:
-        return self.watching_for + self.question_for * len(self.questions)
+        return self.watching_for + sum(self.question_for)
+
+    def question_starts(self, index: int) -> float:
+        """
+        Seconds into the scene a question comes up.
+        """
+        return self.watching_for + sum(self.question_for[:index])
 
     @property
     def panel(self) -> Area:
@@ -650,8 +657,8 @@ class AttributionScene(Scene):
         """
         if seconds < self.watching_for:
             return None, 0.0
-        index = min(int((seconds - self.watching_for) / self.question_for), len(self.questions) - 1)
-        progress = (seconds - self.watching_for - index * self.question_for) / self.question_for
+        index = max(number for number in range(len(self.questions)) if self.question_starts(number) <= seconds)
+        progress = (seconds - self.question_starts(index)) / self.question_for[index]
         return self.questions[index], min(progress, 1.0)
 
     def picture_at(self, seconds: float) -> Frame:

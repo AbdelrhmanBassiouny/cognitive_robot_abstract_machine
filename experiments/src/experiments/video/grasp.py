@@ -30,7 +30,7 @@ from experiments.video.canvas import (
     Typesetting,
     filled,
 )
-from experiments.video.stages import PANEL_VISUAL
+from experiments.video.stages import CLOSE_UP_VISUAL
 from experiments.video.timeline import Frame, Resolution, Scene
 from krrood.entity_query_language.backends import ProbabilisticBackend
 from krrood.entity_query_language.factories import a
@@ -223,7 +223,7 @@ class GraspDistribution(Scene):
     Seconds the run's answer stands out at the end.
     """
 
-    resolution: Resolution = PANEL_VISUAL
+    resolution: Resolution = CLOSE_UP_VISUAL
     """
     The size the scene draws itself at.
     """

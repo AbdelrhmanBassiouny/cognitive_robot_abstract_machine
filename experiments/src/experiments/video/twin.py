@@ -21,7 +21,7 @@ from experiments.montessori.hole_geometry import BOARD_MESH_PATH
 from experiments.paper.lettering import Face
 from experiments.video.cache import SceneCache
 from experiments.video.canvas import BODY_SIZE, Anchor, Area, Ink, Typesetting, filled, fitted
-from experiments.video.stages import PANEL_VISUAL
+from experiments.video.stages import CLOSE_UP_VISUAL
 from experiments.video.sources import RecordedRun
 from experiments.video.timeline import Frame, Resolution, Scene, eased
 from semantic_digital_twin.adapters.picture import (
@@ -454,7 +454,7 @@ class WorkingMemoryCheck(Scene):
     Seconds into the scene the result is given.
     """
 
-    resolution: Resolution = PANEL_VISUAL
+    resolution: Resolution = CLOSE_UP_VISUAL
     """
     The size the scene draws itself at.
     """

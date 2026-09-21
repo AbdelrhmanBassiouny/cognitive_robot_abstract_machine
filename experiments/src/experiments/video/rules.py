@@ -13,7 +13,7 @@ from functools import cached_property
 
 import cv2
 import numpy as np
-from typing_extensions import Dict, List, Optional
+from typing_extensions import Dict, List, Optional, Tuple
 
 from experiments.montessori.perception.overlay import project_to_pixels
 from experiments.montessori.semantics import (
@@ -35,7 +35,7 @@ from experiments.video.canvas import (
     framed,
 )
 from experiments.video.sources import RecordedRun
-from experiments.video.stages import PANEL_VISUAL
+from experiments.video.stages import CLOSE_UP_VISUAL
 from experiments.video.timeline import Frame, Resolution, Scene, eased
 from krrood.entity_query_language.rdr.rule_tree_view import (
     RuleStatus,
@@ -51,7 +51,18 @@ ELSE_BRANCH = "else"
 What the branch to the next rule is called: taken when the condition does not hold.
 """
 
-RULE_SIZE = 24
+NODE_HEIGHT = 120
+"""
+Pixels a rule's node is tall: two rows of condition over one of conclusion.
+"""
+
+BRANCH_ROOM = 100
+"""
+Pixels between the rule that fired and the last rule: the else branch, the ellipsis
+and the arrow into the last rule.
+"""
+
+RULE_SIZE = 22
 """
 The letters of a rule's condition and conclusion: between the video's body and label
 sizes, so that the longest condition fits its node.
@@ -271,12 +282,12 @@ class RuleTreeEvaluation(Scene):
     Seconds the conclusion is shown at the end.
     """
 
-    resolution: Resolution = PANEL_VISUAL
+    resolution: Resolution = CLOSE_UP_VISUAL
     """
     The size the scene draws itself at.
     """
 
-    tree_width: float = 600.0
+    tree_width: float = 500.0
     """
     Pixels the nodes are wide.
     """
@@ -312,11 +323,11 @@ class RuleTreeEvaluation(Scene):
 
     @property
     def fired_node(self) -> Area:
-        return Area(0, 72, self.tree_width, 92)
+        return Area(0, 72, self.tree_width, NODE_HEIGHT)
 
     @property
     def last_node(self) -> Area:
-        return Area(0, 268, self.tree_width, 92)
+        return Area(0, 72 + NODE_HEIGHT + BRANCH_ROOM, self.tree_width, NODE_HEIGHT)
 
     @property
     def board_area(self) -> Area:
@@ -351,20 +362,30 @@ class RuleTreeEvaluation(Scene):
 
     def _node(self, frame: Frame, node: Area, rule: TracedRule, highlighted: bool) -> Frame:
         """
-        One rule: its condition over its conclusion; framed in the accent once it has
-        fired.
+        One rule: its condition, on two rows broken at the comparison so the node stays
+        narrow, over its conclusion; framed in the accent once it has fired.
         """
         stroke = Ink.ANSWER.rgb if highlighted else Ink.HAIRLINE.rgb
-        divider = node.y + node.height * 0.5
+        divider = node.y + node.height * 2 / 3
         frame = filled(frame, node, Ink.BUBBLE.rgb)
         cv2.line(frame, (int(node.x), int(divider)), (int(node.right), int(divider)), stroke, 1, cv2.LINE_AA)
         frame = framed(frame, node, stroke, thickness=3)
-        frame = Typesetting(size=RULE_SIZE, face=Face.BOLD, color=Ink.TEXT.rgb).written(
-            frame, f"if {rule.condition}", (node.x + 16, (node.y + divider) / 2), Anchor.LEFT_MIDDLE
-        )
+        condition = Typesetting(size=RULE_SIZE, face=Face.BOLD, color=Ink.TEXT.rgb)
+        subject, comparison = self.condition_rows(rule.condition)
+        pitch = (divider - node.y) / 2
+        frame = condition.written(frame, f"if {subject}", (node.x + 16, node.y + pitch / 2), Anchor.LEFT_MIDDLE)
+        frame = condition.written(frame, comparison, (node.x + 16 + RULE_SIZE, node.y + pitch * 1.5), Anchor.LEFT_MIDDLE)
         return Typesetting(size=RULE_SIZE, face=Face.BOLD if highlighted else Face.REGULAR, color=Ink.TEXT.rgb).written(
             frame, f"then {rule.conclusion}", (node.x + 16, (divider + node.bottom) / 2), Anchor.LEFT_MIDDLE
         )
+
+    @staticmethod
+    def condition_rows(condition: str) -> Tuple[str, str]:
+        """
+        A rule's condition in two rows: what is compared, and the comparison.
+        """
+        subject, comparison = condition.split(" == ", 1)
+        return subject, f"== {comparison}"
 
     def _case(self, frame: Frame) -> Frame:
         """

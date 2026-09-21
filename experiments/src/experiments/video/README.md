@@ -18,21 +18,17 @@ while -- the look run over the recordings' frames, the pictures of the twin, the
 decoded camera streams -- is kept under `EXPERIMENTS_VIDEO_CACHE`
 (`~/.cache/experiments/video` by default), so a second render is mostly encoding.
 
-The words the slides carry -- the paper's title, the three chapters' claims, the hero
-frame's principle, the results table, the one line over the grid, the footnote on the
-resolved plan and what the robot is called on screen -- are `VideoScript` in
-`script.py`. What the narrator says is `NarrationLines` in the same file.
+The words the slides carry -- the paper's title, the results table, the one line over
+the grid, the footnote on the resolved plan and what the robot is called on screen --
+are `VideoScript` in `script.py`. What the narrator says is `NarrationLines` in the
+same file.
 
-The video runs in three chapters, one per contribution of the paper (`chapters.py`):
-each opens with its claim large over its first shot, which then shrinks into a pill in
-the top left corner that stays for the chapter, with a dot per chapter marking how far
-along the video is. Every frame keeps the same zones: the pill top left, the speed
-badge top right on footage, the caption on a fixed baseline at the bottom -- dark on
-the page, white on a band shaded towards black wherever footage fills the frame. Three
-letter sizes (`canvas.py`): 40 px for claims and the hero text, 28 px for captions,
-body and table cells, 20 px for labels. The backends' colours are used for backends
-alone; one accent (the figure's answer magenta) marks answers and what to look at, and
-the rest is greyscale.
+Every frame keeps the same zones: the speed badge top right on footage, the caption
+on a fixed baseline at the bottom -- dark on the page, white on a band shaded towards
+black wherever footage fills the frame. Three letter sizes (`canvas.py`): 40 px for
+the title, 28 px for captions, body and table cells, 20 px for labels. The backends'
+colours are used for backends alone; one accent (the figure's answer magenta) marks
+what is pointed to and what was answered, and the rest is greyscale.
 
 ### The narration
 
@@ -49,11 +45,12 @@ line that is still being said when the next begins is refused (`NarrationOverrun
 so the scene lengths in `icra_video.py` are tuned to the lines.
 `Narration.report()` prints where each line falls and the silence after it. Where a
 scene has steps that should come as the narration reaches them -- the views of the
-look, the parts of the query slide, the questions over the grid -- the assembly
-measures the lines with the voice (`starts_of`) and times the scene to them, so the
-picture and the speech cannot drift apart. Where a part must come up at a word inside
-a line (the example's lines as each is named, its `...` at "three dots"), the moment
-is measured on the spoken line once and kept as a constant beside the scene.
+look, the tiles brought to the front of the grid, the question over it -- the
+assembly measures the lines with the voice (`starts_of`) and times the scene to them,
+so the picture and the speech cannot drift apart. Where a part must come up at a word
+inside a line (the pick-up at "pick up", each open part as it is named, the band on
+the twin at "confirms", the samples at "and samples"), the moment is measured on the
+spoken line once and kept as a constant beside the scene.
 
 The narration goes into the mp4 as AAC. The subtitles are burned into the picture by
 default (`Subtitled`, drawn into the band every scene leaves clear at the bottom,
@@ -86,17 +83,20 @@ stands over the same film, where the cube goes through the hole (`TitleOverFoota
 
 ### Reading the plan
 
-The plan is written out twice (`plan.py`, `PlanOverview` in `stages.py`): as stated,
-in two columns so that it reads at the video's size, with everything but its three
-open parts dimmed once the line names them; and resolved with what the run read, with
-the footnote that the paper's figure shows stand-ins. Between the two, each backend
-works in one fixed layout (`BackendAtWork`): the sub-query in a box on the left
-(`statements.py`, the plan's sub-queries as stated and as answered), the backend's
-panel on the right with its title bar in the backend's colour and its one visual, and,
-once the backend has answered, its answer on a chip that moves into the open slot of
-the sub-query, which then reads answered -- the same motion for all four. A backend's
-scene cuts in rather than dissolving, since the box would otherwise crossfade two
-different texts.
+The video's spine is the paper's framework figure, compiled from its own typst source
+(`figure.py`) with what the run read in place of the figure's stand-ins, and drawn a
+little fuller after each backend has answered. The whole plan is magnified out of it
+(`Magnified` in `stages.py`) and read with an arrow (`Pointer`) that moves onto the
+pick-up, the insertion and each part left open as the lines name them, the open parts
+highlighted (`Mark`). Then each backend answers its sub-query beside its close-up
+(`Answering`): the sub-query grows out of the plan into a column on the left, its
+`...` ringed, and is held there while the line about what is asked is said; the
+backend's work grows out of its panel of the figure and plays while the lines about
+how it answers are said; then an arrow from the work points at what it answered, the
+answer is written into the sub-query as written, its `...` replaced (the figure's
+`filled_fields`), and the filled sub-query shrinks back into its place in the plan as
+the work shrinks back into its panel. The resolved plan is magnified the same way at
+the end, over the footnote that the paper's figure shows stand-ins.
 
 The query put to long term memory over the grid is written in the match syntax,
 `a(Type)` for each class with the event named where it is matched
@@ -118,27 +118,21 @@ give.
   `Storyboard` pairing scenes with the lines that start with them, `Narration`,
   every line placed in time, checked, laid on a soundtrack and cut into subtitles,
   and `Subtitled`, a timeline with those subtitles drawn in.
-- `chapters.py` -- `ChapterMark` draws a chapter's claim large and its pill;
-  `InChapter` wraps a scene with them.
-- `slides.py` and `query_slide.py` -- the results table and the end card, and the
-  introduction in three beats on one slide: the plan's grasp query with its `...`
-  marked and what it says in words; the query shrunk to the top with the backends by
-  kind under it and the choice among them; the hero frame, the query above a divider
-  and the paper's principle under it in large type.
+- `slides.py` -- the results table and the end card with the link.
 - `canvas.py` -- where things go and how they are drawn and written, the three letter
   sizes and the margin; `CodeTypesetting` writes a line of Python coloured piece by
   piece as an editor would, with any stretch marked behind as a highlighter would.
-- `plan.py`, `statements.py` and `stages.py` -- the plan's lines as stated and as
-  resolved, the four sub-queries as stated and as answered, and the scenes that show
-  them: `PlanOverview` and `BackendAtWork`. `figure.py` compiles the paper's framework
-  figure from its own typst source and states what the run read (`RunReadings`), from
-  which the resolved lines are taken.
-- `perception.py`, `twin.py`, `grasp.py`, `rules.py` -- one visual per backend, each
-  driving the backend's own code on the recorded run: the narrowing as a row of four
-  pictures, the predicate's boxes on the twin drawn close over the cube, the model's
-  bars and samples under the registry the run used (every direction as likely as the
-  next), and the rule tree elided to the rule that fired and the last rule with the
-  concluded hole ringed on the board.
+- `figure.py` and `stages.py` -- the paper's framework figure compiled from its own
+  typst source, stage by stage, with what the run read (`RunReadings`) and its
+  geometry (where the plan, its actions, sub-queries, `...` fields and filled-in
+  values lie), and the scenes over it: `FigureOnCanvas`, `Magnified` with its
+  `Pointer`s and `Mark`s, and `Answering`.
+- `perception.py`, `twin.py`, `grasp.py`, `rules.py` -- one close-up per backend,
+  each driving the backend's own code on the recorded run: the narrowing as four
+  pictures two by two, the predicate's boxes on the twin drawn close over the cube,
+  the model's bars and samples under the registry the run used (every direction as
+  likely as the next), and the rule tree elided to the rule that fired and the last
+  rule with the concluded hole ringed on the board.
 - `attribution.py` -- the robot's camera filling the frame with the trial's timeline
   on a panel over it: the rows the questions are about (the motions, the pick-ups and
   placings) and one strip for everything the robot ran; the recorded questions "Which
@@ -154,5 +148,4 @@ give.
   turn and replayed slower from just before the person moves, the rest paused and
   dimmed; then long term memory is asked which episodes the robot picked the cube up
   in, and the tiles its answer names are outlined.
-- `icra_video.py` -- the scenes in order with their lines, in three chapters, and the
-  command line.
+- `icra_video.py` -- the scenes in order with their lines, and the command line.

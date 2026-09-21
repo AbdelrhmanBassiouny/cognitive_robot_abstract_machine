@@ -223,8 +223,8 @@ def test_a_later_line_waits_beyond_the_pause_for_what_it_speaks_of() -> None:
     assert starts == pytest.approx([LEAD, LEAD + 1.0 + 0.5 + 1.5, LEAD + 1.0 + 0.5 + 1.5 + 1.0 + 0.5])
 
 
-def test_the_papers_sentence_telling_backends_apart_is_one_burned_in_subtitle() -> None:
-    text = NarrationLines().principle.written
+def test_the_line_about_the_insertion_is_one_burned_in_subtitle() -> None:
+    text = NarrationLines().plan_insertion.written
     cues = Narration([spoken(text, 0.0, 7.0)]).cues(BURNED_IN_ROOM)
     assert [cue.text for cue in cues] == [text]
     assert len(cues[0].rows(BURNED_IN_ROOM.characters_per_row)) == 2
