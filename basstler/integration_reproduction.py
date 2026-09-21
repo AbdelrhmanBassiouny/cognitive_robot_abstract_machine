@@ -428,13 +428,17 @@ def _blocked_pull_requests_by_branch(
 # %% the pytest plugin the targeted job loads
 
 
-@dataclass
+@dataclass(eq=False)
 class ReproductionRecorder:
     """
     Collects what each reproduction test did, and writes the run's document.
 
     Registered as a plugin instance rather than reading and writing module state, so a
     run's collection belongs to that run.
+
+    Compared by identity, because ``pytest`` keeps the plugins it has already scanned in
+    a set - and a dataclass with the generated ``__eq__`` has no ``__hash__`` at all, so
+    registering one aborts the whole run before a test is collected.
     """
 
     report_path: Path
