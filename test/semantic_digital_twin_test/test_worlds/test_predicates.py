@@ -7,19 +7,13 @@ import numpy as np
 from semantic_digital_twin.datastructures.field_of_view import FieldOfView
 from semantic_digital_twin.datastructures.joint_state import JointState
 from semantic_digital_twin.reasoning.predicates import (
-    contact,
-    visible,
     Above,
     Below,
     LeftOf,
     RightOf,
     Behind,
     InFrontOf,
-    is_body_in_region,
     occluding_bodies,
-    is_supported_by,
-    reachable,
-    is_place_occupied,
     InsideOf,
     InsideRegion,
     InContactWith,
@@ -143,9 +137,9 @@ def test_in_contact():
         w.add_kinematic_structure_entity(b3)
         w.add_connection(Connection6DoF.create_with_dofs(parent=b1, child=b2, world=w))
         w.add_connection(Connection6DoF.create_with_dofs(parent=b2, child=b3, world=w))
-    assert contact(b1, b2)
-    assert not contact(b1, b3)
-    assert contact(b2, b3)
+    assert InContactWith(b1, b2)()
+    assert not InContactWith(b1, b3)()
+    assert InContactWith(b2, b3)()
 
 
 def test_robot_in_contact(pr2_world_copy: World):
@@ -203,7 +197,7 @@ def test_get_visible_objects(pr2_world_copy: World):
 
     camera = pr2_world_copy.get_semantic_annotations_by_type(Camera)[0]
 
-    assert visible(camera, body)
+    assert VisibleTo(obj=body, camera=camera)()
 
 
 def test_camera_view_frame_x_axis_is_the_forward_axis(pr2_world_copy: World):
@@ -251,12 +245,12 @@ def test_visibility_follows_camera_orientation(pr2_world_copy: World):
     camera = pr2_world_copy.get_semantic_annotations_by_type(Camera)[0]
     head_pan = pr2_world_copy.get_degree_of_freedom_by_name("head_pan_joint")
 
-    assert not visible(camera, body)
+    assert not VisibleTo(obj=body, camera=camera)()
 
     pr2_world_copy.state[head_pan.id].position = np.pi / 2
     pr2_world_copy.notify_state_change()
 
-    assert visible(camera, body)
+    assert VisibleTo(obj=body, camera=camera)()
 
 
 def test_occluding_bodies(pr2_world_state_reset: World):
@@ -415,8 +409,8 @@ def test_body_in_region(two_block_world):
         center._world.add_connection(connection)
     assert InsideRegion(center, region).compute_contained_fraction() == 0.5
     assert InsideRegion(top, region).compute_contained_fraction() == 0.0
-    assert is_body_in_region(center, region)
-    assert not is_body_in_region(top, region)
+    assert InsideRegion(center, region)()
+    assert not InsideRegion(top, region)()
 
 
 def test_supporting(two_block_world):
@@ -426,8 +420,8 @@ def test_supporting(two_block_world):
         top.parent_connection.parent_T_connection_expression = (
             HomogeneousTransformationMatrix.from_xyz_rpy(reference_frame=center, z=1.0)
         )
-    assert is_supported_by(top, center)
-    assert not is_supported_by(center, top)
+    assert SupportedBy(top, center)()
+    assert not SupportedBy(center, top)()
 
 
 def test_is_body_in_gripper(pr2_world_copy):
@@ -494,11 +488,11 @@ def test_reachable(pr2_world_state_reset, rclpy_node):
         reference_frame=pr2.left_arm.end_effector.tool_frame,
     )
 
-    assert reachable(
+    assert Reachable(
         tool_frame_T_reachable_goal,
         pr2.left_arm.root,
         pr2.left_arm.end_effector.tool_frame,
-    )
+    )()
     assert not blocking(
         tool_frame_T_reachable_goal,
         pr2.left_arm.root,
@@ -507,11 +501,11 @@ def test_reachable(pr2_world_state_reset, rclpy_node):
     tool_frame_T_unreachable_goal = HomogeneousTransformationMatrix.from_xyz_rpy(
         x=10, y=10, reference_frame=pr2.left_arm.end_effector.tool_frame
     )
-    assert not reachable(
+    assert not Reachable(
         tool_frame_T_unreachable_goal,
         pr2.left_arm.root,
         pr2.left_arm.end_effector.tool_frame,
-    )
+    )()
 
     tool_frame_T_rotated_reachable_goal = HomogeneousTransformationMatrix.from_xyz_rpy(
         x=-0.2,
@@ -519,11 +513,11 @@ def test_reachable(pr2_world_state_reset, rclpy_node):
         yaw=np.pi / 2,
         reference_frame=pr2.left_arm.end_effector.tool_frame,
     )
-    assert reachable(
+    assert Reachable(
         tool_frame_T_rotated_reachable_goal,
         pr2.left_arm.root,
         pr2.left_arm.end_effector.tool_frame,
-    )
+    )()
 
     tool_frame_T_rotated_unreachable_goal = (
         HomogeneousTransformationMatrix.from_xyz_rpy(
@@ -533,11 +527,11 @@ def test_reachable(pr2_world_state_reset, rclpy_node):
             reference_frame=pr2.left_arm.end_effector.tool_frame,
         )
     )
-    assert not reachable(
+    assert not Reachable(
         tool_frame_T_rotated_unreachable_goal,
         pr2.left_arm.root,
         pr2.left_arm.end_effector.tool_frame,
-    )
+    )()
 
 
 def test_blocking(pr2_world_copy):
@@ -582,25 +576,25 @@ def test_region_is_occupied(pr2_world_state_reset):
     target_box = VolumetricBoundingBox(
         0, 0, 0, 1, 1, 1, HomogeneousTransformationMatrix()
     )
-    assert not is_place_occupied(
+    assert not PlaceIsOccupied(
         target_box,
         Pose.from_xyz_rpy(2.5, 2, 0, reference_frame=pr2_world_state_reset.root),
         pr2_world_state_reset,
-    )
+    )()
 
     view.root.parent_connection.origin = HomogeneousTransformationMatrix.from_xyz_rpy(
         3.5, 2.5, 0
     )
     pr2_world_state_reset.notify_state_change()
 
-    assert is_place_occupied(target_box, view.root.global_pose, pr2_world_state_reset)
+    assert PlaceIsOccupied(target_box, view.root.global_pose, pr2_world_state_reset)()
 
-    assert not is_place_occupied(
+    assert not PlaceIsOccupied(
         target_box,
         Pose.from_xyz_rpy(3.5, 2.5, 1, 0, reference_frame=pr2_world_state_reset.root),
         pr2_world_state_reset,
         view.bodies_with_collision,
-    )
+    )()
 
 
 def test_is_pose_free_for_robot(pr2_apartment_state_reset):
@@ -853,16 +847,6 @@ def test_support_relates_the_supported_thing_to_what_holds_it_up():
 
     assert relation.subject is supported
     assert relation.object is supporting
-
-
-def test_support_holds_exactly_where_the_geometric_reading_says_it_does(
-    two_block_world,
-):
-    center, top = two_block_world
-
-    assert SupportedBy(supported=top, supporting=center)() is is_supported_by(
-        top, center
-    )
 
 
 # %% how a relation reads

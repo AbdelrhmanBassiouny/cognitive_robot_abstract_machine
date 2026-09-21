@@ -15,7 +15,6 @@ from krrood.entity_query_language.predicate import (
     RenderedFields,
     Symbol,
     SymbolicFunction,
-    symbolic_callable_to_function,
     symbolic_function,
     Triple,
 )
@@ -88,14 +87,6 @@ class Stable(Predicate):
         return clause(Noun(fields["obj"]), Copula(), Adjective("stable"))
 
 
-stable = symbolic_callable_to_function(Stable)
-"""
-Whether a body stays where it is.
-
-The function spelling of :class:`Stable`.
-"""
-
-
 @dataclass(eq=False)
 class InContactWith(Triple):
     """
@@ -159,14 +150,6 @@ class InContactWith(Triple):
             Prepositions.WITH,
             Noun(fields["body2"]),
         )
-
-
-contact = symbolic_callable_to_function(InContactWith)
-"""
-Whether two bodies are touching.
-
-The function spelling of :class:`InContactWith`.
-"""
 
 
 @symbolic_function
@@ -235,19 +218,6 @@ class VisibleTo(Triple):
 
     def __call__(self) -> bool:
         return self.obj in get_visible_bodies(self.camera)
-
-
-def visible(camera: Camera, obj: KinematicStructureEntity) -> bool:
-    """
-    Whether a body or region is visible to a camera.
-
-    Keeps the camera first, as every caller writes it, where the relation reads the
-    other way round -- the thing is visible *to* the camera.
-
-    :param camera: The camera looking.
-    :param obj: The thing that may be in view.
-    """
-    return symbolic_callable_to_function(VisibleTo)(obj=obj, camera=camera)
 
 
 @symbolic_function
@@ -370,15 +340,6 @@ class Reachable(Predicate):
         )
 
 
-reachable = symbolic_callable_to_function(Reachable)
-"""
-Whether a kinematic chain can put its tip at a pose.
-
-The function spelling of
-:class:`Reachable`.
-"""
-
-
 @symbolic_function
 def compute_euclidean_planar_distance(
     body1: Body, body2: Body, ignore_dimension: Vector3
@@ -495,14 +456,6 @@ class SupportedBy(Triple):
         return size < self.maximum_intersection_height
 
 
-is_supported_by = symbolic_callable_to_function(SupportedBy)
-"""
-Whether one body rests on another.
-
-The function spelling of :class:`SupportedBy`.
-"""
-
-
 @dataclass(eq=False)
 class Supports(Predicate):
     """
@@ -544,15 +497,6 @@ class Supports(Predicate):
             Adjective("supporting"),
             Noun("body"),
         )
-
-
-is_supporting = symbolic_callable_to_function(Supports)
-"""
-Whether anything in the world rests on a body.
-
-The function spelling of
-:class:`Supports`.
-"""
 
 
 @dataclass(eq=False)
@@ -629,14 +573,6 @@ class InsideRegion(Triple):
             Prepositions.INSIDE,
             Noun(fields["region"]),
         )
-
-
-is_body_in_region = symbolic_callable_to_function(InsideRegion)
-"""
-Whether a body lies in a region.
-
-The function spelling of :class:`InsideRegion`.
-"""
 
 
 @dataclass(eq=False)
@@ -995,15 +931,6 @@ class PlaceIsOccupied(Predicate):
         :param fields: The rendered fragment for each field, keyed by field name.
         """
         return clause(Noun(fields["box"]), Copula(), Adjective("occupied"))
-
-
-is_place_occupied = symbolic_callable_to_function(PlaceIsOccupied)
-"""
-Whether anything already stands in a stretch of the world.
-
-The function spelling of
-:class:`PlaceIsOccupied`.
-"""
 
 
 @symbolic_function
