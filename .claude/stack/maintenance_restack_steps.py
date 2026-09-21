@@ -11,6 +11,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from collections.abc import Sequence
 from dataclasses import dataclass
+from datetime import datetime
 from enum import StrEnum
 from typing import Any
 
@@ -21,8 +22,10 @@ from maintenance_constants import (
 from maintenance_board import PullRequestField
 from maintenance_git_commands import MaintenanceGitCommandRunner, RestackPush
 from maintenance_github import ForkPullRequests
+from push_window import PushWindow, WaitReason
 from stack import (
     Branch,
+    BranchStatus,
     CommitMoveAction,
     CommitMoveChecks,
     Configuration,
@@ -81,6 +84,12 @@ class RestackOutcome(StrEnum):
     re-reported.
     """
 
+    HELD = "held"
+    """
+    Its parent moved, but it is under upstream review and the window for pushing it is
+    shut - so it waits rather than moving under whoever is reading it.
+    """
+
 
 @dataclass(frozen=True)
 class BranchOutcome:
@@ -116,6 +125,11 @@ class BranchOutcome:
     refusals: tuple[RefusalReason, ...] = ()
     """
     Why the push was refused, empty unless the outcome is a refusal.
+    """
+
+    wait_reasons: tuple[WaitReason, ...] = ()
+    """
+    Why the branch is waiting to be pushed, empty unless the outcome is a hold.
     """
 
     pushed_commit: str | None = None
@@ -203,6 +217,17 @@ class BranchUnderRestack:
     checks: CommitMoveChecks
     """
     The checks its push is put through.
+    """
+
+    push_window: PushWindow | None
+    """
+    When this branch may be pushed if it is under upstream review, or ``None`` where the
+    run has been asked for the push whatever the hour.
+    """
+
+    now: datetime
+    """
+    The moment the whole pass is judged at, so every branch in it reads one clock.
     """
 
     @property
@@ -318,6 +343,36 @@ class SkipBranchAlreadyCurrent(RestackStep):
         ):
             return restacking.concluded(RestackOutcome.UP_TO_DATE)
         return None
+
+
+@dataclass(frozen=True)
+class HoldBranchUnderReview(RestackStep):
+    """
+    Leaves a promoted branch alone until the window for pushing it is open.
+
+    A branch with an open upstream pull request is being read by somebody outside this
+    fork, and a push moves the diff under them and starts their checks again. The
+    branch still follows its parent - just at the next pass whose window is open, which
+    is why this holds the branch rather than reporting anything to anyone.
+
+    A branch nobody has promoted has no such reader, and a run asked for the push has
+    somebody who has decided it should move now; neither is held.
+    """
+
+    def attempt(self, restacking: BranchUnderRestack) -> BranchOutcome | None:
+        """:param restacking: The branch being restacked.
+        :return: A held outcome carrying every reason to wait, otherwise ``None``."""
+        if restacking.push_window is None:
+            return None
+        if restacking.branch.status is not BranchStatus.IN_REVIEW:
+            return None
+        reasons = restacking.push_window.reasons_to_wait(
+            last_pushed_at=restacking.git.committed_at(restacking.branch_reference),
+            now=restacking.now,
+        )
+        if not reasons:
+            return None
+        return restacking.concluded(RestackOutcome.HELD, wait_reasons=reasons)
 
 
 @dataclass(frozen=True)

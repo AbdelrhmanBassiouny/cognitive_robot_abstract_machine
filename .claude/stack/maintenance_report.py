@@ -21,6 +21,18 @@ from maintenance_promotion import Promotion
 from maintenance_restack_steps import BranchOutcome, RestackOutcome
 from stack import Reparent, Stack, landed_branches, promotion_order, reparents
 
+OUTCOMES_THE_PASS_MEANT_TO_LEAVE: frozenset[RestackOutcome] = frozenset(
+    {RestackOutcome.PUSHED, RestackOutcome.UP_TO_DATE, RestackOutcome.HELD}
+)
+"""
+Every outcome that leaves a branch where the pass intended, so a caller acting on the
+exit status alone has nothing outstanding.
+
+A held branch belongs here and a withheld one does not: a hold ends by itself at the
+next pass whose window is open, where a withheld branch waits on somebody resolving a
+conflict.
+"""
+
 # %% the report a caller renders or emits
 
 
@@ -89,7 +101,7 @@ class MaintenanceReport:
         return tuple(
             outcome
             for outcome in self.restacked
-            if outcome.outcome not in {RestackOutcome.PUSHED, RestackOutcome.UP_TO_DATE}
+            if outcome.outcome not in OUTCOMES_THE_PASS_MEANT_TO_LEAVE
         )
 
     @property
@@ -158,6 +170,7 @@ def print_restack(outcomes: Sequence[BranchOutcome]) -> None:
         detail = (
             ",".join(outcome.conflicting_paths)
             or ",".join(outcome.refusals)
+            or ",".join(outcome.wait_reasons)
             or outcome.pushed_commit
             or outcome.explanation
             or ""

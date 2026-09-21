@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import subprocess
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 
 from exceptions import GitCommandFailed
@@ -244,6 +245,21 @@ class GitCommandRunner:
         :return: The commit it names.
         """
         return self.run("rev-parse", reference)
+
+    def committed_at(self, reference: str) -> datetime:
+        """
+        Say when the commit a reference names was last written.
+
+        This is the committer date rather than the author date, because it is the one a
+        merge or a rebase rewrites - so it moves whenever the branch itself does, which
+        is what a reader of a published branch sees.
+
+        :param reference: Any reference git can resolve.
+        :return: When its commit was written, in that commit's own offset.
+        """
+        return datetime.fromisoformat(
+            self.run("log", "--max-count=1", "--format=%cI", reference)
+        )
 
     def checkout(self, branch: str, start_point: str) -> None:
         """

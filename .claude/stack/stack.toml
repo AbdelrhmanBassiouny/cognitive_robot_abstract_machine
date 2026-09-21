@@ -40,3 +40,12 @@ upstream_base = "main"
 # worth running is a property of the repository rather than of the tool, so it is configurable;
 # this default is the tooling suite CI's own `test_claude_dev_tooling` job runs.
 integration_test_command = "python3 -m pytest .claude/skills/plan-dashboard/tests .claude/hooks/tests .claude/stack/tests"
+
+# When a branch that is already under review upstream may be pushed to. A restack moves such a
+# branch under whoever is reading it and starts its checks again, so it is moved only at night
+# where its reviewers are, and never twice inside the interval. A pass asked for by hand pushes
+# it whatever the hour - `maintenance.py restack --push-branches-under-review-now`.
+review_push_night_begins = "22:00"       # when the window opens, in review_push_time_zone
+review_push_night_ends = "06:00"         # when it closes again; earlier than the opening, so it spans midnight
+review_push_time_zone = "Europe/Berlin"  # the reviewers' zone, so the hours hold across the clock change
+review_push_hours_between_pushes = 4     # how long such a branch is left alone after it moves

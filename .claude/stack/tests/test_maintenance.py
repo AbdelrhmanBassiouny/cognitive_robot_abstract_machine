@@ -19,9 +19,11 @@ import os
 import subprocess
 import sys
 from collections.abc import Sequence
+from datetime import datetime, timezone
 from dataclasses import dataclass
 from dataclasses import field as dataclasses_field
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 import pytest
 
@@ -82,8 +84,10 @@ from maintenance_report import (
     MaintenanceReport,
     build_report,
     exit_code_for,
+    print_restack,
 )
 from maintenance_restack_procedure import restack
+from push_window import PushWindow, WaitReason
 from maintenance_restack_steps import BranchOutcome, RestackOutcome, RestackStep
 
 STACK_DIRECTORY = Path(__file__).parent.parent
@@ -107,6 +111,14 @@ UPSTREAM_REMOTE = "cram2"
 """
 The name :class:`ForkCheckout` registers the upstream under, matching what
 ``stack.toml`` names as the default a checkout gets before configuring one.
+"""
+
+A_MOMENT = datetime(2026, 1, 15, 12, 0, tzinfo=timezone.utc)
+"""
+When a pass that is not about the push window is judged to have run.
+
+Every test below that hands ``restack`` no window has nothing to do with the hour, so
+it names one rather than reading the clock the suite happens to run on.
 """
 
 A_LABEL_THIS_TOOL_NEVER_WRITES = "a-label-somebody-else-put-here"
@@ -612,7 +624,11 @@ def test_a_branch_whose_parent_has_not_moved_is_reported_up_to_date(
     a_parent_and_child(fork_checkout)
 
     outcomes = restack(
-        a_stack(fork_checkout, the_board()), fork_checkout.git, RecordingPullRequests()
+        a_stack(fork_checkout, the_board()),
+        fork_checkout.git,
+        RecordingPullRequests(),
+        push_window=None,
+        now=A_MOMENT,
     )
 
     assert [outcome.outcome for outcome in outcomes] == [
@@ -629,7 +645,11 @@ def test_a_branch_whose_parent_moved_is_integrated_and_pushed(
     before = fork_checkout.published_commit("origin", "a-child")
 
     outcomes = restack(
-        a_stack(fork_checkout, the_board()), fork_checkout.git, RecordingPullRequests()
+        a_stack(fork_checkout, the_board()),
+        fork_checkout.git,
+        RecordingPullRequests(),
+        push_window=None,
+        now=A_MOMENT,
     )
 
     child = next(outcome for outcome in outcomes if outcome.branch == "a-child")
@@ -648,7 +668,11 @@ def test_a_conflicting_integration_pushes_nothing_and_names_the_files(
     before = fork_checkout.published_commit("origin", "a-child")
 
     outcomes = restack(
-        a_stack(fork_checkout, the_board()), fork_checkout.git, RecordingPullRequests()
+        a_stack(fork_checkout, the_board()),
+        fork_checkout.git,
+        RecordingPullRequests(),
+        push_window=None,
+        now=A_MOMENT,
     )
 
     child = next(outcome for outcome in outcomes if outcome.branch == "a-child")
@@ -671,7 +695,13 @@ def test_an_integration_stopped_before_it_began_is_not_reported_as_a_conflict(
     before = fork_checkout.published_commit("origin", "a-child")
     fork = RecordingPullRequests()
 
-    outcomes = restack(a_stack(fork_checkout, the_board()), fork_checkout.git, fork)
+    outcomes = restack(
+        a_stack(fork_checkout, the_board()),
+        fork_checkout.git,
+        fork,
+        push_window=None,
+        now=A_MOMENT,
+    )
 
     child = next(outcome for outcome in outcomes if outcome.branch == "a-child")
     assert child.outcome == RestackOutcome.INTEGRATION_FAILED
@@ -697,6 +727,8 @@ def test_a_rebase_labelled_branch_is_rebased_rather_than_merged(
         a_stack(fork_checkout, the_board(labels=["rebase"])),
         fork_checkout.git,
         RecordingPullRequests(),
+        push_window=None,
+        now=A_MOMENT,
     )
 
     child = next(outcome for outcome in outcomes if outcome.branch == "a-child")
@@ -741,7 +773,11 @@ def test_a_branch_that_moved_under_the_pass_is_incorporated_rather_than_overwrit
     fork_checkout.run_git("fetch", "--quiet", "origin")
 
     outcomes = restack(
-        a_stack(fork_checkout, the_board()), fork_checkout.git, RecordingPullRequests()
+        a_stack(fork_checkout, the_board()),
+        fork_checkout.git,
+        RecordingPullRequests(),
+        push_window=None,
+        now=A_MOMENT,
     )
 
     child = next(outcome for outcome in outcomes if outcome.branch == "a-child")
@@ -770,6 +806,8 @@ def test_a_rebase_whose_lease_has_expired_is_rejected_rather_than_forced_through
         a_stack(fork_checkout, the_board(labels=["rebase"])),
         fork_checkout.git,
         RecordingPullRequests(),
+        push_window=None,
+        now=A_MOMENT,
     )
 
     child = next(outcome for outcome in outcomes if outcome.branch == "a-child")
@@ -792,7 +830,11 @@ def test_a_push_the_move_checks_refuse_is_not_made(fork_checkout: ForkCheckout):
     before = fork_checkout.published_commit("origin", "a-parent")
 
     outcomes = restack(
-        a_stack(fork_checkout, the_board()), fork_checkout.git, RecordingPullRequests()
+        a_stack(fork_checkout, the_board()),
+        fork_checkout.git,
+        RecordingPullRequests(),
+        push_window=None,
+        now=A_MOMENT,
     )
 
     parent = next(outcome for outcome in outcomes if outcome.branch == "a-parent")
@@ -843,7 +885,11 @@ def test_a_restack_leaves_the_invoking_checkout_on_its_own_branch(
     a_stack_cut_before_the_tooling_landed(fork_checkout)
 
     restack(
-        a_stack(fork_checkout, the_board()), fork_checkout.git, RecordingPullRequests()
+        a_stack(fork_checkout, the_board()),
+        fork_checkout.git,
+        RecordingPullRequests(),
+        push_window=None,
+        now=A_MOMENT,
     )
 
     assert fork_checkout.run_git("branch", "--show-current") == UPSTREAM_BASE
@@ -859,7 +905,11 @@ def test_a_restack_keeps_what_the_branches_it_switches_to_do_not_have(
     tooling = a_stack_cut_before_the_tooling_landed(fork_checkout)
 
     restack(
-        a_stack(fork_checkout, the_board()), fork_checkout.git, RecordingPullRequests()
+        a_stack(fork_checkout, the_board()),
+        fork_checkout.git,
+        RecordingPullRequests(),
+        push_window=None,
+        now=A_MOMENT,
     )
 
     assert tooling.read_text() == TOOLING_CONTENT
@@ -879,7 +929,11 @@ def test_a_restack_publishes_a_branch_the_caller_is_sitting_on(
     before = fork_checkout.published_commit("origin", "a-child")
 
     outcomes = restack(
-        a_stack(fork_checkout, the_board()), fork_checkout.git, RecordingPullRequests()
+        a_stack(fork_checkout, the_board()),
+        fork_checkout.git,
+        RecordingPullRequests(),
+        push_window=None,
+        now=A_MOMENT,
     )
 
     child = next(outcome for outcome in outcomes if outcome.branch == "a-child")
@@ -897,7 +951,13 @@ def test_the_caller_holds_no_branch_while_a_restack_runs(fork_checkout: ForkChec
     fork_checkout.commit_on("a-child", "a-contested-file", "the child's version\n")
     fork = PullRequestsWatchingTheCaller(caller=fork_checkout.git)
 
-    restack(a_stack(fork_checkout, the_board()), fork_checkout.git, fork)
+    restack(
+        a_stack(fork_checkout, the_board()),
+        fork_checkout.git,
+        fork,
+        push_window=None,
+        now=A_MOMENT,
+    )
 
     assert fork.branches_held_while_restacking == [""]
 
@@ -910,7 +970,11 @@ def test_a_restack_gives_back_the_branch_the_caller_lent_it(
     fork_checkout.run_git("checkout", "--quiet", "a-child")
 
     restack(
-        a_stack(fork_checkout, the_board()), fork_checkout.git, RecordingPullRequests()
+        a_stack(fork_checkout, the_board()),
+        fork_checkout.git,
+        RecordingPullRequests(),
+        push_window=None,
+        now=A_MOMENT,
     )
 
     assert fork_checkout.run_git("branch", "--show-current") == "a-child"
@@ -920,7 +984,11 @@ def test_a_restack_leaves_no_worktree_of_its_own_behind(fork_checkout: ForkCheck
     a_stack_cut_before_the_tooling_landed(fork_checkout)
 
     restack(
-        a_stack(fork_checkout, the_board()), fork_checkout.git, RecordingPullRequests()
+        a_stack(fork_checkout, the_board()),
+        fork_checkout.git,
+        RecordingPullRequests(),
+        push_window=None,
+        now=A_MOMENT,
     )
 
     listed = fork_checkout.run_git("worktree", "list", "--porcelain")
@@ -947,6 +1015,8 @@ def test_a_restack_that_raises_still_takes_its_worktree_with_it(
             a_stack(fork_checkout, the_board()),
             fork_checkout.git,
             PullRequestsRefusingToReport(),
+            push_window=None,
+            now=A_MOMENT,
         )
 
     listed = fork_checkout.run_git("worktree", "list", "--porcelain")
@@ -1192,7 +1262,13 @@ def test_a_conflict_labels_the_branch_and_tells_its_owner(
     board[1].session = "https://claude.ai/code/session_01ABCdef"
     fork = RecordingPullRequests()
 
-    outcomes = restack(a_stack(fork_checkout, board), fork_checkout.git, fork)
+    outcomes = restack(
+        a_stack(fork_checkout, board),
+        fork_checkout.git,
+        fork,
+        push_window=None,
+        now=A_MOMENT,
+    )
 
     child = next(outcome for outcome in outcomes if outcome.branch == "a-child")
     assert child.outcome == RestackOutcome.CONFLICT
@@ -1222,6 +1298,8 @@ def test_a_label_write_keeps_every_label_the_branch_already_carried(
         a_stack(fork_checkout, the_board(labels=[A_LABEL_THIS_TOOL_NEVER_WRITES])),
         fork_checkout.git,
         fork,
+        push_window=None,
+        now=A_MOMENT,
     )
 
     assert fork.label_writes == [
@@ -1253,6 +1331,8 @@ def test_a_branch_still_conflicting_is_withheld_without_being_relabelled(
         ),
         fork_checkout.git,
         fork,
+        push_window=None,
+        now=A_MOMENT,
     )
 
     child = next(outcome for outcome in outcomes if outcome.branch == "a-child")
@@ -1279,6 +1359,8 @@ def test_a_branch_that_no_longer_conflicts_has_its_label_cleared_and_is_restacke
         ),
         fork_checkout.git,
         fork,
+        push_window=None,
+        now=A_MOMENT,
     )
 
     child = next(outcome for outcome in outcomes if outcome.branch == "a-child")
@@ -1305,6 +1387,8 @@ def test_a_branch_breaking_another_is_withheld_though_it_merges_cleanly(
         ),
         fork_checkout.git,
         fork,
+        push_window=None,
+        now=A_MOMENT,
     )
 
     child = next(outcome for outcome in outcomes if outcome.branch == "a-child")
@@ -1336,9 +1420,238 @@ def test_the_pass_never_clears_the_label_it_did_not_apply(fork_checkout: ForkChe
         ),
         fork_checkout.git,
         fork,
+        push_window=None,
+        now=A_MOMENT,
     )
 
     assert fork.label_writes == []
+
+
+# %% a branch under upstream review
+
+
+IN_BERLIN = ZoneInfo("Europe/Berlin")
+"""
+The zone the committed push window is read in, which every moment below is written in.
+"""
+
+
+def a_moment_in_berlin(hour: int, day: int = 15) -> datetime:
+    """
+    :param hour: The hour in Berlin.
+    :param day: The day in Berlin.
+    :return: That local moment as an instant.
+    """
+    return datetime(2026, 1, day, hour, 0, tzinfo=IN_BERLIN)
+
+
+def the_board_under_review() -> list[PullRequest]:
+    """
+    :return: The two-branch board with the child promoted to the upstream.
+    """
+    return the_board(labels=[make_configuration().in_review_label])
+
+
+def the_child_last_moved_at(
+    fork_checkout: ForkCheckout, moment: datetime, monkeypatch
+) -> None:
+    """
+    Republish the child with its tip committed at a given moment.
+
+    The window is read against when the branch last moved, and every commit a scratch
+    checkout makes is stamped with the moment the suite happens to run - so the stamp
+    is written here rather than left to the clock.
+
+    :param fork_checkout: The checkout holding the branch.
+    :param moment: When the branch is to have last moved.
+    :param monkeypatch: Used to stamp the amended commit.
+    """
+    monkeypatch.setenv("GIT_COMMITTER_DATE", moment.isoformat())
+    fork_checkout.run_git("checkout", "--quiet", "a-child")
+    fork_checkout.run_git("commit", "--quiet", "--amend", "--no-edit")
+    fork_checkout.run_git("push", "--quiet", "--force", "origin", "a-child:a-child")
+    fork_checkout.run_git("fetch", "--quiet", "origin")
+    monkeypatch.delenv("GIT_COMMITTER_DATE")
+
+
+def test_a_branch_under_upstream_review_is_left_alone_while_its_reviewers_are_awake(
+    fork_checkout: ForkCheckout, monkeypatch
+):
+    """
+    A push moves the diff under whoever is reading it and starts their checks again, so
+    a promoted branch waits for the window rather than following its parent at once.
+    """
+    a_parent_and_child(fork_checkout)
+    fork_checkout.commit_on("a-parent", "a-parent-file", "the parent moved\n")
+    the_child_last_moved_at(fork_checkout, a_moment_in_berlin(3), monkeypatch)
+    before = fork_checkout.published_commit("origin", "a-child")
+
+    outcomes = restack(
+        a_stack(fork_checkout, the_board_under_review()),
+        fork_checkout.git,
+        RecordingPullRequests(),
+        push_window=PushWindow.from_values({}),
+        now=a_moment_in_berlin(14),
+    )
+
+    child = next(outcome for outcome in outcomes if outcome.branch == "a-child")
+    assert child.outcome == RestackOutcome.HELD
+    assert child.wait_reasons == (WaitReason.DAYTIME,)
+    assert fork_checkout.published_commit("origin", "a-child") == before
+
+
+def test_a_branch_under_upstream_review_is_pushed_once_it_is_night(
+    fork_checkout: ForkCheckout, monkeypatch
+):
+    a_parent_and_child(fork_checkout)
+    fork_checkout.commit_on("a-parent", "a-parent-file", "the parent moved\n")
+    the_child_last_moved_at(fork_checkout, a_moment_in_berlin(3), monkeypatch)
+    before = fork_checkout.published_commit("origin", "a-child")
+
+    outcomes = restack(
+        a_stack(fork_checkout, the_board_under_review()),
+        fork_checkout.git,
+        RecordingPullRequests(),
+        push_window=PushWindow.from_values({}),
+        now=a_moment_in_berlin(23),
+    )
+
+    child = next(outcome for outcome in outcomes if outcome.branch == "a-child")
+    assert child.outcome == RestackOutcome.PUSHED
+    assert fork_checkout.published_commit("origin", "a-child") != before
+
+
+def test_a_branch_under_upstream_review_is_left_alone_just_after_it_moved(
+    fork_checkout: ForkCheckout, monkeypatch
+):
+    """
+    The window being open is not on its own a reason to move a branch twice: a reviewer
+    who started on the last push is still reading it.
+    """
+    a_parent_and_child(fork_checkout)
+    fork_checkout.commit_on("a-parent", "a-parent-file", "the parent moved\n")
+    the_child_last_moved_at(fork_checkout, a_moment_in_berlin(23), monkeypatch)
+    before = fork_checkout.published_commit("origin", "a-child")
+
+    outcomes = restack(
+        a_stack(fork_checkout, the_board_under_review()),
+        fork_checkout.git,
+        RecordingPullRequests(),
+        push_window=PushWindow.from_values({}),
+        now=a_moment_in_berlin(1, day=16),
+    )
+
+    child = next(outcome for outcome in outcomes if outcome.branch == "a-child")
+    assert child.outcome == RestackOutcome.HELD
+    assert child.wait_reasons == (WaitReason.PUSHED_RECENTLY,)
+    assert fork_checkout.published_commit("origin", "a-child") == before
+
+
+def test_a_branch_nobody_has_promoted_is_pushed_whatever_the_hour(
+    fork_checkout: ForkCheckout, monkeypatch
+):
+    """
+    The window exists for the reviewers an upstream pull request has. A branch that has
+    none is nobody else's to be disturbed by.
+    """
+    a_parent_and_child(fork_checkout)
+    fork_checkout.commit_on("a-parent", "a-parent-file", "the parent moved\n")
+    the_child_last_moved_at(fork_checkout, a_moment_in_berlin(13), monkeypatch)
+
+    outcomes = restack(
+        a_stack(fork_checkout, the_board()),
+        fork_checkout.git,
+        RecordingPullRequests(),
+        push_window=PushWindow.from_values({}),
+        now=a_moment_in_berlin(14),
+    )
+
+    child = next(outcome for outcome in outcomes if outcome.branch == "a-child")
+    assert child.outcome == RestackOutcome.PUSHED
+
+
+def test_a_run_asked_to_push_branches_under_review_makes_the_push_in_the_daytime(
+    fork_checkout: ForkCheckout, monkeypatch
+):
+    """
+    Somebody asking for the pass by hand has decided the branch should move now, which
+    is the one thing the window is not there to overrule.
+    """
+    a_parent_and_child(fork_checkout)
+    fork_checkout.commit_on("a-parent", "a-parent-file", "the parent moved\n")
+    the_child_last_moved_at(fork_checkout, a_moment_in_berlin(13), monkeypatch)
+
+    outcomes = restack(
+        a_stack(fork_checkout, the_board_under_review()),
+        fork_checkout.git,
+        RecordingPullRequests(),
+        push_window=None,
+        now=a_moment_in_berlin(14),
+    )
+
+    child = next(outcome for outcome in outcomes if outcome.branch == "a-child")
+    assert child.outcome == RestackOutcome.PUSHED
+
+
+def test_a_held_branch_is_reported_with_every_reason_it_is_waiting_on(capsys):
+    """
+    The reasons are what say whether the branch moves at the next pass or in four
+    hours, so both are printed rather than only whichever was found first.
+    """
+    print_restack(
+        (
+            BranchOutcome(
+                "a-child",
+                "a-parent",
+                IntegrationStrategy.MERGE,
+                RestackOutcome.HELD,
+                wait_reasons=(WaitReason.DAYTIME, WaitReason.PUSHED_RECENTLY),
+            ),
+        )
+    )
+
+    printed = capsys.readouterr().out.strip().split("\t")
+
+    assert printed == [
+        "a-child",
+        RestackOutcome.HELD,
+        f"{WaitReason.DAYTIME},{WaitReason.PUSHED_RECENTLY}",
+    ]
+
+
+def test_a_held_branch_is_not_a_branch_the_pass_needs_attention_for():
+    """
+    A held branch is where the pass meant to leave it and moves at the next one, unlike
+    every other branch it publishes nothing for.
+    """
+    assert (
+        exit_code_for(a_report(restack_outcome=RestackOutcome.HELD))
+        == MaintenanceExitCode.SUCCESS
+    )
+
+
+def test_a_scheduled_restack_reads_the_window_and_a_run_asked_for_the_push_does_not(
+    fork_checkout: ForkCheckout, monkeypatch
+):
+    """
+    The flag is the whole difference between the two, so what each one hands the
+    restack is asserted rather than left to the command line's default.
+    """
+    windows = []
+    monkeypatch.setattr(
+        maintenance_commands,
+        "restack",
+        lambda stack, git, fork, push_window, now=None: windows.append(push_window)
+        or [],
+    )
+
+    for asked in (False, True):
+        RestackCommand().run(
+            AlreadyResolvedPass.over(fork_checkout, the_board()),
+            argparse.Namespace(push_branches_under_review_now=asked),
+        )
+
+    assert windows == [make_configuration().push_window, None]
 
 
 # %% promotion
@@ -1485,6 +1798,8 @@ def test_a_branch_no_step_concludes_is_an_error_rather_than_a_silent_pass(
             a_stack(fork_checkout, the_board()),
             fork_checkout.git,
             RecordingPullRequests(),
+            push_window=None,
+            now=A_MOMENT,
         )
 
     assert raised.value.branch in {"a-parent", "a-child"}
@@ -1501,7 +1816,13 @@ def test_the_report_serialises_every_command_s_outcome(fork_checkout: ForkChecko
     report = build_report(
         stack,
         fast_forward(make_configuration(), fork_checkout.git),
-        restack(stack, fork_checkout.git, RecordingPullRequests()),
+        restack(
+            stack,
+            fork_checkout.git,
+            RecordingPullRequests(),
+            push_window=None,
+            now=A_MOMENT,
+        ),
     )
     document = json.loads(report.as_json())
 
@@ -1530,7 +1851,7 @@ def test_a_whole_pass_leaves_no_board_behind(
 
     RunReportCommand().run(
         AlreadyResolvedPass.over(fork_checkout, the_board()),
-        argparse.Namespace(json=True),
+        argparse.Namespace(json=True, push_branches_under_review_now=False),
     )
 
     assert not board_path.exists()

@@ -221,6 +221,9 @@ def stack_to_build(
     it again is what lets :func:`select_for_build` leave out the branch this very pass
     has just blocked.
 
+    Asking for the restack is already a deliberate act, so it observes no push window: a
+    branch under upstream review moves with the rest, whatever the hour.
+
     :param run: What this run has resolved.
     :param fork: The fork to read the open pull requests from.
     :param restack_first: Whether to bring stale tips forward before reading.
@@ -236,7 +239,7 @@ def stack_to_build(
     stack = run.stack(fork)
     if not restack_first:
         return checks.annotate(stack)
-    restack(stack, run.git, fork)
+    restack(stack, run.git, fork, push_window=None)
     run.refresh_remotes()
     return checks.annotate(run.stack(fork))
 

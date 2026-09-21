@@ -62,6 +62,7 @@ from urllib.parse import quote
 sys.path.insert(0, str(Path(__file__).parent.parent / "shared"))
 
 from git_commands import GitCommandRunner
+from push_window import PushWindow
 
 # %% configuration
 
@@ -349,6 +350,12 @@ class Configuration:
     Empty when this checkout's configuration names none, which the integration build
     refuses rather than reading as a suite that passed."""
 
+    push_window: PushWindow = field(default_factory=lambda: PushWindow.from_values({}))
+    """When a branch already under upstream review may be pushed to.
+
+    Defaulted rather than required, so a caller building a configuration by hand gets the
+    committed window instead of having to restate it."""
+
     @property
     def blocking_labels(self) -> tuple[str, ...]:
         """The labels that hold a branch out of a pass and out of promotion.
@@ -446,6 +453,7 @@ def load_configuration(
         integration_test_command=values.get(
             ConfigurationKey.INTEGRATION_TEST_COMMAND, ""
         ),
+        push_window=PushWindow.from_values(values),
     )
 
 
