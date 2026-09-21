@@ -28,6 +28,16 @@ Suite: `python -m pytest test/basstler_test --confcutdir=test/basstler_test`.
 - All five steps implemented and pushed as one commit; PR description rewritten to match.
   679 tests pass (664 on the base), `python3 -m pytest test/basstler_test --confcutdir=test/basstler_test`.
 
+## Review rounds
+
+- **2026-09-21, two threads on `test_stack.py`** (retyped branch names): answered and
+  resolved, fixed in `8fbbf4ede`. `StackBranch` in `test/basstler_test/constants.py`,
+  shared by both suites; `a_three_deep_stack()` builds the stack suite's fixture once;
+  the sweep covers `test_maintenance.py`'s pre-existing tests too (86 spellings), plus
+  `FixtureFile` and `ForkCheckout.own_file()` for the repeated file names. The sweep's
+  scope was the user's call, made in session; the file-name half was mine, and the reply
+  offers to take it back out.
+
 ## Next
 
 - Nothing outstanding on the branch. It waits on review, and on #185 landing before it can.
