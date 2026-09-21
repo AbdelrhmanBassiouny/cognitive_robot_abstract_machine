@@ -169,16 +169,16 @@ def is_builtin_type(type_object: Any):
     )
 
 
-def get_import_root_from_path(path: str) -> str:
+def get_import_root_from_path(path: Path) -> Path:
     """
     Find the directory an import of a path is resolved against.
 
     :param path: The file system path to find the import root of.
     :return: The nearest ancestor of the path that is not itself a package.
     """
-    root = os.path.abspath(path)
-    while os.path.exists(os.path.join(root, "__init__.py")):
-        parent = os.path.dirname(root)
+    root = Path(path).resolve()
+    while (root / "__init__.py").exists():
+        parent = root.parent
         if parent == root:
             break
         root = parent
@@ -192,14 +192,14 @@ def get_import_path_from_path(path: str) -> Optional[str]:
     :param path: The file system path to convert.
     :return: The Python import path, or None if the path is not inside a package.
     """
-    absolute_path = os.path.abspath(path)
+    absolute_path = Path(path).resolve()
     root = get_import_root_from_path(absolute_path)
     if root == absolute_path:
         return None
-    return os.path.relpath(absolute_path, root).replace(os.path.sep, ".")
+    return str(absolute_path.relative_to(root)).replace(os.path.sep, ".")
 
 
-def make_path_importable(path: str) -> None:
+def make_path_importable(path: Path) -> None:
     """
     Put the directory an import of a path is resolved against on the search path.
 
@@ -209,7 +209,7 @@ def make_path_importable(path: str) -> None:
 
     :param path: The file system path that is about to be imported.
     """
-    root = get_import_root_from_path(path)
+    root = str(get_import_root_from_path(path))
     if root not in sys.path:
         sys.path.insert(0, root)
 
