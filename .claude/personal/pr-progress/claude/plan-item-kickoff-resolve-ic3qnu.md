@@ -37,10 +37,32 @@ Suite: `python -m pytest test/basstler_test --confcutdir=test/basstler_test`.
   `FixtureFile` and `ForkCheckout.own_file()` for the repeated file names. The sweep's
   scope was the user's call, made in session; the file-name half was mine, and the reply
   offers to take it back out.
+- **2026-09-21, two threads on `test_maintenance.py`** (hard-coded label and session
+  strings): answered and resolved. Fixed as `608b72e92` **on #185's branch**, not here,
+  on the user's instruction that a change to what an earlier open pull request introduced
+  belongs there and comes back by merge. `StackLabel` joins `StackBranch` in
+  `constants.py` and `make_configuration()` builds from it in both suites;
+  `A_SESSION_LINK` replaces the six spellings of one sample URL. `DEFAULT_STACK_TOML`
+  keeps its literals - it is the document the loader parses. Merged back as `9cf9f2815`;
+  680 pass, 665 on the base.
+
+## The sweep now lives on #185
+
+The whole naming sweep moved with it: `StackBranch`, `StackLabel`, `A_SESSION_LINK`,
+`FixtureFile` and `ForkCheckout.own_file()` are on `claude/plan-item-kickoff-workflow-cuare2`
+(`608b72e92`, commented on #185), so this branch's diff no longer changes a test it did not
+add - 537 insertions over 11 files, against 37 deletions that are all its own. What stayed
+is what only a three-deep stack needs: `StackBranch.GRANDCHILD`, `StackBranch.OFF_THE_CHAIN`
+and `ForkCheckout.published_file()`.
+
+If #185 is ever rewritten or abandoned, that commit is what this branch loses.
 
 ## Next
 
 - Nothing outstanding on the branch. It waits on review, and on #185 landing before it can.
+- `test_stack.py`'s older tests still spell their branch names per test (`engine`,
+  `parser`, `wip`, `stuck`). Offered in the review reply, not done: they read as each
+  test's own role rather than a shared vocabulary. That sweep would belong on #185 too.
 
 ## Decisions made while implementing
 
