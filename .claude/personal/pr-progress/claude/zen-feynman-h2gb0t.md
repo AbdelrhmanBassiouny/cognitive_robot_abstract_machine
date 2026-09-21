@@ -1,36 +1,37 @@
 ## A branch under upstream review is only pushed inside a push window
 
 PR: https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/437
-(draft, base `main`)
+(draft, base `main`) - and now also carried on `integration` as 8927b828dc.
 
-**Ask** (this session): a restack must not push a branch that has an open
-upstream pull request unless it is night in Berlin and at least 4 hours have
-passed since that branch was last pushed. A manual run pushes anyway.
-
-**Base**: re-cut from `origin/main`. The branch arrived descending from
-`integration` (274 commits, not a legal PR base). Every file this touches is on
-`main`; the integration tooling (`integration*.py`) is on no open PR, so there
-was nothing to stack on.
+**Ask**: a restack must not push a branch with an open upstream pull request
+unless it is night in Berlin and 4 hours have passed since its last push. A
+manual run pushes anyway.
 
 ### Done
-- `push_window.py`: `PushWindow` + `WaitReason`, pure, imports nothing else of
-  the workflow's so `Configuration` can hold one.
-- `stack.toml`: `review_push_night_begins/ends/time_zone/hours_between_pushes`
-  (22:00-06:00 Europe/Berlin, 4h).
-- `GitCommandRunner.committed_at` - when the fork's copy of a branch last moved.
-- `HoldBranchUnderReview` in `RESTACK_STEPS`, after `SkipBranchAlreadyCurrent`
-  and before `IntegrateParent`; `RestackOutcome.HELD`, excluded from the
-  outcomes a pass needs attention for.
-- `restack()` takes a required `push_window`; `--push-branches-under-review-now`
-  on `restack` and `run-report`; routine prompt says to leave it off.
-- SKILL.md and the stack README say when a promoted branch moves.
-- 176 stack tests pass; 4 hook tests fail for missing dashboard dependencies in
-  this container and fail identically on clean `main`.
+- `push_window.py` (`PushWindow`, `WaitReason`), `stack.toml` settings,
+  `committed_at`, `HoldBranchUnderReview` in `RESTACK_STEPS`,
+  `RestackOutcome.HELD`, `--push-branches-under-review-now` on `restack` and
+  `run-report`, docs. 176 tests on the `main`-based branch.
+- Ported onto `integration` by cherry-pick (six conflicts, all in these files).
+  On that branch `GitCommandRunner` lives in `.claude/shared/git_commands.py`,
+  so `committed_at` went there; `maintenance_git_commands.py` keeps only what a
+  pass adds.
+- `integration_selection.py`'s `restack(...)` now passes `push_window=None` -
+  `integration.py build --restack` observes no window, which closes the item
+  left outstanding last session.
+- `.claude/stack/tests` on the ported integration branch: 527 pass. The 4
+  `test_integration_reproduction.py` failures are pre-existing and fail
+  identically on clean `origin/integration`.
 
-### Outstanding
-- `integration.py build --restack` calls the shared `restack()`, so it inherits
-  the window - but its call site lives on no open PR, so its
-  `push_window=None` (push whatever the hour, per the decision made here) has to
-  be added by whichever PR eventually lands that tooling. Nothing to do on this
-  branch.
-- Nothing else. Waiting on review.
+### Findings for the user
+- Stale `in-review` labels, checked against upstream by git (no merge ref while
+  the branch merges `cram2/main` cleanly => the upstream PR is closed):
+  **stale**: #248 (upstream #654), #261 (#647), #262 (#661), #264 (#656).
+  **still open upstream**: #229 (#655), #251 (#653), #269 (#645).
+  Not cleared - clearing puts those four back in the promotion queue, and why
+  they were closed upstream is the user's to say.
+- Asked whether to automate the label; proposed as its own PR (a fork Action
+  reading upstream with GITHUB_TOKEN, as `upstream-reviews.yml` already does).
+
+### Next
+- Waiting on the user: clear the four stale labels? build the label automation?
