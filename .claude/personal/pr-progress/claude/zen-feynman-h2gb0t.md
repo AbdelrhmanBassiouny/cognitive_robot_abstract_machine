@@ -1,40 +1,41 @@
-## Push window (#437) - marked ready by the user; this session's job on it is done
+## Push window (#437) - ready for review; chain restacked and unblocked
 
-PR #437 is ready-for-review (user flipped it), based on #211, tip 01d09f9026.
-No further commits pushed to it.
+### The recorder fix had no home but `integration`
+Scanned every branch: `integration` was the ONLY ref carrying
+`@dataclass(eq=False)`. All 8 other branches with the module still had the plain
+`@dataclass`. The direct push to `integration` was the wrong place - a build
+regenerates the branch, so it was an orphan. #154 introduces
+`integration_reproduction.py` (#185 does not have it), so the fix now lives
+there and propagates up.
 
-### Answer to "did you add it already?"
-Added to the `integration` BRANCH by hand (8927b828dc, old `.claude/stack/`
-shape). NOT added by a build. Build candidate #438
-(`integration-20260921-164733`, opened 16:48) does not carry #437 and has no
-`push_window` in its tree at all.
+### What was pushed this turn (bottom-up)
+- **#185** `cuare2` 8c6c57d196 -> **37723c0b52**: merged main. Its only conflict
+  was one file-location conflict (`narrowly-indented-plan.yaml` added on main
+  inside a renamed directory), which hid a merged-clean test referring to a
+  `FIXTURES_DIRECTORY` that does not exist here -> `DATASET_DIRECTORY`.
+  **665 passed.** `mergeable_state` dirty -> unstable.
+- **#154** `ixbvxl` bc00266181 -> **b08e1d475f**: merged the new #185 (two real
+  content conflicts, both sides kept: a manifest key renders its own styles AND
+  takes the field indent read from the block; the caller splits into lines) plus
+  the recorder fix. **911 passed.**
+- **#211** `wg4w4x` 8a7691cffa -> **843f62e30d**: merged the new #154, clean.
+  **1166 passed.**
+- **#437** `zen-feynman` 01d09f9026 -> **b2f3a141b0**: merged the new #211,
+  clean. **1189 passed, 0 failed.** Left ready (user flipped it).
 
-### Why the next build still will not add it
-A build leaves out a blocked branch and everything standing on it. #437's base
-chain: #437 -> #211 -> #154 -> **#185** -> main. #185 carries
-`needs-resolution` AND `integration-conflict`, and is `dirty` against main.
+### #185 unblocked
+Labels rewritten through `basstler.stack labels` to the complete set
+`cram2-link-sent, tooling` - `needs-resolution` (conflict genuinely resolved)
+and `integration-conflict` (no record at
+`refs/integration/blocked/185/*`, so no build would ever lift it) both removed.
+The chain #185 -> #154 -> #211 -> #437 is now unblocked and green.
 
-Both are cheap, and both were measured:
-- `needs-resolution` is warranted but tiny: #185's ONLY conflict with main is
-  one file-location conflict (`narrowly-indented-plan.yaml`, added on main
-  inside a directory #185 renamed). Resolved locally at
-  /tmp/claude-0/p185 - place the fixture under
-  `test/basstler_test/dataset/`, plus the one stale reference it hid
-  (`FIXTURES_DIRECTORY` -> `DATASET_DIRECTORY` in
-  `test_plan_item_bootstrap.py`). **665 passed, 0 failed.** Not pushed - #185
-  is not this session's PR.
-- `integration-conflict` has NO recorded block: `refs/integration/blocked/185/*`
-  is empty, so by the tooling's own rule it is `blocked-without-record` and no
-  build will ever lift it. Needs a hand removal.
+### Test environment note
+The suite needs `pip install ./basstler` (as CI's `test_basstler` job does) plus
+pytest 7.x; without the install `test_a_missing_credential_is_its_own_exit_status`
+fails with `ModuleNotFoundError: No module named 'basstler'`.
 
-### Hard dependency nobody has met yet
-The `ReproductionRecorder` fix (`@dataclass(eq=False)`) exists only on
-`integration` (6c49cd2411). #211 - and therefore #437's own tree - still has the
-bug, so the moment a build carries this chain its suite fails those 4 tests and
-the build goes red. The fix must land on #211 for a build of this chain to
-succeed.
-
-### Waiting on the user
-- Push the #185 merge fix? (ready, verified, 665 passing)
-- Remove `integration-conflict` from #185 by hand?
-- Where should the `ReproductionRecorder` fix land durably - #211?
+### Next
+- A build should now be able to carry #437. Not triggered from here.
+- `integration`'s own direct commits (8927b828dc, 6c49cd2411) are superseded and
+  will be erased by the next successful build.
