@@ -1,11 +1,8 @@
 """
-The cramera backend of :class:`coraplex.visualization.WorldVisualization`.
+Publish native CRAM world and plan state to the browser viewer.
 
-Binds the live bridge to the world object itself: world state and model changes reach
-the viewer through the world's own callbacks, and plan execution through a
-:class:`~coraplex.plans.plan_callbacks.PlanCallback`. No parser or executor hooks are
-involved — whatever world a demo builds, however it builds it, is what the viewer
-shows.
+World callbacks publish geometry and poses. Plan callbacks and native motion histories
+publish execution progress.
 """
 
 from __future__ import annotations
@@ -19,6 +16,9 @@ from typing_extensions import Any, Callable, Optional, TYPE_CHECKING
 from coraplex.plans.plan_callbacks import PlanCallback
 from coraplex.plans.plan_node import MotionNode, PlanNode
 from coraplex.visualization import PlanVisualization, VisualizationSession
+from giskardpy.motion_statechart.motion_statechart import (
+    StateHistoryObserver,
+)
 from semantic_digital_twin.callbacks.callback import (
     ModelChangeCallback,
     StateChangeCallback,
@@ -37,7 +37,7 @@ logger = get_logger(__name__)
 
 if TYPE_CHECKING:
     from coraplex.plans.plan import Plan
-    from giskardpy.motion_statechart.motion_statechart import MotionStatechart
+    from giskardpy.motion_statechart.motion_statechart import StateHistory
 
 # %% world synchronization
 
@@ -92,15 +92,19 @@ class WorldModelSync(ModelChangeCallback):
 
 
 @dataclass
-class BridgePlanCallback(PlanCallback):
+class BridgePlanCallback(PlanCallback, StateHistoryObserver):
     """
-    Feeds a plan's execution into the live bridge: per-node progress as its nodes start
-    and end, and the executing motion statechart on every executor tick.
+    Publish plan progress and changes recorded by its native motion histories.
     """
 
     bridge: Bridge = field(kw_only=True)
     """
     The bridge the plan's execution is published to.
+    """
+
+    _histories: list[StateHistory] = field(default_factory=list, init=False, repr=False)
+    """
+    The motion histories subscribed to during this plan's execution.
     """
 
     def on_start(self, node: PlanNode) -> None:
@@ -111,7 +115,12 @@ class BridgePlanCallback(PlanCallback):
         """
         if isinstance(node, MotionNode):
             self.bridge.observe_motion_started(node)
-            return
+            chart = node.motion_statechart
+            if chart is not None:
+                if not any(history is chart.history for history in self._histories):
+                    chart.history.add_observer(self)
+                    self._histories.append(chart.history)
+                self.bridge.observe_chart(chart)
         self.bridge.snapshot_plan()
 
     def on_end(self, node: PlanNode) -> None:
@@ -120,18 +129,38 @@ class BridgePlanCallback(PlanCallback):
 
         :param node: The plan node that completed.
         """
+        plan_ended = self.plan is not None and node is self.plan.root
         if isinstance(node, MotionNode):
             self.bridge.observe_motion_ended(node)
-            return
+            if plan_ended:
+                self.bridge.observe_chart(node.motion_statechart)
+        else:
+            self.bridge.snapshot_plan()
+        if (
+            not isinstance(node, MotionNode) or plan_ended
+        ) and self.bridge.recording is not None:
+            self.bridge.recording.update_statechart(self.bridge.executing_statechart())
+        if plan_ended:
+            self.stop()
+
+    def on_state_change(self, history: StateHistory) -> None:
+        """
+        Publish the chart and plan after a native history snapshot changes.
+
+        :param history: The subscribed history containing the changed state.
+        """
+        self.bridge.observe_chart(
+            history.history[-1].life_cycle_state.motion_statechart
+        )
         self.bridge.snapshot_plan()
 
-    def on_motion_tick(self, statechart: MotionStatechart) -> None:
+    def stop(self) -> None:
         """
-        Publish the motion executor's current chart.
-
-        :param statechart: The chart being executed.
+        Remove this plan's motion history subscriptions.
         """
-        self.bridge.observe_motion_tick(statechart)
+        for history in self._histories:
+            history.remove_observer(self)
+        self._histories.clear()
 
 
 def _finalize_recording_at_exit(
@@ -210,6 +239,13 @@ class LiveVisualization(PlanVisualization):
     The registered finalizer for this session's capture.
     """
 
+    _plan_callbacks: list[BridgePlanCallback] = field(
+        default_factory=list, init=False, repr=False
+    )
+    """
+    The callbacks whose history subscriptions belong to this session.
+    """
+
     def start(self) -> LiveVisualization:
         """
         Attach the bridge to the world and start serving the viewer.
@@ -254,12 +290,17 @@ class LiveVisualization(PlanVisualization):
         :return: The callback to append to the plan's ``node_callbacks``.
         """
         self.bridge.begin_plan(plan)
-        return BridgePlanCallback(bridge=self.bridge, plan=plan)
+        callback = BridgePlanCallback(bridge=self.bridge, plan=plan)
+        self._plan_callbacks.append(callback)
+        return callback
 
     def stop(self) -> None:
         """
         Finalize this session's recording and release its callbacks and server.
         """
+        for callback in self._plan_callbacks:
+            callback.stop()
+        self._plan_callbacks.clear()
         if self._exit_callback is not None:
             atexit.unregister(self._exit_callback)
             self._exit_callback = None

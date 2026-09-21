@@ -34,6 +34,7 @@ from cramera.body_geometry import NumericPose, POSE_PRECISION, rounded_pose
 from semantic_digital_twin.world_description.connections import (
     ActiveConnection1DOF,
 )
+from giskardpy.motion_statechart.data_types import LifeCycleValues
 
 from cramera.knowledge.enums import PlanNodeGroup
 from cramera.live.chart_observer import ChartObserver
@@ -611,9 +612,10 @@ class Bridge:
     """
 
     _ever_running: set = field(default_factory=set)
-    """ids of plan nodes that have been RUNNING at least once, so a node that has run
-    and gone idle (and not failed) reads as SUCCEEDED — a monotonic done-progression
-    the raw coraplex status does not keep (expanded nodes revert to CREATED)."""
+    """
+    Node identities whose callback-derived progress retains completion after becoming
+    idle.
+    """
 
     _motion_nodes: Dict[int, MotionNodeProgress] = field(default_factory=dict)
     """
@@ -625,19 +627,6 @@ class Bridge:
     handing its ``id`` to a later object.
 
     Reset whenever a new plan starts performing, which bounds it to one plan's nodes.
-    """
-
-    _tick_count: int = 0
-    """
-    Tick counter used to throttle the plan snapshot.
-    """
-
-    plan_snapshot_tick_interval: int = 5
-    """
-    How many simulation ticks pass between plan-tree snapshots.
-
-    Walking the plan tree is the expensive part of a tick, and the tree changes far
-    more slowly than the world pose does.
     """
 
     _model_revision: int = 0
@@ -706,19 +695,6 @@ class Bridge:
             type(self.robot).__name__ if self.robot else "?",
             len(self._connections),
         )
-
-    def observe_motion_tick(self, chart: MotionStatechart) -> None:
-        """
-        Publish everything one motion executor tick makes available.
-
-        :param chart: The motion statechart the executor is ticking.
-        """
-        self.observe_chart(chart)
-        if self.recording is not None:
-            self.recording.update_statechart(self.executing_statechart())
-        self._tick_count += 1
-        if self._tick_count % self.plan_snapshot_tick_interval == 0:
-            self.snapshot_plan()
 
     def observe_motion_started(self, node: MotionNode) -> None:
         """
@@ -1400,11 +1376,7 @@ class Bridge:
 
     def snapshot_plan(self) -> None:
         """
-        Serialize the plan tree with per-node execution status.
-
-        A node's own status wins while it says something; otherwise the live statechart
-        status is used, else the aggregate of the children (running/failed bubble up; a
-        parent whose children are only partly done reads as running, not succeeded).
+        Publish plan lifecycle values and derive unstarted parents from their children.
         """
         plan = self._plan
         if plan is None:
@@ -1438,6 +1410,7 @@ class Bridge:
         """
         node_id = "plan_node_%d" % id(node)
         designator = node.designator if isinstance(node, DescribesAnAction) else None
+        native_lifecycle = isinstance(node.status, LifeCycleValues)
         own_status = TaskStatusName.of_native_name(node.status.name)
         entry = PlanNodeEntry(
             id=node_id,
@@ -1472,14 +1445,15 @@ class Bridge:
         if own_status == TaskStatusName.CREATED:
             if child_best == TaskStatusName.SUCCEEDED and done < children:
                 child_best = TaskStatusName.RUNNING
-            derived = self._live_motion_status(node) or (
+            motion_status = None if native_lifecycle else self._live_motion_status(node)
+            derived = motion_status or (
                 child_best if child_best != TaskStatusName.CREATED else None
             )
             if derived:
                 entry.status = derived
                 entry.derived = True
-        # sticky completion: once a node has run and is idle again (not running/failed),
-        # keep it SUCCEEDED so the plan view shows a monotonic done-progression.
+        if native_lifecycle:
+            return entry.status
         if entry.status == TaskStatusName.RUNNING:
             self._ever_running.add(id(node))
         elif id(node) in self._ever_running and entry.status == TaskStatusName.CREATED:

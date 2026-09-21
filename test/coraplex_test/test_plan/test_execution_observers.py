@@ -8,12 +8,12 @@ import pytest
 
 import coraplex.plans.executables as executables
 from coraplex.datastructures.dataclasses import Context
-from giskardpy.motion_statechart.graph_node import Goal
+from giskardpy.motion_statechart.graph_node import Goal, Task
 from semantic_digital_twin.robots.minimal_robot import MinimalRobot
 
 from coraplex.execution_environment import simulated_robot
 from coraplex.plans.attachment_nodes import ReAttachNode
-from coraplex.plans.executables import MotionLifeCycleTracker
+from coraplex.plans.executables import MotionPlanHistory
 from coraplex.plans.factories import sequential
 from coraplex.plans.failures import PlanFailure
 from coraplex.plans.plan import Plan
@@ -22,7 +22,12 @@ from coraplex.plans.plan_node import MotionNode, PlanNode
 from coraplex.robot_plans.actions.core.robot_body import MoveTorsoAction
 from coraplex.robot_plans.motions.robot_body import MoveJointsMotion
 from giskardpy.motion_statechart.data_types import LifeCycleValues
-from giskardpy.motion_statechart.motion_statechart import MotionStatechart
+from giskardpy.motion_statechart.motion_statechart import (
+    MotionStatechart,
+    StateHistoryItem,
+    StateHistoryObserver,
+    StateHistory,
+)
 from semantic_digital_twin.datastructures.definitions import TorsoState
 
 
@@ -49,7 +54,7 @@ class NodeEvent:
 
 
 @dataclass
-class ExecutionRecorder(PlanCallback):
+class ExecutionRecorder(PlanCallback, StateHistoryObserver):
     """Keep execution boundaries and motion ticks in delivery order."""
 
     events: list[NodeEvent] = field(default_factory=list)
@@ -63,6 +68,8 @@ class ExecutionRecorder(PlanCallback):
         :param node: Node whose execution began.
         """
         self.events.append(NodeEvent(ExecutionEvent.START, node, node.status))
+        if isinstance(node, MotionNode) and node.motion_statechart is not None:
+            node.motion_statechart.history.add_observer(self)
 
     def on_end(self, node: PlanNode) -> None:
         """Remember the native terminal state.
@@ -71,23 +78,70 @@ class ExecutionRecorder(PlanCallback):
         """
         self.events.append(NodeEvent(ExecutionEvent.END, node, node.status))
 
-    def on_motion_tick(self, statechart: MotionStatechart) -> None:
-        """Remember one executor observation.
+    def on_state_change(self, history: StateHistory) -> None:
+        """Remember a changed native chart snapshot.
 
-        :param statechart: The chart that was ticked.
+        :param history: The chart's recorded states.
         """
-        self.statecharts.append(statechart)
+        self.statecharts.append(history.history[-1].life_cycle_state.motion_statechart)
 
 
 @dataclass
-class TaskLifecycle:
-    """The lifecycle state exposed by an executing task."""
+class RecordedMotion:
+    """A task whose transitions are stored by the native history."""
 
-    life_cycle_state: LifeCycleValues
-    """The currently observed state."""
+    chart: MotionStatechart = field(default_factory=MotionStatechart)
+    """The native motion chart."""
+    task: Task = field(default_factory=Task)
+    """The task whose states the test controls."""
+
+    def __post_init__(self) -> None:
+        """Register the task with its native state arrays."""
+        self.chart.add_node(self.task)
+
+    def record(self, state: LifeCycleValues) -> None:
+        """Append the task's state through the production history API.
+
+        :param state: The next native lifecycle state.
+        """
+        self.chart.life_cycle_state[self.task] = state
+        self.chart.history.append(
+            StateHistoryItem(
+                control_cycle=len(self.chart.history),
+                life_cycle_state=self.chart.life_cycle_state,
+                observation_state=self.chart.observation_state,
+            )
+        )
 
 
 # %% motion lifecycle
+def test_native_history_drives_motion_events_without_executor_polling() -> None:
+    """Native history updates publish motion boundaries without a second state cache."""
+    node = MotionNode(designator=MoveJointsMotion(names=[], positions=[]))
+    plan = Plan()
+    plan.add_node(node)
+    recorder = ExecutionRecorder(plan=plan)
+    plan.node_callbacks.append(recorder)
+    chart = MotionStatechart()
+    task = Task()
+    chart.add_node(task)
+    observer = MotionPlanHistory(statechart=chart, motion_mappings={node: task})
+    for state in (LifeCycleValues.RUNNING, LifeCycleValues.SUCCEEDED):
+        chart.life_cycle_state[task] = state
+        chart.history.append(
+            StateHistoryItem(
+                control_cycle=len(chart.history),
+                life_cycle_state=chart.life_cycle_state,
+                observation_state=chart.observation_state,
+            )
+        )
+
+    assert recorder.events == [
+        NodeEvent(ExecutionEvent.START, node, LifeCycleValues.RUNNING),
+        NodeEvent(ExecutionEvent.END, node, LifeCycleValues.SUCCEEDED),
+    ]
+
+
 @pytest.fixture
 def tracked_motion():
     """A native identity-hashable motion node registered with a plan."""
@@ -103,18 +157,19 @@ def test_terminal_motion_reports_start_and_exact_outcome(
 ) -> None:
     """A short motion still starts before its successful, failed or interrupted end."""
     root = tracked_motion
-    observer = ExecutionRecorder(plan=root.plan)
-    root.plan.node_callbacks.append(observer)
-    task = TaskLifecycle(LifeCycleValues.NOT_STARTED)
-    tracker = MotionLifeCycleTracker(motion_mappings={root: task})
+    recorder = ExecutionRecorder(plan=root.plan)
+    root.plan.node_callbacks.append(recorder)
+    motion = RecordedMotion()
+    observer = MotionPlanHistory(
+        statechart=motion.chart, motion_mappings={root: motion.task}
+    )
 
-    tracker.emit_transitions()
-    assert observer.events == []
-    task.life_cycle_state = terminal
-    tracker.emit_transitions()
-    tracker.emit_transitions()
+    motion.record(LifeCycleValues.NOT_STARTED)
+    assert recorder.events == []
+    motion.record(terminal)
+    motion.record(terminal)
 
-    assert observer.events == [
+    assert recorder.events == [
         NodeEvent(ExecutionEvent.START, root, LifeCycleValues.RUNNING),
         NodeEvent(ExecutionEvent.END, root, terminal),
     ]
@@ -125,23 +180,70 @@ def test_terminal_motion_reports_start_and_exact_outcome(
 def test_pausing_and_resuming_does_not_repeat_start(tracked_motion) -> None:
     """The plan state follows pauses while boundaries remain exactly once."""
     root = tracked_motion
-    observer = ExecutionRecorder(plan=root.plan)
-    root.plan.node_callbacks.append(observer)
-    task = TaskLifecycle(LifeCycleValues.NOT_STARTED)
-    tracker = MotionLifeCycleTracker(motion_mappings={root: task})
+    recorder = ExecutionRecorder(plan=root.plan)
+    root.plan.node_callbacks.append(recorder)
+    motion = RecordedMotion()
+    observer = MotionPlanHistory(
+        statechart=motion.chart, motion_mappings={root: motion.task}
+    )
 
     for state in (
         LifeCycleValues.RUNNING,
         LifeCycleValues.PAUSED,
         LifeCycleValues.RUNNING,
     ):
-        task.life_cycle_state = state
-        tracker.emit_transitions()
+        motion.record(state)
         assert root.status is state
 
-    assert observer.events == [
+    assert recorder.events == [
         NodeEvent(ExecutionEvent.START, root, LifeCycleValues.RUNNING)
     ]
+
+
+def test_native_reset_starts_a_new_motion_execution(tracked_motion) -> None:
+    """Resetting the native task clears the projected timestamps before another run."""
+    node = tracked_motion
+    recorder = ExecutionRecorder(plan=node.plan)
+    node.plan.node_callbacks.append(recorder)
+    motion = RecordedMotion()
+    observer = MotionPlanHistory(motion.chart, {node: motion.task})
+    motion.record(LifeCycleValues.RUNNING)
+    motion.record(LifeCycleValues.SUCCEEDED)
+
+    motion.record(LifeCycleValues.NOT_STARTED)
+
+    assert node.status is LifeCycleValues.NOT_STARTED
+    assert node.start_time is None
+    assert node.end_time is None
+    motion.record(LifeCycleValues.RUNNING)
+    motion.record(LifeCycleValues.INTERRUPTED)
+    assert recorder.events == [
+        NodeEvent(ExecutionEvent.START, node, LifeCycleValues.RUNNING),
+        NodeEvent(ExecutionEvent.END, node, LifeCycleValues.SUCCEEDED),
+        NodeEvent(ExecutionEvent.START, node, LifeCycleValues.RUNNING),
+        NodeEvent(ExecutionEvent.END, node, LifeCycleValues.INTERRUPTED),
+    ]
+    observer.stop()
+
+
+def test_aborting_does_not_overwrite_a_completed_motion(tracked_motion) -> None:
+    """Executor failures retain outcomes already recorded by the native chart."""
+    node = tracked_motion
+    recorder = ExecutionRecorder(plan=node.plan)
+    node.plan.node_callbacks.append(recorder)
+    motion = RecordedMotion()
+    observer = MotionPlanHistory(motion.chart, {node: motion.task})
+    motion.record(LifeCycleValues.RUNNING)
+    motion.record(LifeCycleValues.SUCCEEDED)
+
+    observer.end_active_motions(LifeCycleValues.FAILED)
+
+    assert node.status is LifeCycleValues.SUCCEEDED
+    assert recorder.events == [
+        NodeEvent(ExecutionEvent.START, node, LifeCycleValues.RUNNING),
+        NodeEvent(ExecutionEvent.END, node, LifeCycleValues.SUCCEEDED),
+    ]
+    observer.stop()
 
 
 # %% performed native plans
@@ -222,33 +324,56 @@ def test_failed_plan_reports_failure_before_end(monkeypatch) -> None:
     ]
 
 
-def test_default_callback_accepts_motion_ticks() -> None:
-    """An existing observer may omit the new event without breaking execution."""
-    plan = Plan()
-    plan.node_callbacks.append(PlanCallback(plan=plan))
-    assert plan.notify_motion_tick(MotionStatechart()) is None
+def test_default_callback_accepts_native_history_events(tracked_motion) -> None:
+    """A plan observer can omit every optional boundary method."""
+    node = tracked_motion
+    node.plan.node_callbacks.append(PlanCallback(plan=node.plan))
+    motion = RecordedMotion()
+    observer = MotionPlanHistory(
+        statechart=motion.chart, motion_mappings={node: motion.task}
+    )
+    motion.record(LifeCycleValues.RUNNING)
+    motion.record(LifeCycleValues.SUCCEEDED)
+    assert node.status is LifeCycleValues.SUCCEEDED
+    observer.stop()
+    assert motion.chart.history.observers == []
 
 
 # %% aborted execution
 @dataclass
 class AbortedExecution:
-    """An executor whose active task is interrupted by a native execution failure."""
+    """An executor whose native task history precedes an execution failure."""
 
-    task: TaskLifecycle
+    motion: RecordedMotion
     """The task exposed as running by compilation."""
-    failure: BaseException
-    """The original error raised by the executor tick."""
+    failure: BaseException | None
+    """The original error raised by the executor tick, if any."""
+    context: Mock = field(default_factory=Mock)
+    """The native execution context's cleanup boundary."""
+    stopped: bool = False
+    """Whether motion commands were cleared."""
+
+    @property
+    def motion_statechart(self) -> MotionStatechart:
+        """Return the chart provided to compilation."""
+        return self.motion.chart
 
     def compile(self, statechart: MotionStatechart) -> None:
-        """Expose a running task at the executor observation boundary.
+        """Expose a running task through its native history.
 
         :param statechart: The supplied motion chart.
         """
-        self.task.life_cycle_state = LifeCycleValues.RUNNING
+        assert statechart is self.motion.chart
+        self.motion.record(LifeCycleValues.RUNNING)
 
     def tick(self) -> None:
-        """Abort the current execution."""
-        raise self.failure
+        """Abort execution if a failure was configured."""
+        if self.failure is not None:
+            raise self.failure
+
+    def set_velocity_acceleration_jerk_to_zero(self) -> None:
+        """Record command cleanup after execution."""
+        self.stopped = True
 
 
 @pytest.mark.parametrize(
@@ -265,14 +390,15 @@ def test_aborted_executor_ends_started_motion_observation(
     node = tracked_motion
     recorder = ExecutionRecorder(plan=node.plan)
     node.plan.node_callbacks.append(recorder)
-    task = TaskLifecycle(LifeCycleValues.NOT_STARTED)
-    aborted = AbortedExecution(task, failure)
+    motion = RecordedMotion()
+    aborted = AbortedExecution(motion, failure)
     monkeypatch.setattr(executables, "Ros2Executor", Mock(return_value=aborted))
     robot = cylinder_bot_world.get_semantic_annotations_by_type(MinimalRobot)[0]
     executable = executables.GiskardExecutable(
         context=Context(cylinder_bot_world, robot),
         root_node=Goal(),
-        motion_mappings={node: task},
+        motion_state_chart=motion.chart,
+        motion_mappings={node: motion.task},
     )
 
     with pytest.raises(type(failure)) as caught:
@@ -283,6 +409,35 @@ def test_aborted_executor_ends_started_motion_observation(
         NodeEvent(ExecutionEvent.START, node, LifeCycleValues.RUNNING),
         NodeEvent(ExecutionEvent.END, node, outcome),
     ]
+
+
+def test_aborted_executor_releases_native_resources(
+    monkeypatch, tracked_motion, cylinder_bot_world
+) -> None:
+    """Execution failure stops commands, cleans native nodes and detaches history."""
+    node = tracked_motion
+    motion = RecordedMotion()
+    failure = RuntimeError("controller stopped")
+    executor = AbortedExecution(motion, failure)
+    monkeypatch.setattr(executables, "Ros2Executor", Mock(return_value=executor))
+    cleanup = Mock(spec=motion.task.cleanup)
+    monkeypatch.setattr(motion.task, "cleanup", cleanup)
+    robot = cylinder_bot_world.get_semantic_annotations_by_type(MinimalRobot)[0]
+    executable = executables.GiskardExecutable(
+        context=Context(cylinder_bot_world, robot),
+        root_node=Goal(),
+        motion_state_chart=motion.chart,
+        motion_mappings={node: motion.task},
+    )
+
+    with pytest.raises(RuntimeError) as caught:
+        executable._execute_simulation()
+
+    assert caught.value is failure
+    assert executor.stopped
+    cleanup.assert_called_once_with(context=executor.context)
+    executor.context.cleanup.assert_called_once_with()
+    assert motion.chart.history.observers == []
 
 
 @pytest.mark.parametrize(
@@ -318,6 +473,7 @@ def test_compilation_failure_preserves_error_without_starting_motion(
     recorder = ExecutionRecorder(plan=node.plan)
     node.plan.node_callbacks.append(recorder)
     failure = RuntimeError("cannot compile")
+    motion = RecordedMotion()
     executor = Mock()
     executor.compile.side_effect = failure
     monkeypatch.setattr(executables, "Ros2Executor", Mock(return_value=executor))
@@ -325,7 +481,8 @@ def test_compilation_failure_preserves_error_without_starting_motion(
     executable = executables.GiskardExecutable(
         context=Context(cylinder_bot_world, robot),
         root_node=Goal(),
-        motion_mappings={node: TaskLifecycle(LifeCycleValues.NOT_STARTED)},
+        motion_state_chart=motion.chart,
+        motion_mappings={node: motion.task},
     )
     with pytest.raises(RuntimeError) as caught:
         executable._execute_simulation()
@@ -341,15 +498,15 @@ def test_exhausted_execution_ends_started_motion_observation(
     node = tracked_motion
     recorder = ExecutionRecorder(plan=node.plan)
     node.plan.node_callbacks.append(recorder)
-    task = TaskLifecycle(LifeCycleValues.RUNNING)
-    executor = Mock()
-    executor.motion_statechart.is_end_motion.return_value = False
+    motion = RecordedMotion()
+    executor = AbortedExecution(motion, failure=None)
     monkeypatch.setattr(executables, "Ros2Executor", Mock(return_value=executor))
     robot = cylinder_bot_world.get_semantic_annotations_by_type(MinimalRobot)[0]
     executable = executables.GiskardExecutable(
         context=Context(cylinder_bot_world, robot, ticks_per_motion=1),
         root_node=Goal(),
-        motion_mappings={node: task},
+        motion_state_chart=motion.chart,
+        motion_mappings={node: motion.task},
     )
     with pytest.raises(executables.MotionDidNotFinish):
         executable._execute_simulation()

@@ -41,7 +41,6 @@ if TYPE_CHECKING:
     from coraplex.plans.plan_callbacks import PlanCallback
     from coraplex.datastructures.dataclasses import Context
     from coraplex.plans.designator import Designator
-    from giskardpy.motion_statechart.motion_statechart import MotionStatechart
 
 
 logger = logging.getLogger(__name__)
@@ -280,15 +279,6 @@ class Plan:
         """
         for callback in self.node_callbacks:
             callback.on_end(node)
-
-    def notify_motion_tick(self, statechart: MotionStatechart) -> None:
-        """
-        Report a simulated executor tick to registered observers.
-
-        :param statechart: The chart after the tick.
-        """
-        for callback in self.node_callbacks:
-            callback.on_motion_tick(statechart)
 
     def re_perform(self):
         for child in self.root.descendants:

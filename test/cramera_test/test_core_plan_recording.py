@@ -4,9 +4,15 @@ Native plan status publication and plan inspection after recording.
 
 from __future__ import annotations
 
-from giskardpy.motion_statechart.data_types import LifeCycleValues
+from typing_extensions import TYPE_CHECKING
+
+from giskardpy.motion_statechart.data_types import (
+    LifeCycleValues,
+    ObservationStateValues,
+)
 
 from cramera.live.bridge import Bridge, TaskStatusName
+from cramera.live.chart_structure import ObservationName
 from cramera.live.recording_bundle import write_recording_bundle
 from cramera.live.recording_storage import trim_recording_bundle
 from cramera.live.frame_range import FrameRange
@@ -15,10 +21,14 @@ from cramera.knowledge.recorded_statecharts import RecordedStatecharts, STATECHA
 from cramera.generated_json import GeneratedJson
 from cramera import paths
 
-from .test_live_bridge import PlanWithRoot, make_plan_node, nodes_by_kind, make_chart
+from .dataset.motion_execution import motion_execution
+from .test_live_bridge import PlanWithRoot, make_plan_node, nodes_by_kind
 from .test_live_bundle import attached_bridge
 from .test_recording_bundle import frame_with_milk
 from .test_live_recording import statechart, snapshot
+
+if TYPE_CHECKING:
+    from .dataset.motion_execution import MotionExecution
 
 
 # %% native status translation
@@ -72,40 +82,58 @@ class TestNativePlanStatus:
 # %% plan persistence
 
 
-class TestMotionTickRecording:
+class TestMotionHistoryRecording:
     """
-    Post-controller observations belong to the world tick already recorded.
+    Plan completion retains a final chart observation on the last recorded pose.
     """
 
-    def test_last_world_frame_keeps_the_final_observation(self):
-        bridge = Bridge(recording=Recording())
+    def test_last_world_frame_keeps_the_final_observation(
+        self, motion_execution: MotionExecution
+    ) -> None:
+        """
+        The final chart-only observation preserves the last world pose.
+        """
+        bridge = motion_execution.bridge
+        bridge.recording = Recording()
         bridge.recording.start()
-        chart = make_chart()
-        bridge.observe_motion_tick(chart)
+        chart = motion_execution.chart
+        chart.observation_state.data[-1] = ObservationStateValues.FALSE
+        motion_execution.callback.on_start(motion_execution.motion)
+        motion_execution.record(LifeCycleValues.RUNNING)
         bridge.recording.append(
             snapshot(frames={"joint": 0.5}), statechart=bridge.executing_statechart()
         )
         first_world_frame = bridge.recording.frames_in(FrameRange(0, 0))[0]
-        chart.observation_state.data[-1] = 1.0
+        chart.observation_state.data[-1] = ObservationStateValues.TRUE
 
-        bridge.observe_motion_tick(chart)
+        motion_execution.record(LifeCycleValues.SUCCEEDED)
+        motion_execution.callback.on_end(motion_execution.plan.root)
 
         [recorded] = bridge.recording.stop()
         assert recorded.statechart == bridge.executing_statechart()
         assert recorded.frames == first_world_frame.frames
-        assert recorded.statechart.nodes[-1].observation == "TRUE"
-        assert first_world_frame.statechart.nodes[-1].observation == "FALSE"
+        assert recorded.statechart.nodes[-1].observation == ObservationName.TRUE
+        assert (
+            first_world_frame.statechart.nodes[-1].observation == ObservationName.FALSE
+        )
 
-    def test_a_finalized_recording_does_not_change_on_later_motion_ticks(self):
-        bridge = Bridge(recording=Recording())
+    def test_a_finalized_recording_does_not_change_on_later_history_updates(
+        self, motion_execution: MotionExecution
+    ) -> None:
+        """
+        History changes and plan completion leave saved captures unchanged.
+        """
+        bridge = motion_execution.bridge
+        bridge.recording = Recording()
         bridge.recording.start()
-        chart = make_chart()
-        bridge.observe_motion_tick(chart)
+        motion_execution.callback.on_start(motion_execution.motion)
+        motion_execution.record(LifeCycleValues.RUNNING)
         bridge.recording.append(snapshot(), statechart=bridge.executing_statechart())
         original = bridge.recording.stop()
-        chart.observation_state.data[-1] = 1.0
+        motion_execution.chart.observation_state.data[-1] = ObservationStateValues.TRUE
 
-        bridge.observe_motion_tick(chart)
+        motion_execution.record(LifeCycleValues.SUCCEEDED)
+        motion_execution.callback.on_end(motion_execution.plan.root)
 
         assert bridge.recording.stop() == original
 

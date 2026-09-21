@@ -25,6 +25,7 @@ from coraplex.plans.motion_state_chart_building import BuildsMotionStateChart
 from coraplex.plans.plan_entity import PlanEntity
 
 if TYPE_CHECKING:
+    from giskardpy.motion_statechart.motion_statechart import MotionStatechart
     from giskardpy.motion_statechart.graph_node import Task
     from coraplex.datastructures.dataclasses import Context
     from coraplex.robot_plans.actions.base import ActionDescription
@@ -617,6 +618,13 @@ class MotionNode(DesignatorNode, BuildsMotionStateChart):
     designator: BaseMotion = field(kw_only=True)
     """
     Reference to the motion designator which is linked to this node.
+    """
+
+    motion_statechart: MotionStatechart | None = field(
+        default=None, init=False, repr=False, compare=False
+    )
+    """
+    The native chart bound to this motion for its current execution.
     """
 
     @property

@@ -8,7 +8,6 @@ from coraplex.plans.plan_entity import PlanEntity
 
 if TYPE_CHECKING:
     from coraplex.plans.plan_node import PlanNode
-    from giskardpy.motion_statechart.motion_statechart import MotionStatechart
 
 
 @dataclass
@@ -29,11 +28,4 @@ class PlanCallback(PlanEntity):
         Observe a node after its execution ends.
 
         :param node: The completed node, including its outcome.
-        """
-
-    def on_motion_tick(self, statechart: MotionStatechart) -> None:
-        """
-        Observe a simulated motion chart after its executor tick.
-
-        :param statechart: The chart whose current state can be read.
         """

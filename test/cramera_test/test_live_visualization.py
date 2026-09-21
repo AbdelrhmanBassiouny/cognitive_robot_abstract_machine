@@ -17,6 +17,7 @@ from semantic_digital_twin.world_description.connections import (
 from semantic_digital_twin.world_description.world_entity import Body
 
 from coraplex.plans.plan_node import MotionNode
+from giskardpy.motion_statechart.data_types import LifeCycleValues
 
 from cramera import paths
 from cramera.live import visualization as visualization_module
@@ -29,6 +30,7 @@ from cramera.live.visualization import (
     WorldStateSync,
 )
 
+from .dataset.motion_execution import motion_execution
 from .test_live_bridge import (
     PlanWithRoot,
     ReportedStatus,
@@ -206,11 +208,12 @@ class TestBridgePlanCallback:
 
         assert nodes_by_kind(bridge)["MotionNode"]["status"] == TaskStatusName.FAILED
 
-    def test_a_motion_tick_publishes_the_statechart(self):
+    def test_a_native_history_change_publishes_the_statechart(self, motion_execution):
         bridge = Bridge()
         callback = BridgePlanCallback(bridge=bridge)
 
-        callback.on_motion_tick(make_chart())
+        motion_execution.record(LifeCycleValues.RUNNING)
+        callback.on_state_change(motion_execution.chart.history)
 
         assert bridge.get_chart()["nodes"] != []
 

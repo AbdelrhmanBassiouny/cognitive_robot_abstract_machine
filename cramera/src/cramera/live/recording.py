@@ -184,12 +184,12 @@ class Recording:
         return held if held == statechart else statechart
 
     def update_statechart(self, statechart: Optional[ChartSnapshot]) -> None:
-        """Complete the latest world tick with its controller's observation.
+        """Complete the latest world frame with a plan's final chart observation.
 
-        Native world callbacks run before the controller publishes the same tick's
-        chart. Amend that frame without inventing a second pose or timestamp.
+        A plan boundary can follow chart changes without another world update.
+        Preserve the final observation on the latest pose and timestamp.
 
-        :param statechart: The chart observed after the latest recorded world tick.
+        :param statechart: The chart observed when the plan node completed.
         """
         with self._lock:
             if self.state is not RecordingState.RECORDING or not self._frames:

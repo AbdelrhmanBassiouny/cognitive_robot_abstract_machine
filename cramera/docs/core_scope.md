@@ -2,7 +2,11 @@
 
 The core package observes an existing CRAM world and its plan execution, renders
 live or recorded 3D scenes, saves recordings, and provides EQL and graph inspection.
-It uses existing CRAM world/plan callbacks and geometry serializers.
+It uses existing CRAM world/plan callbacks, native motion-state history observers,
+and geometry serializers. Motion charts are published when their recorded state
+changes. World updates capture the current chart alongside each pose, and plan
+completion preserves the final chart observation. History subscriptions end with
+their plan or visualization session.
 
 ## Deferred features
 
