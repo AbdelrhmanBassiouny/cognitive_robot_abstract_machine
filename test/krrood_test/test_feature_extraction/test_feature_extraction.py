@@ -11,9 +11,11 @@ from probabilistic_model.probabilistic_circuit.relational.rspn import (
     RelationalProbabilisticCircuit,
 )
 from probabilistic_model.probabilistic_circuit.rx.helper import fully_factorized
+from random_events.set import Set
 from random_events.variable import Symbolic
 from ..dataset import ormatic_interface  # type: ignore
 from ..dataset.example_classes import (
+    ApproachSceneObject,
     NestedAction,
     KRROODPose,
     KRROODPosition,
@@ -26,6 +28,26 @@ from ..dataset.example_classes import (
     ExampleString,
 )
 from ..dataset.semantic_world_like_classes import Body
+
+
+def test_an_entity_carrying_an_enum_keeps_that_enums_members_as_its_domain():
+    """
+    A polymorphic enum column says only that some enum is stored in it, so the concrete
+    enum has to come from the value standing there; without it the variable describing
+    the entity's kind has no members to be conditioned on.
+    """
+    action = a(ApproachSceneObject)(
+        target=SceneObject(type=SceneObjectType.TABLE), speed=...
+    )
+
+    parameters = UnderspecifiedParameters(action)
+
+    [kind] = [
+        variable
+        for name, variable in parameters.variables.items()
+        if name.endswith(".type")
+    ]
+    assert kind.domain == Set.from_iterable(SceneObjectType)
 
 
 @pytest.fixture
@@ -88,8 +110,8 @@ def test_features_extraction():
 
 def test_feature_extraction_with_aggregations(scenario):
     room, room2, room_dao, room2_dao, feature_extractor = scenario
-    rpc = RelationalProbabilisticCircuit(SceneRoom)
-    rpc.fit([room_dao, room2_dao])
+    relational_probabilistic_circuit = RelationalProbabilisticCircuit(SceneRoom)
+    relational_probabilistic_circuit.fit([room_dao, room2_dao])
 
     room_query = a(SceneRoom)(
         position=a(KRROODPosition)(x=..., y=..., z=...),
@@ -97,7 +119,7 @@ def test_feature_extraction_with_aggregations(scenario):
         objects=[a(SceneObject)(type=...) for _ in range(4)],
     )
     room_query.resolve()
-    model = rpc.ground(room_query)
+    model = relational_probabilistic_circuit.ground(room_query)
     model = model.simplify()
 
     assert model.is_valid()
