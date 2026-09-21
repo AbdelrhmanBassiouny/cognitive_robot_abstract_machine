@@ -1,35 +1,36 @@
 ## A branch under upstream review is only pushed inside a push window
 
+PR: https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/437
+(draft, base `main`)
+
 **Ask** (this session): a restack must not push a branch that has an open
-upstream pull request unless (a) it is night in Berlin and (b) at least 4 hours
-have passed since that branch was last pushed. A manual run pushes anyway.
+upstream pull request unless it is night in Berlin and at least 4 hours have
+passed since that branch was last pushed. A manual run pushes anyway.
 
 **Base**: re-cut from `origin/main`. The branch arrived descending from
 `integration` (274 commits, not a legal PR base). Every file this touches is on
 `main`; the integration tooling (`integration*.py`) is on no open PR, so there
 was nothing to stack on.
 
-**Where it lands**: `maintenance.py restack` and `integration.py build
---restack` both run `maintenance_restack_procedure.RESTACK_STEPS`, so one new
-step covers both surfaces.
-
-### Plan
-1. `push_window.py`: `PushWindow` (night begins/ends, time zone, least time
-   between pushes) + `WaitReason`. Pure, imports nothing of ours.
-2. `Configuration` gains `push_window`; `stack.toml` gains its four defaults
-   (22:00-06:00 Europe/Berlin, 4 hours).
-3. `GitCommandRunner.committed_at` - when the fork's copy of a branch last moved.
-4. `HoldBranchUnderReview` step, after `SkipBranchAlreadyCurrent` and before
-   `IntegrateParent`; new `RestackOutcome.HELD`, which is not a branch needing
-   attention.
-5. `restack()` takes `push_window: PushWindow | None` (required; `None` = push
-   whatever the hour). `--push-branches-under-review-now` on `restack` and
-   `run-report`.
-6. Skill + README say when a promoted branch moves.
-
 ### Done
-- Investigation, base decision, design settled with the user (clock = last
-  push; night = 22:00-06:00 Berlin; override = its own flag).
+- `push_window.py`: `PushWindow` + `WaitReason`, pure, imports nothing else of
+  the workflow's so `Configuration` can hold one.
+- `stack.toml`: `review_push_night_begins/ends/time_zone/hours_between_pushes`
+  (22:00-06:00 Europe/Berlin, 4h).
+- `GitCommandRunner.committed_at` - when the fork's copy of a branch last moved.
+- `HoldBranchUnderReview` in `RESTACK_STEPS`, after `SkipBranchAlreadyCurrent`
+  and before `IntegrateParent`; `RestackOutcome.HELD`, excluded from the
+  outcomes a pass needs attention for.
+- `restack()` takes a required `push_window`; `--push-branches-under-review-now`
+  on `restack` and `run-report`; routine prompt says to leave it off.
+- SKILL.md and the stack README say when a promoted branch moves.
+- 176 stack tests pass; 4 hook tests fail for missing dashboard dependencies in
+  this container and fail identically on clean `main`.
 
-### Next
-- Write the failing tests, then implement 1-6, then push and open the draft PR.
+### Outstanding
+- `integration.py build --restack` calls the shared `restack()`, so it inherits
+  the window - but its call site lives on no open PR, so its
+  `push_window=None` (push whatever the hour, per the decision made here) has to
+  be added by whichever PR eventually lands that tooling. Nothing to do on this
+  branch.
+- Nothing else. Waiting on review.
