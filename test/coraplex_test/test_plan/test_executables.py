@@ -39,9 +39,13 @@ from semantic_digital_twin.world_description.shape_collection import ShapeCollec
 from semantic_digital_twin.world_description.world_entity import Body
 
 from coraplex.datastructures.dataclasses import Context
-from coraplex.datastructures.enums import Arms, ApproachDirection, VerticalAlignment
+from coraplex.datastructures.enums import (
+    ApproachDirection,
+    Arms,
+    ExecutionType,
+    VerticalAlignment,
+)
 from coraplex.datastructures.grasp import GraspDescription
-from coraplex.datastructures.enums import ExecutionType
 from coraplex.execution_environment import (
     ExecutionEnvironment,
     real_robot,

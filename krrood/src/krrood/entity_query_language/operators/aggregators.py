@@ -35,6 +35,7 @@ from krrood.entity_query_language.exceptions import (
     NestedAggregationError,
     InvalidChildType,
 )
+from krrood.entity_query_language.operators.comparator import Comparator
 from krrood.entity_query_language.utils import T
 from krrood.entity_query_language.core.mapped_variable import CanBehaveLikeAVariable
 
@@ -295,7 +296,7 @@ class EntityAggregator(Aggregator[T], ABC):
     """
 
     def __post_init__(self):
-        if not isinstance(self._child_, Selectable):
+        if not isinstance(self._child_, (Selectable, Comparator)):
             raise InvalidChildType(type(self._child_), [Selectable])
         self._var_ = self
         super().__post_init__()
