@@ -67,6 +67,13 @@ test('discard is offered whenever there is something to throw away', function ()
 });
 
 // %% save name validation
+test('a trailing line break is outside the scene-name alphabet', function () {
+  const recording = load();
+  for (const suffix of ['\n', '\r', '\r\n']) {
+    assert.strictEqual(recording.isValidSaveName('episode' + suffix), false);
+  }
+});
+
 test('a plain name is accepted', function () {
   const recording = load();
   assert.strictEqual(recording.isValidSaveName('kitchen_run-2'), true);

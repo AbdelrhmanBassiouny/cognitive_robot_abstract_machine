@@ -392,7 +392,7 @@ class Plan:
             f"start: {node.start_time}",
             f"end: {node.end_time}",
             f"result: {node.result}",
-            f"reason: {node.reason}",
+            f"reason: {node.execution_error or node.reason}",
         ]
 
     def __repr__(self):

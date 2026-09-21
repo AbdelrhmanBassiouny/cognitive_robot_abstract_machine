@@ -9,6 +9,7 @@ archive is also discovered when it contains an index.
 from __future__ import annotations
 
 import os
+import re
 from pathlib import Path
 
 from typing_extensions import List, Optional
@@ -16,6 +17,11 @@ from typing_extensions import List, Optional
 WEB_ROOT = Path(__file__).resolve().parent / "web"
 """
 The packaged frontend: index.html, panels, vendored libraries.
+"""
+
+SCENE_NAME_PATTERN = re.compile(r"[A-Za-z0-9_-]{1,64}")
+"""
+Single-segment names accepted for saved recordings and internal captures.
 """
 
 LIVE_SCENE_NAME = "__live__"
@@ -109,9 +115,14 @@ def resolve_scene_directory(name: str) -> Optional[Path]:
 
     :param name: Name of the scene to look up.
     """
+    if not SCENE_NAME_PATTERN.fullmatch(name):
+        return None
     for root in scene_roots():
         candidate = root / name
-        if (candidate / "scene.json").is_file():
+        if (
+            candidate.resolve().is_relative_to(root.resolve())
+            and (candidate / "scene.json").is_file()
+        ):
             return candidate
     return None
 

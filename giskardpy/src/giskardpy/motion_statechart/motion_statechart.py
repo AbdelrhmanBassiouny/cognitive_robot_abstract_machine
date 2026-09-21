@@ -1151,15 +1151,14 @@ class MotionStatechart(SubclassJSONSerializer):
         """
         Executes a single tick of the motion statechart.
 
-        First the observation state is updated, then the life cycle state.
+        Record completed observation and life cycle updates before reporting a native
+        cancellation. Failed updates do not publish a partial control cycle.
 
         :param context: The context required to execute the tick.
         """
+        self._update_observation_state(context)
+        self._update_life_cycle_state(context)
         try:
-            self._update_observation_state(context)
-            self._update_life_cycle_state(context)
-            self._raise_if_cancel_motion()
-        finally:
             self.history.append(
                 next_item=StateHistoryItem(
                     control_cycle=len(self.history),
@@ -1167,6 +1166,8 @@ class MotionStatechart(SubclassJSONSerializer):
                     observation_state=self.observation_state,
                 )
             )
+        finally:
+            self._raise_if_cancel_motion()
 
     def get_nodes_by_type(
         self, node_type: Type[GenericMotionStatechartNode]

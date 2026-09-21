@@ -34,8 +34,6 @@ from cramera.body_geometry import NumericPose, POSE_PRECISION, rounded_pose
 from semantic_digital_twin.world_description.connections import (
     ActiveConnection1DOF,
 )
-from giskardpy.motion_statechart.data_types import LifeCycleValues
-
 from cramera.knowledge.enums import PlanNodeGroup
 from cramera.live.chart_observer import ChartObserver
 from cramera.live.chart_structure import (
@@ -639,6 +637,12 @@ class Bridge:
     The ROS debug markers per subscribed topic (see :mod:`cramera.live.ros_markers`).
     """
 
+    _marker_lock: threading.Lock = field(default_factory=threading.Lock)
+    """Guards marker ingestion, topic removal and snapshot capture."""
+
+    _marker_revision: int = 0
+    """Monotonic revision of the marker contents across all topics."""
+
     marker_listener: Optional[RosMarkerListener] = None
     """
     The ROS subscription feeding the marker overlay, while one runs — the viewer's
@@ -654,13 +658,12 @@ class Bridge:
 
     _published_marker_revision: int = -1
     """
-    The aggregate store revision :attr:`marker_state` was built from.
+    The marker revision :attr:`marker_state` was built from.
     """
 
     _marker_state_version: int = 0
     """
-    Monotonic version of :attr:`marker_state`; the sum of store revisions can revisit
-    an old value after a topic is dropped, this never does.
+    Monotonic version of the published :attr:`marker_state` snapshots.
     """
 
     _bundle_signature: str = ""
@@ -752,14 +755,10 @@ class Bridge:
         :param topic: The topic the array arrived on.
         :param markers: The array's markers.
         """
-        store = self._marker_stores.setdefault(topic, MarkerStore())
-        store.observe(markers)
-
-    def _marker_revision(self) -> int:
-        """
-        The aggregate revision over every topic's marker store.
-        """
-        return sum(store.revision for store in self._marker_stores.values())
+        with self._marker_lock:
+            store = self._marker_stores.setdefault(topic, MarkerStore())
+            if store.observe(markers):
+                self._marker_revision += 1
 
     def _refresh_marker_state(self) -> None:
         """
@@ -770,17 +769,22 @@ class Bridge:
         world entity are the robot/environment geometry the scene already renders,
         and stay out of the overlay.
         """
-        revision = self._marker_revision()
-        if revision == self._published_marker_revision:
-            return
+        with self._marker_lock:
+            revision = self._marker_revision
+            if revision == self._published_marker_revision:
+                return
+            marker_entries = {
+                topic: tuple(store.entries.values())
+                for topic, store in self._marker_stores.items()
+            }
         world_entity_names = set()
         if self.world is not None:
             world_entity_names = {str(body.name) for body in self.world.bodies} | {
                 str(region.name) for region in self.world.regions
             }
         markers = []
-        for topic in sorted(self._marker_stores):
-            for entry in self._marker_stores[topic].entries.values():
+        for topic in sorted(marker_entries):
+            for entry in marker_entries[topic]:
                 if entry.ns in world_entity_names:
                     continue
                 markers.append(self._marker_payload(topic, entry))
@@ -891,10 +895,10 @@ class Bridge:
             self.marker_listener.subscribe(topic)
         else:
             self.marker_listener.unsubscribe(topic)
-            store = self._marker_stores.pop(topic, None)
-            if store is not None and store.entries:
-                # force the next snapshot to rebuild without this topic
-                self._published_marker_revision = -1
+            with self._marker_lock:
+                store = self._marker_stores.pop(topic, None)
+                if store is not None and store.entries:
+                    self._marker_revision += 1
         return self.marker_topics_payload()
 
     def publish_bodies(self, bodies: Dict[str, Body]) -> None:

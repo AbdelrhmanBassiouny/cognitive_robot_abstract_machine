@@ -200,6 +200,7 @@ function mountPanel(overrides, recognizer) {
     overrides || {}
   );
   let panelFactory = null;
+  let completionOptions = null;
   const define = function (name, factory) { panelFactory = factory; };
   new Function(
     'Panels', 'SceneContext', 'QuerySource', 'QuestionDisplay', 'PresetGroups',
@@ -209,7 +210,7 @@ function mountPanel(overrides, recognizer) {
   )(
     { define: define }, core.SceneContext, core.QuerySource, core.QuestionDisplay,
     core.PresetGroups, core.AnswerTable, core.ResponseUtil, core.VoiceCapture,
-    { of() { return { forget() {}, handledKey() { return false; } }; } },
+    { of(options) { completionOptions = options; return { forget() {}, handledKey() { return false; } }; } },
     { popupUrl() { return ''; } },
     core.Folding,
     makeFetch(routes, requests),
@@ -217,7 +218,7 @@ function mountPanel(overrides, recognizer) {
     { createElement: makeElement }
   );
   panelFactory(root, bus);
-  return { root: root, bus: bus, requests: requests };
+  return { root: root, bus: bus, requests: requests, completion: completionOptions };
 }
 
 // %% the flow a viewer drives
@@ -491,4 +492,171 @@ test('folding one group leaves the others open', async function () {
 
   assert.ok(!rowOf(found[0]).classList.contains('folded'));
   assert.ok(rowOf(found[1]).classList.contains('folded'));
+});
+
+// %% replies belong to the source that was asked
+/** Release a response only after the answering source has changed. */
+class PendingAnswer {
+  constructor() {
+    this.promise = new Promise((resolve, reject) => {
+      this.resolve = resolve;
+      this.reject = reject;
+    });
+  }
+}
+
+const LIVE_PRESETS = {ok: true, title: 'running demo', presets: [UNWORDED_PRESET]};
+const RECORDED_VOCABULARY = {ok: true, entries: [{name: 'recorded_robot'}]};
+
+function attach(panel, on, url = 'http://bridge') {
+  panel.bus.emit('live:changed', {on, url});
+}
+
+function runTyped(panel, code) {
+  panel.root.part('#query-input').value = code;
+  panel.root.part('#query-run').click();
+}
+
+test('late live presets cannot replace the recorded source after detach', async function () {
+  const pending = new PendingAnswer();
+  const panel = mountPanel({'http://bridge/presets': pending.promise});
+  await flush();
+  attach(panel, true);
+  attach(panel, false);
+  const recordedStatus = panel.root.part('#knowledge-status').textContent;
+  pending.resolve(LIVE_PRESETS);
+  await flush();
+  assert.strictEqual(panel.root.part('#knowledge-status').textContent, recordedStatus);
+});
+
+test('a rejected old preset request cannot replace a new bridge status', async function () {
+  const pending = new PendingAnswer();
+  const panel = mountPanel({
+    'http://bridge/presets': pending.promise,
+    'http://replacement/presets': LIVE_PRESETS,
+  });
+  await flush();
+  attach(panel, true);
+  attach(panel, true, 'http://replacement');
+  await flush();
+  const replacementStatus = panel.root.part('#knowledge-status').textContent;
+  pending.reject(new Error('old bridge offline'));
+  await flush();
+  assert.strictEqual(panel.root.part('#knowledge-status').textContent, replacementStatus);
+});
+
+for (const fails of [false, true]) {
+  test('an old vocabulary ' + (fails ? 'failure' : 'answer') + ' cannot replace current completions', async function () {
+    const pending = new PendingAnswer();
+    const panel = mountPanel({
+      'http://bridge/presets': LIVE_PRESETS,
+      'http://bridge/vocabulary': pending.promise,
+      '/api/eql/vocabulary': RECORDED_VOCABULARY,
+    });
+    await flush();
+    attach(panel, true);
+    await flush();
+    attach(panel, false);
+    await flush();
+    if (fails) pending.reject(new Error('old vocabulary unavailable'));
+    else pending.resolve({ok: true, entries: [{name: 'old_live_object'}]});
+    await flush();
+    assert.deepStrictEqual(panel.completion.entries(), RECORDED_VOCABULARY.entries);
+  });
+}
+
+test('changing the source releases Run while the old query remains pending', async function () {
+  const pending = new PendingAnswer();
+  const panel = mountPanel({
+    'http://bridge/presets': LIVE_PRESETS,
+    'http://bridge/eql': pending.promise,
+  });
+  await flush();
+  attach(panel, true);
+  await flush();
+  runTyped(panel, 'live_query');
+  attach(panel, false);
+  runTyped(panel, 'recorded_query');
+  await flush();
+  assert.deepStrictEqual(panel.requests.filter(request => request.options?.method === 'POST')
+    .map(request => request.url), ['http://bridge/eql', '/api/eql']);
+  pending.resolve(ANSWER);
+  await flush();
+});
+
+for (const fails of [false, true]) {
+  test('an old query ' + (fails ? 'failure' : 'answer') + ' cannot replace the detached answer', async function () {
+    const pending = new PendingAnswer();
+    const panel = mountPanel({
+      'http://bridge/presets': LIVE_PRESETS,
+      'http://bridge/eql': pending.promise,
+    });
+    await flush();
+    attach(panel, true);
+    await flush();
+    runTyped(panel, 'live_query');
+    attach(panel, false);
+    const detachedAnswer = panel.root.part('#answer').innerHTML;
+    if (fails) pending.reject(new Error('old query failed'));
+    else pending.resolve(ANSWER);
+    await flush();
+    assert.strictEqual(panel.root.part('#answer').innerHTML, detachedAnswer);
+  });
+}
+
+test('a voice match from an old source is never executed on its replacement', async function () {
+  const pending = new PendingAnswer();
+  const panel = mountPanel({
+    'http://bridge/presets': LIVE_PRESETS,
+    'http://bridge/question': pending.promise,
+    'http://replacement/presets': LIVE_PRESETS,
+    'http://replacement/eql': ANSWER,
+  });
+  await flush();
+  attach(panel, true);
+  await flush();
+  panel.bus.emit('voice:transcript', {text: 'which robot is this'});
+  attach(panel, true, 'http://replacement');
+  await flush();
+  pending.resolve({ok: true, matched: true, preset: WORDED_PRESET});
+  await flush();
+  assert.deepStrictEqual(panel.requests.filter(request => request.url.endsWith('/eql')), []);
+});
+
+test('a stale voice error cannot replace the current answer', async function () {
+  const pending = new PendingAnswer();
+  const panel = mountPanel({
+    'http://bridge/presets': LIVE_PRESETS,
+    'http://bridge/question': pending.promise,
+  });
+  await flush();
+  attach(panel, true);
+  await flush();
+  panel.bus.emit('voice:transcript', {text: 'which robot is this'});
+  attach(panel, false);
+  runTyped(panel, WORDED_PRESET.code);
+  await flush();
+  const recordedAnswer = panel.root.part('#answer').innerHTML;
+  pending.reject(new Error('old voice question failed'));
+  await flush();
+  assert.strictEqual(panel.root.part('#answer').innerHTML, recordedAnswer);
+});
+
+test('a selected query scope does not leak into the replacement source', async function () {
+  const panel = mountPanel({
+    'http://bridge/presets': {ok: true, title: 'memory', presets: [
+      {...UNWORDED_PRESET, scope: 'episodic_memory'},
+    ]},
+    'http://bridge/eql': ANSWER,
+  });
+  await flush();
+  attach(panel, true);
+  await flush();
+  presetButtons(panel.root.part('#presets')).at(-1).click();
+  await flush();
+  attach(panel, false);
+  runTyped(panel, WORDED_PRESET.code);
+  await flush();
+  const request = panel.requests.filter(request => request.url === '/api/eql').at(-1);
+  assert.strictEqual(JSON.parse(request.options.body).scope, null);
 });

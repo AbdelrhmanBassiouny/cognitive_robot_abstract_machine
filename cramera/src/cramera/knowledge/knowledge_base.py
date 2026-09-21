@@ -166,6 +166,14 @@ class EpisodeKnowledgeBase:
 
         self.objects = self._build_objects(scene)
         objects_by_id = {entity.name: entity for entity in self.objects}
+        objects_by_reference = {
+            **objects_by_id,
+            **{
+                entry["key"]: objects_by_id[entry["id"]]
+                for entry in scene.get("objects") or []
+                if entry.get("key")
+            },
+        }
         place_area = objects_by_id.get("place_area")
 
         part_annotations = [
@@ -176,7 +184,7 @@ class EpisodeKnowledgeBase:
         self.grippers, self.arms = self._build_arms(parts, part_annotations, robot_name)
         self.robot = Robot(robot_name, arm_count=len(self.arms))
         self.episodes = self._build_episodes(
-            scene, frames_per_second, objects_by_id, place_area
+            scene, frames_per_second, objects_by_reference, place_area
         )
         self.joints = self._build_joint_motions(trajectory, parts, robot_prefix)
         self.detected_events = DetectedEventRecord.of_scene(scene)
@@ -314,7 +322,7 @@ class EpisodeKnowledgeBase:
         self,
         scene: Dict[str, Any],
         frames_per_second: int,
-        objects_by_id: Dict[str, BenchObject],
+        objects_by_reference: Dict[str, BenchObject],
         place_area: Optional[BenchObject],
     ) -> List[ActionEpisode]:
         """
@@ -322,13 +330,13 @@ class EpisodeKnowledgeBase:
 
         :param scene: The active scene bundle's ``scene.json`` content.
         :param frames_per_second: The recording's frame rate, for episode durations.
-        :param objects_by_id: Scene objects keyed by their id, for picked/placed
-            lookups.
+        :param objects_by_reference: Scene objects keyed by their serialized key and
+            display identity, for picked/placed lookups.
         :param place_area: The scene's place-area object, if any.
         """
         episodes = []
         for index, segment in enumerate(scene.get("segments") or []):
-            picks = objects_by_id.get(segment.get("picks"))
+            picks = objects_by_reference.get(segment.get("picks"))
             episodes.append(
                 ActionEpisode(
                     name=segment["step"],

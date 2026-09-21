@@ -145,6 +145,11 @@ class VisualizationSession:
             self._current.reset(self._token)
 
     @classmethod
+    def is_active(cls) -> bool:
+        """Return whether the current context owns visualization cleanup."""
+        return cls._current.get() is not None
+
+    @classmethod
     def register(cls, cleanup: Callable[[], None]) -> None:
         """Register cleanup in the active session, if one exists.
 

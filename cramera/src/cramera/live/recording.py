@@ -159,7 +159,7 @@ class Recording:
             self._frames.append(
                 RecordedFrame(
                     frames=dict(snapshot.frames),
-                    base=snapshot.base,
+                    base=list(snapshot.base) if snapshot.base is not None else None,
                     objects={
                         key: list(value) for key, value in snapshot.objects.items()
                     },

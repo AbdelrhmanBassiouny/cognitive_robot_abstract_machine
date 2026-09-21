@@ -242,14 +242,22 @@ class TransformGraph:
         observed: Dict[str, ConnectionActivity] = {}
         for connection in connections:
             name = str(connection.name)
+            parent = str(connection.parent.name)
+            child = str(connection.child.name)
+            kind = ConnectionKind.of_connection(connection)
             values = self._values(connection, world)
             previous = self.activities.get(name)
-            if previous is None:
+            if (
+                previous is None
+                or previous.parent != parent
+                or previous.child != child
+                or previous.kind is not kind
+            ):
                 observed[name] = ConnectionActivity(
                     name=name,
-                    parent=str(connection.parent.name),
-                    child=str(connection.child.name),
-                    kind=ConnectionKind.of_connection(connection),
+                    parent=parent,
+                    child=child,
+                    kind=kind,
                     values=values,
                 )
                 continue

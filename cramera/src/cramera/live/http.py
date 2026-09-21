@@ -57,18 +57,19 @@ from cramera.knowledge.query_vocabulary import UnknownVocabularyName
 from cramera.knowledge.queryable_knowledge import QueryScope, UnknownQueryScope
 from cramera.live.bridge import Bridge
 from cramera.live.query import NoQuerySourceRegistered
-from cramera.live.frame_range import FrameRange, InvalidFrameRange
+from cramera.live.frame_range import InvalidFrameRange
 from cramera.live.live_bundle import build_live_scene
 from cramera.live.recording import Recording, RecordingState
 from cramera.live.recording_bundle import finalize_recording
+from cramera.live.recording_save_request import (
+    InvalidRecordingSaveRequest,
+    RecordingSaveRequest,
+)
 from cramera.live.recording_storage import (
     NoSavedRecording,
-    SceneDestination,
     SceneNameTaken,
     SharedScenesUnavailable,
     discard_recording_bundle,
-    save_recording_bundle,
-    trim_recording_bundle,
 )
 from cramera.logging_setup import get_logger
 from cramera.request_origin import OriginHeader, RequestOrigin
@@ -408,32 +409,23 @@ class BridgeRequestHandler(BaseHTTPRequestHandler):
         Promote the finalized recording to a permanent, locally saved scene.
 
         An optional ``firstFrame``/``lastFrame`` pair trims the run before it is saved,
-        re-bundling it from the kept stretch (see
-        :func:`cramera.live.recording_storage.trim_recording_bundle`).
+        preserving the original bundle until the selected copy is saved.
         """
         length = int(self.headers.get("Content-Length") or 0)
-        payload = json.loads(self.rfile.read(length) or b"{}")
         recording = self.bridge.recording
         if recording is None or recording.state is not RecordingState.FINALIZED:
             return self._send_json(
                 {"ok": False, "error": "nothing finalized to save"}, 400
             )
-        if payload.get("firstFrame") is not None:
-            try:
-                trim_recording_bundle(
-                    FrameRange(
-                        first=int(payload["firstFrame"]),
-                        last=int(payload.get("lastFrame", -1)),
-                    )
-                )
-            except (InvalidFrameRange, NoSavedRecording) as error:
-                return self._send_json({"ok": False, "error": str(error)}, 400)
         try:
-            name = save_recording_bundle(
-                str(payload.get("name") or ""),
-                SceneDestination(payload.get("destination", SceneDestination.LOCAL)),
-            )
-        except InvalidSceneName as error:
+            payload = json.loads(self.rfile.read(length) or b"{}")
+            name = RecordingSaveRequest.from_json(payload).save()
+        except (
+            InvalidSceneName,
+            InvalidFrameRange,
+            InvalidRecordingSaveRequest,
+            json.JSONDecodeError,
+        ) as error:
             return self._send_json({"ok": False, "error": str(error)}, 400)
         except (NoSavedRecording, SharedScenesUnavailable) as error:
             return self._send_json({"ok": False, "error": str(error)}, 400)

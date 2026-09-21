@@ -88,6 +88,8 @@ class MotionPlanHistory(StateHistoryObserver):
             if current_state == previous_state:
                 continue
             if current_state == LifeCycleValues.NOT_STARTED:
+                if previous_state in (LifeCycleValues.RUNNING, LifeCycleValues.PAUSED):
+                    self._end_motion(node, LifeCycleValues.INTERRUPTED)
                 node.status = current_state
                 node.start_time = None
                 node.end_time = None
@@ -99,21 +101,39 @@ class MotionPlanHistory(StateHistoryObserver):
                 node.plan.notify_node_started(node)
             node.status = current_state
             if current_state.is_terminal:
-                node.end_time = datetime.now()
-                node.plan.notify_node_ended(node)
+                self._end_motion(node, current_state)
 
-    def end_active_motions(self, outcome: LifeCycleValues) -> None:
+    def end_active_motions(self, outcome: LifeCycleValues | None = None) -> None:
         """
         Report executor termination for plan motions still in progress.
 
-        :param outcome: The failed or interrupted execution outcome.
+        :param outcome: The executor's failure outcome, or None to use native task
+            verdicts.
         """
-        for node in self.motion_mappings:
+        for node, task in self.motion_mappings.items():
             if node.status not in (LifeCycleValues.RUNNING, LifeCycleValues.PAUSED):
                 continue
-            node.status = outcome
-            node.end_time = datetime.now()
-            node.plan.notify_node_ended(node)
+            self._end_motion(
+                node,
+                (
+                    outcome
+                    if outcome is not None
+                    else LifeCycleValues.verdict_for(
+                        self.statechart.observation_state[task]
+                    )
+                ),
+            )
+
+    def _end_motion(self, node: MotionNode, outcome: LifeCycleValues) -> None:
+        """
+        Publish the terminal boundary of one native motion attempt.
+
+        :param node: The motion whose attempt ended.
+        :param outcome: The native terminal state to publish.
+        """
+        node.status = outcome
+        node.end_time = datetime.now()
+        node.plan.notify_node_ended(node)
 
     def stop(self) -> None:
         """
@@ -356,6 +376,7 @@ class GiskardExecutable(Executable):
                 ):
                     executor.tick()
                     if executor.motion_statechart.is_end_motion():
+                        history.end_active_motions()
                         return
                 unfinished_nodes = [
                     node

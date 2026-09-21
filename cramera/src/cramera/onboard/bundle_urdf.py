@@ -22,8 +22,10 @@ import os
 import re
 import shutil
 import sys
+import xml.etree.ElementTree as ElementTree
 from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
+from urllib.parse import unquote
 
 from typing_extensions import (
     Any,
@@ -38,6 +40,7 @@ from typing_extensions import (
 from semantic_digital_twin.adapters.package_resolver import PackageUriResolver
 from semantic_digital_twin.adapters.urdf import URDFParser
 from semantic_digital_twin.exceptions import ParsingError
+from krrood.exceptions import DataclassException
 
 from cramera import paths
 from cramera.logging_setup import get_logger
@@ -52,6 +55,22 @@ How many unresolved assets ``main`` lists before truncating.
 
 
 # %% reference resolution
+@dataclass
+class InvalidBundlePath(DataclassException, ValueError):
+    """A reference cannot be represented by a path inside the bundle."""
+
+    path: str
+    """Reference or destination that would leave the bundle."""
+
+    def error_message(self) -> str:
+        """Identify the invalid bundle path."""
+        return f"Invalid path inside a URDF bundle: {self.path}"
+
+    def suggest_correction(self) -> str:
+        """Describe the required destination layout."""
+        return "Use a relative path contained inside the bundle directory."
+
+
 @dataclass(frozen=True)
 class MeshReference:
     """
@@ -112,6 +131,16 @@ class MeshReference:
             package, _, relative_path = self.uri[len(self.PACKAGE_SCHEME) :].partition(
                 "/"
             )
+            decoded = PurePosixPath(unquote(package + "/" + relative_path))
+            if (
+                not package
+                or not relative_path
+                or relative_path.startswith("/")
+                or decoded.is_absolute()
+                or ".." in decoded.parts
+                or "\\" in unquote(self.uri)
+            ):
+                raise InvalidBundlePath(self.uri)
             return os.path.join(package, relative_path)
         name = (
             self.uri[len(self.FILE_SCHEME) :]
@@ -146,8 +175,8 @@ class BundledAssets:
     """
     The files copied into a bundle, and the references that resolved to no file.
 
-    Owns the already-copied memo, so a mesh referenced by several links, and a texture
-    shared by several meshes, are each copied exactly once.
+    Reuses mesh copies across links and preserves every side asset's referenced
+    location inside the bundle.
     """
 
     UNRESOLVED_REFERENCE: ClassVar[str] = "<unresolved>"
@@ -168,7 +197,7 @@ class BundledAssets:
 
     copied: Dict[str, str] = field(default_factory=dict)
     """
-    Source path to the path it was copied to inside the bundle.
+    Source path to its first copied location inside the bundle.
     """
 
     missing: List[str] = field(default_factory=list)
@@ -189,8 +218,16 @@ class BundledAssets:
         """
         if self.bundle_root is None:
             return True
-        root = os.path.abspath(self.bundle_root)
-        return os.path.commonpath([os.path.abspath(path), root]) == root
+        return Path(path).resolve().is_relative_to(Path(self.bundle_root).resolve())
+
+    def require_destination(self, path: str) -> None:
+        """Reject a destination that resolves outside the bundle.
+
+        :param path: Destination to validate before writing.
+        :raises InvalidBundlePath: If the path leaves the configured root.
+        """
+        if not self._is_within_bundle(path):
+            raise InvalidBundlePath(path)
 
     @property
     def mesh_suffixes(self) -> List[str]:
@@ -199,23 +236,32 @@ class BundledAssets:
         """
         return sorted({os.path.splitext(path)[1].lower() for path in self.copied})
 
-    def copy(self, source: Optional[str], destination: str) -> bool:
+    def copy(
+        self, source: Optional[str], destination: str, *, reuse_source: bool = True
+    ) -> bool:
         """
-        Copy one asset into the bundle, at most once.
+        Copy an asset, optionally reusing its first bundled location.
 
         :param source: The resolved path, or None when the reference could not be
             resolved.
         :param destination: Where the asset belongs inside the bundle.
+        :param reuse_source: Whether an existing source copy satisfies a different
+            destination. Disable when a file's relative reference cannot be rewritten.
         :return: Whether the asset is present in the bundle afterwards.
         """
-        if source in self.copied:
+        if not self._is_within_bundle(destination):
+            self.missing.append(destination)
+            return False
+        if source in self.copied and (
+            reuse_source or self.copied[source] == destination
+        ):
             return True
         if not source or not os.path.isfile(source):
             self.missing.append(source or self.UNRESOLVED_REFERENCE)
             return False
         os.makedirs(os.path.dirname(destination), exist_ok=True)
         shutil.copy2(source, destination)
-        self.copied[source] = destination
+        self.copied.setdefault(source, destination)
         return True
 
     def copy_side_assets(self, source_mesh: str, bundled_mesh: str) -> None:
@@ -252,7 +298,7 @@ class BundledAssets:
             # mesh, so a parent-relative one (``../materials/…``, the Gazebo model
             # layout) resolves in the browser exactly as it did on disk
             if os.path.isfile(source) and self._is_within_bundle(destination):
-                self.copy(source, destination)
+                self.copy(source, destination, reuse_source=False)
 
     def _object_side_references(
         self, mesh_text: str, source_directory: str, bundled_directory: str
@@ -273,14 +319,17 @@ class BundledAssets:
             material_source = os.path.join(source_directory, material_library)
             if not os.path.isfile(material_source):
                 continue
-            self.copy(
-                material_source, os.path.join(bundled_directory, material_library)
-            )
+            if not self.copy(
+                material_source,
+                os.path.join(bundled_directory, material_library),
+                reuse_source=False,
+            ):
+                continue
             material_text = (
                 Path(material_source).read_bytes().decode("utf-8", "replace")
             )
             references |= {
-                texture.strip()
+                os.path.join(os.path.dirname(material_library), texture.strip())
                 for texture in self.TEXTURE_MAP_PATTERN.findall(material_text)
             }
         return references
@@ -422,9 +471,13 @@ class BundleReport:
         base_directory = os.path.dirname(source_path)
 
         os.makedirs(output_directory, exist_ok=True)
-        assets = BundledAssets()
-        rewritten = 0
-        for reference in sorted(set(cls.MESH_REFERENCE_PATTERN.findall(urdf_text))):
+        assets = BundledAssets(bundle_root=output_directory)
+        urdf_out = os.path.join(output_directory, "%s.urdf" % name)
+        assets.require_destination(urdf_out)
+        document = ElementTree.fromstring(urdf_text)
+        rewritten: Set[str] = set()
+        for mesh in document.iter("mesh"):
+            reference = mesh.get("filename", "")
             if MeshFormat.of_path(reference) is None:
                 continue  # plugins (.so) and other non-geometry references
             mesh_reference = MeshReference(reference)
@@ -434,17 +487,22 @@ class BundleReport:
             relative_path = mesh_reference.bundled_relative_path()
             bundled = os.path.join(output_directory, "meshes", relative_path)
             if assets.copy(resolved, bundled):
+                bundled = assets.copied[resolved]
                 assets.copy_side_assets(resolved, bundled)
-            urdf_text = urdf_text.replace(
-                '"%s"' % reference,
-                '"meshes/%s"' % relative_path.replace(os.sep, "/"),
+            mesh.set(
+                "filename",
+                os.path.relpath(bundled, output_directory).replace(os.sep, "/"),
             )
-            rewritten += 1
+            rewritten.add(reference)
 
-        urdf_out = os.path.join(output_directory, "%s.urdf" % name)
-        Path(urdf_out).write_text(urdf_text, encoding="utf-8")
-        links = cls.LINK_PATTERN.findall(urdf_text)
-        joints = cls.JOINT_PATTERN.findall(urdf_text)
+        ElementTree.ElementTree(document).write(
+            urdf_out, encoding="utf-8", xml_declaration=True
+        )
+        links = [link.attrib["name"] for link in document.findall("link")]
+        joints = [
+            (joint.attrib["name"], joint.attrib["type"])
+            for joint in document.findall("joint")
+        ]
         return cls(
             name=name,
             urdf=urdf_out,
@@ -458,7 +516,7 @@ class BundleReport:
             ],
             meshes_copied=len(assets.copied),
             mesh_suffixes=assets.mesh_suffixes,
-            references_rewritten=rewritten,
+            references_rewritten=len(rewritten),
             missing=assets.missing,
         )
 

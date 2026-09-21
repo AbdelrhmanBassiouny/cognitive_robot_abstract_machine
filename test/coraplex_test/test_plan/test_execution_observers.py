@@ -8,20 +8,23 @@ import pytest
 
 import coraplex.plans.executables as executables
 from coraplex.datastructures.dataclasses import Context
-from giskardpy.motion_statechart.graph_node import Goal, Task
+from giskardpy.motion_statechart.graph_node import EndMotion, Goal, Task
 from semantic_digital_twin.robots.minimal_robot import MinimalRobot
 
 from coraplex.execution_environment import simulated_robot
 from coraplex.plans.attachment_nodes import ReAttachNode
 from coraplex.plans.executables import MotionPlanHistory
-from coraplex.plans.factories import sequential
+from coraplex.plans.factories import code, parallel, sequential
 from coraplex.plans.failures import PlanFailure
 from coraplex.plans.plan import Plan
 from coraplex.plans.plan_callbacks import PlanCallback
 from coraplex.plans.plan_node import MotionNode, PlanNode
 from coraplex.robot_plans.actions.core.robot_body import MoveTorsoAction
 from coraplex.robot_plans.motions.robot_body import MoveJointsMotion
-from giskardpy.motion_statechart.data_types import LifeCycleValues
+from giskardpy.motion_statechart.data_types import (
+    LifeCycleValues,
+    ObservationStateValues,
+)
 from giskardpy.motion_statechart.motion_statechart import (
     MotionStatechart,
     StateHistoryItem,
@@ -531,3 +534,287 @@ def test_start_observer_failure_releases_execution_scope(monkeypatch) -> None:
     assert recorder.events == [
         NodeEvent(ExecutionEvent.END, root, LifeCycleValues.FAILED)
     ]
+
+
+# %% execution boundary ownership
+def test_parallel_plan_preserves_unexpected_child_error() -> None:
+    """The parent reports the original child failure after joining its worker."""
+    failure = RuntimeError("child execution failed")
+
+    def fail_child() -> None:
+        """Raise the error whose identity must survive parallel execution."""
+        raise failure
+
+    child = code(fail_child)
+    root = parallel([child])
+    with pytest.raises(type(failure)) as caught:
+        root.perform()
+
+    assert caught.value is failure
+    assert child.execution_error is failure
+
+
+def test_direct_motion_reports_one_pair_of_boundaries(immutable_model_world) -> None:
+    """Directly performing a motion shares its boundary with native history."""
+    world, robot, context = immutable_model_world
+    root = sequential([MoveTorsoAction(TorsoState.HIGH)], context=context)
+    root.notify()
+    node = next(node for node in root.plan.all_nodes if isinstance(node, MotionNode))
+    recorder = ExecutionRecorder(plan=root.plan)
+    root.plan.node_callbacks.append(recorder)
+
+    with simulated_robot:
+        node.perform()
+
+    assert recorder.events == [
+        NodeEvent(ExecutionEvent.START, node, LifeCycleValues.RUNNING),
+        NodeEvent(ExecutionEvent.END, node, LifeCycleValues.SUCCEEDED),
+    ]
+
+
+@dataclass
+class SuccessfulExecution(AbortedExecution):
+    """An executor reaching EndMotion while a mapped task remains active."""
+
+    final_state: LifeCycleValues = LifeCycleValues.RUNNING
+    """The task state in the successful chart's last native snapshot."""
+    observation: ObservationStateValues = ObservationStateValues.TRUE
+    """Whether the task observes its own goal when the chart stops."""
+    end_motion: EndMotion = field(default_factory=EndMotion)
+    """The chart's successful execution stop condition."""
+
+    def __post_init__(self) -> None:
+        """Include the native EndMotion node in the test chart."""
+        self.motion.chart.add_node(self.end_motion)
+
+    def tick(self) -> None:
+        """Record successful chart completion without terminating every task."""
+        self.motion.chart.observation_state[self.end_motion] = (
+            ObservationStateValues.TRUE
+        )
+        self.motion.chart.observation_state[self.motion.task] = self.observation
+        self.motion.record(self.final_state)
+
+
+@pytest.mark.parametrize(
+    "final_state", [LifeCycleValues.RUNNING, LifeCycleValues.PAUSED]
+)
+def test_successful_executor_ends_active_motion_observation(
+    monkeypatch, tracked_motion, cylinder_bot_world, final_state
+) -> None:
+    """EndMotion finishes each started mapped task even if its snapshot is active."""
+    node = tracked_motion
+    recorder = ExecutionRecorder(plan=node.plan)
+    node.plan.node_callbacks.append(recorder)
+    motion = RecordedMotion()
+    executor = SuccessfulExecution(motion, failure=None, final_state=final_state)
+    monkeypatch.setattr(executables, "Ros2Executor", Mock(return_value=executor))
+    robot = cylinder_bot_world.get_semantic_annotations_by_type(MinimalRobot)[0]
+    executable = executables.GiskardExecutable(
+        context=Context(cylinder_bot_world, robot),
+        root_node=Goal(),
+        motion_state_chart=motion.chart,
+        motion_mappings={node: motion.task},
+    )
+
+    executable._execute_simulation()
+
+    assert recorder.events == [
+        NodeEvent(ExecutionEvent.START, node, LifeCycleValues.RUNNING),
+        NodeEvent(ExecutionEvent.END, node, LifeCycleValues.SUCCEEDED),
+    ]
+    assert node.status is LifeCycleValues.SUCCEEDED
+
+
+def test_end_observer_does_not_replace_execution_error(monkeypatch) -> None:
+    """Reporting a failed node preserves its original exception for the parent."""
+    root = sequential([])
+    failure = RuntimeError("execution failed")
+    observer_failure = ValueError("end observer failed")
+    monkeypatch.setattr(root, "notify", Mock(side_effect=failure))
+    monkeypatch.setattr(
+        root.plan, "notify_node_ended", Mock(side_effect=observer_failure)
+    )
+
+    with pytest.raises(type(failure)) as caught:
+        root.perform()
+
+    assert caught.value is failure
+    assert root.execution_error is failure
+
+
+def test_direct_motion_observer_receives_native_history(immutable_model_world) -> None:
+    """The first motion start exposes the bound chart for native subscriptions."""
+    world, robot, context = immutable_model_world
+    root = sequential([MoveTorsoAction(TorsoState.HIGH)], context=context)
+    root.notify()
+    node = next(node for node in root.plan.all_nodes if isinstance(node, MotionNode))
+    recorder = ExecutionRecorder(plan=root.plan)
+    root.plan.node_callbacks.append(recorder)
+
+    with simulated_robot:
+        node.perform()
+
+    assert recorder.statecharts
+    assert all(chart is node.motion_statechart for chart in recorder.statecharts)
+    assert recorder.statecharts[-1].is_end_motion()
+
+
+def test_direct_motion_parsing_failure_preserves_error_without_start(
+    monkeypatch, tracked_motion
+) -> None:
+    """An uncompiled motion has no native start and retains its parsing failure."""
+    failure = RuntimeError("motion parsing failed")
+    recorder = ExecutionRecorder(plan=tracked_motion.plan)
+    tracked_motion.plan.node_callbacks.append(recorder)
+    monkeypatch.setattr(tracked_motion, "parse", Mock(side_effect=failure))
+
+    with pytest.raises(type(failure)) as caught:
+        tracked_motion.perform()
+
+    assert caught.value is failure
+    assert tracked_motion.execution_error is failure
+    assert tracked_motion.status is LifeCycleValues.FAILED
+    assert recorder.events == []
+
+
+def test_direct_motion_failure_closes_its_native_boundary(
+    monkeypatch, tracked_motion, cylinder_bot_world
+) -> None:
+    """A direct motion ends its one native start before its error reaches the caller."""
+    node = tracked_motion
+    failure = RuntimeError("motion execution failed")
+    motion = RecordedMotion()
+    executor = AbortedExecution(motion, failure)
+    monkeypatch.setattr(executables, "Ros2Executor", Mock(return_value=executor))
+    robot = cylinder_bot_world.get_semantic_annotations_by_type(MinimalRobot)[0]
+    executable = executables.GiskardExecutable(
+        context=Context(cylinder_bot_world, robot),
+        root_node=Goal(),
+        motion_state_chart=motion.chart,
+        motion_mappings={node: motion.task},
+    )
+    monkeypatch.setattr(node, "parse", Mock(return_value=executable))
+    recorder = ExecutionRecorder(plan=node.plan)
+    node.plan.node_callbacks.append(recorder)
+
+    with simulated_robot, pytest.raises(type(failure)) as caught:
+        node.perform()
+
+    assert caught.value is failure
+    assert node.execution_error is failure
+    assert recorder.events == [
+        NodeEvent(ExecutionEvent.START, node, LifeCycleValues.RUNNING),
+        NodeEvent(ExecutionEvent.END, node, LifeCycleValues.FAILED),
+    ]
+
+
+def test_direct_motion_compilation_failure_has_no_unmatched_end(
+    monkeypatch, tracked_motion, cylinder_bot_world
+) -> None:
+    """Compilation failure cannot end a motion the native history never started."""
+    node = tracked_motion
+    failure = RuntimeError("motion compilation failed")
+    executor = Mock()
+    executor.compile.side_effect = failure
+    motion = RecordedMotion()
+    monkeypatch.setattr(executables, "Ros2Executor", Mock(return_value=executor))
+    robot = cylinder_bot_world.get_semantic_annotations_by_type(MinimalRobot)[0]
+    executable = executables.GiskardExecutable(
+        context=Context(cylinder_bot_world, robot),
+        root_node=Goal(),
+        motion_state_chart=motion.chart,
+        motion_mappings={node: motion.task},
+    )
+    monkeypatch.setattr(node, "parse", Mock(return_value=executable))
+    recorder = ExecutionRecorder(plan=node.plan)
+    node.plan.node_callbacks.append(recorder)
+
+    with simulated_robot, pytest.raises(type(failure)) as caught:
+        node.perform()
+
+    assert caught.value is failure
+    assert node.execution_error is failure
+    assert recorder.events == []
+
+
+def test_reset_closes_a_running_attempt_before_restart(tracked_motion) -> None:
+    """A native reset interrupts the active attempt before another start is reported."""
+    node = tracked_motion
+    motion = RecordedMotion()
+    observer = MotionPlanHistory(motion.chart, {node: motion.task})
+    recorder = ExecutionRecorder(plan=node.plan)
+    node.plan.node_callbacks.append(recorder)
+
+    for state in (
+        LifeCycleValues.RUNNING,
+        LifeCycleValues.NOT_STARTED,
+        LifeCycleValues.RUNNING,
+        LifeCycleValues.SUCCEEDED,
+    ):
+        motion.record(state)
+
+    assert recorder.events == [
+        NodeEvent(ExecutionEvent.START, node, LifeCycleValues.RUNNING),
+        NodeEvent(ExecutionEvent.END, node, LifeCycleValues.INTERRUPTED),
+        NodeEvent(ExecutionEvent.START, node, LifeCycleValues.RUNNING),
+        NodeEvent(ExecutionEvent.END, node, LifeCycleValues.SUCCEEDED),
+    ]
+    observer.stop()
+
+
+@pytest.mark.parametrize(
+    "observation", [ObservationStateValues.FALSE, ObservationStateValues.UNKNOWN]
+)
+def test_successful_chart_judges_remaining_tasks_by_their_observations(
+    monkeypatch, tracked_motion, cylinder_bot_world, observation
+) -> None:
+    """EndMotion does not grant success to a task that has not observed its goal."""
+    node = tracked_motion
+    recorder = ExecutionRecorder(plan=node.plan)
+    node.plan.node_callbacks.append(recorder)
+    motion = RecordedMotion()
+    executor = SuccessfulExecution(motion, failure=None, observation=observation)
+    monkeypatch.setattr(executables, "Ros2Executor", Mock(return_value=executor))
+    robot = cylinder_bot_world.get_semantic_annotations_by_type(MinimalRobot)[0]
+    executable = executables.GiskardExecutable(
+        context=Context(cylinder_bot_world, robot),
+        root_node=Goal(),
+        motion_state_chart=motion.chart,
+        motion_mappings={node: motion.task},
+    )
+
+    executable._execute_simulation()
+
+    assert recorder.events == [
+        NodeEvent(ExecutionEvent.START, node, LifeCycleValues.RUNNING),
+        NodeEvent(ExecutionEvent.END, node, LifeCycleValues.verdict_for(observation)),
+    ]
+
+
+def test_parallel_plan_reports_failed_native_verdict(
+    monkeypatch, tracked_motion, cylinder_bot_world
+) -> None:
+    """An unsuccessful native task verdict raises a plan failure without an exception."""
+    node = tracked_motion
+    motion = RecordedMotion()
+    executor = SuccessfulExecution(
+        motion, failure=None, observation=ObservationStateValues.FALSE
+    )
+    monkeypatch.setattr(executables, "Ros2Executor", Mock(return_value=executor))
+    robot = cylinder_bot_world.get_semantic_annotations_by_type(MinimalRobot)[0]
+    executable = executables.GiskardExecutable(
+        context=Context(cylinder_bot_world, robot),
+        root_node=Goal(),
+        motion_state_chart=motion.chart,
+        motion_mappings={node: motion.task},
+    )
+    monkeypatch.setattr(node, "parse", Mock(return_value=executable))
+    root = parallel([node])
+
+    with simulated_robot, pytest.raises(PlanFailure):
+        root.notify()
+
+    assert node.status is LifeCycleValues.FAILED
+    assert node.execution_error is None
+    assert node.reason is None

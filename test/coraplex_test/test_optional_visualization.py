@@ -491,3 +491,26 @@ def test_explicit_stop_releases_demo_thread_but_keeps_borrowed_ros_context(
     finally:
         if session.spin_thread.is_alive():
             session.stop()
+
+
+def test_unscoped_browser_demo_releases_owned_ros_session(
+    monkeypatch, cylinder_bot_world, installed_scene
+) -> None:
+    """
+    An inspectable browser scene does not retain an unowned executor lifetime.
+    """
+    monkeypatch.setenv(VisualizationOption.BACKEND, VisualizationBackend.CRAMERA.value)
+    demonstration = RecordingDemonstration(
+        world=cylinder_bot_world, used_robot=MinimalRobot
+    )
+    demonstration.acquire_world()
+    session = demonstration.ros_session
+    provider = demonstration.visualization.cramera_visualization
+    try:
+        demonstration.tear_down()
+        assert not session.spin_thread.is_alive()
+        assert demonstration.ros_session is None
+        assert not rclpy.ok()
+        assert not provider.stopped
+    finally:
+        demonstration.stop_visualization()

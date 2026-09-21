@@ -14,8 +14,11 @@ from __future__ import annotations
 
 import json
 import shutil
+from contextlib import ExitStack
+from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
+from tempfile import TemporaryDirectory
 
 from typing_extensions import Optional
 
@@ -96,6 +99,7 @@ def save_recording_bundle(
     robot: Optional[str] = None,
     environment: Optional[str] = None,
     task: Optional[str] = None,
+    frame_range: Optional[FrameRange] = None,
 ) -> str:
     """
     Promote the finalized ``__recording__`` bundle to a permanent, saved scene.
@@ -109,6 +113,7 @@ def save_recording_bundle(
         recording's own answer standing.
     :param environment: What they call the environment, likewise.
     :param task: What the run was doing, which only they can say.
+    :param frame_range: Optional inclusive range to keep in the saved copy.
     :raises cramera.onboard.scene_index.InvalidSceneName: If ``name`` is unsafe or
         reserved.
     :raises NoSavedRecording: If no finalized ``__recording__`` bundle exists on disk.
@@ -128,24 +133,7 @@ def save_recording_bundle(
         raise NoSavedRecording("no finalized recording to save")
     if any((existing / name).is_dir() for existing in paths.scene_roots()):
         raise SceneNameTaken("a scene named '%s' already exists" % name)
-    scene_directory = root / name
-    shutil.move(str(source), str(scene_directory))
-    scene_path = scene_directory / "scene.json"
-    scene = json.loads(scene_path.read_text(encoding="utf-8"))
-    scene["name"] = name
-    scene.update(
-        {
-            field.value: given
-            for field, given in [
-                (SceneField.ROBOT_NAME, robot),
-                (SceneField.ENVIRONMENT_NAME, environment),
-                (SceneField.TASK, task),
-            ]
-            if given
-        }
-    )
-    write_json_atomically(scene_path, scene, indent=1)
-    write_scene_index(root / "index.json", name)
+    RecordingBundle(source).save(root / name, frame_range, robot, environment, task)
     return name
 
 
@@ -167,33 +155,145 @@ def trim_recording_bundle(frame_range: FrameRange) -> None:
     :raises cramera.live.recording.InvalidFrameRange: If the range reaches past the
         bundled run.
     """
-    bundle = paths.local_scenes_directory() / paths.RECORDING_SCENE_NAME
-    scene_path, trajectory_path = bundle / "scene.json", bundle / "trajectory.json"
-    if not scene_path.is_file() or not trajectory_path.is_file():
-        raise NoSavedRecording("no finalized recording to trim")
-    trajectory = json.loads(trajectory_path.read_text(encoding="utf-8"))
-    if frame_range.last >= len(trajectory["frames"]):
-        raise InvalidFrameRange(
-            "frame %d is past the recording's %d frames"
-            % (frame_range.last, len(trajectory["frames"]))
+    RecordingBundle(paths.local_scenes_directory() / paths.RECORDING_SCENE_NAME).trim(
+        frame_range
+    )
+
+
+# %% preparing and publishing recording copies
+
+
+@dataclass(frozen=True)
+class RecordingBundle:
+    """
+    A finalized recording whose edits can be prepared separately from its source.
+    """
+
+    directory: Path
+    """
+    Directory containing the scene, trajectory, and supporting assets.
+    """
+
+    def save(
+        self,
+        destination: Path,
+        frame_range: Optional[FrameRange],
+        robot: Optional[str],
+        environment: Optional[str],
+        task: Optional[str],
+    ) -> None:
+        """
+        Publish a prepared copy, retaining the original until indexing succeeds.
+
+        If restoration fails, the original remains at the recovery path named in an
+        exception note.
+
+        :param destination: Validated unoccupied permanent scene directory.
+        :param frame_range: Optional inclusive range to retain in the saved copy.
+        :param robot: Optional display name for the recorded robot.
+        :param environment: Optional display name for the recorded environment.
+        :param task: Optional description of the recorded task.
+        """
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        with TemporaryDirectory(
+            dir=destination.parent, ignore_cleanup_errors=True
+        ) as staging_directory:
+            prepared = RecordingBundle(Path(staging_directory) / destination.name)
+            shutil.copytree(self.directory, prepared.directory)
+            if frame_range is not None:
+                prepared.trim(frame_range)
+            prepared.rename(destination.name, robot, environment, task)
+            backup = TemporaryDirectory(
+                dir=self.directory.parent, ignore_cleanup_errors=True, delete=False
+            )
+            original = Path(backup.name) / self.directory.name
+            try:
+                with ExitStack() as rollback:
+                    prepared.directory.rename(destination)
+                    rollback.callback(shutil.rmtree, destination)
+                    self.directory.rename(original)
+                    rollback.callback(original.rename, self.directory)
+                    write_scene_index(
+                        destination.parent / "index.json", destination.name
+                    )
+                    rollback.pop_all()
+            except BaseException as error:
+                if original.exists():
+                    error.add_note(f"Original recording preserved at {original}")
+                else:
+                    backup.cleanup()
+                raise
+            else:
+                backup.cleanup()
+
+    def rename(
+        self,
+        name: str,
+        robot: Optional[str],
+        environment: Optional[str],
+        task: Optional[str],
+    ) -> None:
+        """
+        Update the saved scene's identity without changing its recorded data.
+
+        :param name: Permanent name of the saved scene.
+        :param robot: Optional robot display name.
+        :param environment: Optional environment display name.
+        :param task: Optional description of the run.
+        """
+        scene_path = self.directory / "scene.json"
+        scene = json.loads(scene_path.read_text(encoding="utf-8"))
+        scene["name"] = name
+        scene.update(
+            {
+                field.value: given
+                for field, given in [
+                    (SceneField.ROBOT_NAME, robot),
+                    (SceneField.ENVIRONMENT_NAME, environment),
+                    (SceneField.TASK, task),
+                ]
+                if given
+            }
         )
-    kept = slice(frame_range.first, frame_range.last + 1)
-    for track in ("frames", "base", "objects"):
-        trajectory[track] = trajectory[track][kept]
-    if TrajectoryField.FRAME_TIMES in trajectory:
-        trajectory[TrajectoryField.FRAME_TIMES] = trajectory[
-            TrajectoryField.FRAME_TIMES
-        ][kept]
-    scene = json.loads(scene_path.read_text(encoding="utf-8"))
-    statecharts_path = bundle / scene.get("statecharts", "statecharts.json")
-    if statecharts_path.is_file():
-        statecharts = json.loads(statecharts_path.read_text(encoding="utf-8"))
-        statecharts["frames"] = statecharts["frames"][kept]
-        write_json_atomically(statecharts_path, statecharts)
-    scene["segments"] = clip_segment_payloads(scene["segments"], frame_range)
-    for entry in scene["objects"]:
-        spawn = trajectory["objects"][0].get(entry["key"])
-        if spawn is not None:
-            entry["spawn"] = spawn
-    write_json_atomically(trajectory_path, trajectory)
-    write_json_atomically(scene_path, scene, indent=1)
+        write_json_atomically(scene_path, scene, indent=1)
+
+    def trim(self, frame_range: FrameRange) -> None:
+        """
+        Keep a frame range with aligned trajectory, chart, and timeline data.
+
+        :param frame_range: Inclusive recording range to retain.
+        :raises NoSavedRecording: If the scene or trajectory is missing.
+        :raises InvalidFrameRange: If the range extends past the recording.
+        """
+        scene_path, trajectory_path = (
+            self.directory / "scene.json",
+            self.directory / "trajectory.json",
+        )
+        if not scene_path.is_file() or not trajectory_path.is_file():
+            raise NoSavedRecording("no finalized recording to trim")
+        trajectory = json.loads(trajectory_path.read_text(encoding="utf-8"))
+        if frame_range.last >= len(trajectory["frames"]):
+            raise InvalidFrameRange(
+                "frame %d is past the recording's %d frames"
+                % (frame_range.last, len(trajectory["frames"]))
+            )
+        kept = slice(frame_range.first, frame_range.last + 1)
+        for track in ("frames", "base", "objects"):
+            trajectory[track] = trajectory[track][kept]
+        if TrajectoryField.FRAME_TIMES in trajectory:
+            trajectory[TrajectoryField.FRAME_TIMES] = trajectory[
+                TrajectoryField.FRAME_TIMES
+            ][kept]
+        scene = json.loads(scene_path.read_text(encoding="utf-8"))
+        statecharts_path = self.directory / scene.get("statecharts", "statecharts.json")
+        if statecharts_path.is_file():
+            statecharts = json.loads(statecharts_path.read_text(encoding="utf-8"))
+            statecharts["frames"] = statecharts["frames"][kept]
+            write_json_atomically(statecharts_path, statecharts)
+        scene["segments"] = clip_segment_payloads(scene["segments"], frame_range)
+        for entry in scene["objects"]:
+            spawn = trajectory["objects"][0].get(entry["key"])
+            if spawn is not None:
+                entry["spawn"] = spawn
+        write_json_atomically(trajectory_path, trajectory)
+        write_json_atomically(scene_path, scene, indent=1)

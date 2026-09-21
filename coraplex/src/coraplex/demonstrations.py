@@ -283,9 +283,11 @@ class RobotDemonstration(ABC):
         """
         if self.visualization is not None:
             if self.visualization.cramera_visualization is not None:
-                return
-            self.visualization.stop()
-            self.visualization = None
+                if VisualizationSession.is_active():
+                    return
+            else:
+                self.visualization.stop()
+                self.visualization = None
         if self.ros_session is None or not self.ros_session.owns_context:
             return
         self.ros_session.stop()

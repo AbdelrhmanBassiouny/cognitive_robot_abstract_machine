@@ -5,6 +5,7 @@ History subscriptions follow native state snapshots and observer ownership.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from unittest.mock import Mock
 
 import pytest
 
@@ -185,3 +186,68 @@ def test_cancelled_tick_publishes_its_final_native_snapshot(mini_world) -> None:
     assert final.observation_state[cancel] is ObservationStateValues.TRUE
     assert final.observation_state == chart.observation_state
     assert final.life_cycle_state == chart.life_cycle_state
+
+
+# %% incomplete updates
+@pytest.mark.parametrize(
+    "update", ["_update_observation_state", "_update_life_cycle_state"]
+)
+def test_failed_update_does_not_publish_partial_snapshot(
+    monkeypatch, history_chart, mini_world, update
+) -> None:
+    """
+    An incomplete native update cannot create a recorded control cycle.
+    """
+    recorder = HistoryRecorder()
+    history_chart.history.add_observer(recorder)
+    context = MotionStatechartContext(world=mini_world)
+    history_chart.compile(context)
+    snapshots = list(history_chart.history.history)
+    observed_snapshots = list(recorder.snapshots)
+    failure = RuntimeError("native update failed")
+
+    def fail_update(context: MotionStatechartContext) -> None:
+        """
+        Change one state before the updater fails to complete.
+
+        :param context: The active control context.
+        """
+        history_chart.life_cycle_state[history_chart.nodes[0]] = LifeCycleValues.RUNNING
+        raise failure
+
+    monkeypatch.setattr(history_chart, update, fail_update)
+    with pytest.raises(type(failure)) as caught:
+        history_chart.tick(context)
+
+    assert caught.value is failure
+    assert history_chart.history.history == snapshots
+    assert recorder.snapshots == observed_snapshots
+
+
+def test_cancelled_tick_preserves_error_when_observer_fails(
+    monkeypatch, mini_world
+) -> None:
+    """
+    A subscriber failure cannot replace the chart's cancellation reason.
+    """
+    failure = RuntimeError("motion cancelled")
+    observer_failure = ValueError("observer failed")
+    cancel = CancelMotion(exception=failure)
+    chart = MotionStatechart()
+    chart.add_node(cancel)
+    context = MotionStatechartContext(world=mini_world)
+    chart.compile(context)
+    chart.tick(context)
+    recorder = HistoryRecorder()
+    observer = Mock(spec=StateHistoryObserver)
+    observer.on_state_change.side_effect = observer_failure
+    chart.history.add_observer(recorder)
+    chart.history.add_observer(observer)
+
+    with pytest.raises(type(failure)) as caught:
+        chart.tick(context)
+
+    assert caught.value is failure
+    assert (
+        recorder.snapshots[-1].observation_state[cancel] is ObservationStateValues.TRUE
+    )

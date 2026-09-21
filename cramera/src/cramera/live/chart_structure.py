@@ -7,7 +7,9 @@ too, and both have to describe a statechart the same way.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+import hashlib
+import json
+from dataclasses import asdict, dataclass, field, replace
 from enum import StrEnum
 
 from giskardpy.motion_statechart.motion_statechart import MotionStatechart
@@ -61,7 +63,7 @@ class ChartStructure:
 
     signature: str = ""
     """
-    Node-id signature of the structure, stable while it does not change.
+    Content digest identifying the nodes, hierarchy and transitions.
     """
 
 
@@ -144,10 +146,12 @@ def structure_of(chart: MotionStatechart) -> ChartStructure:
                 kind=transition.kind.name,
             )
         )
-    signature = "|".join(node.id + ":" + node.name for node in nodes)
-    return ChartStructure(
+    structure = ChartStructure(
         nodes=nodes,
         edges=edges,
         node_state_indices=node_state_indices,
-        signature=signature,
     )
+    signature = hashlib.sha256(
+        json.dumps(asdict(structure), sort_keys=True).encode("utf-8")
+    ).hexdigest()
+    return replace(structure, signature=signature)

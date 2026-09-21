@@ -27,6 +27,7 @@
     let offered = [];              // what the menu currently shows
     let active = 0;                // which row is selected
     let token = null;              // the word the offers are for
+    let vocabularyRevision = 0;
     const membersByOwner = {};     // owner name -> its members, once asked for
 
     function isOpen() {
@@ -46,7 +47,9 @@
       if (!current.owner) return show(current, options.entries());
       const known = membersByOwner[current.owner];
       if (known) return show(current, known);
+      const requestedVocabulary = vocabularyRevision;
       options.fetchMembers(current.owner).then(function (members) {
+        if (requestedVocabulary !== vocabularyRevision) return;
         membersByOwner[current.owner] = members;
         const latest = Completion.tokenAt(input.value, input.selectionStart);
         // the caret may have moved on while the members were being fetched
@@ -159,6 +162,8 @@
       isOpen: isOpen,
       handledKey: handledKey,
       forget: function () {
+        vocabularyRevision += 1;
+        close();
         for (const owner in membersByOwner) delete membersByOwner[owner];
       },
     };

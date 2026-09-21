@@ -10,9 +10,11 @@ it has no notion of the source format.
 from __future__ import annotations
 
 import os
+import math
 import warnings
 import xml.etree.ElementTree as ElementTree
 from dataclasses import dataclass, field
+from krrood.exceptions import DataclassException
 
 from coraplex.datastructures.enums import JointType
 from scipy.spatial.transform import Rotation
@@ -39,6 +41,28 @@ from semantic_digital_twin.world_description.world_entity import Body
 from typing_extensions import ClassVar, Dict, Iterable, List, Optional, Type
 
 from cramera.onboard.bundle_urdf import BundledAssets, BundleReport
+
+
+@dataclass
+class UnrepresentableJointLimits(DataclassException, ValueError):
+    """
+    A bounded URDF joint lacks two finite native position limits.
+    """
+
+    joint_name: str
+    """Name of the connection that cannot be exported."""
+
+    def error_message(self) -> str:
+        """
+        Identify the connection whose bounds cannot be serialized.
+        """
+        return f"Joint {self.joint_name} needs two finite position limits for URDF."
+
+    def suggest_correction(self) -> str:
+        """
+        Require bounds in the source world rather than invented export values.
+        """
+        return "Define valid position limits on the native degree of freedom."
 
 
 @dataclass
@@ -230,6 +254,7 @@ class UrdfDocument:
         :param bodies: The bodies serialized into the document.
         """
         urdf_out = os.path.join(self.output_directory, "%s.urdf" % name)
+        self.assets.require_destination(urdf_out)
         ElementTree.indent(self.root_element)
         ElementTree.ElementTree(self.root_element).write(
             urdf_out, encoding="utf-8", xml_declaration=True
@@ -356,11 +381,14 @@ class UrdfDocument:
                 "axis",
                 {"xyz": self._format_numbers(connection.axis.to_np()[:3])},
             )
-        if (
-            joint_type in self.LIMITED_JOINT_TYPES
-            and connection.dof.has_position_limits()
-        ):
+        if joint_type in self.LIMITED_JOINT_TYPES:
             limits = connection.dof.limits
+            positions = (limits.lower.position, limits.upper.position)
+            if any(
+                position is None or not math.isfinite(position)
+                for position in positions
+            ):
+                raise UnrepresentableJointLimits(str(connection.name))
             ElementTree.SubElement(
                 joint_element,
                 "limit",

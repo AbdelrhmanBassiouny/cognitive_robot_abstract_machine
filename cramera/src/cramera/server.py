@@ -48,16 +48,17 @@ from typing_extensions import Any, Callable, ClassVar, Dict, List, Optional
 from urllib.parse import parse_qs, urlparse
 
 from cramera import paths
-from cramera.live.frame_range import FrameRange, InvalidFrameRange
+from cramera.live.frame_range import InvalidFrameRange
+from cramera.live.recording_save_request import (
+    InvalidRecordingSaveRequest,
+    RecordingSaveRequest,
+)
 from cramera.live.recording_storage import (
     NoSavedRecording,
-    SceneDestination,
     SceneNameTaken,
     SharedScenesUnavailable,
     discard_recording_bundle,
     has_saveable_recording,
-    save_recording_bundle,
-    trim_recording_bundle,
 )
 from cramera.logging_setup import get_logger
 from cramera.onboard.scene_index import InvalidSceneName, merged_scene_index
@@ -316,26 +317,15 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         An optional ``firstFrame``/``lastFrame`` pair cuts the run down to that
         inclusive range before it is saved.
         """
-        body = self._request_body()
-        if body.get("firstFrame") is not None:
-            try:
-                trim_recording_bundle(
-                    FrameRange(
-                        first=int(body["firstFrame"]),
-                        last=int(body.get("lastFrame", -1)),
-                    )
-                )
-            except (InvalidFrameRange, NoSavedRecording) as error:
-                return self._send_json({"ok": False, "error": str(error)}, 400)
         try:
-            name = save_recording_bundle(
-                str(body.get("name") or ""),
-                SceneDestination(body.get("destination", SceneDestination.LOCAL)),
-                robot=body.get("robot"),
-                environment=body.get("environment"),
-                task=body.get("task"),
-            )
-        except InvalidSceneName as error:
+            body = self._request_body()
+            name = RecordingSaveRequest.from_json(body).save()
+        except (
+            InvalidSceneName,
+            InvalidFrameRange,
+            InvalidRecordingSaveRequest,
+            json.JSONDecodeError,
+        ) as error:
             return self._send_json({"ok": False, "error": str(error)}, 400)
         except (NoSavedRecording, SharedScenesUnavailable) as error:
             return self._send_json({"ok": False, "error": str(error)}, 400)

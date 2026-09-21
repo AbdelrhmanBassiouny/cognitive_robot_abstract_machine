@@ -108,6 +108,9 @@ Panels.define('graph', function (root, bus) {
   const stacks = {};          // tab -> parent payloads for the back button
   Object.keys(TABS).forEach(function (t) { stacks[t] = []; });
   let inGraphSet = {};
+  let navigationRevision = 0;
+  let drillRequest = 0;
+  let destroyed = false;
 
   // %% Plan tab: readable step-list rendering (an alternative to the vis graph)
   let stepsMode = true;   // Plan tab opens in the readable Steps view; the toggle switches to the graph
@@ -301,18 +304,29 @@ Panels.define('graph', function (root, bus) {
   }
   async function drill(id) {
     if (!view.details[id]) return;
+    const requestedView = view;
+    const requestedNavigation = navigationRevision;
+    const requestedBridge = liveState;
+    const request = ++drillRequest;
     try {
       const r = await fetch(SceneContext.withScene('/api/knowledge/expand?node=' + encodeURIComponent(id)));
       const p = await ResponseUtil.parseJson(r);
+      if (destroyed || request !== drillRequest || requestedNavigation !== navigationRevision
+          || requestedView !== view || requestedBridge !== liveState) return;
       if (!p.ok) return;                       // node has no inside view
       stacks[tab].push(view);
       setView(p);
       select(id);
     } catch (err) { /* server unreachable — stay where we are */ }
   }
-  function goBack() { if (stacks[tab].length) setView(stacks[tab].pop()); }
+  function goBack() {
+    if (!stacks[tab].length) return;
+    navigationRevision += 1;
+    setView(stacks[tab].pop());
+  }
   function goHome() {
     if (!stacks[tab].length) return;
+    navigationRevision += 1;
     stacks[tab] = [];
     setView(base[tab]);
   }
@@ -336,7 +350,8 @@ Panels.define('graph', function (root, bus) {
     }
   }
   async function showTab(name) {
-    if (!TABS[name]) return;
+    if (destroyed || !TABS[name]) return;
+    const requestedNavigation = ++navigationRevision;
     tab = name;
     tabsEl.querySelectorAll('button').forEach(function (b) {
       b.classList.toggle('active', b.dataset.view === name);
@@ -347,7 +362,7 @@ Panels.define('graph', function (root, bus) {
       const loaded = await loadedView(name);
       // a view is fetched, so the reader can be on another tab by the time it arrives:
       // drawing it there would show one tab's graph under another tab's name
-      if (tab !== name) return;
+      if (destroyed || requestedNavigation !== navigationRevision) return;
       if (loaded.error) { emptyEl.textContent = loaded.error; return; }
       base[name] = loaded.payload;
     }
@@ -416,6 +431,8 @@ Panels.define('graph', function (root, bus) {
   const liveSig = { plan: '', chart: '', transforms: '' };
   let liveTimer = null;
   let liveState = { on: false, url: '' };
+  let liveRequest = 0;
+  let appliedLiveRequest = 0;
 
   function liveSource() {
     const p = shown[tab] || base[tab];
@@ -514,16 +531,24 @@ Panels.define('graph', function (root, bus) {
   }
 
   async function liveRefresh(force) {
+    if (destroyed) return;
     const src = liveSource();
     const active = !!src && liveState.on;
     liveBadge.classList.toggle('on', active);
     if (!active) return;
     if (stacks[tab].length) return;              // inside a drill-down: leave it alone
+    const requestedNavigation = navigationRevision;
+    const requestedBridge = liveState;
+    const request = ++liveRequest;
     let live;
     try {
       live = await fetch(liveState.url + LIVE_ENDPOINT[src]).then(ResponseUtil.parseJson);
     } catch (err) { return; }                    // bridge gone — the 3D side handles it
+    if (destroyed || requestedNavigation !== navigationRevision || requestedBridge !== liveState
+        || stacks[tab].length || request < appliedLiveRequest) return;
     if (!live || !(live.nodes || live.connections)) return;
+    // A slower poll may still contribute until a newer response has actually arrived.
+    appliedLiveRequest = request;
     const payload = livePayload(src, live);
     if (force || live.signature !== liveSig[src]) {    // structure changed → rebuild
       liveSig[src] = live.signature;
@@ -541,6 +566,7 @@ Panels.define('graph', function (root, bus) {
   }
 
   bus.on('live:changed', function (p) {
+    if (destroyed) return;
     liveState = { on: !!p.on, url: p.url || '' };
     if (liveTimer) { clearInterval(liveTimer); liveTimer = null; }
     if (liveState.on) {
@@ -622,6 +648,7 @@ Panels.define('graph', function (root, bus) {
 
   return {
     destroy: function () {
+      destroyed = true;
       if (liveTimer) { clearInterval(liveTimer); liveTimer = null; }
     },
   };

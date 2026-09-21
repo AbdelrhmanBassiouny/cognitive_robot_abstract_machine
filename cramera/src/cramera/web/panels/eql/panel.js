@@ -68,6 +68,9 @@ Panels.define('eql', function (root, bus) {
   let recordedStatus = '';             // what the recorded scene calls itself
   // which body of knowledge is asked about: the last preset picked
   let askedScope = null;
+  let vocabularyRequest = 0;
+  let voiceRequest = 0;
+  let running = false;
 
   // %% boot
   fetch(SceneContext.withScene('/api/knowledge')).then(ResponseUtil.parseJson).then(boot).catch(function (err) {
@@ -92,11 +95,25 @@ Panels.define('eql', function (root, bus) {
   // %% which source answers
   bus.on('live:changed', function (live) {
     source = QuerySource.of(live);
+    const requestedSource = source;
+    askedScope = null;
+    running = false;
+    runBtn.textContent = 'Run';
+    answerEl.innerHTML = '';
+    questionEl.innerHTML = QuestionDisplay.hint(ASK_HINT);
+    vocabularyRequest += 1;
+    voiceRequest += 1;
+    vocabulary = [];
+    suggestions.forget();
     if (!source.live) return showSource(recordedStatus, (knowledge && knowledge.presets) || []);
-    fetch(source.presetsUrl).then(ResponseUtil.parseJson).then(function (payload) {
+    knowledgeStatus.textContent = 'loading live queries…';
+    buildPresets([]);
+    fetch(requestedSource.presetsUrl).then(ResponseUtil.parseJson).then(function (payload) {
+      if (requestedSource !== source) return;
       if (!payload.ok) throw new Error(payload.error || 'the demo offers no queries');
       showSource('live · ' + payload.title, payload.presets || [], payload.scopes);
     }).catch(function (err) {
+      if (requestedSource !== source) return;
       showSource('live · no queries (' + errorText(err) + ')', []);
     });
   });
@@ -111,13 +128,18 @@ Panels.define('eql', function (root, bus) {
   // Re-asked whenever the answering source changes: a demo's own variables are not the
   // recorded scene's, and only the source that answers a query knows what it accepts.
   function loadVocabulary() {
+    const request = ++vocabularyRequest;
+    const requestedSource = source;
     vocabulary = [];
     suggestions.forget();
-    fetch(source.vocabularyUrl(askedScope)).then(ResponseUtil.parseJson)
+    fetch(requestedSource.vocabularyUrl(askedScope)).then(ResponseUtil.parseJson)
       .then(function (payload) {
+        if (requestedSource !== source || request !== vocabularyRequest) return;
         vocabulary = (payload && payload.ok && payload.entries) || [];
       })
-      .catch(function () { vocabulary = []; });
+      .catch(function () {
+        if (requestedSource === source && request === vocabularyRequest) vocabulary = [];
+      });
   }
 
   function fetchMembers(owner) {
@@ -271,14 +293,17 @@ Panels.define('eql', function (root, bus) {
 
   async function askSpokenQuestion(text) {
     text = (text || '').trim(); if (!text) return;
+    const request = ++voiceRequest;
+    const requestedSource = source;
     questionEl.innerHTML = QuestionDisplay.hint('You asked: “' + text + '”');
     try {
-      const r = await fetch(source.questionUrl, {
+      const r = await fetch(requestedSource.questionUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ text: text }),
       });
       const res = await ResponseUtil.parseJson(r);
+      if (requestedSource !== source || request !== voiceRequest) return;
       if (!res.ok) throw new Error(res.error || 'question matching failed');
       if (!res.matched) {
         showAnswer('<div class="nores">' + esc(res.reply) + '</div>');
@@ -286,28 +311,36 @@ Panels.define('eql', function (root, bus) {
         return;
       }
       input.value = res.preset.code;
-      askedScope = res.preset.scope;
+      if (askedScope !== res.preset.scope) {
+        askedScope = res.preset.scope;
+        loadVocabulary();
+      }
       showQuestion(res.preset);
       runQuery(res.preset.code);
     } catch (err) {
+      if (requestedSource !== source || request !== voiceRequest) return;
       showAnswer('<div class="qerr">' + esc(errorText(err)) + '</div>');
     }
   }
 
   // %% run an EQL query
-  let running = false;
   async function runQuery(code) {
     code = (code || '').trim(); if (!code || running) return;
+    const requestedSource = source;
+    voiceRequest += 1;
     running = true;
     runBtn.textContent = '…';
     try {
-      const r = await fetch(source.runUrl, {
+      const r = await fetch(requestedSource.runUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ code: code, scope: askedScope }),
       });
-      render(code, await ResponseUtil.parseJson(r));
+      const response = await ResponseUtil.parseJson(r);
+      if (requestedSource !== source) return;
+      render(code, response);
     } catch (err) {
+      if (requestedSource !== source) return;
       render(code, { ok: false, error: errorText(err) });
     }
     running = false;
