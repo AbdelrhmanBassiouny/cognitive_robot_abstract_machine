@@ -170,5 +170,16 @@ Verified with the package's own suite (`python -m pytest test/basstler_test
 
 What shipped on #430, added to the plan above: a chain **stops at a branch that has landed** -
 whatever sits above one needs a reparent onto the upstream base, which the whole-board pass owns,
-so it is not part of the subtree below it. 679 tests pass against 664 on the base; the selector's
+so it is not part of the subtree below it. 680 tests pass against 665 on the base; the selector's
 departure from `is_ancestor` is the one call a review should check.
+
+**The review rounds' test-naming cleanup is on #185, not on this item.** Two rounds asked for the
+strings these suites retype - branch names, then labels and a sample session link - to be named
+once, and every test involved is one #185 introduced. Under the scope rule that already governs
+this (a change to what an unlanded pull request introduced is that pull request's work), the sweep
+was pushed to `claude/plan-item-kickoff-workflow-cuare2` as `608b72e92` and merged back here, so
+this item's diff changes no test it did not add. `StackBranch`, `StackLabel`, `A_SESSION_LINK`,
+`FixtureFile` and `ForkCheckout.own_file()` therefore land with #185 whatever happens to this item
+- and are lost to it if #185 is ever rewritten. It is worth noting the rule reaches review rounds
+at all: a fix asked for on a stacked pull request is not automatically that pull request's to
+carry.
