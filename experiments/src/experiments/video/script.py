@@ -126,9 +126,9 @@ class NarrationLines:
         "A backend choice picks among the capable ones by meta-queries over the task, "
         "in an order of preference."
     )
-    # "that means:" made the voice break before "that"; "meaning:" runs on and pauses after
+    # "that means:" made the voice break before "that"; the bare colon pauses once, after it
     plan_pick_up: Line = Line(
-        "We demonstrate this with a plan written as a nested query meaning: pick up the "
+        "We demonstrate this with a plan written as a nested query: pick up the "
         "cyan cube resting on the board,"
     )
     plan_insertion: Line = Line(

@@ -233,11 +233,11 @@ How much of the stage the whole plan takes while it is read: as tall as the stag
 allows, so that all of it is in view while its parts are pointed to in turn.
 """
 
-PICK_UP_NAMED_AT = 3.75
+PICK_UP_NAMED_AT = 3.4
 """
 Seconds into the line about the pick-up that "pick up" is said, after the pause that
-follows "meaning:" — measured on the spoken line; the pick-up action is pointed to
-then. The insertion action is pointed to as the line about it starts.
+follows "nested query:" — measured on the spoken line; the pick-up action is pointed
+to then. The insertion action is pointed to as the line about it starts.
 """
 
 OPEN_PART_NAMED_AT: Dict[Slot, float] = {Slot.PERCEPTION: 1.8, Slot.PROBABILISTIC: 2.55, Slot.RULES: 3.45}
