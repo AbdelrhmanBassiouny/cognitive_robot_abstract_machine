@@ -60,6 +60,12 @@ ALUMINIUM = Color(0.66, 0.68, 0.71, 1.0)
 The brushed metal the table top is, for the table to be drawn in.
 """
 
+BAND_PADDING = 0.006
+"""
+Metres the band where the two boxes interfere is thickened by above and below, the
+interference itself being too thin to see.
+"""
+
 # %% what the predicate reads
 
 
@@ -441,6 +447,23 @@ class WorkingMemoryCheck(Scene):
     How long the boxes and the reading are shown once the view has landed.
     """
 
+    boxes_at: Tuple[float, float] = (0.5, 1.2)
+    """
+    Seconds after the view has landed that the box around the lid, then the one around
+    the cube, are drawn.
+    """
+
+    band_at: float = 2.4
+    """
+    Seconds after the landing that the band where the two boxes interfere is drawn, and
+    the overlap read out.
+    """
+
+    verdict_at: float = 4.5
+    """
+    Seconds after the landing that the verdict is given.
+    """
+
     resolution: Resolution = CLOSE_UP
     """
     The size the scene draws itself at.
@@ -473,19 +496,20 @@ class WorkingMemoryCheck(Scene):
         reading = self.pictures.reading
         viewpoint = self.pictures.viewpoint(1.0)
         drawn = frame.copy()
-        if seconds > 0.5:
-            self._draw_box(drawn, reading.supporting, viewpoint, Ink.SIMULATION.rgb, eased((seconds - 0.5) / 0.6))
-        if seconds > 1.2:
-            self._draw_box(drawn, reading.supported, viewpoint, Ink.PERCEPTION.rgb, eased((seconds - 1.2) / 0.6))
+        supporting_at, supported_at = self.boxes_at
+        if seconds > supporting_at:
+            self._draw_box(drawn, reading.supporting, viewpoint, Ink.SIMULATION.rgb, eased((seconds - supporting_at) / 0.6))
+        if seconds > supported_at:
+            self._draw_box(drawn, reading.supported, viewpoint, Ink.PERCEPTION.rgb, eased((seconds - supported_at) / 0.6))
         overlap = reading.supported.intersected(reading.supporting)
-        if seconds > 2.4 and overlap is not None:
+        if seconds > self.band_at and overlap is not None:
             self._draw_band(drawn, overlap, viewpoint)
         caption = "SupportedBy(cube, lid): the two bounding boxes"
-        if seconds > 2.4:
+        if seconds > self.band_at:
             caption = reading.reading_line
-        if seconds > 4.5:
+        if seconds > self.verdict_at:
             caption = f"SupportedBy(cube, lid) → {reading.holds}"
-        return self._captioned(drawn, caption, verdict=seconds > 4.5)
+        return self._captioned(drawn, caption, verdict=seconds > self.verdict_at)
 
     @staticmethod
     def _draw_box(frame: Frame, box: BoxCorners, viewpoint: Viewpoint, color, weight: float) -> None:
@@ -497,13 +521,15 @@ class WorkingMemoryCheck(Scene):
 
     @staticmethod
     def _draw_band(frame: Frame, band: BoxCorners, viewpoint: Viewpoint) -> None:
-        # the band is thin; draw it as its own box, filled, so the overlap is seen at all
-        thick = BoxCorners(lower=band.lower - np.array([0.0, 0.0, 0.004]), upper=band.upper + np.array([0.0, 0.0, 0.004]))
+        # the band is thin; draw it as its own box, filled and outlined in the hue that
+        # points things out, so the interference is seen at all
+        thick = BoxCorners(lower=band.lower - np.array([0.0, 0.0, BAND_PADDING]), upper=band.upper + np.array([0.0, 0.0, BAND_PADDING]))
         corners = viewpoint.project(thick.corners)
         overlay = frame.copy()
         hull = cv2.convexHull(corners.astype(np.float32).reshape(-1, 1, 2)).astype(int)
-        cv2.fillPoly(overlay, [hull], Ink.SIMULATION.rgb)
-        cv2.addWeighted(overlay, 0.45, frame, 0.55, 0, frame)
+        cv2.fillPoly(overlay, [hull], Ink.ASKED.rgb)
+        cv2.addWeighted(overlay, 0.6, frame, 0.4, 0, frame)
+        cv2.polylines(frame, [hull], True, Ink.ASKED.rgb, 2, cv2.LINE_AA)
 
     def _captioned(self, frame: Frame, caption: str, verdict: bool = False) -> Frame:
         canvas = self.resolution.blank(255)

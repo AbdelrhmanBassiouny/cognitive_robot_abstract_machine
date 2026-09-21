@@ -258,15 +258,15 @@ class SpokenLine:
         """
         return self.starts + self.speech.duration
 
-    def cues(self, characters_per_row: int = SUBTITLE_ROW, rows: int = SUBTITLE_ROWS) -> List[SubtitleCue]:
+    def cues(self, room: Optional[SubtitleRoom] = None) -> List[SubtitleCue]:
         """
-        The line cut into subtitles, each short enough for a player's rows, each shown
-        for its share of the speech by its share of the letters.
+        The line cut into subtitles, each short enough for the room, each shown for its
+        share of the speech by its share of the letters.
 
-        :param characters_per_row: The most characters a player shows on one row.
-        :param rows: How many rows a subtitle may take.
+        :param room: How much text one subtitle may show; a player's one row if not
+            given.
         """
-        fitting = SubtitleRoom(characters_per_row, rows)
+        fitting = room if room is not None else SubtitleRoom(SUBTITLE_ROW, SUBTITLE_ROWS)
         pieces = self._pieces(fitting)
         letters = sum(len(piece) for piece in pieces)
         cues: List[SubtitleCue] = []
@@ -333,6 +333,13 @@ class SubtitleRoom:
                     return cut
         return words
 
+
+BURNED_IN_ROOM = SubtitleRoom(characters_per_row=58, rows=2)
+"""
+How much a subtitle burned into the picture shows: two rows of the band the scenes keep
+clear, the letters' size being the video's own, so that a whole clause is read at a
+time rather than pieces that switch faster than they are read.
+"""
 
 CUTS_TRIED = 3
 """
@@ -503,11 +510,14 @@ class Narration:
             )
         return "\n".join(rows)
 
-    def cues(self) -> List[SubtitleCue]:
+    def cues(self, room: Optional[SubtitleRoom] = None) -> List[SubtitleCue]:
         """
         Every subtitle, in order.
+
+        :param room: How much text one subtitle may show; a player's one row if not
+            given.
         """
-        return [cue for line in self.lines for cue in line.cues()]
+        return [cue for line in self.lines for cue in line.cues(room)]
 
     def srt(self) -> str:
         """
@@ -543,16 +553,22 @@ class Subtitled(Timeline):
 
     cues: List[SubtitleCue] = field(default_factory=list)
     """
-    The subtitles, in order.
+    The subtitles, in order, each fitting the room.
+    """
+
+    room: SubtitleRoom = BURNED_IN_ROOM
+    """
+    How much text one subtitle shows: the rows a cue is written on.
     """
 
     @classmethod
-    def over(cls, timeline: Timeline, cues: List[SubtitleCue]) -> Subtitled:
+    def over(cls, timeline: Timeline, narration: Narration, room: SubtitleRoom = BURNED_IN_ROOM) -> Subtitled:
         """
         :param timeline: The timeline as it stands.
-        :param cues: What to draw on it.
+        :param narration: What is said over it, cut into subtitles that fit the room.
+        :param room: How much text one subtitle shows.
         """
-        return cls(timeline.scenes, timeline.frames_per_second, timeline.dissolve, cues=list(cues))
+        return cls(timeline.scenes, timeline.frames_per_second, timeline.dissolve, cues=narration.cues(room), room=room)
 
     def cue_at(self, seconds: float) -> Optional[SubtitleCue]:
         """
@@ -568,7 +584,7 @@ class Subtitled(Timeline):
         resolution = Resolution.of(frame)
         middle = (resolution.stage_height + resolution.height) / 2
         return Typesetting(size=SUBTITLE_SIZE, color=Ink.TEXT.rgb).written(
-            frame, "\n".join(cue.rows(SUBTITLE_ROW)), (resolution.width / 2, middle), Anchor.CENTRE_MIDDLE
+            frame, "\n".join(cue.rows(self.room.characters_per_row)), (resolution.width / 2, middle), Anchor.CENTRE_MIDDLE
         )
 
 

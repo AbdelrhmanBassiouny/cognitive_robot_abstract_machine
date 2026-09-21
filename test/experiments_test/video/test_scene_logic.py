@@ -24,9 +24,46 @@ from experiments.video.footage import (
     ViewOfTheRun,
 )
 from experiments.video.perturbations import IdleStretches, RecordingStretch
-from experiments.video.twin import BoxCorners, SupportReading
+from experiments.video.timeline import Resolution
+from experiments.video.twin import BoxCorners, SupportReading, WorkingMemoryCheck
 
 # %% boxes
+
+
+@dataclass
+class FlatViewpoint:
+    """
+    A view straight down: a point's x and y are its pixels, scaled.
+    """
+
+    def project(self, points: np.ndarray) -> np.ndarray:
+        return points[:, :2] * 100.0 + 50.0
+
+
+@dataclass
+class TwinStandIn:
+    """
+    A twin whose every picture is blank, with a cube resting on a lid.
+    """
+
+    reading: SupportReading = field(
+        default_factory=lambda: SupportReading(
+            supported=BoxCorners(lower=np.array([0.5, 0.5, 0.099]), upper=np.array([0.7, 0.7, 0.3])),
+            supporting=BoxCorners(lower=np.array([0.0, 0.0, 0.0]), upper=np.array([1.5, 1.0, 0.1])),
+            vertical_overlap=0.001,
+            maximum=0.01,
+            holds=True,
+        )
+    )
+
+    def viewpoint(self, progress: float) -> FlatViewpoint:
+        return FlatViewpoint()
+
+    def before_the_spawn(self) -> np.ndarray:
+        return np.full((120, 200, 3), 255, dtype=np.uint8)
+
+    def along_the_flight(self, progress: float) -> np.ndarray:
+        return self.before_the_spawn()
 
 
 def test_a_box_has_twelve_edges_each_joining_corners_that_differ_in_one_axis() -> None:
@@ -61,6 +98,27 @@ def test_the_reading_line_states_the_comparison_the_predicate_makes(overlap: flo
 
 
 # %% standing still
+
+
+def test_the_check_draws_the_boxes_the_band_and_the_verdict_at_the_moments_it_is_given() -> None:
+    check = WorkingMemoryCheck(
+        TwinStandIn(), flight_from=1.0, flight_for=1.0, boxes_for=3.0, boxes_at=(0.2, 0.6), band_at=1.2, verdict_at=2.0,
+        resolution=Resolution(width=400, height=240),
+    )
+    assert check.duration == pytest.approx(5.0)
+    landed = check.flight_from + check.flight_for
+
+    def inked(seconds: float) -> int:
+        picture = check.frame_at(seconds)[: int(check.resolution.stage_height) - 80]
+        return int((picture.min(axis=2) < 250).sum())
+
+    assert inked(landed + 0.1) == 0  # nothing drawn yet
+    lid_box = inked(landed + 0.5)
+    both_boxes = inked(landed + 1.1)
+    banded = inked(landed + 1.5)
+    assert 0 < lid_box < both_boxes < banded
+    verdict = check.frame_at(landed + 2.5)
+    assert not np.array_equal(verdict, check.frame_at(landed + 1.5))
 
 
 def test_a_stretch_holds_its_ends() -> None:

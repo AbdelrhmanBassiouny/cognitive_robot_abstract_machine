@@ -319,14 +319,26 @@ class Typesetting:
         :param anchor: Which point of the text goes there.
         """
         picture = Image.fromarray(frame)
-        ImageDraw.Draw(picture).multiline_text(
+        drawing = ImageDraw.Draw(picture)
+        typeface = font(self.face, self.size)
+        spacing = self.size * 0.35
+        if "\n" in text:
+            # several rows hang from their top; a middle anchor is met by raising them by
+            # half their height
+            anchor_value = anchor.value[0] + "a"
+            if anchor.value[1] == "m":
+                _, top, _, bottom = drawing.multiline_textbbox(at, text, font=typeface, anchor=anchor_value, spacing=spacing)
+                at = (at[0], at[1] - (bottom - top) / 2)
+        else:
+            anchor_value = anchor.value
+        drawing.multiline_text(
             at,
             text,
             fill=self.color,
-            font=font(self.face, self.size),
-            anchor=anchor.value if "\n" not in text else anchor.value[0] + "a",
+            font=typeface,
+            anchor=anchor_value,
             align="center" if anchor.value[0] == "m" else "left",
-            spacing=self.size * 0.35,
+            spacing=spacing,
         )
         return np.array(picture)
 

@@ -232,7 +232,7 @@ BACKEND_TAXONOMY = TreeNode(
         ),
         TreeNode(
             "Generative",
-            "computes an answer",
+            "infers new instances",
             children=(
                 TreeNode("PerceptionBackend", "looks through the robot's camera", Ink.PERCEPTION.rgb),
                 TreeNode("RippleDownRulesBackend", "rule-based reasoning", Ink.RULES.rgb),

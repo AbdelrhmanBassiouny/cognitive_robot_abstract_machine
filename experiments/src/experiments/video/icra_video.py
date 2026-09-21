@@ -43,6 +43,7 @@ from experiments.video.encoding import (
 )
 from experiments.video.figure import (
     FigureBox,
+    FigureGeometry,
     FrameworkFigure,
     GraspChartBar,
     PlanAction,
@@ -90,10 +91,10 @@ from experiments.video.stages import (
     Answering,
     FigureOnCanvas,
     FigureScene,
+    Magnified,
     Mark,
     OnCanvas,
-    ReadingStop,
-    Scrolled,
+    Pointer,
 )
 from experiments.video.timeline import Scene, Timeline
 from experiments.video.twin import TwinPictures, WorkingMemoryCheck
@@ -220,39 +221,35 @@ QUERY_HELD_AT_LEAST = 0.5
 Seconds a sub-query is held alone at the least, however short the line over it.
 """
 
-PLAN_CAPTION = "The plan states what it wants and leaves four things open, each answered by a backend."
+PLAN_CAPTION = ""
 """
-What is written under the figure while the plan is read.
-"""
-
-PLAN_SCROLL_FROM = 0.65
-"""
-How far into the line about the pick-up the plan starts scrolling down: where the line
-reaches what the pick-up asks for, having introduced the plan.
+What is written under the figure while the plan is read: nothing, the plan magnified
+to the stage's height covering the caption's place.
 """
 
-PLAN_SCROLL_UNTIL = 1.5
+PLAN_SHARE = 0.96
 """
-Seconds into the line about the insertion by which the plan's open fields, the
-insertion's among them, have scrolled into view: once the line has named the insertion.
-"""
-
-OPEN_FIELD_NAMED_AT: Dict[Slot, float] = {Slot.PROBABILISTIC: 2.55, Slot.RULES: 3.45}
-"""
-Seconds into the line about the insertion that the field each slot leaves open is
-named — "the approach direction", "and the hole" — measured on the spoken line; the
-slot's ``...`` is marked then.
+How much of the stage the whole plan takes while it is read: as tall as the stage
+allows, so that all of it is in view while its parts are pointed to in turn.
 """
 
-OPEN_FIELDS_IN_VIEW_UNTIL = 5.0
+PICK_UP_NAMED_AT = 3.75
 """
-Seconds into the line about the insertion the reading rests with every open field in
-view: until "left open" has been said, before the reading drifts on to the plan's end.
+Seconds into the line about the pick-up that "pick up" is said, after the pause that
+follows "meaning:" — measured on the spoken line; the pick-up action is pointed to
+then. The insertion action is pointed to as the line about it starts.
+"""
+
+OPEN_PART_NAMED_AT: Dict[Slot, float] = {Slot.PERCEPTION: 1.8, Slot.PROBABILISTIC: 2.55, Slot.RULES: 3.45}
+"""
+Seconds into the line about the insertion that what each slot leaves open is named —
+"The cube", "the approach direction", "and the hole" — measured on the spoken line;
+the part is pointed to and highlighted then.
 """
 
 OPEN_FIELD_HUE = Ink.ASKED.rgb
 """
-What a ``...`` of the plan is ringed in when it is pointed to.
+What a part of the plan is ringed in when it is pointed to.
 """
 
 QUERY_PARTS_NAMED_AT = (1.1, 3.4, 4.2, 5.5)
@@ -538,7 +535,11 @@ class VideoAssembly:
                 scene.appears_at, scene.run_for = (0.0, 1.0, 2.0, 3.0), 2.0
             return scene
         if slot is Slot.SIMULATION:
-            scene = WorkingMemoryCheck(self.twin, flight_from=1.5, flight_for=3.0, boxes_for=1.5)
+            # the band where the boxes interfere is drawn as the line reaches "the board's
+            # top", and the verdict as it reaches "confirms"
+            scene = WorkingMemoryCheck(
+                self.twin, spawn_at=0.3, flight_from=1.2, flight_for=2.0, boxes_for=3.0, boxes_at=(0.2, 0.6), band_at=1.0, verdict_at=1.8
+            )
             if self.preview:
                 scene.flight_for, scene.boxes_for = 2.0, 4.0
             return scene
@@ -547,47 +548,46 @@ class VideoAssembly:
                 self.sampling,
                 GraspOptionsOnThePicture(self.demo, self.twin.cube_at + [0.0, 0.0, 0.01]),
                 statement_for=1.5,
-                sampling_for=4.0,
+                sampling_for=3.5,
                 answer_for=1.5,
             )
             if self.preview:
                 scene.sampling_for, scene.answer_for = 3.0, 2.0
             return scene
-        scene = RuleTreeEvaluation(self.rule_trace, HoleOnThePicture(self.demo), tree_for=2.0, answer_for=3.0)
+        scene = RuleTreeEvaluation(self.rule_trace, HoleOnThePicture(self.demo), tree_for=2.0, answer_for=2.7)
         if self.preview:
             scene.answer_for = 2.0
         return scene
 
     def plan_reading(self) -> NarratedScene:
         """
-        The whole plan magnified out of the figure and read from the top, scrolling
-        down as the lines about it reach the pick-up and then the insertion.
+        The whole plan magnified out of the figure and read with an arrow: the pick-up
+        and then the insertion pointed to as the lines describe them, then each part
+        left open as it is named, highlighted as the arrow moves on.
         """
         shown = self.figure(0, None, PLAN_CAPTION)
         geometry = shown.figure.geometry
         pick_up, insertion = geometry.actions[PlanAction.PICK_UP], geometry.actions[PlanAction.INSERTION]
         whole = FigureBox(geometry.plan.x, pick_up.y, geometry.plan.width, insertion.y + insertion.height - pick_up.y)
         lines = (self.lines.plan_pick_up, self.lines.plan_insertion)
-        starts = self.starts_of(lines)
-        pick_up_said, insertion_said = (self.voice.speaks(line.said).duration for line in lines)
-        scrolled = Scrolled(shown, whole, Ink.TEXT.rgb)
-        fields = geometry.open_fields
-        # the open fields, from the first `...` to the last, in the middle of the window
-        rows = scrolled.window.height / scrolled.scale
-        first = min(field.y for field in fields.values())
-        last = max(field.y + field.height for field in fields.values())
-        fields_in_view = (first + last) / 2 - rows / 2
-        scrolled.stops = (
-            ReadingStop(LEAD + starts[0] + PLAN_SCROLL_FROM * pick_up_said, whole.y),
-            ReadingStop(LEAD + starts[1] + PLAN_SCROLL_UNTIL, fields_in_view),
-            ReadingStop(LEAD + starts[1] + OPEN_FIELDS_IN_VIEW_UNTIL, fields_in_view),
-            ReadingStop(LEAD + starts[1] + insertion_said, scrolled.lowest_top),
+        pick_up_from, insertion_from = (LEAD + start for start in self.starts_of(lines))
+        open_parts = {slot: insertion_from + named_at for slot, named_at in OPEN_PART_NAMED_AT.items()}
+        magnified = Magnified(shown, whole, Ink.TEXT.rgb, share=PLAN_SHARE)
+        magnified.pointers = (
+            Pointer(pick_up, OPEN_FIELD_HUE, from_second=pick_up_from + PICK_UP_NAMED_AT),
+            Pointer(insertion, OPEN_FIELD_HUE, from_second=insertion_from),
+            *(Pointer(self.left_open(geometry, slot), OPEN_FIELD_HUE, from_second=named_at, framed=False) for slot, named_at in open_parts.items()),
         )
-        scrolled.marks = tuple(
-            Mark(fields[slot], OPEN_FIELD_HUE, from_second=LEAD + starts[1] + named_at)
-            for slot, named_at in OPEN_FIELD_NAMED_AT.items()
-        )
-        return NarratedScene(scrolled, lines)
+        magnified.marks = tuple(Mark(self.left_open(geometry, slot), OPEN_FIELD_HUE, from_second=named_at) for slot, named_at in open_parts.items())
+        return NarratedScene(magnified, lines)
+
+    @staticmethod
+    def left_open(geometry: FigureGeometry, slot: Slot) -> FigureBox:
+        """
+        What the plan leaves open for a slot: the field written as ``...`` where there
+        is one, else the whole description the slot answers.
+        """
+        return geometry.open_fields.get(slot, geometry.slots[slot])
 
     def backend_scene(self, slot: Slot) -> NarratedScene:
         """
@@ -789,7 +789,7 @@ class VideoAssembly:
         logger.info("%.1f s of video in %d scenes", timeline.duration, len(timeline.scenes))
         budget = int(limits.largest * min(timeline.duration / limits.longest, 1.0)) - bytes_for_sound(timeline.duration)
         burned_in = self.subtitling is Subtitling.BURNED_IN
-        picture = Subtitled.over(timeline, narration.cues()) if burned_in else timeline
+        picture = Subtitled.over(timeline, narration) if burned_in else timeline
         silent = H264Encoder(size_budget=budget, preset="fast" if self.preview else "slow").encode(
             picture, path.with_name(path.stem + "_silent.mp4")
         )

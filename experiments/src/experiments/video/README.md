@@ -49,7 +49,10 @@ default (`Subtitled`, drawn into the band every scene leaves clear at the bottom
 `Resolution.stage_height`); `--subtitles soft` puts them in as a text track the
 viewer can switch off (on by default) plus the same cues as a SubRip file next to the
 mp4 instead. Either way the cues are cut from the written lines at clause ends where
-possible, one row of at most 42 characters each.
+possible; burned in, a cue takes two rows of the band (`BURNED_IN_ROOM`, up to 58
+characters a row, the letters' size being the video's own), so a whole clause is read
+at a time; in the soft track, whose text size is the player's, one row of at most 42
+characters.
 
 ### The robot's camera
 
@@ -84,14 +87,16 @@ what was filled in marked the way the `...` was (`filled_fields` in the geometry
 before the filled sub-query shrinks back into its place in the plan and the work into
 its panel, both filled in by the time they land. So the plan on the left fills in as
 the backends answer, and the resolved plan on the right is never zoomed into on its
-own. `Scrolled` grows the whole plan
-out to a window it is read through and scrolls it down at `ReadingStop`s the assembly
-times to the lines about the plan: the plan rests at its top while the line introduces
-it, rests again with every `...` in view while the line names what is left open, and
-has scrolled to its end as the line ends. The source also states where each `...`
-lies (`open_fields`), and a `Mark` points to it from the moment the line names its
-field -- a highlighter's yellow over it, ringed -- on the scrolled plan and again on
-the sub-query held beside its close-up.
+own. Before the backends, the whole plan is read as one `Magnified` stretch as tall
+as the stage allows (`PLAN_SHARE`), all of it in view, with `Pointer`s the assembly
+times to the lines about it: an arrow beside the window points at the pick-up action
+as "pick up" is said and moves onto the insertion as its line starts, each framed and
+washed in the pointer's hue while it is pointed to; then, as the line names what is
+left open, the arrow moves onto the cube's description and each `...` in turn
+(`OPEN_PART_NAMED_AT`). The source states where each `...` lies (`open_fields`), and
+a `Mark` highlights each part left open from the moment it is named -- a
+highlighter's yellow over it, ringed -- staying on as the arrow moves on, and again
+on the sub-query held beside its close-up.
 
 The queries put to long-term memory over the grid are written in the match syntax,
 `a(Type)` for each class with the event named where it is matched
@@ -126,9 +131,9 @@ The queries put to long-term memory over the grid are written in the match synta
   beside its work grown out of its panel, names the backend on a tab over the work,
   writes the answer into the sub-query as written and shrinks both back once answered
   (`Spotlight` is the work alone, grown out to the whole screen); `Magnified` grows a
-  stretch of the figure itself out to where it can be read, and `Scrolled` one too
-  tall to read at once; a `Mark` on any of them points to a part of the stretch from
-  a moment on.
+  stretch of the figure itself out to where it can be read; a `Mark` on either
+  highlights a part of the stretch from a moment on, and a `Pointer` on a magnified
+  stretch points an arrow at a part in turn.
 - `perception.py`, `twin.py`, `grasp.py`, `rules.py` -- one scene per backend, each
   driving the backend's own code on the recorded run: the narrowing, the predicate's
   boxes, the model's samples, the rule tree's trace. The twin is drawn dressed as

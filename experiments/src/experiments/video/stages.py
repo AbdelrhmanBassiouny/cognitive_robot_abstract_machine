@@ -349,17 +349,18 @@ def grown(seconds: float, grow: float, held_for: float, shrink: float) -> float:
     return 1.0
 
 
-def magnifying_room(resolution: Resolution) -> Area:
+def magnifying_room(resolution: Resolution, share: float = MAGNIFIED_SHARE) -> Area:
     """
     The room a magnified stretch of the figure may take: its share of the stage, centred.
 
     :param resolution: The size of the canvas.
+    :param share: How much of the stage's width and height the room takes.
     """
     return Area(
-        resolution.width * (1 - MAGNIFIED_SHARE) / 2,
-        resolution.stage_height * (1 - MAGNIFIED_SHARE) / 2,
-        resolution.width * MAGNIFIED_SHARE,
-        resolution.stage_height * MAGNIFIED_SHARE,
+        resolution.width * (1 - share) / 2,
+        resolution.stage_height * (1 - share) / 2,
+        resolution.width * share,
+        resolution.stage_height * share,
     )
 
 
@@ -413,9 +414,20 @@ class Magnified(Scene):
     one scale.
     """
 
+    share: float = MAGNIFIED_SHARE
+    """
+    How much of the stage's width and height the stretch may take.
+    """
+
     marks: Tuple[Mark, ...] = ()
     """
-    The parts of the stretch pointed to while it is read, if any.
+    The parts of the stretch highlighted while it is read, if any.
+    """
+
+    pointers: Tuple[Pointer, ...] = ()
+    """
+    The parts of the stretch pointed to in turn while it is read, if any, in the order
+    they are pointed to.
     """
 
     @property
@@ -427,7 +439,7 @@ class Magnified(Scene):
         """
         Where the stretch lies fully grown: at its scale, centred on the stage.
         """
-        room = magnifying_room(self.shown.resolution).fitting(self.box.width / self.box.height)
+        room = magnifying_room(self.shown.resolution, self.share).fitting(self.box.width / self.box.height)
         scale = self.pixels_per_centimetre
         if scale is None:
             scale = min(room.width / self.box.width, self.shown.pixels_per_centimetre * self.magnification_up_to)
@@ -451,13 +463,70 @@ class Magnified(Scene):
         """
         return grown(seconds, self.grow, self.held_for, self.shrink)
 
+    def placed(self, where: Area, part: FigureBox) -> Area:
+        """
+        Where a part of the stretch lies when the stretch lies somewhere.
+
+        :param where: Where the stretch lies, on the canvas.
+        :param part: The part, in the figure's centimetres.
+        """
+        scale = where.width / self.box.width
+        return Area(
+            where.x + (part.x - self.box.x) * scale,
+            where.y + (part.y - self.box.y) * scale,
+            part.width * scale,
+            part.height * scale,
+        )
+
+    def pointed_at(self, seconds: float) -> Optional[Tuple[Pointer, Optional[Pointer], float]]:
+        """
+        What is pointed to at a moment, if anything: the pointer, the one before it that
+        the arrow is still on its way from, and how far the move has got, from zero to
+        one.
+        """
+        current = [pointer for pointer in self.pointers if pointer.from_second <= seconds]
+        if not current:
+            return None
+        pointer = current[-1]
+        moved = eased((seconds - pointer.from_second) / POINTER_MOVE)
+        before = current[-2] if len(current) > 1 and moved < 1.0 else None
+        return pointer, before, moved
+
     def picture_at(self, seconds: float) -> Frame:
         progress = self.grown_at(seconds)
         where = self.shown.area_of(self.box).towards(self.window, progress)
         frame = dimmed(self.shown.frame, 0.55 * progress)
         frame = filled(frame, where.inset(-4), self.hue)
         picture = marked(self.picture, (self.box.x, self.box.y), self.scale, self.marks, seconds)
-        return pasted(frame, picture, where)
+        frame = pasted(frame, picture, where)
+        return self._pointed(frame, where, seconds, progress)
+
+    def _pointed(self, frame: Frame, where: Area, seconds: float, weight: float) -> Frame:
+        """
+        The frame with the part pointed to at a moment framed, and the arrow beside the
+        window pointing at it; on its way from the part before while it is still moving,
+        and appearing with the first pointer.
+
+        :param frame: The frame, the stretch pasted on.
+        :param where: Where the stretch lies.
+        :param seconds: The moment.
+        :param weight: How far the pointing shows at all, by how far the stretch is grown.
+        """
+        pointed = self.pointed_at(seconds)
+        if pointed is None or weight <= 0.0:
+            return frame
+        pointer, before, moved = pointed
+        around = self.placed(where, pointer.box).inset(-POINTER_AIR)
+        if before is not None:
+            around = self.placed(where, before.box).inset(-POINTER_AIR).towards(around, moved)
+        else:
+            weight *= moved
+        drawn = frame
+        if pointer.framed:
+            drawn = framed(washed(drawn, around, pointer.hue), around, pointer.hue, thickness=3)
+        head = (where.right + 4 + POINTER_AIR, around.centre[1])
+        drawn = arrowed(drawn, (head[0] + POINTER_LENGTH, head[1]), head, pointer.hue, thickness=4)
+        return blended(frame, drawn, weight)
 
 
 # %% a part of a magnified stretch pointed to
@@ -529,6 +598,67 @@ def marked(picture: Frame, origin: Tuple[float, float], scale: float, marks: Seq
         drawn = framed(drawn, around, mark.hue, thickness=max(2, int(round(scale * 0.02))))
         picture = blended(picture, drawn, weight)
     return picture
+
+
+POINTER_MOVE = 0.4
+"""
+Seconds an arrow takes to move from the part it pointed to onto the next.
+"""
+
+POINTER_LENGTH = 90
+"""
+Pixels long the arrow pointing at a part of a magnified stretch is.
+"""
+
+POINTER_AIR = 6
+"""
+Pixels a pointer's frame stands off the part it frames, and the arrow's head off the
+window.
+"""
+
+POINTER_WASH = 0.12
+"""
+How much of its hue a pointer washes over the part it frames.
+"""
+
+
+@dataclass(frozen=True)
+class Pointer:
+    """
+    A part of a magnified stretch a reader is pointed to as it is read: an arrow beside
+    the window points at it from a moment on, the part framed and washed in the hue,
+    until the next pointer takes the arrow over.
+    """
+
+    box: FigureBox
+    """
+    The part, in the figure's centimetres.
+    """
+
+    hue: Rgb
+    """
+    The colour of the arrow and the frame.
+    """
+
+    from_second: float = 0.0
+    """
+    Seconds into the scene the arrow points at the part; before, it points at the
+    pointer before, or at nothing.
+    """
+
+    framed: bool = True
+    """
+    Whether the part is framed and washed as well as pointed at; not where a mark
+    already highlights it.
+    """
+
+
+def washed(picture: Frame, around: Area, hue: Rgb) -> Frame:
+    """
+    A copy of the picture with a wash of a hue over a rectangle of it, faint enough to
+    read through.
+    """
+    return blended(picture, filled(picture, around, hue), POINTER_WASH)
 
 
 def highlighted(picture: Frame, around: Area) -> Frame:
@@ -879,158 +1009,6 @@ class Answering(Scene):
         A picture framed in the hue and pasted where it lies.
         """
         frame = filled(frame, where.inset(-4), self.hue)
-        return pasted(frame, picture, where)
-
-
-# %% a stretch of the figure read through, scrolling
-
-
-@dataclass(frozen=True)
-class ReadingStop:
-    """
-    Where a reading of a scrolled stretch of the figure has got to at a moment.
-    """
-
-    seconds: float
-    """
-    The moment, into the scene.
-    """
-
-    top: float
-    """
-    The figure's y, in centimetres, that lies at the window's top edge then.
-    """
-
-
-@dataclass
-class Scrolled(Scene):
-    """
-    A stretch of the figure too tall to read at once, grown out of its place into a
-    window it is read through, scrolled down as it is read, and shrunk back; the rest
-    of the figure dims behind it.
-    """
-
-    shown: FigureOnCanvas
-    """
-    The figure at its stage.
-    """
-
-    box: FigureBox
-    """
-    The stretch read, in the figure's centimetres.
-    """
-
-    hue: Rgb
-    """
-    The colour the window is framed in.
-    """
-
-    stops: Tuple[ReadingStop, ...] = ()
-    """
-    Where the reading has got to at some moments, in order: the window's top moves
-    evenly from each to the next and rests before the first and after the last; none
-    to rest at the top of the stretch throughout.
-    """
-
-    held_for: float = 6.0
-    """
-    Seconds the window is held fully grown.
-    """
-
-    grow: float = 0.8
-    """
-    Seconds it takes to grow out.
-    """
-
-    shrink: float = 0.6
-    """
-    Seconds it takes to shrink back.
-    """
-
-    magnification_up_to: float = 2.5
-    """
-    The most the stretch grows by, over the scale the figure is placed at, where the
-    screen's width would allow more.
-    """
-
-    marks: Tuple[Mark, ...] = ()
-    """
-    The parts of the stretch pointed to while it is read, if any.
-    """
-
-    @property
-    def duration(self) -> float:
-        return self.grow + self.held_for + self.shrink
-
-    @cached_property
-    def scale(self) -> float:
-        """
-        The pixels per centimetre the stretch is read at: as wide as the room allows,
-        up to the magnification.
-        """
-        room = magnifying_room(self.shown.resolution)
-        return min(room.width / self.box.width, self.shown.pixels_per_centimetre * self.magnification_up_to)
-
-    @cached_property
-    def window(self) -> Area:
-        """
-        Where the stretch is read fully grown: at its scale, as tall as the room allows
-        or the stretch is, centred on the stage.
-        """
-        room = magnifying_room(self.shown.resolution)
-        width = self.box.width * self.scale
-        height = min(room.height, self.box.height * self.scale)
-        return Area(room.centre[0] - width / 2, room.centre[1] - height / 2, width, height)
-
-    @cached_property
-    def picture(self) -> Frame:
-        return self.shown.cut_out(self.box, self.scale)
-
-    @property
-    def lowest_top(self) -> float:
-        """
-        The figure's y at the window's top when the stretch's bottom edge lies at its
-        bottom: as far as the reading can scroll.
-        """
-        return self.box.y + self.box.height - self.window.height / self.scale
-
-    def top_at(self, seconds: float) -> float:
-        """
-        The figure's y at the window's top at a moment, fully grown.
-        """
-        top = self.box.y
-        for earlier, later in zip(self.stops, self.stops[1:]):
-            if seconds >= later.seconds:
-                continue
-            if seconds > earlier.seconds:
-                share = (seconds - earlier.seconds) / (later.seconds - earlier.seconds)
-                top = earlier.top + (later.top - earlier.top) * share
-            else:
-                top = earlier.top
-            break
-        else:
-            if self.stops:
-                top = self.stops[-1].top
-        return min(max(top, self.box.y), self.lowest_top)
-
-    def grown_at(self, seconds: float) -> float:
-        """
-        How far the window has grown at a moment, from zero to one.
-        """
-        return grown(seconds, self.grow, self.held_for, self.shrink)
-
-    def picture_at(self, seconds: float) -> Frame:
-        progress = self.grown_at(seconds)
-        placed = self.shown.area_of(self.box)
-        where = placed.towards(self.window, progress)
-        # the window opens from the whole stretch at its place to its share of it, read at its scale
-        scale = self.shown.pixels_per_centimetre + (self.scale - self.shown.pixels_per_centimetre) * progress
-        top = self.box.y + (self.top_at(seconds) - self.box.y) * progress
-        first = int(round((top - self.box.y) * self.scale))
-        last = int(round((top - self.box.y + where.height / scale) * self.scale))
-        frame = dimmed(self.shown.frame, 0.55 * progress)
-        frame = filled(frame, where.inset(-4), self.hue)
-        picture = marked(self.picture[first:last], (self.box.x, self.box.y + first / self.scale), self.scale, self.marks, seconds)
         return pasted(frame, picture, where)
 
 

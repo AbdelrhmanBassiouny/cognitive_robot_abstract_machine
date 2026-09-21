@@ -119,15 +119,17 @@ class NarrationLines:
         "computed by any capable backend.",
     )
     taxonomy: Line = Line(
-        "Selective backends retrieve what is known; generative backends compute."
+        "Selective backends retrieve what is known; generative backends infer new "
+        "instances."
     )
     backend_choice: Line = Line(
         "A backend choice picks among the capable ones by meta-queries over the task, "
         "in an order of preference."
     )
+    # "that means:" made the voice break before "that"; "meaning:" runs on and pauses after
     plan_pick_up: Line = Line(
-        "We demonstrate this with a plan written as a nested query that means: pick up "
-        "the cyan cube resting on the board,"
+        "We demonstrate this with a plan written as a nested query meaning: pick up the "
+        "cyan cube resting on the board,"
     )
     plan_insertion: Line = Line(
         "and insert it into a hole. The cube, the approach direction and the hole are "

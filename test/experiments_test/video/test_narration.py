@@ -12,6 +12,7 @@ import numpy as np
 import pytest
 
 from experiments.video.narration import (
+    BURNED_IN_ROOM,
     LEAD,
     NarratedScene,
     Narration,
@@ -21,6 +22,7 @@ from experiments.video.narration import (
     SpokenLine,
     Storyboard,
     SubtitleCue,
+    SUBTITLE_ROW,
     SubtitleRoom,
     Subtitled,
     starts_of,
@@ -75,7 +77,7 @@ def test_a_long_line_is_cut_at_clauses_into_cues_of_at_most_two_short_lines() ->
         "query from different sources of knowledge."
     )
     line = spoken(text, 5.0, 20.0)
-    cues = line.cues(characters_per_row=42, rows=2)
+    cues = line.cues(SubtitleRoom(characters_per_row=42, rows=2))
     assert len(cues) >= 3
     assert all(len(cue.text) <= 42 for cue in line.cues())  # one row each by default
     assert " ".join(cue.text for cue in cues) == text
@@ -205,7 +207,7 @@ def test_a_sentence_too_long_for_a_subtitle_is_cut_evenly_at_a_clause_end_where_
     assert parts[0].endswith("simulation:")
     assert room.evenly("short") == ["short"]
     line = SpokenLine(Line("It holds. It does. " + sentence), 0.0, Speech(np.zeros(100, dtype=np.float32), 100))
-    texts = [cue.text for cue in line.cues(characters_per_row=42, rows=2)]
+    texts = [cue.text for cue in line.cues(room)]
     assert texts[0] == "It holds. It does."  # short sentences are joined where they fit together
     assert texts[1] == parts[0]
 
@@ -219,6 +221,30 @@ def test_a_cue_is_written_on_two_even_rows_when_it_needs_two() -> None:
     assert narration.srt().count("\n") == 4  # number, times, one row, a blank line
 
 
+def test_burned_in_subtitles_show_a_whole_clause_on_two_rows_of_the_band() -> None:
+    text = (
+        "Which objects moved is answered from the motion events and their tracked "
+        "objects; which of them the robot moved, from the agent-interaction events "
+        "restricted to those objects."
+    )
+    narration = Narration([spoken(text, 0.0, 9.0)])
+    burned_in, players = narration.cues(BURNED_IN_ROOM), narration.cues()
+    assert len(burned_in) < len(players)
+    assert all(len(cue.rows(BURNED_IN_ROOM.characters_per_row)) <= 2 for cue in burned_in)
+    assert any(len(cue.text) > SUBTITLE_ROW for cue in burned_in)
+    resolution = Resolution(width=1280, height=720)
+    timeline = Timeline([Still(resolution.blank(255), held_for=10.0)], frames_per_second=10, dissolve=0.0)
+    subtitled = Subtitled.over(timeline, narration)
+    assert subtitled.cues == burned_in
+    written = subtitled.frame_at(0.5)
+    band = written[int(resolution.stage_height) :]
+    inked_rows = np.flatnonzero(band.min(axis=(1, 2)) < 128)
+    assert written[: int(resolution.stage_height)].min() == 255
+    # two rows of letters, a gap between them, inside the band with air above and below
+    assert inked_rows[0] > 4 and inked_rows[-1] < band.shape[0] - 5
+    assert np.any(np.diff(inked_rows) > 4)
+
+
 def test_lines_said_in_turn_start_a_pause_after_the_one_before_ends() -> None:
     lines = [Line("one two"), Line("three four five six"), Line("seven")]
     assert starts_of(VoiceThatTakes(), lines, pause=0.5) == pytest.approx([0.0, 1.5, 4.0])
@@ -228,7 +254,7 @@ def test_lines_said_in_turn_start_a_pause_after_the_one_before_ends() -> None:
 def test_a_subtitled_timeline_draws_the_cue_of_the_moment_into_the_band_and_nothing_else() -> None:
     resolution = Resolution(width=320, height=180)
     timeline = Timeline([Still(resolution.blank(255), held_for=4.0)], frames_per_second=10, dissolve=0.0)
-    subtitled = Subtitled.over(timeline, [SubtitleCue(1.0, 2.0, "hello there")])
+    subtitled = Subtitled(timeline.scenes, timeline.frames_per_second, timeline.dissolve, cues=[SubtitleCue(1.0, 2.0, "hello there")])
     assert subtitled.duration == timeline.duration and subtitled.frame_count == timeline.frame_count
     assert subtitled.cue_at(1.5) is not None and subtitled.cue_at(2.0) is None
     band = slice(int(resolution.stage_height), resolution.height)

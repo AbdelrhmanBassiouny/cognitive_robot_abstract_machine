@@ -15,14 +15,16 @@ from experiments.video.stages import (
     COLUMN_GAP,
     MAGNIFIED_SHARE,
     MARK_FADE,
+    POINTER_AIR,
+    POINTER_LENGTH,
+    POINTER_MOVE,
     QUERY_COLUMN_WIDTH,
     TAB_HEIGHT,
     Answering,
     FigureOnCanvas,
     Magnified,
     Mark,
-    ReadingStop,
-    Scrolled,
+    Pointer,
     Spotlight,
     highlighted,
     marked,
@@ -286,6 +288,16 @@ def test_the_answer_is_written_in_while_the_work_is_still_shown_and_the_column_l
 # %% a stretch of the figure magnified
 
 
+def plan_stretch(shown: FigureOnCanvas) -> tuple:
+    """
+    The whole plan, from the pick-up's first line to the insertion's last, and its actions.
+    """
+    actions = shown.figure.geometry.actions
+    pick_up, insertion = actions[PlanAction.PICK_UP], actions[PlanAction.INSERTION]
+    plan = shown.figure.geometry.plan
+    return plan.__class__(plan.x, pick_up.y, plan.width, insertion.y + insertion.height - pick_up.y), pick_up, insertion
+
+
 def test_a_magnified_stretch_grows_from_its_place_to_the_screens_share_and_back() -> None:
     shown = FigureOnCanvas(FrameworkFigure(stage=0), resolution=Resolution(width=640, height=360))
     box = shown.figure.geometry.slots[Slot.RULES]
@@ -312,6 +324,74 @@ def test_a_stated_scale_sets_the_magnified_window_and_the_picture_is_cut_at_it()
     assert height == pytest.approx(box.height * 50.0, abs=1.5)
 
 
+def test_a_magnified_stretch_may_take_more_of_the_stage_than_the_usual_share() -> None:
+    shown = FigureOnCanvas(FrameworkFigure(stage=0), resolution=Resolution(width=640, height=360))
+    box, _, _ = plan_stretch(shown)
+    usual = Magnified(shown, box, hue=(0, 0, 0), magnification_up_to=100.0).window
+    wider = Magnified(shown, box, hue=(0, 0, 0), magnification_up_to=100.0, share=0.96).window
+    assert usual.height == pytest.approx(shown.resolution.stage_height * MAGNIFIED_SHARE)
+    assert wider.height == pytest.approx(shown.resolution.stage_height * 0.96)
+    assert wider.centre == pytest.approx(usual.centre)
+
+
+def hue_pixels(frame: np.ndarray, hue: tuple, area: Area) -> int:
+    """
+    How many pixels of an area of the frame are the hue, near enough.
+    """
+    left, top, width, height = area.rounded()
+    patch = frame[max(top, 0) : top + height, max(left, 0) : left + width].astype(int)
+    return int((np.abs(patch - np.array(hue)).sum(axis=2) < 40).sum())
+
+
+def arrow_row(window: Area, part: Area) -> Area:
+    """
+    The strip beside the window an arrow pointing at a part lies in.
+    """
+    return Area(window.right + POINTER_AIR, part.centre[1] - 4, POINTER_LENGTH + POINTER_AIR + 8, 8)
+
+
+def test_a_pointer_frames_its_part_and_an_arrow_beside_the_window_points_at_it_until_the_next_takes_over() -> None:
+    shown = FigureOnCanvas(FrameworkFigure(stage=0), resolution=Resolution(width=640, height=360))
+    box, pick_up, insertion = plan_stretch(shown)
+    hue = (0xD9, 0x29, 0x38)
+    magnified = Magnified(shown, box, hue=(0, 0, 0), held_for=4.0, grow=0.0, shrink=0.0, share=0.96)
+    magnified.pointers = (Pointer(pick_up, hue, from_second=0.5), Pointer(insertion, hue, from_second=2.0))
+    window = magnified.window
+    beside = Area(window.right, window.y, POINTER_LENGTH + 2 * POINTER_AIR + 8, window.height)
+    assert hue_pixels(magnified.frame_at(0.2), hue, beside) == 0
+    pointing = magnified.frame_at(1.5)
+    pick_up_at, insertion_at = magnified.placed(window, pick_up), magnified.placed(window, insertion)
+    assert hue_pixels(pointing, hue, arrow_row(window, pick_up_at)) > POINTER_LENGTH // 2
+    assert hue_pixels(pointing, hue, arrow_row(window, insertion_at)) == 0
+    # the frame runs along the part's top, just outside the window's own frame
+    above = Area(pick_up_at.x, pick_up_at.y - POINTER_AIR - 3, pick_up_at.width, 5)
+    assert hue_pixels(pointing, hue, above) > pick_up_at.width // 2
+    assert hue_pixels(pointing, hue, Area(insertion_at.x, insertion_at.bottom + POINTER_AIR - 2, insertion_at.width, 5)) == 0
+    # halfway through the move the arrow lies between the two parts; afterwards at the second alone
+    moving = magnified.frame_at(2.0 + POINTER_MOVE / 2)
+    between = Area(window.right + POINTER_AIR, pick_up_at.centre[1] + 4, POINTER_LENGTH + POINTER_AIR + 8, insertion_at.centre[1] - pick_up_at.centre[1] - 8)
+    assert hue_pixels(moving, hue, between) > POINTER_LENGTH // 2
+    moved = magnified.frame_at(3.5)
+    assert hue_pixels(moved, hue, arrow_row(window, insertion_at)) > POINTER_LENGTH // 2
+    assert hue_pixels(moved, hue, arrow_row(window, pick_up_at)) == 0
+    assert hue_pixels(moved, hue, above) == 0
+
+
+def test_a_pointer_left_unframed_only_points_leaving_the_part_to_its_mark() -> None:
+    shown = FigureOnCanvas(FrameworkFigure(stage=0), resolution=Resolution(width=640, height=360))
+    box, _, _ = plan_stretch(shown)
+    field = shown.figure.geometry.open_fields[Slot.RULES]
+    hue = (0xD9, 0x29, 0x38)
+    magnified = Magnified(shown, box, hue=(0, 0, 0), held_for=2.0, grow=0.0, shrink=0.0, share=0.96)
+    magnified.pointers = (Pointer(field, hue, from_second=0.0, framed=False),)
+    window = magnified.window
+    field_at = magnified.placed(window, field)
+    frame = magnified.frame_at(1.0)
+    assert hue_pixels(frame, hue, arrow_row(window, field_at)) > POINTER_LENGTH // 2
+    # nothing of the hue is drawn inside the window around the field: the arrow stops beside the window
+    assert hue_pixels(frame, hue, field_at.inset(-POINTER_AIR - 4)) == 0
+
+
 def test_a_magnified_stretch_without_growing_starts_fully_grown_and_framed_in_its_hue() -> None:
     shown = FigureOnCanvas(FrameworkFigure(stage=0), resolution=Resolution(width=640, height=360))
     hue = (0x0F, 0x76, 0x6E)
@@ -320,57 +400,6 @@ def test_a_magnified_stretch_without_growing_starts_fully_grown_and_framed_in_it
     window = magnified.window
     on_frame = (int(window.y - 2), int(window.centre[0]))
     assert tuple(magnified.frame_at(0.0)[on_frame]) == hue
-
-
-# %% a stretch of the figure read through
-
-
-def plan_stretch(shown: FigureOnCanvas) -> tuple:
-    """
-    The whole plan, from the pick-up's first line to the insertion's last, and its actions.
-    """
-    actions = shown.figure.geometry.actions
-    pick_up, insertion = actions[PlanAction.PICK_UP], actions[PlanAction.INSERTION]
-    plan = shown.figure.geometry.plan
-    return plan.__class__(plan.x, pick_up.y, plan.width, insertion.y + insertion.height - pick_up.y), pick_up, insertion
-
-
-def test_a_scrolled_stretch_reads_at_the_rooms_width_and_shows_what_the_room_is_tall() -> None:
-    shown = FigureOnCanvas(FrameworkFigure(stage=0), resolution=Resolution(width=640, height=360))
-    box, _, _ = plan_stretch(shown)
-    scrolled = Scrolled(shown, box, hue=(0, 0, 0), magnification_up_to=100.0)
-    assert scrolled.window.width == pytest.approx(640 * MAGNIFIED_SHARE)
-    assert scrolled.window.height == pytest.approx(shown.resolution.stage_height * MAGNIFIED_SHARE)
-    assert scrolled.picture.shape[0] > scrolled.window.height
-    assert scrolled.lowest_top == pytest.approx(box.y + box.height - scrolled.window.height / scrolled.scale)
-    capped = Scrolled(shown, box, hue=(0, 0, 0), magnification_up_to=2.0)
-    assert capped.scale == pytest.approx(shown.pixels_per_centimetre * 2.0)
-
-
-def test_a_scrolled_stretch_rests_moves_evenly_between_its_stops_and_rests_again() -> None:
-    shown = FigureOnCanvas(FrameworkFigure(stage=0), resolution=Resolution(width=640, height=360))
-    box, _, insertion = plan_stretch(shown)
-    scrolled = Scrolled(shown, box, hue=(0, 0, 0), held_for=8.0, magnification_up_to=100.0)
-    scrolled.stops = (ReadingStop(2.0, box.y), ReadingStop(6.0, scrolled.lowest_top))
-    assert scrolled.top_at(0.0) == scrolled.top_at(2.0) == box.y
-    assert scrolled.top_at(4.0) == pytest.approx((box.y + scrolled.lowest_top) / 2)
-    assert scrolled.top_at(6.0) == scrolled.top_at(9.0) == scrolled.lowest_top
-    # a stop past the stretch's bottom is read at the bottom
-    scrolled.stops = (ReadingStop(0.0, insertion.y + insertion.height),)
-    assert scrolled.top_at(1.0) == scrolled.lowest_top
-
-
-def test_a_scrolled_stretch_grows_from_its_place_to_its_window_and_back() -> None:
-    shown = FigureOnCanvas(FrameworkFigure(stage=0), resolution=Resolution(width=640, height=360))
-    box, _, _ = plan_stretch(shown)
-    hue = (0x1F, 0x23, 0x28)
-    scrolled = Scrolled(shown, box, hue=hue, held_for=1.0, grow=0.5, shrink=0.5)
-    assert scrolled.duration == pytest.approx(2.0)
-    assert scrolled.grown_at(0.0) == 0.0 and scrolled.grown_at(0.5) == 1.0 and scrolled.grown_at(2.0) == pytest.approx(0.0)
-    window = scrolled.window
-    on_frame = (int(window.y - 2), int(window.centre[0]))
-    assert tuple(scrolled.frame_at(1.0)[on_frame]) == hue
-    assert scrolled.frame_at(0.0).shape == scrolled.frame_at(1.0).shape
 
 
 # %% a part of a stretch pointed to
@@ -432,18 +461,4 @@ def test_a_magnified_sub_query_rings_its_open_field_once_the_mark_has_appeared()
     window, scale, box = magnified.window, magnified.scale, magnified.box
     before = patch_of(magnified.frame_at(0.5), window, box, scale, field)
     after = patch_of(magnified.frame_at(1.9), window, box, scale, field)
-    assert highlighter_over(before, after)
-
-
-def test_a_scrolled_plan_rings_an_open_field_where_the_scroll_has_put_it() -> None:
-    shown = FigureOnCanvas(FrameworkFigure(stage=0), resolution=Resolution(width=640, height=360))
-    box, _, _ = plan_stretch(shown)
-    field = shown.figure.geometry.open_fields[Slot.RULES]
-    scrolled = Scrolled(shown, box, hue=(0, 0, 0), held_for=2.0, grow=0.0, shrink=0.0, magnification_up_to=100.0)
-    scrolled.stops = (ReadingStop(0.0, scrolled.lowest_top),)
-    window, scale = scrolled.window, scrolled.scale
-    in_view = FigureBox(box.x, scrolled.lowest_top, box.width, box.height)
-    before = patch_of(scrolled.frame_at(1.0), window, in_view, scale, field)
-    scrolled.marks = (Mark(field, (0, 0, 0)),)
-    after = patch_of(scrolled.frame_at(1.0), window, in_view, scale, field)
     assert highlighter_over(before, after)
