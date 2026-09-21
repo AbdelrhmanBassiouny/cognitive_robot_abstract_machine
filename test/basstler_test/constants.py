@@ -28,6 +28,7 @@ __all__ = [
     "UPSTREAM_REVIEW_RESPONSE_DIRECTORY",
     "WORK_BRANCH",
     "PersonalNotesPath",
+    "StackBranch",
     "ToolingDirectory",
 ]
 
@@ -52,6 +53,37 @@ SET_UP_CLONE_DATASET = DATASET_DIRECTORY / "set-up-clone"
 A committed tree of everything ``check-setup.sh`` requires of a set-up clone, copied over
 a scratch project root rather than written out file by file.
 """
+
+
+class StackBranch(StrEnum):
+    """
+    The branches a stack under test is built from, named once for every suite that
+    builds one.
+
+    A suite names several of them per test, in a board entry, a git command and an
+    assertion at once, so a spelling that differs anywhere is a test quietly about a
+    branch its stack does not contain.
+    """
+
+    PARENT = "a-parent"
+    """
+    The bottom of the chain, cut from the base.
+    """
+
+    CHILD = "a-child"
+    """
+    Stacked directly on the parent.
+    """
+
+    GRANDCHILD = "a-grandchild"
+    """
+    Stacked on the child, so it reaches the parent only through it.
+    """
+
+    OFF_THE_CHAIN = "off-the-chain"
+    """
+    Cut from the base beside the chain, so nothing stacks it on the parent.
+    """
 
 
 class ToolingDirectory(StrEnum):
