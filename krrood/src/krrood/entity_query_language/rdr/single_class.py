@@ -176,16 +176,27 @@ class EQLSingleClassRDR:
         attach_definition_scope(self.case_variable, capture_caller_scope())
 
     @classmethod
-    def from_underspecified(cls, underspecified_query: Match) -> Self:
+    def from_underspecified(
+        cls,
+        underspecified_query: Match,
+        model_saver: Optional[ModelSaver] = None,
+    ) -> Self:
         """
         Build an RDR from an underspecified ``Match`` query, whose lone ``...``
         attribute defines what the RDR predicts.
 
         :param underspecified_query: For example ``an(Animal)(species=...)``.
+        :param model_saver: Where the rules are persisted, defaulting to the same
+            temporary store the constructor uses. Rules concluding something the
+            serializer cannot write pass :class:`NullModelSaver` here.
         :return: An RDR predicting the query's single underspecified attribute.
         """
         statement = UnderspecifiedMatch(underspecified_query)
-        return cls(statement.case_type, statement.target_attribute_name)
+        return cls(
+            statement.case_type,
+            statement.target_attribute_name,
+            model_saver=model_saver or TemporaryModelSaver(),
+        )
 
     # %% classification
 

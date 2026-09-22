@@ -12,14 +12,20 @@ from dataclasses import dataclass
 
 from typing_extensions import Optional, Type
 
-from experiments.montessori.perception.detections import MontessoriDetection
+from experiments.montessori.perception.detections import (
+    MontessoriBoardDetection,
+    MontessoriDetection,
+    MontessoriShapeDetection,
+    ShapeSortingHoleDetection,
+)
+from krrood.entity_query_language.backends import Look, PerceptionDetector
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 
 # %% what to look for
 
 
 @dataclass(frozen=True)
-class SceneRequest:
+class SceneRequest(Look):
     """
     The kind of thing a look is asked for, and where it is asked to search.
 
@@ -42,6 +48,32 @@ class SceneRequest:
     The surface to search, by the name the world knows it by, or ``None`` to search
     every surface of the scene.
     """
+
+    detector: Optional[PerceptionDetector] = None
+    """
+    The detector that answers this request, left open for the rules to work out.
+
+    A request stating nothing here is a description whose answer has still to be
+    planned, which is what the rules that choose a detector are asked about; a request
+    carrying one has been planned already.
+    """
+
+    @property
+    def pieces_are_asked_for(self) -> bool:
+        """
+        Whether a loose piece is a thing this request can be answered with.
+        """
+        return self.wants(MontessoriShapeDetection)
+
+    @property
+    def the_board_is_asked_for(self) -> bool:
+        """
+        Whether the board, or one of the holes cut through its lid, is a thing this
+        request can be answered with.
+        """
+        return self.wants(MontessoriBoardDetection) or self.wants(
+            ShapeSortingHoleDetection
+        )
 
     def wants(self, detection_type: Type[MontessoriDetection]) -> bool:
         """
