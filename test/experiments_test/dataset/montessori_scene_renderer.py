@@ -5,7 +5,7 @@ tested against ground truth it was never told.
 The camera looks at the table from off to one side, the way the real one does, so a
 piece standing on the table shows its sides as well as its top and its silhouette comes
 out stretched -- the very effect
-:meth:`~experiments.montessori.perception.pipeline.LoosePieceDetector.detect` has to
+:meth:`~experiments.montessori.perception.pipeline.EdgeFitDetector.detect` has to
 cancel.
 """
 

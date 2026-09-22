@@ -22,13 +22,19 @@ and centimetre-scale noise, far too coarse to measure a thirty millimetre piece.
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
 import cv2
 import numpy as np
-from typing_extensions import List, Optional, Tuple
+from krrood.entity_query_language.factories import ConditionType
+from typing_extensions import Dict, List, Optional, Sequence, Tuple
 
 from experiments.montessori.perception.camera import RgbdFrame
+from experiments.montessori.perception.detector_choice import (
+    DetectorRules,
+    PieceDetector,
+    TargetOnSurface,
+)
 from experiments.montessori.perception.detections import (
     MontessoriBoardDetection,
     MontessoriDetection,
@@ -51,7 +57,12 @@ from experiments.montessori.perception.orthophoto import (
 from experiments.montessori.perception.piece_matcher import PieceMatcher
 from experiments.montessori.perception.scene_request import SceneRequest
 from experiments.montessori.perception.surfaces import SurfaceSearch, WorkspaceSurface
-from experiments.montessori.pieces import HUE_RANGE, HUE_TOLERANCE, PIECE_HUES
+from experiments.montessori.pieces import (
+    HUE_RANGE,
+    HUE_TOLERANCE,
+    KNOWN_PIECES,
+    KnownPiece,
+)
 from experiments.montessori.semantics import ShapeSortingBoard
 from experiments.montessori.world import BOARD_SCALE
 from semantic_digital_twin.spatial_types.spatial_types import Pose
@@ -552,10 +563,14 @@ class BoardDetector:
         )
 
 
-@dataclass
-class LoosePieceDetector:
+@dataclass(eq=False)
+class EdgeFitDetector(PieceDetector):
     """
-    Finds the loose Montessori pieces in a view rectified onto the surface they rest on.
+    Finds the loose Montessori pieces by fitting their known outlines to the edges the
+    camera saw, searching for the placement that follows those edges best.
+
+    Needs nothing of the surface: an outline is fitted to edges whatever threw them, which
+    is why this is the general answer and the one a reflective table leaves standing.
     """
 
     matcher: PieceMatcher = field(default_factory=PieceMatcher)
@@ -583,13 +598,23 @@ class LoosePieceDetector:
     cancellation is forgiving of the difference.
     """
 
+    def capability(self, look: TargetOnSurface) -> ConditionType:
+        """
+        Answers a look for a piece whose outline is modelled, on any surface.
+
+        :param look: The look to state the condition over.
+        """
+        return look.target_outline_is_known
+
     def detect(
         self,
         orthophoto: Orthophoto,
         top_orthophoto: Orthophoto,
+        edges: EdgeDistances,
         frame: RgbdFrame,
         reference_frame: Optional[KinematicStructureEntity],
         search: SurfaceSearch,
+        candidates: Sequence[KnownPiece] = KNOWN_PIECES,
     ) -> List[MontessoriShapeDetection]:
         """
         Find the pieces resting on one surface.
@@ -610,17 +635,20 @@ class LoosePieceDetector:
 
         :param orthophoto: The rectified view of the surface's own plane.
         :param top_orthophoto: The rectified view of the plane a piece's top stands on.
+        :param edges: How far each point of that top view lies from an edge the camera
+            saw, which is what a piece's own outline is scored against.
         :param frame: The camera data, for measuring how tall each piece stands.
         :param reference_frame: Frame the resulting poses are expressed in.
         :param search: The surface being searched, which settles what rests on it.
+        :param candidates: The pieces this detector was chosen to look for.
         :return: One detection per recognised piece.
         """
-        edges = EdgeDistances.of(top_orthophoto)
+        matcher = replace(self.matcher, candidates=tuple(candidates))
         pieces = []
-        for hue in PIECE_HUES:
+        for hue in sorted({piece.hue for piece in candidates}):
             for contour in self._outlines_wearing(hue, orthophoto, top_orthophoto):
                 piece = self._piece_at(
-                    contour, orthophoto, edges, frame, reference_frame, search
+                    contour, orthophoto, edges, frame, reference_frame, search, matcher
                 )
                 if piece is not None:
                     pieces.append(piece)
@@ -653,6 +681,7 @@ class LoosePieceDetector:
         frame: RgbdFrame,
         reference_frame: Optional[KinematicStructureEntity],
         search: SurfaceSearch,
+        matcher: PieceMatcher,
     ) -> Optional[MontessoriShapeDetection]:
         """
         Recognise the piece one outline covers, if it is a piece of this surface's at
@@ -669,6 +698,7 @@ class LoosePieceDetector:
         :param frame: The camera data, for measuring how tall the piece stands.
         :param reference_frame: Frame the resulting pose is expressed in.
         :param search: The surface being searched.
+        :param matcher: The matcher, narrowed to the pieces being looked for.
         :return: The piece, or None where the outline is not one of this surface's.
         """
         footprint = Footprint.from_contour(contour, orthophoto.region.resolution)
@@ -679,7 +709,7 @@ class LoosePieceDetector:
         x, y = orthophoto.contour_center(contour)
         if not search.claims(x, y):
             return None
-        match = self.matcher.match(
+        match = matcher.match(
             edges,
             (x, y),
             self.colors.measure_hue(orthophoto, _filled(contour, orthophoto)),
@@ -702,6 +732,176 @@ class LoosePieceDetector:
             outline_agreement=match.outline_agreement,
             supporting_surface=search.surface.name,
         )
+
+
+@dataclass(eq=False)
+class ColorBlobDetector(PieceDetector):
+    """
+    Finds the loose Montessori pieces by cutting them out of the surface by colour and
+    reading the placement off the blob itself.
+
+    Where colour separates a piece from what it rests on, the blob already says where
+    the piece stands and roughly how it is turned, so the known outline is scored at
+    that one placement instead of being searched for. It reports the same outline
+    agreement the :class:`EdgeFitDetector` does, measured the same way, so the two can
+    be compared.
+    """
+
+    matcher: PieceMatcher = field(default_factory=PieceMatcher)
+    """
+    Scores a known piece's outline where the blob says it stands.
+    """
+
+    colors: SurfaceColors = field(default_factory=SurfaceColors)
+    """
+    How a piece separates from the surface by colour.
+    """
+
+    piece_size: SizeRange = LOOSE_PIECE_SIZE
+    """
+    Area a piece's outline may cover.
+    """
+
+    piece_height: float = 0.03
+    """
+    Roughly how tall a loose piece stands, in metres, reported as its own height
+    wherever the depth image cannot resolve it.
+    """
+
+    def capability(self, look: TargetOnSurface) -> ConditionType:
+        """
+        Answers a look only where colour separates the piece from the surface, since a
+        piece that shares the surface's colour has no blob to be cut out of it.
+
+        :param look: The look to state the condition over.
+        """
+        return look.target_separates_from_the_surface_by_color
+
+    def detect(
+        self,
+        orthophoto: Orthophoto,
+        top_orthophoto: Orthophoto,
+        edges: EdgeDistances,
+        frame: RgbdFrame,
+        reference_frame: Optional[KinematicStructureEntity],
+        search: SurfaceSearch,
+        candidates: Sequence[KnownPiece] = KNOWN_PIECES,
+    ) -> List[MontessoriShapeDetection]:
+        """
+        Find the pieces resting on one surface, from the colour they wear.
+
+        :param orthophoto: The rectified view of the surface's own plane.
+        :param top_orthophoto: The rectified view of the plane a piece's top stands on.
+        :param edges: How far each point of that top view lies from an edge the camera
+            saw, which is what a piece's own outline is scored against.
+        :param frame: The camera data, for measuring how tall each piece stands.
+        :param reference_frame: Frame the resulting poses are expressed in.
+        :param search: The surface being searched, which settles what rests on it.
+        :param candidates: The pieces this detector was chosen to look for.
+        :return: One detection per recognised piece.
+        """
+        matcher = replace(self.matcher, candidates=tuple(candidates))
+        pieces = []
+        for hue in sorted({piece.hue for piece in candidates}):
+            for contour in self._outlines_wearing(hue, orthophoto, top_orthophoto):
+                piece = self._piece_at(
+                    contour, orthophoto, edges, frame, reference_frame, search, matcher
+                )
+                if piece is not None:
+                    pieces.append(piece)
+        return pieces
+
+    def _outlines_wearing(
+        self, hue: int, orthophoto: Orthophoto, top_orthophoto: Orthophoto
+    ) -> List[np.ndarray]:
+        """
+        The outlines one colour covers on both of a surface's rectified views.
+
+        :param hue: The colour to look for, as OpenCV reports hue.
+        :param orthophoto: The rectified view of the surface's own plane.
+        :param top_orthophoto: The rectified view of the plane a piece's top stands on.
+        """
+        mask = _clean(
+            cv2.bitwise_and(
+                self.colors.piece_mask(orthophoto, hue),
+                self.colors.piece_mask(top_orthophoto, hue),
+            )
+        )
+        contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        return list(contours)
+
+    def _piece_at(
+        self,
+        contour: np.ndarray,
+        orthophoto: Orthophoto,
+        edges: EdgeDistances,
+        frame: RgbdFrame,
+        reference_frame: Optional[KinematicStructureEntity],
+        search: SurfaceSearch,
+        matcher: PieceMatcher,
+    ) -> Optional[MontessoriShapeDetection]:
+        """
+        Recognise the piece one blob covers, scored where the blob says it stands.
+
+        :param contour: The outline to read, in rectified pixels.
+        :param orthophoto: The rectified view of the surface's own plane.
+        :param edges: How far each point of the top view lies from an edge the camera
+            saw.
+        :param frame: The camera data, for measuring how tall the piece stands.
+        :param reference_frame: Frame the resulting pose is expressed in.
+        :param search: The surface being searched.
+        :param matcher: The matcher, narrowed to the pieces being looked for.
+        :return: The piece, or None where the outline is not one of this surface's.
+        """
+        footprint = Footprint.from_contour(contour, orthophoto.region.resolution)
+        if not self.piece_size.admits(footprint):
+            return None
+        if not _wholly_within(contour, orthophoto):
+            return None
+        x, y = orthophoto.contour_center(contour)
+        if not search.claims(x, y):
+            return None
+        match = matcher.match_at(
+            edges,
+            (x, y),
+            self._turns_of(contour),
+            self.colors.measure_hue(orthophoto, _filled(contour, orthophoto)),
+        )
+        if match is None:
+            return None
+        height = _measure_height(contour, orthophoto, frame, self.piece_height)
+        return MontessoriShapeDetection(
+            pose=Pose.from_xyz_rpy(
+                match.center[0],
+                match.center[1],
+                orthophoto.plane_height + height / 2,
+                yaw=match.yaw,
+                reference_frame=reference_frame,
+            ),
+            footprint=footprint,
+            outline=match.piece.turned_outline(match.yaw) + np.asarray(match.center),
+            category=match.piece.category,
+            height=height,
+            outline_agreement=match.outline_agreement,
+            supporting_surface=search.surface.name,
+        )
+
+    @staticmethod
+    def _turns_of(contour: np.ndarray) -> List[float]:
+        """
+        The turns a blob's own bounding rectangle says its piece may stand at.
+
+        The rectangle fixes the turn only up to a quarter of a circle, since a rectangle
+        laid a quarter turn round covers the same ground, so all four are offered and
+        the edges decide between them. The rectification is axis-aligned and both its
+        axes grow with the world's, so an angle measured in it is a world turn
+        unchanged.
+
+        :param contour: The outline to read, in rectified pixels.
+        """
+        quarter_turn = math.pi / 2
+        _, _, degrees = cv2.minAreaRect(contour)
+        return [math.radians(degrees) + turn * quarter_turn for turn in range(4)]
 
 
 # %% measuring how tall a piece stands
@@ -790,6 +990,57 @@ def _to_world_outline(contour: np.ndarray, orthophoto: Orthophoto) -> np.ndarray
     )
 
 
+@dataclass
+class RectifiedFrame:
+    """
+    One camera frame, and every horizontal plane it has been rectified onto.
+
+    A plane is rectified once however many detectors read it: the surfaces a look searches
+    and the detectors chosen for them ask for overlapping planes, and rectifying is the
+    most expensive thing a look does.
+    """
+
+    frame: RgbdFrame
+    """
+    The camera data every plane is rectified from.
+    """
+
+    projector: OrthophotoProjector
+    """
+    Rectifies the frame onto a plane, over the stretch of table perception searches.
+    """
+
+    views: Dict[float, Orthophoto] = field(default_factory=dict)
+    """
+    The planes rectified so far, by their height above the world frame's origin.
+    """
+
+    edges: Dict[float, EdgeDistances] = field(default_factory=dict)
+    """
+    The edges read off each rectified plane so far, by that plane's height.
+    """
+
+    def at(self, height: float) -> Orthophoto:
+        """
+        The frame rectified onto one horizontal plane.
+
+        :param height: Height of the plane above the world frame's origin, in metres.
+        """
+        if height not in self.views:
+            self.views[height] = self.projector.project(self.frame, height)
+        return self.views[height]
+
+    def edges_at(self, height: float) -> EdgeDistances:
+        """
+        How far each point of one rectified plane lies from an edge the camera saw.
+
+        :param height: Height of the plane above the world frame's origin, in metres.
+        """
+        if height not in self.edges:
+            self.edges[height] = EdgeDistances.of(self.at(height))
+        return self.edges[height]
+
+
 # %% the pipeline
 
 
@@ -829,9 +1080,17 @@ class MontessoriPerceptionPipeline:
     Finds the board and its holes.
     """
 
-    piece_detector: LoosePieceDetector = field(default_factory=LoosePieceDetector)
+    detector_rules: DetectorRules = field(
+        default_factory=lambda: DetectorRules(
+            edge_fit=EdgeFitDetector(), color_blob=ColorBlobDetector()
+        )
+    )
     """
-    Finds the loose pieces resting on each of the scene's surfaces.
+    Says which detector looks for each piece on each of the scene's surfaces.
+
+    A look is answered by the detector the rules choose from what the world states about
+    the surface and the piece, so a scene the twin describes better is looked at better
+    without the pipeline changing.
     """
 
     headroom: float = 0.15
@@ -939,22 +1198,29 @@ class MontessoriPerceptionPipeline:
         :return: The pieces, the board, and its holes, as far as the request asked for
             them.
         """
+        rectified = RectifiedFrame(
+            frame=frame, projector=OrthophotoProjector(region=self.table.region)
+        )
         board = self.board_detector.detect(
-            self.rectify(frame, self.lid.height), self.reference_frame
+            rectified.at(self.lid.height), self.reference_frame
         )
         pieces = []
         if request.wants(MontessoriShapeDetection):
             for search in self.searched_surfaces(board, request):
-                pieces.extend(
-                    self.piece_detector.detect(
-                        self.rectify(frame, search.surface.height),
-                        self.rectify(
+                for detector, candidates in self.detector_rules.detectors_for(
+                    search.surface, KNOWN_PIECES
+                ):
+                    pieces.extend(
+                        detector.detect(
+                            rectified.at(search.surface.height),
+                            rectified.at(search.surface.height + detector.piece_height),
+                            rectified.edges_at(
+                                search.surface.height + detector.piece_height
+                            ),
                             frame,
-                            search.surface.height + self.piece_detector.piece_height,
-                        ),
-                        frame,
-                        self.reference_frame,
-                        search,
+                            self.reference_frame,
+                            search,
+                            candidates,
+                        )
                     )
-                )
         return MontessoriScene(shapes=pieces, board=board)

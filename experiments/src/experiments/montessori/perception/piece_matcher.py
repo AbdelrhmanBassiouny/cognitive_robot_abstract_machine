@@ -182,6 +182,44 @@ class PieceMatcher:
             return None
         return best
 
+    def match_at(
+        self,
+        edges: EdgeDistances,
+        placement: Tuple[float, float],
+        yaws: Sequence[float],
+        hue: Optional[int],
+    ) -> Optional[MatchedPiece]:
+        """
+        Recognise the piece standing at one placement that is already known.
+
+        Scores each candidate where it is said to stand instead of searching for where
+        it stands, which is what makes this the cheap way to read a piece something else
+        has already located.
+
+        :param edges: The edges seen in the plane the piece's top face stands on.
+        :param placement: The world-frame ``(x, y)`` the piece is said to stand at.
+        :param yaws: The turns, in radians, it may be standing at.
+        :param hue: The colour that spot was measured to be, or None where it had no
+            colour to read.
+        :return: The best fit at that placement, or None if no known piece follows the
+            edges there well enough.
+        """
+        candidates = [piece for piece in self.candidates if self._could_be(piece, hue)]
+        if not candidates or not yaws:
+            return None
+        positions = np.asarray([placement], dtype=float)
+        best = max(
+            (
+                self._best_position(piece, edges, positions, yaw, self.reach)
+                for piece in candidates
+                for yaw in yaws
+            ),
+            key=lambda fit: fit.outline_agreement,
+        )
+        if best.outline_agreement < self.minimum_agreement:
+            return None
+        return best
+
     def _could_be(self, piece: KnownPiece, hue: Optional[int]) -> bool:
         """
         Whether a piece's own colour is close enough to a measured one to be it.
