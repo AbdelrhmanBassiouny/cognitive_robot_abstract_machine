@@ -8,10 +8,9 @@ questions about those episodes from working memory (during a run) and long-term 
 
 ## Supplementary video
 
-[![The title of the supplementary video over the robot inserting a piece into the board](experiments/doc/video/supplementary_video_poster.jpg)](experiments/doc/video/supplementary_video.mp4)
+[supplementary_video.mp4](experiments/doc/video/supplementary_video.mp4)
 
-The [supplementary video](experiments/doc/video/supplementary_video.mp4) (three minutes,
-16 MB, subtitled) shows the plan of the paper's framework figure resolved by one backend
+The video (three minutes, 16 MB, subtitled) shows the plan of the paper's framework figure resolved by one backend
 after another and carried out on the real robot, the action attribution and temporal
 queries answered during two trials, the perturbed episodes, and long-term memory
 answering the same query over the recorded corpus. It is the video submitted with the
@@ -336,6 +335,6 @@ All 17 remain in the dump; pass other identifiers to `export_filtered_corpus.py
 | `experiments/src/experiments/tracy_experiments/` | The simulated (`*_mujoco.py`) and real (`*_real.py`) robot rigs and demos |
 | `experiments/src/experiments/paper/` | Tables, query cards and plan timelines |
 | `experiments/doc/figures/framework/` | The framework figure (`python experiments/doc/figures/framework/build.py`, needs `pip install typst`) |
-| `experiments/doc/video/` | The supplementary video and its poster picture |
+| `experiments/doc/video/` | The supplementary video |
 | `test/experiments_test/` | Tests for all of the above |
 | `MONOREPO.md` | The general README of the monorepo this branch lives in |
