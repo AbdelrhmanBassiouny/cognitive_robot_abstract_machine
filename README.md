@@ -8,13 +8,13 @@ questions about those episodes from working memory (during a run) and long-term 
 
 ## Supplementary video
 
-[supplementary_video.mp4](experiments/doc/video/supplementary_video.mp4)
+<video width="640" controls src="experiments/doc/video/supplementary_video.mp4"><a href="experiments/doc/video/supplementary_video.mp4">supplementary_video.mp4</a></video>
 
-The video (three minutes, 16 MB, subtitled) shows the plan of the paper's framework figure resolved by one backend
-after another and carried out on the real robot, the action attribution and temporal
-queries answered during two trials, the perturbed episodes, and long-term memory
-answering the same query over the recorded corpus. It is the video submitted with the
-paper.
+The video (three minutes, 16 MB, subtitled) shows the plan of the paper's framework
+figure resolved by one backend after another and carried out on the real robot, the
+action attribution and temporal queries answered during two trials, the perturbed
+episodes, and long-term memory answering the same query over the recorded corpus. It is
+the video submitted with the paper, at `experiments/doc/video/`.
 
 There are three ways to reproduce the results, from least to most effort:
 
