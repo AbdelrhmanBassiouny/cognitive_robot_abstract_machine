@@ -28,7 +28,41 @@ from basstler.maintenance_report import (
     print_restack,
 )
 from basstler.maintenance_restack_procedure import restack
+from basstler.push_window import PushWindow
 from basstler.stack import BOARD_PATH, Configuration, Stack, load_stack
+
+
+def declare_the_push_flag(parser: argparse.ArgumentParser) -> None:
+    """
+    Declare the flag every command that restacks takes.
+
+    Shared rather than written twice, so the two cannot come to disagree about what
+    asking for the push is called.
+
+    :param parser: The subparser to declare it on.
+    """
+    parser.add_argument(
+        "--push-branches-under-review-now",
+        action="store_true",
+        help=(
+            "push branches that are already under review upstream whatever the hour; "
+            "without it they move only inside the configured window, so a scheduled "
+            "pass never shifts a diff under whoever is reading it"
+        ),
+    )
+
+
+def push_window_for(
+    configuration: Configuration, arguments: argparse.Namespace
+) -> PushWindow | None:
+    """
+    :param configuration: The resolved configuration, which carries the window.
+    :param arguments: The parsed command line.
+    :return: The window this run observes, or ``None`` where it was asked for the push.
+    """
+    if arguments.push_branches_under_review_now:
+        return None
+    return configuration.push_window
 
 
 @dataclass(frozen=True)
@@ -172,6 +206,10 @@ class RestackCommand(MaintenanceCommand):
         """
         return "integrate every moved parent and publish the result"
 
+    def declare_arguments(self, parser: argparse.ArgumentParser) -> None:
+        """:param parser: The subparser to declare this command's flags on."""
+        declare_the_push_flag(parser)
+
     def run(
         self, maintenance: MaintenancePass, arguments: argparse.Namespace
     ) -> MaintenanceExitCode:
@@ -179,7 +217,12 @@ class RestackCommand(MaintenanceCommand):
         :param arguments: The parsed command line.
         :return: The process exit code."""
         stack = maintenance.stack()
-        outcomes = restack(stack, maintenance.git, maintenance.fork())
+        outcomes = restack(
+            stack,
+            maintenance.git,
+            maintenance.fork(),
+            push_window=push_window_for(maintenance.configuration, arguments),
+        )
         print_restack(outcomes)
         return exit_code_for(MaintenanceReport(restacked=tuple(outcomes)))
 
@@ -239,12 +282,13 @@ class RunReportCommand(MaintenanceCommand):
         return "perform the whole pass and report it"
 
     def declare_arguments(self, parser: argparse.ArgumentParser) -> None:
-        """:param parser: The subparser to declare ``--json`` on."""
+        """:param parser: The subparser to declare this command's flags on."""
         parser.add_argument(
             "--json",
             action="store_true",
             help="emit the machine-readable document rather than a summary",
         )
+        declare_the_push_flag(parser)
 
     def run(
         self, maintenance: MaintenancePass, arguments: argparse.Namespace
@@ -266,7 +310,12 @@ class RunReportCommand(MaintenanceCommand):
         report = build_report(
             stack,
             fast_forward_report,
-            restack(stack, maintenance.git, fork),
+            restack(
+                stack,
+                maintenance.git,
+                fork,
+                push_window=push_window_for(maintenance.configuration, arguments),
+            ),
             promote(stack, fork),
             clear_spent_promotion_labels(stack, fork),
         )
