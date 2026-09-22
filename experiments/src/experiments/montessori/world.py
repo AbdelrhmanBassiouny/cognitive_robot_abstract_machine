@@ -23,7 +23,7 @@ from experiments.montessori.hole_geometry import (
     cut_board_mesh,
     detect_hole_footprints,
 )
-from experiments.montessori.pieces import KNOWN_PIECE_BY_CATEGORY
+from experiments.montessori.pieces import KNOWN_PIECE_BY_CATEGORY, color_of_hue
 from experiments.montessori.semantics import (
     MONTESSORI_SHAPE_CLASSES,
     MontessoriShapeCategory,
@@ -58,6 +58,7 @@ from semantic_digital_twin.world_description.geometry import (
     Mesh,
     Scale,
     Shape,
+    SurfaceFinish,
     Sphere,
 )
 from semantic_digital_twin.world_description.shape_collection import ShapeCollection
@@ -103,7 +104,51 @@ two never share a footprint.
 
 BOARD_SCALE = Scale(0.11, 0.282, 0.08)
 BOARD_POSITION = Point3(-0.4, 0.0, 0.553)
-BOARD_COLOR = Color.BEIGE()
+
+MEASURED_BOARD_HUE = 19
+"""
+Hue of the board's own wood, measured off the rectified camera image.
+
+Read the same way the pieces' hues were (see
+:data:`~experiments.montessori.pieces.CYAN_HUE`), so a detector holding a measured
+colour against the surface it was seen on compares two measurements rather than a
+measurement against a nominal name.
+"""
+
+BOARD_COLOR = color_of_hue(MEASURED_BOARD_HUE)
+"""
+The colour the board's wood is, at full saturation and brightness.
+
+Only the hue was measured, so this is the pure form of it, exactly as
+:attr:`~experiments.montessori.pieces.KnownPiece.color` is for a piece.
+"""
+
+BOARD_FINISH = SurfaceFinish.MATTE
+"""
+How the board's lid takes light: painted wood, which scatters it.
+
+This is what lets colour separate a piece from the lid at all, and so what decides
+whether a look at the lid can be answered by the cheaper colour blob.
+"""
+
+TABLE_COLOR = Color(R=0.55, G=0.57, B=0.58)
+"""
+The colour of Tracy's bare steel table.
+
+Almost colourless, which is what the camera measures: the table reads at a saturation
+of around 13 out of 255 where the palest thing standing on it reads around 53. Stated
+as a neutral grey rather than as the board's own wood, which is what the simulated
+table used to be drawn in.
+"""
+
+TABLE_FINISH = SurfaceFinish.MIRROR
+"""
+How Tracy's table takes light: brushed steel, which throws a diffuse reflection of
+whatever stands on it.
+
+That reflection has no sharp boundary anywhere, which is why a piece on this table is
+found by fitting its outline to edges rather than by cutting it out by colour.
+"""
 
 DRAWER_SCALE = Scale(0.09, 0.08, 0.06)
 HANDLE_SCALE = Scale(0.03, 0.015, 0.015)
@@ -375,15 +420,24 @@ def _board_collision_boxes(
     Tile the board's footprint into solid collision boxes, leaving every hole's true
     bounding box entirely open; see :func:`_tile_footprint_avoiding_holes`.
 
+    Every box states the board's own colour and finish, because these boxes are the
+    board as far as anything measuring its surface is concerned: perception reads a
+    supporting surface off the widest horizontal *collision* shape of the body offering
+    it, so an appearance stated only on the visual mesh is one it never sees.
+
     :param board_scale: Size of the board blank the holes are cut into.
     :param footprints: The holes to leave open.
     :return: One solid :class:`Box` per occupied grid cell.
     """
     half_x, half_y = board_scale.x / 2, board_scale.y / 2
     hole_bounds = [_footprint_bounds(footprint) for footprint in footprints]
-    return _tile_footprint_avoiding_holes(
+    boxes = _tile_footprint_avoiding_holes(
         (-half_x, half_x, -half_y, half_y), hole_bounds, board_scale.z
     )
+    for box in boxes:
+        box.color = BOARD_COLOR
+        box.finish = BOARD_FINISH
+    return boxes
 
 
 def _drawer_collision_boxes(
@@ -530,6 +584,7 @@ def _table_shapes(
     leg_footprint: float,
     support_z: float,
     color: Color,
+    finish: Optional[SurfaceFinish] = None,
 ) -> List[Shape]:
     """
     Build a tabletop :class:`Box` plus four leg :class:`Box`\\ es that support it from
@@ -540,6 +595,8 @@ def _table_shapes(
     :param leg_footprint: Cross-sectional width/depth of each leg.
     :param support_z: Height of the surface the legs stand on.
     :param color: Color shared by the tabletop and its legs.
+    :param finish: How the tabletop takes light, stated on it alone: the legs are not a
+        surface anything is looked for on.
     :return: The tabletop shape followed by its four leg shapes, positioned relative to
         the tabletop's own origin.
     """
@@ -548,7 +605,7 @@ def _table_shapes(
     leg_height = table_center_z - table_scale.z / 2 - support_z
     leg_center_local_z = support_z + leg_height / 2 - table_center_z
 
-    shapes = [Box(scale=table_scale, color=color)]
+    shapes = [Box(scale=table_scale, color=color, finish=finish)]
     for sign_x, sign_y in _LEG_CORNER_SIGNS:
         leg_origin = HomogeneousTransformationMatrix.from_xyz_rpy(
             x=sign_x * half_x, y=sign_y * half_y, z=leg_center_local_z
@@ -945,7 +1002,7 @@ class MontessoriWorld:
                     top_z - ROBOT_STAND_SCALE.z / 2,
                     TABLE_LEG_FOOTPRINT,
                     FLOOR_Z,
-                    BOARD_COLOR,
+                    TABLE_COLOR,
                 ),
             ),
         )
@@ -1059,7 +1116,8 @@ class MontessoriWorld:
                     float(TABLE_POSITION.z),
                     TABLE_LEG_FOOTPRINT,
                     FLOOR_Z,
-                    BOARD_COLOR,
+                    TABLE_COLOR,
+                    TABLE_FINISH,
                 ),
             ),
         )
@@ -1068,6 +1126,7 @@ class MontessoriWorld:
     def _build_shape_sorting_board(self) -> ShapeSortingBoard:
         board_shape = Mesh.from_trimesh(mesh=_BOARD_MESH)
         board_shape.color = BOARD_COLOR
+        board_shape.finish = BOARD_FINISH
         board = ShapeSortingBoard(
             name=_name("board"),
             root=_board_body(_name("board"), board_shape, _HOLE_FOOTPRINTS),
