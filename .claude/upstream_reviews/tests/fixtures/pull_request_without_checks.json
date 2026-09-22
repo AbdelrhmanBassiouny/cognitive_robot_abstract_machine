@@ -5,43 +5,7 @@
       "title": "[DevTools] Even more scripted and Less agentic stacked PRs maintenance",
       "url": "https://github.com/example-upstream/example-repo/pull/513",
       "commits": {
-        "nodes": [
-          {
-            "commit": {
-              "statusCheckRollup": {
-                "state": "FAILURE",
-                "contexts": {
-                  "nodes": [
-                    {
-                      "__typename": "CheckRun",
-                      "name": "test (krrood)",
-                      "conclusion": "SUCCESS",
-                      "detailsUrl": "https://github.com/example-upstream/example-repo/actions/runs/1/job/21"
-                    },
-                    {
-                      "__typename": "CheckRun",
-                      "name": "test (robokudo)",
-                      "conclusion": "FAILURE",
-                      "detailsUrl": "https://github.com/example-upstream/example-repo/actions/runs/1/job/22"
-                    },
-                    {
-                      "__typename": "CheckRun",
-                      "name": "test (coraplex)",
-                      "conclusion": null,
-                      "detailsUrl": "https://github.com/example-upstream/example-repo/actions/runs/1/job/23"
-                    },
-                    {
-                      "__typename": "StatusContext",
-                      "context": "continuous-integration/legacy",
-                      "state": "ERROR",
-                      "targetUrl": "https://github.com/example-upstream/example-repo/statuses/legacy"
-                    }
-                  ]
-                }
-              }
-            }
-          }
-        ]
+        "nodes": [{"commit": {"statusCheckRollup": null}}]
       },
       "reviews": {
         "nodes": [
