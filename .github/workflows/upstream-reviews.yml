@@ -1,10 +1,12 @@
 name: Upstream reviews
 
-# Reports the review threads a fork branch's upstream pull request has collected.
+# Reports the checks and review threads a fork branch's upstream pull request has
+# collected, and on request the log behind each check that failed.
 #
-# Thread resolved-state is only exposed by GitHub's GraphQL API, which a Claude
-# session cannot reach, so the read happens here and the session reads this job's
-# log. Dispatch-only on purpose: nothing about this should run on a timer.
+# Thread resolved-state is only exposed by GitHub's GraphQL API, and a Claude session
+# reaches neither that nor the upstream's REST API at all, so both reads happen here
+# and the session reads this job's log. Dispatch-only on purpose: nothing about this
+# should run on a timer.
 #
 # Runs unchanged in any fork - the upstream comes from .claude/stack/stack.toml
 # and the fork owner from the runner's own context, so no repository is named here.
@@ -25,13 +27,18 @@ on:
         required: false
         default: false
         type: boolean
+      failure_logs:
+        description: "Quote the log behind each check that failed"
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: read
 
 jobs:
   report:
-    name: Report upstream review threads
+    name: Report the upstream pull request
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -41,7 +48,7 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Read upstream review threads
+      - name: Read the upstream pull request
         env:
           # gh is preinstalled on the runner; this is the only credential it needs,
           # and read-only is all the job is granted.
@@ -61,4 +68,8 @@ jobs:
           if [ "${{ inputs.include_resolved }}" = "true" ]; then
             ARGUMENTS+=(--include-resolved)
           fi
-          python3 .claude/upstream_reviews/upstream_reviews.py "${ARGUMENTS[@]}"
+          if [ "${{ inputs.failure_logs }}" = "true" ]; then
+            ARGUMENTS+=(--failure-logs)
+          fi
+          source .claude/hooks/resolve-personal-notes-config.sh
+          python3 "${UPSTREAM_REVIEWS_SCRIPT}" "${ARGUMENTS[@]}"
