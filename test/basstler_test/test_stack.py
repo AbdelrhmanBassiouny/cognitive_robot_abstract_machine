@@ -23,6 +23,7 @@ from basstler.stack import (
     BranchStatus,
     Configuration,
     ContradictoryLabelWriteError,
+    DefaultLabel,
     ExitCode,
     ForkRemoteNotFoundError,
     LabelWrite,
@@ -75,6 +76,7 @@ def make_configuration(upstream_setup_command: str | None = None) -> Configurati
         in_review_label=StackLabel.IN_REVIEW,
         rebase_label=StackLabel.REBASE,
         needs_resolution_label=StackLabel.NEEDS_RESOLUTION,
+        integration_conflict_label=StackLabel.INTEGRATION_CONFLICT,
         fork_repository=Repository("a-fork-owner", "a-fork"),
         fork_remote="origin",
         upstream_repository=Repository("an-upstream-owner", "a-project"),
@@ -570,6 +572,22 @@ def test_a_remote_that_names_no_repository_is_ignored():
 # %% the configuration the shell tooling reads
 
 
+def test_every_default_label_is_spelled_the_way_a_fork_creates_it():
+    """
+    The one place the label's wire spelling is pinned.
+
+    Everything else - the defaults, the committed configuration, the tests - now reads the member, so a renamed value would
+    change them all together and no test would notice; but the label a pass writes has to
+    match the one a fork's owner created by hand, and GitHub does not create a missing one.
+    """
+    assert {label.name: str(label) for label in DefaultLabel} == {
+        "IN_REVIEW": "in-review",
+        "REBASE": "rebase",
+        "NEEDS_RESOLUTION": "needs-resolution",
+        "INTEGRATION_CONFLICT": "integration-conflict",
+    }
+
+
 def test_every_setting_is_printed_under_its_own_field_name(capsys):
     """
     Callers read one setting by name out of this output, so a key that is not a field name
@@ -583,6 +601,7 @@ def test_every_setting_is_printed_under_its_own_field_name(capsys):
         "in_review_label": StackLabel.IN_REVIEW,
         "rebase_label": StackLabel.REBASE,
         "needs_resolution_label": StackLabel.NEEDS_RESOLUTION,
+        "integration_conflict_label": StackLabel.INTEGRATION_CONFLICT,
         "fork_repository": "a-fork-owner/a-fork",
         "fork_remote": "origin",
         "upstream_repository": "an-upstream-owner/a-project",

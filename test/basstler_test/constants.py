@@ -102,6 +102,12 @@ class StackLabel(StrEnum):
     Put on a branch whose owner has been asked to resolve a conflict.
     """
 
+    INTEGRATION_CONFLICT = "integration-conflict"
+    """
+    Put on a branch that breaks one it merges cleanly with, which no mergeable state
+    reports and so nothing clears on its own.
+    """
+
     BUG = "bug"
     """
     Carried by a fix, and never acted on by this tooling - a label it reads past.
