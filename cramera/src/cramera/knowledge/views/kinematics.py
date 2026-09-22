@@ -6,11 +6,12 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass
 
-from coraplex.datastructures.enums import JointType
+from coraplex.datastructures.enums import Arms, JointType
 from typing_extensions import Any, ClassVar, Dict, List, Optional, TYPE_CHECKING
 
 from cramera.knowledge.enums import EdgeKind, KinematicChainGroup
-from cramera.knowledge.scene_bundle import ParsedUrdf, SceneBundle
+from cramera.knowledge.scene_bundle import ParsedUrdf
+from cramera.robot_parts import RobotPartAnnotation, RobotPartRole
 from cramera.knowledge.subgraph import (
     DetailEntry,
     GraphEdge,
@@ -68,10 +69,16 @@ class UrdfViewPayload(GraphPanelPayload):
         if not links:
             return cls(breadcrumb=knowledge_base.robot.name + " · URDF (not found)")
 
-        scene = SceneBundle.of_scene(knowledge_base.scene_name).scene
-        parts = (scene.get("robot") or {}).get("parts") or {}
         link_to_part = {
-            link: part for part, part_links in parts.items() for link in part_links
+            link: part
+            for part in sorted(
+                knowledge_base.part_annotations,
+                key=lambda part: (
+                    part.role is not RobotPartRole.ARM,
+                    part.role is RobotPartRole.END_EFFECTOR,
+                ),
+            )
+            for link in part.links
         }
 
         # which joint drives each link (child link → its parent joint), for tooltips
@@ -87,7 +94,7 @@ class UrdfViewPayload(GraphPanelPayload):
             view.add(
                 "urdf:" + link,
                 link,
-                cls._chain_group(link, link_to_part.get(link, "")),
+                cls._chain_group(link_to_part.get(link)),
                 lines,
             )
         for joint in joints:
@@ -123,25 +130,14 @@ class UrdfViewPayload(GraphPanelPayload):
         )
 
     @staticmethod
-    def _chain_group(link_name: str, part: str) -> KinematicChainGroup:
-        """
-        The colour group a kinematic-chain link is drawn in.
-
-        :param link_name: Name of the link to classify.
-        :param part: Name of the robot part the link belongs to, or ``""`` when the
-            recorded annotation assigns it to none.
-        """
-        part = part.lower()
-        if "gripper" in part or "hand" in part or "effector" in part:
+    def _chain_group(part: RobotPartAnnotation | None) -> KinematicChainGroup:
+        if part is None:
+            return KinematicChainGroup.BASE
+        if part.role is RobotPartRole.END_EFFECTOR:
             return KinematicChainGroup.GRIPPER
-        if "left" in part:
-            return KinematicChainGroup.LEFT_ARM
-        if "right" in part:
-            return KinematicChainGroup.RIGHT_ARM
-        lowered = link_name.lower()
-        if any(
-            keyword in lowered
-            for keyword in ("head", "stereo", "sensor", "kinect", "camera", "laser")
-        ):
+        if part.role is RobotPartRole.SENSOR:
             return KinematicChainGroup.SENSOR
-        return KinematicChainGroup.BASE  # base, torso, casters
+        return {
+            Arms.LEFT: KinematicChainGroup.LEFT_ARM,
+            Arms.RIGHT: KinematicChainGroup.RIGHT_ARM,
+        }.get(part.side, KinematicChainGroup.BASE)

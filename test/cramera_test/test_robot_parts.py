@@ -61,6 +61,9 @@ class TwoArmedRobot:
     def get_arms(self) -> List[ArmPart]:
         return [self.left, self.right]
 
+    def get_sensors(self) -> list[PartWithBodies]:
+        return []
+
     def get_left_arm_if_specified(self) -> ArmPart:
         return self.left
 
@@ -83,6 +86,9 @@ class OneArmedRobot:
 
     def get_arms(self) -> List[ArmPart]:
         return [self.arm]
+
+    def get_sensors(self) -> list[PartWithBodies]:
+        return []
 
     def get_left_arm_if_specified(self) -> None:
         return None

@@ -24,7 +24,7 @@ from cramera import paths
 from cramera.live.bridge import Bridge
 from cramera.live.live_bundle import build_live_scene
 
-from .test_robot_parts import ArmPart, NamedBody
+from .test_robot_parts import ArmPart, NamedBody, PartWithBodies
 
 # %% fixtures
 
@@ -44,6 +44,9 @@ class RobotWithSubtree:
 
     def get_arms(self):
         return [self.arm]
+
+    def get_sensors(self) -> list[PartWithBodies]:
+        return []
 
     def get_left_arm_if_specified(self):
         return None

@@ -818,3 +818,90 @@ def test_parallel_plan_reports_failed_native_verdict(
     assert node.status is LifeCycleValues.FAILED
     assert node.execution_error is None
     assert node.reason is None
+
+
+# %% node-owned execution scopes
+def test_direct_attachment_reports_one_pair_of_boundaries(mutable_model_world) -> None:
+    world, robot, context = mutable_model_world
+    attachment = ReAttachNode(
+        body=world.get_body_by_name("milk.stl"), new_parent=robot.root
+    )
+    plan = sequential([attachment], context=context).plan
+    recorder = ExecutionRecorder(plan=plan)
+    plan.node_callbacks.append(recorder)
+
+    attachment.perform()
+
+    assert recorder.events == [
+        NodeEvent(ExecutionEvent.START, attachment, LifeCycleValues.RUNNING),
+        NodeEvent(ExecutionEvent.END, attachment, LifeCycleValues.SUCCEEDED),
+    ]
+    assert attachment.body.parent_connection.parent is robot.root
+
+
+def test_parsed_attachment_reports_its_own_failure(
+    monkeypatch, mutable_model_world
+) -> None:
+    world, robot, context = mutable_model_world
+    attachment = ReAttachNode(
+        body=world.get_body_by_name("milk.stl"), new_parent=robot.root
+    )
+    plan = sequential([attachment], context=context).plan
+    recorder = ExecutionRecorder(plan=plan)
+    plan.node_callbacks.append(recorder)
+    failure = RuntimeError("attachment failed")
+    monkeypatch.setattr(world, "move_branch", Mock(side_effect=failure))
+
+    with pytest.raises(type(failure)) as caught:
+        attachment.parse().execute()
+
+    assert caught.value is failure
+    assert attachment.execution_error is failure
+    assert recorder.events == [
+        NodeEvent(ExecutionEvent.START, attachment, LifeCycleValues.RUNNING),
+        NodeEvent(ExecutionEvent.END, attachment, LifeCycleValues.FAILED),
+    ]
+
+
+def test_nested_execution_scope_reports_only_the_outer_boundaries() -> None:
+    root = sequential([])
+    recorder = ExecutionRecorder(plan=root.plan)
+    root.plan.node_callbacks.append(recorder)
+
+    with root.execution_scope():
+        with root.execution_scope():
+            assert root.status is LifeCycleValues.RUNNING
+        assert root.status is LifeCycleValues.RUNNING
+
+    assert recorder.events == [
+        NodeEvent(ExecutionEvent.START, root, LifeCycleValues.RUNNING),
+        NodeEvent(ExecutionEvent.END, root, LifeCycleValues.SUCCEEDED),
+    ]
+
+
+def test_execution_error_does_not_chain_an_end_observer_failure(monkeypatch) -> None:
+    root = sequential([])
+    failure = RuntimeError("execution failed")
+    observer_failure = ValueError("end observer failed")
+    monkeypatch.setattr(root, "notify", Mock(side_effect=failure))
+    monkeypatch.setattr(
+        root.plan, "notify_node_ended", Mock(side_effect=observer_failure)
+    )
+
+    with pytest.raises(type(failure)) as caught:
+        root.perform()
+
+    assert caught.value is failure
+    assert failure.__context__ is None
+
+
+def test_end_observer_failure_after_success_is_propagated(monkeypatch) -> None:
+    root = sequential([])
+    failure = RuntimeError("end observer failed")
+    monkeypatch.setattr(root.plan, "notify_node_ended", Mock(side_effect=failure))
+
+    with pytest.raises(type(failure)) as caught:
+        root.perform()
+
+    assert caught.value is failure
+    assert not root._execution_in_progress

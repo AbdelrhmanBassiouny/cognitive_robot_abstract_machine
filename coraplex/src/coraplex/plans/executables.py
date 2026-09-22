@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 import logging
-from contextlib import ExitStack, nullcontext
+from contextlib import AbstractContextManager, ExitStack, nullcontext
 from datetime import datetime
 from dataclasses import dataclass, field
 
-from typing_extensions import List, Dict, ClassVar, Optional, TYPE_CHECKING
+from typing_extensions import Callable, List, Dict, ClassVar, Optional, TYPE_CHECKING
 
 from coraplex.datastructures.enums import ExecutionType
 from coraplex.exceptions import (
@@ -36,7 +36,7 @@ if TYPE_CHECKING:
     from coraplex.robot_plans.actions.base import ActionDescription
 
     from coraplex.plans.condition_nodes import ConditionNode
-    from coraplex.plans.plan_node import MotionNode, PlanNode
+    from coraplex.plans.plan_node import MotionNode
     from coraplex.plans.underspecified import UnderspecifiedNode
     from coraplex.datastructures.dataclasses import Context
 
@@ -442,17 +442,15 @@ class MoveBranchExecutable(Executable):
     The new parent to which the branch is moved.
     """
 
-    node: Optional[PlanNode] = field(default=None, kw_only=True)
-    """
-    The plan node whose execution boundary includes this model change.
-    """
+    execution_scope: Callable[[], AbstractContextManager[None]] = field(
+        default=nullcontext, kw_only=True, repr=False, compare=False
+    )
 
     def execute(self) -> None:
         """
         Move the branch and report the attached node's execution outcome.
         """
-        scope = self.node.execution_scope() if self.node is not None else nullcontext()
-        with scope:
+        with self.execution_scope():
             self.context.world.move_branch(self.body, self.new_parent)
 
 

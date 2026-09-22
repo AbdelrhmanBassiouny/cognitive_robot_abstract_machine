@@ -17,7 +17,7 @@ from cramera.knowledge.architecture_scan import ArchitectureScanner, PackageDepe
 from cramera.knowledge.detected_events import DetectedEventRecord
 from cramera.knowledge.entities import (
     ActionEpisode,
-    Arm,
+    RecordedArm,
     BenchObject,
     Gripper,
     JointMotion,
@@ -25,7 +25,7 @@ from cramera.knowledge.entities import (
 )
 from cramera.knowledge.enums import JointRegion
 from cramera.knowledge.scene_bundle import SceneBundle
-from cramera.robot_parts import ArmSide, RobotPartAnnotation, RobotPartRole
+from cramera.robot_parts import RobotPartAnnotation, RobotPartRole
 
 
 @dataclass(init=False)
@@ -114,9 +114,13 @@ class EpisodeKnowledgeBase:
     """
     Grippers identified by the robot annotations.
     """
-    arms: List[Arm]
+    arms: List[RecordedArm]
     """
     Arms available on the recorded robot.
+    """
+    part_annotations: List[RobotPartAnnotation]
+    """
+    Typed robot-part facts recorded with the scene.
     """
     robot: Robot
     """
@@ -176,12 +180,13 @@ class EpisodeKnowledgeBase:
         }
         place_area = objects_by_id.get("place_area")
 
-        part_annotations = [
-            RobotPartAnnotation.from_payload(payload)
-            for payload in (scene.get("robot") or {}).get("partAnnotations") or []
-        ]
+        self.part_annotations = RobotPartAnnotation.of_recording(
+            scene.get("robot") or {}
+        )
 
-        self.grippers, self.arms = self._build_arms(parts, part_annotations, robot_name)
+        self.grippers, self.arms = self._build_annotated_arms(
+            self.part_annotations, robot_name
+        )
         self.robot = Robot(robot_name, arm_count=len(self.arms))
         self.episodes = self._build_episodes(
             scene, frames_per_second, objects_by_reference, place_area
@@ -231,34 +236,14 @@ class EpisodeKnowledgeBase:
         return objects
 
     @classmethod
-    def _build_arms(
-        cls,
-        parts: Dict[str, Any],
-        part_annotations: List[RobotPartAnnotation],
-        robot_name: str,
-    ) -> Tuple[List[Gripper], List[Arm]]:
-        """
-        Arms and grippers of the recorded robot.
-
-        :param parts: Robot part names to link names, from the recorded robot
-            annotation.
-        :param part_annotations: The recorded sem_dt robot-part annotations, empty for a
-            bundle recorded before they were written.
-        :param robot_name: Name of the recorded robot, used to build each :class:`Arm`.
-        """
-        if part_annotations:
-            return cls._build_annotated_arms(part_annotations, robot_name)
-        return cls._build_arms_by_name(parts, robot_name)
-
-    @classmethod
     def _build_annotated_arms(
         cls, part_annotations: List[RobotPartAnnotation], robot_name: str
-    ) -> Tuple[List[Gripper], List[Arm]]:
+    ) -> Tuple[List[Gripper], List[RecordedArm]]:
         """
         Arms and grippers read straight off the recorded sem_dt annotations.
 
         :param part_annotations: The recorded sem_dt robot-part annotations.
-        :param robot_name: Name of the recorded robot, used to build each :class:`Arm`.
+        :param robot_name: Name of the recorded robot, used to build each recorded arm.
         """
         end_effectors = {
             annotation.attached_to: annotation
@@ -270,52 +255,13 @@ class EpisodeKnowledgeBase:
             if annotation.role is not RobotPartRole.ARM:
                 continue
             end_effector = end_effectors.get(annotation.name)
-            side = cls._arm_of_side(annotation.side)
+            side = annotation.side
             gripper = Gripper(
                 end_effector.name if end_effector else annotation.name + "_ee",
                 side,
             )
             grippers.append(gripper)
-            arms.append(Arm(annotation.name, side, robot_name, gripper))
-        return grippers, arms
-
-    @classmethod
-    def _build_arms_by_name(
-        cls, parts: Dict[str, Any], robot_name: str
-    ) -> Tuple[List[Gripper], List[Arm]]:
-        """
-        Arms and grippers inferred from part names, for bundles recorded before the
-        sem_dt annotations were written into them.
-
-        Gripper keywords take precedence — robot names can contain 'arm' themselves, so
-        'arm' alone must not decide.
-
-        :param parts: Robot part names to link names, from the recorded robot
-            annotation.
-        :param robot_name: Name of the recorded robot, used to build each :class:`Arm`.
-        """
-        gripper_parts = [
-            part
-            for part in parts
-            if any(
-                keyword in part.lower() for keyword in ("gripper", "hand", "effector")
-            )
-        ]
-        arm_parts = [
-            part
-            for part in parts
-            if part not in gripper_parts and "arm" in part.lower()
-        ]
-        grippers, arms = [], []
-        for arm_part in sorted(arm_parts):
-            side = cls._side_of_name(arm_part)
-            gripper_part = next(
-                (part for part in gripper_parts if cls._side_of_name(part) == side),
-                None,
-            )
-            gripper = Gripper(gripper_part or (arm_part + "_ee"), side)
-            grippers.append(gripper)
-            arms.append(Arm(arm_part, side, robot_name, gripper))
+            arms.append(RecordedArm(annotation.name, side, robot_name, gripper))
         return grippers, arms
 
     def _build_episodes(
@@ -354,7 +300,7 @@ class EpisodeKnowledgeBase:
             )
         return episodes
 
-    def _arm_of_segment(self, segment: Dict[str, Any]) -> Optional[Arm]:
+    def _arm_of_segment(self, segment: Dict[str, Any]) -> Optional[RecordedArm]:
         """
         The arm matching a recorded plan segment's side hint, falling back to the first
         arm if the segment picks something but names no side.
@@ -451,18 +397,6 @@ class EpisodeKnowledgeBase:
             )
             for (package, subpackage) in sorted(modules)
         ]
-
-    @staticmethod
-    def _arm_of_side(side: Optional[ArmSide]) -> Optional[Arms]:
-        """
-        The coraplex arm a recorded robot-part side names.
-
-        :param side: The side a recorded annotation carries, or None for a robot that
-            specifies no left and right arm.
-        """
-        if side is None:
-            return None
-        return Arms[side.name]
 
     @staticmethod
     def _side_of_name(name: str) -> Optional[Arms]:

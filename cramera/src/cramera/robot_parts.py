@@ -10,24 +10,27 @@ from enum import StrEnum
 
 from typing_extensions import Any, Dict, List, Optional
 
+from coraplex.datastructures.enums import Arms
+from semantic_digital_twin.robots.hsrb import HSRBArm, HSRBGripper
+from semantic_digital_twin.robots.pr2 import (
+    PR2LeftArm,
+    PR2RightArm,
+    PR2LeftGripper,
+    PR2RightGripper,
+)
 from semantic_digital_twin.robots.robot_parts import AbstractRobot, AbstractRobotPart
+from semantic_digital_twin.robots.stretch import StretchArm, StretchGripper
+from semantic_digital_twin.robots.tracy import (
+    TracyLeftArm,
+    TracyRightArm,
+    TracyLeftGripper,
+    TracyRightGripper,
+)
 
 # %% the published shape of a robot part
 
 
-class ArmSide(StrEnum):
-    """
-    Which of a robot's two arms a part belongs to.
-
-    semantic_digital_twin encodes handedness structurally, through
-    :meth:`~semantic_digital_twin.robots.robot_parts.AbstractRobot.get_left_arm_if_specified`,
-    rather than as an enum. coraplex's :class:`~coraplex.datastructures.enums.Arms` is
-    not reused here because :mod:`cramera.live.bridge` reads this module and has to
-    stay importable outside a demo environment.
-    """
-
-    LEFT = "left"
-    RIGHT = "right"
+ArmSide = Arms  # Preserve the published import name without a second side enum.
 
 
 class RobotPartRole(StrEnum):
@@ -44,6 +47,58 @@ class RobotPartRole(StrEnum):
     """
     A :class:`semantic_digital_twin.robots.robot_parts.EndEffector` annotation.
     """
+
+    SENSOR = "sensor"
+
+
+class LegacyRobotPart(StrEnum):
+    LEFT_ARM = "left_arm"
+    RIGHT_ARM = "right_arm"
+    CENTER_ARM = "center_arm"
+    ARM = "arm"
+    LEFT_GRIPPER = "left_gripper"
+    RIGHT_GRIPPER = "right_gripper"
+    GRIPPER = "gripper"
+
+    @classmethod
+    def of_name(cls, name: str) -> LegacyRobotPart | None:
+        if name in cls:
+            return cls(name)
+        return {
+            PR2LeftArm.__name__: cls.LEFT_ARM,
+            PR2RightArm.__name__: cls.RIGHT_ARM,
+            PR2LeftGripper.__name__: cls.LEFT_GRIPPER,
+            PR2RightGripper.__name__: cls.RIGHT_GRIPPER,
+            TracyLeftArm.__name__: cls.LEFT_ARM,
+            TracyRightArm.__name__: cls.RIGHT_ARM,
+            TracyLeftGripper.__name__: cls.LEFT_GRIPPER,
+            TracyRightGripper.__name__: cls.RIGHT_GRIPPER,
+            StretchArm.__name__: cls.ARM,
+            StretchGripper.__name__: cls.GRIPPER,
+            HSRBArm.__name__: cls.ARM,
+            HSRBGripper.__name__: cls.GRIPPER,
+        }.get(name)
+
+    @property
+    def side(self) -> Arms | None:
+        return {
+            self.LEFT_ARM: Arms.LEFT,
+            self.LEFT_GRIPPER: Arms.LEFT,
+            self.RIGHT_ARM: Arms.RIGHT,
+            self.RIGHT_GRIPPER: Arms.RIGHT,
+        }.get(self)
+
+    @property
+    def arm(self) -> LegacyRobotPart | None:
+        return {
+            self.LEFT_GRIPPER: self.LEFT_ARM,
+            self.RIGHT_GRIPPER: self.RIGHT_ARM,
+            self.GRIPPER: self.ARM,
+        }.get(self)
+
+    @property
+    def role(self) -> RobotPartRole:
+        return RobotPartRole.END_EFFECTOR if self.arm is not None else RobotPartRole.ARM
 
 
 @dataclass
@@ -63,10 +118,10 @@ class RobotPartAnnotation:
 
     role: RobotPartRole
     """
-    Whether the part is an arm or an end effector.
+    Whether the part is an arm, end effector, or sensor.
     """
 
-    side: Optional[ArmSide]
+    side: Optional[Arms]
     """
     Which arm of the robot the part belongs to, or None for a robot that does not
     specify a left and a right arm.
@@ -74,8 +129,9 @@ class RobotPartAnnotation:
 
     links: List[str] = field(default_factory=list)
     """
-    Link names of the part, stripped of their model-name prefix. An arm's links exclude
-    those of its own end effector.
+    Link names of the part, stripped of their model-name prefix.
+
+    An arm's links exclude those of its own end effector.
     """
 
     attached_to: Optional[str] = None
@@ -90,7 +146,7 @@ class RobotPartAnnotation:
         return {
             "name": self.name,
             "role": self.role.value,
-            "side": self.side.value if self.side is not None else None,
+            "side": self.side.name.lower() if self.side is not None else None,
             "links": list(self.links),
             "attachedTo": self.attached_to,
         }
@@ -106,10 +162,50 @@ class RobotPartAnnotation:
         return cls(
             name=payload["name"],
             role=RobotPartRole(payload["role"]),
-            side=ArmSide(side) if side else None,
+            side=Arms[side.upper()] if side is not None else None,
             links=list(payload.get("links") or []),
             attached_to=payload.get("attachedTo"),
         )
+
+    @classmethod
+    def of_recording(cls, robot: Dict[str, Any]) -> List[RobotPartAnnotation]:
+        if "partAnnotations" in robot:
+            return [
+                cls.from_payload(payload) for payload in robot["partAnnotations"] or []
+            ]
+        annotations = []
+        parts = robot.get("parts") or {}
+        legacy_parts = {name: LegacyRobotPart.of_name(name) for name in parts}
+        for name, links in parts.items():
+            part = legacy_parts[name]
+            if part is None:
+                continue
+            attached_to = None
+            if part.arm is not None:
+                attached_to = next(
+                    (
+                        name
+                        for name, candidate in legacy_parts.items()
+                        if candidate is part.arm
+                    ),
+                    None,
+                )
+                if (
+                    attached_to is None
+                    and part is LegacyRobotPart.GRIPPER
+                    and LegacyRobotPart.CENTER_ARM in parts
+                ):
+                    attached_to = LegacyRobotPart.CENTER_ARM.value
+            annotations.append(
+                cls(
+                    name=name,
+                    role=part.role,
+                    side=part.side,
+                    links=list(links),
+                    attached_to=attached_to,
+                )
+            )
+        return annotations
 
     @staticmethod
     def link_names(part: AbstractRobotPart) -> List[str]:
@@ -125,29 +221,29 @@ class RobotPartAnnotation:
         return names
 
     @staticmethod
-    def _arm_sides(robot: AbstractRobot) -> Dict[int, ArmSide]:
+    def _arm_sides(robot: AbstractRobot) -> Dict[int, Arms]:
         """
         The side of every arm the robot names as its left or its right one, keyed by arm
         identity.
 
-        Robots that do not specify a left and a right arm contribute nothing, which is what
-        leaves a one-armed robot's arm sideless.
+        Robots that do not specify a left and a right arm contribute nothing, which is
+        what leaves a one-armed robot's arm sideless.
 
         :param robot: The robot whose arm annotations are read.
         """
         sides = {}
         left_arm = robot.get_left_arm_if_specified()
         if left_arm is not None:
-            sides[id(left_arm)] = ArmSide.LEFT
+            sides[id(left_arm)] = Arms.LEFT
         right_arm = robot.get_right_arm_if_specified()
         if right_arm is not None:
-            sides[id(right_arm)] = ArmSide.RIGHT
+            sides[id(right_arm)] = Arms.RIGHT
         return sides
 
     @classmethod
     def of_robot(cls, robot: AbstractRobot) -> List[RobotPartAnnotation]:
         """
-        Every arm of a robot and the end effector it carries, in publication order.
+        Recorded arms, their end effectors, and the robot's native sensors.
 
         :param robot: The robot annotation of the world being recorded or served.
         """
@@ -178,6 +274,15 @@ class RobotPartAnnotation:
                         attached_to=arm_name,
                     )
                 )
+        annotations.extend(
+            cls(
+                name=type(sensor).__name__,
+                role=RobotPartRole.SENSOR,
+                side=None,
+                links=sorted(set(cls.link_names(sensor))),
+            )
+            for sensor in robot.get_sensors()
+        )
         return annotations
 
 

@@ -36,7 +36,7 @@ class Gripper(NamedEntity):
 
 
 @dataclass(unsafe_hash=True)
-class Arm(NamedEntity):
+class RecordedArm(NamedEntity):
     """
     A manipulator of the recorded robot.
     """
@@ -153,7 +153,7 @@ class ActionEpisode(NamedEntity):
     Episode duration in seconds.
     """
 
-    performed_by: Optional[Arm]
+    performed_by: Optional[RecordedArm]
     """
     The arm that performed the manipulation, if any.
     """

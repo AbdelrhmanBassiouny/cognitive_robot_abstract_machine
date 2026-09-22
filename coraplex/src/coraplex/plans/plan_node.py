@@ -312,13 +312,6 @@ class PlanNode(PlanEntity):
             self.notify()
             self.result = self.parse().execute()
 
-    @property
-    def reports_execution_boundaries(self) -> bool:
-        """
-        Return whether the call scope publishes this node's start and end events.
-        """
-        return True
-
     @contextmanager
     def execution_scope(self) -> Iterator[None]:
         """
@@ -328,39 +321,45 @@ class PlanNode(PlanEntity):
             yield
             return
         self._execution_in_progress = True
-        if self.reports_execution_boundaries:
-            self.status = LifeCycleValues.RUNNING
-            self.start_time = datetime.now()
-            self.end_time = None
         self.reason = None
         self.execution_error = None
         try:
-            if self.reports_execution_boundaries:
-                self.plan.notify_node_started(self)
+            self._start_execution()
             yield
-            if (
-                self.reports_execution_boundaries
-                and self.status == LifeCycleValues.RUNNING
-            ):
-                self.status = LifeCycleValues.SUCCEEDED
         except BaseException as error:
-            self.execution_error = error
-            self.reason = error if isinstance(error, PlanFailure) else None
-            self.status = (
-                LifeCycleValues.FAILED
-                if isinstance(error, Exception)
-                else LifeCycleValues.INTERRUPTED
-            )
+            self._fail_execution(error)
             raise
         finally:
-            self._execution_in_progress = False
-            try:
-                if self.reports_execution_boundaries:
-                    self.end_time = datetime.now()
-                    self.plan.notify_node_ended(self)
-            finally:
-                if self.execution_error is not None:
-                    raise self.execution_error
+            self._finish_execution()
+
+    def _start_execution(self) -> None:
+        self.status = LifeCycleValues.RUNNING
+        self.start_time = datetime.now()
+        self.end_time = None
+        self.plan.notify_node_started(self)
+
+    def _fail_execution(self, error: BaseException) -> None:
+        self.execution_error = error
+        self.reason = error if isinstance(error, PlanFailure) else None
+        self.status = (
+            LifeCycleValues.FAILED
+            if isinstance(error, Exception)
+            else LifeCycleValues.INTERRUPTED
+        )
+
+    def _end_execution(self) -> None:
+        if self.status == LifeCycleValues.RUNNING:
+            self.status = LifeCycleValues.SUCCEEDED
+        self.end_time = datetime.now()
+        self.plan.notify_node_ended(self)
+
+    def _finish_execution(self) -> None:
+        self._execution_in_progress = False
+        try:
+            self._end_execution()
+        except BaseException:
+            if self.execution_error is None:
+                raise
 
     def mount_subplan(self, root: PlanNode):
         """
@@ -655,12 +654,11 @@ class MotionNode(DesignatorNode, BuildsMotionStateChart):
     The native chart bound to this motion for its current execution.
     """
 
-    @property
-    def reports_execution_boundaries(self) -> bool:
-        """
-        Leave motion boundaries to the native task history.
-        """
-        return False
+    def _start_execution(self) -> None:
+        pass
+
+    def _end_execution(self) -> None:
+        pass
 
     @property
     def motion(self) -> BaseMotion:

@@ -8,12 +8,13 @@ from dataclasses import dataclass
 
 from typing_extensions import Any, Dict, List, Optional
 
+from coraplex.datastructures.enums import Arms
 from semantic_digital_twin.spatial_types import Point3
 
 from cramera.knowledge.architecture_entities import Package, PythonClass, SubPackage
 from cramera.knowledge.entities import (
     ActionEpisode,
-    Arm,
+    RecordedArm,
     BenchObject,
     Gripper,
     JointMotion,
@@ -66,7 +67,7 @@ class EqlSession:
         return [
             QueryDomain("scene_object", BenchObject, self.knowledge_base.objects),
             QueryDomain("episode", ActionEpisode, self.knowledge_base.episodes),
-            QueryDomain("arm", Arm, self.knowledge_base.arms),
+            QueryDomain("arm", RecordedArm, self.knowledge_base.arms),
             QueryDomain("joint", JointMotion, self.knowledge_base.joints),
             QueryDomain(
                 EVENT_VARIABLE, DetectedEventRecord, self.knowledge_base.detected_events
@@ -86,6 +87,8 @@ class EqlSession:
             extra_names={
                 "Point3": Point3,
                 "Gripper": Gripper,
+                "Arm": RecordedArm,
+                "Arms": Arms,
                 "objects": self.knowledge_base.objects,
                 "episodes": self.knowledge_base.episodes,
                 "arms": self.knowledge_base.arms,
