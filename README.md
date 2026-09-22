@@ -6,6 +6,17 @@ a Montessori shape-sorting board, recording every run as an *episode*, and answe
 questions about those episodes from working memory (during a run) and long-term memory
 (afterwards, from the results database).
 
+## Supplementary video
+
+[![The title of the supplementary video over the robot inserting a piece into the board](experiments/doc/video/supplementary_video_poster.jpg)](experiments/doc/video/supplementary_video.mp4)
+
+The [supplementary video](experiments/doc/video/supplementary_video.mp4) (three minutes,
+16 MB, subtitled) shows the plan of the paper's framework figure resolved by one backend
+after another and carried out on the real robot, the action attribution and temporal
+queries answered during two trials, the perturbed episodes, and long-term memory
+answering the same query over the recorded corpus. It is the video submitted with the
+paper.
+
 There are three ways to reproduce the results, from least to most effort:
 
 | | What you get | Needs |
@@ -18,6 +29,7 @@ The paper's figures were produced with path A over the corpus recorded with path
 
 ## Contents
 
+- [Supplementary video](#supplementary-video)
 - [Setup](#setup)
 - [A. Recompute the tables from the recorded corpus](#a-recompute-the-tables-from-the-recorded-corpus)
 - [B. Re-run the experiments in simulation](#b-re-run-the-experiments-in-simulation)
@@ -324,5 +336,6 @@ All 17 remain in the dump; pass other identifiers to `export_filtered_corpus.py
 | `experiments/src/experiments/tracy_experiments/` | The simulated (`*_mujoco.py`) and real (`*_real.py`) robot rigs and demos |
 | `experiments/src/experiments/paper/` | Tables, query cards and plan timelines |
 | `experiments/doc/figures/framework/` | The framework figure (`python experiments/doc/figures/framework/build.py`, needs `pip install typst`) |
+| `experiments/doc/video/` | The supplementary video and its poster picture |
 | `test/experiments_test/` | Tests for all of the above |
 | `MONOREPO.md` | The general README of the monorepo this branch lives in |
