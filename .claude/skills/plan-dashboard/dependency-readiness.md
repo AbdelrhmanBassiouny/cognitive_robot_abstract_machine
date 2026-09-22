@@ -23,8 +23,15 @@ state into `/tmp/pr_data.json`. Then run:
 python3 -m "${CHECK_DEPENDENCY_READINESS_MODULE}" \
   --plan /tmp/plan.yaml \
   --pr-data /tmp/pr_data.json \
-  --item <item-id>
+  --item <item-id> \
+  [--plans-dir /tmp/plans]
 ```
+
+Pass `--plans-dir` whenever the item's `depends_on` names another plan
+(`<plan-id>/<item-id>`) - the same directory `/plan-dashboard` extracts, so
+this reports the readiness the dashboard shows. Without it such a dependency
+resolves to nothing and is reported not ready, which is the safe answer but
+not the true one.
 
 rather than re-deriving the readiness rule in either skill — it reuses
 `build_dashboard.py`'s own `Item.is_ready_to_unblock_dependents()`, so
