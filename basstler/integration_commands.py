@@ -12,6 +12,10 @@ from basstler.command_line import commands_of
 
 from basstler.integration_build_commands import BuildCommand  # noqa: F401
 from basstler.integration_candidate_commands import OpenCandidateCommand  # noqa: F401
+from basstler.integration_localisation_commands import (  # noqa: F401
+    LocateCandidateFailureCommand,
+)
+from basstler.integration_pipeline_commands import RefreshCommand  # noqa: F401
 from basstler.integration_resolution_commands import StageConflictCommand  # noqa: F401
 from basstler.integration_run import IntegrationCommand
 
