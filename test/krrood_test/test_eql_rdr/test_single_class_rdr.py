@@ -18,9 +18,20 @@ from typing_extensions import Any, Dict, Set, Tuple
 from krrood.entity_query_language.core.base_expressions import SymbolicExpression
 from krrood.entity_query_language.rdr.answer_vocabulary import AnswerName
 from krrood.entity_query_language.rdr.condition_resolver import ChainConditionResolver
-from krrood.entity_query_language.rdr.exceptions import ExpertRequired
+from krrood.entity_query_language.rdr.exceptions import (
+    ExpertRequired,
+    RulesAlreadyPresent,
+    RulesOverAnotherCase,
+)
 from krrood.entity_query_language.rdr.expert import Expert
-from krrood.entity_query_language.factories import an
+from krrood.entity_query_language.factories import (
+    add,
+    alternative,
+    an,
+    entity,
+    refinement,
+    variable,
+)
 from krrood.entity_query_language.rdr.interface import FunctionInterface
 from krrood.entity_query_language.rdr.rule_tree_view import walk_rules
 from krrood.entity_query_language.rdr.single_class import EQLSingleClassRDR
@@ -29,7 +40,7 @@ from krrood.entity_query_language.rules.conclusion_selector import (
     Refinement,
 )
 
-from .animal import Animal, Species, make_animal
+from .animal import Animal, Species, make_animal, make_bird, make_mammal
 from .expert_doubles import (
     feature_vector,
     maximally_specific_expert,
@@ -486,3 +497,184 @@ class TestAutomaticConditionResolution:
 
         assert len(expert.interface.calls) > calls_before
         assert rdr.classify(unknown) == Species.bird
+
+
+# %% rules stated outright
+
+
+class TestStateRules:
+    """
+    Rules an author already has need no case to be derived from: the tree is written the
+    way any rule tree is written, and the RDR takes it as its own.
+    """
+
+    def test_a_stated_rule_answers_the_cases_its_condition_holds_for(self):
+        rdr = EQLSingleClassRDR(Animal, "species")
+        animal = rdr.case_variable
+        rules = entity(animal).where(animal.milk == True)
+        with rules:
+            add(animal.species, Species.mammal)
+
+        rdr.state_rules(rules)
+
+        assert rdr.classify(make_mammal()) == Species.mammal
+
+    def test_a_case_no_stated_rule_reaches_stays_undetermined(self):
+        rdr = EQLSingleClassRDR(Animal, "species")
+        animal = rdr.case_variable
+        rules = entity(animal).where(animal.milk == True)
+        with rules:
+            add(animal.species, Species.mammal)
+
+        rdr.state_rules(rules)
+
+        assert rdr.classify(make_bird()) is ...
+
+    def test_the_first_rule_whose_condition_holds_is_the_one_that_answers(self):
+        """
+        The order the alternatives are written in is the order they are tried in, which
+        is how an author says that a narrow rule is to be preferred to the general one
+        it overlaps.
+        """
+        rdr = EQLSingleClassRDR(Animal, "species")
+        animal = rdr.case_variable
+        rules = entity(animal).where(animal.feathers == True)
+        with rules:
+            add(animal.species, Species.bird)
+            with alternative(animal.backbone == True):
+                add(animal.species, Species.fish)
+
+        rdr.state_rules(rules)
+
+        assert rdr.classify(make_bird()) == Species.bird
+        assert rdr.classify(make_mammal()) == Species.fish
+
+    def test_an_exception_written_under_a_rule_overrides_it(self):
+        """
+        A stated tree is written in the language the tree grows in, so an author can
+        state an exception outright -- which fitting reaches only by being given a case
+        the rule it hangs under gets wrong.
+        """
+        rdr = EQLSingleClassRDR(Animal, "species")
+        animal = rdr.case_variable
+        rules = entity(animal).where(animal.backbone == True)
+        with rules:
+            add(animal.species, Species.fish)
+            with refinement(animal.milk == True):
+                add(animal.species, Species.mammal)
+
+        rdr.state_rules(rules)
+
+        assert rdr.classify(make_mammal()) == Species.mammal
+        assert rdr.classify(make_animal("a_fish", backbone=True)) == Species.fish
+
+    def test_every_stated_rule_is_one_rule_of_the_tree(self):
+        rdr = EQLSingleClassRDR(Animal, "species")
+        animal = rdr.case_variable
+        rules = entity(animal).where(animal.feathers == True)
+        with rules:
+            add(animal.species, Species.bird)
+            with alternative(animal.milk == True):
+                add(animal.species, Species.mammal)
+            with alternative(animal.backbone == True):
+                add(animal.species, Species.fish)
+
+        rdr.state_rules(rules)
+
+        assert len(walk_rules(rdr.conditions_root)) == 3
+
+    def test_stating_rules_answers_with_the_rules_themselves(self):
+        rdr = EQLSingleClassRDR.from_underspecified(an(Animal)(species=...))
+        animal = rdr.case_variable
+        rules = entity(animal).where(animal.milk == True)
+        with rules:
+            add(animal.species, Species.mammal)
+
+        assert rdr.state_rules(rules) is rdr
+
+    def test_a_case_a_stated_rule_gets_wrong_is_corrected_by_fitting_it(self):
+        """
+        A stated tree is a starting point rather than the last word: the rules an author
+        wrote and the rules an expert adds afterwards are one tree.
+        """
+        rdr = EQLSingleClassRDR(Animal, "species")
+        animal = rdr.case_variable
+        rules = entity(animal).where(animal.backbone == True)
+        with rules:
+            add(animal.species, Species.fish)
+        rdr.state_rules(rules)
+        mammal = make_mammal()
+
+        rdr.fit_case(
+            mammal,
+            Species.mammal,
+            scripted_expert({Species.mammal: lambda v: v.milk == True}),
+        )
+
+        assert rdr.classify(mammal) == Species.mammal
+        assert rdr.classify(make_animal("a_fish", backbone=True)) == Species.fish
+
+    def test_rules_reading_one_trait_are_stated_together_without_clashing(self):
+        """
+        Two rules that read the same trait share the expression that reads it, which the
+        tree has to take as one trait read twice rather than as two rules fighting over
+        one node.
+        """
+        rdr = EQLSingleClassRDR(Animal, "species")
+        animal = rdr.case_variable
+        rules = entity(animal).where(animal.milk == True)
+        with rules:
+            add(animal.species, Species.mammal)
+            with alternative(animal.milk == False):
+                add(animal.species, Species.bird)
+
+        rdr.state_rules(rules)
+
+        assert rdr.classify(make_mammal()) == Species.mammal
+        assert rdr.classify(make_bird()) == Species.bird
+
+    def test_a_conclusion_a_stated_rule_reaches_is_inferable_backwards(self):
+        rdr = EQLSingleClassRDR(Animal, "species")
+        animal = rdr.case_variable
+        rules = entity(animal).where(animal.feathers == True)
+        with rules:
+            add(animal.species, Species.bird)
+            with alternative(animal.milk == True):
+                add(animal.species, Species.mammal)
+
+        rdr.state_rules(rules)
+
+        assert rdr.sufficient_conditions_for(Species.mammal).is_satisfiable()
+
+    def test_stating_rules_for_a_tree_that_already_has_some_is_refused(self):
+        """
+        A stated tree becomes the RDR's own tree, so it has nowhere to go once fitting
+        has authored rules of its own.
+        """
+        rdr = EQLSingleClassRDR(Animal, "species")
+        rdr.fit_case(
+            make_mammal(),
+            Species.mammal,
+            scripted_expert({Species.mammal: lambda v: v.milk == True}),
+        )
+        animal = rdr.case_variable
+        rules = entity(animal).where(animal.feathers == True)
+        with rules:
+            add(animal.species, Species.bird)
+
+        with pytest.raises(RulesAlreadyPresent):
+            rdr.state_rules(rules)
+
+    def test_stating_rules_over_another_case_is_refused(self):
+        """
+        The RDR classifies its own case variable, so a tree written over another one
+        would answer nothing at all.
+        """
+        rdr = EQLSingleClassRDR(Animal, "species")
+        other = variable(Animal, domain=[])
+        rules = entity(other).where(other.milk == True)
+        with rules:
+            add(other.species, Species.mammal)
+
+        with pytest.raises(RulesOverAnotherCase):
+            rdr.state_rules(rules)

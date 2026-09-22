@@ -86,6 +86,53 @@ class ConclusionSelectorAsConditionError(DataclassException):
         return ""
 
 
+# %% rules stated outright
+
+
+@dataclass
+class RulesAlreadyPresent(DataclassException):
+    """
+    Raised when a rule tree is stated for an RDR that already has rules.
+    """
+
+    case_type: Type
+    """The type of case the RDR classifies."""
+
+    def error_message(self) -> str:
+        return (
+            f"The {self.case_type.__name__} RDR already has rules, so a stated tree has "
+            "nowhere to go."
+        )
+
+    def suggest_correction(self) -> str:
+        return (
+            "State the rules before fitting anything, or add each one with `fit_case`."
+        )
+
+
+@dataclass
+class RulesOverAnotherCase(DataclassException):
+    """
+    Raised when a stated rule tree ranges over a variable other than the RDR's own case
+    variable.
+    """
+
+    case_variable: Any
+    """The variable the RDR classifies."""
+
+    stated_over: Any
+    """The variable the stated tree selects instead."""
+
+    def error_message(self) -> str:
+        return (
+            f"The rules range over {self.stated_over!r}, but the RDR classifies "
+            f"{self.case_variable!r}."
+        )
+
+    def suggest_correction(self) -> str:
+        return "Write the conditions over the RDR's own `case_variable`."
+
+
 # %% underspecified inference targets
 
 
