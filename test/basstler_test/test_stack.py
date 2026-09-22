@@ -45,12 +45,13 @@ from basstler.stack import (
     print_configuration,
     reparents,
     resolve_remotes,
+    branches_stacked_on,
     order,
     promotion_order,
     restack_plan,
 )
 
-from .constants import StackLabel
+from .constants import StackBranch, StackLabel
 from .scratch_repository import ScratchRepository
 from .script_runner import PythonModuleRunner
 
@@ -271,6 +272,110 @@ def test_restack_plan_reparents_child_of_merged_parent_onto_base():
     ]
     plan = restack_plan(build(prs, merged={"parent"}))
     assert plan == [{"branch": "child", "parent": "main", "strategy": "merge"}]
+
+
+# %% what is stacked on one branch
+
+
+def a_three_deep_stack(
+    merged: Container[str] = frozenset(), rebasing: Container[str] = frozenset()
+):
+    """
+    :param merged: Which of its branches have already landed upstream.
+    :param rebasing: Which of them carry the label authorising a rebase.
+    :return: The chain of three, beside the branch cut from the base.
+    """
+    configuration = make_configuration()
+
+    def pull_request(number: int, branch: StackBranch, parent: str) -> PullRequest:
+        return PullRequest(
+            number,
+            branch,
+            parent,
+            draft=True,
+            labels=[configuration.rebase_label] if branch in rebasing else [],
+        )
+
+    return build(
+        [
+            pull_request(1, StackBranch.PARENT, configuration.upstream_base),
+            pull_request(2, StackBranch.CHILD, StackBranch.PARENT),
+            pull_request(3, StackBranch.GRANDCHILD, StackBranch.CHILD),
+            pull_request(4, StackBranch.OFF_THE_CHAIN, configuration.upstream_base),
+        ],
+        merged,
+    )
+
+
+def test_every_branch_along_the_chain_is_stacked_on_the_named_one():
+    stacked = branches_stacked_on(a_three_deep_stack(), StackBranch.PARENT)
+    assert [branch.name for branch in stacked] == [
+        StackBranch.CHILD,
+        StackBranch.GRANDCHILD,
+    ]
+
+
+def test_the_named_branch_is_not_stacked_on_itself():
+    stacked = branches_stacked_on(a_three_deep_stack(), StackBranch.PARENT)
+    assert StackBranch.PARENT not in [branch.name for branch in stacked]
+
+
+def test_a_branch_on_another_parent_is_not_stacked_on_the_named_one():
+    stacked = branches_stacked_on(a_three_deep_stack(), StackBranch.PARENT)
+    assert StackBranch.OFF_THE_CHAIN not in [branch.name for branch in stacked]
+
+
+def test_a_branch_with_nothing_above_it_has_nothing_stacked_on_it():
+    assert branches_stacked_on(a_three_deep_stack(), StackBranch.GRANDCHILD) == []
+
+
+def test_a_chain_is_stacked_only_up_to_the_branch_that_has_landed():
+    # A merged branch has nothing to take from the branch below it, and whatever sits on
+    # it is no longer reached from below either: its parent has landed, so what it needs
+    # is a reparent onto the upstream base, which a whole-board pass owns.
+    stack = a_three_deep_stack(merged={StackBranch.CHILD})
+
+    assert branches_stacked_on(stack, StackBranch.PARENT) == []
+
+
+# %% the restack plan for one subtree
+
+
+def test_a_named_subtree_plans_only_what_is_stacked_on_it():
+    plan = restack_plan(a_three_deep_stack(), stacked_on=StackBranch.PARENT)
+    assert plan == [
+        {
+            "branch": StackBranch.CHILD,
+            "parent": StackBranch.PARENT,
+            "strategy": IntegrationStrategy.MERGE,
+        },
+        {
+            "branch": StackBranch.GRANDCHILD,
+            "parent": StackBranch.CHILD,
+            "strategy": IntegrationStrategy.MERGE,
+        },
+    ]
+
+
+def test_naming_no_subtree_plans_the_whole_board():
+    plan = restack_plan(a_three_deep_stack())
+    assert [entry["branch"] for entry in plan] == [
+        StackBranch.PARENT,
+        StackBranch.CHILD,
+        StackBranch.GRANDCHILD,
+        StackBranch.OFF_THE_CHAIN,
+    ]
+
+
+def test_a_subtree_carries_each_branch_own_integration_strategy():
+    stack = a_three_deep_stack(rebasing={StackBranch.CHILD})
+
+    plan = restack_plan(stack, stacked_on=StackBranch.PARENT)
+
+    assert [entry["strategy"] for entry in plan] == [
+        IntegrationStrategy.REBASE,
+        IntegrationStrategy.MERGE,
+    ]
 
 
 # %% landed parents that no open pull request describes

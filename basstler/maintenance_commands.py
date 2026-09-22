@@ -199,6 +199,17 @@ class RestackCommand(MaintenanceCommand):
         """
         return "integrate every moved parent and publish the result"
 
+    def declare_arguments(self, parser: argparse.ArgumentParser) -> None:
+        """:param parser: The subparser to declare ``--stacked-on`` on."""
+        parser.add_argument(
+            "--stacked-on",
+            help=(
+                "carry only this branch into what is stacked on it, leaving the rest "
+                "of the board alone and handing any collision back rather than "
+                "reporting it to the branch's owner"
+            ),
+        )
+
     def run(
         self, maintenance: MaintenancePass, arguments: argparse.Namespace
     ) -> MaintenanceExitCode:
@@ -206,7 +217,9 @@ class RestackCommand(MaintenanceCommand):
         :param arguments: The parsed command line.
         :return: The process exit code."""
         stack = maintenance.stack()
-        outcomes = restack(stack, maintenance.git, maintenance.fork())
+        outcomes = restack(
+            stack, maintenance.git, maintenance.fork(), arguments.stacked_on
+        )
         print_restack(outcomes)
         return exit_code_for(MaintenanceReport(restacked=tuple(outcomes)))
 

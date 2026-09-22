@@ -76,6 +76,16 @@ class StackBranch(StrEnum):
     Stacked directly on the parent.
     """
 
+    GRANDCHILD = "a-grandchild"
+    """
+    Stacked on the child, so it reaches the parent only through it.
+    """
+
+    OFF_THE_CHAIN = "off-the-chain"
+    """
+    Cut from the base beside the chain, so nothing stacks it on the parent.
+    """
+
 
 class StackLabel(StrEnum):
     """
@@ -131,6 +141,16 @@ class ToolingDirectory(StrEnum):
     """
     The maintenance pass's own instructions.
     """
+
+    PLAN_ITEM_RESOLVE_SKILL = ".claude/skills/plan-item-resolve"
+    """
+    The resolve skill's instructions, and the documents cited beside them.
+    """
+
+    @classmethod
+    def skills(cls) -> tuple[ToolingDirectory, ...]:
+        """:return: Every member that is a skill rather than another kind of home."""
+        return tuple(member for member in cls if member.startswith(".claude/skills/"))
 
     @property
     def path(self) -> Path:
