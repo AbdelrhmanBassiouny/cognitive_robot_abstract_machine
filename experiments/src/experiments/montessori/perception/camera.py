@@ -215,6 +215,16 @@ class RgbdFrame:
         """
         return int(self.color.shape[1])
 
+    @property
+    def carries_depth(self) -> bool:
+        """
+        Whether the camera returned any depth reading at all for this frame.
+
+        A camera reporting only colour leaves every pixel at zero, which is a look
+        nothing can be measured in however well the world describes it.
+        """
+        return bool((self.depth > 0.0).any())
+
     def project(self, points: np.ndarray) -> np.ndarray:
         """
         Where points in the world fall in this frame's image.

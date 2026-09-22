@@ -191,7 +191,7 @@ class WorkspaceTuner:
         self.viewer.show_rectified(
             ViewFromAbove(
                 RectifiedView(
-                    self.frame, searching.rectify(self.frame, searching.table.height)
+                    self.frame, searching.rectify(self.frame, searching.table)
                 )
             ).to_image()
         )
