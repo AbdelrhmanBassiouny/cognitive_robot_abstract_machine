@@ -63,3 +63,32 @@ One failing check of 24 (19 still queued): **"Run the maintenance pass"**, exit
 and a fresh build would now carry the whole green chain - but opening a
 candidate re-triggers that self-judging maintenance pass, which pushes
 branches, so it needs the user's go-ahead.
+
+### #437's red CI is main's, not the branch's
+Three failures on b2f3a141b0, all docker matrix: `test_each_lib` for
+**coraplex, semantic_digital_twin, giskardpy**. `test_basstler` - the job this
+change actually affects - **passes**.
+
+Evidence it is inherited, not caused:
+- `origin/main` fails the **same three jobs** with the same error and the same
+  tally (490 passed, 7 skipped, 7 errors).
+- On #437's pre-merge head 01d09f9026 those three jobs **passed**. They only
+  started failing once the chain merged main up - which is the propagation that
+  was asked for, working as intended.
+
+Root cause, located: **f3ca2f96b9** (Simon Stelter, 2026-09-21 12:34 +0200,
+"feat(tests): add trajectory length limit and enhance kinematic structure
+access for DAiSy") rewrote
+`semantic_digital_twin/resources/collision_configs/daisy.srdf`, adding 28 lines
+that reference `left_gripper_side_cylinder_link` /
+`right_gripper_side_cylinder_link`. **No URDF or xacro in the tree defines
+either link**, so loading the DAiSy world raises
+`WorldEntityNotFoundError` -> `BrokenWorldModificationHistoryError`.
+
+No fix is in flight: nothing anywhere defines those links, and the branches
+whose `daisy.srdf` lacks the entries are simply older than that commit.
+
+Two possible fixes, and which is right is the author's call, not a guess:
+drop the 28 stale `disable_self_collision` entries, or add the missing links to
+the DAiSy description. Not pushed - this is main's bug and somebody else's
+commit.
