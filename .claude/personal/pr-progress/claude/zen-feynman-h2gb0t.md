@@ -92,3 +92,27 @@ Two possible fixes, and which is right is the author's call, not a guess:
 drop the 28 stale `disable_self_collision` entries, or add the missing links to
 the DAiSy description. Not pushed - this is main's bug and somebody else's
 commit.
+
+### Main re-merged through the chain (2026-09-22)
+Fork main and cram2 main are in sync at **86bca5ddb8**. Someone had already
+merged it into #185, which also gained a real change - `608b72e926` "Name the
+branches, labels and session link the tooling tests share".
+
+Propagated it the rest of the way, every step verified:
+- **#154** b08e1d475f -> **55b098ddde**, 911 passed. Two conflicts:
+  `DefaultLabel` -> `StackLabel` (the new shared test vocabulary, which gained
+  `INTEGRATION_CONFLICT` so this branch's fourth label has a name in it), and a
+  collection error `UPSTREAM_REMOTE` - #185's refactor inlined `"cram2"` four
+  times while this branch's three integration suites import it by name, so the
+  constant is back and those sites read it.
+- **#211** 843f62e30d -> **1769b511cc**, clean, 1166 passed.
+- **#437** b2f3a141b0 -> **3c246b240f**, 1189 passed. One conflict, both sides
+  kept: `FixtureFile`/`A_SESSION_LINK` from below and `A_MOMENT` here, which sat
+  either side of a docstring closing after the conflict marker.
+
+Whole chain now contains main and its parent.
+
+**The daisy bug is NOT fixed.** main 86bca5ddb8 still has all 28
+`side_cylinder` entries in `daisy.srdf` and still fails the same three
+`test_each_lib` jobs, so #437's red CI stays red until somebody fixes
+f3ca2f96b9. `test_basstler` passes throughout.
