@@ -21,6 +21,13 @@ dependencies = [
     "random_events",
     "segmind",
     "semantic_digital_twin",
+    "typst>=0.13",
+]
+
+[project.optional-dependencies]
+video = [
+    "kokoro-onnx>=0.6",  # The supplementary video's narration is spoken by the Kokoro model
+    "soundfile",  # and kept as wave files between renders
 ]
 
 [tool.setuptools]

@@ -247,13 +247,14 @@ class ResultsDatabase:
         table" error the moment ``CREATE TABLE`` tried to reference it.
 
         A table the database already holds gains the columns the schema added to it
-        since, see :meth:`_add_missing_columns`.
+        since, see :meth:`_add_missing_columns`; the tables the schema added are created
+        first, since a gained column may refer to one of them.
         """
         engine = create_results_engine(self.uri)
         metadata = self._schema()
         tables = self._creatable_tables(metadata)
-        self._add_missing_columns(engine, tables)
         metadata.create_all(engine, tables=tables)
+        self._add_missing_columns(engine, tables)
         return sessionmaker(engine)
 
     @classmethod

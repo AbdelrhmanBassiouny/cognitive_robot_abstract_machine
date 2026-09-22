@@ -132,7 +132,7 @@ class EventTimeline:
         """
         answered = {type(event) for event in emphasise}
         spans: Dict[Type[DetectionEvent], List[TimelineSpan]] = {}
-        for tick, span in self._spans_of(trial):
+        for tick, span in self.spans_of(trial):
             for event in tick.events:
                 spans.setdefault(type(event), []).append(span)
         return tuple(
@@ -145,7 +145,7 @@ class EventTimeline:
         )
 
     @staticmethod
-    def _spans_of(trial: RecordedTrial) -> List[Tuple[Tick, TimelineSpan]]:
+    def spans_of(trial: RecordedTrial) -> List[Tuple[Tick, TimelineSpan]]:
         """
         The stretch of the trial each of its ticks stands for.
 
