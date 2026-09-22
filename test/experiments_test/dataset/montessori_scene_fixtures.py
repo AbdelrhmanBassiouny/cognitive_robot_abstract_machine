@@ -1,0 +1,64 @@
+"""
+The rendered Montessori scene, and the pipeline that reads it, shared by every test
+module that needs detections rather than one component in isolation.
+"""
+
+from __future__ import annotations
+
+import pytest
+
+from experiments.montessori.perception.detections import MontessoriScene
+from experiments.montessori.perception.orthophoto import WorkspaceRegion
+from experiments.montessori.perception.pipeline import MontessoriPerceptionPipeline
+from experiments.montessori.perception.surfaces import WorkspaceSurface
+from experiments.montessori.semantics import MontessoriShapeCategory
+from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
+
+from .montessori_scene_renderer import MontessoriSceneRenderer, PlacedPiece
+
+
+@pytest.fixture
+def renderer() -> MontessoriSceneRenderer:
+    return MontessoriSceneRenderer()
+
+
+@pytest.fixture
+def placed_pieces() -> list[PlacedPiece]:
+    return [
+        PlacedPiece(MontessoriShapeCategory.CUBE, x=0.58, y=0.15),
+        PlacedPiece(MontessoriShapeCategory.CYLINDER, x=0.58, y=0.25),
+        PlacedPiece(MontessoriShapeCategory.TRIANGULAR_PRISM, x=0.58, y=0.35),
+    ]
+
+
+SCENE_REGION = WorkspaceRegion(
+    minimum_x=0.35, maximum_x=1.35, minimum_y=-0.45, maximum_y=0.75
+)
+"""
+The stretch of table the rendered scene is set up on.
+"""
+
+
+@pytest.fixture
+def pipeline(renderer: MontessoriSceneRenderer) -> MontessoriPerceptionPipeline:
+    return MontessoriPerceptionPipeline(
+        table=WorkspaceSurface(
+            name=PrefixedName("table", "montessori_scene"),
+            region=SCENE_REGION,
+            height=renderer.table_height,
+        ),
+        lid=WorkspaceSurface(
+            name=PrefixedName("board_lid", "montessori_scene"),
+            region=SCENE_REGION,
+            height=renderer.lid_height,
+        ),
+    )
+
+
+@pytest.fixture
+def scene(
+    pipeline: MontessoriPerceptionPipeline,
+    renderer: MontessoriSceneRenderer,
+    placed_pieces: list[PlacedPiece],
+) -> MontessoriScene:
+    return pipeline.detect(renderer.render(placed_pieces))
