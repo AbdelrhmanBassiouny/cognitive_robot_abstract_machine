@@ -187,15 +187,8 @@ class WorldVisualization(ABC):
             .strip()
             .lower()
         )
-        mode = (
-            os.environ.get(VisualizationOption.RERUN_MODE, RerunMode.SPAWN.value)
-            .strip()
-            .lower()
-        )
         if backend not in {member.value for member in VisualizationBackend}:
             raise UnknownVisualizationOption(VisualizationOption.BACKEND, backend)
-        if mode not in {member.value for member in RerunMode}:
-            raise UnknownVisualizationOption(VisualizationOption.RERUN_MODE, mode)
         constructors = {
             VisualizationBackend.NONE: partial(HeadlessVisualization, world),
             VisualizationBackend.RVIZ: partial(
@@ -204,15 +197,15 @@ class WorldVisualization(ABC):
                 ros_node=ros_node,
                 collision_visualization=collision_visualization,
             ),
-            VisualizationBackend.RERUN: partial(
-                RerunVisualization,
-                world,
-                mode=RerunMode(mode),
-                target=os.environ.get(VisualizationOption.RERUN_TARGET),
-            ),
+            VisualizationBackend.RERUN: partial(RerunVisualization, world),
             VisualizationBackend.CRAMERA: partial(PluginVisualization, world),
         }
-        return constructors[VisualizationBackend(backend)]()
+        visualization = constructors[VisualizationBackend(backend)]()
+        visualization._configure_from_environment()
+        return visualization
+
+    def _configure_from_environment(self) -> None:
+        pass
 
     @property
     @abstractmethod
@@ -350,6 +343,17 @@ class RerunVisualization(WorldVisualization):
     """
     The owned native Rerun adapter.
     """
+
+    def _configure_from_environment(self) -> None:
+        mode = (
+            os.environ.get(VisualizationOption.RERUN_MODE, RerunMode.SPAWN.value)
+            .strip()
+            .lower()
+        )
+        if mode not in {member.value for member in RerunMode}:
+            raise UnknownVisualizationOption(VisualizationOption.RERUN_MODE, mode)
+        self.mode = RerunMode(mode)
+        self.target = os.environ.get(VisualizationOption.RERUN_TARGET)
 
     @property
     def is_rendering(self) -> bool:

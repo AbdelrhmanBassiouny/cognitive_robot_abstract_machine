@@ -4,6 +4,7 @@ Visualization is opt-in and preserves native demonstration ownership.
 
 from dataclasses import dataclass, field
 from importlib.metadata import EntryPoint, EntryPoints
+from pathlib import Path
 from unittest.mock import Mock
 
 import pytest
@@ -24,6 +25,7 @@ from coraplex.visualization import (
     WorldVisualization,
     HeadlessVisualization,
     RvizVisualization,
+    RerunVisualization,
     PluginVisualization,
 )
 from semantic_digital_twin.robots.minimal_robot import MinimalRobot
@@ -282,6 +284,7 @@ def test_unknown_rerun_mode_is_reported(monkeypatch) -> None:
     """
     Unsupported Rerun output modes produce a named configuration failure.
     """
+    monkeypatch.setenv(VisualizationOption.BACKEND, VisualizationBackend.RERUN)
     monkeypatch.setenv(VisualizationOption.RERUN_MODE, "missing-mode")
     with pytest.raises(UnknownVisualizationOption) as caught:
         WorldVisualization.from_environment(World())
@@ -493,3 +496,38 @@ def test_unscoped_browser_demo_releases_owned_ros_session(
         assert not provider.stopped
     finally:
         demonstration.stop_visualization()
+
+
+# %% backend configuration isolation
+@pytest.mark.parametrize(
+    "backend",
+    [
+        VisualizationBackend.NONE,
+        VisualizationBackend.RVIZ,
+        VisualizationBackend.CRAMERA,
+    ],
+)
+def test_backend_selection_ignores_rerun_settings(
+    monkeypatch: pytest.MonkeyPatch,
+    backend: VisualizationBackend,
+) -> None:
+    monkeypatch.setenv(VisualizationOption.BACKEND, backend)
+    monkeypatch.setenv(VisualizationOption.RERUN_MODE, "missing-mode")
+    world = World()
+    selected = WorldVisualization.from_environment(world)
+    assert selected.backend is backend
+    assert selected.world is world
+
+
+def test_default_rerun_selection_reads_its_configuration(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    target = tmp_path / "world.rrd"
+    monkeypatch.delenv(VisualizationOption.BACKEND, raising=False)
+    monkeypatch.setenv(VisualizationOption.RERUN_MODE, RerunMode.SAVE.value)
+    monkeypatch.setenv(VisualizationOption.RERUN_TARGET, str(target))
+    selected = WorldVisualization.from_environment(World(), VisualizationBackend.RERUN)
+    assert isinstance(selected, RerunVisualization)
+    assert selected.mode is RerunMode.SAVE
+    assert selected.target == str(target)
