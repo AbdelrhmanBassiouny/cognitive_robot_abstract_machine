@@ -1,0 +1,5 @@
+2026-09-18T15:58:01.0010000Z ##[group]Initialize containers
+2026-09-18T15:58:01.0020000Z ##[command]/usr/bin/docker pull ghcr.io/cram2/cognitive_robot_abstract_machine:jazzy
+2026-09-18T15:58:12.7730000Z Error response from daemon: manifest unknown
+2026-09-18T15:58:12.7740000Z ##[error]Docker pull failed with exit code 1, back off 1.021 seconds before retry.
+2026-09-18T15:58:20.4450000Z ##[error]Failed to pull the image ghcr.io/cram2/cognitive_robot_abstract_machine:jazzy
