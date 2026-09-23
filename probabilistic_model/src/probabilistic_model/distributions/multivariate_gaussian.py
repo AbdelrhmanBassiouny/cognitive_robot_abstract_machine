@@ -7,19 +7,20 @@ from dataclasses import dataclass
 
 import numpy as np
 import numpy.typing as npt
-from random_events.interval import Bound, SimpleInterval, singleton
+from random_events.interval import SimpleInterval, singleton
 from random_events.product_algebra import Event, SimpleEvent, VariableMap
 from random_events.variable import Continuous, Variable
-from scipy.optimize import minimize
-from scipy.stats import multivariate_normal, truncnorm
+from scipy.optimize import lsq_linear
+from scipy.stats import multivariate_normal, norm, truncnorm
+from scipy.stats._multivariate import multivariate_normal_frozen
 from typing_extensions import (
     Any,
     Dict,
     Iterable,
+    Iterator,
     List,
     Optional,
     Self,
-    TYPE_CHECKING,
     Tuple,
 )
 
@@ -36,8 +37,111 @@ from probabilistic_model.probabilistic_model import (
     ProbabilisticModel,
 )
 
-if TYPE_CHECKING:
-    from scipy.stats._multivariate import multivariate_normal_frozen
+# %% the covariance matrix
+
+
+@dataclass
+class Covariance:
+    """
+    The covariance matrix of a multivariate Gaussian.
+
+    A covariance matrix is symmetric, so only the entries on and below its diagonal are
+    stored. Every row and column is addressed by its index.
+    """
+
+    lower_triangle: npt.NDArray
+    """
+    The entries of the covariance matrix on and below its diagonal, row by row.
+    """
+
+    def __post_init__(self):
+        self.lower_triangle = np.asarray(self.lower_triangle, dtype=float)
+        self.validate()
+
+    def validate(self):
+        """
+        :raises ShapeMismatchError: If the entries are not the lower triangle of a
+            square matrix.
+        """
+        entries = self.dimension * (self.dimension + 1) // 2
+        if self.lower_triangle.shape != (entries,):
+            raise ShapeMismatchError(self.lower_triangle.shape, (entries,))
+
+    @classmethod
+    def from_matrix(cls, matrix: npt.ArrayLike) -> Self:
+        """
+        :param matrix: A covariance matrix, of which only the entries on and below the
+            diagonal are read.
+        :return: The covariance.
+        :raises ShapeMismatchError: If the matrix is not square.
+        """
+        matrix = np.atleast_2d(np.asarray(matrix, dtype=float))
+        dimension = len(matrix)
+        if matrix.shape != (dimension, dimension):
+            raise ShapeMismatchError(matrix.shape, (dimension, dimension))
+        return cls(lower_triangle=matrix[np.tril_indices(dimension)])
+
+    @property
+    def dimension(self) -> int:
+        """
+        :return: How many rows, and columns, the matrix has.
+        """
+        return int((math.isqrt(8 * len(self.lower_triangle) + 1) - 1) // 2)
+
+    @property
+    def matrix(self) -> npt.NDArray:
+        """
+        :return: The full, symmetric matrix.
+        """
+        rows, columns = np.tril_indices(self.dimension)
+        matrix = np.empty((self.dimension, self.dimension))
+        matrix[rows, columns] = self.lower_triangle
+        matrix[columns, rows] = self.lower_triangle
+        return matrix
+
+    @property
+    def variances(self) -> npt.NDArray:
+        """
+        :return: The diagonal of the matrix.
+        """
+        indices = np.arange(self.dimension)
+        return self.lower_triangle[indices * (indices + 1) // 2 + indices]
+
+    @property
+    def is_diagonal(self) -> bool:
+        """
+        :return: Whether every entry off the diagonal is zero.
+        """
+        rows, columns = np.tril_indices(self.dimension)
+        return not np.any(self.lower_triangle[rows != columns])
+
+    def between(self, first: int, second: int) -> float:
+        """
+        :param first: The index of a row.
+        :param second: The index of a column.
+        :return: The entry at that row and column.
+        """
+        row, column = max(first, second), min(first, second)
+        return float(self.lower_triangle[row * (row + 1) // 2 + column])
+
+    def marginal(self, indices: List[int]) -> Self:
+        """
+        :param indices: The rows and columns to keep, in the order to keep them in.
+        :return: The covariance of only those.
+        """
+        return self.from_matrix(self.matrix[np.ix_(indices, indices)])
+
+    def scaled(self, factors: npt.NDArray) -> Self:
+        """
+        :param factors: What to multiply each index by.
+        :return: The covariance after every index is multiplied by its factor, which
+            scales each entry once per index it relates.
+        """
+        rows, columns = np.tril_indices(self.dimension)
+        return type(self)(
+            lower_triangle=self.lower_triangle * factors[rows] * factors[columns]
+        )
+
 
 # %% a Gaussian over several variables at once
 
@@ -52,7 +156,7 @@ class MultivariateGaussianDistribution(ProbabilisticModel):
     answers its own through :mod:`scipy.stats.norm`.
     """
 
-    distribution_variables: Tuple[Continuous, ...]
+    variables: Tuple[Continuous, ...]
     """
     The variables of the distribution.
     """
@@ -64,35 +168,36 @@ class MultivariateGaussianDistribution(ProbabilisticModel):
     Its dimension corresponds to the variables in the same order.
     """
 
-    covariance_lower_triangle: npt.NDArray
+    covariance: Covariance
     """
-    The entries of the covariance matrix on and below its diagonal, row by row.
+    The covariance.
 
-    A covariance matrix is symmetric, so these determine all of it.
+    Its rows and columns correspond to the variables in the same order.
     """
 
     def __post_init__(self):
+        self.variables = tuple(self.variables)
+        self.mean = np.asarray(self.mean, dtype=float)
+        self.validate()
+
+    def validate(self):
         """
         :raises ShapeMismatchError: If the mean or the covariance is not laid out by
             this distribution's variables.
         """
-        self.distribution_variables = tuple(self.distribution_variables)
-        self.mean = np.asarray(self.mean, dtype=float)
-        self.covariance_lower_triangle = np.asarray(
-            self.covariance_lower_triangle, dtype=float
-        )
-
-        amount = len(self.distribution_variables)
+        amount = len(self.variables)
         if self.mean.shape != (amount,):
             raise ShapeMismatchError(self.mean.shape, (amount,))
-        entries = amount * (amount + 1) // 2
-        if self.covariance_lower_triangle.shape != (entries,):
-            raise ShapeMismatchError(self.covariance_lower_triangle.shape, (entries,))
+        if self.covariance.dimension != amount:
+            raise ShapeMismatchError(
+                (self.covariance.dimension, self.covariance.dimension),
+                (amount, amount),
+            )
 
     @classmethod
     def from_mean_and_covariance(
         cls,
-        distribution_variables: Iterable[Continuous],
+        variables: Iterable[Continuous],
         mean: npt.ArrayLike,
         covariance: npt.ArrayLike,
     ) -> Self:
@@ -100,7 +205,7 @@ class MultivariateGaussianDistribution(ProbabilisticModel):
         Build the distribution from a full covariance matrix, of which only the entries
         on and below the diagonal are read.
 
-        :param distribution_variables: The variables of the distribution.
+        :param variables: The variables of the distribution.
         :param mean: The mean, laid out by the variables.
         :param covariance: The covariance matrix, both of whose dimensions are laid out
             by the variables.
@@ -108,32 +213,11 @@ class MultivariateGaussianDistribution(ProbabilisticModel):
         :raises ShapeMismatchError: If the mean or the covariance is not laid out by the
             variables.
         """
-        distribution_variables = tuple(distribution_variables)
-        covariance = np.asarray(covariance, dtype=float)
-        amount = len(distribution_variables)
-        if covariance.shape != (amount, amount):
-            raise ShapeMismatchError(covariance.shape, (amount, amount))
         return cls(
-            distribution_variables=distribution_variables,
+            variables=tuple(variables),
             mean=mean,
-            covariance_lower_triangle=covariance[np.tril_indices(amount)],
+            covariance=Covariance.from_matrix(covariance),
         )
-
-    @property
-    def variables(self) -> Tuple[Continuous, ...]:
-        return tuple(self.distribution_variables)
-
-    @property
-    def covariance(self) -> npt.NDArray:
-        """
-        :return: The covariance matrix. Both of its dimensions correspond to the
-            variables in the same order.
-        """
-        rows, columns = np.tril_indices(len(self.distribution_variables))
-        covariance = np.empty((len(self.distribution_variables),) * 2)
-        covariance[rows, columns] = self.covariance_lower_triangle
-        covariance[columns, rows] = self.covariance_lower_triangle
-        return covariance
 
     @property
     def support(self) -> Event:
@@ -144,21 +228,22 @@ class MultivariateGaussianDistribution(ProbabilisticModel):
         """
         :return: The scipy distribution every tractable query is answered by.
         """
-        return multivariate_normal(mean=self.mean, cov=self.covariance)
+        return multivariate_normal(mean=self.mean, cov=self.covariance.matrix)
 
     # %% reading it by variable
 
     def index_of(self, variable: Continuous) -> int:
         """
         :param variable: The variable to locate.
-        :return: Its index in the mean and in both dimensions of the covariance.
+        :return: Its index in the mean and in the covariance.
         :raises VariableNotInDistributionError: If this distribution is not over it.
         """
-        if variable not in self.distribution_variables:
+        try:
+            return self.variables.index(variable)
+        except ValueError as error:
             raise VariableNotInDistributionError(
-                variable=variable, variables=list(self.distribution_variables)
-            )
-        return self.distribution_variables.index(variable)
+                variable=variable, variables=list(self.variables)
+            ) from error
 
     def covariance_between(self, first: Continuous, second: Continuous) -> float:
         """
@@ -171,7 +256,7 @@ class MultivariateGaussianDistribution(ProbabilisticModel):
         :raises VariableNotInDistributionError: If this distribution is not over either
             of them.
         """
-        return float(self.covariance[self.index_of(first), self.index_of(second)])
+        return self.covariance.between(self.index_of(first), self.index_of(second))
 
     # %% density and probability
 
@@ -190,28 +275,29 @@ class MultivariateGaussianDistribution(ProbabilisticModel):
         :param event: The box, or boxes, to measure.
         :return: How probable it is.
         """
-        intervals_per_variable = [
-            tuple(event[variable].simple_sets) for variable in self.variables
-        ]
         return float(
             sum(
-                self._probability_of_box(box)
-                for box in itertools.product(*intervals_per_variable)
+                max(float(self.scipy_distribution.cdf(upper, lower_limit=lower)), 0.0)
+                for lower, upper in self._bounds_of_boxes(event)
             )
         )
 
-    def _probability_of_box(self, box: Tuple[SimpleInterval, ...]) -> float:
+    def _bounds_of_boxes(
+        self, event: SimpleEvent
+    ) -> Iterator[Tuple[npt.NDArray, npt.NDArray]]:
         """
-        :param box: One simple interval per variable, in this distribution's order.
-        :return: How probable it is that every variable falls in its own interval.
+        :param event: The event to split into boxes.
+        :return: The lower and the upper bounds of each box the event makes, laid out
+            by this distribution's variables.
         """
-        probability = multivariate_normal.cdf(
-            np.array([interval.upper for interval in box]),
-            mean=self.mean,
-            cov=self.covariance,
-            lower_limit=np.array([interval.lower for interval in box]),
-        )
-        return max(float(probability), 0.0)
+        intervals_per_variable = [
+            tuple(event[variable].simple_sets) for variable in self.variables
+        ]
+        for box in itertools.product(*intervals_per_variable):
+            yield (
+                np.array([interval.lower for interval in box]),
+                np.array([interval.upper for interval in box]),
+            )
 
     def log_mode(self) -> Tuple[Event, float]:
         """
@@ -251,12 +337,10 @@ class MultivariateGaussianDistribution(ProbabilisticModel):
             order.
         :return: The Gaussian over those variables.
         """
-        return self.from_mean_and_covariance(
-            distribution_variables=tuple(
-                self.distribution_variables[index] for index in indices
-            ),
+        return type(self)(
+            variables=tuple(self.variables[index] for index in indices),
             mean=self.mean[indices],
-            covariance=self.covariance[np.ix_(indices, indices)],
+            covariance=self.covariance.marginal(indices),
         )
 
     # %% fixing variables at a value
@@ -314,112 +398,42 @@ class MultivariateGaussianDistribution(ProbabilisticModel):
         :return: The Gaussian over the free variables, conditioned on the fixed ones.
         """
         free = self._marginal_over_variable_indices(free_indices)
-        cross = self.covariance[np.ix_(free_indices, fixed_indices)]
-        explained = cross @ np.linalg.inv(
-            self.covariance[np.ix_(fixed_indices, fixed_indices)]
-        )
+        matrix = self.covariance.matrix
+        cross = matrix[np.ix_(free_indices, fixed_indices)]
+        explained = cross @ np.linalg.inv(matrix[np.ix_(fixed_indices, fixed_indices)])
         return self.from_mean_and_covariance(
-            distribution_variables=free.distribution_variables,
+            variables=free.variables,
             mean=free.mean + explained @ (fixed_at - self.mean[fixed_indices]),
-            covariance=free.covariance - explained @ cross.T,
+            covariance=free.covariance.matrix - explained @ cross.T,
         )
 
     def product_with_gaussian_likelihood(
-        self,
-        observation_matrix: npt.NDArray,
-        observed: npt.NDArray,
-        observation_covariance: npt.NDArray,
+        self, other: MultivariateGaussianDistribution
     ) -> Self:
         """
-        Multiply this density by the Gaussian likelihood of an observation and normalize
-        the product.
+        Multiply this density by the density of another Gaussian over some of the same
+        variables, and normalize the product.
 
-        The observation is ``observation_matrix`` applied to the variables plus Gaussian
-        noise with covariance ``observation_covariance``. Its likelihood as a function
-        of the variables is a Gaussian density, and so is the normalized product of two
-        Gaussian densities. That product is the Gaussian over these variables
-        conditioned on ``observed`` in their joint distribution with the observation.
+        The product of two Gaussian densities is again a Gaussian density, over the
+        variables of this distribution.
 
-        :param observation_matrix: How much each variable contributes to each observed
-            number, with one row per observed number.
-        :param observed: The numbers observed, one per row of ``observation_matrix``.
-        :param observation_covariance: The covariance of the observation noise, one row
-            and column per observed number.
-        :return: The normalized product, over the same variables.
-        :raises ShapeMismatchError: If the three do not describe one observation of
-            these variables.
+        :param other: The Gaussian to multiply by. Its variables must all be this
+            distribution's.
+        :return: The normalized product.
+        :raises VariableNotInDistributionError: If ``other`` is over a variable this
+            distribution is not over.
         """
-        observation_matrix = np.atleast_2d(np.asarray(observation_matrix, dtype=float))
-        observed = np.atleast_1d(np.asarray(observed, dtype=float))
-        observation_covariance = np.atleast_2d(
-            np.asarray(observation_covariance, dtype=float)
+        indices = [self.index_of(variable) for variable in other.variables]
+        matrix = self.covariance.matrix
+        cross = matrix[:, indices]
+        gain = cross @ np.linalg.inv(
+            matrix[np.ix_(indices, indices)] + other.covariance.matrix
         )
-
-        amount = len(observation_matrix)
-        if observation_matrix.shape != (amount, len(self.variables)):
-            raise ShapeMismatchError(
-                observation_matrix.shape, (amount, len(self.variables))
-            )
-        if observed.shape != (amount,):
-            raise ShapeMismatchError(observed.shape, (amount,))
-        if observation_covariance.shape != (amount, amount):
-            raise ShapeMismatchError(observation_covariance.shape, (amount, amount))
-
-        if amount == 0:
-            return self
-
-        joint = self._joint_with_observation(observation_matrix, observation_covariance)
-        return joint._conditional_over_variable_indices(
-            list(range(len(self.variables))),
-            list(range(len(self.variables), len(joint.variables))),
-            observed,
-        )
-
-    def _joint_with_observation(
-        self, observation_matrix: npt.NDArray, observation_covariance: npt.NDArray
-    ) -> Self:
-        """
-        :param observation_matrix: How much each variable contributes to each observed
-            number.
-        :param observation_covariance: The covariance of the observation noise.
-        :return: The Gaussian over these variables followed by the observed numbers.
-        """
-        covariance = self.covariance
         return self.from_mean_and_covariance(
-            distribution_variables=(
-                *self.distribution_variables,
-                *self._variables_for_observation(len(observation_matrix)),
-            ),
-            mean=np.concatenate([self.mean, observation_matrix @ self.mean]),
-            covariance=np.block(
-                [
-                    [covariance, covariance @ observation_matrix.T],
-                    [
-                        observation_matrix @ covariance,
-                        observation_matrix @ covariance @ observation_matrix.T
-                        + observation_covariance,
-                    ],
-                ]
-            ),
+            variables=self.variables,
+            mean=self.mean + gain @ (other.mean - self.mean[indices]),
+            covariance=matrix - gain @ cross.T,
         )
-
-    def _variables_for_observation(self, amount: int) -> List[Continuous]:
-        """
-        The observed numbers are variables of the joint only while the product is being
-        formed, so they are named here rather than asked of the caller.
-
-        :param amount: How many observed numbers need a name.
-        :return: That many names, none of which this distribution already uses.
-        """
-        taken = {variable.name for variable in self.variables}
-        names = []
-        for position in range(amount):
-            name = f"observation {position}"
-            while name in taken:
-                name = f"{name} "
-            taken.add(name)
-            names.append(Continuous(name))
-        return names
 
     # %% confining it to an event
 
@@ -443,7 +457,9 @@ class MultivariateGaussianDistribution(ProbabilisticModel):
             variable.
         """
         event.fill_missing_variables(set(self.variables))
-        box = self.require_box(event)
+        if not event.is_box():
+            raise EventIsNotABoxError(model=self, event=event)
+        [box] = event.simple_sets
         probability = self.probability_of_simple_event(box)
         if probability == 0.0:
             return None, -np.inf
@@ -452,44 +468,26 @@ class MultivariateGaussianDistribution(ProbabilisticModel):
             math.log(probability),
         )
 
-    def require_box(self, event: Event) -> SimpleEvent:
-        """
-        :param event: The event to read as a box.
-        :return: The one box it is.
-        :raises EventIsNotABoxError: If it is more than one box, or leaves a variable on
-            several simple intervals.
-        """
-        if len(event.simple_sets) != 1:
-            raise EventIsNotABoxError(model=self, event=event)
-        box = event.simple_sets[0]
-        if any(len(box[variable].simple_sets) != 1 for variable in self.variables):
-            raise EventIsNotABoxError(model=self, event=event)
-        return box
-
     # %% moments
 
     def moment(self, order: OrderType, center: CenterType) -> MomentType:
         """
         Every moment asked for here is of one variable on its own, so each is answered
-        by that variable's own marginal.
+        by that variable's own marginal, through :mod:`scipy.stats.norm`.
 
         :param order: The order of the moment of each variable to answer for.
         :param center: What to take each of those moments about.
         :return: The moment of each variable asked for.
         """
-        from probabilistic_model.distributions.gaussian import GaussianDistribution
-
         moments = VariableMap()
         for variable in order:
-            marginal = GaussianDistribution(
-                variable=variable,
-                location=float(self.mean[self.index_of(variable)]),
-                scale=math.sqrt(self.covariance_between(variable, variable)),
+            index = self.index_of(variable)
+            moments[variable] = float(
+                norm(
+                    loc=self.mean[index] - center[variable],
+                    scale=math.sqrt(self.covariance.between(index, index)),
+                ).moment(order[variable])
             )
-            moments[variable] = marginal.moment(
-                VariableMap({variable: order[variable]}),
-                VariableMap({variable: center[variable]}),
-            )[variable]
         return moments
 
     # %% translation and scaling
@@ -516,10 +514,7 @@ class MultivariateGaussianDistribution(ProbabilisticModel):
             [scaling.get(variable, 1.0) for variable in self.variables], dtype=float
         )
         self.mean = self.mean * factors
-        self.covariance_lower_triangle = (
-            self.covariance_lower_triangle
-            * np.outer(factors, factors)[np.tril_indices(len(self.variables))]
-        )
+        self.covariance = self.covariance.scaled(factors)
 
     # %% sampling
 
@@ -530,9 +525,9 @@ class MultivariateGaussianDistribution(ProbabilisticModel):
 
     def __copy__(self) -> Self:
         return type(self)(
-            distribution_variables=self.distribution_variables,
+            variables=self.variables,
             mean=self.mean.copy(),
-            covariance_lower_triangle=self.covariance_lower_triangle.copy(),
+            covariance=Covariance(lower_triangle=self.covariance.lower_triangle.copy()),
         )
 
     def __deepcopy__(self, memo=None) -> Self:
@@ -542,12 +537,12 @@ class MultivariateGaussianDistribution(ProbabilisticModel):
         if id_self in memo:
             return memo[id_self]
         result = type(self)(
-            distribution_variables=tuple(
+            variables=tuple(
                 variable.__class__(name=variable.name, domain=variable.domain)
-                for variable in self.distribution_variables
+                for variable in self.variables
             ),
             mean=self.mean.copy(),
-            covariance_lower_triangle=self.covariance_lower_triangle.copy(),
+            covariance=Covariance(lower_triangle=self.covariance.lower_triangle.copy()),
         )
         memo[id_self] = result
         return result
@@ -608,7 +603,7 @@ class TruncatedMultivariateGaussianDistribution(ProbabilisticModel):
         inside = np.array([self.support.contains(event) for event in events])
         return np.where(
             inside,
-            self.untruncated.log_likelihood(events)
+            np.atleast_1d(self.untruncated.scipy_distribution.logpdf(events))
             - math.log(self.normalizing_constant),
             -np.inf,
         )
@@ -617,10 +612,12 @@ class TruncatedMultivariateGaussianDistribution(ProbabilisticModel):
         surviving = event.intersection_with(self.box)
         if surviving.is_empty():
             return 0.0
-        return (
-            self.untruncated.probability_of_simple_event(surviving)
-            / self.normalizing_constant
+        scipy_distribution = self.untruncated.scipy_distribution
+        probability = sum(
+            max(float(scipy_distribution.cdf(upper, lower_limit=lower)), 0.0)
+            for lower, upper in self.untruncated._bounds_of_boxes(surviving)
         )
+        return probability / self.normalizing_constant
 
     # %% the most likely point the box still allows
 
@@ -644,51 +641,36 @@ class TruncatedMultivariateGaussianDistribution(ProbabilisticModel):
 
     def _most_likely_point(self) -> npt.NDArray:
         """
-        :return: Where the density is greatest within the box, pulled just inside a
+        The point of the box nearest to the mean in the distribution's own metric
+        minimises :math:`\\lVert W (x - \\mu) \\rVert^2` over the box, where
+        :math:`W^T W` is the inverse of the covariance. That is a bounded linear least
+        squares problem, which :func:`scipy.optimize.lsq_linear` solves exactly.
+
+        :return: Where the density is greatest within the box, moved just inside an
             interval that excludes its own end.
         """
         mean = self.untruncated.mean
         if self.support.contains(mean):
             return mean
         intervals = [self.interval_of(variable) for variable in self.variables]
-        precision = np.linalg.inv(self.untruncated.covariance)
-
-        def distance(point: npt.NDArray) -> float:
-            difference = point - mean
-            return float(difference @ precision @ difference)
-
-        def gradient(point: npt.NDArray) -> npt.NDArray:
-            return 2 * precision @ (point - mean)
-
-        bounds = [(interval.lower, interval.upper) for interval in intervals]
-        started_at = np.array(
-            [
-                min(max(value, interval.lower), interval.upper)
-                for value, interval in zip(mean, intervals)
-            ]
-        )
-        found = minimize(
-            distance, started_at, jac=gradient, bounds=bounds, method="L-BFGS-B"
+        whitening = np.linalg.cholesky(
+            np.linalg.inv(self.untruncated.covariance.matrix)
+        ).T
+        found = lsq_linear(
+            whitening,
+            whitening @ mean,
+            bounds=(
+                [interval.lower for interval in intervals],
+                [interval.upper for interval in intervals],
+            ),
+            method="bvls",
         ).x
         return np.array(
-            [self._inside(value, interval) for value, interval in zip(found, intervals)]
+            [
+                interval.nearest_contained_value(float(value))
+                for value, interval in zip(found, intervals)
+            ]
         )
-
-    @staticmethod
-    def _inside(value: float, interval: SimpleInterval) -> float:
-        """
-        An interval that excludes its own end has no nearest point to anything beyond
-        it, so the next value there is stands in for the end itself.
-
-        :param value: Where the density is greatest along this interval.
-        :param interval: The interval it has to stay in.
-        :return: That value, moved off an excluded end.
-        """
-        if value == interval.lower and interval.left == Bound.OPEN:
-            return float(np.nextafter(value, np.inf))
-        if value == interval.upper and interval.right == Bound.OPEN:
-            return float(np.nextafter(value, -np.inf))
-        return float(value)
 
     # %% ruling out more, and fixing a variable
 
@@ -707,7 +689,10 @@ class TruncatedMultivariateGaussianDistribution(ProbabilisticModel):
             variable.
         """
         event.fill_missing_variables(set(self.variables))
-        surviving = self.untruncated.require_box(event).intersection_with(self.box)
+        if not event.is_box():
+            raise EventIsNotABoxError(model=self, event=event)
+        [box] = event.simple_sets
+        surviving = box.intersection_with(self.box)
         probability = self.probability_of_simple_event(surviving)
         if probability == 0.0:
             return None, -np.inf
@@ -725,29 +710,31 @@ class TruncatedMultivariateGaussianDistribution(ProbabilisticModel):
         makes at those values.
 
         :param point: What each fixed variable is known to be.
-        :return: That distribution and the log-density of the values given, or nothing
-            at all if the box rules them out.
+        :return: That distribution and the log-likelihood of the values given, or
+            nothing at all if the box rules them out.
         :raises VariableNotInDistributionError: If a fixed variable is not one of this
             distribution's.
         :raises ProbabilisticCircuitRequiredError: If every variable is fixed, which
             leaves a product of Dirac impulses.
         """
-        if any(
-            not self.box[variable].contains(value) for variable, value in point.items()
-        ):
-            return None, -np.inf
-
         conditional, log_density = self.untruncated.log_conditional(point)
-        log_density -= math.log(self.normalizing_constant)
-
         free = [variable for variable in self.variables if variable not in point]
         slice_of_the_box = SimpleEvent.from_data(
             {variable: self.box[variable] for variable in free}
         ).as_composite_set()
         confined, log_probability = conditional.log_truncated(slice_of_the_box)
-        if confined is None:
+
+        inside = all(
+            self.box[variable].contains(value) for variable, value in point.items()
+        )
+        log_likelihood = (
+            log_density + log_probability - math.log(self.normalizing_constant)
+            if inside
+            else -np.inf
+        )
+        if log_likelihood == -np.inf:
             return None, -np.inf
-        return confined, log_density + log_probability
+        return confined, log_likelihood
 
     # %% sampling
 
@@ -756,18 +743,9 @@ class TruncatedMultivariateGaussianDistribution(ProbabilisticModel):
         :param amount: How many samples to draw.
         :return: That many samples, all of them inside the box.
         """
-        if self._variables_co_vary:
-            return self.rejection_sample(amount)
-        return self._sample_each_variable_on_its_own(amount)
-
-    @property
-    def _variables_co_vary(self) -> bool:
-        """
-        :return: Whether any two variables move together, which is what stops each of
-            them from being drawn from its own interval.
-        """
-        covariance = self.untruncated.covariance
-        return bool(np.any(covariance - np.diag(np.diag(covariance))))
+        if self.untruncated.covariance.is_diagonal:
+            return self._sample_each_variable_on_its_own(amount)
+        return self.rejection_sample(amount)
 
     def _sample_each_variable_on_its_own(self, amount: int) -> npt.NDArray:
         """
@@ -780,7 +758,7 @@ class TruncatedMultivariateGaussianDistribution(ProbabilisticModel):
         """
         intervals = [self.interval_of(variable) for variable in self.variables]
         mean = self.untruncated.mean
-        deviation = np.sqrt(np.diag(self.untruncated.covariance))
+        deviation = np.sqrt(self.untruncated.covariance.variances)
         return truncnorm.rvs(
             a=(np.array([interval.lower for interval in intervals]) - mean) / deviation,
             b=(np.array([interval.upper for interval in intervals]) - mean) / deviation,

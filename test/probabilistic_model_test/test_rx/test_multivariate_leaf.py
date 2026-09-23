@@ -43,7 +43,7 @@ def correlated(first, second) -> MultivariateGaussianDistribution:
     them in, so a leaf that confused the two orders would read the wrong columns.
     """
     return MultivariateGaussianDistribution.from_mean_and_covariance(
-        distribution_variables=(second, first),
+        variables=(second, first),
         mean=np.array([10.0, -10.0]),
         covariance=np.array([[1.0, 0.6], [0.6, 2.0]]),
     )
