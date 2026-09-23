@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import itertools
 import math
 from dataclasses import dataclass
@@ -150,7 +151,7 @@ class MultivariateGaussianDistribution(ProbabilisticModel):
     def index_of(self, variable: Continuous) -> int:
         """
         :param variable: The variable to locate.
-        :return: The row it occupies in the mean and the covariance.
+        :return: Its index in the mean and in both dimensions of the covariance.
         :raises VariableNotInDistributionError: If this distribution is not over it.
         """
         if variable not in self.distribution_variables:
@@ -158,22 +159,6 @@ class MultivariateGaussianDistribution(ProbabilisticModel):
                 variable=variable, variables=list(self.distribution_variables)
             )
         return self.distribution_variables.index(variable)
-
-    def mean_of(self, variable: Continuous) -> float:
-        """
-        :param variable: The variable to read.
-        :return: Its mean.
-        :raises VariableNotInDistributionError: If this distribution is not over it.
-        """
-        return float(self.mean[self.index_of(variable)])
-
-    def variance_of(self, variable: Continuous) -> float:
-        """
-        :param variable: The variable to read.
-        :return: Its variance.
-        :raises VariableNotInDistributionError: If this distribution is not over it.
-        """
-        return self.covariance_between(variable, variable)
 
     def covariance_between(self, first: Continuous, second: Continuous) -> float:
         """
@@ -199,32 +184,32 @@ class MultivariateGaussianDistribution(ProbabilisticModel):
     def probability_of_simple_event(self, event: SimpleEvent) -> float:
         """
         The probability of an axis-aligned box under a correlated Gaussian has no closed
-        form, so it is integrated numerically. A variable confined to several stretches
+        form, so it is integrated numerically. A variable confined to several intervals
         makes several boxes, and their probabilities add.
 
         :param event: The box, or boxes, to measure.
         :return: How probable it is.
         """
-        stretches_per_variable = [
+        intervals_per_variable = [
             tuple(event[variable].simple_sets) for variable in self.variables
         ]
         return float(
             sum(
                 self._probability_of_box(box)
-                for box in itertools.product(*stretches_per_variable)
+                for box in itertools.product(*intervals_per_variable)
             )
         )
 
     def _probability_of_box(self, box: Tuple[SimpleInterval, ...]) -> float:
         """
-        :param box: One unbroken stretch per variable, in this distribution's order.
-        :return: How probable it is that every variable falls in its own stretch.
+        :param box: One simple interval per variable, in this distribution's order.
+        :return: How probable it is that every variable falls in its own interval.
         """
         probability = multivariate_normal.cdf(
-            np.array([stretch.upper for stretch in box]),
+            np.array([interval.upper for interval in box]),
             mean=self.mean,
             cov=self.covariance,
-            lower_limit=np.array([stretch.lower for stretch in box]),
+            lower_limit=np.array([interval.lower for interval in box]),
         )
         return max(float(probability), 0.0)
 
@@ -235,7 +220,10 @@ class MultivariateGaussianDistribution(ProbabilisticModel):
         :return: The mean, and the log-density there.
         """
         mode = SimpleEvent.from_data(
-            {variable: singleton(self.mean_of(variable)) for variable in self.variables}
+            {
+                variable: singleton(float(value))
+                for variable, value in zip(self.variables, self.mean)
+            }
         ).as_composite_set()
         return mode, float(self.log_likelihood(self.mean.reshape(1, -1))[0])
 
@@ -244,27 +232,31 @@ class MultivariateGaussianDistribution(ProbabilisticModel):
     def marginal(self, variables: Iterable[Variable]) -> Optional[Self]:
         """
         :param variables: The variables to keep. They are kept in this distribution's
-            own order, whatever order they are asked for in.
-        :return: The Gaussian over only those variables.
-        :raises VariableNotInDistributionError: If this distribution is not over one of
-            them.
+            own order, whatever order they are asked for in, and those it is not over
+            are ignored.
+        :return: The Gaussian over only those variables, or nothing if none of them is
+            one of this distribution's.
         """
         kept = set(variables)
-        return self._marginal_over_variable_indices(
-            [self.index_of(variable) for variable in self.variables if variable in kept]
-        )
+        indices = [
+            index for index, variable in enumerate(self.variables) if variable in kept
+        ]
+        if not indices:
+            return None
+        return self._marginal_over_variable_indices(indices)
 
-    def _marginal_over_variable_indices(self, rows: List[int]) -> Self:
+    def _marginal_over_variable_indices(self, indices: List[int]) -> Self:
         """
-        :param rows: The rows to keep, in this distribution's own order.
-        :return: The Gaussian over the variables those rows belong to.
+        :param indices: The indices of the variables to keep, in this distribution's own
+            order.
+        :return: The Gaussian over those variables.
         """
         return self.from_mean_and_covariance(
             distribution_variables=tuple(
-                self.distribution_variables[row] for row in rows
+                self.distribution_variables[index] for index in indices
             ),
-            mean=self.mean[rows],
-            covariance=self.covariance[np.ix_(rows, rows)],
+            mean=self.mean[indices],
+            covariance=self.covariance[np.ix_(indices, indices)],
         )
 
     # %% fixing variables at a value
@@ -284,42 +276,51 @@ class MultivariateGaussianDistribution(ProbabilisticModel):
         :raises ProbabilisticCircuitRequiredError: If every variable is fixed, which
             leaves a product of Dirac impulses rather than a Gaussian.
         """
-        fixed_rows = [self.index_of(variable) for variable in point]
-        free_rows = [
-            row for row in range(len(self.variables)) if row not in set(fixed_rows)
+        fixed_indices = [self.index_of(variable) for variable in point]
+        free_indices = [
+            index
+            for index in range(len(self.variables))
+            if index not in set(fixed_indices)
         ]
-        if not free_rows:
+        if not free_indices:
             raise ProbabilisticCircuitRequiredError(model=self)
 
         fixed_at = np.array([float(point[variable]) for variable in point])
         log_density = float(
-            self._marginal_over_variable_indices(fixed_rows).log_likelihood(
+            self._marginal_over_variable_indices(fixed_indices).log_likelihood(
                 fixed_at.reshape(1, -1)
             )[0]
         )
 
-        return self._conditioned(free_rows, fixed_rows, fixed_at), log_density
+        return (
+            self._conditional_over_variable_indices(
+                free_indices, fixed_indices, fixed_at
+            ),
+            log_density,
+        )
 
-    def _conditioned(
+    def _conditional_over_variable_indices(
         self,
-        free_rows: List[int],
-        fixed_rows: List[int],
+        free_indices: List[int],
+        fixed_indices: List[int],
         fixed_at: npt.NDArray,
     ) -> Self:
         """
-        :param free_rows: The rows the answer is over, in this distribution's order.
-        :param fixed_rows: The rows held at a value, in the order ``fixed_at`` uses.
-        :param fixed_at: What those rows are held at.
-        :return: The Gaussian over ``free_rows``, narrowed by what the fixed rows say.
+        :param free_indices: The indices of the variables the answer is over, in this
+            distribution's order.
+        :param fixed_indices: The indices of the variables held at a value, in the order
+            ``fixed_at`` uses.
+        :param fixed_at: What those variables are held at.
+        :return: The Gaussian over the free variables, conditioned on the fixed ones.
         """
-        free = self._marginal_over_variable_indices(free_rows)
-        cross = self.covariance[np.ix_(free_rows, fixed_rows)]
+        free = self._marginal_over_variable_indices(free_indices)
+        cross = self.covariance[np.ix_(free_indices, fixed_indices)]
         explained = cross @ np.linalg.inv(
-            self.covariance[np.ix_(fixed_rows, fixed_rows)]
+            self.covariance[np.ix_(fixed_indices, fixed_indices)]
         )
         return self.from_mean_and_covariance(
             distribution_variables=free.distribution_variables,
-            mean=free.mean + explained @ (fixed_at - self.mean[fixed_rows]),
+            mean=free.mean + explained @ (fixed_at - self.mean[fixed_indices]),
             covariance=free.covariance - explained @ cross.T,
         )
 
@@ -368,7 +369,7 @@ class MultivariateGaussianDistribution(ProbabilisticModel):
             return self
 
         joint = self._joint_with_observation(observation_matrix, observation_covariance)
-        return joint._conditioned(
+        return joint._conditional_over_variable_indices(
             list(range(len(self.variables))),
             list(range(len(self.variables), len(joint.variables))),
             observed,
@@ -438,7 +439,7 @@ class MultivariateGaussianDistribution(ProbabilisticModel):
             probability zero.
         :return: The confined distribution and the log-probability of the box, or
             nothing at all if it cannot happen.
-        :raises EventIsNotABoxError: If the event is not one unbroken stretch per
+        :raises EventIsNotABoxError: If the event is not one simple interval per
             variable.
         """
         event.fill_missing_variables(set(self.variables))
@@ -456,7 +457,7 @@ class MultivariateGaussianDistribution(ProbabilisticModel):
         :param event: The event to read as a box.
         :return: The one box it is.
         :raises EventIsNotABoxError: If it is more than one box, or leaves a variable on
-            several separate stretches.
+            several simple intervals.
         """
         if len(event.simple_sets) != 1:
             raise EventIsNotABoxError(model=self, event=event)
@@ -482,8 +483,8 @@ class MultivariateGaussianDistribution(ProbabilisticModel):
         for variable in order:
             marginal = GaussianDistribution(
                 variable=variable,
-                location=self.mean_of(variable),
-                scale=math.sqrt(self.variance_of(variable)),
+                location=float(self.mean[self.index_of(variable)]),
+                scale=math.sqrt(self.covariance_between(variable, variable)),
             )
             moments[variable] = marginal.moment(
                 VariableMap({variable: order[variable]}),
@@ -491,31 +492,29 @@ class MultivariateGaussianDistribution(ProbabilisticModel):
             )[variable]
         return moments
 
-    # %% moving and stretching
+    # %% translation and scaling
 
     def apply_translation(self, translation: Dict[Variable, float]):
         """
         Move the mean, leaving the covariance as it is.
 
-        :param translation: How far to move each variable; one left out does not move.
-        :raises VariableNotInDistributionError: If it names a variable this distribution
-            is not over.
+        :param translation: How far to move each variable; one left out does not move,
+            and one this distribution is not over is ignored.
         """
-        for variable, distance in translation.items():
-            self.mean[self.index_of(variable)] += distance
+        for index, variable in enumerate(self.variables):
+            self.mean[index] += translation.get(variable, 0.0)
 
     def apply_scaling(self, scaling: Dict[Variable, float]):
         """
-        Stretch the variables, which stretches the mean once and the covariance once per
+        Scale the variables, which scales the mean once and the covariance once per
         variable it relates.
 
-        :param scaling: What to multiply each variable by; one left out keeps its size.
-        :raises VariableNotInDistributionError: If it names a variable this distribution
-            is not over.
+        :param scaling: What to multiply each variable by; one left out keeps its size,
+            and one this distribution is not over is ignored.
         """
-        factors = np.ones(len(self.variables))
-        for variable, factor in scaling.items():
-            factors[self.index_of(variable)] = factor
+        factors = np.array(
+            [scaling.get(variable, 1.0) for variable in self.variables], dtype=float
+        )
         self.mean = self.mean * factors
         self.covariance_lower_triangle = (
             self.covariance_lower_triangle
@@ -536,6 +535,23 @@ class MultivariateGaussianDistribution(ProbabilisticModel):
             covariance_lower_triangle=self.covariance_lower_triangle.copy(),
         )
 
+    def __deepcopy__(self, memo=None) -> Self:
+        if memo is None:
+            memo = {}
+        id_self = id(self)
+        if id_self in memo:
+            return memo[id_self]
+        result = type(self)(
+            distribution_variables=tuple(
+                variable.__class__(name=variable.name, domain=variable.domain)
+                for variable in self.distribution_variables
+            ),
+            mean=self.mean.copy(),
+            covariance_lower_triangle=self.covariance_lower_triangle.copy(),
+        )
+        memo[id_self] = result
+        return result
+
 
 # %% a Gaussian that has been confined to a box
 
@@ -550,7 +566,7 @@ class TruncatedMultivariateGaussianDistribution(ProbabilisticModel):
     shape no Gaussian has. What it keeps is the shape of the original inside the box,
     scaled up so that the box is certain.
 
-    A box is one unbroken stretch per variable, which is as far as one such shape
+    A box is one simple interval per variable, which is as far as one such shape
     reaches: ruling out a hole in the middle of the space leaves several of them, which
     is a circuit rather than a distribution.
     """
@@ -562,7 +578,7 @@ class TruncatedMultivariateGaussianDistribution(ProbabilisticModel):
 
     box: SimpleEvent
     """
-    Everything still considered possible, one stretch per variable.
+    Everything still considered possible, one simple interval per variable.
     """
 
     @property
@@ -574,17 +590,17 @@ class TruncatedMultivariateGaussianDistribution(ProbabilisticModel):
         return self.box.as_composite_set()
 
     @property
-    def probability_of_the_box(self) -> float:
+    def normalizing_constant(self) -> float:
         """
         :return: How probable the box was before it was the only thing left, which is
             what every density here is scaled up by.
         """
         return self.untruncated.probability_of_simple_event(self.box)
 
-    def stretch_of(self, variable: Variable) -> SimpleInterval:
+    def interval_of(self, variable: Variable) -> SimpleInterval:
         """
         :param variable: The variable to read.
-        :return: The one stretch the box leaves it.
+        :return: The one simple interval the box leaves it.
         """
         return self.box[variable].simple_sets[0]
 
@@ -593,7 +609,7 @@ class TruncatedMultivariateGaussianDistribution(ProbabilisticModel):
         return np.where(
             inside,
             self.untruncated.log_likelihood(events)
-            - math.log(self.probability_of_the_box),
+            - math.log(self.normalizing_constant),
             -np.inf,
         )
 
@@ -603,7 +619,7 @@ class TruncatedMultivariateGaussianDistribution(ProbabilisticModel):
             return 0.0
         return (
             self.untruncated.probability_of_simple_event(surviving)
-            / self.probability_of_the_box
+            / self.normalizing_constant
         )
 
     # %% the most likely point the box still allows
@@ -629,12 +645,12 @@ class TruncatedMultivariateGaussianDistribution(ProbabilisticModel):
     def _most_likely_point(self) -> npt.NDArray:
         """
         :return: Where the density is greatest within the box, pulled just inside a
-            stretch that excludes its own end.
+            interval that excludes its own end.
         """
         mean = self.untruncated.mean
         if self.support.contains(mean):
             return mean
-        stretches = [self.stretch_of(variable) for variable in self.variables]
+        intervals = [self.interval_of(variable) for variable in self.variables]
         precision = np.linalg.inv(self.untruncated.covariance)
 
         def distance(point: npt.NDArray) -> float:
@@ -644,33 +660,33 @@ class TruncatedMultivariateGaussianDistribution(ProbabilisticModel):
         def gradient(point: npt.NDArray) -> npt.NDArray:
             return 2 * precision @ (point - mean)
 
-        bounds = [(stretch.lower, stretch.upper) for stretch in stretches]
+        bounds = [(interval.lower, interval.upper) for interval in intervals]
         started_at = np.array(
             [
-                min(max(value, stretch.lower), stretch.upper)
-                for value, stretch in zip(mean, stretches)
+                min(max(value, interval.lower), interval.upper)
+                for value, interval in zip(mean, intervals)
             ]
         )
         found = minimize(
             distance, started_at, jac=gradient, bounds=bounds, method="L-BFGS-B"
         ).x
         return np.array(
-            [self._inside(value, stretch) for value, stretch in zip(found, stretches)]
+            [self._inside(value, interval) for value, interval in zip(found, intervals)]
         )
 
     @staticmethod
-    def _inside(value: float, stretch: SimpleInterval) -> float:
+    def _inside(value: float, interval: SimpleInterval) -> float:
         """
-        A stretch that excludes its own end has no nearest point to anything beyond it,
-        so the next value there is stands in for the end itself.
+        An interval that excludes its own end has no nearest point to anything beyond
+        it, so the next value there is stands in for the end itself.
 
-        :param value: Where the density is greatest along this stretch.
-        :param stretch: The stretch it has to stay in.
+        :param value: Where the density is greatest along this interval.
+        :param interval: The interval it has to stay in.
         :return: That value, moved off an excluded end.
         """
-        if value == stretch.lower and stretch.left == Bound.OPEN:
+        if value == interval.lower and interval.left == Bound.OPEN:
             return float(np.nextafter(value, np.inf))
-        if value == stretch.upper and stretch.right == Bound.OPEN:
+        if value == interval.upper and interval.right == Bound.OPEN:
             return float(np.nextafter(value, -np.inf))
         return float(value)
 
@@ -687,7 +703,7 @@ class TruncatedMultivariateGaussianDistribution(ProbabilisticModel):
             zero.
         :return: The further confined distribution and the log-probability of the event
             under this one, or nothing at all if nothing is left.
-        :raises EventIsNotABoxError: If the event is not one unbroken stretch per
+        :raises EventIsNotABoxError: If the event is not one simple interval per
             variable.
         """
         event.fill_missing_variables(set(self.variables))
@@ -722,7 +738,7 @@ class TruncatedMultivariateGaussianDistribution(ProbabilisticModel):
             return None, -np.inf
 
         conditional, log_density = self.untruncated.log_conditional(point)
-        log_density -= math.log(self.probability_of_the_box)
+        log_density -= math.log(self.normalizing_constant)
 
         free = [variable for variable in self.variables if variable not in point]
         slice_of_the_box = SimpleEvent.from_data(
@@ -741,14 +757,14 @@ class TruncatedMultivariateGaussianDistribution(ProbabilisticModel):
         :return: That many samples, all of them inside the box.
         """
         if self._variables_co_vary:
-            return self._rejection_sample(amount)
+            return self.rejection_sample(amount)
         return self._sample_each_variable_on_its_own(amount)
 
     @property
     def _variables_co_vary(self) -> bool:
         """
         :return: Whether any two variables move together, which is what stops each of
-            them from being drawn from its own stretch.
+            them from being drawn from its own interval.
         """
         covariance = self.untruncated.covariance
         return bool(np.any(covariance - np.diag(np.diag(covariance))))
@@ -762,18 +778,18 @@ class TruncatedMultivariateGaussianDistribution(ProbabilisticModel):
         :param amount: How many samples to draw.
         :return: That many samples, all of them inside the box.
         """
-        stretches = [self.stretch_of(variable) for variable in self.variables]
+        intervals = [self.interval_of(variable) for variable in self.variables]
         mean = self.untruncated.mean
         deviation = np.sqrt(np.diag(self.untruncated.covariance))
         return truncnorm.rvs(
-            a=(np.array([stretch.lower for stretch in stretches]) - mean) / deviation,
-            b=(np.array([stretch.upper for stretch in stretches]) - mean) / deviation,
+            a=(np.array([interval.lower for interval in intervals]) - mean) / deviation,
+            b=(np.array([interval.upper for interval in intervals]) - mean) / deviation,
             loc=mean,
             scale=deviation,
             size=(amount, len(self.variables)),
         )
 
-    def _rejection_sample(self, amount: int) -> npt.NDArray:
+    def rejection_sample(self, amount: int) -> npt.NDArray:
         """
         Draw from the untruncated Gaussian and keep what the box allows.
 
@@ -793,6 +809,17 @@ class TruncatedMultivariateGaussianDistribution(ProbabilisticModel):
         return kept[:amount]
 
     def __copy__(self) -> Self:
-        from copy import copy
+        return type(self)(untruncated=copy.copy(self.untruncated), box=self.box)
 
-        return type(self)(untruncated=copy(self.untruncated), box=self.box)
+    def __deepcopy__(self, memo=None) -> Self:
+        if memo is None:
+            memo = {}
+        id_self = id(self)
+        if id_self in memo:
+            return memo[id_self]
+        result = type(self)(
+            untruncated=copy.deepcopy(self.untruncated, memo),
+            box=self.box.__deepcopy__(),
+        )
+        memo[id_self] = result
+        return result

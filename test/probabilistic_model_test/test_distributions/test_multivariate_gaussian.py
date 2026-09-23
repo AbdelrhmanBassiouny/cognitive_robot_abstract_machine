@@ -1,3 +1,4 @@
+import copy
 import math
 
 import numpy as np
@@ -18,6 +19,7 @@ from probabilistic_model.exceptions import (
     ShapeMismatchError,
     VariableNotInDistributionError,
 )
+from probabilistic_model.probabilistic_model import ProbabilisticModel
 
 # %% shared fixtures
 
@@ -59,6 +61,20 @@ def correlated(horizontal, vertical) -> MultivariateGaussianDistribution:
     )
 
 
+def mean_of(distribution: ProbabilisticModel, variable: Continuous) -> float:
+    """
+    :return: The expectation of one variable.
+    """
+    return distribution.expectation([variable])[variable]
+
+
+def variance_of(distribution: ProbabilisticModel, variable: Continuous) -> float:
+    """
+    :return: The variance of one variable.
+    """
+    return distribution.variance([variable])[variable]
+
+
 def marginal_of(
     distribution: MultivariateGaussianDistribution, variable: Continuous
 ) -> GaussianDistribution:
@@ -68,8 +84,8 @@ def marginal_of(
     """
     return GaussianDistribution(
         variable=variable,
-        location=distribution.mean_of(variable),
-        scale=math.sqrt(distribution.variance_of(variable)),
+        location=mean_of(distribution, variable),
+        scale=math.sqrt(variance_of(distribution, variable)),
     )
 
 
@@ -94,10 +110,10 @@ class TestBuildingADistribution:
     def test_the_mean_and_the_variance_are_read_by_variable(
         self, independent, horizontal, vertical
     ):
-        assert independent.mean_of(horizontal) == 1.0
-        assert independent.mean_of(vertical) == -2.0
-        assert independent.variance_of(horizontal) == 4.0
-        assert independent.variance_of(vertical) == 9.0
+        assert mean_of(independent, horizontal) == 1.0
+        assert mean_of(independent, vertical) == -2.0
+        assert variance_of(independent, horizontal) == 4.0
+        assert variance_of(independent, vertical) == 9.0
 
     def test_a_covariance_is_read_in_either_direction(
         self, correlated, horizontal, vertical
@@ -111,8 +127,8 @@ class TestBuildingADistribution:
             mean=np.array([3.0]),
             covariance=np.array([[0.25]]),
         )
-        assert distribution.mean_of(horizontal) == 3.0
-        assert distribution.variance_of(horizontal) == 0.25
+        assert mean_of(distribution, horizontal) == 3.0
+        assert variance_of(distribution, horizontal) == 0.25
         assert distribution.variables == (horizontal,)
 
     def test_a_mean_that_is_not_laid_out_by_the_variables_is_rejected(
@@ -172,7 +188,7 @@ class TestBuildingADistribution:
     ):
         absent = Continuous("absent")
         with pytest.raises(VariableNotInDistributionError) as error:
-            independent.mean_of(absent)
+            mean_of(independent, absent)
         assert error.value.variable == absent
 
     def test_the_variables_keep_the_layout_order(
@@ -278,7 +294,7 @@ class TestProbabilityOfABox:
         )
         assert correlated.probability_of_simple_event(both_positive) > 0.25
 
-    def test_a_variable_confined_to_two_stretches_sums_them(
+    def test_a_variable_confined_to_two_intervals_sums_them(
         self, independent, horizontal, vertical
     ):
         whole_column = closed(-np.inf, np.inf)
@@ -359,18 +375,20 @@ class TestConditioningOnAValue:
         self, independent, horizontal, vertical
     ):
         conditioned, _ = independent.conditional({vertical: 100.0})
-        assert conditioned.mean_of(horizontal) == pytest.approx(
-            independent.mean_of(horizontal)
+        assert mean_of(conditioned, horizontal) == pytest.approx(
+            mean_of(independent, horizontal)
         )
-        assert conditioned.variance_of(horizontal) == pytest.approx(
-            independent.variance_of(horizontal)
+        assert variance_of(conditioned, horizontal) == pytest.approx(
+            variance_of(independent, horizontal)
         )
 
     def test_conditioning_always_narrows_a_correlated_variable(
         self, correlated, horizontal, vertical
     ):
         conditioned, _ = correlated.conditional({vertical: 0.0})
-        assert conditioned.variance_of(horizontal) < correlated.variance_of(horizontal)
+        assert variance_of(conditioned, horizontal) < variance_of(
+            correlated, horizontal
+        )
 
     def test_the_conditioned_covariance_is_exactly_symmetric(self, horizontal):
         """
@@ -454,7 +472,7 @@ class TestProductWithAGaussianLikelihood:
             observed=np.array([5.0]),
             observation_covariance=np.array([[1.0]]),
         )
-        assert independent.mean_of(horizontal) < product.mean_of(horizontal) < 5.0
+        assert mean_of(independent, horizontal) < mean_of(product, horizontal) < 5.0
 
     def test_an_observation_always_leaves_the_mean_more_certain(
         self, independent, horizontal
@@ -464,7 +482,7 @@ class TestProductWithAGaussianLikelihood:
             observed=np.array([5.0]),
             observation_covariance=np.array([[4.0]]),
         )
-        assert product.variance_of(horizontal) < independent.variance_of(horizontal)
+        assert variance_of(product, horizontal) < variance_of(independent, horizontal)
 
     def test_an_observation_of_equal_certainty_lands_halfway(self, horizontal):
         """
@@ -476,7 +494,7 @@ class TestProductWithAGaussianLikelihood:
             observed=np.array([10.0]),
             observation_covariance=np.array([[2.0]]),
         )
-        assert product.mean_of(horizontal) == pytest.approx(5.0)
+        assert mean_of(product, horizontal) == pytest.approx(5.0)
 
     def test_repeated_observations_accumulate_into_the_covariance(self, horizontal):
         """
@@ -494,7 +512,7 @@ class TestProductWithAGaussianLikelihood:
             )
 
         expected_precision = 1 / starting_variance + observations / observation_variance
-        assert distribution.variance_of(horizontal) == pytest.approx(
+        assert variance_of(distribution, horizontal) == pytest.approx(
             1 / expected_precision
         )
 
@@ -515,9 +533,9 @@ class TestProductWithAGaussianLikelihood:
             observed=np.array([4.0]),
             observation_covariance=np.array([[1.0]]),
         )
-        assert product.mean_of(horizontal) > 0.0
-        assert product.mean_of(vertical) > 0.0
-        assert product.mean_of(horizontal) == pytest.approx(product.mean_of(vertical))
+        assert mean_of(product, horizontal) > 0.0
+        assert mean_of(product, vertical) > 0.0
+        assert mean_of(product, horizontal) == pytest.approx(mean_of(product, vertical))
 
     def test_observing_nothing_leaves_the_mean_alone(self, independent, horizontal):
         product = independent.product_with_gaussian_likelihood(
@@ -525,19 +543,19 @@ class TestProductWithAGaussianLikelihood:
             observed=np.zeros(0),
             observation_covariance=np.zeros((0, 0)),
         )
-        assert product.mean_of(horizontal) == independent.mean_of(horizontal)
-        assert product.variance_of(horizontal) == independent.variance_of(horizontal)
+        assert mean_of(product, horizontal) == mean_of(independent, horizontal)
+        assert variance_of(product, horizontal) == variance_of(independent, horizontal)
 
     def test_the_product_does_not_change_the_distribution_it_multiplied(
         self, independent, horizontal
     ):
-        before = independent.mean_of(horizontal)
+        before = mean_of(independent, horizontal)
         independent.product_with_gaussian_likelihood(
             observation_matrix=np.array([[1.0, 0.0]]),
             observed=np.array([5.0]),
             observation_covariance=np.array([[1.0]]),
         )
-        assert independent.mean_of(horizontal) == before
+        assert mean_of(independent, horizontal) == before
 
     def test_an_observation_matrix_of_the_wrong_width_is_rejected(self, independent):
         with pytest.raises(ShapeMismatchError) as error:
@@ -571,8 +589,11 @@ class TestMarginal:
     ):
         marginal = correlated.marginal([horizontal])
         assert marginal.variables == (horizontal,)
-        assert marginal.mean_of(horizontal) == correlated.mean_of(horizontal)
-        assert marginal.variance_of(horizontal) == correlated.variance_of(horizontal)
+        assert mean_of(marginal, horizontal) == mean_of(correlated, horizontal)
+        assert variance_of(marginal, horizontal) == variance_of(correlated, horizontal)
+
+    def test_a_marginal_over_none_of_its_variables_is_nothing(self, correlated):
+        assert correlated.marginal([Continuous("absent")]) is None
 
     def test_a_marginal_is_laid_out_in_the_distribution_s_own_order(
         self, correlated, horizontal, vertical
@@ -609,7 +630,7 @@ class TestMoments:
         )
 
 
-# %% moving and stretching
+# %% translation and scaling
 
 
 class TestTranslationAndScaling:
@@ -617,17 +638,17 @@ class TestTranslationAndScaling:
         self, independent, horizontal, vertical
     ):
         independent.apply_translation({horizontal: 3.0})
-        assert independent.mean_of(horizontal) == 4.0
-        assert independent.mean_of(vertical) == -2.0
-        assert independent.variance_of(horizontal) == 4.0
+        assert mean_of(independent, horizontal) == 4.0
+        assert mean_of(independent, vertical) == -2.0
+        assert variance_of(independent, horizontal) == 4.0
 
-    def test_scaling_stretches_the_mean_and_squares_into_the_variance(
+    def test_scaling_multiplies_the_mean_and_squares_into_the_variance(
         self, independent, horizontal, vertical
     ):
         independent.apply_scaling({horizontal: 2.0})
-        assert independent.mean_of(horizontal) == 2.0
-        assert independent.variance_of(horizontal) == 16.0
-        assert independent.variance_of(vertical) == 9.0
+        assert mean_of(independent, horizontal) == 2.0
+        assert variance_of(independent, horizontal) == 16.0
+        assert variance_of(independent, vertical) == 9.0
 
     def test_scaling_carries_into_a_covariance_once_per_variable(
         self, correlated, horizontal, vertical
@@ -635,12 +656,24 @@ class TestTranslationAndScaling:
         correlated.apply_scaling({horizontal: 2.0})
         assert correlated.covariance_between(horizontal, vertical) == pytest.approx(1.2)
 
+    def test_a_translation_of_a_variable_it_is_not_over_is_ignored(
+        self, independent, horizontal
+    ):
+        independent.apply_translation({horizontal: 3.0, Continuous("absent"): 5.0})
+        assert independent.mean.tolist() == [4.0, -2.0]
+
+    def test_a_scaling_of_a_variable_it_is_not_over_is_ignored(
+        self, independent, horizontal
+    ):
+        independent.apply_scaling({horizontal: 2.0, Continuous("absent"): 5.0})
+        assert independent.covariance.tolist() == [[16.0, 0.0], [0.0, 9.0]]
+
     def test_a_variable_left_out_of_a_scaling_keeps_its_size(
         self, independent, vertical
     ):
         independent.apply_scaling({})
-        assert independent.mean_of(vertical) == -2.0
-        assert independent.variance_of(vertical) == 9.0
+        assert mean_of(independent, vertical) == -2.0
+        assert variance_of(independent, vertical) == 9.0
 
 
 # %% sampling
@@ -664,12 +697,33 @@ class TestSampling:
 
 class TestCopying:
     def test_a_copy_moves_without_moving_the_original(self, independent, horizontal):
-        from copy import copy
-
-        copied = copy(independent)
+        copied = copy.copy(independent)
         copied.apply_translation({horizontal: 10.0})
-        assert independent.mean_of(horizontal) == 1.0
-        assert copied.mean_of(horizontal) == 11.0
+        assert mean_of(independent, horizontal) == 1.0
+        assert mean_of(copied, horizontal) == 11.0
+
+    def test_a_deep_copy_is_the_same_distribution(self, correlated):
+        copied = copy.deepcopy(correlated)
+        assert copied.variables == correlated.variables
+        assert copied.mean.tolist() == correlated.mean.tolist()
+        assert copied.covariance.tolist() == correlated.covariance.tolist()
+
+    def test_a_deep_copy_moves_without_moving_the_original(
+        self, independent, horizontal
+    ):
+        copied = copy.deepcopy(independent)
+        copied.apply_scaling({horizontal: 2.0})
+        assert independent.covariance.tolist() == [[4.0, 0.0], [0.0, 9.0]]
+
+    def test_a_deep_copy_of_a_truncated_distribution_keeps_its_box(
+        self, correlated, horizontal, vertical
+    ):
+        truncated, _ = correlated.truncated(
+            box_over(horizontal, vertical, 0.0, 1.0).as_composite_set()
+        )
+        copied = copy.deepcopy(truncated)
+        assert copied.box == truncated.box
+        assert copied.normalizing_constant == truncated.normalizing_constant
 
 
 # %% confining a distribution to an event
@@ -677,7 +731,7 @@ class TestCopying:
 
 def box_over(horizontal, vertical, lower: float, upper: float) -> SimpleEvent:
     """
-    :return: The same stretch on both variables, which is the shape every truncation
+    :return: The same interval on both variables, which is the shape every truncation
         here is confined to.
     """
     return SimpleEvent.from_data(
@@ -714,17 +768,17 @@ class TestTruncation:
         self, correlated, horizontal, vertical
     ):
         """
-        A variable confined to two separate stretches leaves a shape that needs a
+        A variable confined to two separate intervals leaves a shape that needs a
         circuit rather than one truncated Gaussian.
         """
-        two_stretches = SimpleEvent.from_data(
+        two_intervals = SimpleEvent.from_data(
             {
                 horizontal: closed(0.0, 1.0) | closed(3.0, 4.0),
                 vertical: closed(0.0, 1.0),
             }
         ).as_composite_set()
         with pytest.raises(EventIsNotABoxError) as error:
-            correlated.truncated(two_stretches)
+            correlated.truncated(two_intervals)
         assert error.value.model is correlated
 
     def test_an_impossible_event_leaves_nothing(self, correlated, horizontal, vertical):
@@ -772,14 +826,14 @@ class TestTruncation:
     ):
         """
         Variables that do not co-vary are most likely, within a box, exactly where each
-        of them on its own is: at the point of its own stretch nearest its own mean.
+        of them on its own is: at the point of its own interval nearest its own mean.
         """
         box = SimpleEvent.from_data(
             {horizontal: closed(3.0, 4.0), vertical: closed(-2.0, 0.0)}
         ).as_composite_set()
         truncated, _ = independent.truncated(box)
         assert mode_point_of(truncated) == pytest.approx(
-            [3.0, independent.mean_of(vertical)]
+            [3.0, mean_of(independent, vertical)]
         )
 
     def test_the_mode_is_on_the_boundary_once_the_mean_is_cut_away(
@@ -829,7 +883,7 @@ class TestTruncation:
         self, correlated, horizontal, vertical
     ):
         """
-        A stretch that excludes its own lower end has no nearest point, so the mode is
+        An interval that excludes its own lower end has no nearest point, so the mode is
         the next value there is rather than the end itself, which the box gives no
         density at all.
         """
@@ -866,7 +920,7 @@ class TestTruncation:
     ):
         """
         A box the distribution almost never lands in cannot be reached by drawing until
-        something falls inside it; each variable is drawn from its own stretch instead.
+        something falls inside it; each variable is drawn from its own interval instead.
         """
         np.random.seed(69)
         unlikely = SimpleEvent.from_data(
@@ -905,10 +959,10 @@ class TestConditioningATruncatedDistribution:
         conditional, _ = truncated.conditional({vertical: 0.5})
 
         untruncated_conditional, _ = correlated.conditional({vertical: 0.5})
-        stretch = SimpleEvent.from_data(
+        interval = SimpleEvent.from_data(
             {horizontal: closed(0.0, 1.0)}
         ).as_composite_set()
-        expected, _ = untruncated_conditional.truncated(stretch)
+        expected, _ = untruncated_conditional.truncated(interval)
         inside = np.array([[0.25]])
         assert conditional.likelihood(inside)[0] == pytest.approx(
             expected.likelihood(inside)[0]

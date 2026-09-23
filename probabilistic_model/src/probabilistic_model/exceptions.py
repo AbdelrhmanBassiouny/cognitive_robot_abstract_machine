@@ -73,7 +73,7 @@ class EventIsNotABoxError(ProbabilisticCircuitRequiredError):
     Exception raised when a model is asked to confine itself to something other than a
     single box.
 
-    A box is one unbroken stretch per variable. Anything wider leaves a shape no single
+    A box is one simple interval per variable. Anything wider leaves a shape no single
     truncated distribution describes.
     """
 
@@ -87,7 +87,7 @@ class EventIsNotABoxError(ProbabilisticCircuitRequiredError):
 
     def suggest_correction(self) -> str:
         return (
-            "Confine it to one unbroken stretch per variable, or wrap the distribution "
+            "Confine it to one simple interval per variable, or wrap the distribution "
             "into a probabilistic circuit and confine the circuit."
         )
 
@@ -121,7 +121,7 @@ class VariableNotInDistributionError(DataclassException):
     Exception raised when a variable is named that a distribution is not over.
 
     A distribution's mean and covariance are laid out by its own variables, so a
-    variable outside them has no row to be read from or written to.
+    variable outside them has no index to be read from or written to.
     """
 
     variable: Variable
