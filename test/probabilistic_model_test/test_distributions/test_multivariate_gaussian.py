@@ -6,6 +6,7 @@ import pytest
 from random_events.interval import closed, open_closed, singleton
 from random_events.product_algebra import SimpleEvent, VariableMap
 from random_events.variable import Continuous
+from scipy.stats import norm
 from scipy.stats._multivariate import multivariate_normal_frozen
 
 from probabilistic_model.distributions.gaussian import GaussianDistribution
@@ -141,10 +142,6 @@ class TestCovariance:
         factors = np.array([2.0, 1.0, 3.0])
         scaled = Covariance.from_matrix(self.matrix).scaled(factors)
         assert scaled.matrix == pytest.approx(self.matrix * np.outer(factors, factors))
-
-    def test_a_matrix_with_entries_off_the_diagonal_is_not_diagonal(self):
-        assert not Covariance.from_matrix(self.matrix).is_diagonal
-        assert Covariance.from_matrix(np.diag(np.diag(self.matrix))).is_diagonal
 
     def test_a_lower_triangle_of_the_wrong_length_is_rejected(self):
         with pytest.raises(ShapeMismatchError) as error:
@@ -908,13 +905,48 @@ class TestTruncation:
         assert samples.shape == (200, 2)
         assert all(truncated.support.contains(sample) for sample in samples)
 
-    def test_variables_that_do_not_co_vary_are_sampled_without_being_rejected(
-        self, independent, horizontal, vertical
+    def test_samples_of_correlated_variables_follow_the_truncated_distribution(
+        self, horizontal, vertical
     ):
         """
-        A box the distribution almost never lands in cannot be reached by drawing until
-        something falls inside it; each variable is drawn from its own interval instead.
+        With ``vertical = rho * horizontal + sqrt(1 - rho^2) * z``, confining only
+        ``horizontal`` to ``[1, inf)`` moves the mean of ``vertical`` to ``rho`` times
+        the truncated normal mean ``pdf(1) / sf(1)``. Drawing each variable from its own
+        interval alone would leave ``vertical`` centred at zero.
         """
+        np.random.seed(69)
+        rho = 0.9
+        correlated = MultivariateGaussianDistribution.from_mean_and_covariance(
+            variables=(horizontal, vertical),
+            mean=np.zeros(2),
+            covariance=np.array([[1.0, rho], [rho, 1.0]]),
+        )
+        confined = SimpleEvent.from_data(
+            {horizontal: closed(1.0, np.inf), vertical: closed(-np.inf, np.inf)}
+        ).as_composite_set()
+        truncated, _ = correlated.truncated(confined)
+        samples = truncated.sample(5000)
+        assert samples[:, 1].mean() == pytest.approx(
+            rho * norm.pdf(1.0) / norm.sf(1.0), abs=0.05
+        )
+
+    def test_a_box_the_distribution_almost_never_lands_in_is_still_sampled(
+        self, correlated, horizontal, vertical
+    ):
+        """
+        A box far out in the tails is almost never reached by drawing from the
+        untruncated distribution, and must still be sampled.
+        """
+        np.random.seed(69)
+        unlikely = box_over(horizontal, vertical, 8.0, 9.0).as_composite_set()
+        truncated, _ = correlated.truncated(unlikely)
+        samples = truncated.sample(50)
+        assert samples.shape == (50, 2)
+        assert all(truncated.support.contains(sample) for sample in samples)
+
+    def test_variables_that_do_not_co_vary_are_sampled_in_a_distant_box(
+        self, independent, horizontal, vertical
+    ):
         np.random.seed(69)
         unlikely = SimpleEvent.from_data(
             {horizontal: closed(20.0, 21.0), vertical: closed(20.0, 21.0)}

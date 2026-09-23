@@ -15,6 +15,7 @@ from scipy.stats import multivariate_normal, norm, truncnorm
 from scipy.stats._multivariate import multivariate_normal_frozen
 from typing_extensions import (
     Any,
+    ClassVar,
     Dict,
     Iterable,
     Iterator,
@@ -106,14 +107,6 @@ class Covariance:
         """
         indices = np.arange(self.dimension)
         return self.lower_triangle[indices * (indices + 1) // 2 + indices]
-
-    @property
-    def is_diagonal(self) -> bool:
-        """
-        :return: Whether every entry off the diagonal is zero.
-        """
-        rows, columns = np.tril_indices(self.dimension)
-        return not np.any(self.lower_triangle[rows != columns])
 
     def between(self, first: int, second: int) -> float:
         """
@@ -576,6 +569,12 @@ class TruncatedMultivariateGaussianDistribution(ProbabilisticModel):
     Everything still considered possible, one simple interval per variable.
     """
 
+    sweeps_per_sample: ClassVar[int] = 100
+    """
+    How many times each chain draws every variable before its last state becomes a
+    sample.
+    """
+
     @property
     def variables(self) -> Tuple[Variable, ...]:
         return self.untruncated.variables
@@ -740,51 +739,46 @@ class TruncatedMultivariateGaussianDistribution(ProbabilisticModel):
 
     def sample(self, amount: int) -> npt.NDArray:
         """
-        :param amount: How many samples to draw.
-        :return: That many samples, all of them inside the box.
-        """
-        if self.untruncated.covariance.is_diagonal:
-            return self._sample_each_variable_on_its_own(amount)
-        return self.rejection_sample(amount)
+        Draw by Gibbs sampling: every sweep draws each variable from
+        :mod:`scipy.stats.truncnorm`, the Gaussian of that variable given the current
+        values of the others, confined to the variable's interval. Each sample ends a
+        chain of its own that starts at the mode, so the samples are independent of each
+        other.
 
-    def _sample_each_variable_on_its_own(self, amount: int) -> npt.NDArray:
-        """
-        Variables that do not co-vary stay independent once the box confines each of
-        them separately, so each is drawn from its own :mod:`scipy.stats.truncnorm` and
-        no sample is ever thrown away.
+        .. note::
+            The samples follow this distribution only approximately, closer the more
+            sweeps each chain makes. Variables that do not co-vary do not depend on each
+            other, so for them the first sweep is already exact.
 
         :param amount: How many samples to draw.
         :return: That many samples, all of them inside the box.
         """
         intervals = [self.interval_of(variable) for variable in self.variables]
+        lower = np.array([interval.lower for interval in intervals])
+        upper = np.array([interval.upper for interval in intervals])
         mean = self.untruncated.mean
-        deviation = np.sqrt(self.untruncated.covariance.variances)
-        return truncnorm.rvs(
-            a=(np.array([interval.lower for interval in intervals]) - mean) / deviation,
-            b=(np.array([interval.upper for interval in intervals]) - mean) / deviation,
-            loc=mean,
-            scale=deviation,
-            size=(amount, len(self.variables)),
-        )
+        precision = np.linalg.inv(self.untruncated.covariance.matrix)
+        conditional_deviation = 1 / np.sqrt(np.diag(precision))
 
-    def rejection_sample(self, amount: int) -> npt.NDArray:
-        """
-        Draw from the untruncated Gaussian and keep what the box allows.
-
-        .. warning::
-            How many rounds this needs grows as the reciprocal of the box's
-            probability, and there is no bound on it.
-
-        :param amount: How many samples to draw.
-        :return: That many samples, all of them inside the box.
-        """
-        allowed = self.support
-        kept = np.empty((0, len(self.variables)))
-        while len(kept) < amount:
-            drawn = self.untruncated.sample(amount)
-            inside = np.array([allowed.contains(sample) for sample in drawn])
-            kept = np.concatenate([kept, drawn[inside]])
-        return kept[:amount]
+        samples = np.tile(self._most_likely_point(), (amount, 1))
+        for _ in range(self.sweeps_per_sample):
+            for index in range(len(self.variables)):
+                conditional_mean = (
+                    mean[index]
+                    - (
+                        (samples - mean) @ precision[index]
+                        - precision[index, index] * (samples[:, index] - mean[index])
+                    )
+                    / precision[index, index]
+                )
+                samples[:, index] = truncnorm.rvs(
+                    a=(lower[index] - conditional_mean) / conditional_deviation[index],
+                    b=(upper[index] - conditional_mean) / conditional_deviation[index],
+                    loc=conditional_mean,
+                    scale=conditional_deviation[index],
+                    size=amount,
+                )
+        return samples
 
     def __copy__(self) -> Self:
         return type(self)(untruncated=copy.copy(self.untruncated), box=self.box)
