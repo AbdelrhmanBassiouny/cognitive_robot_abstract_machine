@@ -20,7 +20,7 @@ from semantic_digital_twin.collision_checking.collision_rules import (
     AvoidExternalCollisions,
     AllowSelfCollisions,
 )
-from semantic_digital_twin.reasoning.predicates import is_place_occupied
+from semantic_digital_twin.reasoning.predicates import PlaceIsOccupied
 from semantic_digital_twin.robots.robot_part_mixins import HasTwoFingers
 from semantic_digital_twin.robots.robot_parts import (
     AbstractRobot,
@@ -212,7 +212,7 @@ def is_gripper_holding_something(gripper: EndEffector) -> bool:
 
 @symbolic_function
 def is_pose_free_for_robot(robot: AbstractRobot, pose: Pose) -> bool:
-    return not is_place_occupied(
+    return not PlaceIsOccupied(
         robot.mobile_base.bounding_box,
         pose,
         robot._world,
@@ -222,4 +222,4 @@ def is_pose_free_for_robot(robot: AbstractRobot, pose: Pose) -> bool:
             for annotation in robot._world.get_semantic_annotations_by_type(Floor)
             for kse in annotation.kinematic_structure_entities
         ],
-    )
+    )()
