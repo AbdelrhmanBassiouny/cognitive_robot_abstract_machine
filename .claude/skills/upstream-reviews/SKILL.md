@@ -1,14 +1,14 @@
 ---
 name: upstream-reviews
-description: Report the review threads a fork branch's upstream pull request has collected, including which are still unresolved, by dispatching the fork's own upstream-reviews Action and reading its job log. Invoke as "/upstream-reviews [<pull-request-number>|<branch>]". Use when the user asks what the upstream reviewers said, whether a promoted branch has outstanding review comments, or to check upstream review state before resolving or resuming work on a branch.
+description: Report the CI checks and review threads a fork branch's upstream pull request has collected, including which checks failed and which threads are still unresolved, by dispatching the fork's own upstream-reviews Action and reading its job log. Invoke as "/upstream-reviews [<pull-request-number>|<branch>]". Use when the user asks what the upstream reviewers said, how a promoted branch's CI is doing upstream, whether it has outstanding review comments, or to check upstream state before resolving or resuming work on a branch.
 allowed-tools: Bash, Read, mcp__github__actions_run_trigger, mcp__github__actions_list, mcp__github__get_job_logs
 ---
 
 # Upstream reviews
 
-Reads the review state of a fork branch's pull request on the upstream
-repository and reports it. Generic and fork-agnostic — nothing here may
-hardcode a repository, owner, or branch name.
+Reads the check and review state of a fork branch's pull request on the
+upstream repository and reports it. Generic and fork-agnostic — nothing here
+may hardcode a repository, owner, or branch name.
 
 **This skill only reads.** It never comments on, reviews, resolves, or
 otherwise modifies anything on the upstream. `AGENTS.md` forbids it outright,
@@ -18,9 +18,12 @@ and the report is the entire deliverable.
 
 Thread resolved-state is exposed only by GitHub's GraphQL API, and GraphQL is
 blocked for Claude sessions by the agent proxy's egress policy — for every
-repository, including the fork's own. The read therefore happens on the fork's
-Actions runner, where `gh` is preinstalled and `GITHUB_TOKEN` authenticates it,
-and this session reads the resulting job log, which is plain read-only REST.
+repository, including the fork's own. The upstream is worse off still: a Claude
+session's GitHub access is scoped to the repositories attached to it, so the
+upstream's REST API answers 403 as well, and its check results cannot be read
+from the session at all. The read therefore happens on the fork's Actions
+runner, where `gh` is preinstalled and `GITHUB_TOKEN` authenticates it, and
+this session reads the resulting job log, which is plain read-only REST.
 
 ## 0. One-time prerequisite
 
@@ -75,10 +78,15 @@ job summary, which the user can read from the GitHub mobile app.
 
 ## 5. Present it
 
-Reproduce the report's substance in the session: every unresolved thread with
-its author, `file:line`, and comment text. Do not summarize away the comment
-bodies — the point of the skill is that the reviewer's actual words reach the
-session without the user retyping them.
+Reproduce the report's substance in the session: the checks verdict with every
+check that did not pass, and every unresolved thread with its author,
+`file:line`, and comment text. Do not summarize away the comment bodies — the
+point of the skill is that the reviewer's actual words reach the session
+without the user retyping them.
+
+The checks section names only the checks that did not pass, alongside the
+verdict GitHub itself computed and how many of the total passed. A check still
+running reads as `pending`, which is not the same as passing.
 
 If the run failed, report the failure and the log's error rather than an empty
 result. If the branch has no upstream pull request, the script says so
