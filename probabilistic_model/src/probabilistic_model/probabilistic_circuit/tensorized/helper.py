@@ -2,18 +2,20 @@ from __future__ import annotations
 
 import numpy as np
 from random_events.product_algebra import Event, SimpleEvent
+from scipy.sparse import coo_array
 from sortedcontainers import SortedSet
 from typing_extensions import Iterable, List
 
-from probabilistic_model.probabilistic_circuit.tensorized.inner_layer import (
-    Layer,
+from probabilistic_model.probabilistic_circuit.tensorized.inner_layer.base import Layer
+from probabilistic_model.probabilistic_circuit.tensorized.inner_layer.product_layer import (
     ProductLayer,
+)
+from probabilistic_model.probabilistic_circuit.tensorized.inner_layer.sum_layer import (
     SumLayer,
 )
 from probabilistic_model.probabilistic_circuit.tensorized.layered_probabilistic_circuit import (
     LayeredProbabilisticCircuit,
 )
-from probabilistic_model.probabilistic_circuit.tensorized.utils import SparseArray
 from probabilistic_model.probabilistic_circuit.rx import helper as rx_helper
 
 
@@ -52,11 +54,12 @@ def product_of(variables: SortedSet, child_layers: List[Layer]) -> ProductLayer:
     :param child_layers: The child layers, each contributing its first node.
     :return: The product layer.
     """
-    edges = SparseArray.from_coordinates(
-        np.arange(len(child_layers)),
-        np.zeros(len(child_layers), dtype=np.int64),
-        np.zeros(len(child_layers), dtype=np.int64),
-        (len(child_layers), 1),
+    edges = coo_array(
+        (
+            np.zeros(len(child_layers), dtype=np.int64),
+            (np.arange(len(child_layers)), np.zeros(len(child_layers), dtype=np.int64)),
+        ),
+        shape=(len(child_layers), 1),
     )
     return ProductLayer(child_layers, edges)
 
@@ -78,11 +81,9 @@ def mixture_of(child_layers: List[Layer], log_weights: Iterable[float]) -> SumLa
     return SumLayer(
         child_layers,
         [
-            SparseArray.from_coordinates(
-                np.array([0]),
-                np.array([0]),
-                np.array([log_weight], dtype=float),
-                (1, child_layer.number_of_nodes),
+            coo_array(
+                (np.array([log_weight], dtype=float), (np.array([0]), np.array([0]))),
+                shape=(1, child_layer.number_of_nodes),
             )
             for child_layer, log_weight in zip(child_layers, weights)
         ],

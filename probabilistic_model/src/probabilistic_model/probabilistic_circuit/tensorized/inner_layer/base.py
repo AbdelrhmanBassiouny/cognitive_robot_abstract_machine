@@ -1,68 +1,28 @@
 from __future__ import annotations
 
 import dataclasses
-import enum
 import functools
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 
 import numpy as np
 import numpy.typing as npt
-import rustworkx
-import tqdm
 from krrood.adapters import json_serializer
 from krrood.adapters.json_serializer import SubclassJSONSerializer
-from krrood.patterns.subclass_safe_generic import SubClassSafeGeneric
 from random_events.product_algebra import Event, SimpleEvent
 from random_events.variable import Variable
 from sortedcontainers import SortedSet
 from typing_extensions import (
     Any,
+    Callable,
     Dict,
-    Generic,
     Iterable,
     Iterator,
     List,
     Optional,
     Self,
     Tuple,
-    TypeVar,
 )
-
-from probabilistic_model.probabilistic_circuit.rx.probabilistic_circuit import (
-    ProbabilisticCircuit as RustworkxProbabilisticCircuit,
-    Unit,
-)
-
-RustworkxUnitType = TypeVar("RustworkxUnitType")
-"""
-The class of the ``probabilistic_model.probabilistic_circuit.rx`` package that a
-:class:`Layer` subclass represents: a unit class for an inner layer, or the distribution
-class of a leaf unit for an input layer.
-"""
-
-
-class LayerQuery(enum.Enum):
-    """
-    The passes over the layers whose per-layer result a :class:`QueryCache` holds.
-
-    A pass evaluates its query once per layer, so the query it belongs to is one half of
-    the key a cached result sits under and the layer it was evaluated for is the other.
-    """
-
-    LOG_LIKELIHOOD = enum.auto()
-    CUMULATIVE_DISTRIBUTION = enum.auto()
-    PROBABILITY_OF_SIMPLE_EVENT = enum.auto()
-    SUPPORT = enum.auto()
-    LOG_MODE = enum.auto()
-    MOMENT = enum.auto()
-    TRUNCATED = enum.auto()
-    BATCHED_TRUNCATED = enum.auto()
-    CONDITIONAL = enum.auto()
-    MARGINAL = enum.auto()
-    SIMPLIFY = enum.auto()
-    REMAP_VARIABLES = enum.auto()
-    TO_RUSTWORKX = enum.auto()
 
 
 @dataclass(frozen=True)
@@ -72,9 +32,9 @@ class QueryCacheKey:
     result of.
     """
 
-    query: LayerQuery
+    query: Callable
     """
-    The query that was evaluated.
+    The method that evaluated the query.
     """
 
     layer_id: int
@@ -104,56 +64,25 @@ class QueryCache:
     The result of every query evaluated so far, per layer.
     """
 
-    def has(self, query: LayerQuery, layer: Layer) -> bool:
-        """
-        :param query: The query to look up.
-        :param layer: The layer to look it up for.
-        :return: Whether the result is already in this cache.
-        """
-        return QueryCacheKey(query, id(layer)) in self.results
 
-    def get(self, query: LayerQuery, layer: Layer) -> Any:
-        """
-        :param query: The query to look up.
-        :param layer: The layer to look it up for.
-        :return: The cached result.
-        :raises KeyError: If the query was not evaluated for that layer yet.
-        """
-        return self.results[QueryCacheKey(query, id(layer))]
-
-    def set(self, query: LayerQuery, layer: Layer, result: Any) -> Any:
-        """
-        Record the result of a query for a layer.
-
-        :param query: The query that was evaluated.
-        :param layer: The layer it was evaluated for.
-        :param result: The result.
-        :return: That same result, so that a caller can ``return cache.set(...)``.
-        """
-        self.results[QueryCacheKey(query, id(layer))] = result
-        return result
-
-
-def memoized(query: LayerQuery):
+def memoized(method: Callable) -> Callable:
     """
-    Memoize a bottom-up query of a layer by the identity of the layer.
+    Memoize a query of a layer by the method and the identity of the layer.
 
-    :param query: The query the wrapped method evaluates.
-    :return: The decorator.
+    :param method: The method that evaluates the query.
+    :return: The memoized method.
     """
 
-    def decorator(method):
-        @functools.wraps(method)
-        def wrapper(self, *args, cache: Optional[QueryCache] = None, **kwargs):
-            if cache is None:
-                cache = QueryCache()
-            if not cache.has(query, self):
-                cache.set(query, self, method(self, *args, cache=cache, **kwargs))
-            return cache.get(query, self)
+    @functools.wraps(method)
+    def wrapper(self, *args, cache: Optional[QueryCache] = None, **kwargs):
+        if cache is None:
+            cache = QueryCache()
+        key = QueryCacheKey(method, id(self))
+        if key not in cache.results:
+            cache.results[key] = method(self, *args, cache=cache, **kwargs)
+        return cache.results[key]
 
-        return wrapper
-
-    return decorator
+    return wrapper
 
 
 @dataclass
@@ -242,36 +171,20 @@ class LayerWithDepth:
     """
 
 
-class Layer(
-    Generic[RustworkxUnitType], SubClassSafeGeneric, SubclassJSONSerializer, ABC
-):
+class Layer(SubclassJSONSerializer, ABC):
     """
     Abstract base class for the layers of a layered probabilistic circuit.
 
-    Every node of a layer has the same scope (set of variables) and, for input layers,
-    the same type of distribution. The parameters of all nodes of a layer are stored in
-    contiguous arrays, which is what allows every query to be evaluated for all nodes of
-    a layer at once.
-
-    Variables are referred to by their index in the ``variables`` of the owning
-    :class:`probabilistic_model.probabilistic_circuit.tensorized.layered_probabilistic_circuit.LayeredProbabilisticCircuit`
-    rather than by the variable objects themselves.
-
-    Concrete subclasses bind :data:`RustworkxUnitType` to the ``rx`` class they represent,
-    for instance ``ProductLayer(InnerLayer[ProductUnit])``; the conversion in
-    :mod:`probabilistic_model.probabilistic_circuit.tensorized.rustworkx_conversion` reads
-    it back with :meth:`get_generic_type_parameters` to find the layer class for a unit.
+    A layer groups nodes that have the same scope and stores their parameters in
+    arrays, so that every query is evaluated for all nodes of the layer at once.
+    Variables are referred to by their index in the variables of the circuit.
     """
 
     # %% structure
 
     child_layers: List[Layer]
     """
-    The layers below this one: a field on :class:`InnerLayer`, an empty list on the
-    input layers.
-
-    An annotation rather than a property, so that the generated ``__init__`` of
-    :class:`InnerLayer` can assign to it.
+    The layers that the nodes of this layer point to.
     """
 
     @property
@@ -289,13 +202,6 @@ class Layer(
         :return: The number of nodes in this layer.
         """
         raise NotImplementedError
-
-    @property
-    def number_of_components(self) -> int:
-        """
-        :return: The number of components (nodes and edges) of the circuit rooted here.
-        """
-        return self.number_of_nodes
 
     @property
     def number_of_parameters(self) -> int:
@@ -333,66 +239,42 @@ class Layer(
 
     def all_layers(self) -> List[Layer]:
         """
-        :return: Every layer of the circuit rooted here, each exactly once, parents
-            before children.
+        :return: Every layer of the circuit rooted here, each exactly once, and every
+            layer after all of its parents.
         """
-        result: List[Layer] = []
-        self._visit_once(result, set())
-        return result
+        postorder: List[Layer] = []
+        self._append_in_postorder(postorder, set())
+        return postorder[::-1]
 
-    def _visit_once(self, result: List[Layer], seen: set):
+    def _append_in_postorder(self, result: List[Layer], visited: set):
         """
-        Append this layer and its descendants to ``result``, each exactly once.
+        Append the layers of the circuit rooted here to ``result``, every layer after
+        all of its descendants and each exactly once.
 
-        :param result: The list to append to, in visiting order.
-        :param seen: The ids of the layers already visited.
+        Reversed, this order has every layer after all of its parents, which a
+        breadth-first or a pre-order traversal does not guarantee for a layer that
+        several parents share.
+
+        :param result: The list to append to.
+        :param visited: The ids of the layers already visited.
         """
-        if id(self) in seen:
+        if id(self) in visited:
             return
-        seen.add(id(self))
-        result.append(self)
+        visited.add(id(self))
         for child_layer in self.child_layers:
-            child_layer._visit_once(result, seen)
+            child_layer._append_in_postorder(result, visited)
+        result.append(self)
 
     def all_layers_with_depth(self, depth: int = 0) -> List[LayerWithDepth]:
         """
         :param depth: The depth to report for this layer.
         :return: Every layer of the circuit rooted here with its depth. Layers that are
-            reachable along several paths appear once per path, mirroring the jax
-            implementation.
+            reachable along several paths appear once per path.
         """
         result = [LayerWithDepth(depth, self)]
         for child_layer in self.child_layers:
             result.extend(child_layer.all_layers_with_depth(depth + 1))
         return result
-
-    def topological_layer_order(self) -> List[Layer]:
-        """
-        Order the layers of the circuit rooted here such that every layer appears after
-        all of its parents.
-
-        This is the order in which a top-down pass (such as sampling or :meth:`prune`)
-        has to visit the layers so that a layer is only processed once every parent has
-        contributed to it. A breadth-first order does not give that guarantee: a layer
-        that several parents share is reached at the smallest of their distances from
-        the root, which can be before a parent further down has been visited.
-
-        :return: The layers in topological order.
-        """
-        layers = self.all_layers()
-        graph = rustworkx.PyDiGraph()
-        index_of = {
-            id(layer): index
-            for layer, index in zip(layers, graph.add_nodes_from(layers))
-        }
-        graph.add_edges_from_no_data(
-            [
-                (index_of[id(layer)], index_of[id(child_layer)])
-                for layer in layers
-                for child_layer in layer.child_layers
-            ]
-        )
-        return [graph[index] for index in rustworkx.topological_sort(graph)]
 
     # %% queries
 
@@ -501,6 +383,47 @@ class Layer(
         """
         raise NotImplementedError
 
+    def is_decomposable_of_nodes(self) -> npt.NDArray:
+        """
+        Only a product node can violate decomposability, so every other layer reports
+        all of its nodes as decomposable.
+
+        :return: Whether every node of this layer is decomposable, shape (#nodes,).
+        """
+        return np.ones(self.number_of_nodes, dtype=bool)
+
+    def is_decomposable(self) -> bool:
+        """
+        :return: Whether every node of the circuit rooted here is decomposable.
+        """
+        return all(
+            layer.is_decomposable_of_nodes().all() for layer in self.all_layers()
+        )
+
+    def is_deterministic_of_nodes(
+        self, variables: SortedSet, cache: QueryCache
+    ) -> npt.NDArray:
+        """
+        Only a sum node can violate determinism, so every other layer reports all of its
+        nodes as deterministic.
+
+        :param variables: The variables of the circuit.
+        :param cache: The shared cache of the supports computed so far.
+        :return: Whether every node of this layer is deterministic, shape (#nodes,).
+        """
+        return np.ones(self.number_of_nodes, dtype=bool)
+
+    def is_deterministic(self, variables: SortedSet) -> bool:
+        """
+        :param variables: The variables of the circuit.
+        :return: Whether every node of the circuit rooted here is deterministic.
+        """
+        cache = QueryCache()
+        return all(
+            layer.is_deterministic_of_nodes(variables, cache).all()
+            for layer in self.all_layers()
+        )
+
     # %% structural
 
     @abstractmethod
@@ -509,8 +432,8 @@ class Layer(
         event: SimpleEvent,
         variables: SortedSet,
         singleton_allowed: bool,
+        log_probabilities: Dict[int, npt.NDArray],
         cache: Optional[QueryCache] = None,
-        log_probabilities: Optional[Dict[int, npt.NDArray]] = None,
     ) -> Tuple[Layer, npt.NDArray]:
         """
         Truncate every node of this layer to a simple event.
@@ -523,12 +446,27 @@ class Layer(
         :param event: The simple event to truncate to.
         :param variables: The variables of the circuit.
         :param singleton_allowed: Whether singletons are allowed in the event.
-        :param cache: The shared cache of the current query.
         :param log_probabilities: The map the per-node log-probabilities of the new
             layers are written into, keyed by the id of the new layer.
+        :param cache: The shared cache of the current query.
         :return: The truncated layer and the log-probabilities of its nodes.
         """
         raise NotImplementedError
+
+    def can_truncate_in_one_batch(
+        self, events: List[SimpleEvent], variables: SortedSet, singleton_allowed: bool
+    ) -> bool:
+        """
+        Only an input layer can change its type when it is truncated, so every other
+        layer can be truncated in one batch.
+
+        :param events: The simple events to truncate to.
+        :param variables: The variables of the circuit.
+        :param singleton_allowed: Whether singletons are allowed in the events.
+        :return: Whether :meth:`log_truncated_of_simple_events` can truncate this layer
+            to all the events at once.
+        """
+        return True
 
     @abstractmethod
     def log_truncated_of_simple_events(
@@ -536,9 +474,9 @@ class Layer(
         events: List[SimpleEvent],
         variables: SortedSet,
         singleton_allowed: bool,
+        log_probabilities: Dict[int, npt.NDArray],
         cache: Optional[QueryCache] = None,
-        log_probabilities: Optional[Dict[int, npt.NDArray]] = None,
-    ) -> Optional[Tuple[Layer, npt.NDArray]]:
+    ) -> Tuple[Layer, npt.NDArray]:
         """
         Truncate this layer to several simple events at once.
 
@@ -549,14 +487,14 @@ class Layer(
         mixing the results produces one set of layers per simple set and takes the layered
         representation apart.
 
+        Only valid if :meth:`can_truncate_in_one_batch` holds for every layer below.
+
         :param events: The simple events to truncate to.
         :param variables: The variables of the circuit.
         :param singleton_allowed: Whether singletons are allowed in the events.
-        :param cache: The shared cache of the current query.
         :param log_probabilities: The map the per-node log-probabilities are written to.
-        :return: The truncated layer and the log-probabilities of its nodes, or ``None``
-            if this layer or one below it cannot be truncated this way and the caller has
-            to fall back to truncating once per event.
+        :param cache: The shared cache of the current query.
+        :return: The truncated layer and the log-probabilities of its nodes.
         """
         raise NotImplementedError
 
@@ -565,8 +503,8 @@ class Layer(
         self,
         point: Dict[Variable, Any],
         variables: SortedSet,
+        log_probabilities: Dict[int, npt.NDArray],
         cache: Optional[QueryCache] = None,
-        log_probabilities: Optional[Dict[int, npt.NDArray]] = None,
     ) -> Tuple[Layer, npt.NDArray]:
         """
         Condition every node of this layer on a partial point.
@@ -575,8 +513,8 @@ class Layer(
 
         :param point: The partial point.
         :param variables: The variables of the circuit.
-        :param cache: The shared cache of the current query.
         :param log_probabilities: The map the per-node log-probabilities are written to.
+        :param cache: The shared cache of the current query.
         :return: The conditioned layer and the log-probabilities of its nodes.
         """
         raise NotImplementedError
@@ -634,15 +572,15 @@ class Layer(
         """
         Remove every impossible and every unreachable node of the circuit rooted here.
 
-        The pass first propagates liveness downwards in topological order, so that a
-        layer shared by several parents is pruned once against the union of what its
+        The pass first propagates liveness downwards, parents before children, so that
+        a layer shared by several parents is pruned once against the union of what its
         parents need, and then rebuilds the layers bottom-up.
 
         :param log_probabilities: The per-layer log-probabilities of the structural pass
             that created this circuit.
         :return: The pruned circuit, or ``None`` if the root became impossible.
         """
-        order = self.topological_layer_order()
+        order = self.all_layers()
 
         needed: Dict[int, npt.NDArray] = {
             id(self): np.ones(self.number_of_nodes, dtype=bool)
@@ -715,42 +653,6 @@ class Layer(
         Normalize the parameters stored in this layer alone in-place.
         """
 
-    def is_decomposable(self) -> bool:
-        """
-        Only a product layer can violate decomposability, so only those are asked.
-
-        :return: Whether every product layer of the circuit rooted here is decomposable.
-        """
-        # imported here because product_layer imports this module
-        from probabilistic_model.probabilistic_circuit.tensorized.inner_layer.product_layer import (
-            ProductLayer,
-        )
-
-        return all(
-            layer.is_decomposable_own()
-            for layer in self.all_layers()
-            if isinstance(layer, ProductLayer)
-        )
-
-    def is_deterministic(self, variables: SortedSet) -> bool:
-        """
-        Only a sum layer can violate determinism, so only those are asked.
-
-        :param variables: The variables of the circuit.
-        :return: Whether every sum layer of the circuit rooted here is deterministic.
-        """
-        # imported here because sum_layer imports this module
-        from probabilistic_model.probabilistic_circuit.tensorized.inner_layer.sum_layer import (
-            SumLayer,
-        )
-
-        cache = QueryCache()
-        return all(
-            layer.is_deterministic_own(variables, cache)
-            for layer in self.all_layers()
-            if isinstance(layer, SumLayer)
-        )
-
     def apply_translation(self, translation: npt.NDArray):
         """
         Translate the circuit rooted here in-place.
@@ -778,45 +680,6 @@ class Layer(
         """
         Scale the parameters of this layer alone in-place.
         """
-
-    # %% conversion
-
-    @classmethod
-    @abstractmethod
-    def create_layer_from_nodes_with_same_type_and_scope(
-        cls,
-        nodes: List[Unit],
-        child_layers: List[LayerConverter],
-        progress_bar: bool = False,
-    ) -> LayerConverter:
-        """
-        Create a layer from units of a rustworkx circuit that share type and scope.
-
-        :param nodes: The units.
-        :param child_layers: The converters of the level below.
-        :param progress_bar: Whether to show a progress bar.
-        :return: The converter of the created layer.
-        """
-        raise NotImplementedError
-
-    @abstractmethod
-    def to_rustworkx(
-        self,
-        variables: SortedSet,
-        result: RustworkxProbabilisticCircuit,
-        cache: Optional[QueryCache] = None,
-        progress_bar: Optional[tqdm.tqdm] = None,
-    ) -> List[Unit]:
-        """
-        Create one unit of a rustworkx circuit per node of this layer.
-
-        :param variables: The variables of the circuit.
-        :param result: The circuit to write into.
-        :param cache: The shared cache of the conversion.
-        :param progress_bar: A progress bar to update.
-        :return: The created units, in the order of the nodes of this layer.
-        """
-        raise NotImplementedError
 
     @abstractmethod
     def __deepcopy__(self, memo=None) -> Layer:
@@ -867,7 +730,7 @@ class Layer(
 
 
 @dataclass(eq=False, repr=False)
-class InnerLayer(Layer[RustworkxUnitType], ABC):
+class InnerLayer(Layer, ABC):
     """
     Abstract base class for the layers that have child layers.
     """
@@ -892,14 +755,10 @@ class InnerLayer(Layer[RustworkxUnitType], ABC):
         """
         self._variables_cache = None
 
+    @memoized
     def remap_variables(self, remap: npt.NDArray, cache: Optional[QueryCache] = None):
-        if cache is None:
-            cache = QueryCache()
-        if cache.has(LayerQuery.REMAP_VARIABLES, self):
-            return
-        cache.set(LayerQuery.REMAP_VARIABLES, self, True)
         for child_layer in self.child_layers:
-            child_layer.remap_variables(remap, cache)
+            child_layer.remap_variables(remap, cache=cache)
         self.reset_variables()
 
     @abstractmethod
@@ -909,26 +768,3 @@ class InnerLayer(Layer[RustworkxUnitType], ABC):
             child layers.
         """
         raise NotImplementedError
-
-
-@dataclass
-class LayerConverter:
-    """
-    Bookkeeping for the conversion of a circuit of the ``rx`` package into a layered
-    one.
-    """
-
-    layer: Layer
-    """
-    The created layer.
-    """
-
-    nodes: List[Unit]
-    """
-    The units the layer was created from, in the order of its nodes.
-    """
-
-    hash_remap: Dict[int, int]
-    """
-    A map from the hash of a unit to the index of its node in the layer.
-    """

@@ -7,26 +7,28 @@ import numpy.typing as npt
 from krrood.adapters.json_serializer import DataclassJSONSerializer
 from random_events.product_algebra import Event, SimpleEvent, VariableMap
 from random_events.variable import Variable
+from scipy.sparse import coo_array
 from sortedcontainers import SortedSet
 from typing_extensions import Any, Dict, Iterable, List, Optional, Self, Tuple
 
 from probabilistic_model.distributions.helper import make_dirac
-from probabilistic_model.exceptions import IntractableError, UnorderedVariablesError
-from probabilistic_model.probabilistic_circuit.tensorized.inner_layer import (
+from probabilistic_model.exceptions import IntractableError
+from probabilistic_model.probabilistic_circuit.tensorized.inner_layer.base import (
     ForwardSampleAssignment,
     Layer,
-    ProductLayer,
     QueryCache,
-    SumLayer,
 )
-from probabilistic_model.probabilistic_circuit.tensorized.input_layer import (
-    layer_of_distributions,
+from probabilistic_model.probabilistic_circuit.tensorized.inner_layer.product_layer import (
+    ProductLayer,
+)
+from probabilistic_model.probabilistic_circuit.tensorized.inner_layer.sum_layer import (
+    SumLayer,
 )
 from probabilistic_model.probabilistic_circuit.tensorized.rustworkx_conversion import (
     circuit_of_root_layer,
+    input_layer_of_distributions,
     root_layer_of_circuit,
 )
-from probabilistic_model.probabilistic_circuit.tensorized.utils import SparseArray
 from probabilistic_model.probabilistic_circuit.rx.probabilistic_circuit import (
     ProbabilisticCircuit as RustworkxProbabilisticCircuit,
 )
@@ -53,20 +55,13 @@ class LayeredProbabilisticCircuit(ProbabilisticModel, DataclassJSONSerializer):
 
     variables: SortedSet
     """
-    The variables of the circuit, ordered.
-
-    The layers refer to them by their index here, so the order is part of the circuit
-    and a container that does not fix it is rejected.
+    The variables of the circuit. The layers refer to them by their index here.
     """
 
     root: Layer
     """
     The root layer of the circuit.
     """
-
-    def __post_init__(self):
-        if not isinstance(self.variables, SortedSet):
-            raise UnorderedVariablesError(type(self.variables))
 
     @property
     def variable_to_index_map(self) -> Dict[Variable, int]:
@@ -132,7 +127,7 @@ class LayeredProbabilisticCircuit(ProbabilisticModel, DataclassJSONSerializer):
         return modes[0], float(values[0])
 
     def sample(self, amount: int) -> npt.NDArray:
-        order = self.root.topological_layer_order()
+        order = self.root.all_layers()
         assignment = ForwardSampleAssignment.for_layers(order)
 
         # the root is responsible for every row of the output array
@@ -213,11 +208,11 @@ class LayeredProbabilisticCircuit(ProbabilisticModel, DataclassJSONSerializer):
                 event.simple_sets[0], singleton_allowed
             )
 
-        batched = self.truncated_root_of_simple_events(
-            list(event.simple_sets), singleton_allowed
-        )
-        if batched is not None:
-            root, total_log_probability = batched
+        simple_events = list(event.simple_sets)
+        if self.can_truncate_in_one_batch(simple_events, singleton_allowed):
+            root, total_log_probability = self.truncated_root_of_simple_events(
+                simple_events, singleton_allowed
+            )
             if root is None:
                 return None, -np.inf
             self.root = root
@@ -242,11 +237,9 @@ class LayeredProbabilisticCircuit(ProbabilisticModel, DataclassJSONSerializer):
         )
 
         log_weights = [
-            SparseArray.from_coordinates(
-                np.array([0]),
-                np.array([0]),
-                np.array([log_probability]),
-                (1, root.number_of_nodes),
+            coo_array(
+                (np.array([log_probability]), (np.array([0]), np.array([0]))),
+                shape=(1, root.number_of_nodes),
             )
             for root, log_probability in truncated
         ]
@@ -290,9 +283,23 @@ class LayeredProbabilisticCircuit(ProbabilisticModel, DataclassJSONSerializer):
         root.normalize()
         return root, log_probability
 
+    def can_truncate_in_one_batch(
+        self, events: List[SimpleEvent], singleton_allowed: bool = False
+    ) -> bool:
+        """
+        :param events: The simple events to truncate to.
+        :param singleton_allowed: Whether singletons are allowed in the events.
+        :return: Whether :meth:`truncated_root_of_simple_events` can truncate this
+            circuit to the events.
+        """
+        return all(
+            layer.can_truncate_in_one_batch(events, self.variables, singleton_allowed)
+            for layer in self.layers
+        )
+
     def truncated_root_of_simple_events(
         self, events: List[SimpleEvent], singleton_allowed: bool = False
-    ) -> Optional[Tuple[Optional[Layer], float]]:
+    ) -> Tuple[Optional[Layer], float]:
         """
         Build the root of this circuit truncated to several simple events in one pass.
 
@@ -303,23 +310,21 @@ class LayeredProbabilisticCircuit(ProbabilisticModel, DataclassJSONSerializer):
         with a hundred simple sets, the same circuit ends up spread over hundreds of
         layers of a few nodes each.
 
+        Only valid if :meth:`can_truncate_in_one_batch` holds.
+
         :param events: The simple events to truncate to.
         :param singleton_allowed: Whether singletons are allowed in the events.
         :return: The new root and the log-probability of the union of the events, or
-            ``None`` if a layer of this circuit cannot be truncated this way and the
-            caller has to fall back to truncating once per event.
+            ``(None, -inf)`` if the events are impossible.
         """
         log_probabilities: Dict[int, npt.NDArray] = {}
-        batched = self.root.log_truncated_of_simple_events(
+        replicated, node_log_probabilities = self.root.log_truncated_of_simple_events(
             events,
             self.variables,
             singleton_allowed,
+            log_probabilities,
             cache=QueryCache(),
-            log_probabilities=log_probabilities,
         )
-        if batched is None:
-            return None
-        replicated, node_log_probabilities = batched
 
         # the simple sets of an event are disjoint, so P(E) = sum_k P(E_k)
         total_log_probability = float(logsumexp(node_log_probabilities))
@@ -331,11 +336,15 @@ class LayeredProbabilisticCircuit(ProbabilisticModel, DataclassJSONSerializer):
         mixture = SumLayer(
             [replicated],
             [
-                SparseArray.from_coordinates(
-                    np.zeros(len(node_log_probabilities), dtype=np.int64),
-                    np.arange(len(node_log_probabilities)),
-                    node_log_probabilities,
-                    (1, len(node_log_probabilities)),
+                coo_array(
+                    (
+                        node_log_probabilities,
+                        (
+                            np.zeros(len(node_log_probabilities), dtype=np.int64),
+                            np.arange(len(node_log_probabilities)),
+                        ),
+                    ),
+                    shape=(1, len(node_log_probabilities)),
                 )
             ],
         )
@@ -416,16 +425,17 @@ class LayeredProbabilisticCircuit(ProbabilisticModel, DataclassJSONSerializer):
 
         for variable, value in point.items():
             children.append(
-                layer_of_distributions(
+                input_layer_of_distributions(
                     original_variables.index(variable), [make_dirac(variable, value)]
                 )
             )
 
-        edges = SparseArray.from_coordinates(
-            np.arange(len(children)),
-            np.zeros(len(children), dtype=np.int64),
-            np.zeros(len(children), dtype=np.int64),
-            (len(children), 1),
+        edges = coo_array(
+            (
+                np.zeros(len(children), dtype=np.int64),
+                (np.arange(len(children)), np.zeros(len(children), dtype=np.int64)),
+            ),
+            shape=(len(children), 1),
         )
         self.root = ProductLayer(children, edges).simplify()
         self.root.normalize()
@@ -441,7 +451,7 @@ class LayeredProbabilisticCircuit(ProbabilisticModel, DataclassJSONSerializer):
         remap = np.array(
             [variables.index(variable) for variable in self.variables], dtype=np.int64
         )
-        self.root.remap_variables(remap, QueryCache())
+        self.root.remap_variables(remap)
         self.variables = variables
 
     def marginal(self, variables: Iterable[Variable]) -> Optional[Self]:
@@ -467,14 +477,14 @@ class LayeredProbabilisticCircuit(ProbabilisticModel, DataclassJSONSerializer):
         kept = np.array(
             [variable in kept_variables for variable in self.variables], dtype=bool
         )
-        new_root = self.root.marginal(kept, QueryCache())
+        new_root = self.root.marginal(kept)
         if new_root is None:
             return None
 
         remap = np.full(len(self.variables), -1, dtype=np.int64)
         for new_index, variable in enumerate(kept_variables):
             remap[self.variables.index(variable)] = new_index
-        new_root.remap_variables(remap, QueryCache())
+        new_root.remap_variables(remap)
 
         self.root = new_root.simplify()
         self.variables = kept_variables
@@ -514,7 +524,7 @@ class LayeredProbabilisticCircuit(ProbabilisticModel, DataclassJSONSerializer):
             ],
             dtype=np.int64,
         )
-        self.root.remap_variables(remap, QueryCache())
+        self.root.remap_variables(remap)
         self.variables = replaced
 
     def rename_variables_with_prefix(

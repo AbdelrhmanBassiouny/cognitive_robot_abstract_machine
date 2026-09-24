@@ -32,26 +32,23 @@ from krrood.adapters.json_serializer import from_json, to_json
 from random_events.interval import closed
 from random_events.product_algebra import Event, SimpleEvent, VariableMap
 from random_events.variable import Continuous
-from sortedcontainers import SortedSet
 
 from probabilistic_model.distributions.uniform import UniformDistribution
-from probabilistic_model.exceptions import (
-    IntractableError,
-    ShapeMismatchError,
-    UnorderedVariablesError,
-)
-from probabilistic_model.probabilistic_circuit.tensorized.inner_layer import (
+from probabilistic_model.exceptions import IntractableError, ShapeMismatchError
+from probabilistic_model.probabilistic_circuit.tensorized.inner_layer.product_layer import (
     ProductLayer,
+)
+from probabilistic_model.probabilistic_circuit.tensorized.inner_layer.sum_layer import (
     SumLayer,
 )
-from probabilistic_model.probabilistic_circuit.tensorized.input_layer import (
+from probabilistic_model.probabilistic_circuit.tensorized.input_layer.dirac_delta_layer import (
     DiracDeltaLayer,
+)
+from probabilistic_model.probabilistic_circuit.tensorized.input_layer.uniform_layer import (
+    UniformLayer,
 )
 from probabilistic_model.probabilistic_circuit.tensorized.layered_probabilistic_circuit import (
     LayeredProbabilisticCircuit,
-)
-from probabilistic_model.probabilistic_circuit.tensorized.uniform_layer import (
-    UniformLayer,
 )
 from probabilistic_model.probabilistic_circuit.rx.probabilistic_circuit import (
     ProbabilisticCircuit as RxCircuit,
@@ -161,19 +158,6 @@ class ConversionTestCase(unittest.TestCase):
                 layered = LayeredProbabilisticCircuit.from_rustworkx(rx_circuit)
                 self.assertEqual(list(layered.variables), list(rx_circuit.variables))
                 layered.validate()
-
-    def test_variables_that_do_not_fix_their_order_are_rejected(self):
-        """
-        The layers index variables by position, so a container that does not fix the
-        order would silently answer for the wrong variable.
-        """
-        root = LayeredProbabilisticCircuit.from_rustworkx(overlapping_mixture()).root
-
-        with self.assertRaises(UnorderedVariablesError):
-            LayeredProbabilisticCircuit([y, x], root)
-
-        ordered = LayeredProbabilisticCircuit(SortedSet([y, x]), root)
-        self.assertEqual(list(ordered.variables), [x, y])
 
     def test_layer_types_of_a_uniform_mixture(self):
         layered = LayeredProbabilisticCircuit.from_rustworkx(overlapping_mixture())
@@ -474,15 +458,15 @@ class TruncationTestCase(unittest.TestCase):
     @staticmethod
     def truncate_one_simple_set_at_a_time(layered, event):
         """
-        Truncate through the fallback path, which handles one simple set at a time.
+        Truncate through the path that handles one simple set at a time.
 
         The patch is applied to the class: the public truncation works on a copy of the
         circuit, so an attribute set on the instance would not reach it.
         """
         with mock.patch.object(
             LayeredProbabilisticCircuit,
-            "truncated_root_of_simple_events",
-            return_value=None,
+            "can_truncate_in_one_batch",
+            return_value=False,
         ):
             return layered.truncated(event)
 
@@ -864,9 +848,9 @@ class LayerTestCase(unittest.TestCase):
         # two weights on the root plus two bounds for each of the four uniform nodes
         self.assertEqual(layered.number_of_parameters, 2 + 4 * 2)
 
-    def test_topological_order_visits_parents_first(self):
+    def test_layers_visits_parents_first(self):
         layered = LayeredProbabilisticCircuit.from_rustworkx(shared_children_circuit())
-        order = layered.root.topological_layer_order()
+        order = layered.layers
         positions = {id(layer): index for index, layer in enumerate(order)}
         self.assertEqual(len(order), len(layered.layers))
         for layer in order:

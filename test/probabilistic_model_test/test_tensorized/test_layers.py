@@ -1,6 +1,6 @@
 """
-Tests for the individual layer classes, the sparse array they are built on, the helpers
-and the integration with a learned circuit.
+Tests for the individual layer classes, the helpers and the integration with a learned
+circuit.
 """
 
 from __future__ import annotations
@@ -13,6 +13,7 @@ from krrood.adapters.json_serializer import from_json, to_json
 from random_events.interval import Bound, SimpleInterval, closed, open, singleton
 from random_events.product_algebra import SimpleEvent
 from random_events.variable import Continuous
+from scipy.sparse import coo_array
 from sortedcontainers import SortedSet
 
 from probabilistic_model.distributions.uniform import UniformDistribution
@@ -24,25 +25,28 @@ from probabilistic_model.probabilistic_circuit.tensorized.helper import (
     uniform_measure_of_event,
     uniform_measure_of_simple_event,
 )
-from probabilistic_model.probabilistic_circuit.tensorized.inner_layer import (
+from probabilistic_model.probabilistic_circuit.tensorized.inner_layer.base import (
     LayerWithDepth,
+)
+from probabilistic_model.probabilistic_circuit.tensorized.inner_layer.product_layer import (
     ProductLayer,
+)
+from probabilistic_model.probabilistic_circuit.tensorized.inner_layer.sum_layer import (
     SumLayer,
 )
-from probabilistic_model.probabilistic_circuit.tensorized.input_layer import (
+from probabilistic_model.probabilistic_circuit.tensorized.input_layer.dirac_delta_layer import (
     DiracDeltaLayer,
+)
+from probabilistic_model.probabilistic_circuit.tensorized.input_layer.uniform_layer import (
+    UniformLayer,
 )
 from probabilistic_model.probabilistic_circuit.tensorized.layered_probabilistic_circuit import (
     LayeredProbabilisticCircuit,
 )
-from probabilistic_model.probabilistic_circuit.tensorized.uniform_layer import (
-    UniformLayer,
-)
-from .test_layered_probabilistic_circuit import shared_children_circuit
 from probabilistic_model.probabilistic_circuit.tensorized.utils import (
-    SparseArray,
     embedded_logsumexp,
 )
+from .test_layered_probabilistic_circuit import shared_children_circuit
 
 
 x = Continuous("x")
@@ -61,43 +65,7 @@ def uniform_layer_of(variable_index: int, intervals) -> UniformLayer:
     )
 
 
-class SparseArrayTestCase(unittest.TestCase):
-
-    def test_dense_round_trip_keeps_explicit_zeros(self):
-        dense = np.array([[0, 3], [2, 0]])
-        sparse = SparseArray.from_dense(dense)
-        np.testing.assert_array_equal(sparse.to_dense(), dense)
-
-        # a product layer stores child node indices, where zero is a real edge
-        edges = SparseArray.from_coordinates([0, 1], [0, 0], [0, 0], (2, 1))
-        self.assertEqual(edges.number_of_stored_entries, 2)
-        np.testing.assert_array_equal(edges.data, np.array([0, 0]))
-
-    def test_sort_indices(self):
-        sparse = SparseArray.from_coordinates(
-            [1, 0, 1], [0, 2, 1], [10.0, 20.0, 30.0], (2, 3)
-        )
-        sorted_sparse = sparse.sort_indices()
-        np.testing.assert_array_equal(sorted_sparse.rows, np.array([0, 1, 1]))
-        np.testing.assert_array_equal(sorted_sparse.columns, np.array([2, 0, 1]))
-        np.testing.assert_array_equal(sorted_sparse.data, np.array([20.0, 10.0, 30.0]))
-
-    def test_json_round_trip(self):
-        """
-        A sparse array is serialized by the general dataclass serializer, without a
-        method of its own.
-        """
-        sparse = SparseArray.from_coordinates([0, 1], [1, 0], [1.5, -2.5], (2, 2))
-        restored = from_json(to_json(sparse))
-        self.assertIsInstance(restored, SparseArray)
-        np.testing.assert_array_equal(restored.to_dense(), sparse.to_dense())
-        self.assertEqual(restored.shape, sparse.shape)
-
-    def test_copy_shares_no_memory(self):
-        sparse = SparseArray.from_coordinates([0], [0], [1.0], (1, 1))
-        copy = sparse.copy()
-        copy.data[0] = 5.0
-        self.assertEqual(sparse.data[0], 1.0)
+class LogSumExpTestCase(unittest.TestCase):
 
     def test_embedded_logsumexp(self):
         np.testing.assert_allclose(
@@ -114,6 +82,23 @@ class SparseArrayTestCase(unittest.TestCase):
             embedded_logsumexp(np.array([[-np.inf, -np.inf]]), axis=1),
             np.array([-np.inf]),
         )
+
+
+class DecomposabilityTestCase(unittest.TestCase):
+
+    def test_decomposability_is_decided_per_node(self):
+        leaf_x = uniform_layer_of(0, [(0, 1)])
+        other_leaf_x = uniform_layer_of(0, [(1, 2)])
+        leaf_y = uniform_layer_of(1, [(0, 1)])
+        # node 0 multiplies x and y, node 1 multiplies x twice
+        edges = coo_array(
+            (np.zeros(4, dtype=np.int64), ([0, 1, 0, 2], [0, 0, 1, 1])), shape=(3, 2)
+        )
+        layer = ProductLayer([leaf_x, leaf_y, other_leaf_x], edges)
+        np.testing.assert_array_equal(
+            layer.is_decomposable_of_nodes(), np.array([True, False])
+        )
+        self.assertFalse(layer.is_decomposable())
 
 
 class TruncationOfInputLayersTestCase(unittest.TestCase):
@@ -174,8 +159,9 @@ class TruncationOfInputLayersTestCase(unittest.TestCase):
         root = SumLayer(
             [layer],
             [
-                SparseArray.from_coordinates(
-                    [0, 0], [0, 1], np.log([0.25, 0.75]), (1, 2)
+                coo_array(
+                    (np.log([0.25, 0.75]), ([0, 0], [0, 1])),
+                    shape=(1, 2),
                 )
             ],
         )
@@ -237,11 +223,11 @@ class VectorizedTruncationTestCase(unittest.TestCase):
                         event_bounds=event_bounds,
                         event=(lower, upper),
                     ):
-                        vectorized = layer.log_truncated_of_assignment(
-                            event_interval.as_composite_set(), False
+                        truncated_layer, log_probabilities = (
+                            layer.log_truncated_of_assignment(
+                                event_interval.as_composite_set(), False
+                            )
                         )
-                        self.assertIsNotNone(vectorized)
-                        truncated_layer, log_probabilities = vectorized
 
                         for node, distribution in enumerate(distributions):
                             expected, expected_log_probability = (
@@ -262,15 +248,39 @@ class VectorizedTruncationTestCase(unittest.TestCase):
                                 expected.interval,
                             )
 
-    def test_a_singleton_event_falls_back_to_the_scalar_path(self):
-        layer = uniform_layer_of(0, [(0, 2)])
-        self.assertIsNone(layer.log_truncated_of_assignment(singleton(1.0), True))
-
-    def test_a_composite_assignment_falls_back_to_the_scalar_path(self):
-        layer = uniform_layer_of(0, [(0, 4)])
-        self.assertIsNone(
-            layer.log_truncated_of_assignment(closed(0, 1) | closed(3, 4), False)
+    def test_a_singleton_turns_every_node_into_a_dirac_delta(self):
+        layer = uniform_layer_of(0, [(0, 2), (1, 5)])
+        assignment = singleton(1.0)
+        truncated_layer, log_probabilities = layer.log_truncated_of_assignment(
+            assignment, True
         )
+        self.assertIsInstance(truncated_layer, DiracDeltaLayer)
+        for node in range(layer.number_of_nodes):
+            expected, expected_log_probability = layer.node_distribution(
+                node, x
+            ).log_conditional_from_simple_interval(assignment.simple_sets[0], True)
+            self.assertAlmostEqual(
+                float(log_probabilities[node]), float(expected_log_probability)
+            )
+            self.assertEqual(
+                truncated_layer.node_distribution(node, x).location, expected.location
+            )
+
+    def test_a_composite_assignment_mixes_the_truncations_to_its_simple_intervals(
+        self,
+    ):
+        layer = uniform_layer_of(0, [(0, 4), (0, 8)])
+        assignment = closed(0, 1) | closed(3, 4)
+        truncated_layer, log_probabilities = layer.log_truncated_of_assignment(
+            assignment, False
+        )
+        self.assertIsInstance(truncated_layer, SumLayer)
+        self.assertEqual(truncated_layer.number_of_nodes, layer.number_of_nodes)
+        for node in range(layer.number_of_nodes):
+            expected = layer.node_distribution(node, x).probability(
+                SimpleEvent.from_data({x: assignment}).as_composite_set()
+            )
+            self.assertAlmostEqual(float(np.exp(log_probabilities[node])), expected)
 
     def test_dirac_delta_layer_agrees_with_the_scalar_truncation(self):
         layer = DiracDeltaLayer(0, np.array([0.0, 1.0, 2.0]), np.array([1.0, 1.0, 1.0]))
@@ -374,8 +384,8 @@ class LayerGraphTraversalTestCase(unittest.TestCase):
             ),
         )
 
-    def test_topological_order_visits_every_parent_before_the_layer(self):
-        order = self.root.topological_layer_order()
+    def test_all_layers_visits_every_parent_before_the_layer(self):
+        order = self.root.all_layers()
         positions = {id(layer): index for index, layer in enumerate(order)}
 
         self.assertEqual(len(self.root.all_layers()), len(order))

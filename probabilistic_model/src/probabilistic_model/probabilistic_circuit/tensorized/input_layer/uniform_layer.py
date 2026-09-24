@@ -4,18 +4,13 @@ from dataclasses import dataclass
 
 import numpy as np
 import numpy.typing as npt
-from random_events.interval import Interval
+from random_events.interval import SimpleInterval
 from random_events.variable import Variable
 from sortedcontainers import SortedSet
-from typing_extensions import List, Optional, Self, Tuple
+from typing_extensions import List, Self, Tuple
 
 from probabilistic_model.distributions.uniform import UniformDistribution
-from probabilistic_model.probabilistic_circuit.tensorized.inner_layer import (
-    LayerQuery,
-    QueryCache,
-    memoized,
-)
-from probabilistic_model.probabilistic_circuit.tensorized.input_layer import (
+from probabilistic_model.probabilistic_circuit.tensorized.input_layer.absolutely_continuous_layer import (
     ContinuousLayerWithFiniteSupport,
 )
 
@@ -37,12 +32,9 @@ class UniformLayer(ContinuousLayerWithFiniteSupport[UniformDistribution]):
         with np.errstate(divide="ignore"):
             return -np.log(self.upper - self.lower)
 
-    @memoized(LayerQuery.LOG_LIKELIHOOD)
-    def log_likelihood_of_nodes(
-        self, x: npt.NDArray, cache: Optional[QueryCache] = None
-    ) -> npt.NDArray:
+    def log_likelihood_of_nodes_from_column(self, x: npt.NDArray) -> npt.NDArray:
         return np.where(
-            self.included_condition(self.column_of(x)),
+            self.included_condition(x),
             self.log_probability_density_function_value(),
             -np.inf,
         )
@@ -94,29 +86,13 @@ class UniformLayer(ContinuousLayerWithFiniteSupport[UniformDistribution]):
     ) -> npt.NDArray:
         return np.random.uniform(self.lower[node], self.upper[node], amount)
 
-    def log_truncated_of_assignment(
-        self, assignment: Interval, singleton_allowed: bool
-    ) -> Optional[Tuple["UniformLayer", npt.NDArray]]:
+    def log_truncated_of_non_singleton_interval(
+        self, interval: SimpleInterval
+    ) -> Tuple[UniformLayer, npt.NDArray]:
         """
-        Truncate all nodes to one simple interval at once.
-
         A uniform truncated to an interval is the uniform over the intersection of the
-        two, so the whole layer is truncated by intersecting its bounds with the interval
-        and reading the probabilities off its own cumulative distribution. This mirrors
-        :meth:`UniformDistribution.log_conditional_from_simple_interval_if_not_singleton`
-        exactly, node by node.
-
-        A composite assignment splits a node into one piece per simple interval and a
-        singleton turns it into a Dirac delta; neither keeps the layer a uniform layer, so
-        both fall back to the generic path.
+        two, with the probability of the interval under the node.
         """
-        if len(assignment.simple_sets) != 1:
-            return None
-
-        interval = assignment.simple_sets[0]
-        if singleton_allowed and interval.is_singleton():
-            return None
-
         lower, upper = float(interval.lower), float(interval.upper)
         left_bound, right_bound = int(interval.left), int(interval.right)
 

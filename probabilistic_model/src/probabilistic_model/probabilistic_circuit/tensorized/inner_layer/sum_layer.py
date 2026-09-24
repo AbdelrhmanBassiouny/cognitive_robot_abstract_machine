@@ -4,9 +4,9 @@ from dataclasses import dataclass, field
 
 import numpy as np
 import numpy.typing as npt
-import tqdm
 from random_events.product_algebra import Event, SimpleEvent
 from random_events.variable import Variable
+from scipy.sparse import coo_array
 from sortedcontainers import SortedSet
 from typing_extensions import (
     Any,
@@ -19,42 +19,33 @@ from typing_extensions import (
 
 from probabilistic_model.exceptions import ShapeMismatchError
 from probabilistic_model.probabilistic_circuit.tensorized.utils import (
-    SparseArray,
     embedded_logsumexp,
     remap_indices,
-)
-from probabilistic_model.probabilistic_circuit.rx.probabilistic_circuit import (
-    ProbabilisticCircuit as RustworkxProbabilisticCircuit,
-    SumUnit,
-    Unit,
 )
 from probabilistic_model.probabilistic_circuit.tensorized.inner_layer.base import (
     Edge,
     ForwardSampleAssignment,
     InnerLayer,
     Layer,
-    LayerConverter,
-    LayerQuery,
     QueryCache,
     memoized,
 )
 
 
 @dataclass(eq=False, repr=False)
-class SumLayer(InnerLayer[SumUnit]):
+class SumLayer(InnerLayer):
     """
     A layer of sum units.
 
     All nodes of a sum layer have the same scope, which is the scope of its child
     layers.
 
-    The weights are always stored sparsely: this is the layer that a circuit of the
-    ``rx`` package is converted into, and a sum unit there usually has few children, so
+    The weights are always stored sparsely: a sum node usually has few children, so
     the dense weight matrix of a layer with many nodes is mostly empty and can be far
     larger than the circuit itself.
     """
 
-    log_weights: List[SparseArray]
+    log_weights: List[coo_array]
     """
     The logarithmic weights of the edges, grouped per child layer.
 
@@ -93,20 +84,10 @@ class SumLayer(InnerLayer[SumUnit]):
 
     @property
     def number_of_own_parameters(self) -> int:
-        return sum(
-            log_weights.number_of_stored_entries for log_weights in self.log_weights
-        )
+        return sum(log_weights.nnz for log_weights in self.log_weights)
 
     @property
-    def number_of_components(self) -> int:
-        return sum(
-            child_layer.number_of_components for child_layer in self.child_layers
-        ) + sum(
-            log_weights.number_of_stored_entries for log_weights in self.log_weights
-        )
-
-    @property
-    def log_weighted_child_layers(self) -> Iterator[Tuple[SparseArray, Layer]]:
+    def log_weighted_child_layers(self) -> Iterator[Tuple[coo_array, Layer]]:
         """
         :return: The log-weights and the child layers, zipped together.
         """
@@ -130,7 +111,7 @@ class SumLayer(InnerLayer[SumUnit]):
         """
         :return: The node of every edge, with the child layers concatenated in order.
         """
-        return np.concatenate([log_weights.rows for log_weights in self.log_weights])
+        return np.concatenate([log_weights.row for log_weights in self.log_weights])
 
     @property
     def concatenated_edge_log_weights(self) -> npt.NDArray:
@@ -224,19 +205,17 @@ class SumLayer(InnerLayer[SumUnit]):
             self._edge_targets = (
                 np.concatenate(
                     [
-                        np.full(log_weights.number_of_stored_entries, index, np.int64)
+                        np.full(log_weights.nnz, index, np.int64)
                         for index, log_weights in enumerate(self.log_weights)
                     ]
                 ),
-                np.concatenate(
-                    [log_weights.columns for log_weights in self.log_weights]
-                ),
+                np.concatenate([log_weights.col for log_weights in self.log_weights]),
             )
         return self._edge_targets
 
     def iterate_edges(self) -> Iterator[Edge]:
         for child_layer_index, log_weights in enumerate(self.log_weights):
-            for node, child_node in log_weights.indices:
+            for node, child_node in zip(log_weights.row, log_weights.col):
                 yield Edge(int(node), child_layer_index, int(child_node))
 
     # %% weights
@@ -250,33 +229,30 @@ class SumLayer(InnerLayer[SumUnit]):
         return embedded_logsumexp(gathered, axis=-1)
 
     @property
+    def normalized_edge_log_weights(self) -> npt.NDArray:
+        """
+        :return: The logarithmic weight of every edge, normalized per node, in the
+            order of the concatenated edges.
+        """
+        return (
+            self.concatenated_edge_log_weights
+            - self.log_normalization_constants[self.concatenated_rows]
+        )
+
+    @property
     def normalized_edge_weights(self) -> npt.NDArray:
         """
         :return: The weight of every edge in linear space, normalized per node.
         """
-        normalization = self.log_normalization_constants
-        rows = self.concatenated_rows
-        shifted = self.concatenated_edge_log_weights - normalization[rows]
+        shifted = self.normalized_edge_log_weights
         # a node whose weights are all -inf normalizes to nan; it is impossible, and the
         # prune pass removes it, so its weights are simply zero here
         return np.where(np.isfinite(shifted), np.exp(shifted), 0.0)
 
-    def normalized_log_weights_per_child_layer(self) -> List[npt.NDArray]:
-        """
-        :return: The dense, normalized log-weight block per child layer.
-        """
-        normalization = self.log_normalization_constants
-        result = []
-        for log_weights in self.log_weights:
-            normalized = log_weights.copy()
-            normalized.data = normalized.data - normalization[normalized.rows]
-            result.append(normalized.to_dense(-np.inf))
-        return result
-
     def normalize_own(self):
         normalization = self.log_normalization_constants
         for log_weights in self.log_weights:
-            log_weights.data = log_weights.data - normalization[log_weights.rows]
+            log_weights.data = log_weights.data - normalization[log_weights.row]
 
     # %% queries
 
@@ -293,7 +269,7 @@ class SumLayer(InnerLayer[SumUnit]):
         """
         values = np.concatenate(
             [
-                child_result[..., log_weights.columns]
+                child_result[..., log_weights.col]
                 for log_weights, child_result in zip(self.log_weights, child_results)
             ],
             axis=-1,
@@ -313,7 +289,7 @@ class SumLayer(InnerLayer[SumUnit]):
         """
         values = np.concatenate(
             [
-                child_result[log_weights.columns]
+                child_result[log_weights.col]
                 for log_weights, child_result in zip(self.log_weights, child_results)
             ],
             axis=0,
@@ -323,7 +299,7 @@ class SumLayer(InnerLayer[SumUnit]):
         return padded[self.edge_gather].sum(axis=1)
 
     def weighted_child_values(
-        self, log_weights: SparseArray, child_result: npt.NDArray
+        self, log_weights: coo_array, child_result: npt.NDArray
     ) -> npt.NDArray:
         """
         Take the value of the child node of every edge and add the weight of that edge.
@@ -332,7 +308,7 @@ class SumLayer(InnerLayer[SumUnit]):
         :param child_result: The result of that child layer, child nodes last.
         :return: One value per edge, the edges last.
         """
-        columns = log_weights.columns
+        columns = log_weights.col
         # a sum layer usually points at every node of its child layer exactly once and in
         # order, in which case the gather is an identity copy of an array that has one
         # entry per event per node, and skipping it is worth the comparison
@@ -360,7 +336,7 @@ class SumLayer(InnerLayer[SumUnit]):
         gathered = self.group_edges_by_node(values)
         return embedded_logsumexp(gathered, axis=-1) - self.log_normalization_constants
 
-    @memoized(LayerQuery.LOG_LIKELIHOOD)
+    @memoized
     def log_likelihood_of_nodes(
         self, x: npt.NDArray, cache: Optional[QueryCache] = None
     ) -> npt.NDArray:
@@ -370,7 +346,7 @@ class SumLayer(InnerLayer[SumUnit]):
         ]
         return self.log_weighted_sum(child_results)
 
-    @memoized(LayerQuery.CUMULATIVE_DISTRIBUTION)
+    @memoized
     def cumulative_distribution_of_nodes(
         self, x: npt.NDArray, cache: Optional[QueryCache] = None
     ) -> npt.NDArray:
@@ -380,7 +356,7 @@ class SumLayer(InnerLayer[SumUnit]):
         ]
         return self._weighted_forward(child_results)
 
-    @memoized(LayerQuery.PROBABILITY_OF_SIMPLE_EVENT)
+    @memoized
     def probability_of_simple_event_of_nodes(
         self,
         event: SimpleEvent,
@@ -395,7 +371,7 @@ class SumLayer(InnerLayer[SumUnit]):
         ]
         return self._weighted_forward(child_results).reshape(-1)
 
-    @memoized(LayerQuery.SUPPORT)
+    @memoized
     def support_of_nodes(
         self, variables: SortedSet, cache: Optional[QueryCache] = None
     ) -> List[Event]:
@@ -414,7 +390,7 @@ class SumLayer(InnerLayer[SumUnit]):
 
         return [Event() if support is None else support for support in result]
 
-    @memoized(LayerQuery.LOG_MODE)
+    @memoized
     def log_mode_of_nodes(
         self, variables: SortedSet, cache: Optional[QueryCache] = None
     ) -> Tuple[List[Event], npt.NDArray]:
@@ -422,21 +398,25 @@ class SumLayer(InnerLayer[SumUnit]):
             child_layer.log_mode_of_nodes(variables, cache=cache)
             for child_layer in self.child_layers
         ]
-
-        log_weights = self.normalized_log_weights_per_child_layer()
+        child_layer_of_edge, child_node_of_edge = self.edge_targets
 
         best_value = np.full(self.number_of_nodes, -np.inf)
         candidates: List[List[Event]] = [[] for _ in range(self.number_of_nodes)]
 
-        for edge in self.iterate_edges():
-            log_weight = log_weights[edge.child_layer_index][edge.node, edge.child_node]
-            value = log_weight + child_modes[edge.child_layer_index][1][edge.child_node]
-            mode = child_modes[edge.child_layer_index][0][edge.child_node]
-            if value > best_value[edge.node]:
-                best_value[edge.node] = value
-                candidates[edge.node] = [mode]
-            elif value == best_value[edge.node]:
-                candidates[edge.node].append(mode)
+        for node, log_weight, child_layer_index, child_node in zip(
+            self.concatenated_rows,
+            self.normalized_edge_log_weights,
+            child_layer_of_edge,
+            child_node_of_edge,
+        ):
+            child_events, child_values = child_modes[child_layer_index]
+            value = log_weight + child_values[child_node]
+            mode = child_events[child_node]
+            if value > best_value[node]:
+                best_value[node] = value
+                candidates[node] = [mode]
+            elif value == best_value[node]:
+                candidates[node].append(mode)
 
         modes = []
         for events in candidates:
@@ -450,7 +430,7 @@ class SumLayer(InnerLayer[SumUnit]):
 
         return modes, best_value
 
-    @memoized(LayerQuery.MOMENT)
+    @memoized
     def moment_of_nodes(
         self,
         order: npt.NDArray,
@@ -473,50 +453,59 @@ class SumLayer(InnerLayer[SumUnit]):
         samples: npt.NDArray,
         variables: SortedSet,
     ):
-        own_assignment = assignment.rows_of(self)
-        gather = self.edge_gather
         # the padding slot gets a weight of zero, so it is never drawn
         weights = np.append(self.normalized_edge_weights, 0.0)
-        child_layer_of_edge, child_node_of_edge = self.edge_targets
-
-        for node, rows_of_node in enumerate(own_assignment):
-            if not rows_of_node:
-                continue
-            rows = np.concatenate(rows_of_node)
-
-            positions = gather[node]
-            probabilities = weights[positions]
-
-            # guard against the accumulated floating point error of the normalization
-            total = probabilities.sum()
-            if total <= 0:
-                continue
-            counts = np.random.multinomial(len(rows), pvals=probabilities / total)
-
-            # shuffle so that the contiguous chunks handed to the children are an
-            # unbiased partition of the rows
-            np.random.shuffle(rows)
-
-            offset = 0
-            for count, position in zip(counts, positions):
-                if not count:
-                    continue
-                child_layer = self.child_layers[child_layer_of_edge[position]]
-                assignment.assign(
-                    child_layer,
-                    child_node_of_edge[position],
-                    rows[offset : offset + count],
+        for node, rows_of_node in enumerate(assignment.rows_of(self)):
+            if rows_of_node:
+                self.route_rows_of_node(
+                    node, np.concatenate(rows_of_node), weights, assignment
                 )
-                offset += count
 
-    def is_deterministic_own(self, variables: SortedSet, cache: QueryCache) -> bool:
+    def route_rows_of_node(
+        self,
+        node: int,
+        rows: npt.NDArray,
+        weights: npt.NDArray,
+        assignment: ForwardSampleAssignment,
+    ):
         """
-        Check whether every node of this sum layer has children with pairwise disjoint
-        supports.
+        Split the sample rows of one node among its children, in proportion to the
+        weights of its edges.
 
-        :param variables: The variables of the circuit.
-        :param cache: The shared cache of the supports computed so far.
-        :return: Whether all nodes are deterministic.
+        :param node: The index of the node.
+        :param rows: The sample rows assigned to the node.
+        :param weights: The normalized weight of every edge, followed by the zero weight
+            of the padding slot of :attr:`edge_gather`.
+        :param assignment: The assignment to route the rows into.
+        """
+        positions = self.edge_gather[node]
+        probabilities = weights[positions]
+
+        # guard against the accumulated floating point error of the normalization
+        total = probabilities.sum()
+        if total <= 0:
+            return
+        counts = np.random.multinomial(len(rows), pvals=probabilities / total)
+
+        # shuffle so that the contiguous chunks handed to the children are an unbiased
+        # partition of the rows
+        np.random.shuffle(rows)
+        chunks = np.split(rows, np.cumsum(counts)[:-1])
+
+        child_layer_of_edge, child_node_of_edge = self.edge_targets
+        for index in np.flatnonzero(counts):
+            position = positions[index]
+            assignment.assign(
+                self.child_layers[child_layer_of_edge[position]],
+                child_node_of_edge[position],
+                chunks[index],
+            )
+
+    def is_deterministic_of_nodes(
+        self, variables: SortedSet, cache: QueryCache
+    ) -> npt.NDArray:
+        """
+        A sum node is deterministic if its children have pairwise disjoint supports.
         """
         supports = [
             child_layer.support_of_nodes(variables, cache=cache)
@@ -529,12 +518,25 @@ class SumLayer(InnerLayer[SumUnit]):
                 supports[edge.child_layer_index][edge.child_node]
             )
 
-        for node_supports in supports_per_node:
-            for index, support in enumerate(node_supports):
-                for other in node_supports[index + 1 :]:
-                    if not support.intersection_with(other).is_empty():
-                        return False
-        return True
+        return np.array(
+            [
+                self.are_pairwise_disjoint(node_supports)
+                for node_supports in supports_per_node
+            ],
+            dtype=bool,
+        )
+
+    @staticmethod
+    def are_pairwise_disjoint(events: List[Event]) -> bool:
+        """
+        :param events: The events to compare.
+        :return: Whether no two of the events intersect.
+        """
+        return all(
+            event.intersection_with(other).is_empty()
+            for index, event in enumerate(events)
+            for other in events[index + 1 :]
+        )
 
     def __deepcopy__(self, memo=None) -> SumLayer:
         if memo is None:
@@ -560,9 +562,8 @@ class SumLayer(InnerLayer[SumUnit]):
         """
         Update the weights of this layer with the log-probabilities of its children.
 
-        This is the layered equivalent of ``SumUnit.log_forward_conditioning``: the new
-        weight of an edge is its old weight times the probability of the event under the
-        child, and the probability of a node is the sum of its new weights.
+        The new weight of an edge is its old weight times the probability of the event
+        under the child, and the probability of a node is the sum of its new weights.
 
         :param child_results: The new child layer and its node log-probabilities.
         :param log_probabilities: The map to record the result in.
@@ -573,7 +574,7 @@ class SumLayer(InnerLayer[SumUnit]):
             self.log_weights, child_results
         ):
             updated = log_weights.copy()
-            updated.data = updated.data + child_log_probabilities[updated.columns]
+            updated.data = updated.data + child_log_probabilities[updated.col]
             new_log_weights.append(updated)
 
         result = self.__class__(
@@ -584,74 +585,53 @@ class SumLayer(InnerLayer[SumUnit]):
         log_probabilities[id(result)] = own_log_probabilities
         return result, own_log_probabilities
 
+    @memoized
     def log_truncated_of_simple_event(
         self,
         event: SimpleEvent,
         variables: SortedSet,
         singleton_allowed: bool,
+        log_probabilities: Dict[int, npt.NDArray],
         cache: Optional[QueryCache] = None,
-        log_probabilities: Optional[Dict[int, npt.NDArray]] = None,
     ) -> Tuple[Layer, npt.NDArray]:
-        if cache is None:
-            cache = QueryCache()
-        if cache.has(LayerQuery.TRUNCATED, self):
-            return cache.get(LayerQuery.TRUNCATED, self)
-
         child_results = [
             child_layer.log_truncated_of_simple_event(
-                event,
-                variables,
-                singleton_allowed,
-                cache=cache,
-                log_probabilities=log_probabilities,
+                event, variables, singleton_allowed, log_probabilities, cache=cache
             )
             for child_layer in self.child_layers
         ]
-        return cache.set(
-            LayerQuery.TRUNCATED,
-            self,
-            self._structural_pass(child_results, log_probabilities),
-        )
+        return self._structural_pass(child_results, log_probabilities)
 
+    @memoized
     def log_truncated_of_simple_events(
         self,
         events: List[SimpleEvent],
         variables: SortedSet,
         singleton_allowed: bool,
+        log_probabilities: Dict[int, npt.NDArray],
         cache: Optional[QueryCache] = None,
-        log_probabilities: Optional[Dict[int, npt.NDArray]] = None,
-    ) -> Optional[Tuple[Layer, npt.NDArray]]:
-        if cache is None:
-            cache = QueryCache()
-        if cache.has(LayerQuery.BATCHED_TRUNCATED, self):
-            return cache.get(LayerQuery.BATCHED_TRUNCATED, self)
-
+    ) -> Tuple[Layer, npt.NDArray]:
         number_of_events = len(events)
         number_of_nodes = self.number_of_nodes
+        blocks = np.arange(number_of_events)
 
         new_child_layers = []
         new_log_weights = []
         for log_weights, child_layer in self.log_weighted_child_layers:
-            truncated_child = child_layer.log_truncated_of_simple_events(
-                events,
-                variables,
-                singleton_allowed,
-                cache=cache,
-                log_probabilities=log_probabilities,
+            new_child_layer, child_log_probabilities = (
+                child_layer.log_truncated_of_simple_events(
+                    events, variables, singleton_allowed, log_probabilities, cache=cache
+                )
             )
-            if truncated_child is None:
-                return None
-            new_child_layer, child_log_probabilities = truncated_child
             new_child_layers.append(new_child_layer)
 
             # the block of event k is the original sparsity pattern shifted into its own
             # rows and columns
-            number_of_entries = log_weights.number_of_stored_entries
-            blocks = np.arange(number_of_events)
-            rows = np.tile(log_weights.rows, number_of_events) + np.repeat(
+            number_of_entries = log_weights.nnz
+            rows = np.tile(log_weights.row, number_of_events) + np.repeat(
                 blocks * number_of_nodes, number_of_entries
             )
-            columns = np.tile(log_weights.columns, number_of_events) + np.repeat(
+            columns = np.tile(log_weights.col, number_of_events) + np.repeat(
                 blocks * child_layer.number_of_nodes, number_of_entries
             )
             # the weight of an edge times the probability of the event under its child
@@ -661,11 +641,9 @@ class SumLayer(InnerLayer[SumUnit]):
             )
 
             new_log_weights.append(
-                SparseArray.from_coordinates(
-                    rows,
-                    columns,
-                    data,
-                    (
+                coo_array(
+                    (data, (rows, columns)),
+                    shape=(
                         number_of_events * number_of_nodes,
                         number_of_events * child_layer.number_of_nodes,
                     ),
@@ -675,42 +653,28 @@ class SumLayer(InnerLayer[SumUnit]):
         result = self.__class__(new_child_layers, new_log_weights)
         own_log_probabilities = result.log_normalization_constants
         log_probabilities[id(result)] = own_log_probabilities
+        return result, own_log_probabilities
 
-        return cache.set(
-            LayerQuery.BATCHED_TRUNCATED, self, (result, own_log_probabilities)
-        )
-
+    @memoized
     def log_conditional_of_point(
         self,
         point: Dict[Variable, Any],
         variables: SortedSet,
+        log_probabilities: Dict[int, npt.NDArray],
         cache: Optional[QueryCache] = None,
-        log_probabilities: Optional[Dict[int, npt.NDArray]] = None,
     ) -> Tuple[Layer, npt.NDArray]:
-        if cache is None:
-            cache = QueryCache()
-        if cache.has(LayerQuery.CONDITIONAL, self):
-            return cache.get(LayerQuery.CONDITIONAL, self)
-
         child_results = [
             child_layer.log_conditional_of_point(
-                point,
-                variables,
-                cache=cache,
-                log_probabilities=log_probabilities,
+                point, variables, log_probabilities, cache=cache
             )
             for child_layer in self.child_layers
         ]
-        return cache.set(
-            LayerQuery.CONDITIONAL,
-            self,
-            self._structural_pass(child_results, log_probabilities),
-        )
+        return self._structural_pass(child_results, log_probabilities)
 
     def live_entries(
         self,
         alive: npt.NDArray,
-        log_weights: SparseArray,
+        log_weights: coo_array,
         child_layer: Layer,
         log_probabilities: Dict[int, npt.NDArray],
     ) -> npt.NDArray:
@@ -724,10 +688,10 @@ class SumLayer(InnerLayer[SumUnit]):
             pass.
         :return: A boolean mask over the stored weight entries.
         """
-        mask = alive[log_weights.rows] & (log_weights.data > -np.inf)
+        mask = alive[log_weights.row] & (log_weights.data > -np.inf)
         child_log_probabilities = log_probabilities.get(id(child_layer))
         if child_log_probabilities is not None:
-            mask = mask & (child_log_probabilities[log_weights.columns] > -np.inf)
+            mask = mask & (child_log_probabilities[log_weights.col] > -np.inf)
         return mask
 
     def required_child_nodes(
@@ -737,7 +701,7 @@ class SumLayer(InnerLayer[SumUnit]):
         for log_weights, child_layer in self.log_weighted_child_layers:
             mask = self.live_entries(alive, log_weights, child_layer, log_probabilities)
             needed = np.zeros(child_layer.number_of_nodes, dtype=bool)
-            needed[log_weights.columns[mask]] = True
+            needed[log_weights.col[mask]] = True
             result.append((child_layer, needed))
         return result
 
@@ -760,20 +724,24 @@ class SumLayer(InnerLayer[SumUnit]):
                 continue
             child_needed = needed[id(child_layer)]
             mask = (
-                alive[log_weights.rows]
+                alive[log_weights.row]
                 & (log_weights.data > -np.inf)
-                & child_needed[log_weights.columns]
+                & child_needed[log_weights.col]
             )
             if not mask.any():
                 continue
             child_remap, number_of_child_nodes = remap_indices(child_needed)
             new_child_layers.append(pruned_child)
             new_log_weights.append(
-                SparseArray.from_coordinates(
-                    node_remap[log_weights.rows[mask]],
-                    child_remap[log_weights.columns[mask]],
-                    log_weights.data[mask],
-                    (number_of_nodes, number_of_child_nodes),
+                coo_array(
+                    (
+                        log_weights.data[mask],
+                        (
+                            node_remap[log_weights.row[mask]],
+                            child_remap[log_weights.col[mask]],
+                        ),
+                    ),
+                    shape=(number_of_nodes, number_of_child_nodes),
                 )
             )
 
@@ -782,40 +750,27 @@ class SumLayer(InnerLayer[SumUnit]):
 
         return self.__class__(new_child_layers, new_log_weights)
 
+    @memoized
     def marginal(
         self, kept: npt.NDArray, cache: Optional[QueryCache] = None
     ) -> Optional[Layer]:
-        if cache is None:
-            cache = QueryCache()
-        if cache.has(LayerQuery.MARGINAL, self):
-            return cache.get(LayerQuery.MARGINAL, self)
-
         new_child_layers = []
         new_log_weights = []
         for log_weights, child_layer in self.log_weighted_child_layers:
-            marginal_child = child_layer.marginal(kept, cache)
+            marginal_child = child_layer.marginal(kept, cache=cache)
             if marginal_child is None:
                 continue
             new_child_layers.append(marginal_child)
             new_log_weights.append(log_weights.copy())
 
-        result = (
-            None
-            if not new_child_layers
-            else self.__class__(new_child_layers, new_log_weights)
-        )
-        return cache.set(LayerQuery.MARGINAL, self, result)
+        if not new_child_layers:
+            return None
+        return self.__class__(new_child_layers, new_log_weights)
 
+    @memoized
     def simplify(self, cache: Optional[QueryCache] = None) -> Layer:
-        if cache is None:
-            cache = QueryCache()
-        if cache.has(LayerQuery.SIMPLIFY, self):
-            return cache.get(LayerQuery.SIMPLIFY, self)
-
-        # placed before the recursion so that a cycle-free DAG with shared layers
-        # resolves to the same object for every parent
         simplified_children = [
-            child_layer.simplify(cache) for child_layer in self.child_layers
+            child_layer.simplify(cache=cache) for child_layer in self.child_layers
         ]
         result = self.__class__(
             simplified_children,
@@ -823,9 +778,8 @@ class SumLayer(InnerLayer[SumUnit]):
         )
 
         if result.is_identity():
-            result = simplified_children[0]
-
-        return cache.set(LayerQuery.SIMPLIFY, self, result)
+            return simplified_children[0]
+        return result
 
     def is_identity(self) -> bool:
         """
@@ -837,105 +791,10 @@ class SumLayer(InnerLayer[SumUnit]):
         log_weights = self.log_weights[0]
         if log_weights.shape[0] != log_weights.shape[1]:
             return False
-        if log_weights.number_of_stored_entries != self.number_of_nodes:
+        if log_weights.nnz != self.number_of_nodes:
             return False
-        sorted_weights = log_weights.sort_indices()
-        expected = np.arange(self.number_of_nodes)
+        # every node points at the node with its own index, and at nothing else
         return bool(
-            np.array_equal(sorted_weights.rows, expected)
-            and np.array_equal(sorted_weights.columns, expected)
+            np.array_equal(log_weights.row, log_weights.col)
+            and len(np.unique(log_weights.row)) == self.number_of_nodes
         )
-
-    # %% conversion
-
-    @classmethod
-    def create_layer_from_nodes_with_same_type_and_scope(
-        cls,
-        nodes: List[SumUnit],
-        child_layers: List[LayerConverter],
-        progress_bar: bool = False,
-    ) -> LayerConverter:
-        hash_remap = {hash(node): index for index, node in enumerate(nodes)}
-        variables = np.array(
-            [
-                nodes[0].probabilistic_circuit.variables.index(variable)
-                for variable in nodes[0].variables
-            ]
-        )
-
-        # only the child layers with the same scope can be children of these sum units
-        filtered_child_layers = [
-            child_layer
-            for child_layer in child_layers
-            if np.array_equal(child_layer.layer.variables, variables)
-        ]
-
-        used_child_layers = []
-        log_weights = []
-        for child_layer in filtered_child_layers:
-            rows, columns, values = [], [], []
-            for index, node in enumerate(
-                tqdm.tqdm(nodes, desc="Assembling sum layer") if progress_bar else nodes
-            ):
-                for log_weight, subcircuit in node.log_weighted_subcircuits:
-                    if hash(subcircuit) in child_layer.hash_remap:
-                        rows.append(index)
-                        columns.append(child_layer.hash_remap[hash(subcircuit)])
-                        values.append(log_weight)
-
-            # a candidate that none of these nodes points to is not a child layer
-            if not rows:
-                continue
-
-            used_child_layers.append(child_layer.layer)
-            log_weights.append(
-                SparseArray.from_coordinates(
-                    np.array(rows, dtype=np.int64),
-                    np.array(columns, dtype=np.int64),
-                    np.array(values, dtype=float),
-                    (len(nodes), child_layer.layer.number_of_nodes),
-                )
-            )
-
-        layer = cls(used_child_layers, log_weights)
-        return LayerConverter(layer, nodes, hash_remap)
-
-    def to_rustworkx(
-        self,
-        variables: SortedSet,
-        result: RustworkxProbabilisticCircuit,
-        cache: Optional[QueryCache] = None,
-        progress_bar: Optional[tqdm.tqdm] = None,
-    ) -> List[Unit]:
-        if cache is None:
-            cache = QueryCache()
-        if cache.has(LayerQuery.TO_RUSTWORKX, self):
-            return cache.get(LayerQuery.TO_RUSTWORKX, self)
-
-        if progress_bar:
-            progress_bar.set_postfix_str(
-                f"Parsing sum layer of {[variables[i] for i in self.variables]}"
-            )
-
-        units = [
-            SumUnit(probabilistic_circuit=result) for _ in range(self.number_of_nodes)
-        ]
-        child_units = [
-            child_layer.to_rustworkx(variables, result, cache, progress_bar)
-            for child_layer in self.child_layers
-        ]
-
-        for log_weights, child_layer_units in zip(self.log_weights, child_units):
-            for (node, child_node), log_weight in zip(
-                log_weights.indices, log_weights.data
-            ):
-                units[node].add_subcircuit(
-                    child_layer_units[child_node], float(log_weight)
-                )
-                if progress_bar:
-                    progress_bar.update()
-
-        for unit in units:
-            unit.normalize()
-
-        return cache.set(LayerQuery.TO_RUSTWORKX, self, units)
