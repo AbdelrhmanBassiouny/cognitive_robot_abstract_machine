@@ -6,7 +6,7 @@ import pytest
 from random_events.interval import closed, open_closed, singleton
 from random_events.product_algebra import SimpleEvent, VariableMap
 from random_events.variable import Continuous
-from scipy.stats import norm
+from scipy.stats import norm, truncnorm
 from scipy.stats._multivariate import multivariate_normal_frozen
 
 from probabilistic_model.distributions.gaussian import GaussianDistribution
@@ -43,10 +43,10 @@ def independent(horizontal, vertical) -> MultivariateGaussianDistribution:
     every answer can be checked against the univariate distribution already in this
     package.
     """
-    return MultivariateGaussianDistribution.from_mean_and_covariance(
+    return MultivariateGaussianDistribution(
         variables=(horizontal, vertical),
         mean=np.array([1.0, -2.0]),
-        covariance=np.array([[4.0, 0.0], [0.0, 9.0]]),
+        covariance=Covariance.from_matrix(np.array([[4.0, 0.0], [0.0, 9.0]])),
     )
 
 
@@ -56,10 +56,10 @@ def correlated(horizontal, vertical) -> MultivariateGaussianDistribution:
     Standard variables correlated by 0.6, which is the case with no closed form for the
     probability of a box.
     """
-    return MultivariateGaussianDistribution.from_mean_and_covariance(
+    return MultivariateGaussianDistribution(
         variables=(horizontal, vertical),
         mean=np.array([0.0, 0.0]),
-        covariance=np.array([[1.0, 0.6], [0.6, 1.0]]),
+        covariance=Covariance.from_matrix(np.array([[1.0, 0.6], [0.6, 1.0]])),
     )
 
 
@@ -98,10 +98,10 @@ def one_variable(
     :return: A distribution over a single variable, which several tests need and which
         carries no layout worth restating at each of them.
     """
-    return MultivariateGaussianDistribution.from_mean_and_covariance(
+    return MultivariateGaussianDistribution(
         variables=(variable,),
         mean=np.array([mean]),
-        covariance=np.array([[variance]]),
+        covariance=Covariance.from_matrix(np.array([[variance]])),
     )
 
 
@@ -175,10 +175,10 @@ class TestBuildingADistribution:
         assert correlated.covariance_between(vertical, horizontal) == 0.6
 
     def test_a_distribution_about_one_variable_needs_no_layout(self, horizontal):
-        distribution = MultivariateGaussianDistribution.from_mean_and_covariance(
+        distribution = MultivariateGaussianDistribution(
             variables=(horizontal,),
             mean=np.array([3.0]),
-            covariance=np.array([[0.25]]),
+            covariance=Covariance.from_matrix(np.array([[0.25]])),
         )
         assert mean_of(distribution, horizontal) == 3.0
         assert variance_of(distribution, horizontal) == 0.25
@@ -188,25 +188,13 @@ class TestBuildingADistribution:
         self, horizontal, vertical
     ):
         with pytest.raises(ShapeMismatchError) as error:
-            MultivariateGaussianDistribution.from_mean_and_covariance(
+            MultivariateGaussianDistribution(
                 variables=(horizontal, vertical),
                 mean=np.array([0.0]),
-                covariance=np.zeros((2, 2)),
+                covariance=Covariance.from_matrix(np.zeros((2, 2))),
             )
         assert error.value.expected_shape == (2,)
         assert error.value.received_shape == (1,)
-
-    def test_a_covariance_that_is_not_laid_out_by_the_variables_is_rejected(
-        self, horizontal, vertical
-    ):
-        with pytest.raises(ShapeMismatchError) as error:
-            MultivariateGaussianDistribution.from_mean_and_covariance(
-                variables=(horizontal, vertical),
-                mean=np.zeros(2),
-                covariance=np.zeros((2, 3)),
-            )
-        assert error.value.expected_shape == (2, 2)
-        assert error.value.received_shape == (2, 3)
 
     def test_a_covariance_of_another_dimension_is_rejected(self, horizontal, vertical):
         with pytest.raises(ShapeMismatchError) as error:
@@ -431,15 +419,17 @@ class TestConditioningOnAValue:
         two sides of the diagonal, which must not leave the covariance asymmetric.
         """
         first, second, given = horizontal, Continuous("second"), Continuous("given")
-        distribution = MultivariateGaussianDistribution.from_mean_and_covariance(
+        distribution = MultivariateGaussianDistribution(
             variables=(first, second, given),
             mean=np.zeros(3),
-            covariance=np.array(
-                [
-                    [1e8, 1e-2, 0.9e4],
-                    [1e-2, 1e-8, 1e-5],
-                    [0.9e4, 1e-5, 3.0],
-                ]
+            covariance=Covariance.from_matrix(
+                np.array(
+                    [
+                        [1e8, 1e-2, 0.9e4],
+                        [1e-2, 1e-8, 1e-5],
+                        [0.9e4, 1e-5, 3.0],
+                    ]
+                )
             ),
         )
         conditioned, _ = distribution.conditional({given: 1.0})
@@ -476,10 +466,10 @@ class TestProductWithAGaussianLikelihood:
         The answer divided by the two densities it multiplies is the same constant
         everywhere.
         """
-        likelihood = MultivariateGaussianDistribution.from_mean_and_covariance(
+        likelihood = MultivariateGaussianDistribution(
             variables=(horizontal, vertical),
             mean=np.array([1.0, -0.5]),
-            covariance=np.array([[0.5, 0.1], [0.1, 2.0]]),
+            covariance=Covariance.from_matrix(np.array([[0.5, 0.1], [0.1, 2.0]])),
         )
         product = correlated.product_with_gaussian_likelihood(likelihood)
         points = np.array([[0.0, 0.0], [1.0, 2.0], [-3.0, 0.5]])
@@ -796,6 +786,49 @@ class TestTruncation:
         truncated, _ = correlated.truncated(box)
         assert truncated.likelihood(np.array([[5.0, 5.0]]))[0] == 0.0
 
+    def test_an_excluded_end_of_the_box_cannot_happen(
+        self, correlated, horizontal, vertical
+    ):
+        box = SimpleEvent.from_data(
+            {horizontal: open_closed(0.0, 1.0), vertical: closed(0.0, 1.0)}
+        ).as_composite_set()
+        truncated, _ = correlated.truncated(box)
+        likelihoods = truncated.likelihood(np.array([[0.0, 0.5], [1.0, 0.5]]))
+        assert likelihoods[0] == 0.0
+        assert likelihoods[1] > 0.0
+
+    def test_the_cumulative_distribution_of_variables_that_do_not_co_vary_is_the_product_of_truncated_normals(
+        self, independent, horizontal, vertical
+    ):
+        box = box_over(horizontal, vertical, 0.0, 2.0).as_composite_set()
+        truncated, _ = independent.truncated(box)
+        point = np.array([[1.0, 0.5]])
+        expected = 1.0
+        for index, variable in enumerate(independent.variables):
+            deviation = math.sqrt(independent.covariance_between(variable, variable))
+            location = independent.mean[index]
+            expected *= truncnorm.cdf(
+                point[0, index],
+                a=(0.0 - location) / deviation,
+                b=(2.0 - location) / deviation,
+                loc=location,
+                scale=deviation,
+            )
+        assert truncated.cumulative_distribution_function(point)[0] == pytest.approx(
+            expected
+        )
+
+    def test_the_cumulative_distribution_is_zero_below_and_one_above_the_box(
+        self, correlated, horizontal, vertical
+    ):
+        box = box_over(horizontal, vertical, 0.0, 1.0).as_composite_set()
+        truncated, _ = correlated.truncated(box)
+        values = truncated.cumulative_distribution_function(
+            np.array([[-1.0, 0.5], [2.0, 3.0]])
+        )
+        assert values[0] == 0.0
+        assert values[1] == pytest.approx(1.0)
+
     def test_the_truncated_distribution_is_certain_of_its_own_event(
         self, correlated, horizontal, vertical
     ):
@@ -848,10 +881,10 @@ class TestTruncation:
         Two variables that co-vary are not most likely where each of them on its own
         would be: confining one of them moves where the other is most likely with it.
         """
-        strongly_correlated = MultivariateGaussianDistribution.from_mean_and_covariance(
+        strongly_correlated = MultivariateGaussianDistribution(
             variables=(horizontal, vertical),
             mean=np.array([0.0, 0.0]),
-            covariance=np.array([[1.0, 0.9], [0.9, 1.0]]),
+            covariance=Covariance.from_matrix(np.array([[1.0, 0.9], [0.9, 1.0]])),
         )
         box = SimpleEvent.from_data(
             {horizontal: closed(1.0, 2.0), vertical: closed(-5.0, 5.0)}
@@ -895,6 +928,25 @@ class TestTruncation:
             correlated.probability(smaller) / correlated.probability(box)
         )
 
+    def test_the_number_of_sweeps_carries_over_to_a_further_truncation(
+        self, correlated, horizontal, vertical
+    ):
+        box = box_over(horizontal, vertical, 0.0, 1.0).as_composite_set()
+        truncated, _ = correlated.truncated(box)
+        truncated.sweeps_per_sample = 7
+        smaller = box_over(horizontal, vertical, 0.0, 0.5).as_composite_set()
+        further, _ = truncated.truncated(smaller)
+        assert further.sweeps_per_sample == truncated.sweeps_per_sample
+
+    def test_the_number_of_sweeps_carries_over_to_a_conditional(
+        self, correlated, horizontal, vertical
+    ):
+        box = box_over(horizontal, vertical, 0.0, 1.0).as_composite_set()
+        truncated, _ = correlated.truncated(box)
+        truncated.sweeps_per_sample = 7
+        conditional, _ = truncated.log_conditional({horizontal: 0.5})
+        assert conditional.sweeps_per_sample == truncated.sweeps_per_sample
+
     def test_every_sample_falls_inside_the_event(
         self, correlated, horizontal, vertical
     ):
@@ -916,10 +968,10 @@ class TestTruncation:
         """
         np.random.seed(69)
         rho = 0.9
-        correlated = MultivariateGaussianDistribution.from_mean_and_covariance(
+        correlated = MultivariateGaussianDistribution(
             variables=(horizontal, vertical),
             mean=np.zeros(2),
-            covariance=np.array([[1.0, rho], [rho, 1.0]]),
+            covariance=Covariance.from_matrix(np.array([[1.0, rho], [rho, 1.0]])),
         )
         confined = SimpleEvent.from_data(
             {horizontal: closed(1.0, np.inf), vertical: closed(-np.inf, np.inf)}

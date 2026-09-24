@@ -9,6 +9,7 @@ from random_events.variable import Continuous
 from probabilistic_model.distributions.distributions import DiracDeltaDistribution
 from probabilistic_model.distributions.gaussian import GaussianDistribution
 from probabilistic_model.distributions.multivariate_gaussian import (
+    Covariance,
     MultivariateGaussianDistribution,
 )
 from probabilistic_model.probabilistic_circuit.rx.probabilistic_circuit import (
@@ -42,10 +43,10 @@ def correlated(first, second) -> MultivariateGaussianDistribution:
     A Gaussian whose variables are laid out in the reverse of the order a circuit sorts
     them in, so a leaf that confused the two orders would read the wrong columns.
     """
-    return MultivariateGaussianDistribution.from_mean_and_covariance(
+    return MultivariateGaussianDistribution(
         variables=(second, first),
         mean=np.array([10.0, -10.0]),
-        covariance=np.array([[1.0, 0.6], [0.6, 2.0]]),
+        covariance=Covariance.from_matrix(np.array([[1.0, 0.6], [0.6, 2.0]])),
     )
 
 
