@@ -32,6 +32,18 @@ class QPSolverPIQP(QPSolver[QPDataExplicit]):
     more iterations than 0.99 on the problems that converge either way.
     """
 
+    infeasibility_threshold: float = 100.0
+    """
+    How far piqp's multipliers may drift from their last accepted values, scaled by the
+    regularization, before piqp declares the problem infeasible.
+
+    Our problems cannot be infeasible, but tasks that cannot be reached push heavily
+    weighted slack variables far from zero, and their multipliers legitimately grow to
+    about 1e6. At piqp's default of 0.9 that drift already counts as infeasibility after
+    a few iterations. 100 solves every problem recorded from the test suites at any
+    fraction to boundary from 0.8 to 0.99; 10 is not enough.
+    """
+
     big_ball_mode: bool = False
     """
     If the QP is known to be feasible, ignore non-SOLVED solver statuses and return the
@@ -48,7 +60,7 @@ class QPSolverPIQP(QPSolver[QPDataExplicit]):
         self.solver.settings.eps_duality_gap_rel = 1e-5
         self.solver.settings.reg_lower_limit = 1e-11
         self.solver.settings.tau = self.fraction_to_boundary
-        # self.solver.settings.kkt_solver = piqp.KKTSolver.sparse_multistage
+        self.solver.settings.infeasibility_threshold = self.infeasibility_threshold
 
     def solver_call_explicit_interface(self, qp_data: QPDataExplicit) -> np.ndarray:
         weight_matrix = fast_sparse_diagonal(qp_data.quadratic_weights)
