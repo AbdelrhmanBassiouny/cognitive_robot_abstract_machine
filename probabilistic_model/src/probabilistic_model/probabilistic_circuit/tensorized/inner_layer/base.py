@@ -145,12 +145,12 @@ class Layer(SubclassJSONSerializer, ABC):
 
     @abstractmethod
     def log_likelihood_of_nodes(
-        self, x: npt.NDArray, cache: Optional[QueryCache] = None
+        self, events: npt.NDArray, cache: Optional[QueryCache] = None
     ) -> npt.NDArray:
         """
         Calculate the log-likelihood of every node of this layer.
 
-        :param x: The events with shape (#events, #variables of the circuit).
+        :param events: The events with shape (#events, #variables of the circuit).
         :param cache: The shared cache of the current query.
         :return: The log-likelihoods with shape (#events, #nodes).
         """
@@ -158,12 +158,12 @@ class Layer(SubclassJSONSerializer, ABC):
 
     @abstractmethod
     def cumulative_distribution_of_nodes(
-        self, x: npt.NDArray, cache: Optional[QueryCache] = None
+        self, events: npt.NDArray, cache: Optional[QueryCache] = None
     ) -> npt.NDArray:
         """
         Calculate the cumulative distribution function of every node of this layer.
 
-        :param x: The events with shape (#events, #variables of the circuit).
+        :param events: The events with shape (#events, #variables of the circuit).
         :param cache: The shared cache of the current query.
         :return: The values with shape (#events, #nodes).
         """

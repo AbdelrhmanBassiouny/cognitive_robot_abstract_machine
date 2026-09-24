@@ -90,16 +90,16 @@ class DiracDeltaLayer(AbstractContinuousLayer):
             layers[0].tolerance,
         )
 
-    def log_likelihood_of_nodes_from_column(self, x: npt.NDArray) -> npt.NDArray:
-        column = np.asarray(x, dtype=float).reshape(-1, 1)
+    def log_likelihood_of_nodes_from_column(self, values: npt.NDArray) -> npt.NDArray:
+        column = np.asarray(values, dtype=float).reshape(-1, 1)
         hit = np.abs(column - self.location) < self.tolerance
         with np.errstate(divide="ignore"):
             return np.where(hit, np.log(self.density_cap), -np.inf)
 
     def cumulative_distribution_of_nodes_from_column(
-        self, x: npt.NDArray
+        self, values: npt.NDArray
     ) -> npt.NDArray:
-        column = np.asarray(x, dtype=float).reshape(-1, 1)
+        column = np.asarray(values, dtype=float).reshape(-1, 1)
         return (column >= self.location - self.tolerance).astype(float)
 
     def moment_of_nodes_own(

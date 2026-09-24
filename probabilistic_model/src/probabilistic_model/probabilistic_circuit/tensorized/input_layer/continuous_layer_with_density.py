@@ -245,14 +245,14 @@ class ContinuousLayerWithFiniteSupport(ContinuousLayerWithDensity, ABC):
         if self.interval.shape != self.bounds.shape:
             raise ShapeMismatchError(self.interval.shape, self.bounds.shape)
 
-    def included_condition(self, x: npt.NDArray) -> npt.NDArray:
+    def included_condition(self, values: npt.NDArray) -> npt.NDArray:
         """
         Check whether values lie inside the support of every node.
 
-        :param x: The values with shape (#events,).
+        :param values: The values with shape (#events,).
         :return: A boolean array of shape (#events, #nodes).
         """
-        column = np.asarray(x, dtype=float).reshape(-1, 1)
+        column = np.asarray(values, dtype=float).reshape(-1, 1)
 
         # these arrays hold one entry per event per node, so the homogeneous cases get
         # their own path rather than evaluating both comparisons and selecting between

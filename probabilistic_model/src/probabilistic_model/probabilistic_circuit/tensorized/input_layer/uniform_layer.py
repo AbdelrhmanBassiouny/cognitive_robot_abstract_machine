@@ -32,17 +32,17 @@ class UniformLayer(ContinuousLayerWithFiniteSupport):
         with np.errstate(divide="ignore"):
             return -np.log(self.upper - self.lower)
 
-    def log_likelihood_of_nodes_from_column(self, x: npt.NDArray) -> npt.NDArray:
+    def log_likelihood_of_nodes_from_column(self, values: npt.NDArray) -> npt.NDArray:
         return np.where(
-            self.included_condition(x),
+            self.included_condition(values),
             self.log_probability_density_function_value(),
             -np.inf,
         )
 
     def cumulative_distribution_of_nodes_from_column(
-        self, x: npt.NDArray
+        self, values: npt.NDArray
     ) -> npt.NDArray:
-        column = np.asarray(x, dtype=float).reshape(-1, 1)
+        column = np.asarray(values, dtype=float).reshape(-1, 1)
         result = (column - self.lower) / (self.upper - self.lower)
         return np.clip(result, 0.0, 1.0)
 
@@ -51,8 +51,8 @@ class UniformLayer(ContinuousLayerWithFiniteSupport):
     ) -> npt.NDArray:
         density = np.exp(self.log_probability_density_function_value())
 
-        def evaluate_integral_at(x: npt.NDArray) -> npt.NDArray:
-            return density * (x - center) ** (order + 1) / (order + 1)
+        def evaluate_integral_at(bound: npt.NDArray) -> npt.NDArray:
+            return density * (bound - center) ** (order + 1) / (order + 1)
 
         return evaluate_integral_at(self.upper) - evaluate_integral_at(self.lower)
 

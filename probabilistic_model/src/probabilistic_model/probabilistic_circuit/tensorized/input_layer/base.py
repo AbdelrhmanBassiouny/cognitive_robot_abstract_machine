@@ -64,14 +64,14 @@ class InputLayer(Layer, ABC):
     def remap_variables(self, remap: npt.NDArray, cache: Optional[QueryCache] = None):
         self.variable = int(remap[self.variable])
 
-    def column_of(self, x: npt.NDArray) -> npt.NDArray:
+    def column_of(self, events: npt.NDArray) -> npt.NDArray:
         """
         Select the column of the variable of this layer from an event array.
 
-        :param x: The events with shape (#events, #variables of the circuit).
+        :param events: The events with shape (#events, #variables of the circuit).
         :return: The column of this layer's variable.
         """
-        return x[:, self.variable]
+        return events[:, self.variable]
 
     # %% per node view
 
@@ -369,17 +369,17 @@ class AbstractContinuousLayer(InputLayer, ABC):
 
     @memoized
     def log_likelihood_of_nodes(
-        self, x: npt.NDArray, cache: Optional[QueryCache] = None
+        self, events: npt.NDArray, cache: Optional[QueryCache] = None
     ) -> npt.NDArray:
-        return self.log_likelihood_of_nodes_from_column(self.column_of(x))
+        return self.log_likelihood_of_nodes_from_column(self.column_of(events))
 
     @abstractmethod
-    def log_likelihood_of_nodes_from_column(self, x: npt.NDArray) -> npt.NDArray:
+    def log_likelihood_of_nodes_from_column(self, values: npt.NDArray) -> npt.NDArray:
         """
         Calculate the log-likelihood of every node for a column of values of the
         variable of this layer.
 
-        :param x: The values with shape (#events,).
+        :param values: The values with shape (#events,).
         :return: The log-likelihoods with shape (#events, #nodes).
         """
         raise NotImplementedError
@@ -402,19 +402,19 @@ class AbstractContinuousLayer(InputLayer, ABC):
 
     @memoized
     def cumulative_distribution_of_nodes(
-        self, x: npt.NDArray, cache: Optional[QueryCache] = None
+        self, events: npt.NDArray, cache: Optional[QueryCache] = None
     ) -> npt.NDArray:
-        return self.cumulative_distribution_of_nodes_from_column(self.column_of(x))
+        return self.cumulative_distribution_of_nodes_from_column(self.column_of(events))
 
     @abstractmethod
     def cumulative_distribution_of_nodes_from_column(
-        self, x: npt.NDArray
+        self, values: npt.NDArray
     ) -> npt.NDArray:
         """
         Calculate the cumulative distribution function of every node for a column of
         values of the variable of this layer.
 
-        :param x: The values with shape (#events,).
+        :param values: The values with shape (#events,).
         :return: The values with shape (#events, #nodes).
         """
         raise NotImplementedError

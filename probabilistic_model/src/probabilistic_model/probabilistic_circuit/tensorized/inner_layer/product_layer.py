@@ -153,20 +153,20 @@ class ProductLayer(InnerLayer):
 
     @memoized
     def log_likelihood_of_nodes(
-        self, x: npt.NDArray, cache: Optional[QueryCache] = None
+        self, events: npt.NDArray, cache: Optional[QueryCache] = None
     ) -> npt.NDArray:
         child_results = [
-            child_layer.log_likelihood_of_nodes(x, cache=cache)
+            child_layer.log_likelihood_of_nodes(events, cache=cache)
             for child_layer in self.child_layers
         ]
         return self._gather_and_add(child_results, fill=0.0)
 
     @memoized
     def cumulative_distribution_of_nodes(
-        self, x: npt.NDArray, cache: Optional[QueryCache] = None
+        self, events: npt.NDArray, cache: Optional[QueryCache] = None
     ) -> npt.NDArray:
         child_results = [
-            child_layer.cumulative_distribution_of_nodes(x, cache=cache)
+            child_layer.cumulative_distribution_of_nodes(events, cache=cache)
             for child_layer in self.child_layers
         ]
         return self._gather_and_multiply(child_results)
