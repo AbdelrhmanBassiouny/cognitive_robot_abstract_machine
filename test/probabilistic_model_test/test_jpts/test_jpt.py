@@ -294,14 +294,26 @@ class ContinuousOnlyTestCase(unittest.TestCase):
     Regression test for a tree over only continuous variables never splitting.
     """
 
-    def test_two_separated_clusters_are_split(self):
+    def test_dependent_variables_are_split_apart(self):
+        """
+        Small x always comes with large y and vice versa. A single leaf models x and y
+        as independent, which gives the combination of small x and small y, never seen
+        in the data, some of the probability.
+        """
         data = pd.DataFrame(
-            {"x": np.concatenate([np.linspace(0, 1, 50), np.linspace(10, 11, 50)])}
+            {
+                "x": np.concatenate([np.linspace(0, 1, 50), np.linspace(10, 11, 50)]),
+                "y": np.concatenate([np.linspace(5, 6, 50), np.linspace(-5, -4, 50)]),
+            }
         )
 
         circuit = JointProbabilityTree(min_samples_per_leaf=10).fit(data)
 
-        self.assertGreater(len(circuit.root.subcircuits), 1)
+        x, y = circuit.variables
+        unseen = SimpleEvent.from_data(
+            {x: closed(0, 1), y: closed(-5, -4)}
+        ).as_composite_set()
+        self.assertEqual(circuit.probability(unseen), 0.0)
 
 
 class BreastCancerTestCase(unittest.TestCase):
