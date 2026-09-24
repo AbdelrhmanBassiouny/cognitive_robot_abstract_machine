@@ -192,8 +192,8 @@ class TruncatedGaussianDistribution(
     @property
     def standardized_bounds(self) -> Tuple[float, float]:
         """
-        The bounds of the interval, measured in standard deviations from the location.
-        This is how :data:`scipy.stats.truncnorm` expects them.
+        :return: The bounds of the interval in standard deviations from the location,
+            as :data:`scipy.stats.truncnorm` expects them.
         """
         return (
             (self.lower - self.location) / self.scale,
@@ -203,7 +203,7 @@ class TruncatedGaussianDistribution(
     @property
     def truncated_normal(self) -> rv_frozen:
         """
-        This distribution as a frozen :data:`scipy.stats.truncnorm` distribution.
+        :return: This distribution as a frozen :data:`scipy.stats.truncnorm` distribution.
         """
         lower, upper = self.standardized_bounds
         return truncnorm(lower, upper, loc=self.location, scale=self.scale)
@@ -238,6 +238,10 @@ class TruncatedGaussianDistribution(
         Calculate the moment about the center as the raw moment of the distribution
         shifted by the center. This avoids expanding it into raw moments of the
         unshifted distribution, whose differences cancel far in the tails.
+
+        :param order: The order of the moment for the variable of this distribution.
+        :param center: The center of the moment for the variable of this distribution.
+        :return: The moment for the variable of this distribution.
         """
         lower, upper = self.standardized_bounds
         moment = truncnorm.moment(
