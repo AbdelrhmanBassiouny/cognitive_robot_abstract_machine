@@ -289,6 +289,21 @@ class DenseBoundaryDeterminismTestCase(unittest.TestCase):
         self.assertTrue(model.probabilistic_circuit.is_deterministic())
 
 
+class ContinuousOnlyTestCase(unittest.TestCase):
+    """
+    Regression test for a tree over only continuous variables never splitting.
+    """
+
+    def test_two_separated_clusters_are_split(self):
+        data = pd.DataFrame(
+            {"x": np.concatenate([np.linspace(0, 1, 50), np.linspace(10, 11, 50)])}
+        )
+
+        circuit = JointProbabilityTree(min_samples_per_leaf=10).fit(data)
+
+        self.assertGreater(len(circuit.root.subcircuits), 1)
+
+
 class BreastCancerTestCase(unittest.TestCase):
     data: pd.DataFrame
     model: JointProbabilityTree
