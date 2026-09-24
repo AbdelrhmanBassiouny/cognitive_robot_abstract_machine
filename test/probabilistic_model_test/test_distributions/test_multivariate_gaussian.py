@@ -13,6 +13,8 @@ from probabilistic_model.distributions.gaussian import GaussianDistribution
 from probabilistic_model.distributions.multivariate_gaussian import (
     Covariance,
     MultivariateGaussianDistribution,
+)
+from probabilistic_model.distributions.truncated_multivariate_gaussian import (
     TruncatedMultivariateGaussianDistribution,
 )
 from probabilistic_model.exceptions import (
@@ -343,6 +345,16 @@ class TestProbabilityOfABox:
             {horizontal: singleton(0.0), vertical: closed(-1.0, 1.0)}
         )
         assert correlated.probability_of_simple_event(flattened) == 0.0
+
+
+# %% the precision matrix
+
+
+class TestPrecision:
+    def test_the_precision_is_the_inverse_of_the_covariance(self, correlated):
+        assert correlated.precision @ correlated.covariance.matrix == pytest.approx(
+            np.eye(2)
+        )
 
 
 # %% the most likely point
@@ -797,6 +809,25 @@ class TestTruncation:
         assert likelihoods[0] == 0.0
         assert likelihoods[1] > 0.0
 
+    def test_the_box_reads_a_point_laid_out_in_the_order_of_the_variables(
+        self, horizontal, vertical
+    ):
+        """
+        The variables are laid out in the reverse of the order the box sorts them in, so
+        a check that read the point in the box's order would rule it out.
+        """
+        distribution = MultivariateGaussianDistribution(
+            variables=(vertical, horizontal),
+            mean=np.zeros(2),
+            covariance=Covariance.from_matrix(np.eye(2)),
+        )
+        box = SimpleEvent.from_data(
+            {horizontal: closed(5.0, 6.0), vertical: closed(0.0, 1.0)}
+        ).as_composite_set()
+        truncated, _ = distribution.truncated(box)
+        assert truncated.box_contains(np.array([0.5, 5.5]))
+        assert not truncated.box_contains(np.array([5.5, 0.5]))
+
     def test_the_cumulative_distribution_of_variables_that_do_not_co_vary_is_the_product_of_truncated_normals(
         self, independent, horizontal, vertical
     ):
@@ -928,24 +959,24 @@ class TestTruncation:
             correlated.probability(smaller) / correlated.probability(box)
         )
 
-    def test_the_number_of_sweeps_carries_over_to_a_further_truncation(
+    def test_the_burn_in_period_length_carries_over_to_a_further_truncation(
         self, correlated, horizontal, vertical
     ):
         box = box_over(horizontal, vertical, 0.0, 1.0).as_composite_set()
         truncated, _ = correlated.truncated(box)
-        truncated.sweeps_per_sample = 7
+        truncated.burn_in_period_length = 7
         smaller = box_over(horizontal, vertical, 0.0, 0.5).as_composite_set()
         further, _ = truncated.truncated(smaller)
-        assert further.sweeps_per_sample == truncated.sweeps_per_sample
+        assert further.burn_in_period_length == truncated.burn_in_period_length
 
-    def test_the_number_of_sweeps_carries_over_to_a_conditional(
+    def test_the_burn_in_period_length_carries_over_to_a_conditional(
         self, correlated, horizontal, vertical
     ):
         box = box_over(horizontal, vertical, 0.0, 1.0).as_composite_set()
         truncated, _ = correlated.truncated(box)
-        truncated.sweeps_per_sample = 7
+        truncated.burn_in_period_length = 7
         conditional, _ = truncated.log_conditional({horizontal: 0.5})
-        assert conditional.sweeps_per_sample == truncated.sweeps_per_sample
+        assert conditional.burn_in_period_length == truncated.burn_in_period_length
 
     def test_every_sample_falls_inside_the_event(
         self, correlated, horizontal, vertical
