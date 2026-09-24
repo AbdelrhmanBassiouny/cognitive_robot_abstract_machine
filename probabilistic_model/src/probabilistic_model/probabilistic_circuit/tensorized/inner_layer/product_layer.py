@@ -20,15 +20,21 @@ from typing_extensions import (
 )
 
 from probabilistic_model.exceptions import ShapeMismatchError
-from probabilistic_model.probabilistic_circuit.tensorized.utils import remap_indices
-from probabilistic_model.probabilistic_circuit.tensorized.inner_layer.base import (
-    Edge,
+from probabilistic_model.probabilistic_circuit.tensorized.forward_sample_assignment import (
     ForwardSampleAssignment,
+)
+from probabilistic_model.probabilistic_circuit.tensorized.inner_layer.base import (
     InnerLayer,
     Layer,
+)
+from probabilistic_model.probabilistic_circuit.tensorized.inner_layer.inner_layer_edge import (
+    InnerLayerEdge,
+)
+from probabilistic_model.probabilistic_circuit.tensorized.query_cache import (
     QueryCache,
     memoized,
 )
+from probabilistic_model.probabilistic_circuit.tensorized.utils import remap_indices
 
 
 @dataclass(eq=False, repr=False)
@@ -244,11 +250,11 @@ class ProductLayer(InnerLayer):
 
         return [Event() if event is None else event for event in events], values
 
-    def iterate_edges(self) -> Iterator[Edge]:
+    def iterate_edges(self) -> Iterator[InnerLayerEdge]:
         for child_layer_index, node, child_node in zip(
             self.edges.row, self.edges.col, self.edges.data
         ):
-            yield Edge(int(node), int(child_layer_index), int(child_node))
+            yield InnerLayerEdge(int(node), int(child_layer_index), int(child_node))
 
     @memoized
     def moment_of_nodes(

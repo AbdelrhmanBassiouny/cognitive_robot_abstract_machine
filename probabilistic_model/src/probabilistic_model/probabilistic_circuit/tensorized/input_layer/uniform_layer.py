@@ -10,7 +10,7 @@ from sortedcontainers import SortedSet
 from typing_extensions import List, Self, Tuple
 
 from probabilistic_model.distributions.uniform import UniformDistribution
-from probabilistic_model.probabilistic_circuit.tensorized.input_layer.absolutely_continuous_layer import (
+from probabilistic_model.probabilistic_circuit.tensorized.input_layer.continuous_layer_with_density import (
     ContinuousLayerWithFiniteSupport,
 )
 

@@ -6,7 +6,6 @@ from dataclasses import dataclass, field
 import numpy as np
 import numpy.typing as npt
 from random_events.interval import Bound, Interval, SimpleInterval
-from scipy.sparse import coo_array
 from typing_extensions import Dict, List, Optional, Self, Tuple, Type
 
 from probabilistic_model.exceptions import ShapeMismatchError
@@ -15,9 +14,12 @@ from probabilistic_model.probabilistic_circuit.tensorized.inner_layer.sum_layer 
     SumLayer,
 )
 from probabilistic_model.probabilistic_circuit.tensorized.input_layer.base import (
-    ContinuousLayer,
+    AbstractContinuousLayer,
     DistributionType,
     InputLayer,
+)
+from probabilistic_model.probabilistic_circuit.tensorized.row_grouped_sparse_array import (
+    RowGroupedSparseArray,
 )
 from probabilistic_model.probabilistic_circuit.tensorized.input_layer.dirac_delta_layer import (
     DiracDeltaLayer,
@@ -25,7 +27,7 @@ from probabilistic_model.probabilistic_circuit.tensorized.input_layer.dirac_delt
 
 
 @dataclass(eq=False, repr=False)
-class AbsolutelyContinuousLayer(ContinuousLayer[DistributionType], ABC):
+class ContinuousLayerWithDensity(AbstractContinuousLayer[DistributionType], ABC):
     """
     Abstract base class for the input layers of continuous distributions that have a
     density.
@@ -129,26 +131,23 @@ class AbsolutelyContinuousLayer(ContinuousLayer[DistributionType], ABC):
             )
 
         child_layers = []
-        log_weights = []
+        log_probabilities_per_child_layer = []
         for layer_type, typed_pieces in pieces_by_type.items():
             child_layers.append(
                 layer_type.concatenate([layer for layer, _ in typed_pieces])
             )
-            number_of_pieces = len(typed_pieces)
-            log_weights.append(
-                coo_array(
-                    (
-                        np.concatenate(
-                            [log_probabilities for _, log_probabilities in typed_pieces]
-                        ),
-                        (
-                            np.tile(np.arange(number_of_nodes), number_of_pieces),
-                            np.arange(number_of_pieces * number_of_nodes),
-                        ),
-                    ),
-                    shape=(number_of_nodes, number_of_pieces * number_of_nodes),
-                )
+            log_probabilities_per_child_layer.extend(
+                log_probabilities for _, log_probabilities in typed_pieces
             )
+
+        # the pieces are the columns in order, and node i of every piece sits in row i
+        number_of_pieces = len(pieces)
+        log_weights = RowGroupedSparseArray.from_coordinates(
+            np.concatenate(log_probabilities_per_child_layer),
+            np.tile(np.arange(number_of_nodes), number_of_pieces),
+            np.arange(number_of_pieces * number_of_nodes),
+            (number_of_nodes, number_of_pieces * number_of_nodes),
+        )
 
         node_log_probabilities = np.logaddexp.reduce(
             [log_probabilities for _, log_probabilities in pieces], axis=0
@@ -169,7 +168,7 @@ class AbsolutelyContinuousLayer(ContinuousLayer[DistributionType], ABC):
 
 @dataclass(eq=False, repr=False)
 class ContinuousLayerWithFiniteSupport(
-    AbsolutelyContinuousLayer[DistributionType], ABC
+    ContinuousLayerWithDensity[DistributionType], ABC
 ):
     """
     Abstract base class for continuous input layers whose nodes have a finite support.

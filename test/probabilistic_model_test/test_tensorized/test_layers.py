@@ -16,17 +16,28 @@ from random_events.variable import Continuous
 from scipy.sparse import coo_array
 from sortedcontainers import SortedSet
 
+from probabilistic_model.adapters.rustworkx_tensorized.rustworkx_to_tensorized import (
+    RustworkxCircuitToLayeredCircuitConverter,
+)
+from probabilistic_model.adapters.rustworkx_tensorized.tensorized_to_rustworkx import (
+    LayeredCircuitToRustworkxCircuitConverter,
+)
 from probabilistic_model.distributions.uniform import UniformDistribution
 from probabilistic_model.learning.jpt.jpt import JointProbabilityTree
 from probabilistic_model.learning.jpt.variables import infer_variables_from_dataframe
-from probabilistic_model.probabilistic_circuit.tensorized.helper import (
-    mixture_of,
-    product_of,
+from probabilistic_model.probabilistic_circuit.rx.helper import (
     uniform_measure_of_event,
     uniform_measure_of_simple_event,
 )
-from probabilistic_model.probabilistic_circuit.tensorized.inner_layer.base import (
+from probabilistic_model.probabilistic_circuit.tensorized.helper import (
+    mixture_of,
+    product_of,
+)
+from probabilistic_model.probabilistic_circuit.tensorized.layer_with_depth import (
     LayerWithDepth,
+)
+from probabilistic_model.probabilistic_circuit.tensorized.row_grouped_sparse_array import (
+    RowGroupedSparseArray,
 )
 from probabilistic_model.probabilistic_circuit.tensorized.inner_layer.product_layer import (
     ProductLayer,
@@ -158,12 +169,9 @@ class TruncationOfInputLayersTestCase(unittest.TestCase):
         layer = uniform_layer_of(0, [(0, 1), (2, 3)])
         root = SumLayer(
             [layer],
-            [
-                coo_array(
-                    (np.log([0.25, 0.75]), ([0, 0], [0, 1])),
-                    shape=(1, 2),
-                )
-            ],
+            RowGroupedSparseArray.from_coordinates(
+                np.log([0.25, 0.75]), [0, 0], [0, 1], (1, 2)
+            ),
         )
         circuit = LayeredProbabilisticCircuit(SortedSet([x]), root)
 
@@ -307,7 +315,9 @@ class VectorizedTruncationTestCase(unittest.TestCase):
         Truncating a composite event reuses one circuit for every simple set instead of
         copying it, which is only sound because the pass builds new layers.
         """
-        layered = LayeredProbabilisticCircuit.from_rustworkx(shared_children_circuit())
+        layered = RustworkxCircuitToLayeredCircuitConverter.convert(
+            shared_children_circuit()
+        )
         layers_before = list(layered.layers)
         parameters_before = [
             (type(layer).__name__, layer.number_of_nodes, to_json(layer))
@@ -398,7 +408,9 @@ class HelperTestCase(unittest.TestCase):
 
     def test_uniform_measure_of_a_simple_event(self):
         event = SimpleEvent.from_data({x: closed(0.0, 2.0), y: closed(0.0, 4.0)})
-        circuit = uniform_measure_of_simple_event(event)
+        circuit = RustworkxCircuitToLayeredCircuitConverter.convert(
+            uniform_measure_of_simple_event(event)
+        )
         self.assertEqual(list(circuit.variables), [x, y])
         np.testing.assert_allclose(
             circuit.likelihood(np.array([[1.0, 2.0]])), np.array([1 / 8])
@@ -414,7 +426,9 @@ class HelperTestCase(unittest.TestCase):
                 {x: closed(2.0, 3.0), y: closed(2.0, 3.0)}
             ).as_composite_set()
         )
-        circuit = uniform_measure_of_event(event.__deepcopy__())
+        circuit = RustworkxCircuitToLayeredCircuitConverter.convert(
+            uniform_measure_of_event(event.__deepcopy__())
+        )
         self.assertAlmostEqual(circuit.probability(event.__deepcopy__()), 1.0)
 
     def test_product_of_and_mixture_of(self):
@@ -466,7 +480,7 @@ class JointProbabilityTreeIntegrationTestCase(unittest.TestCase):
         cls.rx_circuit = JointProbabilityTree(
             annotated_variables=variables, min_samples_per_leaf=0.1
         ).fit(frame)
-        cls.layered = LayeredProbabilisticCircuit.from_rustworkx(cls.rx_circuit)
+        cls.layered = RustworkxCircuitToLayeredCircuitConverter.convert(cls.rx_circuit)
 
     def setUp(self):
         np.random.seed(69)
@@ -528,7 +542,7 @@ class JointProbabilityTreeIntegrationTestCase(unittest.TestCase):
         )
 
     def test_round_trip_through_rustworkx(self):
-        back = self.layered.to_rustworkx()
+        back = LayeredCircuitToRustworkxCircuitConverter.convert(self.layered)
         samples = self.rx_circuit.sample(300)
         np.testing.assert_allclose(
             back.log_likelihood(samples), self.rx_circuit.log_likelihood(samples)

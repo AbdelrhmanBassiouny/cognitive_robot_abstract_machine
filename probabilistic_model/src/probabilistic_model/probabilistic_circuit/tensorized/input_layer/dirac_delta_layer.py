@@ -13,12 +13,12 @@ from probabilistic_model.distributions.distributions import DiracDeltaDistributi
 from probabilistic_model.exceptions import ShapeMismatchError
 from probabilistic_model.probabilistic_circuit.tensorized.inner_layer.base import Layer
 from probabilistic_model.probabilistic_circuit.tensorized.input_layer.base import (
-    ContinuousLayer,
+    AbstractContinuousLayer,
 )
 
 
 @dataclass(eq=False, repr=False)
-class DiracDeltaLayer(ContinuousLayer[DiracDeltaDistribution]):
+class DiracDeltaLayer(AbstractContinuousLayer[DiracDeltaDistribution]):
     """
     A layer of Dirac delta distributions over one continuous variable.
     """

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import numpy as np
-from random_events.product_algebra import Event, SimpleEvent
 from scipy.sparse import coo_array
 from sortedcontainers import SortedSet
 from typing_extensions import Iterable, List
@@ -13,36 +12,9 @@ from probabilistic_model.probabilistic_circuit.tensorized.inner_layer.product_la
 from probabilistic_model.probabilistic_circuit.tensorized.inner_layer.sum_layer import (
     SumLayer,
 )
-from probabilistic_model.probabilistic_circuit.tensorized.layered_probabilistic_circuit import (
-    LayeredProbabilisticCircuit,
+from probabilistic_model.probabilistic_circuit.tensorized.row_grouped_sparse_array import (
+    RowGroupedSparseArray,
 )
-from probabilistic_model.probabilistic_circuit.rx import helper as rx_helper
-
-
-def uniform_measure_of_simple_event(
-    simple_event: SimpleEvent,
-) -> LayeredProbabilisticCircuit:
-    """
-    Create the uniform measure over a simple event as a layered circuit.
-
-    :param simple_event: The simple event.
-    :return: The circuit describing the uniform measure.
-    """
-    return LayeredProbabilisticCircuit.from_rustworkx(
-        rx_helper.uniform_measure_of_simple_event(simple_event)
-    )
-
-
-def uniform_measure_of_event(event: Event) -> LayeredProbabilisticCircuit:
-    """
-    Create the uniform measure over an event as a layered circuit.
-
-    :param event: The event.
-    :return: The circuit describing the uniform measure.
-    """
-    return LayeredProbabilisticCircuit.from_rustworkx(
-        rx_helper.uniform_measure_of_event(event)
-    )
 
 
 def product_of(variables: SortedSet, child_layers: List[Layer]) -> ProductLayer:
@@ -78,13 +50,15 @@ def mixture_of(child_layers: List[Layer], log_weights: Iterable[float]) -> SumLa
         raise ValueError(
             "The number of weights has to match the number of child layers."
         )
+    offsets = np.cumsum(
+        [0] + [child_layer.number_of_nodes for child_layer in child_layers]
+    )
     return SumLayer(
         child_layers,
-        [
-            coo_array(
-                (np.array([log_weight], dtype=float), (np.array([0]), np.array([0]))),
-                shape=(1, child_layer.number_of_nodes),
-            )
-            for child_layer, log_weight in zip(child_layers, weights)
-        ],
+        RowGroupedSparseArray.from_coordinates(
+            np.array(weights, dtype=float),
+            np.zeros(len(child_layers), dtype=np.int64),
+            offsets[:-1],
+            (1, int(offsets[-1])),
+        ),
     )

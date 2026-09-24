@@ -24,9 +24,11 @@ from typing_extensions import (
 )
 
 from probabilistic_model.distributions.distributions import UnivariateDistribution
-from probabilistic_model.probabilistic_circuit.tensorized.inner_layer.base import (
+from probabilistic_model.probabilistic_circuit.tensorized.forward_sample_assignment import (
     ForwardSampleAssignment,
-    Layer,
+)
+from probabilistic_model.probabilistic_circuit.tensorized.inner_layer.base import Layer
+from probabilistic_model.probabilistic_circuit.tensorized.query_cache import (
     QueryCache,
     memoized,
 )
@@ -366,7 +368,7 @@ class InputLayer(Generic[DistributionType], SubClassSafeGeneric, Layer, ABC):
 
 
 @dataclass(eq=False, repr=False)
-class ContinuousLayer(InputLayer[DistributionType], ABC):
+class AbstractContinuousLayer(InputLayer[DistributionType], ABC):
     """
     Abstract base class for the input layers of continuous univariate distributions.
     """

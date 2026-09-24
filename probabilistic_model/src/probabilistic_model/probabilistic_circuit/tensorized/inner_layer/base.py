@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import dataclasses
-import functools
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 
@@ -14,9 +13,7 @@ from random_events.variable import Variable
 from sortedcontainers import SortedSet
 from typing_extensions import (
     Any,
-    Callable,
     Dict,
-    Iterable,
     Iterator,
     List,
     Optional,
@@ -24,151 +21,19 @@ from typing_extensions import (
     Tuple,
 )
 
-
-@dataclass(frozen=True)
-class QueryCacheKey:
-    """
-    Which query, evaluated for which layer, an entry of a :class:`QueryCache` is the
-    result of.
-    """
-
-    query: Callable
-    """
-    The method that evaluated the query.
-    """
-
-    layer_id: int
-    """
-    The :func:`id` of the layer it was evaluated for.
-
-    Layers are keyed by identity rather than by value: a pass has to evaluate a layer
-    that is the child of several parents once, and two layers that happen to hold equal
-    parameters are still two layers with two results.
-    """
-
-
-@dataclass
-class QueryCache:
-    """
-    The results one pass over the layers has computed so far.
-
-    Layers form a directed acyclic graph, not a tree: a layer that is the child of
-    several parents must only be evaluated once per pass. Every method that walks the
-    graph takes this cache as a ``cache`` keyword argument and hands it down to the
-    calls it makes on its own children; the top level caller may omit it and gets a
-    fresh one.
-    """
-
-    results: Dict[QueryCacheKey, Any] = field(default_factory=dict)
-    """
-    The result of every query evaluated so far, per layer.
-    """
-
-
-def memoized(method: Callable) -> Callable:
-    """
-    Memoize a query of a layer by the method and the identity of the layer.
-
-    :param method: The method that evaluates the query.
-    :return: The memoized method.
-    """
-
-    @functools.wraps(method)
-    def wrapper(self, *args, cache: Optional[QueryCache] = None, **kwargs):
-        if cache is None:
-            cache = QueryCache()
-        key = QueryCacheKey(method, id(self))
-        if key not in cache.results:
-            cache.results[key] = method(self, *args, cache=cache, **kwargs)
-        return cache.results[key]
-
-    return wrapper
-
-
-@dataclass
-class Edge:
-    """
-    One edge of an inner layer: a node of that layer, and the node of one of its child
-    layers that it points at.
-    """
-
-    node: int
-    """
-    The index of the node inside the layer the edge belongs to.
-    """
-
-    child_layer_index: int
-    """
-    The index of the child layer the edge points into, within
-    :attr:`InnerLayer.child_layers`.
-    """
-
-    child_node: int
-    """
-    The index of the node inside that child layer.
-    """
-
-
-@dataclass
-class ForwardSampleAssignment:
-    """
-    Bookkeeping for a top-down sampling pass over a circuit.
-
-    A layer routes the output rows assigned to each of its nodes to the nodes of its
-    child layers; a child layer that is shared by several parents accumulates rows from
-    each of them before it is its own turn to route them further.
-    """
-
-    rows_by_node: Dict[int, List[List[npt.NDArray]]]
-    """
-    For every layer, indexed by its id, the row-index arrays assigned to each of its
-    nodes so far.
-    """
-
-    @classmethod
-    def for_layers(cls, layers: Iterable[Layer]) -> Self:
-        """
-        :param layers: Every layer that will be visited during the pass.
-        :return: An assignment with an empty bucket for every node of every layer.
-        """
-        return cls(
-            {id(layer): [[] for _ in range(layer.number_of_nodes)] for layer in layers}
-        )
-
-    def assign(self, layer: Layer, node: int, rows: npt.NDArray) -> None:
-        """
-        Route output rows to one node of a layer.
-
-        :param layer: The layer the node belongs to.
-        :param node: The index of the node within that layer.
-        :param rows: The output rows drawn from that node.
-        """
-        self.rows_by_node[id(layer)][node].append(rows)
-
-    def rows_of(self, layer: Layer) -> List[List[npt.NDArray]]:
-        """
-        :param layer: The layer to read the assignment of.
-        :return: The row-index arrays assigned to every node of that layer so far, one
-            list per node.
-        """
-        return self.rows_by_node[id(layer)]
-
-
-@dataclass
-class LayerWithDepth:
-    """
-    A layer of a circuit together with its distance from the root.
-    """
-
-    depth: int
-    """
-    The number of layers between the root layer and this layer.
-    """
-
-    layer: Layer
-    """
-    The layer at that depth.
-    """
+from probabilistic_model.probabilistic_circuit.tensorized.forward_sample_assignment import (
+    ForwardSampleAssignment,
+)
+from probabilistic_model.probabilistic_circuit.tensorized.inner_layer.inner_layer_edge import (
+    InnerLayerEdge,
+)
+from probabilistic_model.probabilistic_circuit.tensorized.layer_with_depth import (
+    LayerWithDepth,
+)
+from probabilistic_model.probabilistic_circuit.tensorized.query_cache import (
+    QueryCache,
+    memoized,
+)
 
 
 class Layer(SubclassJSONSerializer, ABC):
@@ -762,7 +627,7 @@ class InnerLayer(Layer, ABC):
         self.reset_variables()
 
     @abstractmethod
-    def iterate_edges(self) -> Iterator[Edge]:
+    def iterate_edges(self) -> Iterator[InnerLayerEdge]:
         """
         :return: Yields every edge from a node of this layer to a node of one of its
             child layers.

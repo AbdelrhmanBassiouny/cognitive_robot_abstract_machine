@@ -33,6 +33,16 @@ from random_events.interval import closed
 from random_events.product_algebra import Event, SimpleEvent, VariableMap
 from random_events.variable import Continuous
 
+from probabilistic_model.adapters.rustworkx_tensorized.converter import (
+    CannotConvertError,
+)
+from probabilistic_model.adapters.rustworkx_tensorized.rustworkx_to_tensorized import (
+    RustworkxCircuitToLayeredCircuitConverter,
+)
+from probabilistic_model.adapters.rustworkx_tensorized.tensorized_to_rustworkx import (
+    LayeredCircuitToRustworkxCircuitConverter,
+)
+from probabilistic_model.distributions.gaussian import GaussianDistribution
 from probabilistic_model.distributions.uniform import UniformDistribution
 from probabilistic_model.exceptions import IntractableError, ShapeMismatchError
 from probabilistic_model.probabilistic_circuit.tensorized.inner_layer.product_layer import (
@@ -155,12 +165,20 @@ class ConversionTestCase(unittest.TestCase):
         for name, factory in ALL_CIRCUITS.items():
             with self.subTest(name):
                 rx_circuit = factory()
-                layered = LayeredProbabilisticCircuit.from_rustworkx(rx_circuit)
+                layered = RustworkxCircuitToLayeredCircuitConverter.convert(rx_circuit)
                 self.assertEqual(list(layered.variables), list(rx_circuit.variables))
                 layered.validate()
 
+    def test_a_leaf_without_a_converter_is_reported(self):
+        circuit = RxCircuit()
+        leaf(GaussianDistribution(variable=x, location=0.0, scale=1.0), circuit)
+        with self.assertRaises(CannotConvertError):
+            RustworkxCircuitToLayeredCircuitConverter.convert(circuit)
+
     def test_layer_types_of_a_uniform_mixture(self):
-        layered = LayeredProbabilisticCircuit.from_rustworkx(overlapping_mixture())
+        layered = RustworkxCircuitToLayeredCircuitConverter.convert(
+            overlapping_mixture()
+        )
         self.assertIsInstance(layered.root, SumLayer)
         self.assertEqual(layered.root.number_of_nodes, 1)
 
@@ -174,7 +192,9 @@ class ConversionTestCase(unittest.TestCase):
             self.assertEqual(child_layer.number_of_nodes, 2)
 
     def test_shared_leaves_become_one_layer_with_two_nodes(self):
-        layered = LayeredProbabilisticCircuit.from_rustworkx(shared_children_circuit())
+        layered = RustworkxCircuitToLayeredCircuitConverter.convert(
+            shared_children_circuit()
+        )
         uniform_layers = [
             layer for layer in layered.layers if isinstance(layer, UniformLayer)
         ]
@@ -186,10 +206,12 @@ class ConversionTestCase(unittest.TestCase):
         for name in CONTINUOUS_CIRCUITS:
             with self.subTest(name):
                 rx_circuit = ALL_CIRCUITS[name]()
-                layered = LayeredProbabilisticCircuit.from_rustworkx(rx_circuit)
+                layered = RustworkxCircuitToLayeredCircuitConverter.convert(rx_circuit)
                 samples = rx_circuit.sample(200)
                 np.testing.assert_allclose(
-                    layered.to_rustworkx().log_likelihood(samples),
+                    LayeredCircuitToRustworkxCircuitConverter.convert(
+                        layered
+                    ).log_likelihood(samples),
                     rx_circuit.log_likelihood(samples),
                 )
 
@@ -206,7 +228,7 @@ class QueryTestCase(unittest.TestCase):
         for name, factory in ALL_CIRCUITS.items():
             with self.subTest(name):
                 rx_circuit = factory()
-                layered = LayeredProbabilisticCircuit.from_rustworkx(rx_circuit)
+                layered = RustworkxCircuitToLayeredCircuitConverter.convert(rx_circuit)
                 samples = rx_circuit.sample(500)
                 np.testing.assert_allclose(
                     layered.log_likelihood(samples),
@@ -215,7 +237,7 @@ class QueryTestCase(unittest.TestCase):
 
     def test_log_likelihood_outside_the_support_is_minus_infinity(self):
         rx_circuit = deterministic_mixture()
-        layered = LayeredProbabilisticCircuit.from_rustworkx(rx_circuit)
+        layered = RustworkxCircuitToLayeredCircuitConverter.convert(rx_circuit)
         outside = np.array([[10.0, 10.0], [1.5, 1.5]])
         np.testing.assert_allclose(
             layered.log_likelihood(outside), rx_circuit.log_likelihood(outside)
@@ -226,7 +248,7 @@ class QueryTestCase(unittest.TestCase):
         for name in CONTINUOUS_CIRCUITS:
             with self.subTest(name):
                 rx_circuit = ALL_CIRCUITS[name]()
-                layered = LayeredProbabilisticCircuit.from_rustworkx(rx_circuit)
+                layered = RustworkxCircuitToLayeredCircuitConverter.convert(rx_circuit)
                 samples = rx_circuit.sample(200)
                 np.testing.assert_allclose(
                     layered.cumulative_distribution_function(samples),
@@ -237,7 +259,7 @@ class QueryTestCase(unittest.TestCase):
         for name in CONTINUOUS_CIRCUITS:
             with self.subTest(name):
                 rx_circuit = ALL_CIRCUITS[name]()
-                layered = LayeredProbabilisticCircuit.from_rustworkx(rx_circuit)
+                layered = RustworkxCircuitToLayeredCircuitConverter.convert(rx_circuit)
                 order = VariableMap({x: 1, y: 1})
                 center = VariableMap({x: 0.0, y: 0.0})
                 expected = rx_circuit.moment(order, center)
@@ -249,7 +271,7 @@ class QueryTestCase(unittest.TestCase):
 
     def test_moment_of_a_subset_of_the_variables(self):
         rx_circuit = overlapping_mixture()
-        layered = LayeredProbabilisticCircuit.from_rustworkx(rx_circuit)
+        layered = RustworkxCircuitToLayeredCircuitConverter.convert(rx_circuit)
 
         order = VariableMap({x: 1})
         center = VariableMap({x: 0.0})
@@ -262,7 +284,7 @@ class QueryTestCase(unittest.TestCase):
 
     def test_central_moment(self):
         rx_circuit = overlapping_mixture()
-        layered = LayeredProbabilisticCircuit.from_rustworkx(rx_circuit)
+        layered = RustworkxCircuitToLayeredCircuitConverter.convert(rx_circuit)
 
         mean = layered.moment(VariableMap({x: 1}), VariableMap({x: 0.0}))
         order = VariableMap({x: 2})
@@ -277,7 +299,7 @@ class QueryTestCase(unittest.TestCase):
 
     def test_probability_of_a_simple_event(self):
         rx_circuit = overlapping_mixture()
-        layered = LayeredProbabilisticCircuit.from_rustworkx(rx_circuit)
+        layered = RustworkxCircuitToLayeredCircuitConverter.convert(rx_circuit)
         event = SimpleEvent.from_data({x: closed(0.5, 2.0), y: closed(0.0, 1.5)})
         self.assertAlmostEqual(
             layered.probability_of_simple_event(event),
@@ -286,7 +308,7 @@ class QueryTestCase(unittest.TestCase):
 
     def test_probability_of_a_composite_event(self):
         rx_circuit = overlapping_mixture()
-        layered = LayeredProbabilisticCircuit.from_rustworkx(rx_circuit)
+        layered = RustworkxCircuitToLayeredCircuitConverter.convert(rx_circuit)
         event = SimpleEvent.from_data(
             {x: closed(0.0, 0.5) | closed(2.0, 2.5)}
         ).as_composite_set()
@@ -299,14 +321,14 @@ class QueryTestCase(unittest.TestCase):
         for name, factory in ALL_CIRCUITS.items():
             with self.subTest(name):
                 rx_circuit = factory()
-                layered = LayeredProbabilisticCircuit.from_rustworkx(rx_circuit)
+                layered = RustworkxCircuitToLayeredCircuitConverter.convert(rx_circuit)
                 self.assertEqual(layered.support, rx_circuit.support)
 
     def test_expectation_and_variance(self):
         for name in CONTINUOUS_CIRCUITS:
             with self.subTest(name):
                 rx_circuit = ALL_CIRCUITS[name]()
-                layered = LayeredProbabilisticCircuit.from_rustworkx(rx_circuit)
+                layered = RustworkxCircuitToLayeredCircuitConverter.convert(rx_circuit)
                 for variable in rx_circuit.variables:
                     self.assertAlmostEqual(
                         layered.expectation()[variable],
@@ -318,21 +340,23 @@ class QueryTestCase(unittest.TestCase):
 
     def test_expectation_of_a_subset_of_the_variables(self):
         rx_circuit = overlapping_mixture()
-        layered = LayeredProbabilisticCircuit.from_rustworkx(rx_circuit)
+        layered = RustworkxCircuitToLayeredCircuitConverter.convert(rx_circuit)
         self.assertAlmostEqual(
             layered.expectation([x])[x], rx_circuit.expectation([x])[x]
         )
 
     def test_mode_of_a_deterministic_circuit(self):
         rx_circuit = deterministic_mixture()
-        layered = LayeredProbabilisticCircuit.from_rustworkx(rx_circuit)
+        layered = RustworkxCircuitToLayeredCircuitConverter.convert(rx_circuit)
         rx_mode, rx_likelihood = rx_circuit.log_mode()
         mode, likelihood = layered.log_mode()
         self.assertEqual(mode, rx_mode)
         self.assertAlmostEqual(likelihood, rx_likelihood)
 
     def test_mode_of_a_non_deterministic_circuit_is_intractable(self):
-        layered = LayeredProbabilisticCircuit.from_rustworkx(overlapping_mixture())
+        layered = RustworkxCircuitToLayeredCircuitConverter.convert(
+            overlapping_mixture()
+        )
         with self.assertRaises(IntractableError):
             layered.log_mode()
 
@@ -340,7 +364,7 @@ class QueryTestCase(unittest.TestCase):
         for name, factory in ALL_CIRCUITS.items():
             with self.subTest(name):
                 rx_circuit = factory()
-                layered = LayeredProbabilisticCircuit.from_rustworkx(rx_circuit)
+                layered = RustworkxCircuitToLayeredCircuitConverter.convert(rx_circuit)
                 self.assertEqual(
                     layered.is_deterministic(), rx_circuit.is_deterministic()
                 )
@@ -348,7 +372,7 @@ class QueryTestCase(unittest.TestCase):
     def test_decomposability(self):
         for name, factory in ALL_CIRCUITS.items():
             with self.subTest(name):
-                layered = LayeredProbabilisticCircuit.from_rustworkx(factory())
+                layered = RustworkxCircuitToLayeredCircuitConverter.convert(factory())
                 self.assertTrue(layered.is_decomposable())
 
 
@@ -360,14 +384,16 @@ class SamplingTestCase(unittest.TestCase):
     def test_samples_lie_in_the_support(self):
         for name, factory in ALL_CIRCUITS.items():
             with self.subTest(name):
-                layered = LayeredProbabilisticCircuit.from_rustworkx(factory())
+                layered = RustworkxCircuitToLayeredCircuitConverter.convert(factory())
                 samples = layered.sample(500)
                 self.assertEqual(samples.shape, (500, len(layered.variables)))
                 self.assertFalse(np.any(np.isnan(samples)))
                 self.assertTrue(np.all(layered.log_likelihood(samples) > -np.inf))
 
     def test_sample_mean_approximates_the_expectation(self):
-        layered = LayeredProbabilisticCircuit.from_rustworkx(overlapping_mixture())
+        layered = RustworkxCircuitToLayeredCircuitConverter.convert(
+            overlapping_mixture()
+        )
         samples = layered.sample(20000)
         for index, variable in enumerate(layered.variables):
             self.assertAlmostEqual(
@@ -377,7 +403,9 @@ class SamplingTestCase(unittest.TestCase):
             )
 
     def test_sampling_a_circuit_with_shared_leaves(self):
-        layered = LayeredProbabilisticCircuit.from_rustworkx(shared_children_circuit())
+        layered = RustworkxCircuitToLayeredCircuitConverter.convert(
+            shared_children_circuit()
+        )
         samples = layered.sample(5000)
         self.assertTrue(np.all(layered.log_likelihood(samples) > -np.inf))
         for index, variable in enumerate(layered.variables):
@@ -394,7 +422,7 @@ class TruncationTestCase(unittest.TestCase):
         np.random.seed(69)
 
     def assert_same_truncation(self, rx_circuit: RxCircuit, event: Event, grid):
-        layered = LayeredProbabilisticCircuit.from_rustworkx(rx_circuit)
+        layered = RustworkxCircuitToLayeredCircuitConverter.convert(rx_circuit)
 
         rx_truncated, rx_probability = rx_circuit.truncated(event.__deepcopy__())
         truncated, probability = layered.truncated(event.__deepcopy__())
@@ -494,7 +522,7 @@ class TruncationTestCase(unittest.TestCase):
 
         for name in ("overlapping", "deterministic", "shared"):
             with self.subTest(name):
-                layered = LayeredProbabilisticCircuit.from_rustworkx(
+                layered = RustworkxCircuitToLayeredCircuitConverter.convert(
                     ALL_CIRCUITS[name]()
                 )
 
@@ -516,7 +544,9 @@ class TruncationTestCase(unittest.TestCase):
         layers and their blocks grow, instead of getting one set of layers per simple
         set.
         """
-        layered = LayeredProbabilisticCircuit.from_rustworkx(shared_children_circuit())
+        layered = RustworkxCircuitToLayeredCircuitConverter.convert(
+            shared_children_circuit()
+        )
         event = self.boxes(10, 0.0, 2.0)
 
         truncated, _ = layered.truncated(event.__deepcopy__())
@@ -536,7 +566,9 @@ class TruncationTestCase(unittest.TestCase):
         )
 
     def test_truncation_puts_all_mass_inside_the_event(self):
-        layered = LayeredProbabilisticCircuit.from_rustworkx(overlapping_mixture())
+        layered = RustworkxCircuitToLayeredCircuitConverter.convert(
+            overlapping_mixture()
+        )
         event = SimpleEvent.from_data(
             {x: closed(0.5, 2.5), y: closed(0.5, 1.75)}
         ).as_composite_set()
@@ -544,14 +576,18 @@ class TruncationTestCase(unittest.TestCase):
         self.assertAlmostEqual(truncated.probability(event.__deepcopy__()), 1.0)
 
     def test_truncation_to_an_impossible_event(self):
-        layered = LayeredProbabilisticCircuit.from_rustworkx(deterministic_mixture())
+        layered = RustworkxCircuitToLayeredCircuitConverter.convert(
+            deterministic_mixture()
+        )
         event = SimpleEvent.from_data({x: closed(10.0, 11.0)}).as_composite_set()
         truncated, probability = layered.truncated(event)
         self.assertIsNone(truncated)
         self.assertEqual(probability, 0.0)
 
     def test_truncation_removes_the_impossible_nodes(self):
-        layered = LayeredProbabilisticCircuit.from_rustworkx(deterministic_mixture())
+        layered = RustworkxCircuitToLayeredCircuitConverter.convert(
+            deterministic_mixture()
+        )
         event = SimpleEvent.from_data({x: closed(0.0, 1.0)}).as_composite_set()
         truncated, probability = layered.truncated(event)
         self.assertAlmostEqual(probability, 0.3)
@@ -561,7 +597,9 @@ class TruncationTestCase(unittest.TestCase):
                 self.assertEqual(layer.number_of_nodes, 1)
 
     def test_truncation_does_not_change_the_original(self):
-        layered = LayeredProbabilisticCircuit.from_rustworkx(deterministic_mixture())
+        layered = RustworkxCircuitToLayeredCircuitConverter.convert(
+            deterministic_mixture()
+        )
         before = layered.number_of_nodes
         event = SimpleEvent.from_data({x: closed(0.0, 1.0)}).as_composite_set()
         layered.truncated(event)
@@ -581,7 +619,7 @@ class ConditionalTestCase(unittest.TestCase):
         ):
             with self.subTest(name):
                 rx_circuit = ALL_CIRCUITS[name]()
-                layered = LayeredProbabilisticCircuit.from_rustworkx(rx_circuit)
+                layered = RustworkxCircuitToLayeredCircuitConverter.convert(rx_circuit)
 
                 point = {x: 0.75}
                 rx_conditional, _ = rx_circuit.conditional(point)
@@ -601,7 +639,7 @@ class ConditionalTestCase(unittest.TestCase):
         grid = np.linspace(-1, 5, 60001)
         for name in ("overlapping", "deterministic", "shared"):
             with self.subTest(name):
-                layered = LayeredProbabilisticCircuit.from_rustworkx(
+                layered = RustworkxCircuitToLayeredCircuitConverter.convert(
                     ALL_CIRCUITS[name]()
                 )
                 conditional, _ = layered.conditional({x: 0.75})
@@ -618,7 +656,9 @@ class ConditionalTestCase(unittest.TestCase):
         ``(0, 1)`` and ``0.295`` on ``(1, 2)``. Dividing by ``p(x=0.75) = 0.55`` gives the
         conditional density.
         """
-        layered = LayeredProbabilisticCircuit.from_rustworkx(shared_children_circuit())
+        layered = RustworkxCircuitToLayeredCircuitConverter.convert(
+            shared_children_circuit()
+        )
         conditional, probability = layered.conditional({x: 0.75})
 
         self.assertAlmostEqual(probability, 0.55)
@@ -628,13 +668,17 @@ class ConditionalTestCase(unittest.TestCase):
         )
 
     def test_conditioning_on_an_impossible_point(self):
-        layered = LayeredProbabilisticCircuit.from_rustworkx(deterministic_mixture())
+        layered = RustworkxCircuitToLayeredCircuitConverter.convert(
+            deterministic_mixture()
+        )
         conditional, probability = layered.conditional({x: 1.5})
         self.assertIsNone(conditional)
         self.assertEqual(probability, 0.0)
 
     def test_conditioning_on_every_variable(self):
-        layered = LayeredProbabilisticCircuit.from_rustworkx(deterministic_mixture())
+        layered = RustworkxCircuitToLayeredCircuitConverter.convert(
+            deterministic_mixture()
+        )
         conditional, probability = layered.conditional({x: 0.5, y: 0.5})
         self.assertIsNotNone(conditional)
         self.assertAlmostEqual(probability, 0.3)
@@ -652,7 +696,7 @@ class MarginalTestCase(unittest.TestCase):
         for name in ("overlapping", "deterministic"):
             with self.subTest(name):
                 rx_circuit = ALL_CIRCUITS[name]()
-                layered = LayeredProbabilisticCircuit.from_rustworkx(rx_circuit)
+                layered = RustworkxCircuitToLayeredCircuitConverter.convert(rx_circuit)
 
                 rx_marginal = rx_circuit.marginal([x])
                 marginal = layered.marginal([x])
@@ -670,7 +714,9 @@ class MarginalTestCase(unittest.TestCase):
         ``p(x) = 0.5 * sum_x_1(x) + 0.5 * sum_x_2(x)``, which is ``0.5 * 0.8 + 0.5 * 0.3``
         on ``(0, 1)`` and ``0.5 * 0.2 + 0.5 * 0.7`` on ``(1, 2)``.
         """
-        layered = LayeredProbabilisticCircuit.from_rustworkx(shared_children_circuit())
+        layered = RustworkxCircuitToLayeredCircuitConverter.convert(
+            shared_children_circuit()
+        )
         marginal = layered.marginal([x])
 
         np.testing.assert_allclose(
@@ -686,11 +732,15 @@ class MarginalTestCase(unittest.TestCase):
             self.assertAlmostEqual(float(np.trapezoid(joint, grid)), expected, places=3)
 
     def test_marginal_of_a_variable_that_is_not_modeled(self):
-        layered = LayeredProbabilisticCircuit.from_rustworkx(deterministic_mixture())
+        layered = RustworkxCircuitToLayeredCircuitConverter.convert(
+            deterministic_mixture()
+        )
         self.assertIsNone(layered.marginal([Continuous("z")]))
 
     def test_marginal_does_not_change_the_original(self):
-        layered = LayeredProbabilisticCircuit.from_rustworkx(deterministic_mixture())
+        layered = RustworkxCircuitToLayeredCircuitConverter.convert(
+            deterministic_mixture()
+        )
         layered.marginal([x])
         self.assertEqual(list(layered.variables), [x, y])
 
@@ -704,7 +754,7 @@ class SerializationTestCase(unittest.TestCase):
         for name, factory in ALL_CIRCUITS.items():
             with self.subTest(name):
                 rx_circuit = factory()
-                layered = LayeredProbabilisticCircuit.from_rustworkx(rx_circuit)
+                layered = RustworkxCircuitToLayeredCircuitConverter.convert(rx_circuit)
 
                 restored = from_json(to_json(layered))
                 self.assertIsInstance(restored, LayeredProbabilisticCircuit)
@@ -718,7 +768,9 @@ class SerializationTestCase(unittest.TestCase):
     def test_json_round_trip_of_a_conditioned_circuit(self):
         # conditional() attaches a DiracDeltaLayer per conditioned variable under a new
         # product root, which is not exercised by any of the ALL_CIRCUITS factories.
-        layered = LayeredProbabilisticCircuit.from_rustworkx(overlapping_mixture())
+        layered = RustworkxCircuitToLayeredCircuitConverter.convert(
+            overlapping_mixture()
+        )
         conditioned, _ = layered.conditional({x: 0.5})
         self.assertIsInstance(conditioned.root, ProductLayer)
         self.assertTrue(
@@ -732,7 +784,9 @@ class SerializationTestCase(unittest.TestCase):
         )
 
     def test_deep_copy_is_independent(self):
-        layered = LayeredProbabilisticCircuit.from_rustworkx(deterministic_mixture())
+        layered = RustworkxCircuitToLayeredCircuitConverter.convert(
+            deterministic_mixture()
+        )
         copy = layered.__deepcopy__()
 
         samples = np.array([[0.5, 0.5], [2.5, 3.0]])
@@ -747,7 +801,7 @@ class TransformationTestCase(unittest.TestCase):
 
     def test_translation_matches_rustworkx(self):
         rx_circuit = deterministic_mixture()
-        layered = LayeredProbabilisticCircuit.from_rustworkx(rx_circuit)
+        layered = RustworkxCircuitToLayeredCircuitConverter.convert(rx_circuit)
 
         translation = {x: 1.5, y: -0.5}
         rx_circuit.apply_translation(translation)
@@ -762,7 +816,7 @@ class TransformationTestCase(unittest.TestCase):
 
     def test_scaling_matches_rustworkx(self):
         rx_circuit = deterministic_mixture()
-        layered = LayeredProbabilisticCircuit.from_rustworkx(rx_circuit)
+        layered = RustworkxCircuitToLayeredCircuitConverter.convert(rx_circuit)
 
         scaling = {x: 2.0, y: 3.0}
         rx_circuit.apply_scaling(scaling)
@@ -776,7 +830,9 @@ class TransformationTestCase(unittest.TestCase):
         )
 
     def test_renaming_variables_with_a_prefix(self):
-        layered = LayeredProbabilisticCircuit.from_rustworkx(deterministic_mixture())
+        layered = RustworkxCircuitToLayeredCircuitConverter.convert(
+            deterministic_mixture()
+        )
         samples = np.array([[0.5, 0.5], [2.5, 3.0]])
         before = layered.log_likelihood(samples)
 
@@ -788,7 +844,9 @@ class TransformationTestCase(unittest.TestCase):
 
     def test_renaming_keeps_the_column_order(self):
         # renaming may reorder the variables, and the layers have to follow
-        layered = LayeredProbabilisticCircuit.from_rustworkx(deterministic_mixture())
+        layered = RustworkxCircuitToLayeredCircuitConverter.convert(
+            deterministic_mixture()
+        )
         samples = np.array([[0.5, 0.7], [2.5, 3.0]])
         before = layered.log_likelihood(samples)
 
@@ -800,9 +858,11 @@ class TransformationTestCase(unittest.TestCase):
 class SimplificationTestCase(unittest.TestCase):
 
     def test_normalize_makes_the_weights_sum_to_one(self):
-        layered = LayeredProbabilisticCircuit.from_rustworkx(overlapping_mixture())
+        layered = RustworkxCircuitToLayeredCircuitConverter.convert(
+            overlapping_mixture()
+        )
         root = layered.root
-        root.log_weights[0].data = root.log_weights[0].data + 3.0
+        root.log_weights.data = root.log_weights.data + 3.0
 
         samples = np.array([[0.5, 0.5], [2.0, 1.5]])
         before = layered.log_likelihood(samples)
@@ -814,7 +874,9 @@ class SimplificationTestCase(unittest.TestCase):
         np.testing.assert_allclose(layered.log_likelihood(samples), before)
 
     def test_simplify_removes_an_identity_sum_layer(self):
-        layered = LayeredProbabilisticCircuit.from_rustworkx(deterministic_mixture())
+        layered = RustworkxCircuitToLayeredCircuitConverter.convert(
+            deterministic_mixture()
+        )
         samples = np.array([[0.5, 0.5], [2.5, 3.0]])
         before = layered.log_likelihood(samples)
 
@@ -844,12 +906,16 @@ class LayerTestCase(unittest.TestCase):
         np.testing.assert_allclose(result, expected)
 
     def test_number_of_parameters(self):
-        layered = LayeredProbabilisticCircuit.from_rustworkx(overlapping_mixture())
+        layered = RustworkxCircuitToLayeredCircuitConverter.convert(
+            overlapping_mixture()
+        )
         # two weights on the root plus two bounds for each of the four uniform nodes
         self.assertEqual(layered.number_of_parameters, 2 + 4 * 2)
 
     def test_layers_visits_parents_first(self):
-        layered = LayeredProbabilisticCircuit.from_rustworkx(shared_children_circuit())
+        layered = RustworkxCircuitToLayeredCircuitConverter.convert(
+            shared_children_circuit()
+        )
         order = layered.layers
         positions = {id(layer): index for index, layer in enumerate(order)}
         self.assertEqual(len(order), len(layered.layers))

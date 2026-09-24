@@ -13,24 +13,22 @@ from typing_extensions import Any, Dict, Iterable, List, Optional, Self, Tuple
 
 from probabilistic_model.distributions.helper import make_dirac
 from probabilistic_model.exceptions import IntractableError
-from probabilistic_model.probabilistic_circuit.tensorized.inner_layer.base import (
+from probabilistic_model.probabilistic_circuit.tensorized.forward_sample_assignment import (
     ForwardSampleAssignment,
-    Layer,
-    QueryCache,
 )
+from probabilistic_model.probabilistic_circuit.tensorized.inner_layer.base import Layer
 from probabilistic_model.probabilistic_circuit.tensorized.inner_layer.product_layer import (
     ProductLayer,
 )
 from probabilistic_model.probabilistic_circuit.tensorized.inner_layer.sum_layer import (
     SumLayer,
 )
-from probabilistic_model.probabilistic_circuit.tensorized.rustworkx_conversion import (
-    circuit_of_root_layer,
-    input_layer_of_distributions,
-    root_layer_of_circuit,
+from probabilistic_model.probabilistic_circuit.tensorized.input_layer.dirac_delta_layer import (
+    DiracDeltaLayer,
 )
-from probabilistic_model.probabilistic_circuit.rx.probabilistic_circuit import (
-    ProbabilisticCircuit as RustworkxProbabilisticCircuit,
+from probabilistic_model.probabilistic_circuit.tensorized.query_cache import QueryCache
+from probabilistic_model.probabilistic_circuit.tensorized.row_grouped_sparse_array import (
+    RowGroupedSparseArray,
 )
 from probabilistic_model.probabilistic_model import (
     CenterType,
@@ -236,13 +234,13 @@ class LayeredProbabilisticCircuit(ProbabilisticModel, DataclassJSONSerializer):
             logsumexp(np.array([log_probability for _, log_probability in truncated]))
         )
 
-        log_weights = [
-            coo_array(
-                (np.array([log_probability]), (np.array([0]), np.array([0]))),
-                shape=(1, root.number_of_nodes),
-            )
-            for root, log_probability in truncated
-        ]
+        # the root of every truncation has a single node, so it is one column each
+        log_weights = RowGroupedSparseArray.from_coordinates(
+            np.array([log_probability for _, log_probability in truncated]),
+            np.zeros(len(truncated), dtype=np.int64),
+            np.arange(len(truncated)),
+            (1, len(truncated)),
+        )
         self.root = SumLayer([root for root, _ in truncated], log_weights)
         self.root.normalize()
         return self, total_log_probability
@@ -335,18 +333,12 @@ class LayeredProbabilisticCircuit(ProbabilisticModel, DataclassJSONSerializer):
         # event, which turns the replicated root into the single root of the result
         mixture = SumLayer(
             [replicated],
-            [
-                coo_array(
-                    (
-                        node_log_probabilities,
-                        (
-                            np.zeros(len(node_log_probabilities), dtype=np.int64),
-                            np.arange(len(node_log_probabilities)),
-                        ),
-                    ),
-                    shape=(1, len(node_log_probabilities)),
-                )
-            ],
+            RowGroupedSparseArray.from_coordinates(
+                node_log_probabilities,
+                np.zeros(len(node_log_probabilities), dtype=np.int64),
+                np.arange(len(node_log_probabilities)),
+                (1, len(node_log_probabilities)),
+            ),
         )
         log_probabilities[id(mixture)] = np.array([total_log_probability])
 
@@ -425,7 +417,7 @@ class LayeredProbabilisticCircuit(ProbabilisticModel, DataclassJSONSerializer):
 
         for variable, value in point.items():
             children.append(
-                input_layer_of_distributions(
+                DiracDeltaLayer.from_distributions(
                     original_variables.index(variable), [make_dirac(variable, value)]
                 )
             )
@@ -559,34 +551,6 @@ class LayeredProbabilisticCircuit(ProbabilisticModel, DataclassJSONSerializer):
         for variable, value in scaling.items():
             values[self.variables.index(variable)] = value
         self.root.apply_scaling(values)
-
-    # %% conversion
-
-    @classmethod
-    def from_rustworkx(
-        cls, circuit: RustworkxProbabilisticCircuit, progress_bar: bool = False
-    ) -> Self:
-        """
-        Convert a circuit of the ``rx`` package into a layered circuit.
-
-        The result describes the same distribution.
-
-        :param circuit: The circuit to convert.
-        :param progress_bar: Whether to show a progress bar.
-        :return: The layered circuit.
-        """
-        return cls(
-            SortedSet(circuit.variables), root_layer_of_circuit(circuit, progress_bar)
-        )
-
-    def to_rustworkx(self, progress_bar: bool = False) -> RustworkxProbabilisticCircuit:
-        """
-        Convert this circuit into a circuit of the ``rx`` package.
-
-        :param progress_bar: Whether to show a progress bar.
-        :return: The converted circuit.
-        """
-        return circuit_of_root_layer(self.root, self.variables, progress_bar)
 
     def __deepcopy__(self, memo=None) -> Self:
         return self.__class__(SortedSet(self.variables), self.root.__deepcopy__({}))
