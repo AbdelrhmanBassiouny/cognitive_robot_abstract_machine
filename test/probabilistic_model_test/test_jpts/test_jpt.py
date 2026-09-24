@@ -311,6 +311,29 @@ class ContinuousOnlyTestCase(unittest.TestCase):
         self.assertGreater(len(circuit.root.subcircuits), 1)
 
 
+class MaxStandardDeviationTestCase(unittest.TestCase):
+    """
+    A maximum standard deviation is a precision to reach: once every numeric target
+    in a node is at least that precise, the node is not split any further.
+    """
+
+    def test_splitting_stops_once_every_leaf_is_precise_enough(self):
+        generator = np.random.default_rng(0)
+        x = generator.uniform(0, 100, 500)
+        data = pd.DataFrame({"x": x, "y": x + generator.normal(0, 1, 500)})
+
+        variables = infer_variables_from_dataframe(data)
+        for variable in variables:
+            variable.max_standard_deviation = 5
+        tree = JointProbabilityTree(min_samples_per_leaf=20, keep_sample_indices=True)
+        circuit = tree.fit(data, variables)
+        unlimited = JointProbabilityTree(min_samples_per_leaf=20).fit(data)
+
+        for leaf_node in circuit.root.subcircuits:
+            self.assertLessEqual(data.iloc[leaf_node.sample_indices].std().max(), 5)
+        self.assertLess(len(circuit.root.subcircuits), len(unlimited.root.subcircuits))
+
+
 class BreastCancerTestCase(unittest.TestCase):
     data: pd.DataFrame
     model: JointProbabilityTree
