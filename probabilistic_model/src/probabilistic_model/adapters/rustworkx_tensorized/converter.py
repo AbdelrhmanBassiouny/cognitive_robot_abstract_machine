@@ -10,38 +10,20 @@ from, so adding a conversion is subclassing a base class, without any registrati
 from __future__ import annotations
 
 from abc import ABC
-from dataclasses import dataclass, field
 
-from krrood.exceptions import DataclassException
+from krrood.patterns.subclass_safe_generic import SubClassSafeGeneric
 from krrood.utils import recursive_subclasses
-from typing_extensions import Any, Generic, Type, TypeVar, get_args
+from typing_extensions import Any, Generic, Type, TypeVar
+
+from probabilistic_model.adapters.rustworkx_tensorized.exceptions import (
+    CannotConvertError,
+)
 
 InputType = TypeVar("InputType")
 OutputType = TypeVar("OutputType")
 
 
-@dataclass
-class CannotConvertError(DataclassException):
-    """
-    Raised when no converter handles an object.
-    """
-
-    data_type: Type = field(kw_only=True)
-    """
-    The type of the object that could not be converted.
-    """
-
-    def error_message(self) -> str:
-        return f"No converter handles {self.data_type.__name__}."
-
-    def suggest_correction(self) -> str:
-        return (
-            "Subclass the converter base class for the type, binding it as the input "
-            "type."
-        )
-
-
-class Converter(ABC, Generic[InputType, OutputType]):
+class Converter(Generic[InputType, OutputType], SubClassSafeGeneric, ABC):
     """
     Base class for converters from one representation to another.
 
@@ -53,14 +35,14 @@ class Converter(ABC, Generic[InputType, OutputType]):
         """
         :return: The type this converter converts.
         """
-        return get_args(cls.__orig_bases__[0])[0]
+        return cls.get_generic_type_parameters()[0]
 
     @classmethod
     def output_type(cls) -> Type[OutputType]:
         """
         :return: The type this converter converts into.
         """
-        return get_args(cls.__orig_bases__[0])[1]
+        return cls.get_generic_type_parameters()[1]
 
     @classmethod
     def can_convert(cls, data: Any) -> bool:

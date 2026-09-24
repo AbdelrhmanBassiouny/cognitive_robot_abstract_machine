@@ -33,7 +33,7 @@ from random_events.interval import closed
 from random_events.product_algebra import Event, SimpleEvent, VariableMap
 from random_events.variable import Continuous
 
-from probabilistic_model.adapters.rustworkx_tensorized.converter import (
+from probabilistic_model.adapters.rustworkx_tensorized.exceptions import (
     CannotConvertError,
 )
 from probabilistic_model.adapters.rustworkx_tensorized.rustworkx_to_tensorized import (

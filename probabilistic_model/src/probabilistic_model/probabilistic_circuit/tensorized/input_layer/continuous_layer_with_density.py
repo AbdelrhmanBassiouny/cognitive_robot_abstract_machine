@@ -15,7 +15,6 @@ from probabilistic_model.probabilistic_circuit.tensorized.inner_layer.sum_layer 
 )
 from probabilistic_model.probabilistic_circuit.tensorized.input_layer.base import (
     AbstractContinuousLayer,
-    DistributionType,
     InputLayer,
 )
 from probabilistic_model.probabilistic_circuit.tensorized.row_grouped_sparse_array import (
@@ -27,7 +26,7 @@ from probabilistic_model.probabilistic_circuit.tensorized.input_layer.dirac_delt
 
 
 @dataclass(eq=False, repr=False)
-class ContinuousLayerWithDensity(AbstractContinuousLayer[DistributionType], ABC):
+class ContinuousLayerWithDensity(AbstractContinuousLayer, ABC):
     """
     Abstract base class for the input layers of continuous distributions that have a
     density.
@@ -167,9 +166,7 @@ class ContinuousLayerWithDensity(AbstractContinuousLayer[DistributionType], ABC)
 
 
 @dataclass(eq=False, repr=False)
-class ContinuousLayerWithFiniteSupport(
-    ContinuousLayerWithDensity[DistributionType], ABC
-):
+class ContinuousLayerWithFiniteSupport(ContinuousLayerWithDensity, ABC):
     """
     Abstract base class for continuous input layers whose nodes have a finite support.
     """

@@ -5,7 +5,6 @@ from dataclasses import dataclass
 
 import numpy as np
 import numpy.typing as npt
-from krrood.patterns.subclass_safe_generic import SubClassSafeGeneric
 from random_events.interval import Interval
 from random_events.product_algebra import Event, SimpleEvent, VariableMap
 from random_events.sigma_algebra import AbstractCompositeSet
@@ -14,13 +13,11 @@ from sortedcontainers import SortedSet
 from typing_extensions import (
     Any,
     Dict,
-    Generic,
     List,
     Optional,
     Self,
     Tuple,
     Type,
-    TypeVar,
 )
 
 from probabilistic_model.distributions.distributions import UnivariateDistribution
@@ -33,14 +30,9 @@ from probabilistic_model.probabilistic_circuit.tensorized.query_cache import (
     memoized,
 )
 
-DistributionType = TypeVar("DistributionType", bound=UnivariateDistribution)
-"""
-The class of the distributions the nodes of an input layer describe.
-"""
-
 
 @dataclass(eq=False, repr=False)
-class InputLayer(Generic[DistributionType], SubClassSafeGeneric, Layer, ABC):
+class InputLayer(Layer, ABC):
     """
     Abstract base class for the input layers of a layered circuit.
 
@@ -84,7 +76,9 @@ class InputLayer(Generic[DistributionType], SubClassSafeGeneric, Layer, ABC):
     # %% per node view
 
     @abstractmethod
-    def node_distribution(self, index: int, variable: Variable) -> DistributionType:
+    def node_distribution(
+        self, index: int, variable: Variable
+    ) -> UnivariateDistribution:
         """
         Materialize one node of this layer as a univariate distribution.
 
@@ -97,7 +91,7 @@ class InputLayer(Generic[DistributionType], SubClassSafeGeneric, Layer, ABC):
     @classmethod
     @abstractmethod
     def from_distributions(
-        cls, variable_index: int, distributions: List[DistributionType]
+        cls, variable_index: int, distributions: List[UnivariateDistribution]
     ) -> Self:
         """
         Create a layer from a list of distributions of the type of this layer.
@@ -133,7 +127,7 @@ class InputLayer(Generic[DistributionType], SubClassSafeGeneric, Layer, ABC):
         """
         raise NotImplementedError
 
-    def node_distributions(self, variable: Variable) -> List[DistributionType]:
+    def node_distributions(self, variable: Variable) -> List[UnivariateDistribution]:
         """
         :param variable: The variable of this layer.
         :return: Every node of this layer as a univariate distribution.
@@ -368,7 +362,7 @@ class InputLayer(Generic[DistributionType], SubClassSafeGeneric, Layer, ABC):
 
 
 @dataclass(eq=False, repr=False)
-class AbstractContinuousLayer(InputLayer[DistributionType], ABC):
+class AbstractContinuousLayer(InputLayer, ABC):
     """
     Abstract base class for the input layers of continuous univariate distributions.
     """

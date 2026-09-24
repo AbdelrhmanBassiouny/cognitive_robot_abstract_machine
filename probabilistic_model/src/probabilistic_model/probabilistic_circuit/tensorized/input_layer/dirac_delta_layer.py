@@ -18,7 +18,7 @@ from probabilistic_model.probabilistic_circuit.tensorized.input_layer.base impor
 
 
 @dataclass(eq=False, repr=False)
-class DiracDeltaLayer(AbstractContinuousLayer[DiracDeltaDistribution]):
+class DiracDeltaLayer(AbstractContinuousLayer):
     """
     A layer of Dirac delta distributions over one continuous variable.
     """

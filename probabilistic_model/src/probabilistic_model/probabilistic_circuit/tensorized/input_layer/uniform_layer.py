@@ -16,7 +16,7 @@ from probabilistic_model.probabilistic_circuit.tensorized.input_layer.continuous
 
 
 @dataclass(eq=False, repr=False)
-class UniformLayer(ContinuousLayerWithFiniteSupport[UniformDistribution]):
+class UniformLayer(ContinuousLayerWithFiniteSupport):
     """
     A layer of uniform distributions over one continuous variable.
     """
