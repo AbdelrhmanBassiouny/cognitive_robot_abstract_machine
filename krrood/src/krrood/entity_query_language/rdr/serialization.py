@@ -13,7 +13,9 @@ import ast
 import enum
 import operator
 import os
-from dataclasses import dataclass
+import tempfile
+from abc import ABC, abstractmethod
+from dataclasses import dataclass, field
 from textwrap import indent as _indent
 from typing import TYPE_CHECKING
 from uuid import UUID
@@ -542,6 +544,74 @@ def save_rdr_with_case(rdr: EQLSingleClassRDR, path: str) -> str:
     with open(path, "w") as file:
         file.write(source)
     return source
+
+
+class ModelSaver(ABC):
+    """
+    Strategy for persisting a fitted RDR.
+
+    Held by the RDR itself rather than by the expert's interface: what a model does with
+    its own state is the RDR's concern, not the expert's.
+    """
+
+    @abstractmethod
+    def save(self, rdr: EQLSingleClassRDR) -> None:
+        """
+        Persist ``rdr``'s current state.
+
+        :param rdr: The RDR to persist.
+        """
+
+
+@dataclass
+class NullModelSaver(ModelSaver):
+    """
+    The saver used when a model should not be persisted.
+
+    Persists nothing, so the fitting loop never branches on whether saving is
+    configured.
+    """
+
+    def save(self, rdr: EQLSingleClassRDR) -> None:
+        pass
+
+
+@dataclass
+class FileModelSaver(ModelSaver):
+    """
+    Persists a fitted RDR as a Python module via :func:`save_rdr_with_case`.
+    """
+
+    path: str
+    """Destination ``.py`` file path, overwritten on every save."""
+
+    def save(self, rdr: EQLSingleClassRDR) -> None:
+        save_rdr_with_case(rdr, self.path)
+
+
+@dataclass
+class TemporaryModelSaver(ModelSaver):
+    """
+    Persists a fitted RDR to a file in the platform's temporary directory.
+
+    The destination is chosen on the first save and reused afterwards, so a caller who
+    never named a path can still recover the rules an interrupted fit had authored by the
+    time it stopped. :attr:`path` is where to look.
+    """
+
+    prefix: str = "eql_rdr_"
+    """Leading text of the generated filename, so a stray file says what wrote it."""
+
+    path: Optional[str] = field(default=None, init=False)
+    """Where the model was written, or ``None`` until the first save."""
+
+    def save(self, rdr: EQLSingleClassRDR) -> None:
+        if self.path is None:
+            handle, self.path = tempfile.mkstemp(
+                prefix=f"{self.prefix}{rdr.case_type.__name__}_", suffix=".py"
+            )
+            os.close(handle)
+        save_rdr_with_case(rdr, self.path)
 
 
 def load_rdr(path: str) -> EQLSingleClassRDR:
