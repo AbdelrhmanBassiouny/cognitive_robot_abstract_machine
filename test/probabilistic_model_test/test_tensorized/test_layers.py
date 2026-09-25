@@ -23,12 +23,14 @@ from probabilistic_model.adapters.rustworkx_tensorized.tensorized_to_rustworkx i
     LayeredCircuitToRustworkxCircuitConverter,
 )
 from probabilistic_model.distributions.uniform import UniformDistribution
-from probabilistic_model.exceptions import NumberOfWeightsMismatchError
 from probabilistic_model.learning.jpt.jpt import JointProbabilityTree
 from probabilistic_model.learning.jpt.variables import infer_variables_from_dataframe
 from probabilistic_model.probabilistic_circuit.rx.helper import (
     uniform_measure_of_event,
     uniform_measure_of_simple_event,
+)
+from probabilistic_model.probabilistic_circuit.tensorized.exceptions import (
+    NumberOfWeightsMismatchError,
 )
 from probabilistic_model.probabilistic_circuit.tensorized.forward_sample_assignment import (
     SampleRowsOfNode,

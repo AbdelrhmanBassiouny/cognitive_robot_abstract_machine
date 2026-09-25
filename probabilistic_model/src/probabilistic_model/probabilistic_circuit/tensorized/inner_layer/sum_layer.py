@@ -18,10 +18,7 @@ from typing_extensions import (
     Tuple,
 )
 
-from probabilistic_model.exceptions import (
-    NumberOfWeightsMismatchError,
-    ShapeMismatchError,
-)
+from probabilistic_model.exceptions import ShapeMismatchError
 from probabilistic_model.probabilistic_circuit.tensorized.array_types import (
     EdgeMask,
     EdgeValues,
@@ -32,6 +29,9 @@ from probabilistic_model.probabilistic_circuit.tensorized.array_types import (
     SampleRows,
     VariableIndices,
     VariableMask,
+)
+from probabilistic_model.probabilistic_circuit.tensorized.exceptions import (
+    NumberOfWeightsMismatchError,
 )
 from probabilistic_model.probabilistic_circuit.tensorized.forward_sample_assignment import (
     ForwardSampleAssignment,
