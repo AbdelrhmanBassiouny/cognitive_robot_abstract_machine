@@ -17,6 +17,7 @@ import numpy as np
 import pandas as pd
 import tqdm
 from sklearn import datasets
+from sklearn.utils import Bunch
 from typing_extensions import List, Optional, Sequence
 
 from experiments.experiment_definitions import (
@@ -81,10 +82,7 @@ class Dataset(enum.StrEnum):
         """
         :return: The dataset, with its continuous columns standardized.
         """
-        loader = getattr(datasets, f"fetch_{self.value}", None) or getattr(
-            datasets, f"load_{self.value}"
-        )
-        bunch = loader(as_frame=True)
+        bunch = self.bunch()
         features = bunch.data.astype(float)
         match self:
             case Dataset.CALIFORNIA_HOUSING:
@@ -94,6 +92,22 @@ class Dataset(enum.StrEnum):
                 return standardized(features).assign(sex=sex)
         labels = np.asarray(bunch.target_names)[bunch.target.to_numpy()]
         return standardized(features).assign(label=labels.astype(str))
+
+    def bunch(self) -> Bunch:
+        """
+        :return: The dataset as scikit-learn provides it, with pandas frames.
+        """
+        match self:
+            case Dataset.IRIS:
+                return datasets.load_iris(as_frame=True)
+            case Dataset.WINE:
+                return datasets.load_wine(as_frame=True)
+            case Dataset.BREAST_CANCER:
+                return datasets.load_breast_cancer(as_frame=True)
+            case Dataset.DIABETES:
+                return datasets.load_diabetes(as_frame=True)
+            case Dataset.CALIFORNIA_HOUSING:
+                return datasets.fetch_california_housing(as_frame=True)
 
     def settings(self) -> List[Setting]:
         """
