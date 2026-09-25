@@ -18,27 +18,25 @@ from pathlib import Path
 import pytest
 
 from scratch_repository import (
+    FIXTURE_DIRECTORY,
     NOTES_BRANCH,
-    PERSONAL_GIT_IDENTITY_PATH,
+    NOTES_PATH,
     SCRATCH_IDENTITY,
     WORK_BRANCH,
     ScratchRepository,
 )
 from session_start_summary import SummaryMessage, summary_message, summary_value
+from tooling_files import HookScript, ProjectFile
 
-FIXTURES_DIRECTORY = Path(__file__).parent / "fixtures"
-
-PLAN_MANIFEST = (FIXTURES_DIRECTORY / "plan.yaml").read_text()
+PLAN_MANIFEST = (FIXTURE_DIRECTORY / "plan.yaml").read_text()
 
 PLAN_MANIFEST_WITH_TRACKING_ISSUE = (
-    FIXTURES_DIRECTORY / "plan-with-tracking-issue.yaml"
+    FIXTURE_DIRECTORY / "plan-with-tracking-issue.yaml"
 ).read_text()
 
 TRACKING_ISSUE = "55"
 
 PLAN_IDENTIFIER = "test-plan"
-
-NOTES_PATH = ".claude/personal/cram-notes.md"
 
 BRANCH_INDEX_PATH = ".claude/personal/plans/_generated/branch-index.tsv"
 
@@ -75,10 +73,10 @@ def session_start_repository(
     :return: The same repository, ready to publish a notes branch and run the hook.
     """
     scratch_repository.install_hook_scripts(
-        "resolve-personal-notes-config.sh",
-        "session-start-messages.sh",
-        "session-start.sh",
-        "check-setup.sh",
+        HookScript.CONFIGURATION,
+        HookScript.SESSION_START_MESSAGES,
+        HookScript.SESSION_START,
+        HookScript.CHECK_SETUP,
     )
     scratch_repository.write_setup_prerequisites()
     scratch_repository.commit_everything("initial commit")
@@ -95,7 +93,7 @@ def run_session_start(
     :param repository: A fixture-built scratch repository.
     :return: The finished subprocess.
     """
-    return repository.run_hook_script("session-start.sh")
+    return repository.run_hook_script(HookScript.SESSION_START)
 
 
 def publish_and_run(
@@ -118,7 +116,7 @@ def publish_and_run(
     repository.publish_notes_branch(
         {
             NOTES_PATH: "personal notes\n",
-            PERSONAL_GIT_IDENTITY_PATH: SCRATCH_IDENTITY.as_git_config_file(),
+            ProjectFile.PERSONAL_GIT_IDENTITY: SCRATCH_IDENTITY.as_git_config_file(),
             **(notes_branch_files or {}),
         }
     )
@@ -296,7 +294,7 @@ def test_names_every_check_that_needs_setup(
     detail = next(
         row.split("\t")[2]
         for row in session_start_repository.run_hook_script(
-            "check-setup.sh"
+            HookScript.CHECK_SETUP
         ).stdout.splitlines()
         if row.split("\t")[0] == failing_check
     )
