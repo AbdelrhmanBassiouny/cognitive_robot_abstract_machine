@@ -12,7 +12,7 @@ import pandas as pd
 from random_events.variable import Continuous, Integer, Symbolic
 from sklearn.base import clone
 from stepmix.stepmix import StepMix
-from typing_extensions import Any, Dict, Iterable, List, Optional, Union
+from typing_extensions import Any, Iterable, List, Optional, Union
 
 from probabilistic_model.distributions.distributions import (
     DiscreteDistribution,
@@ -27,6 +27,11 @@ from probabilistic_model.learning.gaussian_mixture.gaussian_mixture_learning_met
 )
 from probabilistic_model.learning.gaussian_mixture.initialization_method import (
     InitializationMethod,
+)
+from probabilistic_model.learning.gaussian_mixture.measurement import (
+    CategoricalBlock,
+    GaussianBlock,
+    Measurement,
 )
 from probabilistic_model.learning.jpt.variables import AnnotatedVariable
 from probabilistic_model.probabilistic_circuit.rx.probabilistic_circuit import (
@@ -94,26 +99,33 @@ class StepMixModel(GaussianMixtureLearningMethod):
             columns.append(codes.reshape(-1, 1))
             outcomes.append(keys)
 
-        # StepMix keeps the outcomes it saw in a previous fit, so refit a fresh copy
-        self.model = clone(self.model).set_params(
-            measurement=self._measurement(len(continuous), len(discrete))
+        measurement = Measurement(
+            (
+                GaussianBlock(
+                    continuous, self.covariance_type, self.covariance_regularization
+                )
+                if continuous
+                else None
+            ),
+            [CategoricalBlock(variable) for variable in discrete],
         )
+
+        # StepMix keeps the outcomes it saw in a previous fit, so refit a fresh copy
+        self.model = clone(self.model).set_params(measurement=measurement.to_stepmix())
         self.model.fit(np.column_stack(columns))
 
         parameters = self.model.get_parameters()
-        measurement = parameters["measurement"]
+        fitted = parameters["measurement"]
         discrete_distributions = [
             [
                 self._distribution(
-                    variable,
-                    measurement[f"discrete_{index}"]["pis"][component],
-                    outcomes[index],
+                    block.variable, fitted[block.name]["pis"][component], keys
                 )
-                for index, variable in enumerate(discrete)
+                for block, keys in zip(measurement.categorical, outcomes)
             ]
             for component in range(self.model.n_components)
         ]
-        gaussian = measurement.get("continuous", {})
+        gaussian = fitted[measurement.gaussian.name] if continuous else {}
         return self._circuit(
             self.covariance_type,
             continuous,
@@ -122,24 +134,6 @@ class StepMixModel(GaussianMixtureLearningMethod):
             gaussian.get("covariances"),
             discrete_distributions,
         )
-
-    def _measurement(
-        self, continuous_columns: int, discrete_columns: int
-    ) -> Dict[str, Dict[str, Any]]:
-        """
-        :return: StepMix's description of one Gaussian block over the continuous
-            columns, followed by one categorical block per discrete column.
-        """
-        measurement = {}
-        if continuous_columns:
-            measurement["continuous"] = {
-                "model": self.covariance_type.stepmix_model,
-                "n_columns": continuous_columns,
-                "reg_covar": self.covariance_regularization,
-            }
-        for index in range(discrete_columns):
-            measurement[f"discrete_{index}"] = {"model": "categorical", "n_columns": 1}
-        return measurement
 
     @staticmethod
     def _outcome_codes(

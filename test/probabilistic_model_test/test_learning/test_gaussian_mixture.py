@@ -22,6 +22,9 @@ from probabilistic_model.distributions.distributions import (
     SymbolicDistribution,
 )
 from probabilistic_model.exceptions import NonContinuousVariableError
+from probabilistic_model.learning.gaussian_mixture.covariance_type import (
+    CovarianceType,
+)
 from probabilistic_model.learning.gaussian_mixture.gaussian_mixture_model import (
     GaussianMixtureModel,
 )
@@ -32,8 +35,6 @@ from probabilistic_model.probabilistic_circuit.rx.probabilistic_circuit import (
     MultivariateLeaf,
     SumUnit,
 )
-
-COVARIANCE_TYPES = ["full", "tied", "diag", "spherical"]
 
 
 @pytest.fixture
@@ -61,7 +62,7 @@ def _circuit_columns(circuit, data: pd.DataFrame) -> np.ndarray:
     return data[[variable.name for variable in circuit.variables]].to_numpy()
 
 
-@pytest.mark.parametrize("covariance_type", COVARIANCE_TYPES)
+@pytest.mark.parametrize("covariance_type", CovarianceType)
 def test_the_circuit_has_the_density_of_the_fitted_mixture(
     two_clusters, covariance_type
 ):
@@ -88,7 +89,7 @@ def test_the_root_weighs_one_component_per_mixture_component(two_clusters):
     )
 
 
-@pytest.mark.parametrize("covariance_type", COVARIANCE_TYPES)
+@pytest.mark.parametrize("covariance_type", CovarianceType)
 def test_every_component_is_one_multivariate_gaussian_leaf(
     two_clusters, covariance_type
 ):
@@ -177,6 +178,25 @@ def test_each_fit_is_a_circuit_of_its_own(two_clusters):
 
     assert first is not second
     assert len(first.nodes()) == len(second.nodes())
+
+
+@pytest.mark.parametrize(
+    "method",
+    [
+        GaussianMixtureModel(GaussianMixture(n_components=2, random_state=0)),
+        StepMixModel(),
+    ],
+    ids=["scikit-learn", "StepMix"],
+)
+def test_refitting_leaves_an_earlier_circuit_unchanged(two_clusters, method):
+    first = method.fit(two_clusters)
+    before = first.log_likelihood(_circuit_columns(first, two_clusters))
+
+    method.fit(two_clusters.iloc[:200] * 3.0)
+
+    assert first.log_likelihood(_circuit_columns(first, two_clusters)) == pytest.approx(
+        before
+    )
 
 
 @pytest.fixture

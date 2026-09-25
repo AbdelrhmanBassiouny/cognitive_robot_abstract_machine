@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import enum
 import time
+from abc import ABC, abstractmethod
 from dataclasses import dataclass
 
 import numpy as np
@@ -101,9 +102,8 @@ class Dataset(enum.StrEnum):
         mixture = (
             Method.GAUSSIAN_MIXTURE if self.symbolic_column is None else Method.STEPMIX
         )
-        return [Setting(mixture, components) for components in (1, 3, 5, 10)] + [
-            Setting(Method.JOINT_PROBABILITY_TREE, share)
-            for share in (0.2, 0.1, 0.05, 0.02)
+        return [MixtureSetting(mixture, components) for components in (1, 3, 5, 10)] + [
+            TreeSetting(share) for share in (0.2, 0.1, 0.05, 0.02)
         ]
 
 
@@ -137,36 +137,74 @@ class Method(enum.Enum):
 
 
 @dataclass
-class Setting:
+class Setting(ABC):
     """
     One configuration of a method.
     """
 
-    method: Method
-    """
-    The method configured.
-    """
+    @property
+    @abstractmethod
+    def method(self) -> Method:
+        """
+        :return: The method configured.
+        """
 
-    size: float
-    """
-    The number of components of a mixture, or the minimum share of the rows in a leaf
-    of a tree.
-    """
-
+    @abstractmethod
     def learning_method(self) -> LearningMethod:
         """
         :return: The configured method, not yet fitted.
         """
-        if self.method is Method.JOINT_PROBABILITY_TREE:
-            return self.method.value(min_samples_per_leaf=self.size)
-        method = self.method.value()
-        method.model.set_params(n_components=int(self.size), random_state=0)
+
+
+@dataclass
+class MixtureSetting(Setting):
+    """
+    A Gaussian mixture with a number of components.
+    """
+
+    mixture: Method
+    """
+    The mixture, :attr:`Method.GAUSSIAN_MIXTURE` or :attr:`Method.STEPMIX`.
+    """
+
+    number_of_components: int
+    """
+    The number of components.
+    """
+
+    @property
+    def method(self) -> Method:
+        return self.mixture
+
+    def learning_method(self) -> LearningMethod:
+        method = self.mixture.value()
+        method.model.set_params(n_components=self.number_of_components, random_state=0)
         return method
 
     def __str__(self) -> str:
-        if self.method is Method.JOINT_PROBABILITY_TREE:
-            return f"leaves of at least {self.size:.0%} of the rows"
-        return f"{int(self.size)} components"
+        return f"{self.number_of_components} components"
+
+
+@dataclass
+class TreeSetting(Setting):
+    """
+    A joint probability tree with a minimum share of the rows in each leaf.
+    """
+
+    minimum_leaf_share: float
+    """
+    The minimum share of the rows in a leaf.
+    """
+
+    @property
+    def method(self) -> Method:
+        return Method.JOINT_PROBABILITY_TREE
+
+    def learning_method(self) -> LearningMethod:
+        return self.method.value(min_samples_per_leaf=self.minimum_leaf_share)
+
+    def __str__(self) -> str:
+        return f"leaves of at least {self.minimum_leaf_share:.0%} of the rows"
 
 
 @dataclass
