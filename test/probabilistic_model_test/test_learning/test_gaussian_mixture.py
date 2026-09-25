@@ -1,5 +1,5 @@
 """
-Tests for fitting a circuit as a scikit-learn Gaussian mixture.
+Tests for fitting circuits as Gaussian mixtures.
 """
 
 from __future__ import annotations
@@ -22,7 +22,12 @@ from probabilistic_model.distributions.distributions import (
     IntegerDistribution,
     SymbolicDistribution,
 )
-from probabilistic_model.learning.gaussian_mixture import GaussianMixtureModel
+from probabilistic_model.exceptions import NonContinuousVariableError
+from probabilistic_model.learning.gaussian_mixture import (
+    GaussianMixtureModel,
+    StepMixModel,
+    default_stepmix,
+)
 from probabilistic_model.learning.jpt.variables import infer_variables_from_dataframe
 from probabilistic_model.learning.learning_method import StratifiedLearning
 from probabilistic_model.probabilistic_circuit.rx.probabilistic_circuit import (
@@ -196,10 +201,12 @@ def labelled_clusters(two_clusters) -> pd.DataFrame:
     )
 
 
+def _two_component_stepmix() -> StepMixModel:
+    return StepMixModel(default_stepmix().set_params(n_components=2, random_state=0))
+
+
 def _two_component_fit(data: pd.DataFrame):
-    return GaussianMixtureModel(GaussianMixture(n_components=2, random_state=0)).fit(
-        data
-    )
+    return _two_component_stepmix().fit(data)
 
 
 def _variable(circuit, name: str):
@@ -220,17 +227,25 @@ def test_every_component_gets_a_leaf_per_discrete_variable(labelled_clusters):
                 )
 
 
-def test_continuous_data_is_fitted_with_scikit_learn(two_clusters):
+def test_scikit_learn_rejects_discrete_variables(labelled_clusters):
     method = GaussianMixtureModel(GaussianMixture(n_components=2, random_state=0))
 
-    method.fit(two_clusters)
+    with pytest.raises(NonContinuousVariableError):
+        method.fit(labelled_clusters)
 
-    assert method.mixed_model is None
-    assert method.model.converged_
+
+def test_stepmix_fits_continuous_data_with_the_density_of_its_mixture(two_clusters):
+    method = _two_component_stepmix()
+
+    circuit = method.fit(two_clusters)
+
+    assert circuit.log_likelihood(
+        _circuit_columns(circuit, two_clusters)
+    ).mean() == pytest.approx(method.model.score(two_clusters.to_numpy()))
 
 
 def test_the_circuit_has_the_density_of_the_fitted_mixed_mixture(labelled_clusters):
-    method = GaussianMixtureModel(GaussianMixture(n_components=2, random_state=0))
+    method = _two_component_stepmix()
     circuit = method.fit(labelled_clusters)
     cluster = _variable(circuit, "cluster")
     elements = list(cluster.domain.all_elements)
@@ -246,9 +261,7 @@ def test_the_circuit_has_the_density_of_the_fitted_mixed_mixture(labelled_cluste
         _circuit_columns(circuit, labelled_clusters)
     )
 
-    assert log_likelihood.mean() == pytest.approx(
-        method.mixed_model.score(stepmix_data)
-    )
+    assert log_likelihood.mean() == pytest.approx(method.model.score(stepmix_data))
 
 
 def test_a_symbolic_variable_is_as_frequent_as_in_the_data(labelled_clusters):
@@ -280,7 +293,7 @@ def test_stratifying_on_a_symbolic_variable_keeps_each_value_in_one_branch(
 ):
     circuit = StratifiedLearning(
         variables=["cluster"],
-        method=GaussianMixtureModel(GaussianMixture(n_components=2, random_state=0)),
+        method=_two_component_stepmix(),
     ).fit(labelled_clusters)
     cluster = _variable(circuit, "cluster")
 

@@ -1,23 +1,9 @@
 """
-How well a Gaussian mixture and a joint probability tree describe the same data, when
-both are represented as probabilistic circuits.
+Gaussian mixtures and joint probability trees, fitted and scored on the same rows.
 
-Every method is fitted on a whole dataset and scored on the same rows, so the numbers
-say how well a method can describe the data, not how well it generalizes. Two
-quantities are reported per fit:
-
-- the average log-likelihood of a row, over all of its columns;
-- for datasets with a symbolic column, the average log-probability of that column given
-  the others, i.e. how well the circuit predicts it.
-
-The continuous columns are standardized and cast to single precision.
-:class:`~random_events.interval.SimpleInterval` stores the bounds it is built with from
-Python at single precision, so a support a tree fits around double precision data can
-leave out the extreme rows it was fitted on, which would score them as impossible.
-
-Circuit sizes are reported for reference only: a component of a mixture and a leaf of a
-tree are not the same amount of model, so the node counts of the two methods are not
-comparable.
+The continuous columns are standardized and cast to single precision, the precision
+:class:`~random_events.interval.SimpleInterval` stores its bounds at, so that no tree
+leaves the extreme training rows out of its support.
 """
 
 from __future__ import annotations
@@ -31,14 +17,18 @@ import pandas as pd
 import tqdm
 from sklearn import datasets
 from sklearn.mixture import GaussianMixture
-from typing_extensions import Optional, Sequence, Tuple
+from typing_extensions import List, Optional, Sequence
 
 from experiments.experiment_definitions import (
     ExperimentResult,
     ExperimentsTable,
     TypstRenderer,
 )
-from probabilistic_model.learning.gaussian_mixture import GaussianMixtureModel
+from probabilistic_model.learning.gaussian_mixture import (
+    GaussianMixtureModel,
+    StepMixModel,
+    default_stepmix,
+)
 from probabilistic_model.learning.jpt.jpt import JointProbabilityTree
 from probabilistic_model.learning.learning_method import LearningMethod
 from probabilistic_model.probabilistic_circuit.rx.probabilistic_circuit import (
@@ -53,71 +43,98 @@ class Dataset(enum.StrEnum):
 
     IRIS = "iris"
     """
-    Four measurements of 150 flowers, labelled with one of three species.
+    Four measurements of 150 flowers and their species.
     """
 
     WINE = "wine"
     """
-    Thirteen chemical measurements of 178 wines, labelled with one of three cultivars.
+    Thirteen measurements of 178 wines and their cultivar.
     """
 
     BREAST_CANCER = "breast_cancer"
     """
-    Thirty measurements of 569 tumours, labelled benign or malignant.
+    Thirty measurements of 569 tumours and whether they are malignant.
     """
 
     DIABETES = "diabetes"
     """
-    Nine measurements of 442 patients, with their sex as the symbolic column.
+    Nine measurements of 442 patients and their sex.
     """
 
     CALIFORNIA_HOUSING = "california_housing"
     """
-    Eight measurements of 20640 districts, without a symbolic column. Downloaded by
-    scikit-learn on first use.
+    Eight measurements of 20640 districts. Downloaded on first use.
     """
 
-    def load(self) -> Tuple[pd.DataFrame, Optional[str]]:
+    @property
+    def symbolic_column(self) -> Optional[str]:
         """
-        :return: The dataset with its continuous columns standardized and cast to single
-            precision, and the name of its symbolic column, if it has one.
+        :return: The name of the symbolic column, if there is one.
+        """
+        match self:
+            case Dataset.CALIFORNIA_HOUSING:
+                return None
+            case Dataset.DIABETES:
+                return "sex"
+        return "label"
+
+    def load(self) -> pd.DataFrame:
+        """
+        :return: The dataset, with its continuous columns standardized.
         """
         loader = getattr(datasets, f"fetch_{self.value}", None) or getattr(
             datasets, f"load_{self.value}"
         )
         bunch = loader(as_frame=True)
         features = bunch.data.astype(float)
-        if self is Dataset.CALIFORNIA_HOUSING:
-            return standardized(features), None
-        if self is Dataset.DIABETES:
-            symbolic = np.where(features.pop("sex") > 0, "first", "second")
-            return standardized(features).assign(sex=symbolic), "sex"
+        match self:
+            case Dataset.CALIFORNIA_HOUSING:
+                return standardized(features)
+            case Dataset.DIABETES:
+                sex = np.where(features.pop("sex") > 0, "first", "second")
+                return standardized(features).assign(sex=sex)
         labels = np.asarray(bunch.target_names)[bunch.target.to_numpy()]
-        return standardized(features).assign(label=labels.astype(str)), "label"
+        return standardized(features).assign(label=labels.astype(str))
+
+    def settings(self) -> List[Setting]:
+        """
+        :return: The configurations the dataset is fitted with.
+        """
+        mixture = (
+            Method.GAUSSIAN_MIXTURE if self.symbolic_column is None else Method.STEPMIX
+        )
+        return [Setting(mixture, components) for components in (1, 3, 5, 10)] + [
+            Setting(Method.JOINT_PROBABILITY_TREE, share)
+            for share in (0.2, 0.1, 0.05, 0.02)
+        ]
 
 
 def standardized(features: pd.DataFrame) -> pd.DataFrame:
     """
-    :param features: Continuous columns.
     :return: The columns with zero mean and unit standard deviation, at single
         precision.
     """
     return ((features - features.mean()) / features.std()).astype(np.float32)
 
 
-class Method(enum.StrEnum):
+class Method(enum.Enum):
     """
     The learning methods compared.
     """
 
-    GAUSSIAN_MIXTURE = "Gaussian mixture"
+    GAUSSIAN_MIXTURE = GaussianMixtureModel
     """
-    :class:`GaussianMixtureModel` with full covariances.
+    A scikit-learn Gaussian mixture, for continuous data.
     """
 
-    JOINT_PROBABILITY_TREE = "Joint probability tree"
+    STEPMIX = StepMixModel
     """
-    :class:`JointProbabilityTree`.
+    A StepMix mixture, for data with a symbolic column.
+    """
+
+    JOINT_PROBABILITY_TREE = JointProbabilityTree
+    """
+    A joint probability tree.
     """
 
 
@@ -140,37 +157,29 @@ class Setting:
 
     def learning_method(self) -> LearningMethod:
         """
-        :return: A method configured this way, not yet fitted.
+        :return: The configured method, not yet fitted.
         """
-        if self.method is Method.GAUSSIAN_MIXTURE:
-            return GaussianMixtureModel(
-                GaussianMixture(n_components=int(self.size), random_state=0)
-            )
-        return JointProbabilityTree(min_samples_per_leaf=self.size)
+        if self.method is Method.JOINT_PROBABILITY_TREE:
+            return self.method.value(min_samples_per_leaf=self.size)
+        model = (
+            GaussianMixture()
+            if self.method is Method.GAUSSIAN_MIXTURE
+            else default_stepmix()
+        )
+        return self.method.value(
+            model.set_params(n_components=int(self.size), random_state=0)
+        )
 
     def __str__(self) -> str:
-        if self.method is Method.GAUSSIAN_MIXTURE:
-            components = int(self.size)
-            return f"{components} component{'' if components == 1 else 's'}"
-        return f"leaves of at least {self.size:.0%} of the rows"
-
-
-SETTINGS = [
-    *(Setting(Method.GAUSSIAN_MIXTURE, components) for components in (1, 3, 5, 10)),
-    *(
-        Setting(Method.JOINT_PROBABILITY_TREE, share)
-        for share in (0.2, 0.1, 0.05, 0.02)
-    ),
-]
-"""
-The configurations every dataset is fitted with.
-"""
+        if self.method is Method.JOINT_PROBABILITY_TREE:
+            return f"leaves of at least {self.size:.0%} of the rows"
+        return f"{int(self.size)} components"
 
 
 @dataclass
 class GaussianMixtureBenchmarkResult(ExperimentResult):
     """
-    One method, in one configuration, fitted on one dataset.
+    One configuration of a method, fitted on one dataset.
     """
 
     dataset: Dataset
@@ -185,50 +194,44 @@ class GaussianMixtureBenchmarkResult(ExperimentResult):
 
     setting: str
     """
-    How the method was configured.
+    The configuration of the method.
     """
 
     average_log_likelihood: float
     """
-    The mean log-likelihood of a row, over all of its columns.
+    The mean log-likelihood of a row.
     """
 
     symbolic_given_rest: Optional[float]
     """
-    The mean log-probability of the symbolic column given the other columns, or nothing
-    for a dataset without one. Zero means the circuit predicts it perfectly.
+    The mean log-probability of the symbolic column given the other columns, if there
+    is one.
     """
 
     impossible_rows: int
     """
-    How many of the rows the circuit it fitted on gives no density at all.
+    The number of rows with zero density.
     """
 
     nodes: int
     """
-    How many units the fitted circuit has.
+    The number of units of the circuit.
     """
 
     duration: float
     """
-    Time spent fitting, in seconds.
+    The time spent fitting, in seconds.
     """
 
 
 def measure(
-    dataset: Dataset,
-    data: pd.DataFrame,
-    symbolic: Optional[str],
-    setting: Setting,
+    dataset: Dataset, data: pd.DataFrame, setting: Setting
 ) -> GaussianMixtureBenchmarkResult:
     """
-    Fit one configuration of a method on a dataset and score it on the same rows.
-
     :param dataset: The dataset the rows are from.
     :param data: The rows, as :meth:`Dataset.load` returns them.
-    :param symbolic: The name of the symbolic column, if there is one.
     :param setting: The configuration to fit.
-    :return: The measurement.
+    :return: The configuration fitted and scored on the rows.
     """
     start = time.perf_counter()
     circuit = setting.learning_method().fit(data)
@@ -236,9 +239,13 @@ def measure(
 
     joint = log_likelihood(circuit, data)
     symbolic_given_rest = None
-    if symbolic is not None:
+    if dataset.symbolic_column is not None:
         rest = circuit.marginal(
-            [variable for variable in circuit.variables if variable.name != symbolic]
+            [
+                variable
+                for variable in circuit.variables
+                if variable.name != dataset.symbolic_column
+            ]
         )
         symbolic_given_rest = float(np.mean(joint - log_likelihood(rest, data)))
 
@@ -256,8 +263,6 @@ def measure(
 
 def log_likelihood(circuit: ProbabilisticCircuit, data: pd.DataFrame) -> np.ndarray:
     """
-    :param circuit: The circuit to score with.
-    :param data: The rows to score, with at least a column per variable of the circuit.
     :return: The log-likelihood of every row under the circuit.
     """
     columns = [variable.name for variable in circuit.variables]
@@ -265,18 +270,18 @@ def log_likelihood(circuit: ProbabilisticCircuit, data: pd.DataFrame) -> np.ndar
 
 
 def benchmark(
-    dataset: Dataset, settings: Sequence[Setting] = tuple(SETTINGS)
+    dataset: Dataset, settings: Optional[Sequence[Setting]] = None
 ) -> ExperimentsTable:
     """
     :param dataset: The dataset to fit on.
-    :param settings: The configurations to fit.
+    :param settings: The configurations to fit, by default :meth:`Dataset.settings`.
     :return: One row per configuration.
     """
-    data, symbolic = dataset.load()
+    data = dataset.load()
     return ExperimentsTable(
         [
-            measure(dataset, data, symbolic, setting)
-            for setting in tqdm.tqdm(settings, desc=str(dataset))
+            measure(dataset, data, setting)
+            for setting in tqdm.tqdm(settings or dataset.settings(), desc=str(dataset))
         ]
     )
 
@@ -285,12 +290,10 @@ def main(datasets_to_run: Sequence[Dataset] = tuple(Dataset)):
     for dataset in datasets_to_run:
         print(
             TypstRenderer(benchmark(dataset)).render_figure(
-                f"Gaussian mixtures and joint probability trees fitted on the whole "
-                f"{dataset} dataset and scored on the same rows, with the continuous "
-                f"columns standardized. Higher log-likelihoods are better; the "
-                f"log-probability of the symbolic column given the rest is at most 0, "
-                f"and 0 means a perfect prediction. Node counts are not comparable "
-                f"across methods."
+                f"Gaussian mixtures and joint probability trees fitted and scored on "
+                f"the whole {dataset} dataset. Higher log-likelihoods are better; the "
+                f"log-probability of the symbolic column given the rest is at most 0. "
+                f"Node counts are not comparable across methods."
             )
         )
         print()
