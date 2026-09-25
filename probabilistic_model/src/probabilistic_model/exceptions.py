@@ -142,3 +142,24 @@ class VariableNotInDistributionError(DataclassException):
 
     def suggest_correction(self) -> str:
         return "Name one of the variables the distribution is over."
+
+
+@dataclass
+class NonContinuousVariableError(DataclassException, ValueError):
+    """
+    Exception raised when a model that only fits continuous variables is given others.
+    """
+
+    variables: List[Variable]
+    """
+    The variables that are not continuous.
+    """
+
+    def error_message(self) -> str:
+        return (
+            f"The variables {[str(variable) for variable in self.variables]} are not "
+            f"continuous."
+        )
+
+    def suggest_correction(self) -> str:
+        return "Fit them with a model that supports discrete variables."
