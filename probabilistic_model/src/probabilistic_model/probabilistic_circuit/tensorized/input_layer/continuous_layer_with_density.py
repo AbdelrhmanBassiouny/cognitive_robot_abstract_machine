@@ -4,16 +4,17 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 
 import numpy as np
-import numpy.typing as npt
 from random_events.interval import Bound, Interval, SimpleInterval
 from typing_extensions import Dict, List, Self, Type
 
 from probabilistic_model.exceptions import ShapeMismatchError
 from probabilistic_model.probabilistic_circuit.tensorized.array_types import (
+    NodeIntervalBounds,
+    NodeIntervals,
     NodeMask,
     NodeValues,
     SampleColumn,
-    SampleNodeValues,
+    SampleNodeMask,
     VariableValues,
 )
 from probabilistic_model.probabilistic_circuit.tensorized.inner_layer.base import Layer
@@ -183,12 +184,12 @@ class ContinuousLayerWithFiniteSupport(ContinuousLayerWithDensity, ABC):
     Abstract base class for continuous input layers whose nodes have a finite support.
     """
 
-    interval: npt.NDArray[np.float64]
+    interval: NodeIntervals
     """
     The lower and upper bound of the support of every node, shape (#nodes, 2).
     """
 
-    bounds: npt.NDArray[np.int64]
+    bounds: NodeIntervalBounds
     """
     Whether the lower and upper bound of every node are open or closed, as
     :class:`random_events.interval.Bound` values of shape (#nodes, 2).
@@ -242,7 +243,7 @@ class ContinuousLayerWithFiniteSupport(ContinuousLayerWithDensity, ABC):
         if self.interval.shape != self.bounds.shape:
             raise ShapeMismatchError(self.interval.shape, self.bounds.shape)
 
-    def included_condition(self, values: SampleColumn) -> SampleNodeValues:
+    def included_condition(self, values: SampleColumn) -> SampleNodeMask:
         """
         Check whether values lie inside the support of every node.
 

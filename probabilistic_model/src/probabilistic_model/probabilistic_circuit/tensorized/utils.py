@@ -4,6 +4,11 @@ import numpy as np
 import numpy.typing as npt
 from typing_extensions import Tuple
 
+from probabilistic_model.probabilistic_circuit.tensorized.array_types import (
+    NodeIndices,
+    NodeMask,
+)
+
 
 def embedded_logsumexp(values: npt.NDArray, axis: int) -> npt.NDArray:
     """
@@ -31,8 +36,8 @@ def embedded_logsumexp(values: npt.NDArray, axis: int) -> npt.NDArray:
 
 
 def remap_indices(
-    keep_mask: npt.NDArray,
-) -> Tuple[npt.NDArray, int]:
+    keep_mask: NodeMask,
+) -> Tuple[NodeIndices, int]:
     """
     Create an index remapping for a prune operation.
 

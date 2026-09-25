@@ -4,7 +4,6 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 
 import numpy as np
-import numpy.typing as npt
 from random_events.interval import Interval
 from random_events.product_algebra import Event, SimpleEvent, VariableMap
 from random_events.sigma_algebra import AbstractCompositeSet
@@ -24,6 +23,7 @@ from probabilistic_model.distributions.distributions import UnivariateDistributi
 from probabilistic_model.probabilistic_circuit.tensorized.array_types import (
     NodeMask,
     NodeValues,
+    NodeVariableValues,
     SampleArray,
     SampleColumn,
     SampleNodeValues,
@@ -182,7 +182,7 @@ class InputLayer(Layer, ABC):
         query: MomentQuery,
         variables: SortedSet,
         cache: Optional[QueryCache] = None,
-    ) -> npt.NDArray:
+    ) -> NodeVariableValues:
         result = np.zeros((self.number_of_nodes, query.number_of_variables))
         if not query.requested[self.variable]:
             return result

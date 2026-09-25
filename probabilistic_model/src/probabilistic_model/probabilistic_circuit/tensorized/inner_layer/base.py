@@ -5,7 +5,6 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 
 import numpy as np
-import numpy.typing as npt
 from krrood.adapters import json_serializer
 from krrood.adapters.json_serializer import SubclassJSONSerializer
 from random_events.product_algebra import Event, SimpleEvent
@@ -24,6 +23,7 @@ from typing_extensions import (
 from probabilistic_model.probabilistic_circuit.tensorized.array_types import (
     NodeMask,
     NodeValues,
+    NodeVariableValues,
     SampleArray,
     SampleNodeValues,
     VariableIndices,
@@ -236,7 +236,7 @@ class Layer(SubclassJSONSerializer, ABC):
         query: MomentQuery,
         variables: SortedSet,
         cache: Optional[QueryCache] = None,
-    ) -> npt.NDArray:
+    ) -> NodeVariableValues:
         """
         Calculate the moment of every node of this layer.
 

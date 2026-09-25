@@ -24,6 +24,7 @@ from probabilistic_model.probabilistic_circuit.tensorized.array_types import (
     EdgeValues,
     NodeMask,
     NodeValues,
+    NodeVariableValues,
     SampleArray,
     SampleNodeValues,
     SampleRows,
@@ -130,7 +131,7 @@ class SumLayer(InnerLayer):
         return self.log_weights.number_of_stored_entries
 
     @property
-    def column_offsets(self) -> npt.NDArray:
+    def column_offsets(self) -> npt.NDArray[np.int64]:
         """
         :return: The first column of every child layer, followed by the number of
             columns.
@@ -165,7 +166,7 @@ class SumLayer(InnerLayer):
             columns - offsets[child_layer_indices],
         )
 
-    def values_of_edges(self, child_results: List[npt.NDArray]) -> EdgeValues:
+    def values_of_edges(self, child_results: List[npt.NDArray]) -> npt.NDArray:
         """
         Take the value of the child node of every edge.
 
@@ -219,7 +220,9 @@ class SumLayer(InnerLayer):
 
     # %% queries
 
-    def _weighted_forward(self, child_results: List[npt.NDArray]) -> npt.NDArray:
+    def _weighted_forward(
+        self, child_results: List[SampleNodeValues]
+    ) -> SampleNodeValues:
         """
         Combine the results of the child layers of a linear (non-logarithmic) query
         whose results have the nodes in the last axis.
@@ -231,8 +234,8 @@ class SumLayer(InnerLayer):
         return self.log_weights.group_by_row(values, padding=0.0).sum(axis=-1)
 
     def _weighted_forward_over_nodes(
-        self, child_results: List[npt.NDArray]
-    ) -> npt.NDArray:
+        self, child_results: List[NodeVariableValues]
+    ) -> NodeVariableValues:
         """
         Combine the results of the child layers of a query whose results have the nodes
         in the first axis, such as the moments.
@@ -244,7 +247,9 @@ class SumLayer(InnerLayer):
         values = values * self.normalized_edge_weights
         return self.log_weights.group_by_row(values, padding=0.0).sum(axis=-1).T
 
-    def log_weighted_sum(self, child_results: List[npt.NDArray]) -> npt.NDArray:
+    def log_weighted_sum(
+        self, child_results: List[SampleNodeValues]
+    ) -> SampleNodeValues:
         """
         Reduce the log-results of the child layers with the normalized log-weights.
 
@@ -352,7 +357,7 @@ class SumLayer(InnerLayer):
         query: MomentQuery,
         variables: SortedSet,
         cache: Optional[QueryCache] = None,
-    ) -> npt.NDArray:
+    ) -> NodeVariableValues:
         child_results = [
             child_layer.moment_of_nodes(query, variables, cache=cache)
             for child_layer in self.child_layers

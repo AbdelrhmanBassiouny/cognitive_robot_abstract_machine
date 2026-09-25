@@ -7,6 +7,10 @@ import numpy as np
 import numpy.typing as npt
 from typing_extensions import Iterator, Self
 
+from probabilistic_model.probabilistic_circuit.tensorized.array_types import (
+    NodeIndices,
+)
+
 
 @dataclass
 class InnerLayerEdge:
@@ -41,7 +45,7 @@ class InnerLayerEdges:
     The ``k``-th entry of every array belongs to the ``k``-th edge.
     """
 
-    nodes: npt.NDArray[np.int64]
+    nodes: NodeIndices
     """
     The node of every edge, see :attr:`InnerLayerEdge.node`.
     """
@@ -51,7 +55,7 @@ class InnerLayerEdges:
     The child layer of every edge, see :attr:`InnerLayerEdge.child_layer_index`.
     """
 
-    child_nodes: npt.NDArray[np.int64]
+    child_nodes: NodeIndices
     """
     The child node of every edge, see :attr:`InnerLayerEdge.child_node`.
     """

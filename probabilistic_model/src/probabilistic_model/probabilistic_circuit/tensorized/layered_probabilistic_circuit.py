@@ -12,6 +12,7 @@ from probabilistic_model.distributions.helper import make_dirac
 from probabilistic_model.exceptions import IntractableError
 from probabilistic_model.probabilistic_circuit.tensorized.array_types import (
     SampleArray,
+    SampleValues,
 )
 from probabilistic_model.probabilistic_circuit.tensorized.forward_sample_assignment import (
     ForwardSampleAssignment,
@@ -111,10 +112,10 @@ class LayeredProbabilisticCircuit(ProbabilisticModel):
 
     # %% queries
 
-    def log_likelihood(self, events: SampleArray) -> np.ndarray:
+    def log_likelihood(self, events: SampleArray) -> SampleValues:
         return self.root.log_likelihood_of_nodes(np.asarray(events))[:, 0]
 
-    def cumulative_distribution_function(self, events: SampleArray) -> np.ndarray:
+    def cumulative_distribution_function(self, events: SampleArray) -> SampleValues:
         return self.root.cumulative_distribution_of_nodes(np.asarray(events))[:, 0]
 
     def probability_of_simple_event(self, event: SimpleEvent) -> float:

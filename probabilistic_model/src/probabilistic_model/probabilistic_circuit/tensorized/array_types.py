@@ -26,6 +26,16 @@ SampleRows: TypeAlias = npt.NDArray[np.int64]
 Indices of rows of a :data:`SampleArray`.
 """
 
+SampleValues: TypeAlias = npt.NDArray[np.float64]
+"""
+One value per sample, shape (#samples,).
+"""
+
+NodeIndices: TypeAlias = npt.NDArray[np.int64]
+"""
+Indices of nodes of a layer.
+"""
+
 NodeValues: TypeAlias = npt.NDArray[np.float64]
 """
 One value per node of a layer, shape (#nodes,).
@@ -41,9 +51,31 @@ SampleNodeValues: TypeAlias = npt.NDArray[np.float64]
 One value per sample and node of a layer, shape (#samples, #nodes).
 """
 
-VariableValues: TypeAlias = npt.NDArray[np.float64]
+SampleNodeMask: TypeAlias = npt.NDArray[np.bool_]
 """
-One value per variable of a circuit, shape (#variables of the circuit,).
+One flag per sample and node of a layer, shape (#samples, #nodes).
+"""
+
+NodeVariableValues: TypeAlias = npt.NDArray[np.float64]
+"""
+One value per node of a layer and variable of the circuit, shape (#nodes, #variables of
+the circuit).
+"""
+
+NodeIntervals: TypeAlias = npt.NDArray[np.float64]
+"""
+The lower and upper bound of one interval per node of a layer, shape (#nodes, 2).
+"""
+
+NodeIntervalBounds: TypeAlias = npt.NDArray[np.int64]
+"""
+Whether the lower and upper bound of one interval per node of a layer are open or
+closed, as :class:`random_events.interval.Bound` values of shape (#nodes, 2).
+"""
+
+VariableValues: TypeAlias = npt.NDArray[np.number]
+"""
+One number per variable of a circuit, shape (#variables of the circuit,).
 """
 
 VariableMask: TypeAlias = npt.NDArray[np.bool_]

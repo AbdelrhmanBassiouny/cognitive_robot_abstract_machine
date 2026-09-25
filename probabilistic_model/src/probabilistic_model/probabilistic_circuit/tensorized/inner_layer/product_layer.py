@@ -6,7 +6,6 @@ from dataclasses import (
 )
 
 import numpy as np
-import numpy.typing as npt
 from random_events.product_algebra import Event, SimpleEvent
 from random_events.variable import Variable
 from scipy.sparse import coo_array
@@ -24,6 +23,7 @@ from probabilistic_model.exceptions import ShapeMismatchError
 from probabilistic_model.probabilistic_circuit.tensorized.array_types import (
     NodeMask,
     NodeValues,
+    NodeVariableValues,
     SampleArray,
     SampleNodeValues,
     VariableIndices,
@@ -161,8 +161,8 @@ class ProductLayer(InnerLayer):
         ]
 
     def _gather_and_add(
-        self, child_results: List[npt.NDArray], fill: float
-    ) -> npt.NDArray:
+        self, child_results: List[SampleNodeValues], fill: float
+    ) -> SampleNodeValues:
         """
         Sum, per node, the results of the child nodes the edges point to.
 
@@ -208,7 +208,9 @@ class ProductLayer(InnerLayer):
         ]
         return self._gather_and_multiply(child_results)
 
-    def _gather_and_multiply(self, child_results: List[npt.NDArray]) -> npt.NDArray:
+    def _gather_and_multiply(
+        self, child_results: List[SampleNodeValues]
+    ) -> SampleNodeValues:
         leading_shape = child_results[0].shape[:-1]
         result = np.ones(leading_shape + (self.number_of_nodes,))
         for edges, child_result in zip(self.edges_per_child_layer, child_results):
@@ -288,7 +290,7 @@ class ProductLayer(InnerLayer):
         query: MomentQuery,
         variables: SortedSet,
         cache: Optional[QueryCache] = None,
-    ) -> npt.NDArray:
+    ) -> NodeVariableValues:
         child_results = [
             child_layer.moment_of_nodes(query, variables, cache=cache)
             for child_layer in self.child_layers

@@ -96,14 +96,14 @@ class RowGroupedSparseArray:
         return self.array.nnz
 
     @property
-    def rows(self) -> npt.NDArray:
+    def rows(self) -> npt.NDArray[np.int64]:
         """
         :return: The row of every stored entry.
         """
         return self.array.row
 
     @property
-    def columns(self) -> npt.NDArray:
+    def columns(self) -> npt.NDArray[np.int64]:
         """
         :return: The column of every stored entry.
         """
@@ -121,7 +121,7 @@ class RowGroupedSparseArray:
         self.array.data = value
 
     @functools.cached_property
-    def gather(self) -> npt.NDArray:
+    def gather(self) -> npt.NDArray[np.int64]:
         """
         The positions of the stored entries of every row, as a rectangular index matrix
         of shape (#rows, largest number of entries of a row).
