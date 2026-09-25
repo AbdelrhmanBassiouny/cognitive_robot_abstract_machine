@@ -9,12 +9,13 @@ from dataclasses import dataclass, field
 import numpy as np
 import numpy.typing as npt
 import pandas as pd
-from random_events.variable import Continuous, Symbolic
+from random_events.variable import Continuous, Integer, Symbolic
 from sklearn.base import clone
 from stepmix.stepmix import StepMix
-from typing_extensions import Any, Dict, Iterable, List, Optional
+from typing_extensions import Any, Dict, Iterable, List, Optional, Union
 
 from probabilistic_model.distributions.distributions import (
+    DiscreteDistribution,
     IntegerDistribution,
     SymbolicDistribution,
 )
@@ -22,9 +23,10 @@ from probabilistic_model.learning.gaussian_mixture.covariance_type import (
     CovarianceType,
 )
 from probabilistic_model.learning.gaussian_mixture.gaussian_mixture_learning_method import (
-    DiscreteDistribution,
-    DiscreteVariable,
     GaussianMixtureLearningMethod,
+)
+from probabilistic_model.learning.gaussian_mixture.initialization_method import (
+    InitializationMethod,
 )
 from probabilistic_model.learning.jpt.variables import AnnotatedVariable
 from probabilistic_model.probabilistic_circuit.rx.probabilistic_circuit import (
@@ -44,13 +46,17 @@ class StepMixModel(GaussianMixtureLearningMethod):
 
     model: StepMix = field(
         default_factory=lambda: StepMix(
-            init_params="kmeans", n_init=10, verbose=0, progress_bar=0
+            init_params=InitializationMethod.K_MEANS,
+            n_init=10,
+            verbose=0,
+            progress_bar=0,
         )
     )
     """
     The mixture to fit, by default started from the best of ten k-means runs, since a
-    single random start often ends in a poor local optimum. Each :meth:`fit` replaces
-    it by a copy fitted on the data.
+    single random start often ends in a poor local optimum. Its ``init_params`` is one
+    of :class:`InitializationMethod`. Each :meth:`fit` replaces it by a copy fitted
+    on the data.
     """
 
     covariance_type: CovarianceType = CovarianceType.FULL
@@ -137,7 +143,7 @@ class StepMixModel(GaussianMixtureLearningMethod):
 
     @staticmethod
     def _outcome_codes(
-        variable: DiscreteVariable, values: pd.Series
+        variable: Union[Symbolic, Integer], values: pd.Series
     ) -> tuple[npt.NDArray, List[Any]]:
         """
         :return: The code ``0, 1, ...`` of every row's outcome, which StepMix reads,
@@ -153,7 +159,10 @@ class StepMixModel(GaussianMixtureLearningMethod):
         return codes, [hash(value) for value in unique]
 
     def _distribution(
-        self, variable: DiscreteVariable, probabilities: npt.NDArray, keys: List[Any]
+        self,
+        variable: Union[Symbolic, Integer],
+        probabilities: npt.NDArray,
+        keys: List[Any],
     ) -> DiscreteDistribution:
         """
         :param probabilities: One component's probability of each outcome code.

@@ -10,13 +10,10 @@ from dataclasses import dataclass
 
 import numpy.typing as npt
 import pandas as pd
-from random_events.variable import Continuous, Integer, Symbolic, Variable
-from typing_extensions import Iterable, List, Optional, Sequence, Union
+from random_events.variable import Continuous, Variable
+from typing_extensions import Iterable, List, Optional, Sequence
 
-from probabilistic_model.distributions.distributions import (
-    IntegerDistribution,
-    SymbolicDistribution,
-)
+from probabilistic_model.distributions.distributions import DiscreteDistribution
 from probabilistic_model.distributions.multivariate_gaussian import (
     Covariance,
     MultivariateGaussianDistribution,
@@ -35,9 +32,6 @@ from probabilistic_model.probabilistic_circuit.rx.probabilistic_circuit import (
     SumUnit,
     leaf,
 )
-
-DiscreteVariable = Union[Symbolic, Integer]
-DiscreteDistribution = Union[SymbolicDistribution, IntegerDistribution]
 
 
 @dataclass
