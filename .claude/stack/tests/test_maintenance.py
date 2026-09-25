@@ -25,10 +25,12 @@ from pathlib import Path
 
 import pytest
 
+from maintenance_git_commands import GitCommandRunner
 from scratch_repository import initialize_bare_repository
 
 from stack import (
     BOARD_PATH,
+    PERSONAL_STACK_CONFIGURATION_PATH,
     Configuration,
     IntegrationStrategy,
     PullRequest,
@@ -100,6 +102,11 @@ UPSTREAM_BASE = "main"
 The branch every stack in these tests ultimately targets.
 """
 
+PERSONAL_NOTES_BRANCH = "claude/personal-notes"
+"""
+The branch a checkout's own configuration overrides are read from.
+"""
+
 A_LABEL_THIS_TOOL_NEVER_WRITES = "a-label-somebody-else-put-here"
 """
 Stands for whatever else a pull request happens to carry - the labels a write must
@@ -115,8 +122,10 @@ def make_configuration() -> Configuration:
         in_review_label="in-review",
         rebase_label="rebase",
         needs_resolution_label="needs-resolution",
+        cram2_link_sent_label="cram2-link-sent",
         fork_repository=Repository("a-fork-owner", "a-fork"),
         fork_remote="origin",
+        fork_setup_command=None,
         upstream_repository=Repository("an-upstream-owner", "a-project"),
         upstream_remote="cram2",
         upstream_base=UPSTREAM_BASE,
@@ -178,9 +187,33 @@ class ForkCheckout:
         checkout.commit("a-file", "the first line\n")
         checkout.run_git("push", "--quiet", "origin", UPSTREAM_BASE)
         checkout.run_git("push", "--quiet", "cram2", UPSTREAM_BASE)
+        checkout.publish_personal_configuration()
         checkout.run_git("fetch", "--quiet", "origin")
         checkout.run_git("fetch", "--quiet", "cram2")
         return checkout
+
+    def publish_personal_configuration(self) -> None:
+        """
+        Record which repository is the fork, on the personal-notes branch the executor
+        reads its overrides from.
+
+        The fork is configuration rather than something deduced from the remotes, so a
+        checkout nobody has run setup on is one every command refuses to act on. That
+        refusal is its own behaviour with its own tests; a checkout standing in for a
+        working one has to carry the answer setup would have written.
+        """
+        self.run_git("config", "claude.personalNotesRemote", "origin")
+        self.run_git("config", "claude.personalNotesBranch", PERSONAL_NOTES_BRANCH)
+        self.run_git("checkout", "--quiet", "-b", PERSONAL_NOTES_BRANCH)
+        override = self.project_root / PERSONAL_STACK_CONFIGURATION_PATH
+        override.parent.mkdir(parents=True, exist_ok=True)
+        override.write_text(
+            f'fork_repository = "{make_configuration().fork_repository}"\n'
+        )
+        self.run_git("add", PERSONAL_STACK_CONFIGURATION_PATH)
+        self.run_git("commit", "--quiet", "-m", "record the fork")
+        self.run_git("push", "--quiet", "origin", PERSONAL_NOTES_BRANCH)
+        self.run_git("checkout", "--quiet", UPSTREAM_BASE)
 
     @staticmethod
     def _bare_repository(path: Path) -> Path:
@@ -193,19 +226,17 @@ class ForkCheckout:
 
     def run_git(self, *arguments: str) -> str:
         """
-        Run git in the clone, failing the test if it reports an error.
+        Run git in the clone, raising if it reports an error.
+
+        Through the executor's own runner, which already repeats none of this: same
+        working directory, same capture, same refusal to read a failed command's output
+        as an answer.
 
         :param arguments: The arguments to pass to git.
         :return: The command's stripped stdout.
+        :raises GitCommandFailed: If git exits non-zero.
         """
-        result = subprocess.run(
-            ["git", *arguments],
-            cwd=self.project_root,
-            capture_output=True,
-            text=True,
-        )
-        assert result.returncode == 0, result.stderr
-        return result.stdout.strip()
+        return GitCommandRunner(self.project_root).run(*arguments)
 
     def commit(self, name: str, content: str) -> str:
         """
