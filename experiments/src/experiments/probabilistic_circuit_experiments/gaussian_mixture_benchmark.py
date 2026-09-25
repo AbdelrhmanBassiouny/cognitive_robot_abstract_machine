@@ -16,7 +16,6 @@ import numpy as np
 import pandas as pd
 import tqdm
 from sklearn import datasets
-from sklearn.mixture import GaussianMixture
 from typing_extensions import List, Optional, Sequence
 
 from experiments.experiment_definitions import (
@@ -24,11 +23,10 @@ from experiments.experiment_definitions import (
     ExperimentsTable,
     TypstRenderer,
 )
-from probabilistic_model.learning.gaussian_mixture import (
+from probabilistic_model.learning.gaussian_mixture.gaussian_mixture_model import (
     GaussianMixtureModel,
-    StepMixModel,
-    default_stepmix,
 )
+from probabilistic_model.learning.gaussian_mixture.step_mix_model import StepMixModel
 from probabilistic_model.learning.jpt.jpt import JointProbabilityTree
 from probabilistic_model.learning.learning_method import LearningMethod
 from probabilistic_model.probabilistic_circuit.rx.probabilistic_circuit import (
@@ -161,14 +159,9 @@ class Setting:
         """
         if self.method is Method.JOINT_PROBABILITY_TREE:
             return self.method.value(min_samples_per_leaf=self.size)
-        model = (
-            GaussianMixture()
-            if self.method is Method.GAUSSIAN_MIXTURE
-            else default_stepmix()
-        )
-        return self.method.value(
-            model.set_params(n_components=int(self.size), random_state=0)
-        )
+        method = self.method.value()
+        method.model.set_params(n_components=int(self.size), random_state=0)
+        return method
 
     def __str__(self) -> str:
         if self.method is Method.JOINT_PROBABILITY_TREE:
@@ -202,12 +195,6 @@ class GaussianMixtureBenchmarkResult(ExperimentResult):
     The mean log-likelihood of a row.
     """
 
-    symbolic_given_rest: Optional[float]
-    """
-    The mean log-probability of the symbolic column given the other columns, if there
-    is one.
-    """
-
     impossible_rows: int
     """
     The number of rows with zero density.
@@ -238,23 +225,12 @@ def measure(
     duration = time.perf_counter() - start
 
     joint = log_likelihood(circuit, data)
-    symbolic_given_rest = None
-    if dataset.symbolic_column is not None:
-        rest = circuit.marginal(
-            [
-                variable
-                for variable in circuit.variables
-                if variable.name != dataset.symbolic_column
-            ]
-        )
-        symbolic_given_rest = float(np.mean(joint - log_likelihood(rest, data)))
 
     return GaussianMixtureBenchmarkResult(
         dataset=dataset,
         method=setting.method,
         setting=str(setting),
         average_log_likelihood=float(np.mean(joint)),
-        symbolic_given_rest=symbolic_given_rest,
         impossible_rows=int(np.sum(~np.isfinite(joint))),
         nodes=len(circuit.nodes()),
         duration=duration,
@@ -291,9 +267,8 @@ def main(datasets_to_run: Sequence[Dataset] = tuple(Dataset)):
         print(
             TypstRenderer(benchmark(dataset)).render_figure(
                 f"Gaussian mixtures and joint probability trees fitted and scored on "
-                f"the whole {dataset} dataset. Higher log-likelihoods are better; the "
-                f"log-probability of the symbolic column given the rest is at most 0. "
-                f"Node counts are not comparable across methods."
+                f"the whole {dataset} dataset. Higher log-likelihoods are better. Node "
+                f"counts are not comparable across methods."
             )
         )
         print()

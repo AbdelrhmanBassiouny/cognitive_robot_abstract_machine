@@ -14,7 +14,6 @@ from random_events.product_algebra import SimpleEvent
 from random_events.variable import Continuous
 from sklearn.mixture import GaussianMixture
 
-from probabilistic_model.distributions.gaussian import GaussianDistribution
 from probabilistic_model.distributions.multivariate_gaussian import (
     MultivariateGaussianDistribution,
 )
@@ -23,16 +22,14 @@ from probabilistic_model.distributions.distributions import (
     SymbolicDistribution,
 )
 from probabilistic_model.exceptions import NonContinuousVariableError
-from probabilistic_model.learning.gaussian_mixture import (
+from probabilistic_model.learning.gaussian_mixture.gaussian_mixture_model import (
     GaussianMixtureModel,
-    StepMixModel,
-    default_stepmix,
 )
+from probabilistic_model.learning.gaussian_mixture.step_mix_model import StepMixModel
 from probabilistic_model.learning.jpt.variables import infer_variables_from_dataframe
 from probabilistic_model.learning.learning_method import StratifiedLearning
 from probabilistic_model.probabilistic_circuit.rx.probabilistic_circuit import (
     MultivariateLeaf,
-    ProductUnit,
     SumUnit,
 )
 
@@ -91,8 +88,10 @@ def test_the_root_weighs_one_component_per_mixture_component(two_clusters):
     )
 
 
-@pytest.mark.parametrize("covariance_type", ["full", "tied"])
-def test_a_correlated_component_is_one_multivariate_leaf(two_clusters, covariance_type):
+@pytest.mark.parametrize("covariance_type", COVARIANCE_TYPES)
+def test_every_component_is_one_multivariate_gaussian_leaf(
+    two_clusters, covariance_type
+):
     circuit = GaussianMixtureModel(
         GaussianMixture(n_components=2, covariance_type=covariance_type, random_state=0)
     ).fit(two_clusters)
@@ -102,29 +101,20 @@ def test_a_correlated_component_is_one_multivariate_leaf(two_clusters, covarianc
         assert isinstance(component.distribution, MultivariateGaussianDistribution)
 
 
-@pytest.mark.parametrize("covariance_type", ["diag", "spherical"])
-def test_an_uncorrelated_component_is_a_product_of_univariate_gaussians(
-    two_clusters, covariance_type
-):
-    circuit = GaussianMixtureModel(
-        GaussianMixture(n_components=2, covariance_type=covariance_type, random_state=0)
-    ).fit(two_clusters)
-
-    for component in circuit.root.subcircuits:
-        assert isinstance(component, ProductUnit)
-        assert all(
-            isinstance(child.distribution, GaussianDistribution)
-            for child in component.subcircuits
-        )
-
-
-def test_a_single_variable_is_fitted_into_univariate_leaves(two_clusters):
+def test_a_single_variable_is_fitted_into_one_dimensional_gaussians(two_clusters):
     circuit = GaussianMixtureModel(GaussianMixture(n_components=2, random_state=0)).fit(
         two_clusters[["y"]]
     )
 
     for component in circuit.root.subcircuits:
-        assert isinstance(component.distribution, GaussianDistribution)
+        assert isinstance(component.distribution, MultivariateGaussianDistribution)
+        assert [variable.name for variable in component.distribution.variables] == ["y"]
+
+
+def test_a_single_component_is_simplified_into_its_leaf(two_clusters):
+    circuit = GaussianMixtureModel(GaussianMixture(n_components=1)).fit(two_clusters)
+
+    assert isinstance(circuit.root, MultivariateLeaf)
 
 
 def test_the_circuit_puts_all_probability_on_the_reals(two_clusters):
@@ -202,7 +192,9 @@ def labelled_clusters(two_clusters) -> pd.DataFrame:
 
 
 def _two_component_stepmix() -> StepMixModel:
-    return StepMixModel(default_stepmix().set_params(n_components=2, random_state=0))
+    method = StepMixModel()
+    method.model.set_params(n_components=2, random_state=0)
+    return method
 
 
 def _two_component_fit(data: pd.DataFrame):
