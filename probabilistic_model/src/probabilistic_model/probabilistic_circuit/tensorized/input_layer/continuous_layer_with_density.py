@@ -1,27 +1,37 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 import numpy as np
 import numpy.typing as npt
 from random_events.interval import Bound, Interval, SimpleInterval
-from typing_extensions import Dict, List, Optional, Self, Tuple, Type
+from typing_extensions import Dict, List, Self, Type
 
 from probabilistic_model.exceptions import ShapeMismatchError
+from probabilistic_model.probabilistic_circuit.tensorized.array_types import (
+    NodeMask,
+    NodeValues,
+    SampleColumn,
+    SampleNodeValues,
+    VariableValues,
+)
 from probabilistic_model.probabilistic_circuit.tensorized.inner_layer.base import Layer
 from probabilistic_model.probabilistic_circuit.tensorized.inner_layer.sum_layer import (
     SumLayer,
 )
 from probabilistic_model.probabilistic_circuit.tensorized.input_layer.base import (
     AbstractContinuousLayer,
-    InputLayer,
-)
-from probabilistic_model.probabilistic_circuit.tensorized.row_grouped_sparse_array import (
-    RowGroupedSparseArray,
 )
 from probabilistic_model.probabilistic_circuit.tensorized.input_layer.dirac_delta_layer import (
     DiracDeltaLayer,
+)
+from probabilistic_model.probabilistic_circuit.tensorized.row_grouped_sparse_array import (
+    RowGroupedSparseArray,
+    SparseEntries,
+)
+from probabilistic_model.probabilistic_circuit.tensorized.structural_query import (
+    LayerWithLogProbabilities,
 )
 
 
@@ -39,7 +49,7 @@ class ContinuousLayerWithDensity(AbstractContinuousLayer, ABC):
     @abstractmethod
     def log_truncated_of_non_singleton_interval(
         self, interval: SimpleInterval
-    ) -> Tuple[Layer, npt.NDArray]:
+    ) -> LayerWithLogProbabilities:
         """
         Truncate every node of this layer to a simple interval that is not a singleton.
 
@@ -72,20 +82,22 @@ class ContinuousLayerWithDensity(AbstractContinuousLayer, ABC):
 
     def log_truncated_of_assignment(
         self, assignment: Interval, singleton_allowed: bool
-    ) -> Tuple[Layer, npt.NDArray]:
+    ) -> LayerWithLogProbabilities:
         pieces = [
             self.log_truncated_of_simple_interval(interval, singleton_allowed)
             for interval in assignment.simple_sets
         ]
         if not pieces:
-            return self.__deepcopy__(), np.full(self.number_of_nodes, -np.inf)
+            return LayerWithLogProbabilities(
+                self.__deepcopy__(), np.full(self.number_of_nodes, -np.inf)
+            )
         if len(pieces) == 1:
             return pieces[0]
         return self.mixture_of_pieces(pieces)
 
     def log_truncated_of_simple_interval(
         self, interval: SimpleInterval, singleton_allowed: bool
-    ) -> Tuple[Layer, npt.NDArray]:
+    ) -> LayerWithLogProbabilities:
         """
         Truncate every node of this layer to a simple interval.
 
@@ -104,11 +116,11 @@ class ContinuousLayerWithDensity(AbstractContinuousLayer, ABC):
             np.full(self.number_of_nodes, float(interval.lower)),
             np.ones(self.number_of_nodes),
         )
-        return dirac_delta_layer, log_likelihood
+        return LayerWithLogProbabilities(dirac_delta_layer, log_likelihood)
 
     def mixture_of_pieces(
-        self, pieces: List[Tuple[Layer, npt.NDArray]]
-    ) -> Tuple[SumLayer, npt.NDArray]:
+        self, pieces: List[LayerWithLogProbabilities]
+    ) -> LayerWithLogProbabilities:
         """
         Mix the truncations of this layer to the simple intervals of a composite
         interval.
@@ -123,46 +135,46 @@ class ContinuousLayerWithDensity(AbstractContinuousLayer, ABC):
         :return: The mixture and the log-probabilities of its nodes.
         """
         number_of_nodes = self.number_of_nodes
-        pieces_by_type: Dict[Type[Layer], List[Tuple[InputLayer, npt.NDArray]]] = {}
-        for layer, log_probabilities in pieces:
-            pieces_by_type.setdefault(type(layer), []).append(
-                (layer, log_probabilities)
-            )
+        pieces_by_type: Dict[Type[Layer], List[LayerWithLogProbabilities]] = {}
+        for piece in pieces:
+            pieces_by_type.setdefault(type(piece.layer), []).append(piece)
 
         child_layers = []
         log_probabilities_per_child_layer = []
         for layer_type, typed_pieces in pieces_by_type.items():
             child_layers.append(
-                layer_type.concatenate([layer for layer, _ in typed_pieces])
+                layer_type.concatenate([piece.layer for piece in typed_pieces])
             )
             log_probabilities_per_child_layer.extend(
-                log_probabilities for _, log_probabilities in typed_pieces
+                piece.log_probabilities for piece in typed_pieces
             )
 
         # the pieces are the columns in order, and node i of every piece sits in row i
         number_of_pieces = len(pieces)
-        log_weights = RowGroupedSparseArray.from_coordinates(
-            np.concatenate(log_probabilities_per_child_layer),
-            np.tile(np.arange(number_of_nodes), number_of_pieces),
-            np.arange(number_of_pieces * number_of_nodes),
+        log_weights = RowGroupedSparseArray.from_entries(
+            SparseEntries(
+                np.concatenate(log_probabilities_per_child_layer),
+                np.tile(np.arange(number_of_nodes), number_of_pieces),
+                np.arange(number_of_pieces * number_of_nodes),
+            ),
             (number_of_nodes, number_of_pieces * number_of_nodes),
         )
 
         node_log_probabilities = np.logaddexp.reduce(
-            [log_probabilities for _, log_probabilities in pieces], axis=0
+            [piece.log_probabilities for piece in pieces], axis=0
         )
-        return SumLayer(child_layers, log_weights), node_log_probabilities
+        return LayerWithLogProbabilities(
+            SumLayer(child_layers, log_weights), node_log_probabilities
+        )
 
-    def log_conditional_of_value(
-        self, value: float
-    ) -> Tuple[DiracDeltaLayer, npt.NDArray]:
+    def log_conditional_of_value(self, value: float) -> LayerWithLogProbabilities:
         log_likelihood = self.log_likelihood_of_nodes_from_column(np.array([value]))[0]
         dirac_delta_layer = DiracDeltaLayer(
             self.variable,
             np.full(self.number_of_nodes, float(value)),
             np.exp(log_likelihood),
         )
-        return dirac_delta_layer, log_likelihood
+        return LayerWithLogProbabilities(dirac_delta_layer, log_likelihood)
 
 
 @dataclass(eq=False, repr=False)
@@ -171,55 +183,40 @@ class ContinuousLayerWithFiniteSupport(ContinuousLayerWithDensity, ABC):
     Abstract base class for continuous input layers whose nodes have a finite support.
     """
 
-    interval: npt.NDArray
+    interval: npt.NDArray[np.float64]
     """
-    The support of every node as an array of shape (#nodes, 2).
-
-    The first column holds the lower bounds, the second the upper bounds.
+    The lower and upper bound of the support of every node, shape (#nodes, 2).
     """
 
-    # keyword-only so that a subclass can add required positional fields (such as
-    # location and scale) after ``interval`` without violating dataclass field
-    # ordering, which does not allow a required field to follow one that has a default
-    bounds: Optional[npt.NDArray] = field(default=None, kw_only=True)
+    bounds: npt.NDArray[np.int64]
     """
-    The kind of every bound as an array of shape (#nodes, 2) holding
-    :class:`random_events.interval.Bound` values.
-
-    Keeping the kind of every bound, rather than treating every interval as open, lets
-    a layer describe exactly the same support as the distributions it was created from.
+    Whether the lower and upper bound of every node are open or closed, as
+    :class:`random_events.interval.Bound` values of shape (#nodes, 2).
     """
-
-    def __post_init__(self):
-        super().__post_init__()
-        self.interval = np.asarray(self.interval, dtype=float).reshape(-1, 2)
-        if self.bounds is None:
-            self.bounds = np.full(self.interval.shape, int(Bound.OPEN), dtype=np.int64)
-        self.bounds = np.asarray(self.bounds, dtype=np.int64).reshape(-1, 2)
 
     @property
-    def lower(self) -> npt.NDArray:
+    def lower(self) -> NodeValues:
         """
         :return: The lower bounds of the supports of the nodes.
         """
         return self.interval[:, 0]
 
     @property
-    def upper(self) -> npt.NDArray:
+    def upper(self) -> NodeValues:
         """
         :return: The upper bounds of the supports of the nodes.
         """
         return self.interval[:, 1]
 
     @property
-    def left_closed(self) -> npt.NDArray:
+    def left_closed(self) -> NodeMask:
         """
         :return: Whether the lower bound of every node is included.
         """
         return self.bounds[:, 0] == int(Bound.CLOSED)
 
     @property
-    def right_closed(self) -> npt.NDArray:
+    def right_closed(self) -> NodeMask:
         """
         :return: Whether the upper bound of every node is included.
         """
@@ -245,7 +242,7 @@ class ContinuousLayerWithFiniteSupport(ContinuousLayerWithDensity, ABC):
         if self.interval.shape != self.bounds.shape:
             raise ShapeMismatchError(self.interval.shape, self.bounds.shape)
 
-    def included_condition(self, values: npt.NDArray) -> npt.NDArray:
+    def included_condition(self, values: SampleColumn) -> SampleNodeValues:
         """
         Check whether values lie inside the support of every node.
 
@@ -275,23 +272,21 @@ class ContinuousLayerWithFiniteSupport(ContinuousLayerWithDensity, ABC):
 
         return left & right
 
-    def select_nodes(self, mask: npt.NDArray) -> Self:
-        return self.__class__(
-            self.variable, self.interval[mask], bounds=self.bounds[mask]
-        )
+    def select_nodes(self, mask: NodeMask) -> Self:
+        return self.__class__(self.variable, self.interval[mask], self.bounds[mask])
 
     @classmethod
     def concatenate(cls, layers: List[Self]) -> Self:
         return cls(
             layers[0].variable,
             np.concatenate([layer.interval for layer in layers]),
-            bounds=np.concatenate([layer.bounds for layer in layers]),
+            np.concatenate([layer.bounds for layer in layers]),
         )
 
-    def apply_translation_own(self, translation: npt.NDArray):
+    def apply_translation_own(self, translation: VariableValues):
         self.interval = self.interval + translation[self.variable]
 
-    def apply_scaling_own(self, scaling: npt.NDArray):
+    def apply_scaling_own(self, scaling: VariableValues):
         self.interval = self.interval * scaling[self.variable]
 
     def __deepcopy__(self, memo=None) -> Self:
@@ -299,8 +294,6 @@ class ContinuousLayerWithFiniteSupport(ContinuousLayerWithDensity, ABC):
             memo = {}
         if id(self) in memo:
             return memo[id(self)]
-        result = self.__class__(
-            self.variable, self.interval.copy(), bounds=self.bounds.copy()
-        )
+        result = self.__class__(self.variable, self.interval.copy(), self.bounds.copy())
         memo[id(self)] = result
         return result

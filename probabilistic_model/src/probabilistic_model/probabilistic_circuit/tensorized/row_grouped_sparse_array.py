@@ -6,7 +6,59 @@ from dataclasses import dataclass
 import numpy as np
 import numpy.typing as npt
 from scipy.sparse import coo_array
-from typing_extensions import Self, Tuple
+from typing_extensions import List, Self, Tuple
+
+
+@dataclass
+class SparseEntries:
+    """
+    The stored entries of a two dimensional sparse array, as one array per coordinate.
+
+    The ``k``-th entry of every array belongs to the ``k``-th stored entry.
+    """
+
+    data: npt.NDArray
+    """
+    The value of every entry.
+    """
+
+    rows: npt.NDArray[np.int64]
+    """
+    The row of every entry.
+    """
+
+    columns: npt.NDArray[np.int64]
+    """
+    The column of every entry.
+    """
+
+    @classmethod
+    def concatenate(cls, parts: List[SparseEntries]) -> Self:
+        """
+        :param parts: The entries to join, in order.
+        :return: All entries of the parts.
+        """
+        return cls(
+            np.concatenate([part.data for part in parts]),
+            np.concatenate([part.rows for part in parts]),
+            np.concatenate([part.columns for part in parts]),
+        )
+
+    def to_coo_array(self, shape: Tuple[int, int]) -> coo_array:
+        """
+        :param shape: The shape of the dense array.
+        :return: The sparse array that stores these entries.
+        """
+        return coo_array(
+            (
+                np.asarray(self.data),
+                (
+                    np.asarray(self.rows, dtype=np.int64),
+                    np.asarray(self.columns, dtype=np.int64),
+                ),
+            ),
+            shape=shape,
+        )
 
 
 @dataclass(eq=False)
@@ -27,32 +79,13 @@ class RowGroupedSparseArray:
     """
 
     @classmethod
-    def from_coordinates(
-        cls,
-        data: npt.NDArray,
-        rows: npt.NDArray,
-        columns: npt.NDArray,
-        shape: Tuple[int, int],
-    ) -> Self:
+    def from_entries(cls, entries: SparseEntries, shape: Tuple[int, int]) -> Self:
         """
-        :param data: The value of every stored entry.
-        :param rows: The row of every stored entry.
-        :param columns: The column of every stored entry.
+        :param entries: The stored entries.
         :param shape: The shape of the dense array.
         :return: The sparse array.
         """
-        return cls(
-            coo_array(
-                (
-                    np.asarray(data),
-                    (
-                        np.asarray(rows, dtype=np.int64),
-                        np.asarray(columns, dtype=np.int64),
-                    ),
-                ),
-                shape=shape,
-            )
-        )
+        return cls(entries.to_coo_array(shape))
 
     @property
     def shape(self) -> Tuple[int, int]:
@@ -155,7 +188,9 @@ class RowGroupedSparseArray:
         :param data: The new value of every stored entry.
         :return: A sparse array with the entries of this one and the given values.
         """
-        return self.from_coordinates(data, self.rows, self.columns, self.shape)
+        return self.from_entries(
+            SparseEntries(data, self.rows, self.columns), self.shape
+        )
 
     def copy(self) -> Self:
         """

@@ -3,17 +3,26 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 import numpy as np
-import numpy.typing as npt
 from random_events.interval import Bound, Interval
 from random_events.variable import Variable
 from sortedcontainers import SortedSet
-from typing_extensions import List, Self, Tuple, Type
+from typing_extensions import List, Self, Type
 
 from probabilistic_model.distributions.distributions import DiracDeltaDistribution
 from probabilistic_model.exceptions import ShapeMismatchError
+from probabilistic_model.probabilistic_circuit.tensorized.array_types import (
+    NodeMask,
+    NodeValues,
+    SampleColumn,
+    SampleNodeValues,
+    VariableValues,
+)
 from probabilistic_model.probabilistic_circuit.tensorized.inner_layer.base import Layer
 from probabilistic_model.probabilistic_circuit.tensorized.input_layer.base import (
     AbstractContinuousLayer,
+)
+from probabilistic_model.probabilistic_circuit.tensorized.structural_query import (
+    LayerWithLogProbabilities,
 )
 
 
@@ -23,12 +32,12 @@ class DiracDeltaLayer(AbstractContinuousLayer):
     A layer of Dirac delta distributions over one continuous variable.
     """
 
-    location: npt.NDArray
+    location: NodeValues
     """
     The location of every node.
     """
 
-    density_cap: npt.NDArray
+    density_cap: NodeValues
     """
     The value that replaces the infinite density of every node.
     """
@@ -37,11 +46,6 @@ class DiracDeltaLayer(AbstractContinuousLayer):
     """
     The tolerance with which a value is considered equal to the location.
     """
-
-    def __post_init__(self):
-        super().__post_init__()
-        self.location = np.asarray(self.location, dtype=float).reshape(-1)
-        self.density_cap = np.asarray(self.density_cap, dtype=float).reshape(-1)
 
     @property
     def number_of_nodes(self) -> int:
@@ -76,7 +80,7 @@ class DiracDeltaLayer(AbstractContinuousLayer):
             distributions[0].tolerance,
         )
 
-    def select_nodes(self, mask: npt.NDArray) -> Self:
+    def select_nodes(self, mask: NodeMask) -> Self:
         return self.__class__(
             self.variable, self.location[mask], self.density_cap[mask], self.tolerance
         )
@@ -90,21 +94,23 @@ class DiracDeltaLayer(AbstractContinuousLayer):
             layers[0].tolerance,
         )
 
-    def log_likelihood_of_nodes_from_column(self, values: npt.NDArray) -> npt.NDArray:
+    def log_likelihood_of_nodes_from_column(
+        self, values: SampleColumn
+    ) -> SampleNodeValues:
         column = np.asarray(values, dtype=float).reshape(-1, 1)
         hit = np.abs(column - self.location) < self.tolerance
         with np.errstate(divide="ignore"):
             return np.where(hit, np.log(self.density_cap), -np.inf)
 
     def cumulative_distribution_of_nodes_from_column(
-        self, values: npt.NDArray
-    ) -> npt.NDArray:
+        self, values: SampleColumn
+    ) -> SampleNodeValues:
         column = np.asarray(values, dtype=float).reshape(-1, 1)
         return (column >= self.location - self.tolerance).astype(float)
 
     def moment_of_nodes_own(
         self, order: int, center: float, variable: Variable
-    ) -> npt.NDArray:
+    ) -> NodeValues:
         if order == 0:
             return np.ones(self.number_of_nodes)
         if order == 1:
@@ -113,7 +119,7 @@ class DiracDeltaLayer(AbstractContinuousLayer):
 
     def sample_of_node(
         self, node: int, amount: int, variables: SortedSet
-    ) -> npt.NDArray:
+    ) -> SampleColumn:
         return np.full(amount, self.location[node])
 
     def type_of_truncated_layer(
@@ -123,7 +129,7 @@ class DiracDeltaLayer(AbstractContinuousLayer):
 
     def log_truncated_of_assignment(
         self, assignment: Interval, singleton_allowed: bool
-    ) -> Tuple[DiracDeltaLayer, npt.NDArray]:
+    ) -> LayerWithLogProbabilities:
         """
         Truncating a Dirac delta either keeps it unchanged or makes it impossible, so
         the whole layer is truncated by testing which locations the assignment contains.
@@ -142,11 +148,11 @@ class DiracDeltaLayer(AbstractContinuousLayer):
             )
             inside |= left & right
 
-        return self.__deepcopy__(), np.where(inside, 0.0, -np.inf)
+        return LayerWithLogProbabilities(
+            self.__deepcopy__(), np.where(inside, 0.0, -np.inf)
+        )
 
-    def log_conditional_of_value(
-        self, value: float
-    ) -> Tuple[DiracDeltaLayer, npt.NDArray]:
+    def log_conditional_of_value(self, value: float) -> LayerWithLogProbabilities:
         log_likelihood = self.log_likelihood_of_nodes_from_column(np.array([value]))[0]
         conditioned = self.__class__(
             self.variable,
@@ -154,12 +160,12 @@ class DiracDeltaLayer(AbstractContinuousLayer):
             self.density_cap.copy(),
             self.tolerance,
         )
-        return conditioned, log_likelihood
+        return LayerWithLogProbabilities(conditioned, log_likelihood)
 
-    def apply_translation_own(self, translation: npt.NDArray):
+    def apply_translation_own(self, translation: VariableValues):
         self.location = self.location + translation[self.variable]
 
-    def apply_scaling_own(self, scaling: npt.NDArray):
+    def apply_scaling_own(self, scaling: VariableValues):
         self.location = self.location * scaling[self.variable]
 
     def __deepcopy__(self, memo=None) -> DiracDeltaLayer:

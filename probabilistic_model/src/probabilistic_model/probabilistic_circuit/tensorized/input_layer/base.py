@@ -21,13 +21,29 @@ from typing_extensions import (
 )
 
 from probabilistic_model.distributions.distributions import UnivariateDistribution
+from probabilistic_model.probabilistic_circuit.tensorized.array_types import (
+    NodeMask,
+    NodeValues,
+    SampleArray,
+    SampleColumn,
+    SampleNodeValues,
+    VariableIndices,
+    VariableMask,
+)
 from probabilistic_model.probabilistic_circuit.tensorized.forward_sample_assignment import (
     ForwardSampleAssignment,
 )
 from probabilistic_model.probabilistic_circuit.tensorized.inner_layer.base import Layer
+from probabilistic_model.probabilistic_circuit.tensorized.moment_query import (
+    MomentQuery,
+)
 from probabilistic_model.probabilistic_circuit.tensorized.query_cache import (
     QueryCache,
     memoized,
+)
+from probabilistic_model.probabilistic_circuit.tensorized.structural_query import (
+    LayerWithLogProbabilities,
+    StructuralQuery,
 )
 
 
@@ -46,9 +62,6 @@ class InputLayer(Layer, ABC):
     The index of the variable of this layer.
     """
 
-    def __post_init__(self):
-        self.variable = int(self.variable)
-
     @property
     def child_layers(self) -> List[Layer]:
         """
@@ -57,14 +70,16 @@ class InputLayer(Layer, ABC):
         return []
 
     @property
-    def variables(self) -> npt.NDArray:
+    def variables(self) -> VariableIndices:
         return np.array([self.variable], dtype=np.int64)
 
     @memoized
-    def remap_variables(self, remap: npt.NDArray, cache: Optional[QueryCache] = None):
+    def remap_variables(
+        self, remap: VariableIndices, cache: Optional[QueryCache] = None
+    ):
         self.variable = int(remap[self.variable])
 
-    def column_of(self, events: npt.NDArray) -> npt.NDArray:
+    def column_of(self, events: SampleArray) -> SampleColumn:
         """
         Select the column of the variable of this layer from an event array.
 
@@ -103,7 +118,7 @@ class InputLayer(Layer, ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def select_nodes(self, mask: npt.NDArray) -> Self:
+    def select_nodes(self, mask: NodeMask) -> Self:
         """
         Create a layer that only holds the nodes selected by a mask.
 
@@ -151,7 +166,7 @@ class InputLayer(Layer, ABC):
     @memoized
     def log_mode_of_nodes(
         self, variables: SortedSet, cache: Optional[QueryCache] = None
-    ) -> Tuple[List[Event], npt.NDArray]:
+    ) -> Tuple[List[Event], NodeValues]:
         variable = variables[self.variable]
         modes = [
             distribution.log_mode()
@@ -164,25 +179,23 @@ class InputLayer(Layer, ABC):
     @memoized
     def moment_of_nodes(
         self,
-        order: npt.NDArray,
-        center: npt.NDArray,
-        requested: npt.NDArray,
+        query: MomentQuery,
         variables: SortedSet,
         cache: Optional[QueryCache] = None,
     ) -> npt.NDArray:
-        result = np.zeros((self.number_of_nodes, len(order)))
-        if not requested[self.variable]:
+        result = np.zeros((self.number_of_nodes, query.number_of_variables))
+        if not query.requested[self.variable]:
             return result
         result[:, self.variable] = self.moment_of_nodes_own(
-            int(order[self.variable]),
-            float(center[self.variable]),
+            int(query.order[self.variable]),
+            float(query.center[self.variable]),
             variables[self.variable],
         )
         return result
 
     def moment_of_nodes_own(
         self, order: int, center: float, variable: Variable
-    ) -> npt.NDArray:
+    ) -> NodeValues:
         """
         Calculate the moment of the variable of this layer for every node.
 
@@ -208,21 +221,20 @@ class InputLayer(Layer, ABC):
     def sample_forward(
         self,
         assignment: ForwardSampleAssignment,
-        samples: npt.NDArray,
+        samples: SampleArray,
         variables: SortedSet,
     ):
-        own_assignment = assignment.rows_of(self)
-        for node, rows_of_node in enumerate(own_assignment):
-            if not rows_of_node:
+        for node, rows_of_node in enumerate(assignment.rows_of(self)):
+            if rows_of_node.is_empty:
                 continue
-            rows = np.concatenate(rows_of_node)
+            rows = rows_of_node.rows
             samples[rows, self.variable] = self.sample_of_node(
                 node, len(rows), variables
             )
 
     def sample_of_node(
         self, node: int, amount: int, variables: SortedSet
-    ) -> npt.NDArray:
+    ) -> SampleColumn:
         """
         Draw samples from a single node of this layer.
 
@@ -239,7 +251,7 @@ class InputLayer(Layer, ABC):
     @abstractmethod
     def log_truncated_of_assignment(
         self, assignment: AbstractCompositeSet, singleton_allowed: bool
-    ) -> Tuple[Layer, npt.NDArray]:
+    ) -> LayerWithLogProbabilities:
         """
         Truncate every node of this layer to the assignment of its variable at once.
 
@@ -266,27 +278,25 @@ class InputLayer(Layer, ABC):
     def log_truncated_of_simple_event(
         self,
         event: SimpleEvent,
-        variables: SortedSet,
-        singleton_allowed: bool,
-        log_probabilities: Dict[int, npt.NDArray],
+        query: StructuralQuery,
         cache: Optional[QueryCache] = None,
-    ) -> Tuple[Layer, npt.NDArray]:
-        layer, node_log_probabilities = self.log_truncated_of_assignment(
-            event[variables[self.variable]], singleton_allowed
+    ) -> LayerWithLogProbabilities:
+        return query.log_probabilities.record(
+            self.log_truncated_of_assignment(
+                event[query.variables[self.variable]], query.singleton_allowed
+            )
         )
-        log_probabilities[id(layer)] = node_log_probabilities
-        return layer, node_log_probabilities
 
     def can_truncate_in_one_batch(
-        self, events: List[SimpleEvent], variables: SortedSet, singleton_allowed: bool
+        self, events: List[SimpleEvent], query: StructuralQuery
     ) -> bool:
         """
         The truncations to the events are joined with :meth:`concatenate`, which needs
         them all to be input layers of one type.
         """
-        variable = variables[self.variable]
+        variable = query.variables[self.variable]
         types = {
-            self.type_of_truncated_layer(event[variable], singleton_allowed)
+            self.type_of_truncated_layer(event[variable], query.singleton_allowed)
             for event in events
         }
         return len(types) == 1 and issubclass(types.pop(), InputLayer)
@@ -295,26 +305,24 @@ class InputLayer(Layer, ABC):
     def log_truncated_of_simple_events(
         self,
         events: List[SimpleEvent],
-        variables: SortedSet,
-        singleton_allowed: bool,
-        log_probabilities: Dict[int, npt.NDArray],
+        query: StructuralQuery,
         cache: Optional[QueryCache] = None,
-    ) -> Tuple[Layer, npt.NDArray]:
-        variable = variables[self.variable]
+    ) -> LayerWithLogProbabilities:
+        variable = query.variables[self.variable]
         truncated = [
-            self.log_truncated_of_assignment(event[variable], singleton_allowed)
+            self.log_truncated_of_assignment(event[variable], query.singleton_allowed)
             for event in events
         ]
-        layers = [layer for layer, _ in truncated]
-        layer = type(layers[0]).concatenate(layers)
-        node_log_probabilities = np.concatenate(
-            [log_probability for _, log_probability in truncated]
+        layers = [piece.layer for piece in truncated]
+        return query.log_probabilities.record(
+            LayerWithLogProbabilities(
+                type(layers[0]).concatenate(layers),
+                np.concatenate([piece.log_probabilities for piece in truncated]),
+            )
         )
-        log_probabilities[id(layer)] = node_log_probabilities
-        return layer, node_log_probabilities
 
     @abstractmethod
-    def log_conditional_of_value(self, value: Any) -> Tuple[Layer, npt.NDArray]:
+    def log_conditional_of_value(self, value: Any) -> LayerWithLogProbabilities:
         """
         Condition every node of this layer on a value of its variable at once.
 
@@ -328,24 +336,21 @@ class InputLayer(Layer, ABC):
     def log_conditional_of_point(
         self,
         point: Dict[Variable, Any],
-        variables: SortedSet,
-        log_probabilities: Dict[int, npt.NDArray],
+        query: StructuralQuery,
         cache: Optional[QueryCache] = None,
-    ) -> Tuple[Layer, npt.NDArray]:
-        variable = variables[self.variable]
+    ) -> LayerWithLogProbabilities:
+        variable = query.variables[self.variable]
         if variable not in point:
-            layer = self.__deepcopy__()
-            node_log_probabilities = np.zeros(self.number_of_nodes)
-        else:
-            layer, node_log_probabilities = self.log_conditional_of_value(
-                point[variable]
+            result = LayerWithLogProbabilities(
+                self.__deepcopy__(), np.zeros(self.number_of_nodes)
             )
-        log_probabilities[id(layer)] = node_log_probabilities
-        return layer, node_log_probabilities
+        else:
+            result = self.log_conditional_of_value(point[variable])
+        return query.log_probabilities.record(result)
 
     def rebuild(
         self,
-        needed: Dict[int, npt.NDArray],
+        needed: Dict[int, NodeMask],
         rebuilt: Dict[int, Optional[Layer]],
     ) -> Optional[Layer]:
         alive = needed[id(self)]
@@ -354,7 +359,7 @@ class InputLayer(Layer, ABC):
         return self.select_nodes(alive)
 
     def marginal(
-        self, kept: npt.NDArray, cache: Optional[QueryCache] = None
+        self, kept: VariableMask, cache: Optional[QueryCache] = None
     ) -> Optional[Layer]:
         if not kept[self.variable]:
             return None
@@ -369,12 +374,14 @@ class AbstractContinuousLayer(InputLayer, ABC):
 
     @memoized
     def log_likelihood_of_nodes(
-        self, events: npt.NDArray, cache: Optional[QueryCache] = None
-    ) -> npt.NDArray:
+        self, events: SampleArray, cache: Optional[QueryCache] = None
+    ) -> SampleNodeValues:
         return self.log_likelihood_of_nodes_from_column(self.column_of(events))
 
     @abstractmethod
-    def log_likelihood_of_nodes_from_column(self, values: npt.NDArray) -> npt.NDArray:
+    def log_likelihood_of_nodes_from_column(
+        self, values: SampleColumn
+    ) -> SampleNodeValues:
         """
         Calculate the log-likelihood of every node for a column of values of the
         variable of this layer.
@@ -390,7 +397,7 @@ class AbstractContinuousLayer(InputLayer, ABC):
         event: SimpleEvent,
         variables: SortedSet,
         cache: Optional[QueryCache] = None,
-    ) -> npt.NDArray:
+    ) -> NodeValues:
         interval: Interval = event[variables[self.variable]]
         result = np.zeros(self.number_of_nodes)
         for simple_interval in interval.simple_sets:
@@ -402,14 +409,14 @@ class AbstractContinuousLayer(InputLayer, ABC):
 
     @memoized
     def cumulative_distribution_of_nodes(
-        self, events: npt.NDArray, cache: Optional[QueryCache] = None
-    ) -> npt.NDArray:
+        self, events: SampleArray, cache: Optional[QueryCache] = None
+    ) -> SampleNodeValues:
         return self.cumulative_distribution_of_nodes_from_column(self.column_of(events))
 
     @abstractmethod
     def cumulative_distribution_of_nodes_from_column(
-        self, values: npt.NDArray
-    ) -> npt.NDArray:
+        self, values: SampleColumn
+    ) -> SampleNodeValues:
         """
         Calculate the cumulative distribution function of every node for a column of
         values of the variable of this layer.

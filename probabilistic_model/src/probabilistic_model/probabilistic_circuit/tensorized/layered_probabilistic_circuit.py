@@ -3,16 +3,16 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 import numpy as np
-import numpy.typing as npt
-from krrood.adapters.json_serializer import DataclassJSONSerializer
 from random_events.product_algebra import Event, SimpleEvent, VariableMap
 from random_events.variable import Variable
-from scipy.sparse import coo_array
 from sortedcontainers import SortedSet
 from typing_extensions import Any, Dict, Iterable, List, Optional, Self, Tuple
 
 from probabilistic_model.distributions.helper import make_dirac
 from probabilistic_model.exceptions import IntractableError
+from probabilistic_model.probabilistic_circuit.tensorized.array_types import (
+    SampleArray,
+)
 from probabilistic_model.probabilistic_circuit.tensorized.forward_sample_assignment import (
     ForwardSampleAssignment,
 )
@@ -26,9 +26,17 @@ from probabilistic_model.probabilistic_circuit.tensorized.inner_layer.sum_layer 
 from probabilistic_model.probabilistic_circuit.tensorized.input_layer.dirac_delta_layer import (
     DiracDeltaLayer,
 )
+from probabilistic_model.probabilistic_circuit.tensorized.moment_query import (
+    MomentQuery,
+)
 from probabilistic_model.probabilistic_circuit.tensorized.query_cache import QueryCache
 from probabilistic_model.probabilistic_circuit.tensorized.row_grouped_sparse_array import (
     RowGroupedSparseArray,
+    SparseEntries,
+)
+from probabilistic_model.probabilistic_circuit.tensorized.structural_query import (
+    LayerWithLogProbabilities,
+    StructuralQuery,
 )
 from probabilistic_model.probabilistic_model import (
     CenterType,
@@ -40,7 +48,7 @@ from probabilistic_model.utils import logsumexp
 
 
 @dataclass(eq=False)
-class LayeredProbabilisticCircuit(ProbabilisticModel, DataclassJSONSerializer):
+class LayeredProbabilisticCircuit(ProbabilisticModel):
     """
     A probabilistic circuit whose units are grouped into layers of numpy arrays.
 
@@ -103,10 +111,10 @@ class LayeredProbabilisticCircuit(ProbabilisticModel, DataclassJSONSerializer):
 
     # %% queries
 
-    def log_likelihood(self, events: npt.NDArray) -> npt.NDArray:
+    def log_likelihood(self, events: SampleArray) -> np.ndarray:
         return self.root.log_likelihood_of_nodes(np.asarray(events))[:, 0]
 
-    def cumulative_distribution_function(self, events: npt.NDArray) -> npt.NDArray:
+    def cumulative_distribution_function(self, events: SampleArray) -> np.ndarray:
         return self.root.cumulative_distribution_of_nodes(np.asarray(events))[:, 0]
 
     def probability_of_simple_event(self, event: SimpleEvent) -> float:
@@ -124,7 +132,7 @@ class LayeredProbabilisticCircuit(ProbabilisticModel, DataclassJSONSerializer):
         modes, values = self.root.log_mode_of_nodes(self.variables)
         return modes[0], float(values[0])
 
-    def sample(self, amount: int) -> npt.NDArray:
+    def sample(self, amount: int) -> SampleArray:
         order = self.root.all_layers()
         assignment = ForwardSampleAssignment.for_layers(order)
 
@@ -137,21 +145,8 @@ class LayeredProbabilisticCircuit(ProbabilisticModel, DataclassJSONSerializer):
         return samples
 
     def moment(self, order: OrderType, center: CenterType) -> MomentType:
-        number_of_variables = len(self.variables)
-        order_array = np.zeros(number_of_variables, dtype=np.int64)
-        center_array = np.zeros(number_of_variables)
-        requested = np.zeros(number_of_variables, dtype=bool)
-
-        for variable, value in order.items():
-            index = self.variables.index(variable)
-            order_array[index] = value
-            requested[index] = True
-
-        for variable, value in center.items():
-            center_array[self.variables.index(variable)] = value
-
         result = self.root.moment_of_nodes(
-            order_array, center_array, requested, self.variables
+            MomentQuery.from_maps(order, center, self.variables), self.variables
         )
         return MomentType(
             {
@@ -234,14 +229,10 @@ class LayeredProbabilisticCircuit(ProbabilisticModel, DataclassJSONSerializer):
             logsumexp(np.array([log_probability for _, log_probability in truncated]))
         )
 
-        # the root of every truncation has a single node, so it is one column each
-        log_weights = RowGroupedSparseArray.from_coordinates(
-            np.array([log_probability for _, log_probability in truncated]),
-            np.zeros(len(truncated), dtype=np.int64),
-            np.arange(len(truncated)),
-            (1, len(truncated)),
+        self.root = SumLayer.mixture_of(
+            [root for root, _ in truncated],
+            [log_probability for _, log_probability in truncated],
         )
-        self.root = SumLayer([root for root, _ in truncated], log_weights)
         self.root.normalize()
         return self, total_log_probability
 
@@ -260,20 +251,16 @@ class LayeredProbabilisticCircuit(ProbabilisticModel, DataclassJSONSerializer):
         :return: The new root layer and the log-probability of the event, or
             ``(None, -inf)`` if the event is impossible.
         """
-        log_probabilities: Dict[int, npt.NDArray] = {}
-        new_root, node_log_probabilities = self.root.log_truncated_of_simple_event(
-            event,
-            self.variables,
-            singleton_allowed,
-            cache=QueryCache(),
-            log_probabilities=log_probabilities,
+        query = StructuralQuery(self.variables, singleton_allowed)
+        truncated = self.root.log_truncated_of_simple_event(
+            event, query, cache=QueryCache()
         )
 
-        log_probability = float(node_log_probabilities[0])
+        log_probability = float(truncated.log_probabilities[0])
         if log_probability == -np.inf:
             return None, -np.inf
 
-        pruned = new_root.prune(log_probabilities)
+        pruned = truncated.layer.prune(query.log_probabilities)
         if pruned is None:
             return None, -np.inf
 
@@ -290,9 +277,9 @@ class LayeredProbabilisticCircuit(ProbabilisticModel, DataclassJSONSerializer):
         :return: Whether :meth:`truncated_root_of_simple_events` can truncate this
             circuit to the events.
         """
+        query = StructuralQuery(self.variables, singleton_allowed)
         return all(
-            layer.can_truncate_in_one_batch(events, self.variables, singleton_allowed)
-            for layer in self.layers
+            layer.can_truncate_in_one_batch(events, query) for layer in self.layers
         )
 
     def truncated_root_of_simple_events(
@@ -315,14 +302,11 @@ class LayeredProbabilisticCircuit(ProbabilisticModel, DataclassJSONSerializer):
         :return: The new root and the log-probability of the union of the events, or
             ``(None, -inf)`` if the events are impossible.
         """
-        log_probabilities: Dict[int, npt.NDArray] = {}
-        replicated, node_log_probabilities = self.root.log_truncated_of_simple_events(
-            events,
-            self.variables,
-            singleton_allowed,
-            log_probabilities,
-            cache=QueryCache(),
+        query = StructuralQuery(self.variables, singleton_allowed)
+        replicated = self.root.log_truncated_of_simple_events(
+            events, query, cache=QueryCache()
         )
+        node_log_probabilities = replicated.log_probabilities
 
         # the simple sets of an event are disjoint, so P(E) = sum_k P(E_k)
         total_log_probability = float(logsumexp(node_log_probabilities))
@@ -331,18 +315,23 @@ class LayeredProbabilisticCircuit(ProbabilisticModel, DataclassJSONSerializer):
 
         # mix the copy of the root that belongs to each event by the probability of that
         # event, which turns the replicated root into the single root of the result
+        number_of_copies = len(node_log_probabilities)
         mixture = SumLayer(
-            [replicated],
-            RowGroupedSparseArray.from_coordinates(
-                node_log_probabilities,
-                np.zeros(len(node_log_probabilities), dtype=np.int64),
-                np.arange(len(node_log_probabilities)),
-                (1, len(node_log_probabilities)),
+            [replicated.layer],
+            RowGroupedSparseArray.from_entries(
+                SparseEntries(
+                    node_log_probabilities,
+                    np.zeros(number_of_copies, dtype=np.int64),
+                    np.arange(number_of_copies),
+                ),
+                (1, number_of_copies),
             ),
         )
-        log_probabilities[id(mixture)] = np.array([total_log_probability])
+        query.log_probabilities.record(
+            LayerWithLogProbabilities(mixture, np.array([total_log_probability]))
+        )
 
-        pruned = mixture.prune(log_probabilities)
+        pruned = mixture.prune(query.log_probabilities)
         if pruned is None:
             return None, -np.inf
 
@@ -387,19 +376,16 @@ class LayeredProbabilisticCircuit(ProbabilisticModel, DataclassJSONSerializer):
         :param point: The partial point.
         :return: This circuit and the log-density at the point, or ``(None, -inf)``.
         """
-        log_probabilities: Dict[int, npt.NDArray] = {}
-        new_root, node_log_probabilities = self.root.log_conditional_of_point(
-            point,
-            self.variables,
-            cache=QueryCache(),
-            log_probabilities=log_probabilities,
+        query = StructuralQuery(self.variables)
+        conditioned = self.root.log_conditional_of_point(
+            point, query, cache=QueryCache()
         )
 
-        log_probability = float(node_log_probabilities[0])
+        log_probability = float(conditioned.log_probabilities[0])
         if log_probability == -np.inf:
             return None, -np.inf
 
-        pruned = new_root.prune(log_probabilities)
+        pruned = conditioned.layer.prune(query.log_probabilities)
         if pruned is None:
             return None, -np.inf
 
@@ -422,14 +408,7 @@ class LayeredProbabilisticCircuit(ProbabilisticModel, DataclassJSONSerializer):
                 )
             )
 
-        edges = coo_array(
-            (
-                np.zeros(len(children), dtype=np.int64),
-                (np.arange(len(children)), np.zeros(len(children), dtype=np.int64)),
-            ),
-            shape=(len(children), 1),
-        )
-        self.root = ProductLayer(children, edges).simplify()
+        self.root = ProductLayer.product_of(children).simplify()
         self.root.normalize()
         return self, log_probability
 

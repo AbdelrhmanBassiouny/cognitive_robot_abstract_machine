@@ -35,6 +35,7 @@ from random_events.variable import Continuous
 
 from probabilistic_model.adapters.rustworkx_tensorized.exceptions import (
     CannotConvertError,
+    NotExactlyOneRootError,
 )
 from probabilistic_model.adapters.rustworkx_tensorized.rustworkx_to_tensorized import (
     RustworkxCircuitToLayeredCircuitConverter,
@@ -174,6 +175,15 @@ class ConversionTestCase(unittest.TestCase):
         leaf(GaussianDistribution(variable=x, location=0.0, scale=1.0), circuit)
         with self.assertRaises(CannotConvertError):
             RustworkxCircuitToLayeredCircuitConverter.convert(circuit)
+
+    def test_a_conversion_without_a_root_layer_is_reported(self):
+        with mock.patch.object(
+            RustworkxCircuitToLayeredCircuitConverter,
+            "groups_of_level",
+            return_value=[],
+        ):
+            with self.assertRaises(NotExactlyOneRootError):
+                RustworkxCircuitToLayeredCircuitConverter.convert(overlapping_mixture())
 
     def test_layer_types_of_a_uniform_mixture(self):
         layered = RustworkxCircuitToLayeredCircuitConverter.convert(

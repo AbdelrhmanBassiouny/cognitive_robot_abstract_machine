@@ -1,14 +1,49 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
-import numpy.typing as npt
+import numpy as np
 from typing_extensions import TYPE_CHECKING, Dict, Iterable, List, Self
+
+from probabilistic_model.probabilistic_circuit.tensorized.array_types import (
+    SampleRows,
+)
 
 if TYPE_CHECKING:
     from probabilistic_model.probabilistic_circuit.tensorized.inner_layer.base import (
         Layer,
     )
+
+
+@dataclass
+class SampleRowsOfNode:
+    """
+    The rows of the sample array that one node has to fill.
+
+    A node with several parents receives one chunk of rows from each of them.
+    """
+
+    chunks: List[SampleRows] = field(default_factory=list)
+    """
+    The chunks of rows received so far.
+    """
+
+    def add(self, rows: SampleRows):
+        """
+        :param rows: Rows the node has to fill as well.
+        """
+        self.chunks.append(rows)
+
+    @property
+    def is_empty(self) -> bool:
+        return not self.chunks
+
+    @property
+    def rows(self) -> SampleRows:
+        """
+        :return: All rows the node has to fill.
+        """
+        return np.concatenate(self.chunks)
 
 
 @dataclass
@@ -21,23 +56,25 @@ class ForwardSampleAssignment:
     each of them before it is its own turn to route them further.
     """
 
-    rows_by_node: Dict[int, List[List[npt.NDArray]]]
+    rows_by_layer: Dict[int, List[SampleRowsOfNode]]
     """
-    For every layer, indexed by its id, the row-index arrays assigned to each of its
-    nodes so far.
+    For every layer, keyed by its id, the rows assigned to each of its nodes so far.
     """
 
     @classmethod
     def for_layers(cls, layers: Iterable[Layer]) -> Self:
         """
         :param layers: Every layer that will be visited during the pass.
-        :return: An assignment with an empty bucket for every node of every layer.
+        :return: An assignment without any rows for every node of every layer.
         """
         return cls(
-            {id(layer): [[] for _ in range(layer.number_of_nodes)] for layer in layers}
+            {
+                id(layer): [SampleRowsOfNode() for _ in range(layer.number_of_nodes)]
+                for layer in layers
+            }
         )
 
-    def assign(self, layer: Layer, node: int, rows: npt.NDArray) -> None:
+    def assign(self, layer: Layer, node: int, rows: SampleRows):
         """
         Route output rows to one node of a layer.
 
@@ -45,12 +82,11 @@ class ForwardSampleAssignment:
         :param node: The index of the node within that layer.
         :param rows: The output rows drawn from that node.
         """
-        self.rows_by_node[id(layer)][node].append(rows)
+        self.rows_by_layer[id(layer)][node].add(rows)
 
-    def rows_of(self, layer: Layer) -> List[List[npt.NDArray]]:
+    def rows_of(self, layer: Layer) -> List[SampleRowsOfNode]:
         """
         :param layer: The layer to read the assignment of.
-        :return: The row-index arrays assigned to every node of that layer so far, one
-            list per node.
+        :return: The rows assigned to every node of that layer so far.
         """
-        return self.rows_by_node[id(layer)]
+        return self.rows_by_layer[id(layer)]

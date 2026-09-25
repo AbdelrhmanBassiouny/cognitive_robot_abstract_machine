@@ -3,7 +3,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 import numpy as np
-from scipy.sparse import coo_array
 from sortedcontainers import SortedSet
 from typing_extensions import Any, Dict, List, Tuple, Type
 
@@ -11,6 +10,9 @@ from probabilistic_model.adapters.rustworkx_tensorized.converter import (
     InputType,
     OutputType,
     RustworkxToTensorizedConverter,
+)
+from probabilistic_model.adapters.rustworkx_tensorized.exceptions import (
+    NotExactlyOneRootError,
 )
 from probabilistic_model.distributions.distributions import DiracDeltaDistribution
 from probabilistic_model.distributions.uniform import UniformDistribution
@@ -38,6 +40,7 @@ from probabilistic_model.probabilistic_circuit.tensorized.layered_probabilistic_
 )
 from probabilistic_model.probabilistic_circuit.tensorized.row_grouped_sparse_array import (
     RowGroupedSparseArray,
+    SparseEntries,
 )
 
 
@@ -113,8 +116,6 @@ class SumUnitsToSumLayerConverter(UnitsToLayerConverter[SumUnit, SumLayer]):
 
         child_layers = []
         rows, columns, values = [], [], []
-        # only the layers with the same scope can be children of these sum units, and a
-        # candidate that none of them points to is not a child layer
         for converted_layer in converted_layers:
             if not np.array_equal(converted_layer.layer.variables, variables):
                 continue
@@ -132,10 +133,8 @@ class SumUnitsToSumLayerConverter(UnitsToLayerConverter[SumUnit, SumLayer]):
             if found:
                 child_layers.append(converted_layer.layer)
 
-        log_weights = RowGroupedSparseArray.from_coordinates(
-            np.array(values, dtype=float),
-            np.array(rows, dtype=np.int64),
-            np.array(columns, dtype=np.int64),
+        log_weights = RowGroupedSparseArray.from_entries(
+            SparseEntries(np.array(values, dtype=float), rows, columns),
             (len(data), sum(layer.number_of_nodes for layer in child_layers)),
         )
         return ConvertedLayer.of_units(SumLayer(child_layers, log_weights), data)
@@ -149,8 +148,6 @@ class ProductUnitsToProductLayerConverter(
     def convert(
         cls, data: List[ProductUnit], converted_layers: List[ConvertedLayer]
     ) -> ConvertedLayer:
-        # only the candidates that at least one of these units points to become child
-        # layers, so that the edge matrix has no empty rows
         used_layers: List[ConvertedLayer] = []
         row_of_layer: Dict[int, int] = {}
         rows, columns, values = [], [], []
@@ -168,13 +165,9 @@ class ProductUnitsToProductLayerConverter(
                     columns.append(unit_index)
                     values.append(converted_layer.node_of_unit[subcircuit_hash])
 
-        edges = coo_array(
-            (
-                np.array(values, dtype=np.int64),
-                (np.array(rows, dtype=np.int64), np.array(columns, dtype=np.int64)),
-            ),
-            shape=(len(used_layers), len(data)),
-        )
+        edges = SparseEntries(
+            np.array(values, dtype=np.int64), rows, columns
+        ).to_coo_array((len(used_layers), len(data)))
         layer = ProductLayer(
             [converted_layer.layer for converted_layer in used_layers], edges
         )
@@ -220,9 +213,6 @@ class RustworkxCircuitToLayeredCircuitConverter(
     def convert(cls, data: ProbabilisticCircuit) -> LayeredProbabilisticCircuit:
         converted_layers: List[ConvertedLayer] = []
         for units in reversed(list(data.layers)):
-            # every layer converted so far is offered as a possible child, not only
-            # those of the level directly below: the layering of the graph is by
-            # shortest distance to the root, so an edge may skip levels
             converted_layers = [
                 RustworkxToTensorizedConverter.convert(group, converted_layers)
                 for group in cls.groups_of_level(units)
@@ -234,18 +224,15 @@ class RustworkxCircuitToLayeredCircuitConverter(
             if converted_layer.units[0] is data.root
         ]
         if len(roots) != 1:
-            raise ValueError("The circuit does not have exactly one root.")
+            raise NotExactlyOneRootError(number_of_roots=len(roots))
         return LayeredProbabilisticCircuit(SortedSet(data.variables), roots[0].layer)
 
     @staticmethod
     def groups_of_level(units: List[Unit]) -> List[List[Unit]]:
         """
         :param units: The units of one level of a rustworkx circuit.
-        :return: The units grouped by type and scope, one group per layer.
+        :return: The units grouped by exact type and scope, one group per layer.
         """
-        # grouping is by exact type, not by ``isinstance``: a leaf whose distribution is
-        # a subclass of another distribution would otherwise be pulled into the group of
-        # the base class, whose layer cannot hold it
         groups: Dict[Tuple[Type, Tuple], List[Unit]] = {}
         for unit in units:
             key = (UnitsToLayerConverter.type_of_unit(unit), tuple(unit.variables))

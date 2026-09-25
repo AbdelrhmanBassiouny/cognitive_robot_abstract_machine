@@ -11,13 +11,28 @@ from sortedcontainers import SortedSet
 from typing_extensions import (
     Any,
     Dict,
-    Iterator,
+    Iterable,
     List,
     Optional,
+    Self,
     Tuple,
 )
 
-from probabilistic_model.exceptions import ShapeMismatchError
+from probabilistic_model.exceptions import (
+    NumberOfWeightsMismatchError,
+    ShapeMismatchError,
+)
+from probabilistic_model.probabilistic_circuit.tensorized.array_types import (
+    EdgeMask,
+    EdgeValues,
+    NodeMask,
+    NodeValues,
+    SampleArray,
+    SampleNodeValues,
+    SampleRows,
+    VariableIndices,
+    VariableMask,
+)
 from probabilistic_model.probabilistic_circuit.tensorized.forward_sample_assignment import (
     ForwardSampleAssignment,
 )
@@ -26,7 +41,10 @@ from probabilistic_model.probabilistic_circuit.tensorized.inner_layer.base impor
     Layer,
 )
 from probabilistic_model.probabilistic_circuit.tensorized.inner_layer.inner_layer_edge import (
-    InnerLayerEdge,
+    InnerLayerEdges,
+)
+from probabilistic_model.probabilistic_circuit.tensorized.moment_query import (
+    MomentQuery,
 )
 from probabilistic_model.probabilistic_circuit.tensorized.query_cache import (
     QueryCache,
@@ -34,6 +52,12 @@ from probabilistic_model.probabilistic_circuit.tensorized.query_cache import (
 )
 from probabilistic_model.probabilistic_circuit.tensorized.row_grouped_sparse_array import (
     RowGroupedSparseArray,
+    SparseEntries,
+)
+from probabilistic_model.probabilistic_circuit.tensorized.structural_query import (
+    LayerWithLogProbabilities,
+    LogProbabilitiesOfLayers,
+    StructuralQuery,
 )
 from probabilistic_model.probabilistic_circuit.tensorized.utils import (
     embedded_logsumexp,
@@ -63,8 +87,36 @@ class SumLayer(InnerLayer):
     ``i``-th child layer is the column ``column_offsets[i] + j``.
     """
 
+    @classmethod
+    def mixture_of(
+        cls, child_layers: List[Layer], log_weights: Iterable[float]
+    ) -> Self:
+        """
+        :param child_layers: The child layers, each contributing its first node.
+        :param log_weights: The logarithmic weight of every child layer.
+        :return: A sum layer with a single node that mixes the first node of every
+            child layer.
+        :raises NumberOfWeightsMismatchError: If there is not one weight per child
+            layer.
+        """
+        weights = np.array(list(log_weights), dtype=float)
+        if len(weights) != len(child_layers):
+            raise NumberOfWeightsMismatchError(len(weights), len(child_layers))
+        offsets = np.cumsum(
+            [0] + [child_layer.number_of_nodes for child_layer in child_layers]
+        )
+        return cls(
+            child_layers,
+            RowGroupedSparseArray.from_entries(
+                SparseEntries(
+                    weights, np.zeros(len(child_layers), dtype=np.int64), offsets[:-1]
+                ),
+                (1, int(offsets[-1])),
+            ),
+        )
+
     @property
-    def variables(self) -> npt.NDArray:
+    def variables(self) -> VariableIndices:
         if self._variables_cache is None:
             self._variables_cache = self.child_layers[0].variables
         return self._variables_cache
@@ -100,24 +152,20 @@ class SumLayer(InnerLayer):
     # %% edges
 
     @functools.cached_property
-    def edge_targets(self) -> Tuple[npt.NDArray, npt.NDArray]:
+    def inner_layer_edges(self) -> InnerLayerEdges:
         """
-        :return: The index of the child layer and the index of the node in it that every
-            edge points to, in the order of the stored entries.
+        :return: The edges in the order of the stored weights.
         """
         offsets = self.column_offsets
         columns = self.log_weights.columns
-        child_layer_of_edge = np.searchsorted(offsets, columns, side="right") - 1
-        return child_layer_of_edge, columns - offsets[child_layer_of_edge]
+        child_layer_indices = np.searchsorted(offsets, columns, side="right") - 1
+        return InnerLayerEdges(
+            self.log_weights.rows.astype(np.int64),
+            child_layer_indices,
+            columns - offsets[child_layer_indices],
+        )
 
-    def iterate_edges(self) -> Iterator[InnerLayerEdge]:
-        child_layer_of_edge, child_node_of_edge = self.edge_targets
-        for node, child_layer_index, child_node in zip(
-            self.log_weights.rows, child_layer_of_edge, child_node_of_edge
-        ):
-            yield InnerLayerEdge(int(node), int(child_layer_index), int(child_node))
-
-    def values_of_edges(self, child_results: List[npt.NDArray]) -> npt.NDArray:
+    def values_of_edges(self, child_results: List[npt.NDArray]) -> EdgeValues:
         """
         Take the value of the child node of every edge.
 
@@ -138,7 +186,7 @@ class SumLayer(InnerLayer):
     # %% weights
 
     @property
-    def log_normalization_constants(self) -> npt.NDArray:
+    def log_normalization_constants(self) -> NodeValues:
         """
         :return: ``log(sum(exp(w)))`` over the weights of each node, shape (#nodes,).
         """
@@ -147,7 +195,7 @@ class SumLayer(InnerLayer):
         )
 
     @property
-    def normalized_edge_log_weights(self) -> npt.NDArray:
+    def normalized_edge_log_weights(self) -> EdgeValues:
         """
         :return: The logarithmic weight of every edge, normalized per node.
         """
@@ -157,7 +205,7 @@ class SumLayer(InnerLayer):
         )
 
     @property
-    def normalized_edge_weights(self) -> npt.NDArray:
+    def normalized_edge_weights(self) -> EdgeValues:
         """
         :return: The weight of every edge in linear space, normalized per node.
         """
@@ -210,8 +258,8 @@ class SumLayer(InnerLayer):
 
     @memoized
     def log_likelihood_of_nodes(
-        self, events: npt.NDArray, cache: Optional[QueryCache] = None
-    ) -> npt.NDArray:
+        self, events: SampleArray, cache: Optional[QueryCache] = None
+    ) -> SampleNodeValues:
         child_results = [
             child_layer.log_likelihood_of_nodes(events, cache=cache)
             for child_layer in self.child_layers
@@ -220,8 +268,8 @@ class SumLayer(InnerLayer):
 
     @memoized
     def cumulative_distribution_of_nodes(
-        self, events: npt.NDArray, cache: Optional[QueryCache] = None
-    ) -> npt.NDArray:
+        self, events: SampleArray, cache: Optional[QueryCache] = None
+    ) -> SampleNodeValues:
         child_results = [
             child_layer.cumulative_distribution_of_nodes(events, cache=cache)
             for child_layer in self.child_layers
@@ -234,7 +282,7 @@ class SumLayer(InnerLayer):
         event: SimpleEvent,
         variables: SortedSet,
         cache: Optional[QueryCache] = None,
-    ) -> npt.NDArray:
+    ) -> NodeValues:
         child_results = [
             child_layer.probability_of_simple_event_of_nodes(
                 event, variables, cache=cache
@@ -256,16 +304,16 @@ class SumLayer(InnerLayer):
         for edge in self.iterate_edges():
             support = child_supports[edge.child_layer_index][edge.child_node]
             if result[edge.node] is None:
-                result[edge.node] = support.__deepcopy__()
+                result[edge.node] = support
             else:
-                result[edge.node] = result[edge.node] | support.__deepcopy__()
+                result[edge.node] = result[edge.node] | support
 
         return [Event() if support is None else support for support in result]
 
     @memoized
     def log_mode_of_nodes(
         self, variables: SortedSet, cache: Optional[QueryCache] = None
-    ) -> Tuple[List[Event], npt.NDArray]:
+    ) -> Tuple[List[Event], NodeValues]:
         child_modes = [
             child_layer.log_mode_of_nodes(variables, cache=cache)
             for child_layer in self.child_layers
@@ -291,9 +339,9 @@ class SumLayer(InnerLayer):
             if not events:
                 modes.append(Event())
                 continue
-            mode = events[0].__deepcopy__()
+            mode = events[0]
             for event in events[1:]:
-                mode |= event.__deepcopy__()
+                mode = mode | event
             modes.append(mode)
 
         return modes, best_value
@@ -301,16 +349,12 @@ class SumLayer(InnerLayer):
     @memoized
     def moment_of_nodes(
         self,
-        order: npt.NDArray,
-        center: npt.NDArray,
-        requested: npt.NDArray,
+        query: MomentQuery,
         variables: SortedSet,
         cache: Optional[QueryCache] = None,
     ) -> npt.NDArray:
         child_results = [
-            child_layer.moment_of_nodes(
-                order, center, requested, variables, cache=cache
-            )
+            child_layer.moment_of_nodes(query, variables, cache=cache)
             for child_layer in self.child_layers
         ]
         return self._weighted_forward_over_nodes(child_results)
@@ -318,22 +362,20 @@ class SumLayer(InnerLayer):
     def sample_forward(
         self,
         assignment: ForwardSampleAssignment,
-        samples: npt.NDArray,
+        samples: SampleArray,
         variables: SortedSet,
     ):
         # the padding slot gets a weight of zero, so it is never drawn
         weights = self.log_weights.pad(self.normalized_edge_weights, 0.0)
         for node, rows_of_node in enumerate(assignment.rows_of(self)):
-            if rows_of_node:
-                self.route_rows_of_node(
-                    node, np.concatenate(rows_of_node), weights, assignment
-                )
+            if not rows_of_node.is_empty:
+                self.route_rows_of_node(node, rows_of_node.rows, weights, assignment)
 
     def route_rows_of_node(
         self,
         node: int,
-        rows: npt.NDArray,
-        weights: npt.NDArray,
+        rows: SampleRows,
+        weights: EdgeValues,
         assignment: ForwardSampleAssignment,
     ):
         """
@@ -360,18 +402,18 @@ class SumLayer(InnerLayer):
         np.random.shuffle(rows)
         chunks = np.split(rows, np.cumsum(counts)[:-1])
 
-        child_layer_of_edge, child_node_of_edge = self.edge_targets
+        edges = self.inner_layer_edges
         for index in np.flatnonzero(counts):
             position = positions[index]
             assignment.assign(
-                self.child_layers[child_layer_of_edge[position]],
-                child_node_of_edge[position],
+                self.child_layers[edges.child_layer_indices[position]],
+                edges.child_nodes[position],
                 chunks[index],
             )
 
     def is_deterministic_of_nodes(
         self, variables: SortedSet, cache: QueryCache
-    ) -> npt.NDArray:
+    ) -> NodeMask:
         """
         A sum node is deterministic if its children have pairwise disjoint supports.
         """
@@ -422,71 +464,63 @@ class SumLayer(InnerLayer):
 
     def _structural_pass(
         self,
-        child_results: List[Tuple[Layer, npt.NDArray]],
-        log_probabilities: Dict[int, npt.NDArray],
-    ) -> Tuple[Layer, npt.NDArray]:
+        child_results: List[LayerWithLogProbabilities],
+        query: StructuralQuery,
+    ) -> LayerWithLogProbabilities:
         """
         Update the weights of this layer with the log-probabilities of its children.
 
         The new weight of an edge is its old weight times the probability of the event
         under the child, and the probability of a node is the sum of its new weights.
 
-        :param child_results: The new child layer and its node log-probabilities.
-        :param log_probabilities: The map to record the result in.
+        :param child_results: The new child layers and the log-probabilities of their
+            nodes.
+        :param query: The query to record the result in.
         :return: The new layer and the log-probabilities of its nodes.
         """
         child_log_probabilities = self.values_of_edges(
-            [log_probability for _, log_probability in child_results]
+            [child_result.log_probabilities for child_result in child_results]
         )
         result = self.__class__(
-            [child_layer for child_layer, _ in child_results],
+            [child_result.layer for child_result in child_results],
             self.log_weights.with_data(self.log_weights.data + child_log_probabilities),
         )
         # the probability of a node is the sum of its updated weights
-        own_log_probabilities = result.log_normalization_constants
-        log_probabilities[id(result)] = own_log_probabilities
-        return result, own_log_probabilities
+        return query.log_probabilities.record(
+            LayerWithLogProbabilities(result, result.log_normalization_constants)
+        )
 
     @memoized
     def log_truncated_of_simple_event(
         self,
         event: SimpleEvent,
-        variables: SortedSet,
-        singleton_allowed: bool,
-        log_probabilities: Dict[int, npt.NDArray],
+        query: StructuralQuery,
         cache: Optional[QueryCache] = None,
-    ) -> Tuple[Layer, npt.NDArray]:
+    ) -> LayerWithLogProbabilities:
         child_results = [
-            child_layer.log_truncated_of_simple_event(
-                event, variables, singleton_allowed, log_probabilities, cache=cache
-            )
+            child_layer.log_truncated_of_simple_event(event, query, cache=cache)
             for child_layer in self.child_layers
         ]
-        return self._structural_pass(child_results, log_probabilities)
+        return self._structural_pass(child_results, query)
 
     @memoized
     def log_truncated_of_simple_events(
         self,
         events: List[SimpleEvent],
-        variables: SortedSet,
-        singleton_allowed: bool,
-        log_probabilities: Dict[int, npt.NDArray],
+        query: StructuralQuery,
         cache: Optional[QueryCache] = None,
-    ) -> Tuple[Layer, npt.NDArray]:
+    ) -> LayerWithLogProbabilities:
         child_results = [
-            child_layer.log_truncated_of_simple_events(
-                events, variables, singleton_allowed, log_probabilities, cache=cache
-            )
+            child_layer.log_truncated_of_simple_events(events, query, cache=cache)
             for child_layer in self.child_layers
         ]
-        new_child_layers = [child_layer for child_layer, _ in child_results]
 
         # every child layer grows by the same factor, and the block of event k is the
         # original sparsity pattern shifted into its own rows and into the k-th block
         # of every child layer
         number_of_events = len(events)
         number_of_entries = self.log_weights.number_of_stored_entries
-        child_layer_of_edge, child_node_of_edge = self.edge_targets
+        edges = self.inner_layer_edges
         child_node_counts = np.diff(self.column_offsets)
         blocks = np.repeat(np.arange(number_of_events), number_of_entries)
 
@@ -496,65 +530,59 @@ class SumLayer(InnerLayer):
         # the child layer i now starts at number_of_events * column_offsets[i], and its
         # block of event k starts k * (its original number of nodes) after that
         first_columns = (
-            number_of_events * self.column_offsets[:-1][child_layer_of_edge]
-            + child_node_of_edge
+            number_of_events * self.column_offsets[:-1][edges.child_layer_indices]
+            + edges.child_nodes
         )
         columns = np.tile(first_columns, number_of_events) + blocks * np.tile(
-            child_node_counts[child_layer_of_edge], number_of_events
+            child_node_counts[edges.child_layer_indices], number_of_events
         )
         # the weight of an edge times the probability of the event under its child
         data = (
             np.tile(self.log_weights.data, number_of_events)
-            + np.concatenate([log_probability for _, log_probability in child_results])[
-                columns
-            ]
+            + np.concatenate(
+                [child_result.log_probabilities for child_result in child_results]
+            )[columns]
         )
 
         result = self.__class__(
-            new_child_layers,
-            RowGroupedSparseArray.from_coordinates(
-                data,
-                rows,
-                columns,
+            [child_result.layer for child_result in child_results],
+            RowGroupedSparseArray.from_entries(
+                SparseEntries(data, rows, columns),
                 (
                     number_of_events * self.number_of_nodes,
                     number_of_events * int(self.column_offsets[-1]),
                 ),
             ),
         )
-        own_log_probabilities = result.log_normalization_constants
-        log_probabilities[id(result)] = own_log_probabilities
-        return result, own_log_probabilities
+        return query.log_probabilities.record(
+            LayerWithLogProbabilities(result, result.log_normalization_constants)
+        )
 
     @memoized
     def log_conditional_of_point(
         self,
         point: Dict[Variable, Any],
-        variables: SortedSet,
-        log_probabilities: Dict[int, npt.NDArray],
+        query: StructuralQuery,
         cache: Optional[QueryCache] = None,
-    ) -> Tuple[Layer, npt.NDArray]:
+    ) -> LayerWithLogProbabilities:
         child_results = [
-            child_layer.log_conditional_of_point(
-                point, variables, log_probabilities, cache=cache
-            )
+            child_layer.log_conditional_of_point(point, query, cache=cache)
             for child_layer in self.child_layers
         ]
-        return self._structural_pass(child_results, log_probabilities)
+        return self._structural_pass(child_results, query)
 
     def live_edges(
-        self, alive: npt.NDArray, log_probabilities: Dict[int, npt.NDArray]
-    ) -> npt.NDArray:
+        self, alive: NodeMask, log_probabilities: LogProbabilitiesOfLayers
+    ) -> EdgeMask:
         """
         Determine the edges that survive a prune.
 
         :param alive: The live nodes of this layer.
-        :param log_probabilities: The per-layer log-probabilities of the structural
-            pass.
-        :return: A boolean mask over the edges.
+        :param log_probabilities: The log-probabilities of the structural query.
+        :return: Which edges survive.
         """
         child_alive = [
-            child_layer.alive_own(log_probabilities)
+            log_probabilities.alive_nodes_of(child_layer)
             for child_layer in self.child_layers
         ]
         return (
@@ -564,29 +592,31 @@ class SumLayer(InnerLayer):
         )
 
     def required_child_nodes(
-        self, alive: npt.NDArray, log_probabilities: Dict[int, npt.NDArray]
-    ) -> List[Tuple[Layer, npt.NDArray]]:
+        self, alive: NodeMask, log_probabilities: LogProbabilitiesOfLayers
+    ) -> List[Tuple[Layer, NodeMask]]:
         live = self.live_edges(alive, log_probabilities)
-        child_layer_of_edge, child_node_of_edge = self.edge_targets
+        edges = self.inner_layer_edges
         result = []
         for child_layer_index, child_layer in enumerate(self.child_layers):
             needed = np.zeros(child_layer.number_of_nodes, dtype=bool)
             needed[
-                child_node_of_edge[live & (child_layer_of_edge == child_layer_index)]
+                edges.child_nodes[
+                    live & (edges.child_layer_indices == child_layer_index)
+                ]
             ] = True
             result.append((child_layer, needed))
         return result
 
     def rebuild(
         self,
-        needed: Dict[int, npt.NDArray],
+        needed: Dict[int, NodeMask],
         rebuilt: Dict[int, Optional[Layer]],
     ) -> Optional[Layer]:
         alive = needed[id(self)]
         if not alive.any():
             return None
 
-        child_layer_of_edge, child_node_of_edge = self.edge_targets
+        edges = self.inner_layer_edges
         kept = alive[self.log_weights.rows] & (self.log_weights.data > -np.inf)
 
         new_child_layers = []
@@ -594,16 +624,16 @@ class SumLayer(InnerLayer):
         for child_layer_index, child_layer in enumerate(self.child_layers):
             pruned_child = rebuilt.get(id(child_layer))
             if pruned_child is None:
-                kept &= child_layer_of_edge != child_layer_index
+                kept &= edges.child_layer_indices != child_layer_index
                 continue
             child_needed = needed[id(child_layer)]
-            of_child = child_layer_of_edge == child_layer_index
-            kept[of_child] &= child_needed[child_node_of_edge[of_child]]
+            of_child = edges.child_layer_indices == child_layer_index
+            kept[of_child] &= child_needed[edges.child_nodes[of_child]]
             if not (kept & of_child).any():
                 continue
             child_remap, number_of_child_nodes = remap_indices(child_needed)
             offset = sum(layer.number_of_nodes for layer in new_child_layers)
-            new_columns[of_child] = offset + child_remap[child_node_of_edge[of_child]]
+            new_columns[of_child] = offset + child_remap[edges.child_nodes[of_child]]
             new_child_layers.append(pruned_child)
 
         if not new_child_layers:
@@ -612,10 +642,12 @@ class SumLayer(InnerLayer):
         node_remap, number_of_nodes = remap_indices(alive)
         return self.__class__(
             new_child_layers,
-            RowGroupedSparseArray.from_coordinates(
-                self.log_weights.data[kept],
-                node_remap[self.log_weights.rows[kept]],
-                new_columns[kept],
+            RowGroupedSparseArray.from_entries(
+                SparseEntries(
+                    self.log_weights.data[kept],
+                    node_remap[self.log_weights.rows[kept]],
+                    new_columns[kept],
+                ),
                 (
                     number_of_nodes,
                     sum(layer.number_of_nodes for layer in new_child_layers),
@@ -625,9 +657,9 @@ class SumLayer(InnerLayer):
 
     @memoized
     def marginal(
-        self, kept: npt.NDArray, cache: Optional[QueryCache] = None
+        self, kept: VariableMask, cache: Optional[QueryCache] = None
     ) -> Optional[Layer]:
-        child_layer_of_edge, child_node_of_edge = self.edge_targets
+        edges = self.inner_layer_edges
 
         new_child_layers = []
         kept_edges = np.zeros(self.log_weights.number_of_stored_entries, dtype=bool)
@@ -636,9 +668,9 @@ class SumLayer(InnerLayer):
             marginal_child = child_layer.marginal(kept, cache=cache)
             if marginal_child is None:
                 continue
-            of_child = child_layer_of_edge == child_layer_index
+            of_child = edges.child_layer_indices == child_layer_index
             offset = sum(layer.number_of_nodes for layer in new_child_layers)
-            new_columns[of_child] = offset + child_node_of_edge[of_child]
+            new_columns[of_child] = offset + edges.child_nodes[of_child]
             kept_edges |= of_child
             new_child_layers.append(marginal_child)
 
@@ -646,10 +678,12 @@ class SumLayer(InnerLayer):
             return None
         return self.__class__(
             new_child_layers,
-            RowGroupedSparseArray.from_coordinates(
-                self.log_weights.data[kept_edges],
-                self.log_weights.rows[kept_edges],
-                new_columns[kept_edges],
+            RowGroupedSparseArray.from_entries(
+                SparseEntries(
+                    self.log_weights.data[kept_edges],
+                    self.log_weights.rows[kept_edges],
+                    new_columns[kept_edges],
+                ),
                 (
                     self.number_of_nodes,
                     sum(layer.number_of_nodes for layer in new_child_layers),

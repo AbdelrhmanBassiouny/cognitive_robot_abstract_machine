@@ -3,15 +3,22 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 import numpy as np
-import numpy.typing as npt
 from random_events.interval import SimpleInterval
 from random_events.variable import Variable
 from sortedcontainers import SortedSet
-from typing_extensions import List, Self, Tuple
+from typing_extensions import List, Self
 
 from probabilistic_model.distributions.uniform import UniformDistribution
+from probabilistic_model.probabilistic_circuit.tensorized.array_types import (
+    NodeValues,
+    SampleColumn,
+    SampleNodeValues,
+)
 from probabilistic_model.probabilistic_circuit.tensorized.input_layer.continuous_layer_with_density import (
     ContinuousLayerWithFiniteSupport,
+)
+from probabilistic_model.probabilistic_circuit.tensorized.structural_query import (
+    LayerWithLogProbabilities,
 )
 
 
@@ -25,14 +32,16 @@ class UniformLayer(ContinuousLayerWithFiniteSupport):
     def number_of_own_parameters(self) -> int:
         return 2 * self.number_of_nodes
 
-    def log_probability_density_function_value(self) -> npt.NDArray:
+    def log_probability_density_function_value(self) -> NodeValues:
         """
         :return: The log-density of every node.
         """
         with np.errstate(divide="ignore"):
             return -np.log(self.upper - self.lower)
 
-    def log_likelihood_of_nodes_from_column(self, values: npt.NDArray) -> npt.NDArray:
+    def log_likelihood_of_nodes_from_column(
+        self, values: SampleColumn
+    ) -> SampleNodeValues:
         return np.where(
             self.included_condition(values),
             self.log_probability_density_function_value(),
@@ -40,21 +49,31 @@ class UniformLayer(ContinuousLayerWithFiniteSupport):
         )
 
     def cumulative_distribution_of_nodes_from_column(
-        self, values: npt.NDArray
-    ) -> npt.NDArray:
+        self, values: SampleColumn
+    ) -> SampleNodeValues:
         column = np.asarray(values, dtype=float).reshape(-1, 1)
         result = (column - self.lower) / (self.upper - self.lower)
         return np.clip(result, 0.0, 1.0)
 
     def moment_of_nodes_own(
         self, order: int, center: float, variable: Variable
-    ) -> npt.NDArray:
+    ) -> NodeValues:
+        return self.antiderivative_of_moment_at(
+            self.upper, order, center
+        ) - self.antiderivative_of_moment_at(self.lower, order, center)
+
+    def antiderivative_of_moment_at(
+        self, bound: NodeValues, order: int, center: float
+    ) -> NodeValues:
+        """
+        :param bound: One value per node.
+        :param order: The order of the moment.
+        :param center: The center of the moment.
+        :return: The antiderivative of ``density * (value - center) ** order`` of every
+            node at its bound.
+        """
         density = np.exp(self.log_probability_density_function_value())
-
-        def evaluate_integral_at(bound: npt.NDArray) -> npt.NDArray:
-            return density * (bound - center) ** (order + 1) / (order + 1)
-
-        return evaluate_integral_at(self.upper) - evaluate_integral_at(self.lower)
+        return density * (bound - center) ** (order + 1) / (order + 1)
 
     def node_distribution(self, index: int, variable: Variable) -> UniformDistribution:
         return UniformDistribution(
@@ -79,19 +98,23 @@ class UniformLayer(ContinuousLayerWithFiniteSupport):
             ],
             dtype=np.int64,
         )
-        return cls(variable_index, interval, bounds=bounds)
+        return cls(variable_index, interval, bounds)
 
     def sample_of_node(
         self, node: int, amount: int, variables: SortedSet
-    ) -> npt.NDArray:
+    ) -> SampleColumn:
         return np.random.uniform(self.lower[node], self.upper[node], amount)
 
     def log_truncated_of_non_singleton_interval(
         self, interval: SimpleInterval
-    ) -> Tuple[UniformLayer, npt.NDArray]:
+    ) -> LayerWithLogProbabilities:
         """
-        A uniform truncated to an interval is the uniform over the intersection of the
-        two, with the probability of the interval under the node.
+        Truncate every node to a simple interval. A uniform truncated to an interval is
+        the uniform over the intersection of the two.
+
+        :param interval: The simple interval, which is not a singleton.
+        :return: The uniform layer over the intersections and the log-probability of the
+            interval under every node.
         """
         lower, upper = float(interval.lower), float(interval.upper)
         left_bound, right_bound = int(interval.left), int(interval.right)
@@ -132,7 +155,7 @@ class UniformLayer(ContinuousLayerWithFiniteSupport):
             alive, np.log(np.where(alive, probability, 1.0)), -np.inf
         )
 
-        return (
-            self.__class__(self.variable, interval_of_nodes, bounds=bounds_of_nodes),
+        return LayerWithLogProbabilities(
+            self.__class__(self.variable, interval_of_nodes, bounds_of_nodes),
             log_probabilities,
         )

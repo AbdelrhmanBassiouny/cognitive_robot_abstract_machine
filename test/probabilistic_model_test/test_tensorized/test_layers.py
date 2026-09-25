@@ -23,21 +23,33 @@ from probabilistic_model.adapters.rustworkx_tensorized.tensorized_to_rustworkx i
     LayeredCircuitToRustworkxCircuitConverter,
 )
 from probabilistic_model.distributions.uniform import UniformDistribution
+from probabilistic_model.exceptions import NumberOfWeightsMismatchError
 from probabilistic_model.learning.jpt.jpt import JointProbabilityTree
 from probabilistic_model.learning.jpt.variables import infer_variables_from_dataframe
 from probabilistic_model.probabilistic_circuit.rx.helper import (
     uniform_measure_of_event,
     uniform_measure_of_simple_event,
 )
-from probabilistic_model.probabilistic_circuit.tensorized.helper import (
-    mixture_of,
-    product_of,
+from probabilistic_model.probabilistic_circuit.tensorized.forward_sample_assignment import (
+    SampleRowsOfNode,
+)
+from probabilistic_model.probabilistic_circuit.tensorized.inner_layer.inner_layer_edge import (
+    InnerLayerEdge,
+    InnerLayerEdges,
 )
 from probabilistic_model.probabilistic_circuit.tensorized.layer_with_depth import (
     LayerWithDepth,
 )
+from probabilistic_model.probabilistic_circuit.tensorized.moment_query import (
+    MomentQuery,
+)
+from probabilistic_model.probabilistic_circuit.tensorized.structural_query import (
+    LayerWithLogProbabilities,
+    LogProbabilitiesOfLayers,
+)
 from probabilistic_model.probabilistic_circuit.tensorized.row_grouped_sparse_array import (
     RowGroupedSparseArray,
+    SparseEntries,
 )
 from probabilistic_model.probabilistic_circuit.tensorized.inner_layer.product_layer import (
     ProductLayer,
@@ -121,13 +133,17 @@ class TruncationOfInputLayersTestCase(unittest.TestCase):
     def circuit_of(self, layer) -> LayeredProbabilisticCircuit:
         return LayeredProbabilisticCircuit(
             SortedSet([x]),
-            mixture_of([layer], [0.0]) if layer.number_of_nodes == 1 else layer,
+            (
+                SumLayer.mixture_of([layer], [0.0])
+                if layer.number_of_nodes == 1
+                else layer
+            ),
         )
 
     def test_truncating_to_a_composite_interval_introduces_a_selecting_sum_layer(self):
         layer = uniform_layer_of(0, [(0, 4)])
         circuit = LayeredProbabilisticCircuit(
-            SortedSet([x]), mixture_of([layer], [0.0])
+            SortedSet([x]), SumLayer.mixture_of([layer], [0.0])
         )
 
         event = SimpleEvent.from_data(
@@ -154,7 +170,7 @@ class TruncationOfInputLayersTestCase(unittest.TestCase):
     def test_truncating_to_a_singleton(self):
         layer = uniform_layer_of(0, [(0, 2)])
         circuit = LayeredProbabilisticCircuit(
-            SortedSet([x]), mixture_of([layer], [0.0])
+            SortedSet([x]), SumLayer.mixture_of([layer], [0.0])
         )
 
         event = SimpleEvent.from_data({x: singleton(1.0)}).as_composite_set()
@@ -169,8 +185,8 @@ class TruncationOfInputLayersTestCase(unittest.TestCase):
         layer = uniform_layer_of(0, [(0, 1), (2, 3)])
         root = SumLayer(
             [layer],
-            RowGroupedSparseArray.from_coordinates(
-                np.log([0.25, 0.75]), [0, 0], [0, 1], (1, 2)
+            RowGroupedSparseArray.from_entries(
+                SparseEntries(np.log([0.25, 0.75]), [0, 0], [0, 1]), (1, 2)
             ),
         )
         circuit = LayeredProbabilisticCircuit(SortedSet([x]), root)
@@ -231,11 +247,11 @@ class VectorizedTruncationTestCase(unittest.TestCase):
                         event_bounds=event_bounds,
                         event=(lower, upper),
                     ):
-                        truncated_layer, log_probabilities = (
-                            layer.log_truncated_of_assignment(
-                                event_interval.as_composite_set(), False
-                            )
+                        truncated = layer.log_truncated_of_assignment(
+                            event_interval.as_composite_set(), False
                         )
+                        truncated_layer = truncated.layer
+                        log_probabilities = truncated.log_probabilities
 
                         for node, distribution in enumerate(distributions):
                             expected, expected_log_probability = (
@@ -259,9 +275,9 @@ class VectorizedTruncationTestCase(unittest.TestCase):
     def test_a_singleton_turns_every_node_into_a_dirac_delta(self):
         layer = uniform_layer_of(0, [(0, 2), (1, 5)])
         assignment = singleton(1.0)
-        truncated_layer, log_probabilities = layer.log_truncated_of_assignment(
-            assignment, True
-        )
+        truncated = layer.log_truncated_of_assignment(assignment, True)
+        truncated_layer = truncated.layer
+        log_probabilities = truncated.log_probabilities
         self.assertIsInstance(truncated_layer, DiracDeltaLayer)
         for node in range(layer.number_of_nodes):
             expected, expected_log_probability = layer.node_distribution(
@@ -279,9 +295,9 @@ class VectorizedTruncationTestCase(unittest.TestCase):
     ):
         layer = uniform_layer_of(0, [(0, 4), (0, 8)])
         assignment = closed(0, 1) | closed(3, 4)
-        truncated_layer, log_probabilities = layer.log_truncated_of_assignment(
-            assignment, False
-        )
+        truncated = layer.log_truncated_of_assignment(assignment, False)
+        truncated_layer = truncated.layer
+        log_probabilities = truncated.log_probabilities
         self.assertIsInstance(truncated_layer, SumLayer)
         self.assertEqual(truncated_layer.number_of_nodes, layer.number_of_nodes)
         for node in range(layer.number_of_nodes):
@@ -300,9 +316,9 @@ class VectorizedTruncationTestCase(unittest.TestCase):
             closed(5.0, 6.0),
         ):
             with self.subTest(str(assignment)):
-                _, log_probabilities = layer.log_truncated_of_assignment(
+                log_probabilities = layer.log_truncated_of_assignment(
                     assignment, False
-                )
+                ).log_probabilities
                 for node in range(layer.number_of_nodes):
                     distribution = layer.node_distribution(node, x)
                     _, expected = distribution.log_truncated(
@@ -361,11 +377,13 @@ class LayerGraphTraversalTestCase(unittest.TestCase):
         self.leaf_y = UniformLayer.from_distributions(
             1, [UniformDistribution(variable=y, interval=closed(0, 1).simple_sets[0])]
         )
-        self.product = product_of([x, y], [self.leaf_x, self.leaf_y])
-        self.wrapper = mixture_of([self.product], [np.log(1.0)])
+        self.product = ProductLayer.product_of([self.leaf_x, self.leaf_y])
+        self.wrapper = SumLayer.mixture_of([self.product], [np.log(1.0)])
         # the product layer is both a child of the root and, through the wrapper, its
         # grandchild, so it is reachable at two different depths
-        self.root = mixture_of([self.product, self.wrapper], np.log([0.5, 0.5]))
+        self.root = SumLayer.mixture_of(
+            [self.product, self.wrapper], np.log([0.5, 0.5])
+        )
 
     def test_an_input_layer_has_no_child_layers(self):
         self.assertEqual([], self.leaf_x.child_layers)
@@ -431,12 +449,15 @@ class HelperTestCase(unittest.TestCase):
         )
         self.assertAlmostEqual(circuit.probability(event.__deepcopy__()), 1.0)
 
+
+class SingleNodeLayerTestCase(unittest.TestCase):
+
     def test_product_of_and_mixture_of(self):
         layer_x = uniform_layer_of(0, [(0, 1)])
         layer_y = UniformLayer.from_distributions(
             1, [UniformDistribution(variable=y, interval=closed(0, 2).simple_sets[0])]
         )
-        product = product_of([x, y], [layer_x, layer_y])
+        product = ProductLayer.product_of([layer_x, layer_y])
         self.assertIsInstance(product, ProductLayer)
 
         circuit = LayeredProbabilisticCircuit(SortedSet([x, y]), product)
@@ -444,7 +465,7 @@ class HelperTestCase(unittest.TestCase):
             circuit.likelihood(np.array([[0.5, 1.0]])), np.array([0.5])
         )
 
-        mixture = mixture_of([product], [np.log(1.0)])
+        mixture = SumLayer.mixture_of([product], [np.log(1.0)])
         self.assertIsInstance(mixture, SumLayer)
         np.testing.assert_allclose(
             LayeredProbabilisticCircuit(SortedSet([x, y]), mixture).likelihood(
@@ -454,8 +475,120 @@ class HelperTestCase(unittest.TestCase):
         )
 
     def test_mixture_of_rejects_a_wrong_number_of_weights(self):
-        with self.assertRaises(ValueError):
-            mixture_of([uniform_layer_of(0, [(0, 1)])], [0.0, 0.0])
+        with self.assertRaises(NumberOfWeightsMismatchError):
+            SumLayer.mixture_of([uniform_layer_of(0, [(0, 1)])], [0.0, 0.0])
+
+
+class QueryDatastructureTestCase(unittest.TestCase):
+
+    def test_edges_into_one_child_layer(self):
+        edges = InnerLayerEdges(
+            np.array([0, 0, 1, 1]), np.array([0, 1, 0, 0]), np.array([2, 0, 1, 3])
+        )
+        into_first = edges.into_child_layer(0)
+        self.assertEqual(
+            list(into_first),
+            [InnerLayerEdge(0, 0, 2), InnerLayerEdge(1, 0, 1), InnerLayerEdge(1, 0, 3)],
+        )
+        self.assertFalse(into_first.every_node_at_most_once)
+        self.assertTrue(edges.into_child_layer(1).every_node_at_most_once)
+
+    def test_product_layer_edges_per_child_layer(self):
+        layer = ProductLayer.product_of(
+            [uniform_layer_of(0, [(0, 1)]), uniform_layer_of(1, [(0, 1)])]
+        )
+        self.assertEqual(
+            [list(edges) for edges in layer.edges_per_child_layer],
+            [[InnerLayerEdge(0, 0, 0)], [InnerLayerEdge(0, 1, 0)]],
+        )
+
+    def test_sparse_entries_concatenate_into_one_array(self):
+        entries = SparseEntries.concatenate(
+            [SparseEntries([1.0], [0], [1]), SparseEntries([2.0], [1], [0])]
+        )
+        np.testing.assert_array_equal(
+            entries.to_coo_array((2, 2)).toarray(), np.array([[0.0, 1.0], [2.0, 0.0]])
+        )
+
+    def test_sample_rows_of_a_node_join_the_chunks_of_all_parents(self):
+        rows = SampleRowsOfNode()
+        self.assertTrue(rows.is_empty)
+        rows.add(np.array([0, 2]))
+        rows.add(np.array([5]))
+        self.assertFalse(rows.is_empty)
+        np.testing.assert_array_equal(rows.rows, np.array([0, 2, 5]))
+
+    def test_moment_query_from_maps(self):
+        query = MomentQuery.from_maps({y: 2}, {x: 1.0, y: 3.0}, SortedSet([x, y]))
+        np.testing.assert_array_equal(query.order, np.array([0, 2]))
+        np.testing.assert_array_equal(query.center, np.array([1.0, 3.0]))
+        np.testing.assert_array_equal(query.requested, np.array([False, True]))
+        self.assertEqual(query.number_of_variables, 2)
+
+    def test_alive_nodes_of_recorded_and_unrecorded_layers(self):
+        recorded = uniform_layer_of(0, [(0, 1), (1, 2)])
+        unrecorded = uniform_layer_of(0, [(0, 1)])
+        log_probabilities = LogProbabilitiesOfLayers()
+        log_probabilities.record(
+            LayerWithLogProbabilities(recorded, np.array([-np.inf, 0.0]))
+        )
+        np.testing.assert_array_equal(
+            log_probabilities.alive_nodes_of(recorded), np.array([False, True])
+        )
+        np.testing.assert_array_equal(
+            log_probabilities.alive_nodes_of(unrecorded), np.array([True])
+        )
+
+    def test_uniform_moment_is_the_difference_of_the_antiderivative(self):
+        layer = uniform_layer_of(0, [(0, 2), (1, 5)])
+        np.testing.assert_allclose(
+            layer.moment_of_nodes_own(1, 0.0, x), np.array([1.0, 3.0])
+        )
+        np.testing.assert_allclose(
+            layer.antiderivative_of_moment_at(np.array([2.0, 5.0]), 1, 0.0),
+            np.array([1.0, 25 / 8]),
+        )
+
+
+class SupportWithoutCopiesTestCase(unittest.TestCase):
+    """
+    The support and mode queries combine the events of the children with operations
+    that return new events, so they must not alter the events of the children.
+    """
+
+    def test_the_support_of_a_sum_does_not_alter_the_support_of_its_children(self):
+        child = uniform_layer_of(0, [(0, 1), (2, 3)])
+        root = SumLayer(
+            [child],
+            RowGroupedSparseArray.from_entries(
+                SparseEntries(np.log([0.5, 0.5]), [0, 0], [0, 1]), (1, 2)
+            ),
+        )
+        variables = SortedSet([x])
+        [support] = root.support_of_nodes(variables)
+        self.assertEqual(
+            support,
+            SimpleEvent.from_data({x: closed(0, 1) | closed(2, 3)}).as_composite_set(),
+        )
+        self.assertEqual(
+            child.support_of_nodes(variables)[0],
+            SimpleEvent.from_data({x: closed(0, 1)}).as_composite_set(),
+        )
+
+    def test_the_mode_of_a_product_fills_in_the_variables_of_the_other_factors(self):
+        leaf_x = uniform_layer_of(0, [(0, 1)])
+        leaf_y = UniformLayer.from_distributions(
+            1, [UniformDistribution(variable=y, interval=closed(0, 2).simple_sets[0])]
+        )
+        product = ProductLayer.product_of([leaf_x, leaf_y])
+        [mode], values = product.log_mode_of_nodes(SortedSet([x, y]))
+        self.assertEqual(
+            mode,
+            SimpleEvent.from_data(
+                {x: closed(0, 1), y: closed(0, 2)}
+            ).as_composite_set(),
+        )
+        self.assertAlmostEqual(float(values[0]), np.log(0.5))
 
 
 class JointProbabilityTreeIntegrationTestCase(unittest.TestCase):

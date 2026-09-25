@@ -21,18 +21,36 @@ from typing_extensions import (
     Tuple,
 )
 
+from probabilistic_model.probabilistic_circuit.tensorized.array_types import (
+    NodeMask,
+    NodeValues,
+    SampleArray,
+    SampleNodeValues,
+    VariableIndices,
+    VariableMask,
+    VariableValues,
+)
 from probabilistic_model.probabilistic_circuit.tensorized.forward_sample_assignment import (
     ForwardSampleAssignment,
 )
 from probabilistic_model.probabilistic_circuit.tensorized.inner_layer.inner_layer_edge import (
     InnerLayerEdge,
+    InnerLayerEdges,
 )
 from probabilistic_model.probabilistic_circuit.tensorized.layer_with_depth import (
     LayerWithDepth,
 )
+from probabilistic_model.probabilistic_circuit.tensorized.moment_query import (
+    MomentQuery,
+)
 from probabilistic_model.probabilistic_circuit.tensorized.query_cache import (
     QueryCache,
     memoized,
+)
+from probabilistic_model.probabilistic_circuit.tensorized.structural_query import (
+    LayerWithLogProbabilities,
+    LogProbabilitiesOfLayers,
+    StructuralQuery,
 )
 
 
@@ -54,7 +72,7 @@ class Layer(SubclassJSONSerializer, ABC):
 
     @property
     @abstractmethod
-    def variables(self) -> npt.NDArray:
+    def variables(self) -> VariableIndices:
         """
         :return: The sorted indices of the variables in the scope of this layer.
         """
@@ -145,8 +163,8 @@ class Layer(SubclassJSONSerializer, ABC):
 
     @abstractmethod
     def log_likelihood_of_nodes(
-        self, events: npt.NDArray, cache: Optional[QueryCache] = None
-    ) -> npt.NDArray:
+        self, events: SampleArray, cache: Optional[QueryCache] = None
+    ) -> SampleNodeValues:
         """
         Calculate the log-likelihood of every node of this layer.
 
@@ -158,8 +176,8 @@ class Layer(SubclassJSONSerializer, ABC):
 
     @abstractmethod
     def cumulative_distribution_of_nodes(
-        self, events: npt.NDArray, cache: Optional[QueryCache] = None
-    ) -> npt.NDArray:
+        self, events: SampleArray, cache: Optional[QueryCache] = None
+    ) -> SampleNodeValues:
         """
         Calculate the cumulative distribution function of every node of this layer.
 
@@ -175,7 +193,7 @@ class Layer(SubclassJSONSerializer, ABC):
         event: SimpleEvent,
         variables: SortedSet,
         cache: Optional[QueryCache] = None,
-    ) -> npt.NDArray:
+    ) -> NodeValues:
         """
         Calculate the probability of a simple event for every node of this layer.
 
@@ -202,7 +220,7 @@ class Layer(SubclassJSONSerializer, ABC):
     @abstractmethod
     def log_mode_of_nodes(
         self, variables: SortedSet, cache: Optional[QueryCache] = None
-    ) -> Tuple[List[Event], npt.NDArray]:
+    ) -> Tuple[List[Event], NodeValues]:
         """
         Calculate the mode of every node of this layer.
 
@@ -215,18 +233,15 @@ class Layer(SubclassJSONSerializer, ABC):
     @abstractmethod
     def moment_of_nodes(
         self,
-        order: npt.NDArray,
-        center: npt.NDArray,
-        requested: npt.NDArray,
+        query: MomentQuery,
         variables: SortedSet,
         cache: Optional[QueryCache] = None,
     ) -> npt.NDArray:
         """
         Calculate the moment of every node of this layer.
 
-        :param order: The order per variable of the circuit.
-        :param center: The center per variable of the circuit.
-        :param requested: A boolean mask of the variables the moment is requested for.
+        :param query: The order and center of the moment.
+        :param variables: The variables of the circuit.
         :param cache: The shared cache of the current query.
         :return: The moments with shape (#nodes, #variables of the circuit).
         """
@@ -236,7 +251,7 @@ class Layer(SubclassJSONSerializer, ABC):
     def sample_forward(
         self,
         assignment: ForwardSampleAssignment,
-        samples: npt.NDArray,
+        samples: SampleArray,
         variables: SortedSet,
     ):
         """
@@ -248,7 +263,7 @@ class Layer(SubclassJSONSerializer, ABC):
         """
         raise NotImplementedError
 
-    def is_decomposable_of_nodes(self) -> npt.NDArray:
+    def is_decomposable_of_nodes(self) -> NodeMask:
         """
         Only a product node can violate decomposability, so every other layer reports
         all of its nodes as decomposable.
@@ -267,7 +282,7 @@ class Layer(SubclassJSONSerializer, ABC):
 
     def is_deterministic_of_nodes(
         self, variables: SortedSet, cache: QueryCache
-    ) -> npt.NDArray:
+    ) -> NodeMask:
         """
         Only a sum node can violate determinism, so every other layer reports all of its
         nodes as deterministic.
@@ -295,11 +310,9 @@ class Layer(SubclassJSONSerializer, ABC):
     def log_truncated_of_simple_event(
         self,
         event: SimpleEvent,
-        variables: SortedSet,
-        singleton_allowed: bool,
-        log_probabilities: Dict[int, npt.NDArray],
+        query: StructuralQuery,
         cache: Optional[QueryCache] = None,
-    ) -> Tuple[Layer, npt.NDArray]:
+    ) -> LayerWithLogProbabilities:
         """
         Truncate every node of this layer to a simple event.
 
@@ -309,25 +322,22 @@ class Layer(SubclassJSONSerializer, ABC):
         :meth:`prune` pass.
 
         :param event: The simple event to truncate to.
-        :param variables: The variables of the circuit.
-        :param singleton_allowed: Whether singletons are allowed in the event.
-        :param log_probabilities: The map the per-node log-probabilities of the new
-            layers are written into, keyed by the id of the new layer.
+        :param query: The arguments of the truncation, which records the
+            log-probabilities of the new layers.
         :param cache: The shared cache of the current query.
         :return: The truncated layer and the log-probabilities of its nodes.
         """
         raise NotImplementedError
 
     def can_truncate_in_one_batch(
-        self, events: List[SimpleEvent], variables: SortedSet, singleton_allowed: bool
+        self, events: List[SimpleEvent], query: StructuralQuery
     ) -> bool:
         """
         Only an input layer can change its type when it is truncated, so every other
         layer can be truncated in one batch.
 
         :param events: The simple events to truncate to.
-        :param variables: The variables of the circuit.
-        :param singleton_allowed: Whether singletons are allowed in the events.
+        :param query: The arguments of the truncation.
         :return: Whether :meth:`log_truncated_of_simple_events` can truncate this layer
             to all the events at once.
         """
@@ -337,11 +347,9 @@ class Layer(SubclassJSONSerializer, ABC):
     def log_truncated_of_simple_events(
         self,
         events: List[SimpleEvent],
-        variables: SortedSet,
-        singleton_allowed: bool,
-        log_probabilities: Dict[int, npt.NDArray],
+        query: StructuralQuery,
         cache: Optional[QueryCache] = None,
-    ) -> Tuple[Layer, npt.NDArray]:
+    ) -> LayerWithLogProbabilities:
         """
         Truncate this layer to several simple events at once.
 
@@ -355,9 +363,8 @@ class Layer(SubclassJSONSerializer, ABC):
         Only valid if :meth:`can_truncate_in_one_batch` holds for every layer below.
 
         :param events: The simple events to truncate to.
-        :param variables: The variables of the circuit.
-        :param singleton_allowed: Whether singletons are allowed in the events.
-        :param log_probabilities: The map the per-node log-probabilities are written to.
+        :param query: The arguments of the truncation, which records the
+            log-probabilities of the new layers.
         :param cache: The shared cache of the current query.
         :return: The truncated layer and the log-probabilities of its nodes.
         """
@@ -367,52 +374,30 @@ class Layer(SubclassJSONSerializer, ABC):
     def log_conditional_of_point(
         self,
         point: Dict[Variable, Any],
-        variables: SortedSet,
-        log_probabilities: Dict[int, npt.NDArray],
+        query: StructuralQuery,
         cache: Optional[QueryCache] = None,
-    ) -> Tuple[Layer, npt.NDArray]:
+    ) -> LayerWithLogProbabilities:
         """
         Condition every node of this layer on a partial point.
 
         See :meth:`log_truncated_of_simple_event` for the contract of the result.
 
         :param point: The partial point.
-        :param variables: The variables of the circuit.
-        :param log_probabilities: The map the per-node log-probabilities are written to.
+        :param query: The arguments of the conditioning, which records the
+            log-probabilities of the new layers.
         :param cache: The shared cache of the current query.
         :return: The conditioned layer and the log-probabilities of its nodes.
         """
         raise NotImplementedError
 
-    def alive_own(self, log_probabilities: Dict[int, npt.NDArray]) -> npt.NDArray:
-        """
-        Read back which nodes of this layer a structural query left possible.
-
-        A structural pass such as :meth:`log_truncated_of_simple_event` keeps the node
-        count of every layer it rewrites, so that the edges of the parents stay valid,
-        and reports the nodes that became impossible with a log-probability of ``-inf``.
-        A node of this layer is therefore still possible if its recorded log-probability
-        is above ``-inf``. A layer that the pass recorded nothing for is one it did not
-        rewrite, so none of its nodes became impossible.
-
-        :param log_probabilities: The per-layer log-probabilities of the structural pass
-            that created this layer, keyed by the id of the layer.
-        :return: A boolean mask of the nodes of this layer that are still possible.
-        """
-        own = log_probabilities.get(id(self))
-        if own is None:
-            return np.ones(self.number_of_nodes, dtype=bool)
-        return own > -np.inf
-
     def required_child_nodes(
-        self, alive: npt.NDArray, log_probabilities: Dict[int, npt.NDArray]
-    ) -> List[Tuple[Layer, npt.NDArray]]:
+        self, alive: NodeMask, log_probabilities: LogProbabilitiesOfLayers
+    ) -> List[Tuple[Layer, NodeMask]]:
         """
         Determine which nodes of the direct children a set of live nodes still needs.
 
-        :param alive: A boolean mask of the live nodes of this layer.
-        :param log_probabilities: The per-layer log-probabilities of the structural
-            pass.
+        :param alive: The live nodes of this layer.
+        :param log_probabilities: The log-probabilities of the structural query.
         :return: One ``(child layer, mask)`` pair per child layer.
         """
         return []
@@ -420,7 +405,7 @@ class Layer(SubclassJSONSerializer, ABC):
     @abstractmethod
     def rebuild(
         self,
-        needed: Dict[int, npt.NDArray],
+        needed: Dict[int, NodeMask],
         rebuilt: Dict[int, Optional[Layer]],
     ) -> Optional[Layer]:
         """
@@ -433,7 +418,7 @@ class Layer(SubclassJSONSerializer, ABC):
         """
         raise NotImplementedError
 
-    def prune(self, log_probabilities: Dict[int, npt.NDArray]) -> Optional[Layer]:
+    def prune(self, log_probabilities: LogProbabilitiesOfLayers) -> Optional[Layer]:
         """
         Remove every impossible and every unreachable node of the circuit rooted here.
 
@@ -441,19 +426,19 @@ class Layer(SubclassJSONSerializer, ABC):
         a layer shared by several parents is pruned once against the union of what its
         parents need, and then rebuilds the layers bottom-up.
 
-        :param log_probabilities: The per-layer log-probabilities of the structural pass
-            that created this circuit.
+        :param log_probabilities: The log-probabilities of the structural query that
+            created this circuit.
         :return: The pruned circuit, or ``None`` if the root became impossible.
         """
         order = self.all_layers()
 
-        needed: Dict[int, npt.NDArray] = {
+        needed: Dict[int, NodeMask] = {
             id(self): np.ones(self.number_of_nodes, dtype=bool)
         }
         for layer in order:
             alive = needed.get(
                 id(layer), np.zeros(layer.number_of_nodes, dtype=bool)
-            ) & layer.alive_own(log_probabilities)
+            ) & log_probabilities.alive_nodes_of(layer)
             needed[id(layer)] = alive
             for child_layer, mask in layer.required_child_nodes(
                 alive, log_probabilities
@@ -471,12 +456,12 @@ class Layer(SubclassJSONSerializer, ABC):
 
     @abstractmethod
     def marginal(
-        self, kept: npt.NDArray, cache: Optional[QueryCache] = None
+        self, kept: VariableMask, cache: Optional[QueryCache] = None
     ) -> Optional[Layer]:
         """
         Restrict this layer to a subset of the variables.
 
-        :param kept: A boolean mask over the variables of the circuit.
+        :param kept: The variables of the circuit to keep.
         :param cache: The shared cache of the current pass.
         :return: The marginalized layer, or ``None`` if this layer models none of the
             kept variables.
@@ -484,7 +469,9 @@ class Layer(SubclassJSONSerializer, ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def remap_variables(self, remap: npt.NDArray, cache: Optional[QueryCache] = None):
+    def remap_variables(
+        self, remap: VariableIndices, cache: Optional[QueryCache] = None
+    ):
         """
         Rewrite the variable indices of this layer in-place.
 
@@ -518,7 +505,7 @@ class Layer(SubclassJSONSerializer, ABC):
         Normalize the parameters stored in this layer alone in-place.
         """
 
-    def apply_translation(self, translation: npt.NDArray):
+    def apply_translation(self, translation: VariableValues):
         """
         Translate the circuit rooted here in-place.
 
@@ -527,12 +514,12 @@ class Layer(SubclassJSONSerializer, ABC):
         for layer in self.all_layers():
             layer.apply_translation_own(translation)
 
-    def apply_translation_own(self, translation: npt.NDArray):
+    def apply_translation_own(self, translation: VariableValues):
         """
         Translate the parameters of this layer alone in-place.
         """
 
-    def apply_scaling(self, scaling: npt.NDArray):
+    def apply_scaling(self, scaling: VariableValues):
         """
         Scale the circuit rooted here in-place.
 
@@ -541,7 +528,7 @@ class Layer(SubclassJSONSerializer, ABC):
         for layer in self.all_layers():
             layer.apply_scaling_own(scaling)
 
-    def apply_scaling_own(self, scaling: npt.NDArray):
+    def apply_scaling_own(self, scaling: VariableValues):
         """
         Scale the parameters of this layer alone in-place.
         """
@@ -607,7 +594,7 @@ class InnerLayer(Layer, ABC):
     The list is not copied.
     """
 
-    _variables_cache: Optional[npt.NDArray] = field(
+    _variables_cache: Optional[VariableIndices] = field(
         default=None, init=False, repr=False
     )
     """
@@ -621,15 +608,24 @@ class InnerLayer(Layer, ABC):
         self._variables_cache = None
 
     @memoized
-    def remap_variables(self, remap: npt.NDArray, cache: Optional[QueryCache] = None):
+    def remap_variables(
+        self, remap: VariableIndices, cache: Optional[QueryCache] = None
+    ):
         for child_layer in self.child_layers:
             child_layer.remap_variables(remap, cache=cache)
         self.reset_variables()
 
+    @property
     @abstractmethod
-    def iterate_edges(self) -> Iterator[InnerLayerEdge]:
+    def inner_layer_edges(self) -> InnerLayerEdges:
         """
-        :return: Yields every edge from a node of this layer to a node of one of its
-            child layers.
+        :return: Every edge from a node of this layer to a node of one of its child
+            layers.
         """
         raise NotImplementedError
+
+    def iterate_edges(self) -> Iterator[InnerLayerEdge]:
+        """
+        :return: Yields every edge of :attr:`inner_layer_edges` one by one.
+        """
+        return iter(self.inner_layer_edges)
