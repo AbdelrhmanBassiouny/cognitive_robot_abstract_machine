@@ -1,15 +1,21 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
-from typing_extensions import ClassVar, Iterable, Protocol, Union, runtime_checkable
+from typing_extensions import (
+    ClassVar,
+    Iterable,
+    List,
+    Protocol,
+    Union,
+    runtime_checkable,
+)
 
 from krrood.entity_query_language.predicate import VerbalizationField
 from krrood.entity_query_language.utils import camel_case_to_words
 from krrood.entity_query_language.verbalization import morphology
 from krrood.entity_query_language.verbalization.fragments.base import (
-    apply_subject_verb_agreement,
     Clause,
     VerbalizationFragment,
     NounPhrase,
@@ -36,6 +42,7 @@ from krrood.entity_query_language.verbalization.value_lexicon import type_member
 from krrood.entity_query_language.verbalization.vocabulary.english import (
     Conjunctions,
     Copulas,
+    GroupingPhrases,
     Prepositions,
     SetMembership,
 )
@@ -160,6 +167,28 @@ class Adjective(ClauseElement):
         'reachable'
         """
         return WordFragment(text=self.word)
+
+
+@dataclass(frozen=True)
+class All(ClauseElement):
+    """
+    The universal quantifier *"all"* fronting a clause's subject.
+
+    In a :func:`clause` it both reads as *"all"* and marks the quantified subject — the
+    first noun phrase after it — plural; the agreement realization pass then agrees the
+    clause's verb / copula, so ``clause(All(), Noun("element"), Copula(),
+    Adjective("close"))`` reads *"all elements are close"*. Only the subject's number is
+    decided here; agreement and the morphology inflection (*"element"* → *"elements"*,
+    *"is"* → *"are"*) happen in the realization passes.
+    """
+
+    def as_fragment(self) -> VerbalizationFragment:
+        """:return: the *"all"* quantifier word leaf.
+
+        >>> All().as_fragment().text
+        'all'
+        """
+        return GroupingPhrases.ALL.as_fragment()
 
 
 @dataclass(frozen=True)
@@ -355,10 +384,11 @@ def clause(*constituents: ClauseConstituent) -> Clause:
     treats the first constituent as the clause's subject (pronominalisation, verb agreement).
 
     A subject built from :class:`ConjunctivePhrase` (*"A, B, and C"*) is a coordination of ≥ 2
-    distinct entities, so the following predicate word (:class:`Copula` / :class:`Verb`) is tagged
-    plural here, at build time — coordination is static knowledge, unlike a quantified
-    population's plurality, which the coreference pass decides once it knows the subject is in
-    scope.
+    distinct entities, so the clause is stamped with a plural
+    :attr:`~krrood.entity_query_language.verbalization.fragments.base.PhraseFragment.concord_number`
+    here, at build time — coordination is static knowledge, unlike a quantified population's
+    plurality, which the coreference pass decides once it knows the subject is in scope. The
+    agreement realization pass then agrees the predicate word (:class:`Copula` / :class:`Verb`).
 
     :param constituents: The clause's elements in surface order.
     :return: The clause fragment.
@@ -371,16 +401,64 @@ def clause(*constituents: ClauseConstituent) -> Clause:
     ...            Noun(WordFragment(text="a Department")))
     ... )
     'an Employee work in a Department'
+
+    An :class:`All` quantifier makes the clause read a universal: the subject it fronts is made
+    plural and the agreement realization pass agrees the verb / copula (shown realised here, since
+    agreement and morphology run in the passes, not in :func:`clause`).
+
+    >>> from krrood.entity_query_language.verbalization.rendering.realization import (
+    ...     realize_subtree)
+    >>> realize_subtree(clause(All(), Noun("element"), Copula(), Adjective("close")))
+    'all elements are close'
     """
     leading = constituents[0] if constituents else None
-    coordinated = isinstance(leading, ConjunctivePhrase)
-    if coordinated:
-        items = list(leading.items)
-        constituents = (ConjunctivePhrase(items), *constituents[1:])
-    parts = [constituent.as_fragment() for constituent in constituents]
-    if coordinated and len(items) >= 2 and len(parts) > 1:
-        parts[1] = apply_subject_verb_agreement(parts[1], GrammaticalNumber.PLURAL)
-    return Clause(parts=parts)
+    if isinstance(leading, ConjunctivePhrase):
+        return _coordinated_subject_clause(leading, constituents[1:])
+    parts = [(constituent, constituent.as_fragment()) for constituent in constituents]
+    if any(isinstance(constituent, All) for constituent, _ in parts):
+        return Clause(parts=_pluralize_quantified_subject(parts))
+    return Clause(parts=[fragment for _, fragment in parts])
+
+
+def _coordinated_subject_clause(
+    subject: ConjunctivePhrase, rest: Iterable[ClauseConstituent]
+) -> Clause:
+    """:return: the clause for a coordinated subject (*"A, B, and C are …"*). A coordination of ≥ 2
+    distinct entities is plural by construction — static knowledge, unlike a quantified population's
+    plurality, which the coreference pass decides — so the plural concord number is stamped on the
+    clause here, at build time; the agreement realization pass agrees the finite verb / copula with
+    it, and the morphology pass does the inflection.
+    """
+    items = list(subject.items)
+    parts = [
+        constituent.as_fragment() for constituent in (ConjunctivePhrase(items), *rest)
+    ]
+    if len(items) < 2:
+        return Clause(parts=parts)
+    return Clause(parts=parts, concord_number=GrammaticalNumber.PLURAL)
+
+
+def _pluralize_quantified_subject(
+    parts: List[tuple],
+) -> List[VerbalizationFragment]:
+    """:return: the clause fragments with the universally-quantified subject — the first noun phrase
+    after the :class:`All` word — made plural. Only the subject's number is decided here (the
+    grammatical-number content); the finite verb / copula is agreed with it later by the agreement
+    realization pass, and the morphology pass does the inflection.
+    """
+    fragments: List[VerbalizationFragment] = []
+    seen_all = False
+    subject_pluralized = False
+    for constituent, fragment in parts:
+        if isinstance(constituent, All):
+            seen_all = True
+            fragments.append(fragment)
+        elif seen_all and not subject_pluralized and isinstance(fragment, NounPhrase):
+            fragments.append(replace(fragment, number=GrammaticalNumber.PLURAL))
+            subject_pluralized = True
+        else:
+            fragments.append(fragment)
+    return fragments
 
 
 def function_as_noun(name: str, getter_prefix: str = "get") -> str:
