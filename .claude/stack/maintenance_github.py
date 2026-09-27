@@ -3,9 +3,13 @@ Reading and writing the fork's pull requests.
 
 The reading and the writing halves are declared separately, so a caller that must not
 write - the board export - can be handed a reader and provably cannot. Every write here
-was probed against the live API first: a pull request's *base branch* is the one the
-credential a session carries is refused, which is why retargeting is reported for a
-caller to perform rather than performed.
+was probed against the live API first, through a Claude session's own proxied
+credential: a pull request's *base branch* was the one write that credential was
+refused. That probe never covered this module's own credential - the environment
+variable :data:`maintenance_constants.CREDENTIAL_VARIABLES` names, which this module
+authenticates its own plain requests with directly rather than through any session
+proxy - so :meth:`PullRequestWriter.retarget_base` attempts it rather than assuming the
+same refusal, and reports what GitHub itself says rather than a carried-over guess.
 """
 
 from __future__ import annotations
@@ -21,7 +25,11 @@ from dataclasses import dataclass
 from typing import Any
 
 from maintenance_board import PullRequestRecord
-from maintenance_constants import CREDENTIAL_VARIABLES, GITHUB_API_ROOT
+from maintenance_constants import (
+    BASE_RETARGET_REFUSAL_STATUSES,
+    CREDENTIAL_VARIABLES,
+    GITHUB_API_ROOT,
+)
 from maintenance_errors import ExternalCallFailed
 from stack import Repository
 
@@ -68,11 +76,14 @@ class PullRequestReader(ABC):
 @dataclass(frozen=True)
 class PullRequestWriter(ABC):
     """
-    The three writes a pass makes, each one probed against the live API first.
+    The writes a pass makes.
 
-    Every one of them is available to the credential a session carries; a pull request's
-    *base branch* is the single write that is not, which is why reparenting is the
-    caller's job and none of this is.
+    Labels, comments and descriptions were all probed against the live API and found
+    available to a Claude session's own credential; retargeting a base was the one write
+    that credential was refused. This module's own credential is never proxied through a
+    session, so :meth:`retarget_base` attempts the write rather than inheriting that
+    refusal, and a caller reads its return value to know whether GitHub allowed it here
+    too.
     """
 
     @abstractmethod
@@ -90,6 +101,20 @@ class PullRequestWriter(ABC):
     def set_description(self, number: int, body: str) -> None:
         """:param number: The pull request to write.
         :param body: The new description."""
+
+    @abstractmethod
+    def retarget_base(self, number: int, base: str) -> bool:
+        """
+        Attempt to retarget a pull request's base branch.
+
+        :param number: The pull request to retarget.
+        :param base: The branch it must target instead.
+        :return: Whether GitHub allowed it. ``False`` rather than an exception for the
+            two refusals a caller cannot do anything about but fall back on: this
+            credential refused (``403``), or the pull request is a member of a GitHub
+            Stack that must be moved through native Stack mechanics instead (``422``).
+        :raises GitHubRequestFailed: For any other refusal.
+        """
 
 
 @dataclass(frozen=True)
@@ -211,6 +236,20 @@ class GitHubRepository(ForkPullRequests):
         :param body: The new description.
         """
         self._call("PATCH", f"/pulls/{number}", {"body": body})
+
+    def retarget_base(self, number: int, base: str) -> bool:
+        """:param number: The pull request to retarget.
+        :param base: The branch it must target instead.
+        :return: Whether GitHub allowed it.
+        :raises GitHubRequestFailed: For any refusal other than the two this call
+            treats as a fallback rather than a failure."""
+        try:
+            self._call("PATCH", f"/pulls/{number}", {"base": base})
+            return True
+        except GitHubRequestFailed as refused:
+            if refused.status in BASE_RETARGET_REFUSAL_STATUSES:
+                return False
+            raise
 
     def _call(
         self, method: str, path: str, payload: Mapping[str, Any] | None = None
