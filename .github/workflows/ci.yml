@@ -85,4 +85,5 @@ jobs:
       - run: |
           source .claude/hooks/resolve-personal-notes-config.sh
           python -m pytest "${PLAN_DASHBOARD_TESTS_DIRECTORY}" "${HOOKS_TESTS_DIRECTORY}" \
-            "${STACK_TESTS_DIRECTORY}" "${ADD_PLAN_ITEM_TESTS_DIRECTORY}"
+            "${STACK_TESTS_DIRECTORY}" "${ADD_PLAN_ITEM_TESTS_DIRECTORY}" \
+            "${UPSTREAM_REVIEWS_TESTS_DIRECTORY}"
