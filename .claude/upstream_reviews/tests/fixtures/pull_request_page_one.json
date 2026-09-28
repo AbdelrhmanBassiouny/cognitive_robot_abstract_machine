@@ -4,6 +4,27 @@
       "number": 513,
       "title": "[DevTools] Even more scripted and Less agentic stacked PRs maintenance",
       "url": "https://github.com/example-upstream/example-repo/pull/513",
+      "commits": {
+        "nodes": [
+          {
+            "commit": {
+              "statusCheckRollup": {
+                "state": "PENDING",
+                "contexts": {
+                  "nodes": [
+                    {
+                      "__typename": "CheckRun",
+                      "name": "test (krrood)",
+                      "conclusion": null,
+                      "detailsUrl": "https://github.com/example-upstream/example-repo/actions/runs/1/job/11"
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        ]
+      },
       "reviews": {
         "nodes": [
           {
