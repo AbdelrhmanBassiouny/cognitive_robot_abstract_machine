@@ -5,8 +5,8 @@ Self-contained tests for the rule-tree unparser
 Builds rule trees directly from core EQL primitives and feeds ``rdr_to_python()`` a
 minimal stand-in for the parts of :class:`EQLSingleClassRDR` it actually reads, so this
 test module -- and the DAG-unparsing slice it covers -- stays testable independently of
-the rest of the RDR engine. ``save_rdr``/``save_rdr_with_case``/``load_rdr`` operate on a
-real :class:`EQLSingleClassRDR` and are covered by the later, dedicated serialization
+the rest of the RDR engine. ``save_rdr``/``save_rdr_with_case``/``load_rdr`` operate on
+a real :class:`EQLSingleClassRDR` and are covered by the later, dedicated serialization
 test suite once the engine slice lands.
 """
 
@@ -40,6 +40,9 @@ from krrood.entity_query_language.rdr.serialization import (
     RDR_CONCLUSION_ATTRIBUTE_NAME,
     RDR_CORNER_CASES_NAME,
     RDR_QUERY_NAME,
+    FileModelSaver,
+    NullModelSaver,
+    TemporaryModelSaver,
     rdr_to_python,
     walk_rules_in_emission_order,
 )
@@ -52,7 +55,9 @@ class Species(Enum):
 
 @dataclass(unsafe_hash=True)
 class Animal:
-    """Minimal RDR classification target used only by this test module."""
+    """
+    Minimal RDR classification target used only by this test module.
+    """
 
     name: str
     has_fur: bool = False
@@ -62,7 +67,10 @@ class Animal:
 
 @dataclass
 class _SerializableRuleTree:
-    """Minimal stand-in for the :class:`EQLSingleClassRDR` attributes ``rdr_to_python`` reads."""
+    """
+    Minimal stand-in for the :class:`EQLSingleClassRDR` attributes ``rdr_to_python``
+    reads.
+    """
 
     query: Any
     case_type: type
@@ -94,7 +102,9 @@ def _alternative_chain_rdr():
 
 
 def _exec_generated_module(source: str) -> dict:
-    """Execute generated source in a fresh namespace, as the real module loader would."""
+    """
+    Execute generated source in a fresh namespace, as the real module loader would.
+    """
     namespace: dict = {}
     exec(compile(source, "<generated>", "exec"), namespace)
     return namespace
@@ -223,3 +233,67 @@ def test_recorded_corner_case_with_an_enum_field_round_trips_through_the_generat
     namespace = _exec_generated_module(source)
 
     assert corner_case in namespace[RDR_CORNER_CASES_NAME].values()
+
+
+# %% ModelSaver strategies
+
+
+def test_null_saver_writes_nothing_for_a_fitted_tree(tmp_path):
+    NullModelSaver().save(_flat_tree_rdr())
+
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_file_saver_writes_the_generated_source_to_its_path(tmp_path):
+    rdr = _flat_tree_rdr()
+    destination = tmp_path / "zoo_rules.py"
+
+    FileModelSaver(str(destination)).save(rdr)
+
+    assert destination.read_text() == rdr_to_python(rdr)
+
+
+def test_file_saver_rewrites_the_file_on_every_save(tmp_path):
+    rdr = _flat_tree_rdr()
+    destination = tmp_path / "zoo_rules.py"
+    destination.write_text("stale contents")
+
+    FileModelSaver(str(destination)).save(rdr)
+
+    assert destination.read_text() == rdr_to_python(rdr)
+
+
+def test_temporary_saver_writes_the_generated_source_to_a_file_it_names():
+    rdr = _flat_tree_rdr()
+    saver = TemporaryModelSaver()
+
+    saver.save(rdr)
+
+    assert Path(saver.path).read_text() == rdr_to_python(rdr)
+    Path(saver.path).unlink()
+
+
+def test_temporary_saver_reuses_the_same_file_on_every_save():
+    rdr = _flat_tree_rdr()
+    saver = TemporaryModelSaver()
+    saver.save(rdr)
+    first_path = saver.path
+
+    saver.save(rdr)
+
+    assert saver.path == first_path
+    assert Path(saver.path).read_text() == rdr_to_python(rdr)
+    Path(saver.path).unlink()
+
+
+def test_temporary_saver_names_the_file_after_the_case_type():
+    saver = TemporaryModelSaver()
+
+    saver.save(_flat_tree_rdr())
+
+    assert Path(saver.path).name.startswith(f"eql_rdr_{Animal.__name__}_")
+    Path(saver.path).unlink()
+
+
+def test_temporary_saver_has_no_path_before_it_saves():
+    assert TemporaryModelSaver().path is None

@@ -16,6 +16,12 @@ from krrood.entity_query_language.rdr.conclusion_domain import (
     ConclusionDomain,
     resolve_conclusion_domain,
 )
+from krrood.entity_query_language.rdr.exceptions import (
+    ConclusionMayNotBeNone,
+    ConclusionNotInDomain,
+    ConclusionRequired,
+    ConclusionWrongType,
+)
 
 from .animal import Animal, Species
 
@@ -120,3 +126,35 @@ class TestConclusionDomainHelpers:
     def test_example_shows_type_when_open(self):
         domain = resolve_conclusion_domain(Tag, "name")
         assert domain.example_for("conclusion") == "conclusion = <str>"
+
+    def test_hint_lists_members_when_enumerable(self):
+        domain = resolve_conclusion_domain(Animal, "species")
+        assert domain.hint() == f"one of: {domain.display()}"
+
+    def test_hint_shows_type_when_open(self):
+        domain = resolve_conclusion_domain(Tag, "name")
+        assert domain.hint() == "a str"
+
+
+class TestConclusionDomainValidate:
+    def test_unset_accepted_only_when_allowed(self):
+        domain = resolve_conclusion_domain(Animal, "species")
+        assert domain.validate(..., allow_unset=True) is None
+        assert isinstance(domain.validate(..., allow_unset=False), ConclusionRequired)
+
+    def test_none_accepted_only_when_domain_allows_it(self):
+        optional_domain = resolve_conclusion_domain(Animal, "species")
+        assert optional_domain.validate(None, allow_unset=False) is None
+
+        required_domain = resolve_conclusion_domain(RequiredColour, "colour")
+        assert isinstance(required_domain.validate(None, allow_unset=False), ConclusionMayNotBeNone)
+
+    def test_enumerable_domain_requires_membership(self):
+        domain = resolve_conclusion_domain(Animal, "species")
+        assert domain.validate(Species.mammal, allow_unset=False) is None
+        assert isinstance(domain.validate("mammal", allow_unset=False), ConclusionNotInDomain)
+
+    def test_open_domain_requires_expected_type(self):
+        domain = resolve_conclusion_domain(Tag, "name")
+        assert domain.validate("x", allow_unset=False) is None
+        assert isinstance(domain.validate(5, allow_unset=False), ConclusionWrongType)
