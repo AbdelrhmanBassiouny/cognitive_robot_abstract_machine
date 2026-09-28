@@ -1,0 +1,120 @@
+name: Stack maintenance
+
+# Deterministic replacement for the scheduled LLM Routine "PR Stack Monitor and Update"
+# (trig_01N79jHmLo3bSbg8pLM6MNTB, retired once this has run one green cycle): performs
+# `.claude/stack/maintenance.py run-report`'s happy path with nobody watching -
+# reparenting every child whose base has landed, fast-forwarding the fork's base onto
+# the upstream, restacking every branch whose parent moved, and promoting every
+# approved unblocked branch. A restack conflict already reports itself (a comment plus
+# `needs-resolution`, via `maintenance_restack_steps.conflict_report`); a reparent
+# GitHub refuses this credential is reported the same way, by
+# `maintenance_reparent_notice.resolve_reparents`, for an on-demand session to finish -
+# but the refusal a Claude session's own proxied credential hit is not assumed here,
+# since this credential is never proxied through a session, so the retarget is
+# attempted first. See `maintenance.py`'s own module docstring: `run-report --json`
+# exists precisely so a scheduled job with no model in the loop can emit it directly.
+#
+# Why these triggers: `closed` fires whether a pull request merges or closes unmerged,
+# and either way can drop a branch from the open set - the #40/#41 orphan pattern
+# traced in `routine-cutover`'s own notes - so a full re-sweep runs on that one event,
+# not only the closed pull request's own branch. `opened` and `ready_for_review` run
+# the same full pass promptly on the two events that most often need it acted on right
+# away: a freshly opened pull request wants fast-forwarding and labelling, and a branch
+# leaving draft is the self-review sign-off that makes it promotable - both otherwise
+# wait for the next `schedule` tick. `schedule` keeps the fork's base fresh regardless.
+# `workflow_dispatch` is for a manual run, including the one green cycle this item's
+# own gate is waiting on.
+#
+# Which branch carries this file decides which of those triggers actually reach it,
+# the same as `plan-dashboards.yml`: `workflow_dispatch` is offered only from the
+# repository's default branch, a `pull_request` run fires only for a pull request whose
+# base already carries this file, and `schedule` runs from wherever it is declared.
+#
+# Interaction with the regenerated integration branch (`integration-branch`/
+# `integration-branch-ci-verdict`, not yet on `main`): that pipeline opens its own,
+# non-draft pull requests to judge a build - candidates this pass must never restack or
+# promote as though they were ordinary stack members. The two ship as one landing: the
+# exclusion (`BoardExport.is_a_candidate`) lives in the same board export both a build
+# and this pass derive their work from, in the same pull request that starts opening
+# candidates - see that item's own notes ("the maintenance pass was adopting
+# candidates... the exclusion moved to the one place both readers derive their work
+# from"). So this workflow needs no change when that lands; it inherits the exclusion
+# through the shared module. The two can still fire on the same pull request event and
+# write concurrently, but to disjoint refs - a feature branch or the fork's own base
+# here, a separate build/pointer branch there - and a rebuild is regenerated from
+# scratch and self-limiting, so a race is benign rather than an interruption.
+
+on:
+  pull_request:
+    types: [opened, ready_for_review, closed]
+  schedule:
+    - cron: "0 */6 * * *"
+  workflow_dispatch:
+
+concurrency:
+  # A pass moves commits (fast-forward, restack); two overlapping runs could push past
+  # each other, so a superseded run waits rather than being cancelled mid-push.
+  group: stack-maintenance
+  cancel-in-progress: false
+
+permissions:
+  # contents: write for the fast-forward and every restack push; pull-requests: write
+  # for the label and comment writes (promotion, conflict and reparent notices).
+  contents: write
+  pull-requests: write
+
+jobs:
+  maintain:
+    name: Run the maintenance pass
+    # A pull request from a fork gets a read-only token, which can write neither the
+    # branches nor the labels this pass changes.
+    if: >-
+      github.event_name != 'pull_request'
+      || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Full history: fast-forward and restack both push, and the personal-notes
+          # fetch `stack.py`'s configuration resolution makes on every call cannot run
+          # from a shallow clone either - the same reasoning `plan-dashboards.yml`
+          # already documents for its own pushes.
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Resolve the upstream remote
+        # A plain checkout carries only this repository's own remote. stack.py decides
+        # which remote is which by the repository each URL names rather than by name,
+        # and hands back the exact command to add whichever one is missing - see
+        # stack.py's RemoteResolution.upstream_setup_command and the SKILL.md step this
+        # mirrors, rather than hardcoding a remote name or URL here.
+        run: |
+          set -euo pipefail
+          SETUP_COMMAND="$(python3 .claude/stack/stack.py configuration \
+            | awk -F'\t' '$1 == "upstream_setup_command" { print $2 }')"
+          if [ -n "${SETUP_COMMAND}" ]; then
+            eval "${SETUP_COMMAND}"
+          fi
+
+      - name: Run the maintenance pass
+        env:
+          # gh is preinstalled on the runner, and this is the only credential either it
+          # or the executor's own GitHub client needs - see maintenance_constants.py's
+          # CREDENTIAL_VARIABLES.
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          # The identity every push this pass makes is committed under.
+          git config user.name "${GITHUB_ACTOR}"
+          git config user.email "${GITHUB_ACTOR}@users.noreply.github.com"
+          # `run-report` reads board.json and deletes it once the pass concludes - see
+          # `RunReportCommand.run`'s own docstring - so a caller starts every run by
+          # exporting a fresh one; running it stale would only replay one snapshot old.
+          python3 .claude/stack/maintenance.py board --write
+          python3 .claude/stack/maintenance.py run-report --json
