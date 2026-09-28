@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+import numpy as np
 from krrood.exceptions import DataclassException
 
 
@@ -29,3 +30,21 @@ class NumberOfWeightsMismatchError(DataclassException, ValueError):
 
     def suggest_correction(self) -> str:
         return "Pass exactly one weight per component."
+
+
+@dataclass
+class NonPositiveScaleError(DataclassException, ValueError):
+    """
+    Exception raised when a layer has a scale that is not positive.
+    """
+
+    scale: np.ndarray
+    """
+    The scales that are not positive.
+    """
+
+    def error_message(self) -> str:
+        return f"The scales {self.scale.tolist()} are not positive."
+
+    def suggest_correction(self) -> str:
+        return "Give every node a positive scale."
