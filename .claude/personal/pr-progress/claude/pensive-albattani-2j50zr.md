@@ -13,8 +13,13 @@ Done (86dcf114):
 - pyproject: imageio-ffmpeg, matplotlib, numpy, opencv-python, pillow; `video` extra = kokoro-onnx.
 - 75 tests pass locally (--noconftest, minimal venv); minimal 720p video rendered and inspected.
 
+CI fix (2b481f16): first CI run failed everywhere at ORM generation -
+CouldNotResolveType on slides.ResultsTable: the generator's namespace holds giskardpy's
+goal class `Sequence`, shadowing typing's. rows is now Tuple[ResultRow, ...]; checked no
+other field annotation in the package collides with a workspace class name.
+
 Next / open:
-- CI on #472 not yet seen.
+- CI on 2b481f16 not yet seen.
 - icra-video-on-core (#429 rebuilt on this package) once this reaches the ICRA base branch;
   #429 will need: Ink backend colours as its own enum, icra_2027 as a constant,
   EndCard -> TextCard, Still/held_for kw-only, ResultRow from slides, paper.lettering Face from video.lettering.
