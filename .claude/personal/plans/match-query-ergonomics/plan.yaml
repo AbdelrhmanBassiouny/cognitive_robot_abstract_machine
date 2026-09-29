@@ -189,10 +189,24 @@ items:
     session: https://claude.ai/code/session_01Hg8944NTdj8WMSGFqV4mq8
     blockers:
       - >-
-          None. One review thread stays open by design, answered with a measurement and needing no
-          change from this side: the .resolve() calls in the feature-extraction tests stay, being
-          load-bearing, and making ground() resolve its own argument is a probabilistic_model change
-          the developer should choose.
+          Upstream cram2#662 (this branch, promoted with the in-review label) has changes requested
+          by LucaKro (2026-09-21) and tomsch420 (2026-09-22), with five unresolved threads the
+          developer answered on 2026-09-29 but no commit has addressed: (1) query.py variable_rooted
+          should be a method rather than a free function - of SymbolicExpression per LucaKro,
+          Selectable or CanBehaveLikeAVariable per the developer; (2) base_expressions.py:369
+          SymbolicExpression._as_operand_'s isinstance chain is an open/closed violation, and the
+          developer expects the SymbolicExpression branch to be covered by the HasSymbolicOperations
+          one; (3) match.py:232 the Match class docstring's added paragraphs are too long; (4)
+          match.py:316 the __call__ docstring's a(Adder) should read an(Adder); (5) match.py:813
+          AttributeMatch.assigned_variable's Cause/Confounder comment block is a wall of text and
+          its isinstance branch is not open/closed - the developer proposes an abstract
+          assigned-value type with a method returning the variable. The fork PR looked clean (all 11
+          fork threads resolved), which is why the manifest said none.
+      - >-
+          CI has not run on the fork PR's last three heads (06656b013, 6bfb676c0, 8a31d3672, pushed
+          2026-09-28/29 by the automated main merges): every CI and Examples run concluded
+          action_required, awaiting approval, so the PR has no check runs on its head. The last CI
+          result is de250551ba's from 2026-09-19.
     notes: >
       Implemented ahead of order by an independent IDE-typing session on
       claude/ide-type-inference-instances-dc6l6e (commit 147d098d2), which converged on this item's
