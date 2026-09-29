@@ -8,108 +8,19 @@ personal-notes remote - no network access or real personal-notes branch involved
 from __future__ import annotations
 
 import subprocess
-from dataclasses import dataclass
-from enum import StrEnum
 from pathlib import Path
 
 import pytest
 
 from scratch_repository import (
     NOTES_BRANCH,
-    PERSONAL_GIT_IDENTITY_PATH,
+    NOTES_PATH,
     SCRATCH_IDENTITY,
     ScratchRepository,
-    SetupPrerequisiteFile,
     initialize_bare_repository,
 )
-
-NOTES_PATH = ".claude/personal/cram-notes.md"
-
-
-# %% what a report is made of
-
-
-class SetupCheck(StrEnum):
-    """
-    The checks check-setup.sh reports on, in the order it prints them.
-    """
-
-    TOOLING_FILES = "tooling_files"
-    SESSION_START_HOOK = "session_start_hook"
-    CLAUDE_LOCAL_MD_IGNORED = "claude_local_md_ignored"
-    NOTES_REMOTE = "notes_remote"
-    NOTES_REMOTE_URL = "notes_remote_url"
-    NOTES_BRANCH_NAME = "notes_branch_name"
-    NOTES_PATH = "notes_path"
-    NOTES_BRANCH = "notes_branch"
-    NOTES_FILE = "notes_file"
-    GIT_IDENTITY = "git_identity"
-    DASHBOARD_DEPENDENCIES = "dashboard_dependencies"
-    CLAUDE_LOCAL_MD = "claude_local_md"
-
-
-class CheckStatus(StrEnum):
-    """
-    The status check-setup.sh reports for a single check.
-    """
-
-    OK = "ok"
-    NEEDS_SETUP = "needs-setup"
-    INFORMATIONAL = "info"
-
-
-@dataclass
-class CheckResult:
-    """
-    What check-setup.sh reported for one check.
-    """
-
-    status: CheckStatus
-    """
-    Whether the check passed, needs setup, or is context rather than a verdict.
-    """
-
-    detail: str
-    """
-    The human-readable explanation printed alongside the status.
-    """
-
-
-@dataclass
-class SetupReport:
-    """
-    One parsed run of check-setup.sh: what it reported, and how it exited.
-    """
-
-    exit_code: int
-    """
-    The script's exit code: 0 when nothing needs setup, 1 otherwise.
-    """
-
-    results: dict[SetupCheck, CheckResult]
-    """
-    Every reported check, keyed by the check it reports on.
-    """
-
-    @classmethod
-    def from_completed_process(
-        cls, process: subprocess.CompletedProcess[str]
-    ) -> SetupReport:
-        """
-        Parse a finished check-setup.sh run.
-
-        Raises if a row names a check this test module doesn't know about, so a new
-        check has to be declared here rather than silently going unasserted.
-
-        :param process: The finished check-setup.sh subprocess.
-        :return: The parsed report.
-        """
-        results = {}
-        for line in process.stdout.splitlines():
-            check, status, detail = line.split("\t")
-            results[SetupCheck(check)] = CheckResult(CheckStatus(status), detail)
-        return cls(process.returncode, results)
-
+from setup_report import CheckStatus, SetupCheck, SetupReport
+from tooling_files import HookScript, ProjectFile, SetupPrerequisiteFile
 
 # %% the scratch layout
 
@@ -130,7 +41,7 @@ def check_setup_repository(scratch_repository: ScratchRepository) -> ScratchRepo
     :return: The same repository, fully set up.
     """
     scratch_repository.install_hook_scripts(
-        "resolve-personal-notes-config.sh", "check-setup.sh"
+        HookScript.CONFIGURATION, HookScript.CHECK_SETUP
     )
 
     scratch_repository.write_setup_prerequisites()
@@ -140,7 +51,7 @@ def check_setup_repository(scratch_repository: ScratchRepository) -> ScratchRepo
     scratch_repository.publish_notes_branch(
         {
             NOTES_PATH: "my notes\n",
-            PERSONAL_GIT_IDENTITY_PATH: SCRATCH_IDENTITY.as_git_config_file(),
+            ProjectFile.PERSONAL_GIT_IDENTITY: SCRATCH_IDENTITY.as_git_config_file(),
         }
     )
     scratch_repository.resolve_notes_remote_to()
@@ -159,7 +70,7 @@ def run_check_setup(
     :return: The parsed report.
     """
     return SetupReport.from_completed_process(
-        repository.run_hook_script("check-setup.sh", **environment_overrides)
+        repository.run_hook_script(HookScript.CHECK_SETUP, **environment_overrides)
     )
 
 
@@ -247,7 +158,7 @@ def test_reports_a_recorded_identity_that_matches_this_clone(
 def test_reports_a_notes_branch_that_records_no_identity(
     check_setup_repository: ScratchRepository,
 ):
-    check_setup_repository.remove_from_notes_branch(PERSONAL_GIT_IDENTITY_PATH)
+    check_setup_repository.remove_from_notes_branch(ProjectFile.PERSONAL_GIT_IDENTITY)
 
     report = run_check_setup(check_setup_repository)
     assert report.exit_code == 1

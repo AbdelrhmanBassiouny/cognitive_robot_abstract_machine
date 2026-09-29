@@ -29,11 +29,13 @@ set -euo pipefail
 # script must not gain a dependency just to describe whether dependencies are
 # installed.
 #
-# The one thing it deliberately does not check is GitHub API access, which
-# /plan-dashboard needs for live pull request state: that is reachable only
-# through a session's MCP tools, not from a shell. The same goes for the pull
-# request labels the dashboard reads. .claude/skills/setup-personal-notes
-# covers both as their own steps.
+# The one thing it deliberately does not check is anything requiring GitHub: the
+# API access /plan-dashboard needs for live pull request state, and the labels it
+# reads. Not because a shell cannot reach them - ./github-api.sh does, and
+# ./setup-personal-notes.sh checks the labels through it - but because this script
+# runs on the hot path of every plan-* skill (see
+# ../skills/setup-personal-notes/prerequisite-check.md), where a network round trip
+# would tax every invocation to answer a question only setup asks.
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/resolve-personal-notes-config.sh"
