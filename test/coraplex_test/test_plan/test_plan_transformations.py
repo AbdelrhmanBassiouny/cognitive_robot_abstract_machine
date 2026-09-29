@@ -244,13 +244,13 @@ def test_a_transformation_that_binds_no_type_cannot_say_what_it_matches():
 
 
 def test_a_transformation_bound_to_an_unmatchable_type_is_rejected(
-    immutable_model_world,
+    pr2_apartment_context,
 ):
     """
     A transformation selects its nodes either by their type or by the designator they
     carry, so a type that is neither leaves no rule to select by.
     """
-    world, view, context = immutable_model_world
+    world, view, context = pr2_apartment_context
     node = execute_single(MoveTorsoAction(TorsoState.HIGH), context=context)
 
     with pytest.raises(CannotMatchOnType):
@@ -304,11 +304,11 @@ class MoveGripperBeforeHighTorso(InsertionTransformation[MoveTorsoAction]):
         return [MoveGripperMotion(GripperState.OPEN, Arms.LEFT)]
 
 
-def test_a_transformation_the_case_needs_is_applied(immutable_model_world):
+def test_a_transformation_the_case_needs_is_applied(pr2_apartment_context):
     """
     A node the transformation matches and whose case needs it is rewritten.
     """
-    world, view, context = immutable_model_world
+    world, view, context = pr2_apartment_context
     context.plan_transformations.append(MoveGripperBeforeHighTorso())
 
     plan = execute_single(MoveTorsoAction(TorsoState.HIGH), context=context)
@@ -320,12 +320,12 @@ def test_a_transformation_the_case_needs_is_applied(immutable_model_world):
     ]
 
 
-def test_a_transformation_the_case_does_not_need_is_skipped(immutable_model_world):
+def test_a_transformation_the_case_does_not_need_is_skipped(pr2_apartment_context):
     """
     Matching the node type is not enough: a case that does not need the transformation
     keeps the plan the action describes itself.
     """
-    world, view, context = immutable_model_world
+    world, view, context = pr2_apartment_context
     context.plan_transformations.append(MoveGripperBeforeHighTorso())
 
     plan = execute_single(MoveTorsoAction(TorsoState.LOW), context=context)
@@ -337,13 +337,13 @@ def test_a_transformation_the_case_does_not_need_is_skipped(immutable_model_worl
 
 
 def test_a_transformation_bound_to_a_node_type_reaches_every_action(
-    immutable_model_world,
+    pr2_apartment_context,
 ):
     """
     Binding the node type selects the nodes of actions of every type, which a binding to
     one action type cannot express.
     """
-    world, view, context = immutable_model_world
+    world, view, context = pr2_apartment_context
     context.plan_transformations.append(MoveGripperBeforeEveryAction())
 
     plan = sequential(
@@ -360,13 +360,13 @@ def test_a_transformation_bound_to_a_node_type_reaches_every_action(
 
 
 def test_a_transformation_bound_to_a_designator_type_selects_the_nodes_carrying_it(
-    immutable_model_world,
+    pr2_apartment_context,
 ):
     """
     A transformation bound to a designator type reports that type and selects the nodes
     carrying one, leaving the nodes of every other designator alone.
     """
-    world, view, context = immutable_model_world
+    world, view, context = pr2_apartment_context
     transformation = MoveGrippersBeforeTorsoMotion()
     plan = sequential(
         [MoveTorsoAction(TorsoState.HIGH), ParkArmsAction(Arms.BOTH)], context
@@ -379,13 +379,13 @@ def test_a_transformation_bound_to_a_designator_type_selects_the_nodes_carrying_
 
 
 def test_a_transformation_bound_to_a_node_type_selects_the_nodes_of_that_type(
-    immutable_model_world,
+    pr2_apartment_context,
 ):
     """
     A transformation bound to a node type reports that type and selects the nodes of it,
     leaving the nodes of every other type alone.
     """
-    world, view, context = immutable_model_world
+    world, view, context = pr2_apartment_context
     transformation = MoveGripperBeforeEveryAction()
     plan = sequential([MoveTorsoAction(TorsoState.HIGH)], context)
     [torso] = plan.children
@@ -416,14 +416,14 @@ class MoveGripperBeforeJointMotion(InsertionTransformation[MoveJointsMotion]):
 
 
 def test_a_transformation_bound_to_a_motion_type_selects_the_motion_node(
-    immutable_model_world,
+    pr2_apartment_context,
 ):
     """
     A designator binding selects by the designator a node carries rather than by the
     kind of node, so binding a motion type selects that motion's node and not the action
     it belongs to.
     """
-    world, view, context = immutable_model_world
+    world, view, context = pr2_apartment_context
     node = execute_single(MoveTorsoAction(TorsoState.HIGH), context=context)
     node.notify()
     transformation = MoveGripperBeforeJointMotion()
@@ -436,12 +436,12 @@ def test_a_transformation_bound_to_a_motion_type_selects_the_motion_node(
 # %% inserting
 
 
-def test_a_transformation_inserts_its_nodes_before_the_anchor(immutable_model_world):
+def test_a_transformation_inserts_its_nodes_before_the_anchor(pr2_apartment_context):
     """
     The nodes are placed in front of the anchor, keeping the order the transformation
     gives them.
     """
-    world, view, context = immutable_model_world
+    world, view, context = pr2_apartment_context
     context.plan_transformations.append(MoveGrippersBeforeTorsoMotion())
 
     plan = execute_single(MoveTorsoAction(TorsoState.HIGH), context=context)
@@ -459,12 +459,12 @@ def test_a_transformation_inserts_its_nodes_before_the_anchor(immutable_model_wo
     ]
 
 
-def test_a_transformation_inserts_its_nodes_after_the_anchor(immutable_model_world):
+def test_a_transformation_inserts_its_nodes_after_the_anchor(pr2_apartment_context):
     """
     Inserting after the anchor keeps the given order too, rather than reversing it by
     pushing every node into the same place behind the anchor.
     """
-    world, view, context = immutable_model_world
+    world, view, context = pr2_apartment_context
     context.plan_transformations.append(MoveGrippersAfterTorsoMotion())
 
     plan = execute_single(MoveTorsoAction(TorsoState.HIGH), context=context)
@@ -483,13 +483,13 @@ def test_a_transformation_inserts_its_nodes_after_the_anchor(immutable_model_wor
 
 
 def test_a_transformation_inserts_its_nodes_as_the_last_child_of_the_anchor(
-    immutable_model_world,
+    pr2_apartment_context,
 ):
     """
     Inserting as the last child makes the node a child of the anchor instead of its
     sibling.
     """
-    world, view, context = immutable_model_world
+    world, view, context = pr2_apartment_context
     milk = world.get_semantic_annotations_by_type(Milk)[0]
     context.plan_transformations.append(MoveGripperLastInTheReachBody())
 
@@ -504,11 +504,11 @@ def test_a_transformation_inserts_its_nodes_as_the_last_child_of_the_anchor(
     ]
 
 
-def test_a_transformation_leaves_actions_of_another_type_alone(immutable_model_world):
+def test_a_transformation_leaves_actions_of_another_type_alone(pr2_apartment_context):
     """
     A transformation bound to one action type must not rewrite the plan of another one.
     """
-    world, view, context = immutable_model_world
+    world, view, context = pr2_apartment_context
     context.plan_transformations.append(MoveGrippersBeforeTorsoMotion())
 
     plan = execute_single(ParkArmsAction(Arms.BOTH), context=context)
@@ -522,12 +522,12 @@ def test_a_transformation_leaves_actions_of_another_type_alone(immutable_model_w
     ] == []
 
 
-def test_an_inserted_action_is_expanded(immutable_model_world):
+def test_an_inserted_action_is_expanded(pr2_apartment_context):
     """
     Transformations run while the plan is expanded, so an inserted action still gets a
     plan of its own instead of staying an unexpanded leaf.
     """
-    world, view, context = immutable_model_world
+    world, view, context = pr2_apartment_context
     context.plan_transformations.append(ParkArmsBeforeTorsoMotion())
 
     plan = execute_single(MoveTorsoAction(TorsoState.HIGH), context=context)
@@ -546,12 +546,12 @@ def test_an_inserted_action_is_expanded(immutable_model_world):
 # %% detecting before a grasp
 
 
-def test_the_detection_asks_for_the_object_being_reached_for(immutable_model_world):
+def test_the_detection_asks_for_the_object_being_reached_for(pr2_apartment_context):
     """
     The detection has to ask for the object the reach was given, so that a plan grasping
     something else does not query for the wrong thing.
     """
-    world, view, context = immutable_model_world
+    world, view, context = pr2_apartment_context
     milk = world.get_semantic_annotations_by_type(Milk)[0]
     context.plan_transformations.append(DetectBeforeGrasp())
 
@@ -562,12 +562,12 @@ def test_the_detection_asks_for_the_object_being_reached_for(immutable_model_wor
     assert detection.object_sem_annotation is type(milk)
 
 
-def test_the_perception_precedes_the_final_approach(immutable_model_world):
+def test_the_perception_precedes_the_final_approach(pr2_apartment_context):
     """
     Perceiving is only worth anything before the approach it corrects, so the look and
     the detection go in front of the reach's last motion.
     """
-    world, view, context = immutable_model_world
+    world, view, context = pr2_apartment_context
     milk = world.get_semantic_annotations_by_type(Milk)[0]
     context.plan_transformations.append(DetectBeforeGrasp())
 
@@ -583,12 +583,12 @@ def test_the_perception_precedes_the_final_approach(immutable_model_world):
     ]
 
 
-def test_a_transformation_on_reaches_also_fires_inside_a_pick_up(immutable_model_world):
+def test_a_transformation_on_reaches_also_fires_inside_a_pick_up(pr2_apartment_context):
     """
     The reach a pick-up builds is expanded like any other, so a transformation on
     reaches reaches it without the pick-up having to pass anything down.
     """
-    world, view, context = immutable_model_world
+    world, view, context = pr2_apartment_context
     milk = world.get_semantic_annotations_by_type(Milk)[0]
     context.plan_transformations.append(DetectBeforeGrasp())
 
@@ -602,12 +602,12 @@ def test_a_transformation_on_reaches_also_fires_inside_a_pick_up(immutable_model
     assert detection.object_sem_annotation is type(milk)
 
 
-def test_perceiving_without_an_object_to_detect_is_rejected(immutable_model_world):
+def test_perceiving_without_an_object_to_detect_is_rejected(pr2_apartment_context):
     """
     A reach may be given a pose without an object, but then there is nothing to build
     the detection query from, so the contradiction is reported instead of guessed away.
     """
-    world, view, context = immutable_model_world
+    world, view, context = pr2_apartment_context
     milk = world.get_semantic_annotations_by_type(Milk)[0]
     context.plan_transformations.append(DetectBeforeGrasp())
 
@@ -666,13 +666,13 @@ def pick_up_action(annotation, view, arm: Arms = Arms.RIGHT) -> PickUpAction:
 
 
 def test_the_drawer_is_only_opened_for_an_object_that_lies_in_one(
-    immutable_model_world,
+    pr2_apartment_context,
 ):
     """
     Opening a drawer is worth doing only for an object lying in one, so the pick-up of
     the spoon needs the transformation and the pick-up of the milk does not.
     """
-    world, view, context = immutable_model_world
+    world, view, context = pr2_apartment_context
     spoon = world.get_semantic_annotations_by_type(Spoon)[0]
     milk = world.get_semantic_annotations_by_type(Milk)[0]
     transformation = OpenDrawerBeforePickUp()
@@ -684,12 +684,12 @@ def test_the_drawer_is_only_opened_for_an_object_that_lies_in_one(
     assert not transformation.is_applicable(in_the_open)
 
 
-def test_a_drawer_reports_how_far_it_stands_open(immutable_model_world):
+def test_a_drawer_reports_how_far_it_stands_open(pr2_apartment_context):
     """
     How far a drawer stands open is read from its own travel, so it stands none of the
     way open at the lower limit of its joint and all of the way at the upper one.
     """
-    world, view, context = immutable_model_world
+    world, view, context = pr2_apartment_context
     spoon = world.get_semantic_annotations_by_type(Spoon)[0]
     drawer = drawer_holding(spoon, world)
     connection = drawer.root.parent_connection
@@ -703,12 +703,12 @@ def test_a_drawer_reports_how_far_it_stands_open(immutable_model_world):
     assert drawer.opening_ratio == 1
 
 
-def test_a_drawer_that_already_stands_open_needs_no_opening(immutable_model_world):
+def test_a_drawer_that_already_stands_open_needs_no_opening(pr2_apartment_context):
     """
     The opening is worth doing only while the drawer is shut, so a drawer that already
     stands open leaves the pick-up as it is.
     """
-    world, view, context = immutable_model_world
+    world, view, context = pr2_apartment_context
     spoon = world.get_semantic_annotations_by_type(Spoon)[0]
     drawer = drawer_holding(spoon, world)
     transformation = OpenDrawerBeforePickUp()
@@ -724,13 +724,13 @@ def test_a_drawer_that_already_stands_open_needs_no_opening(immutable_model_worl
 
 
 def test_the_drawer_is_opened_before_a_transport_rather_than_inside_it(
-    immutable_model_world,
+    pr2_apartment_context,
 ):
     """
     A transport drives to the object before picking it up, and that drive is grounded
     against the world it finds, so the opening precedes the whole transport.
     """
-    world, view, context = immutable_model_world
+    world, view, context = pr2_apartment_context
     spoon = world.get_semantic_annotations_by_type(Spoon)[0]
     drawer = drawer_holding(spoon, world)
     context.plan_transformations.append(OpenDrawerBeforeTransport())
@@ -752,13 +752,13 @@ def test_the_drawer_is_opened_before_a_transport_rather_than_inside_it(
 
 
 def test_the_drawer_the_object_lies_in_is_opened_before_the_pick_up(
-    immutable_model_world,
+    pr2_apartment_context,
 ):
     """
     A drawer has to stand open before the gripper goes in, so the opening and the drive
     that makes its handle reachable precede the pick-up rather than following it.
     """
-    world, view, context = immutable_model_world
+    world, view, context = pr2_apartment_context
     spoon = world.get_semantic_annotations_by_type(Spoon)[0]
     drawer = drawer_holding(spoon, world)
     context.plan_transformations.append(OpenDrawerBeforePickUp())
@@ -775,7 +775,7 @@ def test_the_drawer_the_object_lies_in_is_opened_before_the_pick_up(
     assert isinstance(pick_up.designator, PickUpAction)
 
 
-def test_the_opening_beside_the_pick_up_is_expanded(immutable_model_world):
+def test_the_opening_beside_the_pick_up_is_expanded(pr2_apartment_context):
     """
     The opening is inserted beside the node being expanded rather than below it, so its
     new parent has to expand it as well.
@@ -783,7 +783,7 @@ def test_the_opening_beside_the_pick_up_is_expanded(immutable_model_world):
     An unexpanded action is a leaf that cannot be parsed, so it would fail only once the
     plan is run.
     """
-    world, view, context = immutable_model_world
+    world, view, context = pr2_apartment_context
     spoon = world.get_semantic_annotations_by_type(Spoon)[0]
     context.plan_transformations.append(OpenDrawerBeforePickUp())
 
@@ -800,12 +800,12 @@ def test_the_opening_beside_the_pick_up_is_expanded(immutable_model_world):
     assert motions_below(opening) == motions_below(on_its_own)
 
 
-def test_the_drawer_is_opened_with_the_arm_that_picks_up(immutable_model_world):
+def test_the_drawer_is_opened_with_the_arm_that_picks_up(pr2_apartment_context):
     """
     Opening with the other arm would leave the robot holding the handle it has to reach
     past, so the opening takes the arm the pick-up was given.
     """
-    world, view, context = immutable_model_world
+    world, view, context = pr2_apartment_context
     spoon = world.get_semantic_annotations_by_type(Spoon)[0]
     context.plan_transformations.append(OpenDrawerBeforePickUp())
 
@@ -821,12 +821,12 @@ def test_the_drawer_is_opened_with_the_arm_that_picks_up(immutable_model_world):
     assert opening.arm is pick_up.arm
 
 
-def test_an_object_that_lies_in_no_drawer_is_picked_up_unchanged(immutable_model_world):
+def test_an_object_that_lies_in_no_drawer_is_picked_up_unchanged(pr2_apartment_context):
     """
     An object standing in the open needs no drawer opened for it, so the pick-up keeps
     the plan it describes itself.
     """
-    world, view, context = immutable_model_world
+    world, view, context = pr2_apartment_context
     milk = world.get_semantic_annotations_by_type(Milk)[0]
     context.plan_transformations.append(OpenDrawerBeforePickUp())
 
@@ -838,7 +838,7 @@ def test_an_object_that_lies_in_no_drawer_is_picked_up_unchanged(immutable_model
 
 
 def test_the_opening_joins_the_sequence_an_underspecified_pick_up_runs(
-    immutable_model_world,
+    pr2_apartment_context,
 ):
     """
     A pick-up written as an underspecified statement is grounded into a candidate at
@@ -847,7 +847,7 @@ def test_the_opening_joins_the_sequence_an_underspecified_pick_up_runs(
     The opening has to land in that sequence, otherwise it is inserted into the plan but
     never performed.
     """
-    world, view, context = immutable_model_world
+    world, view, context = pr2_apartment_context
     spoon = world.get_semantic_annotations_by_type(Spoon)[0]
     drawer = drawer_holding(spoon, world)
     context.plan_transformations.append(ParkArmsBeforeFirstAction())
@@ -933,13 +933,13 @@ def warnings_of(caplog) -> List[str]:
 
 
 def test_two_transformations_applied_to_one_node_are_reported(
-    immutable_model_world, caplog
+    pr2_apartment_context, caplog
 ):
     """
     Whichever transformation rewrites a node first decides what the next one finds, so a
     node more than one of them is applied to is reported.
     """
-    world, view, context = immutable_model_world
+    world, view, context = pr2_apartment_context
     context.plan_transformations.extend(
         [MoveLeftGripperBeforeTorso(), MoveRightGripperBeforeTorso()]
     )
@@ -953,12 +953,12 @@ def test_two_transformations_applied_to_one_node_are_reported(
     assert str(torso) in warning
 
 
-def test_the_transformations_that_collide_are_still_applied(immutable_model_world):
+def test_the_transformations_that_collide_are_still_applied(pr2_apartment_context):
     """
     The report is a warning rather than a refusal, so both of them rewrite the plan, in
     the order the context lists them.
     """
-    world, view, context = immutable_model_world
+    world, view, context = pr2_apartment_context
     context.plan_transformations.extend(
         [MoveLeftGripperBeforeTorso(), MoveRightGripperBeforeTorso()]
     )
@@ -973,13 +973,13 @@ def test_the_transformations_that_collide_are_still_applied(immutable_model_worl
 
 
 def test_a_transformation_the_case_does_not_need_is_no_collision(
-    immutable_model_world, caplog
+    pr2_apartment_context, caplog
 ):
     """
     Two transformations matching the same node type collide only where both are needed,
     so the one whose case does not apply leaves the other one alone.
     """
-    world, view, context = immutable_model_world
+    world, view, context = pr2_apartment_context
     context.plan_transformations.extend(
         [MoveLeftGripperBeforeTorso(), MoveGripperBeforeHighTorso()]
     )
