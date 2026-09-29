@@ -13,7 +13,7 @@ from threading import RLock
 from segmind.datastructures.event_plotter import EventPlotter
 from segmind.datastructures.events import DetectionEvent, EventWithTrackedObjects
 from segmind.datastructures.object_tracker import ObjectTrackerFactory
-from typing_extensions import List, Optional, Type, Callable, Tuple
+from typing_extensions import List, Optional, Set, Type, Callable, Tuple
 from typing import ClassVar
 
 logger = logging.getLogger(__name__)
@@ -27,15 +27,33 @@ class EventCallbacks(UserDict):
     """
     A dictionary that maps event types to a list of tuples each has a condition and a callback, the callback will be called when the event occurs and the condition is met.
     This modifies the setitem such that if a class or its subclass is added, the callback is also added to the subclass.
+
+    Each kind of event derived from the one added is given the callbacks once, however
+    many ways it derives from it, and each kind holds a list of its own.
     """
 
-    def __setitem__(self, key: Type[DetectionEvent], value: List[Tuple[ConditionFunction, CallbackFunction]]):
-        if key not in self:
-            super().__setitem__(key, value)
-        else:
-            self[key].extend(value)
-        for subclass in key.__subclasses__():
-            self.__setitem__(subclass, value)
+    def __setitem__(
+        self,
+        key: Type[DetectionEvent],
+        value: List[Tuple[ConditionFunction, CallbackFunction]],
+    ):
+        for kind in self.kinds_derived_from(key):
+            self.data.setdefault(kind, []).extend(value)
+
+    @staticmethod
+    def kinds_derived_from(kind: Type[DetectionEvent]) -> Set[Type[DetectionEvent]]:
+        """
+        :param kind: A kind of event.
+        :return: That kind and every kind derived from it, each once.
+        """
+        derived = {kind}
+        to_visit = [kind]
+        while to_visit:
+            for subclass in to_visit.pop().__subclasses__():
+                if subclass not in derived:
+                    derived.add(subclass)
+                    to_visit.append(subclass)
+        return derived
 
 
 @dataclass
@@ -102,7 +120,12 @@ class EventLogger:
         for obj_tracker in ObjectTrackerFactory.get_all_trackers():
             obj_tracker.reset()
 
-    def add_callback(self, event_type: Type[DetectionEvent], callback: CallbackFunction, condition: Optional[ConditionFunction] = None) -> None:
+    def add_callback(
+        self,
+        event_type: Type[DetectionEvent],
+        callback: CallbackFunction,
+        condition: Optional[ConditionFunction] = None,
+    ) -> None:
         """
         Add a callback for an event type.
 
@@ -149,14 +172,17 @@ class EventLogger:
         :param event: The event to annotate the scene with.
         """
 
-        if self.events_to_annotate is not None and (type(event) in self.events_to_annotate):
+        if self.events_to_annotate is not None and (
+            type(event) in self.events_to_annotate
+        ):
             logger.debug(f"Logging event: {event}")
             if self.annotation_thread is not None:
                 self.annotation_queue.put(event)
-                
 
     @staticmethod
-    def update_object_trackers_with_event(event: DetectionEvent, factory: ObjectTrackerFactory) -> None:
+    def update_object_trackers_with_event(
+        event: DetectionEvent, factory: ObjectTrackerFactory
+    ) -> None:
         """
         Update the event object trackers with the event.
 
@@ -214,14 +240,14 @@ class EventLogger:
         self.event_queue.join()
 
     def __str__(self):
-        return '\n'.join([str(event) for event in self.get_events()])
+        return "\n".join([str(event) for event in self.get_events()])
 
 
 class EventAnnotationThread(threading.Thread):
     def __init__(self, logger: EventLogger):
         super().__init__()
         self.logger = logger
-        #self.current_annotations: List[TextAnnotation] = []
+        # self.current_annotations: List[TextAnnotation] = []
         self.kill_event = threading.Event()
 
     def stop(self):
