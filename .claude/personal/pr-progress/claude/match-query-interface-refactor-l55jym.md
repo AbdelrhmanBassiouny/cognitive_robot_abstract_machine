@@ -33,3 +33,36 @@ session opened off `main` and merged in.
 
 Nothing to push. Both PRs are drafts; CI queued. Per the personal notes this
 session's obligation ends here — the open threads are the developer's to answer.
+
+### Upstream review round on cram2#662 (2026-09-29, roadmap §36)
+
+LucaKro and tomsch420 requested changes on cram2#662, with five threads; the
+developer answered them on 2026-09-29. Four threads were addressed in `9d30cdf85`
+(thread 3 by trimming the docstring, thread 4 by the spelling fix):
+
+1. `variable_rooted` (query.py, LucaKro): it is now the `_variable_rooted_`
+   property of every `SymbolicExpression`. `MappedVariable` asks its chain root
+   to re-root it, and only `Query` does anything.
+2. `_as_operand_` open/closed (tomsch420): measured first. Deleting the
+   `SymbolicExpression` branch fails 391 tests, because every `Comparator`
+   becomes a `Literal`. Both kinds now implement the new `Operand` interface
+   (`_symbolic_expression_`), and only a plain value is a `Literal`.
+3. `Match` class docstring: cut back to one paragraph.
+4. `a(Adder)` -> `an(Adder)` in the docstring and in the exception suggestion.
+5. `assigned_variable` wall of text (tomsch420): the new `MatchAssignedValue`
+   interface (`_as_assigned_variable_`). `Cause`/`Confounder` share
+   `CausalRoleMarker`, which makes the typed per-attribute copy, and the comment
+   is gone.
+
+`test/krrood_test` 2067 passed, 5 skipped, plus the two usual Graphviz failures.
+`probabilistic_model_test` 656 passed; its GUI tests need `libEGL`.
+
+### Open
+
+- Upstream threads must be replied to and resolved **by the developer**:
+  AGENTS.md forbids a session from commenting upstream.
+- Fork CI on the three earlier heads sat at `action_required`, waiting for
+  approval, so this push's CI may need approval too.
+- Earlier open questions are unchanged (`ground()` resolving its argument, #159
+  landing hazard). `_get_expression_` and `_symbolic_expression_` are still two
+  names, now on two different interfaces (`HasExpression`, `Operand`).
