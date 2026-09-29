@@ -44,7 +44,9 @@ items:
       Timeline, encoding (without the ICRA preset), cache, canvas (neutral inks),
       lettering, narration, the general half of footage and the end card, with
       tests including one that renders a minimal video to an mp4. Draft #472 pushed
-      2026-09-29 (86dcf114); 75 tests pass locally, CI not yet run.
+      2026-09-29 (86dcf114); its first CI run failed at ORM generation (a field typed
+      Sequence[...] collided with giskardpy's goal class Sequence), fixed in 2b481f16.
+      Field annotations in experiments must not reuse a workspace class name.
 
   - id: icra-video-on-core
     title: "#429 rebuilt on the general package, keeping only the ICRA scenes"
