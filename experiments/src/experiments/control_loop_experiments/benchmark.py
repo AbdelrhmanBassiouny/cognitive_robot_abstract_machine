@@ -27,9 +27,9 @@ from typing import List
 
 from experiments.control_loop_experiments.scenarios import (
     BENCHMARK_SCENARIOS,
+    ControlLoopMeasurement,
     IsolatedBenchmarkSession,
     PlotterMode,
-    ScenarioRunner,
 )
 from experiments.experiment_definitions import (
     ExperimentResult,
@@ -375,15 +375,14 @@ def measure_one_scenario(arguments: argparse.Namespace) -> None:
     """
     Measure a single scenario and write the profile to the requested file.
     """
-    scenario = BENCHMARK_SCENARIOS[arguments.scenario]()
-    python_profiler = None if arguments.profile_to is None else cProfile.Profile()
-    runner = ScenarioRunner(
+    scenario = BENCHMARK_SCENARIOS[arguments.scenario](
         plotter_mode=PlotterMode(arguments.plotter_mode),
         target_frequency=arguments.target_frequency,
-        python_profiler=python_profiler,
     )
+    python_profiler = None if arguments.profile_to is None else cProfile.Profile()
+    runner = ControlLoopMeasurement(python_profiler=python_profiler)
     with IsolatedBenchmarkSession():
-        profile = runner.run(scenario)
+        profile = runner.measure(scenario)
         if python_profiler is not None:
             statistics = pstats.Stats(python_profiler)
             statistics.dump_stats(arguments.profile_to)
