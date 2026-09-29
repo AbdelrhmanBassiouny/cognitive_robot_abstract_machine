@@ -60,6 +60,7 @@ items:
 
   - id: figure-stages-general
     title: Typst-figure close-ups (magnify, pointer, answering) made general
+    branch: claude/general-figure-scenes
     track: figure-scenes
     status: not_started
     depends_on: [icra-video-on-core]
