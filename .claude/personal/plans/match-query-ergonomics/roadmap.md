@@ -1873,3 +1873,63 @@ round has hit): `UnderspecifiedParameters(BranchingAtomCountCausalQuery._build_q
 query's `_limit_` field directly, confirmed by reading it back.
 `test_eql/test_match.py` 51 passed. Pushed to `claude/match-query-interface-refactor-l55jym`
 at `de250551ba`.
+
+## 36. 2026-09-29: the stall was upstream again, and it is five threads nobody has pushed for
+
+`/plan-item-resolve` (invoked as "PR 192"), auto mode. On the fork, #192 looked done: all
+eleven review threads resolved, out of draft, `main` merged in at `8a31d3672` and merging
+cleanly. The manifest's `blockers` read "None". Both were wrong about where the item stands.
+
+**Upstream cram2#662 has changes requested from two reviewers** - LucaKro (2026-09-21) and
+tomsch420 (2026-09-22) - with five unresolved threads, read through `/upstream-reviews`. The
+developer answered each one on 2026-09-29, between 10:34 and 11:14 UTC, and every answer
+agrees a change is due. No commit has made one yet:
+
+| thread | reviewer | the developer's answer |
+| --- | --- | --- |
+| `query.py:1168` (outdated) - why is `variable_rooted` not a method of `SymbolicExpression`? | LucaKro | maybe a method of `Selectable` or `CanBehaveLikeAVariable` |
+| `base_expressions.py:369` - open/closed violation? (`_as_operand_`'s `isinstance` chain) | tomsch420 | the `SymbolicExpression` branch may already be covered by the `HasSymbolicOperations` one; verify and remove |
+| `match.py:232` - more and more comment blocks are not helping (`Match`'s class docstring) | tomsch420 | (none yet) |
+| `match.py:316` - "an" (`a(Adder)` in `__call__`'s docstring) | tomsch420 | should be `an(Adder)` |
+| `match.py:813` - wall of text (`AttributeMatch.assigned_variable`'s `Cause`/`Confounder` comment) | tomsch420 | not open/closed either; model the assigned value as an abstract type with a method that returns its variable, possibly the existing `HasSymbolicOperations`; and the comment should shrink |
+
+**CI has not run on the fork's last three heads.** The automated `main` merges of 2026-09-28/29
+(`06656b013`, `6bfb676c0`, `8a31d3672`) each left their CI and Examples runs at
+`action_required`, which means waiting for approval, so the head has no check runs at all. The
+last real result is `de250551ba`'s from 2026-09-19.
+
+**The plan, in order, each part tested first:**
+
+1. `_as_operand_` (thread 2). Check the developer's hypothesis before deleting anything.
+   `CanBehaveLikeAVariable` subclasses `HasSymbolicOperations`, but `Comparator`, `Literal` and
+   other `SymbolicExpression`s are not variables, so the first branch is probably not
+   redundant. The open/closed fix is to make it polymorphic instead: `_as_operand_` asks the
+   value for the expression it contributes through one member both `SymbolicExpression`
+   (itself) and `HasSymbolicOperations` (`_symbolic_expression_`) implement. The `Literal`
+   fallback then stays the only non-polymorphic case, since a plain Python value implements
+   nothing. Check first whether `HasExpression._get_expression_` already is that member;
+   section 27 left its unification with `_symbolic_expression_` as an open question, and this
+   thread may be the reviewer's answer to it.
+2. `variable_rooted` becomes a method (thread 1). Put it on `SymbolicExpression` as the
+   identity, and override it on `MappedVariable` to re-root when the chain root is a `Query`.
+   That removes the free function's two `isinstance` checks, which is thread 2's complaint in
+   another place. The two callers (`Attribute.number_like_field`, the random-events
+   translator) read `expression._variable_rooted_` or similar; the name follows the
+   underscore convention, because a public name on a symbolic expression would shadow a
+   domain attribute.
+3. `assigned_variable` (thread 5). The `isinstance` ladder over `AbstractMatchExpression`,
+   `Cause`/`Confounder`, non-expression and expression becomes one polymorphic call where the
+   types are ours. The `Cause`/`Confounder` fresh-copy branch comes from `main`, so its
+   behaviour stays the same and only its location moves. The comment shrinks to one sentence.
+4. Docstrings (threads 3 and 4): cut `Match`'s class docstring back to what the class is,
+   and change `a(Adder)` to `an(Adder)`.
+5. Fork CI: the three `action_required` runs need approval from the owner; a session cannot
+   give it.
+
+**Why this session did not carry it out.** Two things held it back, both recorded rather than
+worked around. First, the push window: `stack.toml`'s window for a branch under upstream
+review is 22:00-06:00 Europe/Berlin, at least four hours after its last push, and this
+resolve ran at 13:20 CEST, two hours after the 11:05 UTC merge push. Second, this session's
+designated branch was not the item's branch, and checking out
+`claude/match-query-interface-refactor-l55jym` was refused. The plan waits for the developer
+to authorise a session on the item's branch, pushing inside the window.
