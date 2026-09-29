@@ -3087,3 +3087,43 @@ def test_all_blocks_received_when_subscribed_before_publishing(rclpy_node):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+# %% a receiver that falls behind
+
+
+def test_a_state_change_published_while_the_receiver_is_busy_is_not_lost(rclpy_node):
+    """
+    A state update carries only the degrees of freedom that changed since the last one,
+    so a receiver that drops an update while it is busy never learns of a degree of
+    freedom that changed once and then held still -- a gripper that closed while the
+    receiver was taking a look.
+
+    The updates a busy receiver has not taken yet are kept for it, however many arrive
+    meanwhile.
+    """
+    w1 = create_dummy_world()
+    w2 = create_dummy_world()
+    synchronizer_1 = WorldSynchronizer(node=rclpy_node, _world=w1)
+    busy_receiver = rclpy.create_node("busy_receiver")
+    synchronizer_2 = WorldSynchronizer(node=busy_receiver, _world=w2)
+    assert wait_for_condition(
+        lambda: synchronizer_1.publisher.get_subscription_count() == 2
+    )
+
+    w1.state._data[0, 1] = 0.5
+    w1.notify_state_change()
+    for step in range(1, 101):
+        w1.state._data[0, 0] = step / 100
+        w1.notify_state_change()
+    executor = SingleThreadedExecutor()
+    executor.add_node(busy_receiver)
+    assert wait_for_condition(
+        lambda: (executor.spin_once(timeout_sec=0.05), w2.state._data[0, 0] == 1.0)[1]
+    )
+
+    assert w2.state._data[0, 1] == 0.5
+
+    synchronizer_1.close()
+    synchronizer_2.close()
+    busy_receiver.destroy_node()
