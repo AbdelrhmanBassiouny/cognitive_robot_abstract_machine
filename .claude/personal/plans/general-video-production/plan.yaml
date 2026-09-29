@@ -35,6 +35,7 @@ items:
   - id: video-core
     title: A general video package on main that renders a minimal narrated video end to end
     branch: claude/pensive-albattani-2j50zr
+    pull_request_number: 472
     track: video-package
     status: in_progress
     session: https://claude.ai/code/session_01UbbxurNq8r1WpeBqe8HU5Z
@@ -42,7 +43,8 @@ items:
     notes: >-
       Timeline, encoding (without the ICRA preset), cache, canvas (neutral inks),
       lettering, narration, the general half of footage and the end card, with
-      tests including one that renders a minimal video to an mp4.
+      tests including one that renders a minimal video to an mp4. Draft #472 pushed
+      2026-09-29 (86dcf114); 75 tests pass locally, CI not yet run.
 
   - id: icra-video-on-core
     title: "#429 rebuilt on the general package, keeping only the ICRA scenes"
