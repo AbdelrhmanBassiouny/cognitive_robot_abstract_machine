@@ -479,8 +479,8 @@ def test_get_previous_nodes():
 # ---- Tests interacting with simulated robot/world ----
 
 
-def test_pause_plan(immutable_model_world):
-    world, robot_view, context = immutable_model_world
+def test_pause_plan(pr2_apartment_context):
+    world, robot_view, context = pr2_apartment_context
 
     def node_sleep():
         time.sleep(1)
@@ -517,7 +517,7 @@ def _torso_position(world):
     ].position
 
 
-def test_sequence_runs_all_motions(immutable_model_world):
+def test_sequence_runs_all_motions(pr2_apartment_context):
     """
     Every motion of a sequence is executed, so the torso ends at the target of the
     *last* motion.
@@ -525,7 +525,7 @@ def test_sequence_runs_all_motions(immutable_model_world):
     The robot starts in the LOW configuration, so a final HIGH motion proves the second
     motion actually ran.
     """
-    world, robot_view, context = immutable_model_world
+    world, robot_view, context = pr2_apartment_context
 
     plan = sequential(
         [MoveTorsoAction(TorsoState.LOW), MoveTorsoAction(TorsoState.HIGH)],
@@ -618,7 +618,7 @@ def test_parameterization_of_pick_up(apartment_world_pr2_copy_with_context):
             pass
 
 
-def test_conditions_reference_surviving_action_node_after_merge(immutable_model_world):
+def test_conditions_reference_surviving_action_node_after_merge(pr2_apartment_context):
     """
     Expanding an action mounts a fresh action node whose conditions reference it, and
     simplification merges that node into the equivalent node already in the plan.
@@ -626,7 +626,7 @@ def test_conditions_reference_surviving_action_node_after_merge(immutable_model_
     After the merge every condition must reference the surviving node, not the discarded
     one, otherwise the dangling node leaks into serialization.
     """
-    world, robot_view, context = immutable_model_world
+    world, robot_view, context = pr2_apartment_context
 
     plan = sequential(
         [MoveTorsoAction(TorsoState.HIGH)],
@@ -644,8 +644,8 @@ def test_conditions_reference_surviving_action_node_after_merge(immutable_model_
         assert condition_node.action_node.index in live_node_indices
 
 
-def test_motion_order_pick_up(mutable_model_world):
-    world, robot_view, context = mutable_model_world
+def test_motion_order_pick_up(pr2_apartment_context):
+    world, robot_view, context = pr2_apartment_context
 
     grasp_description = GraspDescription(
         ApproachDirection.FRONT,
@@ -699,8 +699,8 @@ def test_motion_order_pick_up(mutable_model_world):
     ]
 
 
-def test_motion_order_place(mutable_model_world):
-    world, robot_view, context = mutable_model_world
+def test_motion_order_place(pr2_apartment_context):
+    world, robot_view, context = pr2_apartment_context
 
     milk_body = world.get_body_by_name("milk.stl")
     milk_body.parent_connection.origin = world.get_body_by_name(
@@ -755,8 +755,8 @@ def test_motion_order_place(mutable_model_world):
     ]
 
 
-def test_node_expansion(immutable_model_world):
-    world, view, context = immutable_model_world
+def test_node_expansion(pr2_apartment_context):
+    world, view, context = pr2_apartment_context
 
     plan = sequential(
         [
@@ -781,8 +781,8 @@ def test_node_expansion(immutable_model_world):
     assert len(expanded_children[1].children) == 4
 
 
-def test_expand_move_torso(immutable_model_world):
-    world, view, context = immutable_model_world
+def test_expand_move_torso(pr2_apartment_context):
+    world, view, context = pr2_apartment_context
     plan = sequential([MoveTorsoAction(TorsoState.HIGH)], context=context)
 
     plan.notify()
@@ -792,8 +792,8 @@ def test_expand_move_torso(immutable_model_world):
     assert len(node.children) == 3
 
 
-def test_context_back_reference(immutable_model_world):
-    world, view, context = immutable_model_world
+def test_context_back_reference(pr2_apartment_context):
+    world, view, context = pr2_apartment_context
 
     plan = sequential(
         [
@@ -816,8 +816,8 @@ def test_context_back_reference(immutable_model_world):
     assert plan.plan.context == context
 
 
-def test_action_nodes_unequal(immutable_model_world):
-    world, view, context = immutable_model_world
+def test_action_nodes_unequal(pr2_apartment_context):
+    world, view, context = pr2_apartment_context
 
     plan = sequential(
         [
