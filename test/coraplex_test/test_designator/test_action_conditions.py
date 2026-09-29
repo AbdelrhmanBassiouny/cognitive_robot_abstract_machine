@@ -30,8 +30,8 @@ def _construct_and_evaluate_condition(action, action_condition):
     )
 
 
-def test_get_bound_variables(immutable_model_world):
-    world, view, context = immutable_model_world
+def test_get_bound_variables(pr2_apartment_context):
+    world, view, context = pr2_apartment_context
 
     pick_action = PickUpAction(
         world.get_semantic_annotations_by_type(Milk)[0],
@@ -69,8 +69,8 @@ def test_get_bound_variables(immutable_model_world):
     assert bound_variables["object_designator"]._type_ == Milk
 
 
-def test_pick_up_pre_conditions(mutable_model_world):
-    world, view, context = mutable_model_world
+def test_pick_up_pre_conditions(pr2_apartment_context):
+    world, view, context = pr2_apartment_context
 
     pick_action = PickUpAction(
         world.get_semantic_annotations_by_type(Milk)[0],
@@ -120,8 +120,8 @@ def test_pick_up_pre_conditions(mutable_model_world):
     assert _construct_and_evaluate_condition(pick_action, pick_action.post_condition)
 
 
-def test_pick_up_post_condition(mutable_model_world):
-    world, view, context = mutable_model_world
+def test_pick_up_post_condition(pr2_apartment_context):
+    world, view, context = pr2_apartment_context
     pick_action = PickUpAction(
         world.get_semantic_annotations_by_type(Milk)[0],
         Arms.LEFT,
