@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from typing_extensions import Sequence
+from typing_extensions import Tuple
 
 from experiments.video.canvas import (
     BODY_SIZE,
@@ -72,7 +72,7 @@ class ResultsTable(HeldScene):
     What the table is of, over it.
     """
 
-    rows: Sequence[ResultRow]
+    rows: Tuple[ResultRow, ...]
     """
     The rows.
     """
