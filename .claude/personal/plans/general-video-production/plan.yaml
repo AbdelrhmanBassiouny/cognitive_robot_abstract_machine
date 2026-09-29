@@ -1,0 +1,66 @@
+schema_version: 1
+id: general-video-production
+title: General video production for experiments
+description: >-
+  Pull the reusable video-making machinery out of the ICRA 2027 supplementary
+  video (#429) into a general package on main that any experiment can use to
+  render narrated, subtitled videos from its own scenes, then rebuild the ICRA
+  video on top of it.
+default_repository: AbdelrhmanBassiouny/cognitive_robot_abstract_machine
+tracking_issue: 471
+
+waves:
+  - id: wave-1
+    name: "Wave 1: General package on main"
+    description: A usable video package on main, proven by rendering a minimal video in its tests.
+  - id: wave-2
+    name: "Wave 2: The ICRA video on the package"
+    description: The ICRA video keeps only its own scenes and imports the rest.
+  - id: wave-3
+    name: "Wave 3: Figure close-ups for everyone"
+    description: The typst-figure scenes made general.
+
+tracks:
+  - id: video-package
+    name: Video package
+    wave: wave-1
+  - id: icra-video
+    name: ICRA video
+    wave: wave-2
+  - id: figure-scenes
+    name: Figure scenes
+    wave: wave-3
+
+items:
+  - id: video-core
+    title: A general video package on main that renders a minimal narrated video end to end
+    branch: claude/pensive-albattani-2j50zr
+    track: video-package
+    status: in_progress
+    session: https://claude.ai/code/session_01UbbxurNq8r1WpeBqe8HU5Z
+    depends_on: []
+    notes: >-
+      Timeline, encoding (without the ICRA preset), cache, canvas (neutral inks),
+      lettering, narration, the general half of footage and the end card, with
+      tests including one that renders a minimal video to an mp4.
+
+  - id: icra-video-on-core
+    title: "#429 rebuilt on the general package, keeping only the ICRA scenes"
+    branch: claude/the-icra-video-shows-the-plan-being-answered
+    pull_request_number: 429
+    track: icra-video
+    status: not_started
+    depends_on: [video-core]
+    notes: >-
+      #429 is based on real-experiments-tracy-icra-2026, so the package must reach
+      that branch first (merge main into it once video-core lands). The ICRA
+      branch keeps sources, perception, twin, grasp, rules, attribution,
+      perturbations, long_term, script, icra_video, the framework.typ changes,
+      backend inks, TABLE_FRAMING and the icra_2027 limits.
+
+  - id: figure-stages-general
+    title: Typst-figure close-ups (magnify, pointer, answering) made general
+    track: figure-scenes
+    status: not_started
+    depends_on: [icra-video-on-core]
+    notes: stages.py and figure.py behind a figure abstraction, so other experiments grow close-ups from their own figures.
