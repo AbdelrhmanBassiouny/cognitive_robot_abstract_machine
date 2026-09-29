@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import enum
 import json
+import math
 import pathlib
 import statistics
 from dataclasses import asdict, dataclass, is_dataclass
@@ -65,6 +66,20 @@ class IncompatibleUnitConversionError(DataclassException):
 
 
 @dataclass
+class NoMeasurementsError(DataclassException):
+    """
+    Raised when a quantity is summarized over an empty set of measurements, which says
+    nothing about the quantity.
+    """
+
+    def error_message(self) -> str:
+        return "No measurement was taken, so there is nothing to summarize."
+
+    def suggest_correction(self) -> str:
+        return "Take at least one measurement before summarizing them."
+
+
+@dataclass
 class MeanAndStandardDeviation:
     """
     Class that represents a mean and standard deviation for tables that will be directly
@@ -96,6 +111,15 @@ class MeanAndStandardDeviation:
     def from_measurements(
         cls, measurements: list[float], unit: Unit = Unit.NONE
     ) -> MeanAndStandardDeviation:
+        """
+        Summarize the given measurements as their mean and their spread around it.
+
+        :param measurements: The measurements taken.
+        :param unit: The unit they are expressed in.
+        :raises NoMeasurementsError: If no measurement was taken.
+        """
+        if not measurements:
+            raise NoMeasurementsError()
         std = 0.0 if len(measurements) < 2 else statistics.stdev(measurements)
         return cls(
             mean=round(statistics.mean(measurements), 2),
@@ -120,6 +144,58 @@ class MeanAndStandardDeviation:
             mean=round(self.mean * factor, 2),
             standard_deviation=round(self.standard_deviation * factor, 4),
             unit=unit,
+        )
+
+
+DEFAULT_CONFIDENCE_LEVEL = 0.95
+"""
+Two-sided confidence level a measured quantity is reported at unless another one is
+asked for.
+"""
+
+
+@dataclass
+class ConfidenceInterval(Bounds[float]):
+    """
+    The interval a measured mean is expected to lie in, at a stated confidence level.
+
+    Use this wherever a rate or an average is reported over repeated measurements, so a
+    reader sees how far the measurements pin the quantity down rather than a point value
+    that hides it.
+    """
+
+    confidence_level: float = DEFAULT_CONFIDENCE_LEVEL
+    """
+    Two-sided confidence level the bounds hold at.
+    """
+
+    def __str__(self) -> str:
+        return f"[{round(self.lower, 2)}, {round(self.upper, 2)}]"
+
+    @classmethod
+    def for_mean(
+        cls,
+        measurements: list[float],
+        confidence_level: float = DEFAULT_CONFIDENCE_LEVEL,
+    ) -> ConfidenceInterval:
+        """
+        The interval the mean of the given measurements lies in, from the normal
+        approximation of its standard error.
+
+        :param measurements: The measurements the mean is taken over.
+        :param confidence_level: Two-sided confidence level the bounds hold at.
+        :raises NoMeasurementsError: If no measurement was taken.
+        """
+        if not measurements:
+            raise NoMeasurementsError()
+        mean = statistics.mean(measurements)
+        if len(measurements) < 2:
+            return cls(lower=mean, upper=mean, confidence_level=confidence_level)
+        standard_error = statistics.stdev(measurements) / math.sqrt(len(measurements))
+        quantile = statistics.NormalDist().inv_cdf(1 - (1 - confidence_level) / 2)
+        margin = quantile * standard_error
+        return cls(
+            lower=mean - margin, upper=mean + margin, confidence_level=confidence_level
         )
 
 
