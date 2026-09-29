@@ -1,6 +1,6 @@
 """
-Tests for upstream_reviews.py's data parsing, thread pagination, pull request
-resolution, report rendering, and the gh-backed client.
+Tests for upstream_reviews.py's data parsing, check reading, failure-log excerpting,
+thread pagination, pull request resolution, report rendering, and the gh-backed client.
 """
 
 import json
@@ -11,24 +11,41 @@ from enum import StrEnum
 from pathlib import Path
 
 import pytest
-from conftest import FixtureName, RecordedCall, ReplayingClient
+from conftest import (
+    FixtureName,
+    JobLogFixtureName,
+    RecordedCall,
+    ReplayingClient,
+    ReplayingJobLogReader,
+)
 
 from upstream_reviews import (
+    EXCERPT_LINE_LIMIT,
+    CheckOutcome,
+    CheckResult,
+    CheckStatus,
+    FailedJob,
+    FailureLog,
+    FailureLogReader,
+    LogMarker,
+    TERMINAL_ESCAPE_PATTERN,
     GitHubCommandFailed,
     GitHubCommandLineClient,
+    GitHubEndpoint,
     GraphQLErrorsReturned,
     JSONModel,
     PullRequestJSONKey,
-    PullRequestReviewSnapshot,
+    UpstreamPullRequestSnapshot,
     QueryVariable,
     ReportText,
     Repository,
     ReviewState,
     ReviewThread,
+    RollupState,
     ThreadMarker,
-    UnresolvedThreadReport,
+    UpstreamPullRequestReport,
     UpstreamPullRequestNotFound,
-    UpstreamReviewReader,
+    UpstreamPullRequestReader,
     main,
     resolve_upstream_repository,
 )
@@ -57,6 +74,17 @@ class ThreadIdentifier(StrEnum):
     UNRESOLVED_OUTDATED = "THREAD_UNRESOLVED_OUTDATED"
 
 
+class RecordedCheck(StrEnum):
+    """
+    The checks the recorded pull request carries, named by what each one shows.
+    """
+
+    PASSING = "test (krrood)"
+    FAILING = "test (robokudo)"
+    UNFINISHED = "test (coraplex)"
+    LEGACY = "continuous-integration/legacy"
+
+
 class ThreadCursor(StrEnum):
     """
     The cursors the recorded pages hand back.
@@ -71,6 +99,7 @@ class StubEnvironmentVariable(StrEnum):
     """
 
     GRAPHQL_JSON = "STUB_GH_GRAPHQL_JSON"
+    JOB_LOG = "STUB_GH_JOB_LOG"
     EXIT_CODE = "STUB_GH_EXIT_CODE"
     CALL_LOG = "STUB_GH_CALL_LOG"
 
@@ -78,17 +107,30 @@ class StubEnvironmentVariable(StrEnum):
 UPSTREAM = Repository(Example.UPSTREAM_OWNER, Example.UPSTREAM_NAME)
 RECORDED_PULL_REQUEST_NUMBER = 513
 GRAPHQL_ERROR_MESSAGE = "Could not resolve to a Repository"
+RECORDED_JOB_IDENTIFIER = 105780443397
 UPSTREAM_SETTING_TEMPLATE = 'upstream_repository = "{repository}"\n'
 
 
-def make_reader(client: ReplayingClient) -> UpstreamReviewReader:
+def make_reader(client: ReplayingClient) -> UpstreamPullRequestReader:
     """
     Build a reader wired to *client* and the recorded upstream.
 
     :param client: The client to replay responses from.
     :return: The reader under test.
     """
-    return UpstreamReviewReader(client, UPSTREAM, Example.FORK_OWNER)
+    return UpstreamPullRequestReader(client, UPSTREAM, Example.FORK_OWNER)
+
+
+def recorded_rollup() -> dict:
+    """:return: The status check rollup the last recorded page carries."""
+    pull_request = FixtureName.PULL_REQUEST_PAGE_TWO.recorded().pull_request
+    [commit] = pull_request[PullRequestJSONKey.COMMITS][PullRequestJSONKey.NODES]
+    return commit[PullRequestJSONKey.COMMIT][PullRequestJSONKey.STATUS_CHECK_ROLLUP]
+
+
+def recorded_check_nodes() -> list[dict]:
+    """:return: The rollup context nodes the last recorded page carries."""
+    return recorded_rollup()[PullRequestJSONKey.CONTEXTS][PullRequestJSONKey.NODES]
 
 
 def recorded_thread(fixture: FixtureName, identifier: ThreadIdentifier) -> ReviewThread:
@@ -155,7 +197,7 @@ def test_the_snapshot_identifies_the_pull_request_it_read(paginated_client):
         RECORDED_PULL_REQUEST_NUMBER
     )
 
-    recorded = FixtureName.PULL_REQUEST_PAGE_ONE.recorded().pull_request_reviews
+    recorded = FixtureName.PULL_REQUEST_PAGE_ONE.recorded().pull_request_snapshot
     assert snapshot.number == recorded.number
     assert snapshot.title == recorded.title
     assert snapshot.url == recorded.url
@@ -204,6 +246,95 @@ def test_a_thread_anchored_to_a_line_is_located_by_it(paginated_client):
 
     anchored = snapshot.thread(ThreadIdentifier.UNRESOLVED_MIDDLE)
     assert anchored.location == f"{anchored.path}:{anchored.line}"
+
+
+# %% checks
+
+
+@pytest.fixture
+def current_checks(paginated_client) -> CheckStatus:
+    """:return: The checks of the recorded pull request."""
+    return (
+        make_reader(paginated_client)
+        .read_current_state(RECORDED_PULL_REQUEST_NUMBER)
+        .checks
+    )
+
+
+def test_the_rollup_verdict_is_read_rather_than_recomputed(current_checks):
+    assert current_checks.state is RollupState(
+        recorded_rollup()[PullRequestJSONKey.STATE]
+    )
+
+
+def test_every_recorded_check_is_read(current_checks):
+    assert len(current_checks.results) == len(recorded_check_nodes())
+
+
+def test_a_finished_check_run_carries_its_conclusion(current_checks):
+    [failed] = [
+        result
+        for result in current_checks.results
+        if result.outcome is CheckOutcome.FAILURE
+    ]
+
+    assert failed.name == RecordedCheck.FAILING
+
+
+def test_a_check_run_links_to_its_own_output(current_checks):
+    [recorded] = [
+        node
+        for node in recorded_check_nodes()
+        if node.get(PullRequestJSONKey.NAME) == RecordedCheck.FAILING
+    ]
+    [failed] = [
+        result
+        for result in current_checks.results
+        if result.name == RecordedCheck.FAILING
+    ]
+
+    assert failed.url == recorded[PullRequestJSONKey.DETAILS_URL]
+
+
+def test_an_unfinished_check_run_reads_as_pending(current_checks):
+    [pending] = [
+        result
+        for result in current_checks.results
+        if result.name == RecordedCheck.UNFINISHED
+    ]
+
+    assert pending.outcome is CheckOutcome.PENDING
+
+
+def test_a_status_context_is_read_alongside_the_check_runs(current_checks):
+    [legacy] = [
+        result
+        for result in current_checks.results
+        if result.name == RecordedCheck.LEGACY
+    ]
+
+    assert legacy.outcome is CheckOutcome.ERROR
+
+
+def test_only_the_checks_that_did_not_pass_are_unsuccessful(current_checks):
+    assert [result.name for result in current_checks.unsuccessful] == [
+        RecordedCheck.FAILING,
+        RecordedCheck.UNFINISHED,
+        RecordedCheck.LEGACY,
+    ]
+
+
+def test_a_rollup_shape_this_script_cannot_read_is_rejected():
+    with pytest.raises(ValueError):
+        CheckResult.from_json({PullRequestJSONKey.TYPE_NAME: "SomeNewContextShape"})
+
+
+def test_a_head_commit_nothing_reported_against_has_no_checks():
+    client = ReplayingClient([FixtureName.PULL_REQUEST_WITHOUT_CHECKS.load()])
+
+    current_state = make_reader(client).read_current_state(RECORDED_PULL_REQUEST_NUMBER)
+
+    assert current_state.checks is None
 
 
 # %% thread pagination
@@ -257,7 +388,7 @@ def test_the_report_omits_a_resolved_thread(paginated_client):
         RECORDED_PULL_REQUEST_NUMBER
     )
 
-    report = UnresolvedThreadReport(snapshot)
+    report = UpstreamPullRequestReport(snapshot)
 
     assert ThreadIdentifier.RESOLVED not in {
         thread.identifier for thread in report.shown_threads
@@ -272,7 +403,7 @@ def test_including_resolved_threads_restores_it(paginated_client):
         RECORDED_PULL_REQUEST_NUMBER
     )
 
-    rendered = UnresolvedThreadReport(snapshot, include_resolved=True).render()
+    rendered = UpstreamPullRequestReport(snapshot, include_resolved=True).render()
 
     assert snapshot.thread(ThreadIdentifier.RESOLVED).comments[0].body in rendered
 
@@ -282,7 +413,7 @@ def test_including_resolved_threads_counts_what_is_shown(paginated_client):
         RECORDED_PULL_REQUEST_NUMBER
     )
 
-    report = UnresolvedThreadReport(snapshot, include_resolved=True)
+    report = UpstreamPullRequestReport(snapshot, include_resolved=True)
 
     assert report.heading(len(snapshot.threads)) in report.render()
     assert len(report.shown_threads) == len(snapshot.threads)
@@ -336,7 +467,7 @@ def test_a_branch_never_promoted_upstream_is_reported_clearly():
 def test_the_configured_upstream_reaches_the_query():
     client = ReplayingClient([FixtureName.BRANCH_PULL_REQUESTS.load()])
     elsewhere = Repository("another-organization", "another-repository")
-    reader = UpstreamReviewReader(client, elsewhere, Example.FOREIGN_OWNER)
+    reader = UpstreamPullRequestReader(client, elsewhere, Example.FOREIGN_OWNER)
 
     reader.resolve_pull_request_number(Example.BRANCH)
 
@@ -365,7 +496,7 @@ def test_an_explicit_override_outranks_the_configuration_file(tmp_path):
 
 
 @pytest.fixture
-def current_state(paginated_client) -> PullRequestReviewSnapshot:
+def current_state(paginated_client) -> UpstreamPullRequestSnapshot:
     """:return: The snapshot parsed from both recorded pages."""
     return make_reader(paginated_client).read_current_state(
         RECORDED_PULL_REQUEST_NUMBER
@@ -373,14 +504,14 @@ def current_state(paginated_client) -> PullRequestReviewSnapshot:
 
 
 def test_each_unresolved_thread_is_located_by_file_and_line(current_state):
-    rendered = UnresolvedThreadReport(current_state).render()
+    rendered = UpstreamPullRequestReport(current_state).render()
 
     for thread in current_state.unresolved_threads:
         assert thread.location in rendered
 
 
 def test_comment_bodies_are_reproduced(current_state):
-    rendered = UnresolvedThreadReport(current_state).render()
+    rendered = UpstreamPullRequestReport(current_state).render()
 
     for thread in current_state.unresolved_threads:
         for comment in thread.comments:
@@ -388,26 +519,67 @@ def test_comment_bodies_are_reproduced(current_state):
 
 
 def test_each_thread_links_back_to_its_first_comment(current_state):
-    rendered = UnresolvedThreadReport(current_state).render()
+    rendered = UpstreamPullRequestReport(current_state).render()
 
     for thread in current_state.unresolved_threads:
         assert thread.comments[0].url in rendered
 
 
 def test_an_outdated_thread_is_marked_as_such(current_state):
-    rendered = UnresolvedThreadReport(current_state).render()
+    rendered = UpstreamPullRequestReport(current_state).render()
 
     assert ThreadMarker.OUTDATED in rendered
 
 
 def test_the_unresolved_count_is_stated(current_state):
-    report = UnresolvedThreadReport(current_state)
+    report = UpstreamPullRequestReport(current_state)
 
     assert report.heading(len(report.shown_threads)) in report.render()
 
 
+def test_the_checks_section_states_the_verdict_and_how_many_passed(current_state):
+    rendered = UpstreamPullRequestReport(current_state).render()
+    checks = current_state.checks
+    passed = len(checks.results) - len(checks.unsuccessful)
+
+    assert (
+        f"{ReportText.CHECKS_HEADING}: {checks.state.spoken} "
+        f"({passed}/{len(checks.results)} passed)" in rendered
+    )
+
+
+def test_every_check_that_did_not_pass_is_named_with_its_outcome(current_state):
+    rendered = UpstreamPullRequestReport(current_state).render()
+
+    for result in current_state.checks.unsuccessful:
+        assert f"**{result.name}** — {result.outcome.spoken}" in rendered
+
+
+def test_a_passing_check_is_not_listed_individually(current_state):
+    rendered = UpstreamPullRequestReport(current_state).render()
+
+    [passed] = [result for result in current_state.checks.results if result.succeeded]
+
+    assert f"**{passed.name}**" not in rendered
+
+
+def test_a_pull_request_without_checks_says_so(current_state):
+    unchecked = UpstreamPullRequestSnapshot(
+        number=current_state.number,
+        title=current_state.title,
+        url=current_state.url,
+        reviews=current_state.reviews,
+        threads=current_state.threads,
+        checks=None,
+    )
+
+    rendered = UpstreamPullRequestReport(unchecked).render()
+
+    assert ReportText.NO_CHECKS in rendered
+
+
 def test_every_reviewer_and_verdict_is_listed(current_state):
-    rendered = UnresolvedThreadReport(current_state).render()
+    rendered = UpstreamPullRequestReport(current_state).render()
 
     for review in current_state.reviews:
         assert review.author.login in rendered
@@ -415,15 +587,16 @@ def test_every_reviewer_and_verdict_is_listed(current_state):
 
 
 def test_a_pull_request_with_nothing_outstanding_says_so(current_state):
-    settled = PullRequestReviewSnapshot(
+    settled = UpstreamPullRequestSnapshot(
         number=current_state.number,
         title=current_state.title,
         url=current_state.url,
         reviews=current_state.reviews,
         threads=[thread for thread in current_state.threads if thread.is_resolved],
+        checks=current_state.checks,
     )
 
-    rendered = UnresolvedThreadReport(settled).render()
+    rendered = UpstreamPullRequestReport(settled).render()
 
     assert ReportText.NO_UNRESOLVED_HEADING in rendered
     assert ReportText.NOTHING_TO_ACT_ON in rendered
@@ -505,6 +678,38 @@ def test_graphql_errors_are_raised_rather_than_returned(stubbed_gh, monkeypatch)
     assert raised.value.messages == [GRAPHQL_ERROR_MESSAGE]
 
 
+def test_a_job_log_is_asked_for_by_the_job_s_own_endpoint(
+    stubbed_gh, monkeypatch, tmp_path
+):
+    call_log = tmp_path / "calls.txt"
+    monkeypatch.setenv(StubEnvironmentVariable.CALL_LOG, str(call_log))
+    monkeypatch.setenv(StubEnvironmentVariable.JOB_LOG, "")
+
+    GitHubCommandLineClient().read_job_log(UPSTREAM, RECORDED_JOB_IDENTIFIER)
+
+    assert call_log.read_text().strip() == GitHubEndpoint.JOB_LOG.format(
+        repository=UPSTREAM, job=RECORDED_JOB_IDENTIFIER
+    )
+
+
+def test_a_job_log_comes_back_as_the_runner_recorded_it(stubbed_gh, monkeypatch):
+    recorded = JobLogFixtureName.FAILED_JOB_WITHOUT_SUMMARY.load()
+    monkeypatch.setenv(StubEnvironmentVariable.JOB_LOG, recorded)
+
+    read = GitHubCommandLineClient().read_job_log(UPSTREAM, RECORDED_JOB_IDENTIFIER)
+
+    assert read == recorded
+
+
+def test_a_failing_job_log_read_is_raised(stubbed_gh, monkeypatch):
+    monkeypatch.setenv(StubEnvironmentVariable.EXIT_CODE, "1")
+
+    with pytest.raises(GitHubCommandFailed) as raised:
+        GitHubCommandLineClient().read_job_log(UPSTREAM, RECORDED_JOB_IDENTIFIER)
+
+    assert raised.value.exit_code == 1
+
+
 def test_a_branch_without_an_upstream_pull_request_exits_without_a_traceback(
     stubbed_gh, monkeypatch, capsys
 ):
@@ -529,3 +734,188 @@ def test_a_branch_without_an_upstream_pull_request_exits_without_a_traceback(
 
     assert status == 1
     assert str(Example.UNPROMOTED_BRANCH) in capsys.readouterr().err
+
+
+# %% the log behind a failed check
+
+
+def recorded_check(name: RecordedCheck) -> CheckResult:
+    """
+    Read one recorded check through the model the production code parses into.
+
+    :param name: The check to find.
+    :return: The parsed check.
+    """
+    [node] = [
+        node
+        for node in recorded_check_nodes()
+        if node.get(PullRequestJSONKey.NAME) == name
+        or node.get(PullRequestJSONKey.CONTEXT) == name
+    ]
+    return CheckResult.from_json(node)
+
+
+def test_a_check_link_names_the_job_behind_it():
+    failing = recorded_check(RecordedCheck.FAILING)
+
+    assert FailedJob.behind(failing) == FailedJob(
+        int(failing.url.rsplit("/", maxsplit=1)[-1])
+    )
+
+
+def test_a_link_that_names_no_job_has_no_job_behind_it():
+    assert FailedJob.behind(recorded_check(RecordedCheck.LEGACY)) is None
+
+
+def test_an_excerpt_starts_at_pytest_s_own_summary():
+    excerpt = FailureLog.excerpt(
+        str(RecordedCheck.FAILING), JobLogFixtureName.FAILED_JOB.load()
+    )
+
+    assert LogMarker.PYTEST_SUMMARY in excerpt.lines[0]
+
+
+def test_an_excerpt_keeps_the_line_naming_the_failed_test():
+    excerpt = FailureLog.excerpt(
+        str(RecordedCheck.FAILING), JobLogFixtureName.FAILED_JOB.load()
+    )
+
+    assert [line for line in excerpt.lines if line.startswith("FAILED ")]
+
+
+def test_an_excerpt_drops_the_runner_s_timestamps():
+    log = JobLogFixtureName.FAILED_JOB.load()
+    [recorded] = [line for line in log.splitlines() if LogMarker.PYTEST_SUMMARY in line]
+
+    excerpt = FailureLog.excerpt(str(RecordedCheck.FAILING), log)
+
+    assert excerpt.lines[0] == recorded.split(" ", maxsplit=1)[1]
+
+
+def test_an_excerpt_stops_where_the_step_failed():
+    excerpt = FailureLog.excerpt(
+        str(RecordedCheck.FAILING), JobLogFixtureName.FAILED_JOB.load()
+    )
+
+    assert LogMarker.ERROR_ANNOTATION in excerpt.lines[-1]
+
+
+def test_an_excerpt_drops_the_colour_a_test_runner_wrote():
+    excerpt = FailureLog.excerpt(
+        str(RecordedCheck.FAILING), JobLogFixtureName.FAILED_JOB.load()
+    )
+
+    assert TERMINAL_ESCAPE_PATTERN.search("\n".join(excerpt.lines)) is None
+
+
+def test_a_job_that_died_before_pytest_is_excerpted_from_its_error_annotations():
+    excerpt = FailureLog.excerpt(
+        str(RecordedCheck.FAILING), JobLogFixtureName.FAILED_JOB_WITHOUT_SUMMARY.load()
+    )
+
+    assert all(LogMarker.ERROR_ANNOTATION in line for line in excerpt.lines)
+
+
+def test_a_log_with_neither_marker_falls_back_to_its_last_lines():
+    log = "\n".join(f"line {number}" for number in range(EXCERPT_LINE_LIMIT + 10))
+
+    excerpt = FailureLog.excerpt(str(RecordedCheck.FAILING), log)
+
+    assert excerpt.lines[-1] == f"line {EXCERPT_LINE_LIMIT + 9}"
+
+
+def test_an_excerpt_is_capped_at_the_line_limit():
+    log = "\n".join(f"line {number}" for number in range(EXCERPT_LINE_LIMIT + 10))
+
+    excerpt = FailureLog.excerpt(str(RecordedCheck.FAILING), log)
+
+    assert len(excerpt.lines) == EXCERPT_LINE_LIMIT
+
+
+def test_an_excerpt_names_the_check_its_job_reported_for():
+    excerpt = FailureLog.excerpt(
+        str(RecordedCheck.FAILING), JobLogFixtureName.FAILED_JOB.load()
+    )
+
+    assert excerpt.check_name == RecordedCheck.FAILING
+
+
+# %% reading the logs a pull request's failures left
+
+
+def make_failure_log_reader(logs: dict[int, str]) -> FailureLogReader:
+    """
+    :param logs: The log each job identifier answers with.
+    :return: A reader answering from those logs.
+    """
+    return FailureLogReader(ReplayingJobLogReader(logs), UPSTREAM)
+
+
+def failing_job_identifier() -> int:
+    """:return: The job the recorded failing check links to."""
+    return FailedJob.behind(recorded_check(RecordedCheck.FAILING)).identifier
+
+
+def test_every_failed_check_with_a_job_behind_it_is_read(current_checks):
+    reader = make_failure_log_reader(
+        {failing_job_identifier(): JobLogFixtureName.FAILED_JOB.load()}
+    )
+
+    excerpts = reader.read(current_checks)
+
+    assert [excerpt.check_name for excerpt in excerpts] == [str(RecordedCheck.FAILING)]
+
+
+def test_a_check_still_running_has_no_log_read_for_it(current_checks):
+    reader = make_failure_log_reader(
+        {failing_job_identifier(): JobLogFixtureName.FAILED_JOB.load()}
+    )
+
+    reader.read(current_checks)
+
+    assert [call.job_identifier for call in reader.job_logs.calls] == [
+        failing_job_identifier()
+    ]
+
+
+def test_a_job_log_is_read_from_the_upstream_repository(current_checks):
+    reader = make_failure_log_reader(
+        {failing_job_identifier(): JobLogFixtureName.FAILED_JOB.load()}
+    )
+
+    reader.read(current_checks)
+
+    assert [call.repository for call in reader.job_logs.calls] == [UPSTREAM]
+
+
+def test_a_commit_with_no_checks_has_no_logs_to_read():
+    reader = make_failure_log_reader({})
+
+    assert reader.read(None) == []
+
+
+# %% quoting the logs in the report
+
+
+def test_the_report_quotes_each_log_it_was_given(paginated_client):
+    snapshot = make_reader(paginated_client).read_current_state(
+        RECORDED_PULL_REQUEST_NUMBER
+    )
+    excerpt = FailureLog.excerpt(
+        str(RecordedCheck.FAILING), JobLogFixtureName.FAILED_JOB.load()
+    )
+
+    rendered = UpstreamPullRequestReport(snapshot, failure_logs=[excerpt]).render()
+
+    assert ReportText.FAILURE_LOGS_HEADING in rendered
+    assert excerpt.lines[0] in rendered
+
+
+def test_a_report_given_no_logs_leaves_the_section_out(paginated_client):
+    snapshot = make_reader(paginated_client).read_current_state(
+        RECORDED_PULL_REQUEST_NUMBER
+    )
+
+    rendered = UpstreamPullRequestReport(snapshot).render()
+
+    assert ReportText.FAILURE_LOGS_HEADING not in rendered
