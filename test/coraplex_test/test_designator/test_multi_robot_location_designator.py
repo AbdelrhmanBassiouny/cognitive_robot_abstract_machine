@@ -52,6 +52,8 @@ from semantic_digital_twin.spatial_types import (
 )
 from semantic_digital_twin.world import World
 
+from ..world_snapshot import WorldSnapshot
+
 # The alternative motion mappings that should be available to the plans in this test module.
 # Resolution filters by robot type and execution type, so passing the full set is always safe.
 ALTERNATIVE_MOTION_MAPPINGS = [
@@ -152,32 +154,19 @@ def setup_multi_robot_simple_apartment(
 
 
 @pytest.fixture
-def immutable_multiple_robot_simple_apartment(
+def multiple_robot_simple_apartment_context(
     setup_multi_robot_simple_apartment,
 ) -> Generator[Tuple[World, AbstractRobot, Context]]:
+    """
+    The shared simple apartment world with one robot, the robot and a context for both,
+    returned to its initial model and state after the test.
+    """
     world, view = setup_multi_robot_simple_apartment
-    state = deepcopy(world.state._data)
+    snapshot = WorldSnapshot.capture(world)
     yield world, view, Context(
         world, view, alternative_motion_mappings=ALTERNATIVE_MOTION_MAPPINGS
     )
-    world.state._data[:] = state
-    world.notify_state_change()
-
-
-@pytest.fixture
-def mutable_multiple_robot_simple_apartment(setup_multi_robot_simple_apartment):
-    world, view = setup_multi_robot_simple_apartment
-    copy_world = deepcopy(world)
-    copy_view = view.from_world(copy_world)
-    return (
-        copy_world,
-        copy_view,
-        Context(
-            copy_world,
-            copy_view,
-            alternative_motion_mappings=ALTERNATIVE_MOTION_MAPPINGS,
-        ),
-    )
+    snapshot.restore()
 
 
 def test_deferred_location_factory_runs_at_execution_not_construction():
@@ -226,9 +215,9 @@ def test_deferred_location_reflects_state_changed_after_construction():
 
 
 def test_new_reachability_location_pose(
-    immutable_multiple_robot_simple_apartment, rclpy_node
+    multiple_robot_simple_apartment_context, rclpy_node
 ):
-    world, robot, context = immutable_multiple_robot_simple_apartment
+    world, robot, context = multiple_robot_simple_apartment_context
 
     plan = sequential(
         [ParkArmsAction(Arms.BOTH), MoveTorsoAction(TorsoState.HIGH)],
@@ -249,9 +238,9 @@ def test_new_reachability_location_pose(
 
 
 def test_new_reachability_location_body(
-    immutable_multiple_robot_simple_apartment, rclpy_node
+    multiple_robot_simple_apartment_context, rclpy_node
 ):
-    world, robot, context = immutable_multiple_robot_simple_apartment
+    world, robot, context = multiple_robot_simple_apartment_context
 
     plan = sequential(
         [ParkArmsAction(Arms.BOTH), MoveTorsoAction(TorsoState.HIGH)],
@@ -271,8 +260,8 @@ def test_new_reachability_location_body(
     assert len(pose.to_quaternion().to_list()) == 4
 
 
-def test_merge_reachability_location(immutable_multiple_robot_simple_apartment):
-    world, robot, context = immutable_multiple_robot_simple_apartment
+def test_merge_reachability_location(multiple_robot_simple_apartment_context):
+    world, robot, context = multiple_robot_simple_apartment_context
 
     plan = sequential(
         [ParkArmsAction(Arms.BOTH), MoveTorsoAction(TorsoState.HIGH)],
@@ -298,8 +287,8 @@ def test_merge_reachability_location(immutable_multiple_robot_simple_apartment):
     assert len(pose.to_quaternion().to_list()) == 4
 
 
-def test_visibility_location_pose(immutable_multiple_robot_simple_apartment):
-    world, robot, context = immutable_multiple_robot_simple_apartment
+def test_visibility_location_pose(multiple_robot_simple_apartment_context):
+    world, robot, context = multiple_robot_simple_apartment_context
 
     plan = sequential(
         [ParkArmsAction(Arms.BOTH), MoveTorsoAction(TorsoState.HIGH)],
@@ -320,8 +309,8 @@ def test_visibility_location_pose(immutable_multiple_robot_simple_apartment):
     assert len(pose.to_quaternion().to_list()) == 4
 
 
-def test_visibility_location_body(immutable_multiple_robot_simple_apartment):
-    world, robot, context = immutable_multiple_robot_simple_apartment
+def test_visibility_location_body(multiple_robot_simple_apartment_context):
+    world, robot, context = multiple_robot_simple_apartment_context
 
     plan = sequential(
         [ParkArmsAction(Arms.BOTH), MoveTorsoAction(TorsoState.HIGH)],
@@ -340,8 +329,8 @@ def test_visibility_location_body(immutable_multiple_robot_simple_apartment):
     assert len(pose.to_quaternion().to_list()) == 4
 
 
-def test_visibility_reachability_merge(immutable_multiple_robot_simple_apartment):
-    world, robot, context = immutable_multiple_robot_simple_apartment
+def test_visibility_reachability_merge(multiple_robot_simple_apartment_context):
+    world, robot, context = multiple_robot_simple_apartment_context
 
     plan = sequential(
         [ParkArmsAction(Arms.BOTH), MoveTorsoAction(TorsoState.HIGH)],
@@ -370,8 +359,8 @@ def test_visibility_reachability_merge(immutable_multiple_robot_simple_apartment
 
 
 
-def test_giskard_location_pose(immutable_multiple_robot_simple_apartment):
-    world, robot, context = immutable_multiple_robot_simple_apartment
+def test_giskard_location_pose(multiple_robot_simple_apartment_context):
+    world, robot, context = multiple_robot_simple_apartment_context
     plan = sequential(
         [
             ParkArmsAction(Arms.BOTH),
