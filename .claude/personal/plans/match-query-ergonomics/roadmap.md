@@ -1933,3 +1933,45 @@ resolve ran at 13:20 CEST, two hours after the 11:05 UTC merge push. Second, thi
 designated branch was not the item's branch, and checking out
 `claude/match-query-interface-refactor-l55jym` was refused. The plan waits for the developer
 to authorise a session on the item's branch, pushing inside the window.
+
+**Carried out the same day, once the developer confirmed the push window binds only the
+automated pass** (not a session the developer directs), in `9d30cdf85`:
+
+- *`_as_operand_` (thread 2).* The developer's hypothesis was measured and does not hold:
+  with the `SymbolicExpression` branch deleted, 391 `test_eql` tests fail, because every
+  `Comparator` and other non-variable expression becomes a `Literal`. The open/closed
+  complaint is still right, so the branch was not deleted but made polymorphic. A new
+  `Operand` interface declares `_symbolic_expression_`. `SymbolicExpression` implements it
+  as itself, and `HasSymbolicOperations` narrows it to the variable its operations build
+  on, so a match contributes its lowered query exactly as before. `_as_operand_` is now
+  `Operand` or `Literal`, the second case covering a plain value, which can implement
+  nothing. `HasExpression._get_expression_` was ruled out for this role:
+  `ProbabilisticQuery` implements it by returning its match's query, and a probability
+  used as an operand is a number, not that query. That is the contract difference section
+  27 recorded, now named by two interfaces rather than left implicit.
+- *`variable_rooted` (thread 1).* It is now the `_variable_rooted_` property on
+  `SymbolicExpression`, which returns the expression itself. `MappedVariable` overrides it
+  to ask its chain root to re-root it through `_rerooted_on_selection_`. That method's
+  default on `SymbolicExpression` returns the chain as written, and `Query` keeps its
+  override. The free function and both of its `isinstance` checks are gone.
+- *`assigned_variable` (thread 5).* A `MatchAssignedValue` interface declares
+  `_as_assigned_variable_(attribute_type)`. An expression stands for itself, a match for
+  the variable it creates, and `Cause`/`Confounder` now share `CausalRoleMarker`, which
+  returns a typed per-attribute copy when the shared instance has no type. The long
+  comment is gone because the base class's docstring says it once. The `isinstance`
+  guard left in `assigned_variable` separates a plain value, which is wrapped in a
+  `Literal`.
+- *Threads 3 and 4.* `Match`'s class docstring is back to one paragraph. The callable
+  example reads `an(Adder)` in `__call__` and in
+  `PositionalArgumentsInMatchPattern`'s suggestion.
+
+Tests first: `test_operand.py` (a new kind of operand contributes and filters), the
+variable-rooted form in `test_query_type.py`, and a new kind of assigned value in
+`test_cause.py`. The stand-ins are in `dataset/expression_stand_ins.py`. The
+variable-rooted tests fail with the source stashed, and the other two cannot import there.
+`test/krrood_test` 2067 passed, 5 skipped, plus the two Graphviz failures;
+`probabilistic_model_test` 656 passed, its GUI tests needing `libEGL`.
+
+Still the developer's: replying on and resolving the five upstream threads (AGENTS.md
+forbids a session from commenting upstream), and approving fork CI if this push also sits
+at `action_required`.
