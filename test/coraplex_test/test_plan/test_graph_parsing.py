@@ -75,8 +75,8 @@ from semantic_digital_twin.spatial_types.spatial_types import Pose, Point3
 from semantic_digital_twin.world_description.geometry import VolumetricBoundingBox
 
 
-def test_parse_simple_action(immutable_model_world):
-    world, view, context = immutable_model_world
+def test_parse_simple_action(pr2_apartment_context):
+    world, view, context = pr2_apartment_context
 
     plan = execute_single(MoveTorsoAction(TorsoState.HIGH), context=context)
 
@@ -105,12 +105,12 @@ def test_language_nodes_create_a_goal_of_their_template():
     assert type(TryInOrderNode().create_goal()) is TryInOrder
 
 
-def test_sequential_plan_nests_a_goal_per_plan_node(immutable_model_world):
+def test_sequential_plan_nests_a_goal_per_plan_node(pr2_apartment_context):
     """
     Parsing a sequential plan builds a goal per language and action node, with the
     motions as tasks at the leaves, rather than one flat list of tasks.
     """
-    world, view, context = immutable_model_world
+    world, view, context = pr2_apartment_context
 
     plan = sequential(
         [MoveTorsoAction(TorsoState.LOW), MoveTorsoAction(TorsoState.HIGH)],
@@ -161,12 +161,12 @@ def _parse_and_compile(plan, world, context):
     return executable
 
 
-def test_pause_monitor_pauses_the_children_goal(immutable_model_world, rclpy_node):
+def test_pause_monitor_pauses_the_children_goal(pr2_apartment_context, rclpy_node):
     """
     The monitor and the children's goal are siblings inside the monitored goal, which is
     what makes the pause condition legal: it may only reference a sibling.
     """
-    world, view, context = immutable_model_world
+    world, view, context = pr2_apartment_context
     monitor = ConstFalseNode(name="never")
 
     plan = pause_while(
@@ -183,13 +183,13 @@ def test_pause_monitor_pauses_the_children_goal(immutable_model_world, rclpy_nod
 
 
 def test_pause_until_monitor_pauses_the_children_goal(
-    immutable_model_world, rclpy_node
+    pr2_apartment_context, rclpy_node
 ):
     """
     The children's goal is paused on the negated monitor observation, so it is held
     until the monitor turns True rather than while it is True.
     """
-    world, view, context = immutable_model_world
+    world, view, context = pr2_apartment_context
     monitor = ConstFalseNode(name="never")
 
     plan = pause_until(
@@ -205,8 +205,8 @@ def test_pause_until_monitor_pauses_the_children_goal(
     ]
 
 
-def test_cancel_monitor_ends_the_children_goal(immutable_model_world, rclpy_node):
-    world, view, context = immutable_model_world
+def test_cancel_monitor_ends_the_children_goal(pr2_apartment_context, rclpy_node):
+    world, view, context = pr2_apartment_context
     monitor = ConstFalseNode(name="never")
 
     plan = cancel_when(
@@ -223,13 +223,13 @@ def test_cancel_monitor_ends_the_children_goal(immutable_model_world, rclpy_node
 
 
 def test_cancel_monitor_ends_the_motion_when_the_monitor_fires(
-    immutable_model_world, rclpy_node
+    pr2_apartment_context, rclpy_node
 ):
     """
     The monitored goal holds a node that ends the motion, so giving up on the subtree
     gives up on the plan rather than leaving the rest of it waiting.
     """
-    world, view, context = immutable_model_world
+    world, view, context = pr2_apartment_context
     monitor = ConstFalseNode(name="never")
 
     plan = cancel_when(
@@ -246,7 +246,7 @@ def test_cancel_monitor_ends_the_motion_when_the_monitor_fires(
 
 
 def test_monitored_subtree_nested_in_a_sequence_compiles(
-    immutable_model_world, rclpy_node
+    pr2_apartment_context, rclpy_node
 ):
     """
     A monitored subtree is a node like any other in the surrounding sequence.
@@ -254,7 +254,7 @@ def test_monitored_subtree_nested_in_a_sequence_compiles(
     Compiling is the real assertion: it runs the condition scope validation that this
     structure exists to satisfy.
     """
-    world, view, context = immutable_model_world
+    world, view, context = pr2_apartment_context
 
     plan = sequential(
         [
@@ -274,14 +274,14 @@ def test_monitored_subtree_nested_in_a_sequence_compiles(
 
 
 def test_repeat_node_wraps_its_children_in_a_repeating_goal(
-    immutable_model_world, rclpy_node
+    pr2_apartment_context, rclpy_node
 ):
     """
     A repeat contributes a goal that holds the children, the attempt counter and the
     node that reports running out of attempts, all as siblings so the wiring between
     them is legal.
     """
-    world, view, context = immutable_model_world
+    world, view, context = pr2_apartment_context
 
     plan = repeat(
         [MoveTorsoAction(TorsoState.HIGH)], maximum_repetitions=3, context=context
@@ -298,8 +298,8 @@ def test_repeat_node_wraps_its_children_in_a_repeating_goal(
     assert exhausted.start_condition.free_variables() == [counter.observation_variable]
 
 
-def test_merge_motions(immutable_model_world, rclpy_node):
-    world, view, context = immutable_model_world
+def test_merge_motions(pr2_apartment_context, rclpy_node):
+    world, view, context = pr2_apartment_context
 
     milk_connection = world.get_body_by_name("milk.stl").parent_connection
     milk_connection.origin = HomogeneousTransformationMatrix.from_xyz_rpy(
@@ -333,8 +333,8 @@ def test_merge_motions(immutable_model_world, rclpy_node):
         executable.execute()
 
 
-def test_parse_pick_up(immutable_model_world):
-    world, view, context = immutable_model_world
+def test_parse_pick_up(pr2_apartment_context):
+    world, view, context = pr2_apartment_context
 
     plan = execute_single(
         PickUpAction(
@@ -361,13 +361,13 @@ def test_parse_pick_up(immutable_model_world):
     assert type(executable.execution_list[2]) == GiskardExecutable
 
 
-def test_parse_pick_up_merges_motions_around_model_change(immutable_model_world):
+def test_parse_pick_up_merges_motions_around_model_change(pr2_apartment_context):
     """
     The motions on each side of the model change (the attach) must be merged into a
     single giskard executable per side, so the model change splits the plan into exactly
     [merged motions, model change, merged motions].
     """
-    world, view, context = immutable_model_world
+    world, view, context = pr2_apartment_context
 
     plan = execute_single(
         PickUpAction(
@@ -391,8 +391,8 @@ def test_parse_pick_up_merges_motions_around_model_change(immutable_model_world)
     assert len(executable.execution_list[2].motion_mappings) == 1
 
 
-def test_parse_complex_plan(immutable_model_world):
-    world, view, context = immutable_model_world
+def test_parse_complex_plan(pr2_apartment_context):
+    world, view, context = pr2_apartment_context
 
     plan = sequential(
         [
@@ -419,8 +419,8 @@ def test_parse_complex_plan(immutable_model_world):
     assert len(exec.motion_mappings) == 3
 
 
-def test_parsing_two_actions_into_one_exec(immutable_model_world):
-    world, view, context = immutable_model_world
+def test_parsing_two_actions_into_one_exec(pr2_apartment_context):
+    world, view, context = pr2_apartment_context
 
     plan = sequential(
         [
@@ -448,8 +448,8 @@ def test_parsing_two_actions_into_one_exec(immutable_model_world):
     assert len(exec.motion_mappings) == 3
 
 
-def test_parse_pick_place(immutable_model_world):
-    world, view, context = immutable_model_world
+def test_parse_pick_place(pr2_apartment_context):
+    world, view, context = pr2_apartment_context
 
     plan = sequential(
         [
@@ -482,8 +482,8 @@ def test_parse_pick_place(immutable_model_world):
     assert len(executable.execution_list[1].execution_list) == 3
 
 
-def test_parse_transport_plan(mutable_model_world, rclpy_node):
-    world, view, context = mutable_model_world
+def test_parse_transport_plan(pr2_apartment_context, rclpy_node):
+    world, view, context = pr2_apartment_context
 
     plan = sequential(
         [
@@ -524,12 +524,12 @@ class BoundaryNode(ExecutionBoundaryNode):
         return Executable(context=self.plan.context)
 
 
-def test_execution_boundary_splits_the_merged_motion_chart(immutable_model_world):
+def test_execution_boundary_splits_the_merged_motion_chart(pr2_apartment_context):
     """
     A node declaring itself an execution boundary separates the motions around it into
     one merged chart per side, instead of all of them collapsing into a single chart.
     """
-    world, view, context = immutable_model_world
+    world, view, context = pr2_apartment_context
 
     plan = sequential(
         [
@@ -556,12 +556,12 @@ def test_execution_boundary_splits_the_merged_motion_chart(immutable_model_world
 # %% perception inside the merged chart
 
 
-def test_detecting_motion_merges_with_the_motions_around_it(immutable_model_world):
+def test_detecting_motion_merges_with_the_motions_around_it(pr2_apartment_context):
     """
     Perception is a motion like any other, so it does not interrupt the merging of the
     motions around it: one chart holds the detection and both moves.
     """
-    world, view, context = immutable_model_world
+    world, view, context = pr2_apartment_context
     query = PerceptionQuery(
         Milk,
         VolumetricBoundingBox(
@@ -597,12 +597,12 @@ def test_detecting_motion_merges_with_the_motions_around_it(immutable_model_worl
     ]
 
 
-def test_detect_action_parses_to_a_single_motion_chart(immutable_model_world):
+def test_detect_action_parses_to_a_single_motion_chart(pr2_apartment_context):
     """
     An action that only perceives still compiles to a motion chart, so its conditions
     are carried by that chart rather than needing to run around it.
     """
-    world, view, context = immutable_model_world
+    world, view, context = pr2_apartment_context
 
     plan = execute_single(
         DetectAction(DetectionTechnique.TYPES, object_sem_annotation=Milk),
@@ -654,12 +654,12 @@ def reach_action(milk: Milk, view, **kwargs) -> ReachAction:
     )
 
 
-def test_a_reach_does_not_perceive_without_a_rule(immutable_model_world):
+def test_a_reach_does_not_perceive_without_a_rule(pr2_apartment_context):
     """
     A reach acts on the pose the world already holds, so it must not spend a detection
     nobody asked for.
     """
-    world, view, context = immutable_model_world
+    world, view, context = pr2_apartment_context
     milk = world.get_semantic_annotations_by_type(Milk)[0]
 
     plan = execute_single(reach_action(milk, view), context=context)
@@ -671,7 +671,7 @@ def test_a_reach_does_not_perceive_without_a_rule(immutable_model_world):
 # %% expansion-time pose capture
 
 
-def test_pick_up_motions_follow_the_object_moved_after_expansion(immutable_model_world):
+def test_pick_up_motions_follow_the_object_moved_after_expansion(pr2_apartment_context):
     """
     The whole plan is expanded before the first motion runs, so a pick-up that captured
     the object's pose in world coordinates could never act on a pose corrected in
@@ -679,7 +679,7 @@ def test_pick_up_motions_follow_the_object_moved_after_expansion(immutable_model
 
     Keeping the motion targets in the object's own frame is what lets them follow it.
     """
-    world, view, context = immutable_model_world
+    world, view, context = pr2_apartment_context
     milk = world.get_semantic_annotations_by_type(Milk)[0]
     milk_body = milk.root
 
@@ -726,8 +726,8 @@ def test_pick_up_motions_follow_the_object_moved_after_expansion(immutable_model
 # %% splitting helper
 
 
-def test_split_by_type(immutable_model_world):
-    world, view, context = immutable_model_world
+def test_split_by_type(pr2_apartment_context):
+    world, view, context = pr2_apartment_context
 
     split_list = [
         MoveToolCenterPointMotion(Pose(), Arms.LEFT),
@@ -759,8 +759,8 @@ def test_split_by_type_without_match_stays_one_group():
     assert splitted_list[0] == no_model_change
 
 
-def test_split_by_type_groups_consecutive_elements(immutable_model_world):
-    world, view, context = immutable_model_world
+def test_split_by_type_groups_consecutive_elements(pr2_apartment_context):
+    world, view, context = pr2_apartment_context
     model_change = ReAttachNode(
         body=world.get_body_by_name("milk.stl"), new_parent=world.root
     )
@@ -779,8 +779,8 @@ def test_split_by_type_groups_consecutive_elements(immutable_model_world):
     assert all(not isinstance(element, ReAttachNode) for element in splitted_list[0])
 
 
-def test_split_by_type_leading_and_trailing_match(immutable_model_world):
-    world, view, context = immutable_model_world
+def test_split_by_type_leading_and_trailing_match(pr2_apartment_context):
+    world, view, context = pr2_apartment_context
     first_model_change = ReAttachNode(
         body=world.get_body_by_name("milk.stl"), new_parent=world.root
     )
@@ -801,8 +801,8 @@ def test_split_by_type_leading_and_trailing_match(immutable_model_world):
     assert splitted_list[2] == [last_model_change]
 
 
-def test_detect_before_grasp_transformation_applies(immutable_model_world):
-    world, view, context = immutable_model_world
+def test_detect_before_grasp_transformation_applies(pr2_apartment_context):
+    world, view, context = pr2_apartment_context
 
     context.plan_transformations.append(DetectBeforeGrasp())
 
