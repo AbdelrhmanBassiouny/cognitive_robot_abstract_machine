@@ -66,3 +66,12 @@ developer answered them on 2026-09-29. Four threads were addressed in `9d30cdf85
 - Earlier open questions are unchanged (`ground()` resolving its argument, #159
   landing hazard). `_get_expression_` and `_symbolic_expression_` are still two
   names, now on two different interfaces (`HasExpression`, `Operand`).
+### Fork review, 2026-09-29 (one thread, `factory_and_kwargs.py:53`)
+
+"Shouldn't that be an error?" on `construct_instance` silently dropping a
+keyword that names no factory parameter (added on `main` in e41583f2c). Done in
+`f96201975`: it raises `KeywordNamesNoFactoryParameter`, unless the host's
+`_is_kept_out_of_construction_(value)` hook says otherwise. `Match` says so for
+a `CausalRoleMarker`, because a marked keyword that is not a field names an
+aggregation statistic (`chair_count=cause`). With the drop made to raise, only
+that one test failed. Replied and resolved. `test/krrood_test` 2071 passed.
