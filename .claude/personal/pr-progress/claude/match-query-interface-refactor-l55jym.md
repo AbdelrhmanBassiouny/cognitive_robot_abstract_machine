@@ -75,3 +75,9 @@ keyword that names no factory parameter (added on `main` in e41583f2c). Done in
 a `CausalRoleMarker`, because a marked keyword that is not a field names an
 aggregation statistic (`chair_count=cause`). With the drop made to raise, only
 that one test failed. Replied and resolved. `test/krrood_test` 2071 passed.
+Follow-up the same day (`807e0546d`), from the developer's point that a pattern
+may constrain an attribute the constructor does not take: `Match` also keeps a
+keyword out when it names an attribute of the matched class (a property or a
+method, e.g. `area=12` on a `Rectangle`). Only a name the class lacks entirely
+raises. The hook takes `(keyword, value)`. Test class:
+`dataset/derived_attributes.py`. `test/krrood_test` 2073 passed.
