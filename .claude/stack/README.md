@@ -26,6 +26,20 @@ You never hand-edit a ledger. The stack is read from **GitHub itself** plus git:
 | cram2 create-link built | the **`cram2-link-sent`** marker | nothing - a maintenance pass sets it when it puts a create-link in the PR description, and clears it once you promote (add `in-review`) |
 | conflict/CI-red reported | the **`needs-resolution`** label | nothing - a maintenance pass sets it when it reports a restack conflict to the branch's owning session, and clears it once the branch stops conflicting |
 
+## Setup
+
+`/setup-stacked-prs` takes a fork from nothing to a working stack: the remotes this config
+names, the labels the state machine reads, your own `.claude/personal/stack.toml` overrides,
+and the prompt to register when you want the maintenance pass to run unattended.
+`bash .claude/hooks/check-stack-setup.sh` is the read-only "is this clone set up?" answer it
+works from, and is safe to run at any time.
+
+Two install modes. **Native** is this repository: the tooling is tracked on `main`, so a clone
+already has it. **Fork-overlay** is for a repository whose maintainers won't take `.claude/`
+tooling upstream — the same canonical files, `.claude/stack/` and
+`.claude/skills/stacked-pr-maintenance/` together, are installed onto a never-merged branch of
+your own fork instead, and re-running the setup is how you update them.
+
 ## Files
 
 - **`stack.toml`** - the committed defaults: label names, and `upstream_repository`, the one

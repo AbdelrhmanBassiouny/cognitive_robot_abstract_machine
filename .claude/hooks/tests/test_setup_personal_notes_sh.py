@@ -253,7 +253,7 @@ def test_records_the_git_identity_it_is_given(
         checkout / ProjectFile.PERSONAL_GIT_IDENTITY
     )
     assert recorded == SCRATCH_IDENTITY
-    report = SetupReport.from_completed_process(result)
+    report = SetupReport.from_completed_process(result, SetupCheck)
     assert report.results[SetupCheck.GIT_IDENTITY].status is CheckStatus.OK
 
 
@@ -298,7 +298,7 @@ def test_finishes_the_rest_of_the_setup_when_given_no_identity(
     assert setup_repository.notes_branch_commit() is not None
     checkout = setup_repository.clone_notes_branch(tmp_path / "notes-checkout")
     assert not (checkout / ProjectFile.PERSONAL_GIT_IDENTITY).exists()
-    report = SetupReport.from_completed_process(result)
+    report = SetupReport.from_completed_process(result, SetupCheck)
     assert report.results[SetupCheck.GIT_IDENTITY].status is CheckStatus.NEEDS_SETUP
     assert report.results[SetupCheck.NOTES_FILE].status is CheckStatus.OK
 
@@ -380,7 +380,7 @@ def test_prints_the_final_report(
         str(setup_repository.notes_remote_path),
     )
 
-    report = SetupReport.from_completed_process(result)
+    report = SetupReport.from_completed_process(result, SetupCheck)
     assert {
         SetupCheck.NOTES_BRANCH,
         SetupCheck.NOTES_FILE,
