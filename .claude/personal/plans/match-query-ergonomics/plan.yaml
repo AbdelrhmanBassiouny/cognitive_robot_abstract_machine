@@ -652,4 +652,4 @@ items:
       read, and the rule number_like_field and #182 both already applied inline is written once as
       query.variable_rooted. test/krrood_test 1903 passed, 5 skipped.
     depends_on: []
-    status: in_progress
+    status: done
