@@ -257,3 +257,11 @@ def test_selective_backend_accepts_match_without_ellipsis_attribute():
     apple = Apple("apple", 7)
     q = an(Apple)(name="apple", size=7).from_([apple])
     assert list(q.evaluate(backend=EntityQueryLanguageBackend())) == [apple]
+
+
+def test_probabilistic_backend_samples_a_numeric_field_from_its_symbolic_variable():
+    heights = [1.0, 2.0]
+    query = a(KRROODPosition)(x=..., y=..., z=variable(float, heights))
+    positions = list(query.evaluate(backend=ProbabilisticBackend(number_of_samples=10)))
+    assert {position.z for position in positions} <= set(heights)
+    assert len(positions) == 10
