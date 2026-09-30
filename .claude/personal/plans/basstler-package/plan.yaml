@@ -184,6 +184,52 @@ items:
     had carried it as `in_progress` since. `.claude/SETUP.md`, `.claude/hooks/setup_steps.py` and
     `.claude/hooks/tests/test_setup_steps.py` are on `main` now, which is what makes them
     `basstler-package`'s to fold in under the whichever-lands-second convention.
+- id: basstler-src-layout
+  title: 'Move basstler to the src layout, importable through an editable install'
+  branch: null
+  status: not_started
+  track: extraction
+  depends_on:
+  - basstler-package
+  notes: |-
+    Move basstler to the `src` layout every other package here uses (`basstler/src/basstler/`), and
+    make it importable through an editable install that `session-start.sh` performs when missing.
+    Asked for on cram2#659 (`scripts/sync_version.py:26`, LucaKro: "why is basstler not a proper
+    package like the others?"). What goes away: `FLAT_LAYOUT_PACKAGES`, `package-dir basstler =
+    "."`, and `pyproject.toml` shipped as package data.
+
+    **Why it is possible now when decision 8 ruled it out.** Decision 8 required the tooling to run
+    with nothing installed, and installing the package was rejected because it would leave a second
+    copy in site-packages. Both premises have moved. Since the dependency-tier reversal,
+    `session-start.sh` installs whatever is missing on every start: only for a clone that has done
+    the setup, and never fatally. Runners and CI already install `./basstler`. And an editable
+    install (`pip install -e ./basstler`) resolves `import basstler` to the clone's own source, so
+    there is no second copy.
+
+    **Open design points for this item's review.** First, the failure mode: if the editable install
+    fails, nothing imports at all, where today the standard-library modules still run. Second, a
+    `PYTHONPATH=basstler/src` export in `resolve-personal-notes-config.sh` covers every caller that
+    sources it, but not the roughly 20 bare `python -m basstler.*` commands in `SKILL.md` and README
+    files.
+
+    **Why its own item and not part of #185** (the user, 2026-09-30). #185 is reviewable because its
+    diff reads as renames, and a second move of about 40 modules would stack on that and put rename
+    detection at risk. cram2#659 has changes requested and 9 open threads, and moving every file
+    would shift the lines they point at. The stacked branches would each merge across a second move.
+    And the install behaviour is a design change that needs its own review.
+
+    **Sequencing, deliberately not a `depends_on`** (the user, 2026-09-30). #154, #211 and #430 do
+    not depend on this: import paths stay `basstler.x`. The move is mechanical and cheap to redo
+    over extra files, while each stacked branch merging across a move pays a round of conflicts. So
+    land it after whichever of them is close to merging, and have the rest merge across it under
+    decision 13's whichever-lands-second rule. It is not made to wait on all three, since the
+    upstream queue can hold them for weeks.
+
+    **Landing hazard.** `basstler/` keeps existing (it holds `pyproject.toml` and the README), so
+    git sees per-file renames rather than a directory rename. A module a stacked branch adds
+    directly under `basstler/` then merges cleanly and silently stays in the old location, the same
+    shape recorded three times for `.claude/`. The move ships a contract test that fails on any
+    module directly under `basstler/`, as #185's test does for `.claude/`.
 - id: basstler-notes-core-python
   title: 'Bash→Python 1: notes-core modules (config, git seam, writer, markers)'
   branch: null

@@ -188,3 +188,15 @@ stall behind the integration one: #185 is cram2#659, where LucaKro requested cha
 `sync_version.py` and why basstler is not a proper package, a version check, and an `__init__`
 comment. This is the case `always-read-upstream-reviews` records: the label does not tell you
 whether an upstream pull request exists.
+
+## The src-layout follow-up, decided 2026-09-30
+
+cram2#659 asked why basstler is not a proper package like the others. The honest answer has
+changed since decision 8. The session-start hook now installs on every start, and an editable
+install leaves no second copy, so both premises that ruled out a `src` layout are gone. The user
+chose to keep #185 flat and do the move as `basstler-src-layout` straight after it. Doing it inside
+#185 would re-move about 40 files in a PR whose readability depends on its rename diff, would shift
+the lines nine open upstream threads point at, and would make every stacked branch merge across a
+second move. #154, #211 and #430 are deliberately *not* made to depend on it: the move is cheap to
+redo, while crossing it is not. The one hazard worth a test is the silent case: a module added
+directly under `basstler/` merges cleanly into the old location.
