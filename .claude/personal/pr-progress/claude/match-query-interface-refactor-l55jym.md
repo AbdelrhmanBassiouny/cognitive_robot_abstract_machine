@@ -90,3 +90,13 @@ derived value - rejection may return nothing. `test/krrood_test` 2076 passed.
 Follow-up handed to a new session as a prompt (not started): enumerate through
 Bindings rows instead of mutating `_value_`, and a `ProbabilisticBinding` carrying a
 likelihood, stacked on this branch.
+CI red on 9986887c1 (coraplex: test_underspecified_language, test_algebra_sequential_plan
+generated nothing): the filter read back values passed *to* the factory, which a factory like
+PoseMapping.from_point_mapping_quaternion_mapping keeps under another name. Fixed in 571e8c9c5 -
+only values for attributes the owning factory does not take are checked
+(`HasFactoryAndKwargs._is_factory_parameter_`, `AttributeMatch._stating_match_`), pinned by a
+krrood test with `Rectangle.from_sides`. krrood 2077 passed, probabilistic_model 656. Coraplex
+not runnable here; waiting on CI.
+Side bug found here, split out at the developer's request: PR #476
+(`claude/numeric-variable-probabilistic-sample`, off main, draft, `bug`) - numeric field given
+a symbolic variable crashed sampling ('Interval' has no hash_map).
