@@ -21,9 +21,13 @@ from krrood.parametrization.exceptions import (
     EmptyVariableDomain,
     InvalidEllipsis,
     JointQueryAcrossClassesNotSupported,
+    ModelVariableNotBound,
 )
 import random_events.variable
-from krrood.entity_query_language.core.base_expressions import SymbolicExpression
+from krrood.entity_query_language.core.base_expressions import (
+    Bindings,
+    SymbolicExpression,
+)
 from krrood.entity_query_language.core.mapped_variable import Attribute
 from krrood.entity_query_language.operators.causal import (
     Cause,
@@ -683,62 +687,175 @@ class UnderspecifiedParameters(ModelQueryParameters):
 
         return result
 
-    def construct_instance_from_model_sample(
+    @cached_property
+    def _attribute_matches_by_name(self) -> dict[str, AttributeMatch]:
+        """
+        :return: The attribute matches of the statement's pattern that assign a
+            variable, keyed by the name of the random events variable they correspond
+            to.
+        """
+        return {
+            attribute_match.name_from_variable_access_path: attribute_match
+            for attribute_match in self.statement._matches_with_variables_
+        }
+
+    def bindings_from_model_sample(
         self,
         variables: Iterable[random_events.variable.Variable],
         sample: np.ndarray,
-    ) -> dict[random_events.variable.Variable, Any]:
+    ) -> Bindings:
         """
-        Construct an instance from a sample of a probabilistic model.
+        Bind the statement's pattern variables to a sample of a probabilistic model.
 
         :param variables: The variables from a probabilistic model.
         :param sample: A sample from the same model.
-        :return: The constructed instance.
+        :return: The value of every sampled variable of the pattern, keyed by the
+            identifier of the variable assigned to its attribute.
         """
-        sample_mapping = dict(zip(variables, sample))
-        for variable_, value in sample_mapping.items():
-            mapped_variable = self.statement._get_mapped_variable_by_name(
-                variable_.name
-            )
-            attribute_match = [
-                match
-                for match in self.statement._matches_with_variables_
-                if match.name_from_variable_access_path == variable_.name
-            ]
-            attribute_match = attribute_match[0] if attribute_match else None
+        bindings = {}
+        for variable_, value in zip(variables, sample):
+            attribute_match = self._attribute_matches_by_name.get(variable_.name)
             if attribute_match is None:
                 continue
-            if mapped_variable is None:
-                continue
+            bindings[attribute_match.assigned_variable._id_] = (
+                self._value_from_model_sample(attribute_match, variable_, value)
+            )
+        return bindings
 
-            if (
-                attribute_match
-                and isinstance(attribute_match.assigned_value, SymbolicExpression)
-                and not isinstance(attribute_match.assigned_value, Literal)
-            ):
-                [domain_index] = [
-                    val
-                    for index, val in variable_.domain.hash_map.items()
-                    if index == value
-                ]
-                [value] = [
-                    domain_value
-                    for domain_value in attribute_match.assigned_value.tolist()
-                    if hash(domain_value) == domain_index
-                ]
-            elif not variable_.is_numeric:
-                [value] = [
-                    domain_value.element
-                    for domain_value in variable_.domain
-                    if hash(domain_value) == value
-                ]
-            else:
-                value = value.item()
-            mapped_variable._value_ = value
+    def model_sample_from_bindings(
+        self,
+        variables: Iterable[random_events.variable.Variable],
+        bindings: Bindings,
+    ) -> np.ndarray:
+        """
+        Translate bindings of the statement's pattern variables into a sample of a
+        probabilistic model, the inverse of :meth:`bindings_from_model_sample`.
 
-        self.statement._update_kwargs_from_literal_values()
-        result = self.statement.construct_instance()
-        return result
+        A variable the statement states a literal value for takes that value.
+
+        :param variables: The variables of a probabilistic model.
+        :param bindings: The values of the pattern's variables, keyed by the identifier
+            of the variable assigned to each attribute.
+        :return: A sample holding a single row over the variables.
+        :raises ModelVariableNotBound: If neither the bindings nor the literal values
+            give a variable a value.
+        """
+        return np.array(
+            [
+                [
+                    self._model_sample_value(variable_, bindings)
+                    for variable_ in variables
+                ]
+            ],
+            dtype=float,
+        )
+
+    def _model_sample_value(
+        self, variable_: random_events.variable.Variable, bindings: Bindings
+    ) -> Any:
+        """
+        :param variable_: A variable of a probabilistic model.
+        :param bindings: The values of the pattern's variables, keyed by the identifier
+            of the variable assigned to each attribute.
+        :return: The value of the variable in a model sample.
+        :raises ModelVariableNotBound: If neither the bindings nor the literal values
+            give the variable a value.
+        """
+        attribute_match = self._attribute_matches_by_name.get(variable_.name)
+        if (
+            attribute_match is not None
+            and attribute_match.assigned_variable._id_ in bindings
+        ):
+            return self._value_to_model_sample(
+                variable_,
+                bindings[attribute_match.assigned_variable._id_],
+                attribute_match,
+            )
+        if variable_ in self.conditioning_assignments_from_literal_values:
+            return self._value_to_model_sample(
+                variable_, self.conditioning_assignments_from_literal_values[variable_]
+            )
+        raise ModelVariableNotBound(variable_)
+
+    @staticmethod
+    def _is_assigned_a_domain_variable(attribute_match: AttributeMatch) -> bool:
+        """
+        :param attribute_match: An attribute match of the statement.
+        :return: Whether the attribute is assigned a variable ranging over a domain of
+            objects, whose values a model samples as keys of that domain.
+        """
+        return isinstance(
+            attribute_match.assigned_value, SymbolicExpression
+        ) and not isinstance(attribute_match.assigned_value, Literal)
+
+    @classmethod
+    def _value_from_model_sample(
+        cls,
+        attribute_match: AttributeMatch,
+        variable_: random_events.variable.Variable,
+        value: Any,
+    ) -> Any:
+        """
+        :param attribute_match: The attribute match the sampled variable corresponds to.
+        :param variable_: The sampled variable.
+        :param value: The value the model sampled for the variable.
+        :return: The attribute's value the sampled value stands for.
+        """
+        if cls._is_assigned_a_domain_variable(attribute_match):
+            [domain_hash] = [
+                domain_hash
+                for key, domain_hash in variable_.domain.hash_map.items()
+                if key == value
+            ]
+            [value] = [
+                domain_value
+                for domain_value in attribute_match.assigned_value.tolist()
+                if hash(domain_value) == domain_hash
+            ]
+            return value
+        if not variable_.is_numeric:
+            [value] = [
+                domain_value.element
+                for domain_value in variable_.domain
+                if hash(domain_value) == value
+            ]
+            return value
+        return value.item()
+
+    @classmethod
+    def _value_to_model_sample(
+        cls,
+        variable_: random_events.variable.Variable,
+        value: Any,
+        attribute_match: Optional[AttributeMatch] = None,
+    ) -> Any:
+        """
+        The inverse of :meth:`_value_from_model_sample`.
+
+        :param variable_: A variable of a probabilistic model.
+        :param value: A value of the attribute the variable corresponds to.
+        :param attribute_match: The attribute match the variable corresponds to, if
+            the statement has one.
+        :return: The value the model samples for the variable to stand for the given
+            value.
+        """
+        if attribute_match is not None and cls._is_assigned_a_domain_variable(
+            attribute_match
+        ):
+            [key] = [
+                key
+                for key, domain_hash in variable_.domain.hash_map.items()
+                if domain_hash == hash(value)
+            ]
+            return key
+        if not variable_.is_numeric:
+            [domain_hash] = [
+                hash(domain_value)
+                for domain_value in variable_.domain
+                if domain_value.element == value
+            ]
+            return domain_hash
+        return value
 
     @staticmethod
     def _process_attribute_match_type(type_):

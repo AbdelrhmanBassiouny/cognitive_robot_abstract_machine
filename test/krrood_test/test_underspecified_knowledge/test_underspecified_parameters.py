@@ -3,7 +3,8 @@ from typing import List, Any
 
 import pytest
 
-from krrood.parametrization.exceptions import InvalidEllipsis
+from krrood.parametrization.exceptions import InvalidEllipsis, ModelVariableNotBound
+from krrood.parametrization.model_registries import FullyFactorizedRegistry
 from ..dataset.semantic_world_like_classes import Body
 from krrood.entity_query_language.factories import (
     variable,
@@ -150,3 +151,27 @@ def test_list_of_enum_field_produces_indexed_variables():
 
     assert "ListOfEnum.list_of_enum[0]" in parameters.variables
     assert "ListOfEnum.list_of_enum[1]" in parameters.variables
+
+
+# %% translating between model samples and bindings
+
+
+def test_model_sample_from_bindings_inverts_bindings_from_model_sample():
+    query = an(EnumAction)(obj=Body(name="body"), enum=...)
+    parameters = UnderspecifiedParameters(query)
+    model = parameters.resolve_conditioned_and_truncated_model(
+        FullyFactorizedRegistry().get_model(parameters)
+    )
+    [sample] = model.sample(1)
+    bindings = parameters.bindings_from_model_sample(model.variables, sample)
+    assert parameters.model_sample_from_bindings(
+        model.variables, bindings
+    ).tolist() == [sample.tolist()]
+
+
+def test_model_sample_from_bindings_rejects_an_unbound_model_variable():
+    query = an(EnumAction)(obj=Body(name="body"), enum=...)
+    parameters = UnderspecifiedParameters(query)
+    model = FullyFactorizedRegistry().get_model(parameters)
+    with pytest.raises(ModelVariableNotBound):
+        parameters.model_sample_from_bindings(model.variables, {})

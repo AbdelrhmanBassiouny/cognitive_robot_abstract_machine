@@ -37,8 +37,10 @@ from typing_extensions import (
 
 from krrood.class_diagrams.utils import get_type_hints_of_object
 from krrood.entity_query_language.core.base_expressions import (
+    Bindings,
     HasExpression,
     MatchAssignedValue,
+    OperationResult,
     Selectable,
     SymbolicExpression,
 )
@@ -64,6 +66,7 @@ from krrood.entity_query_language.exceptions import (
     MatchTypeCannotBeDetermined,
     PositionalArgumentsInMatchPattern,
     ReadOnlyMapping,
+    UnboundPatternVariable,
 )
 from krrood.entity_query_language.predicate import HasType
 from krrood.entity_query_language.query.quantifiers import An, ResultQuantifier
@@ -545,6 +548,50 @@ class Match(
             selection = selection.where(*conditions)
         return selection
 
+    def _construct_instance_from_bindings_(self, bindings: Bindings) -> T:
+        """
+        Construct an instance of the matched type from the values the bindings give the
+        variables of this match's pattern, leaving the pattern itself unchanged.
+
+        An attribute whose assigned variable the bindings do not bind takes the value
+        the pattern states for it.
+
+        :param bindings: The values of the pattern's variables, keyed by the identifier
+            of the variable assigned to each attribute.
+        :return: The constructed instance.
+        :raises UnboundPatternVariable: If the bindings do not bind a variable that
+            states no value of its own.
+        """
+        self.resolve()
+        return self._factory_(
+            **{
+                keyword: self._construct_argument_from_bindings_(keyword, bindings)
+                for keyword in self._factory_keyword_arguments_
+            }
+        )
+
+    def _construct_argument_from_bindings_(
+        self, keyword: str, bindings: Bindings
+    ) -> Any:
+        """
+        :param keyword: A keyword argument of the pattern that is passed to the factory.
+        :param bindings: The values of the pattern's variables, keyed by the identifier
+            of the variable assigned to each attribute.
+        :return: The value the keyword's attribute takes under the bindings; a list-like
+            value whose elements are matched one by one is rebuilt from its elements.
+        """
+        attribute_matches = [
+            attribute_match
+            for attribute_match in self._children_
+            if attribute_match.attribute_name == keyword
+        ]
+        if attribute_matches[0].index_access is None:
+            return attribute_matches[0].construct_value_from_bindings(bindings)
+        return type(self._kwargs_[keyword])(
+            attribute_match.construct_value_from_bindings(bindings)
+            for attribute_match in attribute_matches
+        )
+
     @property
     def _conditions_on_stated_values_(self) -> Iterator[ConditionType]:
         """
@@ -944,6 +991,25 @@ class AttributeMatch(AbstractMatchExpression[T]):
             final_step._set_child_instance_value_(
                 current_value, self.assigned_variable._value_
             )
+
+    def construct_value_from_bindings(self, bindings: Bindings) -> Any:
+        """
+        :param bindings: The values of the pattern's variables, keyed by the identifier
+            of the variable assigned to each attribute.
+        :return: The value this attribute takes under the bindings: an instance
+            constructed from them for a nested match, otherwise the value of the
+            assigned variable evaluated under them.
+        :raises UnboundPatternVariable: If the bindings do not bind the assigned
+            variable and it states no value of its own.
+        """
+        if isinstance(self.assigned_value, Match):
+            return self.assigned_value._construct_instance_from_bindings_(bindings)
+        if (
+            not isinstance(self.assigned_variable, Literal)
+            and self.assigned_variable._id_ not in bindings
+        ):
+            raise UnboundPatternVariable(self)
+        return next(self.assigned_variable._evaluate_(OperationResult(bindings))).value
 
     @property
     def _stating_match_(self) -> Match:

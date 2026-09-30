@@ -87,6 +87,32 @@ class InvalidEllipsis(InputError):
 
 
 @dataclass
+class ModelVariableNotBound(DataclassException):
+    """
+    Raised when bindings are translated into a sample of a probabilistic model, but
+    neither the bindings nor the literal values of the match give a variable of the
+    model a value.
+    """
+
+    variable: random_events.variable.Variable
+    """
+    The variable of the model that has no value.
+    """
+
+    def error_message(self) -> str:
+        return (
+            f"The bindings give no value to the model variable {self.variable.name}, "
+            f"and the match states no literal value for it."
+        )
+
+    def suggest_correction(self) -> str:
+        return (
+            "Bind the variable assigned to the attribute this model variable "
+            "corresponds to, keyed by that variable's identifier."
+        )
+
+
+@dataclass
 class DoRequiresCausalCircuitModel(DataclassException):
     """
     Raised when a match has a ``cause`` intervention but the model registry resolved a
@@ -186,14 +212,15 @@ class JointQueryAcrossClassesNotSupported(DataclassException):
 @dataclass
 class RelationalCircuitRegistryRequiresMatch(DataclassException):
     """
-    Raised when a :class:`~krrood.parametrization.model_registries.RelationalCircuitRegistry`
-    is asked to resolve a model for parameters that aren't a
+    Raised when a
+    :class:`~krrood.parametrization.model_registries.RelationalCircuitRegistry` is asked
+    to resolve a model for parameters that aren't a
     :class:`~krrood.parametrization.parameterizer.UnderspecifiedParameters` (i.e. not a
-    ``Match``, directly or wrapped by ``distribution_of(...)``) -- ``probability_of(...)``
-    and a bare ``average(...)`` build the lighter
+    ``Match``, directly or wrapped by ``distribution_of(...)``) --
+    ``probability_of(...)`` and a bare ``average(...)`` build the lighter
     :class:`~krrood.parametrization.parameterizer.ConditionParameters`/
-    :class:`~krrood.parametrization.parameterizer.SelectedAttributesParameters`
-    instead, which carry no match statement to ground.
+    :class:`~krrood.parametrization.parameterizer.SelectedAttributesParameters` instead,
+    which carry no match statement to ground.
     """
 
     parameters: Any
