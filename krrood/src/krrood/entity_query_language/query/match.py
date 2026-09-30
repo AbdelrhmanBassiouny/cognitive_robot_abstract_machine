@@ -55,8 +55,6 @@ from krrood.entity_query_language.core.mapped_variable import (
     FlatVariable,
     CanBehaveLikeAVariable,
     HasSymbolicOperations,
-    MappedVariable,
-    IndexByValue,
 )
 from krrood.entity_query_language.core.variable import Literal, DomainType, Variable
 from krrood.entity_query_language.evaluable import Evaluable
@@ -65,7 +63,6 @@ from krrood.entity_query_language.exceptions import (
     CalledMatchMultipleTimes,
     MatchTypeCannotBeDetermined,
     PositionalArgumentsInMatchPattern,
-    ReadOnlyMapping,
     UnboundPatternVariable,
 )
 from krrood.entity_query_language.predicate import HasType
@@ -820,32 +817,6 @@ class Match(
         self._create_or_update_variable_()
         return self
 
-    def _update_kwargs_from_literal_values(self):
-        """
-        Update the kwargs dictionary with values from this statements leaves.
-        """
-        for attribute_match in self._matches_with_variables_:
-            attribute_match._update_kwargs_from(self)
-
-    def _get_mapped_variable_by_name(self, name: str) -> Optional[MappedVariable]:
-        """
-        Get a mapped variable by its name in the path.
-
-        :param name: The name
-        :return: The mapped variable
-        """
-        result = [
-            attribute_match.assigned_variable
-            for attribute_match in self._matches_with_variables_
-            if attribute_match.name_from_variable_access_path == name
-        ]
-        if len(result) == 0:
-            return None
-        elif len(result) == 1:
-            return result[0]
-        else:
-            raise KeyError(f"Multiple variables with name {name}")
-
 
 @dataclass(eq=False)
 class AttributeMatch(AbstractMatchExpression[T]):
@@ -965,32 +936,6 @@ class AttributeMatch(AbstractMatchExpression[T]):
 
     def __str__(self):
         return self._name_
-
-    def _update_kwargs_from(self, match: Match[T]):
-        """
-        Update the kwargs of the parent match with the values of the assigned variable.
-
-        Only works if this is a variable assignment.
-        """
-        current_value = match
-        for step in self._variable_._access_path_[:-1]:
-            if isinstance(step, Attribute):
-                current_value = current_value._kwargs_[step._attribute_name_]
-            elif isinstance(step, IndexByValue):
-                current_value = current_value[step._key_]
-            else:
-                raise ReadOnlyMapping(step)
-
-        final_step = self._variable_._access_path_[-1]
-
-        if isinstance(final_step, Attribute):
-            current_value._kwargs_[final_step._attribute_name_] = (
-                self.assigned_variable._value_
-            )
-        else:
-            final_step._set_child_instance_value_(
-                current_value, self.assigned_variable._value_
-            )
 
     def construct_value_from_bindings(self, bindings: Bindings) -> Any:
         """

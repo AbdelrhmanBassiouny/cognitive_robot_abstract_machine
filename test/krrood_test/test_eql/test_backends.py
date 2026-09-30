@@ -16,6 +16,7 @@ from probabilistic_model.probabilistic_circuit.rx.probabilistic_circuit import (
 from random_events.variable import Continuous
 
 from ..dataset.derived_attributes import Rectangle
+from ..pattern_variables import find_assigned_variable
 from ..dataset.semantic_world_like_classes import Apple, Body
 from krrood.entity_query_language.backends import (
     SQLAlchemyBackend,
@@ -398,8 +399,8 @@ def test_probabilistic_backend_samples_bindings_with_their_log_likelihood(
     rectangle_backend,
 ):
     query = a(Rectangle)(width=..., height=...)
-    width = query._get_mapped_variable_by_name("Rectangle.width")
-    height = query._get_mapped_variable_by_name("Rectangle.height")
+    width = find_assigned_variable(query, "Rectangle.width")
+    height = find_assigned_variable(query, "Rectangle.height")
     rows = list(rectangle_backend.sample_bindings(query))
     assert len(rows) == rectangle_backend.number_of_samples
     assert {
@@ -414,8 +415,8 @@ def test_probabilistic_backend_computes_the_log_likelihood_of_given_bindings(
     rectangle_backend,
 ):
     query = a(Rectangle)(width=..., height=...)
-    width = query._get_mapped_variable_by_name("Rectangle.width")
-    height = query._get_mapped_variable_by_name("Rectangle.height")
+    width = find_assigned_variable(query, "Rectangle.width")
+    height = find_assigned_variable(query, "Rectangle.height")
     rectangle_width, rectangle_height = RECTANGLE_SIDES[1]
     bindings = {width._id_: rectangle_width, height._id_: rectangle_height}
     row = rectangle_backend.compute_log_likelihood(query, bindings)
@@ -425,8 +426,8 @@ def test_probabilistic_backend_computes_the_log_likelihood_of_given_bindings(
 
 def test_bindings_the_model_cannot_produce_have_no_likelihood(rectangle_backend):
     query = a(Rectangle)(width=..., height=...)
-    width = query._get_mapped_variable_by_name("Rectangle.width")
-    height = query._get_mapped_variable_by_name("Rectangle.height")
+    width = find_assigned_variable(query, "Rectangle.width")
+    height = find_assigned_variable(query, "Rectangle.height")
     first_width, _ = RECTANGLE_SIDES[0]
     _, second_height = RECTANGLE_SIDES[1]
     row = rectangle_backend.compute_log_likelihood(

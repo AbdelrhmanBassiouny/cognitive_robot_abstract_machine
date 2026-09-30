@@ -6,6 +6,7 @@ from krrood.entity_query_language.factories import (
     variable,
 )
 from ..dataset.derived_attributes import Rectangle
+from ..pattern_variables import find_assigned_variable
 from ..dataset.example_classes import (
     KRROODPose,
     KRROODPosition,
@@ -59,29 +60,6 @@ def test_new_underspecified_with_factory():
     )
 
 
-def test_underspecified_with_list():
-    q = a(KRROODPositions)(
-        positions=[
-            a(KRROODPosition)(x=1.0, y=..., z=...),
-            KRROODPosition(1, 2, 3),
-        ],
-        some_strings=["a", "b"],
-    )
-
-    for literal in q._matches_with_variables_:
-        if literal.assigned_value is ...:
-            literal.assigned_variable._value_ = 0.0
-
-    q._update_kwargs_from_literal_values()
-
-    assert q._kwargs_["positions"][0]._kwargs_ == {"x": 1.0, "y": 0.0, "z": 0.0}
-    assert q._factory_ == KRROODPositions
-    r = q.construct_instance()
-    assert r == KRROODPositions(
-        [KRROODPosition(1.0, 0.0, 0.0), KRROODPosition(1, 2, 3)], ["a", "b"]
-    )
-
-
 # %% constructing an instance from the bindings of its pattern's variables
 
 
@@ -92,7 +70,7 @@ def test_match_constructs_an_instance_from_bindings_of_its_nested_pattern():
         position=a(KRROODPosition)(x=..., y=stated_y, z=stated_z),
         orientation=orientation,
     )
-    x = query._get_mapped_variable_by_name("KRROODPose.position.x")
+    x = find_assigned_variable(query, "KRROODPose.position.x")
     instance = query._construct_instance_from_bindings_({x._id_: bound_x})
     assert instance == KRROODPose(
         KRROODPosition(bound_x, stated_y, stated_z), orientation
@@ -107,8 +85,8 @@ def test_match_constructs_list_elements_from_bindings():
         positions=[a(KRROODPosition)(x=stated_x, y=..., z=...), stated_position],
         some_strings=some_strings,
     )
-    y = query._get_mapped_variable_by_name("KRROODPositions.positions[0].y")
-    z = query._get_mapped_variable_by_name("KRROODPositions.positions[0].z")
+    y = find_assigned_variable(query, "KRROODPositions.positions[0].y")
+    z = find_assigned_variable(query, "KRROODPositions.positions[0].z")
     instance = query._construct_instance_from_bindings_(
         {y._id_: bound_y, z._id_: bound_z}
     )
@@ -119,7 +97,7 @@ def test_match_constructs_list_elements_from_bindings():
 
 def test_constructing_from_bindings_leaves_the_pattern_unchanged():
     query = a(KRROODPosition)(x=..., y=1.0, z=2.0)
-    x = query._get_mapped_variable_by_name("KRROODPosition.x")
+    x = find_assigned_variable(query, "KRROODPosition.x")
     query._construct_instance_from_bindings_({x._id_: 5.0})
     assert query._kwargs_ == {"x": ..., "y": 1.0, "z": 2.0}
     assert x._value_ is ...
