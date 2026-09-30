@@ -221,6 +221,11 @@ class ScratchRepository:
         repository.run_git("init", "--quiet")
         repository.run_git("config", "user.name", SCRATCH_IDENTITY.name)
         repository.run_git("config", "user.email", SCRATCH_IDENTITY.email)
+        # A throwaway repository has no reason to sign, and an environment that signs
+        # by default makes every commit here depend on a reachable signing service -
+        # observed failing mid-suite with "signing server returned status 520", on a
+        # different test each run.
+        repository.run_git("config", "commit.gpgsign", "false")
         return repository
 
     def clear_local_git_identity(self) -> None:
@@ -279,7 +284,8 @@ class ScratchRepository:
 
     def install_hook_scripts(self, *script_names: str) -> None:
         """
-        Copy the real hook scripts under test into the scratch layout.
+        Copy the real hook scripts under test, and what they import, into the scratch
+        layout.
 
         :param script_names: File names within the hooks directory.
         """
