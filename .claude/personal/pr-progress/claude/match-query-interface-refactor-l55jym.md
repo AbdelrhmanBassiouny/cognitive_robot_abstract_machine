@@ -106,3 +106,7 @@ Match's override returns False for a factory parameter (pinned by `Rectangle.lay
 field). Article sweep a/an across tests. Two threads replied+resolved; the a/an thread replied and
 left open - the mypy typing fixture keeps `an(Robot)` etc. deliberately (overload coverage).
 krrood 2078 passed, probabilistic_model 656. PR stays ready (user-marked).
+Second fork thread 2026-09-30 (match.py:609, memoize), 3bd091ff4: hook takes value_type; Match
+decides via lru_cached static per (factory, matched type, keyword, value type); factory signature
+cached per factory (`_factory_signature_`). Test counts signature reads (10 -> 1). Replied+resolved.
+krrood 2079, probabilistic_model 656. Open: only the a/an typing-fixture exception thread.
