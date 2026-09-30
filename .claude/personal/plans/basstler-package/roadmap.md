@@ -137,3 +137,38 @@ Two tooling defects turned up alongside, and neither belongs to this plan:
   their own item; the "never published" claim is deleted from the metadata rather than replaced.
 - Two review threads on the extraction stay open on purpose, each answered differently from what it
   asked. Both are the user's to close.
+
+## What stalled it again, found 2026-09-30
+
+`integration-conflict` has withheld #185 since 2026-09-19. Its two comments blame `D-store`, then
+`D-ui`. Both are krrood branches that share no file with this one, and neither is the cause.
+
+**#185 is red on its own under the suite the published pipeline runs.** `integration-refresh.yml`
+runs from the `integration` branch and reads `integration_test_command` from that branch's own
+`.claude/stack/stack.toml`. That command still names `.claude/skills/plan-dashboard/tests`,
+`.claude/hooks/tests` and `.claude/stack/tests`, and this branch moves all three to
+`test/basstler_test/`. Run on #185's head, pytest exits 4 with `file or directory not found`. The
+branch's own suite passes 665/665.
+
+**Why an innocent tip was named.** The narrowing round pairs the suspect with each earlier tip, but
+it never tries the suspect alone on the base. A tip that is red by itself fails every pairing, so
+the most recent earlier tip gets the blame. The triage skill does say to confirm each branch passes
+alone, but the automatic label and comment are written before anyone runs that check. This is a
+`red-candidate-localisation` (#211) defect, not this plan's.
+
+**It is a deadlock, not a collision.** The pipeline takes its suite from the last build it
+published, and a build carrying #185 cannot publish while that suite names the pre-move paths.
+#154 and #211 are stacked on #185 and already set
+`python3 -m pytest test/basstler_test --confcutdir=test/basstler_test`, but they can only reach
+`integration` behind #185. Removing the label on its own gets it re-applied by the next build. The
+label also kept the branch out of the maintenance pass, including its `main` merges, so the branch
+had fallen 113 commits behind. That merge was clean and 665 tests still pass.
+
+Two ways out, and both belong to the pipeline: have `build` read the suite from the tree under test
+rather than from the tooling running it, or dispatch one refresh on a reference that already carries
+the new command. The second is what the workflow's own comment gives a dispatch for.
+
+**A tooling defect met while recording this.** `plan_item_bootstrap update --append-notes` rewrote
+this item's literal-block (`|-`) note as a folded scalar, with a blank line after every hard-wrapped
+line, so one appended paragraph turned the note into 57. The manifest was repaired by hand and saved
+with `save-plan.sh`.

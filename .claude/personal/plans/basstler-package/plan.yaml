@@ -33,159 +33,83 @@ items:
   track: extraction
   depends_on: []
   blockers:
-    - >-
-      Found 2026-09-30: withheld from every pass by `integration-conflict` since 2026-09-19, and the
-      pair that label names is wrong. The published integration pipeline reads its suite from the
-      `integration` branch's own `.claude/stack/stack.toml`, whose `integration_test_command` still
-      names `.claude/skills/plan-dashboard/tests .claude/hooks/tests .claude/stack/tests` - three
-      directories this branch moves to `test/basstler_test/`. So #185 fails that suite *alone*
-      (pytest exit 4, `file or directory not found`), while its own suite passes 665/665. `D-store`
-      (2026-09-19) and `D-ui` (2026-09-21) were blamed because the narrowing round pairs the suspect
-      with each earlier tip but never tries it alone, so a tip red on its own is pinned on the most
-      recent earlier one. Deadlock: the pipeline takes its suite from the last published build, and
-      a build carrying #185 cannot publish while that suite names pre-move paths. #154 and #211,
-      stacked on #185, already set `python3 -m pytest test/basstler_test
-      --confcutdir=test/basstler_test`. Removing the label alone just gets it re-applied on the next
-      build.
-  notes: >
+  - >-
+    Found 2026-09-30: withheld from every pass by `integration-conflict` since 2026-09-19, and the
+    pair that label names is wrong. The published integration pipeline reads its suite from the
+    `integration` branch's own `.claude/stack/stack.toml`, whose `integration_test_command` still
+    names `.claude/skills/plan-dashboard/tests .claude/hooks/tests .claude/stack/tests` - three
+    directories this branch moves to `test/basstler_test/`. So #185 fails that suite *alone* (pytest
+    exit 4, `file or directory not found`), while its own suite passes 665/665. `D-store`
+    (2026-09-19) and `D-ui` (2026-09-21) were blamed because the narrowing round pairs the suspect
+    with each earlier tip but never tries it alone, so a tip red on its own is pinned on the most
+    recent earlier one. Deadlock: the pipeline takes its suite from the last published build, and a
+    build carrying #185 cannot publish while that suite names pre-move paths. #154 and #211, stacked
+    on #185, already set `python3 -m pytest test/basstler_test --confcutdir=test/basstler_test`.
+    Removing the label alone just gets it re-applied on the next build.
+  notes: |-
     Moves every Python file already on main under `.claude/` into one package: `.claude/stack/`
-
-    (`stack.py`, the maintenance modules, `class_property.py`), `.claude/skills/plan-dashboard/`'s
-    seven
-
+    (`stack.py`, the maintenance modules, `class_property.py`), `.claude/skills/plan-dashboard/`'s seven
     modules, and `.claude/hooks/`'s `plan_item_bootstrap.py`, `plan_manifest_tools.py`,
-
-    `plan_updates_since_support.py`, `plan_item_mode.py` - with their tests under
-    `test/basstler_test/`
-
-    and the CI job repointed and renamed `test_basstler`. Boundaries, unchanged from decisions 8 and
-    12:
-
-    `SKILL.md` files, `settings.json` and the bash entry points stay in `.claude/`, since Claude
-    Code
-
-    discovers them by path, as thin wrappers calling `python -m` into the package; zero-install
-    survives
-
+    `plan_updates_since_support.py`, `plan_item_mode.py` - with their tests under `test/basstler_test/`
+    and the CI job repointed and renamed `test_basstler`. Boundaries, unchanged from decisions 8 and 12:
+    `SKILL.md` files, `settings.json` and the bash entry points stay in `.claude/`, since Claude Code
+    discovers them by path, as thin wrappers calling `python -m` into the package; zero-install survives
     (importable from the repository root, `pyproject` for optional install).
 
-    **Re-scoped, renamed and moved to the front 2026-08-20 (decision 13, the user's call.)** This
-    item
-
+    **Re-scoped, renamed and moved to the front 2026-08-20 (decision 13, the user's call.)** This item
     now creates the package itself off `main` instead of inheriting the one #111 carries, so #111
-
     rebases onto this branch and folds its modules in under the `basstler` name, and the original
-
-    "sequence it last" constraint is reversed. The cost was measured rather than guessed - every
-    open
-
-    tooling pull request except #155 touches Python this moves - and accepted: each merges `main`
-    across
-
+    "sequence it last" constraint is reversed. The cost was measured rather than guessed - every open
+    tooling pull request except #155 touches Python this moves - and accepted: each merges `main` across
     the move and re-applies its delta in the package, which is the resolution pattern #111 already
-
-    exercised. A pull request already through review may instead land just before the migration's
-    final
-
+    exercised. A pull request already through review may instead land just before the migration's final
     merge; the user decides per pull request.
 
     **The duplication carriers are unified in the move rather than pairwise beforehand**, because
-
-    `.claude/hooks/` and `.claude/stack/` are separate `sys.path` entries and nothing in one can
-    import
-
-    the other without the hackery decision 8 ends: `run_git` written out three times, the
-    command-class
-
-    base plus `classproperty` twice (#139's `MaintenanceCommand`, #151's `Subcommand`),
-    `ItemStatus`, and
-
+    `.claude/hooks/` and `.claude/stack/` are separate `sys.path` entries and nothing in one can import
+    the other without the hackery decision 8 ends: `run_git` written out three times, the command-class
+    base plus `classproperty` twice (#139's `MaintenanceCommand`, #151's `Subcommand`), `ItemStatus`, and
     the personal-notes precedence rules' second Python copy. The GitHub backend rule stays with
-
     `basstler-github-api-unification`; the `run_git` seam stays `basstler-notes-core-python`'s.
 
-    **Dependency tiers were built, then deleted entirely, and the reasoning binds later items.**
-    Three
-
-    successive shapes - a declared tier table, a set of modules that may need the requirements, and
-    an
-
+    **Dependency tiers were built, then deleted entirely, and the reasoning binds later items.** Three
+    successive shapes - a declared tier table, a set of modules that may need the requirements, and an
     import closure derived from the callers that run with nothing installed - all existed to protect
-
-    callers running before an install. The user's answer was that nothing should run before an
-    install:
-
+    callers running before an install. The user's answer was that nothing should run before an install:
     `session-start.sh` now installs whatever of the declared dependencies is missing on every start,
-
-    gated on the notes-branch fetch the hook already exits on, reporting a failure on a
-    `dependencies:`
-
+    gated on the notes-branch fetch the hook already exits on, reporting a failure on a `dependencies:`
     summary line and finishing the run regardless. Actions runners install the package themselves.
-
-    `package_layout.py` writes nothing down at all now. The two installers diverge on purpose: a
-    session
-
-    installs the missing *specifiers*, because `pip install ./basstler` would leave a second copy
-    beside
-
+    `package_layout.py` writes nothing down at all now. The two installers diverge on purpose: a session
+    installs the missing *specifiers*, because `pip install ./basstler` would leave a second copy beside
     the clone's own and the clone's copy is what a caller imports; a runner has no such contract and
-
-    installs `./basstler`. `basstler/requirements.txt` is deleted and the four distributions are
-    declared
-
-    in `basstler/pyproject.toml`'s `[project] dependencies`, matching what `main` did for every
-    other
-
-    workspace member; `basstler` stays out of `[tool.uv.workspace] members`, since membership would
-    put
-
+    installs `./basstler`. `basstler/requirements.txt` is deleted and the four distributions are declared
+    in `basstler/pyproject.toml`'s `[project] dependencies`, matching what `main` did for every other
+    workspace member; `basstler` stays out of `[tool.uv.workspace] members`, since membership would put
     it in the default `uv sync`, which decision 12 rules out. No bash entry point carries embedded
-
     Python any more.
 
     **Recorded for a later item, not acted on here:** basstler is to depend on `krrood`, to cut
-
     duplication rather than mirror its idioms (the user, 2026-08-23). That makes decision 12's
-
     version-1 independence a stage rather than a permanent state.
 
     State: 632 tests pass, CI green on `7730b5177`, both original dependencies merged - so the
-
-    `depends_on` entries onto them are dropped. Two review threads from the 2026-08-23 round stay
-    open
-
+    `depends_on` entries onto them are dropped. Two review threads from the 2026-08-23 round stay open
     on purpose, each answered differently from what it asked: the `RESTACK_STEPS` name that
-
     `monkeypatch.setattr` takes as a string by its own signature, and a surviving `status_label`
-
     assertion offered for deletion. Both are the user's to close.
 
     **Resolved 2026-09-03** at `674f1507f`: `main` merged, `setup_steps.py` folded into the package
+    as `basstler/setup_steps.py` and its suite converted off the `sys.path` hackery, 664 tests passing.
 
-    as `basstler/setup_steps.py` and its suite converted off the `sys.path` hackery, 664 tests
-    passing.
-
-    **The "still a draft" this note carried was wrong, and so was the absence of a blocker.** #185
-    has
-
-    been out of draft since the 2026-08-23 round - which in this workflow is the promotion approval,
-    not
-
-    a loose end - and has carried `needs-resolution` since 2026-08-22, which withholds it from
-    promotion
-
-    until the branch merges `main` cleanly again. So the item was not "in progress": it was
-    finished,
-
+    **The "still a draft" this note carried was wrong, and so was the absence of a blocker.** #185 has
+    been out of draft since the 2026-08-23 round - which in this workflow is the promotion approval, not
+    a loose end - and has carried `needs-resolution` since 2026-08-22, which withholds it from promotion
+    until the branch merges `main` cleanly again. So the item was not "in progress": it was finished,
     approved, and held at the last step by a conflict nothing recorded.
 
     One process finding worth carrying, seen twice in two days: deleting a block by slicing from one
-
-    anchor to the next also deleted a test that sat between them, and the suite stayed green, so
-    nothing
-
+    anchor to the next also deleted a test that sat between them, and the suite stayed green, so nothing
     flagged it. A green run after a deletion says nothing about what the deletion took with it - the
-
     check is the mutation that used to fail, or the test count.
 
     **Resolved in part 2026-09-30** (session
