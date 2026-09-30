@@ -1,0 +1,8 @@
+# Personal overrides layered over the committed stack.toml by the published tooling.
+#
+# integration_test_command: the published `integration` branch still names the pre-move
+# suite (.claude/{skills/plan-dashboard,hooks,stack}/tests), which #185 moves to
+# test/basstler_test/, so every build carrying #185 failed on its own and relabelled it.
+# This is the command #154 and #211 already commit in basstler/stack.toml. Delete this
+# override once a build carrying either of them has published.
+integration_test_command = "python3 -m pytest test/basstler_test --confcutdir=test/basstler_test"
