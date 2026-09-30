@@ -64,16 +64,22 @@ from typing import Any, ClassVar
 
 # %% locations
 
-HOOKS_DIRECTORY = Path(".claude/hooks")
-"""
-Where the shell entry points this module sources and runs live, from the project root.
-"""
 
-PACKAGE_DIRECTORY = Path(__file__).parent.name
-"""
-This package's own directory name, from the project root, read off this module's location
-rather than written down.
-"""
+class Directory(StrEnum):
+    """
+    The directories the files this module touches live in, from the project root.
+    """
+
+    HOOKS = ".claude/hooks"
+    """
+    Where the shell entry points this module sources and runs live.
+    """
+
+    PACKAGE = Path(__file__).parent.name
+    """
+    This package's own directory, read off this module's location rather than written
+    down.
+    """
 
 
 class Location(StrEnum):
@@ -83,21 +89,21 @@ class Location(StrEnum):
     A member is the path as text, since that is what most of them are handed to - a
     ``git`` reference, a ``bash -c`` line, a subprocess argument, the report a caller
     parses. :attr:`path` is the same location where a real :class:`~pathlib.Path` is
-    wanted. ``HOOKS_DIRECTORY`` and ``PACKAGE_DIRECTORY`` stay constants above rather than
-    members, so each directory its members share is still named once.
+    wanted. The directories its members share are :class:`Directory`'s, so each is still
+    named once.
     """
 
-    CONFIGURATION_SCRIPT = f"{HOOKS_DIRECTORY}/resolve-personal-notes-config.sh"
+    CONFIGURATION_SCRIPT = f"{Directory.HOOKS}/resolve-personal-notes-config.sh"
     """
     The shell configuration that resolves the personal-notes remote and branch.
     """
 
-    NOTES_WRITER_SCRIPT = f"{HOOKS_DIRECTORY}/write-personal-notes-file.sh"
+    NOTES_WRITER_SCRIPT = f"{Directory.HOOKS}/write-personal-notes-file.sh"
     """
     The generic commit-and-push-one-file helper ``set`` writes through.
     """
 
-    COMMITTED_DEFAULTS = f"{PACKAGE_DIRECTORY}/plan-item-modes.toml"
+    COMMITTED_DEFAULTS = f"{Directory.PACKAGE}/plan-item-modes.toml"
     """
     The shipped defaults, beside this module rather than on the personal-notes branch.
     """
