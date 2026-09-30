@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import ast
 from dataclasses import dataclass
-from functools import lru_cache
+from functools import cache
 from pathlib import Path
 
 PACKAGE_DIRECTORY = Path(__file__).parent
@@ -62,7 +62,7 @@ def _has_a_main_block(source: Path) -> bool:
     )
 
 
-@lru_cache(maxsize=1)
+@cache
 def package_modules() -> tuple[PackageModule, ...]:
     """
     :return: Every module in this package, in name order.

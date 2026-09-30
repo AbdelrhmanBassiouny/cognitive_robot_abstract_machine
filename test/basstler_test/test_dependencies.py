@@ -13,8 +13,13 @@ import pytest
 
 from .script_runner import PythonModuleRunner
 from basstler import dependencies
-from basstler.dependencies import Dependency
-from basstler.package_layout import PACKAGE_DIRECTORY, REPOSITORY_ROOT
+from basstler.dependencies import (
+    Dependency,
+    DependencyDeclaration,
+    PyprojectKey,
+    UnreadableDependencyDeclarationError,
+)
+from basstler.package_layout import REPOSITORY_ROOT
 
 # %% the declaration
 
@@ -23,8 +28,8 @@ def declared_specifiers() -> list[str]:
     """
     :return: The requirement specifiers ``pyproject.toml`` states, read straight from it.
     """
-    project = tomllib.loads((PACKAGE_DIRECTORY / "pyproject.toml").read_text())
-    return project["project"]["dependencies"]
+    project = tomllib.loads(DependencyDeclaration.of_this_package().path.read_text())
+    return project[PyprojectKey.PROJECT][PyprojectKey.DEPENDENCIES]
 
 
 def test_the_declared_dependencies_are_the_ones_pyproject_states():
@@ -32,7 +37,8 @@ def test_the_declared_dependencies_are_the_ones_pyproject_states():
     One declaration: what the package installs is what its metadata says it needs.
     """
     assert [
-        dependency.specifier for dependency in dependencies.declared_dependencies()
+        dependency.specifier
+        for dependency in DependencyDeclaration.of_this_package().dependencies()
     ] == declared_specifiers()
 
 
@@ -41,9 +47,11 @@ def test_the_declaration_is_static_so_a_reader_needs_no_build():
     ``dependencies`` resolved by the build backend is invisible to anything that reads
     the file - which is what this module, the session start and the workflows all do.
     """
-    project = tomllib.loads((PACKAGE_DIRECTORY / "pyproject.toml").read_text())
+    project = tomllib.loads(DependencyDeclaration.of_this_package().path.read_text())
 
-    assert "dependencies" not in project["project"].get("dynamic", [])
+    assert PyprojectKey.DEPENDENCIES not in project[PyprojectKey.PROJECT].get(
+        "dynamic", []
+    )
 
 
 @pytest.mark.parametrize(
@@ -91,11 +99,22 @@ def test_missing_dependencies_are_a_subset_of_what_is_declared():
     """
     What the caller installs is drawn from the declaration and nothing else.
     """
-    missing = dependencies.missing_dependencies()
+    missing = DependencyDeclaration.of_this_package().missing()
 
     assert {dependency.specifier for dependency in missing} <= set(
         declared_specifiers()
     )
+
+
+def test_an_absent_declaration_raises_rather_than_declaring_nothing(tmp_path):
+    """
+    An absent file is not an empty declaration: reading nothing from it would tell a
+    caller that nothing is missing.
+    """
+    absent = DependencyDeclaration(tmp_path / DependencyDeclaration.FILE_NAME)
+
+    with pytest.raises(UnreadableDependencyDeclarationError):
+        absent.missing()
 
 
 # %% the command line the shell calls
@@ -122,7 +141,8 @@ def test_the_command_line_prints_one_specifier_per_missing_dependency():
 
     assert result.returncode == 0, result.stderr
     assert result.stdout.split() == [
-        dependency.specifier for dependency in dependencies.missing_dependencies()
+        dependency.specifier
+        for dependency in DependencyDeclaration.of_this_package().missing()
     ]
 
 
