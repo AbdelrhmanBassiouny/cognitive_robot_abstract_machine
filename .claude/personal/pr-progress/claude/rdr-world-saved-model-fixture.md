@@ -1,32 +1,33 @@
-# rdr-world saved-model fixture (PR #251, draft, `bug`)
+# rdr-world saved-model fixture (PR #251, `bug`, `in-review` as cram2#653)
 
-Branch `claude/rdr-world-saved-model-fixture` off `main` at 69b2395a2. Not a
-`match-query-ergonomics` item: it is the second root cause found while diagnosing that
-plan's CI red on #248, in the RDR test suite rather than in EQL, and it is one pull
-request rather than a tracked programme.
+Branch `claude/rdr-world-saved-model-fixture` off `main`. Not a plan item: the second root
+cause found while diagnosing `match-query-ergonomics`' CI red on #248; referenced as the fix
+in `match-query-ergonomics` and `knowledge-directed-requests` (perception-backend blockers).
 
 ## The bug
-`test_draw_evaluated_tree_for_drawer_cabinet_rdr` loads the model
-`test_save_and_load_drawer_cabinet_rdr` writes; `test_results/` is gitignored, so in a
-fresh checkout it exists only once the writer has run, and CI's `pytest -n auto` puts the
-two on different workers.
+`test_draw_evaluated_tree_for_drawer_cabinet_rdr` loaded the model
+`test_save_and_load_drawer_cabinet_rdr` writes; that output is untracked, so under CI's
+`pytest -n auto` the reader can run before the writer.
 
-## Plan
-1. Reproduce on `main` from a clean state. [done - `RDRLoadError`, and identically with
-   #248's diff reverted]
-2. A `saved_drawer_cabinet_rdr` fixture writing into a directory named after the
-   requesting test, reporting where and under what name. [done]
-3. Both tests read it; the reader stops naming `"world_rdr"` itself. [done]
-4. Draft PR with the `bug` label. [done - #251]
+## Done
+1. Reproduced on `main` from a clean state (`RDRLoadError`).
+2. `saved_drawer_cabinet_rdr` fixture writes into a directory named after the requesting
+   test; both tests read it; the reader stops naming `"world_rdr"`.
+3. Promoted upstream as cram2#653. LucaKro approved; tomsch420 requested changes with one
+   thread on `conftest.py:189` (`directory: str`), text: "path".
+4. 2026-09-30 (session_01AeV6SN95muCLAZKJTRWHNH): answered it in a2b48c4d8 -
+   `SavedRDRModel.directory` is a `pathlib.Path`, built with pathlib, `str()` only at
+   `GeneralRDR.save`/`load` (which concatenate `save_dir + "/__init__.py"`). Read as "make
+   it a Path"; the one-word comment could also mean rename to `path` or use pytest's
+   `tmp_path` - not asked back, since upstream replies are the developer's.
+   `test_rdr_world` under `-n 4` from clean: 8 passed, 1 skipped, 3/3.
 
-## Verification
-- the reader alone from a clean state: passes; fails on `main`.
-- the module under `-n 4` from a clean state: `6 passed, 1 skipped`, 5/5 runs (1 failed
-  5/5 before).
-- `test/krrood_test/test_ripple_down_rules` under `-n 4`: 76 passed, 2 skipped; the two
-  `test_object_diagram` failures are this container's missing Graphviz `dot`.
-
-## Next / outstanding
-- Nothing outstanding beyond CI on the pull request itself.
-- The old shared path `test_results/world_drawer_cabinet_rdr` now has no writer; it is
-  gitignored output, so nothing references it.
+## Outstanding
+- Reply on cram2#653's thread (developer only - AGENTS.md forbids us posting upstream)
+  and re-request tomsch420.
+- krrood red on d27c920 was a casadi segfault in main's `test_thread_safety.py`
+  (cram2#603's test); also hit integration-20260930-014913; 30/30 locally. Not ours.
+- `integration-conflict` label (2026-09-30 16:36 refresh) is a misattribution: this
+  branch was in none of that refresh's builds, and the tooling suite it runs passes with
+  the branch merged. Left in place for the developer; four other branches (64, 65, 226,
+  248) were blocked the same way in that run.
