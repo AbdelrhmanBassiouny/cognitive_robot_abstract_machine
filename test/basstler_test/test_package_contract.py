@@ -21,6 +21,7 @@ import pytest
 
 from .constants import ToolingDirectory
 from .script_runner import ScriptRunner
+from basstler import _version
 from basstler.package_layout import (
     PACKAGE_DIRECTORY,
     REPOSITORY_ROOT,
@@ -131,6 +132,14 @@ def test_the_package_imports_from_the_repository_root_with_no_install():
 
     assert result.returncode == 0, result.stderr
     assert Path(result.stdout.strip()) == PACKAGE_DIRECTORY / "__init__.py"
+
+
+def test_the_package_version_is_the_repository_version():
+    """
+    ``_version.py`` is written by ``scripts/sync_version.py`` from the root ``VERSION``
+    file, the same as every other package here, so one bump moves them all together.
+    """
+    assert _version.__version__ == (REPOSITORY_ROOT / "VERSION").read_text().strip()
 
 
 # %% each module stands on its own

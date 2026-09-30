@@ -53,6 +53,9 @@ SET_UP_CLONE_DATASET = DATASET_DIRECTORY / "set-up-clone"
 """
 A committed tree of everything ``check-setup.sh`` requires of a set-up clone, copied over
 a scratch project root rather than written out file by file.
+
+Its ``basstler/`` stands in for the real package: the ``tooling_files`` check tests only
+that each path exists, so nothing there is ever imported or run.
 """
 
 
