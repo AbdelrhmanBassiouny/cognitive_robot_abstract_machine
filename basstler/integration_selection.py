@@ -272,6 +272,9 @@ def stack_to_build(
     branch that broke a build assembles the tips the build carried - a readmitted branch
     included - rather than some other set.
 
+    Asking for the restack is already a deliberate act, so it observes no push window: a
+    branch under upstream review moves with the rest, whatever the hour.
+
     :param run: What this run has resolved.
     :param fork: The fork to read the open pull requests from.
     :param restack_first: Whether to bring stale tips forward before reading.
@@ -288,7 +291,7 @@ def stack_to_build(
     blocks = BlockRecords.read(run.git, remote)
     stack = run.stack(fork)
     if restack_first:
-        restack(stack, run.git, fork)
+        restack(stack, run.git, fork, push_window=None)
         run.refresh_remotes()
         stack = run.stack(fork)
     return blocks.forget_lifted(stack).annotate(checks.annotate(stack))

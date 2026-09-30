@@ -32,8 +32,9 @@ Every module named below lives in the `basstler` package at the repository root,
 with no install; `stack.toml` and `board.json` sit beside them. This document stays here,
 next to the workflow it describes, because it is read rather than run.
 
-- **`stack.toml`** - the committed defaults: label names, and `upstream_repository`, the one
-  repository that is the same for every contributor. It names nobody's fork: the fork is
+- **`stack.toml`** - the committed defaults: label names, the hours a branch under review may
+  be pushed in, and `upstream_repository`, the one repository that is the same for every
+  contributor. It names nobody's fork: the fork is
   *whichever remote is not the upstream*, matched by the repository each URL points at rather
   than by what the remote is called, so `origin` may be either one. A
   `.claude/personal/stack.toml` on the personal-notes branch layers your own overrides on top
@@ -80,7 +81,8 @@ next to the workflow it describes, because it is read rather than run.
     upstream base is what actually closes them.
 - **`maintenance.py`** - the executor: the half of a pass that moves commits, where `stack.py`
   only derives and prints. `board --write`, `fast-forward`, `restack`, `promote` and
-  `run-report --json`; see [Running a maintenance pass](#running-a-maintenance-pass). It is the
+  `run-report --json`; the two that restack take `--push-branches-under-review-now`, which moves a
+  promoted branch whatever the hour. See [Running a maintenance pass](#running-a-maintenance-pass). It is the
   command line onto modules named for what they do, so nothing has to be hunted for inside one
   long file: `maintenance_constants.py` (every value edited by hand),
   `maintenance_git_commands.py`, `maintenance_board.py`, `maintenance_github.py`,
@@ -143,6 +145,15 @@ next to the workflow it describes, because it is read rather than run.
   cram2 without your sign-off.
 - `ready → in-review`: when you promote it, add the **`in-review`** label to the fork PR.
 - `in-review → merged`: automatic once the branch lands in `cram2/main` (git ancestry).
+
+Once a branch reaches `in-review` it has a reader outside this fork, and a restack push moves the
+diff under them and restarts their checks. So from then on it is pushed only inside a **window**:
+at night in the reviewers' zone, and never within a set interval of its own last push - `22:00`
+to `06:00` Europe/Berlin and four hours by default, all four settable in `stack.toml`. It still
+follows its parent; it does so at the next pass that runs inside the window, reported as `held`
+with the reasons it is waiting on, and nothing is written to the branch or its pull request
+meanwhile. A pass somebody asks for by hand passes `--push-branches-under-review-now` and the
+branch moves at once - the window exists for the passes nobody is watching.
 
 ## The loop you run
 
