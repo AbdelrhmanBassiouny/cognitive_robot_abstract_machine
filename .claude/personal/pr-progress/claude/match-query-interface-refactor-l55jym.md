@@ -100,3 +100,9 @@ not runnable here; waiting on CI.
 Side bug found here, split out at the developer's request: PR #476
 (`claude/numeric-variable-probabilistic-sample`, off main, draft, `bug`) - numeric field given
 a symbolic variable crashed sampling ('Interval' has no hash_map).
+Fork review 2026-09-30 (three threads), 2fc43e244: `_is_kept_out_of_construction_` now answers
+the whole question (not a factory parameter *and* kept out) and construct_instance asks it first;
+Match's override returns False for a factory parameter (pinned by `Rectangle.layer`, a defaulted
+field). Article sweep a/an across tests. Two threads replied+resolved; the a/an thread replied and
+left open - the mypy typing fixture keeps `an(Robot)` etc. deliberately (overload coverage).
+krrood 2078 passed, probabilistic_model 656. PR stays ready (user-marked).
