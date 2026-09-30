@@ -82,6 +82,24 @@ class TipStatus(StrEnum):
     tried to merge it. Reported apart from :attr:`BLOCKED` because nobody labelled it:
     what lets it back in is its checks going green, not a label coming off."""
 
+    BLOCKED_WITHOUT_RECORD = TipStatusSpecification(
+        "blocked-without-record", integrated=False
+    )
+    """It carries the label that blocks a branch for breaking another, and nothing
+    recorded the tree the break was found in - so no build can tell when that tree is
+    gone, and only a hand or a passing reproduction test lifts it. Reported apart from
+    :attr:`BLOCKED` because a reader would otherwise wait for a rebuild that will never
+    carry it."""
+
+    ANOTHER_PLAN = TipStatusSpecification("another-plan", integrated=False)
+    """This build was asked for particular plans and the branch belongs to a different
+    one. Nothing is wrong with it; it is simply not what was asked for."""
+
+    NO_PLAN_RECORDED = TipStatusSpecification("no-plan-recorded", integrated=False)
+    """This build was asked for particular plans and the index names none for the
+    branch, so the filter cannot answer for it either way. Reported rather than dropped
+    or carried: a build that decided silently is one nobody can read."""
+
 
 # %% who resolved the conflict that let it in
 
@@ -147,6 +165,40 @@ class ResolutionProvenance:
         :param author: Who wrote it.
         :return: These claims with that one added, the existing ones left alone."""
         return ResolutionProvenance({**self.authors, branch: author})
+
+
+# %% a branch carried although a label withholds it
+
+
+@dataclass(frozen=True)
+class ReadmittedBranch:
+    """A branch a build carried although a label withholds it, and that reached the
+    finished branch.
+
+    Carried because the tree its block was measured in no longer exists, so the suite
+    run over the build is the first measurement of the break since. Only one that
+    reached the branch is named: a suite that passed over a build the branch never
+    reached says nothing about it.
+    """
+
+    branch: str
+    """The branch."""
+
+    pull_request_number: int
+    """The fork pull request that publishes it, and carries the label."""
+
+    @classmethod
+    def from_json(cls, document: dict[str, Any]) -> ReadmittedBranch:
+        """Read one readmitted branch back out of a report's document.
+
+        :param document: The branch's own object, as :meth:`IntegrationReport.as_json`
+            wrote it.
+        :return: The branch it describes.
+        """
+        return cls(
+            branch=document[ReportKey.BRANCH],
+            pull_request_number=document[ReportKey.PULL_REQUEST_NUMBER],
+        )
 
 
 # %% the outcome a report carries
