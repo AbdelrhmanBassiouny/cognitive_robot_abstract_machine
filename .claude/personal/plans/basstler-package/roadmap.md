@@ -179,3 +179,12 @@ command #154 and #211 commit. Loaded through the published `.claude/stack/stack.
 to that value. `integration-conflict` was removed from #185. The override is temporary, so delete
 it once a build carrying #154 or #211 has published. The localisation defect is not recorded on
 `stack-maintenance`'s manifest yet.
+
+**What the resolution missed at first: the upstream review.** `/upstream-reviews` was skipped
+because #185 carries `cram2-link-sent`, not `in-review`. When it did run, it showed the real
+stall behind the integration one: #185 is cram2#659, where LucaKro requested changes on
+2026-09-21 and nine threads are still unresolved. They cover global constants in `dependencies.py`,
+`plan_item_mode.py` and `package_layout.py`, moving helpers onto `Dependency`, a StrEnum in
+`sync_version.py` and why basstler is not a proper package, a version check, and an `__init__`
+comment. This is the case `always-read-upstream-reviews` records: the label does not tell you
+whether an upstream pull request exists.
