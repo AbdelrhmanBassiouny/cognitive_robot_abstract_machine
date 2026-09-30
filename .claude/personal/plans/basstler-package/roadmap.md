@@ -172,3 +172,10 @@ the new command. The second is what the workflow's own comment gives a dispatch 
 this item's literal-block (`|-`) note as a folded scalar, with a blank line after every hard-wrapped
 line, so one appended paragraph turned the note into 57. The manifest was repaired by hand and saved
 with `save-plan.sh`.
+
+**Resolution, same day.** `main` was merged at `0c7ff268f`. The user chose the personal override:
+`.claude/personal/stack.toml` on the notes branch now sets `integration_test_command` to the
+command #154 and #211 commit. Loaded through the published `.claude/stack/stack.py`, it resolves
+to that value. `integration-conflict` was removed from #185. The override is temporary, so delete
+it once a build carrying #154 or #211 has published. The localisation defect is not recorded on
+`stack-maintenance`'s manifest yet.

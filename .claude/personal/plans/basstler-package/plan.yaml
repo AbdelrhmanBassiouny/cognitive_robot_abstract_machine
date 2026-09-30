@@ -28,24 +28,19 @@ items:
   title: 'Create the basstler package: the .claude Python and its tests move into it'
   branch: claude/plan-item-kickoff-workflow-cuare2
   pull_request_number: 185
-  status: blocked
+  status: in_progress
   session: https://claude.ai/code/session_014kmiZegiD2Q8w2eese2L2L
   track: extraction
   depends_on: []
   blockers:
   - >-
-    Found 2026-09-30: withheld from every pass by `integration-conflict` since 2026-09-19, and the
-    pair that label names is wrong. The published integration pipeline reads its suite from the
-    `integration` branch's own `.claude/stack/stack.toml`, whose `integration_test_command` still
-    names `.claude/skills/plan-dashboard/tests .claude/hooks/tests .claude/stack/tests` - three
-    directories this branch moves to `test/basstler_test/`. So #185 fails that suite *alone* (pytest
-    exit 4, `file or directory not found`), while its own suite passes 665/665. `D-store`
-    (2026-09-19) and `D-ui` (2026-09-21) were blamed because the narrowing round pairs the suspect
-    with each earlier tip but never tries it alone, so a tip red on its own is pinned on the most
-    recent earlier one. Deadlock: the pipeline takes its suite from the last published build, and a
-    build carrying #185 cannot publish while that suite names pre-move paths. #154 and #211, stacked
-    on #185, already set `python3 -m pytest test/basstler_test --confcutdir=test/basstler_test`.
-    Removing the label alone just gets it re-applied on the next build.
+    Cleared 2026-09-30: `main` merged at `0c7ff268f` (clean, 665 pass); `integration_test_command`
+    overridden in `.claude/personal/stack.toml` on the notes branch to `python3 -m pytest
+    test/basstler_test --confcutdir=test/basstler_test`, which the published pipeline reads;
+    `integration-conflict` removed from #185. The next integration build is the check. Delete the
+    override once a build carrying #154 or #211 has published, since both commit the same command.
+    Until then a build that leaves #185 out fails under it, and blames whichever tip it happens to
+    localise.
   notes: |-
     Moves every Python file already on main under `.claude/` into one package: `.claude/stack/`
     (`stack.py`, the maintenance modules, `class_property.py`), `.claude/skills/plan-dashboard/`'s seven
@@ -121,7 +116,8 @@ items:
     commits behind. That merge was clean, left no `.py` under `.claude/`, and 665 tests still pass.
     The deadlock is the pipeline's, not the branch's: the fix is to change where the pipeline reads
     its suite, or to let it run once from a reference that already carries the new command. Neither
-    is #185's to change.
+    is #185's to change. The user chose the personal override of `integration_test_command` to break
+    it, and `integration-conflict` was removed.
 - id: basstler-first-time-setup
   title: One-page first-time setup, with the fork/GitHub/Claude steps printed for the reader
   branch: claude/bastler-setup-first-time-6tfcun
