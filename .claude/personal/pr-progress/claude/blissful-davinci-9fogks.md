@@ -10,8 +10,11 @@ Done (commit eaaccea93, pushed):
   ModelVariableNotBound.
 - krrood 2090 passed (2 graphviz-dot env failures), probabilistic_model 656 passed.
 
-Open for user: remove test-only _update_kwargs_from_literal_values / _update_kwargs_from /
-_get_mapped_variable_by_name? compute_log_likelihood does not derive feature values for
-non-primitive krrood variables (raises ModelVariableNotBound).
+- b85d0bdcb (user approved): removed _update_kwargs_from_literal_values, AttributeMatch._update_kwargs_from,
+  _get_mapped_variable_by_name and their two tests; tests look up pattern variables via
+  test/krrood_test/pattern_variables.py find_assigned_variable. krrood 2088 passed, pm 656 passed.
+  PR description updated.
+Open: compute_log_likelihood does not derive feature values for non-primitive krrood variables
+(raises ModelVariableNotBound).
 Env note: the verification venv is .venv (uv 0.12 via pip; the system uv 0.8 cannot parse root pyproject);
 full test runs regenerate test_verbalization/verbalization_results.py - restore before committing.
