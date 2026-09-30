@@ -81,3 +81,12 @@ keyword out when it names an attribute of the matched class (a property or a
 method, e.g. `area=12` on a `Rectangle`). Only a name the class lacks entirely
 raises. The hook takes `(keyword, value)`. Test class:
 `dataset/derived_attributes.py`. `test/krrood_test` 2073 passed.
+Rejection sampling, 2026-09-30 (`9986887c1`): measured that `area=12.0` had no
+effect in either generative backend (models trained on constructor fields have no
+property variable; conditioning on it was silently dropped). `Match._select_satisfying_`
+now keeps only constructed instances having every plain stated value and satisfying
+`where`; both backends go through it. The developer chose no error for a continuous
+derived value - rejection may return nothing. `test/krrood_test` 2076 passed.
+Follow-up handed to a new session as a prompt (not started): enumerate through
+Bindings rows instead of mutating `_value_`, and a `ProbabilisticBinding` carrying a
+likelihood, stacked on this branch.
