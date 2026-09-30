@@ -42,18 +42,13 @@ items:
     Until then a build that leaves #185 out fails under it, and blames whichever tip it happens to
     localise.
   - >-
-    Upstream review, read 2026-09-30 through `/upstream-reviews`: #185 is promoted as
-    cram2/cognitive_robot_abstract_machine#659, where LucaKro requested changes on 2026-09-21 and 9
-    threads are unresolved. The fork pull request showed none of this. The threads:
-    `basstler/_version.py:1` (is the version right), `basstler/dependencies.py:34`,
-    `basstler/plan_item_mode.py:72` and `basstler/package_layout.py:65` (no global constants),
-    `basstler/dependencies.py:89` (a value capped at 1), `basstler/dependencies.py:130` and :149
-    (move onto the `Dependency` class), `scripts/sync_version.py:26` (a StrEnum, and why basstler is
-    not a proper package like the others), and
-    `test/basstler_test/dataset/set-up-clone/basstler/__init__.py:1` (empty inits). The user replied
-    on 2026-09-30, agreeing to most and questioning two (`dependencies.py:34`, the `__init__`
-    comment). The fixes go on the fork branch; nothing is written upstream. The upstream title still
-    says `bastler`.
+    Upstream review cram2#659 (LucaKro, changes requested 2026-09-21). The fixes for every agreed
+    thread were pushed as `86e90570d` on 2026-09-30: `DependencyDeclaration`/`PyprojectKey`,
+    `functools.cache`, the `Directory` and `Package` StrEnums, an empty fixture `__init__`, and a
+    version test. 667 + 12 tests pass. Outstanding, and the user's to do because nothing is written
+    upstream from a session: reply on the nine threads, and answer the "proper package" question by
+    pointing at `basstler-src-layout`. `package_layout.py:65` is the capped-at-1 `lru_cache` point,
+    not global constants. The upstream title still says `bastler`.
   notes: |-
     Moves every Python file already on main under `.claude/` into one package: `.claude/stack/`
     (`stack.py`, the maintenance modules, `class_property.py`), `.claude/skills/plan-dashboard/`'s seven
