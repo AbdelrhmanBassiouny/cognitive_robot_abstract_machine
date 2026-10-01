@@ -667,6 +667,15 @@ def test_the_pattern_parentheses_reject_positional_arguments():
         a(CallableAdder)("one")
 
 
+def test_the_pattern_parentheses_reject_positional_arguments_as_a_call_with_too_many_arguments():
+    """
+    Python refuses surplus positional arguments with a :class:`TypeError`, so a caller
+    handling that refusal handles this one too.
+    """
+    with pytest.raises(TypeError):
+        a(CallableAdder)("one")
+
+
 def test_a_second_pattern_still_raises_when_the_matched_class_is_not_callable():
     match = a(KRROODPosition)(x=1.0)
     with pytest.raises(CalledMatchMultipleTimes):

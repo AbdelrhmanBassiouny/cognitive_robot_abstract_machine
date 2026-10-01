@@ -114,7 +114,7 @@ class UnmemoizableOwnerError(DataclassException):
 
 
 @dataclass
-class KeywordNamesNoFactoryParameter(DataclassException):
+class KeywordNamesNoFactoryParameter(DataclassException, TypeError):
     """
     Raised when a keyword argument given for construction names no parameter of the
     factory it is given to, which would otherwise be lost without a trace.

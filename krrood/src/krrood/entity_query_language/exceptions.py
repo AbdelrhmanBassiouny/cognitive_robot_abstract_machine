@@ -1081,7 +1081,7 @@ class AmbiguousQuerySubject(UsageError):
 
 
 @dataclass
-class PositionalArgumentsInMatchPattern(DataclassException):
+class PositionalArgumentsInMatchPattern(DataclassException, TypeError):
     """
     Raised when the parentheses that state a match's pattern are given positional
     arguments, which a pattern of named fields has no place for.
