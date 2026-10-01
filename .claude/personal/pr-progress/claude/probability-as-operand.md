@@ -17,10 +17,12 @@ Review round 2026-10-01 (three fork threads):
   declares (vars or annotations); new `ReservesFrameworkNames` (Match, Probability) adds `_name_`
   form. Single-underscore private attributes now go to the value type. #192's TypeError commit
   merged in (17c64646e). krrood 2089 passed.
-- Probability as an Aggregator (line 90) and whether `ProbabilityValue` is then needed (line 176):
-  open, discussing in session. Measured: a selected condition yields True/False per row, so
-  probability = mean of the condition; a scratch `Aggregator` subclass gives correct per-group
-  values (current #479 gives the global 0.75 repeated per group - a real bug) and works in
-  `having`; but every aggregator is refused in another query's `where`
-  (`AggregatorInWhereConditionsError`), so `t.value < probability_of(...)` would need
-  `entity(...)` around it, like `average`. Awaiting the developer's decision.
+- Probability as an Aggregator (line 90) and `ProbabilityValue` (line 176): developer chose the
+  aggregator. Done in 86dca40db, both threads replied+resolved. `Probability(ProbabilisticQuery,
+  Aggregator[float])`, child = condition, truths read from the condition's own binding (a logical
+  operator's value is its whole row - `and_` gave 1.0 otherwise). Grouped = per-group probability
+  (test failed before). `ProbabilityValue` + rule removed. Probability no longer claims `_name_`
+  names (variable-like); that test removed. #480 merged in (1332f33d3) so a nested probability in
+  a where reads as a subquery. krrood 2094 passed.
+
+Landing order: #192 and #480, then #479. Next: nothing pending; retarget onto main once they land.
