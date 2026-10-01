@@ -470,7 +470,7 @@ items:
   pull_request_number: 216
   track: method-selection
   depends_on: []
-  status: in_progress
+  status: done
   session: https://claude.ai/code/session_019FYgjdCK7BStm7KdSDyrwY
   notes: >
     The digital twin models a surface's colour but not its finish, which is the property that
