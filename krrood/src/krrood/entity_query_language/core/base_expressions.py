@@ -288,13 +288,15 @@ class SymbolicExpression(AbstractContextManager, HasExpression):
         self, old_child: SymbolicExpression, new_child: SymbolicExpression
     ):
         """
-        Replace a child expression with a new child expression.
+        Replace a child expression with a new child expression, attached the way
+        :meth:`_update_children_` attaches one.
 
         :param old_child: The old child expression.
         :param new_child: The new child expression.
         """
         if old_child is new_child:
             return
+        new_child = new_child._as_embeddable_child_(self)
         _children_ids_ = [v._id_ for v in self._children_]
         child_idx = _children_ids_.index(old_child._id_)
         self._children_[child_idx] = new_child

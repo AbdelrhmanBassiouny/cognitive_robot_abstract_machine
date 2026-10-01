@@ -560,18 +560,20 @@ class NonAggregatorInHavingConditionsError(AggregationUsageError):
 @dataclass
 class AggregatorInWhereConditionsError(AggregationUsageError):
     """
-    Raised when an aggregator is used in a where condition.
+    Raised when a where condition uses an aggregator over a variable the query selects,
+    which takes no single value per row. An aggregator over variables the query does not
+    select is a subquery instead.
 
     For further details, see :doc:`/krrood/doc/eql/result_processors`.
     """
 
     aggregators: Tuple[Aggregator, ...]
     """
-    The aggregators in the where condition.
+    The aggregators in the where condition over variables the query selects.
     """
 
     def error_message(self) -> str:
-        return f"The where condition of the query {self.query} contains aggregators {self.aggregators}."
+        return f"The where condition of the query {self.query} contains aggregators over variables it selects {self.aggregators}."
 
     def suggest_correction(self) -> str:
         return (
