@@ -33,10 +33,13 @@ Four threads from the developer on `base.py` / `predicates.py`:
 - `.living_worlds_tally/master.json` committed by accident in `581d941a` (a local pytest
   run + `git add -A`): removed in `498306d8`, replied, resolved. `main`'s `.gitignore`
   lacks the entry - a separate one-line fix off `main`, offered, not done.
-- Developer proposed `Triple.from_subject_object` for the Triple/Predicate thread;
-  recommended it (default implementation in krrood resolving fields from the
-  `subject`/`object` properties, as the verbalizer already does) over a body-to-body base.
-  Awaiting go-ahead.
+- Developer chose `Triple.from_subject_object` + closing both gaps: done in `a326db09`
+  (krrood `Triple` generic over `SubjectType`/`ObjectType` with `SubClassSafeGeneric`,
+  `from_subject_object`, `subject_field_name`/`object_field_name`; sdt relations bind
+  their types, `VisibleTo` via forward ref "Camera" (import cycle); segmind bound
+  `Triple[Body, Body]`). Thread replied + resolved. krrood 2441 passed (2 graphviz env
+  failures); sdt failures identical with change stashed.
+- `.gitignore` fix opened separately as #481 (`bug`, draft, off `main`).
 
 ## Next
 
