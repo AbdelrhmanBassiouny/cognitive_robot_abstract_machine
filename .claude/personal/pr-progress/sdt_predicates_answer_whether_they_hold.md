@@ -22,6 +22,15 @@ mode, 2026-10-01 (session_016LRmUnGe5NAuEmCxZy9E6t).
 - PR description rewritten to the branch's current state.
 - Formatter deliberately not applied to segmind files (would reformat ~450 lines).
 
+## Fork review round, 2026-10-01 (pushed as `581d941a`)
+
+Four threads from the developer on `base.py` / `predicates.py`:
+- TypeVar bound to `Triple` for `get_relation`'s relation (`BodyRelation`): done, resolved.
+- `obj` loop variable in `get_relation` -> `tracked_body`: done, resolved.
+- `VisibleTo.obj` -> `VisibleTo.entity` (tests, coraplex updated): done, resolved.
+- "Restricted to Triple, not Predicate?": answered (Triple is the nearest existing bound,
+  not exact; a dedicated body-to-body base would close it) — left open for the developer.
+
 ## Next
 
 - Approve CI on the new head; confirm segmind's new test and the sdt job.
