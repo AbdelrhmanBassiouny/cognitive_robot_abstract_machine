@@ -175,17 +175,15 @@ items:
   track: request-language
   depends_on: []
   status: in_progress
-  session: https://claude.ai/code/session_0137umDhuvEG3jkbh6iZUDzQ
+  session: https://claude.ai/code/session_016LRmUnGe5NAuEmCxZy9E6t
   blockers:
     - >-
-      Upstream review on cram2#655 (this branch, promoted 2026-09-21) is the real stall, invisible
-      from the fork PR: tomsch420 requested changes on 2026-09-22 and three threads were open, all
-      agreed by the developer on 2026-10-01 - r4069013391 (segmind
-      `spatial_relation_detector_nodes.py:52`, "all these lambdas are kinda ugly"), r4069017507
-      (`predicates.py:72`, `Stable.obj`, "no abbreviations and class this body") and r4069020640
-      (`predicates.py:77`, `Stable.__call__` raising NotImplementedError, "we can also just delete
-      this"). LucaKro's changes-requested thread (drop the function-spelled aliases) is resolved by
-      f218400e. Being addressed by the 2026-10-01 resolve.
+      Upstream review on cram2#655: tomsch420's changes-requested review (2026-09-22) had three
+      threads, all agreed by the developer on 2026-10-01, and all three are now addressed on the
+      branch (`9fcff7cf` removes `Stable`, settling r4069020640 and r4069017507; `27f88034` hands
+      segmind's detectors the relation class instead of lambdas, r4069013391). Waiting on the
+      developer to answer the threads on cram2#655 and on the reviewers' re-review - a session may
+      not comment there.
     - >-
       `test_each_lib (semantic_digital_twin)` is red on the branch's own CI (last executed run,
       78510c56, 2026-09-29) with every test passing - "1766 passed, 52 skipped" - and the run failed
