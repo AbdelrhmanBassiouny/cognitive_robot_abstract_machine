@@ -180,7 +180,7 @@ def probability_of(condition: ConditionType) -> Probability:
     # Local import: avoids a circular import through operators/probabilistic_queries.py.
     from krrood.entity_query_language.operators.probabilistic_queries import Probability
 
-    return Probability(condition=condition)
+    return Probability(condition)
 
 
 # %% Variable Declaration

@@ -8,10 +8,9 @@ from dataclasses import dataclass
 import pytest
 
 from krrood.entity_query_language.core.mapped_variable import Attribute
-from krrood.entity_query_language.factories import a, probability_of, variable
+from krrood.entity_query_language.factories import a, variable
 
 from ...dataset.expression_stand_ins import ValueStandInWithUnreadableProperty
-from ...dataset.semantic_world_like_classes import Body
 
 
 @dataclass
@@ -52,12 +51,3 @@ def test_match_filters_on_a_private_attribute_of_the_matched_class():
 def test_match_raises_for_a_missing_name_of_its_own_form():
     with pytest.raises(AttributeError):
         _ = a(SerialNumbered)._missing_
-
-
-# %% names a probability keeps for itself
-
-
-def test_probability_raises_for_a_missing_name_of_its_own_form():
-    body = variable(Body, domain=[])
-    with pytest.raises(AttributeError):
-        _ = probability_of(body.size > 1)._missing_

@@ -138,8 +138,20 @@ print(entity(alert).where(hot > alert).tolist())
 # [0.25]
 ```
 
-Inside another query the probability is always counted over its condition's domain,
-the way the batch above is; only a probability asked for on its own reads the model.
+Counted, a probability is an aggregator -- the fraction of rows its condition holds
+for -- so in a grouped query it is the probability within each group, here the share of
+hot robots at each charge level:
+
+```python
+from krrood.entity_query_language.factories import set_of
+
+hot = probability_of(y.temperature > 0.5)
+print(set_of(y.charge, hot).grouped_by(y.charge).tolist())
+```
+
+Inside another query, and in a grouped one, the probability is always counted over its
+condition's domain, the way the batch above is; only a probability asked for on its own
+reads the model.
 
 ## "Given today's charge level, what does the rest look like?"
 

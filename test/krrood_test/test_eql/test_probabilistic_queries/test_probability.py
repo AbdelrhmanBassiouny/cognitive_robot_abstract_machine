@@ -10,6 +10,7 @@ from krrood.entity_query_language.factories import (
     and_,
     entity,
     probability_of,
+    set_of,
     variable,
 )
 from krrood.parametrization.exceptions import JointQueryAcrossClassesNotSupported
@@ -127,3 +128,21 @@ def test_probability_on_the_left_of_a_comparison_builds_a_condition():
 
     expected_probability = probability.first()
     assert below == [t for t in thresholds if expected_probability > t.value]
+
+
+# %% a probability within each group
+
+
+def test_grouped_probability_is_the_probability_within_each_group():
+    coin = variable(Coin, domain=_COIN_DOMAIN)
+    probability = probability_of(coin.a < 0.5)
+
+    rows = set_of(coin.b, probability).grouped_by(coin.b).tolist()
+
+    def probability_among(b: float) -> float:
+        coins_with_b = variable(Coin, domain=[c for c in _COIN_DOMAIN if c.b == b])
+        return probability_of(coins_with_b.a < 0.5).first()
+
+    assert {row[coin.b]: row[probability] for row in rows} == {
+        b: probability_among(b) for b in {c.b for c in _COIN_DOMAIN}
+    }
