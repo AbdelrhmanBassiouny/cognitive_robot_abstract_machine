@@ -1,7 +1,8 @@
 """
 Grammar rules for the probabilistic query constructs:
-:class:`~krrood.entity_query_language.operators.probabilistic_queries.Distribution` and
-:class:`~krrood.entity_query_language.operators.probabilistic_queries.Probability`.
+:class:`~krrood.entity_query_language.operators.probabilistic_queries.Distribution`,
+:class:`~krrood.entity_query_language.operators.probabilistic_queries.Probability` and
+:class:`~krrood.entity_query_language.operators.probabilistic_queries.ProbabilityValue`.
 
 Auto-registered by :mod:`~krrood.entity_query_language.verbalization.grammar.framework.registry`
 (any module named ``rules.py`` under ``grammar/`` is walked and imported, and every concrete
@@ -18,6 +19,7 @@ from typing_extensions import List
 from krrood.entity_query_language.operators.probabilistic_queries import (
     Distribution,
     Probability,
+    ProbabilityValue,
 )
 from krrood.entity_query_language.verbalization.fragments.base import (
     BlockFragment,
@@ -139,3 +141,24 @@ class ProbabilityRule(PhraseRule):
                 context.child(node.condition),
             ]
         )
+
+
+@dataclass
+class ProbabilityValueRule(PhraseRule):
+    """
+    Realise a probability used as a number inside another query exactly as the
+    probability itself reads.
+
+    >>> from krrood.entity_query_language.factories import entity, probability_of, variable
+    >>> robot = variable(Robot, [])
+    >>> limit = variable(int, [])
+    >>> verbalize_expression(entity(limit).where(limit > probability_of(robot.battery > 50)))
+    'Find an Integer such that the Integer is greater than the probability that the battery of a Robot is greater than 50'
+    """
+
+    construct = ProbabilityValue
+
+    def build(
+        self, node: ProbabilityValue, context: RuleContext
+    ) -> VerbalizationFragment:
+        return context.child(node.probability)

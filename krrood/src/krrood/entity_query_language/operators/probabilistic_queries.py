@@ -19,13 +19,21 @@ same base, the same shape ``operators/aggregators.py`` bundles ``Sum``/``Max``/`
 
 from __future__ import annotations
 
+import uuid
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing_extensions import Any, Iterator, Tuple, TYPE_CHECKING
+from functools import cached_property
+from typing_extensions import Any, Iterator, Tuple, Type, TYPE_CHECKING
 
 from krrood.entity_query_language.core.base_expressions import (
     HasExpression,
+    OperationResult,
     SymbolicExpression,
+    UnaryExpression,
+)
+from krrood.entity_query_language.core.mapped_variable import (
+    CanBehaveLikeAVariable,
+    HasSymbolicOperations,
 )
 from krrood.entity_query_language.core.variable import Literal
 from krrood.entity_query_language.evaluable import Evaluable
@@ -79,7 +87,7 @@ class ProbabilisticQuery(Evaluable, HasExpression, ABC):
 
 
 @dataclass(eq=False, repr=False)
-class Probability(ProbabilisticQuery):
+class Probability(ProbabilisticQuery, HasSymbolicOperations[float]):
     """
     The probability of a condition, e.g. ``probability_of(x.A > 5)`` for
     ``x = variable(MyClass)``. Accepts any condition a ``.where(...)`` clause does.
@@ -87,12 +95,20 @@ class Probability(ProbabilisticQuery):
     Resolves two ways: exactly via :meth:`_resolve_` under a
     :class:`~krrood.entity_query_language.backends.ProbabilisticBackend`, or by
     counting matching rows via :meth:`_evaluate_natively_` under any other backend.
+    Inside another query it stands for a number, counted the same way, so it can be
+    compared with or computed on like any other numeric value.
     See :doc:`/krrood/doc/eql/user/probabilistic_queries` for the full walkthrough.
     """
 
     condition: SymbolicExpression
     """
     The condition to compute the probability of.
+    """
+
+    _id_: uuid.UUID = field(init=False, default_factory=uuid.uuid4)
+    """
+    The identity this is hashed by, since comparing two probabilities builds a
+    condition.
     """
 
     def __post_init__(self):
@@ -107,6 +123,31 @@ class Probability(ProbabilisticQuery):
         :raises JointQueryAcrossClassesNotSupported: If the condition references
             attributes reached from more than one ``variable(...)`` root, or none.
         """
+        yield from entity(self._symbolic_expression_).evaluate()
+
+    @property
+    def _type_(self) -> Type[float]:
+        """
+        :return: The type of the number a probability is.
+        """
+        return float
+
+    def _is_own_name_(self, name: str) -> bool:
+        """
+        :param name: A name that this probability does not define.
+        :return: Whether the name belongs to the probability's own machinery, which
+            keeps its state behind underscore-prefixed names.
+        """
+        return name.startswith("_")
+
+    @cached_property
+    def _symbolic_expression_(self) -> ProbabilityValue:
+        """
+        :return: The value of this probability, as an expression another query can use
+            as an operand.
+        :raises JointQueryAcrossClassesNotSupported: If the condition references
+            attributes reached from more than one ``variable(...)`` root, or none.
+        """
         referenced_attributes = WhereExpressionToRandomEventTranslator(
             self.condition
         ).variables.keys()
@@ -114,10 +155,10 @@ class Probability(ProbabilisticQuery):
         if len(roots) != 1:
             raise JointQueryAcrossClassesNotSupported({root._type_ for root in roots})
         [root_variable] = roots
-
-        matching_count = entity(count(root_variable)).where(self.condition).first()
-        total_count = entity(count(root_variable)).first()
-        yield matching_count / total_count
+        fraction = entity(count(root_variable)).where(self.condition) / entity(
+            count(root_variable)
+        )
+        return ProbabilityValue(fraction, probability=self)
 
     def _resolve_(self, model_registry: ModelRegistry) -> float:
         parameters = ConditionParameters(self.condition)
@@ -129,6 +170,36 @@ class Probability(ProbabilisticQuery):
 
     def __repr__(self) -> str:
         return f"probability_of({self.condition!r})"
+
+
+@dataclass(eq=False, repr=False)
+class ProbabilityValue(UnaryExpression, CanBehaveLikeAVariable[float]):
+    """
+    The value of a :class:`Probability`, standing where another query expects a number.
+
+    Its child computes the fraction of the condition's domain the condition holds for.
+    """
+
+    probability: Probability = field(kw_only=True)
+    """
+    The probability this is the value of.
+    """
+
+    def __post_init__(self):
+        super().__post_init__()
+        self._var_ = self
+        self._type_ = float
+
+    @property
+    def _name_(self) -> str:
+        return repr(self.probability)
+
+    def _evaluate__(self, sources: OperationResult) -> Iterator[OperationResult]:
+        for child_result in self._child_._evaluate_(sources):
+            value = self._child_._process_result_(child_result)
+            yield OperationResult(
+                child_result.bindings | {self._id_: value}, self, child_result
+            )
 
 
 @dataclass(eq=False, repr=False)

@@ -2,12 +2,25 @@ import pytest
 from random_events.interval import closed
 from random_events.product_algebra import SimpleEvent
 
-from krrood.entity_query_language.backends import EntityQueryLanguageBackend, ProbabilisticBackend
-from krrood.entity_query_language.factories import and_, probability_of, variable
+from krrood.entity_query_language.backends import (
+    EntityQueryLanguageBackend,
+    ProbabilisticBackend,
+)
+from krrood.entity_query_language.factories import (
+    and_,
+    entity,
+    probability_of,
+    variable,
+)
 from krrood.parametrization.exceptions import JointQueryAcrossClassesNotSupported
 from krrood.parametrization.model_registries import DictRegistry
 
-from ._fixtures import Coin, OtherClass, build_three_independent_variables_circuit
+from ._fixtures import (
+    Coin,
+    OtherClass,
+    Threshold,
+    build_three_independent_variables_circuit,
+)
 
 # A small, hand-picked domain (not sampled) so the expected fraction is exact, not an
 # approximation -- 4 out of 6 coins have a < 0.5.
@@ -87,3 +100,30 @@ def test_probability_of_true_rejected_natively_too():
     """
     with pytest.raises(JointQueryAcrossClassesNotSupported):
         probability_of(True).first()
+
+
+# %% a probability used as an operand of another query
+
+
+def test_probability_compared_in_another_query_filters_by_its_value():
+    coin = variable(Coin, domain=_COIN_DOMAIN)
+    probability = probability_of(coin.a < 0.5)
+    thresholds = [Threshold(0.5), Threshold(0.7), Threshold(0.9)]
+    threshold = variable(Threshold, domain=thresholds)
+
+    above = entity(threshold).where(threshold.value > probability).tolist()
+
+    expected_probability = probability.first()
+    assert above == [t for t in thresholds if t.value > expected_probability]
+
+
+def test_probability_on_the_left_of_a_comparison_builds_a_condition():
+    coin = variable(Coin, domain=_COIN_DOMAIN)
+    probability = probability_of(coin.a < 0.5)
+    thresholds = [Threshold(0.5), Threshold(0.7)]
+    threshold = variable(Threshold, domain=thresholds)
+
+    below = entity(threshold).where(probability > threshold.value).tolist()
+
+    expected_probability = probability.first()
+    assert below == [t for t in thresholds if expected_probability > t.value]
