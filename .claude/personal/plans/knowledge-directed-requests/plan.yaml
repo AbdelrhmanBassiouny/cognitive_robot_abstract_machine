@@ -259,6 +259,12 @@ items:
     segmind's detectors, coraplex and the sage_10k demos. The `Reachable` wording thread r3896606294
     was resolved by the developer; `Stable` is removed rather than migrated, at the upstream
     review's ask, since it never answered.
+
+    Widened 2026-10-01 into krrood, at the developer's direction on the fork review: `Triple` is
+    now generic over its subject and object types (`Triple[Body, Body]` for support and contact)
+    and gains `from_subject_object`, which builds a relation whatever order its fields are declared
+    in. segmind's `get_relation` accepts only `Triple[Body, Body]` and builds through it
+    (`a326db09`). #33's rebase onto this branch meets these `Triple` changes too.
 - id: search-clipped-to-a-predicates-region
   title: Clip the search to the region a spatial predicate allows
   branch: claude/kdp-search-constraints-pfaph7

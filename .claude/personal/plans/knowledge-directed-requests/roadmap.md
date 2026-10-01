@@ -309,3 +309,18 @@ else merged. That budget arrived on `main` on 2026-09-18 and the count flips bet
 ROS-only tests rather than a leak this branch adds: without ROS its predicate tests leave
 no world behind, and a relation used inside a query keeps its world alive on `main`
 exactly as here. Still open, and needs a ROS environment to settle.
+
+### `predicates-answer-whether-they-hold`: `Triple` widened into krrood, 2026-10-01
+
+The fork review asked whether `get_relation` was really restricted to `Triple` rather than any
+`Predicate`. It was not, exactly: it built each relation positionally, which `Triple` does not
+guarantee puts the subject first, and `Triple` did not say what kinds of things it relates
+(`VisibleTo`'s object is a `Camera`). The developer chose a `from_subject_object` constructor on
+`Triple` over a body-to-body base in sdt, and asked for both gaps closed: `Triple` is now
+`Generic[SubjectType, ObjectType]` with `SubClassSafeGeneric`, `from_subject_object` reads the
+field names off the `subject`/`object` properties as the sentence rendering already did, and every
+relation binds its types (`VisibleTo` through a forward reference, since a runtime `Camera` import
+closes `robot_parts` -> `semantic_annotations` -> `predicates`). Done in `a326db09`.
+
+The same round found `.living_worlds_tally/` committed by accident: `main`'s combined world budget
+writes it at the repository root and nothing ignored it. Fixed off `main` as #481 (`bug`).
