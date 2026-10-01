@@ -200,3 +200,31 @@ the lines nine open upstream threads point at, and would make every stacked bran
 second move. #154, #211 and #430 are deliberately *not* made to depend on it: the move is cheap to
 redo, while crossing it is not. The one hazard worth a test is the silent case: a module added
 directly under `basstler/` merges cleanly into the old location.
+
+## 2026-10-01 - cram2#659 second round (tomsch420)
+
+tomsch420 requested changes on the new head with eight threads, mostly "scattered constants".
+The user had already agreed in replies to: path enums for `plan_item_mode.py`'s `Directory` and
+`Location`, grouping the scattered path constants, discovering packages in `sync_version.py`
+rather than listing them, and removing the conftest's `sys.path` insert. They also suggested an
+AGENTS.md rule for enum value types. All are in `1f6b3c585`.
+
+- **`Directory(Path, Enum)` does not work, so the ask was answered differently.** Python 3.11
+  cannot subclass `Path`; on 3.12+ every derived path (`member / "x"`) goes through the enum's
+  member lookup and raises. `basstler/locations.py` therefore holds plain enums whose values are
+  `Path`s, with `__fspath__`, `__str__` and `__truediv__`, so a member works wherever a path
+  does. The AGENTS.md rule records the trap.
+- **The dependency regexes went further than asked.** `importlib.metadata.distributions(name=)`
+  already compares names per PEP 503, so the separator regex, `canonical_name` and the cached
+  installed set are deleted. The cache was also a latent defect: anything installed after its
+  first read stayed invisible to the process, which the new spelling test exposed. One regex
+  (the PEP 508 name boundary) remains, because `packaging` cannot be imported by a module that
+  runs before anything is installed.
+- **`sync_version.py`** follows setuptools' own resolution (named `package-dir`, then the `""`
+  mapping, then `packages.find.where`, then beside the `pyproject.toml`), applied to the module
+  each version attribute names. That needs no special case for basstler and skips segmind, whose
+  version is set in its `__init__`.
+- **The `sys.path` insert was already redundant**: `test/` is a package, so pytest's default
+  import mode puts the repository root on `sys.path` itself.
+- Dropped along the way: the second `GITHUB_API_ROOT`, and `HookScript.PLAN_ITEM_BOOTSTRAP`,
+  which named the pre-move `.claude/hooks/` path and had no reader.
