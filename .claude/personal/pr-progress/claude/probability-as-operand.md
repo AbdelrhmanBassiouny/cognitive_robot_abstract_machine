@@ -25,4 +25,6 @@ Review round 2026-10-01 (three fork threads):
   names (variable-like); that test removed. #480 merged in (1332f33d3) so a nested probability in
   a where reads as a subquery. krrood 2094 passed.
 
+#480 review round merged in (b1fb7747b), krrood 2095 passed.
+
 Landing order: #192 and #480, then #479. Next: nothing pending; retarget onto main once they land.
