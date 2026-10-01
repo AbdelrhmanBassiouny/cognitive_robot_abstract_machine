@@ -288,3 +288,27 @@ not arbitrate between a small pose error and a small model error, which is the d
 call per setup. And a belief is *the* pose rather than an offset composed with each
 frame's own, which is right for a camera that does not move between captures and would
 need revisiting for one that does.
+
+### `predicates-answer-whether-they-hold`: the stall was upstream, 2026-10-01
+
+The fork PR looked clean (out of draft, no open threads, the Reachable thread resolved by
+the developer), but its upstream pull request cram2#655 carried two changes-requested
+reviews. LucaKro's one thread (drop the function-spelled aliases) had already been settled
+by `f218400e`; tomsch420's three were open until the developer agreed to all of them on
+2026-10-01. Resolved on the branch: `Stable` is removed rather than renamed, since it only
+ever raised `NotImplementedError` and nothing used it, and segmind's `get_relation` takes
+the relation class itself. Worth knowing for any later relation: casting a krrood
+`Predicate` to `bool` evaluates it, so a relation class is already a valid two-argument
+truth test without a wrapper.
+
+Two recorded facts turned out wrong and are corrected in the manifest. The item's
+blocker said the `Reachable` thread was deliberately open; it had been resolved. And the
+`integration-conflict` label of 2026-09-23 blames `claude/function-case-type-checking-block`
+(#226), but the failing probe passed every test (1766 passed) and failed only on
+`test/conftest.py`'s combined worlds-in-memory budget at 31 against 30; #226 touches only
+krrood's function-case template, and this branch's own CI fails identically with nothing
+else merged. That budget arrived on `main` on 2026-09-18 and the count flips between 30 and
+31 across runs of the same tree, which points at a per-process cache somewhere in the
+ROS-only tests rather than a leak this branch adds: without ROS its predicate tests leave
+no world behind, and a relation used inside a query keeps its world alive on `main`
+exactly as here. Still open, and needs a ROS environment to settle.
