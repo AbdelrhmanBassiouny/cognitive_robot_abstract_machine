@@ -52,7 +52,8 @@ items:
     `96146eb45`: `.claude` named once as `ProjectLocation.CLAUDE_CODE_DIRECTORY`, and the test
     constants grouped into enums. 690 tests pass on 3.11 and 3.12. Waiting on the upstream
     reviewers. `Directory(Path, Enum)` cannot be built on 3.11, which basstler still supports, so
-    the enums carry `Path` values; the fork thread asking why is open for the user.
+    the enums carry `Path` values. The user chose (2026-10-01) to make the
+    cleaner `Path` mixin part of `basstler-src-layout`, together with a 3.12+ environment for basstler.
   notes: |-
     Moves every Python file already on main under `.claude/` into one package: `.claude/stack/`
     (`stack.py`, the maintenance modules, `class_property.py`), `.claude/skills/plan-dashboard/`'s seven
@@ -223,6 +224,22 @@ items:
     land it after whichever of them is close to merging, and have the rest merge across it under
     decision 13's whichever-lands-second rule. It is not made to wait on all three, since the
     upstream queue can hold them for weeks.
+
+    **Also in scope: basstler's own Python 3.12+ environment** (the user, 2026-10-01, on #185's
+    `locations.py:15` thread). The install creates a virtual environment from a 3.12+ interpreter,
+    installs basstler into it editable, and the hooks run that environment's Python rather than
+    whatever `python3` is. With that in place, raise `requires-python` to `>=3.12` and make
+    `PathEnumeration` a real `Path` mixin, `class PathEnumeration(Path, ReprEnum)`, overriding
+    `with_segments` to return a plain `Path` and restoring `__hash__ = Path.__hash__`. It is a
+    one-file change in `locations.py`, since callers already treat members as paths. Mind that
+    `member.name` then reads the path's file name, because `Path.name` shadows the enum's.
+    Why not just bump the version: in the cloud container `python3` is 3.11.15, the only
+    interpreter with the dependencies installed, and the hooks call it in 19 places. The container's
+    `python3.12` is Ubuntu's system interpreter, without the dependencies and marked
+    `EXTERNALLY-MANAGED`, so the hook's own `pip install` is refused there. Finding a 3.12+
+    interpreter where none is the default (`uv python install` is one option) is a design point for
+    this item's review. The environment also settles the `PYTHONPATH` point above, since a
+    caller would run the environment's interpreter instead.
 
     **Landing hazard.** `basstler/` keeps existing (it holds `pyproject.toml` and the README), so
     git sees per-file renames rather than a directory rename. A module a stacked branch adds

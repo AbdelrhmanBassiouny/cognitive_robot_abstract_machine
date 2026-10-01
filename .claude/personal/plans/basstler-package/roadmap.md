@@ -241,3 +241,14 @@ thread asked why `PathEnumeration` exists rather than `class X(Path, Enum)`. Tes
 mixin fails on 3.11, and on 3.12+ needs `with_segments`, `__hash__` and `ReprEnum` overrides and
 still shadows the enum's `name`. It stays open for the user, and becomes a one-file change if
 basstler moves to `>=3.12`.
+
+
+## 2026-10-01 - the 3.12 bump goes to basstler-src-layout
+
+The user asked to make basstler `>=3.12` so `PathEnumeration` could become `class
+PathEnumeration(Path, ReprEnum)`, unless that hurt cloud sessions. It does: the cloud container's
+`python3` is 3.11.15, the only interpreter with basstler's dependencies, and every module imports
+`locations.py`, so a 3.12-only class would break every session start. The container's 3.12 is an
+externally managed system interpreter with none of the dependencies. The user chose to fold the
+bump into `basstler-src-layout`, whose editable install now also creates basstler's own 3.12+
+environment for the hooks to run, with the mixin as a one-file follow-on.
