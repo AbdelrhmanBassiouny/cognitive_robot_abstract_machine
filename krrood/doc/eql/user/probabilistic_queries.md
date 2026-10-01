@@ -123,6 +123,36 @@ count, only the model (as with `backend` above). The counting answer is only eve
 good as the fleet it's counting; the model-based one is exact regardless of fleet
 size, because there never was a fleet to begin with.
 
+### Using a probability inside another query
+
+A probability is a number, so another query can compare with it or compute on it like
+any other numeric value -- here, which alert levels the share of hot robots has
+crossed:
+
+```python
+from krrood.entity_query_language.factories import entity
+
+hot = probability_of(y.temperature > 0.5)
+alert = variable(float, domain=[0.25, 0.5, 0.75])
+print(entity(alert).where(hot > alert).tolist())
+# [0.25]
+```
+
+Counted, a probability is an aggregator -- the fraction of rows its condition holds
+for -- so in a grouped query it is the probability within each group, here the share of
+hot robots at each charge level:
+
+```python
+from krrood.entity_query_language.factories import set_of
+
+hot = probability_of(y.temperature > 0.5)
+print(set_of(y.charge, hot).grouped_by(y.charge).tolist())
+```
+
+Inside another query, and in a grouped one, the probability is always counted over its
+condition's domain, the way the batch above is; only a probability asked for on its own
+reads the model.
+
 ## "Given today's charge level, what does the rest look like?"
 
 Every robot left the dock at a 1.5 charge level today, and anything moving slower than

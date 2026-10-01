@@ -136,6 +136,6 @@ class ProbabilityRule(PhraseRule):
         return PhraseFragment(
             parts=[
                 Keywords.THE_PROBABILITY_THAT.as_fragment(),
-                context.child(node.condition),
+                context.child(node._child_),
             ]
         )

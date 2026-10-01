@@ -53,6 +53,7 @@ from krrood.entity_query_language.core.mapped_variable import (
     FlatVariable,
     CanBehaveLikeAVariable,
     HasSymbolicOperations,
+    ReservesFrameworkNames,
     MappedVariable,
     IndexByValue,
 )
@@ -224,7 +225,7 @@ class AbstractMatchExpression(MatchAssignedValue, Generic[T], ABC):
 class Match(
     Evaluable,
     HasQueryModifiers[T],
-    HasSymbolicOperations[T],
+    ReservesFrameworkNames[T],
     AbstractMatchExpression[T],
     HasFactoryAndKwargs[T],
     HasExpression,
@@ -355,15 +356,6 @@ class Match(
             call beyond the pattern's own means.
         """
         return "__call__" in dir(self._type_)
-
-    def _is_own_name_(self, name: str) -> bool:
-        """
-        :param name: A name that this match does not define.
-        :return: Whether the name belongs to the match machinery, which keeps its own
-            state behind underscore-prefixed names, leaving every other name to the
-            matched class.
-        """
-        return name.startswith("_")
 
     @property
     def _symbolic_expression_(self) -> Entity[T]:

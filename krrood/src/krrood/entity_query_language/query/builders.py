@@ -14,6 +14,7 @@ from functools import cached_property
 
 from ordered_set import OrderedSet
 from typing_extensions import (
+    Set,
     Tuple,
     List,
     Type,
@@ -50,6 +51,7 @@ from krrood.entity_query_language.query.operations import (
 from krrood.entity_query_language.operators.aggregators import Aggregator, CountAll
 from krrood.entity_query_language.core.variable import (
     Literal,
+    Variable,
 )
 from krrood.entity_query_language.core.mapped_variable import MappedVariable
 from krrood.patterns.caching import memoize
@@ -107,6 +109,12 @@ class FilterBuilder(ExpressionBuilder, ABC):
     """
 
     def __post_init__(self):
+        self._accept_conditions_()
+
+    def _accept_conditions_(self):
+        """
+        Check the filter's conditions, whenever conditions are given to it.
+        """
         self.assert_correct_conditions()
 
     def assert_correct_conditions(self):
@@ -173,22 +181,93 @@ class WhereBuilder(FilterBuilder):
     Metadata for the `Where` Filter.
     """
 
+    def _accept_conditions_(self):
+        """
+        Check the where conditions, then read every aggregator unrelated to the query
+        as a subquery.
+        """
+        super()._accept_conditions_()
+        self._replace_unrelated_aggregators_with_subqueries_()
+
     def assert_correct_conditions(self):
         """
         Assert that the where conditions are correct.
 
-        :raises AggregatorInWhereConditionsError: If the where conditions contain any
-            aggregators.
+        :raises AggregatorInWhereConditionsError: If the where conditions contain an
+            aggregator over a variable the query selects, which takes no single value per
+            row.
         """
         super().assert_correct_conditions()
-        aggregators, non_aggregators = (
-            self.aggregators_and_non_aggregators_in_conditions
+        related_aggregators = tuple(
+            aggregator
+            for aggregator in self.aggregators_and_non_aggregators_in_conditions[0]
+            if not self._is_unrelated_to_the_query_(aggregator)
         )
-        if aggregators:
-            raise AggregatorInWhereConditionsError(aggregators, query=self.query)
+        if related_aggregators:
+            raise AggregatorInWhereConditionsError(
+                related_aggregators, query=self.query
+            )
 
     def build(self) -> Where:
         return Where(self.conditions_expression)
+
+    @cached_property
+    def variables_of_the_query(self) -> Set[uuid.UUID]:
+        """
+        :return: The identifiers of the variables the query binds per row: those its
+            selection is built on. A variable only its conditions use is existential, so
+            it binds nothing outside the condition that uses it.
+        """
+        return self._variables_reached_from_(self.query._selected_variables_)
+
+    @staticmethod
+    def _variables_reached_from_(
+        expressions: Tuple[SymbolicExpression, ...],
+    ) -> Set[uuid.UUID]:
+        """
+        :param expressions: The expressions to look through.
+        :return: The identifiers of the variables the expressions are built on.
+        """
+        return {
+            node._id_
+            for expression in expressions
+            for node in (expression, *expression._descendants_)
+            if isinstance(node, Variable)
+        }
+
+    def _is_unrelated_to_the_query_(self, aggregator: Aggregator) -> bool:
+        """
+        :param aggregator: An aggregator in the where conditions.
+        :return: Whether the aggregator is over variables of its own, none of which the
+            query binds per row, so it takes a single value computed over its own
+            variables.
+        """
+        aggregated_variables = self._variables_reached_from_((aggregator,))
+        return bool(aggregated_variables) and aggregated_variables.isdisjoint(
+            self.variables_of_the_query
+        )
+
+    def _replace_unrelated_aggregators_with_subqueries_(self):
+        """
+        Replace every aggregator unrelated to the query by a subquery selecting it, which
+        is computed once over the aggregator's own variables.
+        """
+        from krrood.entity_query_language.query.query import Query
+
+        visited: Set[uuid.UUID] = set()
+        pending: List[SymbolicExpression] = list(self.conditions)
+        while pending:
+            expression = pending.pop()
+            if expression._id_ in visited:
+                continue
+            visited.add(expression._id_)
+            for child in tuple(expression._children_):
+                if isinstance(child, Aggregator) and self._is_unrelated_to_the_query_(
+                    child
+                ):
+                    expression._replace_child_(child, child._as_subquery_())
+                elif not isinstance(child, (Literal, Query)):
+                    pending.append(child)
 
 
 @dataclass(eq=False)

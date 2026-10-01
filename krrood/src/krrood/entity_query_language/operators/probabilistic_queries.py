@@ -24,16 +24,17 @@ from dataclasses import dataclass, field
 from typing_extensions import Any, Iterator, Tuple, TYPE_CHECKING
 
 from krrood.entity_query_language.core.base_expressions import (
+    Bindings,
     HasExpression,
+    OperationResult,
     SymbolicExpression,
 )
-from krrood.entity_query_language.core.variable import Literal
 from krrood.entity_query_language.evaluable import Evaluable
 from krrood.entity_query_language.exceptions import (
     BackendCannotEvaluateProbabilisticQuery,
     NoSolutionFound,
 )
-from krrood.entity_query_language.factories import count, entity
+from krrood.entity_query_language.operators.aggregators import Aggregator
 from krrood.parametrization.exceptions import JointQueryAcrossClassesNotSupported
 from krrood.parametrization.parameterizer import (
     ConditionParameters,
@@ -79,56 +80,70 @@ class ProbabilisticQuery(Evaluable, HasExpression, ABC):
 
 
 @dataclass(eq=False, repr=False)
-class Probability(ProbabilisticQuery):
+class Probability(ProbabilisticQuery, Aggregator[float]):
     """
     The probability of a condition, e.g. ``probability_of(x.A > 5)`` for
     ``x = variable(MyClass)``. Accepts any condition a ``.where(...)`` clause does.
 
-    Resolves two ways: exactly via :meth:`_resolve_` under a
-    :class:`~krrood.entity_query_language.backends.ProbabilisticBackend`, or by
-    counting matching rows via :meth:`_evaluate_natively_` under any other backend.
+    Asked for on its own, it resolves exactly via :meth:`_resolve_` under a
+    :class:`~krrood.entity_query_language.backends.ProbabilisticBackend`, and by counting
+    under any other backend. Counted, it is an aggregator: the fraction of the rows its
+    condition's variables take for which the condition holds, one per group when the
+    query is grouped, and a number another query can compare with or compute on.
     See :doc:`/krrood/doc/eql/user/probabilistic_queries` for the full walkthrough.
     """
 
-    condition: SymbolicExpression
-    """
-    The condition to compute the probability of.
-    """
-
     def __post_init__(self):
-        if not isinstance(self.condition, SymbolicExpression):
-            self.condition = Literal(_value_=self.condition)
+        super().__post_init__()
+        self._type_ = float
 
     def _evaluate_natively_(self) -> Iterator[float]:
         """
-        Counts matching rows via ``entity(count(root)).where(condition)`` instead of
-        resolving a model -- works under any backend with an enumerable domain.
+        Count the fraction of rows the condition holds for, instead of resolving a
+        model.
 
         :raises JointQueryAcrossClassesNotSupported: If the condition references
             attributes reached from more than one ``variable(...)`` root, or none.
         """
+        yield from self._as_subquery_().evaluate()
+
+    def _evaluate__(self, sources: OperationResult) -> Iterator[OperationResult]:
+        """
+        :raises JointQueryAcrossClassesNotSupported: If the condition references
+            attributes reached from more than one ``variable(...)`` root, or none, which
+            a model could not answer either.
+        """
+        self._assert_condition_is_about_one_class_()
+        yield from super()._evaluate__(sources)
+
+    def _assert_condition_is_about_one_class_(self):
+        """
+        :raises JointQueryAcrossClassesNotSupported: If the condition references
+            attributes reached from more than one ``variable(...)`` root, or none.
+        """
         referenced_attributes = WhereExpressionToRandomEventTranslator(
-            self.condition
+            self._child_
         ).variables.keys()
         roots = {attribute._chain_root_ for attribute in referenced_attributes}
         if len(roots) != 1:
             raise JointQueryAcrossClassesNotSupported({root._type_ for root in roots})
-        [root_variable] = roots
 
-        matching_count = entity(count(root_variable)).where(self.condition).first()
-        total_count = entity(count(root_variable)).first()
-        yield matching_count / total_count
+    def _apply_aggregation_function_and_get_bindings_(
+        self, child_result: OperationResult
+    ) -> Iterator[Bindings]:
+        truths = child_result[self._child_._id_]
+        yield {self._id_: sum(1 for truth in truths if truth) / len(truths)}
 
     def _resolve_(self, model_registry: ModelRegistry) -> float:
-        parameters = ConditionParameters(self.condition)
+        parameters = ConditionParameters(self._child_)
         model = model_registry.get_model(parameters)
         return model.probability(parameters.event)
 
     def _get_expression_(self) -> SymbolicExpression:
-        return self.condition
+        return self._child_
 
     def __repr__(self) -> str:
-        return f"probability_of({self.condition!r})"
+        return f"probability_of({self._child_!r})"
 
 
 @dataclass(eq=False, repr=False)

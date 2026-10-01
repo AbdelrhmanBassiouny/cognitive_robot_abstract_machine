@@ -85,6 +85,21 @@ Always use `.where()` for conditions that can be evaluated on individual objects
 for conditions that depend on group-level aggregates.
 ```
 
+## An Aggregate of Other Variables Inside `.where()`
+
+An aggregator in a `.where()` condition over variables the query does not select is
+computed once, as a subquery, and compared as a single value. A variable only the
+conditions use binds nothing per row, so it leaves the aggregator a subquery too:
+
+```python
+# Robots whose battery is above the average charge of every charging station
+query = entity(r).where(r.battery > average(station.charge))
+```
+
+An aggregator over a variable the query selects, such as `entity(r).where(r.battery > average(r.battery))`,
+has no single value per row, so it is refused with `AggregatorInWhereConditionsError`. Group the
+query and filter with `.having()`, or select the aggregate in a subquery of its own.
+
 ## Full Example: ExampleWorld Statistics
 
 ```{code-cell} ipython3

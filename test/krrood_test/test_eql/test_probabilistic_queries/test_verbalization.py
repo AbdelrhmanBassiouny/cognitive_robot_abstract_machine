@@ -2,12 +2,13 @@ from krrood.entity_query_language.factories import (
     a,
     and_,
     distribution_of,
+    entity,
     probability_of,
     variable,
 )
 from krrood.entity_query_language.verbalization.pipeline import verbalize_expression
 
-from ._fixtures import Coin
+from ._fixtures import Coin, Threshold
 
 
 def test_verbalize_distribution_of_match():
@@ -61,3 +62,13 @@ def test_verbalize_probability_of_conjunction():
     assert text.startswith("the probability that")
     assert "the a of a Coin is less than 0.5" in text
     assert "the b of the Coin is less than 1" in text
+
+
+def test_verbalize_probability_compared_in_another_query():
+    coin = variable(Coin)
+    probability = probability_of(coin.a < 0.5)
+    threshold = variable(Threshold)
+
+    text = verbalize_expression(entity(threshold).where(threshold.value > probability))
+
+    assert verbalize_expression(probability) in text
