@@ -381,6 +381,6 @@ now decides by the selection alone.
 Measuring it showed the rule is not yet true of a plain where: entity(body).where(
 employee.salary < body.size) returns one row per witnessing employee (B5 twice over a
 two-employee domain). No item covered that - exists-semijoin is scoped to exists() - so
- was added, after exists-semijoin, whose local-variable
+the `plain-where-locals-existential` item was added, after exists-semijoin, whose local-variable
 computation it reuses.
 
