@@ -67,9 +67,6 @@ plan.
 
 ## Open, at the developer's own discretion (not this plan's to resolve)
 
-- `predicates-answer-whether-they-hold`: whether `Reachable`'s subject reads as *"a
-  HomogeneousTransformationMatrix is reachable by a Body"* or as `montessori-eql-stack`'s
-  own wording, once that stack rebases here (review thread r3896606294).
 - `choose-detection-method`: whether an unmet look should ask krrood's `Expert` for a new
   rule, which needs the expert interface still on the unmerged RDR stack rather than on
   `main`.
