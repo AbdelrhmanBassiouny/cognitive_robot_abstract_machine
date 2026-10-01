@@ -13,7 +13,7 @@ from krrood.entity_query_language.exceptions import (
     UnselectedQueryVariable,
 )
 from krrood.entity_query_language.factories import (
-    an,
+    a,
     entity,
     flat_variable,
     set_of,
@@ -69,8 +69,8 @@ def test_match_condition_rooted_at_the_lowered_query_filters(
     handles_and_containers_world,
 ):
     bodies = handles_and_containers_world.bodies
-    match = an(Body)().from_(bodies)
-    match.where(match.expression.size > 1)
+    match = a(Body).from_(bodies)
+    match.where(match.size > 1)
 
     assert match.tolist() == [body for body in bodies if body.size > 1]
 

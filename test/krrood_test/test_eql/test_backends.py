@@ -5,6 +5,17 @@ from types import EllipsisType
 import pytest
 from sqlalchemy.orm import sessionmaker
 
+import numpy as np
+from probabilistic_model.distributions.distributions import DiracDeltaDistribution
+from probabilistic_model.probabilistic_circuit.rx.probabilistic_circuit import (
+    ProbabilisticCircuit,
+    ProductUnit,
+    SumUnit,
+    leaf,
+)
+from random_events.variable import Continuous
+
+from ..dataset.derived_attributes import Rectangle
 from ..dataset.semantic_world_like_classes import Apple, Body
 from krrood.entity_query_language.backends import (
     SQLAlchemyBackend,
@@ -63,7 +74,7 @@ def test_nested_action():
     variables = parameters.variables
     names_of_actual_specified_parameters = [
         match.name_from_variable_access_path
-        for match in parameters.statement.matches_with_variables
+        for match in parameters.statement._matches_with_variables_
         if (
             isinstance(match.assigned_variable, Literal)
             or isinstance(match.assigned_variable, KRROODVariable)
@@ -202,7 +213,7 @@ def test_probabilistic_query_backend():
         position=a(KRROODPosition)(x=..., y=..., z=...),
         orientation=KRROODOrientation(x=0.0, y=0.0, z=0.0, w=1.0),
     )
-    prob_q.where(prob_q.variable.position.x > 0.5)
+    prob_q.where(prob_q.position.x > 0.5)
 
     pm_backend = ProbabilisticBackend(number_of_samples=10)
     values = list(prob_q.evaluate(backend=pm_backend))
@@ -221,7 +232,7 @@ def test_generative_eql_backend():
     )
     # No explicit resolve(): the subject variable is available as soon as the pattern is
     # specified, so where() can reference it directly.
-    q.where(q.variable.type > q.variable.charge)
+    q.where(q.type > q.charge)
     results = list(q.evaluate(backend=EntityQueryLanguageGenerativeBackend()))
     assert len(results) == 6
     for result in results:
@@ -257,3 +268,82 @@ def test_selective_backend_accepts_match_without_ellipsis_attribute():
     apple = Apple("apple", 7)
     q = an(Apple)(name="apple", size=7).from_([apple])
     assert list(q.evaluate(backend=EntityQueryLanguageBackend())) == [apple]
+
+
+# %% generated instances satisfy the pattern they were generated from
+
+
+RECTANGLE_SIDES = [(3.0, 4.0), (2.0, 2.0)]
+"""
+The width and height of every rectangle the rectangle model can sample.
+"""
+
+
+@pytest.fixture
+def rectangle_model() -> ProbabilisticCircuit:
+    """
+    :return: A model over the sides of a rectangle that samples each pair of
+        :data:`RECTANGLE_SIDES` with equal probability, and knows nothing about the area
+        those sides enclose.
+    """
+    width = Continuous("Rectangle.width")
+    height = Continuous("Rectangle.height")
+    model = ProbabilisticCircuit()
+    root = SumUnit(probabilistic_circuit=model)
+    for rectangle_width, rectangle_height in RECTANGLE_SIDES:
+        sides = ProductUnit(probabilistic_circuit=model)
+        sides.add_subcircuit(
+            leaf(
+                DiracDeltaDistribution(
+                    variable=width, location=rectangle_width, density_cap=1.0
+                ),
+                model,
+            )
+        )
+        sides.add_subcircuit(
+            leaf(
+                DiracDeltaDistribution(
+                    variable=height, location=rectangle_height, density_cap=1.0
+                ),
+                model,
+            )
+        )
+        root.add_subcircuit(sides, np.log(1 / len(RECTANGLE_SIDES)))
+    return model
+
+
+def test_probabilistic_backend_rejects_samples_contradicting_a_derived_attribute(
+    rectangle_model,
+):
+    first_width, first_height = RECTANGLE_SIDES[0]
+    query = a(Rectangle)(width=..., height=..., area=first_width * first_height)
+    backend = ProbabilisticBackend(
+        number_of_samples=20, model_registry=DictRegistry({Rectangle: rectangle_model})
+    )
+    rectangles = query.evaluate(backend=backend)
+    assert {(rectangle.width, rectangle.height) for rectangle in rectangles} == {
+        RECTANGLE_SIDES[0]
+    }
+
+
+def test_enumerating_backend_rejects_instances_contradicting_a_derived_attribute():
+    query = a(Rectangle)(
+        width=variable(int, [1, 2, 3, 4]), height=variable(int, [3, 4, 6]), area=12
+    )
+    rectangles = query.evaluate(backend=EntityQueryLanguageGenerativeBackend())
+    assert {(rectangle.width, rectangle.height) for rectangle in rectangles} == {
+        (2, 6),
+        (3, 4),
+        (4, 3),
+    }
+
+
+def test_enumerating_backend_keeps_instances_whose_factory_renames_a_stated_value():
+    query = a(Rectangle.from_sides)(
+        first_side=variable(int, [3, 4]), second_side=RECTANGLE_SIDES[0][1]
+    )
+    rectangles = query.evaluate(backend=EntityQueryLanguageGenerativeBackend())
+    assert {(rectangle.width, rectangle.height) for rectangle in rectangles} == {
+        (3, RECTANGLE_SIDES[0][1]),
+        (4, RECTANGLE_SIDES[0][1]),
+    }

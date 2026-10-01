@@ -1175,7 +1175,7 @@ def test_order_by_not_evaluated_variable(handles_and_containers_world):
 def test_ordering_the_query_by_the_query_itself(handles_and_containers_world):
     body = variable(Body, domain=handles_and_containers_world.bodies)
     query = entity(body).where(contains(body.name, "Handle"))
-    ordered_query = an(query.ordered_by(query.name[-1], descending=True))
+    ordered_query = a(query.ordered_by(query.name[-1], descending=True))
     filtered_values = [
         b for b in handles_and_containers_world.bodies if "Handle" in b.name
     ]
@@ -1351,7 +1351,7 @@ def test_embedded_subquery_captures_the_current_product_and_shares_variable_leav
     var1 = variable(int, [1, 2, 3])
     source = entity(var1).where(var1 == 2)
 
-    condition = var1 != an(source)
+    condition = var1 != a(source)
     source.build()
 
     embedded = condition.right
