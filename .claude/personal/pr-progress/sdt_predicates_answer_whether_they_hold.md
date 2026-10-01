@@ -40,6 +40,12 @@ Four threads from the developer on `base.py` / `predicates.py`:
   `Triple[Body, Body]`). Thread replied + resolved. krrood 2441 passed (2 graphviz env
   failures); sdt failures identical with change stashed.
 - `.gitignore` fix opened separately as #481 (`bug`, draft, off `main`).
+- `92bd9199`: `get_visible_bodies`, `VisibleTo`, `occluding_bodies` moved to
+  `reasoning/robot_predicates.py` (above `robot_parts`), so `VisibleTo` binds `Camera`
+  unquoted - the developer disliked the forward ref. Cause: annotation layer (`mixins.py`
+  SupportedBy, `semantic_annotations.py` InsideOf, `robot_part_mixins.py` LeftOf/RightOf)
+  imports `predicates.py`, and Camera is built on it. Deeper layering fix (annotations not
+  calling predicates) offered as separate work, not done.
 
 ## Next
 
