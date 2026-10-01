@@ -1,28 +1,31 @@
-# PR #229 — predicates-answer-whether-they-hold (knowledge-directed-perception)
+# PR #229 — predicates-answer-whether-they-hold (knowledge-directed-requests)
 
-Branch `sdt_predicates_answer_whether_they_hold`, off `main`, draft.
-Worked here via `/plan-item-resolve` in `auto` mode, 2026-08-31.
+Branch `sdt_predicates_answer_whether_they_hold`, off `main`. Out of draft and promoted
+upstream as cram2#655 (`in-review`). Last worked via `/plan-item-resolve PR 229` in `auto`
+mode, 2026-10-01 (session_016LRmUnGe5NAuEmCxZy9E6t).
 
-## What this resolve did
+## What stalled it (found 2026-10-01)
 
-1. Verified the duplication against #33. **It was real and substantial.** Evidence in
-   https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/229#issuecomment-5482272328
-2. Fixed CI (`1120178b`): `mixins.py:942` called `is_supported_by` with the pre-rename
-   keywords. The local verification could not see it — that test module needs ROS.
-3. `Reachable` reads the pose as subject (`17631592`), as r3896606294 asked.
-4. All four `Triple`-based relations state their own clause (`0b1234a0`), taking #33's
-   reviewed wordings rather than a third set.
+1. **Upstream review**, invisible from the fork PR: tomsch420 requested changes on
+   cram2#655 (2026-09-22); three threads open, all agreed by the developer on 2026-10-01.
+   LucaKro's thread (drop the function aliases) was already settled by `f218400e`.
+2. **sdt CI red with every test passing**: the combined worlds-in-memory budget in
+   `test/conftest.py` (31 vs 30), flipping between runs of the same tree. Not root-caused.
+3. **`integration-conflict` label** blaming #226 — a misattribution of that same budget.
+4. **Head CI not run**: bot-pushed merges of `main` sit at `action_required`.
 
-## The fold, settled by the developer
+## Done this round (pushed as `27f88034`)
 
-**#229 carries the predicate classes; #33 rebases onto it** and ports its 34 reviewed
-wordings across. Recorded on both plans: knowledge-directed-perception's roadmap, and
-eql-verbalization's `p4-sdt-migration` blockers + roadmap. Both dashboards republished.
+- `9fcff7cf`: removed `Stable` (r4069020640), which also settles r4069017507 (`obj`).
+- `27f88034`: segmind `get_relation` takes the relation class; lambdas gone (r4069013391);
+  new test `test_a_relation_relates_only_the_bodies_it_holds_between` (CI-only, ROS).
+- PR description rewritten to the branch's current state.
+- Formatter deliberately not applied to segmind files (would reformat ~450 lines).
 
-## Still outstanding
+## Next
 
-- **The `Reachable` wording**, thread r3896606294, deliberately left open: this branch
-  says what he asked; eql-verbalization decision 11 says the same thing at greater
-  length. His pick applies to both branches.
-- **CI on the latest push** is the only confirmation the `mixins.py` fix works, since
-  `test_reasoning_queries.py` cannot be collected without ROS.
+- Approve CI on the new head; confirm segmind's new test and the sdt job.
+- Root-cause the 31/30 world budget in a ROS environment (which ROS-only test leaves a
+  per-process world), or decide the budget on `main` is set too tight.
+- Developer to decide whether to drop the `integration-conflict` label.
+- Upstream threads: the developer replies/resolves on cram2#655 (sessions may not).
