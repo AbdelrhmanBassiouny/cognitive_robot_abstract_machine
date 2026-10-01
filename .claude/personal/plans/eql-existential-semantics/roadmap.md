@@ -384,3 +384,42 @@ two-employee domain). No item covered that - exists-semijoin is scoped to exists
 the `plain-where-locals-existential` item was added, after exists-semijoin, whose local-variable
 computation it reuses.
 
+## One existential per query-level local (2026-10-01)
+
+Decided with the developer the same day `plain-where-locals-existential` was added: a
+variable the query does not select, used in several of its where conditions, is quantified
+once over all of them - one existential over the conjunction, not one per condition. This is
+the standard semantics of a conjunctive query (Chandra & Merlin, in the bibliography): a
+Datalog body or a SQL WHERE quantifies each non-head variable once over the whole body. It
+matters because exists distributes over or but not over and; per-condition existentials would
+silently loosen any query that ties two conditions to one unselected object.
+
+Measured on main, bodies of sizes 1-5 and employees earning 2 and 4:
+
+| written | today | per-condition existentials would give |
+| --- | --- | --- |
+| `where(e.salary < size, e.salary > 3)` | B5 | B3, B4, B5 |
+| the same over two `.where()` calls | B5 | B3, B4, B5 |
+| `where(e.salary < size, not_(e.salary > 3))` | B3, B4, B5 | - |
+| `where(exists(e, e.salary < size), e.salary > 3)` | every body (exists defect) | - |
+
+So the engine's cross product already shares the binding; what it lacks is the deduplication
+`plain-where-locals-existential` adds. The rule fixes both items' meaning:
+
+- `plain-where-locals-existential` states it as its definition and pins the first three rows,
+  so removing the duplicates cannot change which bodies match.
+- `exists-semijoin`'s outer-visible set includes query-level locals, not only selected
+  variables: a variable used both inside an exists and in another condition belongs to the
+  query-level existential, so the last row must equal the first (B5).
+- Subqueries and aggregators are scopes of their own (as #480 already treats aggregators),
+  like a SQL alias reused in a subquery.
+
+The price, which is SQL's: one variable object is one quantified variable per scope. "Some
+employee earns more than 3, and no employee earns less than the body's size" needs a second
+`variable(Employee)` for the negated part. Negation over a query-level local is safe - every
+EQL variable carries a domain - so `not_(c(e))` reads "some e fails c", and "no e satisfies c"
+is `not_(exists(...))` over a variable used only there.
+
+`negation-antijoin` and `binding-order-planner` are unaffected: query-level locals are
+enumerated, so they are bound before any negated condition runs.
+

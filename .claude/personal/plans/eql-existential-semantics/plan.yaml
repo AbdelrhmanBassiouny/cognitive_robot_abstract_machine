@@ -267,6 +267,13 @@ items:
       Once locals stop escaping, there is no witness to choose, and the "why the first
       answer?" question disappears rather than needing an answer.
 
+      OUTER-VISIBLE INCLUDES QUERY-LEVEL LOCALS (decided 2026-10-01): a variable is
+      outer-visible to an exists if it occurs anywhere else in the same query scope -
+      selected, or a non-selected variable another condition uses. Only a variable used
+      solely inside the exists is local to it. Otherwise a variable shared by an exists and
+      a plain condition would split into two independent existentials, which
+      plain-where-locals-existential rules out.
+
       EXPLORE FIRST: (a) how to compute the outer-visible set. The rule is lexical: a
       variable is local iff it occurs only within the exists subtree. Statically
       decidable on the expression tree, but it must be computed at build/plan time
@@ -289,6 +296,12 @@ items:
         the attribute it compares are absent from the output unification.
       - An OR inside the exists whose branches use different local variables loses no
         rows (verified achievable this session).
+      - A variable that also occurs outside the exists is outer-visible, selected or not
+        (decided 2026-10-01, roadmap "One existential per query-level local"): over bodies
+        of sizes 1-5 and employees earning 2 and 4,
+        entity(body).where(exists(e, e.salary < body.size), e.salary > 3) returns [B5],
+        agreeing with entity(body).where(e.salary < body.size, e.salary > 3). It returns
+        every body today.
       - PR #99's deferred defect: evaluate_condition on a satisfied bare exists(...)
         returns False today. #99 preserved it deliberately — "it deserves its own
         change" — and this is that change.
@@ -343,6 +356,26 @@ items:
         .distinct().
       - It agrees with the exists(...) spelling.
       - A selected variable (set_of(body, employee)) still yields one row per pair.
+
+      THE SCOPE RULE (decided 2026-10-01, roadmap "One existential per query-level local"):
+      every where condition of a query, across all .where() calls, is one scope, and each
+      non-selected variable is quantified once over all of them - conjunctive-query
+      semantics, Chandra & Merlin. Never one existential per condition: exists distributes
+      over or but not over and, so splitting it would loosen every query that ties two
+      conditions to one unselected object. Locals linked through a condition are quantified
+      jointly. A subquery or an aggregator is a scope of its own even when it uses the same
+      variable object, like a SQL alias. The engine's cross product already binds a shared
+      local once per row, so the rule fixes which rows match today; what this item changes
+      is the multiplicity.
+
+      MORE TDD, pinning that the deduplication keeps today's matching:
+      - entity(body).where(e.salary < body.size, e.salary > 3) returns [B5] once (one
+        employee satisfies both; per-condition existentials would give B3, B4, B5).
+      - The same conditions split over two .where() calls agree with it.
+      - entity(body).where(e.salary < body.size, not_(e.salary > 3)) returns B3, B4, B5:
+        some employee fails the second condition. "No employee satisfies it" is
+        not_(exists(...)) over a variable used only there; using the shared variable
+        object for both needs a second variable(Employee), as SQL needs a second alias.
 
       ALREADY CONSISTENT: #480 decides whether an aggregator in a where is tied to the query
       by the selection alone, so a condition-only variable leaves the aggregator a subquery;
