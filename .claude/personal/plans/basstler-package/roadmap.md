@@ -228,3 +228,16 @@ AGENTS.md rule for enum value types. All are in `1f6b3c585`.
   import mode puts the repository root on `sys.path` itself.
 - Dropped along the way: the second `GITHUB_API_ROOT`, and `HookScript.PLAN_ITEM_BOOTSTRAP`,
   which named the pre-move `.claude/hooks/` path and had no reader.
+
+## 2026-10-01 - fork review of the second round
+
+The user reviewed `1f6b3c585` on #185 with three threads. `.claude` was spelled in every
+`ProjectLocation` member, so it became one member, `CLAUDE_CODE_DIRECTORY`, and the test suites
+build their `.claude` paths from it too (`a83cca79c`, `96146eb45`). The test `constants.py` lost
+`__all__`, which nothing star-imported, and every loose constant: dataset paths, skill
+directories, notes-branch paths, branches and environment prefixes are enums now, reusing
+`ProjectLocation` and `PackageLocation` where the package already names the thing. The third
+thread asked why `PathEnumeration` exists rather than `class X(Path, Enum)`. Tested again: the
+mixin fails on 3.11, and on 3.12+ needs `with_segments`, `__hash__` and `ReprEnum` overrides and
+still shadows the enum's `name`. It stays open for the user, and becomes a one-file change if
+basstler moves to `>=3.12`.

@@ -47,11 +47,12 @@ items:
     round two in `1f6b3c585` - path constants grouped into `basstler/locations.py`'s two path
     enums, the dependency check asking `importlib.metadata` instead of its own regex and cache,
     `sync_version.py` finding packages from each `pyproject.toml`, the conftest `sys.path` insert
-    removed, and an AGENTS.md rule on enum value types. 689 tests pass on 3.11 and 3.12.
-    Outstanding, and the user's to do because nothing is written upstream from a session: reply
-    on the ten open threads. `plan_model.py:56` stands as the user answered it (the values are the
-    manifest's spelling), and `Directory(Path, Enum)` as written cannot work, so the enums carry
-    `Path` values instead. The upstream title still says `bastler`.
+    removed, and an AGENTS.md rule on enum value types. The user replied on the upstream threads
+    2026-10-01 and fixed the title. A fork review round the same day followed in `a83cca79c` and
+    `96146eb45`: `.claude` named once as `ProjectLocation.CLAUDE_CODE_DIRECTORY`, and the test
+    constants grouped into enums. 690 tests pass on 3.11 and 3.12. Waiting on the upstream
+    reviewers. `Directory(Path, Enum)` cannot be built on 3.11, which basstler still supports, so
+    the enums carry `Path` values; the fork thread asking why is open for the user.
   notes: |-
     Moves every Python file already on main under `.claude/` into one package: `.claude/stack/`
     (`stack.py`, the maintenance modules, `class_property.py`), `.claude/skills/plan-dashboard/`'s seven
