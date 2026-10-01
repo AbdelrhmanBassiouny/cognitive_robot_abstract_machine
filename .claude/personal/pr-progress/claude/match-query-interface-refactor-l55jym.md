@@ -113,3 +113,8 @@ krrood 2079, probabilistic_model 656. Open: only the a/an typing-fixture excepti
 Probability as an operand, 2026-10-01: built and tested as stacked draft PR #479
 (`claude/probability-as-operand`), not folded here. #192 is usable without it, since the
 probability case fails the same way on main. #192 untouched and stays ready.
+Upstream cram2#662 round 2026-10-01 (tomsch420, two threads, developer agreed): 39867816a -
+`PositionalArgumentsInMatchPattern` and `KeywordNamesNoFactoryParameter` now subclass `TypeError`
+(Python's own refusal for surplus positional / unexpected keyword arguments), as ormatic's
+exceptions already do. Tests first. krrood 2081 passed. The developer still has to reply on and
+resolve the two upstream threads. Merged into #479. PR stays ready (user-marked).
