@@ -322,5 +322,12 @@ field names off the `subject`/`object` properties as the sentence rendering alre
 relation binds its types (`VisibleTo` through a forward reference, since a runtime `Camera` import
 closes `robot_parts` -> `semantic_annotations` -> `predicates`). Done in `a326db09`.
 
+Then the forward reference went too (`92bd9199`), at the developer's ask: the camera code
+(`get_visible_bodies`, `VisibleTo`, `occluding_bodies`) moved to `reasoning/robot_predicates.py`,
+which already sits above `robot_parts`, so `VisibleTo` binds `Camera` directly. The cycle came from
+the annotation layer calling predicates (`mixins.py`, `semantic_annotations.py`,
+`robot_part_mixins.py`); taking those calls out of that layer is a separate layering change, not
+taken here.
+
 The same round found `.living_worlds_tally/` committed by accident: `main`'s combined world budget
 writes it at the repository root and nothing ignored it. Fixed off `main` as #481 (`bug`).
