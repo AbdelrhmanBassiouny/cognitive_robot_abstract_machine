@@ -207,7 +207,8 @@ items:
       CI on the head commit adadc138 has not run: the merges of `main` pushed by github-actions[bot]
       leave the CI workflow at `action_required`, waiting for a manual approval, so the PR shows no
       checks at all rather than green.
-  notes: 'The developer''s direction on 2026-08-31, correcting a call `perception-predicates-guide-
+  notes: >
+    The developer's direction on 2026-08-31, correcting a call `perception-predicates-guide-
 
     the-search` made: a relation that computes a ratio should still be a `Predicate`, with
 
@@ -221,14 +222,13 @@ items:
 
     that are only `@symbolic_function`s today (support, contact, visibility, reachability,
 
-    occupancy). krrood''s own `symbolic_callable_to_function` keeps the function spelling
+    occupancy). krrood's own `symbolic_callable_to_function` keeps the function spelling
 
     working off one implementation, so no caller in coraplex, segmind or giskardpy has to
 
     change.
 
-
-    Its own pull request off `main`, since it is a change to `semantic_digital_twin`''s
+    Its own pull request off `main`, since it is a change to `semantic_digital_twin`'s
 
     vocabulary rather than to perception (the same placement `surface-finish-annotation`
 
@@ -236,10 +236,9 @@ items:
 
     land.
 
+    Resolved 2026-08-31. Verified and settled at the developer's direction: this branch's
 
-    Resolved 2026-08-31. Verified and settled at the developer''s direction: this branch''s
-
-    predicate classes are the ones to keep, and `montessori-eql-stack`''s `eql-verbalization`
+    predicate classes are the ones to keep, and `montessori-eql-stack`'s `eql-verbalization`
 
     (#33, 166 commits behind `main` and dirty in `predicates.py`) rebases onto this branch and
 
@@ -251,11 +250,15 @@ items:
 
     rendered ungrammatically because `Triple` reads a verb off a class name that is not
 
-    verb-first - both fixed. Review thread r3896606294 (`Reachable`''s subject wording) is left
+    verb-first - both fixed. Review thread r3896606294 (`Reachable`'s subject wording) is left
 
-    open at the developer''s own request; only he can settle it once #33 rebases here.
+    open at the developer's own request; only he can settle it once #33 rebases here.
 
-    '
+    Corrected 2026-10-01: the function spellings are no longer kept. The developer removed them in
+    `f218400e` (LucaKro's upstream thread), so every caller constructs the class - including
+    segmind's detectors, coraplex and the sage_10k demos. The `Reachable` wording thread r3896606294
+    was resolved by the developer; `Stable` is removed rather than migrated, at the upstream
+    review's ask, since it never answered.
 - id: search-clipped-to-a-predicates-region
   title: Clip the search to the region a spatial predicate allows
   branch: claude/kdp-search-constraints-pfaph7
