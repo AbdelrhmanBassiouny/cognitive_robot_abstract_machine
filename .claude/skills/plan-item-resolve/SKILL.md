@@ -44,7 +44,7 @@ already exists**, which is where the cause of a stall almost always is:
   exists to surface. A failing check or a requested-changes review is
   usually the actual blocker; state exactly which one and why, don't just
   say "CI is failing."
-- If the fork PR carries the `in_review_label` from `.claude/stack/stack.toml`
+- If the fork PR carries the `in_review_label` from `basstler/stack.toml`
   (`in-review` by default, the recorded signal for "promoted upstream, under
   review"), the branch also has a pull request on the upstream, whose review
   threads none of the calls above can see — a fork PR can look entirely clean
@@ -159,6 +159,10 @@ item is already underway rather than being started:
 - **The pull request goes back to draft after the push**, per the user's own
   convention, unless they marked it ready themselves — in which case the
   item was finished and this skill should not have been resolving it.
+
+Once the fix is pushed, carry it into the pull requests stacked on this item's
+branch, which a resolve otherwise leaves holding the state it replaced — follow
+[`propagating-a-fix.md`](./propagating-a-fix.md).
 
 Finish by reporting what was wrong, what was changed, and what was decided —
 in `auto` mode this report is the user's first look at the resolution.

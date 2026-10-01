@@ -711,11 +711,13 @@ class UnderspecifiedParameters(ModelQueryParameters):
             if mapped_variable is None:
                 continue
 
-            if (
-                attribute_match
-                and isinstance(attribute_match.assigned_value, SymbolicExpression)
-                and not isinstance(attribute_match.assigned_value, Literal)
-            ):
+            if variable_.is_numeric:
+                # a numeric variable is truncated to the domain's values, so a sample
+                # is the value itself
+                value = value.item()
+            elif isinstance(
+                attribute_match.assigned_value, SymbolicExpression
+            ) and not isinstance(attribute_match.assigned_value, Literal):
                 [domain_index] = [
                     val
                     for index, val in variable_.domain.hash_map.items()
@@ -726,14 +728,12 @@ class UnderspecifiedParameters(ModelQueryParameters):
                     for domain_value in attribute_match.assigned_value.tolist()
                     if hash(domain_value) == domain_index
                 ]
-            elif not variable_.is_numeric:
+            else:
                 [value] = [
                     domain_value.element
                     for domain_value in variable_.domain
                     if hash(domain_value) == value
                 ]
-            else:
-                value = value.item()
             mapped_variable._value_ = value
 
         self.statement._update_kwargs_from_literal_values()
