@@ -118,3 +118,9 @@ Upstream cram2#662 round 2026-10-01 (tomsch420, two threads, developer agreed): 
 (Python's own refusal for surplus positional / unexpected keyword arguments), as ormatic's
 exceptions already do. Tests first. krrood 2081 passed. The developer still has to reply on and
 resolve the two upstream threads. Merged into #479. PR stays ready (user-marked).
+cram2#662 conflict, 2026-10-01: cram2 main was 59 commits ahead of the fork's main (which
+merged cleanly). Merged cram2 main in at 25f86cc30; the one conflict was additive in
+krrood/patterns/exceptions.py (KeywordNamesNoFactoryParameter here, AmbiguousRuleError
+upstream) - both kept. Upstream additions read none of the retired match names. krrood 2191
+passed. Now merges cleanly with cram2 main; #479 still merges cleanly on top. The fork PR's
+diff shows the 59 upstream commits until the fork's main is synced. PR stays ready (user-marked).
