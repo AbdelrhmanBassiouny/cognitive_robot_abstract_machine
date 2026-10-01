@@ -110,3 +110,6 @@ Second fork thread 2026-09-30 (match.py:609, memoize), 3bd091ff4: hook takes val
 decides via lru_cached static per (factory, matched type, keyword, value type); factory signature
 cached per factory (`_factory_signature_`). Test counts signature reads (10 -> 1). Replied+resolved.
 krrood 2079, probabilistic_model 656. Open: only the a/an typing-fixture exception thread.
+Probability as an operand, 2026-10-01: built and tested as stacked draft PR #479
+(`claude/probability-as-operand`), not folded here. #192 is usable without it, since the
+probability case fails the same way on main. #192 untouched and stays ready.
