@@ -82,17 +82,22 @@ class Aggregator(UnaryExpression, CanBehaveLikeAVariable[T], ABC):
             the wrapping entity.
         :return: An iterator over the aggregator results.
         """
-        from krrood.entity_query_language.query.query import Entity
-
-        return Entity(_selected_variables_=(self,)).evaluate(backend=backend)
+        return self._as_subquery_().evaluate(backend=backend)
 
     def grouped_by(self, *variables: Selectable) -> Entity:
         """
         Group the results by the given variables.
         """
+        return self._as_subquery_().grouped_by(*variables)
+
+    def _as_subquery_(self) -> Entity:
+        """
+        :return: A query selecting this aggregator alone, so it is computed over its own
+            variables.
+        """
         from krrood.entity_query_language.query.query import Entity
 
-        return Entity(_selected_variables_=(self,)).grouped_by(*variables)
+        return Entity(_selected_variables_=(self,))
 
     def _evaluate__(
         self,

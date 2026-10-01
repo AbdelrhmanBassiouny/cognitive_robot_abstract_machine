@@ -400,7 +400,7 @@ class Query(
         if self._where_builder_ is None:
             self._where_builder_ = WhereBuilder(conditions=conditions, query=self)
         else:
-            self._where_builder_.conditions += conditions
+            self._where_builder_.add_conditions(conditions)
         return self
 
     @modifies_query_structure
@@ -417,7 +417,7 @@ class Query(
         if self._having_builder_ is None:
             self._having_builder_ = HavingBuilder(conditions=conditions, query=self)
         else:
-            self._having_builder_.conditions += conditions
+            self._having_builder_.add_conditions(conditions)
         return self
 
     @modifies_query_structure
