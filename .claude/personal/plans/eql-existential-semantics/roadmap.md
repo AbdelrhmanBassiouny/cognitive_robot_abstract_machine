@@ -367,3 +367,20 @@ plan nodes; a cross-plan note was added there so neither plan builds the thresho
 Noted for that item: PR #14 already defines verbalization-only `Parallel` and `TryAll`
 classes in `entity_query_language/performatives.py`, so the names collide and the two
 layers must be kept distinct.
+
+## Plain-where locals are existential, raised from #480's review (2026-10-01)
+
+#480 lets an aggregator in a where over variables the query does not select act as a
+subquery. Its first version also counted the variables the *other conditions* use as
+binding the query, so where(body.size > average(employee.salary), employee.salary <
+body.size) was refused. The developer's review: a variable the query does not select is
+existential - like one inside exists() - so it binds nothing, and the aggregator stays a
+subquery. That is this plan's own "locals never escape" rule (exists-semijoin), and #480
+now decides by the selection alone.
+
+Measuring it showed the rule is not yet true of a plain where: entity(body).where(
+employee.salary < body.size) returns one row per witnessing employee (B5 twice over a
+two-employee domain). No item covered that - exists-semijoin is scoped to exists() - so
+ was added, after exists-semijoin, whose local-variable
+computation it reuses.
+

@@ -313,6 +313,42 @@ items:
       Correlation and Substitution in SPARQL", arXiv 1801.04387). Evaluate the condition
       under the outer bindings as an environment; do not substitute.
 
+  - id: plain-where-locals-existential
+    title: "A variable only a plain where uses is existential, not a cross product"
+    branch: null
+    pull_request_number: null
+    track: quantifiers
+    depends_on: [exists-semijoin]
+    status: not_started
+    notes: >
+      GOAL: a variable a query does not select, used in a plain .where(), behaves like one
+      inside exists(): it binds nothing per row and never escapes, so the query yields one
+      row per binding of its selection, not one per witness. The same "locals never
+      escape" rule exists-semijoin defines, applied outside exists(). Raised by the
+      developer on the review of #480 (2026-10-01) and proposed on #137.
+
+      MEASURED on main (2026-10-01), five bodies of sizes 1-5 and employees with salaries
+      2 and 4: entity(body).where(employee.salary < body.size) returns B3, B4, B5, B5 - the
+      cross product projected onto the selection, B5 once per witnessing employee. The
+      exists(employee, ...) spelling returns every body today, which is
+      binding-order-planner's defect.
+
+      WHY AFTER exists-semijoin: the local-variable computation (a variable is local iff it
+      occurs nowhere in the selection) and the semi-join evaluation are that item's; this
+      one applies them to a plain where's conditions. Check first whether exists-semijoin's
+      outer-visible-set computation can be reused as is.
+
+      TDD:
+      - entity(body).where(employee.salary < body.size) returns B3, B4, B5 without
+        .distinct().
+      - It agrees with the exists(...) spelling.
+      - A selected variable (set_of(body, employee)) still yields one row per pair.
+
+      ALREADY CONSISTENT: #480 decides whether an aggregator in a where is tied to the query
+      by the selection alone, so a condition-only variable leaves the aggregator a subquery;
+      it does not wait on this item. Its test uses .distinct() to stay independent of the
+      duplication above.
+
   - id: negation-antijoin
     title: "Make negated exists an antijoin, and fix for_all the same way"
     branch: null
