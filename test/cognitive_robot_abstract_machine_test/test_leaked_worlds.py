@@ -15,6 +15,8 @@ from pathlib import Path
 
 import pytest
 
+from cognitive_robot_abstract_machine.orm_interfaces import REPOSITORY_ROOT
+
 from ..living_worlds import (
     BEFORE_THE_FIRST_TEST,
     MAXIMUM_LIVING_WORLDS,
@@ -27,6 +29,7 @@ from ..living_worlds import (
     WorldTallyLedger,
 )
 from .dataset.leakable_object import LeakableObject, ObjectMakingItsOwnInstances
+from .test_orm_interfaces import git_ignores
 
 
 @dataclass(frozen=True)
@@ -283,6 +286,14 @@ def test_clearing_a_ledger_that_was_never_written_to_does_not_raise(
     ledger.clear()
 
     assert ledger.read_all() == ()
+
+
+def test_this_repository_ignores_the_tallies_a_run_records():
+    tally_written_by_a_run = (
+        REPOSITORY_ROOT / WorldTallyLedger.DIRECTORY_NAME / "master.json"
+    )
+
+    assert git_ignores(REPOSITORY_ROOT, tally_written_by_a_run)
 
 
 # %% the ledger enforces a limit on every worker's tally combined
