@@ -111,15 +111,6 @@ class FilterBuilder(ExpressionBuilder, ABC):
     def __post_init__(self):
         self._accept_conditions_()
 
-    def add_conditions(self, conditions: Tuple[ConditionType, ...]):
-        """
-        Add conditions to the ones the filter already has.
-
-        :param conditions: The conditions to add.
-        """
-        self.conditions += conditions
-        self._accept_conditions_()
-
     def _accept_conditions_(self):
         """
         Check the filter's conditions, whenever conditions are given to it.
@@ -142,7 +133,7 @@ class FilterBuilder(ExpressionBuilder, ABC):
         if literal_expressions:
             raise LiteralConditionError(self.query, literal_expressions)
 
-    @property
+    @cached_property
     def aggregators_and_non_aggregators_in_conditions(
         self,
     ) -> Tuple[Tuple[Aggregator, ...], Tuple[Selectable, ...]]:
@@ -190,14 +181,6 @@ class WhereBuilder(FilterBuilder):
     Metadata for the `Where` Filter.
     """
 
-    aggregators_read_as_subqueries: List[Aggregator] = field(
-        init=False, default_factory=list
-    )
-    """
-    The aggregators unrelated to the query that were replaced by subqueries selecting
-    them, kept so a condition added later that relates one of them is still refused.
-    """
-
     def _accept_conditions_(self):
         """
         Check the where conditions, then read every aggregator unrelated to the query
@@ -211,16 +194,13 @@ class WhereBuilder(FilterBuilder):
         Assert that the where conditions are correct.
 
         :raises AggregatorInWhereConditionsError: If the where conditions contain an
-            aggregator over the query's own variables, which takes no single value per
+            aggregator over a variable the query selects, which takes no single value per
             row.
         """
         super().assert_correct_conditions()
         related_aggregators = tuple(
             aggregator
-            for aggregator in (
-                *self.aggregators_and_non_aggregators_in_conditions[0],
-                *self.aggregators_read_as_subqueries,
-            )
+            for aggregator in self.aggregators_and_non_aggregators_in_conditions[0]
             if not self._is_unrelated_to_the_query_(aggregator)
         )
         if related_aggregators:
@@ -231,16 +211,14 @@ class WhereBuilder(FilterBuilder):
     def build(self) -> Where:
         return Where(self.conditions_expression)
 
-    @property
+    @cached_property
     def variables_of_the_query(self) -> Set[uuid.UUID]:
         """
-        :return: The identifiers of the variables the query selects or its conditions use
-            outside any aggregator.
+        :return: The identifiers of the variables the query binds per row: those its
+            selection is built on. A variable only its conditions use is existential, so
+            it binds nothing outside the condition that uses it.
         """
-        _, non_aggregators = self.aggregators_and_non_aggregators_in_conditions
-        return self._variables_reached_from_(
-            (*self.query._selected_variables_, *non_aggregators)
-        )
+        return self._variables_reached_from_(self.query._selected_variables_)
 
     @staticmethod
     def _variables_reached_from_(
@@ -261,8 +239,8 @@ class WhereBuilder(FilterBuilder):
         """
         :param aggregator: An aggregator in the where conditions.
         :return: Whether the aggregator is over variables of its own, none of which the
-            query selects or uses outside an aggregator, so it takes a single value
-            computed over its own variables.
+            query binds per row, so it takes a single value computed over its own
+            variables.
         """
         aggregated_variables = self._variables_reached_from_((aggregator,))
         return bool(aggregated_variables) and aggregated_variables.isdisjoint(
@@ -288,7 +266,6 @@ class WhereBuilder(FilterBuilder):
                     child
                 ):
                     expression._replace_child_(child, child._as_subquery_())
-                    self.aggregators_read_as_subqueries.append(child)
                 elif not isinstance(child, (Literal, Query)):
                     pending.append(child)
 
