@@ -12,7 +12,7 @@ import uuid
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from functools import cached_property
-from inspect import isclass
+from inspect import get_annotations, isclass
 from typing import Self
 
 from typing_extensions import (
@@ -134,13 +134,17 @@ class HasSymbolicOperations(Operand, Generic[T], ABC):
 
     def _is_own_name_(self, name: str) -> bool:
         """
-        :param name: A name that this does not define.
-        :return: Whether the name belongs to this object's own machinery rather than to
-            the value type, making a missing one a genuine :class:`AttributeError`. An
-            expression that is itself a variable claims no such names, since the value
-            type may define any of them.
+        :param name: A name whose value this object could not read.
+        :return: Whether the name belongs to this object rather than to the value type,
+            making a missing one a genuine :class:`AttributeError`: a name its class
+            declares, as a field, property or method, is its own even when reading it
+            failed. An expression that is itself a variable claims no other name, since
+            the value type may define any of them.
         """
-        return False
+        return any(
+            name in vars(declaring_class) or name in get_annotations(declaring_class)
+            for declaring_class in type(self).__mro__
+        )
 
     def __getattr__(self, name: str) -> Attribute[T]:
         """
@@ -286,6 +290,26 @@ class HasSymbolicOperations(Operand, Generic[T], ABC):
 
     def __hash__(self):
         return hash(self._id_)
+
+
+class ReservesFrameworkNames(HasSymbolicOperations[T], ABC):
+    """
+    Something standing for a value that is not itself a variable, and keeps its own
+    state behind names of the form ``_name_``.
+
+    Every name of that form is its own, so a misspelt one raises, while every other
+    name, a single-underscore private one included, is left to the value type.
+    """
+
+    def _is_own_name_(self, name: str) -> bool:
+        """
+        :param name: A name whose value this object could not read.
+        :return: Whether its class declares the name, or the name has the ``_name_``
+            form this object keeps its own state behind.
+        """
+        return super()._is_own_name_(name) or (
+            len(name) > 2 and name.startswith("_") and name.endswith("_")
+        )
 
 
 @dataclass(eq=False, repr=False)

@@ -33,7 +33,7 @@ from krrood.entity_query_language.core.base_expressions import (
 )
 from krrood.entity_query_language.core.mapped_variable import (
     CanBehaveLikeAVariable,
-    HasSymbolicOperations,
+    ReservesFrameworkNames,
 )
 from krrood.entity_query_language.core.variable import Literal
 from krrood.entity_query_language.evaluable import Evaluable
@@ -87,7 +87,7 @@ class ProbabilisticQuery(Evaluable, HasExpression, ABC):
 
 
 @dataclass(eq=False, repr=False)
-class Probability(ProbabilisticQuery, HasSymbolicOperations[float]):
+class Probability(ProbabilisticQuery, ReservesFrameworkNames[float]):
     """
     The probability of a condition, e.g. ``probability_of(x.A > 5)`` for
     ``x = variable(MyClass)``. Accepts any condition a ``.where(...)`` clause does.
@@ -131,14 +131,6 @@ class Probability(ProbabilisticQuery, HasSymbolicOperations[float]):
         :return: The type of the number a probability is.
         """
         return float
-
-    def _is_own_name_(self, name: str) -> bool:
-        """
-        :param name: A name that this probability does not define.
-        :return: Whether the name belongs to the probability's own machinery, which
-            keeps its state behind underscore-prefixed names.
-        """
-        return name.startswith("_")
 
     @cached_property
     def _symbolic_expression_(self) -> ProbabilityValue:

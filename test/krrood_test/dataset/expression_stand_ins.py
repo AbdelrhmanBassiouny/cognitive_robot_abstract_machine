@@ -15,6 +15,10 @@ from krrood.entity_query_language.core.base_expressions import (
     Operand,
     SymbolicExpression,
 )
+from krrood.entity_query_language.core.mapped_variable import (
+    CanBehaveLikeAVariable,
+    HasSymbolicOperations,
+)
 
 
 @dataclass(eq=False)
@@ -55,3 +59,31 @@ class AssignedVariableStandIn(MatchAssignedValue):
     ) -> SymbolicExpression:
         self.attribute_type = attribute_type
         return self.variable
+
+
+@dataclass(eq=False)
+class ValueStandInWithUnreadableProperty(HasSymbolicOperations[int]):
+    """
+    A value that builds its symbolic operations on a given variable, and declares a
+    property whose value cannot be read.
+    """
+
+    variable: CanBehaveLikeAVariable[int]
+    """
+    The variable every symbolic operation on this is built on.
+    """
+
+    @property
+    def _symbolic_expression_(self) -> CanBehaveLikeAVariable[int]:
+        return self.variable
+
+    @property
+    def _type_(self) -> Type[int]:
+        return int
+
+    @property
+    def _unreadable_(self) -> int:
+        """
+        A property of this stand-in that fails to produce its value.
+        """
+        raise AttributeError("the value this property reads is missing")
