@@ -107,18 +107,26 @@ class UnsupportedInferenceTarget(DataclassException):
 
 @dataclass
 class CaseNotSerializableError(DataclassException):
-    """Raised when a :class:`~krrood.entity_query_language.rdr.corner_case.CaseSerializer`
-    cannot emit constructor source for a value."""
+    """
+    Raised when a :class:`~krrood.entity_query_language.rdr.corner_case.CaseSerializer`
+    cannot emit constructor source for a value.
+    """
 
     value: Any
-    """The field value that could not be serialized."""
+    """
+    The field value that could not be serialized.
+    """
 
     supported_types: Tuple[Type, ...]
-    """The scalar types the serializer does support (``None`` and nested dataclasses are
-    always supported in addition to these, so are not part of this list)."""
+    """
+    The scalar types the serializer does support (``None`` and nested dataclasses are
+    always supported in addition to these, so are not part of this list).
+    """
 
     def error_message(self) -> str:
-        type_names = ", ".join(t.__name__ for t in self.supported_types)
+        type_names = ", ".join(
+            supported_type.__name__ for supported_type in self.supported_types
+        )
         return (
             f"Cannot serialize value of type {type(self.value).__name__!r} to Python "
             f"constructor source. Only None, {type_names} members, and nested "
