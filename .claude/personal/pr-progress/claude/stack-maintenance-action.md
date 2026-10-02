@@ -48,10 +48,30 @@ constraint #218 already documented).
   - PR description, roadmap and this note updated to match; pushed as
     `a1409d71`.
 
-**Next:** the developer's own re-review of #280 (still draft, per
-convention) - specifically whether the retarget-attempt design answers the
-question, since the *actual* answer (does GitHub allow it on this fork) is
-still unverified until a real dispatched run. Once merged to `main`,
-dispatch the workflow once to get the green cycle the item's gate needs,
-then delete the live Routine trigger (`trig_01N79jHmLo3bSbg8pLM6MNTB`) and
-flip `routine-cutover` to `done` - neither done yet, deliberately.
+- **Resolved 2026-10-02** (session https://claude.ai/code/session_017wfueWmCbN76Z5MQo2EWAv),
+  after the user asked how this integrates with basstler and whether it is
+  usable:
+  - #280 had never crossed #185. Merged #185's branch in (`eeb76241`):
+    every import is now `basstler.*`, `maintenance_reparent_notice.py` and both
+    test files moved into the package, the whole-pass tests rely on the autouse
+    `board_snapshot_set_aside`, and the workflow test uses
+    `PackageLocation.REPOSITORY_ROOT`.
+  - The Action had run 158 times on integration candidates since 2026-09-17,
+    and all failed with exit 10. `run-unattended` (`0b6e9776`) treats a branch
+    already reported on its pull request (CONFLICT/WITHHELD) as success, and
+    still fails on unreported faults. The workflow installs `./basstler` and
+    runs `python -m "${MAINTENANCE_MODULE}"`, with the JSON going to the step
+    summary.
+  - 705 tests pass in `test/basstler_test`. Base retargeted to #185's branch,
+    `integration-conflict` removed, description rewritten.
+  - The duplicate-comment bug (91 comments on #156) is split out as #482, off
+    `main`, labelled `bug`.
+
+**Next:** #185 lands first, since this now stacks on it. Then a real run of
+`stack-maintenance.yml` on this head is the green cycle the gate needs. That
+run also answers whether the Actions token may retarget a base (no run so far
+had a pending reparent). #482 should land before the Routine trigger
+(`trig_01N79jHmLo3bSbg8pLM6MNTB`) is deleted. The upstream promotion link
+predates the re-cut and would carry #185's diff, so rebuild it after #185
+lands. The PR was left out of draft as found: it was not re-drafted, in case
+the user marked it ready.
