@@ -48,6 +48,7 @@ from pathlib import Path
 from typing import ClassVar
 from urllib.parse import quote
 
+from basstler.git_commands import GitCommandRunner
 from basstler.locations import PackageLocation, ProjectLocation
 
 # %% configuration
@@ -767,16 +768,26 @@ class PromotionLink:
 # %% git plumbing
 
 
+def _runner() -> GitCommandRunner:
+    """:return: A runner over the current working directory.
+
+    Resolved per call rather than once at import, since this module is read by tests
+    that change directory between them.
+    """
+    return GitCommandRunner(working_directory=Path.cwd())
+
+
 def _git(*args: str) -> str:
     """Run a git command and return its stripped stdout (empty string on failure).
+
+    Answering nothing on failure is deliberate and is why this reads through
+    ``attempt``: every caller here derives, where a reference that does not resolve
+    simply means there is no answer.
 
     :param args: The git subcommand and its arguments.
     :return: The command's stripped stdout.
     """
-    result = subprocess.run(
-        ["git", *args], capture_output=True, text=True, cwd=Path.cwd()
-    )
-    return result.stdout.strip()
+    return _runner().attempt(*args).output
 
 
 def _git_succeeds(*args: str) -> bool:
@@ -785,10 +796,7 @@ def _git_succeeds(*args: str) -> bool:
     :param args: The git subcommand and its arguments.
     :return: Whether the command exited successfully.
     """
-    result = subprocess.run(
-        ["git", *args], capture_output=True, text=True, cwd=Path.cwd()
-    )
-    return result.returncode == 0
+    return _runner().attempt(*args).succeeded
 
 
 def _merged_predicate(configuration: Configuration):

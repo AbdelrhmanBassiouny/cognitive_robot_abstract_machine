@@ -15,7 +15,7 @@ from basstler.class_property import classproperty
 from basstler.locations import PackageLocation
 from basstler.maintenance_board import BoardExport
 from basstler.maintenance_fast_forward import fast_forward
-from basstler.maintenance_git_commands import GitCommandRunner
+from basstler.maintenance_git_commands import MaintenanceGitCommandRunner
 from basstler.maintenance_github import GitHubRepository
 from basstler.maintenance_promotion import clear_spent_promotion_labels, promote
 from basstler.maintenance_report import (
@@ -47,7 +47,7 @@ class MaintenancePass:
     The resolved configuration naming both repositories and every label.
     """
 
-    git: GitCommandRunner
+    git: MaintenanceGitCommandRunner
     """
     The runner every git command goes through.
     """
