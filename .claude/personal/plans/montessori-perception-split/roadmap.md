@@ -118,3 +118,33 @@ Branch `claude/clever-carson-wp7c09` off `main` (`236b295a2`), draft PR #487.
   files are byte-identical to `4653fe32e`.
 - **Scope check:** the two paths do not exist on `main`. They overlap #202 only, which is
   the plan's design, so there is nothing to fold.
+
+## `shape-vocabulary-on-main` (layer 2), kicked off 2026-10-02
+
+Branch `claude/ecstatic-knuth-curscv`, off `main` at `236b295a2`, draft #488. Cut from
+#202's tip `4653fe32e`.
+
+**What it carries, verbatim from `4653fe32e`:** `montessori/semantics.py`,
+`montessori/exceptions.py`, `montessori/hole_geometry.py`, `montessori/resources/board.stl`,
+`montessori/pieces.py`, `test_montessori_semantics.py`, `test_montessori_hole_geometry.py`.
+
+**The one new file:** `test/experiments_test/test_montessori_pieces.py`. It holds the three
+tests from `test_montessori_piece_matching.py`'s "reading a piece's colour" section that need
+only `pieces.py`: the piece's pure-hue colour, two pieces at one hue coloured alike, and hue
+measured the short way round. The other two tests in that section, and the `_painted` helper
+they share, read `SurfaceColors` (`pipeline.py`), so they stay for `detection-pipeline-on-main`.
+The new module is named after the module it tests, matching the `test_montessori_<module>.py`
+convention #202's test split set.
+
+**Co-author:** sorinar329 (`mrsoran2009@gmail.com`). `b5d0745ee` first added `semantics.py`,
+`hole_geometry.py` and their tests, and `256fe58bc` added `board.stl`.
+
+**Flag for `detection-pipeline-on-main` and `perception-node-on-main`:** moving tests
+breaks the roadmap's claim that the final merge into `montessori_perception_on_main`
+"changes no file". After this layer, the stack's `test_montessori_piece_matching.py` lacks
+three tests that #202's copy still has, and the stack adds `test_montessori_pieces.py`, which
+#202 lacks. `detection-pipeline-on-main` lands the trimmed `test_montessori_piece_matching.py`.
+The final merge into #202 then has to take the stack's side for these test files. Only test
+files are affected, so the claim still holds for every source file. The empty-diff check at
+the end should exclude these files, or #202 should take the same move first. That choice
+belongs to `perception-node-on-main`; this layer only records it.
