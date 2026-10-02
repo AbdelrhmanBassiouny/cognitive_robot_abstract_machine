@@ -119,6 +119,32 @@ class ModelQueryParameters(ABC):
 
 
 @dataclass
+class DomainObjectFeature:
+    """
+    A feature of the objects a pattern variable ranges over, which a probabilistic
+    model represents as a variable of its own.
+    """
+
+    attribute_match: AttributeMatch
+    """
+    The attribute match whose assigned variable ranges over the objects.
+    """
+
+    values_by_object_hash: dict[int, Any] = field(default_factory=dict)
+    """
+    The value of the feature for every object in the domain, keyed by the object's
+    hash.
+    """
+
+    def value_of(self, domain_object: Any) -> Any:
+        """
+        :param domain_object: An object in the domain of the assigned variable.
+        :return: The value of the feature for that object.
+        """
+        return self.values_by_object_hash[hash(domain_object)]
+
+
+@dataclass
 class UnderspecifiedParameters(ModelQueryParameters):
     """
     A class that extracts all necessary information from a
@@ -206,6 +232,14 @@ class UnderspecifiedParameters(ModelQueryParameters):
     """
     Variables compared in a `causes_effect(...)` condition: the effect(s) a `Cause`
     search should optimize the interventional probability of.
+    """
+
+    _domain_object_features: dict[str, DomainObjectFeature] = field(
+        init=False, default_factory=dict
+    )
+    """
+    The features of the objects a pattern variable ranges over, keyed by the name of
+    the model variable each feature is represented by.
     """
 
     def __post_init__(self):
@@ -657,6 +691,9 @@ class UnderspecifiedParameters(ModelQueryParameters):
             )
             re_variable = variable_from_name_and_type(name=name, type_=feature._type_)
             result[re_variable.name] = re_variable
+            self._domain_object_features[re_variable.name] = DomainObjectFeature(
+                attribute_match
+            )
 
         identifier_name = f"{attribute_match.name_from_variable_access_path}"
         identifier_variable = random_events.variable.Symbolic(
@@ -675,6 +712,7 @@ class UnderspecifiedParameters(ModelQueryParameters):
                     f"{attribute_match.name_from_variable_access_path}.{feature_name}"
                 )
                 data[result[name]] = value
+                self._domain_object_features[name].values_by_object_hash[hash_] = value
 
             simple_events.append(SimpleEvent.from_data(data))
 
@@ -731,7 +769,9 @@ class UnderspecifiedParameters(ModelQueryParameters):
         Translate bindings of the statement's pattern variables into a sample of a
         probabilistic model, the inverse of :meth:`bindings_from_model_sample`.
 
-        A variable the statement states a literal value for takes that value.
+        A variable the statement states a literal value for takes that value, and a
+        feature of an object the bindings give a pattern variable takes that object's
+        value of the feature.
 
         :param variables: The variables of a probabilistic model.
         :param bindings: The values of the pattern's variables, keyed by the identifier
@@ -770,6 +810,17 @@ class UnderspecifiedParameters(ModelQueryParameters):
                 variable_,
                 bindings[attribute_match.assigned_variable._id_],
                 attribute_match,
+            )
+        domain_object_feature = self._domain_object_features.get(variable_.name)
+        if (
+            domain_object_feature is not None
+            and domain_object_feature.attribute_match.assigned_variable._id_ in bindings
+        ):
+            domain_object = bindings[
+                domain_object_feature.attribute_match.assigned_variable._id_
+            ]
+            return self._value_to_model_sample(
+                variable_, domain_object_feature.value_of(domain_object)
             )
         if variable_ in self.conditioning_assignments_from_literal_values:
             return self._value_to_model_sample(
