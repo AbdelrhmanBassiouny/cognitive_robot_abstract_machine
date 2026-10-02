@@ -1,0 +1,120 @@
+schema_version: 1
+id: montessori-perception-split
+title: Split the Montessori perception package's landing into reviewable layers
+description: >
+  #202 lands the Montessori perception package on main as one 65-file, +11,220-line pull
+  request. Its import graph cuts cleanly into layers that each stand on main plus the layers
+  below them, with their own tests. This plan builds those layers as a stack of pull requests,
+  each holding exactly #202's final file contents, and ends with #202 itself retargeted onto
+  the stack so that it shows only the ROS runtime. No history is rewritten, so every branch
+  already stacked on #202 stays valid.
+default_repository: AbdelrhmanBassiouny/cognitive_robot_abstract_machine
+tracking_issue: 486
+waves:
+- id: split
+  name: '#202 as a stack of layers'
+  description: One wave. The layers stack in import order; network_limits stands apart.
+tracks:
+- id: stack
+  name: The layer stack
+  wave: split
+  description: 'Sequential: each layer imports only main and the layers below it.'
+- id: standalone
+  name: Independent of the stack
+  wave: split
+  description: Imports nothing else in #202, so it is reviewable and landable in any order.
+items:
+- id: network-limits-on-main
+  title: Land the large-message link check on main
+  track: standalone
+  depends_on: []
+  status: not_started
+  notes: >
+    experiments/network_limits.py and test/experiments_test/test_network_limits.py - 2 files,
+    424 lines. Off main. Imports nothing else in #202; only perception/node.py (the top layer)
+    reads it.
+- id: shape-vocabulary-on-main
+  title: Land the Montessori shape vocabulary, the board's hole geometry and the piece set
+  track: stack
+  depends_on: []
+  status: not_started
+  notes: >
+    montessori/semantics.py, montessori/exceptions.py, montessori/hole_geometry.py with
+    resources/board.stl (loaded at import time), montessori/pieces.py, and the tests
+    test_montessori_semantics.py and test_montessori_hole_geometry.py - 7 files, ~1,340 lines.
+    Off main. pieces.py has no test module of its own on #202: its colour and hue tests sit in
+    test_montessori_piece_matching.py's "reading a piece's colour" section. The tests in that
+    section that need only pieces.py move down here verbatim; the two that read SurfaceColors
+    (pipeline.py) stay with the pipeline layer.
+- id: simulated-world-on-main
+  title: Land the simulated Montessori world
+  track: stack
+  depends_on: [shape-vocabulary-on-main]
+  status: not_started
+  notes: >
+    montessori/world.py, test_montessori_world.py, dataset/synthetic_fixed_arm_robot.py and
+    .urdf, and dataset/__init__.py - 5 files, ~1,770 lines. Has to land before any detection
+    code, because pipeline.py reads BOARD_SCALE from world.py. That one constant brings in all
+    1,169 lines of world.py; detect-per-supporting-surface (knowledge-directed-grounding)
+    removes that use later.
+- id: frame-reading-on-main
+  title: Land reading, rectifying and showing camera frames
+  track: stack
+  depends_on: [simulated-world-on-main]
+  status: not_started
+  notes: >
+    perception/__init__.py, perception/exceptions.py, camera.py, orthophoto.py, viewer.py, the
+    opencv dependency in experiments/pyproject.toml, and test_montessori_camera.py and
+    test_montessori_viewer.py - 8 files, ~1,570 lines. Needs only main, so it could branch off
+    main instead. It is stacked linearly so that every later layer has a single parent.
+- id: piece-recognition-on-main
+  title: Land outline measurement and recognising a piece from its edges
+  track: stack
+  depends_on: [frame-reading-on-main]
+  status: not_started
+  notes: >
+    footprint.py, detections.py, edges.py and piece_matcher.py, test_montessori_footprint.py,
+    and the direct piece-recognition tests. Those tests are split verbatim out of
+    test_montessori_piece_matching.py into a module of their own, since that file imports
+    pipeline.py at the top and uses the shared scene fixtures. This is the first half of the
+    ~3,560-line detection layer, cut in two at the developer's decision (2026-10-02). Fallback
+    if the piece-matcher tests turn out not to stand without the pipeline: fold this item into
+    detection-pipeline-on-main rather than land code here that nothing tests.
+- id: detection-pipeline-on-main
+  title: Land the detection pipeline, its overlays and the simulated scene it is tested on
+  track: stack
+  depends_on: [piece-recognition-on-main]
+  status: not_started
+  notes: >
+    pipeline.py, overlay.py, colors.py and scene_source.py, dataset/montessori_scene_renderer.py
+    and montessori_scene_fixtures.py, test_montessori_views.py, test_montessori_perception.py,
+    and the rest of test_montessori_piece_matching.py. The second half of the detection layer.
+- id: captures-on-main
+  title: Land the real-camera captures and reading them back
+  track: stack
+  depends_on: [detection-pipeline-on-main]
+  status: not_started
+  notes: >
+    perception/captures.py, the 18 files under montessori/resources/captures (3 MB),
+    dataset/montessori_capture_truths.py, test_montessori_captures.py, and the .gitignore
+    rosbags rule - 22 files, ~790 lines. Needs only frame-reading-on-main; it is stacked
+    linearly for the same reason as that layer.
+- id: perception-node-on-main
+  title: '#202 itself, retargeted: the ROS runtime on top of the stack'
+  pull_request_number: 202
+  track: stack
+  depends_on: [captures-on-main, network-limits-on-main]
+  status: not_started
+  notes: >
+    perception/node.py, markers.py, recordings.py, watch_camera.py, capture_from_bag.py,
+    tracy_experiments/equipment.py and tracy_experiments/__init__.py - 7 files, ~1,770 lines,
+    all importing rclpy, so nothing here can run their tests. The item is to merge the top of
+    the stack, and network-limits-on-main's branch, into montessori_perception_on_main (a
+    merge that changes no file), retarget #202's base to captures-on-main's branch, and
+    rewrite #202's description to cover only this layer. Until
+    network-limits-on-main lands, #202's diff against captures-on-main's branch also shows
+    network_limits' two files. The branch is deliberately not
+    named here: montessori_perception_on_main is already tracked by
+    knowledge-directed-grounding's montessori-perception-on-main item, and the branch index
+    keeps only the first plan that claims a branch. equipment.py is 556 lines brought in for
+    table_top_z alone, which surfaces-from-world (#205) removes.
