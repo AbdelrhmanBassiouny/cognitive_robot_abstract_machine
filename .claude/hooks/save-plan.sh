@@ -80,7 +80,7 @@ fi
 # where that never ran reaches this message instead of a traceback.
 MISSING_DEPENDENCIES="$(missing_dependencies)" || MISSING_DEPENDENCIES=""
 if [ -n "${MISSING_DEPENDENCIES}" ]; then
-  echo "The bastler package's dependencies are not installed: ${MISSING_DEPENDENCIES}" >&2
+  echo "The basstler package's dependencies are not installed: ${MISSING_DEPENDENCIES}" >&2
   echo "Run: pip install ${MISSING_DEPENDENCIES}" >&2
   exit 1
 fi
