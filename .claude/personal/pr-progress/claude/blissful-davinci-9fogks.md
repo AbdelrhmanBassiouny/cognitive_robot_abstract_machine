@@ -14,7 +14,9 @@ Done (commit eaaccea93, pushed):
   _get_mapped_variable_by_name and their two tests; tests look up pattern variables via
   test/krrood_test/pattern_variables.py find_assigned_variable. krrood 2088 passed, pm 656 passed.
   PR description updated.
-Open: compute_log_likelihood does not derive feature values for non-primitive krrood variables
-(raises ModelVariableNotBound).
+- 8d8dc1f2b merged #192's latest (25f86cc30, cram2 main). 83724f815 (user: fix in this PR):
+  model_sample_from_bindings derives domain-object feature values via DomainObjectFeature kept while
+  building the truncation event. krrood 2201 passed, pm 656 passed. PR description updated.
+Open: object outside a pattern variable's domain fails with a plain ValueError (both directions).
 Env note: the verification venv is .venv (uv 0.12 via pip; the system uv 0.8 cannot parse root pyproject);
 full test runs regenerate test_verbalization/verbalization_results.py - restore before committing.
