@@ -120,6 +120,12 @@ The fixture item whose ``depends_on`` is written out beneath its key, only prese
 :data:`INDENTLESS_PLAN_MANIFEST`.
 """
 
+LITERALLY_NOTED_ITEM = "a-literally-noted-item"
+"""
+The fixture item whose note is a literal block, where a single newline is a hard-wrapped
+line rather than a paragraph break, only present in :data:`INDENTLESS_PLAN_MANIFEST`.
+"""
+
 WORK_REMOTE = "origin"
 """
 The remote :meth:`ScratchRepository.add_work_remote` registers, and the one the module's
@@ -815,6 +821,36 @@ def test_appending_to_a_note_keeps_the_recorded_paragraphs_apart(
 
     assert published_item(bootstrap_repository)[ManifestKey.NOTES.key] == (
         "The first.\nThe second.\nThe third.\n"
+    )
+
+
+def test_appending_to_a_literal_note_keeps_its_wrapped_lines_within_their_paragraph(
+    indentless_plan_repository: ScratchRepository,
+):
+    """
+    A literal block reads a hard-wrapped line back as a newline and a paragraph break as
+    a blank line, the opposite of a folded one, so taking every newline for a paragraph
+    break splits each wrapped line into a paragraph of its own.
+    """
+    update_item(
+        update_request(
+            item_identifier=LITERALLY_NOTED_ITEM, notes_to_append="The third.\n"
+        ),
+        project_root=indentless_plan_repository.project_root,
+    )
+
+    published = yaml.safe_load(
+        published_plan(indentless_plan_repository)[PlanDocument.MANIFEST]
+    )
+    written = next(
+        item
+        for item in published[ManifestKey.ITEMS.key]
+        if item[ManifestKey.IDENTIFIER.key] == LITERALLY_NOTED_ITEM
+    )
+    assert written[ManifestKey.NOTES.key] == (
+        "The first paragraph, which its author wrapped by hand.\n"
+        "The second paragraph.\n"
+        "The third.\n"
     )
 
 

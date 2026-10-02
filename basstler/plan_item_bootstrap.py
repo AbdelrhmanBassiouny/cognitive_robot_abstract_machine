@@ -1703,24 +1703,86 @@ class ItemUpdateRequest:
     """
 
 
-def extend_note(recorded: str | None, addition: str) -> str:
+class BlockScalarStyle(StrEnum):
+    """
+    How a block scalar YAML has already read back separates its paragraphs, named by
+    the indicator that opens it.
+    """
+
+    LITERAL = "|"
+    """
+    Every line break is kept, so a single newline is a hard-wrapped line and a blank
+    line separates paragraphs.
+    """
+
+    FOLDED = ">"
+    """
+    Line breaks fold into spaces and a blank line reads back as one newline, so a
+    single newline separates paragraphs.
+    """
+
+    @property
+    def paragraph_separator(self) -> re.Pattern[str]:
+        """
+        What separates two paragraphs in a value of this style once it has been read.
+        """
+        if self is BlockScalarStyle.LITERAL:
+            return re.compile(r"\n\s*\n")
+        return re.compile(r"\n+")
+
+    @classmethod
+    def of_item_key(
+        cls,
+        manifest_text: str,
+        plan_identifier: str,
+        item_identifier: str,
+        manifest_key: ManifestKey,
+    ) -> BlockScalarStyle:
+        """
+        Read the style one item's key is written in off the manifest text, since parsing
+        the manifest discards it.
+
+        :param manifest_text: The manifest's raw text.
+        :param plan_identifier: The plan being edited, for the error message.
+        :param item_identifier: The item whose key to read.
+        :param manifest_key: The key to read.
+        :raises UnknownItemError: If the item has no block in the text.
+        :return: :attr:`LITERAL` for a value opened with ``|``, otherwise :attr:`FOLDED`,
+            which is also how a value written on the key's own line folds.
+        """
+        lines = manifest_text.split("\n")
+        start, end = locate_item_block(lines, plan_identifier, item_identifier)
+        for line in lines[start:end]:
+            if manifest_key.pattern.match(line):
+                indicator = line.split(":", 1)[1].strip()
+                if indicator.startswith(cls.LITERAL.value):
+                    return cls.LITERAL
+                return cls.FOLDED
+        return cls.FOLDED
+
+
+def extend_note(
+    recorded: str | None, addition: str, recorded_style: BlockScalarStyle
+) -> str:
     """
     A recorded note with *addition* as a further paragraph.
 
     The two sources separate their paragraphs differently, which is why extending a note
-    cannot simply concatenate them. A folded scalar reads its own line breaks back as
-    spaces and a blank line back as one newline, so a note read out of the manifest
-    separates paragraphs with a single newline - which :func:`fold` would take for a
-    hard-wrapped line and run together into one paragraph. A file a caller writes uses a
-    blank line, which :func:`fold` already reads correctly.
+    cannot simply concatenate them. A note read out of the manifest separates them the
+    way its own :class:`BlockScalarStyle` does, while a file a caller writes uses a blank
+    line, which is what :func:`fold` reads; so the recorded paragraphs are split by
+    their own style and rejoined with blank lines.
 
     :param recorded: The note the manifest carries, or ``None`` where it carries none.
     :param addition: The text to add, as its author wrote it.
+    :param recorded_style: How the recorded note is written in the manifest.
     :return: The whole note, separated the way a written note is.
     """
     paragraphs = [
         paragraph
-        for paragraph in re.split(r"\n+", (recorded or "").strip())
+        for paragraph in recorded_style.paragraph_separator.split(
+            (recorded or "").strip()
+        )
         if paragraph
     ]
     paragraphs.append(addition.strip())
@@ -1757,6 +1819,12 @@ def update_item(request: ItemUpdateRequest, project_root: Path) -> BootstrapRepo
         values_by_key[ManifestKey.NOTES] = extend_note(
             documents.item(request.item_identifier).get(ManifestKey.NOTES.key),
             request.notes_to_append,
+            BlockScalarStyle.of_item_key(
+                documents.manifest_text,
+                request.plan_identifier,
+                request.item_identifier,
+                ManifestKey.NOTES,
+            ),
         )
     manifest_text = apply_item_fields(
         documents.manifest_text,

@@ -44,3 +44,16 @@ items:
   - an-existing-item
   status: in_progress
   session: https://example.invalid/session_stacked
+
+- id: a-literally-noted-item
+  branch: some/literal-branch
+  title: "An item whose note is a literal block"
+  pull_request_number: 14
+  track: a-track
+  depends_on: []
+  status: in_progress
+  notes: |-
+    The first paragraph, which its author
+    wrapped by hand.
+
+    The second paragraph.
