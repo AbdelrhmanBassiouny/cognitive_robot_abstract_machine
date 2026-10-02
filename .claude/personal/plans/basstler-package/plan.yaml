@@ -64,6 +64,15 @@ items:
     the user: this branch writes the new spelling, which `main`'s tooling rejects, so a manifest
     written by this branch's code, or by #154, #211 or #430, fails a `main`-based dashboard until #185
     lands. Then rewrite the notes-branch manifests and drop the underscore reading.
+  - >-
+    Upstream round four, 2026-10-02: LucaKro requested changes again (11:12). "Use logging"
+    (`dependencies.py:172`, `setup_steps.py:618`) is applied in `4cdd39318`: every print in basstler
+    goes through a module logger under one `StandardStreamHandler` that writes bare messages to
+    stdout and stderr, so the output contracts are unchanged. "And no classvar" on the fields thread
+    was already met by `be0ed435f`. The two `Repository` classes are one in
+    `basstler/repository.py` (`c61a734d9`, asked by the user). Open: "dataclass exception gaming" on
+    `dependencies.py:54`, which waits on the user's call about krrood's `DataclassException`. 710 tests
+    pass on 3.11.
   notes: |-
     Moves every Python file already on main under `.claude/` into one package: `.claude/stack/`
     (`stack.py`, the maintenance modules, `class_property.py`), `.claude/skills/plan-dashboard/`'s seven

@@ -273,3 +273,29 @@ tooling only reads `in_progress`. Until #185 lands, a manifest written by this b
 the stacked #154, #211 and #430, fails a `main`-based dashboard build. After it lands, rewrite the
 notes-branch manifests to the new spelling, then drop `_missing_` and `accepted_spellings`.
 
+## 2026-10-02 - cram2#659 fourth round (LucaKro), and one Repository
+
+LucaKro requested changes at 11:12, before `be0ed435f` was pushed, with three new threads and one
+reply.
+
+- **"Use logging"** (`dependencies.py:172`, `setup_steps.py:618`). Both lines are their command's
+  stdout data. The user chose to route everything through logging anyway, so all 67 prints now go
+  through module loggers under the `basstler` package logger. Its one handler,
+  `basstler/standard_streams.py`'s `StandardStreamHandler`, writes bare messages to stdout at
+  information level and to stderr from a warning up, so every output contract is byte for byte the
+  same. Two things only showed up when running the code. The handler has to look the stream up when
+  it writes, or captured streams miss the output. And a module run with `python -m` is named
+  `__main__`, so its logger fell outside the package logger and 41 tests saw empty stdout until its
+  import name was read from its spec. In `4cdd39318`.
+- **"And no classvar"** on the fields thread was already met by `be0ed435f`.
+- **"Dataclass exception gaming"** (`dependencies.py:54`) is open. The repo-wide idiom is krrood's
+  `DataclassException`, and basstler has 35 exception classes of its own. Decision 14 says basstler
+  depends on krrood eventually, but no item schedules that. `basstler-notes-core-python`'s
+  `errors.py` was planned to mirror the idiom without importing krrood. Waiting on the user.
+
+**One `Repository`** (the user, same day, `c61a734d9`). `stack.py` and `setup_steps.py` each had one,
+and they read remote URLs by different rules. `basstler/repository.py` keeps `stack.py`'s rule (any
+host, last two segments, raises when no repository is named), since it is the one that reads a cloud
+session's proxy remote. `setup_steps`'s "another host names no repository" rule moved into
+`resolve_repository`, where it decides.
+
