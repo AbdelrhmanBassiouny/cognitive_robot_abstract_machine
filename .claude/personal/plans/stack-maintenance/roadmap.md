@@ -517,3 +517,9 @@ first: `BlockScalarStyle` reads the indicator off the manifest text, since parsi
 The manifest was restored from the commit before the append and the note re-appended with the
 fix. **A writer exercised only against the fixture's own folded note is a writer no real note
 exercises** - the same lesson the indentation fold recorded, met one field over.
+
+`promotion-summaries-and-table`'s note was restored the same day. The damage came in at
+`d5896b0b1` (2026-09-01), the first append after the split had written it as a literal block. The
+six paragraphs were taken from the intact version at `a5178fb90`, and the four appended since were
+taken from the damaged note, which held each of them on a line of its own. Each paragraph was
+checked against its source before the write.
