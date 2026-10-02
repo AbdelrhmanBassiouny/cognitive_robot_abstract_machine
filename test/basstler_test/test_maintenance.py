@@ -53,6 +53,7 @@ from basstler.maintenance_commands import (
     MaintenancePass,
     RestackCommand,
     RunReportCommand,
+    UnattendedRunCommand,
 )
 from basstler.maintenance_constants import CREDENTIAL_VARIABLES, PROMOTION_LINK_LABEL
 from basstler.maintenance_fast_forward import (
@@ -82,6 +83,7 @@ from basstler.maintenance_report import (
     MaintenanceReport,
     build_report,
     exit_code_for,
+    unattended_exit_code_for,
 )
 from basstler.maintenance_restack_procedure import restack
 from basstler.maintenance_restack_steps import (
@@ -1824,6 +1826,66 @@ def test_a_branch_left_unpublished_is_never_reported_as_a_clean_pass(
     assert (
         exit_code_for(a_report(restack_outcome=left_behind))
         == MaintenanceExitCode.BRANCH_NEEDS_ATTENTION
+    )
+
+
+@pytest.mark.parametrize("reported", [RestackOutcome.CONFLICT, RestackOutcome.WITHHELD])
+def test_an_unattended_pass_succeeds_when_every_branch_left_behind_was_reported(
+    reported: RestackOutcome,
+):
+    """
+    A conflict is labelled and commented on its own pull request, and a withheld branch
+    still carries that label, so its owner already has it. Failing the job over it as
+    well would turn every scheduled run red while any branch anywhere waits on a person.
+    """
+    assert (
+        unattended_exit_code_for(a_report(restack_outcome=reported))
+        == MaintenanceExitCode.SUCCESS
+    )
+
+
+@pytest.mark.parametrize(
+    "unreported", [RestackOutcome.PUSH_REJECTED, RestackOutcome.INTEGRATION_FAILED]
+)
+def test_an_unattended_pass_fails_on_a_branch_nobody_was_told_about(
+    unreported: RestackOutcome,
+):
+    """
+    A rejected push or an integration that failed without conflicting is a fault in the
+    pass rather than in the branch, and nobody is commented at for it - so the job
+    status is the only place it surfaces.
+    """
+    assert unattended_exit_code_for(
+        a_report(restack_outcome=unreported)
+    ) == exit_code_for(a_report(restack_outcome=unreported))
+
+
+def test_an_unattended_pass_still_fails_on_a_refused_fast_forward():
+    refused = a_report(fast_forward_outcome=FastForwardOutcome.REFUSED_NOT_FAST_FORWARD)
+
+    assert unattended_exit_code_for(refused) == MaintenanceExitCode.NOT_FAST_FORWARD
+
+
+def test_an_unattended_run_reports_a_conflict_on_its_pull_request_and_succeeds(
+    fork_checkout: ForkCheckout, capsys: pytest.CaptureFixture[str]
+):
+    """
+    ``run-unattended`` is the whole pass a scheduled job runs: the conflict reaches its
+    owner as a comment, the document reaches the job log, and the job stays green.
+    """
+    a_parent_and_child(fork_checkout)
+    fork_checkout.commit_on("a-parent", "a-contested-file", "the parent's version\n")
+    fork_checkout.commit_on("a-child", "a-contested-file", "the child's version\n")
+    maintenance_pass = AlreadyResolvedPass.over(fork_checkout, the_board())
+
+    status = UnattendedRunCommand().run(maintenance_pass, argparse.Namespace())
+
+    assert status == MaintenanceExitCode.SUCCESS
+    assert maintenance_pass.recorded_fork.comments[0].pull_request_number == 41
+    document = json.loads(capsys.readouterr().out)
+    assert (
+        document["status"]
+        == MaintenanceExitCode.BRANCH_NEEDS_ATTENTION.name_for_a_caller
     )
 
 

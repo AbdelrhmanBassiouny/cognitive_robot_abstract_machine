@@ -29,6 +29,7 @@ from basstler.maintenance_report import (
     print_promotions,
     print_reparents,
     print_restack,
+    unattended_exit_code_for,
 )
 from basstler.maintenance_restack_procedure import restack
 from basstler.stack import Configuration, Stack, load_stack, reparents
@@ -280,15 +281,25 @@ class RunReportCommand(MaintenanceCommand):
         self, maintenance: MaintenancePass, arguments: argparse.Namespace
     ) -> MaintenanceExitCode:
         """
-        Perform every step of the pass, then discard the board it derived from.
+        :param maintenance: What this run has resolved.
+        :param arguments: The parsed command line.
+        :return: The process exit code.
+        """
+        return exit_code_for(self.perform(maintenance, as_json=arguments.json))
+
+    def perform(self, maintenance: MaintenancePass, as_json: bool) -> MaintenanceReport:
+        """
+        Perform every step of the pass, print it, then discard the board it derived
+        from.
 
         The board is a snapshot of one moment's open pull requests, and a stale one read
         by a later run is worse than none at all - so a whole pass ends without one, and
         the next begins by exporting a fresh one.
 
         :param maintenance: What this run has resolved.
-        :param arguments: The parsed command line.
-        :return: The process exit code.
+        :param as_json: Whether to print the machine-readable document rather than a
+            summary.
+        :return: What the pass did.
         """
         stack = maintenance.stack()
         fork = maintenance.fork()
@@ -307,14 +318,53 @@ class RunReportCommand(MaintenanceCommand):
             reparent_outcomes,
         )
         PackageLocation.BOARD.value.unlink(missing_ok=True)
-        if arguments.json:
+        if as_json:
             print(report.as_json())
         else:
             print_fast_forward(fast_forward_report)
             print_reparents(reparent_outcomes)
             print_restack(report.restacked)
             print_promotions(report.promoted, report.promotion_labels_cleared)
-        return exit_code_for(report)
+        return report
+
+
+@dataclass(frozen=True)
+class UnattendedRunCommand(MaintenanceCommand):
+    """
+    Performs the whole pass for a job nobody watches, and reports it as one document.
+
+    The pass is :class:`RunReportCommand`'s; only the exit status differs, per
+    :func:`maintenance_report.unattended_exit_code_for`.
+    """
+
+    @classproperty
+    def invoked_as(cls) -> str:
+        """
+        The name it is invoked by on the command line.
+        """
+        return "run-unattended"
+
+    @classproperty
+    def description(cls) -> str:
+        """
+        What it does, as ``--help`` puts it.
+        """
+        return (
+            "perform the whole pass for a job nobody watches, succeeding when every "
+            "branch left behind was reported on its pull request"
+        )
+
+    def run(
+        self, maintenance: MaintenancePass, arguments: argparse.Namespace
+    ) -> MaintenanceExitCode:
+        """
+        :param maintenance: What this run has resolved.
+        :param arguments: The parsed command line.
+        :return: The process exit code.
+        """
+        return unattended_exit_code_for(
+            RunReportCommand().perform(maintenance, as_json=True)
+        )
 
 
 COMMANDS: tuple[MaintenanceCommand, ...] = tuple(

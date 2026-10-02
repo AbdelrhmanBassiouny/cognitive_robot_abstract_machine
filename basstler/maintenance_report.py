@@ -304,3 +304,23 @@ def exit_code_for(report: MaintenanceReport) -> MaintenanceExitCode:
     if unpublished:
         return MaintenanceExitCode.BRANCH_NEEDS_ATTENTION
     return MaintenanceExitCode.SUCCESS
+
+
+def unattended_exit_code_for(report: MaintenanceReport) -> MaintenanceExitCode:
+    """
+    Decide the exit status of a pass nobody is watching.
+
+    A branch whose owner has already been told on its pull request is theirs to act on,
+    so it does not fail the run; anything else :func:`exit_code_for` fails on still
+    does, since the run's status is the only place nobody-was-told surfaces.
+
+    :param report: What the pass did.
+    :return: The process exit code.
+    """
+    exit_code = exit_code_for(report)
+    if exit_code is MaintenanceExitCode.BRANCH_NEEDS_ATTENTION and all(
+        outcome.outcome.is_reported_to_its_owner
+        for outcome in report.branches_left_unpublished
+    ):
+        return MaintenanceExitCode.SUCCESS
+    return exit_code

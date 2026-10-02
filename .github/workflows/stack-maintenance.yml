@@ -2,7 +2,7 @@ name: Stack maintenance
 
 # Deterministic replacement for the scheduled LLM Routine "PR Stack Monitor and Update"
 # (trig_01N79jHmLo3bSbg8pLM6MNTB, retired once this has run one green cycle): performs
-# `.claude/stack/maintenance.py run-report`'s happy path with nobody watching -
+# `python -m basstler.maintenance run-unattended` with nobody watching -
 # reparenting every child whose base has landed, fast-forwarding the fork's base onto
 # the upstream, restacking every branch whose parent moved, and promoting every
 # approved unblocked branch. A restack conflict already reports itself (a comment plus
@@ -11,8 +11,10 @@ name: Stack maintenance
 # `maintenance_reparent_notice.resolve_reparents`, for an on-demand session to finish -
 # but the refusal a Claude session's own proxied credential hit is not assumed here,
 # since this credential is never proxied through a session, so the retarget is
-# attempted first. See `maintenance.py`'s own module docstring: `run-report --json`
-# exists precisely so a scheduled job with no model in the loop can emit it directly.
+# attempted first. `run-unattended` is `run-report --json` with one difference: a
+# branch whose owner was already told on its pull request (a conflict, or one still
+# withheld) does not fail the job, while anything nobody was told about still does -
+# see `maintenance_report.unattended_exit_code_for`.
 #
 # Why these triggers: `closed` fires whether a pull request merges or closes unmerged,
 # and either way can drop a branch from the open set - the #40/#41 orphan pattern
@@ -87,15 +89,22 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Resolve the upstream remote
-        # A plain checkout carries only this repository's own remote. stack.py decides
-        # which remote is which by the repository each URL names rather than by name,
-        # and hands back the exact command to add whichever one is missing - see
-        # stack.py's RemoteResolution.upstream_setup_command and the SKILL.md step this
-        # mirrors, rather than hardcoding a remote name or URL here.
+      - name: Install the basstler dependencies
         run: |
           set -euo pipefail
-          SETUP_COMMAND="$(python3 .claude/stack/stack.py configuration \
+          source .claude/hooks/resolve-personal-notes-config.sh
+          pip install "./${BASSTLER_PACKAGE_DIRECTORY}"
+
+      - name: Resolve the upstream remote
+        # A plain checkout carries only this repository's own remote. basstler.stack
+        # decides which remote is which by the repository each URL names rather than by
+        # name, and hands back the exact command to add whichever one is missing - see
+        # RemoteResolution.upstream_setup_command and the SKILL.md step this mirrors,
+        # rather than hardcoding a remote name or URL here.
+        run: |
+          set -euo pipefail
+          source .claude/hooks/resolve-personal-notes-config.sh
+          SETUP_COMMAND="$(python3 -m "${STACK_MODULE}" configuration \
             | awk -F'\t' '$1 == "upstream_setup_command" { print $2 }')"
           if [ -n "${SETUP_COMMAND}" ]; then
             eval "${SETUP_COMMAND}"
@@ -110,11 +119,22 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
+          source .claude/hooks/resolve-personal-notes-config.sh
           # The identity every push this pass makes is committed under.
           git config user.name "${GITHUB_ACTOR}"
           git config user.email "${GITHUB_ACTOR}@users.noreply.github.com"
-          # `run-report` reads board.json and deletes it once the pass concludes - see
-          # `RunReportCommand.run`'s own docstring - so a caller starts every run by
-          # exporting a fresh one; running it stale would only replay one snapshot old.
-          python3 .claude/stack/maintenance.py board --write
-          python3 .claude/stack/maintenance.py run-report --json
+          # The pass reads board.json and deletes it once it concludes - see
+          # `RunReportCommand.perform`'s own docstring - so every run starts by exporting
+          # a fresh one; running it stale would only replay one snapshot old.
+          python3 -m "${MAINTENANCE_MODULE}" board --write
+          REPORT="${RUNNER_TEMP}/maintenance-report.json"
+          STATUS=0
+          python3 -m "${MAINTENANCE_MODULE}" run-unattended > "${REPORT}" || STATUS=$?
+          cat "${REPORT}"
+          {
+            echo '### Maintenance pass'
+            echo '```json'
+            cat "${REPORT}"
+            echo '```'
+          } >> "${GITHUB_STEP_SUMMARY}"
+          exit "${STATUS}"

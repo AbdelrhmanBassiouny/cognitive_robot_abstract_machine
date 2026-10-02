@@ -80,6 +80,14 @@ class RestackOutcome(StrEnum):
     untouched rather than re-reported.
     """
 
+    @property
+    def is_reported_to_its_owner(self) -> bool:
+        """
+        :return: Whether the branch's owner has been told on its pull request - this
+            pass for a conflict, an earlier one for a branch still withheld.
+        """
+        return self in {RestackOutcome.CONFLICT, RestackOutcome.WITHHELD}
+
 
 @dataclass(frozen=True)
 class BranchOutcome:
