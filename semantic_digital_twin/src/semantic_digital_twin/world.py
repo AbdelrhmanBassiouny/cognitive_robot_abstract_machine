@@ -859,6 +859,15 @@ class World(HasSimulatorProperties):
         self._validate_dofs()
         return True
 
+    @property
+    def is_tree(self) -> bool:
+        """
+        :return: Whether the kinematic structure currently forms a single tree.
+        """
+        return len(self.kinematic_structure_entities) == (
+            len(self.connections) + 1
+        ) and rx.is_weakly_connected(self.kinematic_structure)
+
     def _validate_dofs(self):
         actual_dofs = {
             dof for connection in self.connections for dof in connection.dofs
@@ -2872,6 +2881,26 @@ class World(HasSimulatorProperties):
         return WorldModelUpdateContextManager(
             world=self, publish_changes=publish_changes
         )
+
+    def _implicit_modification_block(
+        self, func: Callable
+    ) -> Union[WorldModelUpdateContextManager, nullcontext]:
+        """
+        The block a modification of ``func`` runs in when the caller opened none,
+        according to the policy.
+
+        :raises MissingWorldModificationContextError: Under
+            :attr:`WorldModificationPolicy.EXPLICIT` when no block is open.
+        """
+        model_manager = self._model_manager
+        if model_manager._active_world_model_update_context_manager_ids:
+            return nullcontext()
+        if model_manager.policy == WorldModificationPolicy.EXPLICIT:
+            raise MissingWorldModificationContextError(func)
+        if model_manager.policy.commits_each_operation:
+            return self._modification_block()
+        self._open_deferred_block()
+        return nullcontext()
 
     def _open_deferred_block(self) -> None:
         """

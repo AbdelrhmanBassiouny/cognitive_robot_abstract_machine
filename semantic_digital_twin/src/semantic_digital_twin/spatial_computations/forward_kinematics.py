@@ -91,9 +91,15 @@ class ForwardKinematicsManager(ModelChangeCallback):
     def ensure_compiled(self) -> None:
         """
         Compile the expressions if the model changed since they were last compiled.
+
+        Inside an open modification block the world may be half built; while it is not a
+        tree, reads there keep using the expressions compiled last.
         """
-        if self.is_stale:
-            self.compile_for_current_model()
+        if not self.is_stale:
+            return
+        if self._world.world_is_being_modified and not self._world.is_tree:
+            return
+        self.compile_for_current_model()
 
     def compile_for_current_model(self) -> None:
         """
