@@ -39,3 +39,19 @@ a capability that did not exist, so this branch built it.
 - The integration build cannot publish while `claude/performatives-clean` (#14)
   stays conflicted against its base: that is what fails the candidate's "Run
   the maintenance pass" check (exit 10, BRANCH_NEEDS_ATTENTION).
+
+## 2026-10-02 - stacked on #185 (session https://claude.ai/code/session_01P3qbqgYFh5n1M26ey2szz6)
+
+- The user allowed the push after their ready flip, so #420 stays ready, not drafted.
+- Merged #185's branch at `2d53a88e7` and moved the base to
+  `claude/plan-item-kickoff-workflow-cuare2`. #185 moves `.claude/upstream_reviews/` into
+  `basstler/`. Three mechanical conflicts were resolved. 723 tests pass in `test/basstler_test`.
+- Now tracked as `upstream-pull-request-checks` in plan `basstler-package`, with #424 as
+  `upstream-check-failure-logs`.
+
+## Next
+
+- After #185 lands: the maintenance pass moves the base back to `main`, then rebuild the promotion
+  link and promote.
+- #424 needs #420's new head merged in. Seven conflicts are recorded on its plan item. It needs the
+  user's go-ahead, because they marked it ready.
