@@ -341,3 +341,14 @@ module-level `lru_cache` (11 worlds per worker that runs it, so 11-22 depending 
 and `CaseReasoner` kept its rule trees on the class while the rules keep the last case they
 classified (4-5 worlds per worker). Each is its own `bug` PR off `main` (#484, #483), merged
 into #229 at `2502db19` so its CI can pass now; the CI-image run then leaves 6 worlds.
+
+## `predicates-answer-whether-they-hold`: CI green and an upstream round, 2026-10-02
+
+- CI on `2502db19` went green on every check, so the world-budget fix holds in CI as well as in
+  the CI image. #483 and #484 still need to land on `main`; until then #229 carries them.
+- cram2#655: tomsch420 approved. LucaKro requested changes again with one thread, r4165033892:
+  keep only the operations that really modify the world inside `with world.modify_world()`,
+  since anything else in there makes debugging harder. The developer agreed. `occluding_bodies`
+  now builds the copied body, its pose and its connection before the block (`a635644d`); the
+  other two blocks in `robot_predicates.py` already held only world changes. The thread is the
+  developer's to answer upstream.
