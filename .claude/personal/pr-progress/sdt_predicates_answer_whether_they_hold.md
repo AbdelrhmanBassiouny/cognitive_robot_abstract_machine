@@ -69,11 +69,26 @@ Four threads from the developer on `base.py` / `predicates.py`:
   ROS-only tests; CI prints only per-worker totals, so which tests is unknown. Suggested
   (not done): make the combined-limit failure print the per-test tally (a main change).
 
+## CI world budget fixed, 2026-10-02 (pushed as `2502db19`)
+
+- Reproduced in the CI image (docker in this container: start `dockerd`, pull
+  `ghcr.io/abdelrhmanbassiouny/cognitive_robot_abstract_machine:jazzy`, `uv sync --extra dev
+  --active` + `uv pip install drake` with `--network host` and the proxy CA, committed as
+  `cram-ci:deps`; run with each worktree's `*/src` on PYTHONPATH, `-n auto`).
+- Same 25 worlds on main and this branch. Holders (traced with a reverse-reference map):
+  test_robot_joint_names' module-level lru_cache (11 per worker), CaseReasoner.rdrs
+  class-level rule trees keeping the last case (4-5 per worker), unittest class attrs
+  (ProcTHOR/Pipeline, 1 each).
+- Fixes as separate bug PRs off main: #483 (each reasoner reads its own rules,
+  cached_property; test test_each_reasoner_applies_rules_of_its_own) and #484
+  (module-scoped indirect fixture). Both merged into this branch (0f5f498d, 2502db19).
+  CI-image run after: 6 worlds (4/1/0/1), 1729 passed; rerun/sage10k failures are
+  container-network only (same on main).
+
 ## Next
 
 - Approve CI on the new head; confirm segmind's new test and the sdt job.
-- Root-cause the world budget in a ROS environment, or have main print the per-test tally
-  on failure so CI names the tests holding worlds.
+- Confirm sdt CI green on `2502db19`; land #483 and #484 on main.
 - Developer to settle the TypeVar thread's exceptions/trade-off and close it.
 - Developer to decide whether to drop the `integration-conflict` label.
 - Upstream threads: the developer replies/resolves on cram2#655 (sessions may not).
