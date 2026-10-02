@@ -28,12 +28,13 @@
 - Asked on the thread whether "remove this" meant the whole narrow-indentation test, which
   duplicates the indentless fixture's coverage; only the line was removed.
 
+- Follow-up thread: `SKILL_INSTRUCTIONS_FILE` became `SkillFile.INSTRUCTIONS`, a path enum
+  (`60c821ec5`); replied and resolved. 809 pass.
+- `promotion-summaries-and-table`'s damaged note was restored from history
+  (`a5178fb90` plus the four later paragraphs) and the dashboard republished.
+
 ### Outstanding
-- CI on `9917dc2fe` had not reported when this session ended. GitHub's mergeability for
-  the new head was still computing.
-- `promotion-summaries-and-table`'s note in this plan still carries the same
-  literal-note damage from an earlier append; it can be restored from that item's note
-  history on the notes branch.
+- CI on `60c821ec5` had not reported when this session ended.
 
 ---
 
