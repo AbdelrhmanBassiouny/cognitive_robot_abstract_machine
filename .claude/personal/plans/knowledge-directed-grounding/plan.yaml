@@ -110,6 +110,14 @@ items:
 
     re-encoding, so a capture and the live stream see the same pixels.
 
+
+    2026-10-02: unblocked a `.gitignore` conflict with `main` that had stalled the maintenance
+    routine since 2026-09-23 (`4653fe32e`). The same day, at the developer''s request, #202 is
+    being split into a stack of reviewable layers under its own plan,
+    `montessori-perception-split` (tracking issue #486). The split changes how #202 reaches
+    review, not what it contains: #202 stays open, its branch is never rewritten, and it ends
+    up retargeted onto the stack showing only the ROS runtime. Nothing here waits on that.
+
     '
 - id: surfaces-from-world
   title: Take the workspace from the table the robot knows about, not from a constant
