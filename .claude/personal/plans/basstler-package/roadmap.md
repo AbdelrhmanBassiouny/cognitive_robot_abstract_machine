@@ -288,10 +288,12 @@ reply.
   `__main__`, so its logger fell outside the package logger and 41 tests saw empty stdout until its
   import name was read from its spec. In `4cdd39318`.
 - **"And no classvar"** on the fields thread was already met by `be0ed435f`.
-- **"Dataclass exception gaming"** (`dependencies.py:54`) is open. The repo-wide idiom is krrood's
-  `DataclassException`, and basstler has 35 exception classes of its own. Decision 14 says basstler
-  depends on krrood eventually, but no item schedules that. `basstler-notes-core-python`'s
-  `errors.py` was planned to mirror the idiom without importing krrood. Waiting on the user.
+- **"Dataclass exception gaming"** (`dependencies.py:54`). The repo-wide idiom is krrood's
+  `DataclassException`, and basstler has 35 exception classes of its own. The user answered it
+  upstream as "in the coming PRs, one step at a time" and resolved it, so it now belongs to
+  `basstler-notes-core-python`'s `errors.py`. Decision 14 says basstler depends on krrood
+  eventually, but no item schedules that, so whether `errors.py` mirrors the idiom or imports it is
+  decided in that item.
 
 **One `Repository`** (the user, same day, `c61a734d9`). `stack.py` and `setup_steps.py` each had one,
 and they read remote URLs by different rules. `basstler/repository.py` keeps `stack.py`'s rule (any
@@ -319,3 +321,11 @@ explicitly, so #420 stays ready rather than going back to draft.
 #424 is stacked on #420 and has not been updated. A trial merge gave seven conflicts, recorded on
 its item. Most of them come from #185 having merged the two `gh` stubs into one, and having given
 the module's suite its own CI job.
+
+## 2026-10-02 evening - fork review of the logging round
+
+The user asked on #185 for `StandardStreamHandler` to be a dataclass, and for the new tests to stop
+repeating their strings. Both are in `105de6379`. The handler is `@dataclass(eq=False)`: with no
+fields, a generated `__eq__` would make every instance equal and drop its hash, which `logging`
+needs to tell handlers apart. The same "name it once" fix went into `test_repository.py`. Upstream,
+cram2#659 has one unresolved thread left, "fields / and no classvar", which `be0ed435f` meets.
