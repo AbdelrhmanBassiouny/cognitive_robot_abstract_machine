@@ -20,8 +20,16 @@
 - PR left out of draft: it carries `cram2-link-sent`, so it was apparently marked ready
   before; the user's convention is to leave a PR they marked ready as ready.
 
+### Review round of 2026-10-02 (three threads, all answered and resolved)
+- Skill paths moved into `SkillDirectory` (`ROOT`, `PLAN_CREATE`, an `instructions`
+  property, `SKILL_INSTRUCTIONS_FILE`); the staleness, scope-overlap and maintenance-skill
+  tests read them. The bootstrap docstring line naming `icra-mechanism/plan.yaml` was
+  removed, along with its stale `ITEM_FIELD_INDENT` mention. Pushed as `9917dc2fe`; 809 pass.
+- Asked on the thread whether "remove this" meant the whole narrow-indentation test, which
+  duplicates the indentless fixture's coverage; only the line was removed.
+
 ### Outstanding
-- CI on `e17bf4d5d` had not reported when this session ended. GitHub's mergeability for
+- CI on `9917dc2fe` had not reported when this session ended. GitHub's mergeability for
   the new head was still computing.
 - `promotion-summaries-and-table`'s note in this plan still carries the same
   literal-note damage from an earlier append; it can be restored from that item's note
