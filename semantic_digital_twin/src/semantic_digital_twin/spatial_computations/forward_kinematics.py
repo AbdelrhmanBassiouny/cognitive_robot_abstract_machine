@@ -73,9 +73,41 @@ class ForwardKinematicsManager(ModelChangeCallback):
     stale set of expressions from an up-to-date one.
     """
 
+    is_stale: bool = field(init=False, default=False, repr=False)
+    """
+    Whether the model changed since the expressions were last compiled, under lazy
+    compilation.
+    """
+
     def on_model_change(self, **kwargs):
         if len(self._world.kinematic_structure_entities) == 0:
             return
+        if self._world.get_world_model_manager().lazy_compilation:
+            clear_memoization_cache(self)
+            self.is_stale = True
+            # code inside the next block relies on the root cached at commit time
+            self._world.root
+            return
+        self.compile_for_current_model()
+
+    def ensure_compiled(self) -> None:
+        """
+        Compile the expressions if the model changed since they were last compiled.
+
+        Inside an open modification block the world may be half built; while it is not a
+        tree, reads there keep using the expressions compiled last.
+        """
+        if not self.is_stale:
+            return
+        if self._world.world_is_being_modified and not self._world.is_tree:
+            return
+        self.compile_for_current_model()
+
+    def compile_for_current_model(self) -> None:
+        """
+        Rebuild, compile and evaluate the forward kinematics of the current model.
+        """
+        self.is_stale = False
         self.update_root_T_kse_expression_cache()
         clear_memoization_cache(self)
         self.compile()
@@ -136,6 +168,8 @@ class ForwardKinematicsManager(ModelChangeCallback):
         Should be called after a state update.
         """
         clear_memoization_cache(self)
+        if self.is_stale:
+            return
         self.forward_kinematics_for_all_bodies = self.compiled_all_fks.evaluate()
 
     @copy_memoize
@@ -149,6 +183,7 @@ class ForwardKinematicsManager(ModelChangeCallback):
             It determines the endpoint of the forward kinematics calculation.
         :return: An expression representing the computed forward kinematics of the tip KinematicStructureEntity relative to the root KinematicStructureEntity.
         """
+        self.ensure_compiled()
         if root == self._world.root:
             return self.root_T_kse_expression_cache[tip.id]
         root_chain, tip_chain = self._world.compute_split_chain_of_connections(
@@ -201,6 +236,7 @@ class ForwardKinematicsManager(ModelChangeCallback):
         :return: Transformation matrix representing the relative pose of the tip body
             with respect to the root body.
         """
+        self.ensure_compiled()
         root = root.id
         tip = tip.id
         root_is_world = root == self._world.root.id
