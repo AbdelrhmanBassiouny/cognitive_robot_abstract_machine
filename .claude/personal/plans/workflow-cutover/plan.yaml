@@ -73,7 +73,7 @@ items:
 - id: routine-cutover
   title: 'Retire the scheduled LLM Routine: deterministic Action + on-demand sessions'
   branch: claude/stack-maintenance-action
-  status: blocked
+  status: in_progress
   session: https://claude.ai/code/session_01Q8JfYcge9pLWPxGSE9d9d1
   track: cutover
   pull_request_number: 280

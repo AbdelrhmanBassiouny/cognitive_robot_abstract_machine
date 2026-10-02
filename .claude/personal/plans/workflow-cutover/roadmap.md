@@ -277,3 +277,15 @@ self-limiting by design. Recorded as a comment in `stack-maintenance.yml` itself
 does not have to re-derive it from `stack-maintenance`'s roadmap.
 
 Both threads replied to and resolved. Pushed as `a1409d71`.
+
+## `routine-cutover` resolved 2026-10-02: crossed #185, and the gate made reachable
+
+The user asked how #280 relates to basstler and whether it was usable and tested. The answers were "it doesn't fit yet" and "only in unit tests", and they turned up three things the item had not recorded.
+
+**#280 had never crossed #185.** It still edited `.claude/stack/`, which #185 deletes. Merged onto #185 it conflicted in five files, its new module landed outside the package with bare `sys.path` imports, and its workflow called deleted paths. That is what the integration pipeline's `integration-conflict` on 2026-09-30 was. The user chose the re-cut (2026-10-02): #185 merged in at `eeb76241`, every change re-applied inside `basstler/`, and #280 retargeted to #185's branch like #156, #154 and #211.
+
+**The Action had already been running, and failing, for two weeks.** Integration candidate pull requests carry the workflow file, and a `pull_request` workflow runs from the merge ref. So it ran 158 times from 2026-09-17, with write access, against the real stack. Every run completed the pass and then exited 10 (`BRANCH_NEEDS_ATTENTION`), because some branch is always conflicted or withheld. Under that status the recorded gate, "one green Action cycle", was unreachable. The fix is `run-unattended` (`0b6e9776`): `run-report`'s pass with its own exit policy. A branch whose owner was already told on its pull request (`CONFLICT`, `WITHHELD`) does not fail the job. A rejected push, a non-conflict integration failure or a refused fast-forward still does, because nobody is told about those.
+
+**The executor re-reported conflicts.** That run of the Action is what produced the 91 comments on #156. It is a bug in #139's code and now its own item, `maintenance-rereport-fix` (#482).
+
+Still open: a real green run on #280's head, which needs #185 to land first since #280 now stacks on it. Also still open is whether the Actions token may retarget a base: no run so far has had a pending reparent. #280's upstream promotion link predates the re-cut and would now carry #185's whole diff, so it needs rebuilding once #185 lands.
