@@ -480,3 +480,40 @@ redundant once #211 carried it.
 
 **Left standing**: merging #280 into this stack still conflicts on six files, the
 `.claude/stack/` to `basstler/` relocation, which belongs to an integration triage pass.
+
+## `manifest-currency-first`: the rename merge of 2026-10-02
+
+Resolved from `/plan-item-resolve` in `auto` mode. The manifest called the item healthy and
+`in_progress` with no blocker; GitHub had called #151 `dirty` against #185 since 2026-09-19, on
+twenty files every maintenance pass re-reported. **It is the 2026-09-19 miss once more**: #151 last
+merged #185 at `5b332d6a59`, one commit before `213ad791c7` renamed the package, so everything it
+adds under `bastler/` met git's directory-rename detection.
+
+**Recording the rename as merged is what made the merge cheap, more than applying it.** The
+substitution was applied to this branch first and proven byte-identical to `213ad791c7` when run
+over its parent; merging #185's head straight after still left twenty-seven conflicts, because the
+merge base stayed pre-rename and every renamed line on one side sat next to a later edit on the
+other. Merging `213ad791c7` with the `ours` strategy - exact here, since the tree already carried
+that substitution - moved the merge base past the rename, and three content conflicts were left.
+The merged tree differs from #185's head on exactly this branch's 30 paths.
+
+**One semantic break, and a duplicate fix.** The staleness-document test imported
+`REPOSITORY_ROOT` from `package_layout`, which #185 had removed into `basstler.locations`; no
+conflict reported it, the suite did. And #185 had picked up main's narrower indentation fix
+(`existing_field_indent`), the same defect this branch's `ItemIndentation` from the #160 fold
+already covers along with the sequence and folded-scalar paths. The narrower one was dropped and
+main's own test for it passes unchanged against `ItemIndentation`.
+
+**The `integration-conflict` against `D-deco` no longer reproduces.** The two share no file; the
+pair's only textual conflicts, `AGENTS.md` and a krrood module, are #185's against `D-deco` and
+reproduce without #151; and the tooling suite passes over the merged pair.
+
+**This item's own `update --append-notes` corrupted this item's note while recording the above.**
+It split the recorded note on every newline, which is right for a folded scalar and wrong for a
+literal one, where a single newline is a hard-wrapped line - so every wrapped line became a
+paragraph. Most notes in this plan are literal blocks, and `promotion-summaries-and-table`'s note
+already carries the same damage from an earlier append. Fixed on the branch with a failing test
+first: `BlockScalarStyle` reads the indicator off the manifest text, since parsing discards it.
+The manifest was restored from the commit before the append and the note re-appended with the
+fix. **A writer exercised only against the fixture's own folded note is a writer no real note
+exercises** - the same lesson the indentation fold recorded, met one field over.
