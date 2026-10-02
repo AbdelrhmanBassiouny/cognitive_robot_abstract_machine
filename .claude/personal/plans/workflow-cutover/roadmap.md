@@ -289,3 +289,11 @@ The user asked how #280 relates to basstler and whether it was usable and tested
 **The executor re-reported conflicts.** That run of the Action is what produced the 91 comments on #156. It is a bug in #139's code and now its own item, `maintenance-rereport-fix` (#482).
 
 Still open: a real green run on #280's head, which needs #185 to land first since #280 now stacks on it. Also still open is whether the Actions token may retarget a base: no run so far has had a pending reparent. #280's upstream promotion link predates the re-cut and would now carry #185's whole diff, so it needs rebuilding once #185 lands.
+
+## `maintenance-rereport-fix` added 2026-10-02: the executor re-reported the same conflict every run
+
+Found while resolving `routine-cutover`. `github-actions[bot]` posted 91 identical "NEEDS RESOLUTION" comments on #156 between 2026-09-19 and 2026-09-30, one per run of #280's Action on an integration candidate pull request.
+
+`WithholdBranchStillConflicting` decided "still conflicted" from GitHub's `mergeable_state` alone. GitHub computes that against the pull request's own base, and #156 read `unstable` while merging its derived parent still conflicted. So each run cleared `needs-resolution`, merged, hit the same conflict, relabelled and commented.
+
+The fix withholds a labelled branch while GitHub reports it `dirty` *or* a trial integration of its parent still leaves unmerged paths, and clears the label only when both agree. It is a separate bug-fix pull request off `main` ([#482](https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/482)) rather than part of #280, because the bug is #139's executor on `main`. The user chose that split on 2026-10-02. #185 moves the module into `basstler/`, so whichever of the two lands second re-applies the four-line change there.

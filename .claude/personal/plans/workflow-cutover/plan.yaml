@@ -287,3 +287,10 @@ items:
     through a session's git proxy, so those two steps run outside the harness - the user's machine, or
     `gh api`. A session can still do every verification and prepare the exact commands. The sibling
     `session-hooks-retirement` hit the same wall and the user ran the delete.
+
+- id: maintenance-rereport-fix
+  title: "Withhold a conflicted branch until its parent actually integrates (stop re-reporting conflicts)"
+  branch: null
+  track: cutover
+  depends_on: []
+  status: in_progress
