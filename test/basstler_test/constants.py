@@ -15,11 +15,6 @@ from pathlib import Path
 
 from basstler.locations import PathEnumeration, ProjectLocation
 
-SKILL_INSTRUCTIONS_FILE = "SKILL.md"
-"""
-The file a skill directory keeps its instructions in, which is what Claude Code looks for.
-"""
-
 
 class DatasetLocation(PathEnumeration):
     """
@@ -110,6 +105,17 @@ class StackLabel(StrEnum):
     """
 
 
+class SkillFile(PathEnumeration):
+    """
+    The files a skill directory holds, relative to that directory.
+    """
+
+    INSTRUCTIONS = Path("SKILL.md")
+    """
+    The skill's instructions, which is the file Claude Code looks for.
+    """
+
+
 class SkillDirectory(PathEnumeration):
     """
     The skills the suites read, relative to the project root.
@@ -143,7 +149,7 @@ class SkillDirectory(PathEnumeration):
         """
         :return: The skill's instructions, relative to the project root.
         """
-        return self.value / SKILL_INSTRUCTIONS_FILE
+        return self.value / SkillFile.INSTRUCTIONS
 
 
 class ScratchBranch(StrEnum):

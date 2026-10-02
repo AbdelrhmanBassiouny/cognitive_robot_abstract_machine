@@ -20,7 +20,7 @@ import pytest
 
 from basstler.locations import PackageLocation, ProjectLocation
 
-from .constants import SKILL_INSTRUCTIONS_FILE, SkillDirectory
+from .constants import SkillDirectory, SkillFile
 
 MASTER_INDEX_KEY = "_index"
 """
@@ -105,7 +105,7 @@ def skills_writing_plan_data() -> list[Path]:
     return sorted(
         skill
         for skill in (PackageLocation.REPOSITORY_ROOT / SkillDirectory.ROOT).glob(
-            f"*/{SKILL_INSTRUCTIONS_FILE}"
+            f"*/{SkillFile.INSTRUCTIONS}"
         )
         if any(script in skill.read_text() for script in PLAN_WRITING_SCRIPTS)
     )
