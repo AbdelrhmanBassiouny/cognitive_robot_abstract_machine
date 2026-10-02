@@ -13,3 +13,12 @@
 - PR left out of draft on purpose (item notes: a draft would show dependents #205 etc. as
   blocked on the dashboard) - user to confirm or flip.
 - Upstream: `cram2-link-sent`, not `in-review`; promotion is the user's click.
+
+## Split (2026-10-02)
+- Developer: #202 too big -> split into layers as its own plan `montessori-perception-split`
+  (tracking issue #486, dashboard https://claude.ai/artifact/HbJxEtTJQRQzyvZoTp591u).
+- 8 items: network_limits standalone; stack vocabulary -> world -> frames -> piece recognition
+  -> pipeline -> captures; #202 becomes the top (ROS runtime) by merging the stack in (no file
+  change) and retargeting its base. Nothing on this branch is rewritten.
+- Not started; next is `/plan-item-kickoff montessori-perception-split shape-vocabulary-on-main`
+  (and network-limits-on-main in parallel).
