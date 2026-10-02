@@ -290,7 +290,9 @@ items:
 
 - id: maintenance-rereport-fix
   title: "Withhold a conflicted branch until its parent actually integrates (stop re-reporting conflicts)"
-  branch: null
+  branch: claude/compassionate-faraday-0opx3t
   track: cutover
+  pull_request_number: 482
+  session: https://claude.ai/code/session_017wfueWmCbN76Z5MQo2EWAv
   depends_on: []
   status: in_progress
