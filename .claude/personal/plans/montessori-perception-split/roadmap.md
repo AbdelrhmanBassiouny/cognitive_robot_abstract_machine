@@ -101,3 +101,20 @@ it upstream stays the developer's click.
 That plan's `montessori-perception-on-main` item still tracks #202's branch and remains
 what its `surfaces` track stacks on. This plan changes how #202 reaches review, not what
 it contains, so no `depends_on` there changes.
+
+## `network-limits-on-main` — kickoff (2026-10-02)
+
+Branch `claude/clever-carson-wp7c09` off `main` (`236b295a2`), draft PR #487.
+
+- **Source:** #202's tip `4653fe32e`. Its two files are checked out verbatim with
+  `git checkout 4653fe32e -- experiments/src/experiments/network_limits.py test/experiments_test/test_network_limits.py`.
+  No code is edited.
+- **Authorship:** both files were first added by `7d54d8002`, authored by Abdelrhman Bassiouny,
+  so this layer needs no `Co-authored-by` trailer.
+- **Imports:** the only import outside the standard library and `typing_extensions` is
+  `krrood.exceptions.DataclassException`, which exists on `main`. Nothing else in #202 is
+  imported.
+- **Verification:** run `test_network_limits.py` with `--noconftest`, then check that both
+  files are byte-identical to `4653fe32e`.
+- **Scope check:** the two paths do not exist on `main`. They overlap #202 only, which is
+  the plan's design, so there is nothing to fold.
