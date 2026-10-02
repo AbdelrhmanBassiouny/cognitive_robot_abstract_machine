@@ -47,10 +47,33 @@ Four threads from the developer on `base.py` / `predicates.py`:
   imports `predicates.py`, and Camera is built on it. Deeper layering fix (annotations not
   calling predicates) offered as separate work, not done.
 
+## Fork review round, 2026-10-02 (pushed as `0b35f6fa`)
+
+- "Is the Camera not importable here?" (outdated, pre-`92bd9199`): answered (import cycle,
+  fixed by the move), resolved.
+- "Use typevars bounded to these types, everywhere (TBody, TRegion, ...)": done in
+  `0b35f6fa` - InContactWith/SupportedBy `Triple[TBody, TBody]`, InsideRegion
+  `Triple[TBody, TRegion]`, VisibleTo `Triple[TKinematicStructureEntity, TCamera]`, fields
+  and subject/object typed the same. TBody/TRegion in world_entity.py, TCamera after
+  Camera in robot_parts.py, TKinematicStructureEntity reused from mixins.py. Test now
+  `test_a_relation_is_generic_in_the_kinds_of_thing_it_relates` (failed first).
+  Not applied: segmind BodyRelation bound (TypeVars not allowed in a bound), krrood
+  HasType (subject Any), krrood mimic (tests concrete read-back). Trade-off: mypy now
+  accepts `get_relation(..., VisibleTo)` (bare generic = Any). Replied, left OPEN for the
+  developer.
+- sdt CI on `92bd9199`: 1770 passed, failed only on the combined world budget, 32/30
+  (gw0 13, gw1 19). Same on `78510c56` (31); passed on `27f88034`, `581d941a`,
+  `498306d8`; #481 (main) passed. Locally (no ROS) main and this branch both leave the
+  same 2 worlds (test_body_filter, test_door_add_to_world). Session fixtures are torn down
+  before pytest_sessionfinish, so the ~30 are held by something outliving the tests in
+  ROS-only tests; CI prints only per-worker totals, so which tests is unknown. Suggested
+  (not done): make the combined-limit failure print the per-test tally (a main change).
+
 ## Next
 
 - Approve CI on the new head; confirm segmind's new test and the sdt job.
-- Root-cause the 31/30 world budget in a ROS environment (which ROS-only test leaves a
-  per-process world), or decide the budget on `main` is set too tight.
+- Root-cause the world budget in a ROS environment, or have main print the per-test tally
+  on failure so CI names the tests holding worlds.
+- Developer to settle the TypeVar thread's exceptions/trade-off and close it.
 - Developer to decide whether to drop the `integration-conflict` label.
 - Upstream threads: the developer replies/resolves on cram2#655 (sessions may not).
