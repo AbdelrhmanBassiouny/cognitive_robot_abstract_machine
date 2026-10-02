@@ -45,9 +45,12 @@ from basstler.build_dashboard import (
     main,
     validate_plan,
 )
+from basstler.locations import PackageLocation
+
+from .constants import SkillDirectory
 
 EXAMPLE_DIRECTORY = (
-    Path(__file__).parent.parent.parent / ".claude/skills/plan-dashboard/example"
+    PackageLocation.REPOSITORY_ROOT / SkillDirectory.PLAN_DASHBOARD / "example"
 )
 """The example-walkthrough.md doc's committed sample plan.yaml/roadmap.md/
 pr_data.json - see the tests at the bottom of this file for why."""

@@ -26,7 +26,7 @@ from dataclasses import dataclass
 from enum import Enum, StrEnum
 from pathlib import Path
 
-from basstler.package_layout import REPOSITORY_ROOT
+from basstler.locations import PackageLocation, ProjectLocation
 
 
 class Host(StrEnum):
@@ -227,7 +227,7 @@ class PersonalNotesSetting(PersonalNotesSettingSpecification, Enum):
     PATH = PersonalNotesSettingSpecification(
         git_config_key="claude.personalNotesPath",
         environment_variable="CLAUDE_PERSONAL_NOTES_PATH",
-        default=".claude/personal/cram-notes.md",
+        default=str(ProjectLocation.PERSONAL_NOTES_DOCUMENT),
     )
     """
     Where on that branch the notes file sits.
@@ -615,7 +615,11 @@ def main() -> None:
     """
     Print the checklist for this clone.
     """
-    print(SetupChecklist.for_clone(REPOSITORY_ROOT, os.environ).render())
+    print(
+        SetupChecklist.for_clone(
+            PackageLocation.REPOSITORY_ROOT.value, os.environ
+        ).render()
+    )
 
 
 if __name__ == "__main__":

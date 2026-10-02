@@ -27,13 +27,8 @@ from typing import Any, TypeVar, ClassVar
 
 import tomllib
 
-from basstler.stack import CONFIGURATION_PATH, Repository
-
-QUERY_DIRECTORY = Path(__file__).resolve().parent / "queries"
-"""
-Where the ``.graphql`` documents live.
-"""
-
+from basstler.locations import PackageLocation
+from basstler.stack import Repository
 
 # %% the reading contract
 
@@ -152,7 +147,7 @@ class GraphQLDocument(StrEnum):
 
     def read(self) -> str:
         """:return: The document's text."""
-        return (QUERY_DIRECTORY / f"{self}.graphql").read_text()
+        return (PackageLocation.QUERIES / f"{self}.graphql").read_text()
 
 
 class EnvironmentVariable(StrEnum):
@@ -872,7 +867,7 @@ class UpstreamReviewReader:
 
 
 def resolve_upstream_repository(
-    path: Path = CONFIGURATION_PATH, override: str | None = None
+    path: Path = PackageLocation.STACK_CONFIGURATION.value, override: str | None = None
 ) -> Repository:
     """
     Decide which repository the fork's pull requests are reviewed on.

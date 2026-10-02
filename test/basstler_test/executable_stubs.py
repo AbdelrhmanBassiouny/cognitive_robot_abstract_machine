@@ -13,7 +13,7 @@ import shutil
 from dataclasses import dataclass
 from pathlib import Path
 
-from .constants import STUBS_DIRECTORY
+from .constants import DatasetLocation
 
 
 @dataclass(frozen=True)
@@ -45,7 +45,7 @@ class ExecutableStubDirectory:
         :param executable_name: The executable to stand in for, e.g. ``"gh"``.
         """
         destination = self.path / executable_name
-        shutil.copy(STUBS_DIRECTORY / f"{executable_name}.sh", destination)
+        shutil.copy(DatasetLocation.STUBS / f"{executable_name}.sh", destination)
         destination.chmod(0o755)
 
     def ahead_of(self, search_path: str) -> str:

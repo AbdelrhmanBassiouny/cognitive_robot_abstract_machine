@@ -49,23 +49,9 @@ from typing import ClassVar
 from urllib.parse import quote
 
 from basstler.git_commands import GitCommandRunner
+from basstler.locations import PackageLocation, ProjectLocation
 
 # %% configuration
-
-CONFIGURATION_PATH = Path(__file__).with_name("stack.toml")
-"""The checked-in configuration every run starts from, before any per-user override."""
-
-BOARD_PATH = Path(__file__).with_name("board.json")
-"""Where the exported snapshot of the fork's open pull requests is read from and written
-to - scratch state, never committed."""
-
-PERSONAL_STACK_CONFIGURATION_PATH = ".claude/personal/stack.toml"
-"""Path, relative to the project root, of the per-user configuration override file on the personal-notes
-branch (see :func:`_personal_configuration_overrides`)."""
-
-PERSONAL_NOTES_CONFIGURATION_SCRIPT = ".claude/hooks/resolve-personal-notes-config.sh"
-"""Path, relative to the project root, of the shell file that owns which remote and branch the
-personal notes are on (see :func:`_fetch_personal_notes_branch`)."""
 
 
 @dataclass
@@ -325,7 +311,7 @@ class Configuration:
 
 
 def load_configuration(
-    path: Path = CONFIGURATION_PATH,
+    path: Path = PackageLocation.STACK_CONFIGURATION.value,
     fork_repository: Repository | None = None,
     upstream_repository: Repository | None = None,
 ) -> Configuration:
@@ -372,7 +358,7 @@ def _configuration_values(path: Path) -> dict[str, str]:
 
 
 def resolved_remotes(
-    path: Path = CONFIGURATION_PATH,
+    path: Path = PackageLocation.STACK_CONFIGURATION.value,
     fork_repository: Repository | None = None,
     upstream_repository: Repository | None = None,
 ) -> RemoteResolution:
@@ -417,7 +403,7 @@ def _fetch_personal_notes_branch() -> bool:
             [
                 "bash",
                 "-c",
-                f'source "{PERSONAL_NOTES_CONFIGURATION_SCRIPT}" && fetch_personal_notes_branch',
+                f'source "{ProjectLocation.PERSONAL_NOTES_CONFIGURATION_SCRIPT}" && fetch_personal_notes_branch',
             ],
             capture_output=True,
             text=True,
@@ -429,18 +415,19 @@ def _fetch_personal_notes_branch() -> bool:
 def _personal_configuration_overrides() -> dict[str, object]:
     """Fetch the personal-notes branch and parse its configuration override file, if any.
 
-    :return: The parsed contents of ``.claude/personal/stack.toml`` on the personal-notes branch, or
+    :return: The parsed contents of :attr:`ProjectLocation.PERSONAL_STACK_CONFIGURATION` on the
+        personal-notes branch, or
         an empty mapping if the branch or the file doesn't exist (e.g. before it has ever been
         written).
     """
     if not _fetch_personal_notes_branch():
         return {}
     if not _git_succeeds(
-        "cat-file", "-e", f"FETCH_HEAD:{PERSONAL_STACK_CONFIGURATION_PATH}"
+        "cat-file", "-e", f"FETCH_HEAD:{ProjectLocation.PERSONAL_STACK_CONFIGURATION}"
     ):
         return {}
     return tomllib.loads(
-        _git("show", f"FETCH_HEAD:{PERSONAL_STACK_CONFIGURATION_PATH}")
+        _git("show", f"FETCH_HEAD:{ProjectLocation.PERSONAL_STACK_CONFIGURATION}")
     )
 
 
@@ -567,7 +554,7 @@ class BoardUnavailable(RuntimeError):
     """Raised when ``board.json`` is missing."""
 
 
-def load_board(path: Path = BOARD_PATH) -> list[PullRequest]:
+def load_board(path: Path = PackageLocation.BOARD.value) -> list[PullRequest]:
     """Parse ``board.json`` into the list of fork pull requests.
 
     :param path: The board export file.

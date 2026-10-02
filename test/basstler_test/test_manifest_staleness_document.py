@@ -18,14 +18,22 @@ from pathlib import Path
 
 import pytest
 
-from basstler.package_layout import REPOSITORY_ROOT
+from basstler.locations import PackageLocation, ProjectLocation
 
-SKILLS_DIRECTORY = REPOSITORY_ROOT / ".claude" / "skills"
+from .constants import SkillDirectory
+
+SKILLS_DIRECTORY = (
+    PackageLocation.REPOSITORY_ROOT / ProjectLocation.CLAUDE_CODE_DIRECTORY / "skills"
+)
 """
 Where every skill's own directory lives.
 """
 
-MAINTENANCE_SKILL = SKILLS_DIRECTORY / "stacked-pr-maintenance" / "SKILL.md"
+MAINTENANCE_SKILL = (
+    PackageLocation.REPOSITORY_ROOT
+    / SkillDirectory.STACKED_PULL_REQUEST_MAINTENANCE
+    / "SKILL.md"
+)
 """
 The pass that changes a tracked item's real state without owning the item.
 """
@@ -80,9 +88,9 @@ def shell_constant(name: str) -> str:
         [
             "bash",
             "-c",
-            f'source .claude/hooks/resolve-personal-notes-config.sh; printf "%s" "${{{name}}}"',
+            f'source {ProjectLocation.PERSONAL_NOTES_CONFIGURATION_SCRIPT}; printf "%s" "${{{name}}}"',
         ],
-        cwd=REPOSITORY_ROOT,
+        cwd=PackageLocation.REPOSITORY_ROOT,
         capture_output=True,
         text=True,
         check=True,
@@ -96,7 +104,9 @@ def currency_document() -> str:
 
     :return: Its markdown.
     """
-    return (REPOSITORY_ROOT / shell_constant(STALENESS_DOCUMENT_CONSTANT)).read_text()
+    return (
+        PackageLocation.REPOSITORY_ROOT / shell_constant(STALENESS_DOCUMENT_CONSTANT)
+    ).read_text()
 
 
 def skills_writing_plan_data() -> list[Path]:
@@ -116,7 +126,7 @@ def test_the_rule_lives_where_the_shell_configuration_says_it_does():
     document = Path(shell_constant(STALENESS_DOCUMENT_CONSTANT))
 
     assert document.name == "manifest-staleness.md"
-    assert (REPOSITORY_ROOT / document).is_file()
+    assert (PackageLocation.REPOSITORY_ROOT / document).is_file()
 
 
 @pytest.mark.parametrize(

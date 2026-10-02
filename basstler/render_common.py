@@ -10,21 +10,17 @@ import it rather than duplicating the logic.
 from __future__ import annotations
 
 import re
-from pathlib import Path
 from urllib.parse import urlsplit
 
 import jinja2
 import markdown as markdown_library
 import nh3
 
+from basstler.locations import PackageLocation
 from basstler.plan_model import ItemStatus
 
 _ALLOWED_URL_SCHEMES = frozenset({"http", "https"})
 
-TEMPLATES_DIRECTORY = Path(__file__).parent / "templates"
-"""
-Where every page template (dashboard.html, index.html) lives.
-"""
 
 # Matches one opening or closing HTML heading tag, e.g. "<h1>"/"</h1>" through
 # "<h6>"/"</h6>". _shift_heading_level() shifts each match down by
@@ -76,7 +72,7 @@ def create_template_environment() -> jinja2.Environment:
     :return: A configured, ready-to-use Jinja2 environment.
     """
     environment = jinja2.Environment(
-        loader=jinja2.FileSystemLoader(TEMPLATES_DIRECTORY),
+        loader=jinja2.FileSystemLoader(PackageLocation.TEMPLATES.value),
         autoescape=True,
         trim_blocks=True,
         lstrip_blocks=True,

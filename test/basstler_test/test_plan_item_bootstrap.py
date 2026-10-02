@@ -1,6 +1,6 @@
 """
-Tests for basstler.plan_item_bootstrap.py's two operations, recording an item and opening
-its work.
+Tests for basstler.plan_item_bootstrap.py's two operations, recording an item and
+opening its work.
 
 Run against the local scratch repository fixture rather than a real remote, and against
 a recording pull request opener rather than GitHub, so nothing here needs network access
@@ -25,10 +25,10 @@ import pytest
 import yaml
 
 import basstler.plan_item_bootstrap
+from basstler.locations import ProjectLocation
 from basstler.plan_item_bootstrap import (
     BLOCK_STYLED_KEYS,
     MANIFEST_LINE_WIDTH,
-    PLANS_DIRECTORY,
     CreatedPullRequest,
     ExitCode,
     HookScript,
@@ -55,7 +55,7 @@ from basstler.plan_item_bootstrap import (
     update_item,
 )
 from .scratch_repository import ScratchRepository
-from .constants import DATASET_DIRECTORY, WORK_BRANCH
+from .constants import DatasetLocation, ScratchBranch
 
 from .script_runner import PythonModuleRunner
 
@@ -70,18 +70,18 @@ the package's own directory on ``sys.path`` in place of the project root.
 
 PLAN_IDENTIFIER = "test-plan"
 
-PLAN_MANIFEST = (DATASET_DIRECTORY / "bootstrap-plan.yaml").read_text()
+PLAN_MANIFEST = (DatasetLocation.DIRECTORY / "bootstrap-plan.yaml").read_text()
 """
 The manifest every test starts from.
 """
 
-PLAN_ROADMAP = (DATASET_DIRECTORY / "bootstrap-roadmap.md").read_text()
+PLAN_ROADMAP = (DatasetLocation.DIRECTORY / "bootstrap-roadmap.md").read_text()
 """
 The roadmap every test starts from.
 """
 
 INDENTLESS_PLAN_MANIFEST = (
-    DATASET_DIRECTORY / "bootstrap-plan-indentless-items.yaml"
+    DatasetLocation.DIRECTORY / "bootstrap-plan-indentless-items.yaml"
 ).read_text()
 """
 The same plan in the other block sequence style YAML admits, with items written flush
@@ -479,7 +479,7 @@ def open_request(**overrides: object) -> WorkOpenRequest:
         plan_identifier=PLAN_IDENTIFIER,
         item_identifier=EXISTING_ITEM,
         branch=NEW_BRANCH,
-        base_branch=WORK_BRANCH,
+        base_branch=ScratchBranch.WORK,
         session_url=SESSION_URL,
         pull_request_title="An item that has not been started",
         pull_request_body="What it does.",
@@ -632,7 +632,7 @@ def test_opening_asks_for_a_draft_pull_request_against_the_plans_repository(
     assert request.draft is True
     assert request.repository == "an-owner/a-repository"
     assert request.head == NEW_BRANCH
-    assert request.base == WORK_BRANCH
+    assert request.base == ScratchBranch.WORK
 
 
 def test_opening_publishes_the_branch_to_the_repositorys_own_remote(
@@ -1368,6 +1368,37 @@ def test_a_line_is_rendered_at_the_depth_the_manifest_it_edits_uses():
     assert indentation != PLAN_INDENTATION
 
 
+NARROWLY_INDENTED_MANIFEST = (
+    DatasetLocation.DIRECTORY / "narrowly-indented-plan.yaml"
+).read_text()
+"""
+A manifest predating this module's own formatting convention: its items list has no
+indent before the ``-`` and its fields sit two spaces in, not the four
+``ITEM_FIELD_INDENT`` assumes.
+
+``icra-mechanism/plan.yaml`` on the personal-notes branch is written exactly this way.
+"""
+
+
+def test_patching_a_field_matches_the_items_own_indentation_rather_than_a_fixed_one():
+    """
+    A fixed indentation nests a patched field under whichever key happens to precede it.
+
+    instead of beside it, the moment a manifest's own indentation differs from the
+    module's assumed one - which stops the result parsing as YAML at all.
+    """
+    patched = apply_item_fields(
+        NARROWLY_INDENTED_MANIFEST,
+        "narrow-plan",
+        "an-item",
+        {ManifestKey.STATUS: ItemStatus.IN_PROGRESS.value},
+    )
+
+    item = yaml.safe_load(patched)[ManifestKey.ITEMS.key][0]
+    assert item[ManifestKey.STATUS.key] == ItemStatus.IN_PROGRESS.value
+    assert item[ManifestKey.TITLE.key] == "An item indented two spaces, not four"
+
+
 def test_a_key_quotes_its_own_value_when_its_style_says_to():
     """
     Quoting is the key's to decide, so no caller has to know that a title is prose and a
@@ -1568,8 +1599,8 @@ def test_the_plans_directory_matches_the_shell_configuration_that_owns_it(
     bootstrap_repository: ScratchRepository,
 ):
     """
-    ``PLANS_DIRECTORY`` mirrors ``PLANS_DIR`` in the shell configuration; this is what
-    stops the mirror drifting, since the two are edited in different files.
+    ``ProjectLocation.PLANS`` mirrors ``PLANS_DIR`` in the shell configuration; this is
+    what stops the mirror drifting, since the two are edited in different files.
     """
     resolved = subprocess.run(
         [
@@ -1586,7 +1617,7 @@ def test_the_plans_directory_matches_the_shell_configuration_that_owns_it(
         check=True,
     )
     plans_directory, manifest_path = resolved.stdout.strip().split("\n")
-    assert plans_directory == PLANS_DIRECTORY
+    assert plans_directory == str(ProjectLocation.PLANS)
     assert manifest_path == PlanDocument.MANIFEST.path_within_notes_branch(
         PLAN_IDENTIFIER
     )
@@ -1942,7 +1973,9 @@ def test_a_paragraph_break_still_separates_paragraphs_after_a_hyphen():
     """
     Closing up a wrapped break must not swallow a blank line that follows a hyphen.
     """
-    assert basstler.plan_item_bootstrap.paragraphs_of("ends in a-\n\nnew paragraph") == [
+    assert basstler.plan_item_bootstrap.paragraphs_of(
+        "ends in a-\n\nnew paragraph"
+    ) == [
         "ends in a-",
         "new paragraph",
     ]

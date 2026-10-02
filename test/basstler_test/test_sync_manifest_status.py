@@ -11,7 +11,7 @@ from typing import Any
 
 import pytest
 
-from .constants import DATASET_DIRECTORY
+from .constants import DatasetLocation
 import yaml
 
 from basstler.build_dashboard import (
@@ -149,7 +149,7 @@ def test_uses_the_item_repository_override_over_the_plan_default():
 # once and shared read-only by every test below, since apply_status_corrections
 # patches text in place and each test asserts against its own fresh copy of
 # the return value rather than mutating this constant.
-MANIFEST_TEXT = (DATASET_DIRECTORY / "manifest.yaml").read_text()
+MANIFEST_TEXT = (DatasetLocation.DIRECTORY / "manifest.yaml").read_text()
 
 
 def test_patches_only_the_targeted_items_status_line():

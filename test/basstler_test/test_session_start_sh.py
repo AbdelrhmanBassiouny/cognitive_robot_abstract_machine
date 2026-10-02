@@ -20,20 +20,17 @@ from pathlib import Path
 
 import pytest
 
-from .constants import (
-    DATASET_DIRECTORY,
-    NOTES_BRANCH,
-    WORK_BRANCH,
-    PersonalNotesPath,
-)
+from basstler.locations import ProjectLocation
+
+from .constants import DatasetLocation, PersonalNotesPath, ScratchBranch
 from .executable_stubs import ExecutableStubDirectory, path_hiding_executable
 from .scratch_repository import SCRATCH_IDENTITY, ScratchRepository
 from .session_start_summary import SummaryMessage, summary_message, summary_value
 
-PLAN_MANIFEST = (DATASET_DIRECTORY / "plan.yaml").read_text()
+PLAN_MANIFEST = (DatasetLocation.DIRECTORY / "plan.yaml").read_text()
 
 PLAN_MANIFEST_WITH_TRACKING_ISSUE = (
-    DATASET_DIRECTORY / "plan-with-tracking-issue.yaml"
+    DatasetLocation.DIRECTORY / "plan-with-tracking-issue.yaml"
 ).read_text()
 
 TRACKING_ISSUE = "55"
@@ -41,7 +38,7 @@ TRACKING_ISSUE = "55"
 PLAN_IDENTIFIER = "test-plan"
 
 
-MANIFEST_PATH = f".claude/personal/plans/{PLAN_IDENTIFIER}/plan.yaml"
+MANIFEST_PATH = ProjectLocation.PLANS / PLAN_IDENTIFIER / "plan.yaml"
 
 CLAUDE_LOCAL_MD = "CLAUDE.local.md"
 
@@ -121,7 +118,7 @@ def publish_and_run(
     """
     repository.publish_notes_branch(
         {
-            PersonalNotesPath.NOTES_FILE: "personal notes\n",
+            ProjectLocation.PERSONAL_NOTES_DOCUMENT: "personal notes\n",
             PersonalNotesPath.GIT_IDENTITY: SCRATCH_IDENTITY.as_git_config_file(),
             **(notes_branch_files or {}),
         }
@@ -135,7 +132,7 @@ def publish_and_run(
 def test_reports_nothing_when_no_notes_branch_exists(
     session_start_repository: ScratchRepository,
 ):
-    session_start_repository.run_git("checkout", "--quiet", "-b", WORK_BRANCH)
+    session_start_repository.run_git("checkout", "--quiet", "-b", ScratchBranch.WORK)
 
     result = run_session_start(session_start_repository)
 
@@ -154,7 +151,7 @@ def test_reports_no_plans_when_none_are_tracked(
 
     assert result.returncode == 0, result.stderr
     assert summary_value(result.stdout, "plan") == summary_message(
-        SummaryMessage.NO_PLANS_TRACKED, NOTES_BRANCH
+        SummaryMessage.NO_PLANS_TRACKED, ScratchBranch.PERSONAL_NOTES
     )
 
 
@@ -176,7 +173,7 @@ def test_names_the_missing_item_when_other_plans_are_tracked(
 
     assert result.returncode == 0, result.stderr
     assert summary_value(result.stdout, "plan") == summary_message(
-        SummaryMessage.NO_PLAN_ITEM_TRACKS_BRANCH, WORK_BRANCH, "2"
+        SummaryMessage.NO_PLAN_ITEM_TRACKS_BRANCH, ScratchBranch.WORK, "2"
     )
 
 
@@ -187,7 +184,7 @@ def test_reports_the_plan_that_tracks_this_branch(
         session_start_repository,
         {
             PersonalNotesPath.BRANCH_INDEX: branch_index(
-                {WORK_BRANCH: PLAN_IDENTIFIER}
+                {ScratchBranch.WORK: PLAN_IDENTIFIER}
             ),
             MANIFEST_PATH: PLAN_MANIFEST_WITH_TRACKING_ISSUE,
         },
@@ -206,7 +203,7 @@ def test_reports_a_tracked_plan_that_has_no_tracking_issue(
         session_start_repository,
         {
             PersonalNotesPath.BRANCH_INDEX: branch_index(
-                {WORK_BRANCH: PLAN_IDENTIFIER}
+                {ScratchBranch.WORK: PLAN_IDENTIFIER}
             ),
             MANIFEST_PATH: PLAN_MANIFEST,
         },
@@ -223,15 +220,19 @@ def test_reports_a_tracked_branch_whose_manifest_is_missing(
 ):
     result = publish_and_run(
         session_start_repository,
-        {PersonalNotesPath.BRANCH_INDEX: branch_index({WORK_BRANCH: PLAN_IDENTIFIER})},
+        {
+            PersonalNotesPath.BRANCH_INDEX: branch_index(
+                {ScratchBranch.WORK: PLAN_IDENTIFIER}
+            )
+        },
     )
 
     assert result.returncode == 0, result.stderr
     assert summary_value(result.stdout, "plan") == summary_message(
         SummaryMessage.PLAN_MANIFEST_MISSING,
         PLAN_IDENTIFIER,
-        MANIFEST_PATH,
-        NOTES_BRANCH,
+        str(MANIFEST_PATH),
+        ScratchBranch.PERSONAL_NOTES,
     )
 
 
@@ -243,9 +244,9 @@ def test_reports_plan_as_not_applicable_on_the_default_branch(
 ):
     session_start_repository.publish_notes_branch(
         {
-            PersonalNotesPath.NOTES_FILE: "personal notes\n",
+            ProjectLocation.PERSONAL_NOTES_DOCUMENT: "personal notes\n",
             PersonalNotesPath.BRANCH_INDEX: branch_index(
-                {WORK_BRANCH: PLAN_IDENTIFIER}
+                {ScratchBranch.WORK: PLAN_IDENTIFIER}
             ),
             MANIFEST_PATH: PLAN_MANIFEST,
         }
@@ -265,14 +266,16 @@ def test_reports_plan_as_not_applicable_on_the_notes_branch(
 ):
     session_start_repository.publish_notes_branch(
         {
-            PersonalNotesPath.NOTES_FILE: "personal notes\n",
+            ProjectLocation.PERSONAL_NOTES_DOCUMENT: "personal notes\n",
             PersonalNotesPath.BRANCH_INDEX: branch_index(
-                {WORK_BRANCH: PLAN_IDENTIFIER}
+                {ScratchBranch.WORK: PLAN_IDENTIFIER}
             ),
             MANIFEST_PATH: PLAN_MANIFEST,
         }
     )
-    session_start_repository.run_git("checkout", "--quiet", NOTES_BRANCH)
+    session_start_repository.run_git(
+        "checkout", "--quiet", ScratchBranch.PERSONAL_NOTES
+    )
 
     result = run_session_start(session_start_repository)
 
@@ -299,7 +302,11 @@ def test_reports_setup_as_ok_when_every_check_passes(
 def test_names_every_check_that_needs_setup(
     session_start_repository: ScratchRepository,
 ):
-    (session_start_repository.project_root / ".claude" / "settings.json").unlink()
+    (
+        session_start_repository.project_root
+        / ProjectLocation.CLAUDE_CODE_DIRECTORY
+        / "settings.json"
+    ).unlink()
     session_start_repository.commit_everything("unregister the SessionStart hook")
 
     result = publish_and_run(session_start_repository)
@@ -321,7 +328,11 @@ def test_names_every_check_that_needs_setup(
 def test_a_failing_setup_check_does_not_fail_the_hook(
     session_start_repository: ScratchRepository,
 ):
-    (session_start_repository.project_root / ".claude" / "settings.json").unlink()
+    (
+        session_start_repository.project_root
+        / ProjectLocation.CLAUDE_CODE_DIRECTORY
+        / "settings.json"
+    ).unlink()
     session_start_repository.commit_everything("unregister the SessionStart hook")
 
     result = publish_and_run(session_start_repository)

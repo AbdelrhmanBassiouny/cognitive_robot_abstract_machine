@@ -12,6 +12,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 
 from basstler.class_property import classproperty
+from basstler.locations import PackageLocation
 from basstler.maintenance_board import BoardExport
 from basstler.maintenance_fast_forward import fast_forward
 from basstler.maintenance_git_commands import MaintenanceGitCommandRunner
@@ -28,7 +29,7 @@ from basstler.maintenance_report import (
     print_restack,
 )
 from basstler.maintenance_restack_procedure import restack
-from basstler.stack import BOARD_PATH, Configuration, Stack, load_stack
+from basstler.stack import Configuration, Stack, load_stack
 
 
 @dataclass(frozen=True)
@@ -297,7 +298,7 @@ class RunReportCommand(MaintenanceCommand):
             promote(stack, fork),
             clear_spent_promotion_labels(stack, fork),
         )
-        BOARD_PATH.unlink(missing_ok=True)
+        PackageLocation.BOARD.value.unlink(missing_ok=True)
         if arguments.json:
             print(report.as_json())
         else:

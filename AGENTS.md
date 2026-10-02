@@ -80,6 +80,7 @@
 - Dont use try except blocks, programs in illegal states should raise appropriate exceptions.
 - Prefer structured data over bare strings, hardcoded values, and meaningless numbers. This is the default, not a preference to weigh: reach for the structured form first and justify the literal, never the other way round.
   - Never hardcode a string that names a fixed thing - a payload key, a state, a label, a filename, an environment variable, a command flag, a status. Give it a `StrEnum` member and use that. A value spelled in two places has no single source to rename, and nothing fails when the two drift apart.
+  - When the members are more than text - paths, numbers - give them values of that type rather than strings, and prefer that over a `StrEnum`. Mix the type into the enum where Python supports it (`IntEnum`, `StrEnum`); `Path` does not support it, because pathlib builds every derived path through the enum's own member lookup, so a path enum is a plain `Enum` whose values are `Path`s.
   - Replace a magic number with a named constant or an enum member. A bare literal that carries meaning is unreadable where it is used and unsearchable everywhere else.
   - For JSON our own classes round-trip, reuse `krrood.adapters.json_serializer.SubclassJSONSerializer` rather than hand-writing `to_json`/`from_json` - it already resolves the concrete subclass from the stored type name.
   - For data whose shape someone else controls - an API response, a configuration file - that serializer does not apply, since the payload carries no type of ours. Mirror the structure in dataclasses instead and parse into them the same way, with a `from_json` classmethod doing the reading, so the field names and the access path into the payload are written once rather than at every use site.
@@ -125,7 +126,7 @@
 ## Version Control
 - Commits must be authored in the name of the human user running the tool, using their own configured git `user.name` and `user.email`. Never author or amend a commit as an assistant/agent identity.
 - Do not attribute authorship or co-authorship to an assistant: no `Co-Authored-By:` trailer for Claude or any assistant, and no `noreply@anthropic.com` (or similar) as author or committer. The commit's authorship reflects the person responsible for it.
-- It is fine — and encouraged — to acknowledge assistant help in the commit message body with a short plain line, for example `Made with the help of Claude`. Keep it a note, not an author/co-author trailer.
+- It is fine — and encouraged — to acknowledge assistant help in the commit message body with a short plain line, for example `Made with AI assistance`. Do NOT add any info mentioning the particular model or the AI service. Keep it a note, not an author/co-author trailer.
 - This applies to every contributor and every tool.
 
 ## Misc

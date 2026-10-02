@@ -9,11 +9,13 @@ import subprocess
 
 import pytest
 
-from .scratch_repository import ScratchRepository
-from .constants import DATASET_DIRECTORY
+from basstler.locations import ProjectLocation
 
-PLAN_MANIFEST = (DATASET_DIRECTORY / "plan.yaml").read_text()
-PLAN_ROADMAP = (DATASET_DIRECTORY / "roadmap.md").read_text()
+from .constants import DatasetLocation, PersonalNotesPath
+from .scratch_repository import ScratchRepository
+
+PLAN_MANIFEST = (DatasetLocation.DIRECTORY / "plan.yaml").read_text()
+PLAN_ROADMAP = (DatasetLocation.DIRECTORY / "roadmap.md").read_text()
 
 
 @pytest.fixture
@@ -34,7 +36,7 @@ def save_plan_repository(scratch_repository: ScratchRepository) -> ScratchReposi
     scratch_repository.write("README.md", "scratch repo\n")
     scratch_repository.commit_everything("initial commit")
     scratch_repository.publish_notes_branch(
-        {".claude/personal/placeholder.md": "notes\n"}
+        {ProjectLocation.PERSONAL_NOTES / "placeholder.md": "notes\n"}
     )
     scratch_repository.resolve_notes_remote_to()
     return scratch_repository
@@ -53,7 +55,7 @@ def run_save_plan(
     return subprocess.run(
         [
             "bash",
-            str(repository.project_root / ".claude" / "hooks" / "save-plan.sh"),
+            str(repository.project_root / ProjectLocation.HOOKS / "save-plan.sh"),
             *arguments,
         ],
         cwd=repository.project_root,
@@ -140,23 +142,13 @@ def test_saves_the_manifest_and_roadmap_extracted_from_claude_local_md_markers(
     verify_checkout = save_plan_repository.clone_notes_branch(
         save_plan_repository.project_root.parent / "verify-checkout"
     )
-    saved_manifest = (
-        verify_checkout / ".claude" / "personal" / "plans" / "test-plan" / "plan.yaml"
-    ).read_text()
-    saved_roadmap = (
-        verify_checkout / ".claude" / "personal" / "plans" / "test-plan" / "roadmap.md"
-    ).read_text()
+    plan_directory = verify_checkout / ProjectLocation.PLANS / "test-plan"
+    saved_manifest = (plan_directory / "plan.yaml").read_text()
+    saved_roadmap = (plan_directory / "roadmap.md").read_text()
     assert saved_manifest == PLAN_MANIFEST
     assert saved_roadmap == PLAN_ROADMAP
 
-    branch_index = (
-        verify_checkout
-        / ".claude"
-        / "personal"
-        / "plans"
-        / "_generated"
-        / "branch-index.tsv"
-    ).read_text()
+    branch_index = (verify_checkout / PersonalNotesPath.BRANCH_INDEX).read_text()
     assert branch_index == "item-a-branch\ttest-plan\n"
 
 

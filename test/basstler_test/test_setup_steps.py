@@ -30,8 +30,10 @@ from basstler.setup_steps import (
     resolve_repository,
 )
 
-from .constants import REPOSITORY_ROOT, ToolingDirectory
-from .scratch_repository import SCRUBBED_ENVIRONMENT_PREFIXES, ScratchRepository
+from basstler.locations import PackageLocation, ProjectLocation
+
+from .constants import ScrubbedEnvironmentPrefix
+from .scratch_repository import ScratchRepository
 from .script_runner import PythonModuleRunner
 
 SETUP_STEPS_MODULE = basstler.setup_steps.__name__
@@ -41,7 +43,9 @@ FORK = Repository(owner="some-user", name="some-repository")
 FORK_REMOTE_URL = f"https://github.com/{FORK.full_name}.git"
 
 RESOLVE_CONFIG_SCRIPT = (
-    REPOSITORY_ROOT / ToolingDirectory.HOOKS / "resolve-personal-notes-config.sh"
+    PackageLocation.REPOSITORY_ROOT
+    / ProjectLocation.HOOKS
+    / "resolve-personal-notes-config.sh"
 )
 
 
@@ -403,7 +407,7 @@ def test_running_the_module_prints_the_steps_for_its_own_clone(
     clone_with_fork_remote.install_package()
     result = PythonModuleRunner(
         project_root=clone_with_fork_remote.project_root,
-        removed_variable_prefixes=SCRUBBED_ENVIRONMENT_PREFIXES,
+        removed_variable_prefixes=tuple(ScrubbedEnvironmentPrefix),
         module_name=SETUP_STEPS_MODULE,
     ).run()
     assert result.returncode == 0, result.stderr
