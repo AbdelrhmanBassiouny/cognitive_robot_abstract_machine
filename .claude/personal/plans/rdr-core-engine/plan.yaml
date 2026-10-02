@@ -148,6 +148,18 @@ items:
   branch: D-core-corner-case
   pull_request_number: 65
   track: engine-stack
+  session: https://claude.ai/code/session_018RwLhEUQy5ojjgCvmYRbWp
+  blockers:
+    - >-
+      Seven unresolved review threads from the developer's 2026-10-02 review: abbreviations in
+      corner_case.py (`f` at 118 and 148, `i` at 202 and 225) and test_corner_case.py:70 (`t`),
+      missing param docs on `AsdictCaseSerializer._emit_value` (126), and `SUPPORTED_SCALAR_TYPES`
+      documented by a `#:` comment instead of a docstring below it (31).
+    - >-
+      Labelled `integration-conflict` since 2026-09-30: the integration build reported this branch
+      merges cleanly but the suite fails on the combined tree, with no single other branch
+      reproducing it. The comment names no failing test, and nothing clears the label automatically,
+      so it withholds promotion until someone triages it.
   depends_on:
   - D-core-underspecified
   status: in_progress
