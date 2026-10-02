@@ -173,8 +173,19 @@ items:
   branch: claude/plan-manifest-update-priority-ex2zst
   pull_request_number: 151
   status: in_progress
-  session: https://claude.ai/code/session_01LDVvWsb7wFEeH3roTnD3FR
+  session: https://claude.ai/code/session_01RAcB6RV7AtLyfuipHeMyw8
   track: pass
+  blockers:
+    - >-
+      #151 has conflicted with its base #185 (claude/plan-item-kickoff-workflow-cuare2) since
+      2026-09-19 on twenty files, re-reported by every maintenance pass since and labelled
+      needs-resolution. The cause is 213ad791c on #185, which renamed bastler to basstler after this
+      branch last merged #185 at 5b332d6a5: every file this branch adds under bastler/ is a
+      directory-rename location conflict, not a content disagreement.
+    - >-
+      Labelled integration-conflict since 2026-09-09: an integration build found #151 merges cleanly
+      with D-deco (rdr-interface-and-decorator) and the suite fails on the result. The recorded
+      comment names the pair but not the cause, and nothing clears the label automatically.
   depends_on:
   - stack-maintenance-executor
   notes: |-
