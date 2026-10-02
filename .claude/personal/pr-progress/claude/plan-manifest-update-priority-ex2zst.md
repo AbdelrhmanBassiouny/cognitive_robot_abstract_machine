@@ -1,3 +1,35 @@
+## Resolve of 2026-10-02 (session_01RAcB6RV7AtLyfuipHeMyw8) — current state
+
+### Plan
+1. Record the real blockers in the manifest and republish the dashboard (done).
+2. Merge #185's head across the `bastler` → `basstler` rename: apply the substitution,
+   record `213ad791c` as merged (`-s ours`), then merge the head (done: `2628b9959`,
+   `4e83230aa`, `be1bd2f62`).
+3. Reproduce the `integration-conflict` against `D-deco` (#77) and clear it if it no
+   longer reproduces (done: it doesn't, so the label was removed).
+4. Fix the `--append-notes` literal-note defect this round hit, failing test first (done:
+   `e17bf4d5d`), and restore the manifest the defect damaged (done).
+5. Update the PR description, roadmap, notes and dashboard (done).
+
+### Done
+- 809 tests pass under `test/basstler_test` on Python 3.12. The merged tree differs from
+  #185's head on exactly this branch's 30 paths.
+- Manifest: blockers cleared, note appended (14 paragraphs), roadmap section
+  "`manifest-currency-first`: the rename merge of 2026-10-02" added.
+- Labels: `integration-conflict` removed; `needs-resolution` left for the pass to clear.
+- PR left out of draft: it carries `cram2-link-sent`, so it was apparently marked ready
+  before; the user's convention is to leave a PR they marked ready as ready.
+
+### Outstanding
+- CI on `e17bf4d5d` had not reported when this session ended. GitHub's mergeability for
+  the new head was still computing.
+- `promotion-summaries-and-table`'s note in this plan still carries the same
+  literal-note damage from an earlier append; it can be restored from that item's note
+  history on the notes branch.
+
+---
+
+## History
 ## #151 — manifest-currency-first, plus the folded `update` YAML fix
 
 **Branch:** `claude/plan-manifest-update-priority-ex2zst`, not the designated
