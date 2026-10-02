@@ -26,10 +26,12 @@ tracks:
 items:
 - id: network-limits-on-main
   title: Land the large-message link check on main
-  branch: null
+  branch: claude/clever-carson-wp7c09
   track: standalone
   depends_on: []
-  status: not_started
+  status: in_progress
+  pull_request_number: 487
+  session: https://claude.ai/code/session_01HMdRorbzSe9pWVXLCKk8mX
   notes: >
     experiments/network_limits.py and test/experiments_test/test_network_limits.py - 2 files,
     424 lines. Off main. Imports nothing else in #202; only perception/node.py (the top layer)
