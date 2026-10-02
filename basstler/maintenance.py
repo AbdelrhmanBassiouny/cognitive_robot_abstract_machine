@@ -15,15 +15,15 @@ This module is the command line onto the modules that perform those steps::
     python -m basstler.maintenance restack           # integrate every moved parent, report every conflict
     python -m basstler.maintenance promote           # record the upstream link on every ready branch
     python -m basstler.maintenance run-report --json # the whole pass as one document
+    python -m basstler.maintenance run-unattended    # the same, for a job nobody watches
 
 It executes an already-derived plan: structure still comes from ``stack.py`` and from
-GitHub's own stack object. Retargeting a pull request's **base branch** is the one write
-GitHub refuses to the credential this runs on - probed directly, alongside the label,
-comment and description writes it does allow - so that step alone is reported for the
-caller to perform through the GitHub MCP server.
+GitHub's own stack object. Retargeting a pull request's **base branch** is attempted
+directly; only when GitHub refuses it is the branch labelled and commented at for a
+session to retarget instead - see :mod:`basstler.maintenance_reparent_notice`.
 
-The exit status is the result. ``run-report --json`` is the machine-readable form, so a
-scheduled job with no model in the loop can emit it directly.
+The exit status is the result. ``run-report --json`` is the machine-readable form, and
+``run-unattended`` emits it for a scheduled job with no model in the loop.
 """
 
 from __future__ import annotations
