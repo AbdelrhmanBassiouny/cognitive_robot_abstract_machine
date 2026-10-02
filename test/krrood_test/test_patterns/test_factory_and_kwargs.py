@@ -34,6 +34,16 @@ def test_keyword_naming_no_parameter_is_refused():
     assert error.value.keyword == "w"
 
 
+def test_keyword_naming_no_parameter_is_refused_as_a_call_with_an_unexpected_keyword():
+    """
+    Python refuses an unexpected keyword argument with a :class:`TypeError`, so a caller
+    handling that refusal handles this one too.
+    """
+    factory_and_kwargs = HasFactoryAndKwargs(KRROODPosition, _kwargs_={"w": 4.0})
+    with pytest.raises(TypeError):
+        factory_and_kwargs.construct_instance()
+
+
 def test_factory_accepting_arbitrary_keywords_receives_every_keyword():
     factory_and_kwargs = HasFactoryAndKwargs(record_keywords, _kwargs_={"w": 4.0})
     assert factory_and_kwargs.construct_instance() == {"w": 4.0}
