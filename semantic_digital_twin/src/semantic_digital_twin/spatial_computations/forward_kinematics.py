@@ -85,6 +85,8 @@ class ForwardKinematicsManager(ModelChangeCallback):
         if self._world.get_world_model_manager().lazy_compilation:
             clear_memoization_cache(self)
             self.is_stale = True
+            # code inside the next block relies on the root cached at commit time
+            self._world.root
             return
         self.compile_for_current_model()
 
