@@ -185,15 +185,13 @@ items:
       developer to answer the threads on cram2#655 and on the reviewers' re-review - a session may
       not comment there.
     - >-
-      `test_each_lib (semantic_digital_twin)` is red on the branch's own CI (last executed run,
-      78510c56, 2026-09-29) with every test passing - "1766 passed, 52 skipped" - and the run failed
-      only by `test/conftest.py`'s combined worlds-in-memory budget: 31 worlds left across both
-      xdist workers (19 + 12) against MAXIMUM_LIVING_WORLDS = 30, a budget `main` gained on
-      2026-09-18. The count flips between 30 and 31 across runs of the same tree, which points at a
-      per-process cache rather than a deterministic leak. Not yet root-caused: the predicate tests
-      that run without ROS leave 0 worlds on this branch, and a relation used inside a query keeps
-      its world alive on `main` and here alike, so the extra world is somewhere in the ROS-only
-      tests, which this container cannot run.
+      `test_each_lib (semantic_digital_twin)` went red intermittently with every test passing, on
+      `test/conftest.py`'s combined worlds-in-memory budget (30). Root-caused 2026-10-02 in the CI
+      image: two holders already on `main` - test_robot_joint_names' module-level lru_cache (11
+      worlds per worker) and CaseReasoner's class-level rule trees keeping the last case (4-5 per
+      worker). Fixed by #483 and #484 (bug PRs off main), both merged into this branch at
+      `2502db19`; the CI-image run then leaves 6 worlds. Remaining: confirm CI green on
+      `2502db19` and land #483 / #484 on main.
     - >-
       The `integration-conflict` label set on 2026-09-23 ("breaks
       claude/function-case-type-checking-block", #226) is a misattribution. The failing probe was
@@ -203,10 +201,6 @@ items:
       prefix 4, which failed. The label is lifted only by a passing `integration_conflict`
       reproduction test, so it stays until the developer removes it or the budget question is
       settled.
-    - >-
-      CI on the head commit adadc138 has not run: the merges of `main` pushed by github-actions[bot]
-      leave the CI workflow at `action_required`, waiting for a manual approval, so the PR shows no
-      checks at all rather than green.
   notes: >
     The developer's direction on 2026-08-31, correcting a call `perception-predicates-guide-
 

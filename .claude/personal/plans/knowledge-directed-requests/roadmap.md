@@ -331,3 +331,13 @@ taken here.
 
 The same round found `.living_worlds_tally/` committed by accident: `main`'s combined world budget
 writes it at the repository root and nothing ignored it. Fixed off `main` as #481 (`bug`).
+
+### `predicates-answer-whether-they-hold`: the world budget root-caused, 2026-10-02
+
+The sdt CI failure with every test passing was never this branch's: run inside the CI image
+with each xdist worker's per-test tally, `main` and this branch both leave 25 worlds, all from
+two holders already on `main`. `test_robot_joint_names.py` cached every parsed robot in a
+module-level `lru_cache` (11 worlds per worker that runs it, so 11-22 depending on the split),
+and `CaseReasoner` kept its rule trees on the class while the rules keep the last case they
+classified (4-5 worlds per worker). Each is its own `bug` PR off `main` (#484, #483), merged
+into #229 at `2502db19` so its CI can pass now; the CI-image run then leaves 6 worlds.
