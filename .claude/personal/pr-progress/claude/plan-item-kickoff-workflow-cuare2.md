@@ -36,6 +36,9 @@ dependency is in the plan. Decision 14 intends it, but no item schedules it.
   format is `BARE_MESSAGE_FORMAT`; the stream tests use a `LoggedMessage` StrEnum and
   `NOTHING_WRITTEN`; `test_repository.py` builds everything from one `REPOSITORY` and `Host`.
   710 pass. Three fork threads replied and resolved.
+- `37e8cf887`: "no global constants" (two fork threads, 17:11) - `standard_streams.py` has none
+  left: `message_format` is a handler field, the package logger is `__package__`, and
+  `import_name` always reads the spec. 710 pass. Both threads replied and resolved.
 - Upstream (16:55 read): only the "fields / and no classvar" thread is unresolved; it is met by
   `be0ed435f`. The user replied on the others at 16:14.
 
