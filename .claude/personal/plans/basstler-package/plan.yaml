@@ -23,6 +23,11 @@ tracks:
 - id: conversion
   name: Bash to Python conversion
   wave: conversion
+- id: carried-across
+  name: Pull requests carried across the move
+  wave: extraction
+  description: Tooling pull requests that change a module the package moves. Each is stacked on
+    basstler-package and changes the module in its new place, so it lands after the move.
 items:
 - id: basstler-package
   title: 'Create the basstler package: the .claude Python and its tests move into it'
@@ -438,3 +443,52 @@ items:
     stack-tooling-install), which brings github-api.sh - one of the two carriers this item unifies.'
   - 'Cross-plan dependency, not representable in depends_on: needs shared-pr-state-chips (#111, plan-dashboards),
     which brings pr_state - the other carrier this item unifies.'
+- id: upstream-pull-request-checks
+  title: Report a promoted branch's upstream CI alongside its review threads
+  branch: claude/review-pr-ci-status-20k6g4
+  pull_request_number: 420
+  status: in_progress
+  session: https://claude.ai/code/session_01P3qbqgYFh5n1M26ey2szz6
+  track: carried-across
+  depends_on:
+  - basstler-package
+  blockers:
+  - >-
+    Waits on basstler-package (#185, cram2#659) landing. #420 is stacked on #185's branch, so promote
+    it only after #185 lands and the maintenance pass has moved its base back to `main`. Then rebuild
+    its promotion link, since the one in its description was built against `main` before the stack.
+  notes: |-
+    Built 2026-09-19 (https://claude.ai/code/session_01LSQTbfwr6ankeW9mFPdB2y). Reads the upstream
+    pull request's `statusCheckRollup` in the same GraphQL query as its review threads, on the fork's
+    runner, and names every check that did not pass. The user marked it ready the same day.
+
+    Stacked on #185 2026-10-02 at `2d53a88e7`, with the user's go-ahead to push after the ready flip.
+    #185 moves `.claude/upstream_reviews/` into `basstler/`, which is every file this branch changes.
+    Three conflicts, all mechanical: #185's package imports and logger against this branch's
+    renamed `UpstreamReadError`, #185's `RecordedResponse` (formerly `FixtureName`) in the tests, and
+    the new recorded response placed in #185's dataset directory. Against #185's branch the diff is
+    still this branch's own eight files. 723 tests pass in `test/basstler_test`, 47 of them this
+    module's (34 on #185 alone).
+- id: upstream-check-failure-logs
+  title: Say why an upstream check failed, not only that it did
+  branch: claude/upstream-check-failure-logs
+  pull_request_number: 424
+  status: blocked
+  session: https://claude.ai/code/session_01LSQTbfwr6ankeW9mFPdB2y
+  track: carried-across
+  depends_on:
+  - upstream-pull-request-checks
+  blockers:
+  - >-
+    Needs #420's new head (`2d53a88e7`, stacked on #185) merged in. A trial merge on 2026-10-02 gave
+    seven conflicts. `basstler/upstream_reviews.py` merged cleanly. The rest: the `gh` stub changes
+    move into #185's one shared `test/basstler_test/dataset/stubs/gh.sh`; the two recorded job logs
+    move into `test/basstler_test/dataset/upstream-review-responses/`; `test_upstream_reviews.py` and
+    `upstream_reviews_replay.py` take #185's names; and `upstream-reviews.yml` keeps #185's install
+    step and `python -m` call. The `ci.yml` line that adds this suite to `test_claude_dev_tooling` is
+    dropped, because #185's `test_basstler` job already runs it. The user marked #424 ready, so pushing
+    this needs their go-ahead, as #420's did.
+  notes: |-
+    Built 2026-09-19 (https://claude.ai/code/session_01LSQTbfwr6ankeW9mFPdB2y), stacked on #420.
+    `--failure-logs` reads each failed upstream check's job log on the fork's runner and quotes the
+    pytest short summary, the runner's error annotations, or the log's tail.

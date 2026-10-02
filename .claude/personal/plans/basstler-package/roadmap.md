@@ -299,3 +299,23 @@ host, last two segments, raises when no repository is named), since it is the on
 session's proxy remote. `setup_steps`'s "another host names no repository" rule moved into
 `resolve_repository`, where it decides.
 
+
+## 2026-10-02 - #420 and #424 join the plan, stacked on #185
+
+The user asked how #420 fits with basstler and chose to track both it and #424 here. #185 moves
+`.claude/upstream_reviews/` into `basstler/`, and #420 changes nothing outside that directory, its
+query and its skill. So under "whichever lands second rebases" the work falls to #420, since #185
+lands first.
+
+The adaptation was done by stacking rather than waiting, the same way #154, #211 and #430 sit on
+#185. #185's branch was merged into #420 at `2d53a88e7`, and #420's base moved to
+`claude/plan-item-kickoff-workflow-cuare2`. Its diff against that base is still its own eight files.
+The maintenance pass moves the base back to `main` once #185 lands. #420 must not be promoted before
+then: its compare link names `main`, and on cram2 it would conflict with cram2#659.
+
+The user had marked #420 ready, which normally ends a session's work on it. They allowed the push
+explicitly, so #420 stays ready rather than going back to draft.
+
+#424 is stacked on #420 and has not been updated. A trial merge gave seven conflicts, recorded on
+its item. Most of them come from #185 having merged the two `gh` stubs into one, and having given
+the module's suite its own CI job.
