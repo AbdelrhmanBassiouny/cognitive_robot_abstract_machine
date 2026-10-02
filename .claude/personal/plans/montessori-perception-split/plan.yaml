@@ -26,6 +26,7 @@ tracks:
 items:
 - id: network-limits-on-main
   title: Land the large-message link check on main
+  branch: null
   track: standalone
   depends_on: []
   status: not_started
@@ -35,6 +36,7 @@ items:
     reads it.
 - id: shape-vocabulary-on-main
   title: Land the Montessori shape vocabulary, the board's hole geometry and the piece set
+  branch: null
   track: stack
   depends_on: []
   status: not_started
@@ -48,6 +50,7 @@ items:
     (pipeline.py) stay with the pipeline layer.
 - id: simulated-world-on-main
   title: Land the simulated Montessori world
+  branch: null
   track: stack
   depends_on: [shape-vocabulary-on-main]
   status: not_started
@@ -59,6 +62,7 @@ items:
     removes that use later.
 - id: frame-reading-on-main
   title: Land reading, rectifying and showing camera frames
+  branch: null
   track: stack
   depends_on: [simulated-world-on-main]
   status: not_started
@@ -69,6 +73,7 @@ items:
     main instead. It is stacked linearly so that every later layer has a single parent.
 - id: piece-recognition-on-main
   title: Land outline measurement and recognising a piece from its edges
+  branch: null
   track: stack
   depends_on: [frame-reading-on-main]
   status: not_started
@@ -82,6 +87,7 @@ items:
     detection-pipeline-on-main rather than land code here that nothing tests.
 - id: detection-pipeline-on-main
   title: Land the detection pipeline, its overlays and the simulated scene it is tested on
+  branch: null
   track: stack
   depends_on: [piece-recognition-on-main]
   status: not_started
@@ -91,6 +97,7 @@ items:
     and the rest of test_montessori_piece_matching.py. The second half of the detection layer.
 - id: captures-on-main
   title: Land the real-camera captures and reading them back
+  branch: null
   track: stack
   depends_on: [detection-pipeline-on-main]
   status: not_started
@@ -101,6 +108,7 @@ items:
     linearly for the same reason as that layer.
 - id: perception-node-on-main
   title: '#202 itself, retargeted: the ROS runtime on top of the stack'
+  branch: null
   pull_request_number: 202
   track: stack
   depends_on: [captures-on-main, network-limits-on-main]
