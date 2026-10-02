@@ -327,5 +327,8 @@ the module's suite its own CI job.
 The user asked on #185 for `StandardStreamHandler` to be a dataclass, and for the new tests to stop
 repeating their strings. Both are in `105de6379`. The handler is `@dataclass(eq=False)`: with no
 fields, a generated `__eq__` would make every instance equal and drop its hash, which `logging`
-needs to tell handlers apart. The same "name it once" fix went into `test_repository.py`. Upstream,
+needs to tell handlers apart. The same "name it once" fix went into `test_repository.py`. A
+second pass asked for no module-level constants in `standard_streams.py` (`37e8cf887`): the format is
+a handler field, the package logger is named by `__package__`, and a module's import name is always
+read from its spec, which makes the `__main__` comparison unnecessary. Upstream,
 cram2#659 has one unresolved thread left, "fields / and no classvar", which `be0ed435f` meets.

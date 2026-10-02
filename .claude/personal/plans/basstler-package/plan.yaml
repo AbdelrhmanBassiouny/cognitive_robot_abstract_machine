@@ -79,7 +79,8 @@ items:
     `dependencies.py` was answered by the user upstream as "in the coming PRs, one step at a time"
     and resolved, so it moves to `basstler-notes-core-python`. A fork review the same evening is
     applied in `105de6379`: `StandardStreamHandler` is a dataclass and the new tests name their
-    strings once. 710 tests pass on 3.11. The one unresolved upstream thread is "fields / and no
+    strings once. A second one ("no global constants") in `37e8cf887`: `standard_streams.py` keeps
+    none, the format being a handler field. 710 tests pass on 3.11. The one unresolved upstream thread is "fields / and no
     classvar", met by `be0ed435f`; the user replies there.
   notes: |-
     Moves every Python file already on main under `.claude/` into one package: `.claude/stack/`
