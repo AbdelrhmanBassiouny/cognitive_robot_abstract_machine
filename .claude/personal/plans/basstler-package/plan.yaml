@@ -55,17 +55,15 @@ items:
     the enums carry `Path` values. The user chose (2026-10-01) to make the
     cleaner `Path` mixin part of `basstler-src-layout`, together with a 3.12+ environment for basstler.
   - >-
-    Found 2026-10-02 (session https://claude.ai/code/session_01GzsB6xE8CwrBApLvwSbGjD): cram2#659
-    has two new unanswered asks from tomsch420 that the fork side did not record. (1)
-    `basstler/dependencies.py:83`: "why are these constants?" / "fields". This is
-    `Dependency.CONSTRAINT_START`, a `ClassVar` regex. (2) `basstler/plan_model.py:56`: remove the `_`
-    from `ItemStatus`'s values so `display_label` is not needed. The user agreed on the thread.
-    But the values are the stored `status:` spelling in every `plan.yaml` (125 entries across the
-    notes branch, read today by `main`'s tooling), the `--status` CLI argument and the dashboard's
-    `status-<value>` CSS class. So (2) is a manifest-format migration, not a rename. The third
-    unresolved upstream thread (`sync_version.py`, src layout) is answered and deferred to
-    `basstler-src-layout`. The fork PR is green and clean, and its three open threads are the user's
-    to close.
+    Upstream round three, 2026-10-02 (session
+    https://claude.ai/code/session_01GzsB6xE8CwrBApLvwSbGjD): tomsch420's two new asks on cram2#659 are
+    applied in `be0ed435f`. `Dependency`'s name-boundary regex is a field, and `ItemStatus`'s values
+    are spaced words (`not started`, `in progress`), so `display_label` and the `status_label` filter
+    are gone. The underscore spelling is still read. 705 tests pass on 3.11. The user still has to
+    reply on the two upstream threads; replies are drafted in the session. Landing hazard, accepted by
+    the user: this branch writes the new spelling, which `main`'s tooling rejects, so a manifest
+    written by this branch's code, or by #154, #211 or #430, fails a `main`-based dashboard until #185
+    lands. Then rewrite the notes-branch manifests and drop the underscore reading.
   notes: |-
     Moves every Python file already on main under `.claude/` into one package: `.claude/stack/`
     (`stack.py`, the maintenance modules, `class_property.py`), `.claude/skills/plan-dashboard/`'s seven

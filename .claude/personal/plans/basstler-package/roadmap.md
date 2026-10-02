@@ -252,3 +252,24 @@ PathEnumeration(Path, ReprEnum)`, unless that hurt cloud sessions. It does: the 
 externally managed system interpreter with none of the dependencies. The user chose to fold the
 bump into `basstler-src-layout`, whose editable install now also creates basstler's own 3.12+
 environment for the hooks to run, with the mixin as a one-file follow-on.
+
+## 2026-10-02 - cram2#659 third round (tomsch420)
+
+The fork side looked finished, but `/upstream-reviews` showed two new threads from that morning.
+Nothing on the fork recorded them.
+
+- **`dependencies.py:83`, "why are these constants?" / "fields".** `Dependency.CONSTRAINT_START`
+  became the field `constraint_start`, with no repr and no comparison.
+- **`plan_model.py:56`, drop the `_` from the values so `display_label` is not needed.** The user
+  had agreed on the thread. The values are also the stored `status:` spelling in every manifest (125
+  entries on the notes branch), the `--status` argument and the card's CSS class. So this is a
+  format migration, not a rename. Asked, the user chose to change the values and migrate. The
+  underscore spelling is still read, through `_missing_` and `ItemStatus.accepted_spellings()`. The
+  CSS class comes from the member name. `sync_manifest_status`'s one-word status-line pattern was
+  widened, after a test with a spaced value showed it failing. All in `be0ed435f`.
+
+**Landing hazard, recorded rather than avoided.** This branch writes `in progress` and `main`'s
+tooling only reads `in_progress`. Until #185 lands, a manifest written by this branch's code, or by
+the stacked #154, #211 and #430, fails a `main`-based dashboard build. After it lands, rewrite the
+notes-branch manifests to the new spelling, then drop `_missing_` and `accepted_spellings`.
+
