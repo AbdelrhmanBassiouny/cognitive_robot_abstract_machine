@@ -85,10 +85,22 @@ Four threads from the developer on `base.py` / `predicates.py`:
   CI-image run after: 6 worlds (4/1/0/1), 1729 passed; rerun/sage10k failures are
   container-network only (same on main).
 
+## Upstream review round, 2026-10-02 (pushed as `a635644d`)
+
+- sdt CI green on `2502db19` (all 24 checks).
+- cram2#655: LucaKro (changes requested 10:52) r4165033892 on robot_predicates.py:344:
+  keep the operations inside the modify_world block minimal. Developer agreed ("keep only
+  the methods that really modify the world inside"). `occluding_bodies` now builds the
+  copied body, its pose and the FixedConnection before the block; only clear/add_body/
+  add_connection stay inside. robot_in_collision's and blocking's blocks already held only
+  world changes. test_predicates.py in the CI image: 44 passed (incl. the 3 occlusion tests).
+- The CI image's editable random_events pointed at a deleted scratch worktree; reinstalled
+  from /home/user/wt229 and re-committed as cram-ci:deps. Runs also need the repo root on
+  PYTHONPATH (the ORM generator subprocess imports cognitive_robot_abstract_machine).
+
 ## Next
 
-- Approve CI on the new head; confirm segmind's new test and the sdt job.
-- Confirm sdt CI green on `2502db19`; land #483 and #484 on main.
+- Developer replies on / resolves r4165033892 upstream (sessions may not).
+- Confirm CI on `a635644d`; land #483 and #484 on main.
 - Developer to settle the TypeVar thread's exceptions/trade-off and close it.
 - Developer to decide whether to drop the `integration-conflict` label.
-- Upstream threads: the developer replies/resolves on cram2#655 (sessions may not).
