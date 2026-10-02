@@ -1,43 +1,25 @@
 ## PR #185 - basstler package extraction
 
-Resolving what stalled it, per `/plan-item-resolve basstler-package basstler-package`
-(auto mode). The pull request itself was finished and approved: out of draft since
-2026-08-23, CI green, both original dependencies merged. What held it was the
-`needs-resolution` label, which withholds a branch from promotion, live since
-2026-08-22 and re-reported by the maintenance routine ~20 times between 2026-08-31
-and 2026-09-03.
+### 2026-10-02 - cram2#659 third round (session_01GzsB6xE8CwrBApLvwSbGjD)
 
-### The conflict, and its silent half
+`/plan-item-resolve` (auto mode). The fork PR was green, clean and out of draft. What it was
+actually waiting on was upstream: two new tomsch420 threads on cram2#659 from 2026-10-02 that
+nothing on the fork had recorded.
 
-- `.claude/hooks/tests/test_setup_steps.py` was added on `main` inside a directory
-  this branch renamed. Git reports `CONFLICT (file location)` and will not place it.
-  That is the one file every routine comment since 2026-08-31 names.
-- `.claude/hooks/setup_steps.py` (626 lines) landed on `main` too and merges with
-  **no conflict at all**, because this branch moved `.claude/hooks/*.py` file by file
-  rather than renaming that directory. Left where it lands it breaks this branch's own
-  `test_no_python_module_remains_under_the_claude_directory`. Third occurrence of the
-  hazard the pull request body already names twice.
+Done, in `be0ed435f`:
+- `dependencies.py:83`: `Dependency.CONSTRAINT_START` became the field `constraint_start`.
+- `plan_model.py:56`: `ItemStatus` values are now `not started` / `in progress`. The user chose to
+  change the values and migrate. The underscore spelling is still read (`_missing_`,
+  `accepted_spellings`). `display_label` and the `status_label` filter are deleted. The CSS class
+  comes from the member name, and the sync status-line regex accepts spaces. The docs use the new
+  spelling.
+- 705 tests pass on 3.11. The PR description is updated. The fork thread on the `status_label`
+  assertion was replied to and resolved.
+- The PR is left ready, not draft: its un-draft is the promotion approval.
 
-Both arrive from `basstler-first-time-setup`, which landed as upstream #577 (`017be2aa2`)
-on 2026-09-01 while the manifest still called it `in_progress`.
-
-### Done
-
-- Merged `origin/main`; placed the new suite at `test/basstler_test/test_setup_steps.py`.
-- `git mv .claude/hooks/setup_steps.py basstler/setup_steps.py`; its `PROJECT_ROOT`
-  hand-counted `.parent` chain becomes `basstler.package_layout.REPOSITORY_ROOT`, and its
-  usage line becomes `python3 -m basstler.setup_steps`.
-- Repointed `.claude/SETUP.md` and `.claude/hooks/README.md` at the module's new home.
-- Converted the moved suite off the `sys.path` hackery this branch deletes: package
-  imports, relative imports of the shared test modules, `PythonModuleRunner` +
-  `install_package()` in place of a hand-built `subprocess.run`.
-- Recorded the real blocker in `plan.yaml`/`roadmap.md` before starting, and corrected
-  `basstler-first-time-setup` to `done`.
-
-### Next
-
-- Push, update the pull request description (entry-point count, test count, the third
-  merge, #203 having landed), republish the dashboard, clear `needs-resolution`.
-- Leave the pull request **ready, not draft**: the un-draft is this workflow's promotion
-  approval, and re-drafting would withdraw it.
-- Two review threads stay open on purpose; both are the user's to close.
+Next:
+- The user posts the drafted replies on the two upstream threads.
+- After #185 lands: rewrite the notes-branch manifests to the spaced spelling, then drop the
+  underscore reading.
+- Landing hazard until then: this branch's writers produce `in progress`, which `main`'s tooling
+  rejects.
