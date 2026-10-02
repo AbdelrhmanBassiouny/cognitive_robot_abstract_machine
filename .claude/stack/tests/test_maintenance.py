@@ -1216,6 +1216,35 @@ def test_a_branch_that_no_longer_conflicts_has_its_label_cleared_and_is_restacke
     assert fork.label_writes == [RecordedLabelWrite(41, ())]
 
 
+def test_a_branch_github_reads_as_mergeable_is_withheld_while_its_parent_still_conflicts(
+    fork_checkout: ForkCheckout,
+):
+    """
+    GitHub computes ``mergeable_state`` against the pull request's own base, and can
+    read it as mergeable while integrating the parent this pass integrates still
+    conflicts. Trusting that reading alone clears the label, re-finds the same
+    conflict and reports it again - on every run.
+    """
+    a_parent_and_child(fork_checkout)
+    fork_checkout.commit_on("a-parent", "a-contested-file", "the parent's version\n")
+    fork_checkout.commit_on("a-child", "a-contested-file", "the child's version\n")
+    fork = RecordingPullRequests(states={41: "unstable"})
+
+    outcomes = restack(
+        a_stack(
+            fork_checkout,
+            the_board(labels=[make_configuration().needs_resolution_label]),
+        ),
+        fork_checkout.git,
+        fork,
+    )
+
+    child = next(outcome for outcome in outcomes if outcome.branch == "a-child")
+    assert child.outcome == RestackOutcome.WITHHELD
+    assert fork.label_writes == []
+    assert fork.comments == []
+
+
 # %% promotion
 
 
