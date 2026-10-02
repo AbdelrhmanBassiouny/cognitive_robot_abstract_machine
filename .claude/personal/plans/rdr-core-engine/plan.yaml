@@ -151,11 +151,6 @@ items:
   session: https://claude.ai/code/session_018RwLhEUQy5ojjgCvmYRbWp
   blockers:
     - >-
-      Seven unresolved review threads from the developer's 2026-10-02 review: abbreviations in
-      corner_case.py (`f` at 118 and 148, `i` at 202 and 225) and test_corner_case.py:70 (`t`),
-      missing param docs on `AsdictCaseSerializer._emit_value` (126), and `SUPPORTED_SCALAR_TYPES`
-      documented by a `#:` comment instead of a docstring below it (31).
-    - >-
       Labelled `integration-conflict` since 2026-09-30: the integration build reported this branch
       merges cleanly but the suite fails on the combined tree, with no single other branch
       reproducing it. The comment names no failing test, and nothing clears the label automatically,
@@ -163,10 +158,20 @@ items:
   depends_on:
   - D-core-underspecified
   status: in_progress
-  notes: '2026-08-12 steward cascade: restacked onto its cascaded base, which now carries main be377fdf
-    (#41 merged 2026-08-10). Full account in roadmap.md section 21. Merged D-core-underspecified (07545624);
-    the same rdr/exceptions.py add/add recurring, this time also carrying CaseNotSerializableError. Unioned
-    again.'
+  notes: >
+    2026-08-12 steward cascade: restacked onto its cascaded base, which now carries main be377fdf
+    (#41 merged 2026-08-10). Full account in roadmap.md section 21. Merged D-core-underspecified
+    (07545624); the same rdr/exceptions.py add/add recurring, this time also carrying
+    CaseNotSerializableError. Unioned again.
+
+    2026-10-02 review round (`55e70b6ac`): the developer's seven threads were all naming and
+    docstring fixes, and all are applied, replied to and resolved. Abbreviated locals are spelled
+    out (`case_field`, not `field`, which would shadow `dataclasses.field`), `_emit_value` has its
+    parameter docs, and `SUPPORTED_SCALAR_TYPES` is documented by a docstring below it. The
+    docstring formatter's changes are kept to this slice's own `exceptions.py` section, so #64's
+    lines are untouched and the cascade carries no extra conflicts. Verified with `py_compile` only,
+    because `random_events`' compiled dependencies don't build in the resolving container. What
+    remains is the `integration-conflict` label.
 - id: D-core-serialization
   title: 'RDR engine: rule-tree unparser (rdr_to_python)'
   branch: D-core-serialization
