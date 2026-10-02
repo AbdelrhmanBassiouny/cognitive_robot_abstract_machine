@@ -19,7 +19,7 @@ from maintenance_constants import (
     MERGEABLE_STATE_WITH_CONFLICTS,
 )
 from maintenance_board import PullRequestField
-from maintenance_git_commands import GitCommandRunner, ProposedPush
+from maintenance_git_commands import GitCommandResult, GitCommandRunner, ProposedPush
 from maintenance_github import ForkPullRequests
 from stack import (
     Branch,
@@ -219,6 +219,30 @@ class BranchUnderRestack:
         """:return: The fork's copy of the parent being integrated."""
         return resolve_ref(self.configuration, self.parent)
 
+    def integrate_parent(self) -> GitCommandResult:
+        """
+        Check this branch out at the fork's copy and integrate its parent's tip into it.
+
+        :return: The finished integration, whose failure is a conflict only when it left
+            unmerged paths behind.
+        """
+        self.git.checkout(self.branch.name, self.branch_reference)
+        if self.strategy is IntegrationStrategy.REBASE:
+            return self.git.rebase(self.parent_reference)
+        return self.git.merge(self.parent_reference)
+
+    def parent_still_conflicts(self) -> bool:
+        """
+        Try integrating the parent, abandoning the attempt when it fails.
+
+        :return: Whether the attempt left unmerged paths.
+        """
+        if self.integrate_parent().succeeded:
+            return False
+        conflicting = self.git.unmerged_paths()
+        self.git.abandon(self.strategy)
+        return bool(conflicting)
+
     def concluded(self, outcome: RestackOutcome, **detail: Any) -> BranchOutcome:
         """
         Finish this branch with an outcome its owner can act on.
@@ -260,6 +284,12 @@ class WithholdBranchStillConflicting(RestackStep):
     """
     Leaves a branch alone while it is still conflicted from an earlier pass.
 
+    It is still conflicted while GitHub reports its pull request ``dirty`` or while
+    integrating its parent here still leaves unmerged paths. GitHub computes
+    mergeability against the pull request's own base, so it can read a branch as
+    mergeable while the integration this pass performs still conflicts; the label is
+    only cleared once both agree it is resolved.
+
     Clears the label as a side effect when it is not, since that is what lets the branch
     rejoin the pass without anybody remembering to remove it by hand.
     """
@@ -275,7 +305,10 @@ class WithholdBranchStillConflicting(RestackStep):
             restacking.fork.pull_request(branch.pull_request_number),
             branch.pull_request_number,
         )
-        if state == MERGEABLE_STATE_WITH_CONFLICTS:
+        if (
+            state == MERGEABLE_STATE_WITH_CONFLICTS
+            or restacking.parent_still_conflicts()
+        ):
             return restacking.concluded(
                 RestackOutcome.WITHHELD,
                 explanation="still conflicted against its base since a previous pass",
@@ -324,12 +357,7 @@ class IntegrateParent(RestackStep):
         :return: A conflict outcome when the parent left unmerged paths, a failure
             outcome when the integration failed without any, otherwise ``None``."""
         git = restacking.git
-        git.checkout(restacking.branch.name, restacking.branch_reference)
-        integration = (
-            git.rebase(restacking.parent_reference)
-            if restacking.strategy is IntegrationStrategy.REBASE
-            else git.merge(restacking.parent_reference)
-        )
+        integration = restacking.integrate_parent()
         if integration.succeeded:
             return None
         conflicting = git.unmerged_paths()
