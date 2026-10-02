@@ -73,18 +73,40 @@ items:
 - id: routine-cutover
   title: 'Retire the scheduled LLM Routine: deterministic Action + on-demand sessions'
   branch: claude/stack-maintenance-action
-  status: in_progress
+  status: blocked
   session: https://claude.ai/code/session_01Q8JfYcge9pLWPxGSE9d9d1
   track: cutover
   pull_request_number: 280
   blockers:
     - >-
-      None left outside this item's own next step. The gate this item was waiting on ("stack tooling
-      on cram2/main and fork main fast-forwards") is now clear: verified 2026-09-06, cram2/main and
-      this fork's main are the identical commit f6a53cf9, both carrying .claude/stack/ including
-      maintenance.py. What remains is this item's own deliverable: no .github/workflows/*.yml calls
-      the deterministic executor yet (confirmed absent on main, on integration, and on #218's
-      branch).
+      Found 2026-10-02 (session https://claude.ai/code/session_017wfueWmCbN76Z5MQo2EWAv): #280 does
+      not cross #185's move into `basstler`. Merging #280 onto #185's head conflicts in
+      `basstler/maintenance_commands.py`, `maintenance_github.py`, `maintenance_report.py`,
+      `maintenance_restack_steps.py` and `test/basstler_test/test_maintenance.py`. Its new module
+      lands at `.claude/stack/maintenance_reparent_notice.py`, outside the package, with bare
+      `sys.path` imports. Its workflow test sits outside `test/basstler_test/`.
+      `stack-maintenance.yml` calls `python3 .claude/stack/maintenance.py` and
+      `.claude/stack/stack.py`, and #185 deletes both. Whichever lands second has to re-apply #280
+      inside the package and switch the workflow to `python -m basstler.maintenance`. Under decision
+      13 the landing order is the user's call for each pull request.
+    - >-
+      Found 2026-10-02: the "one green Action cycle" gate cannot be met as written.
+      `stack-maintenance.yml` has already run 158 times since 2026-09-17, triggered by the
+      integration pipeline's candidate pull requests, which carry the file. Every run finished the
+      pass and then exited 10 (`BRANCH_NEEDS_ATTENTION`), because some stack branch is always
+      withheld or conflicted. The job is red whenever any branch needs a person, which is its normal
+      state. Either the gate has to be redefined, or the workflow has to treat 10 as a reported
+      outcome rather than a job failure.
+    - >-
+      Found 2026-10-02: the executor re-reports the same conflict on every run.
+      `github-actions[bot]` has posted 91 identical "ROUTINE - NEEDS RESOLUTION" comments on #156
+      between 2026-09-19 and 2026-09-30. `WithholdStillConflicted` (`maintenance_restack_steps.py`)
+      withholds a branch only when GitHub reports `mergeable_state == "dirty"`. #156 reads
+      `unstable` against its base while the local merge onto
+      `claude/plan-item-kickoff-workflow-cuare2` still conflicts, so each pass clears
+      `needs-resolution`, merges again, conflicts, then relabels and comments. The bug is in #139's
+      code on `main`, not in #280, but #280 is what runs it unattended every 6 hours and on every
+      pull request event. It needs a focused bug-fix pull request before cutover.
   depends_on: []
   notes: >
     Target revised 2026-07-31 (native-stacks pivot, user-approved): the endgame is no scheduled LLM
