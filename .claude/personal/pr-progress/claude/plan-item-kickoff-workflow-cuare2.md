@@ -30,9 +30,17 @@ Done:
 Open: "dataclass exception gaming" (`dependencies.py:54`). The user asked whether the krrood
 dependency is in the plan. Decision 14 intends it, but no item schedules it.
 
+### 2026-10-02 evening - fork review of 4cdd39318
+
+- `105de6379`: `StandardStreamHandler` is `@dataclass(eq=False)` (setup in `__post_init__`), its
+  format is `BARE_MESSAGE_FORMAT`; the stream tests use a `LoggedMessage` StrEnum and
+  `NOTHING_WRITTEN`; `test_repository.py` builds everything from one `REPOSITORY` and `Host`.
+  710 pass. Three fork threads replied and resolved.
+- Upstream (16:55 read): only the "fields / and no classvar" thread is unresolved; it is met by
+  `be0ed435f`. The user replied on the others at 16:14.
+
 Next:
-- The user posts the drafted replies on the two upstream threads.
-- Draft replies for the four upstream threads (logging x2, no-classvar, dataclass exception).
+- The user replies on (and resolves) the "and no classvar" upstream thread.
 - After #185 lands: rewrite the notes-branch manifests to the spaced spelling, then drop the
   underscore reading.
 - Landing hazard until then: this branch's writers produce `in progress`, which `main`'s tooling
