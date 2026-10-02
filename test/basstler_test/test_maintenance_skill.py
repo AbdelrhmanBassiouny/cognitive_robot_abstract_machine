@@ -21,8 +21,7 @@ from .constants import SkillDirectory
 
 MAINTENANCE_SKILL_DOCUMENT = (
     PackageLocation.REPOSITORY_ROOT
-    / SkillDirectory.STACKED_PULL_REQUEST_MAINTENANCE
-    / "SKILL.md"
+    / SkillDirectory.STACKED_PULL_REQUEST_MAINTENANCE.instructions
 )
 """
 The instructions a maintenance pass follows.

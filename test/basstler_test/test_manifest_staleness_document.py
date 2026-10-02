@@ -20,28 +20,7 @@ import pytest
 
 from basstler.locations import PackageLocation, ProjectLocation
 
-from .constants import SkillDirectory
-
-SKILLS_DIRECTORY = (
-    PackageLocation.REPOSITORY_ROOT / ProjectLocation.CLAUDE_CODE_DIRECTORY / "skills"
-)
-"""
-Where every skill's own directory lives.
-"""
-
-MAINTENANCE_SKILL = (
-    PackageLocation.REPOSITORY_ROOT
-    / SkillDirectory.STACKED_PULL_REQUEST_MAINTENANCE
-    / "SKILL.md"
-)
-"""
-The pass that changes a tracked item's real state without owning the item.
-"""
-
-PLAN_CREATE_SKILL = SKILLS_DIRECTORY / "plan-create" / "SKILL.md"
-"""
-The skill whose own act of creating a plan is what makes the master index stale.
-"""
+from .constants import SKILL_INSTRUCTIONS_FILE, SkillDirectory
 
 MASTER_INDEX_KEY = "_index"
 """
@@ -109,6 +88,14 @@ def currency_document() -> str:
     ).read_text()
 
 
+def skill_instructions(skill: SkillDirectory) -> str:
+    """
+    :param skill: The skill to read.
+    :return: The instructions it keeps in this repository.
+    """
+    return (PackageLocation.REPOSITORY_ROOT / skill.instructions).read_text()
+
+
 def skills_writing_plan_data() -> list[Path]:
     """
     Every skill document that runs a script which writes plan data.
@@ -117,7 +104,9 @@ def skills_writing_plan_data() -> list[Path]:
     """
     return sorted(
         skill
-        for skill in SKILLS_DIRECTORY.glob("*/SKILL.md")
+        for skill in (PackageLocation.REPOSITORY_ROOT / SkillDirectory.ROOT).glob(
+            f"*/{SKILL_INSTRUCTIONS_FILE}"
+        )
         if any(script in skill.read_text() for script in PLAN_WRITING_SCRIPTS)
     )
 
@@ -142,7 +131,7 @@ def test_the_maintenance_pass_writes_the_manifest_its_own_moves_make_stale():
     one that records it - reporting instead leaves the manifest wrong for as long as
     nobody reads the summary.
     """
-    maintenance = MAINTENANCE_SKILL.read_text()
+    maintenance = skill_instructions(SkillDirectory.STACKED_PULL_REQUEST_MAINTENANCE)
 
     assert any(script in maintenance for script in PLAN_WRITING_SCRIPTS)
 
@@ -152,7 +141,9 @@ def test_the_maintenance_pass_can_reach_the_skill_that_publishes():
     Republishing means invoking ``plan-dashboard``, which needs the ``Skill`` tool - a
     grant no amount of prose in the document can substitute for.
     """
-    frontmatter = MAINTENANCE_SKILL.read_text().split("---")[1]
+    frontmatter = skill_instructions(
+        SkillDirectory.STACKED_PULL_REQUEST_MAINTENANCE
+    ).split("---")[1]
     granted = frontmatter.partition("allowed-tools:")[2].partition("\n")[0]
 
     assert "Skill" in {tool.strip() for tool in granted.split(",")}
@@ -165,7 +156,9 @@ def test_the_writer_and_the_clearer_of_a_blocker_name_the_same_owner():
     """
     assert shell_constant(BLOCKER_OWNER_CONSTANT)
     assert BLOCKER_OWNER_CONSTANT in currency_document()
-    assert BLOCKER_OWNER_CONSTANT in MAINTENANCE_SKILL.read_text()
+    assert BLOCKER_OWNER_CONSTANT in skill_instructions(
+        SkillDirectory.STACKED_PULL_REQUEST_MAINTENANCE
+    )
 
 
 def test_creating_a_plan_republishes_the_index_the_new_plan_belongs_in():
@@ -173,7 +166,7 @@ def test_creating_a_plan_republishes_the_index_the_new_plan_belongs_in():
     The index lists every plan, so adding one is the single change that makes the index
     itself wrong - the one case where publishing only the plan's own page is not enough.
     """
-    assert MASTER_INDEX_KEY in PLAN_CREATE_SKILL.read_text()
+    assert MASTER_INDEX_KEY in skill_instructions(SkillDirectory.PLAN_CREATE)
 
 
 def test_the_rule_names_no_plan_of_its_own():

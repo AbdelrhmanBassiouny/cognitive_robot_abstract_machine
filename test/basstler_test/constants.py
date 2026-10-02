@@ -15,6 +15,11 @@ from pathlib import Path
 
 from basstler.locations import PathEnumeration, ProjectLocation
 
+SKILL_INSTRUCTIONS_FILE = "SKILL.md"
+"""
+The file a skill directory keeps its instructions in, which is what Claude Code looks for.
+"""
+
 
 class DatasetLocation(PathEnumeration):
     """
@@ -113,17 +118,32 @@ class SkillDirectory(PathEnumeration):
     does not name it.
     """
 
-    PLAN_DASHBOARD = ProjectLocation.CLAUDE_CODE_DIRECTORY / "skills" / "plan-dashboard"
+    ROOT = ProjectLocation.CLAUDE_CODE_DIRECTORY / "skills"
+    """
+    Where every skill's own directory lives.
+    """
+
+    PLAN_DASHBOARD = ROOT / "plan-dashboard"
     """
     The dashboard skill: its instructions, its worked example and its shell entry point.
     """
 
-    STACKED_PULL_REQUEST_MAINTENANCE = (
-        ProjectLocation.CLAUDE_CODE_DIRECTORY / "skills" / "stacked-pr-maintenance"
-    )
+    STACKED_PULL_REQUEST_MAINTENANCE = ROOT / "stacked-pr-maintenance"
     """
     The maintenance pass's own instructions.
     """
+
+    PLAN_CREATE = ROOT / "plan-create"
+    """
+    The skill whose own act of creating a plan is what makes the master index stale.
+    """
+
+    @property
+    def instructions(self) -> Path:
+        """
+        :return: The skill's instructions, relative to the project root.
+        """
+        return self.value / SKILL_INSTRUCTIONS_FILE
 
 
 class ScratchBranch(StrEnum):

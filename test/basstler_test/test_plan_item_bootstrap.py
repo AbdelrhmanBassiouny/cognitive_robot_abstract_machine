@@ -1409,10 +1409,7 @@ NARROWLY_INDENTED_MANIFEST = (
 ).read_text()
 """
 A manifest predating this module's own formatting convention: its items list has no
-indent before the ``-`` and its fields sit two spaces in, not the four
-``ITEM_FIELD_INDENT`` assumes.
-
-``icra-mechanism/plan.yaml`` on the personal-notes branch is written exactly this way.
+indent before the ``-`` and its fields sit two spaces in.
 """
 
 
