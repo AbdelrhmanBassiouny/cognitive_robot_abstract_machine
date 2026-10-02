@@ -38,10 +38,12 @@ items:
     reads it.
 - id: shape-vocabulary-on-main
   title: Land the Montessori shape vocabulary, the board's hole geometry and the piece set
-  branch: null
+  branch: claude/ecstatic-knuth-curscv
   track: stack
   depends_on: []
-  status: not_started
+  status: in_progress
+  pull_request_number: 488
+  session: https://claude.ai/code/session_01T25zXQPBeES9MrL6i2dE1K
   notes: >
     montessori/semantics.py, montessori/exceptions.py, montessori/hole_geometry.py with
     resources/board.stl (loaded at import time), montessori/pieces.py, and the tests
