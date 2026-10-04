@@ -10,7 +10,11 @@ import pytest
 from experiments.montessori.perception.detections import MontessoriScene
 from experiments.montessori.perception.orthophoto import WorkspaceRegion
 from experiments.montessori.perception.pipeline import MontessoriPerceptionPipeline
-from experiments.montessori.semantics import MontessoriShapeCategory
+from experiments.montessori.semantics import (
+    CubeShape,
+    CylinderShape,
+    TriangularPrismShape,
+)
 
 from .montessori_scene_renderer import MontessoriSceneRenderer, PlacedPiece
 
@@ -23,9 +27,9 @@ def renderer() -> MontessoriSceneRenderer:
 @pytest.fixture
 def placed_pieces() -> list[PlacedPiece]:
     return [
-        PlacedPiece(MontessoriShapeCategory.CUBE, x=0.58, y=0.15),
-        PlacedPiece(MontessoriShapeCategory.CYLINDER, x=0.58, y=0.25),
-        PlacedPiece(MontessoriShapeCategory.TRIANGULAR_PRISM, x=0.58, y=0.35),
+        PlacedPiece(CubeShape, x=0.58, y=0.15),
+        PlacedPiece(CylinderShape, x=0.58, y=0.25),
+        PlacedPiece(TriangularPrismShape, x=0.58, y=0.35),
     ]
 
 

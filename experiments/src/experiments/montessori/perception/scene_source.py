@@ -9,7 +9,7 @@ is what makes perception run::
 
     perceived = PerceivedObjects(source=node)
     triangle = (
-        a(MontessoriShapeDetection)(category=MontessoriShapeCategory.TRIANGULAR_PRISM)
+        a(MontessoriShapeDetection)(category=TriangularPrismShape)
         .from_(perceived)
         .first()
     )

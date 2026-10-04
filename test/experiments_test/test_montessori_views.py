@@ -32,7 +32,7 @@ from experiments.montessori.perception.overlay import (
 )
 from experiments.montessori.perception.pipeline import MontessoriPerceptionPipeline
 from experiments.montessori.pieces import KnownPiece
-from experiments.montessori.semantics import MontessoriShapeCategory
+from experiments.montessori.semantics import CubeShape
 
 from .dataset import montessori_scene_fixtures
 from .dataset.montessori_scene_renderer import (
@@ -76,7 +76,7 @@ def test_a_hole_lands_at_its_own_world_position_in_the_rectified_lid(
         renderer.render([]), renderer.lid_height
     )
     [widest] = sorted(
-        renderer.hole_footprints(), key=lambda hole: -hole.size.x * hole.size.y
+        renderer.hole_footprints(), key=lambda hole: -hole.boundary.bounding_box.area
     )[:1]
     expected_x, expected_y = renderer.hole_center(widest)
 
@@ -213,7 +213,7 @@ def _extent_drawn_in(
 def test_a_standing_piece_is_boxed_around_the_top_face_the_camera_sees(
     renderer: MontessoriSceneRenderer, pipeline: MontessoriPerceptionPipeline
 ):
-    frame = renderer.render([PlacedPiece(MontessoriShapeCategory.CUBE, x=0.58, y=0.15)])
+    frame = renderer.render([PlacedPiece(CubeShape, x=0.58, y=0.15)])
     [piece] = pipeline.detect(frame).shapes
     view = CameraView(frame)
 

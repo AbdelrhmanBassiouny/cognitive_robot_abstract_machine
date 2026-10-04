@@ -16,173 +16,78 @@ from __future__ import annotations
 
 import colorsys
 import math
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from enum import IntEnum
 
 import numpy as np
-from typing_extensions import Dict, Optional, Tuple
+from typing_extensions import Optional, Tuple, Type, Union
 
-from experiments.montessori.semantics import MontessoriShapeCategory
-from semantic_digital_twin.world_description.geometry import Color
-
-# %% measured dimensions
-
-CUBE_EDGE = 0.03
-"""
-Edge length, in metres, of this scene's physical cube piece.
-"""
-
-CYLINDER_DIAMETER = 0.028
-"""
-Diameter, in metres, of this scene's one physical cylindrical piece.
-"""
-
-CYLINDER_HEIGHT = 0.03
-"""
-Height, in metres, of this scene's physical cylindrical piece (see
-:const:`CYLINDER_DIAMETER`).
-"""
-
-RECTANGULAR_PRISM_WIDTH = 0.02
-"""
-Width, in metres, of this scene's physical rectangular-prism piece.
-"""
-
-RECTANGULAR_PRISM_LENGTH = 0.04
-"""
-Length, in metres, of this scene's physical rectangular-prism piece (see
-:const:`RECTANGULAR_PRISM_WIDTH`).
-"""
-
-RECTANGULAR_PRISM_HEIGHT = 0.03
-"""
-Height, in metres, of this scene's physical rectangular-prism piece (see
-:const:`RECTANGULAR_PRISM_WIDTH`).
-"""
-
-TRIANGULAR_PRISM_SIDE = 0.037
-"""
-Side length, in metres, of this scene's physical triangular-prism piece's equilateral
-cross-section.
-"""
-
-TRIANGULAR_PRISM_HEIGHT = 0.03
-"""
-Height, in metres, of this scene's physical triangular-prism piece (see
-:const:`TRIANGULAR_PRISM_SIDE`).
-"""
-
-# %% the outlines they present
-
-_CIRCLE_CORNERS = 64
-"""
-How many corners a circular outline is drawn with, which at this set's sizes puts every
-corner within a tenth of a millimetre of the true circle.
-"""
-
-
-def equilateral_triangle_boundary(side: float) -> np.ndarray:
-    """
-    Vertices of an equilateral triangle centered on its own centroid, apex pointing
-    along local +y.
-
-    :param side: Length of each of the triangle's three sides.
-    """
-    circumradius = side / math.sqrt(3)
-    inradius = side / (2 * math.sqrt(3))
-    return np.array(
-        [
-            [0.0, circumradius],
-            [-side / 2, -inradius],
-            [side / 2, -inradius],
-        ]
-    )
-
-
-def rectangle_boundary(width: float, length: float) -> np.ndarray:
-    """
-    Corners of a rectangle centered on its own middle, its length along local +y.
-
-    :param width: The rectangle's shorter side.
-    :param length: The rectangle's longer side.
-    """
-    return np.array(
-        [
-            [-width / 2, -length / 2],
-            [width / 2, -length / 2],
-            [width / 2, length / 2],
-            [-width / 2, length / 2],
-        ]
-    )
-
-
-def points_along(outline: np.ndarray, spacing: float) -> np.ndarray:
-    """
-    Spread points evenly along a closed outline, corners included.
-
-    :param outline: The outline's corners, as ``(n, 2)`` ``(x, y)`` points in metres.
-    :param spacing: How far apart, in metres, to place the points.
-    :return: The points, as ``(m, 2)`` ``(x, y)`` points in metres.
-    """
-    corners = np.vstack([outline, outline[:1]])
-    walked = []
-    for start, end in zip(corners[:-1], corners[1:]):
-        steps = max(1, int(round(float(np.linalg.norm(end - start)) / spacing)))
-        walked.append(start + np.outer(np.arange(steps) / steps, end - start))
-    return np.vstack(walked)
-
-
-def circle_boundary(diameter: float) -> np.ndarray:
-    """
-    Corners of a many-sided polygon standing in for a circle centered on its own middle.
-
-    :param diameter: The circle's diameter.
-    """
-    angles = np.linspace(0.0, 2 * math.pi, _CIRCLE_CORNERS, endpoint=False)
-    return np.stack([np.cos(angles), np.sin(angles)], axis=1) * diameter / 2
-
+from experiments.montessori.semantics import (
+    CubeShape,
+    CylinderShape,
+    MontessoriShape,
+    RectangularPrismShape,
+    TriangularPrismShape,
+)
+from semantic_digital_twin.world_description.geometry import Color, Polygon2D
 
 # %% the colours they were measured to be
 
-HUE_RANGE = 180
-"""
-Number of hues OpenCV fits into a byte, which its hue channel wraps around at.
-"""
 
-
-def hue_distance(one: int, other: int) -> int:
+@dataclass(frozen=True)
+class HueCircle:
     """
-    How far apart two hues lie on the colour circle.
-
-    :param one: A hue as OpenCV reports it.
-    :param other: The hue to compare it against.
+    The colour circle as OpenCV encodes hue in a byte: hues run from zero up to
+    :attr:`size` and wrap around there.
     """
-    apart = abs(int(one) - int(other))
-    return min(apart, HUE_RANGE - apart)
+
+    size: int = 180
+    """
+    Number of hues OpenCV fits into a byte.
+    """
+
+    def distance(
+        self, one: Union[int, np.ndarray], other: int
+    ) -> Union[int, np.ndarray]:
+        """
+        How far apart two hues lie on the colour circle, the short way round.
+
+        :param one: A hue as OpenCV reports it, or an array of them.
+        :param other: The hue to compare it against.
+        :return: The distance, element by element when ``one`` is an array.
+        """
+        apart = np.abs(np.asarray(one, dtype=int) - int(other))
+        return np.minimum(apart, self.size - apart)
+
+    def pure_color(self, hue: int) -> Color:
+        """
+        A hue at full saturation and brightness.
+
+        :param hue: A hue as OpenCV reports it.
+        """
+        red, green, blue = colorsys.hsv_to_rgb(hue / self.size, 1.0, 1.0)
+        return Color(red, green, blue)
 
 
-HUE_TOLERANCE = 4
-"""
-How far a measured colour may sit from a piece's own and still be taken for it.
+class PieceHue(IntEnum):
+    """
+    The hues the pieces in this set wear, measured off the rectified camera image as
+    OpenCV reports hue.
+    """
 
-Measured on this table, every piece read within 2 of its own recorded colour while the
-two things standing on the table that are not pieces read 6 and 7 away, so this sits
-midway between and turns them away. It is the one number here that a real change of
-lighting would have to be re-measured for.
-"""
+    CYAN = 86
+    """
+    Hue of the pale blue pieces.
+    """
 
-CYAN_HUE = 86
-"""
-Hue of the pale blue pieces in this set, measured off the rectified camera image.
-"""
+    YELLOW = 21
+    """
+    Hue of the yellow pieces.
 
-YELLOW_HUE = 21
-"""
-Hue of the yellow pieces in this set, measured off the rectified camera image.
-
-The bare table has no colour to speak of, so nothing on it competes for this; the
-board's own lid does share it, but the lid is searched on its own plane and excluded
-from the loose pieces by its outline.
-"""
+    The bare table has no colour to speak of, so nothing on it competes for this; the
+    board's own lid does share it, but the lid is searched on its own plane and excluded
+    from the loose pieces by its outline.
+    """
 
 
 # %% one kind of piece
@@ -194,15 +99,15 @@ class KnownPiece:
     One kind of loose piece this set contains, as measured off the piece itself.
     """
 
-    category: MontessoriShapeCategory
+    category: Type[MontessoriShape]
     """
-    The geometric shape it is, and so the hole it belongs in.
+    The kind of piece it is, and so the hole it belongs in.
     """
 
-    outline: np.ndarray
+    outline: Polygon2D
     """
-    The outline it presents while resting on its own flat face, as ``(n, 2)`` ``(x, y)``
-    points in metres about its own centre, at zero turn.
+    The outline it presents while resting on its own flat face, in metres about its own
+    centre, at zero turn.
     """
 
     height: float
@@ -233,25 +138,14 @@ class KnownPiece:
         saturation and brightness -- the pure form of the colour it wears, rather than
         the shade any one photograph of it happened to catch.
         """
-        red, green, blue = colorsys.hsv_to_rgb(self.hue / HUE_RANGE, 1.0, 1.0)
-        return Color(red, green, blue)
+        return HueCircle().pure_color(self.hue)
 
     @property
     def radius(self) -> float:
         """
         How far its outline reaches from its own centre, in metres.
         """
-        return float(np.abs(self.outline).max())
-
-    def turned_outline(self, angle: float) -> np.ndarray:
-        """
-        Its outline turned about its own centre.
-
-        :param angle: How far to turn it, in radians about the world frame's z-axis.
-        :return: The turned outline, as ``(n, 2)`` ``(x, y)`` points in metres.
-        """
-        cosine, sine = math.cos(angle), math.sin(angle)
-        return self.outline @ np.array([[cosine, sine], [-sine, cosine]])
+        return float(np.abs(self.outline.vertices).max())
 
     def smallest_equivalent_turn(self, angle: float) -> float:
         """
@@ -267,53 +161,115 @@ class KnownPiece:
         return (angle + half) % self.rotation_period - half
 
 
-KNOWN_PIECES: Tuple[KnownPiece, ...] = (
-    KnownPiece(
-        category=MontessoriShapeCategory.CUBE,
-        outline=rectangle_boundary(CUBE_EDGE, CUBE_EDGE),
-        height=CUBE_EDGE,
-        hue=CYAN_HUE,
-        rotation_period=math.pi / 2,
-    ),
-    KnownPiece(
-        category=MontessoriShapeCategory.CYLINDER,
-        outline=circle_boundary(CYLINDER_DIAMETER),
-        height=CYLINDER_HEIGHT,
-        hue=CYAN_HUE,
-        rotation_period=None,
-    ),
-    KnownPiece(
-        category=MontessoriShapeCategory.RECTANGULAR_PRISM,
-        outline=rectangle_boundary(RECTANGULAR_PRISM_WIDTH, RECTANGULAR_PRISM_LENGTH),
-        height=RECTANGULAR_PRISM_HEIGHT,
-        hue=YELLOW_HUE,
-        rotation_period=math.pi,
-    ),
-    KnownPiece(
-        category=MontessoriShapeCategory.TRIANGULAR_PRISM,
-        outline=equilateral_triangle_boundary(TRIANGULAR_PRISM_SIDE),
-        height=TRIANGULAR_PRISM_HEIGHT,
-        hue=YELLOW_HUE,
-        rotation_period=2 * math.pi / 3,
-    ),
-)
-"""
-Every kind of loose piece this set contains.
+# %% the set they make up
 
-The disk and the sphere are left out because this physical set has neither.
-"""
 
-KNOWN_PIECE_BY_CATEGORY: Dict[MontessoriShapeCategory, KnownPiece] = {
-    piece.category: piece for piece in KNOWN_PIECES
-}
-"""
-:data:`KNOWN_PIECES` keyed by the shape each one is.
-"""
+@dataclass(frozen=True)
+class PieceSet:
+    """
+    The kinds of loose piece a physical set contains, and how closely a measured colour
+    must match one of theirs to be taken for it.
+    """
 
-PIECE_HUES: Tuple[int, ...] = tuple(sorted({piece.hue for piece in KNOWN_PIECES}))
-"""
-Every colour a loose piece in this set wears.
+    pieces: Tuple[KnownPiece, ...]
+    """
+    Every kind of loose piece in the set.
+    """
 
-What a piece stands on is whatever the table happens to be covered with, so it is these
-that say a pixel belongs to a piece rather than anything about the surface under it.
-"""
+    hue_tolerance: int = 4
+    """
+    How far a measured colour may sit from a piece's own and still be taken for it.
+
+    Measured on this table, every piece read within 2 of its own recorded colour while
+    the two things standing on the table that are not pieces read 6 and 7 away, so this
+    sits midway between and turns them away. It is the one number here that a real
+    change of lighting would have to be re-measured for.
+    """
+
+    hue_circle: HueCircle = field(default_factory=HueCircle)
+    """
+    The colour circle the pieces' hues lie on.
+    """
+
+    @classmethod
+    def this_lab(cls) -> PieceSet:
+        """
+        The pieces this lab's physical set contains, with every dimension in metres.
+
+        The disk and the sphere are left out because this physical set has neither.
+        """
+        return cls(
+            pieces=(
+                KnownPiece(
+                    category=CubeShape,
+                    outline=Polygon2D.rectangle(width=0.03, length=0.03),
+                    height=0.03,
+                    hue=PieceHue.CYAN,
+                    rotation_period=math.pi / 2,
+                ),
+                KnownPiece(
+                    category=CylinderShape,
+                    outline=Polygon2D.circle(diameter=0.028),
+                    height=0.03,
+                    hue=PieceHue.CYAN,
+                    rotation_period=None,
+                ),
+                KnownPiece(
+                    category=RectangularPrismShape,
+                    outline=Polygon2D.rectangle(width=0.02, length=0.04),
+                    height=0.03,
+                    hue=PieceHue.YELLOW,
+                    rotation_period=math.pi,
+                ),
+                KnownPiece(
+                    category=TriangularPrismShape,
+                    outline=Polygon2D.equilateral_triangle(side=0.037),
+                    height=0.03,
+                    hue=PieceHue.YELLOW,
+                    rotation_period=2 * math.pi / 3,
+                ),
+            )
+        )
+
+    @property
+    def hues(self) -> Tuple[int, ...]:
+        """
+        Every colour a piece in this set wears.
+
+        What a piece stands on is whatever the table happens to be covered with, so it
+        is these that say a pixel belongs to a piece rather than anything about the
+        surface under it.
+        """
+        return tuple(sorted({piece.hue for piece in self.pieces}))
+
+    def piece_for(self, category: Type[MontessoriShape]) -> Optional[KnownPiece]:
+        """
+        The piece of a given kind, or None when this set has none of that kind.
+
+        :param category: The kind of piece to look up.
+        """
+        for piece in self.pieces:
+            if piece.category is category:
+                return piece
+        return None
+
+    def could_be(self, piece: KnownPiece, hue: Optional[int]) -> bool:
+        """
+        Whether a piece's own colour is close enough to a measured one to be it.
+
+        :param piece: The piece to consider.
+        :param hue: The colour measured, or None where there was none to read.
+        """
+        if hue is None:
+            return True
+        return bool(self.hue_circle.distance(hue, piece.hue) <= self.hue_tolerance)
+
+    def wears_a_piece_colour(self, hue: np.ndarray) -> np.ndarray:
+        """
+        Which of the given hues lie close enough to one a piece in this set wears.
+
+        :param hue: Hues as OpenCV reports them, of any shape.
+        :return: A boolean array of the same shape.
+        """
+        apart = np.stack([self.hue_circle.distance(hue, worn) for worn in self.hues])
+        return apart.min(axis=0) <= self.hue_tolerance

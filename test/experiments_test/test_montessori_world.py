@@ -2,12 +2,15 @@ import numpy as np
 import pytest
 from trimesh import Trimesh
 
-from experiments.montessori.pieces import KNOWN_PIECE_BY_CATEGORY
+from experiments.montessori.pieces import PieceSet
 from experiments.montessori.semantics import (
+    CylinderShape,
     MontessoriShape,
-    MontessoriShapeCategory,
+    RectangularPrismShape,
     ShapeSortingBoard,
     ShapeSortingHole,
+    SphereShape,
+    TriangularPrismShape,
 )
 from experiments.montessori.world import (
     BOARD_SCALE,
@@ -114,7 +117,9 @@ def _collision_box_world_bounds(shapes, position) -> list:
 
 
 def _hole_world_bounds(hole: ShapeSortingHole) -> tuple:
-    """A hole's true (x, y) bounding box, in the world frame, with tolerance applied."""
+    """
+    A hole's true (x, y) bounding box, in the world frame, with tolerance applied.
+    """
     position = hole.global_transform.to_position()
     local_bounds = hole.root.area.combined_mesh.bounds
     return (
@@ -196,13 +201,13 @@ def test_montessori_world_creates_one_shape_per_hole_category_plus_the_sphere():
     holes = montessori.world.get_semantic_annotations_by_type(ShapeSortingHole)
     hole_categories = {hole.shape_category for hole in holes}
     shape_categories = [
-        shape.shape_category
+        type(shape)
         for shape in montessori.world.get_semantic_annotations_by_type(MontessoriShape)
     ]
 
     # one shape per hole (some categories repeat, e.g. the two circular holes), plus
     # the sphere, which has no matching hole
-    assert set(shape_categories) == hole_categories | {MontessoriShapeCategory.SPHERE}
+    assert set(shape_categories) == hole_categories | {SphereShape}
     assert len(shape_categories) == len(holes) + 1
 
 
@@ -213,7 +218,7 @@ def test_montessori_world_pairs_each_circular_shape_with_its_own_sized_hole():
     cylinder_shapes = [
         shape
         for shape in montessori.world.get_semantic_annotations_by_type(MontessoriShape)
-        if shape.shape_category == MontessoriShapeCategory.CYLINDER
+        if type(shape) is CylinderShape
     ]
 
     # the board has two circular holes of different sizes; each cylinder shape must be
@@ -232,8 +237,8 @@ def test_montessori_world_pairs_each_circular_shape_with_its_own_sized_hole():
 @pytest.mark.parametrize(
     "category",
     [
-        MontessoriShapeCategory.TRIANGULAR_PRISM,
-        MontessoriShapeCategory.RECTANGULAR_PRISM,
+        TriangularPrismShape,
+        RectangularPrismShape,
     ],
 )
 def test_orientation_sensitive_shape_matches_its_holes_footprint_orientation(category):
@@ -243,7 +248,7 @@ def test_orientation_sensitive_shape_matches_its_holes_footprint_orientation(cat
     [shape] = [
         shape
         for shape in montessori.world.get_semantic_annotations_by_type(MontessoriShape)
-        if shape.shape_category == category
+        if type(shape) is category
     ]
     hole = montessori.board.hole_for(shape)
 
@@ -430,15 +435,12 @@ def test_add_robot_stand_spawns_a_table_at_the_mount_height():
 def test_a_loose_shape_wears_the_colour_measured_off_the_real_piece():
     montessori = MontessoriWorld()
 
+    pieces = PieceSet.this_lab()
+    measured = {piece.category: piece.color for piece in pieces.pieces}
     coloured = {
-        shape.shape_category: shape.root.visual[0].color
+        type(shape): shape.root.visual[0].color
         for shape in montessori.world.get_semantic_annotations_by_type(MontessoriShape)
-        if shape.shape_category in KNOWN_PIECE_BY_CATEGORY
+        if type(shape) in measured
     }
 
-    assert coloured == {
-        category: piece.color
-        for category, piece in KNOWN_PIECE_BY_CATEGORY.items()
-        if category in coloured
-    }
-    assert set(coloured) == set(KNOWN_PIECE_BY_CATEGORY)
+    assert coloured == measured

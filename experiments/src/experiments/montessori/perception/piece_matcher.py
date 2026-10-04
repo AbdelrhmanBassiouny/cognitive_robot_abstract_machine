@@ -21,19 +21,13 @@ known piece follows instead of reporting whichever threshold it happened to fall
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import numpy as np
 from typing_extensions import List, Optional, Sequence, Tuple
 
 from experiments.montessori.perception.edges import EdgeDistances
-from experiments.montessori.pieces import (
-    HUE_TOLERANCE,
-    KNOWN_PIECES,
-    KnownPiece,
-    hue_distance,
-    points_along,
-)
+from experiments.montessori.pieces import KnownPiece, PieceSet
 
 # %% what a fit came to
 
@@ -84,14 +78,10 @@ class PieceMatcher:
     that placement, to settle its position and its turn.
     """
 
-    candidates: Tuple[KnownPiece, ...] = KNOWN_PIECES
+    piece_set: PieceSet = field(default_factory=PieceSet.this_lab)
     """
-    The pieces that may be found on the table.
-    """
-
-    hue_tolerance: int = HUE_TOLERANCE
-    """
-    How far a measured colour may sit from a piece's own before that piece is ruled out.
+    The pieces that may be found on the table, and how closely a measured colour must
+    match one of theirs.
     """
 
     minimum_agreement: float = 0.62
@@ -171,7 +161,11 @@ class PieceMatcher:
             colour to read.
         :return: The best fit, or None if no known piece follows the edges well enough.
         """
-        candidates = [piece for piece in self.candidates if self._could_be(piece, hue)]
+        candidates = [
+            piece
+            for piece in self.piece_set.pieces
+            if self.piece_set.could_be(piece, hue)
+        ]
         if not candidates:
             return None
         best = max(
@@ -181,17 +175,6 @@ class PieceMatcher:
         if best.outline_agreement < self.minimum_agreement:
             return None
         return best
-
-    def _could_be(self, piece: KnownPiece, hue: Optional[int]) -> bool:
-        """
-        Whether a piece's own colour is close enough to a measured one to be it.
-
-        :param piece: The piece to consider.
-        :param hue: The colour measured, or None where there was none to read.
-        """
-        if hue is None:
-            return True
-        return hue_distance(hue, piece.hue) <= self.hue_tolerance
 
     def _fit(
         self, piece: KnownPiece, edges: EdgeDistances, seed: Tuple[float, float]
@@ -276,7 +259,7 @@ class PieceMatcher:
         :param reach: How far an edge may lie from the outline and still count.
         :return: The best of those positions.
         """
-        outline = points_along(piece.turned_outline(angle), self.outline_spacing)
+        outline = piece.outline.turned(angle).points_along(self.outline_spacing)
         agreements = edges.agreement(outline[None, :, :] + positions[:, None, :], reach)
         best = int(np.argmax(agreements))
         return MatchedPiece(

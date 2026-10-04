@@ -14,9 +14,16 @@ from dataclasses import dataclass
 
 import cv2
 import numpy as np
-from typing_extensions import Optional, Self
+from typing_extensions import Optional, Self, Type
 
-from experiments.montessori.semantics import MontessoriShapeCategory
+from experiments.montessori.semantics import (
+    CubeShape,
+    CylinderShape,
+    DiskShape,
+    MontessoriShape,
+    RectangularPrismShape,
+    TriangularPrismShape,
+)
 
 # %% measuring an outline
 
@@ -120,12 +127,12 @@ class FootprintClassifier(ABC):
     """
 
     @abstractmethod
-    def classify(self, footprint: Footprint) -> Optional[MontessoriShapeCategory]:
+    def classify(self, footprint: Footprint) -> Optional[Type[MontessoriShape]]:
         """
         Name the shape an outline belongs to.
 
         :param footprint: The measured outline.
-        :return: The category, or None if the outline matches none of them.
+        :return: The kind of piece, or None if the outline matches none of them.
         """
 
 
@@ -135,7 +142,7 @@ class CrossSectionClassifier(FootprintClassifier):
     Tells the Montessori shapes apart by the proportions of their cross-sections.
 
     The board's own mesh is classified the same way (see
-    :func:`~experiments.montessori.hole_geometry._classify_hole_shape`), but from counts
+    :class:`~experiments.montessori.hole_geometry.HoleShapeClassifier`), but from counts
     of mesh vertices, which a rectified camera outline has no counterpart for; the
     proportions below stand in for them and hold for any outline of the same shape at
     any size.
@@ -159,25 +166,25 @@ class CrossSectionClassifier(FootprintClassifier):
     """
     Aspect ratio above which a four-cornered outline is the disk's narrow slot rather
     than a rectangle, matching
-    :data:`~experiments.montessori.hole_geometry._DISK_ASPECT_RATIO_THRESHOLD`.
+    :attr:`~experiments.montessori.hole_geometry.HoleShapeClassifier.disk_aspect_ratio`.
     """
 
     rectangle_aspect_ratio: float = 1.3
     """
     Aspect ratio above which a four-cornered outline is a rectangle rather than a
     square, matching
-    :data:`~experiments.montessori.hole_geometry._RECTANGLE_ASPECT_RATIO_THRESHOLD`.
+    :attr:`~experiments.montessori.hole_geometry.HoleShapeClassifier.rectangle_aspect_ratio`.
     """
 
-    def classify(self, footprint: Footprint) -> Optional[MontessoriShapeCategory]:
+    def classify(self, footprint: Footprint) -> Optional[Type[MontessoriShape]]:
         if footprint.fill_ratio <= 0.0:
             return None
         if footprint.fill_ratio < self.triangle_fill_ratio:
-            return MontessoriShapeCategory.TRIANGULAR_PRISM
+            return TriangularPrismShape
         if footprint.fill_ratio < self.circle_fill_ratio:
-            return MontessoriShapeCategory.CYLINDER
+            return CylinderShape
         if footprint.aspect_ratio > self.slot_aspect_ratio:
-            return MontessoriShapeCategory.DISK
+            return DiskShape
         if footprint.aspect_ratio > self.rectangle_aspect_ratio:
-            return MontessoriShapeCategory.RECTANGULAR_PRISM
-        return MontessoriShapeCategory.CUBE
+            return RectangularPrismShape
+        return CubeShape

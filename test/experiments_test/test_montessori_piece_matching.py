@@ -20,17 +20,13 @@ from experiments.montessori.perception.pipeline import (
     MontessoriPerceptionPipeline,
     SurfaceColors,
 )
-from experiments.montessori.pieces import (
-    CYAN_HUE,
-    HUE_RANGE,
-    KNOWN_PIECES,
-    KNOWN_PIECE_BY_CATEGORY,
-    YELLOW_HUE,
-    KnownPiece,
-    hue_distance,
+from experiments.montessori.pieces import KnownPiece, PieceHue, PieceSet
+from experiments.montessori.semantics import (
+    CubeShape,
+    CylinderShape,
+    TriangularPrismShape,
 )
-from experiments.montessori.semantics import MontessoriShapeCategory
-from semantic_digital_twin.world_description.geometry import Color
+from semantic_digital_twin.world_description.geometry import Polygon2D
 
 from .dataset import montessori_scene_fixtures
 from .dataset.montessori_scene_renderer import MontessoriSceneRenderer, PlacedPiece
@@ -64,53 +60,27 @@ def _painted(hue_saturation_value: np.ndarray) -> Orthophoto:
 
 def test_a_region_is_read_as_the_colour_of_its_own_pixels():
     painted = np.zeros((8, 8, 3), dtype=np.uint8)
-    painted[:, :4] = (CYAN_HUE, 200, 200)
-    painted[:, 4:] = (YELLOW_HUE, 200, 200)
+    painted[:, :4] = (PieceHue.CYAN, 200, 200)
+    painted[:, 4:] = (PieceHue.YELLOW, 200, 200)
     region = np.zeros((8, 8), dtype=np.uint8)
     region[:, :4] = 255
 
-    assert SurfaceColors().measure_hue(_painted(painted), region) == CYAN_HUE
+    assert SurfaceColors().measure_hue(_painted(painted), region) == PieceHue.CYAN
 
 
 def test_a_washed_out_region_carries_no_colour_to_read():
     colors = SurfaceColors()
     painted = np.zeros((8, 8, 3), dtype=np.uint8)
-    painted[:, :] = (CYAN_HUE, colors.minimum_hue_saturation - 1, 250)
+    painted[:, :] = (PieceHue.CYAN, colors.minimum_hue_saturation - 1, 250)
 
     assert colors.measure_hue(_painted(painted), np.full((8, 8), 255, np.uint8)) is None
 
 
-def test_a_piece_is_coloured_the_pure_form_of_the_hue_it_was_measured_at():
-    scarlet = KnownPiece(
-        category=MontessoriShapeCategory.CUBE,
-        outline=np.zeros((0, 2)),
-        height=0.03,
-        hue=0,
-        rotation_period=None,
-    )
-
-    assert scarlet.color == Color(1.0, 0.0, 0.0)
-
-
-def test_two_pieces_measured_at_one_hue_are_coloured_alike():
-    cube = KNOWN_PIECE_BY_CATEGORY[MontessoriShapeCategory.CUBE]
-    cylinder = KNOWN_PIECE_BY_CATEGORY[MontessoriShapeCategory.CYLINDER]
-    rectangular_prism = KNOWN_PIECE_BY_CATEGORY[
-        MontessoriShapeCategory.RECTANGULAR_PRISM
-    ]
-
-    assert cube.color == cylinder.color
-    assert cube.color != rectangular_prism.color
-
-
-def test_hue_is_measured_the_short_way_round_the_colour_circle():
-    assert hue_distance(2, HUE_RANGE - 3) == 5
-    assert hue_distance(20, 25) == 5
-
-
 # %% recognising a piece and how it is turned
 
-TURNABLE_PIECES = [piece for piece in KNOWN_PIECES if piece.rotation_period is not None]
+TURNABLE_PIECES = [
+    piece for piece in PieceSet.this_lab().pieces if piece.rotation_period is not None
+]
 """
 The pieces a turn can be told on at all, so the ones a period means something for.
 """
@@ -135,17 +105,16 @@ off the line that drew it, which costs a share of every point of the outline.
 
 
 def _piece_id(piece: KnownPiece) -> str:
-    return str(piece.category)
+    return piece.category.__name__
 
 
 def _drawn(
-    outline: np.ndarray, center: Tuple[float, float] = (0.0, 0.0)
+    outline: Polygon2D, center: Tuple[float, float] = (0.0, 0.0)
 ) -> EdgeDistances:
     """
     The edges of a rectified view holding one outline drawn on a bare table.
 
-    :param outline: The outline to draw, as ``(n, 2)`` ``(x, y)`` points in metres about
-        its own centre.
+    :param outline: The outline to draw, in metres about its own centre.
     :param center: Where in the world frame to draw it, in metres.
     :return: The edges seen in that view.
     """
@@ -160,8 +129,8 @@ def _drawn(
     image[:, :] = DRAWN_TABLE_COLOR
     corners = np.stack(
         [
-            (outline[:, 0] + center[0] - region.minimum_x) / region.resolution,
-            (outline[:, 1] + center[1] - region.minimum_y) / region.resolution,
+            (outline.vertices[:, 0] + center[0] - region.minimum_x) / region.resolution,
+            (outline.vertices[:, 1] + center[1] - region.minimum_y) / region.resolution,
         ],
         axis=1,
     )
@@ -169,12 +138,12 @@ def _drawn(
     return EdgeDistances.of(Orthophoto(image=image, region=region, plane_height=0.0))
 
 
-@pytest.mark.parametrize("piece", KNOWN_PIECES, ids=_piece_id)
+@pytest.mark.parametrize("piece", PieceSet.this_lab().pieces, ids=_piece_id)
 def test_each_known_piece_is_recognised_from_its_own_outline(piece: KnownPiece):
     matcher = PieceMatcher()
     placed = math.radians(17)
 
-    match = matcher.match(_drawn(piece.turned_outline(placed)), (0.0, 0.0), piece.hue)
+    match = matcher.match(_drawn(piece.outline.turned(placed)), (0.0, 0.0), piece.hue)
 
     assert match.piece.category is piece.category
     assert match.outline_agreement > CLEAN_FIT_AGREEMENT
@@ -188,7 +157,7 @@ def test_a_piece_turned_by_its_own_period_looks_untouched(piece: KnownPiece):
     matcher = PieceMatcher()
 
     match = matcher.match(
-        _drawn(piece.turned_outline(piece.rotation_period)), (0.0, 0.0), piece.hue
+        _drawn(piece.outline.turned(piece.rotation_period)), (0.0, 0.0), piece.hue
     )
 
     assert match.piece.category is piece.category
@@ -196,16 +165,16 @@ def test_a_piece_turned_by_its_own_period_looks_untouched(piece: KnownPiece):
 
 
 def test_an_orientation_is_reported_as_the_smallest_turn_that_reaches_it():
-    cube = KNOWN_PIECE_BY_CATEGORY[MontessoriShapeCategory.CUBE]
+    cube = PieceSet.this_lab().piece_for(CubeShape)
     matcher = PieceMatcher()
     placed = cube.rotation_period - math.radians(10)
 
-    match = matcher.match(_drawn(cube.turned_outline(placed)), (0.0, 0.0), cube.hue)
+    match = matcher.match(_drawn(cube.outline.turned(placed)), (0.0, 0.0), cube.hue)
 
     assert match.yaw == pytest.approx(math.radians(-10), abs=matcher.angle_step)
 
 
-@pytest.mark.parametrize("piece", KNOWN_PIECES, ids=_piece_id)
+@pytest.mark.parametrize("piece", PieceSet.this_lab().pieces, ids=_piece_id)
 def test_a_piece_is_found_where_it_stands_and_not_where_it_was_looked_for(
     piece: KnownPiece,
 ):
@@ -223,39 +192,42 @@ def test_a_piece_is_found_where_it_stands_and_not_where_it_was_looked_for(
 
 
 def test_a_piece_is_never_recognised_as_one_of_the_other_colour():
-    cylinder = KNOWN_PIECE_BY_CATEGORY[MontessoriShapeCategory.CYLINDER]
+    cylinder = PieceSet.this_lab().piece_for(CylinderShape)
     matcher = PieceMatcher()
     edges = _drawn(cylinder.outline)
 
     recognised = matcher.match(edges, (0.0, 0.0), cylinder.hue)
-    seen_yellow = matcher.match(edges, (0.0, 0.0), YELLOW_HUE)
+    seen_yellow = matcher.match(edges, (0.0, 0.0), PieceHue.YELLOW)
 
-    assert recognised.piece.category is MontessoriShapeCategory.CYLINDER
-    assert seen_yellow is None or seen_yellow.piece.hue == YELLOW_HUE
+    assert recognised.piece.category is CylinderShape
+    assert seen_yellow is None or seen_yellow.piece.hue == PieceHue.YELLOW
 
 
 def test_a_colour_no_piece_wears_leaves_nothing_to_recognise():
-    cube = KNOWN_PIECE_BY_CATEGORY[MontessoriShapeCategory.CUBE]
-    unworn = (CYAN_HUE + YELLOW_HUE) // 2
+    cube = PieceSet.this_lab().piece_for(CubeShape)
+    unworn = (PieceHue.CYAN + PieceHue.YELLOW) // 2
 
     assert PieceMatcher().match(_drawn(cube.outline), (0.0, 0.0), unworn) is None
 
 
 def test_edges_no_known_piece_follows_are_refused():
-    reach = max(piece.radius for piece in KNOWN_PIECES) * 1.5
+    reach = max(piece.radius for piece in PieceSet.this_lab().pieces) * 1.5
     sprawl = np.array(
         [[-reach, -reach], [reach, -reach], [reach, reach], [-reach, reach]]
     )
 
-    assert PieceMatcher().match(_drawn(sprawl), (0.0, 0.0), CYAN_HUE) is None
+    assert (
+        PieceMatcher().match(_drawn(Polygon2D(sprawl)), (0.0, 0.0), PieceHue.CYAN)
+        is None
+    )
 
 
 def test_an_outline_with_no_colour_to_read_is_recognised_by_its_shape_alone():
-    triangle = KNOWN_PIECE_BY_CATEGORY[MontessoriShapeCategory.TRIANGULAR_PRISM]
+    triangle = PieceSet.this_lab().piece_for(TriangularPrismShape)
 
     match = PieceMatcher().match(_drawn(triangle.outline), (0.0, 0.0), None)
 
-    assert match.piece.category is MontessoriShapeCategory.TRIANGULAR_PRISM
+    assert match.piece.category is TriangularPrismShape
 
 
 def test_a_reflection_around_a_piece_does_not_move_where_it_is_recognised():
@@ -264,13 +236,13 @@ def test_a_reflection_around_a_piece_does_not_move_where_it_is_recognised():
     by colour takes in along with the piece; the edges the fit follows are the piece's
     own.
     """
-    cube = KNOWN_PIECE_BY_CATEGORY[MontessoriShapeCategory.CUBE]
+    cube = PieceSet.this_lab().piece_for(CubeShape)
     stands_at = (0.6, 0.2)
     edges = _drawn(cube.outline, stands_at)
 
     match = PieceMatcher().match(edges, (stands_at[0] - 0.015, stands_at[1]), cube.hue)
 
-    assert match.piece.category is MontessoriShapeCategory.CUBE
+    assert match.piece.category is CubeShape
     assert match.center == pytest.approx(stands_at, abs=0.002)
 
 

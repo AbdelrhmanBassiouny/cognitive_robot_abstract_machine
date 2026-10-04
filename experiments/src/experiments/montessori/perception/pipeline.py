@@ -48,7 +48,7 @@ from experiments.montessori.perception.orthophoto import (
     WorkspaceRegion,
 )
 from experiments.montessori.perception.piece_matcher import PieceMatcher
-from experiments.montessori.pieces import HUE_RANGE, HUE_TOLERANCE, PIECE_HUES
+from experiments.montessori.pieces import PieceSet
 from experiments.montessori.world import BOARD_SCALE
 from semantic_digital_twin.spatial_types.spatial_types import Pose
 from semantic_digital_twin.world_description.world_entity import (
@@ -116,6 +116,10 @@ class SurfaceColors:
     colourful enough for its hue to mean something, and the pale pieces in this set wash
     out towards white where they catch the light.
     """
+    piece_set: PieceSet = field(default_factory=PieceSet.this_lab)
+    """
+    The pieces whose colours :meth:`piece_mask` marks.
+    """
 
     def piece_mask(self, orthophoto: Orthophoto) -> np.ndarray:
         """
@@ -131,8 +135,7 @@ class SurfaceColors:
         """
         hue_saturation_value = cv2.cvtColor(orthophoto.image, cv2.COLOR_BGR2HSV)
         hue = hue_saturation_value[:, :, 0].astype(int)
-        apart = np.stack([np.abs(hue - worn) for worn in PIECE_HUES], axis=0)
-        wears_one = np.minimum(apart, HUE_RANGE - apart).min(axis=0) <= HUE_TOLERANCE
+        wears_one = self.piece_set.wears_a_piece_colour(hue)
         mask = (
             wears_one
             & (hue_saturation_value[:, :, 1] >= self.minimum_hue_saturation)
@@ -643,7 +646,7 @@ class LoosePieceDetector:
                         reference_frame=reference_frame,
                     ),
                     footprint=footprint,
-                    outline=match.piece.turned_outline(match.yaw)
+                    outline=match.piece.outline.turned(match.yaw).vertices
                     + np.asarray(match.center),
                     category=match.piece.category,
                     height=height,

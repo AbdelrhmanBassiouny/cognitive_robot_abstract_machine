@@ -15,12 +15,12 @@ from dataclasses import dataclass, field
 
 import cv2
 import numpy as np
-from typing_extensions import List, Sequence, Tuple
+from typing_extensions import List, Sequence, Tuple, Type
 
-from experiments.montessori.hole_geometry import HoleFootprint, detect_hole_footprints
+from experiments.montessori.hole_geometry import HoleFootprint, ShapeSortingBoardMesh
 from experiments.montessori.perception.camera import CameraIntrinsics, RgbdFrame
-from experiments.montessori.pieces import KNOWN_PIECE_BY_CATEGORY, KnownPiece
-from experiments.montessori.semantics import MontessoriShapeCategory
+from experiments.montessori.pieces import KnownPiece, PieceSet
+from experiments.montessori.semantics import MontessoriShape
 from semantic_digital_twin.spatial_types.spatial_types import (
     HomogeneousTransformationMatrix,
 )
@@ -91,9 +91,9 @@ class PlacedPiece:
     One loose piece standing on the table, at a position the test chose.
     """
 
-    category: MontessoriShapeCategory
+    category: Type[MontessoriShape]
     """
-    Which shape it is.
+    Which kind of piece it is.
     """
 
     x: float
@@ -117,7 +117,7 @@ class PlacedPiece:
         The piece of this kind the physical set contains, which fixes its outline, its
         height and its colour.
         """
-        return KNOWN_PIECE_BY_CATEGORY[self.category]
+        return PieceSet.this_lab().piece_for(self.category)
 
 
 @dataclass
@@ -211,7 +211,7 @@ class MontessoriSceneRenderer:
         The holes cut into the board this renderer draws, read from the board's own
         mesh.
         """
-        return detect_hole_footprints()
+        return ShapeSortingBoardMesh().hole_footprints
 
     def hole_center(self, footprint: HoleFootprint) -> Tuple[float, float]:
         """
@@ -219,7 +219,8 @@ class MontessoriSceneRenderer:
 
         :param footprint: The hole, positioned relative to the board's own centre.
         """
-        return (self.board_x + footprint.center.x, self.board_y + footprint.center.y)
+        center_x, center_y = footprint.center.to_np()
+        return (self.board_x + float(center_x), self.board_y + float(center_y))
 
     def render(self, pieces: Sequence[PlacedPiece]) -> RgbdFrame:
         """
@@ -262,8 +263,8 @@ class MontessoriSceneRenderer:
             self._fill(
                 canvas,
                 [
-                    (center[0] + point.x, center[1] + point.y)
-                    for point in footprint.boundary
+                    (center[0] + x, center[1] + y)
+                    for x, y in footprint.boundary.vertices
                 ],
                 self.lid_height,
                 HOLE_COLOR,
@@ -281,8 +282,10 @@ class MontessoriSceneRenderer:
         margin = 0.02
         return [
             (
-                footprint.center.x + sign_x * (footprint.size.x / 2 + margin),
-                footprint.center.y + sign_y * (footprint.size.y / 2 + margin),
+                float(footprint.center.x)
+                + sign_x * (footprint.boundary.bounding_box.depth / 2 + margin),
+                float(footprint.center.y)
+                + sign_y * (footprint.boundary.bounding_box.width / 2 + margin),
             )
             for footprint in footprints
             for sign_x, sign_y in ((-1, -1), (1, -1), (1, 1), (-1, 1))
@@ -361,8 +364,8 @@ class MontessoriSceneRenderer:
 
         :param piece: The piece to outline.
         """
-        turned = piece.known_piece.turned_outline(piece.yaw)
-        return [(piece.x + x, piece.y + y) for x, y in turned]
+        turned = piece.known_piece.outline.turned(piece.yaw)
+        return [(piece.x + x, piece.y + y) for x, y in turned.vertices]
 
     def _fill(
         self,

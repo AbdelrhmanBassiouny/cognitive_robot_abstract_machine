@@ -9,9 +9,15 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from typing_extensions import Dict, Tuple
+from typing_extensions import Dict, Tuple, Type
 
-from experiments.montessori.semantics import MontessoriShapeCategory
+from experiments.montessori.semantics import (
+    CubeShape,
+    CylinderShape,
+    MontessoriShape,
+    RectangularPrismShape,
+    TriangularPrismShape,
+)
 
 
 @dataclass(frozen=True)
@@ -20,18 +26,18 @@ class CaptureTruth:
     What one capture really holds, as a reader of the picture can see it.
     """
 
-    pieces_on_table: Tuple[MontessoriShapeCategory, ...]
+    pieces_on_table: Tuple[Type[MontessoriShape], ...]
     """
     Every loose piece resting on the bare table, one entry per physical piece.
     """
 
-    pieces_on_lid: Tuple[MontessoriShapeCategory, ...]
+    pieces_on_lid: Tuple[Type[MontessoriShape], ...]
     """
     Every piece resting on, or standing in a hole of, the board's lid.
     """
 
     @property
-    def pieces(self) -> Tuple[MontessoriShapeCategory, ...]:
+    def pieces(self) -> Tuple[Type[MontessoriShape], ...]:
         """
         Every piece in the scene, wherever it rests.
         """
@@ -41,54 +47,54 @@ class CaptureTruth:
 CAPTURE_TRUTHS: Dict[str, CaptureTruth] = {
     "objects_on_montessori": CaptureTruth(
         pieces_on_table=(
-            MontessoriShapeCategory.CYLINDER,
-            MontessoriShapeCategory.TRIANGULAR_PRISM,
+            CylinderShape,
+            TriangularPrismShape,
         ),
         pieces_on_lid=(
-            MontessoriShapeCategory.CUBE,
-            MontessoriShapeCategory.RECTANGULAR_PRISM,
+            CubeShape,
+            RectangularPrismShape,
         ),
     ),
     "stuck_cube_in_hole": CaptureTruth(
         pieces_on_table=(
-            MontessoriShapeCategory.CYLINDER,
-            MontessoriShapeCategory.RECTANGULAR_PRISM,
-            MontessoriShapeCategory.TRIANGULAR_PRISM,
+            CylinderShape,
+            RectangularPrismShape,
+            TriangularPrismShape,
         ),
-        pieces_on_lid=(MontessoriShapeCategory.CUBE,),
+        pieces_on_lid=(CubeShape,),
     ),
     "disoriented_cube_on_hole": CaptureTruth(
         pieces_on_table=(
-            MontessoriShapeCategory.CYLINDER,
-            MontessoriShapeCategory.RECTANGULAR_PRISM,
-            MontessoriShapeCategory.TRIANGULAR_PRISM,
+            CylinderShape,
+            RectangularPrismShape,
+            TriangularPrismShape,
         ),
-        pieces_on_lid=(MontessoriShapeCategory.CUBE,),
+        pieces_on_lid=(CubeShape,),
     ),
     "displaced_cube_from_hole": CaptureTruth(
         pieces_on_table=(
-            MontessoriShapeCategory.CYLINDER,
-            MontessoriShapeCategory.RECTANGULAR_PRISM,
-            MontessoriShapeCategory.TRIANGULAR_PRISM,
+            CylinderShape,
+            RectangularPrismShape,
+            TriangularPrismShape,
         ),
-        pieces_on_lid=(MontessoriShapeCategory.CUBE,),
+        pieces_on_lid=(CubeShape,),
     ),
     "non_inserted_objects": CaptureTruth(
         pieces_on_table=(),
         pieces_on_lid=(
-            MontessoriShapeCategory.CUBE,
-            MontessoriShapeCategory.CYLINDER,
-            MontessoriShapeCategory.RECTANGULAR_PRISM,
+            CubeShape,
+            CylinderShape,
+            RectangularPrismShape,
         ),
     ),
     "tracy_pickup_demo": CaptureTruth(
         pieces_on_table=(
-            MontessoriShapeCategory.RECTANGULAR_PRISM,
-            MontessoriShapeCategory.TRIANGULAR_PRISM,
+            RectangularPrismShape,
+            TriangularPrismShape,
         ),
         pieces_on_lid=(
-            MontessoriShapeCategory.CUBE,
-            MontessoriShapeCategory.CYLINDER,
+            CubeShape,
+            CylinderShape,
         ),
     ),
 }

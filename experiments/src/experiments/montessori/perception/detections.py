@@ -13,10 +13,10 @@ from dataclasses import dataclass, field
 
 import cv2
 import numpy as np
-from typing_extensions import List, Optional
+from typing_extensions import List, Optional, Type
 
 from experiments.montessori.perception.footprint import Footprint
-from experiments.montessori.semantics import MontessoriShapeCategory
+from experiments.montessori.semantics import MontessoriShape
 from semantic_digital_twin.spatial_types.spatial_types import Pose
 
 # %% detections
@@ -96,9 +96,9 @@ class MontessoriShapeDetection(MontessoriDetection):
     A loose Montessori piece lying on the table.
     """
 
-    category: MontessoriShapeCategory = field(kw_only=True)
+    category: Type[MontessoriShape] = field(kw_only=True)
     """
-    The geometric shape it was recognised as, matched against a hole's own category to
+    The kind of piece it was recognised as, matched against a hole's own category to
     decide which hole it belongs in.
     """
 
@@ -143,7 +143,7 @@ class MontessoriShapeDetection(MontessoriDetection):
 
     @property
     def label(self) -> str:
-        return str(self.category)
+        return self.category.__name__
 
 
 @dataclass(eq=False)
@@ -153,15 +153,15 @@ class ShapeSortingHoleDetection(MontessoriDetection):
     dropped through.
     """
 
-    category: MontessoriShapeCategory = field(kw_only=True)
+    category: Type[MontessoriShape] = field(kw_only=True)
     """
-    The geometric shape of the hole, matched against a piece's own category to decide
-    which pieces fit through it.
+    The kind of piece the hole is cut for, matched against a piece's own category to
+    decide which pieces fit through it.
     """
 
     @property
     def label(self) -> str:
-        return str(self.category)
+        return self.category.__name__
 
 
 @dataclass(eq=False)

@@ -8,12 +8,20 @@ import math
 
 import numpy as np
 import pytest
+from typing_extensions import Type
 
 from experiments.montessori.perception.footprint import (
     CrossSectionClassifier,
     Footprint,
 )
-from experiments.montessori.semantics import MontessoriShapeCategory
+from experiments.montessori.semantics import (
+    CubeShape,
+    CylinderShape,
+    DiskShape,
+    MontessoriShape,
+    RectangularPrismShape,
+    TriangularPrismShape,
+)
 
 # %% measuring an outline
 
@@ -64,15 +72,15 @@ def test_footprint_fill_ratio_separates_the_shape_families():
 @pytest.mark.parametrize(
     "fill_ratio, aspect_ratio, expected",
     [
-        (0.5, 1.15, MontessoriShapeCategory.TRIANGULAR_PRISM),
-        (math.pi / 4, 1.0, MontessoriShapeCategory.CYLINDER),
-        (1.0, 1.0, MontessoriShapeCategory.CUBE),
-        (1.0, 1.9, MontessoriShapeCategory.RECTANGULAR_PRISM),
-        (1.0, 9.6, MontessoriShapeCategory.DISK),
+        (0.5, 1.15, TriangularPrismShape),
+        (math.pi / 4, 1.0, CylinderShape),
+        (1.0, 1.0, CubeShape),
+        (1.0, 1.9, RectangularPrismShape),
+        (1.0, 9.6, DiskShape),
     ],
 )
 def test_classifier_names_each_shape_from_its_proportions(
-    fill_ratio: float, aspect_ratio: float, expected: MontessoriShapeCategory
+    fill_ratio: float, aspect_ratio: float, expected: Type[MontessoriShape]
 ):
     width = 0.02
     footprint = Footprint(

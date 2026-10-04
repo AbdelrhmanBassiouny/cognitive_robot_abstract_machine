@@ -18,7 +18,10 @@ from experiments.montessori.perception.detections import (
 )
 from experiments.montessori.perception.pipeline import MontessoriPerceptionPipeline
 from experiments.montessori.perception.scene_source import FixedScene, PerceivedObjects
-from experiments.montessori.semantics import MontessoriShapeCategory
+from experiments.montessori.semantics import (
+    CubeShape,
+    TriangularPrismShape,
+)
 from krrood.entity_query_language.factories import a, the
 
 from .dataset import montessori_scene_fixtures
@@ -65,7 +68,7 @@ def test_pipeline_recognises_the_shape_of_the_widest_holes(
     expected = {
         footprint.category
         for footprint in renderer.hole_footprints()
-        if min(footprint.size.x, footprint.size.y) > 0.02
+        if min(footprint.boundary.bounding_box.dimensions) > 0.02
     }
 
     assert expected <= {hole.category for hole in scene.holes}
@@ -84,15 +87,11 @@ def test_pipeline_finds_each_loose_piece_where_it_stands(
 def test_pipeline_cancels_the_parallax_that_stretches_a_piece(
     scene: MontessoriScene, renderer: MontessoriSceneRenderer, placed_pieces
 ):
-    [cube] = [
-        placed
-        for placed in placed_pieces
-        if placed.category is MontessoriShapeCategory.CUBE
-    ]
+    [cube] = [placed for placed in placed_pieces if placed.category is CubeShape]
     [true_footprint] = [
         footprint
         for footprint in renderer.hole_footprints()
-        if footprint.category is MontessoriShapeCategory.CUBE
+        if footprint.category is CubeShape
     ]
     nearest = min(
         scene.shapes,
@@ -103,7 +102,7 @@ def test_pipeline_cancels_the_parallax_that_stretches_a_piece(
     )
 
     assert nearest.footprint.length == pytest.approx(
-        max(true_footprint.size.x, true_footprint.size.y), abs=0.008
+        max(true_footprint.boundary.bounding_box.dimensions), abs=0.008
     )
 
 
@@ -153,27 +152,21 @@ def test_a_query_over_perceived_objects_runs_perception_to_answer_itself(
 def test_a_query_selects_a_hole_by_the_shape_it_takes(scene: MontessoriScene):
     perceived = PerceivedObjects(source=FixedScene(captured=scene))
 
-    holes = (
-        a(ShapeSortingHoleDetection)(category=MontessoriShapeCategory.CUBE)
-        .from_(perceived)
-        .tolist()
-    )
+    holes = a(ShapeSortingHoleDetection)(category=CubeShape).from_(perceived).tolist()
 
     assert holes
     for hole in holes:
-        assert hole.category is MontessoriShapeCategory.CUBE
+        assert hole.category is CubeShape
 
 
 def test_a_query_answers_a_pose_a_plan_can_reach_for(scene: MontessoriScene):
     perceived = PerceivedObjects(source=FixedScene(captured=scene))
     [expected] = [
-        hole
-        for hole in scene.holes
-        if hole.category is MontessoriShapeCategory.TRIANGULAR_PRISM
+        hole for hole in scene.holes if hole.category is TriangularPrismShape
     ][:1]
 
     hole = the(
-        a(ShapeSortingHoleDetection)(category=MontessoriShapeCategory.TRIANGULAR_PRISM)
+        a(ShapeSortingHoleDetection)(category=TriangularPrismShape)
         .from_(perceived)
         .expression
     ).tolist()[0]

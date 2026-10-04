@@ -17,18 +17,18 @@ import numpy as np
 import trimesh
 from typing_extensions import Dict, List, Optional, Tuple, Type
 
-from experiments.montessori.hole_geometry import (
-    HOLE_MARKER_THICKNESS,
-    HoleFootprint,
-    cut_board_mesh,
-    detect_hole_footprints,
-)
-from experiments.montessori.pieces import KNOWN_PIECE_BY_CATEGORY
+from experiments.montessori.hole_geometry import HoleFootprint, ShapeSortingBoardMesh
+from experiments.montessori.pieces import PieceSet
 from experiments.montessori.semantics import (
-    MONTESSORI_SHAPE_CLASSES,
-    MontessoriShapeCategory,
+    CubeShape,
+    CylinderShape,
+    DiskShape,
+    MontessoriShape,
+    RectangularPrismShape,
     ShapeSortingBoard,
     ShapeSortingHole,
+    SphereShape,
+    TriangularPrismShape,
 )
 from semantic_digital_twin.adapters.package_resolver import CompositePathResolver
 from semantic_digital_twin.adapters.urdf import URDFParser
@@ -156,15 +156,15 @@ DEFAULT_ROBOT_STANDOFF_DISTANCE = 0.6
 Default distance the spawned robot stands in front of the Montessori table's near edge.
 """
 
-_SHAPE_COLORS: Dict[MontessoriShapeCategory, Color] = {
-    MontessoriShapeCategory.DISK: Color.YELLOW(),
-    MontessoriShapeCategory.SPHERE: Color.MAGENTA(),
-} | {category: piece.color for category, piece in KNOWN_PIECE_BY_CATEGORY.items()}
+_SHAPE_COLORS: Dict[Type[MontessoriShape], Color] = {
+    DiskShape: Color.YELLOW(),
+    SphereShape: Color.MAGENTA(),
+} | {piece.category: piece.color for piece in PieceSet.this_lab().pieces}
 """
-The color used to render a loose shape and the hole it fits through, keyed by their
-shared :class:`~experiments.montessori.semantics.MontessoriShapeCategory`.
+The color used to render a loose shape and the hole it fits through, keyed by the
+:class:`~experiments.montessori.semantics.MontessoriShape` subclass they share.
 
-Every category the physical set contains is drawn in the colour measured off the real
+Every kind of piece the physical set contains is drawn in the colour measured off the real
 piece (see :class:`~experiments.montessori.pieces.KnownPiece`), so the simulated scene
 and the camera are looking at the same thing. The disk and the sphere, which this set
 has none of, keep a colour of their own.
@@ -178,7 +178,7 @@ class _HoleSpec:
     """
 
     key: str
-    category: MontessoriShapeCategory
+    category: Type[MontessoriShape]
     position: Point3
     shape: HoleFootprint
     """
@@ -188,17 +188,17 @@ class _HoleSpec:
 
 
 _HOLE_KEY_BY_CATEGORY = {
-    MontessoriShapeCategory.CUBE: "square_hole",
-    MontessoriShapeCategory.TRIANGULAR_PRISM: "triangle_hole",
-    MontessoriShapeCategory.RECTANGULAR_PRISM: "rectangular_hole",
-    MontessoriShapeCategory.DISK: "disk_hole",
+    CubeShape: "square_hole",
+    TriangularPrismShape: "triangle_hole",
+    RectangularPrismShape: "rectangular_hole",
+    DiskShape: "disk_hole",
 }
 """
-Name given to a hole of a given category, for the categories that occur at most once on
-the board.
+Name given to a hole cut for a given kind of piece, for the kinds that occur at most
+once on the board.
 
-The :attr:`~MontessoriShapeCategory.CYLINDER` category occurs twice and is numbered
-instead (``circular_hole_1``, ``circular_hole_2``).
+Holes for a :class:`~experiments.montessori.semantics.CylinderShape` occur twice and are
+numbered instead (``circular_hole_1``, ``circular_hole_2``).
 """
 
 
@@ -210,7 +210,7 @@ def _hole_spec_from_footprint(footprint: HoleFootprint, key: str) -> _HoleSpec:
     position = Point3(
         BOARD_POSITION.x + footprint.center.x,
         BOARD_POSITION.y + footprint.center.y,
-        BOARD_POSITION.z + BOARD_SCALE.z / 2 - HOLE_MARKER_THICKNESS / 2,
+        BOARD_POSITION.z + BOARD_SCALE.z / 2 - HoleFootprint.MARKER_THICKNESS / 2,
     )
     return _HoleSpec(key, footprint.category, position, footprint)
 
@@ -222,7 +222,7 @@ def _build_hole_specs(footprints: List[HoleFootprint]) -> List[_HoleSpec]:
     circular_hole_count = 0
     hole_specs = []
     for footprint in footprints:
-        if footprint.category is MontessoriShapeCategory.CYLINDER:
+        if footprint.category is CylinderShape:
             circular_hole_count += 1
             key = f"circular_hole_{circular_hole_count}"
         else:
@@ -231,26 +231,31 @@ def _build_hole_specs(footprints: List[HoleFootprint]) -> List[_HoleSpec]:
     return hole_specs
 
 
-_HOLE_FOOTPRINTS: List[HoleFootprint] = detect_hole_footprints()
+_BOARD_HOLES: ShapeSortingBoardMesh = ShapeSortingBoardMesh()
 """
-The board's hole shapes, detected once from its mesh
-(:func:`~experiments.montessori.hole_geometry.detect_hole_footprints`); the single
-source both :const:`_HOLES` and the board's cut mesh are built from.
+The board's mesh, whose holes are read once and are the single source both
+:const:`_HOLES` and the board's cut mesh are built from.
+"""
+
+_HOLE_FOOTPRINTS: List[HoleFootprint] = _BOARD_HOLES.hole_footprints
+"""
+The board's hole shapes, read off its mesh
+(:attr:`~experiments.montessori.hole_geometry.ShapeSortingBoardMesh.hole_footprints`).
 """
 
 _HOLES: List[_HoleSpec] = _build_hole_specs(_HOLE_FOOTPRINTS)
 """
-One hole per :class:`~experiments.montessori.semantics.MontessoriShapeCategory` that has
-a matching shape (two holes, both circular, accept the
-:attr:`~experiments.montessori.semantics.MontessoriShapeCategory.CYLINDER` shape); the
+One hole per :class:`~experiments.montessori.semantics.MontessoriShape` subclass that
+has a matching hole (two holes, both circular, accept a
+:class:`~experiments.montessori.semantics.CylinderShape`); the
 sphere has no matching hole, mirroring the real Montessori board this scene is modelled
 after.
 
-Detected from the board's mesh by
-:func:`~experiments.montessori.hole_geometry.detect_hole_footprints`.
+Read off the board's mesh by
+:attr:`~experiments.montessori.hole_geometry.ShapeSortingBoardMesh.hole_footprints`.
 """
 
-_BOARD_MESH: trimesh.Trimesh = cut_board_mesh(BOARD_SCALE, _HOLE_FOOTPRINTS)
+_BOARD_MESH: trimesh.Trimesh = _BOARD_HOLES.cut_blank(BOARD_SCALE)
 """
 The shape-sorting board's mesh, with all of :const:`_HOLE_FOOTPRINTS` cut fully through
 it.
@@ -279,13 +284,13 @@ def _footprint_bounds(footprint: HoleFootprint) -> Tuple[float, float, float, fl
     :param footprint: The hole to compute bounds for.
     :return: ``(min_x, max_x, min_y, max_y)``.
     """
-    boundary_x = [point.x for point in footprint.boundary]
-    boundary_y = [point.y for point in footprint.boundary]
+    box = footprint.boundary.bounding_box
+    center_x, center_y = footprint.center.to_np()
     return (
-        footprint.center.x + min(boundary_x),
-        footprint.center.x + max(boundary_x),
-        footprint.center.y + min(boundary_y),
-        footprint.center.y + max(boundary_y),
+        float(center_x + box.min_x),
+        float(center_x + box.max_x),
+        float(center_y + box.min_y),
+        float(center_y + box.max_y),
     )
 
 
@@ -398,7 +403,7 @@ def _drawer_collision_boxes(
     :func:`_tile_footprint_avoiding_holes`.
 
     Every hole cuts all the way through the board's full thickness (see
-    :func:`~experiments.montessori.hole_geometry.cut_board_mesh`), and a drawer can sit
+    :meth:`~experiments.montessori.hole_geometry.ShapeSortingBoardMesh.cut_blank`), and a drawer can sit
     anywhere within that thickness, directly behind a hole it has no relation to
     otherwise; without this, a dropped shape could pass the board's own collision
     cleanly and then be stopped by a drawer immediately behind it.
@@ -588,8 +593,8 @@ def _footprint_shape_mesh(
     hole's true footprint, centered on its own origin.
 
     Deriving the shape from the same :class:`HoleFootprint` its hole is cut from (rather
-    than independently hand-authoring a same-category shape, as done for a hole's
-    non-rectangular category, e.g. :attr:`MontessoriShapeCategory.TRIANGULAR_PRISM`)
+    than independently hand-authoring a shape of the same kind, as done for a hole cut
+    for a non-rectangular piece, e.g. a :class:`TriangularPrismShape`)
     keeps the two in the same local orientation by construction, since both are read
     from one detected outline instead of risking two independent authors picking
     different reference orientations for the same nominal shape.
@@ -611,7 +616,7 @@ def _hole_marker_shape(footprint: HoleFootprint, color: Color) -> Mesh:
     Build a thin :class:`Mesh` matching a hole's true cross-section shape, for its
     :class:`~experiments.montessori.semantics.ShapeSortingHole` region.
     """
-    marker = Mesh.from_trimesh(mesh=footprint.extrude(HOLE_MARKER_THICKNESS))
+    marker = Mesh.from_trimesh(mesh=footprint.marker())
     marker.color = color
     return marker
 
@@ -662,8 +667,8 @@ def _landing_region(
     """
     box = Box(
         scale=Scale(
-            footprint.size.x + 2 * LANDING_REGION_XY_MARGIN,
-            footprint.size.y + 2 * LANDING_REGION_XY_MARGIN,
+            footprint.boundary.bounding_box.depth + 2 * LANDING_REGION_XY_MARGIN,
+            footprint.boundary.bounding_box.width + 2 * LANDING_REGION_XY_MARGIN,
             height,
         )
     )
@@ -690,7 +695,7 @@ def _landing_region_position(
 
 def _shape_body(
     name: PrefixedName,
-    category: MontessoriShapeCategory,
+    category: Type[MontessoriShape],
     footprint: Optional[HoleFootprint],
 ) -> Body:
     """
@@ -711,24 +716,23 @@ def _shape_body(
         flat square tile.
     """
     color = _SHAPE_COLORS[category]
-    match category:
-        case MontessoriShapeCategory.CUBE:
-            # A cube's hole footprint is square, so giving it the same thickness its
-            # own footprint edge scales down to (rather than the fixed 0.03 every other
-            # footprint-derived category uses) makes all three of its edges equal --
-            # an actual cube, not a flat square tile.
-            cube_edge = footprint.size.x * SHAPE_FOOTPRINT_CLEARANCE_SCALE
-            shape = _footprint_shape_mesh(footprint, thickness=cube_edge, color=color)
-        case MontessoriShapeCategory.CYLINDER:
-            shape = _footprint_shape_mesh(footprint, thickness=0.03, color=color)
-        case MontessoriShapeCategory.DISK:
-            shape = Cylinder(width=0.044, height=0.004, color=color)
-        case MontessoriShapeCategory.SPHERE:
-            shape = Sphere(radius=0.02, color=color)
-        case MontessoriShapeCategory.RECTANGULAR_PRISM:
-            shape = _footprint_shape_mesh(footprint, thickness=0.03, color=color)
-        case MontessoriShapeCategory.TRIANGULAR_PRISM:
-            shape = _footprint_shape_mesh(footprint, thickness=0.02, color=color)
+    if category is CubeShape:
+        # A cube's hole footprint is square, so giving it the same thickness its
+        # own footprint edge scales down to (rather than the fixed 0.03 every other
+        # footprint-derived category uses) makes all three of its edges equal --
+        # an actual cube, not a flat square tile.
+        cube_edge = (
+            footprint.boundary.bounding_box.depth * SHAPE_FOOTPRINT_CLEARANCE_SCALE
+        )
+        shape = _footprint_shape_mesh(footprint, thickness=cube_edge, color=color)
+    elif category is DiskShape:
+        shape = Cylinder(width=0.044, height=0.004, color=color)
+    elif category is SphereShape:
+        shape = Sphere(radius=0.02, color=color)
+    elif category is TriangularPrismShape:
+        shape = _footprint_shape_mesh(footprint, thickness=0.02, color=color)
+    else:
+        shape = _footprint_shape_mesh(footprint, thickness=0.03, color=color)
     return _body_with_shape(name, shape)
 
 
@@ -1141,9 +1145,7 @@ class MontessoriWorld:
         return board
 
     def _build_shapes(self) -> None:
-        categories = [hole_spec.category for hole_spec in _HOLES] + [
-            MontessoriShapeCategory.SPHERE
-        ]
+        categories = [hole_spec.category for hole_spec in _HOLES] + [SphereShape]
         keys = [hole_spec.key for hole_spec in _HOLES] + ["sphere"]
         footprints = [hole_spec.shape for hole_spec in _HOLES] + [None]
 
@@ -1152,8 +1154,7 @@ class MontessoriWorld:
         ):
             shape_key = f"{key}_shape"
             body = _shape_body(_name(shape_key), category, footprint)
-            shape_class = MONTESSORI_SHAPE_CLASSES[category]
-            shape = shape_class(name=_name(shape_key), root=body)
+            shape = category(name=_name(shape_key), root=body)
             y = TABLE_SHAPE_ROW_START_Y + index * TABLE_SHAPE_ROW_SPACING
             spawn = self._spawn_free_body if self.shapes_are_movable else self._spawn
             spawn(shape, self._resting_position_on_table(body, y))
