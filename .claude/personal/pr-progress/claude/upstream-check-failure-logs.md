@@ -108,3 +108,11 @@ see it.
 
 - Merged #420's `f0b9850f1` (readable verdict values, no `spoken`) cleanly at `cb49ab119`.
   744 tests pass, 68 in the module suite. Description counts updated.
+
+## 2026-10-04 - review round 2
+
+- One owner thread ("dataclasses and enums, no global constants"), done in `478febffc`, replied
+  and resolved. The job-link pattern moved onto `FailedJob`, the line limit onto `FailureLog`,
+  and colour/timestamp stripping into a `LogFormatting` enum. 744 tests pass.
+- Left alone: #185's `UPSTREAM_REPOSITORY_SETTING`, and the test module's `RECORDED_JOB_IDENTIFIER`
+  (it follows that file's convention).
