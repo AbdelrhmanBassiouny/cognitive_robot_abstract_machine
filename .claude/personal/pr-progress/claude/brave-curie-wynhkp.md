@@ -41,6 +41,11 @@ Done:
   Message renders s._name_ -> ['Not', '>']; verbalize_expression gives sentences. Recommended:
   negation whole + verbalize in message; awaiting user decision (also AND first-blocker, drop
   get_true_statements?).
+- Round 7 (user decided: negation whole yes, verbalize no, first-blocker keep, keep
+  get_true_statements + test it): nothing inside a Not is a statement (Not descendants
+  excluded). 3 TDD tests (2 false-list, 1 true-list). Commit b6b7e16643. Replied on atomic
+  thread (left open: answered differently). Answered GuardCondition question in chat: concept
+  matches (leaf+polarity; _leaf_guards keeps Not(predicate) whole too), mechanism doesn't fit.
 
 Next / open (ask user):
 - coraplex ConditionNotSatisfied message is built at construction, i.e. at motion-chart build
