@@ -23,7 +23,7 @@ import subprocess
 import sys
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from enum import StrEnum
+from enum import Enum, StrEnum
 from pathlib import Path
 from typing import Any, TypeVar, ClassVar
 
@@ -990,30 +990,30 @@ class GraphQLResponse:
 # %% the log behind a failed check
 
 
-JOB_IDENTIFIER_GROUP = "identifier"
-"""
-What the job's number is called inside :data:`JOB_URL_PATTERN`.
-"""
+class LogFormatting(Enum):
+    """
+    What gets written around a log line's text that does not survive being quoted.
+    """
 
-JOB_URL_PATTERN = re.compile(rf"/actions/runs/\d+/job/(?P<{JOB_IDENTIFIER_GROUP}>\d+)")
-"""
-Where a check's own output link carries the job that produced it.
-"""
+    TERMINAL_ESCAPE = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
+    """
+    The colour a test runner writes around its own output.
+    """
 
-TERMINAL_ESCAPE_PATTERN = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
-"""
-The colour a test runner writes around its own output.
-"""
+    TIMESTAMP = re.compile(r"^\S+Z ")
+    """
+    The timestamp a runner writes in front of every line it records.
+    """
 
-LOG_TIMESTAMP_PATTERN = re.compile(r"^\S+Z ")
-"""
-The timestamp a runner writes in front of every line it records.
-"""
-
-EXCERPT_LINE_LIMIT = 40
-"""
-How many lines of one job's log the report is willing to quote.
-"""
+    @classmethod
+    def remove_from(cls, line: str) -> str:
+        """
+        :param line: One line of a job log.
+        :return: The line's text alone.
+        """
+        for formatting in cls:
+            line = formatting.value.sub("", line)
+        return line
 
 
 class LogMarker(StrEnum):
@@ -1044,6 +1044,18 @@ class FailedJob:
     The job's own number, which is what a log read asks for.
     """
 
+    IDENTIFIER_GROUP: ClassVar[str] = "identifier"
+    """
+    What the job's number is called inside :attr:`LINK_PATTERN`.
+    """
+
+    LINK_PATTERN: ClassVar[re.Pattern[str]] = re.compile(
+        rf"/actions/runs/\d+/job/(?P<{IDENTIFIER_GROUP}>\d+)"
+    )
+    """
+    Where a check's own output link carries the job that produced it.
+    """
+
     @classmethod
     def behind(cls, result: CheckResult) -> FailedJob | None:
         """
@@ -1055,10 +1067,10 @@ class FailedJob:
         :param result: The check to locate.
         :return: The job, or ``None`` where the link names none.
         """
-        match = JOB_URL_PATTERN.search(result.url)
+        match = cls.LINK_PATTERN.search(result.url)
         if match is None:
             return None
-        return cls(int(match.group(JOB_IDENTIFIER_GROUP)))
+        return cls(int(match.group(cls.IDENTIFIER_GROUP)))
 
 
 @dataclass(frozen=True)
@@ -1077,6 +1089,11 @@ class FailureLog:
     The excerpt, oldest line first, with the runner's timestamps taken off.
     """
 
+    LINE_LIMIT: ClassVar[int] = 40
+    """
+    How many lines of one job's log the report is willing to quote.
+    """
+
     @classmethod
     def excerpt(cls, check_name: str, log: str) -> FailureLog:
         """
@@ -1091,18 +1108,15 @@ class FailureLog:
         :param log: The job log, exactly as the runner recorded it.
         :return: The excerpt.
         """
-        lines = [
-            LOG_TIMESTAMP_PATTERN.sub("", TERMINAL_ESCAPE_PATTERN.sub("", line))
-            for line in log.splitlines()
-        ]
+        lines = [LogFormatting.remove_from(line) for line in log.splitlines()]
         summary = cls._from_marker(lines, LogMarker.PYTEST_SUMMARY)
         if summary:
             ended = cls._until_marker(summary, LogMarker.ERROR_ANNOTATION)
-            return cls(check_name, ended[:EXCERPT_LINE_LIMIT])
+            return cls(check_name, ended[: cls.LINE_LIMIT])
         annotations = [line for line in lines if LogMarker.ERROR_ANNOTATION in line]
         if annotations:
-            return cls(check_name, annotations[:EXCERPT_LINE_LIMIT])
-        return cls(check_name, lines[-EXCERPT_LINE_LIMIT:])
+            return cls(check_name, annotations[: cls.LINE_LIMIT])
+        return cls(check_name, lines[-cls.LINE_LIMIT :])
 
     @staticmethod
     def _from_marker(lines: list[str], marker: LogMarker) -> list[str]:

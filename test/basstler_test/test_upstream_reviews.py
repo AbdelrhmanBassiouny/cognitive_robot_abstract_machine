@@ -14,15 +14,14 @@ import pytest
 
 from basstler.repository import Repository
 from basstler.upstream_reviews import (
-    EXCERPT_LINE_LIMIT,
     CheckOutcome,
     CheckResult,
     CheckStatus,
     FailedJob,
     FailureLog,
     FailureLogReader,
+    LogFormatting,
     LogMarker,
-    TERMINAL_ESCAPE_PATTERN,
     GitHubCommandFailed,
     GitHubCommandLineClient,
     GitHubEndpoint,
@@ -823,7 +822,7 @@ def test_an_excerpt_drops_the_colour_a_test_runner_wrote():
         str(RecordedCheck.FAILING), RecordedJobLog.FAILED_JOB.load()
     )
 
-    assert TERMINAL_ESCAPE_PATTERN.search("\n".join(excerpt.lines)) is None
+    assert LogFormatting.TERMINAL_ESCAPE.value.search("\n".join(excerpt.lines)) is None
 
 
 def test_a_job_that_died_before_pytest_is_excerpted_from_its_error_annotations():
@@ -835,19 +834,19 @@ def test_a_job_that_died_before_pytest_is_excerpted_from_its_error_annotations()
 
 
 def test_a_log_with_neither_marker_falls_back_to_its_last_lines():
-    log = "\n".join(f"line {number}" for number in range(EXCERPT_LINE_LIMIT + 10))
+    log = "\n".join(f"line {number}" for number in range(FailureLog.LINE_LIMIT + 10))
 
     excerpt = FailureLog.excerpt(str(RecordedCheck.FAILING), log)
 
-    assert excerpt.lines[-1] == f"line {EXCERPT_LINE_LIMIT + 9}"
+    assert excerpt.lines[-1] == f"line {FailureLog.LINE_LIMIT + 9}"
 
 
 def test_an_excerpt_is_capped_at_the_line_limit():
-    log = "\n".join(f"line {number}" for number in range(EXCERPT_LINE_LIMIT + 10))
+    log = "\n".join(f"line {number}" for number in range(FailureLog.LINE_LIMIT + 10))
 
     excerpt = FailureLog.excerpt(str(RecordedCheck.FAILING), log)
 
-    assert len(excerpt.lines) == EXCERPT_LINE_LIMIT
+    assert len(excerpt.lines) == FailureLog.LINE_LIMIT
 
 
 def test_an_excerpt_names_the_check_its_job_reported_for():
