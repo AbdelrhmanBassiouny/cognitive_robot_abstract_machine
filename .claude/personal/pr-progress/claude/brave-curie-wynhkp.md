@@ -29,6 +29,11 @@ Done:
   test_comparisons_a_statement_takes_as_values_are_not_statements_of_it. Commit 9d8667425c.
   Resolved the "participant takes context not condition" thread; left open "isn't reached
   enough?" (answered no with the chain dump).
+- Round 6 (2 threads): is_statement inlined into evaluate_statements_of (context/chain/condition
+  always from one evaluation) - commit bea1af44bf, thread resolved. Open, awaiting user:
+  rename to is_atomic_condition_of? Not is kept (and its operand reported too), so "atomic" is
+  wrong today. Options offered: skip Not (truly atomic; failed not_(a) reports nothing) or keep
+  negation whole and drop Not's operand (recommended; "literals" but Literal clashes).
 
 Next / open (ask user):
 - coraplex ConditionNotSatisfied message is built at construction, i.e. at motion-chart build
