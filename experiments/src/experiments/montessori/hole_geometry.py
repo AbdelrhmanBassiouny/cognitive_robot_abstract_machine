@@ -6,291 +6,207 @@ constants.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from functools import cached_property
 from pathlib import Path
 
 import numpy as np
 import trimesh
-from typing_extensions import List, Tuple
+from typing_extensions import ClassVar, List, Type
 
-from experiments.montessori.semantics import MontessoriShapeCategory
-from semantic_digital_twin.world_description.geometry import Scale
-
-BOARD_MESH_PATH = Path(__file__).parent / "resources" / "board.stl"
-"""
-Path to the shape-sorting board's mesh, cut with its six real shape holes.
-"""
-
-HOLE_MARKER_THICKNESS = 0.005
-"""
-Thickness (along the board's z-axis) of the thin box used to mark each hole's footprint;
-the marker's top face sits flush with the board's top surface.
-"""
-
-_CIRCLE_VERTEX_COUNT_THRESHOLD = 20
-"""
-Circular hole boundaries are tessellated into far more polygon vertices than the
-straight-edged holes (~65 vs.
-
-9-13 in the source mesh); above this count a loop is classified as circular.
-"""
-
-_TRIANGLE_FILL_RATIO_THRESHOLD = 0.7
-"""
-A polygon's area divided by its bounding box's area.
-
-A triangle inscribed in its bounding box fills at most half of it; the box-shaped holes
-fill all of it.
-"""
-
-_DISK_ASPECT_RATIO_THRESHOLD = 5.0
-"""
-Ratio of a polygon's bounding box's longer side to its shorter side.
-
-The disk hole is a narrow slot (~10:1); the square and rectangular holes are much closer
-to square.
-"""
-
-_RECTANGLE_ASPECT_RATIO_THRESHOLD = 1.3
-"""
-Bounding-box aspect ratio above which a box-shaped hole is classified as rectangular
-rather than square.
-"""
+from experiments.montessori.semantics import (
+    CubeShape,
+    CylinderShape,
+    DiskShape,
+    MontessoriShape,
+    RectangularPrismShape,
+    TriangularPrismShape,
+)
+from semantic_digital_twin.spatial_types.spatial_types import Point2
+from semantic_digital_twin.world_description.geometry import Polygon2D, Scale
 
 
 @dataclass(frozen=True)
-class PlanarPoint:
+class HoleShapeClassifier:
     """
-    A point on the board mesh's local ``x-y`` plane.
-    """
-
-    x: float
-    """
-    Position along the board mesh's local x-axis, in metres.
+    Names the kind of piece a hole is cut for from the outline of its cross-section.
     """
 
-    y: float
+    circle_vertex_count: int = 20
     """
-    Position along the board mesh's local y-axis, in metres.
+    Circular hole boundaries are tessellated into far more polygon vertices than the
+    straight-edged holes (~65 vs.
+
+    9-13 in the source mesh); above this count an outline is classified as circular.
     """
 
+    triangle_fill_ratio: float = 0.7
+    """
+    An outline's area divided by its bounding box's area, below which it is classified
+    as triangular.
 
-@dataclass(frozen=True)
-class PlanarSize:
-    """
-    How far something reaches along the board mesh's local ``x`` and ``y`` axes.
-    """
-
-    x: float
-    """
-    Reach along the board mesh's local x-axis, in metres.
+    A triangle inscribed in its bounding box fills at most half of it; the box-shaped
+    holes fill all of it.
     """
 
-    y: float
+    disk_aspect_ratio: float = 5.0
     """
-    Reach along the board mesh's local y-axis, in metres.
+    Ratio of an outline's bounding box's longer side to its shorter side, above which it
+    is classified as the disk's slot.
+
+    The disk hole is a narrow slot (~10:1); the square and rectangular holes are much
+    closer to square.
     """
 
-
-@dataclass(frozen=True)
-class PolygonMeasurement:
+    rectangle_aspect_ratio: float = 1.3
     """
-    How much of the plane a simple polygon covers, and where that area balances.
-    """
-
-    area: float
-    """
-    The area the polygon encloses, in square metres, however its vertices are wound.
+    Bounding-box aspect ratio above which a box-shaped hole is classified as rectangular
+    rather than square.
     """
 
-    centroid: PlanarPoint
-    """
-    The point the enclosed area is balanced about, which for an asymmetric outline is
-    not the middle of its bounding box.
-    """
-
-    @classmethod
-    def of(cls, points_xy: np.ndarray) -> PolygonMeasurement:
+    def classify(self, outline: Polygon2D) -> Type[MontessoriShape]:
         """
-        Measure a simple polygon with the shoelace formula.
+        The kind of piece a hole of this cross-section is cut for.
 
-        :param points_xy: Ordered boundary vertices, shape ``(n, 2)``.
+        :param outline: The hole's cross-section.
         """
-        x, y = points_xy[:, 0], points_xy[:, 1]
-        x_next, y_next = np.roll(x, -1), np.roll(y, -1)
-        cross = x * y_next - x_next * y
-        signed_area = cross.sum() / 2.0
-        return cls(
-            area=abs(signed_area),
-            centroid=PlanarPoint(
-                float(((x + x_next) * cross).sum() / (6 * signed_area)),
-                float(((y + y_next) * cross).sum() / (6 * signed_area)),
-            ),
-        )
+        bounding_box = outline.bounding_box
+        aspect_ratio = max(bounding_box.dimensions) / min(bounding_box.dimensions)
+        if len(outline.vertices) > self.circle_vertex_count:
+            return CylinderShape
+        if outline.area / bounding_box.area < self.triangle_fill_ratio:
+            return TriangularPrismShape
+        if aspect_ratio > self.disk_aspect_ratio:
+            return DiskShape
+        if aspect_ratio > self.rectangle_aspect_ratio:
+            return RectangularPrismShape
+        return CubeShape
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, eq=False)
 class HoleFootprint:
     """
     A single hole's position and 2D footprint, detected from the board mesh.
     """
 
-    category: MontessoriShapeCategory
+    category: Type[MontessoriShape]
     """
-    The geometric shape of the hole.
-    """
-
-    center: PlanarPoint
-    """
-    The hole's center, in the board mesh's local ``(x, y)`` frame.
+    The kind of piece the hole is cut for.
     """
 
-    size: PlanarSize
+    center: Point2
     """
-    The hole's axis-aligned bounding box size, along the board mesh's local ``(x, y)``
-    axes.
+    The hole's area centroid, in the board mesh's local ``(x, y)`` frame.
     """
 
-    boundary: Tuple[PlanarPoint, ...]
+    boundary: Polygon2D
     """
-    The hole's true cross-section outline: an ordered, closed polygon of ``(x, y)``
-    points relative to :attr:`center` (as opposed to its bounding box).
+    The hole's true cross-section outline, relative to :attr:`center` (as opposed to its
+    bounding box).
+    """
+
+    MARKER_THICKNESS: ClassVar[float] = 0.005
+    """
+    Thickness (along the board's z-axis) of the thin solid that marks a hole's
+    footprint; the marker's top face sits flush with the board's top surface.
     """
 
     def extrude(self, thickness: float) -> trimesh.Trimesh:
         """
-        Extrude this hole's true boundary polygon into a solid of the given thickness,
-        centered on its own local origin (i.e. on :attr:`center`, once translated
-        there).
+        Extrude this hole's true boundary into a solid of the given thickness, centered
+        on its own local origin (i.e. on :attr:`center`, once translated there).
 
         :param thickness: Extrusion depth along z.
         """
-        return _extrude_polygon(
-            np.asarray([(point.x, point.y) for point in self.boundary]), thickness
+        return self.boundary.extrude(thickness)
+
+    def marker(self) -> trimesh.Trimesh:
+        """
+        The thin solid, :attr:`MARKER_THICKNESS` thick, that marks this hole's
+        footprint.
+        """
+        return self.extrude(self.MARKER_THICKNESS)
+
+    def cut_through(self, solid: trimesh.Trimesh) -> trimesh.Trimesh:
+        """
+        Cut this hole all the way through a solid, in its true cross-section shape
+        rather than its bounding box.
+
+        :param solid: The solid to cut, in the board mesh's local frame.
+        :return: The solid with this hole cut clean through it.
+        """
+        cutter = self.extrude(float(solid.extents[2]) * 2)
+        cutter.apply_translation([*self.center.to_np(), 0.0])
+        return solid.difference(cutter, engine=None)
+
+
+@dataclass(frozen=True)
+class ShapeSortingBoardMesh:
+    """
+    The shape-sorting board's mesh, cut with its six real shape holes, and the holes
+    read off it.
+    """
+
+    path: Path = Path(__file__).parent / "resources" / "board.stl"
+    """
+    Path to the mesh file.
+    """
+
+    hole_classifier: HoleShapeClassifier = field(default_factory=HoleShapeClassifier)
+    """
+    Names the kind of piece each hole read off the mesh is cut for.
+    """
+
+    @cached_property
+    def hole_footprints(self) -> List[HoleFootprint]:
+        """
+        The board's holes, found by slicing its mesh horizontally through the lid and
+        reading each interior outline of the cut.
+
+        :return: One :class:`HoleFootprint` per hole cut into the board, ordered by
+            ascending y-position.
+        """
+        lid = self._perforated_body(trimesh.load(self.path))
+        mid_z = (lid.bounds[0][2] + lid.bounds[1][2]) / 2
+        section = lid.section(
+            plane_origin=[0.0, 0.0, mid_z], plane_normal=[0.0, 0.0, 1.0]
         )
-
-
-def _extrude_polygon(boundary: np.ndarray, thickness: float) -> trimesh.Trimesh:
-    """
-    Extrude a closed 2D polygon that is star-shaped with respect to its own centroid
-    (true of every hole shape on this board) into a solid, via fan triangulation from
-    that centroid.
-
-    :param boundary: Ordered polygon vertices, shape ``(n, 2)``; a closing vertex that
-        duplicates the first is dropped if present.
-    :param thickness: Extrusion depth along z.
-    """
-    if np.allclose(boundary[0], boundary[-1]):
-        boundary = boundary[:-1]
-    centroid = boundary.mean(axis=0)
-    vertices = np.vstack([boundary, centroid])
-    center_index = len(boundary)
-    faces = np.array(
-        [[i, (i + 1) % len(boundary), center_index] for i in range(len(boundary))]
-    )
-    mesh = trimesh.creation.extrude_triangulation(
-        vertices=vertices, faces=faces, height=thickness
-    )
-    mesh.apply_translation([0.0, 0.0, -thickness / 2])
-    return mesh
-
-
-def cut_board_mesh(
-    board_scale: Scale, footprints: List[HoleFootprint]
-) -> trimesh.Trimesh:
-    """
-    Cut every hole in ``footprints`` all the way through a solid board blank, using each
-    hole's true cross-section shape rather than its bounding box.
-
-    :param board_scale: Size of the uncut board blank.
-    :param footprints: The holes to cut, as detected by :func:`detect_hole_footprints`.
-    :return: The board blank with all holes cut clean through it.
-    """
-    board = trimesh.creation.box(
-        extents=(board_scale.x, board_scale.y, board_scale.z)
-    )
-    cut_depth = board_scale.z * 2
-    for footprint in footprints:
-        cutter = footprint.extrude(cut_depth)
-        cutter.apply_translation([footprint.center.x, footprint.center.y, 0.0])
-        board = board.difference(cutter, engine=None)
-    return board
-
-
-def _classify_hole_shape(
-    vertex_count: int, fill_ratio: float, aspect_ratio: float
-) -> MontessoriShapeCategory:
-    """
-    Classify a hole's :class:`MontessoriShapeCategory` from its cross-section polygon's
-    signature.
-    """
-    if vertex_count > _CIRCLE_VERTEX_COUNT_THRESHOLD:
-        return MontessoriShapeCategory.CYLINDER
-    if fill_ratio < _TRIANGLE_FILL_RATIO_THRESHOLD:
-        return MontessoriShapeCategory.TRIANGULAR_PRISM
-    if aspect_ratio > _DISK_ASPECT_RATIO_THRESHOLD:
-        return MontessoriShapeCategory.DISK
-    if aspect_ratio > _RECTANGLE_ASPECT_RATIO_THRESHOLD:
-        return MontessoriShapeCategory.RECTANGULAR_PRISM
-    return MontessoriShapeCategory.CUBE
-
-
-def _find_perforated_body(mesh: trimesh.Trimesh) -> trimesh.Trimesh:
-    """
-    Find the connected part of ``mesh`` that has through-holes cut into it (the board's
-    lid), identified as the watertight part with negative genus.
-
-    :raises ValueError: If no such part exists.
-    """
-    for body in mesh.split(only_watertight=False):
-        if body.is_watertight and body.euler_number < 2:
-            return body
-    raise ValueError("No part of the board mesh has holes cut into it.")
-
-
-def detect_hole_footprints() -> List[HoleFootprint]:
-    """
-    Detect the shape-sorting board's holes by slicing its mesh horizontally through the
-    lid and analyzing each interior boundary loop's polygon.
-
-    :return: One :class:`HoleFootprint` per hole cut into the board, ordered by
-        ascending y-position.
-    """
-    mesh = trimesh.load(BOARD_MESH_PATH)
-    lid = _find_perforated_body(mesh)
-
-    mid_z = (lid.bounds[0][2] + lid.bounds[1][2]) / 2
-    section = lid.section(plane_origin=[0.0, 0.0, mid_z], plane_normal=[0.0, 0.0, 1.0])
-    loops = [np.asarray(loop)[:, :2] for loop in section.discrete]
-    outer_boundary_index = max(
-        range(len(loops)),
-        key=lambda index: np.prod(loops[index].max(axis=0) - loops[index].min(axis=0)),
-    )
-
-    footprints = []
-    for index, loop in enumerate(loops):
-        if index == outer_boundary_index:
-            continue
-        minimum, maximum = loop.min(axis=0), loop.max(axis=0)
-        size_x, size_y = maximum - minimum
-        measurement = PolygonMeasurement.of(loop)
-        aspect_ratio = max(size_x, size_y) / min(size_x, size_y)
-        fill_ratio = measurement.area / (size_x * size_y)
-        category = _classify_hole_shape(len(loop), fill_ratio, aspect_ratio)
-        boundary = loop[:-1] if np.allclose(loop[0], loop[-1]) else loop
-        footprints.append(
+        outlines = [Polygon2D(np.asarray(loop)[:, :2]) for loop in section.discrete]
+        outer_boundary = max(outlines, key=lambda outline: outline.bounding_box.area)
+        footprints = [
             HoleFootprint(
-                category=category,
-                center=measurement.centroid,
-                size=PlanarSize(float(size_x), float(size_y)),
-                boundary=tuple(
-                    PlanarPoint(
-                        float(x - measurement.centroid.x),
-                        float(y - measurement.centroid.y),
-                    )
-                    for x, y in boundary
-                ),
+                category=self.hole_classifier.classify(outline),
+                center=outline.centroid,
+                boundary=outline.centered(),
             )
-        )
+            for outline in outlines
+            if outline is not outer_boundary
+        ]
+        return sorted(footprints, key=lambda footprint: float(footprint.center.y))
 
-    return sorted(footprints, key=lambda footprint: footprint.center.y)
+    def cut_blank(self, blank_scale: Scale) -> trimesh.Trimesh:
+        """
+        A solid board blank with every one of :attr:`hole_footprints` cut all the way
+        through it.
+
+        :param blank_scale: Size of the uncut board blank.
+        """
+        board = trimesh.creation.box(
+            extents=(blank_scale.x, blank_scale.y, blank_scale.z)
+        )
+        for footprint in self.hole_footprints:
+            board = footprint.cut_through(board)
+        return board
+
+    @staticmethod
+    def _perforated_body(mesh: trimesh.Trimesh) -> trimesh.Trimesh:
+        """
+        Find the connected part of ``mesh`` that has through-holes cut into it (the
+        board's lid), identified as the watertight part with negative genus.
+
+        :raises ValueError: If no such part exists.
+        """
+        for body in mesh.split(only_watertight=False):
+            if body.is_watertight and body.euler_number < 2:
+                return body
+        raise ValueError("No part of the board mesh has holes cut into it.")

@@ -8,7 +8,6 @@ from experiments.montessori.semantics import (
     CylinderShape,
     DiskShape,
     MontessoriShape,
-    MontessoriShapeCategory,
     RectangularPrismShape,
     ShapeSortingBoard,
     ShapeSortingHole,
@@ -35,18 +34,18 @@ def world():
 
 
 @pytest.mark.parametrize(
-    "shape_class,category",
+    "shape_class",
     [
-        (CubeShape, MontessoriShapeCategory.CUBE),
-        (CylinderShape, MontessoriShapeCategory.CYLINDER),
-        (DiskShape, MontessoriShapeCategory.DISK),
-        (SphereShape, MontessoriShapeCategory.SPHERE),
-        (TriangularPrismShape, MontessoriShapeCategory.TRIANGULAR_PRISM),
-        (RectangularPrismShape, MontessoriShapeCategory.RECTANGULAR_PRISM),
+        CubeShape,
+        CylinderShape,
+        DiskShape,
+        SphereShape,
+        TriangularPrismShape,
+        RectangularPrismShape,
     ],
 )
-def test_montessori_shape_subclass_reports_its_shape_category(
-    world, shape_class, category
+def test_each_montessori_shape_subclass_is_found_as_a_montessori_shape(
+    world, shape_class
 ):
     body = Body(name=PrefixedName("piece"))
     with world.modify_world():
@@ -56,7 +55,6 @@ def test_montessori_shape_subclass_reports_its_shape_category(
         world.add_semantic_annotation(shape)
 
     assert world.get_semantic_annotations_by_type(MontessoriShape) == [shape]
-    assert shape.shape_category == category
 
 
 def test_montessori_shape_computes_its_insertion_pose_relative_to_the_hole(world):
@@ -70,7 +68,7 @@ def test_montessori_shape_computes_its_insertion_pose_relative_to_the_hole(world
             world=world,
             scale=Scale(0.03, 0.03, 0.001),
         )
-        hole.shape_category = MontessoriShapeCategory.CUBE
+        hole.shape_category = CubeShape
 
     pose = shape.insertion_pose_relative_to_hole(
         hole, horizontal_offset=Point3(0.01, -0.02, 0.0), hover_height=0.03
@@ -85,9 +83,9 @@ def test_montessori_shape_computes_its_insertion_pose_relative_to_the_hole(world
 
 def test_disk_shape_tips_onto_its_edge_to_pass_through_its_slot(world):
     """
-    A disk's matching hole is a narrow slot, not a coin-shaped opening, so unlike
-    every other shape it must be rotated onto its edge to fit through (see
-    experiments.montessori.hole_geometry._classify_hole_shape).
+    A disk's matching hole is a narrow slot, not a coin-shaped opening, so unlike every
+    other shape it must be rotated onto its edge to fit through (see
+    experiments.montessori.hole_geometry.HoleShapeClassifier).
     """
     body = Body(name=PrefixedName("piece"))
     with world.modify_world():
@@ -99,7 +97,7 @@ def test_disk_shape_tips_onto_its_edge_to_pass_through_its_slot(world):
             world=world,
             scale=Scale(0.005, 0.048, 0.001),
         )
-        hole.shape_category = MontessoriShapeCategory.DISK
+        hole.shape_category = DiskShape
 
     pose = shape.insertion_pose_relative_to_hole(
         hole, horizontal_offset=Point3(0.0, 0.0, 0.0), hover_height=0.03
@@ -128,9 +126,9 @@ def _shape_with_cross_section(
 
 def test_fits_through_rejects_a_shape_too_large_for_an_otherwise_matching_hole(world):
     """
-    The board has two circular holes of different sizes, both categorized
-    MontessoriShapeCategory.CYLINDER; matching category alone is not enough to tell
-    them apart, so fits_through must also check size.
+    The board has two circular holes of different sizes, both cut for a CylinderShape;
+    the class alone is not enough to tell them apart, so fits_through must also check
+    size.
     """
     with world.modify_world():
         small_hole = ShapeSortingHole.create_with_new_region_in_world(
@@ -138,14 +136,14 @@ def test_fits_through_rejects_a_shape_too_large_for_an_otherwise_matching_hole(w
             world=world,
             scale=Scale(0.032, 0.032, 0.001),
         )
-        small_hole.shape_category = MontessoriShapeCategory.CYLINDER
+        small_hole.shape_category = CylinderShape
 
         large_hole = ShapeSortingHole.create_with_new_region_in_world(
             name=PrefixedName("large_circular_hole"),
             world=world,
             scale=Scale(0.04, 0.04, 0.001),
         )
-        large_hole.shape_category = MontessoriShapeCategory.CYLINDER
+        large_hole.shape_category = CylinderShape
 
         small_shape = _shape_with_cross_section(
             world, "small_cylinder", CylinderShape, 0.0272
@@ -170,13 +168,13 @@ def test_hole_for_returns_the_smallest_hole_a_shape_actually_fits_through(world)
             world=world,
             scale=Scale(0.032, 0.032, 0.001),
         )
-        small_hole.shape_category = MontessoriShapeCategory.CYLINDER
+        small_hole.shape_category = CylinderShape
         large_hole = ShapeSortingHole.create_with_new_region_in_world(
             name=PrefixedName("large_circular_hole"),
             world=world,
             scale=Scale(0.04, 0.04, 0.001),
         )
-        large_hole.shape_category = MontessoriShapeCategory.CYLINDER
+        large_hole.shape_category = CylinderShape
         board.add(small_hole)
         board.add(large_hole)
 
@@ -201,7 +199,7 @@ def test_hole_for_raises_when_the_board_has_no_hole_of_the_shapes_category(world
             world=world,
             scale=Scale(0.04, 0.04, 0.001),
         )
-        hole.shape_category = MontessoriShapeCategory.CYLINDER
+        hole.shape_category = CylinderShape
         board.add(hole)
 
         cube = _shape_with_cross_section(world, "cube", CubeShape, 0.03)
@@ -217,9 +215,9 @@ def test_shape_sorting_hole_stores_its_shape_category(world):
             world=world,
             scale=Scale(0.03, 0.03, 0.001),
         )
-        hole.shape_category = MontessoriShapeCategory.CUBE
+        hole.shape_category = CubeShape
 
-    assert hole.shape_category == MontessoriShapeCategory.CUBE
+    assert hole.shape_category is CubeShape
 
 
 def test_shape_sorting_board_collects_drawers_and_shape_holes(world):
@@ -235,7 +233,7 @@ def test_shape_sorting_board_collects_drawers_and_shape_holes(world):
             world=world,
             scale=Scale(0.03, 0.03, 0.001),
         )
-        hole.shape_category = MontessoriShapeCategory.TRIANGULAR_PRISM
+        hole.shape_category = TriangularPrismShape
         board.add(drawer)
         board.add(hole)
 

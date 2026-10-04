@@ -18,8 +18,8 @@ if TYPE_CHECKING:
 class NoMatchingHoleError(DataclassException):
     """
     Raised when a :class:`~experiments.montessori.semantics.ShapeSortingBoard` has no
-    :class:`~experiments.montessori.semantics.ShapeSortingHole` whose category matches a
-    given :class:`~experiments.montessori.semantics.MontessoriShape`.
+    :class:`~experiments.montessori.semantics.ShapeSortingHole` that a given
+    :class:`~experiments.montessori.semantics.MontessoriShape` fits through.
     """
 
     montessori_shape: MontessoriShape
@@ -34,8 +34,8 @@ class NoMatchingHoleError(DataclassException):
 
     def error_message(self) -> str:
         return (
-            f"{self.board.name} has no hole matching {self.montessori_shape.name}'s "
-            f"category {self.montessori_shape.shape_category}."
+            f"{self.board.name} has no hole that {self.montessori_shape.name}, a "
+            f"{type(self.montessori_shape).__name__}, fits through."
         )
 
     def suggest_correction(self) -> str:
