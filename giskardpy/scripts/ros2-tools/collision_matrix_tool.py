@@ -878,6 +878,11 @@ class Application(QMainWindow):
             QApplication.quit()
 
 
+READY_MESSAGE = "Collision matrix tool is ready."
+"""
+Printed to standard output once the event loop runs, from which point SIGINT closes the tool.
+"""
+
 quit_requested = False
 """
 Set when SIGINT arrives, so a signal that lands before the event loop starts is not lost.
@@ -902,6 +907,13 @@ def handle_sigint(sig, frame):
     QApplication.quit()
 
 
+def announce_ready():
+    """
+    Print :data:`READY_MESSAGE`, so whoever launched the tool knows SIGINT now closes it.
+    """
+    print(READY_MESSAGE, flush=True)
+
+
 def quit_when_requested():
     """
     Quit the application if SIGINT was received, including before the loop was running.
@@ -923,6 +935,8 @@ if __name__ == "__main__":
 
     window = Application()
     window.show()
+    # Fires on the first iteration of the running event loop.
+    QTimer.singleShot(0, announce_ready)
     exit_code = app.exec_()
     rospy.shutdown()
     sys.exit(exit_code)
