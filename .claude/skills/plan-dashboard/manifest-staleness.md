@@ -63,7 +63,7 @@ for the state; `record` is for the story.
 ## What `check` does and does not cover
 
 It compares the manifest against **local git only**: a recorded branch that was
-never published, an item still `not_started` while its branch exists, a published
+never published, an item still `not started` while its branch exists, a published
 branch with no session or pull request recorded.
 
 It deliberately does not ask GitHub. The dashboard already compares the manifest

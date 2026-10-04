@@ -22,7 +22,6 @@ from basstler.setup_steps import (
     PersistentVariables,
     PersonalNotesSetting,
     Host,
-    Repository,
     RepositoryAccess,
     RepositoryLabel,
     SetupChecklist,
@@ -31,6 +30,7 @@ from basstler.setup_steps import (
 )
 
 from basstler.locations import PackageLocation, ProjectLocation
+from basstler.repository import Repository
 
 from .constants import ScrubbedEnvironmentPrefix
 from .scratch_repository import ScratchRepository
@@ -78,7 +78,7 @@ def test_the_repository_links_use_the_same_host_as_everything_else() -> None:
     A link that varies with the repository is built rather than listed, and builds from
     the same place the fixed ones do.
     """
-    assert FORK.labels_url.startswith(Host.GITHUB.url)
+    assert ForkLabels(FORK).labels_url.startswith(Host.GITHUB.url)
 
 
 def test_the_module_writes_the_scheme_once() -> None:
@@ -113,12 +113,14 @@ def test_a_github_remote_url_names_its_repository(url: str) -> None:
     "url",
     ["https://gitlab.com/some-user/some-repository.git", "/srv/mirrors/bare.git"],
 )
-def test_a_remote_that_is_not_a_github_repository_names_none(url: str) -> None:
+def test_a_remote_that_is_not_a_github_repository_names_none(
+    url: str, scratch_repository: ScratchRepository
+) -> None:
     """
     A remote pointing anywhere but a GitHub repository yields no repository at all,
     rather than a guess assembled from its path.
     """
-    assert Repository.from_remote_url(url) is None
+    assert resolve_repository(scratch_repository.project_root, url) is None
 
 
 def test_the_repository_comes_from_the_notes_remotes_url(
@@ -207,8 +209,9 @@ def test_the_labels_step_leads_with_the_page_that_creates_them_by_hand() -> None
     The ``gh`` CLI is not present everywhere, so the step offers the fork's own labels
     page before the commands that need it.
     """
-    instructions = ForkLabels(FORK).instructions()
-    assert FORK.labels_url in instructions[0]
+    step = ForkLabels(FORK)
+    instructions = step.instructions()
+    assert step.labels_url in instructions[0]
     assert [line for line in instructions if line.startswith("gh label create")] == [
         label.creation_command(FORK) for label in RepositoryLabel
     ]

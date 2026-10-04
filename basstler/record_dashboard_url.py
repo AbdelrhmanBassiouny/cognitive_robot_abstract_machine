@@ -41,6 +41,12 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+from basstler.standard_streams import StandardStreamHandler
+
+logger = StandardStreamHandler.logger_for(__name__)
+"""
+This module's logger, which is also what its command prints through.
+"""
 
 ARTIFACT_URL_PATTERN = re.compile(
     r"^https://claude\.ai/code/artifact/"
@@ -442,14 +448,14 @@ def main() -> int:
     try:
         url = resolve_artifact_url(listing, arguments.expected_title, arguments.url)
     except DashboardUrlError as error:
-        print(f"refusing to record a dashboard URL: {error}", file=sys.stderr)
+        logger.error(f"refusing to record a dashboard URL: {error}")
         return 1
 
     patched = apply_url_record(Path(arguments.cache).read_text(), arguments.key, url)
     Path(arguments.output).write_text(patched.text)
 
     record = UrlRecord(key=arguments.key, url=url, previous_url=patched.previous_url)
-    print(json.dumps(record.to_json_dict()))
+    logger.info(json.dumps(record.to_json_dict()))
     return 0
 
 

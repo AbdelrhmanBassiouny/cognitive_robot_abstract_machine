@@ -12,6 +12,7 @@ from pathlib import Path
 
 import pytest
 
+from basstler.repository import Repository
 from basstler.upstream_reviews import (
     GitHubCommandFailed,
     GitHubCommandLineClient,
@@ -21,7 +22,6 @@ from basstler.upstream_reviews import (
     PullRequestReviewSnapshot,
     QueryVariable,
     ReportText,
-    Repository,
     ReviewState,
     ReviewThread,
     ThreadMarker,

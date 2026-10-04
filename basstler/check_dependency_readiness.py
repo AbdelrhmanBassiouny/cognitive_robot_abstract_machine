@@ -45,6 +45,12 @@ from basstler.build_dashboard import (
     load_pull_requests_by_repository,
     validate_plan,
 )
+from basstler.standard_streams import StandardStreamHandler
+
+logger = StandardStreamHandler.logger_for(__name__)
+"""
+This module's logger, which is also what its command prints through.
+"""
 
 
 class UnknownItemError(ValueError):
@@ -126,7 +132,7 @@ def main() -> int:
     try:
         validate_plan(raw_plan)
     except PlanValidationError as error:
-        print(str(error), file=sys.stderr)
+        logger.error(str(error))
         return 1
     plan = Plan.from_mapping(raw_plan)
 
@@ -140,10 +146,10 @@ def main() -> int:
             plan, arguments.item, pull_requests_by_repository
         )
     except UnknownItemError as error:
-        print(str(error), file=sys.stderr)
+        logger.error(str(error))
         return 1
 
-    print(json.dumps(results))
+    logger.info(json.dumps(results))
     return 0
 
 

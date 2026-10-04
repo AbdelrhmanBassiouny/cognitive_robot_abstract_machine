@@ -24,6 +24,12 @@ import json
 import sys
 from dataclasses import dataclass
 from enum import StrEnum
+from basstler.standard_streams import StandardStreamHandler
+
+logger = StandardStreamHandler.logger_for(__name__)
+"""
+This module's logger, which is also what its command prints through.
+"""
 
 
 class PlanUpdatesSinceOption(StrEnum):
@@ -181,15 +187,14 @@ def main() -> int:
     arguments = parser.parse_args()
 
     if arguments.subcommand == "print-comments":
-        print(format_issue_comments(sys.stdin.read()))
+        logger.info(format_issue_comments(sys.stdin.read()))
     elif arguments.subcommand == "print-no-changes-message":
-        print(NO_CHANGES_MESSAGE)
+        logger.info(NO_CHANGES_MESSAGE)
     elif arguments.subcommand == "print-no-tracking-issue-message":
-        print(NO_TRACKING_ISSUE_MESSAGE)
+        logger.info(NO_TRACKING_ISSUE_MESSAGE)
     elif arguments.subcommand == "print-no-default-repository-message":
-        print(
-            no_default_repository_message(arguments.plan_id, arguments.tracking_issue),
-            file=sys.stderr,
+        logger.error(
+            no_default_repository_message(arguments.plan_id, arguments.tracking_issue)
         )
 
     return 0

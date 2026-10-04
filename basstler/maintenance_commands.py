@@ -30,6 +30,12 @@ from basstler.maintenance_report import (
 )
 from basstler.maintenance_restack_procedure import restack
 from basstler.stack import Configuration, Stack, load_stack
+from basstler.standard_streams import StandardStreamHandler
+
+logger = StandardStreamHandler.logger_for(__name__)
+"""
+This module's logger, which is also what its command prints through.
+"""
 
 
 @dataclass(frozen=True)
@@ -300,7 +306,7 @@ class RunReportCommand(MaintenanceCommand):
         )
         PackageLocation.BOARD.value.unlink(missing_ok=True)
         if arguments.json:
-            print(report.as_json())
+            logger.info(report.as_json())
         else:
             print_fast_forward(fast_forward_report)
             print_restack(report.restacked)

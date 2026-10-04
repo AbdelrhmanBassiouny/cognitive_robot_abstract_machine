@@ -28,7 +28,13 @@ from typing import Any, TypeVar, ClassVar
 import tomllib
 
 from basstler.locations import PackageLocation
-from basstler.stack import Repository
+from basstler.repository import Repository
+from basstler.standard_streams import StandardStreamHandler
+
+logger = StandardStreamHandler.logger_for(__name__)
+"""
+This module's logger, which is also what its command prints through.
+"""
 
 # %% the reading contract
 
@@ -1048,9 +1054,9 @@ def main(argv: list[str] | None = None) -> int:
     try:
         report = _build_report(arguments)
     except UpstreamReviewError as failure:
-        print(failure, file=sys.stderr)
+        logger.error(failure)
         return 1
-    print(report)
+    logger.info(report)
     summary_path = os.environ.get(EnvironmentVariable.STEP_SUMMARY)
     if summary_path:
         Path(summary_path).write_text(report)

@@ -58,9 +58,15 @@ from basstler.build_dashboard import (
     load_pull_requests_by_repository,
     validate_plan,
 )
+from basstler.standard_streams import StandardStreamHandler
+
+logger = StandardStreamHandler.logger_for(__name__)
+"""
+This module's logger, which is also what its command prints through.
+"""
 
 _ITEM_START_PATTERN = re.compile(r"^\s*- id:")
-_STATUS_LINE_PATTERN = re.compile(r"^(\s*status:\s*)(\S+)\s*$")
+_STATUS_LINE_PATTERN = re.compile(r"^(\s*status:\s*)(\S.*?)\s*$")
 
 
 class MissingStatusLineError(ValueError):
@@ -202,7 +208,7 @@ def main() -> int:
     try:
         validate_plan(plan)
     except PlanValidationError as error:
-        print(f"plan.yaml failed validation: {error}", file=sys.stderr)
+        logger.error(f"plan.yaml failed validation: {error}")
         return 1
 
     raw_pull_request_data = json.loads(Path(arguments.pr_data).read_text())
@@ -216,7 +222,7 @@ def main() -> int:
     output_path = Path(arguments.output) if arguments.output else plan_path
     output_path.write_text(corrected_text)
 
-    print(json.dumps({"corrected": [c.to_json_dict() for c in corrections]}))
+    logger.info(json.dumps({"corrected": [c.to_json_dict() for c in corrections]}))
     return 0
 
 

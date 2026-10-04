@@ -5,7 +5,7 @@ Keep a plan item's recorded state current, from before its implementation onward
 Everything a session knows the moment an implementation plan is approved - the branch,
 the draft pull request, the item's manifest fields, its roadmap section - is derivable
 without a line of the implementation, yet all of it conventionally happens at the end.
-For that whole window ``plan.yaml`` says the item is ``not_started`` with no branch while
+For that whole window ``plan.yaml`` says the item is ``not started`` with no branch while
 a branch exists and is being worked, which every dashboard, kickoff and resolve run
 downstream reads as truth.
 
@@ -23,7 +23,7 @@ Seven operations, so each caller depends only on the surface it uses:
 ``open``
     Create the branch, publish it, open the draft pull request, then write ``branch``,
     ``session`` and ``pull_request_number`` back onto the item and flip it to
-    ``in_progress``. A caller that has already created the pull request passes
+    ``in progress``. A caller that has already created the pull request passes
     ``--pull-request-number`` and only the recording happens.
 
 ``update``
@@ -112,6 +112,12 @@ from basstler.command_line import Command, commands_of
 from basstler.locations import ProjectLocation
 from basstler.maintenance_constants import GITHUB_API_ROOT
 from basstler.plan_model import ItemStatus
+from basstler.standard_streams import StandardStreamHandler
+
+logger = StandardStreamHandler.logger_for(__name__)
+"""
+This module's logger, which is also what its command prints through.
+"""
 
 ITEM_MARKER = "  - "
 """
@@ -1951,7 +1957,7 @@ def check_item(
 
     Deliberately local-only. The dashboard already compares the manifest against GitHub
     after the fact; what nothing covers is the window before a push, where a session
-    knows the branch exists and every other reader still sees ``not_started``. Answering
+    knows the branch exists and every other reader still sees ``not started``. Answering
     it from git alone also keeps this importable by a hook, which cannot reach
     ``sync_manifest_status.py`` - that module imports ``build_dashboard``, and so needs
     jinja2 and markdown.
@@ -3165,10 +3171,10 @@ def main() -> int:
     try:
         report = SUBCOMMANDS[arguments.subcommand].run(arguments, project_root)
     except BootstrapError as error:
-        print(f"{error.exit_code.name_for_a_caller}: {error}", file=sys.stderr)
+        logger.error(f"{error.exit_code.name_for_a_caller}: {error}")
         return int(error.exit_code)
 
-    print(json.dumps(report.to_json()))
+    logger.info(json.dumps(report.to_json()))
     return int(report.exit_code)
 
 

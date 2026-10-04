@@ -63,6 +63,12 @@ from pathlib import Path
 from typing import Any, ClassVar
 
 from basstler.locations import ProjectLocation
+from basstler.standard_streams import StandardStreamHandler
+
+logger = StandardStreamHandler.logger_for(__name__)
+"""
+This module's logger, which is also what its command prints through.
+"""
 
 # %% vocabulary
 
@@ -844,10 +850,10 @@ def main() -> int:
                 project_root,
             )
     except ModeError as error:
-        print(f"{error.exit_code.name_for_a_caller}: {error}", file=sys.stderr)
+        logger.error(f"{error.exit_code.name_for_a_caller}: {error}")
         return int(error.exit_code)
 
-    print(json.dumps(report.to_json()))
+    logger.info(json.dumps(report.to_json()))
     return int(report.exit_code)
 
 

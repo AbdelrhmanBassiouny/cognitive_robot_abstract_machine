@@ -7,7 +7,7 @@ the personal-notes push (write-personal-notes-file.sh) are replaced with stubs i
 scratch project-root layout, so these tests exercise only refresh_dashboard.sh's own
 shell logic - no real git remote, network access, or GitHub data is involved.
 basstler.refresh_dashboard_support has no such dependencies, so the real module is reused
-unchanged.
+unchanged, with the logging module it prints through.
 """
 
 import json
@@ -17,6 +17,8 @@ from pathlib import Path
 
 import pytest
 
+import basstler.refresh_dashboard_support
+import basstler.standard_streams
 from basstler.locations import PackageLocation, ProjectLocation
 
 from .constants import DatasetLocation, SkillDirectory
@@ -53,13 +55,12 @@ def scratch_project_root(tmp_path: Path) -> Path:
     )
     install_hook_scripts_into(tmp_path, "resolve-personal-notes-config.sh")
 
-    # The real support module, whose own dependencies are the standard library only, in a
-    # scratch package the script's `python3 -m basstler.<module>` calls resolve against.
+    # The real support module and the logging it prints through, whose own dependencies
+    # are the standard library only, in a scratch package the script's
+    # `python3 -m basstler.<module>` calls resolve against.
     (package_directory / "__init__.py").touch()
-    shutil.copy(
-        PackageLocation.DIRECTORY / "refresh_dashboard_support.py",
-        package_directory / "refresh_dashboard_support.py",
-    )
+    for module in (basstler.refresh_dashboard_support, basstler.standard_streams):
+        shutil.copy(module.__file__, package_directory / Path(module.__file__).name)
     shutil.copy(
         DatasetLocation.STUBS / "sync_manifest_status_stub.py",
         package_directory / "sync_manifest_status.py",

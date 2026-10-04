@@ -184,6 +184,16 @@ def test_patched_text_still_parses_and_validates():
     assert reparsed["items"][0]["notes"] == data["items"][0]["notes"]
 
 
+def test_patches_a_status_line_spelled_with_spaces():
+    text = (
+        DatasetLocation.DIRECTORY / "manifest-with-spaced-statuses.yaml"
+    ).read_text()
+    data = yaml.safe_load(text)
+    patched_text, corrections = apply_status_corrections(text, [data["items"][0]])
+    assert yaml.safe_load(patched_text)["items"][0]["status"] == ItemStatus.DONE.value
+    assert [c.previous_status for c in corrections] == [ItemStatus.IN_PROGRESS]
+
+
 def test_no_items_to_correct_returns_original_text_unchanged():
     patched_text, corrections = apply_status_corrections(MANIFEST_TEXT, [])
     assert patched_text == MANIFEST_TEXT
@@ -276,7 +286,9 @@ def test_main_corrects_the_plan_file_in_place_when_no_output_is_given(
     assert exit_code == 0
     assert "    status: done" in plan_path.read_text()
     summary = json.loads(capsys.readouterr().out)
-    assert summary == {"corrected": [{"id": "a", "previous_status": "in_progress"}]}
+    assert summary == {
+        "corrected": [{"id": "a", "previous_status": ItemStatus.IN_PROGRESS.value}]
+    }
 
 
 def test_main_writes_the_corrected_manifest_to_output_leaving_the_plan_file_untouched(

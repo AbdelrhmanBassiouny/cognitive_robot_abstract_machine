@@ -39,7 +39,6 @@ from __future__ import annotations
 import argparse
 import json
 import subprocess
-import sys
 import tomllib
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass, field
@@ -50,90 +49,15 @@ from urllib.parse import quote
 
 from basstler.git_commands import GitCommandRunner
 from basstler.locations import PackageLocation, ProjectLocation
+from basstler.repository import Repository
+from basstler.standard_streams import StandardStreamHandler
+
+logger = StandardStreamHandler.logger_for(__name__)
+"""
+This module's logger, which is also what its command prints through.
+"""
 
 # %% configuration
-
-
-@dataclass
-class MalformedRepositoryError(ValueError):
-    """Raised when a repository reference is not in ``owner/name`` form."""
-
-    text: str
-    """The value that could not be parsed."""
-
-    def __str__(self) -> str:
-        """:return: What was expected and what arrived instead."""
-        return f"expected a repository as 'owner/name', got {self.text!r}"
-
-
-@dataclass(frozen=True)
-class Repository:
-    """A GitHub repository, identified the way GitHub itself writes it."""
-
-    owner: str
-    """The user or organization the repository belongs to."""
-
-    name: str
-    """The repository's own name."""
-
-    @classmethod
-    def parse(cls, text: str) -> Repository:
-        """Parse an ``owner/name`` repository reference.
-
-        :param text: The reference to parse.
-        :return: The parsed repository.
-        :raises MalformedRepositoryError: If *text* is not ``owner/name``.
-        """
-        owner, separator, name = text.partition("/")
-        if not (owner and separator and name):
-            raise MalformedRepositoryError(text)
-        return cls(owner, name)
-
-    @staticmethod
-    def _remote_url_segments(url: str) -> list[str]:
-        """Split a remote URL into its path segments, discarding scheme and host.
-
-        :param url: The remote URL to split.
-        :return: The path segments, which name a repository when there are two or more.
-        """
-        reference = url.removesuffix(".git").rstrip("/")
-        if "://" in reference:
-            _, _, host_and_path = reference.partition("://")
-            _, _, path = host_and_path.partition("/")
-        elif ":" in reference:
-            _, _, path = reference.rpartition(":")
-        else:
-            return []
-        return [segment for segment in path.split("/") if segment]
-
-    @classmethod
-    def names_a_repository(cls, url: str) -> bool:
-        """Test whether a remote URL points at a repository at all.
-
-        :param url: The remote URL to test.
-        :return: Whether it names an ``owner/name`` pair.
-        """
-        return len(cls._remote_url_segments(url)) >= 2
-
-    @classmethod
-    def from_remote_url(cls, url: str) -> Repository:
-        """Read the repository a git remote URL points at.
-
-        Accepts every form a fork remote takes - HTTPS, SSH, and the local proxy a cloud
-        session is given - by discarding the host and taking the last two path segments.
-
-        :param url: The remote URL to read.
-        :return: The repository it names.
-        :raises MalformedRepositoryError: If *url* names no ``owner/name`` pair.
-        """
-        segments = cls._remote_url_segments(url)
-        if len(segments) < 2:
-            raise MalformedRepositoryError(url)
-        return cls.parse("/".join(segments[-2:]))
-
-    def __str__(self) -> str:
-        """:return: The ``owner/name`` form GitHub uses."""
-        return f"{self.owner}/{self.name}"
 
 
 @dataclass(frozen=True)
@@ -1167,9 +1091,11 @@ def print_status(stack: Stack) -> None:
     """
     configuration = stack.configuration
     upstream = f"{configuration.upstream_remote}/{configuration.upstream_base}"
-    print(f"Stack ({len(stack.branches)} branches) vs {upstream}\n")
-    print(f"{'branch':<38} {'state':<10} {'PR':>4}  ahead/behind parent   behind base")
-    print("-" * 92)
+    logger.info(f"Stack ({len(stack.branches)} branches) vs {upstream}\n")
+    logger.info(
+        f"{'branch':<38} {'state':<10} {'PR':>4}  ahead/behind parent   behind base"
+    )
+    logger.info("-" * 92)
     for branch in order(stack):
         ref = resolve_ref(configuration, branch.name)
         parent_ref = resolve_ref(configuration, branch.parent)
@@ -1177,7 +1103,7 @@ def print_status(stack: Stack) -> None:
         behind_parent = _count(f"{ref}..{parent_ref}")
         behind_base = _count(f"{ref}..{upstream}")
         drift = f"+{ahead}/-{behind_parent} ({branch.strategy} onto {branch.parent})"
-        print(
+        logger.info(
             f"{branch.name:<38} {branch.status:<10} #{branch.pull_request_number:<3}  {drift:<28} {behind_base}"
         )
 
@@ -1188,7 +1114,7 @@ def print_check(stack: Stack) -> None:
     :param stack: The stack to probe.
     """
     configuration = stack.configuration
-    print(
+    logger.info(
         "Integration probe - would each branch merge cleanly onto its parent right now?\n"
     )
     for branch in order(stack):
@@ -1205,7 +1131,7 @@ def print_check(stack: Stack) -> None:
             verdict = f"CONFLICTS onto {branch.parent}"
         else:
             verdict = f"UNKNOWN (ref missing: {parent_ref} / {ref})"
-        print(f"  {branch.name:<40} {verdict}")
+        logger.info(f"  {branch.name:<40} {verdict}")
 
 
 def print_next(stack: Stack) -> None:
@@ -1226,17 +1152,17 @@ def print_next(stack: Stack) -> None:
 
     def report_withheld() -> None:
         if withheld:
-            print(
+            logger.info(
                 f"  Withheld (delegated, needs-resolution): {', '.join(b.name for b in withheld)}"
             )
 
     if promotable:
         plural = "es" if len(promotable) != 1 else ""
-        print(
+        logger.info(
             f"NEXT to submit to {configuration.upstream_remote} ({len(promotable)} branch{plural}):"
         )
         for branch in promotable:
-            print(
+            logger.info(
                 f"  {branch.name} (PR #{branch.pull_request_number}) - approved, parent '{branch.parent}' landed"
             )
         report_withheld()
@@ -1249,14 +1175,14 @@ def print_next(stack: Stack) -> None:
     ]
     draft_candidates = [b for b in order(stack) if b.status == BranchStatus.DRAFT]
 
-    print("Nothing to promote - no branch is both approved and unblocked.")
+    logger.info("Nothing to promote - no branch is both approved and unblocked.")
     if ready_blocked:
-        print(
+        logger.info(
             f"  Approved but waiting on a parent to land: {', '.join(b.name for b in ready_blocked)}"
         )
     report_withheld()
     if draft_candidates:
-        print(
+        logger.info(
             "  The gate: self-review a fork PR, then un-draft it (or set its status ready). "
             f"Draft candidates: {draft_candidates[0].name}"
         )
@@ -1268,7 +1194,7 @@ def print_next_porcelain(stack: Stack) -> None:
     :param stack: The stack to report.
     """
     for branch in promotion_order(stack):
-        print(f"{branch.name}\t{branch.pull_request_number}")
+        logger.info(f"{branch.name}\t{branch.pull_request_number}")
 
 
 def print_restack_plan(stack: Stack) -> None:
@@ -1276,7 +1202,7 @@ def print_restack_plan(stack: Stack) -> None:
 
     :param stack: The stack to plan.
     """
-    print(json.dumps(restack_plan(stack), indent=2))
+    logger.info(json.dumps(restack_plan(stack), indent=2))
 
 
 def print_label_write(write: LabelWrite) -> None:
@@ -1288,7 +1214,7 @@ def print_label_write(write: LabelWrite) -> None:
     :param write: The computed set.
     """
     for label in write.labels:
-        print(label)
+        logger.info(label)
 
 
 def print_promotion_link(link: PromotionLink) -> None:
@@ -1296,12 +1222,9 @@ def print_promotion_link(link: PromotionLink) -> None:
 
     :param link: The built link.
     """
-    print(link.url)
+    logger.info(link.url)
     if link.body_was_truncated:
-        print(
-            "the description was shortened to fit the URL length limit",
-            file=sys.stderr,
-        )
+        logger.error("the description was shortened to fit the URL length limit")
 
 
 def print_reparents(stack: Stack) -> None:
@@ -1310,7 +1233,7 @@ def print_reparents(stack: Stack) -> None:
     :param stack: The stack to sweep.
     """
     for reparent in reparents(stack):
-        print(
+        logger.info(
             f"{reparent.branch}\t{reparent.pull_request_number}\t"
             f"{reparent.current_base}\t{reparent.target_base}"
         )
@@ -1322,7 +1245,7 @@ def print_landed(stack: Stack) -> None:
     :param stack: The stack to sweep.
     """
     for branch in landed_branches(stack):
-        print(f"{branch.name}\t{branch.pull_request_number}")
+        logger.info(f"{branch.name}\t{branch.pull_request_number}")
 
 
 def print_move_checks(
@@ -1336,13 +1259,13 @@ def print_move_checks(
     """
     refusals = move_checks.refusals(move)
     if not refusals:
-        print(
+        logger.info(
             f"{move.action} {move.source} onto "
             f"{move.destination_remote}/{move.destination}: clear"
         )
         return ExitCode.SUCCESS
     for refusal in refusals:
-        print(f"{refusal.reason}: {refusal.explanation}", file=sys.stderr)
+        logger.error(f"{refusal.reason}: {refusal.explanation}")
     return ExitCode.MOVE_REFUSED
 
 
@@ -1358,7 +1281,7 @@ def print_configuration(configuration: Configuration) -> None:
     for name, value in vars(configuration).items():
         if value is None:
             continue
-        print(f"{name}\t{value}")
+        logger.info(f"{name}\t{value}")
 
 
 class Command(StrEnum):
@@ -1627,13 +1550,13 @@ def main() -> ExitCode:
             return _run_without_a_board(command, arguments)
         return _run_against_the_board(command, arguments, load_stack())
     except (ForkRemoteNotFoundError, AmbiguousForkRemoteError) as error:
-        print(f"{error}", file=sys.stderr)
+        logger.error(f"{error}")
         return ExitCode.REMOTES_UNRESOLVED
     except BoardUnavailable as error:
-        print(f"{error}", file=sys.stderr)
+        logger.error(f"{error}")
         return ExitCode.BOARD_UNAVAILABLE
     except (ContradictoryLabelWriteError, PromotionLinkTooLongError) as error:
-        print(f"{error}", file=sys.stderr)
+        logger.error(f"{error}")
         return ExitCode.USAGE
 
 

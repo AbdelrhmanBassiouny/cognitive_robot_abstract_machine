@@ -17,6 +17,7 @@ from pathlib import Path
 import pytest
 
 import basstler.stack
+from basstler.repository import Repository
 from basstler.stack import (
     AmbiguousForkRemoteError,
     CommitMoveAction,
@@ -26,7 +27,6 @@ from basstler.stack import (
     ExitCode,
     ForkRemoteNotFoundError,
     LabelWrite,
-    MalformedRepositoryError,
     IntegrationStrategy,
     CommitMoveChecks,
     ProposedCommitMove,
@@ -36,7 +36,6 @@ from basstler.stack import (
     PullRequest,
     Remote,
     Reparent,
-    Repository,
     build_stack,
     derive_status,
     landed_branches,
@@ -412,53 +411,6 @@ def test_load_configuration_takes_the_fork_from_a_personal_notes_override(
 
     assert configuration.fork_repository == Repository("someone-else", "their-fork")
     assert configuration.fork_remote == "another"
-
-
-# %% repository references
-
-
-def test_repository_splits_a_reference_into_owner_and_name():
-    assert Repository.parse("an-owner/a-repository") == Repository(
-        "an-owner", "a-repository"
-    )
-
-
-def test_repository_round_trips_through_the_form_github_uses():
-    assert str(Repository.parse("an-owner/a-repository")) == "an-owner/a-repository"
-
-
-@pytest.mark.parametrize("malformed", ["no-separator", "/no-owner", "no-name/"])
-def test_repository_rejects_a_reference_that_is_not_owner_and_name(malformed: str):
-    """
-    A half-parsed reference would silently target the wrong repository.
-    """
-    with pytest.raises(MalformedRepositoryError):
-        Repository.parse(malformed)
-
-
-@pytest.mark.parametrize(
-    "url",
-    [
-        "https://github.com/an-owner/a-repository.git",
-        "https://github.com/an-owner/a-repository",
-        "git@github.com:an-owner/a-repository.git",
-        "http://127.0.0.1:41729/git/an-owner/a-repository",
-    ],
-)
-def test_repository_reads_the_owner_and_name_from_a_remote_url(url: str):
-    """
-    Every shape a fork remote takes names the same repository.
-
-    A cloud session reaches GitHub through a local proxy, so the URL it sees shares
-    neither host nor scheme with the one a laptop clone has.
-    """
-    assert Repository.from_remote_url(url) == Repository("an-owner", "a-repository")
-
-
-@pytest.mark.parametrize("malformed", ["", "https://github.com/only-one-segment"])
-def test_repository_rejects_a_remote_url_naming_no_repository(malformed: str):
-    with pytest.raises(MalformedRepositoryError):
-        Repository.from_remote_url(malformed)
 
 
 # %% resolving which remote is the fork
