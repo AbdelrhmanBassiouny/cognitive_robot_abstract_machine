@@ -10,7 +10,8 @@ from __future__ import annotations
 
 import shutil
 
-from .constants import GitHubCredentialVariable
+from basstler.maintenance_constants import CREDENTIAL_VARIABLES
+
 from .executable_stubs import ExecutableStubDirectory, StubbedExecutable
 
 DELIBERATE_TOKEN = "a-token"
@@ -51,12 +52,13 @@ def test_strips_the_callers_own_github_credentials(
     # run that reached GitHub with them would be neither reproducible nor safe.
     environment = stub_bin.subprocess_environment()
 
-    assert not set(GitHubCredentialVariable) & environment.keys()
+    assert not set(CREDENTIAL_VARIABLES) & environment.keys()
 
 
 def test_keeps_a_token_a_test_sets_deliberately(
     stub_bin: ExecutableStubDirectory,
 ):
-    environment = stub_bin.subprocess_environment(GH_TOKEN=DELIBERATE_TOKEN)
+    deliberate = {CREDENTIAL_VARIABLES[0]: DELIBERATE_TOKEN}
+    environment = stub_bin.subprocess_environment(**deliberate)
 
-    assert environment[GitHubCredentialVariable.GH_TOKEN] == DELIBERATE_TOKEN
+    assert environment[CREDENTIAL_VARIABLES[0]] == DELIBERATE_TOKEN

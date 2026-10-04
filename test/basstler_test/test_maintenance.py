@@ -78,6 +78,7 @@ from basstler.maintenance_report import (
     exit_code_for,
 )
 from basstler.maintenance_restack_procedure import restack
+from basstler.repository_label import RepositoryLabel
 from basstler.maintenance_restack_steps import (
     BranchOutcome,
     RestackOutcome,
@@ -85,7 +86,7 @@ from basstler.maintenance_restack_steps import (
 )
 
 from .scratch_repository import initialize_bare_repository, install_package_into
-from .constants import RepositoryLabel, StackBranch
+from .constants import StackBranch
 from .script_runner import PythonModuleRunner
 
 MAINTENANCE_MODULE = basstler.maintenance.__name__

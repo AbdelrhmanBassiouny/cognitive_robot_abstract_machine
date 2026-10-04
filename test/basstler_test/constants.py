@@ -14,6 +14,7 @@ from enum import StrEnum
 from pathlib import Path
 
 from basstler.locations import PathEnumeration, ProjectLocation
+from basstler.maintenance_constants import CREDENTIAL_VARIABLES
 
 
 class DatasetLocation(PathEnumeration):
@@ -36,11 +37,6 @@ class DatasetLocation(PathEnumeration):
     """
     Shell programs a test runs to observe what the hooks' own shell knows, each in a file
     of its own rather than built as a string.
-    """
-
-    STARTER_NOTES = DIRECTORY / "starter-notes.md"
-    """
-    The template ``setup-personal-notes.sh --starter-notes`` seeds a notes file from.
     """
 
     UPSTREAM_REVIEW_RESPONSES = DIRECTORY / "upstream-review-responses"
@@ -85,55 +81,6 @@ class StackBranch(StrEnum):
     """
 
 
-class RepositoryLabel(StrEnum):
-    """
-    Every label this repository's tooling applies to a pull request, named once for every
-    suite that puts one on a pull request or checks that a repository carries it.
-
-    Wider than :class:`basstler.build_dashboard.PullRequestLabel`, which is the subset the
-    dashboard *interprets*; these are the ones something *applies*, and a fork wants each to
-    exist with a description rather than turning up unexplained.
-
-    Held equal to ``PULL_REQUEST_LABELS`` in ``resolve-personal-notes-config.sh``, which is
-    where the shell reads them from, by
-    :func:`test_github_api_sh.test_the_labels_match_the_ones_the_shell_declares`.
-    """
-
-    MERGED = "merged"
-    """
-    The changes landed even though GitHub never recorded a merge.
-    """
-
-    BUG = "bug"
-    """
-    Carried by a fix, and never acted on by the stack workflow - a label it reads past.
-    """
-
-    IN_REVIEW = "in-review"
-    """
-    Carried by a branch that has reached the upstream review queue.
-    """
-
-    REBASE = "rebase"
-    """
-    Authorises rewriting a branch's published history rather than merging into it.
-    """
-
-    NEEDS_RESOLUTION = "needs-resolution"
-    """
-    Put on a branch whose owner has been asked to resolve a conflict.
-    """
-
-    PROMOTION_LINK_SENT = "cram2-link-sent"
-    """
-    Carries the link that opens its upstream pull request.
-
-    The one member whose *value* names a particular upstream rather than what the label
-    means - it mirrors :data:`basstler.maintenance_constants.PROMOTION_LINK_LABEL`, a plain
-    constant where the three above it are configurable in ``basstler/stack.toml``.
-    """
-
-
 class SkillDirectory(PathEnumeration):
     """
     The skills the suites read, relative to the project root.
@@ -145,13 +92,6 @@ class SkillDirectory(PathEnumeration):
     PLAN_DASHBOARD = ProjectLocation.CLAUDE_CODE_DIRECTORY / "skills" / "plan-dashboard"
     """
     The dashboard skill: its instructions, its worked example and its shell entry point.
-    """
-
-    SETUP_PERSONAL_NOTES = (
-        ProjectLocation.CLAUDE_CODE_DIRECTORY / "skills" / "setup-personal-notes"
-    )
-    """
-    The first-time setup skill, which also ships the starter notes template.
     """
 
     STACKED_PULL_REQUEST_MAINTENANCE = (
@@ -230,11 +170,6 @@ class ProjectFile(PathEnumeration):
     The committed settings registering the SessionStart hook.
     """
 
-    STARTER_NOTES = SkillDirectory.SETUP_PERSONAL_NOTES / "starter-notes.md"
-    """
-    The template a new notes file can be seeded from.
-    """
-
 
 class ScrubbedEnvironmentPrefix(StrEnum):
     """
@@ -260,35 +195,15 @@ class ScrubbedEnvironmentPrefix(StrEnum):
     The committer git would otherwise take from the configuration.
     """
 
-
-class GitHubCredentialVariable(StrEnum):
+    GITHUB_CLI_HOST = "GH_HOST"
     """
-    The GitHub credential variables a scratch run must not inherit.
-
-    Whoever runs the tests may well have real ones set, and a test that reached GitHub with
-    them would be neither reproducible nor safe.
-    """
-
-    GH_TOKEN = "GH_TOKEN"
-    """
-    The token ``gh`` reads first, and the fallback backend's own preference.
-    """
-
-    GITHUB_TOKEN = "GITHUB_TOKEN"
-    """
-    The token both fall back to.
-    """
-
-    GH_HOST = "GH_HOST"
-    """
-    The host ``gh`` would talk to, which a real value could redirect.
+    The host the ``gh`` CLI lends a stored token for, which a real value could redirect.
     """
 
 
-SCRUBBED_VARIABLE_PREFIXES = (*ScrubbedEnvironmentPrefix, *GitHubCredentialVariable)
+SCRUBBED_VARIABLE_PREFIXES = (*ScrubbedEnvironmentPrefix, *CREDENTIAL_VARIABLES)
 """
-Everything stripped from a hook's environment before a test runs it.
-
-A whole variable name is its own prefix, so the credentials belong in the same tuple as
-the families.
+Everything stripped from a hook's environment before a test runs it: the families above,
+and the GitHub credential variables the package reads, so a test never reaches GitHub with
+whatever its caller has set. A whole variable name is its own prefix.
 """

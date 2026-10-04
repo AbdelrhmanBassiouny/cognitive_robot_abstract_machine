@@ -76,8 +76,8 @@ starting point they own and can edit or discard. Declining leaves an empty file,
 which is a perfectly good state.
 
 **Create missing labels?** Six between the dashboard and the stacked-PR workflow
-(`resolve-personal-notes-config.sh`'s `PULL_REQUEST_LABELS` is the list), and a
-fresh fork has none of them. Creation writes to their repository and is visible
+(`basstler.repository_label.RepositoryLabel` is the list), and a fresh fork has
+none of them. Creation writes to their repository and is visible
 to everyone who can see it, so ask before passing `--create-labels`. Defaulting
 to yes is fine; doing it unasked is not.
 
@@ -123,11 +123,10 @@ you expected it to print.
 
 **If it reports that it skipped the owner or label checks for lack of
 credentials**, that is the one thing this session can do that the script cannot:
-there is no `gh` and no `GH_TOKEN`/`GITHUB_TOKEN` in the shell. Do those two
-checks over MCP instead — `mcp__github__get_me` for the owner comparison above, and
-`mcp__github__get_label` per label in `PULL_REQUEST_LABELS` (declared in
-`resolve-personal-notes-config.sh`) against the
-repository they open pull requests against, where a `404` means missing. There is
+there is no `GH_TOKEN`/`GITHUB_TOKEN` and no logged-in `gh` in the shell. Do those
+two checks over MCP instead — `mcp__github__get_me` for the owner comparison above,
+and `mcp__github__get_label` per `RepositoryLabel` member against the repository
+they open pull requests against, where a `404` means missing. There is
 no create-label tool in the MCP server, so report which are missing and point them
 at `https://github.com/<owner>/<repo>/labels`, or re-run the script somewhere `gh`
 is authenticated. Missing labels block nothing else.
@@ -138,18 +137,15 @@ is authenticated. Missing labels block nothing else.
 (Claude Code on the web, and any cloud environment): the clone — and its git config
 with it — is gone next session. For those, the same values have to be set as
 persistent environment variables at the *environment* level, which nothing inside a
-session can do. Give them the exact lines, and only the ones that differ from the
-defaults:
+session can do. Run
 
-```
-CLAUDE_PERSONAL_NOTES_REMOTE=<chosen-remote-or-url>
-CLAUDE_PERSONAL_NOTES_BRANCH=<branch, only if not claude/personal-notes>
-CLAUDE_PERSONAL_NOTES_PATH=<path, only if not .claude/personal/cram-notes.md>
+```bash
+python3 -m basstler.setup_steps
 ```
 
-Point them at their environment's own docs for where that list lives (for Claude
-Code on the web: <https://code.claude.com/docs/en/claude-code-on-the-web>), and at
-[`personal-notes.env.example`](../../hooks/personal-notes.env.example) and
+and relay its last step: it prints exactly the lines that differ from the defaults,
+already quoted where a bare value would be cut short, and where to paste them. Point
+them as well at [`personal-notes.env.example`](../../hooks/personal-notes.env.example) and
 [`configure-personal-notes.sh`](../../hooks/configure-personal-notes.sh) for the two
 shapes that wiring takes. Say so plainly rather than leaving them to discover it
 next session when their notes have vanished.

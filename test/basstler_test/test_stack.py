@@ -50,8 +50,8 @@ from basstler.stack import (
 )
 
 from basstler.locations import ProjectLocation
+from basstler.repository_label import RepositoryLabel
 
-from .constants import RepositoryLabel
 from .scratch_repository import ScratchRepository
 from .script_runner import PythonModuleRunner
 

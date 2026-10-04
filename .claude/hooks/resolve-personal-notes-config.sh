@@ -341,6 +341,9 @@ PLAN_MANIFEST_TOOLS_MODULE="basstler.plan_manifest_tools"
 # plan_updates_since_support: renders the plan-state delta
 # plan-updates-since.sh reports.
 PLAN_UPDATES_SINCE_SUPPORT_MODULE="basstler.plan_updates_since_support"
+# setup_personal_notes: the one-time personal-notes setup
+# setup-personal-notes.sh runs.
+SETUP_PERSONAL_NOTES_MODULE="basstler.setup_personal_notes"
 # stack: read-only stacked-PR status tool (status/check/next/restack-plan)
 # - see its own module docstring and STACK_DIRECTORY/README.md.
 STACK_MODULE="basstler.stack"
@@ -421,24 +424,9 @@ SETUP_PERSONAL_NOTES_DIRECTORY=".claude/skills/setup-personal-notes"
 # the single source of truth for that question, so no caller re-implements
 # "is the notes branch there?" with its own git plumbing.
 CHECK_SETUP_SCRIPT=".claude/hooks/check-setup.sh"
-# setup-personal-notes.sh: performs the whole setup non-interactively, gating
-# each step on check-setup.sh's verdict. The mechanical half of
-# /setup-personal-notes, extracted so the setup needs no session at all.
+# setup-personal-notes.sh: performs the whole setup non-interactively - the
+# mechanical half of /setup-personal-notes, so the setup needs no session.
 SETUP_PERSONAL_NOTES_SCRIPT=".claude/hooks/setup-personal-notes.sh"
-# github-api.sh: the GitHub lookups that setup needs - who you are
-# authenticated as, which repository a remote points at, and whether a label
-# exists. Sourced, not executed.
-GITHUB_API_SCRIPT=".claude/hooks/github-api.sh"
-# create-personal-notes-branch.sh: creates the notes branch on the resolved
-# remote with an empty notes file, refusing if it already exists anywhere.
-CREATE_PERSONAL_NOTES_BRANCH_SCRIPT=".claude/hooks/create-personal-notes-branch.sh"
-# save-git-identity.sh: records the contributor's git identity on the notes
-# branch, which session-start.sh then writes into every clone it runs in.
-SAVE_GIT_IDENTITY_SCRIPT=".claude/hooks/save-git-identity.sh"
-# session-start.sh: the SessionStart hook itself, which writes CLAUDE.local.md.
-# Named here because setup runs it directly, so a fresh clone picks the notes up
-# without waiting for the next session.
-SESSION_START_SCRIPT=".claude/hooks/session-start.sh"
 # prerequisite-check.md: the shared "run check-setup.sh, offer
 # /setup-personal-notes if it fails" procedure that plan-create,
 # plan-dashboard, plan-item-kickoff and plan-item-resolve each reference in
@@ -622,23 +610,3 @@ last_recorded_plan_state_sha() {
   [ -f "${PLAN_STATE_SYNC_STAMP}" ] || return 1
   cat "${PLAN_STATE_SYNC_STAMP}"
 }
-
-# PULL_REQUEST_LABELS: every label this repository's tooling applies to a pull
-# request, checked (and on request created) by ./setup-personal-notes.sh. Here
-# rather than in that script so the shell and the Python that tests it read one
-# declaration; a test holds `RepositoryLabel` in test/basstler_test/constants.py
-# equal to this list, so neither can gain a label the other has not.
-#
-# Creating them here is mostly about how they read: one created this way carries
-# a description saying what it means, where a label that arrives any other way
-# does not. `in-review` on this fork is grey and undescribed for that reason.
-#
-# The first three are read by the plan dashboard (see .claude/hooks/README.md);
-# the rest belong to the stacked-PR workflow, and the three of them that
-# basstler/stack.toml makes configurable are listed here at their defaults.
-# A fork that renames one there gets its own created by /setup-stacked-prs, and
-# this default created harmlessly alongside.
-PULL_REQUEST_LABELS=(
-  "merged" "bug" "in-review"
-  "rebase" "needs-resolution" "cram2-link-sent"
-)

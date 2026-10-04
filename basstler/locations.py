@@ -111,11 +111,6 @@ class HookScript(StrEnum):
     Commits one file to that branch and pushes it.
     """
 
-    GITHUB_API = "github-api.sh"
-    """
-    Reaches GitHub through ``gh`` or a token and ``curl``.
-    """
-
     SETUP = "setup-personal-notes.sh"
     """
     Runs the whole first-time setup non-interactively.
@@ -201,6 +196,13 @@ class ProjectLocation(PathEnumeration):
     PERSONAL_NOTES_BRANCH_CREATION_SCRIPT = HOOKS / HookScript.CREATE_NOTES_BRANCH
     """
     The helper that creates the personal-notes branch where it does not exist yet.
+    """
+
+    STARTER_NOTES = (
+        CLAUDE_CODE_DIRECTORY / "skills" / "setup-personal-notes" / "starter-notes.md"
+    )
+    """
+    The template a new notes file can be seeded from.
     """
 
     PERSONAL_NOTES_DOCUMENT = PERSONAL_NOTES / "cram-notes.md"

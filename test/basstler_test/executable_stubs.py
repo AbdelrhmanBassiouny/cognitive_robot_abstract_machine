@@ -29,7 +29,8 @@ class StubbedExecutable(StrEnum):
 
     GH = "gh"
     """
-    The GitHub CLI, the preferred backend of every script that reaches GitHub.
+    The GitHub CLI: the preferred backend of the shell callers that reach GitHub, and a
+    credential source for the package's own client.
     """
 
     CURL = "curl"

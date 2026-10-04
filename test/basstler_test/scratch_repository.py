@@ -38,9 +38,9 @@ SOURCED_SCRIPT_PATTERN = re.compile(r'source\s+"([^"]+)"')
 """
 A shell ``source`` of a quoted path, the form every hook script uses to reach another.
 
-Only the ones ending in a hook script's own file name are followed - a path composed
-through a variable (``source "${GITHUB_API_SCRIPT}"``) names nothing readable here, so
-that script stays the caller's to install.
+Only the ones ending in a hook script's own file name are followed; a path composed
+entirely through a variable names nothing readable here, so that script stays the
+caller's to install.
 """
 
 
@@ -55,11 +55,6 @@ class ShellProgram(StrEnum):
     PRINT_UPSTREAM_REMOTE = "print_upstream_remote.sh"
     """
     Calls ``current_branch_upstream_remote`` the way its strict-mode caller does.
-    """
-
-    PRINT_PULL_REQUEST_LABELS = "print_pull_request_labels.sh"
-    """
-    Prints the labels ``resolve-personal-notes-config.sh`` declares.
     """
 
     @property

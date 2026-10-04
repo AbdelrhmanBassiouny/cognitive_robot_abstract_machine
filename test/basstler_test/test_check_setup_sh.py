@@ -20,7 +20,7 @@ from .scratch_repository import (
     SetupPrerequisiteFile,
     initialize_bare_repository,
 )
-from .setup_report import CheckStatus, SetupCheck, SetupReport
+from basstler.setup_report import CheckStatus, SetupCheck, SetupReport
 
 # %% the scratch layout
 

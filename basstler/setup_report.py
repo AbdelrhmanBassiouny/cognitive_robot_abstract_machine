@@ -1,10 +1,8 @@
 """
-Reading check-setup.sh's report back in a test.
+Reading check-setup.sh's report.
 
-The script's tab-separated rows are its whole interface, and more than one test module
-asserts against them - check-setup.sh's own, and setup-personal-notes.sh's, which
-finishes by printing the same report. Both the vocabulary and the parsing live here so
-neither is written out twice.
+The script's tab-separated rows are its whole interface, so they are read back into the
+check each row is about and the status it reports.
 """
 
 from __future__ import annotations
@@ -31,17 +29,64 @@ class SetupCheck(StrEnum):
     """
 
     TOOLING_FILES = "tooling_files"
+    """
+    The package and the skill files a set-up clone carries.
+    """
+
     SESSION_START_HOOK = "session_start_hook"
+    """
+    The SessionStart hook registered in the committed settings.
+    """
+
     CLAUDE_LOCAL_MD_IGNORED = "claude_local_md_ignored"
+    """
+    ``CLAUDE.local.md`` excluded from commits.
+    """
+
     NOTES_REMOTE = "notes_remote"
+    """
+    The remote the notes branch resolves to, and where that came from.
+    """
+
     NOTES_REMOTE_URL = "notes_remote_url"
+    """
+    That remote's URL.
+    """
+
     NOTES_BRANCH_NAME = "notes_branch_name"
+    """
+    The notes branch name, and where that came from.
+    """
+
     NOTES_PATH = "notes_path"
+    """
+    The notes file's path on that branch, and where that came from.
+    """
+
     NOTES_BRANCH = "notes_branch"
+    """
+    The notes branch existing on its remote.
+    """
+
     NOTES_FILE = "notes_file"
+    """
+    The notes file existing on that branch.
+    """
+
     GIT_IDENTITY = "git_identity"
+    """
+    The identity commits are authored with, against the recorded one.
+    """
+
     DASHBOARD_DEPENDENCIES = "dashboard_dependencies"
+    """
+    Every dependency the package declares being installed.
+    """
+
     CLAUDE_LOCAL_MD = "claude_local_md"
+    """
+    ``CLAUDE.local.md`` written by the SessionStart hook.
+    """
 
 
 class CheckStatus(StrEnum):
@@ -50,8 +95,19 @@ class CheckStatus(StrEnum):
     """
 
     OK = "ok"
+    """
+    Nothing to do.
+    """
+
     NEEDS_SETUP = "needs-setup"
+    """
+    Something still has to be set up.
+    """
+
     INFORMATIONAL = "info"
+    """
+    Context rather than a verdict.
+    """
 
 
 @dataclass

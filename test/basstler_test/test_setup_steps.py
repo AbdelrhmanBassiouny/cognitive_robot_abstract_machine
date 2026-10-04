@@ -14,7 +14,6 @@ from pathlib import Path
 import pytest
 
 import basstler.setup_steps
-from basstler.build_dashboard import PullRequestLabel
 from basstler.setup_steps import (
     COMMENT_MARKER,
     ForkLabels,
@@ -23,7 +22,6 @@ from basstler.setup_steps import (
     PersonalNotesSetting,
     Host,
     RepositoryAccess,
-    RepositoryLabel,
     SetupChecklist,
     SetupLink,
     resolve_repository,
@@ -31,6 +29,7 @@ from basstler.setup_steps import (
 
 from basstler.locations import HookScript, PackageLocation
 from basstler.repository import Repository
+from basstler.repository_label import RepositoryLabel
 
 from .constants import ScrubbedEnvironmentPrefix
 from .scratch_repository import ScratchRepository
@@ -173,31 +172,6 @@ def test_a_value_git_does_answer_comes_back_trimmed(
 
 
 # %% the labels step
-
-
-def test_every_label_the_tooling_relies_on_is_offered() -> None:
-    """
-    This enum and the dashboard's own name the same labels, member for member.
-
-    Asserted against ``build_dashboard.PullRequestLabel`` itself, by member name as well
-    as by value: a label added there and not here would leave a fork missing one, with
-    nothing else to catch it.
-    """
-    assert {label.name: label.value for label in RepositoryLabel} == {
-        member.name: member.value for member in PullRequestLabel
-    }
-
-
-def test_each_label_carries_the_description_it_is_created_with() -> None:
-    """
-    Every label says what it means, and the creation command names the fork.
-    """
-    for label in RepositoryLabel:
-        assert label.purpose
-        assert label.creation_command(FORK) == (
-            f"gh label create {label.value} --repo {FORK.full_name} "
-            f'--description "{label.purpose}"'
-        )
 
 
 def test_the_labels_step_leads_with_the_page_that_creates_them_by_hand() -> None:
