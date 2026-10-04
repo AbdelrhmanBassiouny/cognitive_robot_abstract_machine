@@ -10,6 +10,12 @@ Done:
   SymbolicExpression._evaluate_in_new_context_ extracted from _evaluate_; coraplex message
   says "could not be satisfied". Replace-child: sibling duplicate fixed, CaseWhen elif ->
   replace all, every _replace_child_field_ compares _id_. Tests TDD; 1321 pass in test_eql.
+- Round 3 (user: "why an observer?"): observer replaced by StatementTruths, which walks each
+  root result's OperationResult.result_chain (pulled out of all_bindings) and classifies steps
+  with the context's truth_value_operator_children via is_condition_participant.
+  SatisfiedConditionTracker can't serve: only runs under a query where (None for bare
+  conditions), skips false results. Quantifier internals are not in the chain -> the
+  quantifier itself is the statement.
 
 Next / open (ask user):
 - coraplex ConditionNotSatisfied message is built at construction, i.e. at motion-chart build
