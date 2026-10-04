@@ -34,6 +34,13 @@ Done:
   rename to is_atomic_condition_of? Not is kept (and its operand reported too), so "atomic" is
   wrong today. Options offered: skip Not (truly atomic; failed not_(a) reports nothing) or keep
   negation whole and drop Not's operand (recommended; "literals" but Literal clashes).
+- Brainstorm (user asked for use case): only consumer is coraplex ConditionNotSatisfied message
+  (get_true_statements has no non-test user). Real conditions use not_(predicate) inside or_/and_
+  (Place pre/post, PickUp post). FOUND: a Not's operand leaks into the FALSE list too - Place-post
+  shape and_(free, not_(gripped), at_target) reports "gripped" as unsatisfied (backwards).
+  Message renders s._name_ -> ['Not', '>']; verbalize_expression gives sentences. Recommended:
+  negation whole + verbalize in message; awaiting user decision (also AND first-blocker, drop
+  get_true_statements?).
 
 Next / open (ask user):
 - coraplex ConditionNotSatisfied message is built at construction, i.e. at motion-chart build
