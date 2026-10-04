@@ -91,3 +91,15 @@ see it.
   cannot land until one of cram2 #658 / #662 merges, because `main` still has
   the old names. `integration-conflict` deliberately left on #192 - withholding
   it costs one branch, withholding #64 costs thirteen.
+
+## 2026-10-04 - carried across #185 (session https://claude.ai/code/session_01P3qbqgYFh5n1M26ey2szz6)
+
+- The user allowed the push after their ready flip, so #424 stays ready, not drafted.
+- Merged #420's `a6d7b29c1` (itself stacked on #185) at `2d4a15148`. The job-log branch moved into
+  #185's shared `gh` stub. The job logs moved beside the recorded responses, read through
+  `RecordedJobLog`. `ci.yml` and the dead `UPSTREAM_REVIEWS_*` constants were dropped. 743 tests pass.
+- Tracked as `upstream-check-failure-logs` in plan `basstler-package`.
+
+## Next
+
+- Nothing until #185 and then #420 land. Then promote, with a link rebuilt against `main`.
