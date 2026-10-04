@@ -332,3 +332,18 @@ second pass asked for no module-level constants in `standard_streams.py` (`37e8c
 a handler field, the package logger is named by `__package__`, and a module's import name is always
 read from its spec, which makes the `__main__` comparison unnecessary. Upstream,
 cram2#659 has one unresolved thread left, "fields / and no classvar", which `be0ed435f` meets.
+
+## 2026-10-04 - #424 carried across, and #420 restacked
+
+The user allowed the push to #424 as well. #185 had moved on to `37e8cf887` since #420 was stacked,
+so #420 merged it first, cleanly, at `a6d7b29c1`. #424 then merged #420 at `2d4a15148`. All seven
+conflicts were the ones the trial merge predicted.
+
+One more file went silently, of the kind this plan's process notes warn about: #424 had added
+`UPSTREAM_REVIEWS_*` path constants to `resolve-personal-notes-config.sh`. They merged without a
+conflict, named the directory #185 deletes, and had nothing left reading them. A conflict report
+does not find these. Grepping for the old path in the merged tree does.
+
+Both branches stay ready, since the user had flipped them and then approved the pushes. Nothing is
+left to do on either until #185 lands. Then the maintenance pass moves #420's base back to `main`,
+and both get new promotion links.

@@ -479,26 +479,33 @@ items:
     the new recorded response placed in #185's dataset directory. Against #185's branch the diff is
     still this branch's own eight files. 723 tests pass in `test/basstler_test`, 47 of them this
     module's (34 on #185 alone).
+
+    Restacked 2026-10-04 at `a6d7b29c1` onto #185's `37e8cf887` (its fork review of round four),
+    with no conflicts. 723 tests pass. CI was green on `2d53a88e7`.
 - id: upstream-check-failure-logs
   title: Say why an upstream check failed, not only that it did
   branch: claude/upstream-check-failure-logs
   pull_request_number: 424
-  status: blocked
+  status: in_progress
   session: https://claude.ai/code/session_01LSQTbfwr6ankeW9mFPdB2y
   track: carried-across
   depends_on:
   - upstream-pull-request-checks
   blockers:
   - >-
-    Needs #420's new head (`2d53a88e7`, stacked on #185) merged in. A trial merge on 2026-10-02 gave
-    seven conflicts. `basstler/upstream_reviews.py` merged cleanly. The rest: the `gh` stub changes
-    move into #185's one shared `test/basstler_test/dataset/stubs/gh.sh`; the two recorded job logs
-    move into `test/basstler_test/dataset/upstream-review-responses/`; `test_upstream_reviews.py` and
-    `upstream_reviews_replay.py` take #185's names; and `upstream-reviews.yml` keeps #185's install
-    step and `python -m` call. The `ci.yml` line that adds this suite to `test_claude_dev_tooling` is
-    dropped, because #185's `test_basstler` job already runs it. The user marked #424 ready, so pushing
-    this needs their go-ahead, as #420's did.
+    Waits on upstream-pull-request-checks (#420), which waits on basstler-package (#185,
+    cram2#659). #424 is stacked on #420's branch and lands after it.
   notes: |-
     Built 2026-09-19 (https://claude.ai/code/session_01LSQTbfwr6ankeW9mFPdB2y), stacked on #420.
     `--failure-logs` reads each failed upstream check's job log on the fork's runner and quotes the
     pytest short summary, the runner's error annotations, or the log's tail.
+
+    Carried across #185 2026-10-04 at `2d4a15148` (merging #420's `a6d7b29c1`), with the user's
+    go-ahead to push after the ready flip. The seven conflicts were the ones the trial merge found.
+    The job-log branch joined #185's single shared `gh` stub. It logs the endpoint and still matches
+    `--allow-escape-sequences` rather than skipping it. The two job logs moved beside the recorded
+    responses, read through `RecordedJobLog` (formerly `JobLogFixtureName`). One silent leftover
+    that git did not report: the `UPSTREAM_REVIEWS_*` constants this branch had added to
+    `resolve-personal-notes-config.sh` merged cleanly, named the deleted directory and had no reader.
+    They were removed. With the `ci.yml` line dropped, the diff against #420 is 8 files. 67 tests
+    pass in the module's suite and 743 in `test/basstler_test`.
