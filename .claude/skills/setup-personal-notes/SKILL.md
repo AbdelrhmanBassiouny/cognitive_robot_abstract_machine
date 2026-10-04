@@ -112,9 +112,9 @@ bash "${SETUP_PERSONAL_NOTES_SCRIPT}" --remote <chosen-remote-or-url> \
 ```
 
 It points the notes remote at the choice, creates the branch, seeds it if asked,
-records the identity when given one, installs the plan-dashboard dependencies, runs
-`session-start.sh` so this clone
-picks the notes up, checks the labels, and finishes by printing `check-setup.sh`'s
+records the identity when given one, runs `session-start.sh` so this clone picks the
+notes up - which also installs whatever `basstler/pyproject.toml` declares and the
+environment lacks - checks the labels, and finishes by printing `check-setup.sh`'s
 report. Safe to re-run: every step is skipped when already done, and it exits with
 the final check's status, so it cannot report a half-finished setup as success.
 
@@ -125,7 +125,8 @@ you expected it to print.
 credentials**, that is the one thing this session can do that the script cannot:
 there is no `gh` and no `GH_TOKEN`/`GITHUB_TOKEN` in the shell. Do those two
 checks over MCP instead — `mcp__github__get_me` for the owner comparison above, and
-`mcp__github__get_label` per label (`merged`, `bug`, `in-review`) against the
+`mcp__github__get_label` per label in `PULL_REQUEST_LABELS` (declared in
+`resolve-personal-notes-config.sh`) against the
 repository they open pull requests against, where a `404` means missing. There is
 no create-label tool in the MCP server, so report which are missing and point them
 at `https://github.com/<owner>/<repo>/labels`, or re-run the script somewhere `gh`

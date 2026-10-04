@@ -3,8 +3,9 @@ set -euo pipefail
 
 # The whole one-time personal-notes setup, non-interactively: point the notes
 # remote at a repository you own, create the notes branch, optionally seed it,
-# install the plan-dashboard dependencies, pick the notes up in this clone, and
-# check the pull request labels the tooling uses.
+# pick the notes up in this clone - which also installs whatever the basstler
+# package declares and this environment lacks - and check the pull request
+# labels the tooling uses.
 #
 # Usage (from anywhere - always operates on this repo specifically, see
 # ./resolve-personal-notes-config.sh):
@@ -25,7 +26,8 @@ set -euo pipefail
 #                     reports - and this script exits with its status.
 #   --starter-notes   Seed a brand-new notes file from the starter template
 #                     instead of leaving it empty.
-#   --create-labels   Create any of the `merged`, `bug` and `in-review` labels
+#   --create-labels   Create any of the labels this tooling applies
+#                     (PULL_REQUEST_LABELS in ./resolve-personal-notes-config.sh)
 #                     that the repository is missing. Off by default: labels are
 #                     visible to everyone who can see the repository.
 #
@@ -196,22 +198,11 @@ if [ -n "${IDENTITY_NAME}" ]; then
   bash "${SAVE_GIT_IDENTITY_SCRIPT}" --name "${IDENTITY_NAME}" --email "${IDENTITY_EMAIL}"
 fi
 
-# %% the plan-dashboard dependencies
-
-if [ "$(setup_check_status dashboard_dependencies)" = "needs-setup" ]; then
-  if pip install -r "${PLAN_DASHBOARD_REQUIREMENTS_FILE}"; then
-    echo "Installed the plan-dashboard dependencies."
-  else
-    echo "Could not install the plan-dashboard dependencies. Re-run this by hand when"
-    echo "you can: pip install -r ${PLAN_DASHBOARD_REQUIREMENTS_FILE}"
-    echo "Everything except plan dashboards works without them; carrying on."
-  fi
-else
-  echo "Plan-dashboard dependencies already installed."
-fi
-
 # %% pick the notes up in this clone
 
+# session-start.sh also installs the package's missing dependencies, now that the
+# notes branch it gates that on exists, and reports a failed install on its
+# dependencies line rather than stopping - so this step needs no install of its own.
 bash "${SESSION_START_SCRIPT}"
 
 # %% the pull request labels the tooling applies
