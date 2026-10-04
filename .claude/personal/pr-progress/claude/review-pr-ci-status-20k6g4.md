@@ -59,3 +59,11 @@ a capability that did not exist, so this branch built it.
 ## 2026-10-04 - restacked
 
 - Merged #185's `37e8cf887` cleanly at `a6d7b29c1`. 723 tests pass. #424 now carries it too.
+
+## 2026-10-04 - review round 1
+
+- Two threads from the owner, both done in `f0b9850f1` and resolved after inline replies:
+  member docstrings on the check enums, and dropping `spoken`. Values are now the readable
+  form and the payload is looked up by member name. `ReviewState` (#185's) got the same change,
+  so the module has one rendering pattern. 724 tests pass; description updated.
+- #424 merged the new head cleanly at `cb49ab119` (744 tests pass).
