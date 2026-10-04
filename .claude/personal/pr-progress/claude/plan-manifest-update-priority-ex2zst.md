@@ -33,8 +33,17 @@
 - `promotion-summaries-and-table`'s damaged note was restored from history
   (`a5178fb90` plus the four later paragraphs) and the dashboard republished.
 
+- 2026-10-04: #185 moved five commits (Repository into `basstler/repository.py`, printing
+  through logging, statuses spelled "not started"/"in progress"). Merged in `3b355bb89`:
+  two conflicts (`maintenance_github.py` imports, `plan_item_bootstrap.main` logging), plus
+  the indentless fixture and two prose mentions moved to the spaced spelling. 829 pass;
+  merged tree differs from #185's head only on this branch's 33 paths.
+
 ### Outstanding
-- CI on `60c821ec5` had not reported when this session ended.
+- CI on `3b355bb89` had not reported when this session ended.
+- `update` now writes statuses with spaces (#185's `ItemStatus`); live manifests still
+  use underscores and #185 reads both, but the dashboard tooling on `main` only knows
+  the underscore form until #185 lands.
 
 ---
 
