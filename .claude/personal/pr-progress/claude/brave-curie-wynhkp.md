@@ -16,6 +16,12 @@ Done:
   SatisfiedConditionTracker can't serve: only runs under a query where (None for bare
   conditions), skips false results. Quantifier internals are not in the chain -> the
   quantifier itself is the statement.
+- Round 4 (user review, 5 threads): StatementTruths class removed -> evaluate_statements_of(condition)
+  returns statement results; factories filter by is_true. is_condition_participant takes an
+  explicit evaluation_context (no as_current). Commit 231cfb10cb. Replied on all 5 threads;
+  resolved the is_condition_participant + "removed inheritance" threads; left open: AND/OR skip
+  (x2, answered why, no change - removing breaks 6 of 12 tests) and query+where (answered no:
+  zero results when no solution).
 
 Next / open (ask user):
 - coraplex ConditionNotSatisfied message is built at construction, i.e. at motion-chart build
