@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
+import logging
 import os
 import signal
 import sys
 import traceback
 from dataclasses import dataclass, field
-from enum import Enum
+from enum import Enum, StrEnum
 from typing import Tuple, List, Optional, Dict
 
 import rclpy
@@ -51,6 +52,8 @@ from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.connections import FixedConnection
 from semantic_digital_twin.world_description.geometry import Color
 from semantic_digital_twin.world_description.world_entity import Body
+
+logger = logging.getLogger(__name__)
 
 
 class DisableCollisionReason(Enum):
@@ -878,10 +881,16 @@ class Application(QMainWindow):
             QApplication.quit()
 
 
-READY_MESSAGE = "Collision matrix tool is ready."
-"""
-Printed to standard output once the event loop runs, from which point SIGINT closes the tool.
-"""
+class StatusMessage(StrEnum):
+    """
+    Messages the tool logs about its own state, for whoever launched it to read.
+    """
+
+    READY = "Collision matrix tool is ready."
+    """
+    Logged once the event loop runs, from which point SIGINT closes the tool.
+    """
+
 
 quit_requested = False
 """
@@ -909,9 +918,9 @@ def handle_sigint(sig, frame):
 
 def announce_ready():
     """
-    Print :data:`READY_MESSAGE`, so whoever launched the tool knows SIGINT now closes it.
+    Log :attr:`StatusMessage.READY`, so whoever launched the tool knows SIGINT now closes it.
     """
-    print(READY_MESSAGE, flush=True)
+    logger.info(StatusMessage.READY)
 
 
 def quit_when_requested():
@@ -923,6 +932,7 @@ def quit_when_requested():
 
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO)
     rospy.init_node("self_collision_matrix_updater")
     signal.signal(signal.SIGINT, handle_sigint)
 

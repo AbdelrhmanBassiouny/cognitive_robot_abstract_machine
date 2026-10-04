@@ -96,7 +96,7 @@ def wait_until_ready(process: subprocess.Popen) -> None:
         line = process.stdout.readline().decode()
         if not line:
             pytest.fail(f"Script exited before it was ready:\n{''.join(output)}")
-        if line.strip() == tool.READY_MESSAGE:
+        if tool.StatusMessage.READY in line:
             return
         output.append(line)
     pytest.fail(f"Script was not ready in time:\n{''.join(output)}")
