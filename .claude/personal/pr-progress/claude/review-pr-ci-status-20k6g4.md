@@ -55,3 +55,7 @@ a capability that did not exist, so this branch built it.
   link and promote.
 - #424 needs #420's new head merged in. Seven conflicts are recorded on its plan item. It needs the
   user's go-ahead, because they marked it ready.
+
+## 2026-10-04 - restacked
+
+- Merged #185's `37e8cf887` cleanly at `a6d7b29c1`. 723 tests pass. #424 now carries it too.
