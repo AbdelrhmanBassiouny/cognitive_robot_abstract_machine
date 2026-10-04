@@ -37,10 +37,7 @@ from krrood.entity_query_language.core.mapped_variable import (
     HasSymbolicOperations,
     Attribute,
 )
-from krrood.entity_query_language.evaluation import (
-    ConditionTruthRecorder,
-    is_condition_participant,
-)
+from krrood.entity_query_language.evaluation import evaluate_statements_of
 from krrood.entity_query_language.core.variable import (
     DomainType,
     Literal,
@@ -884,53 +881,35 @@ def distinct(
             raise UnsupportedExpressionTypeForDistinct(type(expression))
 
 
-def get_conditioned_statements(
-    statement: SymbolicExpression, is_selected: Callable[[List[bool]], bool]
-) -> List[SymbolicExpression]:
-    """
-    Evaluate the statement once and select those of its conditions whose results satisfy
-    *is_selected*.
-
-    Each condition is judged by the results it yields within that one evaluation, so only
-    for the values the other conditions allow. A condition that yields no result, such as
-    one skipped after an earlier condition ruled out every value, is not selected.
-
-    :param statement: The statement whose conditions are selected.
-    :param is_selected: Whether a condition is selected, given the truth of every result
-        it yielded.
-    :return: The selected conditions, in the order the statement holds them.
-    """
-    conditions = [
-        child
-        for child in statement._children_
-        if is_condition_participant(child, parent=statement)
-    ]
-    recorder = ConditionTruthRecorder(conditions)
-    recorder.record_evaluation_of(statement)
-    return [
-        condition
-        for condition in conditions
-        if condition._id_ in recorder.truths
-        and is_selected(recorder.truths[condition._id_])
-    ]
-
-
 def get_false_statements(statement: SymbolicExpression) -> List[SymbolicExpression]:
     """
-    :param statement: The statement whose conditions are checked.
-    :return: The conditions of the statement that hold for none of the values the other
-        conditions allow.
+    :param statement: The condition whose statements are checked.
+    :return: The statements of the condition that held for none of the values they were
+        evaluated on, see :func:`evaluate_statements_of`. In a conjunction that is the
+        first conjunct that could not hold together with the conjuncts before it.
     """
-    return get_conditioned_statements(statement, lambda truths: not any(truths))
+    statement_results = evaluate_statements_of(statement)
+    held_ids = {result.operand._id_ for result in statement_results if result.is_true}
+    never_held = {
+        result.operand._id_: result.operand
+        for result in statement_results
+        if result.operand._id_ not in held_ids
+    }
+    return list(never_held.values())
 
 
 def get_true_statements(statement: SymbolicExpression) -> List[SymbolicExpression]:
     """
-    :param statement: The statement whose conditions are checked.
-    :return: The conditions of the statement that hold for at least one of the values
-        the other conditions allow.
+    :param statement: The condition whose statements are checked.
+    :return: The statements of the condition that held for at least one of the values
+        they were evaluated on, see :func:`evaluate_statements_of`.
     """
-    return get_conditioned_statements(statement, any)
+    held = {
+        result.operand._id_: result.operand
+        for result in evaluate_statements_of(statement)
+        if result.is_true
+    }
+    return list(held.values())
 
 
 def evaluate_condition(condition: ConditionType) -> bool:

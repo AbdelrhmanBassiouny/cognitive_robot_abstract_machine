@@ -7,11 +7,8 @@ pipeline without polluting the core evaluation methods.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from uuid import UUID
-
 from ordered_set import OrderedSet
-from typing_extensions import Any, Dict, List, Optional
+from typing_extensions import Any, List, Optional
 
 from krrood.entity_query_language._monitoring import monitored
 from krrood.entity_query_language.core.base_expressions import (
@@ -30,7 +27,10 @@ from krrood.entity_query_language.evaluation_context import (
 from krrood.entity_query_language.exceptions import NoExpressionFoundForGivenID
 from krrood.entity_query_language.operators.comparator import Comparator
 from krrood.entity_query_language.operators.core_logical_operators import (
+    AND,
+    OR,
     LogicalOperator,
+    Not,
 )
 from krrood.entity_query_language.predicate import Predicate
 from krrood.entity_query_language.query.query import Query
@@ -199,46 +199,47 @@ class InferenceRecorder(EvaluationObserver):
         register_inference(result.bindings[expression._id_], expression, result)
 
 
-@dataclass
-class ConditionTruthRecorder(EvaluationObserver):
+def evaluate_statements_of(condition: SymbolicExpression) -> List[OperationResult]:
     """
-    Observer that records the truth of every result the conditions it watches yield
-    during an evaluation.
+    Evaluate *condition* and collect the results of its statements.
+
+    The statements are *condition* itself and every expression its evaluation evaluated
+    as a condition, at any depth, except the conjunctions and disjunctions joining
+    statements, since their truth follows from the statements they join. A negation is
+    one statement as a whole: what it negates holds exactly when the negation does not,
+    so nothing inside a negation is a statement of its own. The values the statements
+    are about, such as variables, attributes and literals, are not statements. A
+    statement is evaluated only on the values its operator lets through, for example
+    only where the conjuncts before it hold.
+
+    :param condition: The condition to evaluate.
+    :return: The results of the statements of *condition*, in the order they were
+        evaluated.
     """
-
-    conditions: List[SymbolicExpression]
-    """
-    The conditions whose results are recorded.
-    """
-
-    truths: Dict[UUID, List[bool]] = field(default_factory=dict, init=False)
-    """
-    The truth of every result each condition yielded, by the condition's id.
-
-    A condition that yielded no result, such as one skipped after an earlier condition
-    ruled out every value, has no entry.
-    """
-
-    def on_result_yielded(self, expression, result):
-        if not any(expression is condition for condition in self.conditions):
-            return
-        self.truths.setdefault(expression._id_, []).append(result.is_true)
-
-    def record_evaluation_of(self, statement: SymbolicExpression) -> None:
-        """
-        Evaluate *statement* once, recording the truth of every result its watched
-        conditions yield.
-
-        :param statement: The statement to evaluate.
-        """
-        evaluation_context = create_default_evaluation_context()
-        evaluation_context.observers.append(self)
-        evaluation_context.active_conditions_root.set_active_root_if_not_set(
-            statement._conditions_root_, has_condition=statement._has_condition_
+    evaluation_context = create_default_evaluation_context()
+    results = list(condition._evaluate_in_new_context_(evaluation_context))
+    steps = [
+        step
+        for result in results
+        for step in result.result_chain
+        if step.operand is not None
+    ]
+    negated_ids = {
+        negated._id_
+        for step in steps
+        if isinstance(step.operand, Not)
+        for negated in step.operand._descendants_
+    }
+    return [
+        step
+        for step in steps
+        if not isinstance(step.operand, (AND, OR))
+        and step.operand._id_ not in negated_ids
+        and (
+            step.operand._id_ == condition._id_
+            or evaluation_context.is_child_of_truth_value_operator(step.operand)
         )
-        with evaluation_context.as_current():
-            for _ in statement._evaluate_():
-                pass
+    ]
 
 
 def create_default_evaluation_context() -> EvaluationContext:

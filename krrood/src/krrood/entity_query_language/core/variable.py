@@ -285,7 +285,7 @@ class InstantiatedVariable(
             self, old_child, new_child
         )
         for name, child in self._child_variables_.items():
-            if child is old_child:
+            if child._id_ == old_child._id_:
                 self._child_variables_[name] = new_child
 
     @cached_property

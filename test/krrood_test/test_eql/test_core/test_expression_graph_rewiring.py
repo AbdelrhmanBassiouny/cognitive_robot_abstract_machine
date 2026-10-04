@@ -8,7 +8,7 @@ reaches the parent-removal step while the removed expression is still recorded o
 sides.
 """
 
-from krrood.entity_query_language.factories import variable
+from krrood.entity_query_language.factories import case_when, variable
 
 from ...dataset.example_classes import KRROODPosition
 from ...dataset.value_comparisons import IsGreaterThan
@@ -43,3 +43,26 @@ def test_detaching_a_parent_keeps_the_other_parents():
     y._replace_child_(position, other_position)
 
     assert identifiers(position._parents_) == identifiers([x])
+
+
+# %% replacing a child
+
+
+def test_replacing_a_child_with_its_sibling_leaves_the_sibling_once():
+    position = variable(KRROODPosition, [])
+    x, y = position.x, position.y
+    predicate = IsGreaterThan(x, y)
+
+    predicate._replace_child_(x, y)
+
+    assert identifiers(predicate._children_) == identifiers([y])
+
+
+def test_replacing_a_child_replaces_every_branch_of_a_case_holding_it():
+    position = variable(KRROODPosition, [])
+    y, z = position.y, position.z
+    case = case_when(position.x > 0, y, y)
+
+    case._replace_child_(y, z)
+
+    assert identifiers([case.then_value, case.else_value]) == identifiers([z, z])
