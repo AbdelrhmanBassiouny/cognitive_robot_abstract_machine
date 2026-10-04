@@ -4,13 +4,16 @@ Plan: review follow-up for upstream cram2#696 (LucaKro, branch krrood_match_bug)
 its head 32c4199 (mirrored as fork branch krrood_match_bug = PR base). User pushes it onto #696.
 
 Done:
-- Dropped ConditionTruthRecorder; get_true/false_statements read truths from the bindings of
-  one plain _evaluate_(); callback replaced by private _statements_that_held_(statement, held).
-- Documented _replace_child_ contract (all references in this parent; other parents keep it).
-- Tests: 109 affected pass, 1314 in test_eql (env lacks probabilistic_model for 8 files).
+- Round 1: dropped PR's direct-children ConditionTruthRecorder; replace-child docstrings.
+- Round 2 (user: "why _children_ at all"): StatementTruthRecorder observer records every
+  condition the evaluation reaches (any depth, minus AND/OR, root always counts);
+  SymbolicExpression._evaluate_in_new_context_ extracted from _evaluate_; coraplex message
+  says "could not be satisfied". Replace-child: sibling duplicate fixed, CaseWhen elif ->
+  replace all, every _replace_child_field_ compares _id_. Tests TDD; 1321 pass in test_eql.
 
-Deliberately left out (follow-ups, ask user):
-- Nested and_ reported as "AND"; lone predicate -> []; AND false-statement is order dependent.
-- coraplex ConditionNotSatisfied builds its message at construction time (chart build), so
-  get_false_statements runs before the motion for the motion-chart path.
-- _replace_child_ can duplicate a sibling (f(x, y), x->y); mixed is/_id_ comparisons.
+Next / open (ask user):
+- coraplex ConditionNotSatisfied message is built at construction, i.e. at motion-chart build
+  time before the motion runs -> needs a lazy message; touches coraplex + giskardpy
+  CancelMotion (exception field, copied in motion_statechart.py:754). Separate PR off main.
+- First two commits carry the old "Made with the help of Claude" line (AGENTS now forbids
+  naming the service); amend/force-push was denied this session.
