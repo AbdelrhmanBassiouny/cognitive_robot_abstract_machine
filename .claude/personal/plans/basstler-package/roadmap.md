@@ -358,3 +358,13 @@ cover every shell entry point. `StackLabel` became `RepositoryLabel`, the same m
 `MERGED` and `PROMOTION_LINK_SENT`. #107 also brings `github-api.sh`, one of the two carriers
 `basstler-github-api-unification` unifies, so that carrier now arrives on a branch stacked on
 the package.
+
+## 2026-10-04 - #107 rebuilt on the package
+
+#107 was rebuilt in basstler's shape on top of #185 (`57480ed4`). Three changes reach #185's own
+modules. `maintenance_github.GitHubRepository` now holds a `GitHubConnection` instead of a bare
+token. That connection resolves GH_TOKEN, then GITHUB_TOKEN, then `gh auth token`, and has
+gained label and login calls. `RepositoryLabel` moved out of `setup_steps.py` into its own
+module and grew to the six labels the tooling applies. `stack.py`'s label defaults and
+`PROMOTION_LINK_LABEL` read it. `basstler-github-api-unification` therefore loses
+`github-api.sh` as a carrier, and its backend question is answered for the package client.

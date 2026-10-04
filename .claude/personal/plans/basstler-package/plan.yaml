@@ -452,8 +452,13 @@ items:
     (`plan-dashboards`). Both are still real preconditions - they are the carriers this unifies - and
     are recorded as blockers instead.
   blockers:
-  - 'Cross-plan dependency, not representable in depends_on: needs setup-personal-notes-script (#107,
-    stack-tooling-install), which brings github-api.sh - one of the two carriers this item unifies.'
+  - >-
+    One carrier fewer since 2026-10-04: setup-personal-notes-script (#107, stack-tooling-install)
+    no longer brings github-api.sh. It was rebuilt on `maintenance_github`, whose new
+    `GitHubConnection` owns the HTTP call and resolves GH_TOKEN, GITHUB_TOKEN, then `gh auth
+    token` - so the backend question this item owns is answered for the package's own client
+    (one HTTP backend, `gh` only as a credential source). What remains is `pr_state` (#111),
+    `plan_item_bootstrap`'s `GitHubPullRequestOpener` and `plan-updates-since.sh`'s copy.
   - 'Cross-plan dependency, not representable in depends_on: needs shared-pr-state-chips (#111, plan-dashboards),
     which brings pr_state - the other carrier this item unifies.'
 - id: upstream-pull-request-checks
