@@ -10,19 +10,11 @@ from __future__ import annotations
 
 import logging
 import sys
+from dataclasses import dataclass
 from typing import TextIO
 
-MAIN_MODULE_NAME = "__main__"
-"""
-The name Python gives the module it runs, whatever that module is called.
-"""
 
-PACKAGE_NAME = __name__.partition(".")[0]
-"""
-The package whose loggers this module configures.
-"""
-
-
+@dataclass(eq=False)
 class StandardStreamHandler(logging.Handler):
     """
     Writes each record's bare message to standard output, or to standard error from a
@@ -31,11 +23,19 @@ class StandardStreamHandler(logging.Handler):
     The stream is looked up when a record is written rather than when the handler is
     made, so a record goes wherever ``sys.stdout`` or ``sys.stderr`` points at that
     moment.
+
+    .. note:: Compared by identity, as every handler is, so that the logging module can
+        tell two of them apart.
     """
 
-    def __init__(self) -> None:
+    message_format: str = "%(message)s"
+    """
+    How a record is written: its message alone, with no level or logger name.
+    """
+
+    def __post_init__(self) -> None:
         super().__init__()
-        self.setFormatter(logging.Formatter("%(message)s"))
+        self.setFormatter(logging.Formatter(self.message_format))
 
     @staticmethod
     def stream_for(record: logging.LogRecord) -> TextIO:
@@ -57,13 +57,12 @@ class StandardStreamHandler(logging.Handler):
     def import_name(module_name: str) -> str:
         """
         A module run with ``python -m`` is named ``__main__``, which no package logger
-        is the parent of, so its import name is read from its spec instead.
+        is the parent of, so the name is read from the module's spec, which holds the
+        name it is imported by however it was run.
 
-        :param module_name: A module's ``__name__``.
+        :param module_name: The ``__name__`` of a module that has been loaded.
         :return: The name the module is imported by.
         """
-        if module_name != MAIN_MODULE_NAME:
-            return module_name
         return sys.modules[module_name].__spec__.name
 
     @classmethod
@@ -77,7 +76,7 @@ class StandardStreamHandler(logging.Handler):
         :param module_name: The ``__name__`` of a module inside the package.
         :return: That module's logger.
         """
-        package_logger = logging.getLogger(PACKAGE_NAME)
+        package_logger = logging.getLogger(__package__)
         if not any(isinstance(handler, cls) for handler in package_logger.handlers):
             package_logger.addHandler(cls())
             package_logger.setLevel(logging.INFO)
