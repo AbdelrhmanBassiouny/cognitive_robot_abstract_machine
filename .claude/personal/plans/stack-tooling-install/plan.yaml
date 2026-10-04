@@ -141,11 +141,17 @@ items:
   branch: claude/setup-personal-notes-script
   pull_request_number: 107
   status: in_progress
-  session: https://claude.ai/code/session_01U7PnqKcjgBbmFfwouGPMeN
+  session: https://claude.ai/code/session_01DbUfzLJEFqE4U3fKBFd2WA
   track: install
   depends_on:
   - setup-personal-notes-pr101
   - stack-tooling-on-main
+  blockers:
+  - >-
+    Cross-plan dependency, not representable in depends_on: stacked on basstler-package (#185,
+    basstler-package plan, upstream cram2#659) since 2026-10-04. Promote only after #185 lands and
+    the maintenance pass has moved #107's base back to main, then rebuild its promotion link, since
+    the one in its description was built against main before the stack.
   notes: >
     Extracts the mechanical half of `/setup-personal-notes` into a script, leaving the skill only
     the
@@ -354,6 +360,19 @@ items:
     converted back to draft after the push, per the standing convention, since it could not be
     established from here that the ready flip was the user's own rather than left over from an
     earlier round.
+
+    **Restacked onto basstler-package (#185) 2026-10-04** (session
+    https://claude.ai/code/session_01DbUfzLJEFqE4U3fKBFd2WA), the user's call: #185 merges first, and
+    it moves every Python file this branch touches. Merged #185's tip `37e8cf88` into this branch
+    (`6e712cec`, 26 conflicts) and retargeted #107 onto `claude/plan-item-kickoff-workflow-cuare2`;
+    against it the diff is this branch's own 36 files. `tooling_files.py` is gone: `HookScript`
+    moved into `basstler/locations.py` naming the shell entry points only. This branch's test
+    helpers folded into the package suite's rather than standing beside them: `stub_executables.py`
+    into `executable_stubs.py`, `RepositoryLabel` replacing `StackLabel` in `constants.py` (a strict
+    superset), `ProjectFile` and the credential variables into `constants.py`, and the gh/curl stubs
+    united a second time. `setup-personal-notes.sh` dropped its own pip step, since the requirements
+    file is gone and `session-start.sh` now installs the package's missing dependencies. 767 tests
+    pass in `test/basstler_test`.
 - id: setup-stacked-prs-skill
   title: 'PR 2: /setup-stacked-prs guided one-command setup skill'
   branch: claude/setup-stacked-prs-skill
@@ -363,6 +382,11 @@ items:
   track: install
   depends_on:
   - stack-tooling-on-main
+  blockers:
+  - >-
+    Its base, setup-personal-notes-script (#107), was restacked onto basstler-package (#185) on
+    2026-10-04, so this branch has to merge #107's new head (`6e712cec`) across the package move
+    before its diff against #107 is its own again.
   notes: >
     Mirrors its two siblings' read-only-check plus guided-skill pattern, with two install modes:
     native

@@ -204,3 +204,37 @@ promotion. Resolved via `/plan-item-resolve`, not by guessing:
   finding - only the automated comment-and-label half ran. A finding with no reproduction
   test is one nothing will ever re-check on its own; it has to be revisited by hand, which
   is what happened here five days later.
+
+### `setup-personal-notes-script` (#107) restacked onto basstler-package (#185), 2026-10-04
+
+The user's call: #185 lands first, and it moves every Python file #107 touches, so #107
+merges across the move now rather than after #185 lands. #185's tip `37e8cf88` was merged
+into #107 (`6e712cec`, 26 conflicts), and #107 was retargeted onto
+`claude/plan-item-kickoff-workflow-cuare2`. Against that base the diff is #107's own 36 files.
+
+The resolution adopted #185's abstractions wherever #107 had built a parallel one, because
+keeping both would have landed a second name for each:
+
+- `tooling_files.py` dissolved. `HookScript` moved into `basstler/locations.py`.
+  `SetupPrerequisiteFile` stays where #185 keeps it, and `ProjectFile` joined
+  `constants.py`.
+- `stub_executables.py` and #185's `executable_stubs.py` were the same helper under two
+  names, each also duplicating `main`'s older `path_hiding_executable`. Now there is one
+  module and one fixture (`stub_bin`).
+- `RepositoryLabel` and #185's `StackLabel` overlapped. `RepositoryLabel` is a strict
+  superset with the same member names, so it replaces `StackLabel` outright.
+
+One behaviour changed rather than moved. `setup-personal-notes.sh`'s own `pip install -r`
+step read a requirements file #185 deletes, so under `set -u` it would have died on an
+unbound variable. The step is gone: `session-start.sh`, which setup already runs, installs
+whatever `basstler/pyproject.toml` declares and the environment lacks. A failed install
+there is reported and does not stop setup.
+
+Checked the way this plan's process notes ask: by grepping the merged diff for any added
+line naming a path #185 deleted (none were left), and by mutations. Each of these was
+caught by the test named for it: not following `source` lines, not hiding `gh`, and not
+stripping credentials. 767 tests pass in `test/basstler_test`.
+
+Next: #110 (`setup-stacked-prs-skill`) is based on #107. It has to merge #107's new head
+across the same move before its diff is its own again. Promote #107 only after #185 lands,
+with a rebuilt link.
