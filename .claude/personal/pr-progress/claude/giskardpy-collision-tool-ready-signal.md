@@ -12,6 +12,9 @@ Done:
   before app.exec_(). Passes 5 out of 5, and 3 out of 3 under full CPU load;
   the whole test file passes (6).
 - Draft PR #490 off main, labelled bug.
+- Review round 1 (38a4101ef): READY_MESSAGE became StatusMessage(StrEnum).READY,
+  logged via logger.info (basicConfig INFO in __main__) instead of print; the test
+  matches the message within a line. 6 pass, 5 out of 5. Both threads replied to and resolved.
 
 Open:
 - SIGINT during the tool's own start-up still exits 1 or is lost. That's a
