@@ -253,6 +253,9 @@ items:
     decision 13's whichever-lands-second rule. It is not made to wait on all three, since the
     upstream queue can hold them for weeks.
 
+    #107 (`setup-personal-notes-script`, in `stack-tooling-install`) joined the branches stacked
+    on #185 on 2026-10-04, so the same whichever-lands-second rule covers it.
+
     **Also in scope: basstler's own Python 3.12+ environment** (the user, 2026-10-01, on #185's
     `locations.py:15` thread). The install creates a virtual environment from a 3.12+ interpreter,
     installs basstler into it editable, and the hooks run that environment's Python rather than

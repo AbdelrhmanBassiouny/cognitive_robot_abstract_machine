@@ -347,3 +347,14 @@ does not find these. Grepping for the old path in the merged tree does.
 Both branches stay ready, since the user had flipped them and then approved the pushes. Nothing is
 left to do on either until #185 lands. Then the maintenance pass moves #420's base back to `main`,
 and both get new promotion links.
+
+## 2026-10-04 - #107 stacked on #185
+
+The user restacked `setup-personal-notes-script` (#107, tracked in `stack-tooling-install`) onto
+this branch, since #185 lands first and moves every Python file #107 touches. Merged at `6e712cec`.
+Two of #185's test definitions changed in the process, which matters to anything else merging
+across #185. `HookScript` moved from `plan_item_bootstrap.py` into `locations.py` and grew to
+cover every shell entry point. `StackLabel` became `RepositoryLabel`, the same members plus
+`MERGED` and `PROMOTION_LINK_SENT`. #107 also brings `github-api.sh`, one of the two carriers
+`basstler-github-api-unification` unifies, so that carrier now arrives on a branch stacked on
+the package.
