@@ -373,6 +373,19 @@ items:
     united a second time. `setup-personal-notes.sh` dropped its own pip step, since the requirements
     file is gone and `session-start.sh` now installs the package's missing dependencies. 767 tests
     pass in `test/basstler_test`.
+
+    **Rebuilt in basstler's shape 2026-10-04** (`57480ed4`, same session), the user asking for it
+    to be as clean as possible with less duplication. The setup is
+    `basstler/setup_personal_notes.py` and `setup-personal-notes.sh` a three-line shim.
+    `github-api.sh` is deleted: GitHub calls go through `basstler/maintenance_github.py`, whose
+    new `GitHubConnection` owns the HTTP call and the credential lookup - GH_TOKEN, GITHUB_TOKEN,
+    then `gh auth token` (the user's choice, so `gh` is a credential source, not a second
+    backend). One label list, `basstler/repository_label.py`, now read by `setup_steps`,
+    `stack.py`'s defaults, `PROMOTION_LINK_LABEL` and the tests; `PULL_REQUEST_LABELS` is gone.
+    `setup_report.py` moved into the package. The owner is checked before anything is written.
+    Tests run the setup in-process against a replaying REST stand-in; 763 pass, four mutations
+    each caught by the test naming them, and a live read-only run against the fork verified the
+    owner through `gh auth token` and found only `rebase` missing.
 - id: setup-stacked-prs-skill
   title: 'PR 2: /setup-stacked-prs guided one-command setup skill'
   branch: claude/setup-stacked-prs-skill
@@ -384,9 +397,11 @@ items:
   - stack-tooling-on-main
   blockers:
   - >-
-    Its base, setup-personal-notes-script (#107), was restacked onto basstler-package (#185) on
-    2026-10-04, so this branch has to merge #107's new head (`6e712cec`) across the package move
-    before its diff against #107 is its own again.
+    Its base, setup-personal-notes-script (#107), was restacked onto basstler-package (#185) and
+    rebuilt in basstler's shape on 2026-10-04 (`57480ed4`): `github-api.sh`, which this branch's
+    `setup-stacked-prs.sh` sources, no longer exists. Merging #107's head means moving this
+    branch's setup onto `basstler.maintenance_github` and `basstler.repository_label` too, not
+    only across the file move.
   notes: >
     Mirrors its two siblings' read-only-check plus guided-skill pattern, with two install modes:
     native

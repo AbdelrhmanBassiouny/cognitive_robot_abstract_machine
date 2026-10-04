@@ -238,3 +238,23 @@ stripping credentials. 767 tests pass in `test/basstler_test`.
 Next: #110 (`setup-stacked-prs-skill`) is based on #107. It has to merge #107's new head
 across the same move before its diff is its own again. Promote #107 only after #185 lands,
 with a rebuilt link.
+
+### `setup-personal-notes-script` (#107) rebuilt in basstler's shape, 2026-10-04
+
+Restacking moved #107's files; it did not make #107 basstler-shaped. It still carried a
+285-line bash orchestrator and its own bash GitHub client beside the package's, and a label
+list in shell mirrored by a test enum. The user asked for it to be as clean as possible with
+less duplication, following the basstler direction, so it was rebuilt (`57480ed4`):
+
+- The setup is `basstler/setup_personal_notes.py`; the script is a shim over `python -m`.
+- `github-api.sh` is deleted. `maintenance_github.GitHubConnection` now owns the HTTP call
+  and the credential lookup, and `gh` survives only as a credential source (`gh auth token`),
+  the user's choice over token-only. That also hands the maintenance pass the same fallback.
+- `basstler/repository_label.py` is the one label list. `stack.py`'s three label defaults
+  and `PROMOTION_LINK_LABEL` read it, and tests hold the dashboard's labels and the shipped
+  `stack.toml` values to it.
+- `setup_report.py` moved into the package, since production now parses check-setup's rows.
+
+The finding worth carrying: a restack carries a branch's *shape* across along with its
+files, and the shape is what the direction is about. A branch that merges cleanly onto the
+package can still be written the way the package exists to stop.
