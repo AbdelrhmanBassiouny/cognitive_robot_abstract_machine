@@ -103,3 +103,8 @@ see it.
 ## Next
 
 - Nothing until #185 and then #420 land. Then promote, with a link rebuilt against `main`.
+
+## 2026-10-04 - #420 review round merged in
+
+- Merged #420's `f0b9850f1` (readable verdict values, no `spoken`) cleanly at `cb49ab119`.
+  744 tests pass, 68 in the module suite. Description counts updated.
