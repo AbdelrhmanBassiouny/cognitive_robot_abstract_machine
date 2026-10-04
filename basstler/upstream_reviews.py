@@ -178,18 +178,35 @@ class EnvironmentVariable(StrEnum):
 class ReviewState(StrEnum):
     """
     The verdict a reviewer submitted with a review.
+
+    Members are named as GitHub spells them, so a payload's value is looked up by
+    name, and each member's value is how the verdict reads in the report.
     """
 
-    APPROVED = "APPROVED"
-    CHANGES_REQUESTED = "CHANGES_REQUESTED"
-    COMMENTED = "COMMENTED"
-    DISMISSED = "DISMISSED"
-    PENDING = "PENDING"
+    APPROVED = "approved"
+    """
+    The reviewer approved the changes.
+    """
 
-    @property
-    def spoken(self) -> str:
-        """:return: The verdict as it reads in a sentence."""
-        return self.replace("_", " ").lower()
+    CHANGES_REQUESTED = "changes requested"
+    """
+    The reviewer asked for changes before the pull request can merge.
+    """
+
+    COMMENTED = "commented"
+    """
+    The reviewer left comments without a verdict.
+    """
+
+    DISMISSED = "dismissed"
+    """
+    The review was dismissed and no longer counts towards the verdict.
+    """
+
+    PENDING = "pending"
+    """
+    The review was started but not yet submitted.
+    """
 
 
 class PullRequestState(StrEnum):
@@ -212,51 +229,119 @@ class CheckContextType(StrEnum):
     """
 
     CHECK_RUN = "CheckRun"
+    """
+    A check run, such as a GitHub Actions job, whose outcome is its conclusion.
+    """
+
     STATUS_CONTEXT = "StatusContext"
+    """
+    A commit status posted through the commit-status API, whose outcome is its state.
+    """
 
 
 class CheckOutcome(StrEnum):
     """
     Where one check stands, over both shapes a rollup can hold.
 
-    A check run that has not finished reports no conclusion at all, which reads here
-    as :attr:`PENDING` so an unfinished check is never mistaken for a passing one.
+    Members are named as GitHub spells them, so a payload's value is looked up by
+    name, and each member's value is how the outcome reads in the report. A check run
+    that has not finished reports no conclusion at all, which reads here as
+    :attr:`PENDING` so an unfinished check is never mistaken for a passing one.
     """
 
-    SUCCESS = "SUCCESS"
-    FAILURE = "FAILURE"
-    ERROR = "ERROR"
-    CANCELLED = "CANCELLED"
-    TIMED_OUT = "TIMED_OUT"
-    ACTION_REQUIRED = "ACTION_REQUIRED"
-    NEUTRAL = "NEUTRAL"
-    SKIPPED = "SKIPPED"
-    STALE = "STALE"
-    STARTUP_FAILURE = "STARTUP_FAILURE"
-    PENDING = "PENDING"
-    EXPECTED = "EXPECTED"
+    SUCCESS = "success"
+    """
+    The check passed.
+    """
 
-    @property
-    def spoken(self) -> str:
-        """:return: The outcome as it reads in a sentence."""
-        return self.replace("_", " ").lower()
+    FAILURE = "failure"
+    """
+    The check failed.
+    """
+
+    ERROR = "error"
+    """
+    The commit status reported an error.
+    """
+
+    CANCELLED = "cancelled"
+    """
+    The check run was cancelled before it finished.
+    """
+
+    TIMED_OUT = "timed out"
+    """
+    The check run exceeded its time limit.
+    """
+
+    ACTION_REQUIRED = "action required"
+    """
+    The check run needs someone to act before it can conclude.
+    """
+
+    NEUTRAL = "neutral"
+    """
+    The check run finished without passing or failing.
+    """
+
+    SKIPPED = "skipped"
+    """
+    The check run was skipped.
+    """
+
+    STALE = "stale"
+    """
+    GitHub marked the check run stale after it went too long without finishing.
+    """
+
+    STARTUP_FAILURE = "startup failure"
+    """
+    The check run failed before it could start.
+    """
+
+    PENDING = "pending"
+    """
+    The check has not finished yet.
+    """
+
+    EXPECTED = "expected"
+    """
+    A required commit status that has not been reported yet.
+    """
 
 
 class RollupState(StrEnum):
     """
     The verdict GitHub itself computes over all of a pull request's checks.
+
+    Members are named as GitHub spells them, so a payload's value is looked up by
+    name, and each member's value is how the verdict reads in the report.
     """
 
-    SUCCESS = "SUCCESS"
-    FAILURE = "FAILURE"
-    ERROR = "ERROR"
-    PENDING = "PENDING"
-    EXPECTED = "EXPECTED"
+    SUCCESS = "success"
+    """
+    Every check passed.
+    """
 
-    @property
-    def spoken(self) -> str:
-        """:return: The verdict as it reads in a sentence."""
-        return self.lower()
+    FAILURE = "failure"
+    """
+    At least one check failed.
+    """
+
+    ERROR = "error"
+    """
+    At least one commit status reported an error.
+    """
+
+    PENDING = "pending"
+    """
+    At least one check has not finished yet.
+    """
+
+    EXPECTED = "expected"
+    """
+    At least one required commit status has not been reported yet.
+    """
 
 
 class ThreadMarker(StrEnum):
@@ -543,7 +628,7 @@ class Review(JSONModel):
         """
         return cls(
             author=Author.from_json(data[PullRequestJSONKey.AUTHOR]),
-            state=ReviewState(data[PullRequestJSONKey.STATE]),
+            state=ReviewState[data[PullRequestJSONKey.STATE]],
             body=data[PullRequestJSONKey.BODY],
             submitted_at=data[PullRequestJSONKey.SUBMITTED_AT],
         )
@@ -661,13 +746,13 @@ class CheckResult(JSONModel):
             return cls(
                 name=data[PullRequestJSONKey.NAME],
                 outcome=(
-                    CheckOutcome(conclusion) if conclusion else CheckOutcome.PENDING
+                    CheckOutcome[conclusion] if conclusion else CheckOutcome.PENDING
                 ),
                 url=data[PullRequestJSONKey.DETAILS_URL] or "",
             )
         return cls(
             name=data[PullRequestJSONKey.CONTEXT],
-            outcome=CheckOutcome(data[PullRequestJSONKey.STATE]),
+            outcome=CheckOutcome[data[PullRequestJSONKey.STATE]],
             url=data[PullRequestJSONKey.TARGET_URL] or "",
         )
 
@@ -702,7 +787,7 @@ class CheckStatus(JSONModel):
         :return: The parsed status.
         """
         return cls(
-            state=RollupState(data[PullRequestJSONKey.STATE]),
+            state=RollupState[data[PullRequestJSONKey.STATE]],
             results=PullRequestJSONKey.CONTEXTS.read_list(data, CheckResult),
         )
 
@@ -1156,13 +1241,13 @@ class UpstreamPullRequestReport:
         unsuccessful = checks.unsuccessful
         succeeded = len(checks.results) - len(unsuccessful)
         lines = [
-            f"{ReportText.CHECKS_HEADING}: {checks.state.spoken} "
+            f"{ReportText.CHECKS_HEADING}: {checks.state} "
             f"({succeeded}/{len(checks.results)} passed)",
             "",
         ]
         for result in unsuccessful:
             location = f" <{result.url}>" if result.url else ""
-            lines.append(f"- **{result.name}** — {result.outcome.spoken}{location}")
+            lines.append(f"- **{result.name}** — {result.outcome}{location}")
         lines.append("")
         return lines
 
@@ -1173,7 +1258,7 @@ class UpstreamPullRequestReport:
         lines = [ReportText.REVIEWS_HEADING, ""]
         for review in self.snapshot.reviews:
             lines.append(
-                f"- **{review.author.login}** — {review.state.spoken} "
+                f"- **{review.author.login}** — {review.state} "
                 f"({review.submitted_at})"
             )
             if review.body.strip():

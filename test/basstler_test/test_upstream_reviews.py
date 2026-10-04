@@ -254,8 +254,8 @@ def current_checks(paginated_client) -> CheckStatus:
 
 
 def test_the_rollup_verdict_is_read_rather_than_recomputed(current_checks):
-    assert current_checks.state is RollupState(
-        recorded_rollup()[PullRequestJSONKey.STATE]
+    assert (
+        current_checks.state is RollupState[recorded_rollup()[PullRequestJSONKey.STATE]]
     )
 
 
@@ -537,7 +537,7 @@ def test_the_checks_section_states_the_verdict_and_how_many_passed(current_state
     passed = len(checks.results) - len(checks.unsuccessful)
 
     assert (
-        f"{ReportText.CHECKS_HEADING}: {checks.state.spoken} "
+        f"{ReportText.CHECKS_HEADING}: {checks.state} "
         f"({passed}/{len(checks.results)} passed)" in rendered
     )
 
@@ -546,7 +546,7 @@ def test_every_check_that_did_not_pass_is_named_with_its_outcome(current_state):
     rendered = UpstreamPullRequestReport(current_state).render()
 
     for result in current_state.checks.unsuccessful:
-        assert f"**{result.name}** — {result.outcome.spoken}" in rendered
+        assert f"**{result.name}** — {result.outcome}" in rendered
 
 
 def test_a_passing_check_is_not_listed_individually(current_state):
@@ -577,7 +577,20 @@ def test_every_reviewer_and_verdict_is_listed(current_state):
 
     for review in current_state.reviews:
         assert review.author.login in rendered
-        assert review.state.spoken in rendered
+        assert review.state in rendered
+
+
+def test_a_verdict_reads_as_words_rather_than_as_github_spells_it(current_state):
+    rendered = UpstreamPullRequestReport(current_state).render()
+
+    [requested, *_] = [
+        review
+        for review in current_state.reviews
+        if review.state is ReviewState.CHANGES_REQUESTED
+    ]
+
+    assert requested.state in rendered
+    assert requested.state.name not in rendered
 
 
 def test_a_pull_request_with_nothing_outstanding_says_so(current_state):
