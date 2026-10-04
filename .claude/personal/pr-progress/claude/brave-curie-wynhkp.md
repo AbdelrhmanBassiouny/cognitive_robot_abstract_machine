@@ -22,6 +22,13 @@ Done:
   resolved the is_condition_participant + "removed inheritance" threads; left open: AND/OR skip
   (x2, answered why, no change - removing breaks 6 of 12 tests) and query+where (answered no:
   zero results when no solution).
+- Round 5 (2 threads): statements = condition itself + steps the context recorded as
+  evaluated as a TVO operand (truth_value_operator_children); is_condition_participant no
+  longer used (its by-type check reported comparisons passed as predicate values) and its
+  evaluation_context param reverted; is_statement_of -> is_statement. New TDD test
+  test_comparisons_a_statement_takes_as_values_are_not_statements_of_it. Commit 9d8667425c.
+  Resolved the "participant takes context not condition" thread; left open "isn't reached
+  enough?" (answered no with the chain dump).
 
 Next / open (ask user):
 - coraplex ConditionNotSatisfied message is built at construction, i.e. at motion-chart build
