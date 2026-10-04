@@ -148,3 +148,36 @@ The final merge into #202 then has to take the stack's side for these test files
 files are affected, so the claim still holds for every source file. The empty-diff check at
 the end should exclude these files, or #202 should take the same move first. That choice
 belongs to `perception-node-on-main`; this layer only records it.
+
+## `shape-vocabulary-on-main`: review of 2026-10-04 answered on #202 (2026-10-04)
+
+The developer's review of #488 asked for real code changes in this layer:
+- remove `MontessoriShapeCategory` in favour of the `MontessoriShape` subclasses;
+- move every constant and free function in `hole_geometry.py` and `pieces.py` onto classes or enums;
+- reuse or add `semantic_digital_twin` types for general geometry.
+
+That would have broken the rule that a layer never edits code, so the developer chose
+where to make the change. **Decision:** answer the review on #202, then re-cut the layer.
+The alternative was to edit only the layer, after which every later layer and #202 would have
+had to absorb a conflict across 17 or more files.
+
+- `6dda1916e` on `montessori_perception_on_main` makes the change and updates every caller on #202.
+  - Tests: 174 passed, 1 skipped with `--noconftest` (154 passed, 1 skipped before).
+  - It also moves the three pieces-only colour tests into `test_montessori_pieces.py` on
+    #202. This settles the test-file landing hazard flagged above: the final merge is
+    file-neutral again.
+- `2f0358c7b` re-cuts #488 from `6dda1916e`.
+  - Every file is byte-identical to #202, and the layer's 45 tests pass on its branch alone.
+  - The layer now also carries SemDT's `geometry.py`, which is `main` plus `Polygon2D`, and `test_polygon.py`.
+- **Every later layer cuts from `6dda1916e` or later**, not `4653fe32e`. The file lists in
+  later items' notes still hold.
+  - `piece-recognition-on-main` and `detection-pipeline-on-main` now carry the
+    `PieceSet`-based `piece_matcher.py` and `pipeline.py`.
+  - The `test_montessori_piece_matching.py` they carry no longer holds the three colour tests.
+- **Downstream of #202:** #205, #221 and the rest of `knowledge-directed-grounding`'s stack pick
+  this up the next time they merge #202. Anything they add that names
+  `MontessoriShapeCategory`, `KNOWN_PIECES`/`KNOWN_PIECE_BY_CATEGORY`,
+  `detect_hole_footprints` or `HoleFootprint.size` has to be updated in that merge.
+- **Open:** one #488 thread asks whether `HueCircle` (OpenCV's 180-step hue encoding)
+  should also move to `semantic_digital_twin`. It was kept in `pieces.py` as image-processing
+  rather than world description, and the thread is left open for the developer.

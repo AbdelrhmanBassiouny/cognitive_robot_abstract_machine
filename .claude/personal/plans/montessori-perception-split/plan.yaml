@@ -46,12 +46,15 @@ items:
   session: https://claude.ai/code/session_01T25zXQPBeES9MrL6i2dE1K
   notes: >
     montessori/semantics.py, montessori/exceptions.py, montessori/hole_geometry.py with
-    resources/board.stl (loaded at import time), montessori/pieces.py, and the tests
-    test_montessori_semantics.py and test_montessori_hole_geometry.py - 7 files, ~1,340 lines.
-    Off main. pieces.py has no test module of its own on #202: its colour and hue tests sit in
-    test_montessori_piece_matching.py's "reading a piece's colour" section. The tests in that
-    section that need only pieces.py move down here verbatim; the two that read SurfaceColors
-    (pipeline.py) stay with the pipeline layer.
+    resources/board.stl (loaded at import time), montessori/pieces.py,
+    semantic_digital_twin's world_description/geometry.py (main plus the new Polygon2D), and
+    the tests test_montessori_semantics.py, test_montessori_hole_geometry.py,
+    test_montessori_pieces.py and test_polygon.py - 10 files. Off main. Cut from #202 at
+    6dda1916e, the commit that answered this layer's 2026-10-04 review on #202 itself (enum
+    removed in favour of the MontessoriShape classes, constants and free functions moved onto
+    classes, Polygon2D added to semantic_digital_twin, pieces-only tests moved into
+    test_montessori_pieces.py on #202). Every file is byte-identical to #202 again. One review
+    thread stays open: whether HueCircle belongs in semantic_digital_twin.
 - id: simulated-world-on-main
   title: Land the simulated Montessori world
   branch: null
