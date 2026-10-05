@@ -120,11 +120,13 @@ attribute has some element, ...". Giving a whole collection still compares the w
 (`takes_course={logic, ai}` matches only a student taking exactly these two courses), and so does a variable whose
 values are whole collections. A list of patterns still matches the elements position by position.
 
-```{note}
-An attribute declared as an optional collection, such as `Optional[set[Course]]`, is not treated as a collection yet
-and keeps equality. When a generative backend constructs objects from such a pattern, the element built from the nested
-pattern is passed to the constructor as it is, not wrapped in a collection.
-```
+An attribute declared as an optional collection, such as `Optional[set[Course]]`, is matched the same way, and an absent
+collection (`None`) counts as empty: it contains no value and no element matches a pattern. `attr=None` still compares
+the attribute to `None`.
+
+When a generative backend constructs objects from a pattern, the element built for a collection-valued attribute is
+wrapped in the attribute's collection type, so `items=an(Item)(...)` on a `list[Item]` attribute constructs
+`items=[item]`, and on a `set[Item]` attribute `items={item}`.
 
 ## Full Example: Finding Connected Parts
 

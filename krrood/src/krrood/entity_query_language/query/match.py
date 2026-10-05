@@ -34,9 +34,12 @@ from typing_extensions import (
     Self,
     Iterator,
     Iterable,
+    get_args,
+    get_origin,
 )
 
 from krrood.class_diagrams.utils import get_type_hints_of_object
+from krrood.class_diagrams.wrapped_field import WrappedField
 from krrood.entity_query_language.core.base_expressions import (
     HasExpression,
     MatchAssignedValue,
@@ -454,6 +457,26 @@ class Match(
         self._children_.append(attr_match)
         self._conditions_.extend(attr_match._conditions_)
         return attr_match
+
+    def _constructor_argument_for_(self, keyword: str, value: Any) -> Any:
+        """
+        :param keyword: A keyword argument of the factory.
+        :param value: The value constructed for it from the pattern.
+        :return: *value* wrapped in the attribute's collection type when the pattern
+            states one element of a collection-valued attribute, else *value*.
+        """
+        if not self._resolved_:
+            # The attribute matches that tell which attributes hold collections are
+            # created by resolution.
+            self.resolve()
+        for attribute_match in self._children_:
+            if (
+                isinstance(attribute_match, AttributeMatch)
+                and attribute_match.attribute_name == keyword
+                and attribute_match.index_access is None
+            ):
+                return attribute_match._as_constructor_argument_(value)
+        return value
 
     def _resolve_list_like_value(
         self, key: str, value: Union[list, tuple], parent: Match
@@ -906,9 +929,15 @@ class AttributeMatch(AbstractMatchExpression[T]):
         :return: Membership of the assigned value in the attribute when it states one
             element of a collection-valued attribute, else equality.
         """
-        if self._states_an_element_of_the_attribute_:
-            return Comparator(self.attribute, self.assigned_variable, operator.contains)
-        return self.attribute == self.assigned_variable
+        if not self._states_an_element_of_the_attribute_:
+            return self.attribute == self.assigned_variable
+        membership = Comparator(
+            self.attribute, self.assigned_variable, operator.contains
+        )
+        if self._collection_field_.is_optional:
+            # An absent optional collection has no elements, so it contains nothing.
+            return AND(self.attribute != None, membership)
+        return membership
 
     @cached_property
     def _states_an_element_of_the_attribute_(self) -> bool:
@@ -924,28 +953,79 @@ class AttributeMatch(AbstractMatchExpression[T]):
         if isinstance(value, AbstractMatchExpression):
             return True
         if isinstance(value, SymbolicExpression):
+            element_type = self._collection_element_type_
             return (
                 isclass(value._type_)
-                and isclass(self._type_)
-                and issubclass(value._type_, self._type_)
+                and isclass(element_type)
+                and issubclass(value._type_, element_type)
             )
-        return not isinstance(value, (list, tuple, set, frozenset, type(Ellipsis)))
+        return value is not None and not isinstance(
+            value, (list, tuple, set, frozenset, type(Ellipsis))
+        )
 
-    @cached_property
+    @property
     def _attribute_holds_a_collection_(self) -> bool:
         """
-        :return: Whether the attribute is declared as a collection such as a list, set,
-            tuple or sequence of elements. An optional collection is not handled yet and
-            keeps equality.
+        :return: Whether the attribute is declared as a collection, such as a list, set,
+            tuple or sequence of elements, or as an optional one.
+        """
+        return self._collection_field_ is not None
+
+    @cached_property
+    def _collection_field_(self) -> Optional[WrappedField]:
+        """
+        :return: The attribute's field when it is declared as a collection or an
+            optional collection, else None.
         """
         wrapped_field = get_wrapped_field(
             self.attribute._owner_class_, self.attribute_name
         )
-        return (
-            wrapped_field is not None
-            and wrapped_field.is_container
-            and wrapped_field.container_type is not type
+        if wrapped_field is None or self._declared_collection_(wrapped_field) is None:
+            return None
+        return wrapped_field
+
+    @cached_property
+    def _collection_element_type_(self) -> Optional[Type]:
+        """
+        :return: The type of the elements of the collection-valued attribute.
+        """
+        element_types = get_args(self._declared_collection_(self._collection_field_))
+        return element_types[0] if element_types else None
+
+    @staticmethod
+    def _declared_collection_(wrapped_field: WrappedField) -> Optional[Any]:
+        """
+        :param wrapped_field: The field of an attribute.
+        :return: The collection type the field is declared as, unwrapped from optional,
+            such as ``set[Course]``, or None when it is not a collection.
+        """
+        declared_type = (
+            wrapped_field.contained_type
+            if wrapped_field.is_optional
+            else wrapped_field.resolved_type
         )
+        container_type = get_origin(declared_type)
+        if (
+            container_type in wrapped_field.container_types
+            and container_type is not type
+        ):
+            return declared_type
+        return None
+
+    def _as_constructor_argument_(self, value: Any) -> Any:
+        """
+        :param value: The value constructed for this attribute from its assigned value.
+        :return: *value* wrapped in the attribute's collection type when the assigned
+            value states one element of a collection-valued attribute, else *value*.
+        """
+        if not self._states_an_element_of_the_attribute_:
+            return value
+        collection_type = get_origin(
+            self._declared_collection_(self._collection_field_)
+        )
+        if collection_type in (set, tuple):
+            return collection_type((value,))
+        return [value]
 
     @cached_property
     def assigned_variable(self) -> SymbolicExpression:

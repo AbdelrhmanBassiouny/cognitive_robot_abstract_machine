@@ -27,6 +27,7 @@ from typing_extensions import (
     Dict,
     List,
     get_args,
+    get_origin,
 )
 
 from random_events.variable import (
@@ -37,6 +38,7 @@ from random_events.variable import (
 )
 
 from krrood.class_diagrams.utils import get_type_hints_of_object
+from krrood.class_diagrams.wrapped_field import WrappedField
 from krrood.entity_query_language.core.base_expressions import (
     UnaryExpression,
     Bindings,
@@ -831,10 +833,27 @@ class FlatVariable(MappedVariable[T]):
     its own, and two of them range over the elements independently.
     """
 
+    def _update_type_(self) -> None:
+        """
+        Update the `_type_` attribute with the element type when the child's type is a
+        parameterized collection such as ``set[X]``, else with the child's type.
+        """
+        super()._update_type_()
+        collection_type = get_origin(self._type_)
+        element_types = get_args(self._type_)
+        if (
+            collection_type in WrappedField.container_types
+            and collection_type is not type
+            and element_types
+        ):
+            self._type_ = element_types[0]
+
     def _apply_mapping_(
-        self, value: Iterable[T], sources: Optional[OperationResult] = None
+        self, value: Optional[Iterable[T]], sources: Optional[OperationResult] = None
     ) -> Iterable[T]:
-        yield from value
+        # An absent collection, such as an optional one left as None, has no elements.
+        if value is not None:
+            yield from value
 
     def _rebuild_on_(self, child: CanBehaveLikeAVariable) -> MappedVariable:
         # Not routed through the mapped-variable cache: a flattening is an iteration
