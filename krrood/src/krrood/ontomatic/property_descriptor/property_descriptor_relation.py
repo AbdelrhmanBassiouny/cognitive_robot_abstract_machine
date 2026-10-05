@@ -142,10 +142,11 @@ class PropertyDescriptorRelation(PredicateClassRelation):
         """
         Infer all symmetric relations of this relation.
         """
-        if (
-            self.inference_explanation
-            and self.inference_explanation[0] == InferredThrough.SYMMETRY
+        if self.inference_explanation and self.inference_explanation[0] in (
+            InferredThrough.SYMMETRY,
+            InferredThrough.SYMMETRIC_TRANSITIVE_COMPONENT,
         ):
+            # The component of a symmetric-transitive property already contains both directions.
             return
         if issubclass(self.property_descriptor_class, SymmetricProperty):
             self.__class__(

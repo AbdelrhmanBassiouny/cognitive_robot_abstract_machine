@@ -32,6 +32,7 @@ from ..property_descriptor.mixins import (
 )
 from ..property_descriptor.property_descriptor import PropertyDescriptor
 from ..property_descriptor.property_descriptor_relation import (
+    InferredThrough,
     PropertyDescriptorRelation,
 )
 from ..utils import (
@@ -655,45 +656,48 @@ class OwlLoader:
                 )
 
     def add_inferences_from_transitive_symmetric_relations(self):
+        """
+        Close every property that is both symmetric and transitive: all individuals in a weakly connected component of
+        the relation graph of such a property are related to each other (and to themselves, unless the property is
+        irreflexive). Each entailed fact is added as a relation of the symbol graph with the explanation
+        SYMMETRIC_TRANSITIVE_COMPONENT, so super-property, inverse, chain and equivalence implications are applied to
+        it. Transitive chaining is not repeated for these facts, the component already closes them.
+        """
         transitive_symmetric_descriptor_types = [
             d
             for p, d in self.metadata.descriptor_by_name.items()
             if issubclass(d, TransitiveProperty) and issubclass(d, SymmetricProperty)
         ]
         for descriptor_type in transitive_symmetric_descriptor_types:
+            reflexive = issubclass(descriptor_type, ReflexiveProperty) or not issubclass(
+                descriptor_type, IrreflexiveProperty
+            )
             descriptor_induced_subgraph = SymbolGraph().descriptor_subgraph(
                 descriptor_type
             )
             wcc = rx.weakly_connected_components(descriptor_induced_subgraph)
-            for comp in wcc:
-                comp = list(comp)
-                for i, node in enumerate(comp):
-                    node_instance = descriptor_induced_subgraph[node]
-                    descriptor_instance: PropertyDescriptor = (
-                        descriptor_type.get_descriptor_instance_for_domain_type(
-                            node_instance.instance_type
-                        )
-                    )
-                    if issubclass(descriptor_type, ReflexiveProperty) or not issubclass(
-                        descriptor_type, IrreflexiveProperty
-                    ):
-                        descriptor_instance.update_value(
-                            node_instance.instance,
-                            node_instance.instance,
+            for component_id, comp in enumerate(wcc):
+                members = [descriptor_induced_subgraph[node] for node in comp]
+                explanation = (
+                    InferredThrough.SYMMETRIC_TRANSITIVE_COMPONENT,
+                    descriptor_type.__name__,
+                    component_id,
+                    len(members),
+                )
+                for source in members:
+                    wrapped_field = descriptor_type.get_descriptor_instance_for_domain_type(
+                        source.instance_type
+                    ).wrapped_field
+                    for target in members:
+                        if target is source and not reflexive:
+                            continue
+                        PropertyDescriptorRelation(
+                            source,
+                            target,
+                            wrapped_field,
                             inferred=True,
-                        )
-                    for node2 in comp[i + 1 :]:
-                        node2_instance = descriptor_induced_subgraph[node2]
-                        descriptor_instance.update_value(
-                            node_instance.instance,
-                            node2_instance.instance,
-                            inferred=True,
-                        )
-                        descriptor_instance.update_value(
-                            node2_instance.instance,
-                            node_instance.instance,
-                            inferred=True,
-                        )
+                            inference_explanation=explanation,
+                        ).update_source_and_add_to_graph_and_apply_implications()
 
     def create_anonymous_instances(self):
         """Creates instances for all anonymous subjects in the graph."""
