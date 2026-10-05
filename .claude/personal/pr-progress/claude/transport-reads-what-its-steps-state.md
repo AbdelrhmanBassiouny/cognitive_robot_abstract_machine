@@ -14,6 +14,11 @@ step when the step is a Match.
 - [x] both krrood commits cherry-picked here; both properties rewritten as
       `self.place.place.object_designator` + `apply_mapping_on_external_root(self.place)`
       when self.place is a Match. test_transporting.py 32 passed.
+- [ ] review thread 4185265491 (mapped_variable.py, Attribute's isinstance on
+      HasFactoryAndKwargs): user asked for a shared mixin so the if goes away. Replied
+      (r4185287354) that the check can only move (values on a path are arbitrary objects);
+      offered 1 value-side double dispatch, 2 singledispatchmethod, 3 keep. Awaiting choice;
+      thread left open. The same code is in #493, so apply the choice there too.
 - [ ] user review. test_multi_robot_action_designator.py cannot run locally (Stretch URDF
       not installed). If #588 moves, restack this onto its new head and refresh
       rip_grasp_descriptions on the fork.
