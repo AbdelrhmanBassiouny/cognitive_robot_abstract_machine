@@ -170,6 +170,14 @@ class PropertyInfo:
     is_functional: bool = False
     is_specialized: bool = False
     declared_domains: List[str] = field(default_factory=list)
+    rdfs_domains: List[str] = field(default_factory=list)
+    """
+    Names of the named classes declared with rdfs:domain for this property in the ontology.
+    """
+    rdfs_ranges: List[str] = field(default_factory=list)
+    """
+    Names of the named classes declared with rdfs:range for this property in the ontology.
+    """
     _overrides_for: List[str] = field(default_factory=list)
     _predefined_data_type: bool = False
     data_type_hint_inner: Optional[str] = None
@@ -2059,6 +2067,17 @@ class CodeGenerator:
         for prop_name, prop_info in self.onto.properties.items():
             if prop_info.chain_axioms:
                 prop_info.base_descriptors.append(HasChainAxioms.__name__)
+            property_uri = rdflib.URIRef(prop_info.uri)
+            prop_info.rdfs_domains = sorted(
+                NamingRegistry.uri_to_python_name(domain)
+                for domain in self.onto.graph.objects(property_uri, RDFS.domain)
+                if isinstance(domain, rdflib.URIRef)
+            )
+            prop_info.rdfs_ranges = sorted(
+                NamingRegistry.uri_to_python_name(range_)
+                for range_ in self.onto.graph.objects(property_uri, RDFS.range)
+                if isinstance(range_, rdflib.URIRef)
+            )
 
         for prop_info in self.onto.properties.values():
             prop_info.onto = None

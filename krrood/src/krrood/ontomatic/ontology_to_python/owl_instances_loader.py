@@ -22,6 +22,8 @@ from ..property_descriptor.attribute_introspector import (
     DescriptorAwareIntrospector,
 )
 from ..property_descriptor.mixins import (
+    HasEquivalentProperties,
+    HasInverseProperty,
     IsBaseClass,
     TransitiveProperty,
     SymmetricProperty,
@@ -398,11 +400,38 @@ class OwlLoader:
 
         Necessary conditions (restrictions in superclass position) and range specialisations of subclasses are not
         used for classification, since they are not entailed in the direction from the property to the class.
+
+        Inferred types are also added to ``instance.types`` so that the type checks of the axioms (e.g. the
+        ``Student`` conjunct of ``Student and (hasMajor some Science) SubClassOf ScienceStudent``) see them, and the
+        inference is repeated until no new type is added (fixpoint).
         """
         declared_domains: Dict[Type[PropertyDescriptor], Tuple[Type, ...]] = {}
         sufficient_domains: Dict[Type[PropertyDescriptor], Tuple[Type, ...]] = {}
         for instance in self.anonymous_instances.values():
             instance.final_sorted_types = get_most_specific_types(tuple(instance.types))
+        number_of_types = -1
+        while number_of_types != self._number_of_inferred_types():
+            number_of_types = self._number_of_inferred_types()
+            self._infer_types_once(declared_domains, sufficient_domains)
+
+    def _number_of_inferred_types(self) -> int:
+        return sum(len(i.final_sorted_types) for i in self.anonymous_instances.values())
+
+    def _add_inferred_type(self, instance: AnonymousClass, cls: Type) -> None:
+        """
+        Add an inferred type to an individual, visible to the axioms of the next inference pass.
+        """
+        instance.final_sorted_types.append(cls)
+        instance.add_type(cls)
+
+    def _infer_types_once(
+        self,
+        declared_domains: Dict[Type[PropertyDescriptor], Tuple[Type, ...]],
+        sufficient_domains: Dict[Type[PropertyDescriptor], Tuple[Type, ...]],
+    ) -> None:
+        """
+        One pass of the type inference over all individuals, see :meth:`infer_all_types_for_the_anonymous_instances`.
+        """
         for instance in self.anonymous_instances.values():
             descriptors = self.get_descriptors_of_instance(instance)
             if len(descriptors) == 0:
@@ -414,7 +443,7 @@ class OwlLoader:
                         issubclass_or_role(t, py_cls)
                         for t in instance.final_sorted_types
                     ):
-                        instance.final_sorted_types.append(py_cls)
+                        self._add_inferred_type(instance, py_cls)
                         self.registry.record_type(
                             instance.uri, py_cls, TypeInferredThrough.NAME, py_cls
                         )
@@ -424,27 +453,89 @@ class OwlLoader:
                     sufficient_domains[desc] = self.domains_with_sufficient_conditions(
                         desc
                     )
-                for dom in declared_domains[desc]:
-                    self._update_inferred_types_given_descriptor_domain_and_range(
-                        instance, desc, dom
-                    )
+                if self.has_declared_domains_and_ranges(desc):
+                    for dom in declared_domains[desc]:
+                        self._add_domain_type(instance, desc, dom)
+                    for range_ in self.declared_ranges(desc):
+                        for value in getattr(instance, desc.get_field_name()):
+                            self._add_range_type(instance, desc, value, range_)
+                else:
+                    for dom in declared_domains[desc]:
+                        self._update_inferred_types_given_descriptor_domain_and_range(
+                            instance, desc, dom
+                        )
                 for dom in sufficient_domains[desc]:
                     if dom.axiom_python(instance) and not any(
                         issubclass_or_role(t, dom) for t in instance.final_sorted_types
                     ):
-                        instance.final_sorted_types.append(dom)
+                        self._add_inferred_type(instance, dom)
                         self.registry.record_type(
                             instance.uri, dom, TypeInferredThrough.AXIOM, dom
                         )
 
     @staticmethod
-    def declared_domains(desc: Type[PropertyDescriptor]) -> Tuple[Type, ...]:
+    def has_declared_domains_and_ranges(desc: Type[PropertyDescriptor]) -> bool:
+        """
+        :return: Whether the generated descriptor lists the rdfs:domain and rdfs:range of its property (models
+         generated before this information was emitted do not).
+        """
+        return "rdfs_domains" in vars(desc)
+
+    def _resolve_class_names(self, names: Iterable[str]) -> Tuple[Type, ...]:
+        return tuple(
+            self.metadata.class_by_name[name]
+            for name in names
+            if name in self.metadata.class_by_name
+        )
+
+    def declared_ranges(self, desc: Type[PropertyDescriptor]) -> Tuple[Type, ...]:
+        """
+        :return: The classes declared with rdfs:range for the property of the descriptor.
+        """
+        return self._resolve_class_names(vars(desc).get("rdfs_ranges", ()))
+
+    def _add_domain_type(self, instance: AnonymousClass, desc: Type, dom: Type) -> None:
+        """
+        Type an individual with the declared domain of one of its properties (prp-dom).
+        """
+        if any(issubclass_or_role(t, dom) for t in instance.final_sorted_types):
+            return
+        self._add_inferred_type(instance, dom)
+        first_value = getattr(instance, desc.get_field_name())[0]
+        self.registry.record_type(
+            instance.uri,
+            dom,
+            TypeInferredThrough.DOMAIN,
+            (instance.uri, desc.__name__, getattr(first_value, "uri", first_value)),
+        )
+
+    def _add_range_type(
+        self, instance: AnonymousClass, desc: Type, value: AnonymousClass, range_: Type
+    ) -> None:
+        """
+        Type a value with the declared range of the property (prp-rng).
+        """
+        if value is None or any(
+            issubclass_or_role(t, range_) for t in value.final_sorted_types
+        ):
+            return
+        self._add_inferred_type(value, range_)
+        self.registry.record_type(
+            value.uri,
+            range_,
+            TypeInferredThrough.RANGE,
+            (instance.uri, desc.__name__, value.uri),
+        )
+
+    def declared_domains(self, desc: Type[PropertyDescriptor]) -> Tuple[Type, ...]:
         """
         :param desc: A property descriptor class.
-        :return: The most general domains of the descriptor, i.e. the domains that are not a subclass (or role) of
-         another domain of the descriptor. These correspond to the declared rdfs:domain of the property; the other
-         domains are specialisations introduced by class restrictions.
+        :return: The classes declared with rdfs:domain for the property of the descriptor. For models generated
+         without this information, the most general domains of the descriptor (the domains that are not a subclass or
+         role of another domain of the descriptor).
         """
+        if self.has_declared_domains_and_ranges(desc):
+            return self._resolve_class_names(vars(desc)["rdfs_domains"])
         domains = tuple(desc.all_domains[desc])
         return tuple(
             dom
@@ -530,7 +621,7 @@ class OwlLoader:
     ):
         values = getattr(instance, desc.get_field_name(), None) or [None]
         if not any(issubclass_or_role(t, dom) for t in instance.final_sorted_types):
-            instance.final_sorted_types.append(dom)
+            self._add_inferred_type(instance, dom)
             first_value = values[0]
             self.registry.record_type(
                 instance.uri,
@@ -555,7 +646,7 @@ class OwlLoader:
             if not any(
                 issubclass_or_role(t, range_) for t in range_inst.final_sorted_types
             ):
-                range_inst.final_sorted_types.append(range_)
+                self._add_inferred_type(range_inst, range_)
                 self.registry.record_type(
                     range_inst.uri,
                     range_,
@@ -644,6 +735,74 @@ class OwlLoader:
         """Iterates through all properties of all instances and assigns properties to the instances."""
         for s, instance in self.anonymous_instances.items():
             self._assign_all_properties_to_instance(instance)
+        self.add_implied_property_values_to_anonymous_instances()
+
+    def add_implied_property_values_to_anonymous_instances(self):
+        """
+        Before the types are inferred, add to every individual the values of the properties implied by its asserted
+        object property values through super-properties (OWL 2 RL rule prp-spo1), equivalent properties (prp-eqp1/2),
+        inverse properties (prp-inv1/2) and symmetry (prp-symp). The domains of these properties and the sufficient
+        conditions that use them are then taken into account when the types are inferred (e.g.
+        ``isCrazyAbout SubPropertyOf loves`` makes ``Person and (loves some Sports) SubClassOf SportsLover``
+        applicable, and ``hasResearchProject SubPropertyOf hasWork`` with ``hasWork`` having the domain Employee).
+        """
+        closures: Dict[Type[PropertyDescriptor], Tuple[Tuple[str, bool], ...]] = {}
+        for subject, instance in self.anonymous_instances.items():
+            for predicate, value in self._triples_by_subject[subject]:
+                if isinstance(value, Literal):
+                    continue
+                value_instance = self.anonymous_instances.get(value)
+                if value_instance is None:
+                    continue
+                descriptor = self.metadata.get_descriptor_base(
+                    to_snake(local_name(predicate))
+                )
+                if descriptor is None:
+                    continue
+                if descriptor not in closures:
+                    closures[descriptor] = self._implied_properties(descriptor)
+                for field_name, inverted in closures[descriptor]:
+                    source, target = (
+                        (value_instance, instance) if inverted else (instance, value_instance)
+                    )
+                    values = getattr(source, field_name, None)
+                    if values is None:
+                        setattr(source, field_name, [target])
+                    elif target not in values:
+                        values.append(target)
+
+    @staticmethod
+    def _implied_properties(
+        descriptor: Type[PropertyDescriptor],
+    ) -> Tuple[Tuple[str, bool], ...]:
+        """
+        :param descriptor: An object property descriptor class.
+        :return: The field names of the properties implied by an assertion of ``descriptor`` (excluding itself), each
+         with a flag that is True if the implied assertion has subject and object swapped.
+        """
+        implied = {(descriptor, False)}
+        frontier = [(descriptor, False)]
+        while frontier:
+            current, inverted = frontier.pop()
+            neighbours = [(parent, inverted) for parent in current.super_classes()]
+            if issubclass(current, HasEquivalentProperties):
+                neighbours += [
+                    (equivalent, inverted)
+                    for equivalent in current.get_equivalent_properties()
+                ]
+            if issubclass(current, HasInverseProperty) and current.get_inverse():
+                neighbours.append((current.get_inverse(), not inverted))
+            if issubclass(current, SymmetricProperty):
+                neighbours.append((current, not inverted))
+            for neighbour in neighbours:
+                if neighbour not in implied:
+                    implied.add(neighbour)
+                    frontier.append(neighbour)
+        implied.discard((descriptor, False))
+        return tuple(
+            (implied_descriptor.get_field_name(), inverted)
+            for implied_descriptor, inverted in implied
+        )
 
     def _assign_all_properties_to_instance(self, instance: AnonymousClass):
         """Iterates through all properties of all instances and assigns properties to the instances."""

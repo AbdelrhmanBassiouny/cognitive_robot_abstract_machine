@@ -6,7 +6,7 @@ Generated using custom converter
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing_extensions import Type, List, Optional, Tuple
+from typing_extensions import Type, List, Optional, Tuple, ClassVar
 
 from krrood.ontomatic.property_descriptor.property_descriptor import PropertyDescriptor
 from krrood.ontomatic.property_descriptor.mixins import (
@@ -34,6 +34,9 @@ class {{ prop.descriptor_name }}({{ ', '.join(prop.base_descriptors) }}):
     {% else %}
     """{{ prop.descriptor_name }}"""
     {% endif %}
+
+    rdfs_domains: ClassVar[Tuple[str, ...]] = ({% for d in prop.rdfs_domains %}"{{ d }}", {% endfor %})
+    rdfs_ranges: ClassVar[Tuple[str, ...]] = ({% for r in prop.rdfs_ranges %}"{{ r }}", {% endfor %})
     {# Only emit a typed inverse if the target descriptor is already defined earlier #}
     {% if prop.inverse_of%}
 
