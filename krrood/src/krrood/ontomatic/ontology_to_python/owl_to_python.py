@@ -1928,7 +1928,9 @@ class CodeGenerator:
         }
         props_order = self.engine.topological_order(prop_classes, "superproperties")
 
-        self.engine.find_implicit_subtypes(props_order)
+        # Subclass and role relations are only taken from the ontology (rdfs:subClassOf, owl:equivalentClass and
+        # roleFor restrictions). Implicit subsumptions guessed from shared properties (find_implicit_subtypes) are not
+        # entailed and are therefore not applied.
 
         for info in self.onto.classes.values():
             info.base_classes_for_topological_sort = info.base_classes[:]
