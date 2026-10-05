@@ -218,12 +218,12 @@ class AvoidExternalCollisions(AvoidCollisionRule, SubclassJSONSerializer):
         body_subset = None
         if body_subset_ids is not None:
             body_subset = {tracker.get(body_id) for body_id in body_subset_ids}
-        return cls(
-            buffer_zone_distance=data["buffer_zone_distance"],
-            violated_distance=data["violated_distance"],
-            robot=robot,
-            body_subset=body_subset,
-        )
+        distance_fields = {
+            field_name: data[field_name]
+            for field_name in ("buffer_zone_distance", "violated_distance")
+            if field_name in data
+        }
+        return cls(robot=robot, body_subset=body_subset, **distance_fields)
 
 
 @dataclass
