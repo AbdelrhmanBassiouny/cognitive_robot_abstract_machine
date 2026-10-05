@@ -254,7 +254,7 @@ def test_underspecified_language(apartment_world_pr2_copy_with_context):
         VerticalAlignment.NoAlignment,
         robot.left_arm.end_effector,
     )
-    plan_generator = an(sequential, target_type=SequentialNode)(
+    plan_generator = a(sequential, target_type=SequentialNode)(
         children=[
             a(NavigateAction)(
                 target_location=(
