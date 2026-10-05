@@ -13,6 +13,7 @@ fields are reachable directly as symbolic attributes.
 
 from __future__ import annotations
 
+import operator
 import uuid
 from abc import ABC, abstractmethod
 from collections import deque
@@ -33,9 +34,12 @@ from typing_extensions import (
     Self,
     Iterator,
     Iterable,
+    get_args,
+    get_origin,
 )
 
 from krrood.class_diagrams.utils import get_type_hints_of_object
+from krrood.class_diagrams.wrapped_field import WrappedField
 from krrood.entity_query_language.core.base_expressions import (
     HasExpression,
     MatchAssignedValue,
@@ -65,13 +69,19 @@ from krrood.entity_query_language.exceptions import (
     PositionalArgumentsInMatchPattern,
     ReadOnlyMapping,
 )
+from krrood.entity_query_language.operators.comparator import Comparator
+from krrood.entity_query_language.operators.core_logical_operators import (
+    AND,
+    chained_logic,
+)
+from krrood.entity_query_language.operators.logical_quantifiers import Exists
 from krrood.entity_query_language.predicate import HasType
 from krrood.entity_query_language.query.quantifiers import An, ResultQuantifier
 from krrood.entity_query_language.query.query_modifiers import HasQueryModifiers
 from krrood.entity_query_language.utils import T
 from krrood.patterns.factory_and_kwargs import HasFactoryAndKwargs
 from krrood.rustworkx_utils.rxnode import RWXNode
-from krrood.symbol_graph.helpers import get_field_type_endpoint
+from krrood.symbol_graph.helpers import get_field_type_endpoint, get_wrapped_field
 
 if TYPE_CHECKING:
     from krrood.entity_query_language.factories import ConditionType
@@ -447,6 +457,26 @@ class Match(
         self._children_.append(attr_match)
         self._conditions_.extend(attr_match._conditions_)
         return attr_match
+
+    def _constructor_argument_for_(self, keyword: str, value: Any) -> Any:
+        """
+        :param keyword: A keyword argument of the factory.
+        :param value: The value constructed for it from the pattern.
+        :return: *value* wrapped in the attribute's collection type when the pattern
+            states one element of a collection-valued attribute, else *value*.
+        """
+        if not self._resolved_:
+            # The attribute matches that tell which attributes hold collections are
+            # created by resolution.
+            self.resolve()
+        for attribute_match in self._children_:
+            if (
+                isinstance(attribute_match, AttributeMatch)
+                and attribute_match.attribute_name == keyword
+                and attribute_match.index_access is None
+            ):
+                return attribute_match._as_constructor_argument_(value)
+        return value
 
     def _resolve_list_like_value(
         self, key: str, value: Union[list, tuple], parent: Match
@@ -851,22 +881,151 @@ class AttributeMatch(AbstractMatchExpression[T]):
         """
         Resolve the attribute assignment by creating the conditions and applying the
         necessary mappings to the attribute.
+
+        For a collection-valued attribute, a single value or pattern describes one
+        element of the collection: a value must be in it, and some element must match a
+        pattern.
         """
+        attribute = self.attribute
         if (
             not isinstance(self.assigned_value, AbstractMatchExpression)
             or self.assigned_value._resolved_
         ):
-            self._conditions_.append(self.attribute == self.assigned_variable)
+            self._conditions_.append(self._build_condition_on_assigned_value_())
             return
 
-        self.assigned_value.resolve(self.attribute, self)
+        if not self._states_an_element_of_the_attribute_:
+            self._conditions_.extend(self._resolve_pattern_against_(attribute))
+            return
 
-        if self.is_type_filter_needed:
-            self._conditions_.append(
-                HasType(self.attribute, self.assigned_value._type_)
+        element = FlatVariable(attribute)
+        # The pattern's own attributes are read off this match's variable, which now
+        # stands for one element of the collection rather than the whole collection.
+        self._variable_ = element
+        self._conditions_.append(
+            Exists(
+                element, chained_logic(AND, *self._resolve_pattern_against_(element))
             )
+        )
 
-        self._conditions_.extend(self.assigned_value._conditions_)
+    def _resolve_pattern_against_(
+        self, variable: CanBehaveLikeAVariable
+    ) -> List[ConditionType]:
+        """
+        Resolve the assigned pattern with *variable* as the object it describes.
+
+        :param variable: The variable the pattern describes.
+        :return: The conditions of the pattern on *variable*.
+        """
+        self.assigned_value.resolve(variable, self)
+        conditions = []
+        if self.is_type_filter_needed:
+            conditions.append(HasType(variable, self.assigned_value._type_))
+        conditions.extend(self.assigned_value._conditions_)
+        return conditions
+
+    def _build_condition_on_assigned_value_(self) -> SymbolicExpression:
+        """
+        :return: Membership of the assigned value in the attribute when it states one
+            element of a collection-valued attribute, else equality.
+        """
+        if not self._states_an_element_of_the_attribute_:
+            return self.attribute == self.assigned_variable
+        membership = Comparator(
+            self.attribute, self.assigned_variable, operator.contains
+        )
+        if self._collection_field_.is_optional:
+            # An absent optional collection has no elements, so it contains nothing.
+            return AND(self.attribute != None, membership)
+        return membership
+
+    @cached_property
+    def _states_an_element_of_the_attribute_(self) -> bool:
+        """
+        :return: Whether the attribute holds a collection and the assigned value stands
+            for one of its elements: a pattern, a plain value that is not itself a
+            collection or ``...``, or a symbolic value whose type is the element type. An
+            indexed attribute names one element already.
+        """
+        if self.index_access is not None or not self._attribute_holds_a_collection_:
+            return False
+        value = self.assigned_value
+        if isinstance(value, AbstractMatchExpression):
+            return True
+        if isinstance(value, SymbolicExpression):
+            element_type = self._collection_element_type_
+            return (
+                isclass(value._type_)
+                and isclass(element_type)
+                and issubclass(value._type_, element_type)
+            )
+        return value is not None and not isinstance(
+            value, (list, tuple, set, frozenset, type(Ellipsis))
+        )
+
+    @property
+    def _attribute_holds_a_collection_(self) -> bool:
+        """
+        :return: Whether the attribute is declared as a collection, such as a list, set,
+            tuple or sequence of elements, or as an optional one.
+        """
+        return self._collection_field_ is not None
+
+    @cached_property
+    def _collection_field_(self) -> Optional[WrappedField]:
+        """
+        :return: The attribute's field when it is declared as a collection or an
+            optional collection, else None.
+        """
+        wrapped_field = get_wrapped_field(
+            self.attribute._owner_class_, self.attribute_name
+        )
+        if wrapped_field is None or self._declared_collection_(wrapped_field) is None:
+            return None
+        return wrapped_field
+
+    @cached_property
+    def _collection_element_type_(self) -> Optional[Type]:
+        """
+        :return: The type of the elements of the collection-valued attribute.
+        """
+        element_types = get_args(self._declared_collection_(self._collection_field_))
+        return element_types[0] if element_types else None
+
+    @staticmethod
+    def _declared_collection_(wrapped_field: WrappedField) -> Optional[Any]:
+        """
+        :param wrapped_field: The field of an attribute.
+        :return: The collection type the field is declared as, unwrapped from optional,
+            such as ``set[Course]``, or None when it is not a collection.
+        """
+        declared_type = (
+            wrapped_field.contained_type
+            if wrapped_field.is_optional
+            else wrapped_field.resolved_type
+        )
+        container_type = get_origin(declared_type)
+        if (
+            container_type in wrapped_field.container_types
+            and container_type is not type
+        ):
+            return declared_type
+        return None
+
+    def _as_constructor_argument_(self, value: Any) -> Any:
+        """
+        :param value: The value constructed for this attribute from its assigned value.
+        :return: *value* wrapped in the attribute's collection type when the assigned
+            value states one element of a collection-valued attribute, else *value*.
+        """
+        if not self._states_an_element_of_the_attribute_:
+            return value
+        collection_type = get_origin(
+            self._declared_collection_(self._collection_field_)
+        )
+        if collection_type in (set, tuple):
+            return collection_type((value,))
+        return [value]
 
     @cached_property
     def assigned_variable(self) -> SymbolicExpression:
@@ -931,6 +1090,10 @@ class AttributeMatch(AbstractMatchExpression[T]):
                 current_value = current_value._kwargs_[step._attribute_name_]
             elif isinstance(step, IndexByValue):
                 current_value = current_value[step._key_]
+            elif isinstance(step, FlatVariable) and isinstance(current_value, Match):
+                # A pattern stated for a collection-valued attribute describes one of
+                # its elements, so the values below this step belong to that pattern.
+                continue
             else:
                 raise ReadOnlyMapping(step)
 
