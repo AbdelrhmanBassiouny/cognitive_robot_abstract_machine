@@ -360,14 +360,19 @@ class SymbolicExpression(
         """
         Replace a child expression with a new child expression.
 
+        Every reference this expression holds to *old_child* is replaced, since an
+        expression filling several operands is one and the same operand in each of them.
+        Other parents of *old_child* keep it.
+
         :param old_child: The old child expression.
         :param new_child: The new child expression.
         """
         if old_child is new_child:
             return
-        _children_ids_ = [v._id_ for v in self._children_]
-        child_idx = _children_ids_.index(old_child._id_)
-        self._children_[child_idx] = new_child
+        children_ids = [child._id_ for child in self._children_]
+        old_child_index = children_ids.index(old_child._id_)
+        if new_child._id_ not in children_ids:
+            self._children_[old_child_index] = new_child
         new_child._parent_ = self
         old_child._remove_parent_(self)
         self._replace_child_field_(old_child, new_child)
@@ -377,7 +382,7 @@ class SymbolicExpression(
         self, old_child: SymbolicExpression, new_child: SymbolicExpression
     ):
         """
-        Replace a child field with a new child expression.
+        Replace every child field that holds *old_child* with *new_child*.
 
         :param old_child: The old child expression.
         :param new_child: The new child expression.
@@ -394,10 +399,14 @@ class SymbolicExpression(
 
         :param parent: The parent expression to remove.
         """
-        if parent in self._parents_:
-            self._parents_.remove(parent)
-        if self._id_ in [child._id_ for child in parent._children_]:
-            parent._children_.remove(self)
+        self._parents_[:] = [
+            other_parent
+            for other_parent in self._parents_
+            if other_parent._id_ != parent._id_
+        ]
+        parent._children_[:] = [
+            child for child in parent._children_ if child._id_ != self._id_
+        ]
         if parent is self._parent__:
             self._parent__ = self._parents_[-1] if self._parents_ else None
 
@@ -549,7 +558,23 @@ class SymbolicExpression(
             create_default_evaluation_context,
         )
 
-        evaluation_context = create_default_evaluation_context()
+        yield from self._evaluate_in_new_context_(
+            create_default_evaluation_context(), sources
+        )
+
+    def _evaluate_in_new_context_(
+        self,
+        evaluation_context: EvaluationContext,
+        sources: Optional[OperationResult] = None,
+    ) -> Iterator[OperationResult]:
+        """
+        Start an evaluation of this expression in a context no evaluation has used yet.
+
+        :param evaluation_context: The new context the evaluation runs in.
+        :param sources: The current OperationResult carrying bindings of variables, or
+            None.
+        :return: An iterator of OperationResult instances.
+        """
         evaluation_context.active_conditions_root.set_active_root_if_not_set(
             self._conditions_root_, has_condition=self._has_condition_
         )
@@ -1069,7 +1094,7 @@ class UnaryExpression(SymbolicExpression, ABC):
     def _replace_child_field_(
         self, old_child: SymbolicExpression, new_child: SymbolicExpression
     ):
-        if self._child_ is old_child:
+        if self._child_._id_ == old_child._id_:
             self._child_ = new_child
 
     @property
@@ -1096,11 +1121,9 @@ class MultiArityExpression(SymbolicExpression, ABC):
     def _replace_child_field_(
         self, old_child: SymbolicExpression, new_child: SymbolicExpression
     ):
-        old_child_index = self._operation_children_.index(old_child)
-        self._operation_children_ = (
-            self._operation_children_[:old_child_index]
-            + (new_child,)
-            + self._operation_children_[old_child_index + 1 :]
+        self._operation_children_ = tuple(
+            new_child if child._id_ == old_child._id_ else child
+            for child in self._operation_children_
         )
 
     def update_children(self, *children: SymbolicExpression) -> None:
@@ -1134,9 +1157,9 @@ class BinaryExpression(SymbolicExpression, ABC):
     def _replace_child_field_(
         self, old_child: SymbolicExpression, new_child: SymbolicExpression
     ):
-        if self.left is old_child:
+        if self.left._id_ == old_child._id_:
             self.left = new_child
-        elif self.right is old_child:
+        if self.right._id_ == old_child._id_:
             self.right = new_child
 
     def _is_equality_literal_comparator_or_conjunction_(self) -> bool:
@@ -1354,22 +1377,28 @@ class OperationResult:
     """
 
     @property
+    def result_chain(self) -> List[OperationResult]:
+        """
+        :return: The results this one was derived from, earliest first, ending with this
+            one.
+        """
+        chain: List[OperationResult] = []
+        seen: Set[int] = set()
+        result: Optional[OperationResult] = self
+        while result is not None and id(result) not in seen:
+            seen.add(id(result))
+            chain.append(result)
+            result = result.previous_operation_result
+        return chain[::-1]
+
+    @property
     def all_bindings(self) -> Bindings:
         """
         :return: All the bindings from all the evaluated operations until this one, including this one.
-        Traverses the full previous_operation_result chain (linear traversal with cycle detection).
         """
         combined: Bindings = {}
-        seen: set = set()
-
-        def collect(node: Optional[OperationResult]) -> None:
-            if node is None or id(node) in seen:
-                return
-            seen.add(id(node))
-            collect(node.previous_operation_result)
-            combined.update(node.bindings)  # shallower nodes (closer to self) win
-
-        collect(self)
+        for result in self.result_chain:
+            combined.update(result.bindings)  # later results (closer to self) win
         return combined
 
     @property
