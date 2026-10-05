@@ -14,6 +14,7 @@ from krrood.ontomatic.property_descriptor.mixins import (
 )
 
 from typing_extensions import (
+    ClassVar,
     Optional,
     Type,
     Iterable,
@@ -60,6 +61,15 @@ class PropertyDescriptorRelation(PredicateClassRelation):
     inference_explanation: Optional[
         Tuple[InferredThrough, PropertyDescriptorRelation]
     ] = field(default=None, compare=False, hash=False)
+
+    eager_symmetric_transitive_closure: ClassVar[bool] = False
+    """
+    Whether relations of properties that are both symmetric and transitive are closed eagerly, relation by relation,
+    while they are added. By default this is disabled and the closure is computed once after loading from the weakly
+    connected components of the relation graph (see ``OwlLoader.add_inferences_from_transitive_symmetric_relations``).
+    Enabling it reproduces the behaviour before the connected-components optimisation and is only meant for the
+    ablation experiment.
+    """
 
     @cached_property
     def transitive(self) -> bool:
@@ -330,7 +340,10 @@ class PropertyDescriptorRelation(PredicateClassRelation):
         if self.is_inferred_from_equivalence_relation:
             return
 
-        if issubclass(self.property_descriptor_class, SymmetricProperty):
+        if (
+            issubclass(self.property_descriptor_class, SymmetricProperty)
+            and not self.eager_symmetric_transitive_closure
+        ):
             return
 
         if self.transitive:

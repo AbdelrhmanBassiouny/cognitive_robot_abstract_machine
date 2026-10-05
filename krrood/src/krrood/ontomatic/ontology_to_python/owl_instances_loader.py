@@ -28,6 +28,9 @@ from ..property_descriptor.mixins import (
     ReflexiveProperty,
 )
 from ..property_descriptor.property_descriptor import PropertyDescriptor
+from ..property_descriptor.property_descriptor_relation import (
+    PropertyDescriptorRelation,
+)
 from ..utils import (
     get_non_class_attribute_names_of_instance,
     get_most_specific_types,
@@ -307,7 +310,8 @@ class OwlLoader:
         self.create_explicit_instances_from_inferred_types_of_anonymous_instances()
         self.sort_explicit_types_from_most_to_least_specific()
         self.assign_all_properties_to_explict_types_and_apply_on_time_forward_chaining()
-        self.add_inferences_from_transitive_symmetric_relations()
+        if not PropertyDescriptorRelation.eager_symmetric_transitive_closure:
+            self.add_inferences_from_transitive_symmetric_relations()
         return self.registry
 
     def infer_all_types_for_the_anonymous_instances(self):
