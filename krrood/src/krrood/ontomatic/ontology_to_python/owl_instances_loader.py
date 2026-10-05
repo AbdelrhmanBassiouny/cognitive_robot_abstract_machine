@@ -5,6 +5,7 @@ import os.path
 import time
 from abc import ABC
 from collections import defaultdict
+from enum import Enum
 from dataclasses import fields, is_dataclass, dataclass, field
 from functools import lru_cache
 from types import ModuleType
@@ -55,6 +56,52 @@ handler.setLevel(logging.INFO)  # <-- this filters out DEBUG messages
 logger.addHandler(handler)
 
 
+class TypeInferredThrough(Enum):
+    """
+    How the loader obtained a type of an individual.
+    """
+
+    ASSERTED = "asserted"
+    """
+    An rdf:type statement of the data. Premise: the class.
+    """
+    DOMAIN = "domain"
+    """
+    The declared domain of a property of the individual (OWL 2 RL rule prp-dom). Premise: (subject, property, value).
+    """
+    RANGE = "range"
+    """
+    The declared range of a property whose value is the individual (OWL 2 RL rule prp-rng).
+    Premise: (subject, property, value).
+    """
+    AXIOM = "axiom"
+    """
+    The individual satisfies a sufficient condition (owl:equivalentClass definition or general class axiom) of the
+    class. Premise: the class whose axiom held.
+    """
+    NAME = "name"
+    """
+    The individual has no properties and is named like the class (punning heuristic of the loader).
+    Premise: the class.
+    """
+
+
+@dataclass(frozen=True)
+class TypeExplanation:
+    """
+    The explanation of a type of an individual.
+    """
+
+    rule: TypeInferredThrough
+    """
+    The rule that added the type.
+    """
+    premises: Tuple[Any, ...]
+    """
+    The premises of the rule, see :class:`TypeInferredThrough`.
+    """
+
+
 class OwlInstancesRegistry:
     """Registry of instances created from an OWL/RDF instances file.
 
@@ -63,6 +110,32 @@ class OwlInstancesRegistry:
 
     def __init__(self, symbol_graph: Optional[SymbolGraph] = None) -> None:
         self._by_uri: Dict[URIRef, List[Any]] = defaultdict(list)
+        self.type_explanations: Dict[URIRef, Dict[Type, TypeExplanation]] = (
+            defaultdict(dict)
+        )
+
+    def record_type(
+        self, uri: URIRef, cls: Type, rule: TypeInferredThrough, *premises: Any
+    ) -> None:
+        """
+        Record why an individual has a type. The first explanation of a type is kept.
+        """
+        self.type_explanations[uri].setdefault(cls, TypeExplanation(rule, premises))
+
+    def explain_type(self, uri: Union[str, URIRef], cls: Type) -> Optional[TypeExplanation]:
+        """
+        :param uri: The individual.
+        :param cls: A class of the individual.
+        :return: The explanation of the type, or of the recorded type it is implied by (a subclass or role of
+         ``cls``), or None if no recorded type implies ``cls``.
+        """
+        explanations = self.type_explanations.get(URIRef(uri), {})
+        if cls in explanations:
+            return explanations[cls]
+        for recorded_cls, explanation in explanations.items():
+            if issubclass_or_role(recorded_cls, cls):
+                return explanation
+        return None
 
     def get_or_create_for(
         self, uri: URIRef, factory: Type, symbol_graph, *args, **kwargs
@@ -342,6 +415,9 @@ class OwlLoader:
                         for t in instance.final_sorted_types
                     ):
                         instance.final_sorted_types.append(py_cls)
+                        self.registry.record_type(
+                            instance.uri, py_cls, TypeInferredThrough.NAME, py_cls
+                        )
             for desc in descriptors:
                 if desc not in declared_domains:
                     declared_domains[desc] = self.declared_domains(desc)
@@ -357,6 +433,9 @@ class OwlLoader:
                         issubclass_or_role(t, dom) for t in instance.final_sorted_types
                     ):
                         instance.final_sorted_types.append(dom)
+                        self.registry.record_type(
+                            instance.uri, dom, TypeInferredThrough.AXIOM, dom
+                        )
 
     @staticmethod
     def declared_domains(desc: Type[PropertyDescriptor]) -> Tuple[Type, ...]:
@@ -449,8 +528,20 @@ class OwlLoader:
         range_: Optional[Type] = None,
         range_inst: Optional[AnonymousClass] = None,
     ):
+        values = getattr(instance, desc.get_field_name(), None) or [None]
         if not any(issubclass_or_role(t, dom) for t in instance.final_sorted_types):
             instance.final_sorted_types.append(dom)
+            first_value = values[0]
+            self.registry.record_type(
+                instance.uri,
+                dom,
+                TypeInferredThrough.DOMAIN,
+                (
+                    instance.uri,
+                    desc.__name__,
+                    getattr(first_value, "uri", first_value),
+                ),
+            )
         if not range_:
             try:
                 range_ = desc.get_descriptor_instance_for_domain_type(dom).range
@@ -465,6 +556,12 @@ class OwlLoader:
                 issubclass_or_role(t, range_) for t in range_inst.final_sorted_types
             ):
                 range_inst.final_sorted_types.append(range_)
+                self.registry.record_type(
+                    range_inst.uri,
+                    range_,
+                    TypeInferredThrough.RANGE,
+                    (instance.uri, desc.__name__, range_inst.uri),
+                )
 
     def add_inferences_from_transitive_symmetric_relations(self):
         transitive_symmetric_descriptor_types = [
@@ -516,6 +613,9 @@ class OwlLoader:
                 py_cls = self.metadata.get_python_class(o_class)
                 if py_cls:
                     ac.add_type(py_cls)
+                    self.registry.record_type(
+                        s, py_cls, TypeInferredThrough.ASSERTED, o_class
+                    )
         if self.anonymous_instances:
             return
         for s, o_class in self.graph.subject_objects(RDF.type):
@@ -536,6 +636,9 @@ class OwlLoader:
             py_cls = self.metadata.get_python_class(o_class)
             if py_cls:
                 self.anonymous_instances[s].add_type(py_cls)
+                self.registry.record_type(
+                    s, py_cls, TypeInferredThrough.ASSERTED, o_class
+                )
 
     def assign_all_properties_to_all_anonymous_instances(self):
         """Iterates through all properties of all instances and assigns properties to the instances."""

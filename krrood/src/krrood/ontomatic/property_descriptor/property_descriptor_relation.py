@@ -14,7 +14,9 @@ from krrood.ontomatic.property_descriptor.mixins import (
 )
 
 from typing_extensions import (
+    Any,
     ClassVar,
+    Dict,
     Optional,
     Type,
     Iterable,
@@ -49,6 +51,8 @@ class InferredThrough(Enum):
     SUPER = "super"
     TRANSITIVE = "transitive"
     SYMMETRY = "symmetry"
+    CHAIN = "chain"
+    SYMMETRIC_TRANSITIVE_COMPONENT = "symmetric_transitive_component"
 
 
 @dataclass(eq=False, repr=False)
@@ -58,9 +62,17 @@ class PropertyDescriptorRelation(PredicateClassRelation):
     descriptor attached to the source instance.
     """
 
-    inference_explanation: Optional[
-        Tuple[InferredThrough, PropertyDescriptorRelation]
-    ] = field(default=None, compare=False, hash=False)
+    inference_explanation: Optional[Tuple[Any, ...]] = field(
+        default=None, compare=False, hash=False
+    )
+    """
+    How an inferred relation was derived: a tuple whose first element is the :class:`InferredThrough` rule and whose
+    remaining elements are the premises. The premises are relations for EQUIVALENT, SUPER, INVERSE and SYMMETRY (one
+    premise), TRANSITIVE (the two composed relations) and CHAIN (the relations of the chain, in order). For
+    SYMMETRIC_TRANSITIVE_COMPONENT the premises are the name of the property descriptor, the identifier of the weakly
+    connected component of its relation graph that entails the relation, and the size of the component. Asserted
+    relations have no explanation.
+    """
 
     eager_symmetric_transitive_closure: ClassVar[bool] = False
     """
@@ -355,17 +367,13 @@ class PropertyDescriptorRelation(PredicateClassRelation):
         Infer transitive relations outgoing from the source.
         """
 
-        def edge_condition(relation: PredicateClassRelation) -> bool:
-            return relation.property_descriptor_class is self.property_descriptor_class
-
-        for target in SymbolGraph()._instance_graph.find_successors_by_edge(
-            self.target.index, edge_condition
-        ):
+        for relation in list(self.target_outgoing_relations_with_same_descriptor_type):
             self.__class__(
                 self.source,
-                target,
+                relation.target,
                 self.wrapped_field,
                 inferred=True,
+                inference_explanation=(InferredThrough.TRANSITIVE, self, relation),
             ).update_source_and_add_to_graph_and_apply_implications()
 
     @cached_property
@@ -380,17 +388,13 @@ class PropertyDescriptorRelation(PredicateClassRelation):
         Infer transitive relations incoming to the target.
         """
 
-        def edge_condition(relation: PredicateClassRelation) -> bool:
-            return relation.property_descriptor_class is self.property_descriptor_class
-
-        for source in SymbolGraph()._instance_graph.find_predecessors_by_edge(
-            self.source.index, edge_condition
-        ):
+        for relation in list(self.source_incoming_relations_with_same_descriptor_type):
             self.__class__(
-                source,
+                relation.source,
                 self.target,
                 self.wrapped_field,
                 inferred=True,
+                inference_explanation=(InferredThrough.TRANSITIVE, relation, self),
             ).update_source_and_add_to_graph_and_apply_implications()
 
     @property
@@ -429,57 +433,148 @@ class PropertyDescriptorRelation(PredicateClassRelation):
                 prefix = chain[:index]
                 suffix = chain[index + 1 :]
 
-                for start_node in self._find_nodes_backward(self.source, prefix):
-                    for end_node in self._find_nodes_forward(self.target, suffix):
+                for start_node, prefix_relations in self._find_nodes_backward(
+                    self.source, prefix
+                ):
+                    for end_node, suffix_relations in self._find_nodes_forward(
+                        self.target, suffix
+                    ):
                         self._apply_inferred_chain_relation(
-                            start_node, end_node, target_class
+                            start_node,
+                            end_node,
+                            target_class,
+                            prefix_relations + (self,) + suffix_relations,
                         )
 
     def _find_nodes_backward(
         self, end_node: WrappedInstance, chain: Tuple[Type[PropertyDescriptor], ...]
-    ) -> Iterable[WrappedInstance]:
+    ) -> Iterable[Tuple[WrappedInstance, Tuple[PropertyDescriptorRelation, ...]]]:
+        """
+        :return: The start nodes of paths that follow ``chain`` and end in ``end_node``, each with the relations of
+         its path in order.
+        """
         if not chain:
-            yield end_node
+            yield end_node, ()
             return
 
         last_property_descriptor = chain[-1]
         remaining = chain[:-1]
 
-        for relation in SymbolGraph().get_incoming_relations_by_descriptor_class(
-            end_node, last_property_descriptor
+        for relation in list(
+            SymbolGraph().get_incoming_relations_by_descriptor_class(
+                end_node, last_property_descriptor
+            )
         ):
-            yield from self._find_nodes_backward(relation.source, remaining)
+            for start_node, path in self._find_nodes_backward(
+                relation.source, remaining
+            ):
+                yield start_node, path + (relation,)
 
     def _find_nodes_forward(
         self,
         start_node: WrappedInstance,
         chain: Tuple[Type[PropertyDescriptor], ...],
-    ) -> Iterable[WrappedInstance]:
+    ) -> Iterable[Tuple[WrappedInstance, Tuple[PropertyDescriptorRelation, ...]]]:
+        """
+        :return: The end nodes of paths that start in ``start_node`` and follow ``chain``, each with the relations of
+         its path in order.
+        """
         if not chain:
-            yield start_node
+            yield start_node, ()
             return
 
         first_property_descriptor = chain[0]
         remaining = chain[1:]
 
-        for relation in SymbolGraph().get_outgoing_relations_by_descriptor_class(
-            start_node, first_property_descriptor
+        for relation in list(
+            SymbolGraph().get_outgoing_relations_by_descriptor_class(
+                start_node, first_property_descriptor
+            )
         ):
-            yield from self._find_nodes_forward(relation.target, remaining)
+            for end_node, path in self._find_nodes_forward(relation.target, remaining):
+                yield end_node, (relation,) + path
 
     def _apply_inferred_chain_relation(
         self,
         source: WrappedInstance,
         target: WrappedInstance,
         target_property_descriptor_class: Type[PropertyDescriptor],
+        chain_relations: Tuple[PropertyDescriptorRelation, ...] = (),
     ):
         association = target_property_descriptor_class.get_association_of_source_type(
             source.instance_type
         )
         if association:
             self.__class__(
-                source, target, association.field, inferred=True
+                source,
+                target,
+                association.field,
+                inferred=True,
+                inference_explanation=(InferredThrough.CHAIN, *chain_relations),
             ).update_source_and_add_to_graph_and_apply_implications()
+
+    @property
+    def rule(self) -> Optional[InferredThrough]:
+        """
+        :return: The rule that inferred this relation, or None if the relation was asserted.
+        """
+        return self.inference_explanation[0] if self.inference_explanation else None
+
+    @property
+    def premises(self) -> Tuple[Any, ...]:
+        """
+        :return: The premises of the rule that inferred this relation (see :attr:`inference_explanation`).
+        """
+        return tuple(self.inference_explanation[1:]) if self.inference_explanation else ()
+
+    def explain(self, depth: int = 3) -> Dict[str, Any]:
+        """
+        Explain how this relation was obtained.
+
+        :param depth: How many levels of premises to expand.
+        :return: A nested mapping with the fact (source, field, target), the rule (None for asserted relations) and
+         the explanations of the premises.
+        """
+        explanation: Dict[str, Any] = {
+            "fact": (
+                getattr(self.source.instance, "uri", self.source.instance),
+                self.wrapped_field.name,
+                getattr(self.target.instance, "uri", self.target.instance),
+            ),
+            "rule": self.rule.value if self.rule else None,
+        }
+        if self.inference_explanation and depth > 0:
+            explanation["premises"] = [
+                (
+                    premise.explain(depth - 1)
+                    if isinstance(premise, PropertyDescriptorRelation)
+                    else premise
+                )
+                for premise in self.premises
+            ]
+        return explanation
+
+    @classmethod
+    def find(
+        cls, source_instance: Any, field_name: str, target_instance: Any
+    ) -> Optional[PropertyDescriptorRelation]:
+        """
+        Find the relation stored in the symbol graph for a fact.
+
+        :param source_instance: The object that holds the attribute.
+        :param field_name: The attribute name.
+        :param target_instance: The value.
+        :return: The relation, or None if the fact is not in the symbol graph.
+        """
+        wrapped_source = SymbolGraph().get_wrapped_instance(source_instance)
+        if wrapped_source is None:
+            return None
+        for relation in SymbolGraph()._relation_index.get(field_name, {}).get(
+            wrapped_source.index, ()
+        ):
+            if relation.target.instance is target_instance:
+                return relation
+        return None
 
     @cached_property
     def property_descriptor_class(self) -> Type[PropertyDescriptor]:
