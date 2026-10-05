@@ -129,6 +129,19 @@ never asks twice. Pass them explicitly to skip resolution entirely:
 To run it unattended, register it as a scheduled Routine; the prompt to paste is in
 [`routine-prompt.md`](../skills/stacked-pr-maintenance/routine-prompt.md).
 
+### One restack merge per branch
+
+A `merge`-strategy branch is restacked by merging its parent's moved tip in, so a pull request
+that waits through many passes would collect one merge per pass. Instead, each restack drops the
+merges at the branch's tip that only brought in an older state of its parent, and merges the
+parent's current tip in once - so the branch carries a single restack merge however long it
+waits. A merge is dropped only when the parent now holds every change it brought in and its
+content is exactly what merging its two sides produces: a merge carrying a conflict resolution,
+one bringing in another branch, and one with work committed on top of it are all kept. Replacing
+merges rewrites the branch, so it is pushed under a lease and never over a push the pass did not
+see; when merging onto the commit beneath them would conflict, the parent is merged onto the
+published tip as before.
+
 ## Rules of hygiene
 
 - **One branch ⇄ one session.** Never point two live sessions at the same branch (force-push

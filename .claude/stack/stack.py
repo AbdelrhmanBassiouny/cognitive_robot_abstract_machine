@@ -461,7 +461,8 @@ class IntegrationStrategy(StrEnum):
     """How a branch integrates its parent's moved tip during a restack."""
 
     MERGE = "merge"
-    """Merge the parent's tip in, which adds a commit and needs no force-push."""
+    """Merge the parent's tip in, replacing the merges earlier restacks left that only
+    brought in an older state of the parent, so the branch carries one such merge."""
 
     REBASE = "rebase"
     """Replay the branch onto the parent's tip, which rewrites published history and is
@@ -926,8 +927,8 @@ def restack_plan(stack: Stack) -> list[dict[str, str]]:
     """The bottom-up restack plan the ``restack`` workflow consumes as its ``args``.
 
     One entry per branch not yet ``merged``, in parent-before-child order. In-review branches are
-    included so they pick up a moved parent; their ``merge`` strategy keeps that update conflict-free
-    and force-push-free, so an open review is never disrupted.
+    included so they pick up a moved parent; their ``merge`` strategy never rewrites their own
+    commits, only replaces the merges earlier restacks left, so an open review keeps its history.
 
     When a branch's parent has **merged** into the upstream, its commits are already in the base, so
     the child is reparented onto the upstream base: the restack rebases it there and it stops
