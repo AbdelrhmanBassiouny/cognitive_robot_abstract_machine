@@ -10,6 +10,9 @@ from sqlalchemy.orm import configure_mappers, sessionmaker
 import krrood.entity_query_language.orm.model
 import krrood.symbol_graph.symbol_graph
 from krrood.class_diagrams.class_diagram import ClassDiagram
+from krrood.entity_query_language.core.inferred_object_registry import (
+    InferredObjectRegistry,
+)
 from krrood.entity_query_language.predicate import (
     HasTypes,
     HasType,
@@ -200,8 +203,10 @@ def cleanup_after_test():
     # class diagram, so they cannot leak in and corrupt type resolution for later tests.
     SymbolGraph.clear()
     SymbolGraph(packages=["krrood", "test.krrood"])
+    InferredObjectRegistry.clear()
     yield
     SymbolGraph().clear()
+    InferredObjectRegistry.clear()
 
 
 @pytest.fixture(scope="session")

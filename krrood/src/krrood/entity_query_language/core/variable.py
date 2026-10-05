@@ -34,6 +34,9 @@ from krrood.entity_query_language.core.base_expressions import (
 )
 from krrood.entity_query_language.core.mapped_variable import CanBehaveLikeAVariable
 from krrood.entity_query_language.core.bound_value import HasBoundValue
+from krrood.entity_query_language.core.inferred_object_registry import (
+    InferredObjectRegistry,
+)
 from krrood.entity_query_language.cache_data import ReEnterableLazyIterable
 from krrood.entity_query_language.enums import DomainSource
 from krrood.entity_query_language.exceptions import NoChildToReplace
@@ -261,22 +264,28 @@ class InstantiatedVariable(
                 for name, child in self._child_variables_.items()
                 if child._id_ in child_result.bindings
             }
-            # A callable class (Predicate / SymbolicFunction) implements HasBoundValue -- it binds the
-            # constructed instance, or, for a value operation, its constructed-and-called value -- the
-            # class-form counterpart of a @symbolic_function being called. A plain function/type does
-            # not, so it binds the direct call result.
-            bind = (
-                self._type_._bound_value_
-                if inspect.isclass(self._type_)
-                and issubclass(self._type_, HasBoundValue)
-                else self._type_
-            )
-            instance = bind(**arguments)
+            instance = self._value_for_(arguments)
 
             bindings = {self._id_: instance} | child_result.bindings
             result = self._build_operation_result_(bindings, child_result)
             result.previous_operation_result = child_result
             yield result
+
+    def _value_for_(self, arguments: Dict[str, Any]) -> Any:
+        """
+        :param arguments: The bound keyword arguments of one answer.
+        :return: The value this variable binds for *arguments*.
+        """
+        # A callable class (Predicate / SymbolicFunction) implements HasBoundValue -- it binds the
+        # constructed instance, or, for a value operation, its constructed-and-called value -- the
+        # class-form counterpart of a @symbolic_function being called. A plain function/type does
+        # not, so it binds the direct call result.
+        bind = (
+            self._type_._bound_value_
+            if inspect.isclass(self._type_) and issubclass(self._type_, HasBoundValue)
+            else self._type_
+        )
+        return bind(**arguments)
 
     def _replace_child_field_(
         self, old_child: SymbolicExpression, new_child: SymbolicExpression
@@ -301,6 +310,33 @@ class InstantiatedVariable(
         :return: The constructed instance.
         """
         return self._type_(*args, **kwargs)
+
+
+@dataclass(eq=False, repr=False)
+class InferredVariable(InstantiatedVariable[T]):
+    """
+    An inference variable whose answers are the single objects its rule denotes.
+
+    For a class ``H``, ``InferredVariable(_type_=H, _kwargs_={k1: t1, ..., kn: tn})``
+    stands for the function term ``f_H(t1, ..., tn)``: for each binding of the keyword arguments it
+    binds the one ``H`` object kept in the
+    :class:`~krrood.entity_query_language.core.inferred_object_registry.InferredObjectRegistry`,
+    constructing it only when none exists yet. Evaluating a rule is therefore idempotent,
+    and the number of objects rules invent is bounded by the number of argument bindings.
+    """
+
+    @classmethod
+    def infers_objects_of(cls, type_: Union[Type, Callable]) -> bool:
+        """
+        :param type_: The type or callable an inference is built from.
+        :return: Whether calling *type_* constructs an object that rules infer, rather
+            than computing a value as a predicate, a symbolic function or a plain
+            function does.
+        """
+        return inspect.isclass(type_) and not issubclass(type_, HasBoundValue)
+
+    def _value_for_(self, arguments: Dict[str, Any]) -> T:
+        return InferredObjectRegistry().object_for(self._type_, arguments)
 
 
 @dataclass(eq=False, repr=False)

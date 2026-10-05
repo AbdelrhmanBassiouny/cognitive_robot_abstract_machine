@@ -42,6 +42,8 @@ from krrood.entity_query_language.core.variable import (
     DomainType,
     Literal,
     ExternallySetVariable,
+    InferredVariable,
+    InstantiatedVariable,
 )
 from krrood.entity_query_language.enums import DomainSource
 from krrood.entity_query_language.exceptions import UnsupportedExpressionTypeForDistinct
@@ -621,15 +623,31 @@ def add(variable: Any, value: Any) -> None:
 
 def inference(
     type_: Type[T],
+    reuse_inferred_objects: bool = True,
 ) -> Union[Callable[[], Union[T, InstantiatedVariable[T]]]]:
     """
     This returns a factory function that creates a new variable of the given type and
     takes keyword arguments for the type constructor.
 
+    The variable denotes one object per binding of the keyword arguments: evaluating a
+    rule again, or another rule inferring the same type from the same argument values,
+    returns the object inferred first instead of constructing a new one. Literal
+    arguments are compared by value and type, all other arguments by identity. See
+    :class:`~krrood.entity_query_language.core.inferred_object_registry.InferredObjectRegistry`.
+
     :param type_: The type of the variable (i.e., The class you want to instantiate).
+    :param reuse_inferred_objects: Whether an object inferred from the same argument
+        values is returned again. When ``False``, a new object is constructed for every
+        answer of every evaluation. Predicates, symbolic functions and plain functions
+        compute a value on every answer regardless.
     :return: The factory function for creating a new variable.
     """
-    return lambda **kwargs: InstantiatedVariable(
+    variable_type = (
+        InferredVariable
+        if reuse_inferred_objects and InferredVariable.infers_objects_of(type_)
+        else InstantiatedVariable
+    )
+    return lambda **kwargs: variable_type(
         _type_=type_,
         _kwargs_=kwargs,
     )
