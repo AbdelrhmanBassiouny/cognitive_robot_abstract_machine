@@ -32,8 +32,8 @@ from ..property_descriptor.mixins import (
 )
 from ..property_descriptor.property_descriptor import PropertyDescriptor
 from ..property_descriptor.property_descriptor_relation import (
-    InferredThrough,
     PropertyDescriptorRelation,
+    SymmetricTransitiveComponent,
 )
 from ..utils import (
     get_non_class_attribute_names_of_instance,
@@ -663,10 +663,16 @@ class OwlLoader:
         """
         Close every property that is both symmetric and transitive: all individuals in a weakly connected component of
         the relation graph of such a property are related to each other (and to themselves, unless the property is
-        irreflexive). Each entailed fact is added as a relation of the symbol graph with the explanation
-        SYMMETRIC_TRANSITIVE_COMPONENT, so super-property, inverse, chain and equivalence implications are applied to
-        it. Transitive chaining is not repeated for these facts, the component already closes them.
+        irreflexive).
+
+        If the property implies other properties (see :meth:`implies_other_properties`), each entailed fact is added
+        as a relation of the symbol graph with the explanation SYMMETRIC_TRANSITIVE_COMPONENT, so the super-property,
+        inverse, chain and equivalence rules are applied to it. Otherwise, these rules derive nothing from the facts,
+        so the facts are only stored in the attributes of the members and the component is registered once as their
+        explanation (see :class:`SymmetricTransitiveComponent`). Transitive chaining is not repeated for these facts,
+        the component already closes them.
         """
+        PropertyDescriptorRelation.symmetric_transitive_components.clear()
         transitive_symmetric_descriptor_types = [
             d
             for p, d in self.metadata.descriptor_by_name.items()
@@ -681,27 +687,79 @@ class OwlLoader:
             )
             wcc = rx.weakly_connected_components(descriptor_induced_subgraph)
             for component_id, comp in enumerate(wcc):
-                members = [descriptor_induced_subgraph[node] for node in comp]
-                explanation = (
-                    InferredThrough.SYMMETRIC_TRANSITIVE_COMPONENT,
-                    descriptor_type.__name__,
+                component = SymmetricTransitiveComponent(
+                    descriptor_type,
                     component_id,
-                    len(members),
+                    {
+                        member.index: member
+                        for member in (
+                            descriptor_induced_subgraph[node] for node in comp
+                        )
+                    },
+                    reflexive,
                 )
-                for source in members:
-                    wrapped_field = descriptor_type.get_descriptor_instance_for_domain_type(
-                        source.instance_type
-                    ).wrapped_field
-                    for target in members:
-                        if target is source and not reflexive:
-                            continue
-                        PropertyDescriptorRelation(
-                            source,
-                            target,
-                            wrapped_field,
-                            inferred=True,
-                            inference_explanation=explanation,
-                        ).update_source_and_add_to_graph_and_apply_implications()
+                if self.implies_other_properties(descriptor_type):
+                    self.add_component_relations_to_the_graph(component)
+                else:
+                    self.add_component_facts_to_the_attributes(component)
+
+    @staticmethod
+    def implies_other_properties(descriptor_type: Type[PropertyDescriptor]) -> bool:
+        """
+        :param descriptor_type: A property descriptor class.
+        :return: True if a fact of the property entails facts of other properties, that is, if the property has a
+         super-property, an inverse other than itself or an equivalent property, or occurs in a property chain.
+        """
+        has_inverse = (
+            issubclass(descriptor_type, HasInverseProperty)
+            and descriptor_type.get_inverse() not in (None, descriptor_type)
+        )
+        has_equivalent = issubclass(
+            descriptor_type, HasEquivalentProperties
+        ) and bool(descriptor_type.get_equivalent_properties())
+        occurs_in_chain = bool(PropertyDescriptor.chain_axioms.get(descriptor_type))
+        return bool(
+            descriptor_type.super_classes()
+            or has_inverse
+            or has_equivalent
+            or occurs_in_chain
+        )
+
+    @staticmethod
+    def add_component_relations_to_the_graph(
+        component: SymmetricTransitiveComponent,
+    ):
+        """
+        Add every fact entailed by the component as an explained relation of the symbol graph and apply the rules of
+        the property to it.
+        """
+        for source in component.members.values():
+            for target in component.members.values():
+                if component.relates(source, target):
+                    component.relation(
+                        source, target
+                    ).update_source_and_add_to_graph_and_apply_implications()
+
+    @staticmethod
+    def add_component_facts_to_the_attributes(
+        component: SymmetricTransitiveComponent,
+    ):
+        """
+        Store every fact entailed by the component in the attribute of its source and register the component as the
+        explanation of these facts.
+        """
+        for source in component.members.values():
+            descriptor = component.property_descriptor_class.get_descriptor_instance_for_domain_type(
+                source.instance_type
+            )
+            PropertyDescriptorRelation.symmetric_transitive_components[
+                (descriptor.wrapped_field.name, source.index)
+            ] = component
+            for target in component.members.values():
+                if component.relates(source, target):
+                    descriptor.update_value(
+                        source.instance, target.instance, inferred=True
+                    )
 
     def create_anonymous_instances(self):
         """Creates instances for all anonymous subjects in the graph."""
