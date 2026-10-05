@@ -34,11 +34,7 @@ from .property_descriptor_relation import PropertyDescriptorRelation
 from ..failures import UnMonitoredContainerTypeForDescriptor
 from ..utils import NamingRegistry
 from ...class_diagrams import ClassDiagram
-from ...class_diagrams.class_diagram import (
-    WrappedClass,
-    Association,
-    AssociationThroughRoleTaker,
-)
+from ...class_diagrams.class_diagram import WrappedClass
 from ...class_diagrams.utils import Role
 from ...class_diagrams.wrapped_field import WrappedField
 from ...class_diagrams.utils import issubclass_or_role
@@ -416,85 +412,6 @@ class PropertyDescriptor(Symbol):
             self.obj_attr_map[domain_value] = range_value
             updated = True
         return updated
-
-    @classmethod
-    @lru_cache(maxsize=None)
-    def get_association_of_source_type(
-        cls,
-        domain_type: Union[Type[Symbol], WrappedClass],
-    ) -> Optional[Union[Association, AssociationThroughRoleTaker]]:
-        """
-        Get the association that has as a source the given domain type and as a field type this descriptor class.
-
-        :param domain_type: The domain type that has an associated field with this descriptor class.
-        """
-        class_diagram = SymbolGraph().class_diagram
-        association_condition = (
-            lambda association: type(association.field.property_descriptor) is cls
-        )
-        result = next(
-            class_diagram.get_outgoing_associations_with_condition(
-                domain_type, association_condition
-            ),
-            None,
-        )
-        return result
-
-    @classmethod
-    @lru_cache(maxsize=None)
-    def get_association_of_target_type(
-        cls,
-        target_type: Union[Type[Symbol], WrappedClass],
-    ) -> Optional[Union[Association, AssociationThroughRoleTaker]]:
-        """
-        Get the association that has the given target type and as a field type this descriptor class.
-
-        :param target_type: The target type that is associated by a field with this descriptor class.
-        """
-        class_diagram = SymbolGraph().class_diagram
-        association_condition = (
-            lambda association: type(association.field.property_descriptor) is cls
-        )
-        result = next(
-            class_diagram.get_incoming_associations_with_condition(
-                target_type, association_condition
-            ),
-            None,
-        )
-        return result
-
-    @classmethod
-    @lru_cache(maxsize=None)
-    def get_superproperties_associations(
-        cls,
-        domain_type: Union[SymbolType, WrappedClass],
-        direct: bool = True,
-    ) -> Tuple[Association, ...]:
-        """
-        :param domain_type: The domain type that has the required association(s).
-        :param direct: Whether to get only direct superproperties or all superproperties.
-        :return: The associations that have the given domain type as a source and have a descriptor type that
-         is a super class of this descriptor class.
-        """
-
-        def association_condition(association: Association) -> bool:
-            if direct:
-                sub_class_condition = (
-                    type(association.field.property_descriptor) in cls.__bases__
-                )
-            else:
-                sub_class_condition = (
-                    issubclass(type(association.field.property_descriptor), cls)
-                    and type(association.field.property_descriptor) is not cls
-                )
-            return sub_class_condition
-
-        class_diagram = SymbolGraph().class_diagram
-
-        associations_generator = class_diagram.get_outgoing_associations_with_condition(
-            domain_type, association_condition
-        )
-        return tuple(associations_generator)
 
     def __hash__(self):
         return hash(id(self))

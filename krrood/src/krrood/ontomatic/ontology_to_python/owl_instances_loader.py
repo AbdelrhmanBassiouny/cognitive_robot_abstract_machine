@@ -385,10 +385,34 @@ class OwlLoader:
         self.keep_most_specific_types_and_sort_from_least_to_most_specific()
         self.create_explicit_instances_from_inferred_types_of_anonymous_instances()
         self.sort_explicit_types_from_most_to_least_specific()
+        self.link_role_takers_of_the_same_individual()
         self.assign_all_properties_to_explict_types_and_apply_on_time_forward_chaining()
         if not PropertyDescriptorRelation.eager_symmetric_transitive_closure:
             self.add_inferences_from_transitive_symmetric_relations()
         return self.registry
+
+    def link_role_takers_of_the_same_individual(self):
+        """
+        Link the root role takers of the objects of every individual that has more than one (see
+        :attr:`PropertyDescriptorRelation.same_individual_role_takers`), so that inferred facts about the individual
+        are stored on whichever of its objects declares the property.
+        """
+        same_individual_role_takers = (
+            PropertyDescriptorRelation.same_individual_role_takers
+        )
+        same_individual_role_takers.clear()
+        for objects in self.registry._by_uri.values():
+            roots = []
+            for individual_object in objects:
+                root = PropertyDescriptorRelation.root_role_taker(individual_object)
+                if not any(root is known_root for known_root in roots):
+                    roots.append(root)
+            if len(roots) < 2:
+                continue
+            for root in roots:
+                same_individual_role_takers[root] = [
+                    other for other in roots if other is not root
+                ]
 
     def infer_all_types_for_the_anonymous_instances(self):
         """

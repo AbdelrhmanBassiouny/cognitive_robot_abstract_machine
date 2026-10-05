@@ -582,12 +582,10 @@ class SymbolGraph(metaclass=SingletonMeta):
         Get all relations whose property descriptor class is a subclass of the given descriptor class
         and are outgoing from the given wrapped instance.
         """
-        for cls, fields in list(self._fields_by_descriptor_class.items()):
-            if issubclass(cls, descriptor_class):
-                for wrapped_field in list(fields):
-                    yield from self.get_outgoing_relations_for_wrapped_field(
-                        wrapped_instance, wrapped_field
-                    )
+        for wrapped_field in self._fields_of_descriptor_subclasses(descriptor_class):
+            yield from self.get_outgoing_relations_for_wrapped_field(
+                wrapped_instance, wrapped_field
+            )
 
     def get_incoming_relations_by_descriptor_class(
         self,
@@ -598,12 +596,26 @@ class SymbolGraph(metaclass=SingletonMeta):
         Get all relations whose property descriptor class is a subclass of the given descriptor class
         and are incoming to the given wrapped instance.
         """
+        for wrapped_field in self._fields_of_descriptor_subclasses(descriptor_class):
+            yield from self.get_incoming_relations_for_wrapped_field(
+                wrapped_instance, wrapped_field
+            )
+
+    def _fields_of_descriptor_subclasses(
+        self, descriptor_class: Type
+    ) -> List[WrappedField]:
+        """
+        :param descriptor_class: A property descriptor class.
+        :return: One wrapped field per field name among the fields of the given descriptor class and its subclasses.
+         The relation index is keyed by field name, so fields of the same name declared by different classes share
+         their relations, and looking them up once per name avoids yielding the same relation several times.
+        """
+        fields_by_name: Dict[str, WrappedField] = {}
         for cls, fields in list(self._fields_by_descriptor_class.items()):
             if issubclass(cls, descriptor_class):
-                for wrapped_field in list(fields):
-                    yield from self.get_incoming_relations_for_wrapped_field(
-                        wrapped_instance, wrapped_field
-                    )
+                for wrapped_field in fields:
+                    fields_by_name.setdefault(wrapped_field.name, wrapped_field)
+        return list(fields_by_name.values())
 
     def to_dot(
         self,
