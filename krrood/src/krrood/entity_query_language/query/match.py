@@ -13,6 +13,7 @@ fields are reachable directly as symbolic attributes.
 
 from __future__ import annotations
 
+import operator
 import uuid
 from abc import ABC, abstractmethod
 from collections import deque
@@ -65,13 +66,19 @@ from krrood.entity_query_language.exceptions import (
     PositionalArgumentsInMatchPattern,
     ReadOnlyMapping,
 )
+from krrood.entity_query_language.operators.comparator import Comparator
+from krrood.entity_query_language.operators.core_logical_operators import (
+    AND,
+    chained_logic,
+)
+from krrood.entity_query_language.operators.logical_quantifiers import Exists
 from krrood.entity_query_language.predicate import HasType
 from krrood.entity_query_language.query.quantifiers import An, ResultQuantifier
 from krrood.entity_query_language.query.query_modifiers import HasQueryModifiers
 from krrood.entity_query_language.utils import T
 from krrood.patterns.factory_and_kwargs import HasFactoryAndKwargs
 from krrood.rustworkx_utils.rxnode import RWXNode
-from krrood.symbol_graph.helpers import get_field_type_endpoint
+from krrood.symbol_graph.helpers import get_field_type_endpoint, get_wrapped_field
 
 if TYPE_CHECKING:
     from krrood.entity_query_language.factories import ConditionType
@@ -851,22 +858,94 @@ class AttributeMatch(AbstractMatchExpression[T]):
         """
         Resolve the attribute assignment by creating the conditions and applying the
         necessary mappings to the attribute.
+
+        For a collection-valued attribute, a single value or pattern describes one
+        element of the collection: a value must be in it, and some element must match a
+        pattern.
         """
+        attribute = self.attribute
         if (
             not isinstance(self.assigned_value, AbstractMatchExpression)
             or self.assigned_value._resolved_
         ):
-            self._conditions_.append(self.attribute == self.assigned_variable)
+            self._conditions_.append(self._build_condition_on_assigned_value_())
             return
 
-        self.assigned_value.resolve(self.attribute, self)
+        if not self._states_an_element_of_the_attribute_:
+            self._conditions_.extend(self._resolve_pattern_against_(attribute))
+            return
 
-        if self.is_type_filter_needed:
-            self._conditions_.append(
-                HasType(self.attribute, self.assigned_value._type_)
+        element = FlatVariable(attribute)
+        # The pattern's own attributes are read off this match's variable, which now
+        # stands for one element of the collection rather than the whole collection.
+        self._variable_ = element
+        self._conditions_.append(
+            Exists(
+                element, chained_logic(AND, *self._resolve_pattern_against_(element))
             )
+        )
 
-        self._conditions_.extend(self.assigned_value._conditions_)
+    def _resolve_pattern_against_(
+        self, variable: CanBehaveLikeAVariable
+    ) -> List[ConditionType]:
+        """
+        Resolve the assigned pattern with *variable* as the object it describes.
+
+        :param variable: The variable the pattern describes.
+        :return: The conditions of the pattern on *variable*.
+        """
+        self.assigned_value.resolve(variable, self)
+        conditions = []
+        if self.is_type_filter_needed:
+            conditions.append(HasType(variable, self.assigned_value._type_))
+        conditions.extend(self.assigned_value._conditions_)
+        return conditions
+
+    def _build_condition_on_assigned_value_(self) -> SymbolicExpression:
+        """
+        :return: Membership of the assigned value in the attribute when it states one
+            element of a collection-valued attribute, else equality.
+        """
+        if self._states_an_element_of_the_attribute_:
+            return Comparator(self.attribute, self.assigned_variable, operator.contains)
+        return self.attribute == self.assigned_variable
+
+    @cached_property
+    def _states_an_element_of_the_attribute_(self) -> bool:
+        """
+        :return: Whether the attribute holds a collection and the assigned value stands
+            for one of its elements: a pattern, a plain value that is not itself a
+            collection or ``...``, or a symbolic value whose type is the element type. An
+            indexed attribute names one element already.
+        """
+        if self.index_access is not None or not self._attribute_holds_a_collection_:
+            return False
+        value = self.assigned_value
+        if isinstance(value, AbstractMatchExpression):
+            return True
+        if isinstance(value, SymbolicExpression):
+            return (
+                isclass(value._type_)
+                and isclass(self._type_)
+                and issubclass(value._type_, self._type_)
+            )
+        return not isinstance(value, (list, tuple, set, frozenset, type(Ellipsis)))
+
+    @cached_property
+    def _attribute_holds_a_collection_(self) -> bool:
+        """
+        :return: Whether the attribute is declared as a collection such as a list, set,
+            tuple or sequence of elements. An optional collection is not handled yet and
+            keeps equality.
+        """
+        wrapped_field = get_wrapped_field(
+            self.attribute._owner_class_, self.attribute_name
+        )
+        return (
+            wrapped_field is not None
+            and wrapped_field.is_container
+            and wrapped_field.container_type is not type
+        )
 
     @cached_property
     def assigned_variable(self) -> SymbolicExpression:
@@ -931,6 +1010,10 @@ class AttributeMatch(AbstractMatchExpression[T]):
                 current_value = current_value._kwargs_[step._attribute_name_]
             elif isinstance(step, IndexByValue):
                 current_value = current_value[step._key_]
+            elif isinstance(step, FlatVariable) and isinstance(current_value, Match):
+                # A pattern stated for a collection-valued attribute describes one of
+                # its elements, so the values below this step belong to that pattern.
+                continue
             else:
                 raise ReadOnlyMapping(step)
 

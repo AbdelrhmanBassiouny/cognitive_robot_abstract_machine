@@ -42,19 +42,19 @@ from krrood.symbol_graph.symbol_graph import Symbol
 
 
 @dataclass(eq=False)
-class Person(Symbol):
+class Academic(Symbol):
     name: str
 
 
 @dataclass(eq=False)
-class Course(Symbol):
+class QuantifiedCourse(Symbol):
     name: str
-    taught_by: set[Person] = field(default_factory=set)
+    taught_by: set[Academic] = field(default_factory=set)
 
 
 @dataclass(eq=False)
-class Student(Role[Person]):
-    takes_course: set[Course] = field(default_factory=set)
+class Student(Role[Academic]):
+    takes_course: set[QuantifiedCourse] = field(default_factory=set)
 
 
 @dataclass(eq=False)
@@ -69,7 +69,7 @@ class Box(Symbol):
 
 
 @dataclass(eq=False)
-class Worker(Symbol):
+class SalariedWorker(Symbol):
     salary: int
 
 
@@ -79,26 +79,26 @@ class University:
     The finite domain shared by the correlated quantifier tests.
     """
 
-    logic: Course
-    artificial_intelligence: Course
-    databases: Course
+    logic: QuantifiedCourse
+    artificial_intelligence: QuantifiedCourse
+    databases: QuantifiedCourse
     students: list[Student]
 
 
 @pytest.fixture
 def university() -> University:
-    turing, minsky, codd = Person("Turing"), Person("Minsky"), Person("Codd")
-    logic = Course("Logic", {turing})
-    artificial_intelligence = Course("AI", {turing, minsky})
-    databases = Course("Databases", {codd})
+    turing, minsky, codd = Academic("Turing"), Academic("Minsky"), Academic("Codd")
+    logic = QuantifiedCourse("Logic", {turing})
+    artificial_intelligence = QuantifiedCourse("AI", {turing, minsky})
+    databases = QuantifiedCourse("Databases", {codd})
     students = [
         Student(
-            role_taker=Person("Alice"),
+            role_taker=Academic("Alice"),
             takes_course={logic, artificial_intelligence},
         ),
-        Student(role_taker=Person("Bob"), takes_course={artificial_intelligence}),
-        Student(role_taker=Person("Carol"), takes_course={logic, databases}),
-        Student(role_taker=Person("Dave"), takes_course=set()),
+        Student(role_taker=Academic("Bob"), takes_course={artificial_intelligence}),
+        Student(role_taker=Academic("Carol"), takes_course={logic, databases}),
+        Student(role_taker=Academic("Dave"), takes_course=set()),
     ]
     return University(logic, artificial_intelligence, databases, students)
 
@@ -355,7 +355,7 @@ def test_for_all_over_an_independent_variable_holds_globally(university):
     """
     student = variable(Student, domain=university.students)
     course = variable(
-        Course,
+        QuantifiedCourse,
         domain=[
             university.logic,
             university.artificial_intelligence,
@@ -372,7 +372,7 @@ def test_for_all_over_an_independent_variable_fails_globally(university):
     """
     student = variable(Student, domain=university.students)
     course = variable(
-        Course,
+        QuantifiedCourse,
         domain=[
             university.logic,
             university.artificial_intelligence,
@@ -389,7 +389,7 @@ def test_exists_over_an_independent_variable_holds_globally(university):
     """
     student = variable(Student, domain=university.students)
     course = variable(
-        Course, domain=[university.logic, university.artificial_intelligence]
+        QuantifiedCourse, domain=[university.logic, university.artificial_intelligence]
     )
     query = an(entity(student).where(exists(course, course.name == "AI")))
     assert student_names(query.evaluate()) == ["Alice", "Bob", "Carol", "Dave"]
@@ -400,7 +400,7 @@ def test_exists_over_an_independent_variable_without_witness_is_empty(university
     Without a witness in the independent domain no student remains.
     """
     student = variable(Student, domain=university.students)
-    course = variable(Course, domain=[university.logic])
+    course = variable(QuantifiedCourse, domain=[university.logic])
     query = an(entity(student).where(exists(course, course.name == "Nope")))
     assert student_names(query.evaluate()) == []
 
@@ -409,7 +409,11 @@ def test_exists_over_an_independent_variable_without_witness_is_empty(university
 
 
 def boxes_and_workers():
-    return [Box(2), Box(5), Box(10)], [Worker(1), Worker(4), Worker(7)]
+    return [Box(2), Box(5), Box(10)], [
+        SalariedWorker(1),
+        SalariedWorker(4),
+        SalariedWorker(7),
+    ]
 
 
 def box_sizes(results) -> list[int]:
@@ -422,11 +426,11 @@ def test_exists_over_a_variable_used_elsewhere_equals_the_plain_conjunction_last
     ``exists(worker, worker.salary < box.size)`` agrees with the plain condition.
     """
     boxes, workers = boxes_and_workers()
-    box, worker = variable(Box, domain=boxes), variable(Worker, domain=workers)
+    box, worker = variable(Box, domain=boxes), variable(SalariedWorker, domain=workers)
     quantified = an(
         entity(box).where(exists(worker, worker.salary < box.size), worker.salary > 3)
     )
-    box, worker = variable(Box, domain=boxes), variable(Worker, domain=workers)
+    box, worker = variable(Box, domain=boxes), variable(SalariedWorker, domain=workers)
     plain = an(entity(box).where(worker.salary < box.size, worker.salary > 3))
     assert box_sizes(quantified.evaluate()) == box_sizes(plain.evaluate())
 
@@ -436,11 +440,11 @@ def test_exists_over_a_variable_used_elsewhere_equals_the_plain_conjunction_firs
     The result does not depend on the quantifier being listed after the other condition.
     """
     boxes, workers = boxes_and_workers()
-    box, worker = variable(Box, domain=boxes), variable(Worker, domain=workers)
+    box, worker = variable(Box, domain=boxes), variable(SalariedWorker, domain=workers)
     quantified = an(
         entity(box).where(worker.salary > 3, exists(worker, worker.salary < box.size))
     )
-    box, worker = variable(Box, domain=boxes), variable(Worker, domain=workers)
+    box, worker = variable(Box, domain=boxes), variable(SalariedWorker, domain=workers)
     plain = an(entity(box).where(worker.salary > 3, worker.salary < box.size))
     assert box_sizes(quantified.evaluate()) == box_sizes(plain.evaluate())
 
@@ -480,7 +484,7 @@ def test_extending_an_evaluated_query_updates_the_outer_visible_variables():
     quantifier; the quantifier then sees the new outside occurrence of ``worker``.
     """
     boxes, workers = boxes_and_workers()
-    box, worker = variable(Box, domain=boxes), variable(Worker, domain=workers)
+    box, worker = variable(Box, domain=boxes), variable(SalariedWorker, domain=workers)
     query = an(entity(box).where(exists(worker, worker.salary < box.size)))
     assert box_sizes(query.evaluate()) == [2, 5, 10]
     query.where(worker.salary > 3)
@@ -493,7 +497,7 @@ def test_a_quantifier_reused_in_two_queries_is_scoped_by_the_evaluated_one():
     evaluation uses the scope of the query being evaluated.
     """
     boxes, workers = boxes_and_workers()
-    box, worker = variable(Box, domain=boxes), variable(Worker, domain=workers)
+    box, worker = variable(Box, domain=boxes), variable(SalariedWorker, domain=workers)
     quantifier = exists(worker, worker.salary < box.size)
     uncorrelated = an(entity(box).where(quantifier))
     correlated_query = an(entity(box).where(quantifier, worker.salary > 3))
@@ -510,7 +514,7 @@ def test_set_of_with_an_exists_does_not_expose_the_local_variable(university):
     Only the selected variables appear in each result row of a set query.
     """
     student, course = correlated(university)
-    other = variable(Course, domain=[university.logic])
+    other = variable(QuantifiedCourse, domain=[university.logic])
     query = set_of(student, other).where(exists(course, course.name == "Logic"))
     rows = list(query.evaluate())
     assert all(course not in row.data for row in rows)
@@ -522,7 +526,7 @@ def test_set_of_with_an_exists_yields_one_row_per_outer_binding(university):
     whose student has a witness.
     """
     student, course = correlated(university)
-    other = variable(Course, domain=[university.logic, university.databases])
+    other = variable(QuantifiedCourse, domain=[university.logic, university.databases])
     query = set_of(student, other).where(exists(course, course.name == "Logic"))
     assert len(list(query.evaluate())) == 4
 
@@ -535,7 +539,7 @@ def test_correlated_exists_with_a_selected_variable_inside_the_body(university):
     """
     student, course = correlated(university)
     selected_course = variable(
-        Course,
+        QuantifiedCourse,
         domain=[
             university.logic,
             university.artificial_intelligence,
