@@ -10,14 +10,19 @@ from __future__ import annotations
 
 import tempfile
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from basstler.maintenance_git_commands import BranchAncestry, MaintenanceGitCommandRunner
+from basstler.maintenance_git_commands import (
+    BranchAncestry,
+    MaintenanceGitCommandRunner,
+)
 from basstler.maintenance_github import ForkPullRequests
 from basstler.maintenance_restack_steps import (
     BranchOutcome,
     BranchUnderRestack,
+    HoldBranchUnderReview,
     IntegrateParent,
     PublishBranch,
     RefuseAnUnsafeMove,
@@ -25,6 +30,7 @@ from basstler.maintenance_restack_steps import (
     SkipBranchAlreadyCurrent,
     WithholdBlockedBranch,
 )
+from basstler.push_window import PushWindow
 from basstler.stack import CommitMoveChecks, IntegrationStrategy, Stack, restack_plan
 
 if TYPE_CHECKING:
@@ -36,6 +42,7 @@ if TYPE_CHECKING:
 RESTACK_STEPS: tuple[RestackStep, ...] = (
     WithholdBlockedBranch(),
     SkipBranchAlreadyCurrent(),
+    HoldBranchUnderReview(),
     IntegrateParent(),
     RefuseAnUnsafeMove(),
     PublishBranch(),
@@ -48,6 +55,10 @@ their own subclasses: a branch is published only once its move has been checked,
 order is a decision about what a pass does, not bookkeeping. Stating it here keeps it
 where it is read, rather than making it a consequence of where the classes happen to be
 defined.
+
+A branch is held after it is found stale and before its parent is integrated: a branch
+with nothing to do is up to date rather than waiting, and a merge made only to be thrown
+away is work nobody asked for.
 """
 
 
@@ -182,7 +193,11 @@ class RestackWorktree:
 
 
 def restack(
-    stack: Stack, git: MaintenanceGitCommandRunner, fork: ForkPullRequests
+    stack: Stack,
+    git: MaintenanceGitCommandRunner,
+    fork: ForkPullRequests,
+    push_window: PushWindow | None,
+    now: datetime | None = None,
 ) -> list[BranchOutcome]:
     """
     Put every branch whose parent moved through :data:`RESTACK_STEPS`, bottom up.
@@ -195,8 +210,13 @@ def restack(
     :param stack: The derived stack, whose plan this executes.
     :param git: The runner naming the checkout to add the worktree to.
     :param fork: The fork, read for conflict state and written to when reporting.
+    :param push_window: When a branch already under upstream review may be pushed, or
+        ``None`` to push one whatever the hour. Stated rather than defaulted, so no
+        caller moves somebody else's branch under them without having said so.
+    :param now: The moment to judge the whole pass at, this one by default.
     :return: One outcome per branch in the plan, parent before child.
     """
+    judged_at = now or datetime.now(timezone.utc)
     with DetachedCheckout.of(git), RestackWorktree.added_to(git) as switching:
         checks = CommitMoveChecks(
             stack=stack,
@@ -214,6 +234,8 @@ def restack(
                     git=switching,
                     fork=fork,
                     checks=checks,
+                    push_window=push_window,
+                    now=judged_at,
                 )
             )
             for entry in restack_plan(stack)
