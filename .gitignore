@@ -194,3 +194,7 @@ basstler/board.json
 # Local data produced by the Python coverage checks.
 /.coverage
 /.coverage.*
+
+# The tally each test process writes for the combined living-worlds limit
+# (test/living_worlds.py's WorldTallyLedger), rewritten by every local test run.
+/.living_worlds_tally/
