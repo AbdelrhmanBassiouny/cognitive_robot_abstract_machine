@@ -1,0 +1,56 @@
+name: Integration probe
+run-name: Integration probe over ${{ inputs.build }}
+
+# Runs one library's tests over one assembled prefix of an integration build's merge
+# order, so a candidate that went red on a matrix job can be localised to the tip whose
+# arrival turned it.
+#
+# Why the tree is an input rather than the reference this is dispatched on: a prefix is
+# the upstream base plus some tips, and a dispatch runs the workflow file that the
+# dispatched reference carries. The empty prefix is bare upstream main, which carries no
+# probe workflow, and none of them carries one until this lands upstream - so dispatching
+# on the prefix would only start working at the moment it stopped being needed. The
+# reference dispatched is one that has the pipeline on it; the prefix is checked out.
+#
+# Why one library rather than the matrix: the failing check names it, and re-running the
+# whole matrix per prefix spends sixteen jobs to answer about one.
+#
+# Kept out of ci.yml because it is dispatched rather than triggered by a push or a pull
+# request, and because it runs one library instead of all of them.
+
+on:
+  workflow_dispatch:
+    inputs:
+      build:
+        description: "The assembled prefix to check out and test"
+        required: true
+        type: string
+      library:
+        description: "Which library's tests to run over it"
+        required: true
+        type: string
+
+jobs:
+  # Both jobs are named rather than left to their keys, because a check named after a
+  # key this file shares with ci.yml is one the pipeline cannot tell apart from its own.
+  # A probe's checks land on whichever reference the pipeline was dispatched on, and
+  # they say nothing about that branch - a probe failing is what a localisation is
+  # looking for - so they are read out of that branch's verdict by name.
+  to-lowercase:
+    name: Name the container image a probe runs in
+    runs-on: ubuntu-latest
+    outputs:
+      repo_lowercase: ${{ steps.lowercase.outputs.repository }}
+    steps:
+      - id: lowercase
+        run: |
+          echo "repository=ghcr.io/${GITHUB_REPOSITORY,,}:jazzy" >> $GITHUB_OUTPUT
+
+  test:
+    name: Run one library's tests over a probed tree
+    needs: [to-lowercase]
+    uses: ./.github/workflows/ci_reusable.yml
+    with:
+      lib: ${{ inputs.library }}
+      repo_lowercase: ${{ needs.to-lowercase.outputs.repo_lowercase }}
+      ref: ${{ inputs.build }}
