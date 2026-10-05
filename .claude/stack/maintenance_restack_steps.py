@@ -19,7 +19,7 @@ from maintenance_constants import (
     MERGEABLE_STATE_WITH_CONFLICTS,
 )
 from maintenance_board import PullRequestField
-from maintenance_git_commands import GitCommandRunner, ProposedPush
+from maintenance_git_commands import GitCommandResult, GitCommandRunner, ProposedPush
 from maintenance_github import ForkPullRequests
 from stack import (
     Branch,
@@ -232,6 +232,57 @@ class BranchUnderRestack:
         )
 
 
+# %% merges a restack replaces
+
+
+@dataclass(frozen=True)
+class SupersededMerges:
+    """
+    The merges at a branch's tip that only brought in an earlier state of its parent.
+
+    Every restack merges the parent's moved tip in, so a branch waiting through many
+    passes would collect one merge per pass. A merge is superseded when the parent now
+    holds every change it brought in, and its content is exactly what merging its two
+    parents produces - so it carries no work of its own, and merging the parent's current
+    tip into the commit beneath it reproduces everything it held.
+    """
+
+    git: GitCommandRunner
+    """
+    The runner to read history through.
+    """
+
+    parent_reference: str
+    """
+    The fork's copy of the parent about to be integrated.
+    """
+
+    def commit_beneath(self, tip: str) -> str:
+        """
+        :param tip: The branch's published tip.
+        :return: The first commit along the branch's own line that is not a superseded
+            merge, which is *tip* itself when it is not one.
+        """
+        commit = tip
+        while self.is_superseded(commit):
+            commit = self.git.parents_of(commit)[0]
+        return commit
+
+    def is_superseded(self, commit: str) -> bool:
+        """:param commit: A commit on the branch's own line.
+        :return: Whether it is a merge the parent's current tip supersedes."""
+        match self.git.parents_of(commit):
+            case (own_line, merged_in):
+                return (
+                    not self.git.contains(own_line, self.parent_reference)
+                    and self.git.adds_only_merges(merged_in, self.parent_reference)
+                    and self.git.automatic_merge_tree(own_line, merged_in)
+                    == self.git.tree_of(commit)
+                )
+            case _:
+                return False
+
+
 # %% the steps themselves
 
 
@@ -312,6 +363,11 @@ class IntegrateParent(RestackStep):
     is labelled and commented on, so the next pass withholds the branch rather than
     re-reporting it.
 
+    A merge is made onto the commit beneath the branch's :class:`SupersededMerges`, so
+    the branch carries one merge of its parent however many passes it waits through.
+    When that merge fails, the parent is merged onto the published tip instead, so
+    replacing earlier merges never turns a clean restack into a reported conflict.
+
     Unmerged paths are what make a failed integration a conflict, not its exit status:
     a merge also refuses when an untracked file is in the way, when the histories are
     unrelated, or when a reference does not resolve. Labelling those would name a
@@ -324,12 +380,7 @@ class IntegrateParent(RestackStep):
         :return: A conflict outcome when the parent left unmerged paths, a failure
             outcome when the integration failed without any, otherwise ``None``."""
         git = restacking.git
-        git.checkout(restacking.branch.name, restacking.branch_reference)
-        integration = (
-            git.rebase(restacking.parent_reference)
-            if restacking.strategy is IntegrationStrategy.REBASE
-            else git.merge(restacking.parent_reference)
-        )
+        integration = self._integrate(restacking)
         if integration.succeeded:
             return None
         conflicting = git.unmerged_paths()
@@ -344,6 +395,42 @@ class IntegrateParent(RestackStep):
             conflicting_paths=conflicting,
             reported_at=self._report(restacking, conflicting),
         )
+
+    @classmethod
+    def _integrate(cls, restacking: BranchUnderRestack) -> GitCommandResult:
+        """
+        :param restacking: The branch being restacked.
+        :return: The integration that stands - the merge replacing the superseded merges
+            when there are any and it succeeded, otherwise the one onto the published tip.
+        """
+        tip = restacking.branch_reference
+        if restacking.strategy is IntegrationStrategy.REBASE:
+            return cls._integrate_onto(restacking, tip)
+        beneath = SupersededMerges(
+            restacking.git, restacking.parent_reference
+        ).commit_beneath(tip)
+        if beneath == tip:
+            return cls._integrate_onto(restacking, tip)
+        replacing = cls._integrate_onto(restacking, beneath)
+        if replacing.succeeded:
+            return replacing
+        restacking.git.abandon(restacking.strategy)
+        return cls._integrate_onto(restacking, tip)
+
+    @staticmethod
+    def _integrate_onto(
+        restacking: BranchUnderRestack, start_point: str
+    ) -> GitCommandResult:
+        """
+        :param restacking: The branch being restacked.
+        :param start_point: The commit to put the branch at before integrating.
+        :return: The finished integration of the parent's tip.
+        """
+        git = restacking.git
+        git.checkout(restacking.branch.name, start_point)
+        if restacking.strategy is IntegrationStrategy.REBASE:
+            return git.rebase(restacking.parent_reference)
+        return git.merge(restacking.parent_reference)
 
     @staticmethod
     def _report(
@@ -404,6 +491,9 @@ class RefuseAnUnsafeMove(RestackStep):
 class PublishBranch(RestackStep):
     """
     Publishes the integrated branch, reporting rather than forcing a rejection.
+
+    A merge that no longer contains the published tip replaced superseded merges, which
+    is the one rewrite a merge publishes - under a lease, like a rebase.
     """
 
     def attempt(self, restacking: BranchUnderRestack) -> BranchOutcome:
@@ -412,7 +502,12 @@ class PublishBranch(RestackStep):
         git = restacking.git
         push = git.push(
             ProposedPush.publishing(
-                restacking.configuration, restacking.branch.name, restacking.strategy
+                restacking.configuration,
+                restacking.branch.name,
+                restacking.strategy,
+                replaces_superseded_merges=not git.contains(
+                    restacking.branch_reference, "HEAD"
+                ),
             )
         )
         if not push.succeeded:
