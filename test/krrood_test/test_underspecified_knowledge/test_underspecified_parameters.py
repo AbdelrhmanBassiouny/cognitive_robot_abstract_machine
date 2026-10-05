@@ -3,7 +3,8 @@ from typing import List, Any
 
 import pytest
 
-from krrood.parametrization.exceptions import InvalidEllipsis
+from krrood.parametrization.exceptions import InvalidEllipsis, ModelVariableNotBound
+from krrood.parametrization.model_registries import FullyFactorizedRegistry
 from ..dataset.semantic_world_like_classes import Body
 from krrood.entity_query_language.factories import (
     variable,
@@ -14,6 +15,8 @@ from krrood.parametrization.parameterizer import UnderspecifiedParameters
 from random_events.interval import singleton, reals
 
 from ..dataset.example_classes import (
+    KRROODOrientation,
+    KRROODPose,
     KRROODPosition,
     TestEnum,
     ListOfEnum,
@@ -150,3 +153,51 @@ def test_list_of_enum_field_produces_indexed_variables():
 
     assert "ListOfEnum.list_of_enum[0]" in parameters.variables
     assert "ListOfEnum.list_of_enum[1]" in parameters.variables
+
+
+# %% translating between model samples and bindings
+
+
+def test_model_sample_from_bindings_inverts_bindings_from_model_sample():
+    query = an(EnumAction)(obj=Body(name="body"), enum=...)
+    parameters = UnderspecifiedParameters(query)
+    model = parameters.resolve_conditioned_and_truncated_model(
+        FullyFactorizedRegistry().get_model(parameters)
+    )
+    [sample] = model.sample(1)
+    bindings = parameters.bindings_from_model_sample(model.variables, sample)
+    assert parameters.model_sample_from_bindings(
+        model.variables, bindings
+    ).tolist() == [sample.tolist()]
+
+
+def test_model_sample_from_bindings_rejects_an_unbound_model_variable():
+    query = an(EnumAction)(obj=Body(name="body"), enum=...)
+    parameters = UnderspecifiedParameters(query)
+    model = FullyFactorizedRegistry().get_model(parameters)
+    with pytest.raises(ModelVariableNotBound):
+        parameters.model_sample_from_bindings(model.variables, {})
+
+
+def test_model_sample_from_bindings_derives_the_features_of_a_bound_domain_object():
+    positions = [KRROODPosition(1.0, 2.0, 3.0), KRROODPosition(4.0, 5.0, 6.0)]
+    position = variable(KRROODPosition, positions)
+    query = a(KRROODPose)(
+        position=position, orientation=KRROODOrientation(0.0, 0.0, 0.0, 1.0)
+    )
+    parameters = UnderspecifiedParameters(query)
+    model = parameters.resolve_conditioned_and_truncated_model(
+        FullyFactorizedRegistry().get_model(parameters)
+    )
+    bindings = {position._id_: positions[1]}
+    [sample] = parameters.model_sample_from_bindings(model.variables, bindings)
+    sample_values = {
+        model_variable.name: value
+        for model_variable, value in zip(model.variables, sample)
+    }
+    assert [
+        sample_values["KRROODPose.position.x"],
+        sample_values["KRROODPose.position.y"],
+        sample_values["KRROODPose.position.z"],
+    ] == [positions[1].x, positions[1].y, positions[1].z]
+    assert parameters.bindings_from_model_sample(model.variables, sample) == bindings

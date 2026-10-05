@@ -269,7 +269,7 @@ class ConditionNotSatisfied(PlanFailure):
         if isinstance(self.condition, bool):
             return f"{prefix}-Condition for Action '{self.action.__name__}' is not satisfied"
         false_statements = get_false_statements(self.condition)
-        return f"{prefix}-Condition for Action '{self.action.__name__}' is not satisfied, following statements are false: {[s._name_ for s in false_statements]}"
+        return f"{prefix}-Condition for Action '{self.action.__name__}' is not satisfied, following statements could not be satisfied: {[s._name_ for s in false_statements]}"
 
     def suggest_correction(self) -> str:
         return ""

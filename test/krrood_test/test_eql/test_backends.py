@@ -16,6 +16,7 @@ from probabilistic_model.probabilistic_circuit.rx.probabilistic_circuit import (
 from random_events.variable import Continuous
 
 from ..dataset.derived_attributes import Rectangle
+from ..pattern_variables import find_assigned_variable
 from ..dataset.semantic_world_like_classes import Apple, Body
 from krrood.entity_query_language.backends import (
     SQLAlchemyBackend,
@@ -54,6 +55,7 @@ from ..dataset.example_classes import (
     EnumAction,
 )
 from ..dataset.ormatic_interface import *  # type: ignore
+from ..dataset.value_comparisons import IsGreaterThan
 
 
 def test_nested_action():
@@ -240,6 +242,56 @@ def test_generative_eql_backend():
         assert result.type > result.charge
 
 
+def test_generative_backend_grounds_a_predicate_over_two_attributes_of_the_match():
+    """
+    A predicate in a match's where condition can take several attributes of the match,
+    each standing for that attribute of the instance being checked.
+    """
+    values = [0.0, 1.0, 2.0]
+    position = a(KRROODPosition)(
+        x=variable_from(values), y=variable_from(values), z=0.0
+    )
+    position.where(IsGreaterThan(position.x, position.y))
+
+    results = list(position.evaluate(backend=EntityQueryLanguageGenerativeBackend()))
+
+    assert {(result.x, result.y) for result in results} == {
+        (x, y) for x in values for y in values if x > y
+    }
+
+
+def test_generative_backend_grounds_a_predicate_taking_one_attribute_of_the_match_twice():
+    """
+    An attribute of the match filling two arguments of a predicate stands for that
+    attribute of the instance being checked in both of them.
+    """
+    values = [0.0, 1.0, 2.0]
+    position = a(KRROODPosition)(
+        x=variable_from(values), y=variable_from(values), z=0.0
+    )
+    position.where(IsGreaterThan(position.x, position.x))
+
+    results = list(position.evaluate(backend=EntityQueryLanguageGenerativeBackend()))
+
+    assert results == []
+
+
+def test_generative_backend_grounds_a_comparison_of_an_attribute_of_the_match_with_itself():
+    """
+    An attribute of the match on both sides of a comparison stands for that attribute of
+    the instance being checked on both sides.
+    """
+    values = [0.0, 1.0, 2.0]
+    position = a(KRROODPosition)(
+        x=variable_from(values), y=variable_from(values), z=0.0
+    )
+    position.where(position.x > position.x)
+
+    results = list(position.evaluate(backend=EntityQueryLanguageGenerativeBackend()))
+
+    assert results == []
+
+
 def test_selective_backend_rejects_match_with_ellipsis_attribute():
     q = a(KRROODPosition)(x=..., y=1.0, z=2.0)
     with pytest.raises(SelectiveBackendCannotResolveEllipsisMatch):
@@ -347,3 +399,89 @@ def test_enumerating_backend_keeps_instances_whose_factory_renames_a_stated_valu
         (3, RECTANGLE_SIDES[0][1]),
         (4, RECTANGLE_SIDES[0][1]),
     }
+
+
+# %% generation constructs instances from bindings rather than writing into the pattern
+
+
+def test_enumerating_backend_leaves_the_pattern_unchanged():
+    width = variable(int, [1, 2, 3, 4])
+    height = variable(int, [3, 4, 6])
+    area = 12
+    query = a(Rectangle)(width=width, height=height, area=area)
+    list(query.evaluate(backend=EntityQueryLanguageGenerativeBackend()))
+    assert query._kwargs_["width"] is width
+    assert query._kwargs_["height"] is height
+    assert query._kwargs_["area"] == area
+
+
+def test_probabilistic_backend_leaves_the_pattern_unchanged(rectangle_model):
+    first_width, first_height = RECTANGLE_SIDES[0]
+    area = first_width * first_height
+    query = a(Rectangle)(width=..., height=..., area=area)
+    backend = ProbabilisticBackend(
+        number_of_samples=20, model_registry=DictRegistry({Rectangle: rectangle_model})
+    )
+    list(query.evaluate(backend=backend))
+    assert query._kwargs_ == {"width": ..., "height": ..., "area": area}
+    assert [
+        attribute_match.assigned_variable._value_
+        for attribute_match in query._matches_with_variables_
+    ] == [
+        attribute_match.assigned_value
+        for attribute_match in query._matches_with_variables_
+    ]
+
+
+# %% rows of bindings carry their log-likelihood under the model
+
+
+@pytest.fixture
+def rectangle_backend(rectangle_model) -> ProbabilisticBackend:
+    """
+    :return: A backend that samples rectangles from the rectangle model.
+    """
+    return ProbabilisticBackend(
+        number_of_samples=20, model_registry=DictRegistry({Rectangle: rectangle_model})
+    )
+
+
+def test_probabilistic_backend_samples_bindings_with_their_log_likelihood(
+    rectangle_backend,
+):
+    query = a(Rectangle)(width=..., height=...)
+    width = find_assigned_variable(query, "Rectangle.width")
+    height = find_assigned_variable(query, "Rectangle.height")
+    rows = list(rectangle_backend.sample_bindings(query))
+    assert len(rows) == rectangle_backend.number_of_samples
+    assert {
+        (row.bindings[width._id_], row.bindings[height._id_]) for row in rows
+    } <= set(RECTANGLE_SIDES)
+    assert [row.log_likelihood for row in rows] == pytest.approx(
+        [np.log(1 / len(RECTANGLE_SIDES))] * len(rows)
+    )
+
+
+def test_probabilistic_backend_computes_the_log_likelihood_of_given_bindings(
+    rectangle_backend,
+):
+    query = a(Rectangle)(width=..., height=...)
+    width = find_assigned_variable(query, "Rectangle.width")
+    height = find_assigned_variable(query, "Rectangle.height")
+    rectangle_width, rectangle_height = RECTANGLE_SIDES[1]
+    bindings = {width._id_: rectangle_width, height._id_: rectangle_height}
+    row = rectangle_backend.compute_log_likelihood(query, bindings)
+    assert row.bindings == bindings
+    assert row.log_likelihood == pytest.approx(np.log(1 / len(RECTANGLE_SIDES)))
+
+
+def test_bindings_the_model_cannot_produce_have_no_likelihood(rectangle_backend):
+    query = a(Rectangle)(width=..., height=...)
+    width = find_assigned_variable(query, "Rectangle.width")
+    height = find_assigned_variable(query, "Rectangle.height")
+    first_width, _ = RECTANGLE_SIDES[0]
+    _, second_height = RECTANGLE_SIDES[1]
+    row = rectangle_backend.compute_log_likelihood(
+        query, {width._id_: first_width, height._id_: second_height}
+    )
+    assert row.log_likelihood == -np.inf
