@@ -1132,24 +1132,13 @@ class InferenceEngine:
                 self.onto.property_restrictions.setdefault(for_class, {}).setdefault(
                     prop_name, set()
                 ).add(rng_name)
+                # The inverse of a restriction (e.g. Organization <- hasEmployee some Employee from
+                # Person and (worksFor some Organization) SubClassOf Employee) is not entailed, so it only
+                # contributes to the attribute types and never becomes a classification axiom of the range class.
                 for inverse in self.onto.properties[prop_name].inverses:
                     self.onto.property_restrictions.setdefault(rng_name, {}).setdefault(
                         inverse, set()
                     ).add(for_class)
-                    if inverse and isinstance(axiom, QualifiedAxiomInfoMixin):
-                        inverse_axiom = copy(axiom)
-                        inverse_axiom.on_class = for_class
-                        inverse_axiom.for_class = rng_name
-                        inverse_axiom.property_name = inverse
-                        self.onto.classes[rng_name].axioms_setup.extend(
-                            inverse_axiom.setup_statements()
-                        )
-                        self.onto.classes[rng_name].axioms.extend(
-                            inverse_axiom.conditions_eql()
-                        )
-                        self.onto.classes[rng_name].axioms_python.extend(
-                            inverse_axiom.conditions_python()
-                        )
             except Exception as e:
                 logger.warning(f"[owl_to_python] Error processing restriction: {e}")
             return True

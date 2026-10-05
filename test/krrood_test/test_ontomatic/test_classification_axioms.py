@@ -8,6 +8,8 @@ The ontology below is a reduced version of the OWL2Bench OWL 2 RL ontology:
 * ``T20CricketFan EquivalentTo isCrazyAbout value T20Cricket`` is a definition (sufficient).
 * ``Student and (hasMajor some Science) SubClassOf ScienceStudent`` is a general class axiom (sufficient), whose named
   conjunct ``Student`` must be kept.
+* ``Person and (worksFor some Organization) SubClassOf Employee`` with ``hasEmployee`` the inverse of ``worksFor`` does
+  not entail ``hasEmployee some Employee SubClassOf Organization``.
 """
 
 from __future__ import annotations
@@ -31,6 +33,8 @@ ONTOLOGY = """
 :hasStudent a owl:ObjectProperty ; rdfs:domain :College ; rdfs:range :Student .
 :hasMajor a owl:ObjectProperty ; rdfs:domain :Student ; rdfs:range :Discipline .
 :isCrazyAbout a owl:ObjectProperty ; rdfs:domain :Person ; rdfs:range :Interest .
+:worksFor a owl:ObjectProperty .
+:hasEmployee a owl:ObjectProperty ; owl:inverseOf :worksFor .
 
 :Person a owl:Class .
 :Man a owl:Class ; rdfs:subClassOf :Person .
@@ -43,6 +47,8 @@ ONTOLOGY = """
 :Interest a owl:Class .
 :Cricket a owl:Class ; rdfs:subClassOf :Interest .
 :ScienceStudent a owl:Class ; rdfs:subClassOf :Student .
+:Organization a owl:Class .
+:Employee a owl:Class ; rdfs:subClassOf :Person .
 
 :LeisureStudent a owl:Class ;
     rdfs:subClassOf :Student ;
@@ -66,6 +72,10 @@ ONTOLOGY = """
 [ a owl:Class ;
   owl:intersectionOf ( :Student [ a owl:Restriction ; owl:onProperty :hasMajor ; owl:someValuesFrom :Science ] ) ;
   rdfs:subClassOf :ScienceStudent ] .
+
+[ a owl:Class ;
+  owl:intersectionOf ( :Person [ a owl:Restriction ; owl:onProperty :worksFor ; owl:someValuesFrom :Organization ] ) ;
+  rdfs:subClassOf :Employee ] .
 """
 
 
@@ -106,3 +116,8 @@ def test_general_class_axiom_keeps_named_conjunct(generated_classes):
     axiom_python = body[body.index("def axiom_python") :]
     assert "issubclass_or_role(t, Student) for t in candidate.types" in axiom_python
     assert "Science" in axiom_python
+
+
+def test_inverse_of_a_general_class_axiom_is_not_a_classification_axiom(generated_classes):
+    assert "def axiom_python" in class_body(generated_classes, "Employee")
+    assert "def axiom_python" not in class_body(generated_classes, "Organization")
