@@ -2,8 +2,8 @@
 :meth:`MappedVariable.apply_mapping_on_external_root` follows a chain from a value
 outside query evaluation, which is how features are read off an instance.
 
-These tests pin what it does when a step along the way maps one value to several, when
-a step maps it to none, and when it meets a pattern standing for an instance.
+These tests pin what it does when a step along the way maps one value to several, when a
+step maps it to none, and when it meets a pattern standing for an instance.
 """
 
 import pytest
@@ -176,6 +176,17 @@ def test_chain_through_a_pattern_stating_a_pattern_reaches_the_inner_stated_valu
     chain = variable(Cabinet, domain=[cabinet]).drawers[0].handle.name
 
     assert chain.apply_mapping_on_external_root(cabinet) is handle_name
+
+
+def test_chain_written_on_a_pattern_reaches_the_value_it_states():
+    """
+    A pattern reads like the instance it describes, so a chain written on the pattern
+    itself, applied back to it, reaches the values it states.
+    """
+    handle_name = "Handle1"
+    drawer = a(Drawer)(handle=a(Handle)(name=handle_name))
+
+    assert drawer.handle.name.apply_mapping_on_external_root(drawer) is handle_name
 
 
 def test_chain_through_a_pattern_that_does_not_state_the_attribute_reaches_no_value():
