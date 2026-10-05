@@ -82,10 +82,10 @@ class TypeInferredThrough(Enum):
     The individual satisfies a sufficient condition (owl:equivalentClass definition or general class axiom) of the
     class. Premise: the class whose axiom held.
     """
-    NAME = "name"
+    BASE_CLASS = "base_class"
     """
-    The individual has no properties and is named like the class (punning heuristic of the loader).
-    Premise: the class.
+    The individual has no asserted or inferred type, it is represented by the ontology base class (owl:Thing).
+    Premise: none.
     """
 
 
@@ -414,6 +414,23 @@ class OwlLoader:
         while number_of_types != self._number_of_inferred_types():
             number_of_types = self._number_of_inferred_types()
             self._infer_types_once(declared_domains, sufficient_domains)
+        self.represent_untyped_individuals_by_the_base_class()
+
+    def represent_untyped_individuals_by_the_base_class(self) -> None:
+        """
+        An individual without any asserted or inferred type is only an owl:Thing; it is represented by an instance of
+        the ontology base class. (It is not typed with a class it happens to be named after, e.g. the individual
+        ``Engineering`` used as a value of hasCollegeDiscipline is not an instance of the class ``Engineering``.)
+        """
+        base_class = self.metadata.ontology_base_class
+        if base_class is None:
+            return
+        for instance in self.anonymous_instances.values():
+            if not instance.final_sorted_types:
+                self._add_inferred_type(instance, base_class)
+                self.registry.record_type(
+                    instance.uri, base_class, TypeInferredThrough.BASE_CLASS
+                )
 
     def _number_of_inferred_types(self) -> int:
         return sum(len(i.final_sorted_types) for i in self.anonymous_instances.values())
@@ -435,19 +452,6 @@ class OwlLoader:
         """
         for instance in self.anonymous_instances.values():
             descriptors = self.get_descriptors_of_instance(instance)
-            if len(descriptors) == 0:
-                py_cls = self.metadata.get_python_class(
-                    NamingRegistry.uri_to_python_name(instance.uri)
-                )
-                if py_cls:
-                    if not any(
-                        issubclass_or_role(t, py_cls)
-                        for t in instance.final_sorted_types
-                    ):
-                        self._add_inferred_type(instance, py_cls)
-                        self.registry.record_type(
-                            instance.uri, py_cls, TypeInferredThrough.NAME, py_cls
-                        )
             for desc in descriptors:
                 if desc not in declared_domains:
                     declared_domains[desc] = self.declared_domains(desc)
