@@ -22,6 +22,12 @@ import sys
 from pathlib import Path
 
 import yaml
+from basstler.standard_streams import StandardStreamHandler
+
+logger = StandardStreamHandler.logger_for(__name__)
+"""
+This module's logger, which is also what its command prints through.
+"""
 
 
 class YamlBooleanCoercionError(ValueError):
@@ -106,11 +112,10 @@ def regenerate_branch_index(
             if not branch:
                 continue
             if branch in seen_branches:
-                print(
+                logger.error(
                     f"plan_manifest_tools.py: duplicate branch {branch!r} in "
                     f"{manifest_path} - keeping the first plan it was seen "
-                    "under, dropping this one.",
-                    file=sys.stderr,
+                    "under, dropping this one."
                 )
                 continue
             seen_branches.add(branch)
@@ -145,7 +150,7 @@ def main() -> int:
     arguments = parser.parse_args()
 
     if arguments.subcommand == "read-id":
-        print(read_manifest_id(arguments.manifest_path))
+        logger.info(read_manifest_id(arguments.manifest_path))
     elif arguments.subcommand == "regenerate-branch-index":
         index_content = regenerate_branch_index(
             arguments.scratch_dir, arguments.plans_dir, arguments.manifest_filename

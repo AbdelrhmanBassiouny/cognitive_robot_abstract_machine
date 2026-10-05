@@ -24,12 +24,12 @@ from pathlib import Path
 
 import pytest
 
+from basstler.repository import Repository
 from basstler.stack import (
     Configuration,
     IntegrationStrategy,
     PullRequest,
     RefusalReason,
-    Repository,
     Stack,
     build_stack,
     load_board,

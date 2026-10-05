@@ -16,6 +16,12 @@ import argparse
 import json
 import sys
 from typing import Any
+from basstler.standard_streams import StandardStreamHandler
+
+logger = StandardStreamHandler.logger_for(__name__)
+"""
+This module's logger, which is also what its command prints through.
+"""
 
 
 class SummaryKeyCollisionError(ValueError):
@@ -74,9 +80,9 @@ def main() -> int:
     arguments = parser.parse_args()
 
     if arguments.command == "count-corrected":
-        print(count_corrected(arguments.sync_summary_json))
+        logger.info(count_corrected(arguments.sync_summary_json))
     else:
-        print(
+        logger.info(
             json.dumps(
                 merge_summaries(
                     arguments.sync_summary_json, arguments.build_summary_json

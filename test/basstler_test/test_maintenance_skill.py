@@ -15,7 +15,8 @@ from pathlib import Path
 
 import basstler.stack
 from basstler.locations import PackageLocation
-from basstler.stack import Repository, _configuration_values
+from basstler.repository import Repository
+from basstler.stack import _configuration_values
 
 from .constants import SkillDirectory
 

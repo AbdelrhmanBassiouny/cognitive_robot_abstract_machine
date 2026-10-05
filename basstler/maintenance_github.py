@@ -31,7 +31,7 @@ from basstler.maintenance_constants import (
     GITHUB_API_ROOT,
 )
 from basstler.maintenance_errors import ExternalCallFailed
-from basstler.stack import Repository
+from basstler.repository import Repository
 
 
 @dataclass

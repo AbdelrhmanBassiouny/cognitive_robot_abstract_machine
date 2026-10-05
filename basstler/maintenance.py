@@ -48,6 +48,12 @@ from basstler.stack import (
     PromotionLinkTooLongError,
     load_configuration,
 )
+from basstler.standard_streams import StandardStreamHandler
+
+logger = StandardStreamHandler.logger_for(__name__)
+"""
+This module's logger, which is also what its command prints through.
+"""
 
 
 def _argument_parser() -> argparse.ArgumentParser:
@@ -76,10 +82,7 @@ def main() -> MaintenanceExitCode:
     """
     status = _dispatch()
     if status is not MaintenanceExitCode.SUCCESS:
-        print(
-            f"maintenance.py: {status.name_for_a_caller} ({int(status)})",
-            file=sys.stderr,
-        )
+        logger.error(f"maintenance.py: {status.name_for_a_caller} ({int(status)})")
     return status
 
 
@@ -100,26 +103,26 @@ def _dispatch() -> MaintenanceExitCode:
         )
         return requested.run(maintenance, arguments)
     except (ForkRemoteNotFoundError, AmbiguousForkRemoteError) as error:
-        print(f"{error}", file=sys.stderr)
+        logger.error(f"{error}")
         return MaintenanceExitCode.REMOTES_UNRESOLVED
     except BoardUnavailable as error:
-        print(f"{error}", file=sys.stderr)
+        logger.error(f"{error}")
         return MaintenanceExitCode.BOARD_UNAVAILABLE
     except GitHubCredentialUnavailableError as error:
-        print(f"{error}", file=sys.stderr)
+        logger.error(f"{error}")
         return MaintenanceExitCode.CREDENTIAL_UNAVAILABLE
     except (
         MissingPullRequestFieldError,
         ContradictoryLabelWriteError,
         PromotionLinkTooLongError,
     ) as error:
-        print(f"{error}", file=sys.stderr)
+        logger.error(f"{error}")
         return MaintenanceExitCode.USAGE
     except GitCommandFailed as error:
-        print(f"{error}", file=sys.stderr)
+        logger.error(f"{error}")
         return MaintenanceExitCode.GIT_COMMAND_FAILED
     except GitHubRequestFailed as error:
-        print(f"{error}", file=sys.stderr)
+        logger.error(f"{error}")
         return MaintenanceExitCode.GITHUB_REQUEST_FAILED
 
 

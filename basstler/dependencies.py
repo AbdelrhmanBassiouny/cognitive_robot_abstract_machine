@@ -26,13 +26,18 @@ import argparse
 import re
 import sys
 import tomllib
-from dataclasses import dataclass
-from enum import StrEnum
+from dataclasses import dataclass, field
+from enum import IntEnum, StrEnum
 from importlib.metadata import distributions
 from pathlib import Path
-from typing import ClassVar
 
 from basstler.locations import PackageLocation
+from basstler.standard_streams import StandardStreamHandler
+
+logger = StandardStreamHandler.logger_for(__name__)
+"""
+This module's logger, which is also what its command prints through.
+"""
 
 
 class PyprojectKey(StrEnum):
@@ -80,21 +85,23 @@ class Dependency:
     One requirement this package declares.
     """
 
-    CONSTRAINT_START: ClassVar[re.Pattern[str]] = re.compile(r"[<>=!~;\[ ]")
-    """
-    The first character that ends a distribution's name and begins a version bound, an extra
-    or an environment marker, in a PEP 508 specifier.
-    """
-
     specifier: str
     """
     The requirement as ``pyproject.toml`` writes it, version bounds and all.
     """
 
+    constraint_start: re.Pattern[str] = field(
+        default=re.compile(r"[<>=!~;\[ ]"), repr=False, compare=False
+    )
+    """
+    The first character that ends a distribution's name and begins a version bound, an extra
+    or an environment marker, in a PEP 508 specifier.
+    """
+
     @property
     def distribution_name(self) -> str:
         """:return: The distribution this requirement names, without its constraints."""
-        return self.CONSTRAINT_START.split(self.specifier, maxsplit=1)[0].strip()
+        return self.constraint_start.split(self.specifier, maxsplit=1)[0].strip()
 
     @property
     def is_missing(self) -> bool:
@@ -153,9 +160,27 @@ class DependencyDeclaration:
         )
 
 
-def main() -> None:
+class ExitCode(IntEnum):
+    """
+    How the command ended, as its caller reads it.
+    """
+
+    SUCCESS = 0
+    """
+    The missing dependencies, if any, were printed.
+    """
+
+    UNREADABLE_DECLARATION = 1
+    """
+    The declaration could not be read, so nothing was printed.
+    """
+
+
+def main() -> ExitCode:
     """
     Print one specifier per missing dependency, for a caller to hand to an installer.
+
+    :return: How the command ended.
     """
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[1])
     parser.add_argument(
@@ -166,10 +191,12 @@ def main() -> None:
     )
     declaration = DependencyDeclaration(parser.parse_args().declaration)
     if not declaration.path.is_file():
-        sys.exit(str(UnreadableDependencyDeclarationError(declaration.path)))
+        logger.error(str(UnreadableDependencyDeclarationError(declaration.path)))
+        return ExitCode.UNREADABLE_DECLARATION
     for dependency in declaration.missing():
-        print(dependency.specifier)
+        logger.info(dependency.specifier)
+    return ExitCode.SUCCESS
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

@@ -218,6 +218,18 @@ def test_validate_plan_rejects_unknown_status():
     assert any(isinstance(problem, UnknownStatus) for problem in error.value.problems)
 
 
+@pytest.mark.parametrize("status", ["in_progress", ItemStatus.IN_PROGRESS.value])
+def test_validate_plan_accepts_a_status_in_either_spelling(status):
+    """
+    ``in_progress`` is the spelling manifests were written in before the values took
+    spaces, and stays readable beside the current one.
+    """
+    items = [
+        {"id": "a", "title": "A", "branch": "a", "track": "track-1", "status": status}
+    ]
+    validate_plan(minimal_plan(items=items))
+
+
 def test_validate_plan_collects_every_problem_not_just_the_first():
     with pytest.raises(PlanValidationError) as error:
         validate_plan(minimal_plan(schema_version=2, tracks=[]))
@@ -419,6 +431,17 @@ def test_status_and_drift_css_class_with_drift():
     drifted_item = Item(title="A", branch="a", track="track-1", status=ItemStatus.DONE)
     drifted_item.drift_description = "marked done, but pull request #1 is still open"
     assert drifted_item.status_and_drift_css_class == "status-done has-drift"
+
+
+@pytest.mark.parametrize("status", list(ItemStatus))
+def test_the_dashboard_styles_every_status_css_class(status):
+    """
+    A status value holds spaces, so the class is built from the member's name, and the
+    stylesheet has to know that name.
+    """
+    item = Item(title="A", branch="a", track="track-1", status=status)
+    template = (PackageLocation.TEMPLATES / "dashboard.html").read_text()
+    assert f".item.{item.status_and_drift_css_class} " in template
 
 
 def test_is_ready_to_unblock_dependents_true_when_done():
@@ -2044,7 +2067,7 @@ def test_main_prints_the_status_summary_as_json(tmp_path, monkeypatch, capsys):
     )
     main()
     summary = json.loads(capsys.readouterr().out)
-    assert summary["counts"]["not_started"] == 1
+    assert summary["counts"][ItemStatus.NOT_STARTED.value] == 1
 
 
 def test_main_rejects_an_invalid_manifest_instead_of_crashing(
