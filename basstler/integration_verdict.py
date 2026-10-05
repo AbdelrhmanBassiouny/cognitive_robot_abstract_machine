@@ -10,11 +10,11 @@ a candidate is opened to be judged and closed unmerged, never to be merged.
 from __future__ import annotations
 
 import sys
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import timedelta
 from enum import StrEnum
 from pathlib import Path
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from typing import Any
 
 
@@ -288,6 +288,55 @@ class CheckRun:
 
 
 @dataclass(frozen=True)
+class ConcludedRuns:
+    """
+    How each run started on one head finished, for the runs that have.
+
+    A run that was cancelled, or lost its runner, can leave a check it started marked as
+    still going, and GitHub never finishes that check. It has no answer left to give, so
+    it is read as finishing the way its run did rather than waited on for ever.
+    """
+
+    conclusions: Mapping[int, str]
+    """
+    How each finished run concluded, keyed by the suite it reported its checks under.
+    """
+
+    @classmethod
+    def of(cls, runs: Sequence[WorkflowRunRecord]) -> ConcludedRuns:
+        """
+        :param runs: Every workflow run started on the head being judged, as the API
+            answers them.
+        :return: How the finished ones concluded.
+        """
+        return cls(
+            {
+                int(run[WorkflowRunField.CHECK_SUITE]): str(
+                    run[WorkflowRunField.CONCLUSION]
+                )
+                for run in runs
+                if run.get(WorkflowRunField.STATUS) == CheckRunStatus.COMPLETED
+            }
+        )
+
+    def settle(self, record: CheckRunRecord) -> CheckRun:
+        """
+        :param record: One check run reported against the head, as the API answers it.
+        :return: The check, finished the way its run did if that run has finished
+            without it.
+        """
+        check = CheckRun.from_json(record)
+        suite = int(record[CheckRunField.CHECK_SUITE][CheckSuiteField.IDENTIFIER])
+        if check.has_finished or suite not in self.conclusions:
+            return check
+        return replace(
+            check,
+            status=CheckRunStatus.COMPLETED,
+            conclusion=self.conclusions[suite],
+        )
+
+
+@dataclass(frozen=True)
 class ReportedChecks:
     """
     Every check reported against one commit or branch, and what they amount to.
@@ -517,7 +566,8 @@ def read_checks(fork: CandidatePullRequests, reference: str) -> ReportedChecks:
     unfit to carry.
 
     Which runs those were is asked of the head they were reported against, so a head
-    nothing has reported on at all is not asked about twice.
+    nothing has reported on at all is not asked about twice. The same runs settle any
+    check one of them finished without, as :class:`ConcludedRuns` describes.
 
     :param fork: The fork to read.
     :param reference: The commit or branch to read the checks reported against.
@@ -526,11 +576,15 @@ def read_checks(fork: CandidatePullRequests, reference: str) -> ReportedChecks:
     records = fork.check_runs(reference)
     if not records:
         return ReportedChecks(())
-    about_the_build = ChecksAboutTheBuild.of(
-        fork.runs_started_on(str(records[0][CheckRunField.HEAD_SHA]))
-    )
-    return ReportedChecks.of(
-        [record for record in records if not about_the_build.reports(record)]
+    runs = fork.runs_started_on(str(records[0][CheckRunField.HEAD_SHA]))
+    about_the_build = ChecksAboutTheBuild.of(runs)
+    concluded = ConcludedRuns.of(runs)
+    return ReportedChecks(
+        tuple(
+            concluded.settle(record)
+            for record in records
+            if not about_the_build.reports(record)
+        )
     )
 
 

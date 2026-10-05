@@ -139,17 +139,26 @@ def a_check(
 
 
 def a_run(
-    workflow: WorkflowFile, check_suite: int = THE_PIPELINE_S_SUITE
+    workflow: WorkflowFile,
+    check_suite: int = THE_PIPELINE_S_SUITE,
+    status: str | None = None,
+    conclusion: str | None = None,
 ) -> WorkflowRunRecord:
     """
     :param workflow: The workflow file the run ran from.
     :param check_suite: The suite it reported its checks under.
+    :param status: Whether it has finished, left out of the record when not given.
+    :param conclusion: How it finished.
     :return: One workflow run, as the API answers it.
     """
-    return {
+    record: WorkflowRunRecord = {
         WorkflowRunField.PATH: workflow.path_in_a_tree,
         WorkflowRunField.CHECK_SUITE: check_suite,
     }
+    if status is not None:
+        record[WorkflowRunField.STATUS] = status
+        record[WorkflowRunField.CONCLUSION] = conclusion
+    return record
 
 
 def a_rebuild_check_name() -> str:
@@ -508,6 +517,72 @@ def test_a_head_nothing_has_reported_on_is_not_asked_which_workflows_ran():
 
     assert read_checks(fork, A_HEAD).verdict is ChecksVerdict.ABSENT
     assert fork.read_heads == []
+
+
+# %% checks a finished run left unfinished
+
+
+A_CHECK_LEFT_UNFINISHED = "test_each_lib (coraplex) / test"
+"""
+A matrix job whose check its run never finished.
+"""
+
+A_RUN_STOPPED_PART_WAY = "cancelled"
+"""
+How a run that was stopped before its matrix finished concludes.
+"""
+
+
+def test_a_check_its_finished_run_left_unfinished_finishes_the_way_its_run_did():
+    """
+    A run that was cancelled, or lost its runner, can leave a check it started marked as
+    still going, and GitHub never finishes it. Waiting on that check waits for ever:
+    candidate #478 held every rebuild for four days behind three such checks of a run
+    that had ended cancelled.
+    """
+    fork = RecordingCandidates(
+        checks=[
+            a_check(),
+            a_check(
+                name=A_CHECK_LEFT_UNFINISHED, status="in_progress", conclusion=None
+            ),
+        ],
+        runs=[
+            a_run(
+                WorkflowFile.CONTINUOUS_INTEGRATION,
+                check_suite=THE_MATRIX_S_SUITE,
+                status=CheckRunStatus.COMPLETED,
+                conclusion=A_RUN_STOPPED_PART_WAY,
+            )
+        ],
+    )
+
+    checks = read_checks(fork, A_HEAD)
+
+    assert checks.verdict is ChecksVerdict.FAILED
+    assert [run.name for run in checks.failed] == [A_CHECK_LEFT_UNFINISHED]
+    assert checks.failed[0].conclusion == A_RUN_STOPPED_PART_WAY
+
+
+def test_a_check_whose_run_is_still_going_is_still_running():
+    """
+    Only a finished run settles a check it left behind, so a matrix still working is
+    waited for rather than read as an answer.
+    """
+    fork = RecordingCandidates(
+        checks=[
+            a_check(name=A_CHECK_LEFT_UNFINISHED, status="in_progress", conclusion=None)
+        ],
+        runs=[
+            a_run(
+                WorkflowFile.CONTINUOUS_INTEGRATION,
+                check_suite=THE_MATRIX_S_SUITE,
+                status="in_progress",
+            )
+        ],
+    )
+
+    assert read_checks(fork, A_HEAD).verdict is ChecksVerdict.RUNNING
 
 
 # %% the candidate itself
@@ -908,7 +983,9 @@ def stack_modules() -> tuple[Path, ...]:
     :return: Every module of the tooling, so a statement is looked for across all of
         them rather than across the ones a reader thought of.
     """
-    return tuple(sorted(Path(basstler.integration_verdict.__file__).parent.glob("*.py")))
+    return tuple(
+        sorted(Path(basstler.integration_verdict.__file__).parent.glob("*.py"))
+    )
 
 
 def slowest_wait_past_the_hour() -> int:
