@@ -105,8 +105,21 @@ class ClassInfo:
     role_taker: Optional[RoleTakerInfo] = None
     declared_properties: List[str] = field(default_factory=list)
     axioms: List[str] = field(default_factory=list)
+    """
+    EQL conditions of the sufficient conditions (owl:equivalentClass definitions and general class axioms with the
+    class as superclass). Only these are used to classify individuals.
+    """
     axioms_python: List[str] = field(default_factory=list)
+    """
+    Python conditions of the sufficient conditions, see :attr:`axioms`.
+    """
     axioms_setup: List[str] = field(default_factory=list)
+    necessary_axioms_python: List[str] = field(default_factory=list)
+    """
+    Python conditions of the necessary conditions (restrictions in superclass position, i.e. rdfs:subClassOf of the
+    class). They hold for every member of the class but do not make an individual a member, so they are not used for
+    classification.
+    """
     onto: Optional[OntologyInfo] = field(default=None, repr=False)
 
     def __deepcopy__(self, memo):
@@ -847,9 +860,9 @@ class InferenceEngine:
             cls_name = NamingRegistry.uri_to_python_name(cls_uri, self.onto.graph)
             for_class = self.onto.description_for(cls_name) or cls_name
 
-            # direct subclass restrictions
+            # direct subclass restrictions are necessary conditions of the class
             for restr in self.onto.graph.objects(cls_uri, RDFS.subClassOf):
-                self._restrictions_handler(cls_name, restr)
+                self._restrictions_handler(cls_name, restr, sufficient=False)
                 # If restriction mentions a property, count this class as declared domain for that property
                 covered_restrictions.add(restr)
                 on_prop = self.onto.graph.value(restr, OWL.onProperty)
@@ -861,11 +874,14 @@ class InferenceEngine:
 
             # restrictions inside intersectionOf
             intersection = []
+            sufficient = self._is_sufficient_class_expression(cls_uri)
             for coll in self.onto.graph.objects(cls_uri, OWL.intersectionOf):
                 node = coll
                 while node and node != RDF.nil:
                     first = self.onto.graph.value(node, RDF.first)
-                    restriction_added = self._restrictions_handler(cls_name, first)
+                    restriction_added = self._restrictions_handler(
+                        cls_name, first, sufficient=sufficient
+                    )
                     covered_restrictions.add(first)
                     on_prop = (
                         self.onto.graph.value(first, OWL.onProperty) if first else None
@@ -875,27 +891,13 @@ class InferenceEngine:
                             on_prop, self.onto.graph
                         )
                         self.property_maps.declared_dom_map[prop_name].add(for_class)
-                    elif (
-                        on_prop
-                        and intersection
-                        and intersection[0] in self.onto.classes
-                        and self.onto.classes[for_class].axioms
-                    ):
-                        subclass_axiom = SubClassAxiomInfo(intersection[0])
-                        self.onto.classes[for_class].axioms.insert(
-                            0,
-                            subclass_axiom.conditions_eql()[0],
-                        )
-                        self.onto.classes[for_class].axioms_python.insert(
-                            0,
-                            subclass_axiom.conditions_python()[0],
-                        )
-                    else:
+                    elif not on_prop:
                         first_name = NamingRegistry.uri_to_python_name(
                             first, self.onto.graph
                         )
                         intersection.append(first_name)
                     node = self.onto.graph.value(node, RDF.rest)
+            self._add_named_conjunct_conditions(for_class, intersection, sufficient)
         # Standalone Restrictions
         for restr in self.onto.graph.subjects(RDF.type, OWL.Restriction):
             if restr in covered_restrictions:
@@ -917,17 +919,76 @@ class InferenceEngine:
                     )
             if not for_class:
                 raise ValueError(f"Could not determine class for restriction {restr}")
-            self._restrictions_handler(for_class, restr)
+            # Either an owl:equivalentClass definition or a general class axiom (restriction rdfs:subClassOf class),
+            # both are sufficient conditions of the class.
+            self._restrictions_handler(for_class, restr, sufficient=True)
             prop_name = NamingRegistry.uri_to_python_name(on_prop, self.onto.graph)
             for_class = self.onto.description_for(for_class) or for_class
             self.property_maps.declared_dom_map[prop_name].add(for_class)
 
-    def _restrictions_handler(self, for_class: str, node: rdflib.term.Node):
+    def _is_sufficient_class_expression(self, class_node: rdflib.term.Node) -> bool:
+        """
+        Whether the class expression ``class_node`` (an intersection) is a sufficient condition of the class it
+        describes: a named class defined by the intersection, a general class axiom ``expression rdfs:subClassOf
+        Class``, or an ``owl:equivalentClass`` definition. An expression that only appears as a superclass of a named
+        class (``Class rdfs:subClassOf expression``) is a necessary condition.
+
+        :param class_node: The class node.
+        :return: True if the expression is a sufficient condition.
+        """
+        if isinstance(class_node, rdflib.URIRef):
+            return True
+        if any(
+            isinstance(superclass, rdflib.URIRef)
+            for superclass in self.onto.graph.objects(class_node, RDFS.subClassOf)
+        ):
+            return True
+        return (None, OWL.equivalentClass, class_node) in self.onto.graph or (
+            class_node,
+            OWL.equivalentClass,
+            None,
+        ) in self.onto.graph
+
+    def _add_named_conjunct_conditions(
+        self, for_class: str, named_conjuncts: List[str], sufficient: bool
+    ):
+        """
+        Add a type check for every named class in an intersection to the conditions of the described class, so that
+        e.g. ``Student and (hasMajor some Science) SubClassOf ScienceStudent`` checks that the individual is a Student.
+
+        :param for_class: The class the intersection describes.
+        :param named_conjuncts: Names of the named classes of the intersection.
+        :param sufficient: Whether the intersection is a sufficient condition.
+        """
+        cls_info = self.onto.classes.get(for_class)
+        if cls_info is None:
+            return
+        for conjunct in reversed(named_conjuncts):
+            if conjunct == for_class or conjunct not in self.onto.classes:
+                continue
+            subclass_axiom = SubClassAxiomInfo(conjunct)
+            python_condition = subclass_axiom.conditions_python()[0]
+            if not sufficient:
+                if python_condition not in cls_info.necessary_axioms_python:
+                    cls_info.necessary_axioms_python.insert(0, python_condition)
+                continue
+            if not cls_info.axioms:
+                # The class has no sufficient restriction conditions, a named conjunct alone is a plain subsumption.
+                continue
+            if python_condition not in cls_info.axioms_python:
+                cls_info.axioms.insert(0, subclass_axiom.conditions_eql()[0])
+                cls_info.axioms_python.insert(0, python_condition)
+
+    def _restrictions_handler(
+        self, for_class: str, node: rdflib.term.Node, sufficient: bool = True
+    ):
         """
         Handle restrictions for a given class and node in the ontology graph.
 
         :param for_class: The class name.
         :param node: The restriction node.
+        :param sufficient: Whether the restriction is (part of) a sufficient condition of the class. Only sufficient
+         conditions become classification axioms, necessary conditions are kept as documentation.
         """
         if not node:
             return True
@@ -1019,13 +1080,18 @@ class InferenceEngine:
                             rng_name, NamingRegistry.to_snake_case(rng_name)
                         )
                     return True
-                self.onto.classes[for_class].axioms_setup.extend(
-                    axiom.setup_statements()
-                )
-                self.onto.classes[for_class].axioms.extend(axiom.conditions_eql())
-                self.onto.classes[for_class].axioms_python.extend(
-                    axiom.conditions_python()
-                )
+                if sufficient:
+                    self.onto.classes[for_class].axioms_setup.extend(
+                        axiom.setup_statements()
+                    )
+                    self.onto.classes[for_class].axioms.extend(axiom.conditions_eql())
+                    self.onto.classes[for_class].axioms_python.extend(
+                        axiom.conditions_python()
+                    )
+                else:
+                    self.onto.classes[for_class].necessary_axioms_python.extend(
+                        axiom.conditions_python()
+                    )
                 if rng_name is None:
                     if self.onto.original_properties[prop_name].ranges:
                         rng_name = self.onto.original_properties[prop_name].ranges[0]

@@ -79,6 +79,13 @@ class {{ cls.name }}({% if cls.base_classes %}{{ ', '.join(cls.base_classes) }}{
     def axiom_python(cls, candidate: AnonymousClass) -> bool:
         return {{ cls.axioms_python | join(' and ') }}
     {% endif %}
+    {% if cls.necessary_axioms_python|length > 0 %}
+
+    @classmethod
+    def necessary_conditions_python(cls, candidate: AnonymousClass) -> bool:
+        """Necessary conditions of the class (superclass restrictions). They are not used for classification."""
+        return {{ cls.necessary_axioms_python | join(' and ') }}
+    {% endif %}
     {% if cls.equivalent_classes|length > 0 %}
 
 

@@ -315,6 +315,19 @@ class OwlLoader:
         return self.registry
 
     def infer_all_types_for_the_anonymous_instances(self):
+        """
+        Infer the types of every individual from the properties it has. Only OWL 2 RL entailed types are added:
+
+        * the declared domain of every property of the individual (rule prp-dom), and its declared range for the
+          values (rule prp-rng);
+        * every class that declares a sufficient condition (an owl:equivalentClass definition or a general class axiom
+          with the class as superclass, rendered as its own ``axiom_python``) that the individual satisfies.
+
+        Necessary conditions (restrictions in superclass position) and range specialisations of subclasses are not
+        used for classification, since they are not entailed in the direction from the property to the class.
+        """
+        declared_domains: Dict[Type[PropertyDescriptor], Tuple[Type, ...]] = {}
+        sufficient_domains: Dict[Type[PropertyDescriptor], Tuple[Type, ...]] = {}
         for instance in self.anonymous_instances.values():
             instance.final_sorted_types = get_most_specific_types(tuple(instance.types))
         for instance in self.anonymous_instances.values():
@@ -330,45 +343,50 @@ class OwlLoader:
                     ):
                         instance.final_sorted_types.append(py_cls)
             for desc in descriptors:
-                domains = desc.all_domains[desc]
-                if len(domains) == 1:
+                if desc not in declared_domains:
+                    declared_domains[desc] = self.declared_domains(desc)
+                    sufficient_domains[desc] = self.domains_with_sufficient_conditions(
+                        desc
+                    )
+                for dom in declared_domains[desc]:
                     self._update_inferred_types_given_descriptor_domain_and_range(
-                        instance, desc, list(domains)[0]
+                        instance, desc, dom
                     )
-                    continue
-                domains = list(
-                    reversed(
-                        sort_classes_by_role_aware_inheritance_path_length(
-                            tuple(domains), with_levels=True
-                        )
-                    )
-                )
-                found_level = -1
-                for dom, level in domains:
-                    if level < found_level:
-                        break
-                    if hasattr(dom, "axiom_python") and dom.axiom_python(instance):
-                        self._update_inferred_types_given_descriptor_domain_and_range(
-                            instance, desc, dom
-                        )
-                        found_level = level
-                        continue
-                    try:
-                        range_ = desc.get_descriptor_instance_for_domain_type(dom).range
-                    except ValueError:
-                        continue
-                    for range_inst in getattr(instance, desc.get_field_name()):
-                        if any(
-                            issubclass_or_role(it, range_)
-                            for it in range_inst.final_sorted_types
-                        ):
-                            if not any(
-                                issubclass_or_role(t, dom)
-                                for t in instance.final_sorted_types
-                            ) and not hasattr(dom, "axiom_python"):
-                                instance.final_sorted_types.append(dom)
-                                found_level = level
-                            break
+                for dom in sufficient_domains[desc]:
+                    if dom.axiom_python(instance) and not any(
+                        issubclass_or_role(t, dom) for t in instance.final_sorted_types
+                    ):
+                        instance.final_sorted_types.append(dom)
+
+    @staticmethod
+    def declared_domains(desc: Type[PropertyDescriptor]) -> Tuple[Type, ...]:
+        """
+        :param desc: A property descriptor class.
+        :return: The most general domains of the descriptor, i.e. the domains that are not a subclass (or role) of
+         another domain of the descriptor. These correspond to the declared rdfs:domain of the property; the other
+         domains are specialisations introduced by class restrictions.
+        """
+        domains = tuple(desc.all_domains[desc])
+        return tuple(
+            dom
+            for dom in domains
+            if not any(
+                other is not dom and issubclass_or_role(dom, other) for other in domains
+            )
+        )
+
+    @staticmethod
+    def domains_with_sufficient_conditions(
+        desc: Type[PropertyDescriptor],
+    ) -> Tuple[Type, ...]:
+        """
+        :param desc: A property descriptor class.
+        :return: The domains of the descriptor that declare their own sufficient condition (``axiom_python`` defined
+         in the class itself, not inherited).
+        """
+        return tuple(
+            dom for dom in desc.all_domains[desc] if "axiom_python" in vars(dom)
+        )
 
     def keep_most_specific_types_and_sort_from_least_to_most_specific(
         self,
