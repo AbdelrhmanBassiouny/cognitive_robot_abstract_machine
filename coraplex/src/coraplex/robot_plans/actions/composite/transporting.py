@@ -56,14 +56,10 @@ class TransportAction(ActionDescription, LimitsItsCandidates):
         :return: The object this transport carries, as its placing step states it,
             whether that step is grounded already or still to be grounded.
         """
-        place = (
-            self.place._kwargs_["place"]
-            if isinstance(self.place, Match)
-            else self.place.place
-        )
-        if isinstance(place, Match):
-            return place._kwargs_["object_designator"]
-        return place.object_designator
+        transported_object = self.place.place.object_designator
+        if isinstance(self.place, Match):
+            return transported_object.apply_mapping_on_external_root(self.place)
+        return transported_object
 
     @property
     def carrying_arm(self) -> Arm:
@@ -71,14 +67,10 @@ class TransportAction(ActionDescription, LimitsItsCandidates):
         :return: The arm this transport carries its object with, as its picking-up step
             states it, whether that step is grounded already or still to be grounded.
         """
-        pick_up = (
-            self.pick_up._kwargs_["pick_up"]
-            if isinstance(self.pick_up, Match)
-            else self.pick_up.pick_up
-        )
-        if isinstance(pick_up, Match):
-            return pick_up._kwargs_["arm"]
-        return pick_up.arm
+        carrying_arm = self.pick_up.pick_up.arm
+        if isinstance(self.pick_up, Match):
+            return carrying_arm.apply_mapping_on_external_root(self.pick_up)
+        return carrying_arm
 
     @classmethod
     def from_graspable_by_closest_grasps(
