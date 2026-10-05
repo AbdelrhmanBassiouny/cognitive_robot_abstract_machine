@@ -104,7 +104,7 @@ def _random_navigate_action(world: World):
             reference_frame=world.root,
         ),
     )
-    action.expression.limit(10)
+    action.limit(10)
     return action
 
 
