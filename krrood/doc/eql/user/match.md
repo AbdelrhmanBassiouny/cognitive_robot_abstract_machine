@@ -94,6 +94,40 @@ to create a {py:func}`~krrood.entity_query_language.factories.variable`,
  selects it using {py:func}`~krrood.entity_query_language.factories.entity` and automatically adds the corresponding {py:meth}`~krrood.entity_query_language.query.query.Query.where` clauses.
 ```
 
+## Matching Collection-Valued Attributes
+
+When an attribute holds a collection (it is declared as a `list`, `set`, `tuple` or `Sequence` of some type), a single
+value or a nested pattern given for it describes **one element** of the collection:
+
+- `attr=value` matches when `value` is in the collection. The same holds for a variable whose type is the element type,
+  such as `takes_course=variable(Course, ...)`.
+- `attr=an(Type)(...)` matches when **some** element of the collection matches the nested pattern. Each object appears
+  in the results once, however many of its elements match, and an object whose collection is empty does not match.
+
+```python
+# Students taking the 'Logic' course
+an(Student)(takes_course=logic).from_(students)
+
+# Students taking some course named 'Databases'
+an(Student)(takes_course=an(Course)(name="Databases")).from_(students)
+
+# Students taking some course taught by someone who is the dean of some organization
+an(Student)(takes_course=an(Course)(is_taught_by=an(Person)(is_dean_of=an(Organization)())))
+```
+
+Nested patterns through several collection-valued attributes, as in the last query, mean "some element, whose
+attribute has some element, ...". Giving a whole collection still compares the whole collection
+(`takes_course={logic, ai}` matches only a student taking exactly these two courses), and so does a variable whose
+values are whole collections. A list of patterns still matches the elements position by position.
+
+An attribute declared as an optional collection, such as `Optional[set[Course]]`, is matched the same way, and an absent
+collection (`None`) counts as empty: it contains no value and no element matches a pattern. `attr=None` still compares
+the attribute to `None`.
+
+When a generative backend constructs objects from a pattern, the element built for a collection-valued attribute is
+wrapped in the attribute's collection type, so `items=an(Item)(...)` on a `list[Item]` attribute constructs
+`items=[item]`, and on a `set[Item]` attribute `items={item}`.
+
 ## Full Example: Finding Connected Parts
 
 This example demonstrates how to find a complex structural relationship using nested matches.
