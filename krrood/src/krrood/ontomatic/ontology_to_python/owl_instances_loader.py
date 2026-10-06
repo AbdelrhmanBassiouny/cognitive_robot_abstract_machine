@@ -7,9 +7,9 @@ from abc import ABC
 from collections import defaultdict
 from enum import Enum
 from dataclasses import fields, is_dataclass, dataclass, field
-from functools import lru_cache
+from functools import cached_property, lru_cache
 from types import ModuleType
-from typing import Any, Dict, Iterable, List, Optional, Tuple, Type, Union, ClassVar
+from typing import Any, Dict, Iterable, List, Optional, Set, Tuple, Type, Union, ClassVar
 
 import rdflib
 import rustworkx as rx
@@ -22,6 +22,7 @@ from ..property_descriptor.attribute_introspector import (
     DescriptorAwareIntrospector,
 )
 from ..property_descriptor.mixins import (
+    HasChainAxioms,
     HasEquivalentProperties,
     HasInverseProperty,
     IsBaseClass,
@@ -32,13 +33,25 @@ from ..property_descriptor.mixins import (
 )
 from ..property_descriptor.property_descriptor import PropertyDescriptor
 from ..property_descriptor.property_descriptor_relation import (
+    InferredThrough,
     PropertyDescriptorRelation,
     SymmetricTransitiveComponent,
+)
+from .owl2rl_check import Owl2RlCheck, Owl2RlReport
+from .owl2rl_tbox import (
+    AllValuesFrom,
+    ClassExpression,
+    HasValue,
+    IntersectionOf,
+    NamedClass,
+    Owl2RlTerminology,
 )
 from ..utils import (
     get_non_class_attribute_names_of_instance,
     get_most_specific_types,
     AnonymousClass,
+    local_name,
+    to_snake,
 )
 from ...class_diagrams.class_diagram import Association, ClassDiagram
 from ...class_diagrams.utils import (
@@ -87,6 +100,16 @@ class TypeInferredThrough(Enum):
     The individual has no asserted or inferred type, it is represented by the ontology base class (owl:Thing).
     Premise: none.
     """
+    SUPERCLASS = "superclass"
+    """
+    The individual belongs to a class that is a subclass of, or equivalent to, an intersection with this class as an
+    operand (OWL 2 RL rules cax-sco and cls-int2). Premise: the class.
+    """
+    ALL_VALUES_FROM = "all_values_from"
+    """
+    The individual is a value of a property of an individual of a class that is a subclass of, or equivalent to, an
+    ``allValuesFrom`` restriction on the property (OWL 2 RL rule cls-avf). Premise: (subject, property, class).
+    """
 
 
 @dataclass(frozen=True)
@@ -116,6 +139,29 @@ class OwlInstancesRegistry:
         self.type_explanations: Dict[URIRef, Dict[Type, TypeExplanation]] = (
             defaultdict(dict)
         )
+        self.terminologies: List[Owl2RlTerminology] = []
+        """
+        The terminologies of the loaded files, see :meth:`check_owl2_rl`.
+        """
+
+    def check_owl2_rl(self) -> Owl2RlReport:
+        """
+        Check the loaded knowledge base against the OWL 2 RL/RDF rules that derive the equality of two individuals or
+        an inconsistency, which loading does not apply (see :class:`Owl2RlCheck`), for the terminology of every
+        loaded file.
+
+        :return: The report; if it passed, the unique-name assumption is entailed and the ontology is consistent under
+         these rules.
+        """
+        report = Owl2RlReport()
+        for terminology in self.terminologies:
+            partial = Owl2RlCheck(terminology, self._by_uri).run()
+            report.equalities.extend(partial.equalities)
+            report.inconsistencies.extend(partial.inconsistencies)
+            report.outside_owl2_rl = sorted(
+                set(report.outside_owl2_rl) | set(partial.outside_owl2_rl)
+            )
+        return report
 
     def record_type(
         self, uri: URIRef, cls: Type, rule: TypeInferredThrough, *premises: Any
@@ -170,24 +216,6 @@ class OwlInstancesRegistry:
         if isinstance(uri, str):
             uri = URIRef(uri)
         return self._by_uri.get(uri)
-
-
-@lru_cache(maxsize=None)
-def local_name(uri: Union[str, URIRef]) -> str:
-    s = str(uri)
-    if "#" in s:
-        return s.rsplit("#", 1)[1]
-    return s.rstrip("/").rsplit("/", 1)[-1]
-
-
-@lru_cache(maxsize=None)
-def to_snake(name: str) -> str:
-    out = []
-    for i, ch in enumerate(name):
-        if ch.isupper() and i > 0 and (not name[i - 1].isupper()):
-            out.append("_")
-        out.append(ch.lower())
-    return "".join(out)
 
 
 @lru_cache(maxsize=None)
@@ -336,6 +364,22 @@ class OwlLoader:
     _triples_by_subject: Dict[URIRef, List[Tuple[URIRef, Any]]] = field(
         default_factory=lambda: defaultdict(list)
     )
+    terminology: Optional[Owl2RlTerminology] = field(init=False, default=None)
+    """
+    The superclass expressions and constraint axioms of the ontology, read when loading.
+    """
+    anonymous_value_sets: Dict[Tuple[URIRef, str], Set[AnonymousClass]] = field(
+        init=False, default_factory=dict
+    )
+    """
+    The values of every property of the anonymous instances as a set, for fast membership tests in
+    :meth:`add_anonymous_fact`. The list of an attribute is indexed when the first value is added through that method.
+    """
+    number_of_anonymous_facts: int = field(init=False, default=0)
+    """
+    The number of property values added to the anonymous instances, used to detect the fixpoint of the type
+    inference.
+    """
 
     @dataclass
     class Case:
@@ -379,6 +423,8 @@ class OwlLoader:
         """
         self.graph.parse(self.owl_path)
         self.index_triples()
+        self.terminology = Owl2RlTerminology(self.graph, self.metadata.class_by_name)
+        self.registry.terminologies.append(self.terminology)
         self.create_anonymous_instances()
         self.assign_all_properties_to_all_anonymous_instances()
         self.infer_all_types_for_the_anonymous_instances()
@@ -387,6 +433,7 @@ class OwlLoader:
         self.sort_explicit_types_from_most_to_least_specific()
         self.link_role_takers_of_the_same_individual()
         self.assign_all_properties_to_explict_types_and_apply_on_time_forward_chaining()
+        self.add_facts_of_superclass_expressions()
         if not PropertyDescriptorRelation.eager_symmetric_transitive_closure:
             self.add_inferences_from_transitive_symmetric_relations()
         return self.registry
@@ -423,22 +470,308 @@ class OwlLoader:
         * every class that declares a sufficient condition (an owl:equivalentClass definition or a general class axiom
           with the class as superclass, rendered as its own ``axiom_python``) that the individual satisfies.
 
-        Necessary conditions (restrictions in superclass position) and range specialisations of subclasses are not
-        used for classification, since they are not entailed in the direction from the property to the class.
+        * the classes and values that the superclass expressions of the individual's classes require (rules cax-sco,
+          cls-int2, cls-hv1 and cls-avf, see :meth:`apply_superclass_expressions_to_anonymous_instances`).
+
+        Necessary conditions (restrictions in superclass position) are not used for classification, since they are
+        not entailed in the direction from the property to the class, and neither are the range specialisations of
+        subclasses.
 
         Inferred types are also added to ``instance.types`` so that the type checks of the axioms (e.g. the
-        ``Student`` conjunct of ``Student and (hasMajor some Science) SubClassOf ScienceStudent``) see them, and the
-        inference is repeated until no new type is added (fixpoint).
+        ``Student`` conjunct of ``Student and (hasMajor some Science) SubClassOf ScienceStudent``) see them. The
+        property values used for typing include those implied through transitivity and property chains (see
+        :meth:`close_type_relevant_properties_of_anonymous_instances`). The inference is repeated until neither a type
+        nor a property value is added (fixpoint).
         """
         declared_domains: Dict[Type[PropertyDescriptor], Tuple[Type, ...]] = {}
         sufficient_domains: Dict[Type[PropertyDescriptor], Tuple[Type, ...]] = {}
         for instance in self.anonymous_instances.values():
             instance.final_sorted_types = get_most_specific_types(tuple(instance.types))
-        number_of_types = -1
-        while number_of_types != self._number_of_inferred_types():
-            number_of_types = self._number_of_inferred_types()
+        state = None
+        number_of_facts_when_closed = None
+        while state != self._inference_state():
+            state = self._inference_state()
+            if number_of_facts_when_closed != self.number_of_anonymous_facts:
+                self.close_type_relevant_properties_of_anonymous_instances()
+                number_of_facts_when_closed = self.number_of_anonymous_facts
+                self.get_descriptors_of_instance.cache_clear()
             self._infer_types_once(declared_domains, sufficient_domains)
+            self.apply_data_property_domains_to_anonymous_instances()
+            self.apply_superclass_expressions_to_anonymous_instances()
         self.represent_untyped_individuals_by_the_base_class()
+
+    def add_anonymous_fact(
+        self,
+        instance: AnonymousClass,
+        descriptor: Type[PropertyDescriptor],
+        value: AnonymousClass,
+    ) -> None:
+        """
+        Add a property value to an anonymous instance, together with the values implied through super-properties,
+        equivalent properties, inverse properties and symmetry (see :meth:`implied_properties`).
+
+        :param instance: The subject.
+        :param descriptor: The property.
+        :param value: The value.
+        """
+        for field_name, inverted in (
+            (descriptor.get_field_name(), False),
+            *self.implied_properties(descriptor),
+        ):
+            source, target = (value, instance) if inverted else (instance, value)
+            values = getattr(source, field_name, None)
+            if values is None:
+                values = []
+                setattr(source, field_name, values)
+            value_set = self.anonymous_value_sets.get((source.uri, field_name))
+            if value_set is None:
+                value_set = set(values)
+                self.anonymous_value_sets[(source.uri, field_name)] = value_set
+            if target in value_set:
+                continue
+            value_set.add(target)
+            values.append(target)
+            self.number_of_anonymous_facts += 1
+
+    def apply_data_property_domains_to_anonymous_instances(self) -> None:
+        """
+        Type every anonymous instance with the declared domains of its data properties and of the data properties
+        they imply (OWL 2 RL rule prp-dom with prp-spo1 and prp-eqp1/2).
+        """
+        for uri, literals in self.literals.items():
+            instance = self.anonymous_instances.get(uri)
+            if instance is None:
+                continue
+            for field_name, literal in list(literals.items()):
+                for domain in self.terminology.data_property_domains.get(field_name, ()):
+                    if any(
+                        issubclass_or_role(t, domain) for t in instance.final_sorted_types
+                    ):
+                        continue
+                    self._add_inferred_type(instance, domain)
+                    self.registry.record_type(
+                        uri, domain, TypeInferredThrough.DOMAIN, (uri, field_name, literal)
+                    )
+
+    def apply_superclass_expressions_to_anonymous_instances(self) -> None:
+        """
+        Apply the superclass expressions (necessary conditions) of the classes of every anonymous instance: an
+        individual of a class is an individual of the named classes the class is a subclass of through an
+        intersection (OWL 2 RL rules cax-sco, cls-int2), has the value of a ``hasValue`` restriction (cls-hv1), and the
+        values of its ``allValuesFrom`` restrictions are individuals of the filler (cls-avf). Complements and maximum
+        cardinalities derive no type or value; :class:`~krrood.ontomatic.ontology_to_python.owl2rl_check.Owl2RlCheck`
+        checks them.
+        """
+        for instance in list(self.anonymous_instances.values()):
+            for python_class, expressions in self.terminology.superclass_expressions.items():
+                if not any(
+                    issubclass_or_role(t, python_class)
+                    for t in instance.final_sorted_types
+                ):
+                    continue
+                for expression in expressions:
+                    self._apply_superclass_expression(
+                        instance, expression, TypeInferredThrough.SUPERCLASS, (python_class,)
+                    )
+
+    def _apply_superclass_expression(
+        self,
+        instance: AnonymousClass,
+        expression: ClassExpression,
+        rule: TypeInferredThrough,
+        premises: Tuple[Any, ...],
+    ) -> None:
+        """
+        Make an anonymous instance satisfy a superclass expression, see
+        :meth:`apply_superclass_expressions_to_anonymous_instances`.
+
+        :param instance: The individual.
+        :param expression: The expression the individual belongs to.
+        :param rule: The rule recorded for a type added for a named class.
+        :param premises: The premises recorded with the rule.
+        """
+        if isinstance(expression, NamedClass):
+            if not any(
+                issubclass_or_role(t, expression.python_class)
+                for t in instance.final_sorted_types
+            ):
+                self._add_inferred_type(instance, expression.python_class)
+                self.registry.record_type(
+                    instance.uri, expression.python_class, rule, *premises
+                )
+        elif isinstance(expression, IntersectionOf):
+            for operand in expression.operands:
+                self._apply_superclass_expression(instance, operand, rule, premises)
+        elif isinstance(expression, HasValue):
+            if isinstance(expression.value, Literal):
+                if self.literals[instance.uri].get(expression.field_name) != expression.value:
+                    self.literals[instance.uri][expression.field_name] = expression.value
+                    self.number_of_anonymous_facts += 1
+                return
+            descriptor = self.metadata.get_descriptor_base(expression.field_name)
+            value = self.anonymous_instances.get(expression.value)
+            if descriptor is not None and value is not None:
+                self.add_anonymous_fact(instance, descriptor, value)
+        elif isinstance(expression, AllValuesFrom):
+            values = getattr(instance, expression.field_name, None)
+            if not isinstance(values, list):
+                return
+            for value in list(values):
+                self._apply_superclass_expression(
+                    value,
+                    expression.filler,
+                    TypeInferredThrough.ALL_VALUES_FROM,
+                    (instance.uri, expression.field_name, *premises),
+                )
+
+    @cached_property
+    def type_relevant_transitive_properties(self) -> Tuple[Type[PropertyDescriptor], ...]:
+        """
+        The transitive properties whose closure can add a type. A fact derived by transitivity relates a subject that
+        already has a fact of the property to a value that already is a value of the property, so the domains and
+        ranges of the property and of the properties it implies add no new type. Its facts can only add a type
+        through a class expression on the property or on a property it implies (a ``someValuesFrom`` or ``hasValue``
+        condition, or an ``allValuesFrom`` restriction), or through a property chain that uses it.
+
+        :return: The transitive properties that occur, directly or through the properties they imply, in a
+         restriction of the ontology or in a property chain.
+        """
+        restricted = {
+            to_snake(local_name(property_node))
+            for property_node in self.graph.objects(None, OWL.onProperty)
+        }
+        for result, chain in self.property_chains:
+            restricted.add(result.get_field_name())
+            restricted.update(link.get_field_name() for link in chain)
+        return tuple(
+            descriptor
+            for descriptor in set(self.metadata.descriptor_by_name.values())
+            if issubclass(descriptor, TransitiveProperty)
+            and (
+                {descriptor.get_field_name()}
+                | {field_name for field_name, _ in self.implied_properties(descriptor)}
+            )
+            & restricted
+        )
+
+    @cached_property
+    def property_chains(
+        self,
+    ) -> Tuple[Tuple[Type[PropertyDescriptor], Tuple[Type[PropertyDescriptor], ...]], ...]:
+        """
+        :return: Every property chain axiom as (the implied property, the chain of properties).
+        """
+        return tuple(
+            (descriptor, tuple(chain))
+            for descriptor in set(self.metadata.descriptor_by_name.values())
+            if issubclass(descriptor, HasChainAxioms)
+            for chain in descriptor.get_chain_axioms()
+        )
+
+    def close_type_relevant_properties_of_anonymous_instances(self) -> None:
+        """
+        Add to the anonymous instances the property values derived through transitivity (OWL 2 RL rule prp-trp) for
+        the properties in :attr:`type_relevant_transitive_properties`, and through every property chain (prp-spo2),
+        so that the types they imply are inferred before the objects are created. Chains and transitivity are applied
+        in turns until neither adds a value, since a chain can use, or imply, a transitive property.
+        """
+        number_of_facts = None
+        while number_of_facts != self.number_of_anonymous_facts:
+            number_of_facts = self.number_of_anonymous_facts
+            self._close_transitive_properties_of_anonymous_instances()
+            self._apply_property_chains_to_anonymous_instances()
+
+    def _close_transitive_properties_of_anonymous_instances(self) -> None:
+        """
+        Add the values reachable through each property of :attr:`type_relevant_transitive_properties` (prp-trp).
+        """
+        for descriptor in self.type_relevant_transitive_properties:
+            field_name = descriptor.get_field_name()
+            for instance in list(self.anonymous_instances.values()):
+                values = getattr(instance, field_name, None)
+                if not isinstance(values, list):
+                    continue
+                reachable = []
+                frontier = [value for value in values if isinstance(value, AnonymousClass)]
+                seen = set(frontier)
+                while frontier:
+                    current = frontier.pop()
+                    for value in getattr(current, field_name, None) or ():
+                        if isinstance(value, AnonymousClass) and value not in seen:
+                            seen.add(value)
+                            reachable.append(value)
+                            frontier.append(value)
+                for value in reachable:
+                    self.add_anonymous_fact(instance, descriptor, value)
+
+    def _apply_property_chains_to_anonymous_instances(self) -> None:
+        """
+        Add the values at the end of every property chain to the property the chain implies (prp-spo2).
+        """
+        for result, chain in self.property_chains:
+            for instance in list(self.anonymous_instances.values()):
+                frontier = {instance}
+                for link in chain:
+                    frontier = {
+                        value
+                        for member in frontier
+                        for value in getattr(member, link.get_field_name(), None) or ()
+                        if isinstance(value, AnonymousClass)
+                    }
+                    if not frontier:
+                        break
+                for value in frontier:
+                    self.add_anonymous_fact(instance, result, value)
+
+    def add_facts_of_superclass_expressions(self) -> None:
+        """
+        Add to the objects the property values that the ``hasValue`` restrictions in superclass position require of
+        the individuals of their classes (OWL 2 RL rule cls-hv1), through the property rules like any inferred fact.
+        The types these values imply were already inferred on the anonymous instances.
+        """
+        for uri, objects in list(self.registry._by_uri.items()):
+            for python_class, expressions in self.terminology.superclass_expressions.items():
+                if any(issubclass_or_role(type(o), python_class) for o in objects):
+                    for expression in expressions:
+                        self._add_facts_of_superclass_expression(
+                            objects, expression, python_class
+                        )
+
+    def _add_facts_of_superclass_expression(
+        self, objects: List[Any], expression: ClassExpression, python_class: Type
+    ) -> None:
+        """
+        :param objects: The objects of an individual of the expression.
+        :param expression: A superclass expression of ``python_class``.
+        :param python_class: The class whose superclass expression it is, the premise of the facts.
+        """
+        if isinstance(expression, IntersectionOf):
+            for operand in expression.operands:
+                self._add_facts_of_superclass_expression(objects, operand, python_class)
+        elif isinstance(expression, HasValue):
+            if isinstance(expression.value, Literal):
+                self.assign_data_value(objects, expression.field_name, expression.value)
+                return
+            descriptor = self.metadata.get_descriptor_base(expression.field_name)
+            value_objects = self.registry.resolve(expression.value)
+            if descriptor is None or not value_objects:
+                return
+            target = self.symbol_graph.ensure_wrapped_instance(
+                PropertyDescriptorRelation.root_role_taker(value_objects[0])
+            )
+            PropertyDescriptorRelation.add_inferred_relation(
+                objects[0],
+                descriptor,
+                target,
+                (InferredThrough.HAS_VALUE, python_class),
+            )
+        elif isinstance(expression, AllValuesFrom):
+            for individual_object in objects:
+                for value in list(getattr(individual_object, expression.field_name, None) or ()):
+                    value_objects = PropertyDescriptorRelation.objects_of_individual(value)
+                    self._add_facts_of_superclass_expression(
+                        value_objects, expression.filler, python_class
+                    )
 
     def represent_untyped_individuals_by_the_base_class(self) -> None:
         """
@@ -455,6 +788,13 @@ class OwlLoader:
                 self.registry.record_type(
                     instance.uri, base_class, TypeInferredThrough.BASE_CLASS
                 )
+
+    def _inference_state(self) -> Tuple[int, int]:
+        """
+        :return: The number of inferred types and of property values of the anonymous instances; the type inference
+         has reached its fixpoint when a pass changes neither.
+        """
+        return self._number_of_inferred_types(), self.number_of_anonymous_facts
 
     def _number_of_inferred_types(self) -> int:
         return sum(len(i.final_sorted_types) for i in self.anonymous_instances.values())
@@ -836,7 +1176,6 @@ class OwlLoader:
         ``isCrazyAbout SubPropertyOf loves`` makes ``Person and (loves some Sports) SubClassOf SportsLover``
         applicable, and ``hasResearchProject SubPropertyOf hasWork`` with ``hasWork`` having the domain Employee).
         """
-        closures: Dict[Type[PropertyDescriptor], Tuple[Tuple[str, bool], ...]] = {}
         for subject, instance in self.anonymous_instances.items():
             for predicate, value in self._triples_by_subject[subject]:
                 if isinstance(value, Literal):
@@ -849,20 +1188,11 @@ class OwlLoader:
                 )
                 if descriptor is None:
                     continue
-                if descriptor not in closures:
-                    closures[descriptor] = self._implied_properties(descriptor)
-                for field_name, inverted in closures[descriptor]:
-                    source, target = (
-                        (value_instance, instance) if inverted else (instance, value_instance)
-                    )
-                    values = getattr(source, field_name, None)
-                    if values is None:
-                        setattr(source, field_name, [target])
-                    elif target not in values:
-                        values.append(target)
+                self.add_anonymous_fact(instance, descriptor, value_instance)
 
     @staticmethod
-    def _implied_properties(
+    @lru_cache(maxsize=None)
+    def implied_properties(
         descriptor: Type[PropertyDescriptor],
     ) -> Tuple[Tuple[str, bool], ...]:
         """
@@ -1013,9 +1343,27 @@ class OwlLoader:
             obj_uri: The RDF node of the object.
         """
         if isinstance(obj_uri, Literal):
-            self._assign_data_property(subj_roles, field_name, obj_uri)
+            self.assign_data_value(subj_roles, field_name, obj_uri)
         else:
             self._assign_object_property(subj_roles, field_name, obj_uri)
+
+    def assign_data_value(
+        self, objects: List[Any], field_name: str, literal: Literal
+    ) -> None:
+        """
+        Assign a data property value to the objects of an individual, and to the data properties it implies through
+        super-properties and equivalent properties (OWL 2 RL rules prp-spo1, prp-eqp1/2) where an object declares
+        them.
+
+        :param objects: The objects of the individual.
+        :param field_name: The attribute name of the data property.
+        :param literal: The value.
+        """
+        for implied_field_name in (
+            field_name,
+            *self.terminology.implied_data_properties.get(field_name, ()),
+        ):
+            self._assign_data_property(objects, implied_field_name, literal)
 
     def _get_all_instances_of_uri(self, subject_uri: URIRef) -> Optional[List[Any]]:
         """Resolves or ensures instances for a given subject URI.

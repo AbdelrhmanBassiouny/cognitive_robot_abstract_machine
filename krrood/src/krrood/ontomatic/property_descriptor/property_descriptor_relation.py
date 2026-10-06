@@ -52,6 +52,11 @@ class InferredThrough(Enum):
     SYMMETRY = "symmetry"
     CHAIN = "chain"
     SYMMETRIC_TRANSITIVE_COMPONENT = "symmetric_transitive_component"
+    HAS_VALUE = "has_value"
+    """
+    The subject is an individual of a class that is a subclass of, or equivalent to, a ``hasValue`` restriction
+    (OWL 2 RL rule cls-hv1). Premise: the class.
+    """
 
 
 @dataclass(eq=False)
@@ -351,8 +356,9 @@ class PropertyDescriptorRelation(PredicateClassRelation):
                 (InferredThrough.SYMMETRY, self),
             )
 
+    @classmethod
     def add_inferred_relation(
-        self,
+        cls,
         source_instance: Any,
         property_descriptor_class: Type[PropertyDescriptor],
         target: WrappedInstance,
@@ -368,13 +374,13 @@ class PropertyDescriptorRelation(PredicateClassRelation):
         :param target: The node of the value.
         :param inference_explanation: The rule and premises of the inference (see :attr:`inference_explanation`).
         """
-        holder = self.holder_of_property(
+        holder = cls.holder_of_property(
             source_instance, property_descriptor_class, target.instance
         )
         if holder is None:
             return
         source, wrapped_field = holder
-        self.__class__(
+        cls(
             source,
             target,
             wrapped_field,

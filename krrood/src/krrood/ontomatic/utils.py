@@ -4,7 +4,7 @@ import re
 from dataclasses import fields, dataclass, field
 from enum import Enum
 from functools import lru_cache
-from typing import Any, Set, Iterable, List, Type, Optional
+from typing import Any, Set, Iterable, List, Type, Optional, Union
 import rdflib
 from rdflib import OWL
 
@@ -190,3 +190,29 @@ class PropertyType(str, Enum):
 
     OBJECT_PROPERTY = "ObjectProperty"
     DATA_PROPERTY = "DataProperty"
+
+
+@lru_cache(maxsize=None)
+def local_name(uri: Union[str, rdflib.URIRef]) -> str:
+    """
+    :param uri: An IRI.
+    :return: The part of the IRI after the last ``#``, or else after the last ``/``.
+    """
+    text = str(uri)
+    if "#" in text:
+        return text.rsplit("#", 1)[1]
+    return text.rstrip("/").rsplit("/", 1)[-1]
+
+
+@lru_cache(maxsize=None)
+def to_snake(name: str) -> str:
+    """
+    :param name: A camel-case name, such as the local name of a property IRI.
+    :return: The snake-case name, the attribute name of the property in the generated model.
+    """
+    out = []
+    for i, character in enumerate(name):
+        if character.isupper() and i > 0 and (not name[i - 1].isupper()):
+            out.append("_")
+        out.append(character.lower())
+    return "".join(out)
