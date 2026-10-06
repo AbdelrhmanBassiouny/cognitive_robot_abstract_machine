@@ -6,7 +6,7 @@ set -uo pipefail
 # earlier on PATH than any real one - see the stub_bin fixture in
 # test_plan_updates_since_sh.py and the stubbed_gh fixture in test_upstream_reviews.py.
 #
-# One stub rather than one per suite: the two recognized invocations are disjoint, and a
+# One stub rather than one per suite: the recognized invocations are disjoint, and a
 # second copy is what drifts when the contract moves.
 #
 # `gh api graphql --input -`, the one call upstream_reviews' transport makes:
@@ -14,6 +14,15 @@ set -uo pipefail
 #   STUB_GH_EXIT_CODE    - the exit code to return, defaulting to 0
 #   STUB_GH_CALL_LOG     - file the request body is appended to, so a test can
 #                          assert the exact query and variables sent
+#
+# `gh api --allow-escape-sequences <endpoint>`, the job-log read upstream_reviews'
+# transport makes:
+#   STUB_GH_JOB_LOG      - the job log to print
+#   STUB_GH_EXIT_CODE    - the exit code to return, defaulting to 0
+#   STUB_GH_CALL_LOG     - file the endpoint asked for is appended to
+# The escape-sequences flag is matched rather than skipped over: gh returns a coloured
+# log and then declines to print it without that flag, so a transport that stopped
+# passing it must fail here rather than pass.
 #
 # `gh api --paginate repos/<owner>/<repo>/issues/<n>/comments?...`, the one call
 # plan-updates-since.sh makes through this backend:
@@ -35,6 +44,19 @@ if [ "${1:-}" = "api" ] && [ "${2:-}" = "graphql" ] && [ "${3:-}" = "--input" ];
     exit "${EXIT_CODE}"
   fi
   printf '%s' "${STUB_GH_GRAPHQL_JSON:-{\}}"
+  exit 0
+fi
+
+if [ "${1:-}" = "api" ] && [ "${2:-}" = "--allow-escape-sequences" ]; then
+  if [ -n "${STUB_GH_CALL_LOG:-}" ]; then
+    printf '%s\n' "${3:-}" >> "${STUB_GH_CALL_LOG}"
+  fi
+  EXIT_CODE="${STUB_GH_EXIT_CODE:-0}"
+  if [ "${EXIT_CODE}" -ne 0 ]; then
+    echo "stub gh: simulated failure" >&2
+    exit "${EXIT_CODE}"
+  fi
+  printf '%s' "${STUB_GH_JOB_LOG:-}"
   exit 0
 fi
 
