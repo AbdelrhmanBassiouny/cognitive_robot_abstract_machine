@@ -16,8 +16,9 @@ from enum import Enum, StrEnum
 from pathlib import Path
 from typing import Any
 
+from basstler.locations import PackageLocation
 from basstler.maintenance_constants import SESSION_LINK_PATTERN
-from basstler.stack import BOARD_PATH, PullRequest
+from basstler.stack import PullRequest
 
 PullRequestRecord = Mapping[str, Any]
 """
@@ -270,7 +271,7 @@ class BoardExport:
             indent=2,
         )
 
-    def write(self, path: Path = BOARD_PATH) -> Path:
+    def write(self, path: Path = PackageLocation.BOARD.value) -> Path:
         """
         Write the export where the derived stack is read from.
 

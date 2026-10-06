@@ -24,22 +24,21 @@ from pathlib import Path
 
 import pytest
 
+from basstler.repository import Repository
 from basstler.stack import (
-    BOARD_PATH,
     Configuration,
     IntegrationStrategy,
     PullRequest,
     RefusalReason,
-    Repository,
     Stack,
     build_stack,
     load_board,
 )
 
 import basstler.maintenance
-import basstler.maintenance_commands
 import basstler.maintenance_restack_procedure
 from basstler.class_property import classproperty
+from basstler.locations import PackageLocation
 from basstler.maintenance_board import (
     BoardExport,
     MissingPullRequestFieldError,
@@ -86,7 +85,7 @@ from basstler.maintenance_restack_steps import (
 )
 
 from .scratch_repository import initialize_bare_repository, install_package_into
-from .constants import REPOSITORY_ROOT, StackBranch, StackLabel
+from .constants import StackBranch, StackLabel
 from .script_runner import PythonModuleRunner
 
 MAINTENANCE_MODULE = basstler.maintenance.__name__
@@ -492,8 +491,8 @@ def test_the_board_snapshot_is_never_committable():
     between a pass and a committed snapshot of a stack that has since moved.
     """
     ignored = subprocess.run(
-        ["git", "check-ignore", "--quiet", str(BOARD_PATH)],
-        cwd=BOARD_PATH.parent,
+        ["git", "check-ignore", "--quiet", str(PackageLocation.BOARD)],
+        cwd=PackageLocation.DIRECTORY.value,
         capture_output=True,
     )
 
@@ -843,7 +842,11 @@ def test_a_push_the_move_checks_refuse_is_not_made(fork_checkout: ForkCheckout):
 
 # %% the checkout the pass was invoked in
 
-TOOLING_PATH = str(Path(basstler.maintenance.__file__).relative_to(REPOSITORY_ROOT))
+TOOLING_PATH = str(
+    Path(basstler.maintenance.__file__).relative_to(
+        PackageLocation.REPOSITORY_ROOT.value
+    )
+)
 """
 Where the pass's own tooling sits: tracked content, so a branch cut before it landed
 does not carry it, and checking that branch out deletes it from the working tree.
@@ -1511,18 +1514,18 @@ def test_the_report_serialises_every_command_s_outcome(fork_checkout: ForkChecko
     assert document["reparents"] == []
 
 
-def test_a_whole_pass_leaves_no_board_behind(
-    fork_checkout: ForkCheckout, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-):
+def test_a_whole_pass_leaves_no_board_behind(fork_checkout: ForkCheckout):
     """
     A board is a snapshot of one moment's open pull requests, and a later run reading a
     stale one is worse than one finding none - so a pass that has finished with it
     removes it, and the next pass starts by exporting a fresh one.
+
+    The board written here is the real one, which ``board_snapshot_set_aside`` has moved
+    out of the way and puts back afterwards.
     """
     a_parent_and_child(fork_checkout)
-    board_path = tmp_path / "board.json"
+    board_path = PackageLocation.BOARD.value
     board_path.write_text("{}")
-    monkeypatch.setattr(basstler.maintenance_commands, "BOARD_PATH", board_path)
 
     RunReportCommand().run(
         AlreadyResolvedPass.over(fork_checkout, the_board()),

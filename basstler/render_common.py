@@ -10,21 +10,16 @@ import it rather than duplicating the logic.
 from __future__ import annotations
 
 import re
-from pathlib import Path
 from urllib.parse import urlsplit
 
 import jinja2
 import markdown as markdown_library
 import nh3
 
-from basstler.plan_model import ItemStatus
+from basstler.locations import PackageLocation
 
 _ALLOWED_URL_SCHEMES = frozenset({"http", "https"})
 
-TEMPLATES_DIRECTORY = Path(__file__).parent / "templates"
-"""
-Where every page template (dashboard.html, index.html) lives.
-"""
 
 # Matches one opening or closing HTML heading tag, e.g. "<h1>"/"</h1>" through
 # "<h6>"/"</h6>". _shift_heading_level() shifts each match down by
@@ -45,23 +40,6 @@ _MAXIMUM_HEADING_LEVEL = 6
 past this, even for an already-deep roadmap heading."""
 
 
-def status_label(status: str) -> str:
-    """
-    Label a plan-item status for display.
-
-    A one-line filter rather than a table: the label belongs to the status, so it lives
-    on :class:`basstler.plan_model.ItemStatus` and this only reaches it from a template.
-
-    :param status: The status, as an :class:`~basstler.plan_model.ItemStatus` or its own
-        value - a :class:`~enum.StrEnum` compares and hashes equal to its value, so
-        either form resolves.
-    :raises ValueError: If the status is not one the manifest accepts, so a typo cannot
-        render blank.
-    :return: The label the page shows for it.
-    """
-    return ItemStatus(status).display_label
-
-
 def create_template_environment() -> jinja2.Environment:
     """
     Build the Jinja2 environment every page template renders through.
@@ -76,14 +54,11 @@ def create_template_environment() -> jinja2.Environment:
     :return: A configured, ready-to-use Jinja2 environment.
     """
     environment = jinja2.Environment(
-        loader=jinja2.FileSystemLoader(TEMPLATES_DIRECTORY),
+        loader=jinja2.FileSystemLoader(PackageLocation.TEMPLATES.value),
         autoescape=True,
         trim_blocks=True,
         lstrip_blocks=True,
     )
-    # Registered here rather than by whichever script renders a page: a template must
-    # not depend on a filter its own environment does not provide.
-    environment.filters["status_label"] = status_label
     return environment
 
 

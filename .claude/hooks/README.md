@@ -184,10 +184,10 @@ the narrative that doesn't belong in structured data.
   can't silently go stale the way a hand-maintained roadmap doc could.
 - Start or unblock one item → `/plan-item-kickoff <plan-id> <item-id>`,
   `/plan-item-resolve <plan-id> <item-id>`. Kickoff opens the item's branch and draft PR and
-  marks it `in_progress` as soon as its plan is approved — via
+  marks it `in progress` as soon as its plan is approved — via
   [`basstler/plan_item_bootstrap.py`](../../basstler/plan_item_bootstrap.py), which you can also
   run by hand as `python3 -m basstler.plan_item_bootstrap` — so the
-  manifest never says `not_started` while the work is underway.
+  manifest never says `not started` while the work is underway.
 - Decide where a new piece of work goes → `/add-plan-item <description>`. It runs the shared scope
   check in [`scope-decision.md`](../skills/add-plan-item/scope-decision.md) — the rule all four plan
   skills defer to for "is this new work, or a change to work already in flight?"

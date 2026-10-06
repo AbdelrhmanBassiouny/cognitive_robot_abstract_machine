@@ -20,12 +20,12 @@ class ItemStatus(StrEnum):
     live-fetched and represented separately.
     """
 
-    NOT_STARTED = "not_started"
+    NOT_STARTED = "not started"
     """
     Nothing has begun.
     """
 
-    IN_PROGRESS = "in_progress"
+    IN_PROGRESS = "in progress"
     """
     The work is underway - what bootstrapping an item sets.
     """
@@ -45,12 +45,32 @@ class ItemStatus(StrEnum):
     Landed.
     """
 
-    @property
-    def display_label(self) -> str:
+    @classmethod
+    def underscore_spellings(cls) -> dict[str, ItemStatus]:
         """
-        Derived from the value rather than kept in a table beside it, so a status added
-        later labels itself and there is no second list to hold in step.
+        The spelling manifests were written in before the values took spaces, which
+        ``plan.yaml`` files still carry until they are rewritten.
 
-        :return: How this status is written on a rendered page, e.g. ``"Not started"``.
+        :return: Each status by its value with underscores in place of spaces.
         """
-        return self.value.replace("_", " ").capitalize()
+        return {status.value.replace(" ", "_"): status for status in cls}
+
+    @classmethod
+    def accepted_spellings(cls) -> frozenset[str]:
+        """
+        :return: Every text a manifest's ``status`` field may hold: each value, and its
+            underscore spelling.
+        """
+        return frozenset(
+            {status.value for status in cls} | set(cls.underscore_spellings())
+        )
+
+    @classmethod
+    def _missing_(cls, value: object) -> ItemStatus | None:
+        """
+        Read a status from its underscore spelling as well as its value.
+
+        :param value: The text no value matched.
+        :return: The status that text spells, or ``None`` when it spells none.
+        """
+        return cls.underscore_spellings().get(value)

@@ -12,16 +12,22 @@ import subprocess
 
 import pytest
 
+from basstler.locations import ProjectLocation
+
+from .constants import (
+    DatasetLocation,
+    PersonalNotesPath,
+    ScratchBranch,
+    ScrubbedEnvironmentPrefix,
+)
 from .scratch_repository import ScratchRepository
 
-from .constants import DATASET_DIRECTORY, PersonalNotesPath
-
-PERSONAL_SETTINGS = (DATASET_DIRECTORY / "personal-settings.json").read_text()
+PERSONAL_SETTINGS = (DatasetLocation.DIRECTORY / "personal-settings.json").read_text()
 UPDATED_PERSONAL_SETTINGS = (
-    DATASET_DIRECTORY / "personal-settings-updated.json"
+    DatasetLocation.DIRECTORY / "personal-settings-updated.json"
 ).read_text()
 LOCALLY_EDITED_SETTINGS = (
-    DATASET_DIRECTORY / "personal-settings-locally-edited.json"
+    DatasetLocation.DIRECTORY / "personal-settings-locally-edited.json"
 ).read_text()
 
 
@@ -45,7 +51,7 @@ def settings_repository(scratch_repository: ScratchRepository) -> ScratchReposit
     scratch_repository.write("README.md", "scratch repo\n")
     scratch_repository.commit_everything("initial commit")
     scratch_repository.publish_notes_branch(
-        {".claude/personal/placeholder.md": "notes\n"}
+        {ProjectLocation.PERSONAL_NOTES / "placeholder.md": "notes\n"}
     )
     scratch_repository.resolve_notes_remote_to()
     return scratch_repository
@@ -68,10 +74,10 @@ def run_hook(
     environment = {
         name: value
         for name, value in os.environ.items()
-        if not name.startswith("CLAUDE_PERSONAL_NOTES_")
+        if not name.startswith(ScrubbedEnvironmentPrefix.PERSONAL_NOTES)
     }
     return subprocess.run(
-        ["bash", str(repository.project_root / ".claude" / "hooks" / script_name)],
+        ["bash", str(repository.project_root / ProjectLocation.HOOKS / script_name)],
         cwd=repository.project_root,
         capture_output=True,
         text=True,
@@ -133,7 +139,7 @@ def test_writes_no_settings_when_the_branch_has_none(
         settings_repository.project_root / PersonalNotesPath.LOCAL_SETTINGS
     ).exists()
     assert (
-        f"local settings:  none on 'claude/personal-notes' "
+        f"local settings:  none on '{ScratchBranch.PERSONAL_NOTES}' "
         f"({PersonalNotesPath.SETTINGS_ON_NOTES_BRANCH})" in result.stdout
     )
 

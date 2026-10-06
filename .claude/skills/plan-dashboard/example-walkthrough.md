@@ -97,7 +97,7 @@ items:
     title: Circuit breaker around the retry loop
     branch: retry-circuit-breaker
     track: retry-logic
-    status: in_progress
+    status: in progress
     pull_request_number: 102
     depends_on: [retry-backoff-strategy]
 

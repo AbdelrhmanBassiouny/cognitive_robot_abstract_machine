@@ -29,11 +29,11 @@ from basstler.record_dashboard_url import (
     resolve_artifact_url,
 )
 
-from .constants import DATASET_DIRECTORY
+from .constants import DatasetLocation
 
-CACHE_TEXT = (DATASET_DIRECTORY / "dashboard-urls.yaml").read_text()
+CACHE_TEXT = (DatasetLocation.DIRECTORY / "dashboard-urls.yaml").read_text()
 LISTING = load_artifact_listing(
-    json.loads((DATASET_DIRECTORY / "artifact-listing.json").read_text())
+    json.loads((DatasetLocation.DIRECTORY / "artifact-listing.json").read_text())
 )
 
 ALPHA_URL = "https://claude.ai/code/artifact/11111111-1111-4111-8111-111111111111"
@@ -279,7 +279,9 @@ def _write_inputs(tmp_path: Path) -> tuple[Path, Path, Path]:
     cache_path = tmp_path / "dashboard-urls.yaml"
     cache_path.write_text(CACHE_TEXT)
     listing_path = tmp_path / "artifact-listing.json"
-    listing_path.write_text((DATASET_DIRECTORY / "artifact-listing.json").read_text())
+    listing_path.write_text(
+        (DatasetLocation.DIRECTORY / "artifact-listing.json").read_text()
+    )
     return cache_path, listing_path, tmp_path / "updated-dashboard-urls.yaml"
 
 
