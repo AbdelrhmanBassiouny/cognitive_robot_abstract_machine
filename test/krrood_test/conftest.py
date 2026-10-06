@@ -27,6 +27,7 @@ from krrood.patterns.role import Role
 from krrood.symbol_graph.symbol_graph import SymbolGraph
 from krrood.utils import recursive_subclasses
 from .dataset import (
+    academy_classes,
     example_classes,
     semantic_world_like_classes,
     alternative_mappings_construction_order,
@@ -87,6 +88,7 @@ def generate_sqlalchemy_interface():
     all_classes |= set(classes_of_module(clashing_field_names))
     all_classes |= set(classes_of_module(classes_with_generic))
     all_classes |= set(classes_of_module(single_value_classes))
+    all_classes |= set(classes_of_module(academy_classes))
     all_classes |= {Symbol, Role}
 
     # remove classes that don't need persistence

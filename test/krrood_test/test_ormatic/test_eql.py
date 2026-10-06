@@ -1,6 +1,6 @@
 import pytest
 
-from sqlalchemy import select, func, case
+from sqlalchemy import select, func, case, true
 from sqlalchemy.exc import MultipleResultsFound
 from sqlalchemy.orm import aliased
 from sqlalchemy.dialects import postgresql
@@ -424,7 +424,9 @@ def test_translate_not(session, database):
     query = an(entity(b).where(not_(b.size == 10)))
 
     translator = eql_to_sql(query, session)
-    expected = select(BodyDAO).where(~(BodyDAO.size == 10))
+    # negation as failure: the negated condition holds when the condition is not true,
+    # also when a missing value makes SQL evaluate it to NULL
+    expected = select(BodyDAO).where((BodyDAO.size == 10).is_not(true()))
 
     assert str(translator.sql_query) == str(expected)
 
@@ -687,7 +689,9 @@ def test_not_and_combined(session, database):
     query = an(entity(b).where(not_(and_(b.size > 5, b.size < 25))))
 
     translator = eql_to_sql(query, session)
-    expected = select(BodyDAO).where(~((BodyDAO.size > 5) & (BodyDAO.size < 25)))
+    expected = select(BodyDAO).where(
+        ((BodyDAO.size > 5) & (BodyDAO.size < 25)).is_not(true())
+    )
 
     assert str(translator.sql_query) == str(expected)
 
