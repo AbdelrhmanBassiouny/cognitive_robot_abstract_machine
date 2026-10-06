@@ -15,12 +15,14 @@ from typing_extensions import Any, Iterable, List, Set, Tuple
 
 from krrood.entity_query_language.factories import (
     an,
+    and_,
     contains,
     entity,
     exists,
     flat_variable,
     inference,
     not_,
+    or_,
     set_of,
     variable,
 )
@@ -233,6 +235,7 @@ def test_exists_over_nested_collections_is_correlated(session, academy):
         set_of(s, so).where(exists(discipline, discipline.name == "Engineering"))
     )
     expected = {("Alice", "RoboticsDepartment"), ("Carol", "RoboticsDepartment")}
+    assert pairs(query.evaluate(), s, so) == expected
     assert pairs(eql_to_sql(query, session).evaluate(), s, so) == expected
 
 
@@ -378,3 +381,138 @@ def test_equality_of_an_element_with_a_variable(session, academy):
     expected = {("Dean", "EngineeringCollege")}
     assert pairs(query.evaluate(), m, o) == expected
     assert pairs(eql_to_sql(query, session).evaluate(), m, o) == expected
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason="Without a collection, the translator gives all variables of one class the "
+    "same table unless an equality relates them (existing behavior, which "
+    "test_plan_like_query pins), so a value comparison compares a row with itself.",
+)
+def test_variables_of_one_type_compared_by_value(session, academy):
+    older = variable(AcademyMember, domain=academy.members)
+    younger = variable(AcademyMember, domain=academy.members)
+    query = an(
+        set_of(older, younger).where(older.age > younger.age, younger.name == "Alice")
+    )
+    expected = {("Carol", "Alice"), ("Dean", "Alice")}
+    assert pairs(eql_to_sql(query, session).evaluate(), older, younger) == expected
+
+
+def test_variables_of_one_type_with_a_collection_are_independent(session, academy):
+    """
+    With a collection in the query, each variable has a FROM element of its own.
+    """
+    older = variable(AcademyMember, domain=academy.members)
+    younger = variable(AcademyMember, domain=academy.members)
+    organization = flat_variable(younger.is_member_of)
+    query = an(
+        set_of(older, younger).where(
+            older.age > younger.age, organization.name == "RoboticsDepartment"
+        )
+    )
+    expected = {("Carol", "Alice"), ("Dean", "Alice")}
+    assert pairs(eql_to_sql(query, session).evaluate(), older, younger) == expected
+
+
+# %% Existential quantifiers over variables that are also used outside them
+
+
+def test_exists_over_a_variable_used_outside_is_correlated(session, academy):
+    """
+    A quantified variable that is also used outside the quantifier is bound by the outer
+    query, so the quantifier only checks its condition for that binding.
+    """
+    s = variable(AcademyStudent, domain=academy.students)
+    c = variable(AcademyCourse)
+    query = an(
+        entity(s).where(
+            contains(s.takes_course, c), exists(c, c.name == "AI"), c.name == "Logic"
+        )
+    )
+    assert names(query.evaluate()) == []
+    assert names(eql_to_sql(query, session).evaluate()) == []
+
+
+def test_exists_over_a_selected_element_is_correlated(session, academy):
+    m = variable(AcademyMember, domain=academy.members)
+    o = flat_variable(m.is_member_of)
+    query = an(set_of(m, o).where(exists(o, o.name == "ArtsCollege")))
+    expected = {("Lecturer", "ArtsCollege")}
+    assert pairs(query.evaluate(), m, o) == expected
+    assert pairs(eql_to_sql(query, session).evaluate(), m, o) == expected
+
+
+# %% Disjunction and negation
+
+
+def test_join_inside_a_disjunction_is_rejected(session, academy):
+    """
+    Joining a collection inside one alternative of or_ would drop the rows that satisfy
+    another alternative but have an empty collection.
+    """
+    m = variable(AcademyMember, domain=academy.members)
+    organization = flat_variable(m.is_member_of)
+    query = an(
+        entity(m).where(or_(m.name == "Bob", organization.name == "ArtsCollege"))
+    )
+    with pytest.raises(UnsupportedTranslationError):
+        eql_to_sql(query, session)
+
+
+def test_equality_of_a_reference_inside_a_disjunction(session, academy):
+    """
+    The equality of a reference inside or_ is a condition of its alternative, not a join
+    of the whole query: every student satisfies the second alternative with the Dean.
+    """
+    s = variable(AcademyStudent, domain=academy.students)
+    m = variable(AcademyMember, domain=academy.members)
+    query = an(entity(s).where(or_(s.role_taker == m, m.name == "Dean")))
+    expected = {"Alice", "Bob", "Carol"}
+    assert set(names(query.evaluate())) == expected
+    assert set(names(eql_to_sql(query, session).evaluate())) == expected
+
+
+def test_equality_of_a_reference_inside_a_negation(session, academy):
+    """
+    The equality of a reference inside not_ is negated with the rest of the condition:
+    every student has some member who is not both its role taker and named Carol.
+    """
+    s = variable(AcademyStudent, domain=academy.students)
+    m = variable(AcademyMember, domain=academy.members)
+    query = an(entity(s).where(not_(and_(s.role_taker == m, m.name == "Carol"))))
+    expected = {"Alice", "Bob", "Carol"}
+    assert set(names(query.evaluate())) == expected
+    assert set(names(eql_to_sql(query, session).evaluate())) == expected
+
+
+# %% Values that cannot be translated faithfully
+
+
+def test_reference_as_a_condition_means_it_is_set(session, academy):
+    s = variable(AcademyStudent, domain=academy.students)
+    query = an(entity(s).where(s.role_taker))
+    assert names(eql_to_sql(query, session).evaluate()) == ["Alice", "Bob", "Carol"]
+
+
+def test_attribute_declared_by_several_subclasses_is_rejected(session, academy):
+    """
+    Two sibling subclasses declare a motto, so narrowing to one of them would drop the
+    instances of the other.
+    """
+    o = variable(AcademyOrganization, domain=academy.organizations)
+    query = an(entity(o).where(o.motto == "Learn"))
+    with pytest.raises(UnsupportedTranslationError):
+        eql_to_sql(query, session)
+
+
+def test_membership_of_an_unrelated_type_is_rejected(session, academy):
+    """
+    The deans are members, not students, so comparing their database ids with those of
+    students would compare unrelated rows.
+    """
+    o = variable(AcademyOrganization, domain=academy.organizations)
+    s = variable(AcademyStudent, domain=academy.students)
+    query = an(set_of(o, s).where(contains(o.has_dean, s)))
+    with pytest.raises(UnsupportedTranslationError):
+        eql_to_sql(query, session)

@@ -46,6 +46,21 @@ class AcademyCollege(AcademyOrganization):
 
 
 @dataclass(eq=False)
+class AcademySchool(AcademyOrganization):
+    """
+    One of two sibling classes that both declare a motto, so that a query reading the
+    motto of an organization cannot be narrowed to a single subclass.
+    """
+
+    motto: Optional[str] = None
+
+
+@dataclass(eq=False)
+class AcademyInstitute(AcademyOrganization):
+    motto: Optional[str] = None
+
+
+@dataclass(eq=False)
 class AcademyMember(Symbol):
     name: str
     age: Optional[int] = None

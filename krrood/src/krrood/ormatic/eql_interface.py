@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from contextlib import contextmanager
 from dataclasses import dataclass, field
-from typing_extensions import Callable, Dict, Iterator, List, Any, Optional, Type
+from typing_extensions import Callable, Dict, Iterator, List, Any, Optional, Set, Type
 import operator
 
 import sqlalchemy.inspection
@@ -19,7 +19,7 @@ from sqlalchemy import (
     true,
 )
 from sqlalchemy.orm import Session, aliased
-from sqlalchemy.types import Boolean, Numeric, Integer, String
+from sqlalchemy.types import Boolean, Date, DateTime, Integer, Numeric, String, Time
 
 from krrood.entity_query_language.query.query import (
     Query,
@@ -105,7 +105,10 @@ class UnsupportedTranslationError(EQLTranslationError, TypeError):
     """Why the expression has no faithful SQL translation."""
 
     def error_message(self) -> str:
-        name = getattr(self.expression, "_name_", type(self.expression).__name__)
+        if isinstance(self.expression, str):
+            name = self.expression
+        else:
+            name = getattr(self.expression, "_name_", type(self.expression).__name__)
         return f"Cannot translate {name} to SQL: {self.reason}"
 
     def suggest_correction(self) -> str:
@@ -610,6 +613,35 @@ class JoinManager:
 
 
 @dataclass
+class CollectionLink:
+    """
+    One relationship step from a FROM element towards the elements of a collection.
+    """
+
+    source: Any
+    """The FROM element the step starts from."""
+
+    attribute_name: str
+    """The name of the relationship attribute of the source."""
+
+    relationship: Any
+    """The SQLAlchemy relationship of the attribute."""
+
+    alias: Any
+    """The alias of the target of the step."""
+
+    def quantified(self, criterion: Optional[Any]) -> Any:
+        """
+        :param criterion: A condition on the alias, or None for none.
+        :return: A correlated EXISTS that holds when a target of the step satisfies the
+            criterion.
+        """
+        attribute = getattr(self.source, self.attribute_name).of_type(self.alias)
+        quantify = attribute.any if self.relationship.uselist else attribute.has
+        return quantify() if criterion is None else quantify(criterion)
+
+
+@dataclass
 class EQLTranslator:
     """
     Translate an EQL query into an SQLAlchemy query.
@@ -627,10 +659,23 @@ class EQLTranslator:
     collection of the query ranges over, keyed by the id of its EQL node.
     """
 
-    collection_mode: bool = False
+    element_mode: bool = False
     """
-    True if the query uses a collection-valued attribute. Every variable is then bound to
-    one FROM element, so that all its uses refer to the same rows.
+    True if the query uses a collection-valued attribute. Every variable is then bound to a
+    FROM element of its own, so that all uses of a variable refer to the same rows and
+    different variables range independently.
+    """
+
+    outer_node_ids: Set[int] = field(default_factory=set)
+    """
+    The ids of the EQL nodes that occur outside every existential quantifier, which the
+    outer query binds.
+    """
+
+    conditional_depth: int = 0
+    """
+    The number of ``or_`` and ``not_`` around the condition being translated. A new inner
+    JOIN there would drop the rows that satisfy another alternative.
     """
 
     joins_forbidden: bool = False
@@ -676,7 +721,7 @@ class EQLTranslator:
     def translate(self) -> None:
         self._reject_inference()
         self._bind_selected_variables()
-        self.collection_mode = self._uses_collections()
+        self._scan_query()
         if isinstance(self.eql_query, Entity):
             self._translate_entity()
         elif isinstance(self.eql_query, SetOf):
@@ -695,54 +740,66 @@ class EQLTranslator:
                     selected, "an inference rule derives new objects"
                 )
 
-    def _uses_collections(self) -> bool:
+    def _scan_query(self) -> None:
         """
-        :return: True if the query has a flattened collection or tests membership in a
+        Find the nodes outside every existential quantifier, and whether the query needs a
+        FROM element per variable because it uses a collection.
+        """
+        uses_collection = False
+        visited = set()
+        pending = [(root, True) for root in self._query_roots()]
+        while pending:
+            node, outer = pending.pop()
+            if (id(node), outer) in visited:
+                continue
+            visited.add((id(node), outer))
+            if outer:
+                self.outer_node_ids.add(id(node))
+            if self._is_collection_node(node):
+                uses_collection = True
+            inside_outer_query = outer and not isinstance(node, EQLExists)
+            pending.extend(
+                (child, inside_outer_query) for child in self._children_of(node)
+            )
+        self.element_mode = uses_collection
+
+    def _query_roots(self) -> List[SymbolicExpression]:
+        """
+        :return: The expressions of the query: its condition, its selection, and the
+            expressions it groups, filters and orders by.
+        """
+        query = self.eql_query
+        roots = [query._where_expression_, *self.select_like._selected_variables_]
+        if query._having_builder_ is not None:
+            roots.append(query._having_builder_.conditions_expression)
+        if query._grouped_by_builder_ is not None:
+            roots.extend(query._grouped_by_builder_.variables_to_group_by)
+        if query._ordered_by_builder_ is not None:
+            roots.append(query._ordered_by_builder_.variable)
+        return [root for root in roots if isinstance(root, SymbolicExpression)]
+
+    def _is_collection_node(self, node: Any) -> bool:
+        """
+        :return: True if the node is a flattened collection or a membership test on a
             collection-valued attribute.
         """
-        roots = [
-            self.eql_query._where_expression_,
-            getattr(self.eql_query._having_builder_, "conditions_expression", None),
-            *self.select_like._selected_variables_,
-        ]
-        return any(
-            self._has_collection_node(root) for root in roots if root is not None
+        return isinstance(node, FlatVariable) or (
+            isinstance(node, Comparator) and self._is_membership_in_collection(node)
         )
 
-    def _has_collection_node(self, expression: Any) -> bool:
-        """
-        :return: True if the expression tree contains a flattened collection or a
-            membership test on a collection-valued attribute.
-        """
-        visited = set()
-        pending = [expression]
-        while pending:
-            node = pending.pop()
-            if id(node) in visited:
-                continue
-            visited.add(id(node))
-            if isinstance(node, FlatVariable):
-                return True
-            if isinstance(node, Comparator) and self._is_membership_in_collection(node):
-                return True
-            pending.extend(self._children_of(node))
-        return False
-
     @staticmethod
-    def _children_of(expression: Any) -> List[Any]:
+    def _children_of(expression: Any) -> List[SymbolicExpression]:
         """
-        :return: The child expressions of an EQL expression. The fields are read from the
-            instance dictionary, because reading a missing attribute of a symbolic variable
-            builds a new symbolic attribute instead of failing.
+        :return: The children of an EQL expression in its expression tree. They are read
+            from the instance dictionary, because reading a missing attribute of a symbolic
+            variable builds a new symbolic attribute instead of failing.
         """
         fields = vars(expression) if hasattr(expression, "__dict__") else {}
-        children = [
-            fields.get(name) for name in ("_child_", "left", "right", "condition")
+        return [
+            child
+            for child in fields.get("_children_", ()) or ()
+            if isinstance(child, SymbolicExpression)
         ]
-        children.extend(fields.get("_children_", ()) or ())
-        if isinstance(expression, EQLExists):
-            children.extend((expression.variable, expression.condition))
-        return [child for child in children if isinstance(child, SymbolicExpression)]
 
     def _bind_selected_variables(self) -> None:
         """
@@ -759,7 +816,7 @@ class EQLTranslator:
         Translate the EQL query to SQL.
         """
         selected = self.select_like.selected_variable
-        if self.collection_mode:
+        if self.element_mode:
             self._translate_selection_of_elements([selected])
         elif isinstance(selected, Attribute):
             self._translate_entity_from_attribute(selected)
@@ -828,7 +885,7 @@ class EQLTranslator:
             isinstance(v, Variable) and not isinstance(v, Attribute) for v in selected
         )
 
-        if self.collection_mode:
+        if self.element_mode:
             self._translate_selection_of_elements(selected)
             self._apply_clauses()
             return
@@ -934,7 +991,7 @@ class EQLTranslator:
 
         :return: The alias.
         """
-        self._require_joins_allowed(variable)
+        self._require_joins_allowed(variable, conditional=False)
         alias = aliased(self._require_dao_class(variable._type_), flat=True)
         self.sql_query = self.sql_query.join(alias, true())
         return alias
@@ -989,34 +1046,32 @@ class EQLTranslator:
             steps.append(("target", mapper.relationships["target"]))
         return owner, steps
 
-    def _exists_along(
-        self, links: List[tuple[Any, str, Any, Any]], criterion: Optional[Any]
-    ) -> Any:
+    @staticmethod
+    def _exists_along(links: List[CollectionLink], criterion: Optional[Any]) -> Any:
         """
         Nest correlated EXISTS subqueries along relationship steps, innermost last.
 
-        :param links: Tuples of a source FROM element, an attribute name, its relationship
-            and the alias of its target.
+        :param links: The steps from an outer FROM element to the quantified alias.
         :param criterion: The condition on the innermost alias, or None for none.
         :return: The outermost EXISTS expression.
         """
-        for source, name, relationship, alias in reversed(links):
-            attribute = getattr(source, name).of_type(alias)
-            quantify = attribute.any if relationship.uselist else attribute.has
-            criterion = quantify() if criterion is None else quantify(criterion)
+        for link in reversed(links):
+            criterion = link.quantified(criterion)
         return criterion
 
     @staticmethod
     def _aliased_links(
         owner: Any, steps: List[tuple[str, Any]]
-    ) -> List[tuple[Any, str, Any, Any]]:
+    ) -> List[CollectionLink]:
         """
+        :param owner: The FROM element the first step starts from.
+        :param steps: Pairs of an attribute name and its relationship.
         :return: The steps from ``owner``, each with a new alias of its target.
         """
         links = []
         for name, relationship in steps:
             alias = aliased(relationship.entity.class_, flat=True)
-            links.append((owner, name, relationship, alias))
+            links.append(CollectionLink(owner, name, relationship, alias))
             owner = alias
         return links
 
@@ -1028,7 +1083,7 @@ class EQLTranslator:
         if (
             isinstance(root, FlatVariable)
             or id(root) in self.elements_by_node
-            or (self.collection_mode and self._is_plain_variable(root))
+            or (self.element_mode and self._is_plain_variable(root))
         ):
             return self._element_of(root)
         base_class = self._extract_base_class(attribute)
@@ -1068,14 +1123,17 @@ class EQLTranslator:
         only the instances of that subclass have the attribute, so the subclass is
         searched, and joined if ``join`` is True.
 
-        :return: The FROM element that has the attribute and its relationship, or None if
-            the attribute is a column.
+        :param current: The FROM element or DAO class to search.
+        :param name: The attribute name.
+        :param join: Whether the role taker or subclass that has the attribute is joined.
+        :return: The FROM element that has the attribute, and its relationship or None if
+            the attribute is not a relationship.
         """
         resolver = RelationshipResolver()
         while True:
             mapper = sqlalchemy.inspection.inspect(current)
             relationship = resolver._find_relationship(mapper, name)
-            if relationship is not None or hasattr(current, name):
+            if relationship is not None or self._declares(current, name):
                 return current, relationship
             role_taker = resolver._find_relationship(mapper, "role_taker")
             if role_taker is None:
@@ -1091,17 +1149,41 @@ class EQLTranslator:
             current = alias or role_taker.entity.class_
 
     @staticmethod
-    def _subclass_declaring(current: Any, name: str) -> Optional[type]:
+    def _mapper_of(current: Any) -> Any:
         """
-        :return: The DAO class of the first subclass of ``current`` that declares the
-            attribute ``name``, or None.
+        :return: The SQLAlchemy mapper of a DAO class or of an alias of one.
         """
-        mapper = sqlalchemy.inspection.inspect(current)
-        mapper = getattr(mapper, "mapper", mapper)
-        for descendant in mapper.self_and_descendants:
-            if descendant is not mapper and name in descendant.attrs:
-                return descendant.class_
-        return None
+        inspected = sqlalchemy.inspection.inspect(current)
+        return getattr(inspected, "mapper", inspected)
+
+    def _declares(self, current: Any, name: str) -> bool:
+        """
+        :return: True if the DAO of ``current`` has an ORM attribute ``name``.
+        """
+        return name in self._mapper_of(current).all_orm_descriptors
+
+    def _subclass_declaring(self, current: Any, name: str) -> Optional[type]:
+        """
+        :return: The DAO class of the subclass of ``current`` that declares the attribute
+            ``name``, or None if no subclass declares it.
+        :raises UnsupportedTranslationError: When several subclasses declare it, so that
+            narrowing to one of them would drop the instances of the others.
+        """
+        mapper = self._mapper_of(current)
+        declaring = [
+            descendant.class_
+            for descendant in mapper.self_and_descendants
+            if descendant is not mapper
+            and name in descendant.attrs
+            and (descendant.inherits is None or name not in descendant.inherits.attrs)
+        ]
+        if len(declaring) > 1:
+            raise UnsupportedTranslationError(
+                name,
+                f"several subclasses of {mapper.class_.__name__} declare it, so the "
+                "query cannot range over one of them",
+            )
+        return declaring[0] if declaring else None
 
     def _join_subclass(self, current: Any, subclass: type) -> Any:
         """
@@ -1117,32 +1199,39 @@ class EQLTranslator:
         )
         return alias
 
-    def _narrow_last_link(
-        self, links: List[tuple[Any, str, Any, Any]], name: str
-    ) -> Any:
+    def _narrow_last_link(self, links: List[CollectionLink], name: str) -> Any:
         """
         When the target of the last link lacks the attribute ``name`` that a subclass
         declares, replace its alias by an alias of the subclass, so that the next
-        quantifier ranges only over the instances that have the attribute.
+        quantifier ranges only over the instances that have the attribute. The element
+        bound to the old alias is rebound to the new one.
 
+        :param links: The links built so far.
+        :param name: The attribute that the next quantifier reads.
         :return: The alias of the last link.
         """
-        source, link_name, relationship, alias = links[-1]
-        if hasattr(alias, name):
-            return alias
-        subclass = self._subclass_declaring(alias, name)
+        last = links[-1]
+        if self._declares(last.alias, name):
+            return last.alias
+        subclass = self._subclass_declaring(last.alias, name)
         if subclass is None:
-            return alias
+            return last.alias
         narrowed = aliased(subclass, flat=True)
-        links[-1] = (source, link_name, relationship, narrowed)
+        links[-1] = CollectionLink(
+            last.source, last.attribute_name, last.relationship, narrowed
+        )
         for node_id, element in list(self.elements_by_node.items()):
-            if element is alias:
+            if element is last.alias:
                 self.elements_by_node[node_id] = narrowed
         return narrowed
 
-    def _require_joins_allowed(self, expression: Any) -> None:
+    def _require_joins_allowed(self, expression: Any, conditional: bool = True) -> None:
         """
-        :raises UnsupportedTranslationError: While translating inside an EXISTS subquery.
+        :param expression: The expression that needs the join, for the error message.
+        :param conditional: Whether the join restricts rows, so that it must not be added
+            inside ``or_`` or ``not_``.
+        :raises UnsupportedTranslationError: While translating inside an EXISTS subquery,
+            or, for a restricting join, inside ``or_`` or ``not_``.
         """
         if self.joins_forbidden:
             raise UnsupportedTranslationError(
@@ -1150,6 +1239,12 @@ class EQLTranslator:
                 "inside an existential quantifier over a collection, conditions may "
                 "only read the columns of the quantified elements and of the outer "
                 "elements",
+            )
+        if conditional and self.conditional_depth > 0:
+            raise UnsupportedTranslationError(
+                expression,
+                "a join inside or_ or not_ would drop the rows that satisfy another "
+                "alternative; test the collection with exists or contains instead",
             )
 
     @contextmanager
@@ -1163,6 +1258,17 @@ class EQLTranslator:
             yield
         finally:
             self.joins_forbidden = previous
+
+    @contextmanager
+    def _conditional_scope(self) -> Iterator[None]:
+        """
+        Mark the translation of an alternative of ``or_`` or of the condition of ``not_``.
+        """
+        self.conditional_depth += 1
+        try:
+            yield
+        finally:
+            self.conditional_depth -= 1
 
     def _extract_dao_from_expression(self, expression: Any) -> Optional[type]:
         """
@@ -1384,10 +1490,22 @@ class EQLTranslator:
         """
         Translate an eql.OR query into an sql.OR.
 
+        Each alternative is translated without joins that restrict rows, which would drop
+        the rows that satisfy another alternative.
+
         :param query: EQL query
-        :return: SQL expression or None if all parts are handled via JOINs.
+        :return: SQL expression.
+        :raises UnsupportedTranslationError: When an alternative has no SQL condition.
         """
-        parts = self._collect_logical_parts(query)
+        with self._conditional_scope():
+            parts = [
+                self.translate_condition(child)
+                for child in self._extract_logical_children(query)
+            ]
+        if any(part is None for part in parts):
+            raise UnsupportedTranslationError(
+                query, "an alternative of or_ has no SQL condition"
+            )
         return self._combine_logical_parts(parts, or_)
 
     def _collect_logical_parts(self, query: Any) -> List[Any]:
@@ -1439,7 +1557,16 @@ class EQLTranslator:
         if self._is_membership_in_collection(query):
             return self._translate_membership(query.left, query.right)
 
-        if not self.collection_mode and self._is_attribute_equality_join(query):
+        if self.element_mode and self._compares_elements(query):
+            self._require_related(
+                self._element_of(query.left), self._element_of(query.right), query
+            )
+
+        if (
+            not self.element_mode
+            and self.conditional_depth == 0
+            and self._is_attribute_equality_join(query)
+        ):
             join_result = self._handle_attribute_equality_join(query)
             if join_result is not None:
                 return None
@@ -1465,14 +1592,41 @@ class EQLTranslator:
         :return: True if the comparator tests whether an item is an element of a
             collection-valued attribute, as ``contains(s.takes_course, c)`` does.
         """
-        is_membership = query.operation is operator.contains or (
-            query.operation.__name__ in ("contains", "in_")
-        )
         return (
-            is_membership
+            query.operation is operator.contains
             and isinstance(query.left, Attribute)
             and self._ends_in_collection(query.left)
         )
+
+    def _compares_elements(self, query: Comparator) -> bool:
+        """
+        :return: True if both operands of the comparator are variables or flattened
+            collections, which compare by database id.
+        """
+        return all(
+            isinstance(operand, FlatVariable) or self._is_plain_variable(operand)
+            for operand in (query.left, query.right)
+        )
+
+    def _require_related(self, first: Any, second: Any, expression: Any) -> None:
+        """
+        :param first: A FROM element.
+        :param second: Another FROM element.
+        :param expression: The expression that compares them, for the error message.
+        :raises UnsupportedTranslationError: When the DAO classes of the elements are not
+            in one class hierarchy, so that their database ids identify unrelated rows.
+        """
+        first_class = self._mapper_of(first).class_
+        second_class = self._mapper_of(second).class_
+        if not (
+            issubclass(first_class, second_class)
+            or issubclass(second_class, first_class)
+        ):
+            raise UnsupportedTranslationError(
+                expression,
+                f"{first_class.__name__} and {second_class.__name__} are unrelated, so "
+                "their database ids do not identify the same objects",
+            )
 
     def _ends_in_collection(self, attribute: Attribute) -> bool:
         """
@@ -1509,8 +1663,11 @@ class EQLTranslator:
         )
         owner, steps = self._collection_steps(owner, names[-1], collection)
         links = self._aliased_links(owner, steps)
-        element = links[-1][3]
-        return self._exists_along(links, element.database_id == self._identity_of(item))
+        element = links[-1].alias
+        identity = self._identity_of(item)
+        if isinstance(item, FlatVariable) or self._is_plain_variable(item):
+            self._require_related(element, self._element_of(item), collection)
+        return self._exists_along(links, element.database_id == identity)
 
     def _identity_of(self, item: Any) -> Any:
         """
@@ -1726,7 +1883,7 @@ class EQLTranslator:
             extractor = DomainValueExtractor(self.session)
             return extractor.extract_from_literal(operand)
 
-        if self.collection_mode and self._is_plain_variable(operand):
+        if self.element_mode and self._is_plain_variable(operand):
             return self._element_of(operand).database_id
 
         if isinstance(operand, Variable):
@@ -1800,24 +1957,31 @@ class EQLTranslator:
 
     def _attribute_condition(self, attribute: Attribute) -> Any:
         """
-        :return: The condition that the value of an attribute is true.
+        :param attribute: The attribute used as a condition.
+        :return: The condition that the value of the attribute is true in Python: a
+            collection is not empty, a reference is set, and a value is true.
         """
         names = self._collect_attribute_chain(attribute)
-        start = self._start_of_chain(attribute)
-        owner = self._walk_references(start, names[:-1], attribute)
+        owner = self._walk_references(
+            self._start_of_chain(attribute), names[:-1], attribute
+        )
         owner, relationship = self._resolve_relationship(owner, names[-1])
-        if relationship is not None and relationship.uselist:
-            return getattr(owner, names[-1]).any()
-        column = self._walk_attribute_chain(start, names, attribute)
         if relationship is not None:
-            return column.is_not(None)
-        return self._truth_value(column)
+            reference = getattr(owner, names[-1])
+            return reference.any() if relationship.uselist else reference.has()
+        if not self._declares(owner, names[-1]):
+            raise MissingColumnError(owner, names[-1])
+        return self._truth_value(getattr(owner, names[-1]), attribute)
 
     @staticmethod
-    def _truth_value(column: Any) -> Any:
+    def _truth_value(column: Any, expression: Any) -> Any:
         """
-        :return: The condition that a column's value is true in Python: not missing, and
+        :param column: The column of a value.
+        :param expression: The EQL attribute of the column, for the error message.
+        :return: The condition that the column's value is true in Python: not missing, and
             not False, zero or the empty string.
+        :raises UnsupportedTranslationError: For column types whose Python truth value has
+            no SQL equivalent, such as JSON, in which an empty list is false.
         """
         if isinstance(column.type, Boolean):
             return column.is_(true())
@@ -1825,14 +1989,30 @@ class EQLTranslator:
             return and_(column.is_not(None), column != 0)
         if isinstance(column.type, String):
             return and_(column.is_not(None), column != "")
-        return column.is_not(None)
+        if isinstance(column.type, (Date, DateTime, Time)):
+            return column.is_not(None)
+        raise UnsupportedTranslationError(
+            expression,
+            f"the truth value of a {type(column.type).__name__} column has no SQL "
+            "equivalent",
+        )
 
     def _translate_negation(self, condition: Any) -> Any:
         """
         Translate negation as failure: the negation holds when the condition is not true,
         also when SQL evaluates the condition to NULL because a value is missing.
+
+        :param condition: The negated EQL condition.
+        :return: The SQL condition.
+        :raises UnsupportedTranslationError: When the negated condition has no SQL
+            condition of its own.
         """
-        inner = self.translate_condition(condition)
+        with self._conditional_scope():
+            inner = self.translate_condition(condition)
+        if inner is None:
+            raise UnsupportedTranslationError(
+                condition, "the negated condition has no SQL condition"
+            )
         return inner.is_not(true())
 
     def _collect_attribute_chain(self, query: Attribute) -> List[str]:
@@ -1955,9 +2135,13 @@ class EQLTranslator:
         """
         existential_variable = exists_node.variable
         condition = exists_node.condition
+        if self.element_mode and id(existential_variable) in self.outer_node_ids:
+            # The outer query binds the quantified variable, so the quantifier only checks
+            # its condition for that binding.
+            return self.translate_condition(condition)
         if isinstance(existential_variable, FlatVariable):
             return self._translate_exists_over_elements(existential_variable, condition)
-        if self.collection_mode:
+        if self.element_mode:
             return self._translate_exists_over_variable(existential_variable, condition)
         dao_class = self._require_dao_class(existential_variable._type_)
         sub_where = self._translate_exists_condition(condition)
@@ -2019,6 +2203,8 @@ class EQLTranslator:
         :return: A SQLAlchemy EXISTS expression.
         """
         chain = self._unbound_collections(quantified)
+        if not chain:
+            return self.translate_condition(condition)
         owner = self._element_of(self._chain_root(chain[0]._child_))
         links = []
         try:
@@ -2029,7 +2215,7 @@ class EQLTranslator:
                             links, flat._child_._attribute_name_
                         )
                     links.extend(self._bind_element_in_subquery(owner, flat))
-                    owner = links[-1][3]
+                    owner = links[-1].alias
                 criterion = self.translate_condition(condition)
         finally:
             for flat in chain:
@@ -2043,15 +2229,21 @@ class EQLTranslator:
         Translate ``exists(v, condition)`` for a variable ``v`` into an EXISTS subquery over
         an alias of its DAO class that is bound only inside the subquery.
 
+        :param quantified: The quantified variable, which occurs only inside the quantifier.
+        :param condition: The condition on it.
         :return: A SQLAlchemy EXISTS expression.
         """
         alias = aliased(self._require_dao_class(quantified._type_), flat=True)
+        previous = self.elements_by_node.get(id(quantified))
         self.elements_by_node[id(quantified)] = alias
         try:
             with self._subquery_scope():
                 criterion = self.translate_condition(condition)
         finally:
-            self.elements_by_node.pop(id(quantified), None)
+            if previous is None:
+                self.elements_by_node.pop(id(quantified), None)
+            else:
+                self.elements_by_node[id(quantified)] = previous
         sub_query = select(literal(1)).select_from(alias)
         if criterion is not None:
             sub_query = sub_query.where(criterion)
@@ -2059,23 +2251,30 @@ class EQLTranslator:
 
     def _unbound_collections(self, quantified: FlatVariable) -> List[FlatVariable]:
         """
-        :return: The flattened collections from the outermost one that is not bound in the
-            enclosing query to ``quantified``.
+        :param quantified: The quantified flattened collection.
+        :return: The flattened collections from the outermost one that the enclosing query
+            does not bind to ``quantified``.
         """
         chain = []
         node = quantified
-        while isinstance(node, FlatVariable) and id(node) not in self.elements_by_node:
+        while (
+            isinstance(node, FlatVariable)
+            and id(node) not in self.elements_by_node
+            and id(node) not in self.outer_node_ids
+        ):
             chain.insert(0, node)
             node = self._chain_root(node._child_)
         return chain
 
     def _bind_element_in_subquery(
         self, owner: Any, flat: FlatVariable
-    ) -> List[tuple[Any, str, Any, Any]]:
+    ) -> List[CollectionLink]:
         """
         Bind a flattened collection, reached directly from ``owner``, to a new alias of
         its element DAO without joining it to the enclosing query.
 
+        :param owner: The FROM element whose collection attribute is flattened.
+        :param flat: The flattened collection.
         :return: The relationship steps from ``owner`` to the alias.
         :raises UnsupportedTranslationError: When the collection is not an attribute of
             ``owner`` itself.
@@ -2091,7 +2290,7 @@ class EQLTranslator:
             )
         owner, steps = self._collection_steps(owner, collection._attribute_name_, flat)
         links = self._aliased_links(owner, steps)
-        self.elements_by_node[id(flat)] = links[-1][3]
+        self.elements_by_node[id(flat)] = links[-1].alias
         return links
 
     def _extract_logical_children(self, node: Any) -> List[Any]:
@@ -2126,6 +2325,14 @@ def eql_to_sql(
             outer_translator.sql_query
             .join(large_bodies, large_bodies.c.database_id == ContainerDAO.database_id)
         )
+
+    The translated query answers the query over the stored data: every variable ranges
+    over the rows of its class in the database, whatever domain it was given in memory.
+    Missing values follow Python where Python is defined: ``!=`` holds between a missing
+    and a present value, an attribute used as a condition holds when its value is true,
+    and ``not_`` is negation as failure. An order comparison with a missing value, which
+    raises a ``TypeError`` in Python, is false. A construct without such a translation
+    raises :class:`UnsupportedTranslationError` instead of returning different answers.
 
     :param query: The EQL query
     :param session: The SQLAlchemy session
