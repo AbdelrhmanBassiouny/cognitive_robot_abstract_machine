@@ -26,7 +26,14 @@ from dataclasses import dataclass
 from enum import Enum, StrEnum
 from pathlib import Path
 
-from basstler.package_layout import REPOSITORY_ROOT
+from basstler.locations import PackageLocation, ProjectLocation
+from basstler.repository import Repository
+from basstler.standard_streams import StandardStreamHandler
+
+logger = StandardStreamHandler.logger_for(__name__)
+"""
+This module's logger, which is also what its command prints through.
+"""
 
 
 class Host(StrEnum):
@@ -64,8 +71,8 @@ class SetupLink(StrEnum):
     """
     Every fixed page the printed steps link to, composed from the host serving it.
 
-    A link that varies with the repository is built by that repository instead - see
-    :attr:`Repository.labels_url`.
+    A link that varies with the repository is built by the step that shows it instead -
+    see :attr:`ForkLabels.labels_url`.
     """
 
     GITHUB_AUTHORIZATION = (
@@ -227,7 +234,7 @@ class PersonalNotesSetting(PersonalNotesSettingSpecification, Enum):
     PATH = PersonalNotesSettingSpecification(
         git_config_key="claude.personalNotesPath",
         environment_variable="CLAUDE_PERSONAL_NOTES_PATH",
-        default=".claude/personal/cram-notes.md",
+        default=str(ProjectLocation.PERSONAL_NOTES_DOCUMENT),
     )
     """
     Where on that branch the notes file sits.
@@ -237,68 +244,21 @@ class PersonalNotesSetting(PersonalNotesSettingSpecification, Enum):
 # %% the repository the steps are about
 
 
-@dataclass(frozen=True)
-class Repository:
-    """
-    A GitHub repository, named the way its URLs and the ``gh`` CLI name it.
-    """
-
-    owner: str
-    """
-    The user or organization that owns it.
-    """
-
-    name: str
-    """
-    The repository's own name.
-    """
-
-    @classmethod
-    def from_remote_url(cls, url: str) -> Repository | None:
-        """
-        Read a repository out of a git remote URL, in either the HTTPS or the SSH form.
-
-        :param url: The remote URL.
-        :return: The repository, or ``None`` if the URL names no GitHub repository.
-        """
-        if Host.GITHUB not in url:
-            return None
-        path = url.split(Host.GITHUB, 1)[1].lstrip(":/").removesuffix(".git")
-        segments = [segment for segment in path.split("/") if segment]
-        if len(segments) != 2:
-            return None
-        return cls(owner=segments[0], name=segments[1])
-
-    @property
-    def full_name(self) -> str:
-        """
-        The ``owner/name`` form the ``gh`` CLI and GitHub's own interface use.
-        """
-        return f"{self.owner}/{self.name}"
-
-    @property
-    def labels_url(self) -> str:
-        """
-        The page where labels are created by hand.
-        """
-        return f"{Host.GITHUB.url}/{self.full_name}/labels"
-
-
 def resolve_repository(project_root: Path, notes_remote: str) -> Repository | None:
     """
     Find the repository a user's pull requests and notes go to.
 
     :param project_root: The clone to read remotes from.
     :param notes_remote: The resolved notes remote, either a remote name or a URL.
-    :return: The repository, or ``None`` when no remote resolves to a GitHub URL.
+    :return: The repository, or ``None`` when no remote resolves to a GitHub URL, so
+        nothing is guessed from another host's path.
     """
     remote_url = git_value(project_root, "remote", "get-url", notes_remote)
     for candidate in (remote_url, notes_remote):
         if candidate is None:
             continue
-        repository = Repository.from_remote_url(candidate)
-        if repository is not None:
-            return repository
+        if Host.GITHUB in candidate and Repository.names_a_repository(candidate):
+            return Repository.from_remote_url(candidate)
     return None
 
 
@@ -430,13 +390,20 @@ class ForkLabels(SetupStep):
             "applying a label a repository lacks fails mid-pull-request."
         )
 
+    @property
+    def labels_url(self) -> str:
+        """
+        The page where the fork's labels are created by hand.
+        """
+        return f"{Host.GITHUB.url}/{self.repository.full_name}/labels"
+
     def instructions(self) -> list[str]:
         """See :meth:`SetupStep.instructions`."""
         commands = [
             label.creation_command(self.repository) for label in RepositoryLabel
         ]
         return [
-            f"By hand: {self.repository.labels_url}",
+            f"By hand: {self.labels_url}",
             "Or, if you have the gh CLI:",
             *commands,
         ]
@@ -615,7 +582,11 @@ def main() -> None:
     """
     Print the checklist for this clone.
     """
-    print(SetupChecklist.for_clone(REPOSITORY_ROOT, os.environ).render())
+    logger.info(
+        SetupChecklist.for_clone(
+            PackageLocation.REPOSITORY_ROOT.value, os.environ
+        ).render()
+    )
 
 
 if __name__ == "__main__":

@@ -55,10 +55,8 @@ version = {attr = "basstler._version.__version__"}
 [tool.setuptools]
 packages = ["basstler"]
 
-# The files the modules resolve beside themselves rather than by an argument:
-# render_common.py finds the page templates as `Path(__file__).parent / "templates"`,
-# stack.py and plan_item_mode.py find their committed defaults beside themselves, and
-# upstream_reviews.py finds its GraphQL documents as `Path(__file__).parent / "queries"`.
+# The files the modules resolve beside themselves rather than by an argument, all named
+# in locations.py: the page templates, the GraphQL documents and the committed defaults.
 # An install that left them out would import and then fail at the first render, the first
 # configuration read, or the first query. pyproject.toml is here because
 # `basstler.dependencies` reads the declaration out of it at runtime.

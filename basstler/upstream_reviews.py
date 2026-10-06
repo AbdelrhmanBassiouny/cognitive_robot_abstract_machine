@@ -27,13 +27,14 @@ from typing import Any, TypeVar, ClassVar
 
 import tomllib
 
-from basstler.stack import CONFIGURATION_PATH, Repository
+from basstler.locations import PackageLocation
+from basstler.repository import Repository
+from basstler.standard_streams import StandardStreamHandler
 
-QUERY_DIRECTORY = Path(__file__).resolve().parent / "queries"
+logger = StandardStreamHandler.logger_for(__name__)
 """
-Where the ``.graphql`` documents live.
+This module's logger, which is also what its command prints through.
 """
-
 
 # %% the reading contract
 
@@ -152,7 +153,7 @@ class GraphQLDocument(StrEnum):
 
     def read(self) -> str:
         """:return: The document's text."""
-        return (QUERY_DIRECTORY / f"{self}.graphql").read_text()
+        return (PackageLocation.QUERIES / f"{self}.graphql").read_text()
 
 
 class EnvironmentVariable(StrEnum):
@@ -872,7 +873,7 @@ class UpstreamReviewReader:
 
 
 def resolve_upstream_repository(
-    path: Path = CONFIGURATION_PATH, override: str | None = None
+    path: Path = PackageLocation.STACK_CONFIGURATION.value, override: str | None = None
 ) -> Repository:
     """
     Decide which repository the fork's pull requests are reviewed on.
@@ -1053,9 +1054,9 @@ def main(argv: list[str] | None = None) -> int:
     try:
         report = _build_report(arguments)
     except UpstreamReviewError as failure:
-        print(failure, file=sys.stderr)
+        logger.error(failure)
         return 1
-    print(report)
+    logger.info(report)
     summary_path = os.environ.get(EnvironmentVariable.STEP_SUMMARY)
     if summary_path:
         Path(summary_path).write_text(report)

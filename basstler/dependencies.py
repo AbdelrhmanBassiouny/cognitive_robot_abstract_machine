@@ -26,38 +26,37 @@ import argparse
 import re
 import sys
 import tomllib
-from dataclasses import dataclass
-from functools import lru_cache
+from dataclasses import dataclass, field
+from enum import IntEnum, StrEnum
 from importlib.metadata import distributions
 from pathlib import Path
 
-DECLARATION_PATH = Path(__file__).parent / "pyproject.toml"
-"""
-This package's own metadata, found beside the modules it declares the dependencies of.
-"""
+from basstler.locations import PackageLocation
+from basstler.standard_streams import StandardStreamHandler
 
-PROJECT_TABLE = "project"
+logger = StandardStreamHandler.logger_for(__name__)
 """
-The ``pyproject.toml`` table a package's own metadata lives in.
-"""
-
-DEPENDENCIES_FIELD = "dependencies"
-"""
-The field of that table listing the requirement specifiers.
-"""
-
-CONSTRAINT_START = re.compile(r"[<>=!~;\[ ]")
-"""
-The first character that ends a distribution's name and begins a version bound, an extra
-or an environment marker.
-"""
-
-NAME_SEPARATORS = re.compile(r"[-_.]+")
-"""
-The characters a distribution name may be spelled with interchangeably, per PEP 503.
+This module's logger, which is also what its command prints through.
 """
 
 
+class PyprojectKey(StrEnum):
+    """
+    The keys of ``pyproject.toml`` this module reads.
+    """
+
+    PROJECT = "project"
+    """
+    The table a package's own metadata lives in.
+    """
+
+    DEPENDENCIES = "dependencies"
+    """
+    The field of that table listing the requirement specifiers.
+    """
+
+
+@dataclass
 class UnreadableDependencyDeclarationError(Exception):
     """
     Raised when the declaration cannot be read, so nothing can be said about what is
@@ -67,35 +66,17 @@ class UnreadableDependencyDeclarationError(Exception):
     from an empty answer and act on by installing nothing.
     """
 
+    declaration: Path
+    """
+    The file that was to be read.
+    """
 
-def unreadable_declaration_message(declaration: Path) -> str:
-    """
-    :param declaration: The file that was to be read.
-    :return: What to tell a reader who asked what is missing and cannot be told.
-    """
-    return (
-        f"{declaration} does not exist, so this package's dependencies cannot be read"
-    )
-
-
-def canonical_name(distribution_name: str) -> str:
-    """
-    :param distribution_name: A distribution's name as anyone spells it.
-    :return: The one spelling ``PyYAML``, ``pyyaml`` and ``py-yaml`` share.
-    """
-    return NAME_SEPARATORS.sub("-", distribution_name).lower()
-
-
-@lru_cache(maxsize=1)
-def installed_distribution_names() -> frozenset[str]:
-    """
-    :return: The canonical name of every distribution installed in this environment.
-    """
-    return frozenset(
-        canonical_name(installed.metadata["Name"])
-        for installed in distributions()
-        if installed.metadata["Name"]
-    )
+    def __str__(self) -> str:
+        """:return: What to tell a reader who asked what is missing and cannot be told."""
+        return (
+            f"{self.declaration} does not exist, so this package's dependencies cannot "
+            f"be read"
+        )
 
 
 @dataclass(frozen=True)
@@ -109,74 +90,113 @@ class Dependency:
     The requirement as ``pyproject.toml`` writes it, version bounds and all.
     """
 
+    constraint_start: re.Pattern[str] = field(
+        default=re.compile(r"[<>=!~;\[ ]"), repr=False, compare=False
+    )
+    """
+    The first character that ends a distribution's name and begins a version bound, an extra
+    or an environment marker, in a PEP 508 specifier.
+    """
+
     @property
     def distribution_name(self) -> str:
         """:return: The distribution this requirement names, without its constraints."""
-        return CONSTRAINT_START.split(self.specifier, maxsplit=1)[0].strip()
+        return self.constraint_start.split(self.specifier, maxsplit=1)[0].strip()
 
     @property
     def is_missing(self) -> bool:
         """
         Presence rather than version: an installed distribution is left alone, which is
-        what lets a session start run this on every start and install nothing.
+        what lets a session start run this on every start and install nothing. Names are
+        compared as PEP 503 does, so a declaration need not match a distribution's own
+        spelling.
 
         :return: Whether this environment has no distribution of that name.
         """
-        return canonical_name(self.distribution_name) not in (
-            installed_distribution_names()
+        return next(iter(distributions(name=self.distribution_name)), None) is None
+
+
+@dataclass(frozen=True)
+class DependencyDeclaration:
+    """
+    A ``pyproject.toml`` and the dependencies it declares.
+    """
+
+    path: Path
+    """
+    The ``pyproject.toml`` to read.
+    """
+
+    @classmethod
+    def of_this_package(cls) -> DependencyDeclaration:
+        """
+        :return: This package's own metadata, found beside the modules it declares the
+            dependencies of.
+        """
+        return cls(PackageLocation.DEPENDENCY_DECLARATION.value)
+
+    def dependencies(self) -> tuple[Dependency, ...]:
+        """
+        :return: Every dependency it declares, in the order it declares them.
+        :raises UnreadableDependencyDeclarationError: If the file is absent.
+        """
+        if not self.path.is_file():
+            raise UnreadableDependencyDeclarationError(self.path)
+        project = tomllib.loads(self.path.read_text(encoding="utf-8"))
+        return tuple(
+            Dependency(specifier)
+            for specifier in project[PyprojectKey.PROJECT].get(
+                PyprojectKey.DEPENDENCIES, []
+            )
+        )
+
+    def missing(self) -> tuple[Dependency, ...]:
+        """
+        :return: The declared dependencies this environment does not have.
+        :raises UnreadableDependencyDeclarationError: If the file is absent.
+        """
+        return tuple(
+            dependency for dependency in self.dependencies() if dependency.is_missing
         )
 
 
-def declared_dependencies(
-    declaration: Path = DECLARATION_PATH,
-) -> tuple[Dependency, ...]:
+class ExitCode(IntEnum):
     """
-    :param declaration: The ``pyproject.toml`` to read.
-    :return: Every dependency it declares, in the order it declares them.
-    :raises UnreadableDependencyDeclarationError: If the file is absent or unparseable.
+    How the command ended, as its caller reads it.
     """
-    if not declaration.is_file():
-        raise UnreadableDependencyDeclarationError(
-            unreadable_declaration_message(declaration)
-        )
-    project = tomllib.loads(declaration.read_text(encoding="utf-8"))
-    return tuple(
-        Dependency(specifier)
-        for specifier in project[PROJECT_TABLE].get(DEPENDENCIES_FIELD, [])
-    )
+
+    SUCCESS = 0
+    """
+    The missing dependencies, if any, were printed.
+    """
+
+    UNREADABLE_DECLARATION = 1
+    """
+    The declaration could not be read, so nothing was printed.
+    """
 
 
-def missing_dependencies(
-    declaration: Path = DECLARATION_PATH,
-) -> tuple[Dependency, ...]:
-    """
-    :param declaration: The ``pyproject.toml`` to read.
-    :return: The declared dependencies this environment does not have.
-    """
-    return tuple(
-        dependency
-        for dependency in declared_dependencies(declaration)
-        if dependency.is_missing
-    )
-
-
-def main() -> None:
+def main() -> ExitCode:
     """
     Print one specifier per missing dependency, for a caller to hand to an installer.
+
+    :return: How the command ended.
     """
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[1])
     parser.add_argument(
         "--declaration",
         type=Path,
-        default=DECLARATION_PATH,
+        default=DependencyDeclaration.of_this_package().path,
         help="The pyproject.toml to read the dependencies from",
     )
-    arguments = parser.parse_args()
-    if not arguments.declaration.is_file():
-        sys.exit(unreadable_declaration_message(arguments.declaration))
-    for dependency in missing_dependencies(arguments.declaration):
-        print(dependency.specifier)
+    declaration = DependencyDeclaration(parser.parse_args().declaration)
+    if not declaration.path.is_file():
+        logger.error(str(UnreadableDependencyDeclarationError(declaration.path)))
+        return ExitCode.UNREADABLE_DECLARATION
+    for dependency in declaration.missing():
+        logger.info(dependency.specifier)
+    return ExitCode.SUCCESS
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())
