@@ -1066,19 +1066,10 @@ class OwlLoader:
         """
         if not field_name:
             return False
-        if len(subj_roles) == 1:
-            subj = subj_roles[0]
-        else:
-            try:
-                subj = [
-                    s
-                    for s in subj_roles
-                    if not must_have_attr or hasattr(s, field_name)
-                ][0]
-            except IndexError:
-                import pdbpp
-
-                pdbpp.set_trace()
+        subj = next(
+            (s for s in subj_roles if not must_have_attr or hasattr(s, field_name)),
+            subj_roles[0],
+        )
         if not must_have_attr or hasattr(subj, field_name):
             # Coerce to field annotated type
             try:
@@ -1140,11 +1131,22 @@ class OwlLoader:
             obj = obj_roles[0] if obj_roles else None
         if obj is None:
             raise ValueError(f"Could not find object for {subj_roles}.{field_name}")
-        subject_roles_with_field_name = [
-            s for s in subj_roles if hasattr(s, field_name)
-        ]
-        if subject_roles_with_field_name:
-            subj = subject_roles_with_field_name[0]
+        descriptor_base = self.metadata.get_descriptor_base(field_name)
+        declaration = (
+            PropertyDescriptorRelation.declaring_object(
+                subj_roles[0], descriptor_base, obj
+            )
+            if descriptor_base is not None
+            else None
+        )
+        if declaration is not None:
+            subj = declaration[0]
+        else:
+            subject_roles_with_field_name = [
+                s for s in subj_roles if hasattr(s, field_name)
+            ]
+            if subject_roles_with_field_name:
+                subj = subject_roles_with_field_name[0]
         matched_obj = None
         # Look for the super, and the inverse properties of the current property,
         # and try to assign their values as well. So call self._assign_object_property()

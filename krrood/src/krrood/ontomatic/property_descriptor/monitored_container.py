@@ -290,13 +290,6 @@ class MonitoredSet(MonitoredContainer, set):
                     if isinstance(role_taker, most_upper_range):
                         value = role_taker
                         break
-        if (
-            self._descriptor.__class__.__name__ == "HasHead"
-            and value.__class__.__name__ == "Chair"
-        ):
-            import pdbpp
-
-            pdbpp.set_trace()
         self._on_add(
             value,
             inferred=inferred,

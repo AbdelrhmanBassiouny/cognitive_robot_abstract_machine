@@ -203,34 +203,80 @@ class PropertyDescriptorRelation(PredicateClassRelation):
         return [node, *(linked for linked in linked_nodes if linked is not None)]
 
     @classmethod
-    def holder_of_property(
-        cls, instance: Any, property_descriptor_class: Type[PropertyDescriptor]
-    ) -> Optional[Tuple[WrappedInstance, WrappedField]]:
+    def declaring_object(
+        cls,
+        instance: Any,
+        property_descriptor_class: Type[PropertyDescriptor],
+        value: Any,
+    ) -> Optional[Tuple[Any, PropertyDescriptor]]:
         """
-        Find where a fact of the property about the individual of the instance is stored.
+        Find the object of the individual of the instance on which a fact of the property with the given value is
+        stored.
 
         The objects of the individual are checked in the order of :meth:`objects_of_individual`, so the root comes
         first. This order matters only for where the fact is stored, not for what it means: all objects of the
-        individual denote it. The class hierarchy of each object is walked from its most specific class; a role class
-        does not inherit from its role taker type, so a property declared on the role taker type is found on the root.
+        individual denote it. For each object, the declaration of its most specific class that declares the property
+        is used, because that is the attribute the object exposes; a role class does not inherit from its role taker
+        type, so a property declared on the role taker type is found on the root. The first declaration whose range
+        admits the value is chosen: a role, such as a basketball lover, can declare the property with a narrower range
+        than its role taker, and a value outside that range belongs to another object of the individual. If no
+        declaration admits the value, the first declaration is chosen.
 
-        :param instance: An object of the individual.
+        :param instance: An object of the subject individual.
         :param property_descriptor_class: The property.
-        :return: The node of the root role taker of the first object of the individual whose class declares the
-         property, and the wrapped field of the declaration; None if no object of the individual declares the
-         property.
+        :param value: The value of the fact, an object of the value individual.
+        :return: The object and the descriptor of the declaration, or None if no object of the individual declares
+         the property.
         """
         descriptors = property_descriptor_class.descriptor_instances_by_domain_type[
             property_descriptor_class
         ]
+        value_objects = cls.objects_of_individual(value)
+        first_declaration = None
         for individual_object in cls.objects_of_individual(instance):
-            for object_type in type(individual_object).__mro__:
-                if object_type in descriptors:
-                    node = SymbolGraph().ensure_wrapped_instance(
-                        cls.root_role_taker(individual_object)
-                    )
-                    return node, descriptors[object_type].wrapped_field
-        return None
+            descriptor = next(
+                (
+                    descriptors[object_type]
+                    for object_type in type(individual_object).__mro__
+                    if object_type in descriptors
+                ),
+                None,
+            )
+            if descriptor is None:
+                continue
+            if any(
+                isinstance(value_object, descriptor.range)
+                for value_object in value_objects
+            ):
+                return individual_object, descriptor
+            first_declaration = first_declaration or (individual_object, descriptor)
+        return first_declaration
+
+    @classmethod
+    def holder_of_property(
+        cls,
+        instance: Any,
+        property_descriptor_class: Type[PropertyDescriptor],
+        value: Any,
+    ) -> Optional[Tuple[WrappedInstance, WrappedField]]:
+        """
+        Find where a fact of the property about the individual of the instance is stored (see
+        :meth:`declaring_object`).
+
+        :param instance: An object of the subject individual.
+        :param property_descriptor_class: The property.
+        :param value: The value of the fact, an object of the value individual.
+        :return: The node of the root role taker of the declaring object and the wrapped field of the declaration;
+         None if no object of the individual declares the property.
+        """
+        declaration = cls.declaring_object(instance, property_descriptor_class, value)
+        if declaration is None:
+            return None
+        individual_object, descriptor = declaration
+        node = SymbolGraph().ensure_wrapped_instance(
+            cls.root_role_taker(individual_object)
+        )
+        return node, descriptor.wrapped_field
 
     @cached_property
     def transitive(self) -> bool:
@@ -322,7 +368,9 @@ class PropertyDescriptorRelation(PredicateClassRelation):
         :param target: The node of the value.
         :param inference_explanation: The rule and premises of the inference (see :attr:`inference_explanation`).
         """
-        holder = self.holder_of_property(source_instance, property_descriptor_class)
+        holder = self.holder_of_property(
+            source_instance, property_descriptor_class, target.instance
+        )
         if holder is None:
             return
         source, wrapped_field = holder
@@ -377,21 +425,16 @@ class PropertyDescriptorRelation(PredicateClassRelation):
         :return: True if the value of the wrapped field was updated, False otherwise (i.e., if the value was already
         set).
         """
-        descriptor = self.wrapped_field.property_descriptor
-        holder = next(
-            (
-                individual_object
-                for individual_object in self.objects_of_individual(
-                    self.source.instance
-                )
-                if isinstance(individual_object, descriptor.domain)
-            ),
-            None,
+        declaration = self.declaring_object(
+            self.source.instance,
+            self.property_descriptor_class,
+            self.target.instance,
         )
-        if holder is None:
+        if declaration is None:
             raise NoObjectOfIndividualDeclaresProperty(
-                self.source.instance, type(descriptor)
+                self.source.instance, self.property_descriptor_class
             )
+        holder, descriptor = declaration
         return descriptor.update_value(holder, self.target.instance)
 
     def infer_super_relations(self):
