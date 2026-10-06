@@ -3,7 +3,6 @@ from __future__ import annotations
 import itertools
 import math
 import plotly.graph_objects as go
-from dataclasses import dataclass
 from typing import (
     TYPE_CHECKING,
     Union,
@@ -45,6 +44,11 @@ from random_events.variable import Integer, Continuous, Variable, Symbolic
 # Type definitions
 FullEvidenceType = np.array  # [Union[float, int, SetElement]]
 
+PartialPointType = Dict[Variable, Any]
+"""
+A partial point: one value for each of some variables of a model.
+"""
+
 # # Type hinting for Python 3.7 to 3.9
 if TYPE_CHECKING:
     OrderType = VariableMap[Union[Integer, Continuous], int]
@@ -56,7 +60,6 @@ else:
     MomentType = VariableMap
 
 
-@dataclass
 class ProbabilisticModel(ABC):
     """
     Abstract base class for probabilistic models.
@@ -67,6 +70,16 @@ class ProbabilisticModel(ABC):
 
     This class can be used as an interface to any kind of probabilistic model, tractable
     or not.
+
+    .. note::
+        ``variables`` is a type-annotated contract, which leaves each subclass free to
+        store it as a plain field or compute it as a property. A subclass that provides
+        neither raises ``AttributeError`` on first access.
+    """
+
+    variables: Tuple[Variable, ...]
+    """
+    The variables of the model.
     """
 
     @property
@@ -75,13 +88,6 @@ class ProbabilisticModel(ABC):
         The symbol used to represent this distribution.
         """
         return self.__class__.__name__
-
-    @property
-    @abstractmethod
-    def variables(self) -> Tuple[Variable, ...]:
-        """
-        :return: The variables of the model.
-        """
 
     def get_variable_by_name(self, name: str) -> Variable:
         [variable] = [v for v in self.variables if v.name == name]
@@ -244,7 +250,7 @@ class ProbabilisticModel(ABC):
         :return: The truncated distribution and the log-probability of the event.
         """
 
-    def conditional(self, point: Dict[Variable, Any]) -> Tuple[Optional[Self], float]:
+    def conditional(self, point: PartialPointType) -> Tuple[Optional[Self], float]:
         """
         Calculate the conditioned distribution P(*| point) and the probability of the
         event.
@@ -257,7 +263,7 @@ class ProbabilisticModel(ABC):
 
     @abstractmethod
     def log_conditional(
-        self, point: Dict[Variable, Any]
+        self, point: PartialPointType
     ) -> Tuple[Optional[Self], float]:
         """
         Calculate the conditioned distribution P(*| point) and the probability of the

@@ -41,6 +41,12 @@ from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
 from typing import Any
+from basstler.standard_streams import StandardStreamHandler
+
+logger = StandardStreamHandler.logger_for(__name__)
+"""
+This module's logger, which is also what its command prints through.
+"""
 
 CANDIDATE_SEPARATOR = "="
 """
@@ -359,10 +365,10 @@ def main() -> int:
             Path(arguments.repository), arguments.base, arguments.paths, candidates
         )
     except (UnknownBranchError, MalformedCandidateError) as error:
-        print(str(error), file=sys.stderr)
+        logger.error(str(error))
         return 1
 
-    print(json.dumps(report.as_json()))
+    logger.info(json.dumps(report.as_json()))
     return 0
 
 

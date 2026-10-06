@@ -9,6 +9,7 @@ notes remote - so no test needs network access or a real personal-notes branch.
 
 from __future__ import annotations
 
+import os
 import shutil
 import subprocess
 from collections.abc import Mapping
@@ -17,18 +18,16 @@ from enum import StrEnum
 from pathlib import Path
 
 from .script_runner import BashScriptRunner
-import basstler.stack
+from basstler.locations import PackageLocation, ProjectLocation
 
 from .constants import (
-    NOTES_BRANCH,
-    PACKAGE_DIRECTORY,
-    SCRUBBED_ENVIRONMENT_PREFIXES,
-    SET_UP_CLONE_DATASET,
-    WORK_BRANCH,
-    ToolingDirectory,
+    DatasetLocation,
+    ScratchBranch,
+    ScrubbedEnvironmentPrefix,
+    SkillDirectory,
 )
 
-HOOKS_SOURCE_DIRECTORY = ToolingDirectory.HOOKS.path
+HOOKS_SOURCE_DIRECTORY = PackageLocation.REPOSITORY_ROOT / ProjectLocation.HOOKS
 """
 The real hooks directory the scripts under test are copied from.
 """
@@ -41,7 +40,7 @@ def install_hook_scripts_into(project_root: Path, *script_names: str) -> None:
     :param project_root: The checkout to copy them into.
     :param script_names: File names within the hooks directory.
     """
-    hooks_directory = project_root / ToolingDirectory.HOOKS
+    hooks_directory = project_root / ProjectLocation.HOOKS
     hooks_directory.mkdir(parents=True, exist_ok=True)
     for script_name in script_names:
         shutil.copy(HOOKS_SOURCE_DIRECTORY / script_name, hooks_directory / script_name)
@@ -59,8 +58,8 @@ def install_package_into(project_root: Path) -> None:
     :param project_root: The checkout to copy it into.
     """
     shutil.copytree(
-        PACKAGE_DIRECTORY,
-        project_root / PACKAGE_DIRECTORY.name,
+        PackageLocation.DIRECTORY,
+        project_root / ProjectLocation.PACKAGE,
         ignore=shutil.ignore_patterns("__pycache__"),
         dirs_exist_ok=True,
     )
@@ -81,7 +80,7 @@ class SetupPrerequisiteFile(StrEnum):
     The package holding every module the hooks and skills run.
     """
 
-    REFRESH_DASHBOARD = ".claude/skills/plan-dashboard/refresh_dashboard.sh"
+    REFRESH_DASHBOARD = str(SkillDirectory.PLAN_DASHBOARD / "refresh_dashboard.sh")
     """
     The refresh entry point the plan-dashboard skill runs.
     """
@@ -92,7 +91,7 @@ class SetupPrerequisiteFile(StrEnum):
     check-setup.sh derives the dependency check from.
     """
 
-    PLAN_SCHEMA = ".claude/skills/plan-dashboard/plan-schema.md"
+    PLAN_SCHEMA = str(SkillDirectory.PLAN_DASHBOARD / "plan-schema.md")
     """
     The manifest field reference.
     """
@@ -213,7 +212,7 @@ class ScratchRepository:
         :return: The new scratch repository.
         """
         project_root = parent_directory / "project"
-        (project_root / ".claude" / "hooks").mkdir(parents=True)
+        (project_root / ProjectLocation.HOOKS).mkdir(parents=True)
         repository = cls(
             project_root,
             initialize_bare_repository(parent_directory / "personal-notes.git"),
@@ -294,10 +293,11 @@ class ScratchRepository:
         :return: The path :func:`basstler.stack.load_configuration` should be pointed at.
         """
         self.install_hook_scripts(
-            Path(basstler.stack.PERSONAL_NOTES_CONFIGURATION_SCRIPT).name
+            ProjectLocation.PERSONAL_NOTES_CONFIGURATION_SCRIPT.value.name
         )
         written = self.write(
-            f"{PACKAGE_DIRECTORY.name}/{basstler.stack.CONFIGURATION_PATH.name}", content
+            f"{ProjectLocation.PACKAGE}/{PackageLocation.STACK_CONFIGURATION.value.name}",
+            content,
         )
         self.commit_everything("add stack.toml")
         return written
@@ -317,7 +317,9 @@ class ScratchRepository:
         of that script must not find it already there - which is why this is a named
         step rather than part of building the repository.
         """
-        shutil.copytree(SET_UP_CLONE_DATASET, self.project_root, dirs_exist_ok=True)
+        shutil.copytree(
+            DatasetLocation.SET_UP_CLONE, self.project_root, dirs_exist_ok=True
+        )
 
     def run_hook_script(
         self,
@@ -328,7 +330,7 @@ class ScratchRepository:
         """
         Run one of the installed hook scripts from the project root, against an
         environment scrubbed of everything that could change what a test asserts (see
-        :data:`SCRUBBED_ENVIRONMENT_PREFIXES`).
+        :class:`ScrubbedEnvironmentPrefix`).
 
         Returns the finished process rather than asserting on it, since a hook's exit
         code and stderr are often what a test is about.
@@ -341,11 +343,11 @@ class ScratchRepository:
         """
         return BashScriptRunner(
             project_root=self.project_root,
-            removed_variable_prefixes=SCRUBBED_ENVIRONMENT_PREFIXES,
-            script_path=self.project_root / ToolingDirectory.HOOKS / script_name,
+            removed_variable_prefixes=tuple(ScrubbedEnvironmentPrefix),
+            script_path=self.project_root / ProjectLocation.HOOKS / script_name,
         ).run(*arguments, **environment_overrides)
 
-    def write(self, relative_path: str, content: str) -> Path:
+    def write(self, relative_path: str | os.PathLike[str], content: str) -> Path:
         """
         Write a file in the project root, creating any missing parent directories.
 
@@ -367,7 +369,7 @@ class ScratchRepository:
         self.run_git("add", "--all")
         self.run_git("commit", "--quiet", "-m", message)
 
-    def publish_notes_branch(self, files: Mapping[str, str]) -> None:
+    def publish_notes_branch(self, files: Mapping[str | os.PathLike[str], str]) -> None:
         """
         Push *files* to the notes branch on the notes remote, then leave the repository
         on a work branch that does not carry them.
@@ -377,29 +379,33 @@ class ScratchRepository:
 
         :param files: File contents, keyed by path relative to the project root.
         """
-        self.run_git("checkout", "--quiet", "-b", NOTES_BRANCH)
+        self.run_git("checkout", "--quiet", "-b", ScratchBranch.PERSONAL_NOTES)
         for relative_path, content in files.items():
             self.write(relative_path, content)
         self.commit_everything("bootstrap personal-notes")
-        self.run_git("push", "--quiet", str(self.notes_remote_path), NOTES_BRANCH)
+        self.run_git(
+            "push", "--quiet", str(self.notes_remote_path), ScratchBranch.PERSONAL_NOTES
+        )
 
-        self.run_git("checkout", "--quiet", "-b", WORK_BRANCH)
+        self.run_git("checkout", "--quiet", "-b", ScratchBranch.WORK)
         for relative_path in files:
             (self.project_root / relative_path).unlink()
         self.commit_everything("drop the notes from the work branch")
 
-    def remove_from_notes_branch(self, relative_path: str) -> None:
+    def remove_from_notes_branch(self, relative_path: str | os.PathLike[str]) -> None:
         """
         Delete a file from the notes branch and push the deletion, for the tests whose
         subject is a notes branch that carries everything except one thing.
 
         :param relative_path: Path relative to the project root.
         """
-        self.run_git("checkout", "--quiet", NOTES_BRANCH)
+        self.run_git("checkout", "--quiet", ScratchBranch.PERSONAL_NOTES)
         (self.project_root / relative_path).unlink()
         self.commit_everything(f"drop {relative_path}")
-        self.run_git("push", "--quiet", str(self.notes_remote_path), NOTES_BRANCH)
-        self.run_git("checkout", "--quiet", WORK_BRANCH)
+        self.run_git(
+            "push", "--quiet", str(self.notes_remote_path), ScratchBranch.PERSONAL_NOTES
+        )
+        self.run_git("checkout", "--quiet", ScratchBranch.WORK)
 
     def clone_notes_branch(self, destination: Path) -> Path:
         """
@@ -413,13 +419,15 @@ class ScratchRepository:
             "clone",
             "--quiet",
             "--branch",
-            NOTES_BRANCH,
+            ScratchBranch.PERSONAL_NOTES,
             str(self.notes_remote_path),
             str(destination),
         )
         return destination
 
-    def update_notes_branch_file(self, relative_path: str, content: str) -> None:
+    def update_notes_branch_file(
+        self, relative_path: str | os.PathLike[str], content: str
+    ) -> None:
         """
         Change one file on the already-published notes branch, the way an edit made from
         another clone would reach it.
@@ -438,7 +446,9 @@ class ScratchRepository:
         destination.write_text(content)
         self.run_git("add", relative_path, cwd=checkout)
         self.run_git("commit", "--quiet", "-m", f"Set {relative_path}", cwd=checkout)
-        self.run_git("push", "--quiet", "origin", NOTES_BRANCH, cwd=checkout)
+        self.run_git(
+            "push", "--quiet", "origin", ScratchBranch.PERSONAL_NOTES, cwd=checkout
+        )
         shutil.rmtree(checkout)
 
     def add_work_remote(self) -> Path:

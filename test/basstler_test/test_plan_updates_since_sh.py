@@ -19,10 +19,11 @@ from pathlib import Path
 
 import pytest
 
-from .constants import ToolingDirectory
+from basstler.locations import ProjectLocation
+
+from .constants import DatasetLocation, ScratchBranch
 from .script_runner import BashScriptRunner
 
-from .constants import DATASET_DIRECTORY
 from .executable_stubs import (
     ExecutableStubDirectory,
     path_hiding_executable,
@@ -37,18 +38,20 @@ from basstler.plan_updates_since_support import (
 )
 from .scratch_repository import ScratchRepository
 
-PLAN_MANIFEST_NOT_STARTED = (DATASET_DIRECTORY / "plan.yaml").read_text()
-PLAN_MANIFEST_IN_PROGRESS = (DATASET_DIRECTORY / "plan-in-progress.yaml").read_text()
+PLAN_MANIFEST_NOT_STARTED = (DatasetLocation.DIRECTORY / "plan.yaml").read_text()
+PLAN_MANIFEST_IN_PROGRESS = (
+    DatasetLocation.DIRECTORY / "plan-in-progress.yaml"
+).read_text()
 PLAN_MANIFEST_WITH_TRACKING_ISSUE = (
-    DATASET_DIRECTORY / "plan-with-tracking-issue.yaml"
+    DatasetLocation.DIRECTORY / "plan-with-tracking-issue.yaml"
 ).read_text()
 PLAN_MANIFEST_TRACKING_ISSUE_NO_REPOSITORY = (
-    DATASET_DIRECTORY / "plan-tracking-issue-no-repository.yaml"
+    DatasetLocation.DIRECTORY / "plan-tracking-issue-no-repository.yaml"
 ).read_text()
-PLAN_ROADMAP = (DATASET_DIRECTORY / "roadmap.md").read_text()
+PLAN_ROADMAP = (DatasetLocation.DIRECTORY / "roadmap.md").read_text()
 
 PLAN_ID = "test-plan"
-STAMP_RELATIVE_PATH = ".claude/.plan-state-sync-sha"
+STAMP_RELATIVE_PATH = ProjectLocation.CLAUDE_CODE_DIRECTORY / ".plan-state-sync-sha"
 
 TRACKING_ISSUE_REPOSITORY = "octo-org/octo-repo"
 """
@@ -113,7 +116,7 @@ def scratch_repo(scratch_repository: ScratchRepository) -> ScratchRepository:
     """
     install_plan_updates_since(scratch_repository)
     scratch_repository.publish_notes_branch(
-        {".claude/personal/placeholder.md": "notes\n"}
+        {ProjectLocation.PERSONAL_NOTES / "placeholder.md": "notes\n"}
     )
     scratch_repository.resolve_notes_remote_to()
     return scratch_repository
@@ -147,20 +150,20 @@ def write_plan_commit(
         "clone",
         "--quiet",
         "--branch",
-        "claude/personal-notes",
+        ScratchBranch.PERSONAL_NOTES,
         str(repository.notes_remote_path),
         str(checkout),
         cwd=repository.project_root.parent,
     )
     _run_git("config", "user.name", "Scratch Repo", cwd=checkout)
     _run_git("config", "user.email", "scratch-repo@example.com", cwd=checkout)
-    plan_directory = checkout / ".claude" / "personal" / "plans" / plan_id
+    plan_directory = checkout / ProjectLocation.PLANS / plan_id
     plan_directory.mkdir(parents=True, exist_ok=True)
     (plan_directory / "plan.yaml").write_text(manifest)
     (plan_directory / "roadmap.md").write_text(roadmap)
-    _run_git("add", f".claude/personal/plans/{plan_id}", cwd=checkout)
+    _run_git("add", str(plan_directory), cwd=checkout)
     _run_git("commit", "--quiet", "-m", message, cwd=checkout)
-    _run_git("push", "--quiet", "origin", "claude/personal-notes", cwd=checkout)
+    _run_git("push", "--quiet", "origin", ScratchBranch.PERSONAL_NOTES, cwd=checkout)
     sha = _run_git("rev-parse", "HEAD", cwd=checkout).stdout.strip()
     shutil.rmtree(checkout)
     return sha
@@ -182,7 +185,7 @@ def run_plan_updates_since(
         project_root=repository.project_root,
         removed_variable_prefixes=REMOVED_VARIABLE_PREFIXES,
         script_path=(
-            repository.project_root / ToolingDirectory.HOOKS / "plan-updates-since.sh"
+            repository.project_root / ProjectLocation.HOOKS / "plan-updates-since.sh"
         ),
     ).run(*arguments, **(env or {}))
 
