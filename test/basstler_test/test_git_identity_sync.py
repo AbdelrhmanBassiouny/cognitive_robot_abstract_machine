@@ -16,7 +16,9 @@ import subprocess
 
 import pytest
 
-from .constants import NOTES_BRANCH, PersonalNotesPath
+from basstler.locations import ProjectLocation
+
+from .constants import PersonalNotesPath, ScratchBranch
 from .scratch_repository import SCRATCH_IDENTITY, GitIdentity, ScratchRepository
 from .session_start_summary import SummaryMessage, summary_message, summary_value
 
@@ -70,7 +72,7 @@ def publish_notes_branch(
     :param identity_file: The git-identity file's contents, or ``None`` to publish a
         notes branch that records no identity at all.
     """
-    files = {PersonalNotesPath.NOTES_FILE: "personal notes\n"}
+    files = {ProjectLocation.PERSONAL_NOTES_DOCUMENT: "personal notes\n"}
     if identity_file is not None:
         files[PersonalNotesPath.GIT_IDENTITY] = identity_file
     repository.publish_notes_branch(files)
@@ -115,7 +117,7 @@ def test_reports_the_identity_it_set(git_identity_repository: ScratchRepository)
 
     assert summary_value(result.stdout, SUMMARY_LABEL) == summary_message(
         SummaryMessage.GIT_IDENTITY_WRITTEN,
-        NOTES_BRANCH,
+        ScratchBranch.PERSONAL_NOTES,
         PersonalNotesPath.GIT_IDENTITY,
         f"{RECORDED_IDENTITY.name} <{RECORDED_IDENTITY.email}>",
     )
@@ -176,7 +178,7 @@ def test_reports_that_no_identity_is_recorded(
 
     assert summary_value(result.stdout, SUMMARY_LABEL) == summary_message(
         SummaryMessage.NO_GIT_IDENTITY_RECORDED,
-        NOTES_BRANCH,
+        ScratchBranch.PERSONAL_NOTES,
         PersonalNotesPath.GIT_IDENTITY,
     )
 
@@ -206,7 +208,7 @@ def test_names_what_an_incomplete_recording_is_missing(
     assert summary_value(result.stdout, SUMMARY_LABEL) == summary_message(
         SummaryMessage.GIT_IDENTITY_INCOMPLETE,
         PersonalNotesPath.GIT_IDENTITY,
-        NOTES_BRANCH,
+        ScratchBranch.PERSONAL_NOTES,
     )
 
 

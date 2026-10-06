@@ -15,7 +15,7 @@ import re
 
 GITHUB_API_ROOT = "https://api.github.com"
 """
-Base URL every REST call the executor makes is built on.
+Base URL every GitHub REST call this package makes is built on.
 """
 
 CREDENTIAL_VARIABLES = ("GH_TOKEN", "GITHUB_TOKEN")
