@@ -6,14 +6,20 @@ soundtrack they are laid on.
 
 from __future__ import annotations
 
+import sys
+import types
 from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
 import pytest
 
+from experiments.video.cache import SceneCache
 from experiments.video.narration import (
+    BREATH_AFTER,
+    BREATH_BEFORE,
     BURNED_IN_ROOM,
+    KokoroVoice,
     LEAD,
     NarratedScene,
     Narration,
@@ -22,6 +28,7 @@ from experiments.video.narration import (
     Sound,
     Soundtrack,
     Speech,
+    SPEECH_PEAK,
     SpokenLine,
     Storyboard,
     SubtitleCue,
@@ -39,7 +46,12 @@ from experiments.video.timeline import (
     Timeline,
 )
 
-from .voices import EvenlyPacedVoice
+from .voices import (
+    EvenlyPacedVoice,
+    TONE_RATE,
+    TONE_SECONDS_PER_WORD,
+    ToneSpeechModel,
+)
 
 
 def spoken(text: str, starts: float, seconds: float, rate: int = 100) -> SpokenLine:
@@ -78,6 +90,65 @@ def test_a_soundtrack_is_written_as_a_wave_file(tmp_path: Path) -> None:
     narration = Narration([spoken("a", 1.0, 1.0)])
     path = narration.soundtrack(runs_for=3.0).written_to(tmp_path / "track.wav")
     assert Sound.read_from(path).duration == pytest.approx(3.0)
+
+
+# %% the pace of a line and the speech kept of it
+
+
+def test_a_line_at_half_pace_takes_twice_as_long_to_say() -> None:
+    voice = EvenlyPacedVoice()
+    at_its_pace = Line("one two three").spoken_by(voice)
+    slowed = Line("one two three", pace=0.5).spoken_by(voice)
+    assert slowed.duration == pytest.approx(2 * at_its_pace.duration)
+
+
+def test_lines_said_in_turn_are_each_measured_at_their_own_pace() -> None:
+    lines = [Line("one two", pace=0.5), Line("three")]
+    assert starts_of(EvenlyPacedVoice(), lines, pause=0.5) == pytest.approx([0.0, 2.5])
+
+
+def test_speech_is_trimmed_to_its_sound_keeping_a_breath_before_and_after() -> None:
+    rate = 1000
+    samples = np.zeros(3 * rate, dtype=np.float32)
+    samples[rate : 2 * rate] = 0.5
+    trimmed = Speech(samples, rate).trimmed()
+    assert isinstance(trimmed, Speech)
+    assert trimmed.duration == pytest.approx(1.0 + BREATH_BEFORE + BREATH_AFTER)
+
+
+def test_speech_with_no_sound_is_kept_whole_when_trimmed() -> None:
+    silence = Speech(np.zeros(100, dtype=np.float32), 100)
+    assert silence.trimmed() == silence
+
+
+def test_speech_is_levelled_so_its_loudest_sample_reaches_the_speech_peak() -> None:
+    samples = np.array([0.1, -0.25, 0.2], dtype=np.float32)
+    levelled = Speech(samples, 100).levelled()
+    assert levelled.samples == pytest.approx(samples * SPEECH_PEAK / 0.25)
+
+
+def test_silence_is_left_as_it_is_when_levelled() -> None:
+    silence = Speech(np.zeros(10, dtype=np.float32), 100)
+    assert silence.levelled() == silence
+
+
+def test_the_kokoro_voice_says_a_line_at_its_pace_trimmed_and_levelled(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    speech_model = types.ModuleType("kokoro_onnx")
+    speech_model.Kokoro = ToneSpeechModel
+    monkeypatch.setitem(sys.modules, "kokoro_onnx", speech_model)
+    voice = KokoroVoice(speed=1.0, cache=SceneCache("narration", root=tmp_path))
+    slowed = Line("one two", pace=0.5).spoken_by(voice)
+    at_its_pace = Line("one two").spoken_by(voice)
+    breath = BREATH_BEFORE + BREATH_AFTER
+    assert slowed.duration == pytest.approx(
+        2 * TONE_SECONDS_PER_WORD / 0.5 + breath, abs=1 / TONE_RATE
+    )
+    assert at_its_pace.duration == pytest.approx(
+        2 * TONE_SECONDS_PER_WORD + breath, abs=1 / TONE_RATE
+    )
+    assert np.abs(slowed.samples).max() == pytest.approx(SPEECH_PEAK, abs=1e-4)
 
 
 # %% subtitles

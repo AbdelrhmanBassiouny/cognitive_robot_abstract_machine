@@ -16,7 +16,7 @@ import hashlib
 import re
 import wave
 from itertools import product
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 
 import numpy as np
@@ -72,6 +72,27 @@ LOUDEST_SAMPLE = 2 ** (8 * SAMPLE_WIDTH - 1) - 1
 The largest value a sixteen-bit sample holds, which a sound at full scale is written as.
 """
 
+SILENCE_LEVEL = 0.01
+"""
+The loudest a sample may be and still count as silence around a spoken line.
+"""
+
+BREATH_BEFORE = 0.03
+"""
+Seconds of quiet kept before the first sound of a line, so its first word is not cut.
+"""
+
+BREATH_AFTER = 0.12
+"""
+Seconds of quiet kept after the last sound of a line: the natural tail of its last word.
+"""
+
+SPEECH_PEAK = 0.89
+"""
+The loudest sample of every spoken line, so every line is said at one loudness and none
+clips.
+"""
+
 CLAUSE_END_WORD = re.compile(r"[.;:?!,—]$")
 """
 A word a subtitle had better end after: one that ends a clause with its punctuation.
@@ -113,12 +134,25 @@ class Line:
     Empty when the two agree.
     """
 
+    pace: float = 1.0
+    """
+    How fast the line is said, as a share of the voice's own speed: below one for a line
+    the viewer needs time to follow.
+    """
+
     @property
     def said(self) -> str:
         """
         What the voice is given to say.
         """
         return self.spoken or self.written
+
+    def spoken_by(self, voice: Voice) -> Speech:
+        """
+        :param voice: What says the line.
+        :return: The line, said at its pace.
+        """
+        return voice.speaks(self.said, self.pace)
 
 
 @dataclass(frozen=True)
@@ -176,15 +210,40 @@ class Speech(Sound):
     A line spoken, as sound.
     """
 
+    def trimmed(self) -> Speech:
+        """
+        :return: The speech without the silence around it, keeping a breath before its
+            first sound and after its last; all of it where it holds no sound.
+        """
+        loud = np.flatnonzero(np.abs(self.samples) > SILENCE_LEVEL)
+        if loud.size == 0:
+            return self
+        first = max(0, loud[0] - int(BREATH_BEFORE * self.rate))
+        after_last = min(
+            len(self.samples), loud[-1] + 1 + int(BREATH_AFTER * self.rate)
+        )
+        return replace(self, samples=self.samples[first:after_last])
+
+    def levelled(self) -> Speech:
+        """
+        :return: The speech scaled so its loudest sample reaches :data:`SPEECH_PEAK`;
+            silence as it is.
+        """
+        loudest = float(np.abs(self.samples).max(initial=0.0))
+        if loudest == 0.0:
+            return self
+        return replace(self, samples=self.samples * (SPEECH_PEAK / loudest))
+
 
 class Voice(Protocol):
     """
     Whatever turns a line into speech.
     """
 
-    def speaks(self, text: str) -> Speech:
+    def speaks(self, text: str, pace: float = 1.0) -> Speech:
         """
         :param text: What to say.
+        :param pace: How fast, as a share of the voice's own speed.
         :return: It, said.
         """
 
@@ -236,25 +295,31 @@ class KokoroVoice:
     Where the lines said are kept.
     """
 
-    def speaks(self, text: str) -> Speech:
-        kept = self.cache.directory / f"{self._key(text)}.wav"
+    def speaks(self, text: str, pace: float = 1.0) -> Speech:
+        speed = self.speed * pace
+        kept = self.cache.directory / f"{self._key(text, speed)}.wav"
         if not kept.exists():
-            self._synthesize(text).written_to(kept)
+            self._synthesize(text, speed).written_to(kept)
         return Speech.read_from(kept)
 
-    def _key(self, text: str) -> str:
-        said = f"{self.voice}|{self.speed}|{self.language}|{text}"
+    def _key(self, text: str, speed: float) -> str:
+        # what the speech is trimmed and levelled to is part of the key, so changing it
+        # says every line again rather than reusing speech cut the old way
+        said = (
+            f"{self.voice}|{speed}|{self.language}|"
+            f"{BREATH_BEFORE}|{BREATH_AFTER}|{SPEECH_PEAK}|{text}"
+        )
         return hashlib.sha1(said.encode()).hexdigest()
 
-    def _synthesize(self, text: str) -> Speech:
+    def _synthesize(self, text: str, speed: float) -> Speech:
         # the speech model is an optional dependency, the ``video`` extra
         from kokoro_onnx import Kokoro
 
         model = Kokoro(str(self.model), str(self.voices))
         samples, rate = model.create(
-            text, voice=self.voice, speed=self.speed, lang=self.language
+            text, voice=self.voice, speed=speed, lang=self.language
         )
-        return Speech(samples.astype(np.float32), rate)
+        return Speech(samples.astype(np.float32), rate).trimmed().levelled()
 
 
 # %% a line placed in time
@@ -775,7 +840,7 @@ def starts_of(voice: Voice, lines: Sequence[Line], pause: float) -> List[float]:
     at = 0.0
     for line in lines:
         starts.append(at)
-        at += voice.speaks(line.said).duration + pause
+        at += line.spoken_by(voice).duration + pause
     return starts
 
 
@@ -816,7 +881,7 @@ class Storyboard:
         for each in self.narrated:
             if not each.lines or each.runs_on or not isinstance(each.scene, HeldScene):
                 continue
-            said = sum(voice.speaks(line.said).duration for line in each.lines)
+            said = sum(line.spoken_by(voice).duration for line in each.lines)
             needed = (
                 LEAD
                 + each.delay
@@ -842,7 +907,7 @@ class Storyboard:
             for number, line in enumerate(each.lines):
                 spoken.append(
                     SpokenLine(
-                        line, at + each.wait_before(number), voice.speaks(line.said)
+                        line, at + each.wait_before(number), line.spoken_by(voice)
                     )
                 )
                 at = spoken[-1].ends + self.pause
