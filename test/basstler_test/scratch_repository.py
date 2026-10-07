@@ -10,20 +10,21 @@ notes remote - so no test needs network access or a real personal-notes branch.
 from __future__ import annotations
 
 import os
+import re
 import shutil
 import subprocess
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
 
 from .script_runner import BashScriptRunner
-from basstler.locations import PackageLocation, ProjectLocation
+from basstler.locations import HookScript, PackageLocation, ProjectLocation
 
 from .constants import (
+    SCRUBBED_VARIABLE_PREFIXES,
     DatasetLocation,
     ScratchBranch,
-    ScrubbedEnvironmentPrefix,
     SkillDirectory,
 )
 
@@ -33,17 +34,79 @@ The real hooks directory the scripts under test are copied from.
 """
 
 
-def install_hook_scripts_into(project_root: Path, *script_names: str) -> None:
+SOURCED_SCRIPT_PATTERN = re.compile(r'source\s+"([^"]+)"')
+"""
+A shell ``source`` of a quoted path, the form every hook script uses to reach another.
+
+Only the ones ending in a hook script's own file name are followed; a path composed
+entirely through a variable names nothing readable here, so that script stays the
+caller's to install.
+"""
+
+
+class ShellProgram(StrEnum):
     """
-    Copy the real hook scripts under test into a checkout.
+    The shell programs the tests run to observe what the hooks' own shell knows.
+
+    Each is a file rather than a string built in Python, so what runs is readable,
+    executable and syntax-highlighted as the shell it is.
+    """
+
+    PRINT_UPSTREAM_REMOTE = "print_upstream_remote.sh"
+    """
+    Calls ``current_branch_upstream_remote`` the way its strict-mode caller does.
+    """
+
+    @property
+    def path(self) -> Path:
+        """
+        The program's absolute path.
+        """
+        return DatasetLocation.SHELL_PROGRAMS / self.value
+
+
+def hook_scripts_with_dependencies(scripts: Iterable[HookScript]) -> list[HookScript]:
+    """
+    Close a set of hook scripts over the siblings they ``source``, transitively.
+
+    Reading each script's own dependencies rather than asking every caller to list them
+    is what keeps them stated once, in the script itself: a hook that grows one does not
+    silently break every test module that installs it.
+
+    :param scripts: The scripts asked for.
+    :return: Those scripts and their dependencies, each once.
+    """
+    by_file_name = {script.value: script for script in HookScript}
+    resolved: dict[HookScript, None] = {}
+    pending = list(scripts)
+    while pending:
+        script = pending.pop()
+        if script in resolved:
+            continue
+        resolved[script] = None
+        sourced = SOURCED_SCRIPT_PATTERN.findall(
+            (HOOKS_SOURCE_DIRECTORY / script.value).read_text()
+        )
+        pending.extend(
+            by_file_name[Path(path).name]
+            for path in sourced
+            if Path(path).name in by_file_name
+        )
+    return list(resolved)
+
+
+def install_hook_scripts_into(project_root: Path, *scripts: HookScript) -> None:
+    """
+    Copy the real hook scripts under test into a checkout, along with every sibling they
+    ``source``.
 
     :param project_root: The checkout to copy them into.
-    :param script_names: File names within the hooks directory.
+    :param scripts: The scripts to install.
     """
     hooks_directory = project_root / ProjectLocation.HOOKS
     hooks_directory.mkdir(parents=True, exist_ok=True)
-    for script_name in script_names:
-        shutil.copy(HOOKS_SOURCE_DIRECTORY / script_name, hooks_directory / script_name)
+    for script in hook_scripts_with_dependencies(scripts):
+        shutil.copy(HOOKS_SOURCE_DIRECTORY / script.value, project_root / script.path)
 
 
 def install_package_into(project_root: Path) -> None:
@@ -230,6 +293,22 @@ class ScratchRepository:
         self.run_git("config", "--unset", "user.name")
         self.run_git("config", "--unset", "user.email")
 
+    def has_upstream(self) -> bool:
+        """
+        Report whether the current branch tracks a remote.
+
+        A branch created locally and never pushed has none, which is the state every
+        scratch repository starts in and the one several hooks have to keep working in.
+
+        :return: Whether an upstream is configured.
+        """
+        return (
+            self.run_git_allowing_failure(
+                "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}"
+            ).returncode
+            == 0
+        )
+
     def local_git_identity(self) -> GitIdentity | None:
         """
         Read the identity configured in this repository's own config.
@@ -276,13 +355,23 @@ class ScratchRepository:
             text=True,
         )
 
-    def install_hook_scripts(self, *script_names: str) -> None:
+    def install_hook_scripts(self, *scripts: HookScript) -> None:
         """
-        Copy the real hook scripts under test into the scratch layout.
+        Copy the real hook scripts under test into the scratch layout, along with every
+        sibling they ``source``.
 
-        :param script_names: File names within the hooks directory.
+        :param scripts: The scripts to install.
         """
-        install_hook_scripts_into(self.project_root, *script_names)
+        install_hook_scripts_into(self.project_root, *scripts)
+
+    def hook_script_path(self, script: HookScript) -> Path:
+        """
+        Where a hook script sits in the scratch layout.
+
+        :param script: The script to locate.
+        :return: Its absolute path.
+        """
+        return self.project_root / script.path
 
     def install_stack_configuration(self, content: str) -> Path:
         """
@@ -292,9 +381,7 @@ class ScratchRepository:
         :param content: The configuration to write.
         :return: The path :func:`basstler.stack.load_configuration` should be pointed at.
         """
-        self.install_hook_scripts(
-            ProjectLocation.PERSONAL_NOTES_CONFIGURATION_SCRIPT.value.name
-        )
+        self.install_hook_scripts(HookScript.CONFIGURATION)
         written = self.write(
             f"{ProjectLocation.PACKAGE}/{PackageLocation.STACK_CONFIGURATION.value.name}",
             content,
@@ -323,19 +410,19 @@ class ScratchRepository:
 
     def run_hook_script(
         self,
-        script_name: str,
+        script: HookScript,
         *arguments: str,
         **environment_overrides: str,
     ) -> subprocess.CompletedProcess[str]:
         """
         Run one of the installed hook scripts from the project root, against an
         environment scrubbed of everything that could change what a test asserts (see
-        :class:`ScrubbedEnvironmentPrefix`).
+        :data:`SCRUBBED_VARIABLE_PREFIXES`).
 
         Returns the finished process rather than asserting on it, since a hook's exit
         code and stderr are often what a test is about.
 
-        :param script_name: File name within the scratch layout's hooks directory.
+        :param script: The installed script to run.
         :param arguments: The arguments to pass to the script.
         :param environment_overrides: Variables to set for this run, for the tests that
             exercise resolution from the environment.
@@ -343,8 +430,8 @@ class ScratchRepository:
         """
         return BashScriptRunner(
             project_root=self.project_root,
-            removed_variable_prefixes=tuple(ScrubbedEnvironmentPrefix),
-            script_path=self.project_root / ProjectLocation.HOOKS / script_name,
+            removed_variable_prefixes=SCRUBBED_VARIABLE_PREFIXES,
+            script_path=self.hook_script_path(script),
         ).run(*arguments, **environment_overrides)
 
     def write(self, relative_path: str | os.PathLike[str], content: str) -> Path:
@@ -424,6 +511,20 @@ class ScratchRepository:
             str(destination),
         )
         return destination
+
+    def notes_branch_commit(self) -> str | None:
+        """
+        Read the commit the notes branch points at on the notes remote, for asserting
+        that a re-run pushed nothing rather than trusting it said so.
+
+        :return: The commit hash, or ``None`` if the branch isn't on the remote at all.
+        """
+        result = self.run_git(
+            "ls-remote", str(self.notes_remote_path), ScratchBranch.PERSONAL_NOTES
+        )
+        if not result.stdout.strip():
+            return None
+        return result.stdout.split()[0]
 
     def update_notes_branch_file(
         self, relative_path: str | os.PathLike[str], content: str

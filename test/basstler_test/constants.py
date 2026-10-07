@@ -14,6 +14,7 @@ from enum import StrEnum
 from pathlib import Path
 
 from basstler.locations import PathEnumeration, ProjectLocation
+from basstler.maintenance_constants import CREDENTIAL_VARIABLES
 
 
 class DatasetLocation(PathEnumeration):
@@ -30,6 +31,12 @@ class DatasetLocation(PathEnumeration):
     """
     Executables copied onto a scratch ``PATH`` to stand in for a real ``gh``, ``curl`` or
     hook script.
+    """
+
+    SHELL_PROGRAMS = DIRECTORY / "scripts"
+    """
+    Shell programs a test runs to observe what the hooks' own shell knows, each in a file
+    of its own rather than built as a string.
     """
 
     UPSTREAM_REVIEW_RESPONSES = DIRECTORY / "upstream-review-responses"
@@ -71,37 +78,6 @@ class StackBranch(StrEnum):
     CHILD = "a-child"
     """
     Stacked directly on the parent.
-    """
-
-
-class StackLabel(StrEnum):
-    """
-    The labels the workflow under test reads and writes, named once for every suite that
-    puts one on a pull request.
-
-    A label is written into a board entry, handed to a command and read back in an
-    assertion, so a suite that spells it is holding the code to a name nothing else in
-    the suite has to agree with.
-    """
-
-    IN_REVIEW = "in-review"
-    """
-    Carried by a branch that has reached the upstream review queue.
-    """
-
-    REBASE = "rebase"
-    """
-    Authorises rewriting a branch's published history rather than merging into it.
-    """
-
-    NEEDS_RESOLUTION = "needs-resolution"
-    """
-    Put on a branch whose owner has been asked to resolve a conflict.
-    """
-
-    BUG = "bug"
-    """
-    Carried by a fix, and never acted on by this tooling - a label it reads past.
     """
 
 
@@ -170,6 +146,31 @@ class PersonalNotesPath(PathEnumeration):
     """
 
 
+class ProjectFile(PathEnumeration):
+    """
+    The files in a clone that the hooks read, write or check by fixed convention, relative
+    to the project root.
+
+    Anything a contributor can redirect - the notes path among them - is resolved from
+    ``resolve-personal-notes-config.sh`` at run time instead.
+    """
+
+    CLAUDE_LOCAL_MD = Path("CLAUDE.local.md")
+    """
+    What session-start.sh writes the personal notes and plan state into.
+    """
+
+    GIT_IGNORE = Path(".gitignore")
+    """
+    Where ``CLAUDE.local.md`` is excluded, so notes can never be committed.
+    """
+
+    CLAUDE_SETTINGS = ProjectLocation.CLAUDE_CODE_DIRECTORY / "settings.json"
+    """
+    The committed settings registering the SessionStart hook.
+    """
+
+
 class ScrubbedEnvironmentPrefix(StrEnum):
     """
     Variables a scratch run must not inherit, by the prefix of their name.
@@ -193,3 +194,16 @@ class ScrubbedEnvironmentPrefix(StrEnum):
     """
     The committer git would otherwise take from the configuration.
     """
+
+    GITHUB_CLI_HOST = "GH_HOST"
+    """
+    The host the ``gh`` CLI lends a stored token for, which a real value could redirect.
+    """
+
+
+SCRUBBED_VARIABLE_PREFIXES = (*ScrubbedEnvironmentPrefix, *CREDENTIAL_VARIABLES)
+"""
+Everything stripped from a hook's environment before a test runs it: the families above,
+and the GitHub credential variables the package reads, so a test never reaches GitHub with
+whatever its caller has set. A whole variable name is its own prefix.
+"""

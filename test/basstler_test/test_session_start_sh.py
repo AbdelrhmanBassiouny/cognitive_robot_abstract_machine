@@ -20,10 +20,14 @@ from pathlib import Path
 
 import pytest
 
-from basstler.locations import ProjectLocation
+from basstler.locations import HookScript, ProjectLocation
 
 from .constants import DatasetLocation, PersonalNotesPath, ScratchBranch
-from .executable_stubs import ExecutableStubDirectory, path_hiding_executable
+from .executable_stubs import (
+    ExecutableStubDirectory,
+    StubbedExecutable,
+    path_hiding_executable,
+)
 from .scratch_repository import SCRATCH_IDENTITY, ScratchRepository
 from .session_start_summary import SummaryMessage, summary_message, summary_value
 
@@ -71,10 +75,10 @@ def session_start_repository(
     :return: The same repository, ready to publish a notes branch and run the hook.
     """
     scratch_repository.install_hook_scripts(
-        "resolve-personal-notes-config.sh",
-        "session-start-messages.sh",
-        "session-start.sh",
-        "check-setup.sh",
+        HookScript.CONFIGURATION,
+        HookScript.SESSION_START_MESSAGES,
+        HookScript.SESSION_START,
+        HookScript.CHECK_SETUP,
     )
     scratch_repository.install_package()
     scratch_repository.write_setup_prerequisites()
@@ -93,7 +97,7 @@ def run_session_start(
     :param environment_overrides: Variables to set for this run.
     :return: The finished subprocess.
     """
-    return repository.run_hook_script("session-start.sh", **environment_overrides)
+    return repository.run_hook_script(HookScript.SESSION_START, **environment_overrides)
 
 
 def publish_and_run(
@@ -315,7 +319,7 @@ def test_names_every_check_that_needs_setup(
     detail = next(
         row.split("\t")[2]
         for row in session_start_repository.run_hook_script(
-            "check-setup.sh"
+            HookScript.CHECK_SETUP
         ).stdout.splitlines()
         if row.split("\t")[0] == failing_check
     )
@@ -381,7 +385,7 @@ def test_installs_nothing_when_every_dependency_is_already_installed(
     The common case, and the one that decides whether installing on every start is
     affordable: nothing is missing, so no installer runs at all.
     """
-    stub_bin.install("pip")
+    stub_bin.install(StubbedExecutable.PIP)
     call_log = tmp_path / "pip-calls"
 
     result = publish_and_run(
@@ -406,7 +410,7 @@ def test_installs_what_is_missing(
     A missing requirement is installed without anyone being asked, and the run says so.
     """
     require_the_uninstallable(session_start_repository)
-    stub_bin.install("pip")
+    stub_bin.install(StubbedExecutable.PIP)
     call_log = tmp_path / "pip-calls"
 
     result = publish_and_run(
@@ -437,7 +441,7 @@ def test_reports_a_failed_install_and_finishes_the_run(
     and no explanation.
     """
     require_the_uninstallable(session_start_repository)
-    stub_bin.install("pip")
+    stub_bin.install(StubbedExecutable.PIP)
 
     result = publish_and_run(
         session_start_repository,
@@ -487,7 +491,8 @@ def test_reports_a_missing_installer_without_failing(
     require_the_uninstallable(session_start_repository)
 
     result = publish_and_run(
-        session_start_repository, PATH=path_hiding_executable("pip", tmp_path)
+        session_start_repository,
+        PATH=path_hiding_executable(StubbedExecutable.PIP, tmp_path),
     )
 
     assert result.returncode == 0, result.stderr

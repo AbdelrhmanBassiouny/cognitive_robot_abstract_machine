@@ -19,7 +19,7 @@ import pytest
 
 import basstler.refresh_dashboard_support
 import basstler.standard_streams
-from basstler.locations import PackageLocation, ProjectLocation
+from basstler.locations import HookScript, PackageLocation, ProjectLocation
 
 from .constants import DatasetLocation, SkillDirectory
 from .scratch_repository import install_hook_scripts_into
@@ -53,7 +53,7 @@ def scratch_project_root(tmp_path: Path) -> Path:
         PLAN_DASHBOARD_DIRECTORY / "refresh_dashboard.sh",
         plan_dashboard_directory / "refresh_dashboard.sh",
     )
-    install_hook_scripts_into(tmp_path, "resolve-personal-notes-config.sh")
+    install_hook_scripts_into(tmp_path, HookScript.CONFIGURATION)
 
     # The real support module and the logging it prints through, whose own dependencies
     # are the standard library only, in a scratch package the script's

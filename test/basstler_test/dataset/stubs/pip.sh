@@ -4,7 +4,7 @@ set -uo pipefail
 # Test stub standing in for `pip`, so session-start.sh's tests can exercise
 # the install it runs without installing anything into the machine running
 # them. Copied into place as an executable named `pip`, earlier on PATH than
-# the real one; see the stub_bin fixture in conftest.py.
+# the real one; see executable_stubs.py and the stub_bin fixture in conftest.py.
 #
 # Recognizes only `install <specifier>...`, the one invocation
 # install_dependencies makes:
