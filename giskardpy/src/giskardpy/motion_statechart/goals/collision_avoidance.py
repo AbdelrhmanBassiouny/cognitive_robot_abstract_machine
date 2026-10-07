@@ -235,7 +235,7 @@ class _ExternalCollisionAvoidanceTask(_ExternalCollisionAvoidanceNode):
             context.world.root, self.tip
         )
 
-        root_V_point_on_a = (root_T_group_a @ self.group_a_P_point_on_a).to_vector3()
+        root_V_point_on_a = (root_T_group_a @ self.group_a_P_point_on_a).vector3
 
         # the position distance is not accurate, but the derivative is still correct
         a_projected_on_normal = self.root_V_contact_normal @ root_V_point_on_a
