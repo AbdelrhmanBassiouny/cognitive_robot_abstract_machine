@@ -14,8 +14,11 @@ waves:
     name: "Wave 1: General package on main"
     description: A usable video package on main, proven by rendering a minimal video in its tests.
   - id: wave-2
-    name: "Wave 2: The ICRA video on the package"
-    description: The ICRA video keeps only its own scenes and imports the rest.
+    name: "Wave 2: Built on the package"
+    description: >-
+      The ICRA video keeps only its own scenes and imports the rest; animated
+      explainer scenes (Naren's Manim reference) join the package as a second
+      kind of scene.
   - id: wave-3
     name: "Wave 3: Figure close-ups for everyone"
     description: The typst-figure scenes made general.
@@ -30,6 +33,9 @@ tracks:
   - id: figure-scenes
     name: Figure scenes
     wave: wave-3
+  - id: explainer-animation
+    name: Explainer animation
+    wave: wave-2
 
 items:
   - id: video-core
@@ -47,6 +53,14 @@ items:
       2026-09-29 (86dcf114); its first CI run failed at ORM generation (a field typed
       Sequence[...] collided with giskardpy's goal class Sequence), fixed in 2b481f16.
       Field annotations in experiments must not reuse a workspace class name.
+      2026-10-07, reconciliation with Naren's Manim explainer reference: these
+      parts change files #472 adds, so they go into #472 rather than a new PR:
+      a speed for each Line (part of the speech cache key); silence trimmed and
+      volume levelled in KokoroVoice; a boxed subtitle style beside the clear
+      band; a progress bar across the whole video drawn as a timeline overlay
+      like Subtitled; and a Theme (colours and fonts) replacing the fixed
+      neutral Inks. Still open: whether the default Theme is Naren's dark one
+      or the neutral one.
 
   - id: icra-video-on-core
     title: "#429 rebuilt on the general package, keeping only the ICRA scenes"
@@ -69,3 +83,24 @@ items:
     status: not_started
     depends_on: [icra-video-on-core]
     notes: stages.py and figure.py behind a figure abstraction, so other experiments grow close-ups from their own figures.
+
+  - id: manim-scenes
+    title: Animated explainer scenes drawn with Manim, narrated and timed by the package
+    track: explainer-animation
+    status: not_started
+    depends_on: [video-core]
+    notes: >-
+      Stacked on #472. An AnimatedScene in experiments.video.animation (its own
+      optional extra, since Manim needs cairo and pango) turns a Manim scene into
+      a timeline Scene: the storyboard hands it each line's spoken length
+      (replacing timing.json), one beat per Line (the beats-used check becomes an
+      exception), no sound or captions of its own, rendered to PNG frames or a
+      lossless clip and read back so the picture is compressed once. Ports
+      Naren's generic helpers (chip, card, box_node, arrow, check and cross
+      marks, glow, bar charts, waffle, counter, constellation, code_block,
+      chapter intro) as dataclass builders, plus the title, numbered-cards,
+      three-card overview and summary/thank-you scenes. Tests render a tiny
+      scene at low quality without LaTeX. None of the reference's paper content
+      (scenes, narration_v6, timing_v6, stills) is committed: the paper is under
+      double-blind review. Still open: whether Naren or a session of
+      Abdelrhman's writes it.
