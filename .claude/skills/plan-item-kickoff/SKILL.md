@@ -151,7 +151,9 @@ the only record it will ever have:
 
 - **`roadmap.md`**, via `record`'s `--roadmap-section` — the durable record of
   what was decided and *why*, including any assumption or open question the
-  plan carries. Not a restatement of the diff.
+  plan carries. Not a restatement of the diff, and scoped per
+  `${ROADMAP_WRITING_DOCUMENT}`: what binds future work, not a transcript of
+  how this session reached it.
 - **The PR-progress note** — the plan, what is done, and what is next, kept
   current as the work goes. Write it between `CLAUDE.local.md`'s
   `BEGIN-PR-PROGRESS`/`END-PR-PROGRESS` markers and run
