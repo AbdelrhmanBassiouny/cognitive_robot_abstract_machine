@@ -22,16 +22,19 @@ from experiments.video.canvas import DARK_THEME, VideoTheme
 from experiments.video.narration import Line
 from experiments.video.timeline import Resolution
 
+from .drawn import drawing_kept_out_of_the_checkout  # noqa: F401  autouse
 from .voices import EvenlyPacedVoice
 
 manim = pytest.importorskip("manim", reason="Manim needs cairo and pango")
 
 from experiments.video.drawing import (  # noqa: E402  imported after the skip
     AnimationPalette,
+    BarChart,
     BoxNode,
     Chip,
     CrossMark,
     Headline,
+    HorizontalBarChart,
     ManimRenderer,
     TickMark,
 )
@@ -249,3 +252,39 @@ def test_a_step_carries_what_it_draws(palette: AnimationPalette) -> None:
 
     assert step.weight == 0.5
     assert len(step.drawn) == 1
+
+
+# %% charts draw once, so a caller grows the bars it shows
+
+
+def test_a_bar_chart_grows_the_bars_it_drew(palette: AnimationPalette) -> None:
+    chart = BarChart(
+        values=(0.4, 0.8),
+        labels=("first", "second"),
+        colours=(palette.accent, palette.muted),
+        origin=(0.0, 0.0),
+        palette=palette,
+    )
+
+    drawn = chart.drawn()
+
+    assert len(drawn.bars) == len(chart.values)
+    assert all(bar in drawn.whole.submobjects for bar in [drawn.bars])
+
+
+def test_a_horizontal_bar_chart_places_its_names_against_its_own_bars(
+    palette: AnimationPalette,
+) -> None:
+    chart = HorizontalBarChart(
+        values=(1.0, 2.0),
+        labels=("first", "second"),
+        colours=(palette.accent, palette.muted),
+        origin=(0.0, 0.0),
+        scale=1.0,
+        palette=palette,
+    )
+
+    drawn = chart.drawn()
+
+    for bar, name in zip(drawn.bars, drawn.names):
+        assert name.get_right()[0] <= bar.get_left()[0] + 1e-6

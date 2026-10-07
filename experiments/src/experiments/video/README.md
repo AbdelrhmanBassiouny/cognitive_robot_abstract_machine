@@ -71,6 +71,66 @@ would, and the three letter sizes (`CLAIM_SIZE`, `BODY_SIZE`, `LABEL_SIZE`) size
 `VIDEO_RESOLUTION` (1280 × 720). Every scene leaves the bottom band of the frame clear
 for the subtitles (`Resolution.stage_height`).
 
+## Animated scenes
+
+A scene can also be drawn by Manim rather than built frame by frame, for an explainer
+that writes text on, grows bars or changes one shape into another. `animation.AnimatedScene`
+plays such a scene on the same timeline as every other, paced by the lines said over it.
+
+Its beats are the lines of its `NarratedScene`, one beat per `Line`. A beat lasts as long
+as its line plus the storyboard's pause, measured through the storyboard's voice, so
+nothing has to be timed by hand. The steps of a beat are scaled down to fit it and never
+stretched to fill it, and whatever time is left is waited out. A scene that plays a
+different number of beats than it has lines raises `BeatMiscount`.
+
+What a scene draws is a `drawing.ScenePainting`: it answers `beats_of` with the steps to
+play on each beat. `drawing.AnimationPalette.of(theme)` reads a `VideoTheme` as the
+colours Manim takes, so animated and frame built scenes look like one video. The pieces a
+scene draws are builders, each a dataclass naming what it shows: `Headline`, `Chip`,
+`Card`, `BoxNode`, `ArrowBetween`, `TickMark`, `CrossMark`, `Glow`, `BarChart`,
+`HorizontalBarChart`, `WaffleChart`, `IconRow`, `RunningCount`, `DriftingConstellation`,
+`CodePanel` and `ChapterHeader`.
+
+`scenes.py` holds scenes to start from: `TitleCard`, `NumberedCards`, `OverviewCards` and
+`ClosingCards`.
+
+An animated scene is drawn once, to a lossless clip read back as frames and kept in a
+`SceneCache` keyed by the scene and the lengths of its beats, so the picture is compressed
+only once, where the video is encoded. It draws no captions and no progress bar; the
+production draws both over every scene.
+
+```python
+from pathlib import Path
+
+from experiments.video.animation import AnimatedScene
+from experiments.video.canvas import DARK_THEME
+from experiments.video.drawing import AnimationPalette, ManimRenderer
+from experiments.video.narration import KokoroVoice, Line, NarratedScene, Storyboard
+from experiments.video.overlays import ProgressBar
+from experiments.video.production import VideoProduction
+from experiments.video.scenes import TitleCard
+
+opening = AnimatedScene(
+    renderer=ManimRenderer(
+        painting=TitleCard(heading="Pouring in simulation", standfirst="12 runs"),
+        palette=AnimationPalette.of(DARK_THEME),
+    ),
+    lines=(Line("The robot pours into a cup twelve times."),),
+    voice=KokoroVoice(),
+    pause=Storyboard(narrated=[]).pause,
+)
+storyboard = Storyboard([NarratedScene(opening, opening.lines)])
+VideoProduction(storyboard, overlays=[ProgressBar(theme=DARK_THEME)]).written_to(
+    Path("pouring.mp4")
+)
+```
+
+Manim is in its own extra, since it needs cairo and pango on the machine
+(`pip install experiments[animation]`, and `apt install libcairo2-dev libpango1.0-dev` on
+Debian or Ubuntu). Equations need LaTeX as well, so nothing the tests draw uses `MathTex`.
+Where Manim cannot be imported, the tests that render are skipped and the tests of the
+beat timing still run.
+
 ## The look
 
 A `canvas.VideoTheme` holds the colours and fonts the slides and captions are drawn

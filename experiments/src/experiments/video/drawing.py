@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import shutil
 from pathlib import Path
+from tempfile import mkdtemp
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import StrEnum
@@ -42,7 +43,6 @@ from manim import (
     VGroup,
     VMobject,
     always_redraw,
-    config,
     tempconfig,
 )
 from typing_extensions import Any, List, Optional, Sequence, Tuple
@@ -628,6 +628,54 @@ class ArrowBetween(DrawingBuilder):
 
 
 @dataclass
+class DrawnChart:
+    """
+    A chart once it has been drawn: its bars and the labels placed against them, so a
+    caller grows the same bars it shows.
+    """
+
+    bars: VGroup
+    """
+    The bars, in the order their values were given.
+    """
+
+    names: VGroup
+    """
+    The label beside each bar.
+    """
+
+    readings: VGroup
+    """
+    The value beside each bar.
+    """
+
+    axis: Optional[ManimLine] = None
+    """
+    The rule the bars stand on, where the chart draws one.
+    """
+
+    @property
+    def whole(self) -> VGroup:
+        """
+        Everything the chart draws, as one piece.
+        """
+        parts = [self.bars, self.names, self.readings]
+        if self.axis is not None:
+            parts.insert(0, self.axis)
+        return VGroup(*parts)
+
+    def grown(self, edge: Any, lag: float = 0.15) -> LaggedStart:
+        """
+        :param edge: Which edge the bars grow from, as Manim names directions.
+        :param lag: How far one bar's growth trails the one before, as a share.
+        :return: The bars growing one after another.
+        """
+        return LaggedStart(
+            *[GrowFromEdge(bar, edge) for bar in self.bars], lag_ratio=lag
+        )
+
+
+@dataclass
 class BarChart(DrawingBuilder):
     """
     Upright bars on an axis, each labelled under it and valued over it.
@@ -691,13 +739,13 @@ class BarChart(DrawingBuilder):
     """
 
     def built(self) -> VGroup:
-        return VGroup(self.axis(), self.bars(), self.names(), self.readings())
+        return self.drawn().whole
 
-    def bars(self) -> VGroup:
+    def drawn(self) -> DrawnChart:
         """
-        The bars alone, in the order they were given.
+        The chart, its labels and values placed against the bars it draws.
         """
-        drawn = VGroup()
+        bars = VGroup()
         for index, (value, colour) in enumerate(zip(self.values, self.colours)):
             bar = Rectangle(
                 width=self.bar_width,
@@ -707,14 +755,8 @@ class BarChart(DrawingBuilder):
                 fill_opacity=0.92,
             )
             bar.move_to([self._x_of(index), self.origin[1], 0.0], aligned_edge=DOWN)
-            drawn.add(bar)
-        return drawn
-
-    def names(self) -> VGroup:
-        """
-        The label under each bar.
-        """
-        return VGroup(
+            bars.add(bar)
+        names = VGroup(
             *[
                 Headline(
                     label,
@@ -727,13 +769,7 @@ class BarChart(DrawingBuilder):
                 for index, label in enumerate(self.labels)
             ]
         )
-
-    def readings(self) -> VGroup:
-        """
-        The value written over each bar.
-        """
-        bars = self.bars()
-        return VGroup(
+        readings = VGroup(
             *[
                 Headline(
                     self.reading.format(value),
@@ -745,8 +781,9 @@ class BarChart(DrawingBuilder):
                 for index, value in enumerate(self.values)
             ]
         )
+        return DrawnChart(bars=bars, names=names, readings=readings, axis=self._axis())
 
-    def axis(self) -> ManimLine:
+    def _axis(self) -> ManimLine:
         """
         The rule the bars stand on.
         """
@@ -758,14 +795,6 @@ class BarChart(DrawingBuilder):
             stroke_color=self.palette.hairline,
             stroke_width=2,
         )
-
-    def grown(self, bars: VGroup, lag: float = 0.15) -> LaggedStart:
-        """
-        :param bars: The bars to grow, as :meth:`bars` built them.
-        :param lag: How far one bar's growth trails the one before, as a share.
-        :return: The bars growing up from the axis, one after another.
-        """
-        return LaggedStart(*[GrowFromEdge(bar, DOWN) for bar in bars], lag_ratio=lag)
 
     def _x_of(self, index: int) -> float:
         """
@@ -840,13 +869,13 @@ class HorizontalBarChart(DrawingBuilder):
     """
 
     def built(self) -> VGroup:
-        return VGroup(self.bars(), self.names(), self.readings())
+        return self.drawn().whole
 
-    def bars(self) -> VGroup:
+    def drawn(self) -> DrawnChart:
         """
-        The bars alone, in the order they were given.
+        The chart, its names and values placed against the bars it draws.
         """
-        drawn = VGroup()
+        bars = VGroup()
         for index, (value, colour) in enumerate(zip(self.values, self.colours)):
             bar = Rectangle(
                 width=max(abs(value) * self.scale, 0.02),
@@ -859,15 +888,8 @@ class HorizontalBarChart(DrawingBuilder):
                 [self.origin[0], self._y_of(index), 0.0],
                 aligned_edge=LEFT if value >= 0 else RIGHT,
             )
-            drawn.add(bar)
-        return drawn
-
-    def names(self) -> VGroup:
-        """
-        The label to the left of each bar.
-        """
-        bars = self.bars()
-        return VGroup(
+            bars.add(bar)
+        names = VGroup(
             *[
                 Headline(label, size=self.label_size, palette=self.palette)
                 .built()
@@ -875,13 +897,7 @@ class HorizontalBarChart(DrawingBuilder):
                 for index, label in enumerate(self.labels)
             ]
         )
-
-    def readings(self) -> VGroup:
-        """
-        The value to the right of each bar.
-        """
-        bars = self.bars()
-        return VGroup(
+        readings = VGroup(
             *[
                 Headline(
                     self.reading.format(value),
@@ -893,14 +909,7 @@ class HorizontalBarChart(DrawingBuilder):
                 for index, value in enumerate(self.values)
             ]
         )
-
-    def grown(self, bars: VGroup, lag: float = 0.15) -> LaggedStart:
-        """
-        :param bars: The bars to grow, as :meth:`bars` built them.
-        :param lag: How far one bar's growth trails the one before, as a share.
-        :return: The bars growing right from their left edge, one after another.
-        """
-        return LaggedStart(*[GrowFromEdge(bar, LEFT) for bar in bars], lag_ratio=lag)
+        return DrawnChart(bars=bars, names=names, readings=readings)
 
     def _y_of(self, index: int) -> float:
         """
@@ -1500,7 +1509,11 @@ class ManimRenderer:
     ) -> List[Frame]:
         """
         The frames, drawn by Manim to a lossless clip and read back.
+
+        Manim writes the clip and its working files into a directory of its own, removed
+        once the frames have been read, so a rendering leaves nothing behind it.
         """
+        working = Path(mkdtemp(prefix="experiments-video-"))
         settings = {
             "quality": self.quality.value,
             "pixel_width": resolution.width,
@@ -1512,7 +1525,7 @@ class ManimRenderer:
             "write_to_movie": True,
             "disable_caching": True,
             "verbosity": "ERROR",
-            "media_dir": str(self._working_directory()),
+            "media_dir": str(working),
         }
         with tempconfig(settings):
             painter = ScenePainter(
@@ -1521,17 +1534,8 @@ class ManimRenderer:
             painter.render()
             clip = painter.renderer.file_writer.movie_file_path
             frames = self._read(clip)
-        shutil.rmtree(self._working_directory(), ignore_errors=True)
+        shutil.rmtree(working, ignore_errors=True)
         return frames
-
-    def _working_directory(self) -> Path:
-        """
-        Where Manim writes while it draws, under the cache where there is one.
-        """
-        root = (
-            self.cache.directory if self.cache is not None else Path(config.media_dir)
-        )
-        return root / "manim"
 
     @staticmethod
     def _read(clip) -> List[Frame]:
