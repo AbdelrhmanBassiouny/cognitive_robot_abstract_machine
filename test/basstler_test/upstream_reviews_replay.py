@@ -1,5 +1,6 @@
 """
-Replaying the recorded GraphQL responses ``test_upstream_reviews.py`` reads.
+Replaying the recorded GraphQL responses and job logs ``test_upstream_reviews.py``
+reads.
 
 The reader is exercised against responses captured from a real pull request rather than
 against GitHub, so the suite needs no network access and no upstream pull request of its
@@ -14,13 +15,14 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Any
 
-from basstler.upstream_reviews import GraphQLClient, RepositoryJSON
+from basstler.repository import Repository
+from basstler.upstream_reviews import GraphQLClient, JobLogReader, RepositoryJSON
 
 RECORDED_RESPONSE_DIRECTORY = (
     Path(__file__).parent / "dataset" / "upstream-review-responses"
 )
 """
-Where the recorded GraphQL responses live.
+Where the recorded GraphQL responses and job logs live.
 """
 
 
@@ -98,3 +100,64 @@ class ReplayingClient(GraphQLClient):
         """
         self.calls.append(RecordedCall(query, variables))
         return self.responses.pop(0)
+
+
+class RecordedJobLog(StrEnum):
+    """
+    The recorded job logs the tests read, named by their filename stem.
+    """
+
+    FAILED_JOB = "failed_job"
+    FAILED_JOB_WITHOUT_SUMMARY = "failed_job_without_summary"
+
+    def load(self) -> str:
+        """:return: The recorded log, exactly as recorded."""
+        return (RECORDED_RESPONSE_DIRECTORY / f"{self}.log").read_text()
+
+
+@dataclass(frozen=True)
+class RecordedJobLogCall:
+    """
+    One job log the reader asked for, kept so a test can assert on it.
+    """
+
+    repository: Repository
+    """
+    The repository it was asked of.
+    """
+
+    job_identifier: int
+    """
+    The job it named.
+    """
+
+
+@dataclass
+class ReplayingJobLogReader(JobLogReader):
+    """
+    A log reader that answers from recorded logs instead of calling GitHub.
+
+    Records every read, so a test can assert which job the reader went after and in
+    which repository.
+    """
+
+    logs: dict[int, str] = field(default_factory=dict)
+    """
+    The log each job identifier answers with.
+    """
+
+    calls: list[RecordedJobLogCall] = field(default_factory=list)
+    """
+    Every read that was asked for, oldest first.
+    """
+
+    def read_job_log(self, repository: Repository, job_identifier: int) -> str:
+        """
+        Answer with the recorded log for *job_identifier*.
+
+        :param repository: The repository, recorded for assertions.
+        :param job_identifier: The job whose log to answer with.
+        :return: The recorded log.
+        """
+        self.calls.append(RecordedJobLogCall(repository, job_identifier))
+        return self.logs[job_identifier]
