@@ -136,11 +136,37 @@ class CollisionDetectorModelUpdater(ModelChangeCallback):
         self._world = self.collision_detector._world
         super().__post_init__()
 
+    is_stale: bool = field(init=False, default=False, repr=False)
+    """
+    Whether the model changed since the collision detector was last synchronized, under
+    lazy compilation.
+    """
+
     def on_model_change(self, **kwargs):
         if self._world.is_empty():
             return
+        if self._world.get_world_model_manager().lazy_compilation:
+            self.is_stale = True
+            return
+        self.synchronize_with_model()
+
+    def synchronize_with_model(self) -> None:
+        """
+        Rebuild the collision shapes and compile the collision forward kinematics.
+        """
+        self.is_stale = False
         self.collision_detector.sync_world_model()
         self.compile_collision_fks()
+
+    def ensure_synchronized(self) -> None:
+        """
+        Synchronize model and state if the model changed since the last synchronization.
+        """
+        if not self.is_stale:
+            return
+        self.synchronize_with_model()
+        self.compiled_collision_fks.evaluate()
+        self.collision_detector.sync_world_state()
 
     def compile_collision_fks(self):
         """
@@ -189,6 +215,8 @@ class CollisionDetectorStateUpdater(StateChangeCallback):
 
     def on_state_change(self, **kwargs):
         if self._world.is_empty():
+            return
+        if self.collision_detector.world_model_updater.is_stale:
             return
         self.collision_detector.world_model_updater.compiled_collision_fks.evaluate()
         self.collision_detector.sync_world_state()
@@ -255,6 +283,8 @@ class CollisionDetector(WorldEntityWithClassBasedID, abc.ABC):
         :return: The closest points of contact if a collision is detected, otherwise
             None.
         """
+        self._world.commit_modifications()
+        self.world_model_updater.ensure_synchronized()
         collision = self.check_collisions(
             CollisionMatrix(
                 {CollisionCheck.create_and_validate(body_a, body_b, distance)}

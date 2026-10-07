@@ -6,7 +6,9 @@ import inspect
 import logging
 import threading
 import uuid
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
+from enum import StrEnum
+import os
 from copy import deepcopy, copy
 from dataclasses import dataclass, field
 from functools import wraps, cached_property
@@ -136,6 +138,84 @@ GenericSemanticAnnotation = TypeVar(
 )
 
 FunctionStack = List[Tuple[Callable, Dict[str, Any]]]
+
+
+class WorldModificationPolicyEnvironmentVariable(StrEnum):
+    """
+    Environment variables steering the world modification prototype.
+    """
+
+    POLICY = "SEMANTIC_DIGITAL_TWIN_MODIFICATION_POLICY"
+    LAZY_COMPILATION = "SEMANTIC_DIGITAL_TWIN_LAZY_COMPILATION"
+
+
+class WorldModificationPolicy(StrEnum):
+    """
+    How structural modifications of a world are grouped into modification blocks.
+    """
+
+    EXPLICIT = "explicit"
+    """
+    Modifications must run inside :meth:`World.modify_world`; the block is committed
+    when the outermost context exits.
+    """
+
+    EAGER = "eager"
+    """
+    :meth:`World.modify_world` does nothing; every modifying method outside an internal
+    block is committed on its own as soon as it returns.
+    """
+
+    EAGER_TOLERANT = "eager_tolerant"
+    """
+    Like :attr:`EAGER`, but a degree of freedom may exist before the connection that
+    uses it, so connections created with ``create_with_dofs`` survive the commit in
+    between.
+    """
+
+    DEFERRED = "deferred"
+    """
+    :meth:`World.modify_world` does nothing; the first modifying method opens an
+    implicit block that stays open and is committed at the next read of derived data
+    (forward kinematics, state change, collision) or at
+    :meth:`World.commit_modifications`.
+    """
+
+    @property
+    def commits_each_operation(self) -> bool:
+        return self in (
+            WorldModificationPolicy.EAGER,
+            WorldModificationPolicy.EAGER_TOLERANT,
+        )
+
+    @classmethod
+    def from_environment(cls) -> WorldModificationPolicy:
+        return cls(
+            os.environ.get(
+                WorldModificationPolicyEnvironmentVariable.POLICY, cls.EXPLICIT
+            )
+        )
+
+
+def world_modification_entry_point(func: Callable) -> Callable:
+    """
+    Runs a public modifying method inside an implicit modification block when no block
+    is open, so that its internal atomic modifications are committed together.
+    """
+
+    @wraps(func)
+    def wrapper(current_world: World, *args, **kwargs):
+        if current_world._model_manager._active_world_model_update_context_manager_ids:
+            return func(current_world, *args, **kwargs)
+        policy = current_world._model_manager.policy
+        if policy.commits_each_operation:
+            with current_world._modification_block():
+                return func(current_world, *args, **kwargs)
+        if policy == WorldModificationPolicy.DEFERRED:
+            current_world._open_deferred_block()
+        return func(current_world, *args, **kwargs)
+
+    return wrapper
 
 
 class ResetStateContextManager:
@@ -292,7 +372,11 @@ class WorldModelUpdateContextManager:
                     model_manager._current_modifications_will_be_published = None
                 raise exc_val
 
-            self.world.delete_orphaned_dofs()
+            if (
+                self.world._model_manager.policy
+                != WorldModificationPolicy.EAGER_TOLERANT
+            ):
+                self.world.delete_orphaned_dofs()
             model_manager = self.world._model_manager
             model_manager._active_world_model_update_context_manager_ids.remove(
                 self._id
@@ -355,7 +439,13 @@ def atomic_world_modification(func=None, modification: Type[WorldModification] =
             if (
                 not current_world._model_manager._active_world_model_update_context_manager_ids
             ):
-                raise MissingWorldModificationContextError(func)
+                policy = current_world._model_manager.policy
+                if policy == WorldModificationPolicy.EXPLICIT:
+                    raise MissingWorldModificationContextError(func)
+                if policy.commits_each_operation:
+                    with current_world._modification_block():
+                        return wrapper(current_world, *args, **kwargs)
+                current_world._open_deferred_block()
             current_world._current_active_atomic_world_modification = func
 
             # bind args and kwargs
@@ -458,6 +548,43 @@ class WorldModelManager:
     _active_world_model_update_context_manager_ids: List[UUID] = field(
         init=False, default_factory=list, repr=False
     )
+
+    policy: WorldModificationPolicy = field(
+        default_factory=WorldModificationPolicy.from_environment, kw_only=True
+    )
+    """
+    How structural modifications are grouped into modification blocks.
+    """
+
+    deferred_block: Optional[WorldModelUpdateContextManager] = field(
+        init=False, default=None, repr=False
+    )
+    """
+    The implicit block opened under :attr:`WorldModificationPolicy.DEFERRED`, if any.
+    """
+
+    deferred_block_thread: Optional[int] = field(init=False, default=None, repr=False)
+    """
+    The thread that opened :attr:`deferred_block`.
+    """
+
+    lazy_compilation: bool = field(
+        default_factory=lambda: os.environ.get(
+            WorldModificationPolicyEnvironmentVariable.LAZY_COMPILATION, ""
+        )
+        == "1",
+        kw_only=True,
+    )
+    """
+    Whether forward kinematics and collision data are recompiled when first read after a
+    model change instead of at every commit.
+    """
+
+    committed_block_count: int = field(init=False, default=0, repr=False)
+    """
+    How many modification blocks were committed, for profiling.
+    """
+
     """
     List of active world model managers currently modifying this world.
     """
@@ -520,6 +647,7 @@ class WorldModelManager:
         model changes.
         """
         self.version += 1
+        self.committed_block_count += 1
         for callback in list(self.model_change_callbacks):
             callback.notify_model_change(**kwargs)
 
@@ -695,7 +823,7 @@ class World(HasSimulatorProperties):
         """
         root_body = Body(name=PrefixedName(root_body_name, prefix))
         world = World()
-        with world.modify_world():
+        with world._modification_block():
             world.add_body(root_body)
         return world
 
@@ -705,7 +833,7 @@ class World(HasSimulatorProperties):
 
         :param name: The new name for the root body.
         """
-        with self.modify_world():
+        with self._modification_block():
             self.root.update_name(name)
 
     def __hash__(self):
@@ -727,8 +855,19 @@ class World(HasSimulatorProperties):
             raise WorldIsNotATreeError(world=self)
         if not rx.is_weakly_connected(self.kinematic_structure):
             raise WorldIsNotATreeError(world=self)
+        if self._model_manager.policy == WorldModificationPolicy.EAGER_TOLERANT:
+            return True
         self._validate_dofs()
         return True
+
+    @property
+    def is_tree(self) -> bool:
+        """
+        :return: Whether the kinematic structure currently forms a single tree.
+        """
+        return len(self.kinematic_structure_entities) == (
+            len(self.connections) + 1
+        ) and rx.is_weakly_connected(self.kinematic_structure)
 
     def _validate_dofs(self):
         actual_dofs = {
@@ -928,6 +1067,7 @@ class World(HasSimulatorProperties):
         return sorted_annotations
 
     # %% Adding WorldEntities to the World
+    @world_modification_entry_point
     def add_connection(self, connection: Connection) -> None:
         """
         Add a connection and the entities it connects to the world.
@@ -1039,6 +1179,7 @@ class World(HasSimulatorProperties):
             return
         self._add_semantic_annotation(semantic_annotation)
 
+    @world_modification_entry_point
     def add_semantic_annotation_recursively(
         self, semantic_annotation: SemanticAnnotation
     ) -> None:
@@ -1139,6 +1280,7 @@ class World(HasSimulatorProperties):
             )
 
     # %% Remove WorldEntities from the World
+    @world_modification_entry_point
     def remove_connection(self, connection: Connection) -> None:
         """
         Removes a connection.
@@ -1171,6 +1313,7 @@ class World(HasSimulatorProperties):
                 pass
         connection.remove_from_world()
 
+    @world_modification_entry_point
     def remove_kinematic_structure_entity(
         self, kinematic_structure_entity: KinematicStructureEntity
     ) -> None:
@@ -1305,7 +1448,7 @@ class World(HasSimulatorProperties):
             if parent_connection is not None
             else connections
         )
-        with self.modify_world():
+        with self._modification_block():
             for connection in connections:
                 self.remove_connection(connection)
             for kinematic_structure_entity in kinematic_structure_entities:
@@ -1783,7 +1926,7 @@ class World(HasSimulatorProperties):
         :param pose: world_root_T_other_root, the pose of the other world's root with
             respect to the current world's root
         """
-        with self.modify_world():
+        with self._modification_block():
             other_root_id = other.root.id
             root_connection = Connection6DoF.create_with_dofs(
                 parent=self.root, child=other.root, world=self
@@ -1812,7 +1955,7 @@ class World(HasSimulatorProperties):
         """
         assert other is not self, "Cannot merge a world with itself."
 
-        with self.modify_world(), other.modify_world():
+        with self._modification_block(), other._modification_block():
             self_root = self.root
             other_state = deepcopy(other.state)
 
@@ -1848,7 +1991,7 @@ class World(HasSimulatorProperties):
         state_change_callbacks = list(self.state.state_change_callbacks)
 
         with self._world_lock:
-            with self.modify_world(publish_changes=False):
+            with self._modification_block(publish_changes=False):
                 self.clear()
             self.merge_world(other)
             self._model_manager.model_change_callbacks.extend(model_change_callbacks)
@@ -2021,7 +2164,7 @@ class World(HasSimulatorProperties):
             new_connection = old_connection.copy_with_new_parent(
                 new_parent, new_parent_T_connection
             )
-        with self.modify_world():
+        with self._modification_block():
             self.add_connection(new_connection)
             self.remove_connection(old_connection)
 
@@ -2050,7 +2193,7 @@ class World(HasSimulatorProperties):
         root_connection = new_root.parent_connection
 
         if not child_bodies:
-            with self.modify_world(), new_world.modify_world():
+            with self._modification_block(), new_world._modification_block():
                 self.remove_connection(root_connection)
                 self.remove_kinematic_structure_entity(new_root)
 
@@ -2066,7 +2209,7 @@ class World(HasSimulatorProperties):
             for dof in connection.dofs
         ]
 
-        with self.modify_world(), new_world.modify_world():
+        with self._modification_block(), new_world._modification_block():
             for dof in child_body_dofs:
                 self.remove_degree_of_freedom(dof)
                 new_world.add_degree_of_freedom(dof)
@@ -2099,6 +2242,8 @@ class World(HasSimulatorProperties):
         context: the setters that write the state cannot know they are part of a batch,
         so the batch is what decides whether its changes are published.
         """
+        if not self.world_is_being_modified:
+            self.commit_modifications()
         if self._state_change_batch_depth > 0:
             self._state_change_batch_has_collected_change = True
             return
@@ -2429,6 +2574,7 @@ class World(HasSimulatorProperties):
         :return: Transformation matrix representing the relative pose of the tip
             KinematicStructureEntity with respect to the root KinematicStructureEntity.
         """
+        self.commit_modifications()
         if not enable_unsafe_inside_world_block:
             return self._forward_kinematic_manager.compute(root, tip)
         return self._manually_compute_entity_a_T_entity_b(root, tip)
@@ -2443,6 +2589,7 @@ class World(HasSimulatorProperties):
             It determines the endpoint of the forward kinematics calculation.
         :return: An expression representing the computed forward kinematics of the tip KinematicStructureEntity relative to the root KinematicStructureEntity.
         """
+        self.commit_modifications()
         return self._forward_kinematic_manager.compose_expression(root, tip)
 
     def compute_forward_kinematics_np(
@@ -2462,6 +2609,7 @@ class World(HasSimulatorProperties):
         :return: Transformation matrix representing the relative pose of the tip
             KinematicStructureEntity with respect to the root KinematicStructureEntity.
         """
+        self.commit_modifications()
         return self._forward_kinematic_manager.compute_np(root, tip).copy()
 
     def update_forward_kinematics(self) -> None:
@@ -2475,12 +2623,14 @@ class World(HasSimulatorProperties):
         :class:`ModelRevision`.
 
         ..warning::
-            Use this method if you need to live update the forward kinematic inside a with self.modify_world(): block.
+            Use this method if you need to live update the forward kinematic inside a with self._modification_block(): block.
             Use with caution, as this only works if the world structure is not currently broken, and thus may lead to
             crashes if its not the case.
         """
+        self.commit_modifications()
         if not self._forward_kinematic_manager.matches_world_structure:
             self._forward_kinematic_manager.notify_model_change()
+        self._forward_kinematic_manager.ensure_compiled()
         self._forward_kinematic_manager.recompute()
 
     def _manually_compute_entity_a_T_entity_b(
@@ -2656,7 +2806,7 @@ class World(HasSimulatorProperties):
         new_world = World(name=self.name)
         memo[me_id] = new_world
 
-        with new_world.modify_world():
+        with new_world._modification_block():
             for modification_block in self._model_manager.model_modification_blocks:
                 modification_block.update_references_for_world_and_apply(
                     world=new_world
@@ -2698,9 +2848,70 @@ class World(HasSimulatorProperties):
     def modify_world(
         self, publish_changes: bool = True
     ) -> WorldModelUpdateContextManager:
+        if self._model_manager.policy != WorldModificationPolicy.EXPLICIT:
+            return nullcontext()
+        return self._modification_block(publish_changes=publish_changes)
+
+    def _modification_block(
+        self, publish_changes: bool = True
+    ) -> WorldModelUpdateContextManager:
+        """
+        A modification block that batches regardless of the policy, for internal
+        operations that replay or move many modifications at once.
+        """
         return WorldModelUpdateContextManager(
             world=self, publish_changes=publish_changes
         )
+
+    def _implicit_modification_block(
+        self, func: Callable
+    ) -> Union[WorldModelUpdateContextManager, nullcontext]:
+        """
+        The block a modification of ``func`` runs in when the caller opened none,
+        according to the policy.
+
+        :raises MissingWorldModificationContextError: Under
+            :attr:`WorldModificationPolicy.EXPLICIT` when no block is open.
+        """
+        model_manager = self._model_manager
+        if model_manager._active_world_model_update_context_manager_ids:
+            return nullcontext()
+        if model_manager.policy == WorldModificationPolicy.EXPLICIT:
+            raise MissingWorldModificationContextError(func)
+        if model_manager.policy.commits_each_operation:
+            return self._modification_block()
+        self._open_deferred_block()
+        return nullcontext()
+
+    def _open_deferred_block(self) -> None:
+        """
+        Open the implicit block of :attr:`WorldModificationPolicy.DEFERRED`.
+        """
+        block = self._modification_block()
+        block.__enter__()
+        self._model_manager.deferred_block = block
+        self._model_manager.deferred_block_thread = threading.get_ident()
+
+    def commit_modifications(self) -> None:
+        """
+        Commit the implicit block of :attr:`WorldModificationPolicy.DEFERRED`, if one is
+        open.
+        """
+        block = self._model_manager.deferred_block
+        if block is None:
+            return
+        if self._model_manager.deferred_block_thread != threading.get_ident():
+            # another thread's implicit block; it can only be committed by its owner
+            return
+        if (
+            self._model_manager._active_world_model_update_context_manager_ids[0]
+            != block._id
+        ):
+            return
+        if len(self._model_manager._active_world_model_update_context_manager_ids) > 1:
+            return
+        self._model_manager.deferred_block = None
+        block.__exit__(None, None, None)
 
     def batch_state_changes(
         self, publish_changes: bool = True
@@ -2761,7 +2972,7 @@ class World(HasSimulatorProperties):
             list(reversed(model_modification_blocks[-count:])) if count else []
         )
         for block in blocks_to_roll_back:
-            with self.modify_world():
+            with self._modification_block():
                 block.revert(self)
         return blocks_to_roll_back
 

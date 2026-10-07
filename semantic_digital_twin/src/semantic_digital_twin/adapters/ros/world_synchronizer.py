@@ -630,7 +630,7 @@ class WorldSynchronizer(Synchronizer, ModelChangeCallback, StateChangeCallback):
         Applies the model and recompiles the world structure before applying the new
         state.
         """
-        with self._world.modify_world(publish_changes=False):
+        with self._world._modification_block(publish_changes=False):
             modification_block_message.modifications.apply(self._world)
 
     def _apply_state(self, state_update_message: WorldStateUpdate):
