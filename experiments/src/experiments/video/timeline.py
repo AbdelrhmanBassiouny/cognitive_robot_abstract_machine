@@ -192,6 +192,26 @@ def blended(first: Frame, second: Frame, weight: float) -> Frame:
     return np.clip(mixed + 0.5, 0, 255).astype(np.uint8)
 
 
+# %% what is drawn over every scene
+
+
+@dataclass
+class Overlay(ABC):
+    """
+    Something drawn over every frame of a video, whatever scene plays: it knows the
+    moment of the whole video rather than of one scene.
+    """
+
+    @abstractmethod
+    def drawn_over(self, frame: Frame, seconds: float, runs_for: float) -> Frame:
+        """
+        :param frame: The frame of the scenes at that moment.
+        :param seconds: The moment, from the video's start.
+        :param runs_for: How long the video lasts.
+        :return: A copy of the frame with this drawn over it.
+        """
+
+
 # %% the timeline
 
 
@@ -215,6 +235,11 @@ class Timeline:
     """
     How long each scene takes to dissolve into the next, in seconds; the two overlap by
     that much.
+    """
+
+    overlays: List[Overlay] = field(default_factory=list)
+    """
+    What is drawn over every frame, in order, after the scenes.
     """
 
     @property
@@ -257,8 +282,21 @@ class Timeline:
 
     def frame_at(self, seconds: float) -> Frame:
         """
-        What the video shows at a moment of its time: the scene playing then, blended
-        with the one before it while the two dissolve.
+        What the video shows at a moment of its time: its scenes then, with every
+        overlay drawn over them.
+
+        :param seconds: The moment, from the video's start.
+        """
+        frame = self.scenes_at(seconds)
+        runs_for = self.duration
+        for overlay in self.overlays:
+            frame = overlay.drawn_over(frame, seconds, runs_for)
+        return frame
+
+    def scenes_at(self, seconds: float) -> Frame:
+        """
+        What the scenes show at a moment of the video's time: the scene playing then,
+        blended with the one before it while the two dissolve.
 
         :param seconds: The moment, from the video's start.
         """

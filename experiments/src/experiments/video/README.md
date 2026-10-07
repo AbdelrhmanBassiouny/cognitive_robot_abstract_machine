@@ -71,6 +71,27 @@ would, and the three letter sizes (`CLAIM_SIZE`, `BODY_SIZE`, `LABEL_SIZE`) size
 `VIDEO_RESOLUTION` (1280 × 720). Every scene leaves the bottom band of the frame clear
 for the subtitles (`Resolution.stage_height`).
 
+## The look
+
+A `canvas.Theme` holds the colours and fonts the slides and captions are drawn in: the
+page, text, muted, hairline, panel, marker and accent colours, how code is coloured,
+and a `lettering.Typeface` (DejaVu by default, since matplotlib ships it). Slides
+take one as `theme=`. `NEUTRAL_THEME`, dark text on white, is the default;
+`DARK_THEME` is light text on a near-black page. Footage keeps white text and dark
+badges whatever the theme.
+
+Burned-in subtitles are drawn in the band every scene keeps clear
+(`narration.BandCaption`, given the video's theme), or in white on a shaded box over
+the bottom of the picture (`narration.BoxedCaption`); pass the style to
+`VideoProduction(captions=...)`.
+
+Anything drawn over the whole video rather than one scene is a `timeline.Overlay`,
+passed as `VideoProduction(overlays=[...])`. `overlays.ProgressBar(theme=...)` is a thin
+bar along the top that fills in the accent colour as the video plays, across every
+scene.
+
+## Keeping slow parts
+
 Slow parts of a scene, such as decoded recordings or rendered pictures, can be stored
 with `cache.SceneCache`. It keeps them under `EXPERIMENTS_VIDEO_CACHE`
 (`~/.cache/experiments/video` by default), so a second render does not recompute them.
@@ -82,15 +103,17 @@ with the `video` extra (`pip install experiments[video]`). Then download
 `kokoro-v1.0.onnx` and `voices-v1.0.bin` from the
 [kokoro-onnx model release](https://github.com/thewh1teagle/kokoro-onnx/releases/tag/model-files-v1.0)
 into the `voice` folder of the cache. `KokoroVoice(voice=..., speed=...)` picks the
-voice and its pace. Every line it says is kept in the cache, so re-rendering a video
-reuses the same speech.
+voice and its pace. Each line is trimmed of the silence around it, keeping a short
+breath, and levelled to one loudness. Every line it says is kept in the cache, so
+re-rendering a video reuses the same speech.
 
-Any object with a `speaks(text) -> Speech` method can narrate instead; see
+Any object with a `speaks(text, pace) -> Speech` method can narrate instead; see
 `narration.Voice`. A storyboard with no lines makes a silent video, and then no
 speech model is needed.
 
 `Line(written, spoken=...)` is subtitled as written and said as spoken, for when the
-two differ (for example numbers). To time steps of a scene to the narration, measure
+two differ (for example numbers). `Line(..., pace=0.9)` says a line slower than the
+voice's own speed, for one the viewer needs time to follow. To time steps of a scene to the narration, measure
 the lines with `narration.starts_of`. `Narration.report()` prints when each line
 starts and how much silence follows it.
 

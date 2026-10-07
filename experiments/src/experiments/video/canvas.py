@@ -400,6 +400,26 @@ def darkened(frame: Frame, over: Area, by: float) -> Frame:
     return result
 
 
+def shaded(frame: Frame, over: Area, by: float, corner_radius: int) -> Frame:
+    """
+    A copy of the frame with a rectangle of it, its corners rounded, shaded evenly
+    towards black: a box a caption is read on over any picture.
+
+    :param frame: The frame.
+    :param over: The box.
+    :param by: How dark it is, from zero to one.
+    :param corner_radius: Pixels its corners are rounded by.
+    """
+    mask = Image.new("L", (frame.shape[1], frame.shape[0]), 0)
+    left, top, width, height = over.rounded()
+    ImageDraw.Draw(mask).rounded_rectangle(
+        (left, top, left + width - 1, top + height - 1), radius=corner_radius, fill=255
+    )
+    weight = np.asarray(mask, dtype=np.float32)[..., None] / 255.0 * by
+    darkened_frame = frame.astype(np.float32) * (1.0 - weight)
+    return np.clip(darkened_frame + 0.5, 0, 255).astype(np.uint8)
+
+
 def framed(frame: Frame, around: Area, color: Rgb, thickness: int = 3) -> Frame:
     """
     A copy of the frame with a rectangle outlined on it.

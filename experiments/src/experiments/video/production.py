@@ -12,7 +12,7 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 from pathlib import Path
 
-from typing_extensions import Optional, Tuple
+from typing_extensions import List, Optional, Tuple
 
 from experiments.video.encoding import (
     H264Encoder,
@@ -22,13 +22,15 @@ from experiments.video.encoding import (
     bytes_for_sound,
 )
 from experiments.video.narration import (
+    BandCaption,
+    CaptionStyle,
     KokoroVoice,
     Narration,
     Storyboard,
     Subtitled,
     Voice,
 )
-from experiments.video.timeline import Timeline
+from experiments.video.timeline import Overlay, Timeline
 
 logger = logging.getLogger(__name__)
 
@@ -103,6 +105,17 @@ class VideoProduction:
     How the subtitles go in.
     """
 
+    captions: CaptionStyle = field(default_factory=BandCaption)
+    """
+    How burned-in subtitles are drawn.
+    """
+
+    overlays: List[Overlay] = field(default_factory=list)
+    """
+    What is drawn over every frame, whatever scene plays, such as a
+    :class:`~experiments.video.overlays.ProgressBar`.
+    """
+
     limits: Optional[SubmissionLimits] = None
     """
     What a venue accepts the video as, if the video is made for one: the picture is
@@ -126,10 +139,22 @@ class VideoProduction:
             self.storyboard.scenes,
             frames_per_second=self.frames_per_second,
             dissolve=self.dissolve,
+            overlays=self.overlays,
         )
         narration = self.storyboard.narrated_by(self.voice, dissolve=self.dissolve)
         narration.check(runs_for=timeline.duration)
         return timeline, narration
+
+    def picture_of(self, timeline: Timeline, narration: Narration) -> Timeline:
+        """
+        :param timeline: The narrated timeline.
+        :param narration: What is said over it.
+        :return: What is encoded as the picture: the timeline with its subtitles drawn
+            in when they are burned in, else the timeline alone.
+        """
+        if self.subtitling is not Subtitling.BURNED_IN:
+            return timeline
+        return Subtitled.over(timeline, narration, style=self.captions)
 
     def picture_budget_for(self, duration: float) -> int:
         """
@@ -157,7 +182,7 @@ class VideoProduction:
             "%.1f s of video in %d scenes", timeline.duration, len(timeline.scenes)
         )
         burned_in = self.subtitling is Subtitling.BURNED_IN
-        picture = Subtitled.over(timeline, narration) if burned_in else timeline
+        picture = self.picture_of(timeline, narration)
         encoder = H264Encoder(
             size_budget=self.picture_budget_for(timeline.duration),
             preset=self.preset.value,

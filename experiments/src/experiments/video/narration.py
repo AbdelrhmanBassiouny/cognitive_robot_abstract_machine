@@ -15,6 +15,7 @@ from __future__ import annotations
 import hashlib
 import re
 import wave
+from abc import ABC, abstractmethod
 from itertools import product
 from dataclasses import dataclass, field, replace
 from pathlib import Path
@@ -38,8 +39,10 @@ from experiments.video.canvas import (
     NEUTRAL_THEME,
     Anchor,
     Area,
+    Theme,
     Typesetting,
     darkened,
+    shaded,
 )
 from experiments.video.timeline import Frame, HeldScene, Resolution, Scene, Timeline
 
@@ -676,10 +679,10 @@ CAPTION_ROW = 38
 Pixels from one caption row to the next.
 """
 
-FOOTAGE_BRIGHTNESS = 235
+PAGE_LIKENESS = 20
 """
-The mean brightness under which the band of a frame is footage rather than the white
-page: the caption is then written in white on a band shaded towards black.
+How far the band's mean colour may lie from the page's, per channel, for the band to be
+the page rather than footage.
 """
 
 BAND_SHADE = 0.72
@@ -687,13 +690,142 @@ BAND_SHADE = 0.72
 How dark the band over footage is shaded at its bottom.
 """
 
+BOX_SHADE = 0.66
+"""
+How dark the box behind a boxed caption is shaded.
+"""
+
+BOX_PADDING = 25
+"""
+Pixels between a boxed caption's rows and the sides of its box.
+"""
+
+BOX_PADDING_ABOVE_AND_BELOW = 14
+"""
+Pixels between a boxed caption's rows and the top and bottom of its box.
+"""
+
+BOX_CORNER_RADIUS = 11
+"""
+Pixels the corners of a caption's box are rounded by.
+"""
+
+BOX_MARGIN = 20
+"""
+Pixels between a caption's box and the bottom of the frame.
+"""
+
+
+@dataclass
+class CaptionStyle(ABC):
+    """
+    How the rows of a subtitle are drawn into a frame.
+    """
+
+    @abstractmethod
+    def captioned(self, frame: Frame, rows: Sequence[str]) -> Frame:
+        """
+        :param frame: The frame.
+        :param rows: The rows of the subtitle, at most two.
+        :return: A copy of the frame with the rows written in.
+        """
+
+
+@dataclass
+class BandCaption(CaptionStyle):
+    """
+    Rows written in the band every scene keeps clear at the bottom of the picture, from
+    one fixed baseline: in the theme's text colour on its page, and white on a band
+    shaded towards black wherever footage fills the frame.
+    """
+
+    theme: Theme = NEUTRAL_THEME
+    """
+    The page the band is told apart from footage by, and the colour written on it.
+    """
+
+    def captioned(self, frame: Frame, rows: Sequence[str]) -> Frame:
+        resolution = Resolution.of(frame)
+        band = Area(
+            0,
+            resolution.stage_height,
+            resolution.width,
+            resolution.height - resolution.stage_height,
+        )
+        on_page = self.is_page(frame[int(band.y) :])
+        if not on_page:
+            frame = darkened(
+                frame,
+                Area(
+                    0,
+                    band.y - CAPTION_TOP * 2,
+                    resolution.width,
+                    band.height + CAPTION_TOP * 2,
+                ),
+                BAND_SHADE,
+            )
+        lettering = Typesetting(
+            size=BODY_SIZE,
+            color=self.theme.text if on_page else FOOTAGE_TEXT,
+            typeface=self.theme.typeface,
+        )
+        for number, row in enumerate(rows):
+            frame = lettering.written(
+                frame,
+                row,
+                (resolution.width / 2, band.y + CAPTION_TOP + number * CAPTION_ROW),
+                Anchor.CENTRE_TOP,
+            )
+        return frame
+
+    def is_page(self, band: Frame) -> bool:
+        """
+        :param band: The band of a frame.
+        :return: Whether it is the theme's page rather than footage.
+        """
+        mean = band.reshape(-1, 3).mean(axis=0)
+        return bool(np.abs(mean - np.array(self.theme.page)).max() <= PAGE_LIKENESS)
+
+
+@dataclass
+class BoxedCaption(CaptionStyle):
+    """
+    Rows written in white on a box shaded towards black, centred over the bottom of the
+    picture, so they read on any scene alike.
+    """
+
+    def captioned(self, frame: Frame, rows: Sequence[str]) -> Frame:
+        resolution = Resolution.of(frame)
+        lettering = Typesetting(size=BODY_SIZE, color=FOOTAGE_TEXT)
+        width = max(lettering.width_of(row) for row in rows) + 2 * BOX_PADDING
+        height = (
+            BODY_SIZE + (len(rows) - 1) * CAPTION_ROW + 2 * BOX_PADDING_ABOVE_AND_BELOW
+        )
+        box = Area(
+            (resolution.width - width) / 2,
+            resolution.height - BOX_MARGIN - height,
+            width,
+            height,
+        )
+        frame = shaded(frame, box, BOX_SHADE, BOX_CORNER_RADIUS)
+        for number, row in enumerate(rows):
+            frame = lettering.written(
+                frame,
+                row,
+                (
+                    resolution.width / 2,
+                    box.y + BOX_PADDING_ABOVE_AND_BELOW + number * CAPTION_ROW,
+                ),
+                Anchor.CENTRE_TOP,
+            )
+        return frame
+
 
 @dataclass
 class Subtitled(Timeline):
     """
-    A timeline with its captions drawn into the band every scene keeps clear at the
-    bottom of the picture, so they are part of the video itself: dark on the page, and
-    white on a band shaded towards black wherever footage fills the frame.
+    A timeline with its captions drawn into the picture, so they are part of the video
+    itself.
     """
 
     cues: List[SubtitleCue] = field(default_factory=list)
@@ -706,24 +838,33 @@ class Subtitled(Timeline):
     How much text one subtitle shows: the rows a cue is written on.
     """
 
+    style: CaptionStyle = field(default_factory=BandCaption)
+    """
+    How a cue's rows are drawn.
+    """
+
     @classmethod
     def over(
         cls,
         timeline: Timeline,
         narration: Narration,
         room: SubtitleRoom = BURNED_IN_ROOM,
+        style: Optional[CaptionStyle] = None,
     ) -> Subtitled:
         """
-        :param timeline: The timeline as it stands.
+        :param timeline: The timeline as it stands, its overlays kept.
         :param narration: What is said over it, cut into subtitles that fit the room.
         :param room: How much text one subtitle shows.
+        :param style: How a cue's rows are drawn; in the band if not given.
         """
         return cls(
             timeline.scenes,
             timeline.frames_per_second,
             timeline.dissolve,
+            timeline.overlays,
             cues=narration.cues(room),
             room=room,
+            style=style if style is not None else BandCaption(),
         )
 
     def cue_at(self, seconds: float) -> Optional[SubtitleCue]:
@@ -737,46 +878,7 @@ class Subtitled(Timeline):
         cue = self.cue_at(seconds)
         if cue is None:
             return frame
-        return captioned(frame, cue.rows(self.room.characters_per_row))
-
-
-def captioned(frame: Frame, rows: Sequence[str]) -> Frame:
-    """
-    A copy of the frame with caption rows written in its band, from one fixed baseline.
-
-    :param frame: The frame.
-    :param rows: The rows, at most two.
-    """
-    resolution = Resolution.of(frame)
-    band = Area(
-        0,
-        resolution.stage_height,
-        resolution.width,
-        resolution.height - resolution.stage_height,
-    )
-    on_footage = float(frame[int(band.y) :, :].mean()) < FOOTAGE_BRIGHTNESS
-    if on_footage:
-        frame = darkened(
-            frame,
-            Area(
-                0,
-                band.y - CAPTION_TOP * 2,
-                resolution.width,
-                band.height + CAPTION_TOP * 2,
-            ),
-            BAND_SHADE,
-        )
-    lettering = Typesetting(
-        size=BODY_SIZE, color=FOOTAGE_TEXT if on_footage else NEUTRAL_THEME.text
-    )
-    for number, row in enumerate(rows):
-        frame = lettering.written(
-            frame,
-            row,
-            (resolution.width / 2, band.y + CAPTION_TOP + number * CAPTION_ROW),
-            Anchor.CENTRE_TOP,
-        )
-    return frame
+        return self.style.captioned(frame, cue.rows(self.room.characters_per_row))
 
 
 def _timestamp(seconds: float) -> str:

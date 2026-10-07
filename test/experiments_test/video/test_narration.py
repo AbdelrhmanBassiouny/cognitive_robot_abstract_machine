@@ -15,10 +15,14 @@ import numpy as np
 import pytest
 
 from experiments.video.cache import SceneCache
+from experiments.video.canvas import DARK_THEME, FOOTAGE_TEXT
 from experiments.video.narration import (
+    BOX_SHADE,
     BREATH_AFTER,
     BREATH_BEFORE,
     BURNED_IN_ROOM,
+    BandCaption,
+    BoxedCaption,
     KokoroVoice,
     LEAD,
     NarratedScene,
@@ -46,6 +50,7 @@ from experiments.video.timeline import (
     Timeline,
 )
 
+from .marks import ProgressStamp, stamped_value
 from .voices import (
     EvenlyPacedVoice,
     TONE_RATE,
@@ -469,3 +474,64 @@ def test_nothing_said_leaves_a_silent_soundtrack_as_long_as_the_video() -> None:
     track = Narration([]).soundtrack(runs_for=2.0)
     assert track.duration == pytest.approx(2.0)
     assert not track.samples.any()
+
+
+# %% how a caption is drawn
+
+
+def test_a_boxed_caption_is_written_light_on_a_shaded_box_over_the_bottom_of_the_picture() -> (
+    None
+):
+    resolution = Resolution(width=640, height=360)
+    subtitled = Subtitled(
+        [Still(resolution.blank(255), held_for=4.0)],
+        frames_per_second=10,
+        dissolve=0.0,
+        cues=[SubtitleCue(1.0, 2.0, "hello there")],
+        style=BoxedCaption(),
+    )
+    written = subtitled.frame_at(1.5)
+    shade = round(255 * (1.0 - BOX_SHADE))
+    box_rows, box_columns = np.nonzero((written == shade).all(axis=2))
+    box = written[
+        box_rows.min() : box_rows.max() + 1, box_columns.min() : box_columns.max() + 1
+    ]
+    assert box_rows.min() > resolution.height / 2
+    assert 0 < box_columns.min() and box_columns.max() < resolution.width - 1
+    assert FOOTAGE_TEXT in {tuple(pixel) for pixel in box.reshape(-1, 3)}
+    assert (written[: box_rows.min()] == 255).all()
+    assert (written[box_rows.max() + 1 :] == 255).all()
+
+
+def test_a_band_caption_on_the_page_of_its_theme_is_written_in_its_text_colour() -> (
+    None
+):
+    resolution = Resolution(width=320, height=180)
+    page = DARK_THEME.page_of(resolution)
+    subtitled = Subtitled(
+        [Still(page, held_for=4.0)],
+        frames_per_second=10,
+        dissolve=0.0,
+        cues=[SubtitleCue(1.0, 2.0, "hello there")],
+        style=BandCaption(theme=DARK_THEME),
+    )
+    written = subtitled.frame_at(1.5)
+    band = written[int(resolution.stage_height) :]
+    assert DARK_THEME.text in {tuple(pixel) for pixel in band.reshape(-1, 3)}
+    assert (band[:, :10] == DARK_THEME.page).all()  # not shaded
+
+
+def test_subtitles_are_written_over_a_timeline_that_keeps_its_overlays() -> None:
+    resolution = Resolution(width=320, height=180)
+    timeline = Timeline(
+        [Still(resolution.blank(255), held_for=4.0)],
+        frames_per_second=10,
+        dissolve=0.0,
+        overlays=[ProgressStamp()],
+    )
+    subtitled = Subtitled.over(
+        timeline, Narration([spoken("hello there", 1.0, 1.0)]), style=BoxedCaption()
+    )
+    assert subtitled.overlays == timeline.overlays
+    assert isinstance(subtitled.style, BoxedCaption)
+    assert (subtitled.frame_at(1.5)[0, 0] == stamped_value(1.5, 4.0)).all()

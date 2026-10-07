@@ -18,6 +18,8 @@ from experiments.video.timeline import (
     eased,
 )
 
+from .marks import ProgressStamp, stamped_value
+
 RESOLUTION = Resolution(width=64, height=32)
 
 
@@ -145,3 +147,24 @@ def test_a_scene_that_cuts_in_takes_no_dissolve_from_the_scene_before() -> None:
     assert (
         20 < int(timeline.frame_at(1.75)[0, 0, 0]) < 30
     )  # the dissolve after it as usual
+
+
+# %% overlays
+
+
+def test_every_overlay_is_drawn_over_each_frame_at_that_moment_of_the_video() -> None:
+    timeline = Timeline(
+        [Still(flat(100), held_for=2.0), Still(flat(100), held_for=2.0)],
+        frames_per_second=10,
+        dissolve=0.0,
+        overlays=[ProgressStamp()],
+    )
+    for seconds in (1.0, 3.0):
+        frame = timeline.frame_at(seconds)
+        assert (frame[0, 0] == stamped_value(seconds, timeline.duration)).all()
+        assert (frame[1:] == 100).all()
+
+
+def test_a_timeline_without_overlays_shows_its_scenes_alone() -> None:
+    timeline = Timeline([Still(flat(100), held_for=2.0)], frames_per_second=10)
+    assert np.array_equal(timeline.frame_at(1.0), flat(100))

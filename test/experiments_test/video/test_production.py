@@ -13,13 +13,21 @@ import imageio_ffmpeg
 import numpy as np
 import pytest
 
-from experiments.video.canvas import VIDEO_RESOLUTION
+from experiments.video.canvas import NEUTRAL_THEME, VIDEO_RESOLUTION
 from experiments.video.encoding import (
     SubmissionLimits,
     VideoFile,
     VideoOutsideTheLimits,
 )
-from experiments.video.narration import LEAD, Line, NarratedScene, Storyboard
+from experiments.video.narration import (
+    LEAD,
+    BoxedCaption,
+    Line,
+    NarratedScene,
+    Storyboard,
+    Subtitled,
+)
+from experiments.video.overlays import ProgressBar
 from experiments.video.production import (
     BYTES_PER_SECOND,
     EncoderPreset,
@@ -222,3 +230,36 @@ def test_a_video_inside_the_venues_limits_is_encoded_to_its_budget(
     )
     video = production(limits=limits).written_to(tmp_path / "minimal.mp4")
     assert video.size <= limits.byte_budget_for(video.duration)
+
+
+# %% what is drawn over the scenes
+
+
+def test_a_production_draws_its_overlays_and_its_captions_in_their_style() -> None:
+    bar = ProgressBar()
+    made = VideoProduction(
+        minimal_storyboard(),
+        voice=VOICE,
+        frames_per_second=FRAMES_PER_SECOND,
+        overlays=[bar],
+        captions=BoxedCaption(),
+    )
+    picture = made.picture_of(*made.narrated_timeline())
+    assert isinstance(picture, Subtitled)
+    assert isinstance(picture.style, BoxedCaption)
+    assert picture.overlays == [bar]
+    assert (picture.frame_at(0.0)[: bar.thickness] == NEUTRAL_THEME.panel).all()
+
+
+def test_soft_subtitles_leave_the_picture_its_overlays_and_no_captions() -> None:
+    bar = ProgressBar()
+    made = VideoProduction(
+        minimal_storyboard(),
+        voice=VOICE,
+        frames_per_second=FRAMES_PER_SECOND,
+        subtitling=Subtitling.SOFT,
+        overlays=[bar],
+    )
+    picture = made.picture_of(*made.narrated_timeline())
+    assert not isinstance(picture, Subtitled)
+    assert picture.overlays == [bar]
