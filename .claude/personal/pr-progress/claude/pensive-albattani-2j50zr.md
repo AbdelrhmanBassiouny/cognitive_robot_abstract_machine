@@ -3,18 +3,21 @@
 Plan item: general-video-production / video-core. Write-up:
 https://claude.ai/artifact/TiTcfZbU2wQnNasrodhFZ5
 
-Plan (TDD, one commit per feature):
-1. Line.pace (multiplies the voice's speed, part of the speech cache key);
-   Voice.speaks(text, pace).
-2. Speech trimmed of silence and levelled to one peak in KokoroVoice.
-3. Timeline overlays + ProgressBar overlay across the whole video.
-4. CaptionStyle: BandCaption (current) and BoxedCaption (dark box over picture).
-5. Theme (colours + Typeface) replacing Ink; NEUTRAL_THEME default, DARK_THEME
-   from Naren's palette; slides and captions drawn in a theme.
-6. VideoProduction takes overlays and a caption style; README updated.
+Done (pushed 455968e9, 100 tests pass locally with --noconftest):
+- 1ca3a28a Line.pace, Voice.speaks(text, pace), Line.spoken_by; KokoroVoice
+  trims silence (BREATH_BEFORE/AFTER) and levels to SPEECH_PEAK, both in the key.
+- e0847672 VideoTheme (colours + Typeface) replaces Ink/CODE_INK; NEUTRAL_THEME
+  default, DARK_THEME from Naren's palette; slides/CodeTypesetting take a theme;
+  footage uses FOOTAGE_TEXT/FOOTAGE_BADGE; Face is a role.
+- 2f9a2495 timeline.Overlay + Timeline.overlays; overlays.ProgressBar;
+  CaptionStyle (BandCaption, BoxedCaption) on Subtitled; VideoProduction takes
+  captions= and overlays=, picture_of names what is encoded. README updated.
+- 455968e9 renamed Theme -> VideoTheme (sdt has a class Theme; the ORM
+  generator resolves hints in one namespace of all scanned classes).
+PR description updated; PR still draft.
 
-Decision taken: neutral theme stays the default (no change for ICRA video);
-DARK_THEME available. Naren writes manim-scenes on top of #472.
+Decisions: neutral theme stays default; Naren writes manim-scenes on top of
+this branch.
 
-Done: -
-Next: tests first for 1.
+Next: watch CI on 455968e9 (ORM generation step is the known risk); nothing
+else planned for this PR unless review asks.
