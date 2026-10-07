@@ -31,6 +31,7 @@ class RecordedResponse(StrEnum):
 
     PULL_REQUEST_PAGE_ONE = "pull_request_page_one"
     PULL_REQUEST_PAGE_TWO = "pull_request_page_two"
+    PULL_REQUEST_WITHOUT_CHECKS = "pull_request_without_checks"
     BRANCH_PULL_REQUESTS = "branch_pull_requests"
     BRANCH_PULL_REQUESTS_FOREIGN_OWNER = "branch_pull_requests_foreign_owner"
     BRANCH_PULL_REQUESTS_NONE = "branch_pull_requests_none"
