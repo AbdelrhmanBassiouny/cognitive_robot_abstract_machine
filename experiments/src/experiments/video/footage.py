@@ -19,7 +19,8 @@ from experiments.video.canvas import (
     VIDEO_RESOLUTION,
     Anchor,
     Area,
-    Ink,
+    FOOTAGE_BADGE,
+    FOOTAGE_TEXT,
     Typesetting,
     filled,
     pasted,
@@ -176,7 +177,7 @@ def badged(
     :param anchor: Which corner: the left top, the right top or the right middle
         standing for the right bottom.
     """
-    lettering = Typesetting(size=LABEL_SIZE, face=Face.BOLD, color=Ink.PAPER.rgb)
+    lettering = Typesetting(size=LABEL_SIZE, face=Face.BOLD, color=FOOTAGE_TEXT)
     width = lettering.width_of(text) + 2 * BADGE_PADDING
     if anchor is Anchor.LEFT_TOP:
         badge = Area(at[0], at[1], width, BADGE_HEIGHT)
@@ -184,7 +185,7 @@ def badged(
         badge = Area(at[0] - width, at[1], width, BADGE_HEIGHT)
     else:
         badge = Area(at[0] - width, at[1] - BADGE_HEIGHT, width, BADGE_HEIGHT)
-    frame = filled(frame, badge, Ink.TEXT.rgb)
+    frame = filled(frame, badge, FOOTAGE_BADGE)
     return lettering.written(frame, text, badge.centre, Anchor.CENTRE_MIDDLE)
 
 
@@ -289,7 +290,7 @@ class FullBleedFootage(Scene):
         )
         if self.inset is not None:
             panel = self.inset_panel
-            frame = filled(frame, panel.inset(-3), Ink.PAPER.rgb)
+            frame = filled(frame, panel.inset(-3), FOOTAGE_TEXT)
             frame = pasted(frame, self.inset_picture_at(seconds), panel)
         # footage at its own pace carries no badge
         return speed_badged(frame, self.speed) if self.speed != 1.0 else frame
@@ -351,14 +352,14 @@ class TitleOverFootage(Scene):
         shaded = np.clip(
             frame.astype(np.float32) * (1.0 - self.shade) + 0.5, 0, 255
         ).astype(np.uint8)
-        heading = Typesetting(size=CLAIM_SIZE, face=Face.BOLD, color=Ink.PAPER.rgb)
+        heading = Typesetting(size=CLAIM_SIZE, face=Face.BOLD, color=FOOTAGE_TEXT)
         text = heading.wrapped(self.title, resolution.width - 2 * MARGIN - 120)
         rows = text.count("\n") + 1
         middle = resolution.stage_height / 2 - 20
         written = heading.written(
             shaded, text, (resolution.width / 2, middle), Anchor.CENTRE_MIDDLE
         )
-        written = Typesetting(size=BODY_SIZE, color=Ink.PAPER.rgb).written(
+        written = Typesetting(size=BODY_SIZE, color=FOOTAGE_TEXT).written(
             written,
             self.line,
             (resolution.width / 2, middle + rows * CLAIM_SIZE * 0.7 + 44),

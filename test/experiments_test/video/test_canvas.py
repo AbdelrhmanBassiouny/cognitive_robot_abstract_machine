@@ -11,8 +11,8 @@ import pytest
 from experiments.video.lettering import Face
 from experiments.video.canvas import (
     changed_spans,
-    CODE_INK,
-    Ink,
+    DARK_THEME,
+    NEUTRAL_THEME,
     CodeTypesetting,
     Token,
     tokenised,
@@ -127,9 +127,9 @@ def test_coloured_code_is_as_wide_as_the_same_line_in_one_ink_and_carries_its_in
     frame = code.written(np.full((60, 400, 3), 255, dtype=np.uint8), line, (10, 30))
     inks = {tuple(pixel) for pixel in frame.reshape(-1, 3)}
     assert (
-        CODE_INK[Token.CLASS] in inks
-        and CODE_INK[Token.STRING] in inks
-        and CODE_INK[Token.CALL] in inks
+        NEUTRAL_THEME.code_inks[Token.CLASS] in inks
+        and NEUTRAL_THEME.code_inks[Token.STRING] in inks
+        and NEUTRAL_THEME.code_inks[Token.CALL] in inks
     )
 
 
@@ -156,9 +156,35 @@ def test_a_marked_stretch_of_code_is_filled_behind_in_the_marker_and_nothing_els
     marked = code.written(blank, line, (10, 30), marked=[(10, 24)])
     plain = code.written(blank, line, (10, 30))
     assert tuple(marked[30, int(10 + code.width_of(line[:12]))]) in {
-        Ink.MARKER.rgb,
-        CODE_INK[Token.CLASS],
+        NEUTRAL_THEME.marker,
+        NEUTRAL_THEME.code_inks[Token.CLASS],
     }
-    assert tuple(marked[30, int(10 + code.width_of("pi") + 1)]) != Ink.MARKER.rgb
-    assert Ink.MARKER.rgb in {tuple(pixel) for pixel in marked.reshape(-1, 3)}
-    assert Ink.MARKER.rgb not in {tuple(pixel) for pixel in plain.reshape(-1, 3)}
+    assert tuple(marked[30, int(10 + code.width_of("pi") + 1)]) != NEUTRAL_THEME.marker
+    assert NEUTRAL_THEME.marker in {tuple(pixel) for pixel in marked.reshape(-1, 3)}
+    assert NEUTRAL_THEME.marker not in {tuple(pixel) for pixel in plain.reshape(-1, 3)}
+
+
+# %% themes
+
+
+def test_a_theme_fills_a_page_with_its_page_colour() -> None:
+    page = DARK_THEME.page_of(RESOLUTION)
+    assert page.shape == RESOLUTION.shape
+    assert (page == DARK_THEME.page).all()
+
+
+def test_text_set_in_a_theme_is_written_in_its_text_colour_and_typeface() -> None:
+    lettering = DARK_THEME.typesetting(size=24, face=Face.BOLD)
+    assert lettering.typeface == DARK_THEME.typeface
+    written = lettering.written(DARK_THEME.page_of(RESOLUTION), "Theme", (10, 50))
+    assert DARK_THEME.text in {tuple(pixel) for pixel in written.reshape(-1, 3)}
+
+
+def test_code_is_coloured_in_the_inks_of_its_theme() -> None:
+    line = 'Tick(name="pick")'
+    code = CodeTypesetting(size=24, theme=DARK_THEME)
+    written = code.written(DARK_THEME.page_of(Resolution(400, 60)), line, (10, 30))
+    inks = {tuple(pixel) for pixel in written.reshape(-1, 3)}
+    assert DARK_THEME.code_inks[Token.CLASS] in inks
+    assert DARK_THEME.code_inks[Token.STRING] in inks
+    assert NEUTRAL_THEME.code_inks[Token.CLASS] not in inks

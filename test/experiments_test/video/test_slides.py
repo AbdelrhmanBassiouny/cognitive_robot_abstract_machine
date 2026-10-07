@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import numpy as np
 
+from experiments.video.canvas import DARK_THEME
 from experiments.video.slides import ResultRow, ResultsTable, TextCard
 from experiments.video.timeline import Frame, HeldScene
 
@@ -51,3 +52,13 @@ def test_a_text_card_writes_both_its_texts() -> None:
 def test_slides_cut_in_rather_than_dissolving() -> None:
     assert not ResultsTable("t", ROWS).dissolves_in
     assert not TextCard("h", "l").dissolves_in
+
+
+def test_slides_are_drawn_on_the_page_of_their_theme_in_its_text_colour() -> None:
+    for slide in (
+        TextCard("The code", "a line", theme=DARK_THEME),
+        ResultsTable("On the real robot", ROWS, theme=DARK_THEME),
+    ):
+        frame = slide.frame_at(0.0)
+        assert (frame[:120] == DARK_THEME.page).all()
+        assert DARK_THEME.text in {tuple(pixel) for pixel in frame.reshape(-1, 3)}

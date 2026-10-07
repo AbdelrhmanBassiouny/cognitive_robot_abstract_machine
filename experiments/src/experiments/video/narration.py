@@ -32,7 +32,15 @@ from typing_extensions import (
 )
 
 from experiments.video.cache import SceneCache, configured_cache_directory
-from experiments.video.canvas import BODY_SIZE, Anchor, Area, Ink, Typesetting, darkened
+from experiments.video.canvas import (
+    BODY_SIZE,
+    FOOTAGE_TEXT,
+    NEUTRAL_THEME,
+    Anchor,
+    Area,
+    Typesetting,
+    darkened,
+)
 from experiments.video.timeline import Frame, HeldScene, Resolution, Scene, Timeline
 
 SUBTITLE_ROW = 42
@@ -759,7 +767,7 @@ def captioned(frame: Frame, rows: Sequence[str]) -> Frame:
             BAND_SHADE,
         )
     lettering = Typesetting(
-        size=BODY_SIZE, color=Ink.PAPER.rgb if on_footage else Ink.TEXT.rgb
+        size=BODY_SIZE, color=FOOTAGE_TEXT if on_footage else NEUTRAL_THEME.text
     )
     for number, row in enumerate(rows):
         frame = lettering.written(

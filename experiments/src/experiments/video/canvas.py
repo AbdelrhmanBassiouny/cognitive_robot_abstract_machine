@@ -6,7 +6,7 @@ every scene shares, so the scenes of a video look like one piece.
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, replace
 from difflib import SequenceMatcher
 from enum import Enum
 
@@ -15,7 +15,7 @@ import numpy as np
 from PIL import Image, ImageDraw
 from typing_extensions import List, Optional, Sequence, Tuple
 
-from experiments.video.lettering import Face, font
+from experiments.video.lettering import Face, Typeface
 from experiments.video.timeline import Frame, Resolution
 
 Rgb = Tuple[int, int, int]
@@ -60,48 +60,167 @@ rather than anything outlined.
 # %% the colours
 
 
-class Ink(Enum):
+@dataclass(frozen=True)
+class SyntaxInks:
     """
-    The neutral colours every scene writes and rules in; the hues a video gives its own
-    subjects are its own to choose, as :data:`Rgb` values.
+    What the kinds of piece of a line of code are written in, as an editor colours
+    them; names and punctuation take the theme's text and muted colours.
     """
 
-    TEXT = (0x1F, 0x23, 0x28)
+    call: Rgb
+    """
+    A name being called.
+    """
+
+    class_name: Rgb
+    """
+    A capitalised name: a class.
+    """
+
+    string: Rgb
+    """
+    A quoted string.
+    """
+
+    number: Rgb
+    """
+    A number.
+    """
+
+
+@dataclass(frozen=True)
+class Theme:
+    """
+    The colours and fonts every scene of a video draws in, so its scenes look like one
+    piece; the hues a video gives its own subjects are its own to choose, as
+    :data:`Rgb` values.
+    """
+
+    page: Rgb
+    """
+    What a slide is drawn on.
+    """
+
+    text: Rgb
     """
     What text is written in on the page.
     """
 
-    MUTED = (0x6B, 0x72, 0x80)
+    muted: Rgb
     """
     What secondary text is written in.
     """
 
-    HAIRLINE = (0xCF, 0xD4, 0xDC)
+    hairline: Rgb
     """
     What rules and frames are drawn in.
     """
 
-    BUBBLE = (0xF6, 0xF7, 0xF9)
+    panel: Rgb
     """
     What a panel standing off the page is filled with.
     """
 
-    PAPER = (0xFF, 0xFF, 0xFF)
-    """
-    The page, and text written over footage.
-    """
-
-    MARKER = (0xFF, 0xEE, 0x8C)
+    marker: Rgb
     """
     What a highlighter leaves behind a stretch of code that a reader is pointed to.
     """
 
+    accent: Rgb
+    """
+    The one colour that marks what to look at, and how far the video has played.
+    """
+
+    syntax: SyntaxInks
+    """
+    What code is coloured in.
+    """
+
+    typeface: Typeface = Typeface()
+    """
+    The fonts text is set in.
+    """
+
+    def page_of(self, resolution: Resolution) -> Frame:
+        """
+        :param resolution: The size of the frame.
+        :return: An empty page of that size.
+        """
+        return np.full(resolution.shape, self.page, dtype=np.uint8)
+
+    def typesetting(self, size: int, face: Face = Face.REGULAR) -> Typesetting:
+        """
+        :param size: The height of the letters, in pixels.
+        :param face: The face they are set in.
+        :return: Text of that size and face, set in this theme's text colour and fonts.
+        """
+        return Typesetting(
+            size=size, face=face, color=self.text, typeface=self.typeface
+        )
+
     @property
-    def rgb(self) -> Rgb:
+    def code_inks(self) -> dict[Token, Rgb]:
         """
-        The colour as bytes.
+        What each kind of piece of a line of code is written in.
         """
-        return self.value
+        return {
+            Token.CALL: self.syntax.call,
+            Token.CLASS: self.syntax.class_name,
+            Token.STRING: self.syntax.string,
+            Token.NUMBER: self.syntax.number,
+            Token.NAME: self.text,
+            Token.PUNCTUATION: self.muted,
+        }
+
+
+NEUTRAL_THEME = Theme(
+    page=(0xFF, 0xFF, 0xFF),
+    text=(0x1F, 0x23, 0x28),
+    muted=(0x6B, 0x72, 0x80),
+    hairline=(0xCF, 0xD4, 0xDC),
+    panel=(0xF6, 0xF7, 0xF9),
+    marker=(0xFF, 0xEE, 0x8C),
+    accent=(0xC8, 0x5A, 0x19),
+    syntax=SyntaxInks(
+        call=(0x1D, 0x4E, 0xD8),
+        class_name=(0x6D, 0x28, 0xD9),
+        string=(0x15, 0x80, 0x3D),
+        number=(0xB4, 0x53, 0x09),
+    ),
+)
+"""
+Dark text on a white page, in greys, with an orange accent: the default.
+"""
+
+DARK_THEME = Theme(
+    page=(0x0D, 0x11, 0x17),
+    text=(0xE6, 0xED, 0xF3),
+    muted=(0x8B, 0x94, 0x9E),
+    hairline=(0x6E, 0x76, 0x81),
+    panel=(0x16, 0x1B, 0x22),
+    marker=(0x4D, 0x3F, 0x12),
+    accent=(0xF0, 0x88, 0x3E),
+    syntax=SyntaxInks(
+        call=(0x5B, 0x8D, 0xEF),
+        class_name=(0xBC, 0x8C, 0xFF),
+        string=(0x3F, 0xB9, 0x7A),
+        number=(0xE3, 0xB3, 0x41),
+    ),
+)
+"""
+Light text on a near-black page with an orange accent, the look of an explainer video.
+"""
+
+FOOTAGE_TEXT: Rgb = (0xFF, 0xFF, 0xFF)
+"""
+What text is written in over footage, whatever the theme: white, on footage darkened
+under it.
+"""
+
+FOOTAGE_BADGE: Rgb = (0x1F, 0x23, 0x28)
+"""
+What a badge over footage is filled with, whatever the theme.
+"""
 
 
 # %% where things go
@@ -377,9 +496,14 @@ class Typesetting:
     The face they are set in.
     """
 
-    color: Rgb = Ink.TEXT.rgb
+    color: Rgb = NEUTRAL_THEME.text
     """
     What they are written in.
+    """
+
+    typeface: Typeface = NEUTRAL_THEME.typeface
+    """
+    The fonts the faces are set in.
     """
 
     def written(
@@ -399,7 +523,7 @@ class Typesetting:
         """
         picture = Image.fromarray(frame)
         drawing = ImageDraw.Draw(picture)
-        typeface = font(self.face, self.size)
+        typeface = self.typeface.font(self.face, self.size)
         spacing = self.size * 0.35
         if "\n" in text:
             # several rows hang from their top; a middle anchor is met by raising them by
@@ -428,7 +552,7 @@ class Typesetting:
         :param text: One line.
         :return: How many pixels wide it is set.
         """
-        return font(self.face, self.size).getlength(text)
+        return self.typeface.font(self.face, self.size).getlength(text)
 
     def wrapped(self, text: str, width: float) -> str:
         """
@@ -466,19 +590,6 @@ class Token(Enum):
     NAME = "name"
     PUNCTUATION = "punctuation"
 
-
-CODE_INK: dict[Token, Rgb] = {
-    Token.CALL: (0x1D, 0x4E, 0xD8),
-    Token.CLASS: (0x6D, 0x28, 0xD9),
-    Token.STRING: (0x15, 0x80, 0x3D),
-    Token.NUMBER: (0xB4, 0x53, 0x09),
-    Token.NAME: Ink.TEXT.rgb,
-    Token.PUNCTUATION: Ink.MUTED.rgb,
-}
-"""
-What each kind of piece is written in, as an editor would colour calls, classes,
-strings and numbers.
-"""
 
 CODE_PIECE = re.compile(r"\"[^\"]*\"|'[^']*'|\d+(?:\.\d+)?|[A-Za-z_]\w*|\s+|.")
 """
@@ -556,19 +667,18 @@ class CodeTypesetting:
     The height of the letters, in pixels.
     """
 
-    inks: dict[Token, Rgb] = field(default_factory=lambda: dict(CODE_INK))
+    theme: Theme = NEUTRAL_THEME
     """
-    What each kind of piece is written in.
+    What the pieces are coloured in, what a marked stretch is filled behind with, and
+    the mono font.
     """
 
     @property
     def face(self) -> Typesetting:
-        return Typesetting(size=self.size, face=Face.MONO)
-
-    marker: Rgb = Ink.MARKER.rgb
-    """
-    What a marked stretch is filled behind with.
-    """
+        """
+        The mono face at this size, in the theme's text colour.
+        """
+        return self.theme.typesetting(self.size, Face.MONO)
 
     def written(
         self,
@@ -595,11 +705,11 @@ class CodeTypesetting:
                 Area(
                     left - 3, y - self.size * 0.62, right - left + 6, self.size * 1.24
                 ),
-                self.marker,
+                self.theme.marker,
             )
         for piece, kind in tokenised(line):
             if not piece.isspace():
-                frame = replace(self.face, color=self.inks[kind]).written(
+                frame = replace(self.face, color=self.theme.code_inks[kind]).written(
                     frame, piece, (x, y), Anchor.LEFT_MIDDLE
                 )
             x += self.face.width_of(piece)
