@@ -286,6 +286,18 @@ class PhraseFragment(VerbalizationFragment):
     separator: Separator = Separator.SPACE
     """Separator inserted between adjacent parts."""
 
+    concord_number: Optional[GrammaticalNumber] = None
+    """The grammatical number this phrase's subject imposes on its finite verb / copula by *concord*
+    — the syntactic agreement whereby a verb matches its subject (*"the dogs **are**"* vs *"the dog
+    **is**"*; Quirk, Greenbaum, Leech & Svartvik 1985, *A Comprehensive Grammar of the English
+    Language*, ch. 10). It is the CONCORD number, distinct from a leaf's own inflection ``number``:
+    a pronoun subject *"they"* imposes plural concord yet must not itself inflect to *"theys"*.
+
+    Set by the coreference pass when it discovers a subject's number (a pronominalised population, a
+    scalar distributed over it) — the one number not evident from a plain head noun — and consumed by
+    the :class:`~krrood.entity_query_language.verbalization.rendering.agreement_processor.AgreementProcessor`.
+    ``None`` when this phrase is not a subject-led predicate (the default)."""
+
 
 @dataclass
 class Clause(PhraseFragment):
@@ -619,51 +631,3 @@ def oxford_comma(
         result.append(WordFragment(text=Separator.COMMA))
     result.append(PhraseFragment(parts=[conjunction, tail]))
     return PhraseFragment(parts=result, separator=Separator.NONE)
-
-
-# %% Subject-verb agreement
-
-
-def apply_subject_verb_agreement(
-    part: VerbalizationFragment, number: GrammaticalNumber
-) -> VerbalizationFragment:
-    """:return: *part* re-tagged with *number* when it is the clause's inflected predicate word —
-    an ``OPERATOR`` (copula / comparison) or ``VERB`` leaf, or a phrase led by one (the factored
-    *"is greater than"*) — else *part* unchanged. The copula inflects (*"is"* → *"are"*) and a
-    lexical verb agrees (*"works"* → *"work"*); a non-copula operator (*"contains"*) is tagged too
-    but the morphology pass leaves it be, so a caller never has to single the predicate word out
-    by text.
-
-    Shared by the coreference pass (a pronominalised subject re-agrees the clause it heads) and
-    :func:`~…vocabulary.parts_of_speech.clause` (a coordinated subject is plural from the moment
-    the clause is built).
-
-    >>> from krrood.entity_query_language.verbalization.fragments.roles import SemanticRole
-    >>> from krrood.entity_query_language.verbalization.fragments.features import (
-    ...     GrammaticalNumber,
-    ... )
-    >>> from krrood.entity_query_language.verbalization.rendering.morphology_processor import (
-    ...     MorphologyProcessor,
-    ... )
-    >>> leaf = RoleFragment(text="is", role=SemanticRole.OPERATOR)
-    >>> plural_leaf = apply_subject_verb_agreement(leaf, GrammaticalNumber.PLURAL)
-    >>> MorphologyProcessor().rewrite(plural_leaf).text
-    'are'
-
-    :param part: A clause constituent, checked for the predicate-word shape.
-    :param number: The grammatical number to agree it to.
-    """
-    predicate_word_roles = (SemanticRole.OPERATOR, SemanticRole.VERB)
-    if isinstance(part, RoleFragment) and part.role in predicate_word_roles:
-        return replace(part, number=number)
-    leads_with_predicate_word = (
-        isinstance(part, PhraseFragment)
-        and part.parts
-        and isinstance(part.parts[0], RoleFragment)
-        and part.parts[0].role in predicate_word_roles
-    )
-    if leads_with_predicate_word:
-        return replace(
-            part, parts=[replace(part.parts[0], number=number), *part.parts[1:]]
-        )
-    return part
