@@ -59,8 +59,12 @@ items:
       volume levelled in KokoroVoice; a boxed subtitle style beside the clear
       band; a progress bar across the whole video drawn as a timeline overlay
       like Subtitled; and a Theme (colours and fonts) replacing the fixed
-      neutral Inks. Still open: whether the default Theme is Naren's dark one
-      or the neutral one.
+      neutral Inks. All five pushed 2026-10-07 (1ca3a28a..455968e9, 100 tests):
+      Line.pace; trimmed and levelled KokoroVoice speech; timeline.Overlay with
+      overlays.ProgressBar; CaptionStyle (BandCaption, BoxedCaption);
+      VideoTheme (named so, not Theme: semantic_digital_twin has a class Theme
+      and the ORM generator resolves hints in one namespace) with NEUTRAL_THEME
+      as the default and DARK_THEME as the explainer look.
 
   - id: icra-video-on-core
     title: "#429 rebuilt on the general package, keeping only the ICRA scenes"
@@ -103,5 +107,6 @@ items:
       three-card overview and summary/thank-you scenes. Tests render a tiny
       scene at low quality without LaTeX. None of the reference's paper content
       (scenes, narration_v6, timing_v6, stills) is committed: the paper is under
-      double-blind review. Still open: whether Naren or a session of
-      Abdelrhman's writes it.
+      double-blind review. Naren writes it (decided 2026-10-07), branched from
+      #472's branch with the PR based on it; the prompt handed to Naren is on
+      the write-up page (https://claude.ai/artifact/TiTcfZbU2wQnNasrodhFZ5).

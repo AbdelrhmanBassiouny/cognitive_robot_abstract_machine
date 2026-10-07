@@ -54,3 +54,10 @@ Naren's own video is rebuilt on the package outside this repository.
 
 Shareable write-up: https://claude.ai/artifact/TiTcfZbU2wQnNasrodhFZ5
 
+
+Decided 2026-10-07: the neutral theme stays the default, so existing videos keep
+their look, and each video may pass DARK_THEME. Naren writes `manim-scenes`, from
+the prompt on the write-up page. The folded-in parts landed on #472 the same day.
+The theme class is VideoTheme rather than Theme, because semantic_digital_twin
+already has a class Theme and the ORM generator resolves field types in one
+namespace of every scanned class (the same trap as #472's earlier Sequence field).
