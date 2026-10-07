@@ -73,9 +73,9 @@ for the subtitles (`Resolution.stage_height`).
 
 ## The look
 
-A `canvas.Theme` holds the colours and fonts the slides and captions are drawn in: the
-page, text, muted, hairline, panel, marker and accent colours, how code is coloured,
-and a `lettering.Typeface` (DejaVu by default, since matplotlib ships it). Slides
+A `canvas.VideoTheme` holds the colours and fonts the slides and captions are drawn
+in: the page, text, muted, hairline, panel, marker and accent colours, how code is
+coloured, and a `lettering.Typeface` (DejaVu by default, since matplotlib ships it). Slides
 take one as `theme=`. `NEUTRAL_THEME`, dark text on white, is the default;
 `DARK_THEME` is light text on a near-black page. Footage keeps white text and dark
 badges whatever the theme.

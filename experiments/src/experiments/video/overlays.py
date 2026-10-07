@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from experiments.video.canvas import NEUTRAL_THEME, Theme
+from experiments.video.canvas import NEUTRAL_THEME, VideoTheme
 from experiments.video.timeline import Frame, Overlay
 
 PROGRESS_BAR_THICKNESS = 5
@@ -22,7 +22,7 @@ class ProgressBar(Overlay):
     video has played, so it grows on across the scenes as one bar.
     """
 
-    theme: Theme = NEUTRAL_THEME
+    theme: VideoTheme = NEUTRAL_THEME
     """
     The colours of the bar: the accent for what has played, the panel colour for what
     has not.

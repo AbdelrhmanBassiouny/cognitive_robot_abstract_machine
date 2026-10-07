@@ -176,7 +176,7 @@ def test_a_theme_fills_a_page_with_its_page_colour() -> None:
 def test_text_set_in_a_theme_is_written_in_its_text_colour_and_typeface() -> None:
     lettering = DARK_THEME.typesetting(size=24, face=Face.BOLD)
     assert lettering.typeface == DARK_THEME.typeface
-    written = lettering.written(DARK_THEME.page_of(RESOLUTION), "Theme", (10, 50))
+    written = lettering.written(DARK_THEME.page_of(RESOLUTION), "VideoTheme", (10, 50))
     assert DARK_THEME.text in {tuple(pixel) for pixel in written.reshape(-1, 3)}
 
 

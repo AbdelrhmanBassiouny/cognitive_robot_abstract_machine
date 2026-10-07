@@ -89,7 +89,7 @@ class SyntaxInks:
 
 
 @dataclass(frozen=True)
-class Theme:
+class VideoTheme:
     """
     The colours and fonts every scene of a video draws in, so its scenes look like one
     piece; the hues a video gives its own subjects are its own to choose, as
@@ -173,7 +173,7 @@ class Theme:
         }
 
 
-NEUTRAL_THEME = Theme(
+NEUTRAL_THEME = VideoTheme(
     page=(0xFF, 0xFF, 0xFF),
     text=(0x1F, 0x23, 0x28),
     muted=(0x6B, 0x72, 0x80),
@@ -192,7 +192,7 @@ NEUTRAL_THEME = Theme(
 Dark text on a white page, in greys, with an orange accent: the default.
 """
 
-DARK_THEME = Theme(
+DARK_THEME = VideoTheme(
     page=(0x0D, 0x11, 0x17),
     text=(0xE6, 0xED, 0xF3),
     muted=(0x8B, 0x94, 0x9E),
@@ -687,7 +687,7 @@ class CodeTypesetting:
     The height of the letters, in pixels.
     """
 
-    theme: Theme = NEUTRAL_THEME
+    theme: VideoTheme = NEUTRAL_THEME
     """
     What the pieces are coloured in, what a marked stretch is filled behind with, and
     the mono font.

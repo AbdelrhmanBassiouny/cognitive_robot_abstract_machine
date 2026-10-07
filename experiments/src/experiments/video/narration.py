@@ -39,7 +39,7 @@ from experiments.video.canvas import (
     NEUTRAL_THEME,
     Anchor,
     Area,
-    Theme,
+    VideoTheme,
     Typesetting,
     darkened,
     shaded,
@@ -739,7 +739,7 @@ class BandCaption(CaptionStyle):
     shaded towards black wherever footage fills the frame.
     """
 
-    theme: Theme = NEUTRAL_THEME
+    theme: VideoTheme = NEUTRAL_THEME
     """
     The page the band is told apart from footage by, and the colour written on it.
     """

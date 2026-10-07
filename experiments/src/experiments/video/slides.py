@@ -13,7 +13,7 @@ from experiments.video.canvas import (
     NEUTRAL_THEME,
     VIDEO_RESOLUTION,
     Anchor,
-    Theme,
+    VideoTheme,
     lined,
 )
 from experiments.video.lettering import Face
@@ -84,7 +84,7 @@ class ResultsTable(HeldScene):
     The size of the slide.
     """
 
-    theme: Theme = NEUTRAL_THEME
+    theme: VideoTheme = NEUTRAL_THEME
     """
     The colours and fonts it is drawn in.
     """
@@ -167,7 +167,7 @@ class TextCard(HeldScene):
     The size of the slide.
     """
 
-    theme: Theme = NEUTRAL_THEME
+    theme: VideoTheme = NEUTRAL_THEME
     """
     The colours and fonts it is drawn in.
     """
