@@ -2,7 +2,18 @@ from __future__ import annotations
 
 from contextlib import contextmanager
 from dataclasses import dataclass, field
-from typing_extensions import Callable, Dict, Iterator, List, Any, Optional, Set, Type
+from typing_extensions import (
+    Callable,
+    Dict,
+    Iterator,
+    List,
+    Any,
+    Optional,
+    Set,
+    Tuple,
+    Type,
+    Union,
+)
 import operator
 
 import sqlalchemy.inspection
@@ -18,7 +29,15 @@ from sqlalchemy import (
     exists as sqlalchemy_exists,
     true,
 )
-from sqlalchemy.orm import Session, aliased
+from sqlalchemy import Column, Table
+from sqlalchemy.orm import (
+    ColumnProperty,
+    RelationshipDirection,
+    RelationshipProperty,
+    Session,
+    aliased,
+)
+from sqlalchemy.sql.expression import ColumnElement, FromClause
 from sqlalchemy.types import Boolean, Date, DateTime, Integer, Numeric, String, Time
 
 from krrood.entity_query_language.query.query import (
@@ -2307,8 +2326,976 @@ class EQLTranslator:
         return []
 
 
+# %% Selection of database identifiers
+
+
+@dataclass
+class QueryScope:
+    """
+    The FROM clause and the conditions of one SELECT statement under construction when
+    identifiers are selected: the outer query, or the subquery of an EXISTS. Tables are
+    combined with inner joins, so that a row of the scope is a combination of table rows
+    that satisfies every join condition.
+    """
+
+    from_clause: Optional[FromClause] = None
+    """The tables joined so far, or None while the scope has none."""
+
+    tables: List[FromClause] = field(default_factory=list)
+    """The aliases of the tables of the scope."""
+
+    conditions: List[ColumnElement] = field(default_factory=list)
+    """
+    Conditions of the WHERE clause: the join condition of the first table of a subquery,
+    which refers to the enclosing query, the conditions that references are set, and the
+    condition of the query.
+    """
+
+    def join(self, table: FromClause, condition: Optional[ColumnElement]) -> None:
+        """
+        Add a table to the FROM clause with an inner join.
+
+        :param table: The alias of the table.
+        :param condition: The join condition, or None for a table each row of which
+            combines with every row of the scope.
+        """
+        self.tables.append(table)
+        if self.from_clause is None:
+            self.from_clause = table
+            if condition is not None:
+                self.conditions.append(condition)
+            return
+        self.from_clause = self.from_clause.join(
+            table, true() if condition is None else condition
+        )
+
+    def select(self, *columns: Any) -> Select:
+        """
+        :param columns: The selected columns.
+        :return: The SELECT statement of the scope.
+        """
+        statement = select(*columns)
+        if self.from_clause is not None:
+            statement = statement.select_from(self.from_clause)
+        if self.conditions:
+            statement = statement.where(*self.conditions)
+        return statement
+
+    def exists(self, criterion: Optional[ColumnElement]) -> ColumnElement:
+        """
+        :param criterion: A further condition on the rows of the scope, or None for none.
+        :return: The correlated EXISTS that holds when the scope has a row that satisfies
+            the criterion. Every table that is not one of the scope is correlated with an
+            enclosing query, also with one that encloses the subquery indirectly.
+        """
+        statement = self.select(literal(1)).correlate_except(*self.tables)
+        if criterion is not None:
+            statement = statement.where(criterion)
+        return sqlalchemy_exists(statement)
+
+
+@dataclass
+class IdentifiedElement:
+    """
+    What a variable, a flattened collection or a reference ranges over when identifiers
+    are selected: the column that holds the database id of its rows, and the tables of its
+    class hierarchy that are joined on that id so far. All tables of a joined-inheritance
+    hierarchy share the database id, so a column of the element is read by joining only
+    the table that declares the column, on the id.
+    """
+
+    dao_class: type
+    """The data access object class of the values that the element ranges over."""
+
+    identifier: ColumnElement
+    """
+    The column that holds the database id: a foreign key column, such as the source or
+    target column of an association table or the column of a reference, or the primary key
+    of a table of the class hierarchy.
+    """
+
+    scope: QueryScope
+    """The scope that binds the element, into which the tables of the element are joined."""
+
+    restricted_class: type
+    """
+    The most specific data access object class to whose rows the identifier is known to
+    refer: the class of the table that the foreign key of the identifier references, or the
+    class whose table was joined to restrict the element. It is ``dao_class`` or one of its
+    subclasses.
+    """
+
+    tables: Dict[Table, FromClause] = field(default_factory=dict)
+    """The alias of every table of the class hierarchy joined on the identifier, by table."""
+
+    def table(self, table: Table) -> FromClause:
+        """
+        :param table: A table of the class hierarchy of ``restricted_class``.
+        :return: The alias of the table joined on the identifier; it is joined on first use.
+            Every row of the element has a row in the table, so the join does not change the
+            rows of the scope.
+        """
+        alias = self.tables.get(table)
+        if alias is None:
+            alias = table.alias()
+            self.scope.join(alias, primary_key_of(alias) == self.identifier)
+            self.tables[table] = alias
+        return alias
+
+    def column(self, column: Column) -> ColumnElement:
+        """
+        :param column: A column of a table of the class hierarchy of ``restricted_class``.
+        :return: The column of the element: the identifier for a primary key, else the column
+            of the alias of its table.
+        """
+        if column.primary_key:
+            return self.identifier
+        return self.table(column.table).corresponding_column(column)
+
+
+def primary_key_of(table: FromClause) -> ColumnElement:
+    """
+    :param table: A table of a data access object or an alias of one.
+    :return: Its primary key column, the database id.
+    """
+    return next(iter(table.primary_key))
+
+
+@dataclass
+class IdentifierSelectingTranslator(EQLTranslator):
+    """
+    Translate an EQL query into SQL that selects the database id of every selected variable
+    and flattened collection, the identity of the answer, instead of its data access
+    object. The translation joins a table only when it is needed:
+
+    * A variable or flattened element is represented by the column that holds its database
+      id. A flattened element of a collection stored in an association table is the target
+      column of the association table, and a variable whose first use is to range over one
+      of its collections is the source column of that association table, so that
+      ``set_of(p, flat_variable(p.is_member_of))`` becomes
+      ``SELECT source_id, target_id FROM association``.
+    * A column of a variable is read by joining, on the database id, only the table of its
+      class hierarchy that declares the column, not the whole inheritance chain.
+    * A foreign key restricts the class of the rows it refers to. A variable of class ``C``
+      represented by a foreign key that references the table of ``C`` or of a subclass of
+      ``C`` needs no join; a foreign key that references the table of a superclass of ``C``
+      is restricted to ``C`` by joining the table of ``C`` on the id.
+    * In a query that returns distinct answers, a membership test
+      ``contains(v.collection, item)`` among the conditions that all answers satisfy, for a
+      variable ``v`` that is not yet bound, joins the association table on its target column
+      and binds ``v`` to its source column, instead of testing an EXISTS subquery for every
+      combination of rows.
+
+    Every variable ranges over the rows of its class independently, as when the query uses
+    a collection-valued attribute (see ``EQLTranslator.element_mode``). The guards of the
+    translation of collections apply unchanged: a join that would restrict rows inside
+    ``or_`` or ``not_``, or inside an existential quantifier, is rejected. A join that only
+    reads a column of a bound element on its database id does not restrict rows and is
+    therefore always allowed. The translation relies on the foreign keys of the schema:
+    an identifier held by a foreign key column refers to a row of the referenced table.
+    """
+
+    outer_scope: QueryScope = field(default_factory=QueryScope)
+    """The scope of the outer query."""
+
+    references: Dict[Tuple[int, str], IdentifiedElement] = field(default_factory=dict)
+    """
+    The elements of the single-valued references followed so far, by the id of the element
+    they start from and the name of the reference, so that following a reference twice
+    refers to the same rows.
+    """
+
+    classes_by_table: Dict[Table, type] = field(default_factory=dict)
+    """The data access object class whose own table each table is, filled on first use."""
+
+    def translate(self) -> None:
+        """
+        Translate the query: bind the selected flattened collections, translate the
+        condition, then select the identifiers and columns of the selection.
+        """
+        self._reject_inference()
+        self._scan_query()
+        self.element_mode = True
+        self._reject_grouping()
+        selected = list(self.select_like._selected_variables_)
+        for expression in selected:
+            self._require_selectable(expression)
+        for expression in selected:
+            if isinstance(expression, FlatVariable):
+                self._element_of(expression)
+        if self.eql_query._where_expression_ is not None:
+            condition = self.translate_condition(self.eql_query._where_expression_)
+            if condition is not None:
+                self.outer_scope.conditions.append(condition)
+        columns = [self._selected_column(expression) for expression in selected]
+        order = self._order_column()
+        self.sql_query = self.outer_scope.select(*columns)
+        if order is not None:
+            self.sql_query = self.sql_query.order_by(order)
+        if self.eql_query._limit_ is not None:
+            self.sql_query = self.sql_query.limit(self.eql_query._limit_)
+        if self.eql_query._distinct_on:
+            self.sql_query = self.sql_query.distinct()
+
+    def _reject_grouping(self) -> None:
+        """
+        :raises UnsupportedTranslationError: When the query groups its results, which
+            selects aggregates instead of the identities of answers.
+        """
+        if (
+            self.eql_query._grouped_by_builder_ is not None
+            or self.eql_query._having_builder_ is not None
+        ):
+            raise UnsupportedTranslationError(
+                self.eql_query,
+                "a grouped query selects aggregates, not identifiers; translate it "
+                "without select_identifiers",
+            )
+
+    def _require_selectable(self, expression: Any) -> None:
+        """
+        :param expression: A selected expression.
+        :raises UnsupportedTranslationError: When it is not a variable, a flattened
+            collection or an attribute, which have an identifier or a column.
+        """
+        if not (
+            isinstance(expression, (FlatVariable, Attribute))
+            or self._is_plain_variable(expression)
+        ):
+            raise UnsupportedTranslationError(
+                expression,
+                "only variables, flattened collections and attributes are selected as "
+                "identifiers or columns",
+            )
+
+    def _selected_column(self, expression: Any) -> Any:
+        """
+        :return: The identifier of a selected variable or flattened collection, or the
+            column of a selected attribute.
+        """
+        if isinstance(expression, Attribute):
+            return self.translate_attribute(expression)
+        return self._element_of(expression).identifier
+
+    def _order_column(self) -> Optional[Any]:
+        """
+        :return: The column the query is ordered by, or None if it is not ordered.
+        """
+        builder = self.eql_query._ordered_by_builder_
+        if builder is None:
+            return None
+        column = self._translate_comparator_operand(builder.variable)
+        return column.desc() if builder.descending else column
+
+    # %% Binding variables and flattened collections
+
+    def _element_of(self, node: Any) -> IdentifiedElement:
+        """
+        :param node: A variable or a flattened collection.
+        :return: The element the node ranges over; it is bound on first use.
+        :raises UnsupportedTranslationError: When the node is neither.
+        """
+        element = self.elements_by_node.get(id(node))
+        if element is not None:
+            return element
+        if isinstance(node, FlatVariable):
+            element = self._bind_flattened(node)
+        elif self._is_plain_variable(node):
+            element = self._bind_variable(node)
+        else:
+            raise UnsupportedTranslationError(
+                node, "only variables and flattened collections range over tables"
+            )
+        self.elements_by_node[id(node)] = element
+        return element
+
+    def _bind_variable(self, variable: Variable) -> IdentifiedElement:
+        """
+        Bind a variable to its own table, the table of its class, added to the outer query
+        as a table each row of which combines with every row, since the variable ranges over
+        all instances independently. A variable that occurs outside every existential
+        quantifier is bound by the outer query also when its first use is inside one.
+
+        :return: The element of the variable.
+        :raises UnsupportedTranslationError: For a variable that occurs only inside an
+            existential quantifier without being quantified by it.
+        """
+        if id(variable) not in self.outer_node_ids:
+            self._require_joins_allowed(variable, conditional=False)
+        return self._table_element(
+            self._require_dao_class(variable._type_), self.outer_scope
+        )
+
+    @staticmethod
+    def _table_element(dao_class: type, scope: QueryScope) -> IdentifiedElement:
+        """
+        :param dao_class: A data access object class.
+        :param scope: The scope to bind the element in.
+        :return: An element over the rows of the own table of the class, joined into the
+            scope as a table each row of which combines with every row of the scope.
+        """
+        table = sqlalchemy.inspection.inspect(dao_class).local_table
+        alias = table.alias()
+        scope.join(alias, None)
+        return IdentifiedElement(
+            dao_class, primary_key_of(alias), scope, dao_class, {table: alias}
+        )
+
+    def _bind_flattened(self, flat: FlatVariable) -> IdentifiedElement:
+        """
+        Bind a flattened collection in the outer query. When its owner is a variable that
+        is not bound yet, the variable is bound to the source column of the association
+        table (see :meth:`_link_unbound_root`); otherwise the association table is joined
+        to the bound owner.
+
+        :return: The element of the flattened collection.
+        :raises UnsupportedTranslationError: When the collection is not reached by
+            attribute access or is not stored, or when the join is not allowed here.
+        """
+        collection = flat._child_
+        if not isinstance(collection, Attribute):
+            raise UnsupportedTranslationError(
+                flat, "only collections reached by attribute access are stored"
+            )
+        self._require_joins_allowed(flat)
+        names = self._collect_attribute_chain(collection)
+        root = self._chain_root(collection)
+        if len(names) == 1 and self._can_link_unbound_root(root, names[0]):
+            link, relationship = self._link_unbound_root(root, names[0], None)
+            return self._target_of_link(link, relationship, self.outer_scope)
+        owner = self._walk_references(self._element_of(root), names[:-1], collection)
+        owner, relationship = self._resolve_on_element(
+            owner, names[-1], collection_in_scope=owner.scope is self.outer_scope
+        )
+        self._require_collection(relationship, names[-1], collection)
+        return self._collection_element(owner, relationship, self.outer_scope)
+
+    @staticmethod
+    def _require_collection(relationship: Any, name: str, expression: Any) -> None:
+        """
+        :raises UnsupportedTranslationError: When ``relationship`` is not a stored
+            collection.
+        """
+        if (
+            not isinstance(relationship, RelationshipProperty)
+            or not relationship.uselist
+        ):
+            raise UnsupportedTranslationError(
+                expression, f"{name} is not a stored collection"
+            )
+
+    def _can_link_unbound_root(self, root: Any, name: str) -> bool:
+        """
+        :param root: The node an attribute chain starts from.
+        :param name: The name of the collection of the root.
+        :return: True if the root is a variable that is not bound yet and whose collection
+            ``name`` is stored in a table that refers to its owner by database id, so that
+            the variable can be bound to the column of that table.
+        """
+        if not self._is_plain_variable(root) or id(root) in self.elements_by_node:
+            return False
+        relationship = self._declared_relationship(
+            self._require_dao_class(root._type_), name
+        )
+        if relationship is None or not relationship.uselist:
+            return False
+        if relationship.direction is not RelationshipDirection.ONETOMANY:
+            return False
+        if relationship.secondary is not None:
+            return False
+        local, _ = self._column_pair(relationship)
+        return local.primary_key
+
+    def _declared_relationship(self, dao_class: type, name: str) -> Optional[Any]:
+        """
+        :return: The relationship ``name`` of the class, or of the one subclass that
+            declares it, or None if neither has such a relationship.
+        """
+        mapper = sqlalchemy.inspection.inspect(dao_class)
+        if name in mapper.attrs:
+            relationship = mapper.attrs[name]
+            return (
+                relationship if isinstance(relationship, RelationshipProperty) else None
+            )
+        if "role_taker" in mapper.relationships:
+            return None
+        subclass = self._subclass_declaring(dao_class, name)
+        if subclass is None:
+            return None
+        return self._declared_relationship(subclass, name)
+
+    def _link_unbound_root(
+        self, root: Variable, name: str, item_identifier: Optional[ColumnElement]
+    ) -> Tuple[IdentifiedElement, Any]:
+        """
+        Bind a variable that is not bound yet to the column of the table that stores its
+        collection ``name`` and refers to the owner by database id: the source column of an
+        association table. The table becomes part of the outer query. The variable is
+        restricted to its class if the foreign key references the table of a superclass.
+
+        :param root: The variable; :meth:`_can_link_unbound_root` holds for it.
+        :param name: The name of the collection.
+        :param item_identifier: The identifier that an element of the collection must have,
+            as the join condition of the table, or None for no condition.
+        :return: The element of the row of the table, and the relationship of the
+            collection.
+        """
+        dao_class = self._require_dao_class(root._type_)
+        relationship = self._declared_relationship(dao_class, name)
+        local, remote = self._column_pair(relationship)
+        table_class = self._class_of_table(remote.table, relationship)
+        alias = remote.table.alias()
+        condition = None
+        if item_identifier is not None:
+            target = self._association_target(relationship)
+            element_column = (
+                primary_key_of(alias)
+                if target is None
+                else alias.corresponding_column(self._column_pair(target)[0])
+            )
+            condition = element_column == item_identifier
+        self.outer_scope.join(alias, condition)
+        root_element = IdentifiedElement(
+            dao_class, alias.corresponding_column(remote), self.outer_scope, dao_class
+        )
+        self._restrict(
+            root_element, self._class_of_table(local.table, relationship), root
+        )
+        self.elements_by_node[id(root)] = root_element
+        link = IdentifiedElement(
+            relationship.mapper.class_,
+            primary_key_of(alias),
+            self.outer_scope,
+            table_class,
+            {remote.table: alias},
+        )
+        self._restrict(link, table_class, relationship.key)
+        return link, relationship
+
+    def _collection_element(
+        self, owner: IdentifiedElement, relationship: Any, scope: QueryScope
+    ) -> IdentifiedElement:
+        """
+        :param owner: The element that owns the collection.
+        :param relationship: The relationship of the collection.
+        :param scope: The scope that the tables of the collection are joined into.
+        :return: The element of the elements of the collection.
+        """
+        link = self._follow(owner, relationship, scope)
+        return self._target_of_link(link, relationship, scope)
+
+    def _target_of_link(
+        self, link: IdentifiedElement, relationship: Any, scope: QueryScope
+    ) -> IdentifiedElement:
+        """
+        ORMatic stores a collection as association objects, each of which refers to one
+        element through its ``target``.
+
+        :param link: The element of the rows that the relationship of a collection leads to.
+        :param relationship: The relationship of the collection.
+        :param scope: The scope of the link.
+        :return: The element of the targets of the association objects, or the link itself
+            when the collection is stored without association objects.
+        """
+        target = self._association_target(relationship)
+        if target is None:
+            return link
+        return self._follow(link, target, scope)
+
+    @staticmethod
+    def _association_target(relationship: Any) -> Optional[Any]:
+        """
+        :return: The ``target`` relationship of the association objects of a collection, or
+            None when the collection does not consist of association objects.
+        """
+        association = relationship.mapper.class_
+        if not issubclass(association, AssociationDataAccessObject):
+            return None
+        return relationship.mapper.relationships["target"]
+
+    def _follow(
+        self, element: IdentifiedElement, relationship: Any, scope: QueryScope
+    ) -> IdentifiedElement:
+        """
+        Follow one relationship from an element.
+
+        A many-to-one relationship, such as a reference or the target of an association
+        object, is followed without a join: the element it leads to is the foreign key
+        column. When the column may be empty, the rows in which it is are dropped, as an
+        inner join drops them. A one-to-many relationship, such as the association objects
+        of a collection, joins the table that holds the foreign key into ``scope``.
+
+        :param element: The element the relationship starts from.
+        :param relationship: The relationship.
+        :param scope: The scope a joined table is added to.
+        :return: The element the relationship leads to.
+        """
+        local, remote = self._column_pair(relationship)
+        target_class = relationship.mapper.class_
+        if relationship.direction is RelationshipDirection.MANYTOONE:
+            identifier = element.column(local)
+            if local.nullable:
+                element.scope.conditions.append(identifier.is_not(None))
+            reference = IdentifiedElement(
+                target_class, identifier, element.scope, target_class
+            )
+            self._restrict(
+                reference,
+                self._class_of_table(remote.table, relationship),
+                relationship.key,
+            )
+            return reference
+        alias = remote.table.alias()
+        scope.join(alias, alias.corresponding_column(remote) == element.column(local))
+        table_class = self._class_of_table(remote.table, relationship)
+        linked = IdentifiedElement(
+            target_class,
+            primary_key_of(alias),
+            scope,
+            table_class,
+            {remote.table: alias},
+        )
+        self._restrict(linked, table_class, relationship.key)
+        return linked
+
+    @staticmethod
+    def _column_pair(relationship: Any) -> Tuple[Column, Column]:
+        """
+        :return: The local and the remote column of a relationship.
+        :raises UnsupportedTranslationError: When the relationship is not through one
+            foreign key column.
+        """
+        pairs = relationship.local_remote_pairs
+        if relationship.secondary is not None or len(pairs) != 1:
+            raise UnsupportedTranslationError(
+                relationship.key,
+                "only relationships through one foreign key column are translated when "
+                "identifiers are selected",
+            )
+        return pairs[0]
+
+    def _class_of_table(self, table: Table, relationship: Any) -> type:
+        """
+        :param table: The own table of a data access object class.
+        :param relationship: A relationship of the registry of the class.
+        :return: The class.
+        """
+        if not self.classes_by_table:
+            for mapper in relationship.parent.registry.mappers:
+                self.classes_by_table[mapper.local_table] = mapper.class_
+        return self.classes_by_table[table]
+
+    def _restrict(
+        self, element: IdentifiedElement, known_class: type, expression: Any
+    ) -> None:
+        """
+        Restrict an element to its class, given the class whose rows its identifier is known
+        to refer to. A known class that is the class of the element or one of its subclasses
+        needs nothing; for a superclass, the own table of the element's class is joined on
+        the id, which keeps the rows of that class only.
+
+        :param element: The element; its ``dao_class`` is the class it must range over.
+        :param known_class: The class of the rows the identifier refers to.
+        :param expression: The expression that binds the element, for the error message.
+        :raises UnsupportedTranslationError: When the classes are unrelated.
+        """
+        if issubclass(known_class, element.dao_class):
+            element.restricted_class = known_class
+            return
+        if not issubclass(element.dao_class, known_class):
+            raise UnsupportedTranslationError(
+                expression,
+                f"{element.dao_class.__name__} and {known_class.__name__} are unrelated, "
+                "so their database ids do not identify the same objects",
+            )
+        element.table(sqlalchemy.inspection.inspect(element.dao_class).local_table)
+        element.restricted_class = element.dao_class
+
+    def _narrow(
+        self,
+        element: IdentifiedElement,
+        subclass: type,
+        name: str,
+        guarded: bool = True,
+        collection_in_scope: bool = False,
+    ) -> IdentifiedElement:
+        """
+        Narrow an element to the instances of one of its subclasses, as in Python only the
+        instances of a subclass have the attributes it declares, by joining the own table of
+        the subclass on the id. When ``name`` is a collection whose table is joined into the
+        scope of the element next and refers to its owner by a foreign key to the table of
+        the subclass, that join already keeps the instances of the subclass only, and the
+        table of the subclass is not joined.
+
+        :param element: The element.
+        :param subclass: The data access object class of the subclass.
+        :param name: The attribute of the subclass that is read.
+        :param guarded: Whether the narrowing must be allowed by the context, which is not
+            required for an element that a subquery under construction binds.
+        :param collection_in_scope: Whether ``name`` is a collection whose table is joined
+            into the scope of the element next.
+        :return: The element.
+        """
+        if guarded:
+            self._require_joins_allowed(subclass)
+        table = sqlalchemy.inspection.inspect(subclass).local_table
+        if not (
+            collection_in_scope and self._refers_by_identifier(subclass, name, table)
+        ):
+            element.table(table)
+        element.restricted_class = subclass
+        return element
+
+    def _refers_by_identifier(self, dao_class: type, name: str, table: Table) -> bool:
+        """
+        :param dao_class: A data access object class.
+        :param name: The name of one of its attributes.
+        :param table: A table.
+        :return: True if the attribute is a collection whose table refers to its owner by a
+            foreign key to the database id of ``table``.
+        """
+        relationship = sqlalchemy.inspection.inspect(dao_class).attrs[name]
+        if not isinstance(relationship, RelationshipProperty):
+            return False
+        if relationship.direction is not RelationshipDirection.ONETOMANY:
+            return False
+        local, _ = self._column_pair(relationship)
+        return local.primary_key and local.table is table
+
+    def _resolve_on_element(
+        self,
+        element: IdentifiedElement,
+        name: str,
+        guarded: bool = True,
+        collection_in_scope: bool = False,
+    ) -> Tuple[IdentifiedElement, Any]:
+        """
+        Find the attribute ``name`` of an element. A role declares only its own attributes
+        and delegates the others to its role taker, which is followed; when only a subclass
+        declares ``name``, the element is narrowed to the subclass (see :meth:`_narrow`).
+
+        :param element: The element to search.
+        :param name: The attribute name.
+        :param guarded: Whether narrowing must be allowed by the context.
+        :param collection_in_scope: Whether ``name`` is read as a collection whose table is
+            joined into the scope of the element next.
+        :return: The element that has the attribute, and the mapped property of the
+            attribute, or None if it is not mapped.
+        """
+        while True:
+            mapper = sqlalchemy.inspection.inspect(element.restricted_class)
+            if name in mapper.attrs:
+                return element, mapper.attrs[name]
+            if name in mapper.all_orm_descriptors:
+                return element, None
+            if "role_taker" in mapper.relationships:
+                element = self._reference(
+                    element, "role_taker", mapper.relationships["role_taker"]
+                )
+                continue
+            subclass = self._subclass_declaring(element.restricted_class, name)
+            if subclass is None:
+                return element, None
+            element = self._narrow(
+                element, subclass, name, guarded, collection_in_scope
+            )
+
+    def _reference(
+        self, element: IdentifiedElement, name: str, relationship: Any
+    ) -> IdentifiedElement:
+        """
+        :param element: The element the reference starts from.
+        :param name: The name of the single-valued reference.
+        :param relationship: Its relationship.
+        :return: The element of the referenced rows, the same for every use.
+        :raises UnsupportedTranslationError: When following the reference, which drops the
+            rows in which it is not set, is not allowed here.
+        """
+        key = (id(element), name)
+        reference = self.references.get(key)
+        if reference is None:
+            self._require_joins_allowed(name)
+            reference = self._follow(element, relationship, element.scope)
+            self.references[key] = reference
+        return reference
+
+    def _walk_references(
+        self, current: IdentifiedElement, names: List[str], chain: Any
+    ) -> IdentifiedElement:
+        """
+        Follow the single-valued references named by ``names``, starting at ``current``.
+
+        :return: The element reached.
+        :raises UnsupportedTranslationError: When a name is a collection.
+        :raises NonRelationshipInChainError: When a name is not a relationship.
+        """
+        for name in names:
+            current, relationship = self._resolve_on_element(current, name)
+            if not isinstance(relationship, RelationshipProperty):
+                raise NonRelationshipInChainError(current.restricted_class, name)
+            if relationship.uselist:
+                raise UnsupportedTranslationError(
+                    chain,
+                    f"{name} is a collection; range over its elements with flat_variable",
+                )
+            current = self._reference(current, name, relationship)
+        return current
+
+    def _chain_owner(self, attribute: Attribute) -> Tuple[IdentifiedElement, Any]:
+        """
+        :param attribute: An attribute chain that starts at a variable or a flattened
+            collection.
+        :return: The element that has the last attribute of the chain, and the mapped
+            property of the last attribute, or None if it is not mapped.
+        """
+        names = self._collect_attribute_chain(attribute)
+        owner = self._walk_references(
+            self._element_of(self._chain_root(attribute)), names[:-1], attribute
+        )
+        return self._resolve_on_element(owner, names[-1])
+
+    # %% Conditions and values
+
+    def translate_attribute(self, query: Attribute) -> Any:
+        """
+        :param query: An attribute chain.
+        :return: The column of the attribute: of a value, or the foreign key column of a
+            reference, which holds the database id of the referenced object.
+        :raises UnsupportedTranslationError: When the attribute is a collection, which has
+            no single value.
+        :raises MissingColumnError: When the attribute is not a column.
+        """
+        owner, mapped = self._chain_owner(query)
+        name = query._attribute_name_
+        if isinstance(mapped, RelationshipProperty):
+            if mapped.uselist:
+                raise UnsupportedTranslationError(
+                    query,
+                    f"{name} is a collection, which has no single value; range over "
+                    "its elements with flat_variable or test membership with contains",
+                )
+            return owner.column(self._column_pair(mapped)[0])
+        if isinstance(mapped, ColumnProperty):
+            return owner.column(mapped.columns[0])
+        raise MissingColumnError(owner.restricted_class, name)
+
+    def _attribute_condition(self, attribute: Attribute) -> Any:
+        """
+        :param attribute: The attribute used as a condition.
+        :return: The condition that the value of the attribute is true in Python: a
+            collection is not empty, a reference is set, and a value is true.
+        """
+        owner, mapped = self._chain_owner(attribute)
+        if isinstance(mapped, RelationshipProperty):
+            if not mapped.uselist:
+                return owner.column(self._column_pair(mapped)[0]).is_not(None)
+            scope = QueryScope()
+            self._follow(owner, mapped, scope)
+            return scope.exists(None)
+        if isinstance(mapped, ColumnProperty):
+            return self._truth_value(owner.column(mapped.columns[0]), attribute)
+        raise MissingColumnError(owner.restricted_class, attribute._attribute_name_)
+
+    def _translate_comparator_operand(self, operand: Any) -> Any:
+        """
+        :param operand: An operand of a comparator.
+        :return: Its SQL expression; a variable or flattened collection is its identifier.
+        """
+        if isinstance(operand, Attribute):
+            return self.translate_attribute(operand)
+        if isinstance(operand, FlatVariable) or self._is_plain_variable(operand):
+            return self._element_of(operand).identifier
+        return super()._translate_comparator_operand(operand)
+
+    def _require_related(self, first: Any, second: Any, expression: Any) -> None:
+        """
+        :param first: An element.
+        :param second: Another element.
+        :param expression: The expression that compares them, for the error message.
+        :raises UnsupportedTranslationError: When the classes of the elements are not in one
+            class hierarchy, so that their database ids identify unrelated rows.
+        """
+        if not (
+            issubclass(first.dao_class, second.dao_class)
+            or issubclass(second.dao_class, first.dao_class)
+        ):
+            raise UnsupportedTranslationError(
+                expression,
+                f"{first.dao_class.__name__} and {second.dao_class.__name__} are "
+                "unrelated, so their database ids do not identify the same objects",
+            )
+
+    def _identity_of(self, item: Any) -> Any:
+        """
+        :return: The SQL expression of the database id of an item: the identifier of a
+            variable or flattened collection, the foreign key column of a reference, or the
+            id of a data access object given as a literal.
+        :raises UnsupportedTranslationError: When the item is a domain object, which has no
+            identity in the database.
+        """
+        if isinstance(item, FlatVariable) or self._is_plain_variable(item):
+            return self._element_of(item).identifier
+        return super()._identity_of(item)
+
+    def translate_comparator(self, query: Comparator) -> Optional[Any]:
+        """
+        Translate a comparator; a membership test that all answers satisfy is a join when
+        :meth:`_join_membership` applies.
+
+        :param query: The comparator.
+        :return: The SQL condition, or None when the comparator became a join.
+        """
+        if (
+            self._is_membership_in_collection(query)
+            and self.eql_query._distinct_on
+            and self.conditional_depth == 0
+            and not self.joins_forbidden
+            and self._join_membership(query.left, query.right)
+        ):
+            return None
+        return super().translate_comparator(query)
+
+    def _join_membership(self, collection: Attribute, item: Any) -> bool:
+        """
+        Translate ``contains(v.collection, item)`` into a join, when ``v`` is a variable that
+        is not bound yet and ``item`` is a variable or flattened collection: the association
+        table is joined on its target column equal to the identifier of the item, and ``v``
+        is bound to its source column. It is only used in a query that returns distinct
+        answers and for a condition that all answers satisfy, because the join yields one row
+        per association object where the existential test yields one row.
+
+        :param collection: The collection attribute.
+        :param item: The item tested for membership.
+        :return: True if the membership test became a join, False if it does not apply.
+        """
+        if not (isinstance(item, FlatVariable) or self._is_plain_variable(item)):
+            return False
+        names = self._collect_attribute_chain(collection)
+        root = self._chain_root(collection)
+        if len(names) != 1 or not self._can_link_unbound_root(root, names[0]):
+            return False
+        item_element = self._element_of(item)
+        if id(root) in self.elements_by_node:
+            return False
+        link, relationship = self._link_unbound_root(
+            root, names[0], item_element.identifier
+        )
+        element = self._target_of_link(link, relationship, self.outer_scope)
+        self._require_related(element, item_element, collection)
+        return True
+
+    def _translate_membership(self, collection: Attribute, item: Any) -> Any:
+        """
+        Translate ``contains(collection, item)`` into an EXISTS subquery over the tables
+        of the collection.
+
+        :return: An EXISTS expression that holds when an element of the collection has the
+            database id of the item.
+        """
+        identity = self._identity_of(item)
+        owner, relationship = self._chain_owner(collection)
+        self._require_collection(relationship, collection._attribute_name_, collection)
+        scope = QueryScope()
+        element = self._collection_element(owner, relationship, scope)
+        if isinstance(item, FlatVariable) or self._is_plain_variable(item):
+            self._require_related(element, self._element_of(item), collection)
+        return scope.exists(element.identifier == identity)
+
+    # %% Existential quantifiers
+
+    def _translate_exists_over_elements(
+        self, quantified: FlatVariable, condition: Any
+    ) -> Any:
+        """
+        Translate ``exists(e, condition)`` for a flattened collection ``e`` into one EXISTS
+        subquery that joins the tables of the flattened collections between ``e`` and the
+        nearest node that the enclosing query binds, and is correlated with that node.
+
+        :param quantified: The flattened collection that is quantified.
+        :param condition: The condition on its elements.
+        :return: The EXISTS expression.
+        """
+        chain = self._unbound_collections(quantified)
+        if not chain:
+            return self.translate_condition(condition)
+        owner = self._element_of(self._chain_root(chain[0]._child_))
+        scope = QueryScope()
+        try:
+            with self._subquery_scope():
+                for flat in chain:
+                    owner = self._bind_element_in_subquery(owner, flat, scope)
+                criterion = self.translate_condition(condition)
+        finally:
+            for flat in chain:
+                self.elements_by_node.pop(id(flat), None)
+        return scope.exists(criterion)
+
+    def _bind_element_in_subquery(
+        self, owner: IdentifiedElement, flat: FlatVariable, scope: QueryScope
+    ) -> IdentifiedElement:
+        """
+        Bind a flattened collection, reached directly from ``owner``, to its tables in the
+        subquery ``scope``.
+
+        :param owner: The element whose collection attribute is flattened.
+        :param flat: The flattened collection.
+        :param scope: The scope of the subquery.
+        :return: The element of the flattened collection.
+        :raises UnsupportedTranslationError: When the collection is not an attribute of
+            ``owner`` itself.
+        """
+        collection = flat._child_
+        if not isinstance(collection, Attribute) or isinstance(
+            collection._child_, Attribute
+        ):
+            raise UnsupportedTranslationError(
+                flat,
+                "an existential quantifier ranges over a collection attribute of a "
+                "bound element",
+            )
+        name = collection._attribute_name_
+        owner, relationship = self._resolve_on_element(
+            owner,
+            name,
+            guarded=owner.scope is not scope,
+            collection_in_scope=owner.scope is scope,
+        )
+        self._require_collection(relationship, name, flat)
+        element = self._collection_element(owner, relationship, scope)
+        self.elements_by_node[id(flat)] = element
+        return element
+
+    def _translate_exists_over_variable(
+        self, quantified: Variable, condition: Any
+    ) -> Any:
+        """
+        Translate ``exists(v, condition)`` for a variable ``v`` into an EXISTS subquery over
+        the own table of its class, bound only inside the subquery.
+
+        :param quantified: The quantified variable, which occurs only inside the quantifier.
+        :param condition: The condition on it.
+        :return: The EXISTS expression.
+        """
+        scope = QueryScope()
+        element = self._table_element(self._require_dao_class(quantified._type_), scope)
+        previous = self.elements_by_node.get(id(quantified))
+        self.elements_by_node[id(quantified)] = element
+        try:
+            with self._subquery_scope():
+                criterion = self.translate_condition(condition)
+        finally:
+            if previous is None:
+                self.elements_by_node.pop(id(quantified), None)
+            else:
+                self.elements_by_node[id(quantified)] = previous
+        return scope.exists(criterion)
+
+
 def eql_to_sql(
-    query: Query, session: Session, as_common_table_expression: Optional[str] = None
+    query: Query,
+    session: Session,
+    as_common_table_expression: Optional[str] = None,
+    select_identifiers: bool = False,
 ) -> Union[EQLTranslator, Any]:
     """
     Translate an EQL query to SQL.
@@ -2336,13 +3323,35 @@ def eql_to_sql(
 
     :param query: The EQL query
     :param session: The SQLAlchemy session
+    By default, the translation selects the data access objects of the selected variables.
+    With ``select_identifiers=True``, it selects the database id of every selected variable
+    and flattened collection instead, the identity of each answer, and the columns of
+    selected attributes. It then joins a table only where one of its columns is read or
+    where it restricts the class of a variable, and represents a variable by the foreign
+    key column that already holds its id, so that, for example,
+    ``an(set_of(p, flat_variable(p.is_member_of)))`` becomes
+    ``SELECT source_id, target_id FROM association_table``
+    (see :class:`IdentifierSelectingTranslator`):
+
+    .. code-block:: python
+
+        translator = eql_to_sql(query, session, select_identifiers=True)
+        for answer in translator.evaluate():
+            person = session.get(PersonDAO, answer[p])
+
+    :param query: The EQL query
+    :param session: The SQLAlchemy session
     :param as_common_table_expression: If provided, returns a SQLAlchemy common table expression with this name.
     The name is required because SQL common table expressions must have an explicit alias
     (e.g. WITH large_bodies AS (SELECT ...))
+    :param select_identifiers: Whether to select database ids instead of data access objects.
     :return: EQLTranslator or SQLAlchemy common table expression
     """
     query.build()
-    result = EQLTranslator(query, session)
+    translator_class = (
+        IdentifierSelectingTranslator if select_identifiers else EQLTranslator
+    )
+    result = translator_class(query, session)
     result.translate()
 
     if as_common_table_expression is not None:
