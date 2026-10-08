@@ -16,6 +16,7 @@ from typing_extensions import Any, Dict, List, Set, Tuple
 from krrood.entity_query_language.factories import (
     an,
     and_,
+    case_when,
     contains,
     count,
     entity,
@@ -216,6 +217,25 @@ def test_membership_in_a_distinct_query_is_a_join(session, academy):
     sql = sql_of(query, session)
     assert "EXISTS" not in sql
     assert "SymbolDAO" not in sql
+
+
+def test_membership_in_a_conditional_value_is_not_a_join(session, academy):
+    """
+    A membership test that only decides a value of ``case_when`` does not hold for every
+    answer, so it stays a condition instead of becoming a join.
+    """
+    s = variable(AcademyStudent, domain=academy.students)
+    c = variable(AcademyCourse, domain=[academy.logic])
+    query = an(
+        set_of(s, c).where(case_when(contains(s.takes_course, c), False, True))
+    ).distinct()
+    assert pair_names(query, session, s, c) == {
+        ("Alice", "Painting"),
+        ("Bob", "AI"),
+        ("Bob", "Logic"),
+        ("Carol", "Logic"),
+        ("Carol", "Painting"),
+    }
 
 
 def test_membership_of_a_bound_variable_in_a_distinct_query(session, academy):

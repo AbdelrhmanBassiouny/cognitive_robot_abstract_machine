@@ -2453,6 +2453,27 @@ class IdentifiedElement:
         return self.table(column.table).corresponding_column(column)
 
 
+def own_table_of(dao_class: type) -> Table:
+    """
+    :param dao_class: A data access object class.
+    :return: The table that holds a row for every instance of the class and of its
+        subclasses only, its own table in joined-table inheritance.
+    :raises UnsupportedTranslationError: When the class shares the table of its superclass
+        (single-table inheritance), so that no table of its own restricts rows to it.
+    """
+    mapper = sqlalchemy.inspection.inspect(dao_class)
+    if (
+        mapper.inherits is not None
+        and mapper.local_table is mapper.inherits.local_table
+    ):
+        raise UnsupportedTranslationError(
+            dao_class.__name__,
+            "the class shares the table of its superclass, so selecting identifiers "
+            "cannot restrict rows to it",
+        )
+    return mapper.local_table
+
+
 def primary_key_of(table: FromClause) -> ColumnElement:
     """
     :param table: A table of a data access object or an alias of one.
@@ -2510,6 +2531,12 @@ class IdentifierSelectingTranslator(EQLTranslator):
     classes_by_table: Dict[Table, type] = field(default_factory=dict)
     """The data access object class whose own table each table is, filled on first use."""
 
+    conjunct_ids: Set[int] = field(default_factory=set)
+    """
+    The ids of the conditions that every answer satisfies: the condition of the query and,
+    recursively, the operands of a conjunction among them.
+    """
+
     def translate(self) -> None:
         """
         Translate the query: bind the selected flattened collections, translate the
@@ -2519,12 +2546,14 @@ class IdentifierSelectingTranslator(EQLTranslator):
         self._scan_query()
         self.element_mode = True
         self._reject_grouping()
+        self._collect_conjuncts()
         selected = list(self.select_like._selected_variables_)
         for expression in selected:
             self._require_selectable(expression)
         for expression in selected:
-            if isinstance(expression, FlatVariable):
-                self._element_of(expression)
+            root = self._chain_root(expression)
+            if isinstance(root, FlatVariable):
+                self._element_of(root)
         if self.eql_query._where_expression_ is not None:
             condition = self.translate_condition(self.eql_query._where_expression_)
             if condition is not None:
@@ -2538,6 +2567,21 @@ class IdentifierSelectingTranslator(EQLTranslator):
             self.sql_query = self.sql_query.limit(self.eql_query._limit_)
         if self.eql_query._distinct_on:
             self.sql_query = self.sql_query.distinct()
+
+    def _collect_conjuncts(self) -> None:
+        """
+        Collect the conditions that every answer satisfies (see ``conjunct_ids``).
+        """
+        pending = [self.eql_query._where_expression_]
+        while pending:
+            condition = pending.pop()
+            if condition is None:
+                continue
+            self.conjunct_ids.add(id(condition))
+            if isinstance(condition, Where):
+                pending.append(condition.condition)
+            elif isinstance(condition, AND):
+                pending.extend(self._extract_logical_children(condition))
 
     def _reject_grouping(self) -> None:
         """
@@ -2636,7 +2680,7 @@ class IdentifierSelectingTranslator(EQLTranslator):
         :return: An element over the rows of the own table of the class, joined into the
             scope as a table each row of which combines with every row of the scope.
         """
-        table = sqlalchemy.inspection.inspect(dao_class).local_table
+        table = own_table_of(dao_class)
         alias = table.alias()
         scope.join(alias, None)
         return IdentifiedElement(
@@ -2760,6 +2804,8 @@ class IdentifierSelectingTranslator(EQLTranslator):
         root_element = IdentifiedElement(
             dao_class, alias.corresponding_column(remote), self.outer_scope, dao_class
         )
+        if remote.nullable:
+            self.outer_scope.conditions.append(root_element.identifier.is_not(None))
         self._restrict(
             root_element, self._class_of_table(local.table, relationship), root
         )
@@ -2884,7 +2930,10 @@ class IdentifierSelectingTranslator(EQLTranslator):
         """
         if not self.classes_by_table:
             for mapper in relationship.parent.registry.mappers:
-                self.classes_by_table[mapper.local_table] = mapper.class_
+                if mapper.inherits is None or (
+                    mapper.local_table is not mapper.inherits.local_table
+                ):
+                    self.classes_by_table[mapper.local_table] = mapper.class_
         return self.classes_by_table[table]
 
     def _restrict(
@@ -2910,7 +2959,7 @@ class IdentifierSelectingTranslator(EQLTranslator):
                 f"{element.dao_class.__name__} and {known_class.__name__} are unrelated, "
                 "so their database ids do not identify the same objects",
             )
-        element.table(sqlalchemy.inspection.inspect(element.dao_class).local_table)
+        element.table(own_table_of(element.dao_class))
         element.restricted_class = element.dao_class
 
     def _narrow(
@@ -2940,7 +2989,7 @@ class IdentifierSelectingTranslator(EQLTranslator):
         """
         if guarded:
             self._require_joins_allowed(subclass)
-        table = sqlalchemy.inspection.inspect(subclass).local_table
+        table = own_table_of(subclass)
         if not (
             collection_in_scope and self._refers_by_identifier(subclass, name, table)
         ):
@@ -3141,14 +3190,15 @@ class IdentifierSelectingTranslator(EQLTranslator):
 
     def translate_comparator(self, query: Comparator) -> Optional[Any]:
         """
-        Translate a comparator; a membership test that all answers satisfy is a join when
-        :meth:`_join_membership` applies.
+        Translate a comparator; a membership test that all answers satisfy, a conjunct of
+        the condition of the query, is a join when :meth:`_join_membership` applies.
 
         :param query: The comparator.
         :return: The SQL condition, or None when the comparator became a join.
         """
         if (
-            self._is_membership_in_collection(query)
+            id(query) in self.conjunct_ids
+            and self._is_membership_in_collection(query)
             and self.eql_query._distinct_on
             and self.conditional_depth == 0
             and not self.joins_forbidden
