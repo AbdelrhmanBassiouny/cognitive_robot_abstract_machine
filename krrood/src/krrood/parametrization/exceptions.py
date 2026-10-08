@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from typing_extensions import Any, List, Set, TYPE_CHECKING, Type
+from typing_extensions import Any, Hashable, List, Set, TYPE_CHECKING, Type
 
 import random_events.variable
 from krrood.entity_query_language.core.variable import Variable
@@ -259,7 +259,7 @@ class DomainElementsIndistinguishableInSamples(DataclassException):
     The symbolic variable.
     """
 
-    elements: List[Any]
+    elements: List[Hashable]
     """
     The elements of the domain whose hashes become the same value in a sample.
     """
