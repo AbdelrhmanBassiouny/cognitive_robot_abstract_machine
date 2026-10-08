@@ -12,11 +12,21 @@ dependencies = [
     "line_profiler",
     "coraplex",
     "giskardpy",
+    "imageio-ffmpeg",  # experiments.video encodes with the ffmpeg binary it ships
     "krrood",
+    "matplotlib",
+    "numpy",
+    "opencv-python",
+    "pillow",
     "probabilistic_model",
     "pymysql",
     "random_events",
     "semantic_digital_twin",
+]
+
+[project.optional-dependencies]
+video = [
+    "kokoro-onnx>=0.6",  # experiments.video's narrator, the Kokoro speech model run locally
 ]
 
 [tool.setuptools]
