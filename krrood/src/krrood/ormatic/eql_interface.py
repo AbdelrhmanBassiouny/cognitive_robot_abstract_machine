@@ -2394,7 +2394,7 @@ class QueryScope:
         return sqlalchemy_exists(statement)
 
 
-@dataclass
+@dataclass(eq=False)
 class IdentifiedElement:
     """
     What a variable, a flattened collection or a reference ranges over when identifiers
@@ -2498,11 +2498,13 @@ class IdentifierSelectingTranslator(EQLTranslator):
     outer_scope: QueryScope = field(default_factory=QueryScope)
     """The scope of the outer query."""
 
-    references: Dict[Tuple[int, str], IdentifiedElement] = field(default_factory=dict)
+    references: Dict[Tuple[IdentifiedElement, str], IdentifiedElement] = field(
+        default_factory=dict
+    )
     """
-    The elements of the single-valued references followed so far, by the id of the element
-    they start from and the name of the reference, so that following a reference twice
-    refers to the same rows.
+    The elements of the single-valued references followed so far, by the element they
+    start from (compared by identity) and the name of the reference, so that following a
+    reference twice refers to the same rows.
     """
 
     classes_by_table: Dict[Table, type] = field(default_factory=dict)
@@ -3011,7 +3013,7 @@ class IdentifierSelectingTranslator(EQLTranslator):
         :raises UnsupportedTranslationError: When following the reference, which drops the
             rows in which it is not set, is not allowed here.
         """
-        key = (id(element), name)
+        key = (element, name)
         reference = self.references.get(key)
         if reference is None:
             self._require_joins_allowed(name)
