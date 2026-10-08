@@ -244,3 +244,36 @@ class AmbiguousVariableName(DataclassException):
             "Give every attribute of the match that the model answers its own variable "
             "name."
         )
+
+
+@dataclass
+class DomainElementsIndistinguishableInSamples(DataclassException):
+    """
+    Raised when two elements of the domain of a symbolic variable have hashes that a
+    sample of a probabilistic model cannot tell apart. A sample holds a hash as a float,
+    which rounds hashes larger than ``2**53``, so close hashes become the same value.
+    """
+
+    variable: random_events.variable.Variable
+    """
+    The symbolic variable.
+    """
+
+    elements: List[Any]
+    """
+    The elements of the domain whose hashes become the same value in a sample.
+    """
+
+    def error_message(self) -> str:
+        return (
+            f"The elements {self.elements} of the domain of {self.variable.name} have "
+            f"hashes that become the same float in a sample of the model, so the "
+            f"element a sample refers to is unknown."
+        )
+
+    def suggest_correction(self) -> str:
+        return (
+            "Give the elements hashes that differ by more than the spacing of floats at "
+            "their size, for instance values smaller than 2**53 for an integer "
+            "enumeration."
+        )

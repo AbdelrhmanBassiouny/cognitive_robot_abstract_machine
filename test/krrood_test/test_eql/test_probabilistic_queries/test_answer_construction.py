@@ -21,7 +21,10 @@ from krrood.entity_query_language.query.match import (
     AbstractMatchExpression,
     AttributeMatch,
 )
-from krrood.parametrization.exceptions import AmbiguousVariableName
+from krrood.parametrization.exceptions import (
+    AmbiguousVariableName,
+    DomainElementsIndistinguishableInSamples,
+)
 from krrood.parametrization.model_registries import DictRegistry
 from krrood.parametrization.parameterizer import UnderspecifiedParameters
 
@@ -33,6 +36,20 @@ class Color(enum.Enum):
 
     RED = "red"
     BLUE = "blue"
+
+
+class LargeNumber(enum.IntEnum):
+    """
+    Members whose hashes become the same float.
+    """
+
+    FIRST = 2**53
+    SECOND = 2**53 + 1
+
+
+@dataclass
+class Counter:
+    number: LargeNumber
 
 
 @dataclass
@@ -135,3 +152,21 @@ def test_a_variable_named_like_several_attributes_is_refused(monkeypatch):
         )
     assert error.value.variable is variable
     assert len(error.value.attribute_matches) == 2
+
+
+def test_domain_elements_that_samples_cannot_tell_apart_are_refused():
+    query = a(Counter)(number=...)
+    number = UnderspecifiedParameters(query).variables["Counter.number"]
+    circuit = ProbabilisticCircuit()
+    leaf(
+        SymbolicDistribution(
+            variable=number,
+            probabilities=MissingDict(float, {hash(LargeNumber.FIRST): 1.0}),
+        ),
+        circuit,
+    )
+    backend = ProbabilisticBackend(model_registry=DictRegistry({Counter: circuit}))
+    with pytest.raises(DomainElementsIndistinguishableInSamples) as error:
+        list(query.evaluate(backend=backend))
+    assert error.value.variable == number
+    assert set(error.value.elements) == set(LargeNumber)

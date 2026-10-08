@@ -23,6 +23,7 @@ from typing_extensions import (
 )
 from krrood.parametrization.exceptions import (
     AmbiguousVariableName,
+    DomainElementsIndistinguishableInSamples,
     EmptyVariableDomain,
     InvalidEllipsis,
     JointQueryAcrossClassesNotSupported,
@@ -795,8 +796,9 @@ class UnderspecifiedParameters(ModelQueryParameters):
         :param attribute_match: The attribute the variable belongs to.
         :return: The value of the attribute for every value a sample of a symbolic
             variable can have, or ``None`` for a numeric variable, whose samples are the
-            values themselves. A sample holds a hash as a float, which rounds large
-            hashes, so the hashes are rounded the same way here.
+            values themselves.
+        :raises DomainElementsIndistinguishableInSamples: If two elements of the domain
+            of a symbolic variable have hashes that a sample cannot tell apart.
         """
         assigned_value = attribute_match.assigned_value
         if isinstance(assigned_value, SymbolicExpression) and not isinstance(
@@ -806,17 +808,47 @@ class UnderspecifiedParameters(ModelQueryParameters):
                 hash(domain_value): domain_value
                 for domain_value in assigned_value.tolist()
             }
-            return {
-                float(sample_value): domain_values_by_hash[domain_index]
-                for sample_value, domain_index in variable_.domain.hash_map.items()
-                if domain_index in domain_values_by_hash
-            }
+            return UnderspecifiedParameters._by_sample_value(
+                variable_,
+                {
+                    sample_value: domain_values_by_hash[domain_index]
+                    for sample_value, domain_index in variable_.domain.hash_map.items()
+                    if domain_index in domain_values_by_hash
+                },
+            )
         if not variable_.is_numeric:
-            return {
-                float(hash(domain_value)): domain_value.element
-                for domain_value in variable_.domain
-            }
+            return UnderspecifiedParameters._by_sample_value(
+                variable_,
+                {
+                    hash(domain_value): domain_value.element
+                    for domain_value in variable_.domain
+                },
+            )
         return None
+
+    @staticmethod
+    def _by_sample_value(
+        variable_: random_events.variable.Variable,
+        values_by_hash: Dict[int, Hashable],
+    ) -> Dict[float, Hashable]:
+        """
+        :param variable_: A symbolic variable of a model.
+        :param values_by_hash: The value of the attribute for the hash of every element
+            of the domain of the variable.
+        :return: The value of the attribute for every hash as a sample holds it, which
+            is a float and rounds hashes larger than ``2**53``.
+        :raises DomainElementsIndistinguishableInSamples: If two hashes round to the
+            same float.
+        """
+        result: Dict[float, Hashable] = {}
+        for hash_, value in values_by_hash.items():
+            sample_value = float(hash_)
+            if sample_value in result:
+                raise DomainElementsIndistinguishableInSamples(
+                    variable=variable_, elements=[result[sample_value], value]
+                )
+            result[sample_value] = value
+        return result
 
     @staticmethod
     def _process_attribute_match_type(type_):
