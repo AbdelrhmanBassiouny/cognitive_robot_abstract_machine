@@ -1,6 +1,9 @@
 import enum
 from dataclasses import dataclass
 
+import numpy as np
+import pytest
+
 from probabilistic_model.distributions.distributions import (
     IntegerDistribution,
     SymbolicDistribution,
@@ -14,7 +17,11 @@ from probabilistic_model.utils import MissingDict
 
 from krrood.entity_query_language.backends import ProbabilisticBackend
 from krrood.entity_query_language.factories import a
-from krrood.entity_query_language.query.match import AbstractMatchExpression
+from krrood.entity_query_language.query.match import (
+    AbstractMatchExpression,
+    AttributeMatch,
+)
+from krrood.parametrization.exceptions import AmbiguousVariableName
 from krrood.parametrization.model_registries import DictRegistry
 from krrood.parametrization.parameterizer import UnderspecifiedParameters
 
@@ -108,3 +115,23 @@ def test_the_attributes_are_looked_up_once_per_query(monkeypatch):
     assert number_of_match_walks_for(5, monkeypatch) == number_of_match_walks_for(
         200, monkeypatch
     )
+
+
+def test_a_variable_named_like_several_attributes_is_refused(monkeypatch):
+    """
+    The attributes of a query have distinct names, so two of them are given the same
+    name here.
+    """
+    parameters = UnderspecifiedParameters(die_query())
+    variable = parameters.variables["Die.face"]
+    monkeypatch.setattr(
+        AttributeMatch, "name_from_variable_access_path", property(lambda _: "Die.face")
+    )
+    with pytest.raises(AmbiguousVariableName) as error:
+        list(
+            parameters.construct_instances_from_model_samples(
+                [variable], np.array([[1.0]])
+            )
+        )
+    assert error.value.variable is variable
+    assert len(error.value.attribute_matches) == 2

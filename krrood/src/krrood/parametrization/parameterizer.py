@@ -11,6 +11,7 @@ import numpy as np
 from typing_extensions import (
     Any,
     Dict,
+    Hashable,
     Iterable,
     Iterator,
     List,
@@ -21,6 +22,7 @@ from typing_extensions import (
     get_args,
 )
 from krrood.parametrization.exceptions import (
+    AmbiguousVariableName,
     EmptyVariableDomain,
     InvalidEllipsis,
     JointQueryAcrossClassesNotSupported,
@@ -132,7 +134,7 @@ class SampleColumn:
     The variable of the attribute the column sets.
     """
 
-    values_by_sample_value: Optional[Dict[Any, Any]] = None
+    values_by_sample_value: Optional[Dict[float, Hashable]] = None
     """
     The value of the attribute for every value of a symbolic column, or ``None`` if the
     samples are the values themselves.
@@ -729,9 +731,6 @@ class UnderspecifiedParameters(ModelQueryParameters):
         """
         Construct one instance per sample of a probabilistic model.
 
-        Which attribute every column of the samples sets, and how its values are read,
-        is worked out once for all samples.
-
         :param variables: The variables of the model, in the order of the columns of
             the samples.
         :param samples: Samples of the model.
@@ -754,8 +753,8 @@ class UnderspecifiedParameters(ModelQueryParameters):
             samples.
         :return: How every column that belongs to an attribute of the statement sets
             that attribute.
-        :raises KeyError: If several attributes of the statement have the name of a
-            variable.
+        :raises AmbiguousVariableName: If several attributes of the statement have the
+            name of a variable.
         """
         attribute_matches_by_name: Dict[str, List[AttributeMatch]] = {}
         for attribute_match in self.statement._matches_with_variables_:
@@ -767,7 +766,9 @@ class UnderspecifiedParameters(ModelQueryParameters):
         for index, variable_ in enumerate(variables):
             attribute_matches = attribute_matches_by_name.get(variable_.name, [])
             if len(attribute_matches) > 1:
-                raise KeyError(f"Multiple variables with name {variable_.name}")
+                raise AmbiguousVariableName(
+                    variable=variable_, attribute_matches=attribute_matches
+                )
             if not attribute_matches:
                 continue
             [attribute_match] = attribute_matches
@@ -788,7 +789,7 @@ class UnderspecifiedParameters(ModelQueryParameters):
     @staticmethod
     def _values_by_sample_value(
         variable_: random_events.variable.Variable, attribute_match: AttributeMatch
-    ) -> Optional[Dict[Any, Any]]:
+    ) -> Optional[Dict[float, Hashable]]:
         """
         :param variable_: A variable of a model.
         :param attribute_match: The attribute the variable belongs to.

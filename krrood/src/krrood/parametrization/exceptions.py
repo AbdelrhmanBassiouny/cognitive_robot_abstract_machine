@@ -10,6 +10,7 @@ from krrood.exceptions import DataclassException, InputError
 
 if TYPE_CHECKING:
     from krrood.entity_query_language.factories import ConditionType
+    from krrood.entity_query_language.query.match import AttributeMatch
 
 
 @dataclass
@@ -211,4 +212,35 @@ class RelationalCircuitRegistryRequiresMatch(DataclassException):
         return (
             "Use RelationalCircuitRegistry only with distribution_of(...) (or a bare "
             "Match), not probability_of(...)/average(...)."
+        )
+
+
+@dataclass
+class AmbiguousVariableName(DataclassException):
+    """
+    Raised when several attributes of a match have the name of a variable of a
+    probabilistic model, so it is unclear which of them a sample of the variable sets.
+    """
+
+    variable: random_events.variable.Variable
+    """
+    The variable of the model.
+    """
+
+    attribute_matches: List[AttributeMatch]
+    """
+    The attributes of the match that have the name of the variable.
+    """
+
+    def error_message(self) -> str:
+        return (
+            f"{len(self.attribute_matches)} attributes of the match have the name "
+            f"{self.variable.name} of a variable of the model, so a sample of the "
+            f"variable sets no single attribute."
+        )
+
+    def suggest_correction(self) -> str:
+        return (
+            "Give every attribute of the match that the model answers its own variable "
+            "name."
         )
