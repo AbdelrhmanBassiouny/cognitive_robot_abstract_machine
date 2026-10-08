@@ -2506,6 +2506,11 @@ class IdentifierSelectingTranslator(EQLTranslator):
       variable ``v`` that is not yet bound, joins the association table on its target column
       and binds ``v`` to its source column, instead of testing an EXISTS subquery for every
       combination of rows.
+    * With an ``identifying_attribute``, such as the IRI of an individual, every selected
+      variable and flattened collection is returned as the value of that attribute instead
+      of its database id. The attribute is read as any other column, by joining on the id
+      only the table of the class hierarchy that declares it, and through the role taker of
+      a role.
 
     Every variable ranges over the rows of its class independently, as when the query uses
     a collection-valued attribute (see ``EQLTranslator.element_mode``). The guards of the
@@ -2535,6 +2540,13 @@ class IdentifierSelectingTranslator(EQLTranslator):
     """
     The ids of the conditions that every answer satisfies: the condition of the query and,
     recursively, the operands of a conjunction among them.
+    """
+
+    identifying_attribute: Optional[str] = None
+    """
+    The name of the attribute whose value identifies an object outside the database, such
+    as ``uri`` for the IRI of an individual, selected for every selected variable and
+    flattened collection instead of its database id; None selects the database id.
     """
 
     def translate(self) -> None:
@@ -2617,11 +2629,47 @@ class IdentifierSelectingTranslator(EQLTranslator):
     def _selected_column(self, expression: Any) -> Any:
         """
         :return: The identifier of a selected variable or flattened collection, or the
-            column of a selected attribute.
+            column of its identifying attribute when one is given, or the column of a
+            selected attribute.
         """
         if isinstance(expression, Attribute):
+            self._require_value_when_identifying(expression)
             return self.translate_attribute(expression)
-        return self._element_of(expression).identifier
+        element = self._element_of(expression)
+        if self.identifying_attribute is None:
+            return element.identifier
+        return self._identifying_column(element)
+
+    def _identifying_column(self, element: IdentifiedElement) -> ColumnElement:
+        """
+        :param element: The element of a selected variable or flattened collection.
+        :return: The column of the identifying attribute of the element, read from the table
+            of its class hierarchy that declares the attribute, joined on the id, or from its
+            role taker for a role.
+        :raises MissingColumnError: When the class of the element has no such column.
+        """
+        owner, mapped = self._resolve_on_element(element, self.identifying_attribute)
+        if not isinstance(mapped, ColumnProperty):
+            raise MissingColumnError(owner.restricted_class, self.identifying_attribute)
+        return owner.column(mapped.columns[0])
+
+    def _require_value_when_identifying(self, attribute: Attribute) -> None:
+        """
+        :param attribute: A selected attribute.
+        :raises UnsupportedTranslationError: When an identifying attribute is selected and
+            the attribute is a reference, whose foreign key column holds a database id; the
+            referenced objects are selected by a variable bound to them instead.
+        """
+        if self.identifying_attribute is None:
+            return
+        _, mapped = self._chain_owner(attribute)
+        if isinstance(mapped, RelationshipProperty):
+            raise UnsupportedTranslationError(
+                attribute,
+                "a selected reference is its database id, not its "
+                f"{self.identifying_attribute}; select a variable bound to the referenced "
+                "objects instead",
+            )
 
     def _order_column(self) -> Optional[Any]:
         """
@@ -3348,6 +3396,7 @@ def eql_to_sql(
     session: Session,
     as_common_table_expression: Optional[str] = None,
     select_identifiers: bool = False,
+    identifying_attribute: Optional[str] = None,
 ) -> Union[EQLTranslator, Any]:
     """
     Translate an EQL query to SQL.
@@ -3391,19 +3440,43 @@ def eql_to_sql(
         for answer in translator.evaluate():
             person = session.get(PersonDAO, answer[p])
 
+    With ``identifying_attribute``, it selects the value of that attribute instead of the
+    database id, for example the IRI of every answer, read from the one table that declares
+    the attribute:
+
+    .. code-block:: python
+
+        translator = eql_to_sql(
+            query, session, select_identifiers=True, identifying_attribute="uri"
+        )
+        iris = [answer[p] for answer in translator.evaluate()]
+
     :param query: The EQL query
     :param session: The SQLAlchemy session
     :param as_common_table_expression: If provided, returns a SQLAlchemy common table expression with this name.
     The name is required because SQL common table expressions must have an explicit alias
     (e.g. WITH large_bodies AS (SELECT ...))
     :param select_identifiers: Whether to select database ids instead of data access objects.
+    :param identifying_attribute: The name of an attribute, such as ``uri``, whose value is
+        selected instead of the database id of every selected variable and flattened
+        collection; only with ``select_identifiers``. None selects the database id.
     :return: EQLTranslator or SQLAlchemy common table expression
+    :raises UnsupportedTranslationError: When an identifying attribute is given without
+        ``select_identifiers``.
     """
     query.build()
-    translator_class = (
-        IdentifierSelectingTranslator if select_identifiers else EQLTranslator
-    )
-    result = translator_class(query, session)
+    if select_identifiers:
+        result = IdentifierSelectingTranslator(
+            query, session, identifying_attribute=identifying_attribute
+        )
+    elif identifying_attribute is not None:
+        raise UnsupportedTranslationError(
+            query,
+            "an identifying attribute is selected instead of database ids, so it requires "
+            "select_identifiers",
+        )
+    else:
+        result = EQLTranslator(query, session)
     result.translate()
 
     if as_common_table_expression is not None:

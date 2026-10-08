@@ -4,7 +4,9 @@ Tests of the translation of EQL queries to SQL that selects database identifiers
 
 The queries are those of :mod:`test_eql_collections`, on the same academy. The answers are
 database ids, which the tests map back to data access objects to compare them by name. The
-shape of the SQL is checked where the translation avoids a join.
+shape of the SQL is checked where the translation avoids a join. With an identifying
+attribute (``identifying_attribute="name"`` here, ``"uri"`` for the IRIs of OWL2Bench), the
+answers are the names themselves, which must equal the database ids mapped to names.
 """
 
 from __future__ import annotations
@@ -27,8 +29,10 @@ from krrood.entity_query_language.factories import (
     set_of,
     variable,
 )
+from krrood.entity_query_language.core.mapped_variable import Attribute
 from krrood.ormatic.eql_interface import (
     IdentifierSelectingTranslator,
+    MissingColumnError,
     UnsupportedTranslationError,
     eql_to_sql,
 )
@@ -503,3 +507,211 @@ def test_default_translation_selects_objects(session, academy):
     rows = eql_to_sql(an(set_of(m, o)), session).evaluate()
     assert all(not isinstance(row[m], int) for row in rows)
     assert "SymbolDAO" in str(eql_to_sql(an(set_of(m, o)), session).sql_query)
+
+
+# %% Selection of an identifying attribute instead of the database id
+
+
+def translate_identifying(query: Any, session: Any) -> IdentifierSelectingTranslator:
+    """
+    :return: The translator of the query that selects the name of every selected variable
+        and flattened collection instead of its database id.
+    """
+    translator = eql_to_sql(
+        query, session, select_identifiers=True, identifying_attribute="name"
+    )
+    assert isinstance(translator, IdentifierSelectingTranslator)
+    return translator
+
+
+def answer_tuple(answer: Any, selected: List[Any]) -> Tuple[Any, ...]:
+    """
+    :param answer: An answer of a translation: a value for an ``entity`` query, else a
+        mapping from the selected expressions to values.
+    :param selected: The selected expressions.
+    :return: The values of the answer in the order of ``selected``.
+    """
+    if len(selected) == 1 and not hasattr(answer, "keys"):
+        return (answer,)
+    return tuple(answer[expression] for expression in selected)
+
+
+def answers_by_name(query: Any, session: Any, selected: List[Any]) -> List[Tuple]:
+    """
+    :return: The sorted answers of the translation that selects names, with repetitions.
+    """
+    return sorted(
+        answer_tuple(answer, selected)
+        for answer in translate_identifying(query, session).evaluate()
+    )
+
+
+def answers_by_identifier_mapped_to_names(
+    query: Any, session: Any, selected: List[Any]
+) -> List[Tuple]:
+    """
+    :return: The sorted answers of the translation that selects database ids, with the id
+        of every variable and flattened collection mapped to its name, with repetitions.
+    """
+    return sorted(
+        tuple(
+            (
+                value
+                if isinstance(expression, Attribute)
+                else name_of_identifier(session, value)
+            )
+            for expression, value in zip(selected, answer_tuple(answer, selected))
+        )
+        for answer in translate(query, session).evaluate()
+    )
+
+
+def assert_names_equal_mapped_identifiers(
+    query: Any, session: Any, selected: List[Any]
+) -> List[Tuple]:
+    """
+    Assert that selecting names returns the answers of selecting database ids, with the ids
+    mapped to names.
+
+    :return: The answers of the translation that selects names.
+    """
+    by_name = answers_by_name(query, session, selected)
+    assert by_name == answers_by_identifier_mapped_to_names(query, session, selected)
+    return by_name
+
+
+def test_identifying_attribute_of_an_owner_and_its_elements(session, academy):
+    m = variable(AcademyMember, domain=academy.members)
+    o = flat_variable(m.is_member_of)
+    answers = assert_names_equal_mapped_identifiers(an(set_of(m, o)), session, [m, o])
+    assert answers == [
+        ("Alice", "RoboticsDepartment"),
+        ("Dean", "EngineeringCollege"),
+        ("Lecturer", "ArtsCollege"),
+        ("Lecturer", "EngineeringCollege"),
+    ]
+
+
+def test_identifying_attribute_joins_only_the_table_that_declares_it(session, academy):
+    """
+    The name of a member and of an organization is read by joining, on the id, the table
+    that declares it to the association table, one alias per variable, and no table of a
+    base class.
+    """
+    m = variable(AcademyMember, domain=academy.members)
+    o = flat_variable(m.is_member_of)
+    tables = from_clause_of(
+        str(translate_identifying(an(set_of(m, o)), session).sql_query)
+    )
+    assert tables.count("JOIN") == 2
+    assert "AcademyMemberDAO" in tables
+    assert "AcademyOrganizationDAO" in tables
+    assert "SymbolDAO" not in tables
+
+
+def test_identifying_attribute_of_a_subclass_is_read_from_its_superclass_table(
+    session, academy
+):
+    """
+    ``name`` is declared by organizations; a college variable is restricted by the college
+    table and its name is read from the organization table.
+    """
+    c = variable(AcademyCollege, domain=[])
+    whole = flat_variable(c.is_part_of)
+    query = an(set_of(c, whole))
+    assert assert_names_equal_mapped_identifiers(query, session, [c, whole]) == [
+        ("ArtsCollege", "University"),
+        ("EngineeringCollege", "University"),
+    ]
+    tables = from_clause_of(str(translate_identifying(query, session).sql_query))
+    assert "AcademyCollegeDAO" in tables
+    assert "AcademyOrganizationDAO" in tables
+    assert "SymbolDAO" not in tables
+
+
+def test_identifying_attribute_of_a_role_is_read_from_its_role_taker(session, academy):
+    s = variable(AcademyStudent, domain=academy.students)
+    query = an(entity(s))
+    assert assert_names_equal_mapped_identifiers(query, session, [s]) == [
+        ("Alice",),
+        ("Bob",),
+        ("Carol",),
+    ]
+    tables = from_clause_of(str(translate_identifying(query, session).sql_query))
+    assert "AcademyStudentDAO" in tables
+    assert "AcademyMemberDAO" in tables
+
+
+def test_identifying_attribute_of_an_entity_with_a_condition(session, academy):
+    o = variable(AcademyOrganization, domain=academy.organizations)
+    discipline = flat_variable(o.has_discipline)
+    query = an(entity(o).where(discipline.name == "Engineering"))
+    assert assert_names_equal_mapped_identifiers(query, session, [o]) == [
+        ("EngineeringCollege",)
+    ]
+
+
+def test_identifying_attribute_with_a_selected_value(session, academy):
+    m = variable(AcademyMember, domain=academy.members)
+    query = an(set_of(m, m.age).where(m.age))
+    assert assert_names_equal_mapped_identifiers(query, session, [m, m.age]) == [
+        ("Alice", 22),
+        ("Carol", 31),
+        ("Dean", 60),
+    ]
+
+
+def test_identifying_attribute_with_membership_in_a_distinct_query(session, academy):
+    """
+    The membership test is still a join (OWL2Bench Q22 shape); the names of the student and
+    of the course are read through their tables.
+    """
+    s = variable(AcademyStudent, domain=academy.students)
+    o = variable(AcademyOrganization, domain=academy.organizations)
+    dean = flat_variable(o.has_dean)
+    c = flat_variable(dean.teaches_course)
+    query = an(set_of(s, c).where(contains(s.takes_course, c)).distinct())
+    assert assert_names_equal_mapped_identifiers(query, session, [s, c]) == [
+        ("Alice", "Logic")
+    ]
+    sql = str(translate_identifying(query, session).sql_query)
+    assert "EXISTS" not in sql
+    assert "SymbolDAO" not in sql
+
+
+def test_identifying_attribute_with_exists_over_nested_collections(session, academy):
+    s = variable(AcademyStudent, domain=academy.students)
+    so = flat_variable(s.is_student_of)
+    whole = flat_variable(so.is_part_of)
+    discipline = flat_variable(whole.has_discipline)
+    query = an(
+        set_of(s, so).where(exists(discipline, discipline.name == "Engineering"))
+    )
+    assert assert_names_equal_mapped_identifiers(query, session, [s, so]) == [
+        ("Alice", "RoboticsDepartment"),
+        ("Carol", "RoboticsDepartment"),
+    ]
+    assert str(translate_identifying(query, session).sql_query).count("EXISTS") == 1
+
+
+def test_identifying_attribute_requires_selecting_identifiers(session, academy):
+    m = variable(AcademyMember, domain=academy.members)
+    with pytest.raises(UnsupportedTranslationError):
+        eql_to_sql(an(entity(m)), session, identifying_attribute="name")
+
+
+def test_selected_reference_with_an_identifying_attribute_is_rejected(session, academy):
+    s = variable(AcademyStudent, domain=academy.students)
+    with pytest.raises(UnsupportedTranslationError):
+        translate_identifying(an(entity(s.role_taker)), session)
+
+
+def test_missing_identifying_attribute_is_rejected(session, academy):
+    m = variable(AcademyMember, domain=academy.members)
+    with pytest.raises(MissingColumnError):
+        eql_to_sql(
+            an(entity(m)),
+            session,
+            select_identifiers=True,
+            identifying_attribute="iri",
+        )
