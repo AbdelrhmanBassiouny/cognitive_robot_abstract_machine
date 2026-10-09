@@ -221,7 +221,7 @@ immediately.
 
 The plan now exists, so every later change to it is a transition rather than a
 draft. Follow `${MANIFEST_STALENESS_DOCUMENT}` for all of them: write the manifest
-and republish the dashboard before the work that follows, not after it. That
+and refresh the dashboard before the work that follows, not after it. That
 applies to this skill's own remaining steps too — publish before reporting back,
 so what you report is what a reader will actually see.
 

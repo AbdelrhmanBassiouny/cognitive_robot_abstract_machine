@@ -73,9 +73,9 @@ Prints a one-line JSON report led by ``status`` and ``exit_code``, so a caller a
 the document never has to decode an integer back into a meaning.
 
 .. note::
-   Republishing the dashboard is deliberately not done here. Only a live session can
-   call the ``Artifact`` tool, so every operation hands back the ``/plan-dashboard``
-   command to run instead, exactly as ``save-plan.sh`` already does.
+   Refreshing the dashboard is deliberately not done here. Every operation writes the
+   manifest only and hands back the ``/plan-dashboard`` command to run instead, exactly
+   as ``save-plan.sh`` already does.
 
 .. note::
    The manifest is edited by patching only the lines that change. A full YAML
@@ -724,7 +724,7 @@ class ReportKey(StrEnum):
 
     DASHBOARD_COMMAND = "dashboard_command"
     """
-    The republish a live session still has to run, since only it can call ``Artifact``.
+    The dashboard refresh the caller still has to run.
     """
 
     FINDINGS = "findings"
@@ -1611,8 +1611,7 @@ class BootstrapReport:
     @property
     def dashboard_command(self) -> str:
         """
-        The republish a live session still has to run, since only it can call
-        ``Artifact``.
+        The dashboard refresh the caller still has to run.
         """
         return f"/plan-dashboard {self.plan_identifier}"
 

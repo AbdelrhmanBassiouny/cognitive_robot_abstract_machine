@@ -141,5 +141,5 @@ output is the plan itself.
 
 Adding an item, folding one into another and changing a plan's shape are each a
 transition, so `${MANIFEST_STALENESS_DOCUMENT}` governs when they get written:
-the manifest first and the dashboard republished in the same turn, not once the
+the manifest first and the dashboard refreshed in the same turn, not once the
 work the outcome describes is finished.

@@ -275,12 +275,12 @@ it unprompted, since that republishes a second, separate page. A caller
 that asks for both is not breaking this: `plan-create` does, because
 adding a plan is the one change that alters what the index itself lists.
 
-## Republishing is half of every transition, not a step of its own
+## Refreshing is half of every transition, not a step of its own
 
-This skill is what every other plan skill ends on, because only a live session can
-call the `Artifact` tool. `${MANIFEST_STALENESS_DOCUMENT}` states the rule they all
-follow: the manifest is written and the dashboard republished at every point that
-makes a recorded field stale, before the work that follows. When something asks you
+This skill is what every other plan skill ends on, because the operations that write
+a manifest never publish it. `${MANIFEST_STALENESS_DOCUMENT}` states the rule they all
+follow: the manifest is written and the dashboard refreshed at every point that makes
+a recorded field stale, before the work that follows. When something asks you
 to run `/plan-dashboard`, that is this rule finishing — a published dashboard older
 than the manifest behind it is the staleness the whole system exists to catch.
 

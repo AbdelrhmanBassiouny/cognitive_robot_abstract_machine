@@ -29,7 +29,7 @@ How the dashboard URL cache names the master index's own page.
 
 BLOCKER_OWNER_CONSTANT = "MAINTENANCE_BLOCKER_OWNER"
 """
-The constant naming who the maintenance pass writes its blockers under, which the writer
+The constant naming who stack maintenance writes its blockers under, which the writer
 and the clearer of one have to agree on exactly.
 """
 
@@ -125,40 +125,13 @@ def test_a_skill_that_writes_plan_data_cites_the_currency_rule(skill: Path):
     assert STALENESS_DOCUMENT_CONSTANT in skill.read_text()
 
 
-def test_the_maintenance_pass_writes_the_manifest_its_own_moves_make_stale():
-    """
-    The pass concluding a branch is blocked is what makes the item blocked, so it is the
-    one that records it - reporting instead leaves the manifest wrong for as long as
-    nobody reads the summary.
-    """
-    maintenance = skill_instructions(SkillDirectory.STACKED_PULL_REQUEST_MAINTENANCE)
-
-    assert any(script in maintenance for script in PLAN_WRITING_SCRIPTS)
-
-
-def test_the_maintenance_pass_can_reach_the_skill_that_publishes():
-    """
-    Republishing means invoking ``plan-dashboard``, which needs the ``Skill`` tool - a
-    grant no amount of prose in the document can substitute for.
-    """
-    frontmatter = skill_instructions(
-        SkillDirectory.STACKED_PULL_REQUEST_MAINTENANCE
-    ).split("---")[1]
-    granted = frontmatter.partition("allowed-tools:")[2].partition("\n")[0]
-
-    assert "Skill" in {tool.strip() for tool in granted.split(",")}
-
-
-def test_the_writer_and_the_clearer_of_a_blocker_name_the_same_owner():
+def test_the_rule_names_the_blocker_owner_through_its_constant():
     """
     A blocker written under one name and cleared under another would accumulate forever,
-    so both sides cite the constant rather than spelling the name out.
+    so the document cites the one constant rather than spelling the name out.
     """
     assert shell_constant(BLOCKER_OWNER_CONSTANT)
     assert BLOCKER_OWNER_CONSTANT in currency_document()
-    assert BLOCKER_OWNER_CONSTANT in skill_instructions(
-        SkillDirectory.STACKED_PULL_REQUEST_MAINTENANCE
-    )
 
 
 def test_creating_a_plan_republishes_the_index_the_new_plan_belongs_in():

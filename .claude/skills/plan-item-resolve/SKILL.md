@@ -122,7 +122,7 @@ thread, the dependency that regressed. Leave `notes` for a conclusion that chang
 what the item *means*, not a summary of this run — and add to an existing note with
 `--append-notes` rather than rewriting it.
 
-Then republish: `/plan-dashboard <plan-id>`. An item that has been stalled for days
+Then refresh the dashboard: `/plan-dashboard <plan-id>`. An item that has been stalled for days
 while the manifest calls it healthy is the failure this step exists to end, and it
 is not fixed by resolving the item — only by recording what was true before the
 resolution starts.

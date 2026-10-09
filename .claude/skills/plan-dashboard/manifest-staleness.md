@@ -1,14 +1,13 @@
 # Keeping a plan's manifest current, at every transition
 
 Shared by every skill that can change what a plan records: `plan-create`,
-`add-plan-item`, `plan-item-kickoff`, `plan-item-resolve`, `plan-dashboard` and
-`stacked-pr-maintenance`. The rule lives here once rather than being restated in
+`add-plan-item`, `plan-item-kickoff`, `plan-item-resolve` and `plan-dashboard`. The rule lives here once rather than being restated in
 each of them.
 
 ## The rule
 
-**Write the manifest and republish the dashboard first, at every point that makes
-a recorded field stale** — not at the end of the work that made it stale.
+**Write the manifest and refresh the plan's dashboard first, at every point that
+makes a recorded field stale** — not at the end of the work that made it stale.
 
 A transition is any moment one of these stops being true: the item's `status`, its
 `branch`, its `pull_request_number`, its `session`, its `notes`, its `blockers`, or
@@ -73,10 +72,9 @@ push, which is exactly where a session works.
 
 ## What a script cannot do, and so stays yours
 
-- **Publishing the dashboard.** Only a live session can call the `Artifact` tool, so
-  every operation hands back `/plan-dashboard <plan-id>` rather than pretending it
-  ran. Run it in the same turn as the write — every session does, unattended ones
-  included. A published dashboard older than the manifest behind it is the staleness
+- **Refreshing the dashboard.** The operations write the manifest only, and hand
+  back `/plan-dashboard <plan-id>` rather than pretending it ran. Run it in the same
+  turn as the write. A dashboard older than the manifest behind it is the staleness
   this rule exists to close.
 - **Creating the pull request.** One the script creates is attributed to the app its
   requests are proxied through rather than to you; create it yourself and pass
@@ -87,14 +85,12 @@ push, which is exactly where a session works.
   transition means — `blocked` when something outside the item must move first,
   `deferred` when it was parked deliberately.
 
-## For a pass that changes state without owning it
+## For automation that changes a branch's state without owning its item
 
-`stacked-pr-maintenance` reparents pull requests, promotes branches, restacks and
-moves labels. All of that changes what a tracked item's recorded fields should say,
-and none of it happens in the session that owns the item.
-
-It holds a branch rather than an item id, so every operation below is keyed on the
-branch and resolves the rest itself:
+Restacking, reparenting, promoting and labelling a branch all change what a tracked
+item's recorded fields should say, and none of it happens in the session that owns
+the item. Such automation holds a branch rather than an item id, so these operations
+are keyed on the branch and resolve the rest themselves:
 
 ```bash
 source .claude/hooks/resolve-personal-notes-config.sh
@@ -102,38 +98,30 @@ source .claude/hooks/resolve-personal-notes-config.sh
 # Which plan and items does this branch belong to?
 python3 -m "${PLAN_ITEM_BOOTSTRAP_MODULE}" resolve --branch <branch>
 
-# Block every item on it, under this pass's own name.
+# Block every item on it, under the automation's own name.
 python3 -m "${PLAN_ITEM_BOOTSTRAP_MODULE}" block --branch <branch> \
     --owner "${MAINTENANCE_BLOCKER_OWNER}" --reason <file>
 
-# Withdraw that blocker once the pass finds the branch clean again.
+# Withdraw that blocker once the branch is clean again.
 python3 -m "${PLAN_ITEM_BOOTSTRAP_MODULE}" unblock --branch <branch> \
     --owner "${MAINTENANCE_BLOCKER_OWNER}"
 ```
 
 A branch can carry more than one item, so each writes all of them; a branch no plan
 claims exits `branch_tracks_no_item` and writes nothing, which is a finding to report
-rather than a failure — every fork pull request is supposed to belong to a plan.
+rather than a failure - every fork pull request is supposed to belong to a plan.
 
-**What it writes is only what it decided itself.** A branch it labels
-`needs-resolution` is blocked because this pass concluded so; one whose label it
-clears is not. The blocker carries the owner it was written under, so the pass
-replaces and withdraws its own entry and never one a person wrote, and an item left
-carrying somebody else's blocker stays blocked.
+**Write only what was decided mechanically.** A branch the automation found
+conflicted is blocked because it concluded so; one it finds clean again is not. The
+blocker carries the owner it was written under, so the automation replaces and
+withdraws its own entry and never one a person wrote, and an item left carrying
+somebody else's blocker stays blocked. A reparent, a promotion or a landed branch is
+reported rather than written: which status those imply is a reading rather than a
+mechanical fact, and a landed branch is corrected to `done` by the dashboard refresh
+on its own.
 
-**What it reports rather than writes** is everything whose status is a reading rather
-than a mechanical fact: a reparent, a promotion, a landed branch. A landed branch
-needs no write at all — the refresh below corrects merged to `done` on its own.
-
-Then republish, once per plan it wrote to, at the transition rather than in the
-finish summary. The finish summary still names every item touched, which of them were
-written, and which plans were republished.
-
-It publishes rather than handing the command back because it runs as a session like
-any other: `--non-interactive` suppresses asking the user a question, not writing a
-file or calling a tool. The write is a script call precisely so it survives
-`routine-cutover`, after which the pass is a plain Action with no session in it and
-publishing moves to the built site.
+All three need nothing beyond the standard library and the notes branch, so they run
+the same from a session or from a plain Action.
 
 ## In auto mode
 
