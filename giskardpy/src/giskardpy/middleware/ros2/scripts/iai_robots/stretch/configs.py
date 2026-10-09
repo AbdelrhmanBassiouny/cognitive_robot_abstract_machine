@@ -5,11 +5,7 @@ from typing_extensions import List
 from giskardpy.middleware.ros2.robot_interface_config import (
     ClosedLoopRobotInterfaceConfig,
 )
-from giskardpy.model.world_config import (
-    WorldWithOmniDriveRobot,
-    WorldWithDiffDriveRobot,
-)
-from semantic_digital_twin.robots.robot_parts import AbstractRobot
+from giskardpy.model.world_config import WorldWithMobileRobot
 from semantic_digital_twin.robots.stretch import Stretch, StretchJoint
 from semantic_digital_twin.world_description.connections import (
     Connection6DoF,
@@ -68,16 +64,26 @@ class StretchVelocityInterface(ClosedLoopRobotInterfaceConfig):
 
 
 @dataclass
-class WorldWithStretchConfig(WorldWithOmniDriveRobot):
-    urdf_view: AbstractRobot = field(kw_only=True, default=Stretch, init=False)
+class WorldWithStretchConfig(WorldWithMobileRobot):
+    """
+    A world containing only Stretch, modelled with an omnidirectional base.
+    """
 
-    def setup_collision_config(self):
-        pass
+    robot_class: type[Stretch] = field(kw_only=True, default=Stretch, init=False)
+    """
+    The robot class that is applied to the parsed description.
+    """
 
 
 @dataclass
-class WorldWithStretchConfigDiffDrive(WorldWithDiffDriveRobot):
-    urdf_view: AbstractRobot = field(kw_only=True, default=Stretch, init=False)
+class WorldWithStretchConfigDiffDrive(WorldWithStretchConfig):
+    """
+    A world containing only Stretch, which drives on a differential base.
+    """
 
-    def setup_collision_config(self):
-        pass
+    drive_class: type[DifferentialDrive] = field(
+        kw_only=True, default=DifferentialDrive, init=False
+    )
+    """
+    The kind of connection between the odometry body and the robot.
+    """

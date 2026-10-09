@@ -1,18 +1,28 @@
 from dataclasses import dataclass, field
 
-from giskardpy.model.world_config import WorldWithOmniDriveRobot
+from giskardpy.model.world_config import WorldWithMobileRobot
 from giskardpy.middleware.ros2.robot_interface_config import (
     ClosedLoopRobotInterfaceConfig,
 )
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
-from semantic_digital_twin.robots.robot_parts import AbstractRobot
 from semantic_digital_twin.robots.pr2 import PR2
 
 
 @dataclass
-class WorldWithPR2Config(WorldWithOmniDriveRobot):
+class WorldWithPR2Config(WorldWithMobileRobot):
+    """
+    A world containing only the PR2, which drives on an omnidirectional base.
+    """
+
     odom_body_name: PrefixedName = PrefixedName("odom_combined")
-    urdf_view: AbstractRobot = field(kw_only=True, default=PR2, init=False)
+    """
+    Name of the body the robot drives relative to.
+    """
+
+    robot_class: type[PR2] = field(kw_only=True, default=PR2, init=False)
+    """
+    The robot class that is applied to the parsed description.
+    """
 
 
 @dataclass

@@ -1,12 +1,10 @@
 from dataclasses import dataclass, field
-from typing import Optional
 
 from giskardpy.middleware.ros2.robot_interface_config import (
     ClosedLoopRobotInterfaceConfig,
 )
 from giskardpy.model.world_config import WorldWithFixedRobot
 from semantic_digital_twin.robots.daisy import DAiSy, DAiSyController
-from semantic_digital_twin.robots.robot_parts import AbstractRobot
 
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 
@@ -38,11 +36,7 @@ class WorldWithDaisyConfig(WorldWithFixedRobot):
     Name of the body DAiSy is attached to.
     """
 
-    urdf_view: AbstractRobot = field(kw_only=True, default=DAiSy, init=False)
+    robot_class: type[DAiSy] = field(kw_only=True, default=DAiSy, init=False)
     """
-    Semantic view that is applied to the parsed urdf.
+    The robot class that is applied to the parsed description.
     """
-
-    def setup_world(self, robot_name: Optional[str] = None) -> None:
-        super().setup_world()
-        self.robot = self.world.get_semantic_annotations_by_type(DAiSy)[0]

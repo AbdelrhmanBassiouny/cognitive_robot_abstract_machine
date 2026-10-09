@@ -1,12 +1,10 @@
 from dataclasses import dataclass, field
-from typing import Optional
 
 from giskardpy.model.world_config import WorldWithFixedRobot
 from giskardpy.middleware.ros2.robot_interface_config import (
     ClosedLoopRobotInterfaceConfig,
 )
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
-from semantic_digital_twin.robots.robot_parts import AbstractRobot
 from semantic_digital_twin.robots.tracy import (
     Tracy,
     TracyController,
@@ -39,14 +37,10 @@ class WorldWithTracyConfig(WorldWithFixedRobot):
     Name of the body Tracy is attached to.
     """
 
-    urdf_view: AbstractRobot = field(kw_only=True, default=Tracy, init=False)
+    robot_class: type[Tracy] = field(kw_only=True, default=Tracy, init=False)
     """
-    Semantic view that is applied to the parsed urdf.
+    The robot class that is applied to the parsed description.
     """
-
-    def setup_world(self, robot_name: Optional[str] = None) -> None:
-        super().setup_world()
-        self.robot = self.world.get_semantic_annotations_by_type(Tracy)[0]
 
 
 # class TracyCollisionAvoidanceConfig(LoadSelfCollisionMatrixConfig):

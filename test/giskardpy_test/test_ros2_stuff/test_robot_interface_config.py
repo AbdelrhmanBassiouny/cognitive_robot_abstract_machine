@@ -216,6 +216,22 @@ def test_a_world_with_a_differential_drive_robot_controls_its_drive():
     assert drive.is_controlled
 
 
+def test_a_world_with_a_drive_limits_the_velocity_of_its_drive():
+    world_config = WorldWithPR2Config(
+        urdf=load_xacro(PR2.get_ros_file_path()),
+        translation_velocity_limit=0.4,
+        rotation_velocity_limit=0.7,
+    )
+    with world_config.world.modify_world():
+        world_config.setup_world()
+
+    [drive] = world_config.world.get_connections_by_type(OmniDrive)
+    assert drive.x_velocity.limits.upper.velocity == (
+        world_config.translation_velocity_limit
+    )
+    assert drive.yaw.limits.upper.velocity == world_config.rotation_velocity_limit
+
+
 # %% in closed loop only commanded joints are controlled
 
 
