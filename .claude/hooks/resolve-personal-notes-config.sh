@@ -550,7 +550,7 @@ BASSTLER_ENVIRONMENT_DIRECTORY="${BASSTLER_SOURCE_TREE}/.venv"
 BASSTLER_ENVIRONMENT_INTERPRETER="${PROJECT_ROOT}/${BASSTLER_ENVIRONMENT_DIRECTORY}/bin/python"
 # BASSTLER_PYTHON_REQUIREMENT: the interpreters the package supports - the
 # requires-python of BASSTLER_PYPROJECT_FILE, which a test holds this equal to.
-BASSTLER_PYTHON_REQUIREMENT=">=3.11"
+BASSTLER_PYTHON_REQUIREMENT=">=3.12"
 # BASSTLER_INTERPRETER_CANDIDATES: interpreters satisfying that requirement,
 # newest first, tried by name when uv is not there to find or fetch one.
 BASSTLER_INTERPRETER_CANDIDATES="python3.14 python3.13 python3.12"
