@@ -240,6 +240,11 @@ items:
   branch: claude/auto-run-setup-notes-02nhxv
   pull_request_number: 156
   status: in_progress
+  blockers: |-
+    Two outdated review threads on plan-item-resolve/SKILL.md, a deferral to #149, are still open for the
+    owner to close. The review thread on the guard's global constants is answered in a conversation
+    comment (an inline reply is rejected while the owner has a pending review) and left open for the
+    owner. The upstream pull request does not exist.
   session: https://claude.ai/code/session_01RydZutnNtFBYeT73Qt4Bxv
   track: conventions
   depends_on: []
@@ -271,6 +276,11 @@ items:
 
     No upstream pull request exists: the branch carries `cram2-link-sent`, meaning the compare link was
     built, but no upstream pull request has this head, so Create was never clicked.
+
+    Resolved 2026-10-09: `main` renamed the package `bastler` to `basstler`, which was the
+    `needs-resolution` conflict (the guard test sat in the renamed directory). Merged `main`, moved the
+    guard to `test/basstler_test`, and answered the review thread asking for no global constants by
+    using `PackageLocation`, a new `SkillDirectory.DIRECTORY` and two `StrEnum`s in the guard itself.
 - id: no-pr-subscriptions
   title: Stop sessions from subscribing to their own pull requests
   branch: claude/remove-auto-subscribe-pr-oowwkp

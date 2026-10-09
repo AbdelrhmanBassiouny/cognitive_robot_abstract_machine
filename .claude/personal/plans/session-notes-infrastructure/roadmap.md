@@ -88,6 +88,11 @@ of 3.11 is taken deliberately by `basstler-session-start-python`, behind a shim 
 - **Review threads inside an unsubmitted pending review reject inline replies with a 422**, since
   GitHub allows one pending review per user. Explain the resolution in a conversation comment instead.
 
+- **A package rename on main surfaces as a conflict in a branch's own new file.** `bastler` became
+  `basstler` on main while `setup-runs-without-asking` had crossed the earlier move into `bastler`, so its one
+  new test file sat in a directory main had renamed. Git reports it as a file-location conflict;
+  `git mv` into the renamed directory and renaming the import settle it.
+
 ## Standing risks
 
 - **The identity fix cannot reach commits made outside a session.** Merge commits landing from the
