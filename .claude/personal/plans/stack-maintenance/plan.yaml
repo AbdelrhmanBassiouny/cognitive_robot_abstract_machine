@@ -313,6 +313,16 @@ items:
   status: in_progress
   session: https://claude.ai/code/session_016DukdvsJzggwAAF3CkKaDZ
   track: pass
+  blockers:
+    - >-
+      GitHub reports #158 dirty against main since 2026-09-19 on four files (SKILL.md,
+      basstler/stack.py, test_maintenance_skill.py, test_stack.py), re-reported by every maintenance
+      pass and never resolved. Cause: the branch was rebased onto #185 at 5b332d6a59, one commit
+      before 213ad791c7 renamed bastler to basstler, so the branch still carries bastler/ and
+      test/bastler_test (106 paths) and the rename is not an ancestor. Manifest called the item
+      healthy; it is the 2026-09-19 and 2026-10-02 miss a third time. Also open: the
+      integration-conflict label against D-deco (2026-09-09) has not been re-measured, and the PR is
+      out of draft.
   depends_on: []
   notes: |-
     Found while running a maintenance pass, and fixed at the source rather than worked around. The skill
