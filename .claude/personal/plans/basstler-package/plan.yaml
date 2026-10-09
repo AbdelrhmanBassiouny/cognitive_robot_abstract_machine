@@ -33,7 +33,7 @@ items:
   title: 'Create the basstler package: the .claude Python and its tests move into it'
   branch: claude/plan-item-kickoff-workflow-cuare2
   pull_request_number: 185
-  status: in_progress
+  status: done
   session: https://claude.ai/code/session_014kmiZegiD2Q8w2eese2L2L
   track: extraction
   depends_on: []
