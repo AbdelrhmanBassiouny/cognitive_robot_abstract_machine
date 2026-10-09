@@ -105,6 +105,17 @@ class StackLabel(StrEnum):
     """
 
 
+class SkillFile(PathEnumeration):
+    """
+    The files a skill directory holds, relative to that directory.
+    """
+
+    INSTRUCTIONS = Path("SKILL.md")
+    """
+    The skill's instructions, which is the file Claude Code looks for.
+    """
+
+
 class SkillDirectory(PathEnumeration):
     """
     The skills the suites read, relative to the project root.
@@ -113,17 +124,32 @@ class SkillDirectory(PathEnumeration):
     does not name it.
     """
 
-    PLAN_DASHBOARD = ProjectLocation.CLAUDE_CODE_DIRECTORY / "skills" / "plan-dashboard"
+    ROOT = ProjectLocation.CLAUDE_CODE_DIRECTORY / "skills"
+    """
+    Where every skill's own directory lives.
+    """
+
+    PLAN_DASHBOARD = ROOT / "plan-dashboard"
     """
     The dashboard skill: its instructions, its worked example and its shell entry point.
     """
 
-    STACKED_PULL_REQUEST_MAINTENANCE = (
-        ProjectLocation.CLAUDE_CODE_DIRECTORY / "skills" / "stacked-pr-maintenance"
-    )
+    STACKED_PULL_REQUEST_MAINTENANCE = ROOT / "stacked-pr-maintenance"
     """
     The maintenance pass's own instructions.
     """
+
+    PLAN_CREATE = ROOT / "plan-create"
+    """
+    The skill whose own act of creating a plan is what makes the master index stale.
+    """
+
+    @property
+    def instructions(self) -> Path:
+        """
+        :return: The skill's instructions, relative to the project root.
+        """
+        return self.value / SkillFile.INSTRUCTIONS
 
 
 class ScratchBranch(StrEnum):

@@ -59,10 +59,10 @@ from basstler.maintenance_fast_forward import (
     FastForwardReport,
     fast_forward,
 )
+from basstler.exceptions import GitCommandFailed
 from basstler.maintenance_git_commands import (
     BranchAncestry,
-    GitCommandFailed,
-    GitCommandRunner,
+    MaintenanceGitCommandRunner,
     ProposedPush,
 )
 from basstler.maintenance_github import ForkPullRequests
@@ -323,11 +323,11 @@ class ForkCheckout:
         return self.run_git("ls-remote", "origin", f"refs/heads/{branch}").split()[0]
 
     @property
-    def git(self) -> GitCommandRunner:
+    def git(self) -> MaintenanceGitCommandRunner:
         """
         :return: The runner the executor drives this checkout through.
         """
-        return GitCommandRunner(working_directory=self.project_root)
+        return MaintenanceGitCommandRunner(working_directory=self.project_root)
 
 
 @pytest.fixture
@@ -1182,7 +1182,7 @@ class PullRequestsWatchingTheCaller(RecordingPullRequests):
     branch - which is otherwise over before a test can look.
     """
 
-    caller: GitCommandRunner = dataclasses_field(kw_only=True)
+    caller: MaintenanceGitCommandRunner = dataclasses_field(kw_only=True)
     """
     The invoking checkout to read.
     """
