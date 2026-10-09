@@ -28,6 +28,9 @@ dependencies = [
 video = [
     "kokoro-onnx>=0.6",  # experiments.video's narrator, the Kokoro speech model run locally
 ]
+animation = [
+    "manim>=0.18",  # experiments.video's animated scenes; needs cairo and pango on the machine
+]
 
 [tool.setuptools]
 package-dir = {"" = "src"}
