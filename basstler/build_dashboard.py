@@ -40,7 +40,8 @@ import sys
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from datetime import datetime
-from enum import StrEnum
+from enum import Enum, StrEnum
+from functools import cache
 from itertools import combinations
 from pathlib import Path
 from typing import Any, ClassVar
@@ -86,13 +87,13 @@ class HideableStatus:
         return f"show-{self.status.value}-toggle"
 
 
-HIDEABLE_STATUSES: tuple[HideableStatus, ...] = (
-    HideableStatus(ItemStatus.DONE, "Show done / merged items"),
-    HideableStatus(ItemStatus.DEFERRED, "Show deferred items"),
-)
-"""Every status hidden by default, in the order its checkbox appears. Both
-mean there is nothing to act on: a done item has landed, and a deferred one is
-intentionally paused or superseded."""
+class DefaultHiddenStatus(HideableStatus, Enum):
+    """Every status hidden by default, in the order its checkbox appears. Both
+    mean there is nothing to act on: a done item has landed, and a deferred one
+    is intentionally paused or superseded."""
+
+    DONE = (ItemStatus.DONE, "Show done / merged items")
+    DEFERRED = (ItemStatus.DEFERRED, "Show deferred items")
 
 
 @dataclass(frozen=True)
@@ -104,17 +105,19 @@ class VisibilityFilter:
     ticked, with nothing re-rendered."""
 
     hidden: tuple[HideableStatus, ...]
-    """The statuses hidden in this combination, in :data:`HIDEABLE_STATUSES`
+    """The statuses hidden in this combination, in :class:`DefaultHiddenStatus`
     order; empty when everything shows."""
 
     @classmethod
+    @cache
     def every_combination(cls) -> tuple[VisibilityFilter, ...]:
         """Every state the sidebar's checkboxes can put the page in, shortest
-        first, so a filter always precedes the ones hiding a superset of it."""
+        first, so a filter always precedes the ones hiding a superset of it.
+        Computed once."""
         return tuple(
             cls(combination)
-            for size in range(len(HIDEABLE_STATUSES) + 1)
-            for combination in combinations(HIDEABLE_STATUSES, size)
+            for size in range(len(DefaultHiddenStatus) + 1)
+            for combination in combinations(DefaultHiddenStatus, size)
         )
 
     @property
@@ -151,11 +154,6 @@ class VisibilityFilter:
     def hides_more_than(self, other: VisibilityFilter) -> bool:
         """Whether this filter hides everything ``other`` does, and more."""
         return other.hidden_statuses < self.hidden_statuses
-
-
-VISIBILITY_FILTERS: tuple[VisibilityFilter, ...] = VisibilityFilter.every_combination()
-"""Every visibility filter, precomputed once - each item is rendered with a
-position under all of them."""
 
 
 class LiveState(StrEnum):
@@ -1161,8 +1159,8 @@ class DashboardRenderer:
             roadmap_html=render_markdown_to_html(self.roadmap_text),
             waves=self._build_wave_sections(),
             available_models=AVAILABLE_MODELS,
-            hideable_statuses=HIDEABLE_STATUSES,
-            visibility_filters=VISIBILITY_FILTERS,
+            hideable_statuses=DefaultHiddenStatus,
+            visibility_filters=VisibilityFilter.every_combination(),
         )
 
         summary = DashboardSummary(
@@ -1479,7 +1477,7 @@ class DashboardRenderer:
                     item=item,
                     positions={
                         visibility_filter: stack_position(item, visibility_filter)
-                        for visibility_filter in VISIBILITY_FILTERS
+                        for visibility_filter in VisibilityFilter.every_combination()
                     },
                 )
             )

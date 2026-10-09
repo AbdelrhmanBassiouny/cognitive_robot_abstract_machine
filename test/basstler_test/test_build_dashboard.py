@@ -15,9 +15,10 @@ import yaml
 from basstler.build_dashboard import (
     AVAILABLE_MODELS,
     DashboardRenderer,
+    DefaultHiddenStatus,
     DependencyCycle,
     DuplicateItemId,
-    HIDEABLE_STATUSES,
+    HideableStatus,
     InvalidBlockers,
     InvalidDependsOn,
     InvalidManifestRoot,
@@ -41,7 +42,6 @@ from basstler.build_dashboard import (
     UnknownStatus,
     UnknownTrack,
     UnknownWave,
-    VISIBILITY_FILTERS,
     VisibilityFilter,
     Wave,
     classify_live_state,
@@ -92,14 +92,15 @@ def minimal_plan(**overrides: Any) -> dict[str, Any]:
 
 def visibility_filter(*hidden: ItemStatus) -> VisibilityFilter:
     """
-    The one filter in :data:`VISIBILITY_FILTERS` hiding exactly ``hidden``.
+    The one filter among :meth:`VisibilityFilter.every_combination` hiding exactly
+    ``hidden``.
 
     :param hidden: The statuses that filter hides; none for the show-everything filter.
     """
     wanted = frozenset(hidden)
     return next(
         candidate
-        for candidate in VISIBILITY_FILTERS
+        for candidate in VisibilityFilter.every_combination()
         if candidate.hidden_statuses == wanted
     )
 
@@ -1479,19 +1480,29 @@ def test_only_the_item_that_wraps_carries_a_wrap_parent():
 
 
 def test_every_hideable_status_is_one_a_manifest_item_can_carry():
-    assert all(hideable.status in set(ItemStatus) for hideable in HIDEABLE_STATUSES)
+    assert all(hideable.status in set(ItemStatus) for hideable in DefaultHiddenStatus)
 
 
 def test_done_and_deferred_are_the_hideable_statuses():
-    assert [hideable.status for hideable in HIDEABLE_STATUSES] == [
+    assert [hideable.status for hideable in DefaultHiddenStatus] == [
         ItemStatus.DONE,
         ItemStatus.DEFERRED,
     ]
 
 
+def test_default_hidden_statuses_are_hideable_statuses():
+    assert all(isinstance(member, HideableStatus) for member in DefaultHiddenStatus)
+
+
+def test_every_combination_is_computed_once():
+    assert VisibilityFilter.every_combination() is VisibilityFilter.every_combination()
+
+
 def test_visibility_filters_cover_every_combination_of_hideable_statuses():
-    every_status = {hideable.status for hideable in HIDEABLE_STATUSES}
-    assert [candidate.hidden_statuses for candidate in VISIBILITY_FILTERS] == [
+    every_status = {hideable.status for hideable in DefaultHiddenStatus}
+    assert [
+        candidate.hidden_statuses for candidate in VisibilityFilter.every_combination()
+    ] == [
         frozenset(),
         frozenset({ItemStatus.DONE}),
         frozenset({ItemStatus.DEFERRED}),
@@ -1526,7 +1537,7 @@ def test_visibility_filter_hides_more_than_one_hiding_a_subset():
 def test_hideable_status_page_class_and_toggle_identifier_follow_the_status():
     deferred = next(
         hideable
-        for hideable in HIDEABLE_STATUSES
+        for hideable in DefaultHiddenStatus
         if hideable.status is ItemStatus.DEFERRED
     )
     assert deferred.page_css_class == "hide-deferred"
@@ -1921,7 +1932,7 @@ def test_render_hides_every_hideable_status_by_default_with_a_sidebar_toggle():
     output, _ = renderer.render()
     assert 'id="plan-dashboard-page"' in output
     assert 'class="page hide-done hide-deferred"' in output
-    for hideable in HIDEABLE_STATUSES:
+    for hideable in DefaultHiddenStatus:
         assert f'id="{hideable.toggle_element_id}"' in output
         assert hideable.toggle_label in output
 
@@ -1940,7 +1951,7 @@ def test_render_hides_every_hideable_status_behind_its_own_page_class():
         plan=plan, roadmap_text="", pull_requests_by_repository={}, tracking_url=None
     )
     output, _ = renderer.render()
-    for hideable in HIDEABLE_STATUSES:
+    for hideable in DefaultHiddenStatus:
         assert (
             f".page.{hideable.page_css_class} .item.status-{hideable.status.value}"
             " { display: none; }" in output
@@ -2006,7 +2017,7 @@ def test_render_picks_each_visibility_filters_indent_level_by_page_class():
         plan=plan, roadmap_text="", pull_requests_by_repository={}, tracking_url=None
     )
     output, _ = renderer.render()
-    for candidate in VISIBILITY_FILTERS:
+    for candidate in VisibilityFilter.every_combination():
         assert (
             f".page{candidate.page_selector} .item {{ margin-left:"
             f" calc(var({candidate.indent_variable_name}, 0) * 1.75rem); }}" in output
@@ -2040,7 +2051,7 @@ def test_render_marks_each_wrap_arrow_with_the_filter_it_belongs_to():
         plan=plan, roadmap_text="", pull_requests_by_repository={}, tracking_url=None
     )
     output, _ = renderer.render()
-    for candidate in VISIBILITY_FILTERS:
+    for candidate in VisibilityFilter.every_combination():
         assert f'class="wrap-arrow {candidate.wrap_arrow_css_class}"' in output
 
 
