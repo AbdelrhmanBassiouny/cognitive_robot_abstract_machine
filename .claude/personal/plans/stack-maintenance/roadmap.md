@@ -523,3 +523,30 @@ exercises** - the same lesson the indentation fold recorded, met one field over.
 six paragraphs were taken from the intact version at `a5178fb90`, and the four appended since were
 taken from the damaged note, which held each of them on a line of its own. Each paragraph was
 checked against its source before the write.
+
+## `pinned-stack-tooling`: the rename merge of 2026-10-09
+
+Resolved from `/plan-item-resolve` in `auto` mode. The manifest called the item healthy and
+`in_progress` with no blocker; GitHub had called #158 `dirty` since 2026-09-19, on four files every
+maintenance pass re-reported. **It is the 2026-09-19 and 2026-10-02 miss a third time**: #158 was
+rebased onto #185 one commit before `213ad791c7` renamed the package, so it still carried `bastler/`
+and `test/bastler_test`. The same recipe worked: the substitution applied to the branch first (checked
+to pair line for line with `213ad791c7`), recorded as merged with `-s ours`, then `main` merged across.
+Four conflicts became three, all in imports.
+
+**Two breaks the merge could not show, found by the suite.** `main`'s `StandardStreamHandler` reads a
+module's import spec, which is `None` for a file run by path, so `python <pinned>/stack.py` died on
+import - the whole premise of invoking the pinned tool by path no longer held. The pinned copy is now
+run as `python -P -m basstler.<module>` with `PYTHONPATH` set to the printed directory. `-P` is the part
+that is easy to miss: `-m` puts the working directory on the import path first, so without it the
+checkout's own `basstler` wins and the pin protects nothing. Removing it fails the branch-switch test.
+Second, nothing puts a sibling directory on `sys.path` any more, so the `ast`-walk pinning added after
+the integration build and its two tests were deleted, as this item's note anticipated.
+
+**A guard only as wide as the case that prompted it.** The skill's working-tree test matched
+`python -m basstler.stack` only, so an unpinned `maintenance` call would have passed. It now matches any
+module of the package; an unpinned call in the skill fails it.
+
+**Left open**: the `integration-conflict` label against `D-deco` (#77). The two share no file, but the
+combined suite was not re-run, so the label was not cleared. The item's own invocation form changed from
+a file path to a module, which the PR description now states.
