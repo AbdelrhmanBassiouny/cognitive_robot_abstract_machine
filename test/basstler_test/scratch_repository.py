@@ -64,7 +64,10 @@ def install_package_into(project_root: Path) -> None:
         PackageLocation.SOURCE_TREE,
         project_root / ProjectLocation.PACKAGE_SOURCE_TREE,
         ignore=shutil.ignore_patterns(
-            "__pycache__", "*.egg-info", ".venv", PackageLocation.BOARD.value.name
+            "__pycache__",
+            "*.egg-info",
+            ".venv",
+            f"{PackageLocation.BOARD.value.name}*",
         ),
         dirs_exist_ok=True,
     )

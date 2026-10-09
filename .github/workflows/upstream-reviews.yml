@@ -71,4 +71,4 @@ jobs:
             ARGUMENTS+=(--include-resolved)
           fi
           source .claude/hooks/resolve-personal-notes-config.sh
-          python3 -m "${UPSTREAM_REVIEWS_MODULE}" "${ARGUMENTS[@]}"
+          "${BASSTLER_PYTHON}" -m "${UPSTREAM_REVIEWS_MODULE}" "${ARGUMENTS[@]}"
