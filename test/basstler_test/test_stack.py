@@ -10,17 +10,24 @@ remote, so those tests run against a :class:`ScratchRepository` instead.
 
 from __future__ import annotations
 
+import os
 import subprocess
-from collections.abc import Container
+import sys
+from collections.abc import Container, Iterable
+from dataclasses import dataclass
 from pathlib import Path
 
 import pytest
 
+import basstler.maintenance
 import basstler.stack
+from basstler.locations import PackageLocation, ProjectLocation
+from basstler.maintenance_git_commands import GitCommandRunner
 from basstler.repository import Repository
 from basstler.stack import (
     AmbiguousForkRemoteError,
     CommitMoveAction,
+    Command,
     BranchStatus,
     Configuration,
     ContradictoryLabelWriteError,
@@ -36,6 +43,8 @@ from basstler.stack import (
     PullRequest,
     Remote,
     Reparent,
+    PinnedTooling,
+    WorkingTreeTooling,
     build_stack,
     derive_status,
     landed_branches,
@@ -48,8 +57,6 @@ from basstler.stack import (
     promotion_order,
     restack_plan,
 )
-
-from basstler.locations import ProjectLocation
 
 from .constants import StackLabel
 from .scratch_repository import ScratchRepository
@@ -1069,7 +1076,7 @@ def offline_checkout(scratch_repository: ScratchRepository) -> ScratchRepository
 
 
 def run_stack(
-    checkout: ScratchRepository, *arguments: str
+    checkout: ScratchRepository, *arguments: str, pinned: PinnedTooling | None = None
 ) -> subprocess.CompletedProcess[str]:
     """
     Invoke the tool as a caller does, so its exit status is exercised rather than
@@ -1077,11 +1084,21 @@ def run_stack(
 
     :param checkout: The repository to run in.
     :param arguments: The command and its flags.
+    :param pinned: A pinned copy to run instead of the checkout's own, put on the import
+        path ahead of the working directory, as the skill runs it.
     :return: The finished subprocess.
     """
-    return PythonModuleRunner(
-        project_root=checkout.project_root, module_name=STACK_MODULE
-    ).run(*arguments)
+    if pinned is None:
+        return PythonModuleRunner(
+            project_root=checkout.project_root, module_name=STACK_MODULE
+        ).run(*arguments)
+    return subprocess.run(
+        [sys.executable, "-P", "-m", STACK_MODULE, *arguments],
+        capture_output=True,
+        text=True,
+        cwd=checkout.project_root,
+        env={**os.environ, "PYTHONPATH": str(pinned.root)},
+    )
 
 
 def test_an_unknown_command_is_a_usage_error(offline_checkout: ScratchRepository):
@@ -1212,3 +1229,283 @@ def test_a_promotion_link_is_built_from_the_resolved_repositories(
     assert result.stdout.strip().endswith(
         "...a-fork-owner:engine?expand=1&title=A%20title&body="
     )
+
+
+# %% pinning the tool where a branch switch cannot reach it
+
+
+TOOL_WITH_A_DIFFERENT_COMMAND_SET = (
+    Path(__file__).parent / "fixtures" / "tool_with_a_different_command_set.py"
+)
+"""
+Stands in for the version of the tool another branch happens to carry.
+"""
+
+A_BRANCH_CARRYING_ANOTHER_VERSION = "a-branch-of-the-stack"
+"""
+Named for what it is to a pass: one more branch to restack, which happens to carry its
+own copy of the tool.
+"""
+
+ENTRY_POINT_NAME = Path(basstler.stack.__file__).name
+"""
+The tool's own file, which a pinned copy keeps the name of.
+"""
+
+MAINTENANCE_EXECUTOR_NAME = "maintenance.py"
+"""
+The executor beside the tool, which a pinned copy has to be able to run as well.
+"""
+
+
+@dataclass(frozen=True)
+class ToolingCheckout:
+    """
+    A scratch checkout carrying the tool as a committed file, the way a pass meets it.
+    """
+
+    repository: ScratchRepository
+    """
+    The checkout the tool was installed into.
+    """
+
+    tool: Path
+    """
+    The tool in that checkout's working tree, which a branch switch may replace.
+    """
+
+    git: GitCommandRunner
+    """
+    The runner every branch switch of this checkout goes through.
+    """
+
+    starting_branch: str
+    """
+    The branch carrying the real tool, checked out until something switches away.
+    """
+
+    @classmethod
+    def install_into(cls, repository: ScratchRepository) -> ToolingCheckout:
+        """
+        Commit this repository's own tooling into a scratch checkout, and give it a
+        second branch carrying a version whose commands differ.
+
+        Both versions are committed here so that :meth:`check_out_another_tool_version`
+        is nothing but a branch switch: what replaces the tool in the working tree is
+        then version control alone, which is the whole hazard being reproduced.
+
+        :param repository: The checkout to install into.
+        :return: The checkout, and where its copy of the tool now sits.
+        """
+        directory = PackageLocation.DIRECTORY.value.relative_to(
+            PackageLocation.REPOSITORY_ROOT.value
+        )
+        for source in WorkingTreeTooling().files:
+            repository.write(str(directory / source.name), source.read_text())
+        repository.commit_everything("carry the stack tooling")
+
+        git = GitCommandRunner(repository.project_root)
+        installed = cls(
+            repository,
+            repository.project_root / directory / ENTRY_POINT_NAME,
+            git,
+            git.checked_out_branch(),
+        )
+        git.checkout(A_BRANCH_CARRYING_ANOTHER_VERSION, "HEAD")
+        installed.tool.write_text(TOOL_WITH_A_DIFFERENT_COMMAND_SET.read_text())
+        repository.commit_everything("carry a tool whose commands differ")
+        git.checkout(installed.starting_branch, installed.starting_branch)
+        return installed
+
+    def check_out_another_tool_version(self) -> None:
+        """
+        Switch to the branch whose tooling directory holds the other version - what any
+        branch switch made in the checkout a pass runs from does, whether a step of the
+        pass or the session driving it made the switch.
+        """
+        self.git.checkout(
+            A_BRANCH_CARRYING_ANOTHER_VERSION, A_BRANCH_CARRYING_ANOTHER_VERSION
+        )
+
+    def pin_the_tool(self) -> PinnedTooling:
+        """
+        Pin the tool the way step 0 of a pass does, from the checkout's own copy.
+
+        :return: The pinned copy, as printed on stdout.
+        """
+        result = run_stack(self.repository, Command.PIN_TOOLING)
+        assert result.returncode == ExitCode.SUCCESS, result.stderr
+        return PinnedTooling(
+            Path(result.stdout.strip()) / PackageLocation.DIRECTORY.value.name
+        )
+
+
+@pytest.fixture
+def tooling_checkout(scratch_repository: ScratchRepository) -> ToolingCheckout:
+    """
+    A scratch checkout carrying the tool as a committed file.
+
+    :param scratch_repository: The repository to install the tooling into.
+    :return: The installed checkout.
+    """
+    return ToolingCheckout.install_into(scratch_repository)
+
+
+def a_tooling_directory(path: Path, file_names: Iterable[str]) -> Path:
+    """
+    Build a directory standing in for a tooling directory, without copying the real one.
+
+    :param path: Where to build it.
+    :param file_names: The files it holds; each gets its own name as its content, so two
+        directories differ exactly when their file names do.
+    :return: The directory built.
+    """
+    path.mkdir(parents=True)
+    for name in file_names:
+        (path / name).write_text(name)
+    return path
+
+
+def test_a_branch_switch_replaces_the_tool_in_the_working_tree(
+    tooling_checkout: ToolingCheckout,
+):
+    """
+    The hazard the pin exists for.
+
+    The tool is tracked content, which version control moves like any other file, so a
+    command a pass validated in step 0 can be gone by the time a later step calls it.
+    """
+    tooling_checkout.check_out_another_tool_version()
+
+    result = run_stack(
+        tooling_checkout.repository,
+        Command.LABELS,
+        "--add",
+        A_LABEL_THIS_TOOL_NEVER_WRITES,
+    )
+
+    assert result.returncode == ExitCode.USAGE
+
+
+def test_the_pinned_tool_answers_after_a_branch_switch_replaced_the_working_tree_one(
+    tooling_checkout: ToolingCheckout,
+):
+    """
+    The fix: what a pass pinned in step 0 is what drives every later step of it.
+    """
+    pinned = tooling_checkout.pin_the_tool()
+
+    tooling_checkout.check_out_another_tool_version()
+
+    result = run_stack(
+        tooling_checkout.repository,
+        Command.LABELS,
+        "--add",
+        A_LABEL_THIS_TOOL_NEVER_WRITES,
+        pinned=pinned,
+    )
+    assert result.returncode == ExitCode.SUCCESS
+    assert result.stdout.split() == [A_LABEL_THIS_TOOL_NEVER_WRITES]
+
+
+def test_the_pinned_copy_lies_outside_the_checkout_it_was_taken_from(
+    tooling_checkout: ToolingCheckout,
+):
+    """
+    Anywhere inside the working tree is somewhere a checkout could still reach it.
+    """
+    pinned = tooling_checkout.pin_the_tool()
+
+    assert not pinned.root.is_relative_to(tooling_checkout.repository.project_root)
+
+
+def test_every_file_beside_the_tool_is_pinned_with_it(tmp_path: Path):
+    """
+    The tool is several modules and its configuration, so pinning the entry point alone
+    would pin a program that cannot start.
+    """
+    beside_the_tool = {
+        ENTRY_POINT_NAME,
+        PackageLocation.STACK_CONFIGURATION.value.name,
+        MAINTENANCE_EXECUTOR_NAME,
+    }
+    source = a_tooling_directory(tmp_path / "source", beside_the_tool)
+
+    pinned = WorkingTreeTooling(source).pin_to(tmp_path / "pinned")
+
+    assert {path.name for path in pinned.directory.iterdir()} == beside_the_tool
+
+
+def test_the_board_snapshot_is_left_behind_rather_than_pinned(tmp_path: Path):
+    """
+    The board is a snapshot of one pass, so a copy of it would be stale the moment the
+    next pass exported its own - and stale in a way nothing downstream could see.
+    """
+    source = a_tooling_directory(
+        tmp_path / "source", {ENTRY_POINT_NAME, PackageLocation.BOARD.value.name}
+    )
+
+    pinned = WorkingTreeTooling(source).pin_to(tmp_path / "pinned")
+
+    assert not (pinned.directory / PackageLocation.BOARD.value.name).exists()
+
+
+def test_the_pinned_copy_carries_what_the_maintenance_executor_imports(tmp_path: Path):
+    """
+    The executor runs out of the pinned copy too, importing the tool and every module
+    beside it, so a copy it cannot start from is not a pinned tool.
+
+    Run from a directory holding no checkout, so the only ``basstler`` it can import is
+    the copy.
+    """
+    pinned = WorkingTreeTooling().pin_to(tmp_path / "pinned")
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-P",
+            "-m",
+            basstler.maintenance.__name__,
+            "--help",
+        ],
+        capture_output=True,
+        text=True,
+        cwd=elsewhere,
+        env={**os.environ, "PYTHONPATH": str(pinned.root)},
+    )
+
+    assert result.returncode == ExitCode.SUCCESS, result.stderr
+
+
+def test_pinning_the_same_tool_twice_names_the_same_copy(tmp_path: Path):
+    """
+    A pass that pins again - resuming, or re-running a step - keeps the copy it had.
+    """
+    source = a_tooling_directory(tmp_path / "source", {ENTRY_POINT_NAME})
+    root = tmp_path / "pinned"
+
+    first = WorkingTreeTooling(source).pin_to(root)
+    second = WorkingTreeTooling(source).pin_to(root)
+
+    assert first.root == second.root
+
+
+def test_a_tool_that_differs_is_pinned_beside_rather_than_over_the_other_copy(
+    tmp_path: Path,
+):
+    """
+    Two versions can be in flight at once, so a later pass must not overwrite the copy
+    an earlier one is still running.
+    """
+    root = tmp_path / "pinned"
+    one_version = a_tooling_directory(tmp_path / "one", {ENTRY_POINT_NAME})
+    another_version = a_tooling_directory(
+        tmp_path / "another", {ENTRY_POINT_NAME, MAINTENANCE_EXECUTOR_NAME}
+    )
+
+    pinned = WorkingTreeTooling(one_version).pin_to(root)
+    pinned_again = WorkingTreeTooling(another_version).pin_to(root)
+
+    assert pinned.directory != pinned_again.directory
