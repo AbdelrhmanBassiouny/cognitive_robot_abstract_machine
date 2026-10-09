@@ -404,8 +404,8 @@ def test_reports_a_declaration_it_cannot_read_rather_than_nothing_missing(
     check_setup_repository: ScratchRepository,
 ):
     """
-    A declaration the lookup cannot parse says nothing about what is installed, so it
-    is not reported as an environment with nothing missing.
+    A declaration the lookup cannot parse says nothing about what is installed, so it is
+    not reported as an environment with nothing missing.
     """
     check_setup_repository.write(
         SetupPrerequisiteFile.PACKAGE_METADATA, "this is not toml\n"

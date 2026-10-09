@@ -175,9 +175,7 @@ class DependencyDeclaration:
         :raises UnreadableDependencyDeclarationError: If the file is absent.
         """
         return tuple(
-            requirement
-            for requirement in self.requirements()
-            if requirement.is_missing
+            requirement for requirement in self.requirements() if requirement.is_missing
         )
 
     def _project_table(self) -> dict[str, Any]:

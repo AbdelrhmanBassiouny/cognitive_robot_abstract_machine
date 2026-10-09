@@ -114,11 +114,10 @@ def test_the_package_directory_sits_under_the_source_trees_src_directory():
 
 def test_the_dependency_declaration_is_the_source_trees_own_metadata():
     """
-    ``pyproject.toml`` is read from the source tree, beside the ``src`` directory, rather
-    than shipped inside the package.
+    ``pyproject.toml`` is read from the source tree, beside the ``src`` directory,
+    rather than shipped inside the package.
     """
     assert (
         PackageLocation.DEPENDENCY_DECLARATION.value
         == PackageLocation.SOURCE_TREE / "pyproject.toml"
     )
-

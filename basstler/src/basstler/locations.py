@@ -63,7 +63,8 @@ class PackageLocation(PathEnumeration):
 
     STACK_CONFIGURATION = DIRECTORY / "stack.toml"
     """
-    The checked-in stack configuration every run starts from, before any per-user override.
+    The checked-in stack configuration every run starts from, before any per-user
+    override.
     """
 
     BOARD = DIRECTORY / "board.json"
@@ -129,11 +130,11 @@ class ProjectLocation(PathEnumeration):
 
     PACKAGE_ENVIRONMENT = PACKAGE_SOURCE_TREE / ".venv"
     """
-    The package's own virtual environment, which a session start creates and installs the
-    package into.
+    The package's own virtual environment, which a session start creates and installs
+    the package into.
 
-    Mirrors ``BASSTLER_ENVIRONMENT_DIRECTORY`` in ``resolve-personal-notes-config.sh``; a
-    test holds the two equal.
+    Mirrors ``BASSTLER_ENVIRONMENT_DIRECTORY`` in ``resolve-personal-notes-config.sh``;
+    a test holds the two equal.
     """
 
     PACKAGE_ENVIRONMENT_INTERPRETER = PACKAGE_ENVIRONMENT / "bin" / "python"
@@ -167,8 +168,8 @@ class ProjectLocation(PathEnumeration):
     """
     Where plans live on the personal-notes branch.
 
-    Mirrors ``PLANS_DIR`` in ``resolve-personal-notes-config.sh``, which is the shell half
-    of the same tooling; a test holds the two equal so the mirror cannot drift.
+    Mirrors ``PLANS_DIR`` in ``resolve-personal-notes-config.sh``, which is the shell
+    half of the same tooling; a test holds the two equal so the mirror cannot drift.
     """
 
     PERSONAL_STACK_CONFIGURATION = PERSONAL_NOTES / "stack.toml"

@@ -279,7 +279,13 @@ def shell_value(variable_name: str) -> str:
     :return: Its value once the configuration is sourced.
     """
     return subprocess.run(
-        ["bash", "-c", 'source "$0" && printf "%s" "${!1}"', SHELL_CONFIGURATION, variable_name],
+        [
+            "bash",
+            "-c",
+            'source "$0" && printf "%s" "${!1}"',
+            SHELL_CONFIGURATION,
+            variable_name,
+        ],
         cwd=PackageLocation.REPOSITORY_ROOT.value,
         capture_output=True,
         text=True,
@@ -307,4 +313,3 @@ def test_the_shell_asks_for_the_interpreters_the_package_supports():
         shell_value("BASSTLER_PYTHON_REQUIREMENT")
         == project[PyprojectKey.PROJECT][InterpreterRequirementKey.REQUIRES_PYTHON]
     )
-

@@ -73,7 +73,6 @@ UNINSTALLABLE_REQUIREMENT = "basstler-no-such-distribution>=1"
 A distribution nothing can have installed, so the refusal cannot pass by accident.
 """
 
-
 DECLARATION_FILE = str(ProjectLocation.PACKAGE_SOURCE_TREE / "pyproject.toml")
 """
 Where the scratch clone declares the package's requirements.
