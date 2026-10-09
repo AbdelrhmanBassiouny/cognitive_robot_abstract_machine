@@ -220,23 +220,51 @@ items:
   branch: claude/hidden-deferred-plan-items-6weef1
   pull_request_number: 157
   status: in_progress
-  session: https://claude.ai/code/session_01Je624Mq716GToQRqtkTXXn
+  session: https://claude.ai/code/session_015Fy3XzLVV5i2amFd9Mkh5Q
   track: legibility
+  blockers:
+    - >-
+      The pull request carries an `integration-conflict` label from 2026-09-09 ("merges cleanly with
+      `D-deco` and the suite fails on the result"). It was not re-checked in the 2026-10-09 resolve:
+      the branch is a draft again with no failing checks, but the label stays until the integration
+      build is re-run and passes.
   depends_on: []
-  notes: |-
+  notes: >
     A deferred item is intentionally paused or superseded, so it is the same kind of noise on a
-    dashboard as a done one, and done items have been hidden behind a sidebar toggle since the dashboard
-    existed. `rdr-refactor` shows it: eight of its items are deferred and sit inline among the live ones.
+
+    dashboard as a done one, and done items have been hidden behind a sidebar toggle since the
+    dashboard
+
+    existed. `rdr-refactor` shows it: eight of its items are deferred and sit inline among the live
+    ones.
+
     This gives deferred its own checkbox, hidden by default, parallel to "Show done / merged items".
 
     The substance is the indentation, not the checkbox. An item's indent level is its depth in the
-    same-track `depends_on` chain, and the existing toggle already carries a second precomputed level -
-    "as if every done item were not a dependency at all" - so a dependent dedents to zero rather than
+
+    same-track `depends_on` chain, and the existing toggle already carries a second precomputed
+    level -
+
+    "as if every done item were not a dependency at all" - so a dependent dedents to zero rather
+    than
+
     hanging one level in from an invisible parent. A second independent toggle makes that four
+
     combinations, not two, so `StackedItem` stops carrying named pairs of fields and carries one
+
     position per filter state, keyed by a `StatusFilter` enum whose value doubles as the page's CSS
-    class and the item's custom-property suffix. Adding a third hidden status later is then data rather
+
+    class and the item's custom-property suffix. Adding a third hidden status later is then data
+    rather
+
     than another pair of fields and another template branch.
+
+    Correction to the design above (review round 2026-10-09): the types that shipped are
+    `HideableStatus` (a frozen dataclass: status, checkbox label, page class, toggle id),
+    `DefaultHiddenStatus` (an enum whose members are `HideableStatus`es - `DONE`, `DEFERRED`) and
+    `VisibilityFilter` (one per combination, from the cached
+    `VisibilityFilter.every_combination()`), with `StackedItem.positions` keyed by filter. There is
+    no `StatusFilter` enum and no module-level constant for either set; the reviewer asked for both.
 - id: dashboard-refresh-button
   title: Refresh button in the dashboard masthead, copying the command that rebuilds the page
   branch: claude/rdr-dashboard-refresh-button-tpuvo9
