@@ -67,6 +67,17 @@ class TracyControllerManager(StrEnum):
     RIGHT_ARM = "right_arm/controller_manager"
 
 
+class TracyController(StrEnum):
+    """
+    The ros2_control controllers of the Tracy, as its controller managers name them.
+    """
+
+    FORWARD_VELOCITY = "forward_velocity_controller"
+    """
+    Commands the joint velocities of one arm; each arm's controller manager loads one.
+    """
+
+
 class TracyJoint(StrEnum):
     """
     Names of the Tracy's commandable connections, as spelled in its URDF.

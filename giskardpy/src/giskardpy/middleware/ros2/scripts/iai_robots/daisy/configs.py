@@ -5,7 +5,7 @@ from giskardpy.middleware.ros2.robot_interface_config import (
     ClosedLoopRobotInterfaceConfig,
 )
 from giskardpy.model.world_config import WorldWithFixedRobot
-from semantic_digital_twin.robots.daisy import DAiSy
+from semantic_digital_twin.robots.daisy import DAiSy, DAiSyController
 from semantic_digital_twin.robots.robot_parts import AbstractRobot
 
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
@@ -19,7 +19,12 @@ class DAiSyVelocityInterface(ClosedLoopRobotInterfaceConfig):
 
     def setup(self):
         self.sync_robot_parts()
-        self.add_velocity_controllers_from_controller_manager()
+        self.add_velocity_controllers_from_controller_manager(
+            whitelist=[
+                DAiSyController.LEFT_FORWARD_VELOCITY,
+                DAiSyController.RIGHT_FORWARD_VELOCITY,
+            ]
+        )
 
 
 @dataclass

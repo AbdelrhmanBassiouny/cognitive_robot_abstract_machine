@@ -7,7 +7,11 @@ from giskardpy.middleware.ros2.robot_interface_config import (
 )
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.robots.robot_parts import AbstractRobot
-from semantic_digital_twin.robots.tracy import Tracy, TracyControllerManager
+from semantic_digital_twin.robots.tracy import (
+    Tracy,
+    TracyController,
+    TracyControllerManager,
+)
 
 
 @dataclass
@@ -19,7 +23,9 @@ class TracyVelocityInterface(ClosedLoopRobotInterfaceConfig):
     def setup(self):
         self.sync_robot_parts()
         for controller_manager in TracyControllerManager:
-            self.add_velocity_controllers_from_controller_manager(controller_manager)
+            self.add_velocity_controllers_from_controller_manager(
+                controller_manager, whitelist=[TracyController.FORWARD_VELOCITY]
+            )
 
 
 @dataclass
