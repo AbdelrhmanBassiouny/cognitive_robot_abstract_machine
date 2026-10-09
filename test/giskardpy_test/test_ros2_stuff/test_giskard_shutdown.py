@@ -1,6 +1,7 @@
 import signal
 from dataclasses import dataclass
 
+import pytest
 import rclpy
 
 from giskardpy.middleware.ros2.giskard import Giskard
@@ -61,3 +62,66 @@ def test_an_interrupt_while_waiting_for_goals_shuts_ros_down(
     giskard.live()
 
     assert not rclpy.ok()
+
+
+# %% failing while starting
+
+
+class RobotUnreachableError(Exception):
+    """
+    Raised by an interface that cannot connect to its robot.
+    """
+
+
+class WorldUnbuildableError(Exception):
+    """
+    Raised by a world config that cannot build its world.
+    """
+
+
+@dataclass
+class UnreachableRobotInterface(StandAloneRobotInterfaceConfig):
+    """
+    Fails as soon as Giskard connects to the robot.
+    """
+
+    def connect(self):
+        raise RobotUnreachableError()
+
+
+@dataclass
+class UnbuildableWorld(WorldConfig):
+    """
+    Fails as soon as Giskard builds the world.
+    """
+
+    def setup_world(self):
+        raise WorldUnbuildableError()
+
+
+def test_an_interface_that_fails_to_connect_makes_giskard_fail(
+    init_rospy, mini_world: World
+):
+    giskard = Giskard(
+        world_config=WorldWithMinimalRobot(world=mini_world),
+        robot_interface_config=UnreachableRobotInterface(),
+        server_config=GiskardServerConfig(),
+        qp_controller_config=QPControllerConfig(target_frequency=50),
+    )
+
+    with pytest.raises(RobotUnreachableError):
+        giskard.live()
+
+    assert not rclpy.ok()
+
+
+def test_a_world_that_fails_to_build_makes_giskard_fail_with_that_error(init_rospy):
+    giskard = Giskard(
+        world_config=UnbuildableWorld(),
+        robot_interface_config=StandAloneRobotInterfaceConfig(),
+        server_config=GiskardServerConfig(),
+        qp_controller_config=QPControllerConfig(target_frequency=50),
+    )
+
+    with pytest.raises(WorldUnbuildableError):
+        giskard.live()

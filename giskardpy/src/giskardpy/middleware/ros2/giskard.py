@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import logging
 import os
-import traceback
 from dataclasses import dataclass, field
 from typing import List
 
@@ -83,14 +82,16 @@ class Giskard:
     qp_controller_config: QPControllerConfig = field(default_factory=QPControllerConfig)
     executor: Executor = field(init=False)
     motion_server: MotionServer = field(init=False)
-    world_synchronizer: WorldSynchronizer = field(init=False)
-    tf_publisher: TFPublisher = field(init=False)
-    viz_marker_publisher: VizMarkerPublisher = field(init=False)
+    world_synchronizer: WorldSynchronizer | None = field(init=False, default=None)
+    tf_publisher: TFPublisher | None = field(init=False, default=None)
+    viz_marker_publisher: VizMarkerPublisher | None = field(init=False, default=None)
     collision_marker_publisher: CollisionVisualizationMarkerPublisher = field(
         init=False
     )
-    model_reload_synchronizer: ModelReloadSynchronizer = field(init=False)
-    world_fetcher: FetchWorldServer = field(init=False)
+    model_reload_synchronizer: ModelReloadSynchronizer | None = field(
+        init=False, default=None
+    )
+    world_fetcher: FetchWorldServer | None = field(init=False, default=None)
 
     def setup(self):
         """
@@ -232,13 +233,20 @@ class Giskard:
         The world outlives the ros node whenever Giskard is torn down while the world is
         kept, and a callback that publishes on a destroyed node fails. Nothing may
         therefore stay registered on the world.
+
+        ..note:: Giskard can fail before all of them exist, so only the ones that were
+            created are closed.
         """
-        self.world_synchronizer.close()
+        if self.world_synchronizer is not None:
+            self.world_synchronizer.close()
         if self.model_reload_synchronizer is not None:
             self.model_reload_synchronizer.close()
-        self.world_fetcher.close()
-        self.tf_publisher.stop()
-        self.viz_marker_publisher.stop()
+        if self.world_fetcher is not None:
+            self.world_fetcher.close()
+        if self.tf_publisher is not None:
+            self.tf_publisher.stop()
+        if self.viz_marker_publisher is not None:
+            self.viz_marker_publisher.stop()
 
     def sanity_check(self):
         self._controlled_joints_sanity_check()
@@ -267,6 +275,9 @@ class Giskard:
     def live(self):
         """
         Start Giskard and wait for goals until ROS shuts down.
+
+        An error is raised after Giskard has cleaned up, so that a robot that could not
+        be set up makes the process fail.
         """
         with GracefulShutdownSignals():
             try:
@@ -277,8 +288,6 @@ class Giskard:
                 rospy.get_node().get_logger().info(
                     "Giskard was interrupted, shutting down."
                 )
-            except Exception:
-                traceback.print_exc()
             finally:
                 self.close_world_model_ros_interface()
                 if rclpy.ok():
