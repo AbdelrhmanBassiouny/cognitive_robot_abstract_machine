@@ -194,3 +194,7 @@ basstler/src/basstler/board.json
 # Local data produced by the Python coverage checks.
 /.coverage
 /.coverage.*
+
+# basstler's own virtual environment, created by every session start that finds it
+# missing (see create_basstler_environment in .claude/hooks/resolve-personal-notes-config.sh).
+basstler/.venv/

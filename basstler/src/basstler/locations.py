@@ -131,6 +131,21 @@ class ProjectLocation(PathEnumeration):
     This package's own directory.
     """
 
+    PACKAGE_ENVIRONMENT = PACKAGE_SOURCE_TREE / ".venv"
+    """
+    The package's own virtual environment, which a session start creates and installs the
+    package into.
+
+    Mirrors ``BASSTLER_ENVIRONMENT_DIRECTORY`` in ``resolve-personal-notes-config.sh``; a
+    test holds the two equal.
+    """
+
+    PACKAGE_ENVIRONMENT_INTERPRETER = PACKAGE_ENVIRONMENT / "bin" / "python"
+    """
+    The interpreter of :attr:`PACKAGE_ENVIRONMENT`, which every caller runs the package
+    with once it exists.
+    """
+
     PERSONAL_NOTES_CONFIGURATION_SCRIPT = HOOKS / "resolve-personal-notes-config.sh"
     """
     The shell configuration that resolves the personal-notes remote and branch, and

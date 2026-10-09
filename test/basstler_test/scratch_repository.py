@@ -12,6 +12,7 @@ from __future__ import annotations
 import os
 import shutil
 import subprocess
+import sys
 from collections.abc import Mapping
 from dataclasses import dataclass
 from enum import StrEnum
@@ -67,6 +68,19 @@ def install_package_into(project_root: Path) -> None:
         ),
         dirs_exist_ok=True,
     )
+
+
+def write_interpreter_wrapper(destination: Path) -> Path:
+    """
+    Write an executable at *destination* that runs the interpreter running this suite.
+
+    :param destination: Where to write it, its directories created as needed.
+    :return: *destination*.
+    """
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    destination.write_text(f'#!/bin/sh\nexec "{sys.executable}" "$@"\n')
+    destination.chmod(0o755)
+    return destination
 
 
 class SetupPrerequisiteFile(StrEnum):
@@ -311,6 +325,20 @@ class ScratchRepository:
         Copy the real :mod:`basstler` package into the scratch layout.
         """
         install_package_into(self.project_root)
+
+    def install_package_environment(self) -> Path:
+        """
+        Stand in for the package's own environment, as a set up clone has one: its
+        interpreter runs the one running this suite, which has every requirement.
+
+        A script rather than a link, because an interpreter reached through a link outside
+        its own environment no longer finds that environment's installed packages.
+
+        :return: The interpreter written.
+        """
+        return write_interpreter_wrapper(
+            self.project_root / ProjectLocation.PACKAGE_ENVIRONMENT_INTERPRETER
+        )
 
     def write_setup_prerequisites(self) -> None:
         """

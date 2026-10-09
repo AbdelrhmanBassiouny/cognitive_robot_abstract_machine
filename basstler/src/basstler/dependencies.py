@@ -2,9 +2,11 @@
 """
 What this package needs installed, and which of it this environment is missing.
 
-The declaration is ``pyproject.toml``'s ``[project] dependencies``, which is where every
-package in this repository states them, so there is one list rather than a metadata table
-and a requirements file that can disagree.
+The declaration is ``pyproject.toml``'s ``[project]`` table: the package's own name and its
+``dependencies``, which is where every package in this repository states them, so there is
+one list rather than a metadata table and a requirements file that can disagree. An
+environment runs the package only with the package itself installed in it, so the package
+counts as a requirement of its own.
 
 Kept as a module rather than as a snippet inside the shell that calls it: the bash entry
 points ask this question before anything is installed, and a question with parsing in it
@@ -13,8 +15,8 @@ is real, testable code wherever it is written.
 Usage:
     python3 -m basstler.dependencies [--declaration <pyproject.toml>]
 
-Prints one requirement specifier per missing dependency, and nothing at all when the
-environment already has them - which is what a caller passes straight to ``pip install``.
+Prints one requirement specifier per missing requirement, and nothing at all when the
+environment already has them all.
 
 ..note:: Imports nothing outside the standard library. It runs before any install, so a
     dependency of its own would be the one thing it could never report.
@@ -30,6 +32,7 @@ from dataclasses import dataclass, field
 from enum import IntEnum, StrEnum
 from importlib.metadata import distributions
 from pathlib import Path
+from typing import Any
 
 from basstler.locations import PackageLocation
 from basstler.standard_streams import StandardStreamHandler
@@ -48,6 +51,11 @@ class PyprojectKey(StrEnum):
     PROJECT = "project"
     """
     The table a package's own metadata lives in.
+    """
+
+    NAME = "name"
+    """
+    The field of that table naming the package's own distribution.
     """
 
     DEPENDENCIES = "dependencies"
@@ -135,29 +143,53 @@ class DependencyDeclaration:
         """
         return cls(PackageLocation.DEPENDENCY_DECLARATION.value)
 
+    def project(self) -> Dependency:
+        """
+        :return: The package's own distribution, as a requirement of an environment that
+            runs it.
+        :raises UnreadableDependencyDeclarationError: If the file is absent.
+        """
+        return Dependency(self._project_table()[PyprojectKey.NAME])
+
     def dependencies(self) -> tuple[Dependency, ...]:
         """
         :return: Every dependency it declares, in the order it declares them.
         :raises UnreadableDependencyDeclarationError: If the file is absent.
         """
-        if not self.path.is_file():
-            raise UnreadableDependencyDeclarationError(self.path)
-        project = tomllib.loads(self.path.read_text(encoding="utf-8"))
         return tuple(
             Dependency(specifier)
-            for specifier in project[PyprojectKey.PROJECT].get(
-                PyprojectKey.DEPENDENCIES, []
-            )
+            for specifier in self._project_table().get(PyprojectKey.DEPENDENCIES, [])
         )
+
+    def requirements(self) -> tuple[Dependency, ...]:
+        """
+        :return: Everything an environment needs to run the package: the package itself,
+            then its dependencies.
+        :raises UnreadableDependencyDeclarationError: If the file is absent.
+        """
+        return (self.project(), *self.dependencies())
 
     def missing(self) -> tuple[Dependency, ...]:
         """
-        :return: The declared dependencies this environment does not have.
+        :return: The requirements this environment does not have.
         :raises UnreadableDependencyDeclarationError: If the file is absent.
         """
         return tuple(
-            dependency for dependency in self.dependencies() if dependency.is_missing
+            requirement
+            for requirement in self.requirements()
+            if requirement.is_missing
         )
+
+    def _project_table(self) -> dict[str, Any]:
+        """
+        :return: The ``[project]`` table, the package's own metadata.
+        :raises UnreadableDependencyDeclarationError: If the file is absent.
+        """
+        if not self.path.is_file():
+            raise UnreadableDependencyDeclarationError(self.path)
+        return tomllib.loads(self.path.read_text(encoding="utf-8"))[
+            PyprojectKey.PROJECT
+        ]
 
 
 class ExitCode(IntEnum):
@@ -167,7 +199,7 @@ class ExitCode(IntEnum):
 
     SUCCESS = 0
     """
-    The missing dependencies, if any, were printed.
+    The missing requirements, if any, were printed.
     """
 
     UNREADABLE_DECLARATION = 1
@@ -178,7 +210,7 @@ class ExitCode(IntEnum):
 
 def main() -> ExitCode:
     """
-    Print one specifier per missing dependency, for a caller to hand to an installer.
+    Print one specifier per missing requirement, for a caller to report.
 
     :return: How the command ended.
     """
@@ -193,8 +225,8 @@ def main() -> ExitCode:
     if not declaration.path.is_file():
         logger.error(str(UnreadableDependencyDeclarationError(declaration.path)))
         return ExitCode.UNREADABLE_DECLARATION
-    for dependency in declaration.missing():
-        logger.info(dependency.specifier)
+    for requirement in declaration.missing():
+        logger.info(requirement.specifier)
     return ExitCode.SUCCESS
 
 

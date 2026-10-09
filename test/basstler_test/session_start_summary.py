@@ -100,17 +100,30 @@ class SummaryMessage(StrEnum):
 
     DEPENDENCIES_NOT_CHECKED = "dependencies_line_not_checked"
     """
-    Nothing could be looked up, because python3 or the package metadata is missing.
+    Nothing could be looked up, because the interpreter or the package metadata is
+    missing.
     """
 
     DEPENDENCIES_ALREADY_INSTALLED = "dependencies_line_already_installed"
     """
-    Every declared dependency was already installed, so nothing was installed.
+    The package's environment already had every requirement, so nothing was installed.
     """
 
     DEPENDENCIES_INSTALLED = "dependencies_line_installed"
     """
-    What was missing has just been installed.
+    What was missing has just been installed into the package's environment.
+    """
+
+    DEPENDENCIES_ENVIRONMENT_CREATED = "dependencies_line_environment_created"
+    """
+    The package's environment did not exist, and has just been created with the package
+    installed into it.
+    """
+
+    DEPENDENCIES_ENVIRONMENT_NOT_CREATED = "dependencies_line_environment_not_created"
+    """
+    The package's environment did not exist and could not be created, and the run
+    carried on regardless.
     """
 
     DEPENDENCIES_INSTALL_FAILED = "dependencies_line_install_failed"

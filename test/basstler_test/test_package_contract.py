@@ -14,11 +14,13 @@ from __future__ import annotations
 import re
 import subprocess
 import sys
+import tomllib
 from dataclasses import dataclass
 from pathlib import Path
 
 import pytest
 
+from basstler.dependencies import PyprojectKey
 from basstler.locations import PackageLocation, ProjectLocation
 
 from basstler import _version
@@ -28,6 +30,7 @@ from basstler.package_layout import (
     package_modules,
 )
 
+from .constants import InterpreterRequirementKey
 from .script_runner import InterpreterVariable, ScriptRunner
 
 CLAUDE_DIRECTORY = (
@@ -265,4 +268,43 @@ def test_no_module_sits_directly_in_the_source_tree():
     )
 
     assert stray_module_paths == []
+
+
+# %% the shell's copies of what the package states
+
+
+def shell_value(variable_name: str) -> str:
+    """
+    :param variable_name: A variable the shell configuration assigns.
+    :return: Its value once the configuration is sourced.
+    """
+    return subprocess.run(
+        ["bash", "-c", 'source "$0" && printf "%s" "${!1}"', SHELL_CONFIGURATION, variable_name],
+        cwd=PackageLocation.REPOSITORY_ROOT.value,
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout
+
+
+def test_the_shell_creates_the_environment_the_package_names():
+    """
+    The shell creates the environment; the package names it for every Python reader.
+    """
+    assert shell_value("BASSTLER_ENVIRONMENT_DIRECTORY") == str(
+        ProjectLocation.PACKAGE_ENVIRONMENT
+    )
+
+
+def test_the_shell_asks_for_the_interpreters_the_package_supports():
+    """
+    The interpreter an environment is created from satisfies the package's own
+    ``requires-python``, so the two cannot disagree about which versions run it.
+    """
+    project = tomllib.loads(PackageLocation.DEPENDENCY_DECLARATION.value.read_text())
+
+    assert (
+        shell_value("BASSTLER_PYTHON_REQUIREMENT")
+        == project[PyprojectKey.PROJECT][InterpreterRequirementKey.REQUIRES_PYTHON]
+    )
 

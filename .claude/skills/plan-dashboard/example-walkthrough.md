@@ -18,16 +18,16 @@ files, not just prose. You can render them yourself with no GitHub access at
 all:
 
 ```bash
-pip install ./basstler
-python3 -m basstler.build_dashboard \
+source .claude/hooks/resolve-personal-notes-config.sh
+"${BASSTLER_PYTHON}" -m basstler.build_dashboard \
   --plan .claude/skills/plan-dashboard/example/plan.yaml \
   --roadmap .claude/skills/plan-dashboard/example/roadmap.md \
   --pr-data .claude/skills/plan-dashboard/example/pr_data.json \
   --output /tmp/example-dashboard.html
 ```
 
-Run it from the repository root: `basstler` is a plain top-level directory, importable
-with no install, and `-m` is what puts the root on the import path.
+`BASSTLER_PYTHON` is the package's own environment, which every session start creates
+with the package and its dependencies installed; see `basstler/README.md`.
 
 ## 1. Start with the idea, in plan mode
 
