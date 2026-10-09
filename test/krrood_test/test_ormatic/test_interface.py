@@ -997,3 +997,26 @@ def test_selectin_loading_reduces_queries_during_from_dao(session, database):
     assert (
         queries_with == 0
     ), f"Expected 0 queries with selectin_loading but got {queries_with}"
+
+
+def test_references_to_one_object_of_the_same_class_are_kept(session, database):
+    shared_parent = Node()
+    children = [Node(parent=shared_parent), Node(parent=shared_parent)]
+    state = ToDataAccessObjectState()
+    child_daos = [to_dao(child, state=state) for child in children]
+    parent_dao = to_dao(shared_parent, state=state)
+    session.add_all(child_daos)
+    session.commit()
+    child_ids = [dao.database_id for dao in child_daos]
+    parent_id = parent_dao.database_id
+    session.expunge_all()
+
+    stored_parent_ids = {
+        node.database_id: node._parent_id for node in session.scalars(select(NodeDAO))
+    }
+
+    assert stored_parent_ids == {
+        child_ids[0]: parent_id,
+        child_ids[1]: parent_id,
+        parent_id: None,
+    }
