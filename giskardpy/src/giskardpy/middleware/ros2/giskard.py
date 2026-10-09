@@ -55,43 +55,76 @@ logger = logging.getLogger(__name__)
 @dataclass
 class Giskard:
     """
-    The main Class of Giskard.
+    A motion server for one robot.
 
-    Instantiate it with appropriate configs for you setup and then call giskard.live()
-    :param world_config: A world configuration. Use a predefined one or implement your
-        own WorldConfig class.
-    :param robot_interface_config: How Giskard talks to the robot, which also decides
-        whether the motion is simulated or executed. Use
-        ``StandAloneRobotInterfaceConfig`` to simulate, or implement your own
-        ``ClosedLoopRobotInterfaceConfig`` to command a real robot.
-    :param collision_avoidance_config: default is no collision avoidance or implement
-        your own collision_avoidance_config.
-    :param server_config: the goal lifecycle and debug output of the motion server
-    :param qp_controller_config: default is good for almost all cases
-    :param additional_goal_package_paths: specify paths that Giskard needs to import to
-        find your custom Goals. Giskard will run 'from <additional path> import *' for
-        each additional path in the list.
-    :param additional_monitor_package_paths: specify paths that Giskard needs to import
-        to find your custom Monitors. Giskard will run 'from <additional path> import *'
-        for each additional path in the list.
+    Instantiate it with the configs of the setup and call :meth:`live`.
     """
 
     world_config: WorldConfig
+    """
+    Which robot description is loaded and how the robot is attached to the world.
+    """
+
     server_config: GiskardServerConfig
+    """
+    The goal lifecycle and the debug output of the motion server.
+    """
+
     robot_interface_config: RobotInterfaceConfig
+    """
+    How Giskard talks to the robot, which also decides whether a motion is simulated or
+    executed.
+    """
+
     qp_controller_config: QPControllerConfig = field(default_factory=QPControllerConfig)
+    """
+    The control frequency and the tuning of the controller.
+    """
+
     executor: Executor = field(init=False)
+    """
+    Runs the motion statecharts of the goals.
+    """
+
     motion_server: MotionServer = field(init=False)
+    """
+    Accepts goals and executes them.
+    """
+
     world_synchronizer: WorldSynchronizer | None = field(init=False, default=None)
+    """
+    Shares changes of the world with other processes.
+    """
+
     tf_publisher: TFPublisher | None = field(init=False, default=None)
+    """
+    Publishes the frames of the world on tf.
+    """
+
     viz_marker_publisher: VizMarkerPublisher | None = field(init=False, default=None)
+    """
+    Publishes the world as visualization markers.
+    """
+
     collision_marker_publisher: CollisionVisualizationMarkerPublisher = field(
         init=False
     )
+    """
+    Publishes the closest points of the collision checks as visualization markers.
+    """
+
     model_reload_synchronizer: ModelReloadSynchronizer | None = field(
         init=False, default=None
     )
+    """
+    Reloads the world from the database when another process asks for it, ``None``
+    without a database.
+    """
+
     world_fetcher: FetchWorldServer | None = field(init=False, default=None)
+    """
+    Serves the whole world to processes that join later.
+    """
 
     def setup(self):
         """

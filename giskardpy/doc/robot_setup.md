@@ -41,7 +41,9 @@ to be listed by hand.
 
 - `WorldWithFixedRobot` loads the robot description and fixes the robot to the world. It
   suits an arm that is bolted down. The description is read from the
-  `/robot_description` topic, so Giskard uses the same model as the driver.
+  `/robot_description` topic, so Giskard uses the same model as the driver. The
+  section "Where the robot description comes from" below says when to read it from a
+  file instead.
 - `ControllerManagerInterface` asks the controller manager for its active controllers.
   It reads the joint states from the broadcaster and sends velocities to the velocity
   controller.
@@ -68,9 +70,64 @@ Tracy runs one per arm, each in its own namespace:
 - `add_velocity_controllers_from_controller_manager()` connects only to the velocity
   controllers, so the joint states are not read a second time. It takes the name of the
   controller manager including its namespace, for example `left_arm/controller_manager`.
+- `whitelist` names the controllers Giskard may command. Without it Giskard commands
+  every active velocity controller of the manager, including one that belongs to a
+  gripper. With it, a listed controller that is not loaded or not active stops Giskard
+  at startup instead of leaving its joints uncontrolled.
 
 `discover_interfaces_from_controller_manager()`, used above, does both: it reads the
-joint state broadcaster and connects to the velocity controllers.
+joint state broadcaster and connects to the velocity controllers. It takes the same
+`whitelist`.
+
+The world config of such a robot only names the robot class:
+
+```{literalinclude} ../src/giskardpy/middleware/ros2/scripts/iai_robots/tracy/configs.py
+:language: python
+:pyobject: WorldWithTracyConfig
+```
+
+With a robot class Giskard avoids collisions and uses the velocity limits the class
+declares.
+
+## Robots with a mobile base
+
+A robot that drives uses `WorldWithMobileRobot` instead of `WorldWithFixedRobot`. It adds
+an odometry body below the root of the world and connects the robot to it with a drive.
+
+| Field | What it decides |
+|---|---|
+| `drive_class` | `OmniDrive` (the default) or `DifferentialDrive`. |
+| `root_name`, `odom_body_name` | The names of the root and the odometry body, `map` and `odom` by default. |
+| `translation_velocity_limit`, `rotation_velocity_limit` | The velocity limits of the base. |
+
+The interface then says where the pose of the base is read from and where its velocity is
+sent. The HSR does it like this:
+
+```{literalinclude} ../src/giskardpy/middleware/ros2/scripts/iai_robots/hsr/configs.py
+:language: python
+:pyobject: HSRVelocityInterface
+```
+
+- `sync_6dof_joint_with_tf_frame()` reads the localization, the pose of the odometry body
+  in the root, from tf.
+- `sync_robot_parts()` reads the joint states and the odometry from the topics the robot
+  class declares. A robot without a robot class uses `sync_joint_state_topic()` and
+  `sync_odometry_topic()` instead.
+- `add_base_cmd_velocity()` sends the velocity of the drive as a `Twist`.
+- `add_joint_velocity_group_controller()` sends joint velocities to a controller that is
+  not found through a controller manager. The joints have to be listed in the order of
+  the controller's command layout, because the command is an array without names.
+
+Inputs are applied in the order `setup()` adds them, except the tf frames, which are
+always applied first.
+
+## Where the robot description comes from
+
+- A script that commands a robot reads the description from the `/robot_description`
+  topic with `get_robot_description()`. Giskard then uses the model the robot uses. It
+  waits until the description is published.
+- A script that simulates loads the file its robot class declares, with
+  `load_xacro(Robot.get_ros_file_path())`, so nothing has to publish the description.
 
 ## Running it
 
@@ -84,7 +141,7 @@ ros2 launch ur_robot_driver ur_control.launch.py ur_type:=ur5e robot_ip:=0.0.0.0
 Start Giskard in a second terminal. The script is an ordinary Python program:
 
 ```bash
-`python giskardpy/src/giskardpy/middleware/ros2/scripts/tutorial/universal_robot_velocity.py`
+python giskardpy/src/giskardpy/middleware/ros2/scripts/tutorial/universal_robot_velocity.py
 ```
 
 Giskard reports the controller it connected to and then waits for goals:
@@ -93,6 +150,9 @@ Giskard reports the controller it connected to and then waits for goals:
 Created publisher for /forward_velocity_controller/commands for ['shoulder_pan_joint', ...]
 giskard is ready
 ```
+
+If Giskard cannot set the robot up, for example because the controller manager is not
+running, it exits with the error instead of waiting for goals.
 
 Send a joint goal from a third terminal:
 
