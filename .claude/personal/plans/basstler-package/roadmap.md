@@ -368,3 +368,17 @@ gained label and login calls. `RepositoryLabel` moved out of `setup_steps.py` in
 module and grew to the six labels the tooling applies. `stack.py`'s label defaults and
 `PROMOTION_LINK_LABEL` read it. `basstler-github-api-unification` therefore loses
 `github-api.sh` as a carrier, and its backend question is answered for the package client.
+
+## 2026-10-09 - basstler-src-layout kicked off (#501)
+
+#185 merged into the fork's `main` on 2026-10-05, so this item is based on `main` rather than stacked. The manifest still had #185 as `in progress`, and the dashboard refresh's status sync corrects that. Kicked off in `auto` mode, which is the committed default.
+
+The item's three open design points, decided here and flagged on #501 for review:
+
+- **When the install fails.** `BASSTLER_PYTHON` falls back to `python3`, with `basstler/src` on `PYTHONPATH`. That works wherever `python3` is 3.12+ and has the dependencies, CI included. Elsewhere the `dependencies:` summary line has already reported the failure.
+- **Bare `python -m basstler.*` commands in the docs.** Each one sources the configuration and calls `"${BASSTLER_PYTHON}"`.
+- **Finding a 3.12+ interpreter.** `uv venv --python '>=3.12'` is preferred, since it can fetch an interpreter. Otherwise the first `python3.1x` found by name, so no shell carries embedded Python again.
+
+The premise has moved since 2026-10-01: this container's `python3` is now 3.13.16, with 3.11, 3.12 and `uv` 0.11 also present. The environment is still needed, because a 3.11 default is common elsewhere.
+
+The `PathEnumeration(Path, ReprEnum)` mixin was prototyped before the move. With the `with_segments` and `__hash__` overrides it works on 3.12 and 3.13, and fails on 3.11 with `AttributeError: _flavour`, as recorded.
