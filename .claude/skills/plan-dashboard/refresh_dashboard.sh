@@ -7,7 +7,7 @@ set -euo pipefail
 # .claude/skills/plan-dashboard/SKILL.md step 2 previously spelled out as an
 # embedded bash snippet for a session to improvise from. Extracted so that
 # sequence is real, tested-by-construction code (it just calls the two
-# modules test/bastler_test/ already covers) rather than
+# modules test/basstler_test/ already covers) rather than
 # prose a session re-derives - and re-risks getting subtly wrong - on every
 # run.
 #

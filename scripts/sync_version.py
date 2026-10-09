@@ -19,10 +19,10 @@ PACKAGES = [
     "experiments",
     "semantic_digital_twin",
     "cognitive_robot_abstract_machine",
-    "bastler",
+    "basstler",
 ]
 
-FLAT_LAYOUT_PACKAGES = {"cognitive_robot_abstract_machine", "bastler"}
+FLAT_LAYOUT_PACKAGES = {"cognitive_robot_abstract_machine", "basstler"}
 """
 The packages that *are* their own directory rather than living under a ``src`` one, so
 their ``_version.py`` sits one level up from where the rest of them keep it.

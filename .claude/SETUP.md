@@ -20,7 +20,7 @@ are genuinely yours. Re-running it on a set-up clone changes nothing.
 ## 2. Do the steps no script can do
 
 ```bash
-python3 -m bastler.setup_steps
+python3 -m basstler.setup_steps
 ```
 
 It prints these three, already filled in for your fork:

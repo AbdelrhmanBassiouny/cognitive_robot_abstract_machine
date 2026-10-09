@@ -52,13 +52,13 @@ whole run. Do not inspect, guess at, or rename remotes yourself - a remote's nam
 and a wrong guess points every push at the wrong repository.
 
 **a. Make the tooling present rather than assuming it.** Every step shells out to
-`bastler/` - directly here, and through the copy (c) takes from it afterwards - and a failure in a
-later step lands after an earlier one has already changed pull requests. If `ls bastler/maintenance.py`
+`basstler/` - directly here, and through the copy (c) takes from it afterwards - and a failure in a
+later step lands after an earlier one has already changed pull requests. If `ls basstler/maintenance.py`
 fails, `git fetch` the ref you were told to resolve this document from and restore it **into the
 working tree only**:
 
 ```bash
-git restore --source=<ref> --worktree -- bastler/
+git restore --source=<ref> --worktree -- basstler/
 ```
 
 Never reach for `git checkout` with a ref and a path here. That form writes the index as well, so on
@@ -67,7 +67,7 @@ branch during a pass is a restack merge, which would commit the tooling into som
 branch and from there into the upstream. `git restore --worktree` leaves them untracked, where
 nothing can pick them up.
 
-Once `bastler/` is on the default branch this is a no-op on a fresh clone. The pass itself no
+Once `basstler/` is on the default branch this is a no-op on a fresh clone. The pass itself no
 longer takes the tooling away: `restack` switches branches in a worktree of its own, so the checkout
 you invoked it from keeps its branch and its files.
 
@@ -76,7 +76,7 @@ you invoked it from keeps its branch and its files.
 1. **What you were given.** `fork=<owner/repo>` and `upstream=<owner/repo>` in this skill's arguments
    are authoritative. Pass them straight through as `--fork` / `--upstream` and never second-guess
    them.
-2. **What the checkout knows.** Run `python -m bastler.stack configuration` (adding `--fork` /
+2. **What the checkout knows.** Run `python -m basstler.stack configuration` (adding `--fork` /
    `--upstream` for anything you were given). It prints one `field<TAB>value` line per setting -
    `fork_remote`, `fork_repository`, `upstream_remote`, `upstream_repository`, `upstream_base`, the
    label names - deciding which remote is which by the repository each URL names. Exit 0 means use
@@ -108,7 +108,7 @@ Any other non-zero exit is a stop-and-report, not something to work around.
 from a copy of the tooling that no branch carries:
 
 ```bash
-python -m bastler.stack pin-tooling
+python -m basstler.stack pin-tooling
 ```
 
 It prints one path: the copy's `stack.py`, in a directory outside this checkout, with
@@ -116,15 +116,15 @@ It prints one path: the copy's `stack.py`, in a directory outside this checkout,
 directory, that sibling copied alongside so the same import resolves inside the copy. **Every command below written as `<pinned>/…` means
 that directory** - substitute the real path in each time you run one, since a shell variable does
 not survive from one command to the next. `stack.py` imports nothing of its own siblings, so
-invoking it there by path is enough on its own; `maintenance.py` imports `bastler.*` absolutely, so
+invoking it there by path is enough on its own; `maintenance.py` imports `basstler.*` absolutely, so
 a command naming it also carries `PYTHONPATH` set to the pinned directory's own parent - the same
-directory that makes `bastler` importable for the checkout's own copy:
+directory that makes `basstler` importable for the checkout's own copy:
 
 ```bash
 PYTHONPATH="$(dirname <pinned>)" python <pinned>/maintenance.py …
 ```
 
-Pin rather than keep calling `bastler/`, because that directory is tracked content: the copy in the
+Pin rather than keep calling `basstler/`, because that directory is tracked content: the copy in the
 working tree is whichever version the checked-out branch carries, and the branches of a stack differ
 - several of them are rewriting this very directory. So any branch switch made here, by a step of
 this document or by you resolving something by hand, can put a different tool behind the same path
