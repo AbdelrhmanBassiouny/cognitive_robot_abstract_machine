@@ -314,53 +314,110 @@ items:
   session: https://claude.ai/code/session_016DukdvsJzggwAAF3CkKaDZ
   track: pass
   blockers:
-    - >-
-      GitHub reports #158 dirty against main since 2026-09-19 on four files (SKILL.md,
-      basstler/stack.py, test_maintenance_skill.py, test_stack.py), re-reported by every maintenance
-      pass and never resolved. Cause: the branch was rebased onto #185 at 5b332d6a59, one commit
-      before 213ad791c7 renamed bastler to basstler, so the branch still carries bastler/ and
-      test/bastler_test (106 paths) and the rename is not an ancestor. Manifest called the item
-      healthy; it is the 2026-09-19 and 2026-10-02 miss a third time. Also open: the
-      integration-conflict label against D-deco (2026-09-09) has not been re-measured, and the PR is
-      out of draft.
+    - ""
   depends_on: []
-  notes: |-
-    Found while running a maintenance pass, and fixed at the source rather than worked around. The skill
-    invoked the tooling by its in-tree path for a whole run, which assumes that path is the same file from
+  notes: >
+    Found while running a maintenance pass, and fixed at the source rather than worked around. The
+    skill
+
+    invoked the tooling by its in-tree path for a whole run, which assumes that path is the same
+    file from
+
     step 0 to the end - and it is not, since it is tracked content and a pass switches branch in the
-    checkout it runs from. The failure is either loud (a command validated in step 0 comes back as an
-    invalid choice, which is exactly what a rename produces) or quiet (the same command name answering
-    with semantics the skill does not describe). In the reported run it produced a string of spurious
+
+    checkout it runs from. The failure is either loud (a command validated in step 0 comes back as
+    an
+
+    invalid choice, which is exactly what a rename produces) or quiet (the same command name
+    answering
+
+    with semantics the skill does not describe). In the reported run it produced a string of
+    spurious
+
     failures partway through a restack, survived only because the operator hand-copied the tool to a
+
     stable path.
 
-    `pin-tooling` copies the modules and configuration - not the board, which belongs to the pass that
+    `pin-tooling` copies the modules and configuration - not the board, which belongs to the pass
+    that
+
     exported it - to a digest-named directory outside every checkout. Digest naming makes pinning
-    idempotent per version and stops a later pass overwriting the copy an earlier one is still running;
-    the copy is staged beside its destination and moved whole, so a caller never invokes a half-written
-    one. Deterministic rather than a note to remember: a test asserts the skill runs nothing else from
+
+    idempotent per version and stops a later pass overwriting the copy an earlier one is still
+    running;
+
+    the copy is staged beside its destination and moved whole, so a caller never invokes a
+    half-written
+
+    one. Deterministic rather than a note to remember: a test asserts the skill runs nothing else
+    from
+
     the working tree.
 
-    **The review-level question - whether fast-forwarding and restacking everything first would solve
+    **The review-level question - whether fast-forwarding and restacking everything first would
+    solve
+
     this instead - is circular**, and that is the answer rather than a preference: the restack is
-    performed by the tool whose version is in question, so uniformity arrives at the *end* of a pass and
-    the tool must be stable at the start. It also cannot reach the branches that differ most, which are
-    exactly the ones being withheld. And a branch whose own diff edits the tooling is meant to differ.
+
+    performed by the tool whose version is in question, so uniformity arrives at the *end* of a pass
+    and
+
+    the tool must be stable at the start. It also cannot reach the branches that differ most, which
+    are
+
+    exactly the ones being withheld. And a branch whose own diff edits the tooling is meant to
+    differ.
 
     **An integration build found the pin incomplete, which is how a pinned tool fails worst.**
-    `pin_to` listed one directory's contents and copied them flat, complete only while the tool imports
-    nothing outside that directory. Built together with a branch that had moved shared modules into a
+
+    `pin_to` listed one directory's contents and copied them flat, complete only while the tool
+    imports
+
+    nothing outside that directory. Built together with a branch that had moved shared modules into
+    a
+
     sibling directory, the pinned copy died on its first import - so the pin produced a program that
-    cannot start. Both halves had to change, and the second is easy to miss: the copy now carries every
-    sibling directory the tool's own modules name in a `sys.path` insertion, read out of the modules by an
-    `ast` walk rather than listed beside them, *and* it keeps the layout instead of flattening it - such an
-    insertion is relative to the module making it, so flattened the same line resolves outside the copy
+
+    cannot start. Both halves had to change, and the second is easy to miss: the copy now carries
+    every
+
+    sibling directory the tool's own modules name in a `sys.path` insertion, read out of the modules
+    by an
+
+    `ast` walk rather than listed beside them, *and* it keeps the layout instead of flattening it -
+    such an
+
+    insertion is relative to the module making it, so flattened the same line resolves outside the
+    copy
+
     and finds whatever happens to be there.
 
-    Using the real runner in the test exposed a weakness the raw invocation had hidden: the helper created
-    the branch and then wrote the other version, so the working tree changed because the test wrote it
-    rather than because version control moved it - a weaker reproduction than the bug. Both versions are
+    Using the real runner in the test exposed a weakness the raw invocation had hidden: the helper
+    created
+
+    the branch and then wrote the other version, so the working tree changed because the test wrote
+    it
+
+    rather than because version control moved it - a weaker reproduction than the bug. Both versions
+    are
+
     committed at install time now and the step is nothing but a branch switch.
+
+    Resolved on 2026-10-09 from /plan-item-resolve in auto mode. The branch had been dirty against
+    main since 2026-09-19 and every maintenance pass re-reported the same four files; the manifest
+    called it healthy. Cause: it was rebased onto #185 one commit before 213ad791c7 renamed bastler
+    to basstler. The rename was applied to the branch first, recorded as merged with the ours
+    strategy, and main merged across - the same recipe as #151 and #162.
+
+    Two things in main broke the pinning rather than merely conflicting with it. A module run by
+    file path has no import spec, so main's logging fails on import: the pinned copy is now run as
+    python -P -m basstler.module with PYTHONPATH set to the printed directory, and -P is what stops
+    the checkout shadowing the copy. And no module puts a sibling on sys.path any more, so the
+    sibling-directory pinning and its two tests were deleted, as this note anticipated. 719 tests
+    pass; removing -P, or leaving an unpinned maintenance call in the skill, each fails a test.
+
+    Still open: the integration-conflict label against D-deco (#77) is not cleared. The two share no
+    file, but the combined suite was not re-run. Returned to draft after the push.
 - id: promotion-summaries-and-table
   title: Promote with a written summary, and report the links as a table rather than a notification
   branch: claude/plan-item-kickoff-workflow-y38l38
