@@ -382,3 +382,20 @@ The item's three open design points, decided here and flagged on #501 for review
 The premise has moved since 2026-10-01: this container's `python3` is now 3.13.16, with 3.11, 3.12 and `uv` 0.11 also present. The environment is still needed, because a 3.11 default is common elsewhere.
 
 The `PathEnumeration(Path, ReprEnum)` mixin was prototyped before the move. With the `with_segments` and `__hash__` overrides it works on 3.12 and 3.13, and fails on 3.11 with `AttributeError: _flavour`, as recorded.
+
+## 2026-10-09 - basstler-src-layout implemented on #501
+
+The work is done in four commits and waits on review. 745 tests pass on 3.12 and 3.13, against 710 on `main`. Live in a clone, the first session start created `basstler/.venv` with `uv` and installed the package into it; the second installed nothing.
+
+Decisions made along the way that a later item should not re-derive:
+
+- **The installer is `pip --python <environment> install --editable ./basstler`.** Environments are created without pip, either by `uv venv` or by `python3.1x -m venv --without-pip`. So one pip, the one on `PATH`, installs into any of them, and Debian's missing `ensurepip` does not matter.
+- **`basstler.dependencies` counts the package itself as a requirement.** An environment whose install failed is reinstalled on the next start, rather than reading as complete because its dependencies happen to be there.
+- **`PYTHONPATH=basstler/src` is exported by the configuration**, alongside the editable install. That keeps a worktree or a scratch clone on its own copy, and lets `python3` stand in until the environment exists.
+- **`member.name` on a path enumeration is now the file name.** Use `_name_` for the member's name. AGENTS.md says so.
+
+Two defects the tests turned up: `check-setup.sh` and `save-plan.sh` both read an unparseable `pyproject.toml` as "nothing missing". Both are fixed on #501.
+
+Recorded rather than fixed: a `pytest -n` race on the real `board.json`, already on `main` and xdist-only, and `add-plan-item/SKILL.md`'s undefined `${PLAN_ITEM_BOOTSTRAP_SCRIPT}`.
+
+Landing: #420, #424, #430, #437 and #107 each merge across this second move. The new contract test fails on any module left directly under `basstler/`.
