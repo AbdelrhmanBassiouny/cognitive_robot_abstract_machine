@@ -43,6 +43,11 @@ class DatasetLocation(PathEnumeration):
     whose name is spelled with every separator a distribution name may use.
     """
 
+    UNINSTALLED_PROJECT = DIRECTORY / "uninstalled-project" / "pyproject.toml"
+    """
+    The metadata of a project no environment has installed, declaring no dependencies.
+    """
+
     SET_UP_CLONE = DIRECTORY / "set-up-clone"
     """
     A committed tree of everything ``check-setup.sh`` requires of a set-up clone, copied over
@@ -192,4 +197,15 @@ class ScrubbedEnvironmentPrefix(StrEnum):
     GIT_COMMITTER = "GIT_COMMITTER_"
     """
     The committer git would otherwise take from the configuration.
+    """
+
+
+class InterpreterRequirementKey(StrEnum):
+    """
+    The ``[project]`` key stating which interpreters the package supports.
+    """
+
+    REQUIRES_PYTHON = "requires-python"
+    """
+    The version specifier an interpreter has to satisfy.
     """

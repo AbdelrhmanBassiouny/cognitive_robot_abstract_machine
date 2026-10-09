@@ -12,6 +12,7 @@ from __future__ import annotations
 import os
 import shutil
 import subprocess
+import sys
 from collections.abc import Mapping
 from dataclasses import dataclass
 from enum import StrEnum
@@ -48,21 +49,41 @@ def install_hook_scripts_into(project_root: Path, *script_names: str) -> None:
 
 def install_package_into(project_root: Path) -> None:
     """
-    Copy the real :mod:`basstler` package into a checkout, so a command line run there
-    resolves ``python3 -m basstler.<module>`` the way it does in a clone.
+    Copy the real :mod:`basstler` source tree into a checkout, so a command line run there
+    resolves ``python3 -m basstler.<module>`` to that checkout's own source, the way it
+    does in a clone.
 
-    The whole package rather than the modules one script happens to call: a scratch
+    The whole source tree rather than the modules one script happens to call: a scratch
     clone *is* a clone, so it carries what a clone carries, and a test then never has to
-    track which sibling a module imports.
+    track which sibling a module imports. Build output, the package's own environment and
+    the board snapshot are left behind, as a fresh clone has none of them.
 
     :param project_root: The checkout to copy it into.
     """
     shutil.copytree(
-        PackageLocation.DIRECTORY,
-        project_root / ProjectLocation.PACKAGE,
-        ignore=shutil.ignore_patterns("__pycache__"),
+        PackageLocation.SOURCE_TREE,
+        project_root / ProjectLocation.PACKAGE_SOURCE_TREE,
+        ignore=shutil.ignore_patterns(
+            "__pycache__",
+            "*.egg-info",
+            ".venv",
+            f"{PackageLocation.BOARD.value.name}*",
+        ),
         dirs_exist_ok=True,
     )
+
+
+def write_interpreter_wrapper(destination: Path) -> Path:
+    """
+    Write an executable at *destination* that runs the interpreter running this suite.
+
+    :param destination: Where to write it, its directories created as needed.
+    :return: *destination*.
+    """
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    destination.write_text(f'#!/bin/sh\nexec "{sys.executable}" "$@"\n')
+    destination.chmod(0o755)
+    return destination
 
 
 class SetupPrerequisiteFile(StrEnum):
@@ -75,7 +96,7 @@ class SetupPrerequisiteFile(StrEnum):
     following each other silently and asserting nothing.
     """
 
-    PACKAGE = "basstler/__init__.py"
+    PACKAGE = "basstler/src/basstler/__init__.py"
     """
     The package holding every module the hooks and skills run.
     """
@@ -307,6 +328,20 @@ class ScratchRepository:
         Copy the real :mod:`basstler` package into the scratch layout.
         """
         install_package_into(self.project_root)
+
+    def install_package_environment(self) -> Path:
+        """
+        Stand in for the package's own environment, as a set up clone has one: its
+        interpreter runs the one running this suite, which has every requirement.
+
+        A script rather than a link, because an interpreter reached through a link outside
+        its own environment no longer finds that environment's installed packages.
+
+        :return: The interpreter written.
+        """
+        return write_interpreter_wrapper(
+            self.project_root / ProjectLocation.PACKAGE_ENVIRONMENT_INTERPRETER
+        )
 
     def write_setup_prerequisites(self) -> None:
         """

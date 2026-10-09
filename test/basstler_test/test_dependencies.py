@@ -111,15 +111,45 @@ def test_a_dependency_spelled_differently_from_its_installed_distribution_is_pre
     assert not respelled.is_missing
 
 
-def test_missing_dependencies_are_a_subset_of_what_is_declared():
+def declared_project_name() -> str:
+    """
+    :return: The name ``pyproject.toml`` gives the package, read straight from it.
+    """
+    project = tomllib.loads(DependencyDeclaration.of_this_package().path.read_text())
+    return project[PyprojectKey.PROJECT][PyprojectKey.NAME]
+
+
+def test_the_requirements_are_the_package_itself_then_its_dependencies():
+    """
+    An environment runs the package only with the package installed in it, so the
+    package is the first thing it requires.
+    """
+    assert [
+        requirement.specifier
+        for requirement in DependencyDeclaration.of_this_package().requirements()
+    ] == [declared_project_name(), *declared_specifiers()]
+
+
+def test_a_project_nothing_has_installed_is_reported_missing():
+    """
+    The package itself counts as missing where its distribution is not installed, even
+    with every dependency present.
+    """
+    declaration = DependencyDeclaration(DatasetLocation.UNINSTALLED_PROJECT.value)
+
+    assert declaration.missing() == (Dependency(declaration.project().specifier),)
+
+
+def test_missing_requirements_are_a_subset_of_what_is_declared():
     """
     What the caller installs is drawn from the declaration and nothing else.
     """
     missing = DependencyDeclaration.of_this_package().missing()
 
-    assert {dependency.specifier for dependency in missing} <= set(
-        declared_specifiers()
-    )
+    assert {dependency.specifier for dependency in missing} <= {
+        declared_project_name(),
+        *declared_specifiers(),
+    }
 
 
 def test_an_absent_declaration_raises_rather_than_declaring_nothing(tmp_path):
@@ -151,7 +181,7 @@ def run_module(*arguments: str):
     ).run(*arguments)
 
 
-def test_the_command_line_prints_one_specifier_per_missing_dependency():
+def test_the_command_line_prints_one_specifier_per_missing_requirement():
     """
     The output is what a caller passes straight to ``pip install``, so it carries the
     version constraints rather than bare names.

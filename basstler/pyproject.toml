@@ -1,7 +1,5 @@
-# Installed only where the repository root is not the working directory: the package is
-# designed to be imported straight from that root with no install, since cloud sessions
-# run on fresh clones with no pip step. Built with an explicit package-dir mapping
-# because the package *is* this directory rather than living under one.
+# Installed editable into basstler's own environment by every session start that finds it
+# missing, so `import basstler` resolves to this clone's own source under src/.
 
 [build-system]
 requires = ["setuptools>=68"]
@@ -11,7 +9,7 @@ build-backend = "setuptools.build_meta"
 name = "basstler"
 description = "Workflow tooling: stacked-pull-request maintenance, plan dashboards, personal-notes hooks and upstream review reading."
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.12"
 license = "LGPL-3.0-only"
 authors = [
     {name = "Abdelrhman Bassiouny", email = "abassiou@uni-bremen.de"}
@@ -25,8 +23,8 @@ classifiers = [
     "Intended Audience :: Developers",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
     "Topic :: Software Development :: Version Control :: Git",
     "Topic :: Utilities",
 ]
@@ -52,22 +50,18 @@ dynamic = ["version"]
 # uses, so one bump moves all of them together.
 version = {attr = "basstler._version.__version__"}
 
-[tool.setuptools]
-packages = ["basstler"]
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["basstler"]
 
 # The files the modules resolve beside themselves rather than by an argument, all named
 # in locations.py: the page templates, the GraphQL documents and the committed defaults.
 # An install that left them out would import and then fail at the first render, the first
-# configuration read, or the first query. pyproject.toml is here because
-# `basstler.dependencies` reads the declaration out of it at runtime.
+# configuration read, or the first query.
 [tool.setuptools.package-data]
 basstler = [
     "templates/*.html",
     "queries/*.graphql",
     "stack.toml",
     "plan-item-modes.toml",
-    "pyproject.toml",
 ]
-
-[tool.setuptools.package-dir]
-basstler = "."

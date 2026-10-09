@@ -9,6 +9,7 @@ import subprocess
 
 import pytest
 
+from basstler.dependencies import DependencyDeclaration
 from basstler.locations import ProjectLocation
 
 from .constants import DatasetLocation, PersonalNotesPath
@@ -72,6 +73,11 @@ UNINSTALLABLE_REQUIREMENT = "basstler-no-such-distribution>=1"
 A distribution nothing can have installed, so the refusal cannot pass by accident.
 """
 
+DECLARATION_FILE = str(ProjectLocation.PACKAGE_SOURCE_TREE / "pyproject.toml")
+"""
+Where the scratch clone declares the package's requirements.
+"""
+
 
 def test_refuses_when_a_declared_dependency_is_not_installed(
     save_plan_repository: ScratchRepository,
@@ -82,15 +88,34 @@ def test_refuses_when_a_declared_dependency_is_not_installed(
     module happens to be imported first.
     """
     save_plan_repository.write(
-        "basstler/pyproject.toml",
-        f'[project]\ndependencies = ["{UNINSTALLABLE_REQUIREMENT}"]\n',
+        DECLARATION_FILE,
+        "[project]\n"
+        f'name = "{DependencyDeclaration.of_this_package().project().specifier}"\n'
+        f'dependencies = ["{UNINSTALLABLE_REQUIREMENT}"]\n',
     )
 
     result = run_save_plan(save_plan_repository, "test-plan")
 
     assert result.returncode == 1
     assert UNINSTALLABLE_REQUIREMENT in result.stderr
-    assert f"pip install {UNINSTALLABLE_REQUIREMENT}" in result.stderr
+    assert (
+        f"install --editable ./{ProjectLocation.PACKAGE_SOURCE_TREE}" in result.stderr
+    )
+
+
+def test_refuses_when_the_declaration_cannot_be_read(
+    save_plan_repository: ScratchRepository,
+):
+    """
+    A declaration the lookup cannot parse says nothing about what is installed, so it
+    stops the save rather than reading as nothing missing.
+    """
+    save_plan_repository.write(DECLARATION_FILE, "this is not toml\n")
+
+    result = run_save_plan(save_plan_repository, "test-plan")
+
+    assert result.returncode == 1
+    assert DECLARATION_FILE in result.stderr
 
 
 # %% --manifest/--roadmap pairing

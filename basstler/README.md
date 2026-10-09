@@ -6,64 +6,58 @@ tooling, the plan dashboards, the personal-notes hooks and the upstream review r
 The name is the German word for someone who builds things themselves, and shares its
 first letters with the surname of the person who wrote it, Bassiouny.
 
-## Importing it
+## Where it lives
 
-`basstler` is a plain top-level directory on the repository root, so it imports from there
-with no installation step - which is what a cloud session running on a fresh clone with
-no `pip` step needs.
+`basstler` follows the `src` layout every package in this repository uses: this directory
+holds `pyproject.toml` and this README, and the package itself is `src/basstler/`. Nothing
+is a module directly in this directory, and a test holds it so.
 
-```python
-from basstler.stack import load_configuration
-```
+## Its own environment
 
-The `pyproject.toml` beside this file is for installing it somewhere that is not such a
-checkout:
+**Every session start gives `basstler` an environment of its own, without asking:**
+`basstler/.venv`, from an interpreter the package supports, with the package installed
+into it editable. Editable, so `import basstler` there is this clone's own source rather
+than a second copy of it in `site-packages`. Its dependencies are declared once, in
+`pyproject.toml`'s `[project] dependencies`, the way every package in this repository
+declares them, and installing the package brings them with it.
 
-```bash
-pip install ./basstler                # the modules that need nothing but the standard library
-pip install './basstler[rendering]'   # plus the dashboard build's Jinja2/markdown/nh3
-```
+The environment comes from `uv` where it is on the path, since `uv` can fetch a supported
+interpreter where none is installed, and otherwise from the newest supported `python3.1x`
+on the path. `.claude/hooks/session-start.sh` does the work, so no module has to work around
+a dependency that is not there, and nobody has to run `pip` by hand.
 
-## Running it
-
-Every entry point is run as a module rather than by its file path:
-
-```bash
-python3 -m basstler.stack configuration
-python3 -m basstler.maintenance run-report --json
-python3 -m basstler.build_dashboard --help
-```
-
-By path, the interpreter puts *this* directory on `sys.path` in place of the repository
-root, and a module's imports of its siblings stop resolving. The shell entry points under
-`.claude/hooks/` and the skills that call them all use `python3 -m "${SOME_MODULE}"`, with
-the module named once in `.claude/hooks/resolve-personal-notes-config.sh`.
-
-## The dependencies install themselves
-
-**Every session start installs whatever of this package's declared dependencies your
-clone is missing, without asking.** They are declared once, in `basstler/pyproject.toml`'s
-`[project] dependencies`, the way every package in this repository declares them, and
-`basstler.dependencies` is what reads that list back. `.claude/hooks/session-start.sh` does
-the installing, so no module ever has to work around a dependency that is not there, and
-nobody has to notice a missing one and run `pip` by hand.
-
-Three things bound it, and they are worth knowing because it writes to your Python
-environment:
+Three things bound it, and they are worth knowing because it creates an environment and
+installs into it:
 
 - **Only for someone who has already set the tooling up.** The hook stops before this
   point when it cannot reach your personal-notes branch, so a clone that has never run
   `/setup-personal-notes` installs nothing at all.
-- **Only what is missing.** The usual start looks the declaration up and runs no
-  installer, which is what makes doing it every time affordable.
-- **Never fatal.** No `pip`, no network, or an externally managed environment that refuses
-  the write: the summary's `dependencies:` line says so, naming what to install, and the
-  rest of the run carries on. `pip install ./basstler` installs them all when that happens.
+- **Only what is missing.** The usual start finds the environment, looks the declaration
+  up and runs no installer, which is what makes doing it every time affordable. The
+  package itself counts: an environment without it is reinstalled into.
+- **Never fatal.** No supported interpreter, no `pip`, or no network: the summary's
+  `dependencies:` line says so, naming the command to run, and the rest of the run carries
+  on. Callers then fall back to `python3`.
 
 An Actions runner reaches no session hook, so a workflow that runs a module installs the
-dependencies in a step of its own -
+package itself, editable -
 `test/basstler_test/test_package_contract.py` finds every such workflow and checks that it
 does.
+
+## Running it
+
+Every entry point is run as a module, by the package's own interpreter:
+
+```bash
+basstler/.venv/bin/python -m basstler.stack configuration
+basstler/.venv/bin/python -m basstler.maintenance run-report --json
+basstler/.venv/bin/python -m basstler.build_dashboard --help
+```
+
+The shell entry points under `.claude/hooks/` and the skills that call them all use
+`"${BASSTLER_PYTHON}" -m "${SOME_MODULE}"`, with the interpreter and each module named once
+in `.claude/hooks/resolve-personal-notes-config.sh`. Sourcing that file also puts
+`basstler/src` first on `PYTHONPATH`, so a worktree or a scratch clone runs its own copy.
 
 ## What stays outside the package
 

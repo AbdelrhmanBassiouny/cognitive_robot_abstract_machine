@@ -172,25 +172,26 @@ fi
 # %% plan-dashboard dependencies
 
 # Reported rather than installed here: this script is read-only, and running
-# it must never change the answer it gives. ./session-start.sh installs them
-# (see install_dependencies in ./resolve-personal-notes-config.sh), so on a
-# clone whose notes branch resolves, this row reports what that run just did.
+# it must never change the answer it gives. ./session-start.sh creates the
+# package's environment and installs into it (see create_basstler_environment
+# in ./resolve-personal-notes-config.sh), so on a clone whose notes branch
+# resolves, this row reports what that run just did.
 #
 # The lookup itself is missing_dependencies, beside that installer, so both
-# read the same declaration the same way. What stays here is the two reasons
-# it can answer nothing, because they are this script's rows to word.
-if ! command -v python3 > /dev/null 2>&1; then
-  report dashboard_dependencies needs-setup "python3 is not on PATH, so the plan-dashboard modules cannot run at all"
+# read the same declaration the same way, for the same interpreter. What stays
+# here is the reasons it can answer nothing, because they are this script's
+# rows to word.
+if ! command -v "${BASSTLER_PYTHON}" > /dev/null 2>&1; then
+  report dashboard_dependencies needs-setup "${BASSTLER_PYTHON} is not on PATH, so the plan-dashboard modules cannot run at all"
 elif [ ! -f "${BASSTLER_PYPROJECT_FILE}" ]; then
   report dashboard_dependencies needs-setup "cannot check: ${BASSTLER_PYPROJECT_FILE} is missing"
+elif ! MISSING_DEPENDENCIES="$(missing_dependencies)"; then
+  report dashboard_dependencies needs-setup "cannot check: ${BASSTLER_PYPROJECT_FILE} could not be read"
+elif [ -z "${MISSING_DEPENDENCIES}" ]; then
+  report dashboard_dependencies ok "every requirement ${BASSTLER_PYPROJECT_FILE} declares is installed for ${BASSTLER_PYTHON}"
 else
-  MISSING_DEPENDENCIES="$(missing_dependencies)"
-  if [ -z "${MISSING_DEPENDENCIES}" ]; then
-    report dashboard_dependencies ok "every dependency ${BASSTLER_PYPROJECT_FILE} declares is installed"
-  else
-    report dashboard_dependencies needs-setup \
-      "not installed:${MISSING_DEPENDENCIES// / } - run: pip install ${MISSING_DEPENDENCIES}"
-  fi
+  report dashboard_dependencies needs-setup \
+    "not installed for ${BASSTLER_PYTHON}:${MISSING_DEPENDENCIES// / } - a session start installs them, or run: pip --python ${BASSTLER_PYTHON} install --editable ./${BASSTLER_SOURCE_TREE}"
 fi
 
 # %% the result of it all working

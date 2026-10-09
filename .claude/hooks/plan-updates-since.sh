@@ -41,8 +41,8 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/resolve-personal-notes-config.sh"
 
-if ! command -v python3 > /dev/null 2>&1; then
-  echo "python3 is required (it prints this script's messages and parses" >&2
+if ! command -v "${BASSTLER_PYTHON}" > /dev/null 2>&1; then
+  echo "${BASSTLER_PYTHON} is required (it prints this script's messages and parses" >&2
   echo "GitHub's tracking-issue-comments response)." >&2
   exit 1
 fi
@@ -82,7 +82,7 @@ print_issue_comments_since() {
       "${GITHUB_API_BASE_URL}/${path}")"
   fi
 
-  printf '%s' "${response}" | python3 -m "${PLAN_UPDATES_SINCE_SUPPORT_MODULE}" print-comments
+  printf '%s' "${response}" | "${BASSTLER_PYTHON}" -m "${PLAN_UPDATES_SINCE_SUPPORT_MODULE}" print-comments
 }
 
 PLAN_ID=""
@@ -140,7 +140,7 @@ PLAN_DIRECTORY="$(plan_directory_path "${PLAN_ID}")"
 echo "=== Changes to ${PLAN_DIRECTORY} (${SINCE_SHA}..${NEW_SHA}) ==="
 DELTA="$(git diff "${SINCE_SHA}" "${NEW_SHA}" -- "${PLAN_DIRECTORY}")"
 if [ -z "${DELTA}" ]; then
-  python3 -m "${PLAN_UPDATES_SINCE_SUPPORT_MODULE}" print-no-changes-message
+  "${BASSTLER_PYTHON}" -m "${PLAN_UPDATES_SINCE_SUPPORT_MODULE}" print-no-changes-message
 else
   printf '%s\n' "${DELTA}"
 fi
@@ -151,13 +151,13 @@ TRACKING_ISSUE="$(git show "FETCH_HEAD:${MANIFEST_PATH}" \
 
 if [ -z "${TRACKING_ISSUE}" ]; then
   echo "=== Tracking issue ==="
-  python3 -m "${PLAN_UPDATES_SINCE_SUPPORT_MODULE}" print-no-tracking-issue-message
+  "${BASSTLER_PYTHON}" -m "${PLAN_UPDATES_SINCE_SUPPORT_MODULE}" print-no-tracking-issue-message
 else
   DEFAULT_REPOSITORY="$(git show "FETCH_HEAD:${MANIFEST_PATH}" \
     | grep -oE '^default_repository:[[:space:]]*.+$' | head -1 \
     | sed -E 's/^default_repository:[[:space:]]*//' || true)"
   if [ -z "${DEFAULT_REPOSITORY}" ]; then
-    python3 -m "${PLAN_UPDATES_SINCE_SUPPORT_MODULE}" print-no-default-repository-message \
+    "${BASSTLER_PYTHON}" -m "${PLAN_UPDATES_SINCE_SUPPORT_MODULE}" print-no-default-repository-message \
       "${PLAN_ID}" "${TRACKING_ISSUE}"
     exit 1
   fi

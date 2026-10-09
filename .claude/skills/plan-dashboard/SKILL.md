@@ -17,8 +17,8 @@ anything below is unclear about a field's meaning, rather than guessing.
 
 **Everything deterministic — schema validation, live-state classification,
 drift detection, HTML rendering — lives in the committed `basstler` package
-(`basstler/build_dashboard.py`, `basstler/build_index.py`,
-`basstler/render_common.py`), not in this document.** This file's job is only
+(`basstler/src/basstler/build_dashboard.py`, `build_index.py`,
+`render_common.py`), not in this document.** This file's job is only
 the parts a module can't do: resolving what to fetch, calling the GitHub API,
 and calling the `Artifact` tool. If you find yourself re-deriving rendering or
 validation logic in prose instead of just running the module, stop — that
@@ -174,8 +174,9 @@ If `refresh_dashboard.sh` exits non-zero, the manifest failed validation —
 its stderr says exactly what's wrong (which field, which value). Report
 that to the user instead of trying to patch around it yourself; a broken
 manifest is something they need to know about, not paper over. Requires
-PyYAML, Jinja2, and the `markdown` package —
-`pip install "./${BASSTLER_PACKAGE_DIRECTORY}"` if any are missing.
+the package's environment, which every session start creates and installs
+the package's dependencies into — `.claude/hooks/session-start.sh` again if
+its `dependencies:` line reported a failure.
 
 On success it prints one merged JSON summary on stdout: `sync_manifest_status.py`'s
 own `{"corrected": [...]}` plus `build_dashboard.py`'s status counts, drift
@@ -191,7 +192,7 @@ for every plan before building that plan's index entry.
 list, then:
 
 ```bash
-python3 -m "${BUILD_INDEX_MODULE}" \
+"${BASSTLER_PYTHON}" -m "${BUILD_INDEX_MODULE}" \
   --plans /tmp/plans.json \
   --output /tmp/index.html
 ```
@@ -231,7 +232,7 @@ title. Then:
 
 ```bash
 git show "FETCH_HEAD:${DASHBOARD_URL_CACHE_PATH}" > /tmp/dashboard-urls.yaml
-python3 -m "${RECORD_DASHBOARD_URL_MODULE}" \
+"${BASSTLER_PYTHON}" -m "${RECORD_DASHBOARD_URL_MODULE}" \
   --key <plan-id or _index> \
   --expected-title "<the plan's own title: from plan.yaml, or the index page's title>" \
   --listing /tmp/artifact_listing.json \

@@ -115,12 +115,12 @@ git commit --allow-empty -m "Bootstrap <item-id>"
 git push -u origin <branch>
 # then create the draft pull request with your GitHub tool, and:
 source .claude/hooks/resolve-personal-notes-config.sh
-python3 -m "${PLAN_ITEM_BOOTSTRAP_MODULE}" open \
+"${BASSTLER_PYTHON}" -m "${PLAN_ITEM_BOOTSTRAP_MODULE}" open \
     --plan <plan-id> --item <item-id> \
     --branch <branch> --base <base-branch> \
     --session <this session's url> \
     --pull-request-number <number>
-python3 -m "${PLAN_ITEM_BOOTSTRAP_MODULE}" record \
+"${BASSTLER_PYTHON}" -m "${PLAN_ITEM_BOOTSTRAP_MODULE}" record \
     --plan <plan-id> --item <item-id> \
     --status "in progress" --roadmap-section <file>
 ```

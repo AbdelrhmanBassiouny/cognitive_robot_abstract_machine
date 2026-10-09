@@ -16,7 +16,21 @@ import sys
 from abc import ABC, abstractmethod
 from collections.abc import Mapping
 from dataclasses import dataclass
+from enum import StrEnum
 from pathlib import Path
+
+from basstler.locations import ProjectLocation
+
+
+class InterpreterVariable(StrEnum):
+    """
+    The environment variables an interpreter reads, which a run of a module sets.
+    """
+
+    IMPORT_PATH = "PYTHONPATH"
+    """
+    The directories an interpreter searches for imports ahead of its installed packages.
+    """
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -99,6 +113,27 @@ class PythonModuleRunner(ScriptRunner):
     def command(self) -> tuple[str, ...]:
         """:return: This interpreter, running that module."""
         return (sys.executable, "-m", self.module_name)
+
+    def environment(self, overrides: Mapping[str, str]) -> dict[str, str]:
+        """
+        Put the project root's own package source first on the import path, as the shell
+        configuration does for every caller, so the module run is that checkout's copy.
+
+        :param overrides: Variables this call sets.
+        :return: The environment of :meth:`ScriptRunner.environment`, with that path
+            ahead of any it inherited.
+        """
+        environment = super().environment(overrides)
+        import_directory = str(
+            self.project_root / ProjectLocation.PACKAGE_IMPORT_DIRECTORY
+        )
+        inherited_path = environment.get(InterpreterVariable.IMPORT_PATH)
+        environment[InterpreterVariable.IMPORT_PATH] = (
+            os.pathsep.join((import_directory, inherited_path))
+            if inherited_path
+            else import_directory
+        )
+        return environment
 
 
 @dataclass(frozen=True, kw_only=True)

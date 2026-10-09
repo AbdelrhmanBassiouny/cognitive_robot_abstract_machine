@@ -8,38 +8,34 @@ Every file and directory this package names, each written once.
 from __future__ import annotations
 
 import os
-from enum import Enum
+from enum import ReprEnum
 from pathlib import Path
 
 
-class PathEnumeration(Enum):
+class PathEnumeration(Path, ReprEnum):
     """
     An enumeration whose members are paths.
 
-    A member is accepted wherever a path is - joined onto another with ``/``, opened, or
-    passed to a subprocess - and formats as its path's text.
+    A member is the path it names - joined onto another with ``/``, opened, passed to a
+    subprocess, formatted as its text - and every path derived from one is a plain
+    :class:`~pathlib.Path`.
+
+    ..warning:: ``Path.name`` shadows the enumeration's own ``name``: ``member.name`` is
+        the path's last component, and the member's name is ``member._name_``.
     """
 
-    _value_: Path
+    __hash__ = Path.__hash__
+    """
+    Hash as the path does, so a member and its path are one key; the enumeration's own
+    hash would tell them apart.
+    """
 
-    def __fspath__(self) -> str:
+    def with_segments(self, *path_segments: str | os.PathLike[str]) -> Path:
         """
-        :return: The path's text, for anything that accepts a path-like object.
+        :param path_segments: The segments of a path derived from this one.
+        :return: That path, as a plain path rather than a lookup of a member by value.
         """
-        return os.fspath(self.value)
-
-    def __str__(self) -> str:
-        """
-        :return: The path's text, so a member formats as its path rather than its name.
-        """
-        return str(self.value)
-
-    def __truediv__(self, child: str | os.PathLike[str]) -> Path:
-        """
-        :param child: What to join beneath this path.
-        :return: The joined path.
-        """
-        return self.value / child
+        return Path(*path_segments)
 
 
 class PackageLocation(PathEnumeration):
@@ -49,18 +45,26 @@ class PackageLocation(PathEnumeration):
 
     DIRECTORY = Path(__file__).parent
     """
-    This package's own directory, which is also the directory it *is* rather than lives
-    under.
+    This package's own directory, under its source tree's ``src`` directory.
     """
 
-    REPOSITORY_ROOT = DIRECTORY.parent
+    SOURCE_TREE = DIRECTORY.parent.parent
     """
-    The repository root, which is the directory ``basstler`` imports from with no install.
+    The directory holding the package's ``pyproject.toml``, ``README.md`` and ``src``.
+
+    Found from the modules, so it is the clone's own source tree wherever the package is
+    imported from that source - through an editable install or ``PYTHONPATH``.
+    """
+
+    REPOSITORY_ROOT = SOURCE_TREE.parent
+    """
+    The repository root, which holds the source tree.
     """
 
     STACK_CONFIGURATION = DIRECTORY / "stack.toml"
     """
-    The checked-in stack configuration every run starts from, before any per-user override.
+    The checked-in stack configuration every run starts from, before any per-user
+    override.
     """
 
     BOARD = DIRECTORY / "board.json"
@@ -68,7 +72,7 @@ class PackageLocation(PathEnumeration):
     The exported snapshot of the fork's open pull requests - scratch state, never committed.
     """
 
-    DEPENDENCY_DECLARATION = DIRECTORY / "pyproject.toml"
+    DEPENDENCY_DECLARATION = SOURCE_TREE / "pyproject.toml"
     """
     The package metadata, whose ``[project] dependencies`` this package installs.
     """
@@ -107,9 +111,36 @@ class ProjectLocation(PathEnumeration):
     Where the personal-notes branch keeps everything it holds.
     """
 
-    PACKAGE = Path(PackageLocation.DIRECTORY.value.name)
+    PACKAGE_SOURCE_TREE = PackageLocation.SOURCE_TREE.value.relative_to(
+        PackageLocation.REPOSITORY_ROOT.value
+    )
+    """
+    The directory holding the package's ``pyproject.toml``, ``README.md`` and ``src``.
+    """
+
+    PACKAGE_IMPORT_DIRECTORY = PACKAGE_SOURCE_TREE / "src"
+    """
+    The directory a caller puts on the import path to import this clone's own package.
+    """
+
+    PACKAGE = PACKAGE_IMPORT_DIRECTORY / PackageLocation.DIRECTORY.value.name
     """
     This package's own directory.
+    """
+
+    PACKAGE_ENVIRONMENT = PACKAGE_SOURCE_TREE / ".venv"
+    """
+    The package's own virtual environment, which a session start creates and installs
+    the package into.
+
+    Mirrors ``BASSTLER_ENVIRONMENT_DIRECTORY`` in ``resolve-personal-notes-config.sh``;
+    a test holds the two equal.
+    """
+
+    PACKAGE_ENVIRONMENT_INTERPRETER = PACKAGE_ENVIRONMENT / "bin" / "python"
+    """
+    The interpreter of :attr:`PACKAGE_ENVIRONMENT`, which every caller runs the package
+    with once it exists.
     """
 
     PERSONAL_NOTES_CONFIGURATION_SCRIPT = HOOKS / "resolve-personal-notes-config.sh"
@@ -137,8 +168,8 @@ class ProjectLocation(PathEnumeration):
     """
     Where plans live on the personal-notes branch.
 
-    Mirrors ``PLANS_DIR`` in ``resolve-personal-notes-config.sh``, which is the shell half
-    of the same tooling; a test holds the two equal so the mirror cannot drift.
+    Mirrors ``PLANS_DIR`` in ``resolve-personal-notes-config.sh``, which is the shell
+    half of the same tooling; a test holds the two equal so the mirror cannot drift.
     """
 
     PERSONAL_STACK_CONFIGURATION = PERSONAL_NOTES / "stack.toml"

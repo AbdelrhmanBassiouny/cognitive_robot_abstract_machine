@@ -286,8 +286,9 @@ PLAN_BRANCH_INDEX_PATH="${PLANS_DIR}/_generated/branch-index.tsv"
 # same defined-once reasoning as PLAN_BRANCH_INDEX_PATH above.
 DASHBOARD_URL_CACHE_PATH="${PLANS_DIR}/_generated/dashboard-urls.yaml"
 
-# BASSTLER_PACKAGE_DIRECTORY / *_MODULE / *_FILE: every Python entry point in
-# this system, and the package holding them - defined once, here, so
+# BASSTLER_SOURCE_TREE / BASSTLER_PACKAGE_DIRECTORY / *_MODULE / *_FILE: every
+# Python entry point in this system, and the package holding them - defined
+# once, here, so
 # refresh_dashboard.sh, every plan-*/SKILL.md, and .github/workflows/ci.yml
 # source this file and use these variables instead of each carrying its own
 # separately-typed literal (exactly the drift risk a reviewer flagged after
@@ -297,10 +298,16 @@ DASHBOARD_URL_CACHE_PATH="${PLANS_DIR}/_generated/dashboard-urls.yaml"
 # further path arithmetic of its own.
 #
 # A *_MODULE is an import path rather than a file path, and is run as
-# `python3 -m "${SOME_MODULE}"`. Running one by its file path instead would
-# put the package's own directory on sys.path in place of the project root,
-# so its absolute imports of its siblings would not resolve.
-BASSTLER_PACKAGE_DIRECTORY="basstler"
+# `"${BASSTLER_PYTHON}" -m "${SOME_MODULE}"`, BASSTLER_PYTHON being the
+# package's own interpreter (see resolve_basstler_python below).
+# The source tree holds the package's pyproject.toml and README; the package
+# itself sits under its src directory, as every package in this repository does.
+BASSTLER_SOURCE_TREE="basstler"
+BASSTLER_PACKAGE_DIRECTORY="${BASSTLER_SOURCE_TREE}/src/basstler"
+# Exported so every module a caller runs is this clone's own source - a
+# worktree's or a scratch clone's included - whichever interpreter runs it, and
+# whatever a site-packages install of basstler elsewhere would resolve to.
+export PYTHONPATH="${PROJECT_ROOT}/${BASSTLER_SOURCE_TREE}/src${PYTHONPATH:+:${PYTHONPATH}}"
 # build_dashboard: renders one plan's dashboard HTML from its manifest
 # and live GitHub data - see the module's own docstring.
 BUILD_DASHBOARD_MODULE="basstler.build_dashboard"
@@ -345,14 +352,14 @@ CHECK_SCOPE_OVERLAP_MODULE="basstler.check_scope_overlap"
 # upstream_reviews: reports the review threads a fork branch's upstream
 # pull request has collected, run by the upstream-reviews Action.
 UPSTREAM_REVIEWS_MODULE="basstler.upstream_reviews"
-# dependencies: prints the package's declared dependencies this environment
-# does not have - what missing_dependencies below calls.
+# dependencies: prints the package's requirements an environment does not
+# have - what missing_dependencies below calls.
 BASSTLER_DEPENDENCIES_MODULE="basstler.dependencies"
 # pyproject.toml: the package's own metadata, and the one place its
 # PyYAML/Jinja2/markdown/nh3 dependencies are declared - installed by CI, by an
 # Actions workflow running a module, and by ./session-start.sh on every session
-# start (see install_dependencies below).
-BASSTLER_PYPROJECT_FILE="${BASSTLER_PACKAGE_DIRECTORY}/pyproject.toml"
+# start (see install_basstler_into_environment below).
+BASSTLER_PYPROJECT_FILE="${BASSTLER_SOURCE_TREE}/pyproject.toml"
 # stack.toml: the committed defaults stack.py's load_configuration layers a
 # personal-notes .claude/personal/stack.toml override on top of.
 STACK_CONFIG_FILE="${BASSTLER_PACKAGE_DIRECTORY}/stack.toml"
@@ -533,41 +540,92 @@ tracked_plan_count() {
     | awk -F'\t' 'NF >= 2 { seen[$2] = 1 } END { print length(seen) }'
 }
 
-# %% the package's own dependencies
+# %% the package's own environment
 
-# missing_dependencies: prints the requirement specifiers
-# BASSTLER_PYPROJECT_FILE declares that are not installed, space separated, and
-# nothing at all when every one of them is. Returns 1 without printing when the
-# file or python3 is missing, which is a caller's problem to word rather than
-# this function's.
+# BASSTLER_ENVIRONMENT_DIRECTORY: the package's own virtual environment,
+# gitignored, which session-start.sh creates where it is missing and installs
+# the package into, editable - so it runs this clone's own source, on an
+# interpreter the package supports, whatever python3 happens to be.
+BASSTLER_ENVIRONMENT_DIRECTORY="${BASSTLER_SOURCE_TREE}/.venv"
+BASSTLER_ENVIRONMENT_INTERPRETER="${PROJECT_ROOT}/${BASSTLER_ENVIRONMENT_DIRECTORY}/bin/python"
+# BASSTLER_PYTHON_REQUIREMENT: the interpreters the package supports - the
+# requires-python of BASSTLER_PYPROJECT_FILE, which a test holds this equal to.
+BASSTLER_PYTHON_REQUIREMENT=">=3.12"
+# BASSTLER_INTERPRETER_CANDIDATES: interpreters satisfying that requirement,
+# newest first, tried by name when uv is not there to find or fetch one.
+BASSTLER_INTERPRETER_CANDIDATES="python3.14 python3.13 python3.12"
+
+# resolve_basstler_python: sets BASSTLER_PYTHON, the interpreter every caller
+# runs a module of the package with - the package's environment once it
+# exists, python3 until then. Run on sourcing, and again by session-start.sh
+# once it has created the environment.
+resolve_basstler_python() {
+  if [ -x "${BASSTLER_ENVIRONMENT_INTERPRETER}" ]; then
+    BASSTLER_PYTHON="${BASSTLER_ENVIRONMENT_INTERPRETER}"
+  else
+    BASSTLER_PYTHON="python3"
+  fi
+}
+resolve_basstler_python
+
+# missing_dependencies: prints the requirement specifiers - the package itself,
+# then what BASSTLER_PYPROJECT_FILE declares - that BASSTLER_PYTHON does not
+# have, space separated, and nothing at all when it has every one of them.
+# Returns 1 without printing when the file or the interpreter is missing,
+# which is a caller's problem to word rather than this function's.
 #
 # The reading is BASSTLER_DEPENDENCIES_MODULE's rather than a snippet written
 # out here: it parses a declaration, and parsing embedded in a shell string is
 # code nothing can run on its own or test.
 missing_dependencies() {
-  command -v python3 > /dev/null 2>&1 || return 1
+  command -v "${BASSTLER_PYTHON}" > /dev/null 2>&1 || return 1
   [ -f "${BASSTLER_PYPROJECT_FILE}" ] || return 1
   local missing
   # Its failure is reported rather than echoed, since an empty answer is what
   # a caller reads as "nothing to install".
-  missing="$(python3 -m "${BASSTLER_DEPENDENCIES_MODULE}")" || return 1
+  missing="$("${BASSTLER_PYTHON}" -m "${BASSTLER_DEPENDENCIES_MODULE}")" || return 1
   # Unquoted so the module's one-specifier-per-line output is word split and
   # printed back as one space separated line.
   # shellcheck disable=SC2086
   echo ${missing}
 }
 
-# install_dependencies: installs the specifiers named in $1, leaving pip's own
-# output (both streams) in DEPENDENCY_INSTALL_OUTPUT for a caller to report,
-# and returning pip's exit status.
+# create_basstler_environment: creates BASSTLER_ENVIRONMENT_DIRECTORY from an
+# interpreter satisfying BASSTLER_PYTHON_REQUIREMENT, leaving what the creating
+# tool said in BASSTLER_ENVIRONMENT_OUTPUT and returning its exit status.
 #
-# The specifiers rather than the package itself: installing ./basstler would put
-# a second copy of these modules in site-packages beside the clone's own, and
-# the clone's copy is what the zero-install contract says a caller imports.
-install_dependencies() {
-  local specifiers="$1"
-  # shellcheck disable=SC2086 # each specifier is its own argument to pip.
-  DEPENDENCY_INSTALL_OUTPUT="$(pip install ${specifiers} 2>&1)"
+# uv first, since it can fetch a supported interpreter where none is
+# installed; otherwise the first of BASSTLER_INTERPRETER_CANDIDATES on PATH.
+# Neither installs pip into the environment: install_basstler_into_environment
+# runs the pip on PATH against it instead.
+create_basstler_environment() {
+  local environment_directory="${PROJECT_ROOT}/${BASSTLER_ENVIRONMENT_DIRECTORY}"
+  if command -v uv > /dev/null 2>&1; then
+    BASSTLER_ENVIRONMENT_OUTPUT="$(uv venv --python "${BASSTLER_PYTHON_REQUIREMENT}" \
+      "${environment_directory}" 2>&1)"
+    return
+  fi
+  local candidate
+  for candidate in ${BASSTLER_INTERPRETER_CANDIDATES}; do
+    command -v "${candidate}" > /dev/null 2>&1 || continue
+    BASSTLER_ENVIRONMENT_OUTPUT="$("${candidate}" -m venv --without-pip \
+      "${environment_directory}" 2>&1)"
+    return
+  done
+  BASSTLER_ENVIRONMENT_OUTPUT="neither uv nor any of ${BASSTLER_INTERPRETER_CANDIDATES} is on PATH"
+  return 1
+}
+
+# install_basstler_into_environment: installs the package editable into its
+# environment, which brings every declared dependency with it, leaving pip's own
+# output (both streams) in BASSTLER_INSTALL_OUTPUT for a caller to report, and
+# returning pip's exit status.
+#
+# Editable, so `import basstler` in the environment is this clone's own source
+# rather than a second copy of it in site-packages.
+install_basstler_into_environment() {
+  BASSTLER_INSTALL_OUTPUT="$(pip --python "${BASSTLER_ENVIRONMENT_INTERPRETER}" install \
+    --editable "./${BASSTLER_SOURCE_TREE}" 2>&1)"
 }
 
 # PLAN_STATE_SYNC_STAMP: gitignored file recording the personal-notes commit

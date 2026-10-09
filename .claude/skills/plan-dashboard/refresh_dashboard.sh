@@ -81,11 +81,11 @@ if [ -z "${PLAN_ID}" ] || [ -z "${PLAN_FILE}" ] || [ -z "${ROADMAP_FILE}" ] \
   exit 1
 fi
 
-SYNC_SUMMARY="$(python3 -m "${SYNC_MANIFEST_STATUS_MODULE}" \
+SYNC_SUMMARY="$("${BASSTLER_PYTHON}" -m "${SYNC_MANIFEST_STATUS_MODULE}" \
   --plan "${PLAN_FILE}" \
   --pr-data "${PULL_REQUEST_DATA_FILE}")"
 
-CORRECTED_COUNT="$(python3 -m "${REFRESH_DASHBOARD_SUPPORT_MODULE}" count-corrected "${SYNC_SUMMARY}")"
+CORRECTED_COUNT="$("${BASSTLER_PYTHON}" -m "${REFRESH_DASHBOARD_SUPPORT_MODULE}" count-corrected "${SYNC_SUMMARY}")"
 
 if [ "${CORRECTED_COUNT}" != "0" ]; then
   DESTINATION_PATH="$(plan_manifest_path "${PLAN_ID}")"
@@ -104,6 +104,6 @@ BUILD_ARGUMENTS=(
 if [ -n "${TRACKING_URL}" ]; then
   BUILD_ARGUMENTS+=(--tracking-url "${TRACKING_URL}")
 fi
-BUILD_SUMMARY="$(python3 -m "${BUILD_DASHBOARD_MODULE}" "${BUILD_ARGUMENTS[@]}")"
+BUILD_SUMMARY="$("${BASSTLER_PYTHON}" -m "${BUILD_DASHBOARD_MODULE}" "${BUILD_ARGUMENTS[@]}")"
 
-python3 -m "${REFRESH_DASHBOARD_SUPPORT_MODULE}" merge-summaries "${SYNC_SUMMARY}" "${BUILD_SUMMARY}"
+"${BASSTLER_PYTHON}" -m "${REFRESH_DASHBOARD_SUPPORT_MODULE}" merge-summaries "${SYNC_SUMMARY}" "${BUILD_SUMMARY}"

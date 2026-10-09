@@ -14,15 +14,24 @@ personal-notes remote - no network access or real personal-notes branch involved
 from __future__ import annotations
 
 import os
+import shutil
 import subprocess
+import sys
+import tomllib
 from collections.abc import Mapping
 from pathlib import Path
 
 import pytest
 
+from basstler.dependencies import DependencyDeclaration, PyprojectKey
 from basstler.locations import ProjectLocation
 
-from .constants import DatasetLocation, PersonalNotesPath, ScratchBranch
+from .constants import (
+    DatasetLocation,
+    InterpreterRequirementKey,
+    PersonalNotesPath,
+    ScratchBranch,
+)
 from .executable_stubs import ExecutableStubDirectory, path_hiding_executable
 from .scratch_repository import SCRATCH_IDENTITY, ScratchRepository
 from .session_start_summary import SummaryMessage, summary_message, summary_value
@@ -77,6 +86,7 @@ def session_start_repository(
         "check-setup.sh",
     )
     scratch_repository.install_package()
+    scratch_repository.install_package_environment()
     scratch_repository.write_setup_prerequisites()
     scratch_repository.commit_everything("initial commit")
     scratch_repository.resolve_notes_remote_to()
@@ -344,9 +354,27 @@ def test_a_failing_setup_check_does_not_fail_the_hook(
 # %% the dependencies line
 
 
-DECLARATION_FILE = "basstler/pyproject.toml"
+DECLARATION_FILE = str(ProjectLocation.PACKAGE_SOURCE_TREE / "pyproject.toml")
 """
-Where the scratch clone declares its dependencies, as the summary line names it.
+Where the scratch clone declares its requirements.
+"""
+
+ENVIRONMENT_DIRECTORY = str(ProjectLocation.PACKAGE_ENVIRONMENT)
+"""
+The package's own environment, as the summary line names it.
+"""
+
+SOURCE_TREE_ARGUMENT = f"./{ProjectLocation.PACKAGE_SOURCE_TREE}"
+"""
+What the installer is handed: the source tree, installed editable.
+"""
+
+SUPPORTED_PYTHON = tomllib.loads(
+    DependencyDeclaration.of_this_package().path.read_text()
+)[PyprojectKey.PROJECT][InterpreterRequirementKey.REQUIRES_PYTHON]
+"""
+The interpreters the package supports, as its metadata states them and so as the
+environment has to be asked for.
 """
 
 UNINSTALLABLE_REQUIREMENT = "basstler-no-such-distribution>=1"
@@ -355,24 +383,47 @@ A distribution nothing can have installed, so the run has something to install.
 
 Its own name says why it is here, which matters because a real name that happened to be
 installed on the machine running the suite would make the test pass without exercising
-anything. The version bound is part of it: what the summary names and what the installer
-is handed is the specifier, not the bare name.
+anything. The version bound is part of it: what the summary names is the specifier, not
+the bare name.
 """
 
 
 def require_the_uninstallable(repository: ScratchRepository) -> None:
     """
-    Leave the scratch clone declaring a dependency that is certainly not installed.
+    Leave the scratch clone declaring a dependency that is certainly not installed,
+    beside the package's own name, which is.
 
     :param repository: The fixture-built scratch repository.
     """
     repository.write(
-        DECLARATION_FILE, f'[project]\ndependencies = ["{UNINSTALLABLE_REQUIREMENT}"]\n'
+        DECLARATION_FILE,
+        "[project]\n"
+        f'name = "{DependencyDeclaration.of_this_package().project().specifier}"\n'
+        f'dependencies = ["{UNINSTALLABLE_REQUIREMENT}"]\n',
     )
     repository.commit_everything("declare something that is not installed")
 
 
-def test_installs_nothing_when_every_dependency_is_already_installed(
+def environment_interpreter(repository: ScratchRepository) -> Path:
+    """
+    :param repository: The fixture-built scratch repository.
+    :return: Where the scratch clone's package environment keeps its interpreter.
+    """
+    return repository.project_root / ProjectLocation.PACKAGE_ENVIRONMENT_INTERPRETER
+
+
+def installer_call(repository: ScratchRepository) -> str:
+    """
+    :param repository: The fixture-built scratch repository.
+    :return: The one invocation the installer is expected to receive.
+    """
+    return (
+        f"--python {environment_interpreter(repository)} install --editable "
+        f"{SOURCE_TREE_ARGUMENT}"
+    )
+
+
+def test_installs_nothing_when_every_requirement_is_already_installed(
     session_start_repository: ScratchRepository,
     stub_bin: ExecutableStubDirectory,
     tmp_path: Path,
@@ -392,18 +443,19 @@ def test_installs_nothing_when_every_dependency_is_already_installed(
 
     assert result.returncode == 0, result.stderr
     assert summary_value(result.stdout, "dependencies") == summary_message(
-        SummaryMessage.DEPENDENCIES_ALREADY_INSTALLED, DECLARATION_FILE
+        SummaryMessage.DEPENDENCIES_ALREADY_INSTALLED, ENVIRONMENT_DIRECTORY
     )
     assert not call_log.exists()
 
 
-def test_installs_what_is_missing(
+def test_installs_the_package_into_its_environment_when_a_requirement_is_missing(
     session_start_repository: ScratchRepository,
     stub_bin: ExecutableStubDirectory,
     tmp_path: Path,
 ):
     """
-    A missing requirement is installed without anyone being asked, and the run says so.
+    A missing requirement is installed without anyone being asked, by installing the
+    package editable into its own environment, and the run says so.
     """
     require_the_uninstallable(session_start_repository)
     stub_bin.install("pip")
@@ -419,9 +471,11 @@ def test_installs_what_is_missing(
     assert summary_value(result.stdout, "dependencies") == summary_message(
         SummaryMessage.DEPENDENCIES_INSTALLED,
         UNINSTALLABLE_REQUIREMENT,
-        DECLARATION_FILE,
+        ENVIRONMENT_DIRECTORY,
     )
-    assert call_log.read_text().splitlines() == [f"install {UNINSTALLABLE_REQUIREMENT}"]
+    assert call_log.read_text().splitlines() == [
+        installer_call(session_start_repository)
+    ]
 
 
 def test_reports_a_failed_install_and_finishes_the_run(
@@ -450,6 +504,7 @@ def test_reports_a_failed_install_and_finishes_the_run(
         summary_message(
             SummaryMessage.DEPENDENCIES_INSTALL_FAILED,
             UNINSTALLABLE_REQUIREMENT,
+            ENVIRONMENT_DIRECTORY,
             "",
         ).split(" - ")[0]
     )
@@ -492,6 +547,123 @@ def test_reports_a_missing_installer_without_failing(
 
     assert result.returncode == 0, result.stderr
     assert UNINSTALLABLE_REQUIREMENT in summary_value(result.stdout, "dependencies")
+    assert (session_start_repository.project_root / CLAUDE_LOCAL_MD).exists()
+
+
+# %% creating the package's environment
+
+
+def without_an_environment(repository: ScratchRepository) -> ScratchRepository:
+    """
+    Take the package's environment away, as on a clone no session start has set up.
+
+    :param repository: The fixture-built scratch repository.
+    :return: The same repository.
+    """
+    shutil.rmtree(repository.project_root / ProjectLocation.PACKAGE_ENVIRONMENT)
+    return repository
+
+
+def test_creates_the_environment_with_uv_and_installs_the_package_into_it(
+    session_start_repository: ScratchRepository,
+    stub_bin: ExecutableStubDirectory,
+    tmp_path: Path,
+):
+    """
+    A clone with no environment gets one from ``uv``, asked for an interpreter the
+    package supports, with the package installed into it.
+    """
+    without_an_environment(session_start_repository)
+    stub_bin.install("uv")
+    stub_bin.install("pip")
+    environment_log = tmp_path / "uv-calls"
+    install_log = tmp_path / "pip-calls"
+
+    result = publish_and_run(
+        session_start_repository,
+        PATH=stub_bin.ahead_of(os.environ.get("PATH", "")),
+        STUB_UV_CALL_LOG=str(environment_log),
+        STUB_UV_PYTHON=sys.executable,
+        STUB_PIP_CALL_LOG=str(install_log),
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert summary_value(result.stdout, "dependencies") == summary_message(
+        SummaryMessage.DEPENDENCIES_ENVIRONMENT_CREATED,
+        ENVIRONMENT_DIRECTORY,
+        SOURCE_TREE_ARGUMENT,
+    )
+    assert environment_log.read_text().splitlines() == [
+        f"venv --python {SUPPORTED_PYTHON} "
+        f"{session_start_repository.project_root / ProjectLocation.PACKAGE_ENVIRONMENT}"
+    ]
+    assert install_log.read_text().splitlines() == [
+        installer_call(session_start_repository)
+    ]
+
+
+def test_creates_the_environment_from_an_interpreter_found_by_name_without_uv(
+    session_start_repository: ScratchRepository,
+    stub_bin: ExecutableStubDirectory,
+    tmp_path: Path,
+):
+    """
+    Without ``uv``, the environment is made from an interpreter on the path that the
+    package supports - a real one, so the environment is a real one too.
+    """
+    without_an_environment(session_start_repository)
+    stub_bin.install("pip")
+
+    result = publish_and_run(
+        session_start_repository,
+        PATH=stub_bin.ahead_of(path_hiding_executable("uv", tmp_path)),
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert summary_value(result.stdout, "dependencies") == summary_message(
+        SummaryMessage.DEPENDENCIES_ENVIRONMENT_CREATED,
+        ENVIRONMENT_DIRECTORY,
+        SOURCE_TREE_ARGUMENT,
+    )
+    version = subprocess.run(
+        [
+            environment_interpreter(session_start_repository),
+            "-c",
+            "import sys; print(sys.version_info >= (3, 12))",
+        ],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    assert version.stdout.strip() == str(True)
+
+
+def test_reports_an_environment_it_could_not_create_and_finishes_the_run(
+    session_start_repository: ScratchRepository,
+    stub_bin: ExecutableStubDirectory,
+):
+    """
+    An environment that cannot be made - no supported interpreter, no network for
+    ``uv`` to fetch one - is reported, nothing is installed, and the run carries on.
+    """
+    without_an_environment(session_start_repository)
+    stub_bin.install("uv")
+
+    result = publish_and_run(
+        session_start_repository,
+        PATH=stub_bin.ahead_of(os.environ.get("PATH", "")),
+        STUB_UV_STATUS="1",
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert summary_value(result.stdout, "dependencies").startswith(
+        summary_message(
+            SummaryMessage.DEPENDENCIES_ENVIRONMENT_NOT_CREATED,
+            ENVIRONMENT_DIRECTORY,
+            "",
+        ).split(" - ")[0]
+    )
+    assert not environment_interpreter(session_start_repository).exists()
     assert (session_start_repository.project_root / CLAUDE_LOCAL_MD).exists()
 
 
