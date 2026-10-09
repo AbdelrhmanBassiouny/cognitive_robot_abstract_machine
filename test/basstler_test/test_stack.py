@@ -19,11 +19,13 @@ from pathlib import Path
 
 import pytest
 
+import basstler.maintenance
 import basstler.stack
+from basstler.locations import PackageLocation, ProjectLocation
 from basstler.maintenance_git_commands import GitCommandRunner
+from basstler.repository import Repository
 from basstler.stack import (
     AmbiguousForkRemoteError,
-    BOARD_PATH,
     CommitMoveAction,
     Command,
     BranchStatus,
@@ -32,7 +34,6 @@ from basstler.stack import (
     ExitCode,
     ForkRemoteNotFoundError,
     LabelWrite,
-    MalformedRepositoryError,
     IntegrationStrategy,
     CommitMoveChecks,
     ProposedCommitMove,
@@ -40,12 +41,9 @@ from basstler.stack import (
     PromotionLink,
     PromotionLinkTooLongError,
     PullRequest,
-    CONFIGURATION_PATH,
     Remote,
     Reparent,
-    Repository,
-    ENTRY_POINT_NAME,
-    TOOLING_DIRECTORY,
+    PinnedTooling,
     WorkingTreeTooling,
     build_stack,
     derive_status,
@@ -60,7 +58,7 @@ from basstler.stack import (
     restack_plan,
 )
 
-from .constants import REPOSITORY_ROOT
+from .constants import StackLabel
 from .scratch_repository import ScratchRepository
 from .script_runner import PythonModuleRunner
 
@@ -82,9 +80,9 @@ so its absolute imports of its siblings would not resolve.
 
 def make_configuration(upstream_setup_command: str | None = None) -> Configuration:
     return Configuration(
-        in_review_label="in-review",
-        rebase_label="rebase",
-        needs_resolution_label="needs-resolution",
+        in_review_label=StackLabel.IN_REVIEW,
+        rebase_label=StackLabel.REBASE,
+        needs_resolution_label=StackLabel.NEEDS_RESOLUTION,
         fork_repository=Repository("a-fork-owner", "a-fork"),
         fork_remote="origin",
         upstream_repository=Repository("an-upstream-owner", "a-project"),
@@ -129,7 +127,7 @@ def test_drafted_is_draft():
 
 def test_in_review_derived_from_label():
     stack = build(
-        [PullRequest(3, "feature", "main", draft=False, labels=["in-review"])]
+        [PullRequest(3, "feature", "main", draft=False, labels=[StackLabel.IN_REVIEW])]
     )
     assert stack.branches[0].status == BranchStatus.IN_REVIEW
 
@@ -142,7 +140,7 @@ def test_merged_derived_from_predicate_not_labels():
 
 
 def test_rebase_label_sets_strategy():
-    stack = build([PullRequest(1, "f", "main", draft=True, labels=["rebase"])])
+    stack = build([PullRequest(1, "f", "main", draft=True, labels=[StackLabel.REBASE])])
     assert stack.branches[0].strategy == IntegrationStrategy.REBASE
     stack = build([PullRequest(1, "f", "main", draft=True, labels=[])])
     assert stack.branches[0].strategy == IntegrationStrategy.MERGE
@@ -188,7 +186,7 @@ def test_child_promotable_once_parent_reaches_review():
     # its own parent the moment the parent has reached in-review - it does not have to
     # wait for the parent to fully merge.
     prs = [
-        PullRequest(1, "parent", "main", draft=False, labels=["in-review"]),
+        PullRequest(1, "parent", "main", draft=False, labels=[StackLabel.IN_REVIEW]),
         PullRequest(2, "child", "parent", draft=False),
     ]
     assert next_to_promote(build(prs)).name == "child"
@@ -219,7 +217,9 @@ def test_promotion_order_withholds_a_branch_delegated_for_conflict_resolution():
     # a branch the routine delegated (needs-resolution) is stuck mid-restack, so it must
     # not be promoted even though it is otherwise ready and unblocked.
     prs = [
-        PullRequest(1, "stuck", "main", draft=False, labels=["needs-resolution"]),
+        PullRequest(
+            1, "stuck", "main", draft=False, labels=[StackLabel.NEEDS_RESOLUTION]
+        ),
         PullRequest(2, "fine", "main", draft=False),
     ]
     names = [b.name for b in promotion_order(build(prs))]
@@ -249,7 +249,7 @@ def test_ci_and_session_carried_onto_branch():
 def test_restack_plan_excludes_merged_only():
     prs = [
         PullRequest(1, "landed", "main", draft=False),
-        PullRequest(2, "review", "main", draft=False, labels=["in-review"]),
+        PullRequest(2, "review", "main", draft=False, labels=[StackLabel.IN_REVIEW]),
         PullRequest(3, "wip", "review", draft=True),
     ]
     plan = restack_plan(build(prs, merged={"landed"}))
@@ -259,9 +259,15 @@ def test_restack_plan_excludes_merged_only():
 
 
 def test_restack_plan_carries_parent_and_strategy():
-    prs = [PullRequest(2, "wip", "base-branch", draft=True, labels=["rebase"])]
+    prs = [PullRequest(2, "wip", "base-branch", draft=True, labels=[StackLabel.REBASE])]
     plan = restack_plan(build(prs))
-    assert plan == [{"branch": "wip", "parent": "base-branch", "strategy": "rebase"}]
+    assert plan == [
+        {
+            "branch": "wip",
+            "parent": "base-branch",
+            "strategy": IntegrationStrategy.REBASE,
+        }
+    ]
 
 
 def test_restack_plan_reparents_child_of_merged_parent_onto_base():
@@ -347,7 +353,9 @@ def test_load_configuration_layers_personal_notes_override_on_top_of_defaults(
 ):
     configuration_path = _committed_configuration_path(scratch_repository)
     scratch_repository.publish_notes_branch(
-        {".claude/personal/stack.toml": 'upstream_remote = "my-fork-cram2"\n'}
+        {
+            ProjectLocation.PERSONAL_STACK_CONFIGURATION: 'upstream_remote = "my-fork-cram2"\n'
+        }
     )
     scratch_repository.resolve_notes_remote_to()
     monkeypatch.chdir(scratch_repository.project_root)
@@ -399,7 +407,9 @@ def test_load_configuration_takes_the_fork_from_a_personal_notes_override(
         "remote", "add", "another", "https://github.com/someone-else/their-fork.git"
     )
     scratch_repository.publish_notes_branch(
-        {".claude/personal/stack.toml": 'fork_repository = "someone-else/their-fork"\n'}
+        {
+            ProjectLocation.PERSONAL_STACK_CONFIGURATION: 'fork_repository = "someone-else/their-fork"\n'
+        }
     )
     scratch_repository.resolve_notes_remote_to()
     monkeypatch.chdir(scratch_repository.project_root)
@@ -408,53 +418,6 @@ def test_load_configuration_takes_the_fork_from_a_personal_notes_override(
 
     assert configuration.fork_repository == Repository("someone-else", "their-fork")
     assert configuration.fork_remote == "another"
-
-
-# %% repository references
-
-
-def test_repository_splits_a_reference_into_owner_and_name():
-    assert Repository.parse("an-owner/a-repository") == Repository(
-        "an-owner", "a-repository"
-    )
-
-
-def test_repository_round_trips_through_the_form_github_uses():
-    assert str(Repository.parse("an-owner/a-repository")) == "an-owner/a-repository"
-
-
-@pytest.mark.parametrize("malformed", ["no-separator", "/no-owner", "no-name/"])
-def test_repository_rejects_a_reference_that_is_not_owner_and_name(malformed: str):
-    """
-    A half-parsed reference would silently target the wrong repository.
-    """
-    with pytest.raises(MalformedRepositoryError):
-        Repository.parse(malformed)
-
-
-@pytest.mark.parametrize(
-    "url",
-    [
-        "https://github.com/an-owner/a-repository.git",
-        "https://github.com/an-owner/a-repository",
-        "git@github.com:an-owner/a-repository.git",
-        "http://127.0.0.1:41729/git/an-owner/a-repository",
-    ],
-)
-def test_repository_reads_the_owner_and_name_from_a_remote_url(url: str):
-    """
-    Every shape a fork remote takes names the same repository.
-
-    A cloud session reaches GitHub through a local proxy, so the URL it sees shares
-    neither host nor scheme with the one a laptop clone has.
-    """
-    assert Repository.from_remote_url(url) == Repository("an-owner", "a-repository")
-
-
-@pytest.mark.parametrize("malformed", ["", "https://github.com/only-one-segment"])
-def test_repository_rejects_a_remote_url_naming_no_repository(malformed: str):
-    with pytest.raises(MalformedRepositoryError):
-        Repository.from_remote_url(malformed)
 
 
 # %% resolving which remote is the fork
@@ -582,9 +545,9 @@ def test_every_setting_is_printed_under_its_own_field_name(capsys):
     printed = dict(line.split("\t") for line in capsys.readouterr().out.splitlines())
 
     assert printed == {
-        "in_review_label": "in-review",
-        "rebase_label": "rebase",
-        "needs_resolution_label": "needs-resolution",
+        "in_review_label": StackLabel.IN_REVIEW,
+        "rebase_label": StackLabel.REBASE,
+        "needs_resolution_label": StackLabel.NEEDS_RESOLUTION,
         "fork_repository": "a-fork-owner/a-fork",
         "fork_remote": "origin",
         "upstream_repository": "an-upstream-owner/a-project",
@@ -647,8 +610,8 @@ def a_deep_stack_beside_an_independent_branch(
             name,
             parent,
             draft=name not in approved,
-            labels=(["in-review"] if name in promoted else [])
-            + (["needs-resolution"] if name in withheld else []),
+            labels=([StackLabel.IN_REVIEW] if name in promoted else [])
+            + ([StackLabel.NEEDS_RESOLUTION] if name in withheld else []),
         )
         for number, (name, parent) in enumerate([*deep, *aside], start=1)
     ]
@@ -1113,7 +1076,7 @@ def offline_checkout(scratch_repository: ScratchRepository) -> ScratchRepository
 
 
 def run_stack(
-    checkout: ScratchRepository, *arguments: str, tool: Path | None = None
+    checkout: ScratchRepository, *arguments: str, pinned: PinnedTooling | None = None
 ) -> subprocess.CompletedProcess[str]:
     """
     Invoke the tool as a caller does, so its exit status is exercised rather than
@@ -1121,20 +1084,20 @@ def run_stack(
 
     :param checkout: The repository to run in.
     :param arguments: The command and its flags.
-    :param tool: Which copy of the tool to invoke, when it is not the checkout's own
-        installed package - the working tree's own committed copy, or a copy pinned
-        outside it.
+    :param pinned: A pinned copy to run instead of the checkout's own, put on the import
+        path ahead of the working directory, as the skill runs it.
     :return: The finished subprocess.
     """
-    if tool is None:
+    if pinned is None:
         return PythonModuleRunner(
             project_root=checkout.project_root, module_name=STACK_MODULE
         ).run(*arguments)
     return subprocess.run(
-        [sys.executable, str(tool), *arguments],
+        [sys.executable, "-P", "-m", STACK_MODULE, *arguments],
         capture_output=True,
         text=True,
         cwd=checkout.project_root,
+        env={**os.environ, "PYTHONPATH": str(pinned.root)},
     )
 
 
@@ -1153,26 +1116,35 @@ def test_a_label_write_prints_the_complete_set_one_label_per_line(
         offline_checkout,
         "labels",
         "--current",
-        "in-review",
+        StackLabel.IN_REVIEW,
         "--current",
-        "bug",
+        StackLabel.BUG,
         "--add",
-        "rebase",
+        StackLabel.REBASE,
     )
 
     assert result.returncode == ExitCode.SUCCESS
-    assert result.stdout.splitlines() == ["in-review", "bug", "rebase"]
+    assert result.stdout.splitlines() == [
+        StackLabel.IN_REVIEW,
+        StackLabel.BUG,
+        StackLabel.REBASE,
+    ]
 
 
 def test_a_contradictory_label_write_is_refused_rather_than_guessed_at(
     offline_checkout: ScratchRepository,
 ):
     result = run_stack(
-        offline_checkout, "labels", "--add", "rebase", "--remove", "rebase"
+        offline_checkout,
+        "labels",
+        "--add",
+        StackLabel.REBASE,
+        "--remove",
+        StackLabel.REBASE,
     )
 
     assert result.returncode == ExitCode.USAGE
-    assert "rebase" in result.stderr
+    assert StackLabel.REBASE in result.stderr
 
 
 def test_a_checkout_whose_fork_cannot_be_identified_says_so_by_status(
@@ -1275,6 +1247,11 @@ Named for what it is to a pass: one more branch to restack, which happens to car
 own copy of the tool.
 """
 
+ENTRY_POINT_NAME = Path(basstler.stack.__file__).name
+"""
+The tool's own file, which a pinned copy keeps the name of.
+"""
+
 MAINTENANCE_EXECUTOR_NAME = "maintenance.py"
 """
 The executor beside the tool, which a pinned copy has to be able to run as well.
@@ -1320,7 +1297,9 @@ class ToolingCheckout:
         :param repository: The checkout to install into.
         :return: The checkout, and where its copy of the tool now sits.
         """
-        directory = TOOLING_DIRECTORY.relative_to(REPOSITORY_ROOT)
+        directory = PackageLocation.DIRECTORY.value.relative_to(
+            PackageLocation.REPOSITORY_ROOT.value
+        )
         for source in WorkingTreeTooling().files:
             repository.write(str(directory / source.name), source.read_text())
         repository.commit_everything("carry the stack tooling")
@@ -1348,15 +1327,17 @@ class ToolingCheckout:
             A_BRANCH_CARRYING_ANOTHER_VERSION, A_BRANCH_CARRYING_ANOTHER_VERSION
         )
 
-    def pin_the_tool(self) -> Path:
+    def pin_the_tool(self) -> PinnedTooling:
         """
         Pin the tool the way step 0 of a pass does, from the checkout's own copy.
 
-        :return: The pinned copy's entry point, as printed on stdout.
+        :return: The pinned copy, as printed on stdout.
         """
-        result = run_stack(self.repository, Command.PIN_TOOLING, tool=self.tool)
+        result = run_stack(self.repository, Command.PIN_TOOLING)
         assert result.returncode == ExitCode.SUCCESS, result.stderr
-        return Path(result.stdout.strip())
+        return PinnedTooling(
+            Path(result.stdout.strip()) / PackageLocation.DIRECTORY.value.name
+        )
 
 
 @pytest.fixture
@@ -1401,7 +1382,6 @@ def test_a_branch_switch_replaces_the_tool_in_the_working_tree(
         Command.LABELS,
         "--add",
         A_LABEL_THIS_TOOL_NEVER_WRITES,
-        tool=tooling_checkout.tool,
     )
 
     assert result.returncode == ExitCode.USAGE
@@ -1422,7 +1402,7 @@ def test_the_pinned_tool_answers_after_a_branch_switch_replaced_the_working_tree
         Command.LABELS,
         "--add",
         A_LABEL_THIS_TOOL_NEVER_WRITES,
-        tool=pinned,
+        pinned=pinned,
     )
     assert result.returncode == ExitCode.SUCCESS
     assert result.stdout.split() == [A_LABEL_THIS_TOOL_NEVER_WRITES]
@@ -1436,7 +1416,7 @@ def test_the_pinned_copy_lies_outside_the_checkout_it_was_taken_from(
     """
     pinned = tooling_checkout.pin_the_tool()
 
-    assert not pinned.is_relative_to(tooling_checkout.repository.project_root)
+    assert not pinned.root.is_relative_to(tooling_checkout.repository.project_root)
 
 
 def test_every_file_beside_the_tool_is_pinned_with_it(tmp_path: Path):
@@ -1446,7 +1426,7 @@ def test_every_file_beside_the_tool_is_pinned_with_it(tmp_path: Path):
     """
     beside_the_tool = {
         ENTRY_POINT_NAME,
-        CONFIGURATION_PATH.name,
+        PackageLocation.STACK_CONFIGURATION.value.name,
         MAINTENANCE_EXECUTOR_NAME,
     }
     source = a_tooling_directory(tmp_path / "source", beside_the_tool)
@@ -1462,78 +1442,41 @@ def test_the_board_snapshot_is_left_behind_rather_than_pinned(tmp_path: Path):
     next pass exported its own - and stale in a way nothing downstream could see.
     """
     source = a_tooling_directory(
-        tmp_path / "source", {ENTRY_POINT_NAME, BOARD_PATH.name}
+        tmp_path / "source", {ENTRY_POINT_NAME, PackageLocation.BOARD.value.name}
     )
 
     pinned = WorkingTreeTooling(source).pin_to(tmp_path / "pinned")
 
-    assert not (pinned.directory / BOARD_PATH.name).exists()
+    assert not (pinned.directory / PackageLocation.BOARD.value.name).exists()
 
 
 def test_the_pinned_copy_carries_what_the_maintenance_executor_imports(tmp_path: Path):
     """
-    The executor runs out of the pinned directory too, importing the tool and every
-    module beside it, so a copy it cannot start from is not a pinned tool.
+    The executor runs out of the pinned copy too, importing the tool and every module
+    beside it, so a copy it cannot start from is not a pinned tool.
 
-    Those imports are absolute (``basstler.maintenance_board`` and its siblings), so the
-    copy's own parent - the directory holding the pinned ``basstler/`` - has to be on the
-    import path, exactly as it is for the checkout's own copy.
+    Run from a directory holding no checkout, so the only ``basstler`` it can import is
+    the copy.
     """
     pinned = WorkingTreeTooling().pin_to(tmp_path / "pinned")
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
 
     result = subprocess.run(
-        [sys.executable, str(pinned.directory / MAINTENANCE_EXECUTOR_NAME), "--help"],
+        [
+            sys.executable,
+            "-P",
+            "-m",
+            basstler.maintenance.__name__,
+            "--help",
+        ],
         capture_output=True,
         text=True,
-        env={**os.environ, "PYTHONPATH": str(pinned.directory.parent)},
+        cwd=elsewhere,
+        env={**os.environ, "PYTHONPATH": str(pinned.root)},
     )
 
     assert result.returncode == ExitCode.SUCCESS, result.stderr
-
-
-def test_a_sibling_directory_the_tool_imports_from_is_pinned_with_it(tmp_path: Path):
-    """
-    The tool is not always one directory.
-
-    A module beside it may put a sibling on the import path, and a copy without that sibling is a program that cannot start - so the
-    copy keeps the tool where it stood relative to what it imports, and the same insert
-    resolves inside the copy.
-    """
-    tree = tmp_path / "tree"
-    shared = tree / "shared"
-    shared.mkdir(parents=True)
-    (shared / "carried.py").write_text("ANSWER = 'carried'\n")
-    tooling = a_tooling_directory(tree / "stack", {ENTRY_POINT_NAME})
-    (tooling / ENTRY_POINT_NAME).write_text(
-        "import sys\n"
-        "from pathlib import Path\n"
-        "sys.path.insert(0, str(Path(__file__).parent.parent / 'shared'))\n"
-        "from carried import ANSWER\n"
-        "print(ANSWER)\n"
-    )
-
-    pinned = WorkingTreeTooling(tooling).pin_to(tmp_path / "pinned")
-
-    answered = subprocess.run(
-        [sys.executable, str(pinned.entry_point)], capture_output=True, text=True
-    )
-    assert answered.returncode == 0, answered.stderr
-    assert answered.stdout.strip() == "carried"
-
-
-def test_a_directory_the_tool_never_imports_from_is_left_where_it_is(tmp_path: Path):
-    """
-    Pinning a sibling nothing reaches would copy whatever happens to sit beside the
-    tool, which on a real checkout is most of the repository.
-    """
-    tree = tmp_path / "tree"
-    (tree / "unrelated").mkdir(parents=True)
-    (tree / "unrelated" / "elsewhere.py").write_text("")
-    tooling = a_tooling_directory(tree / "stack", {ENTRY_POINT_NAME})
-
-    pinned = WorkingTreeTooling(tooling).pin_to(tmp_path / "pinned")
-
-    assert not (pinned.directory.parent / "unrelated").exists()
 
 
 def test_pinning_the_same_tool_twice_names_the_same_copy(tmp_path: Path):
@@ -1546,7 +1489,7 @@ def test_pinning_the_same_tool_twice_names_the_same_copy(tmp_path: Path):
     first = WorkingTreeTooling(source).pin_to(root)
     second = WorkingTreeTooling(source).pin_to(root)
 
-    assert first.entry_point == second.entry_point
+    assert first.root == second.root
 
 
 def test_a_tool_that_differs_is_pinned_beside_rather_than_over_the_other_copy(

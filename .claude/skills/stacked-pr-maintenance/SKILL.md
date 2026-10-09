@@ -111,18 +111,17 @@ from a copy of the tooling that no branch carries:
 python -m basstler.stack pin-tooling
 ```
 
-It prints one path: the copy's `stack.py`, in a directory outside this checkout, with
-`maintenance.py` and every module beside it - and, where the tool imports from a sibling
-directory, that sibling copied alongside so the same import resolves inside the copy. **Every command below written as `<pinned>/…` means
-that directory** - substitute the real path in each time you run one, since a shell variable does
-not survive from one command to the next. `stack.py` imports nothing of its own siblings, so
-invoking it there by path is enough on its own; `maintenance.py` imports `basstler.*` absolutely, so
-a command naming it also carries `PYTHONPATH` set to the pinned directory's own parent - the same
-directory that makes `basstler` importable for the checkout's own copy:
+It prints one path: a directory outside this checkout holding a copy of `basstler/`. **Every command
+below written with `<pinned>` means that path** - substitute the real one in each time you run a
+command, since a shell variable does not survive from one command to the next. The tool runs as a
+module, with the copy put on the import path ahead of everything else:
 
 ```bash
-PYTHONPATH="$(dirname <pinned>)" python <pinned>/maintenance.py …
+PYTHONPATH=<pinned> python -P -m basstler.maintenance …
 ```
+
+`-P` stops the current directory being put on the import path first, which would otherwise make the
+checkout's own `basstler` win over the copy.
 
 Pin rather than keep calling `basstler/`, because that directory is tracked content: the copy in the
 working tree is whichever version the checked-out branch carries, and the branches of a stack differ
@@ -151,7 +150,7 @@ below are the mirror image: they have no MCP tool, so they do need curl.
 Export the board first - every step below derives from it, and this one is no exception:
 
 ```bash
-PYTHONPATH="$(dirname <pinned>)" python <pinned>/maintenance.py board --write
+PYTHONPATH=<pinned> python -P -m basstler.maintenance board --write
 ```
 
 Never assemble that file by hand - a fetch that drops a field produces a board that is wrong rather
@@ -160,7 +159,7 @@ than obviously incomplete.
 Then run:
 
 ```bash
-python <pinned>/stack.py reparents
+PYTHONPATH=<pinned> python -P -m basstler.stack reparents
 ```
 
 It prints one `branch<TAB>pr<TAB>current base<TAB>target base` line per open pull request whose base
@@ -199,7 +198,7 @@ leave the rest untouched, and report it: this is a preview API, so never improvi
 The rest of the pass is one command:
 
 ```bash
-PYTHONPATH="$(dirname <pinned>)" python <pinned>/maintenance.py run-report --json
+PYTHONPATH=<pinned> python -P -m basstler.maintenance run-report --json
 ```
 
 It performs the fast-forward, the restack and the promotion, and emits the whole run as one
@@ -242,7 +241,7 @@ yourself.
 - **It never debugs or fixes a red check.** Report it to the branch's owner the same way a conflict
   is reported: find the session link in the fork pull request's description, post a comment prefixed
   `🔴 ROUTINE - NEEDS RESOLUTION:` stating the failing check and its conclusion, and label the pull
-  request `needs-resolution` via `<pinned>/stack.py labels` so the rest of its labels survive. That comment is
+  request `needs-resolution` via the pinned `basstler.stack labels` so the rest of its labels survive. That comment is
   the only channel available to you: no session subscribes to a pull request's activity, so it sits
   on GitHub until the owner reads it - write it to stand alone. Never disable a check to go green.
 - **It never subscribes to learn CI.** Poll with `pull_request_read` → `get_check_runs` /
@@ -260,7 +259,7 @@ guaranteed to be seen.
 
 The **top** of the finish summary must list all pending upstream create-links: any built this run,
 and any fork pull request still carrying `cram2-link-sent` but not yet `in-review` (re-listed from
-prior runs, its link rebuilt with `<pinned>/stack.py promotion-link`). This section appears at the top even when
+prior runs, its link rebuilt with the pinned `basstler.stack promotion-link`). This section appears at the top even when
 nothing new was built, as long as any are pending - a scheduled run is configured to email its
 summary, so the summary *is* the delivery. List each pull request's number, title, branch and
 one-click link.
@@ -280,10 +279,10 @@ when a single step has to be re-run. `<pinned>` is still step 0c's copy; a sessi
 else's run pins its own first, since the path the other run printed is not in front of you:
 
 ```bash
-PYTHONPATH="$(dirname <pinned>)" python <pinned>/maintenance.py board --write   # export the fork's open pull requests
-PYTHONPATH="$(dirname <pinned>)" python <pinned>/maintenance.py fast-forward    # move the fork's base onto the upstream
-PYTHONPATH="$(dirname <pinned>)" python <pinned>/maintenance.py restack         # integrate every moved parent, publish, report
-PYTHONPATH="$(dirname <pinned>)" python <pinned>/maintenance.py promote         # build and record every upstream link
+PYTHONPATH=<pinned> python -P -m basstler.maintenance board --write   # export the fork's open pull requests
+PYTHONPATH=<pinned> python -P -m basstler.maintenance fast-forward    # move the fork's base onto the upstream
+PYTHONPATH=<pinned> python -P -m basstler.maintenance restack         # integrate every moved parent, publish, report
+PYTHONPATH=<pinned> python -P -m basstler.maintenance promote         # build and record every upstream link
 ```
 
 Each prints what it did and exits with the same statuses as the whole pass. Run `--help` for a
@@ -297,7 +296,7 @@ Never move commits from memory, and never judge the move yourself. The executor 
 it makes; you invoke this only for a push you are making yourself:
 
 ```bash
-python <pinned>/stack.py check-move \
+PYTHONPATH=<pinned> python -P -m basstler.stack check-move \
   --action push --source <branch> --destination <branch> --destination-remote <fork-remote>
 ```
 

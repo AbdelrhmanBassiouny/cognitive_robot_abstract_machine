@@ -14,7 +14,9 @@ from pathlib import Path
 
 import pytest
 
-from .constants import NOTES_BRANCH, PersonalNotesPath
+from basstler.locations import ProjectLocation
+
+from .constants import PersonalNotesPath, ScratchBranch
 from .scratch_repository import (
     SCRATCH_IDENTITY,
     ScratchRepository,
@@ -136,7 +138,7 @@ def check_setup_repository(scratch_repository: ScratchRepository) -> ScratchRepo
     scratch_repository.commit_everything("initial commit")
     scratch_repository.publish_notes_branch(
         {
-            PersonalNotesPath.NOTES_FILE: "my notes\n",
+            ProjectLocation.PERSONAL_NOTES_DOCUMENT: "my notes\n",
             PersonalNotesPath.GIT_IDENTITY: SCRATCH_IDENTITY.as_git_config_file(),
         }
     )
@@ -213,18 +215,14 @@ def test_does_not_check_for_the_notes_file_when_its_branch_is_missing(
 def test_reports_a_notes_branch_that_exists_but_holds_no_notes_file(
     check_setup_repository: ScratchRepository,
 ):
-    check_setup_repository.run_git(
-        "config", "claude.personalNotesPath", ".claude/personal/some-other-notes.md"
-    )
+    other_notes = str(ProjectLocation.PERSONAL_NOTES / "some-other-notes.md")
+    check_setup_repository.run_git("config", "claude.personalNotesPath", other_notes)
 
     report = run_check_setup(check_setup_repository)
     assert report.exit_code == 1
     assert report.results[SetupCheck.NOTES_BRANCH].status == CheckStatus.OK
     assert report.results[SetupCheck.NOTES_FILE].status == CheckStatus.NEEDS_SETUP
-    assert (
-        ".claude/personal/some-other-notes.md"
-        in report.results[SetupCheck.NOTES_FILE].detail
-    )
+    assert other_notes in report.results[SetupCheck.NOTES_FILE].detail
 
 
 # %% who commits here would be authored as
@@ -310,23 +308,22 @@ def test_reports_which_source_each_resolved_setting_came_from(
         in report.results[SetupCheck.NOTES_REMOTE].detail
     )
     assert report.results[SetupCheck.NOTES_BRANCH_NAME].detail == (
-        f"{NOTES_BRANCH} (from built-in default)"
+        f"{ScratchBranch.PERSONAL_NOTES} (from built-in default)"
     )
     assert report.results[SetupCheck.NOTES_PATH].detail == (
-        f"{PersonalNotesPath.NOTES_FILE} (from built-in default)"
+        f"{ProjectLocation.PERSONAL_NOTES_DOCUMENT} (from built-in default)"
     )
 
 
 def test_reports_a_setting_resolved_from_the_environment(
     check_setup_repository: ScratchRepository,
 ):
+    notes_path = str(ProjectLocation.PERSONAL_NOTES / "from-the-environment.md")
     report = run_check_setup(
-        check_setup_repository,
-        CLAUDE_PERSONAL_NOTES_PATH=".claude/personal/from-the-environment.md",
+        check_setup_repository, CLAUDE_PERSONAL_NOTES_PATH=notes_path
     )
     assert report.results[SetupCheck.NOTES_PATH].detail == (
-        ".claude/personal/from-the-environment.md"
-        " (from environment variable CLAUDE_PERSONAL_NOTES_PATH)"
+        f"{notes_path} (from environment variable CLAUDE_PERSONAL_NOTES_PATH)"
     )
 
 
@@ -354,7 +351,9 @@ def test_reports_which_tooling_files_this_checkout_is_missing(
 def test_reports_a_session_start_hook_that_is_not_registered(
     check_setup_repository: ScratchRepository,
 ):
-    check_setup_repository.write(".claude/settings.json", "{}\n")
+    check_setup_repository.write(
+        ProjectLocation.CLAUDE_CODE_DIRECTORY / "settings.json", "{}\n"
+    )
 
     report = run_check_setup(check_setup_repository)
     assert report.exit_code == 1

@@ -78,7 +78,7 @@ next to the workflow it describes, because it is read rather than run.
   - `python -m basstler.stack landed` - one `name<TAB>pr` line per open fork PR whose branch
     is already in the upstream base. Reporting only: fast-forwarding the fork's copy of the
     upstream base is what actually closes them.
-  - `python .claude/stack/stack.py pin-tooling` - copies this directory to a path outside the
+  - `python -m basstler.stack pin-tooling` - copies this directory to a path outside the
     checkout and prints the copy's `stack.py`. A pass switches branches, and this directory is
     tracked content, so the branch checked out at any moment decides which version of the tooling
     answers; a pass that pins first is driven by one version from beginning to end. The board is

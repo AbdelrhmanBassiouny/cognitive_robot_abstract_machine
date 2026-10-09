@@ -37,19 +37,16 @@ by itself once its head is contained in its base, so nothing here has to close o
 ``pin-tooling`` exists because this directory is tracked content: whichever branch a checkout is on
 decides which version of the tool answers, so a run that switches branches can be driven by two
 versions without noticing. It copies the tool where no checkout carries it and prints the copy to
-invoke, so what starts a run is what finishes it.
+run, so what starts a run is what finishes it.
 """
 
 from __future__ import annotations
 
 import argparse
-import ast
 import hashlib
 import json
-import os
 import shutil
 import subprocess
-import sys
 import tempfile
 import tomllib
 from collections.abc import Callable, Iterable, Mapping
@@ -59,104 +56,16 @@ from pathlib import Path
 from typing import ClassVar
 from urllib.parse import quote
 
+from basstler.locations import PackageLocation, ProjectLocation
+from basstler.repository import Repository
+from basstler.standard_streams import StandardStreamHandler
+
+logger = StandardStreamHandler.logger_for(__name__)
+"""
+This module's logger, which is also what its command prints through.
+"""
+
 # %% configuration
-
-CONFIGURATION_PATH = Path(__file__).with_name("stack.toml")
-"""The checked-in configuration every run starts from, before any per-user override."""
-
-BOARD_PATH = Path(__file__).with_name("board.json")
-"""Where the exported snapshot of the fork's open pull requests is read from and written
-to - scratch state, never committed."""
-
-PERSONAL_STACK_CONFIGURATION_PATH = ".claude/personal/stack.toml"
-"""Path, relative to the project root, of the per-user configuration override file on the personal-notes
-branch (see :func:`_personal_configuration_overrides`)."""
-
-PERSONAL_NOTES_CONFIGURATION_SCRIPT = ".claude/hooks/resolve-personal-notes-config.sh"
-"""Path, relative to the project root, of the shell file that owns which remote and branch the
-personal notes are on (see :func:`_fetch_personal_notes_branch`)."""
-
-
-@dataclass
-class MalformedRepositoryError(ValueError):
-    """Raised when a repository reference is not in ``owner/name`` form."""
-
-    text: str
-    """The value that could not be parsed."""
-
-    def __str__(self) -> str:
-        """:return: What was expected and what arrived instead."""
-        return f"expected a repository as 'owner/name', got {self.text!r}"
-
-
-@dataclass(frozen=True)
-class Repository:
-    """A GitHub repository, identified the way GitHub itself writes it."""
-
-    owner: str
-    """The user or organization the repository belongs to."""
-
-    name: str
-    """The repository's own name."""
-
-    @classmethod
-    def parse(cls, text: str) -> Repository:
-        """Parse an ``owner/name`` repository reference.
-
-        :param text: The reference to parse.
-        :return: The parsed repository.
-        :raises MalformedRepositoryError: If *text* is not ``owner/name``.
-        """
-        owner, separator, name = text.partition("/")
-        if not (owner and separator and name):
-            raise MalformedRepositoryError(text)
-        return cls(owner, name)
-
-    @staticmethod
-    def _remote_url_segments(url: str) -> list[str]:
-        """Split a remote URL into its path segments, discarding scheme and host.
-
-        :param url: The remote URL to split.
-        :return: The path segments, which name a repository when there are two or more.
-        """
-        reference = url.removesuffix(".git").rstrip("/")
-        if "://" in reference:
-            _, _, host_and_path = reference.partition("://")
-            _, _, path = host_and_path.partition("/")
-        elif ":" in reference:
-            _, _, path = reference.rpartition(":")
-        else:
-            return []
-        return [segment for segment in path.split("/") if segment]
-
-    @classmethod
-    def names_a_repository(cls, url: str) -> bool:
-        """Test whether a remote URL points at a repository at all.
-
-        :param url: The remote URL to test.
-        :return: Whether it names an ``owner/name`` pair.
-        """
-        return len(cls._remote_url_segments(url)) >= 2
-
-    @classmethod
-    def from_remote_url(cls, url: str) -> Repository:
-        """Read the repository a git remote URL points at.
-
-        Accepts every form a fork remote takes - HTTPS, SSH, and the local proxy a cloud
-        session is given - by discarding the host and taking the last two path segments.
-
-        :param url: The remote URL to read.
-        :return: The repository it names.
-        :raises MalformedRepositoryError: If *url* names no ``owner/name`` pair.
-        """
-        segments = cls._remote_url_segments(url)
-        if len(segments) < 2:
-            raise MalformedRepositoryError(url)
-        return cls.parse("/".join(segments[-2:]))
-
-    def __str__(self) -> str:
-        """:return: The ``owner/name`` form GitHub uses."""
-        return f"{self.owner}/{self.name}"
 
 
 @dataclass(frozen=True)
@@ -334,7 +243,7 @@ class Configuration:
 
 
 def load_configuration(
-    path: Path = CONFIGURATION_PATH,
+    path: Path = PackageLocation.STACK_CONFIGURATION.value,
     fork_repository: Repository | None = None,
     upstream_repository: Repository | None = None,
 ) -> Configuration:
@@ -381,7 +290,7 @@ def _configuration_values(path: Path) -> dict[str, str]:
 
 
 def resolved_remotes(
-    path: Path = CONFIGURATION_PATH,
+    path: Path = PackageLocation.STACK_CONFIGURATION.value,
     fork_repository: Repository | None = None,
     upstream_repository: Repository | None = None,
 ) -> RemoteResolution:
@@ -426,7 +335,7 @@ def _fetch_personal_notes_branch() -> bool:
             [
                 "bash",
                 "-c",
-                f'source "{PERSONAL_NOTES_CONFIGURATION_SCRIPT}" && fetch_personal_notes_branch',
+                f'source "{ProjectLocation.PERSONAL_NOTES_CONFIGURATION_SCRIPT}" && fetch_personal_notes_branch',
             ],
             capture_output=True,
             text=True,
@@ -438,30 +347,24 @@ def _fetch_personal_notes_branch() -> bool:
 def _personal_configuration_overrides() -> dict[str, object]:
     """Fetch the personal-notes branch and parse its configuration override file, if any.
 
-    :return: The parsed contents of ``.claude/personal/stack.toml`` on the personal-notes branch, or
+    :return: The parsed contents of :attr:`ProjectLocation.PERSONAL_STACK_CONFIGURATION` on the
+        personal-notes branch, or
         an empty mapping if the branch or the file doesn't exist (e.g. before it has ever been
         written).
     """
     if not _fetch_personal_notes_branch():
         return {}
     if not _git_succeeds(
-        "cat-file", "-e", f"FETCH_HEAD:{PERSONAL_STACK_CONFIGURATION_PATH}"
+        "cat-file", "-e", f"FETCH_HEAD:{ProjectLocation.PERSONAL_STACK_CONFIGURATION}"
     ):
         return {}
     return tomllib.loads(
-        _git("show", f"FETCH_HEAD:{PERSONAL_STACK_CONFIGURATION_PATH}")
+        _git("show", f"FETCH_HEAD:{ProjectLocation.PERSONAL_STACK_CONFIGURATION}")
     )
 
 
 # %% pinning the tool
 
-
-TOOLING_DIRECTORY = Path(__file__).parent
-"""The directory holding this tool and every module and configuration file it runs on."""
-
-ENTRY_POINT_NAME = Path(__file__).name
-"""This file's own name, which a pinned copy keeps so that a copy is invoked exactly as
-the original is."""
 
 PINNED_TOOLING_ROOT = Path(tempfile.gettempdir()) / "stacked-pr-tooling"
 """Where pinned copies are kept - outside any checkout, since a copy inside one is a copy
@@ -476,33 +379,18 @@ DIGEST_FIELD_SEPARATOR = b"\0"
 cannot digest alike by moving bytes from the one into the other."""
 
 
-def _inserts_on_the_import_path(called: ast.expr) -> bool:
-    """
-    :param called: What a call names.
-    :return: Whether it is ``sys.path.insert``.
-    """
-    return (
-        isinstance(called, ast.Attribute)
-        and called.attr == "insert"
-        and isinstance(called.value, ast.Attribute)
-        and called.value.attr == "path"
-        and isinstance(called.value.value, ast.Name)
-        and called.value.value.id == "sys"
-    )
-
-
 @dataclass(frozen=True)
 class PinnedTooling:
     """A copy of the tool that no checkout carries, and so no checkout can replace."""
 
     directory: Path
-    """Where the copy lives."""
+    """The copy of the package itself."""
 
     @property
-    def entry_point(self) -> Path:
-        """:return: The copy's own ``stack.py``, the path a caller invokes; the
-        maintenance executor and the modules both import sit beside it."""
-        return self.directory / ENTRY_POINT_NAME
+    def root(self) -> Path:
+        """:return: The directory holding the copy: put on the import path, it makes the
+        package import from the copy."""
+        return self.directory.parent
 
 
 @dataclass(frozen=True)
@@ -515,51 +403,12 @@ class WorkingTreeTooling:
     mattering.
     """
 
-    directory: Path = TOOLING_DIRECTORY
+    directory: Path = PackageLocation.DIRECTORY.value
     """Where the tool is, defaulting to wherever the running copy of it is."""
 
     @property
-    def imported_directories(self) -> tuple[Path, ...]:
-        """The sibling directories the tool's own modules put on the import path.
-
-        Read out of the modules rather than listed beside them: a module that begins
-        importing from a new sibling is pinned with it, and a copy cannot fall behind
-        what the tool actually reaches.
-
-        :return: Each sibling, in a fixed order.
-        """
-        beside = self.directory.parent
-        return tuple(
-            sorted(
-                {
-                    candidate
-                    for name in self._names_put_on_the_import_path()
-                    if (candidate := beside / name).is_dir()
-                }
-            )
-        )
-
-    def _names_put_on_the_import_path(self) -> set[str]:
-        """:return: Every name a ``sys.path`` insertion in this tool spells out."""
-        names: set[str] = set()
-        for module in self.directory.glob("*.py"):
-            for node in ast.walk(ast.parse(module.read_text())):
-                if not isinstance(node, ast.Call) or not _inserts_on_the_import_path(
-                    node.func
-                ):
-                    continue
-                names.update(
-                    spelled.value
-                    for spelled in ast.walk(node)
-                    if isinstance(spelled, ast.Constant)
-                    and isinstance(spelled.value, str)
-                )
-        return names
-
-    @property
     def files(self) -> tuple[Path, ...]:
-        """Every file the tool needs to run: the modules and configuration beside it,
-        plus whatever it imports from a sibling directory.
+        """Every file the tool needs to run, beside it in its directory.
 
         The exported board is not one of them. It is one pass's snapshot of the fork's
         pull requests, so a copy of it would be stale for every pass after - and stale in
@@ -570,55 +419,40 @@ class WorkingTreeTooling:
         return tuple(
             sorted(
                 path
-                for directory in (self.directory, *self.imported_directories)
-                for path in directory.iterdir()
-                if path.is_file() and path.name != BOARD_PATH.name
+                for path in self.directory.iterdir()
+                if path.is_file() and path.name != PackageLocation.BOARD.value.name
             )
         )
 
-    def copied_as(self, path: Path) -> Path:
-        """Where one file sits inside a copy, relative to the copy's own root.
-
-        The layout is kept rather than flattened, because an insertion the tool makes is
-        relative to the module making it: flattened, the same line would resolve outside
-        the copy and find whatever happened to be there.
-
-        :param path: A file this tool is made of.
-        :return: Its path within a copy.
-        """
-        return path.relative_to(self.directory.parent)
-
     @property
     def digest(self) -> str:
-        """:return: A short digest of the files' paths and contents, telling one version
+        """:return: A short digest of the files' names and contents, telling one version
         of the tool from another."""
         fingerprint = hashlib.sha256()
         for path in self.files:
             fingerprint.update(
-                str(self.copied_as(path)).encode()
-                + DIGEST_FIELD_SEPARATOR
-                + path.read_bytes()
+                path.name.encode() + DIGEST_FIELD_SEPARATOR + path.read_bytes()
             )
         return fingerprint.hexdigest()[:PINNED_COPY_NAME_LENGTH]
 
     def pin_to(self, root: Path = PINNED_TOOLING_ROOT) -> PinnedTooling:
-        """Copy the tool out of the working tree, and name the copy to invoke instead.
+        """Copy the tool out of the working tree, and name the copy to run instead.
 
         A copy is named for its own digest, so pinning one version twice keeps a single
         copy while two versions in flight at once each keep their own. It is assembled
-        beside its destination and moved there whole, so a caller never invokes one that
+        beside its destination and moved there whole, so a caller never runs one that
         is half written.
 
         :param root: The directory pinned copies are kept in.
-        :return: The copy to invoke.
+        :return: The copy to run.
         """
         root.mkdir(parents=True, exist_ok=True)
         destination = root / self.digest
         staged = Path(tempfile.mkdtemp(dir=root))
+        copied_directory = staged / self.directory.name
+        copied_directory.mkdir()
         for path in self.files:
-            copy = staged / self.copied_as(path)
-            copy.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(path, copy)
+            shutil.copy2(path, copied_directory / path.name)
         if destination.exists():
             shutil.rmtree(staged)
         else:
@@ -749,7 +583,7 @@ class BoardUnavailable(RuntimeError):
     """Raised when ``board.json`` is missing."""
 
 
-def load_board(path: Path = BOARD_PATH) -> list[PullRequest]:
+def load_board(path: Path = PackageLocation.BOARD.value) -> list[PullRequest]:
     """Parse ``board.json`` into the list of fork pull requests.
 
     :param path: The board export file.
@@ -1355,9 +1189,11 @@ def print_status(stack: Stack) -> None:
     """
     configuration = stack.configuration
     upstream = f"{configuration.upstream_remote}/{configuration.upstream_base}"
-    print(f"Stack ({len(stack.branches)} branches) vs {upstream}\n")
-    print(f"{'branch':<38} {'state':<10} {'PR':>4}  ahead/behind parent   behind base")
-    print("-" * 92)
+    logger.info(f"Stack ({len(stack.branches)} branches) vs {upstream}\n")
+    logger.info(
+        f"{'branch':<38} {'state':<10} {'PR':>4}  ahead/behind parent   behind base"
+    )
+    logger.info("-" * 92)
     for branch in order(stack):
         ref = resolve_ref(configuration, branch.name)
         parent_ref = resolve_ref(configuration, branch.parent)
@@ -1365,7 +1201,7 @@ def print_status(stack: Stack) -> None:
         behind_parent = _count(f"{ref}..{parent_ref}")
         behind_base = _count(f"{ref}..{upstream}")
         drift = f"+{ahead}/-{behind_parent} ({branch.strategy} onto {branch.parent})"
-        print(
+        logger.info(
             f"{branch.name:<38} {branch.status:<10} #{branch.pull_request_number:<3}  {drift:<28} {behind_base}"
         )
 
@@ -1376,7 +1212,7 @@ def print_check(stack: Stack) -> None:
     :param stack: The stack to probe.
     """
     configuration = stack.configuration
-    print(
+    logger.info(
         "Integration probe - would each branch merge cleanly onto its parent right now?\n"
     )
     for branch in order(stack):
@@ -1393,7 +1229,7 @@ def print_check(stack: Stack) -> None:
             verdict = f"CONFLICTS onto {branch.parent}"
         else:
             verdict = f"UNKNOWN (ref missing: {parent_ref} / {ref})"
-        print(f"  {branch.name:<40} {verdict}")
+        logger.info(f"  {branch.name:<40} {verdict}")
 
 
 def print_next(stack: Stack) -> None:
@@ -1414,17 +1250,17 @@ def print_next(stack: Stack) -> None:
 
     def report_withheld() -> None:
         if withheld:
-            print(
+            logger.info(
                 f"  Withheld (delegated, needs-resolution): {', '.join(b.name for b in withheld)}"
             )
 
     if promotable:
         plural = "es" if len(promotable) != 1 else ""
-        print(
+        logger.info(
             f"NEXT to submit to {configuration.upstream_remote} ({len(promotable)} branch{plural}):"
         )
         for branch in promotable:
-            print(
+            logger.info(
                 f"  {branch.name} (PR #{branch.pull_request_number}) - approved, parent '{branch.parent}' landed"
             )
         report_withheld()
@@ -1437,14 +1273,14 @@ def print_next(stack: Stack) -> None:
     ]
     draft_candidates = [b for b in order(stack) if b.status == BranchStatus.DRAFT]
 
-    print("Nothing to promote - no branch is both approved and unblocked.")
+    logger.info("Nothing to promote - no branch is both approved and unblocked.")
     if ready_blocked:
-        print(
+        logger.info(
             f"  Approved but waiting on a parent to land: {', '.join(b.name for b in ready_blocked)}"
         )
     report_withheld()
     if draft_candidates:
-        print(
+        logger.info(
             "  The gate: self-review a fork PR, then un-draft it (or set its status ready). "
             f"Draft candidates: {draft_candidates[0].name}"
         )
@@ -1456,7 +1292,7 @@ def print_next_porcelain(stack: Stack) -> None:
     :param stack: The stack to report.
     """
     for branch in promotion_order(stack):
-        print(f"{branch.name}\t{branch.pull_request_number}")
+        logger.info(f"{branch.name}\t{branch.pull_request_number}")
 
 
 def print_restack_plan(stack: Stack) -> None:
@@ -1464,7 +1300,7 @@ def print_restack_plan(stack: Stack) -> None:
 
     :param stack: The stack to plan.
     """
-    print(json.dumps(restack_plan(stack), indent=2))
+    logger.info(json.dumps(restack_plan(stack), indent=2))
 
 
 def print_label_write(write: LabelWrite) -> None:
@@ -1476,7 +1312,7 @@ def print_label_write(write: LabelWrite) -> None:
     :param write: The computed set.
     """
     for label in write.labels:
-        print(label)
+        logger.info(label)
 
 
 def print_promotion_link(link: PromotionLink) -> None:
@@ -1484,12 +1320,9 @@ def print_promotion_link(link: PromotionLink) -> None:
 
     :param link: The built link.
     """
-    print(link.url)
+    logger.info(link.url)
     if link.body_was_truncated:
-        print(
-            "the description was shortened to fit the URL length limit",
-            file=sys.stderr,
-        )
+        logger.error("the description was shortened to fit the URL length limit")
 
 
 def print_reparents(stack: Stack) -> None:
@@ -1498,7 +1331,7 @@ def print_reparents(stack: Stack) -> None:
     :param stack: The stack to sweep.
     """
     for reparent in reparents(stack):
-        print(
+        logger.info(
             f"{reparent.branch}\t{reparent.pull_request_number}\t"
             f"{reparent.current_base}\t{reparent.target_base}"
         )
@@ -1510,7 +1343,7 @@ def print_landed(stack: Stack) -> None:
     :param stack: The stack to sweep.
     """
     for branch in landed_branches(stack):
-        print(f"{branch.name}\t{branch.pull_request_number}")
+        logger.info(f"{branch.name}\t{branch.pull_request_number}")
 
 
 def print_move_checks(
@@ -1524,13 +1357,13 @@ def print_move_checks(
     """
     refusals = move_checks.refusals(move)
     if not refusals:
-        print(
+        logger.info(
             f"{move.action} {move.source} onto "
             f"{move.destination_remote}/{move.destination}: clear"
         )
         return ExitCode.SUCCESS
     for refusal in refusals:
-        print(f"{refusal.reason}: {refusal.explanation}", file=sys.stderr)
+        logger.error(f"{refusal.reason}: {refusal.explanation}")
     return ExitCode.MOVE_REFUSED
 
 
@@ -1546,18 +1379,18 @@ def print_configuration(configuration: Configuration) -> None:
     for name, value in vars(configuration).items():
         if value is None:
             continue
-        print(f"{name}\t{value}")
+        logger.info(f"{name}\t{value}")
 
 
 def print_pinned_tooling(pinned: PinnedTooling) -> None:
-    """Print the pinned copy's entry point, and nothing else.
+    """Print the directory holding the pinned copy, and nothing else.
 
     One bare path rather than a labelled field: this is the one output a caller has to
     carry into every command it runs afterwards.
 
     :param pinned: The copy that was made.
     """
-    print(pinned.entry_point)
+    print(pinned.root)
 
 
 class Command(StrEnum):
@@ -1594,7 +1427,7 @@ class Command(StrEnum):
     """Build the upstream compare-and-create link for one branch."""
 
     PIN_TOOLING = "pin-tooling"
-    """Copy the tool out of the working tree, and name the copy to invoke instead."""
+    """Copy the tool out of the working tree, and name the copy to run instead."""
 
     @property
     def needs_a_board(self) -> bool:
@@ -1672,7 +1505,7 @@ def _argument_parser() -> argparse.ArgumentParser:
 
     commands.add_parser(
         Command.PIN_TOOLING,
-        help="copy this tool out of the working tree; print the copy to invoke",
+        help="copy this tool out of the working tree; print the copy to run",
     )
 
     configuration = commands.add_parser(
@@ -1838,13 +1671,13 @@ def main() -> ExitCode:
             return _run_without_a_board(command, arguments)
         return _run_against_the_board(command, arguments, load_stack())
     except (ForkRemoteNotFoundError, AmbiguousForkRemoteError) as error:
-        print(f"{error}", file=sys.stderr)
+        logger.error(f"{error}")
         return ExitCode.REMOTES_UNRESOLVED
     except BoardUnavailable as error:
-        print(f"{error}", file=sys.stderr)
+        logger.error(f"{error}")
         return ExitCode.BOARD_UNAVAILABLE
     except (ContradictoryLabelWriteError, PromotionLinkTooLongError) as error:
-        print(f"{error}", file=sys.stderr)
+        logger.error(f"{error}")
         return ExitCode.USAGE
 
 

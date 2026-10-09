@@ -9,7 +9,6 @@ is exactly the silence this exists to prevent.
 from __future__ import annotations
 
 import json
-import sys
 from collections.abc import Sequence
 from dataclasses import asdict, dataclass
 from enum import IntEnum
@@ -20,6 +19,12 @@ from basstler.maintenance_fast_forward import FastForwardOutcome, FastForwardRep
 from basstler.maintenance_promotion import Promotion
 from basstler.maintenance_restack_steps import BranchOutcome, RestackOutcome
 from basstler.stack import Reparent, Stack, landed_branches, promotion_order, reparents
+from basstler.standard_streams import StandardStreamHandler
+
+logger = StandardStreamHandler.logger_for(__name__)
+"""
+This module's logger, which is also what its command prints through.
+"""
 
 # %% the report a caller renders or emits
 
@@ -140,16 +145,16 @@ def print_board_export(export: BoardExport, written_to: Path | None) -> None:
     :param written_to: Where it was written, or ``None`` when it was only printed.
     """
     if written_to is None:
-        print(export.as_json())
+        logger.info(export.as_json())
         return
-    print(f"{len(export.pull_requests)} open pull request(s) -> {written_to}")
+    logger.info(f"{len(export.pull_requests)} open pull request(s) -> {written_to}")
 
 
 def print_fast_forward(report: FastForwardReport) -> None:
     """:param report: What became of the fork's base branch."""
-    print(f"{report.fork_reference}\t{report.outcome}\t{report.commit}")
+    logger.info(f"{report.fork_reference}\t{report.outcome}\t{report.commit}")
     if report.explanation:
-        print(report.explanation, file=sys.stderr)
+        logger.error(report.explanation)
 
 
 def print_restack(outcomes: Sequence[BranchOutcome]) -> None:
@@ -162,22 +167,23 @@ def print_restack(outcomes: Sequence[BranchOutcome]) -> None:
             or outcome.explanation
             or ""
         )
-        print(f"{outcome.branch}\t{outcome.outcome}\t{detail}")
+        logger.info(f"{outcome.branch}\t{outcome.outcome}\t{detail}")
 
 
 def print_promotions(promoted: Sequence[Promotion], cleared: Sequence[str]) -> None:
     """:param promoted: The branches whose link was built this pass.
     :param cleared: The branches whose spent link label was removed."""
     for promotion in promoted:
-        print(f"{promotion.branch}\t#{promotion.pull_request_number}\t{promotion.url}")
+        logger.info(
+            f"{promotion.branch}\t#{promotion.pull_request_number}\t{promotion.url}"
+        )
         if promotion.body_was_truncated:
-            print(
+            logger.error(
                 f"{promotion.branch}: the prefilled description was shortened to fit "
-                f"the URL limit",
-                file=sys.stderr,
+                f"the URL limit"
             )
     for branch in cleared:
-        print(f"{branch}\tlink-label-cleared\t")
+        logger.info(f"{branch}\tlink-label-cleared\t")
 
 
 # %% the exit status

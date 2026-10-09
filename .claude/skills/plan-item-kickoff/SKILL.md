@@ -20,7 +20,7 @@ each one applies.
 
 Step 4 opens the item's branch and draft pull request and records its
 manifest state, before any implementation begins. It runs in both modes, so
-the item stops reading as `not_started` the moment it isn't.
+the item stops reading as `not started` the moment it isn't.
 
 ## 1. Gather the item's context
 
@@ -101,7 +101,7 @@ The moment the plan is settled, the branch, the draft pull request, the
 item's `branch`/`session`/`pull_request_number` fields and its roadmap
 section are all derivable, and none of them depends on a line of the
 implementation. Doing them at the end instead means the manifest says
-`not_started` with no branch for the entire length of the work, which every
+`not started` with no branch for the entire length of the work, which every
 dashboard, kickoff and resolve run downstream reads as truth.
 
 So run this first, before the first edit:
@@ -122,12 +122,12 @@ python3 -m "${PLAN_ITEM_BOOTSTRAP_MODULE}" open \
     --pull-request-number <number>
 python3 -m "${PLAN_ITEM_BOOTSTRAP_MODULE}" record \
     --plan <plan-id> --item <item-id> \
-    --status in_progress --roadmap-section <file>
+    --status "in progress" --roadmap-section <file>
 ```
 
 `open` before `record`: the pull request number does not exist until the pull
 request does. `open` writes the branch, session and pull request number onto
-the item and flips it to `in_progress`; `record` appends the settled plan to
+the item and flips it to `in progress`; `record` appends the settled plan to
 `roadmap.md`. Both print a one-line JSON report led by `status` and
 `exit_code`.
 

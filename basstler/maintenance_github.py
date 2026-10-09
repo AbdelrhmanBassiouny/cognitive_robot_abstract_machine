@@ -23,7 +23,7 @@ from typing import Any
 from basstler.maintenance_board import PullRequestRecord
 from basstler.maintenance_constants import CREDENTIAL_VARIABLES, GITHUB_API_ROOT
 from basstler.maintenance_errors import ExternalCallFailed
-from basstler.stack import Repository
+from basstler.repository import Repository
 
 
 @dataclass

@@ -1,30 +1,25 @@
 """
-Fixtures shared by every suite in this directory, and the one ``sys.path`` entry they
-need.
+Fixtures shared by every suite in this directory.
 
-``basstler`` is a plain top-level directory on the repository root, importable with no
-install, so the root just has to be on ``sys.path`` when this directory is run from an
-arbitrary working directory. That single entry replaces the three conftests this suite
-was merged from, each of which inserted its own directory - and one of which reached
-across into two others, which is the path hackery the package exists to end.
+basstler is a plain top-level directory on the repository root, importable with no
+install. Because test and this directory are packages, pytest puts the directory above
+the outermost of them - the repository root - on sys.path before it imports this file,
+so the import works from any working directory.
 
-This suite runs in the lightweight ``test_basstler`` CI job with ``--confcutdir`` pointed
-here, so the repository-root ``test/conftest.py`` - which imports the robotics stack that
+This suite runs in the lightweight test_basstler CI job with --confcutdir pointed
+here, so the repository-root test/conftest.py - which imports the robotics stack that
 job does not install - is never loaded for it.
 """
 
-import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+import pytest
 
-import pytest  # noqa: E402
+from basstler.locations import PackageLocation
 
-from basstler.stack import BOARD_PATH  # noqa: E402
-
-from .executable_stubs import ExecutableStubDirectory  # noqa: E402
-from .scratch_repository import ScratchRepository  # noqa: E402
-from .upstream_reviews_replay import RecordedResponse, ReplayingClient  # noqa: E402
+from .executable_stubs import ExecutableStubDirectory
+from .scratch_repository import ScratchRepository
+from .upstream_reviews_replay import RecordedResponse, ReplayingClient
 
 
 @pytest.fixture(autouse=True)
@@ -38,13 +33,14 @@ def board_snapshot_set_aside() -> None:
     Setting it aside makes the suite independent of whether a pass has been run here, and
     restores it afterwards so running the tests never costs somebody their snapshot.
     """
-    if not BOARD_PATH.exists():
+    board = PackageLocation.BOARD.value
+    if not board.exists():
         yield
         return
-    set_aside = BOARD_PATH.with_suffix(".json.set-aside-for-tests")
-    BOARD_PATH.rename(set_aside)
+    set_aside = board.with_suffix(".json.set-aside-for-tests")
+    board.rename(set_aside)
     yield
-    set_aside.rename(BOARD_PATH)
+    set_aside.rename(board)
 
 
 @pytest.fixture

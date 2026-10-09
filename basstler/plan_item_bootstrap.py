@@ -5,7 +5,7 @@ Bootstrap a plan item before its implementation, rather than after it.
 Everything a session knows the moment an implementation plan is approved - the branch,
 the draft pull request, the item's manifest fields, its roadmap section - is derivable
 without a line of the implementation, yet all of it conventionally happens at the end.
-For that whole window ``plan.yaml`` says the item is ``not_started`` with no branch while
+For that whole window ``plan.yaml`` says the item is ``not started`` with no branch while
 a branch exists and is being worked, which every dashboard, kickoff and resolve run
 downstream reads as truth.
 
@@ -18,7 +18,7 @@ Two operations, so each caller depends only on the surface it uses:
 ``open``
     Create the branch, publish it, open the draft pull request, then write ``branch``,
     ``session`` and ``pull_request_number`` back onto the item and flip it to
-    ``in_progress``. A caller that has already created the pull request passes
+    ``in progress``. A caller that has already created the pull request passes
     ``--pull-request-number`` and only the recording happens.
 
 ``open`` runs before ``record`` when both are wanted: the pull request number does not
@@ -69,24 +69,14 @@ from typing import Any, ClassVar, Protocol
 
 import yaml
 
+from basstler.locations import ProjectLocation
+from basstler.maintenance_constants import GITHUB_API_ROOT
 from basstler.plan_model import ItemStatus
+from basstler.standard_streams import StandardStreamHandler
 
-GITHUB_API_ROOT = "https://api.github.com"
+logger = StandardStreamHandler.logger_for(__name__)
 """
-Where pull requests are created, overridable for a GitHub Enterprise host.
-"""
-
-HOOKS_DIRECTORY = ".claude/hooks"
-"""
-Where this repository keeps the scripts that read and write personal-notes data.
-"""
-
-PLANS_DIRECTORY = ".claude/personal/plans"
-"""
-Where plans live on the personal-notes branch.
-
-Mirrors ``PLANS_DIR`` in ``resolve-personal-notes-config.sh``, which is the shell half of
-the same tooling; a test holds the two equal so the mirror cannot drift.
+This module's logger, which is also what its command prints through.
 """
 
 ITEM_FIELD_INDENT = "    "
@@ -119,17 +109,12 @@ class HookScript(StrEnum):
     Pushes an edited manifest and roadmap to the personal-notes branch.
     """
 
-    PLAN_ITEM_BOOTSTRAP = "plan_item_bootstrap.py"
-    """
-    This module, which a caller invokes by path.
-    """
-
     @property
-    def path(self) -> str:
+    def path(self) -> Path:
         """
         The script's path from the project root.
         """
-        return f"{HOOKS_DIRECTORY}/{self.value}"
+        return ProjectLocation.HOOKS / self.value
 
 
 class PlanDocument(StrEnum):
@@ -154,7 +139,7 @@ class PlanDocument(StrEnum):
         :param plan_identifier: The plan's id.
         :return: The path, relative to the personal-notes branch's root.
         """
-        return f"{PLANS_DIRECTORY}/{plan_identifier}/{self.value}"
+        return str(ProjectLocation.PLANS / plan_identifier / self.value)
 
 
 class ValueStyle(StrEnum):
@@ -288,7 +273,12 @@ class ManifestKey(KeySpecification, Enum):
     The manifest's top-level list of items.
     """
 
-    def render(self, value: str, opening_the_item: bool = False) -> str:
+    def render(
+        self,
+        value: str,
+        opening_the_item: bool = False,
+        field_indent: str = ITEM_FIELD_INDENT,
+    ) -> str:
         """
         The manifest line setting this key to *value*, newline included.
 
@@ -297,9 +287,13 @@ class ManifestKey(KeySpecification, Enum):
         :param value: The value to write.
         :param opening_the_item: Whether this is the item block's first line, which
             carries the list marker instead of the key indent.
+        :param field_indent: The whitespace this item's own fields are indented by,
+            read from the block being edited rather than assumed, since a manifest
+            written before this module's own convention keeps whichever indentation
+            it already has.
         :return: The rendered line.
         """
-        prefix = ITEM_MARKER if opening_the_item else ITEM_FIELD_INDENT
+        prefix = ITEM_MARKER if opening_the_item else field_indent
         written = f'"{value}"' if self.style is ValueStyle.DOUBLE_QUOTED else value
         return f"{prefix}{self.key}: {written}\n"
 
@@ -632,7 +626,7 @@ class NotesBranchUnavailableError(BootstrapError):
         return f"could not fetch the personal-notes branch: {self.detail}"
 
     def suggest_correction(self) -> str:
-        return f"Run {HOOKS_DIRECTORY}/create-personal-notes-branch.sh first."
+        return f"Run {ProjectLocation.PERSONAL_NOTES_BRANCH_CREATION_SCRIPT} first."
 
 
 # %% the plan on the personal-notes branch
@@ -876,6 +870,28 @@ def locate_item_block(
     )
 
 
+def existing_field_indent(manifest_lines: list[str], start: int, end: int) -> str:
+    """
+    The whitespace this item's own fields are indented by, in the manifest they live in.
+
+    Read from the block itself rather than assumed: a manifest written before
+    ``/plan-create``'s own convention keeps whichever indentation it already has, and a
+    fixed indent would silently nest a patched field under whichever key happens to
+    precede it instead of beside it.
+
+    :param manifest_lines: The manifest, split into lines.
+    :param start: The block's first line (the ``- id:`` line).
+    :param end: One past the block's last line.
+    :return: The leading whitespace of the block's second populated line, or this
+        module's own default when the block holds only its opening line.
+    """
+    for index in range(start + 1, end):
+        if manifest_lines[index].strip():
+            stripped = manifest_lines[index].lstrip(" ")
+            return manifest_lines[index][: len(manifest_lines[index]) - len(stripped)]
+    return ITEM_FIELD_INDENT
+
+
 def apply_item_fields(
     manifest_text: str,
     plan_identifier: str,
@@ -899,8 +915,9 @@ def apply_item_fields(
     """
     lines = manifest_text.split("\n")
     start, end = locate_item_block(lines, plan_identifier, item_identifier)
+    field_indent = existing_field_indent(lines, start, end)
     for manifest_key, value in values_by_key.items():
-        rendered = manifest_key.render(value).rstrip("\n")
+        rendered = manifest_key.render(value, field_indent=field_indent).rstrip("\n")
         existing = next(
             (
                 index
@@ -1567,10 +1584,10 @@ def main() -> int:
                 remote=arguments.remote,
             )
     except BootstrapError as error:
-        print(f"{error.exit_code.name_for_a_caller}: {error}", file=sys.stderr)
+        logger.error(f"{error.exit_code.name_for_a_caller}: {error}")
         return int(error.exit_code)
 
-    print(json.dumps(report.as_document()))
+    logger.info(json.dumps(report.as_document()))
     return int(report.exit_code)
 
 

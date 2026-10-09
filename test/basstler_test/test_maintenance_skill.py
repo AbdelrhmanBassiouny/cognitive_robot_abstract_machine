@@ -16,23 +16,27 @@ import subprocess
 from pathlib import Path
 
 import basstler.stack
-from basstler.stack import CONFIGURATION_PATH, Command, Repository, _configuration_values
+from basstler.locations import PackageLocation
+from basstler.repository import Repository
+from basstler.stack import Command, _configuration_values
 
-from .constants import ToolingDirectory
+from .constants import SkillDirectory
 
 MAINTENANCE_SKILL_DOCUMENT = (
-    ToolingDirectory.STACKED_PULL_REQUEST_MAINTENANCE_SKILL.path / "SKILL.md"
+    PackageLocation.REPOSITORY_ROOT
+    / SkillDirectory.STACKED_PULL_REQUEST_MAINTENANCE
+    / "SKILL.md"
 )
 """
 The instructions a maintenance pass follows.
 """
 
 WORKING_TREE_INVOCATION = re.compile(
-    rf"python -m {re.escape(basstler.stack.__name__)} ([\w-]+)"
+    rf"python -m {re.escape(basstler.__name__)}\.\w+ ([\w-]+)"
 )
 """
 Matches a command the skill still runs against the working tree's own installed
-module, before the tool is pinned - capturing the subcommand.
+module of the package, before the tool is pinned - capturing the subcommand.
 """
 
 
@@ -48,7 +52,9 @@ def candidate_forks() -> set[Repository]:
     :return: The candidate forks, empty if the checkout has no repository remote at all.
     """
     upstream = Repository.parse(
-        _configuration_values(CONFIGURATION_PATH)["upstream_repository"]
+        _configuration_values(PackageLocation.STACK_CONFIGURATION.value)[
+            "upstream_repository"
+        ]
     )
     listed = subprocess.run(
         ["git", "remote"], capture_output=True, text=True, check=True

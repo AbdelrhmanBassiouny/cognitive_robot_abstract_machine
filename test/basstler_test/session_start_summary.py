@@ -16,9 +16,13 @@ from __future__ import annotations
 import subprocess
 from enum import StrEnum
 
-from .constants import ToolingDirectory
+from basstler.locations import PackageLocation, ProjectLocation
 
-MESSAGES_SCRIPT = ToolingDirectory.HOOKS.path / "session-start-messages.sh"
+MESSAGES_SCRIPT = (
+    PackageLocation.REPOSITORY_ROOT
+    / ProjectLocation.HOOKS
+    / "session-start-messages.sh"
+)
 """
 The shell file defining the wording of every summary line.
 """
