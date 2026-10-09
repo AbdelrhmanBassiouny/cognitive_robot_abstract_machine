@@ -1,24 +1,26 @@
 from datetime import timedelta
 
 from giskardpy.middleware.ros2 import rospy
-from giskardpy.middleware.ros2.server_config import GiskardServerConfig
-from giskardpy.middleware.ros2.scripts.iai_robots.stretch.configs import (
-    WorldWithStretchConfigDiffDrive,
-    StretchVelocityInterface,
-)
 from giskardpy.middleware.ros2.giskard import Giskard
-from giskardpy.middleware.ros2.utils.utils import load_xacro
+from giskardpy.middleware.ros2.ros2_interface import get_robot_description
+from giskardpy.middleware.ros2.scripts.iai_robots.stretch.configs import (
+    StretchVelocityInterface,
+    WorldWithStretchConfigDiffDrive,
+)
+from giskardpy.middleware.ros2.server_config import GiskardServerConfig
 from giskardpy.qp.qp_controller_config import QPControllerConfig
-from semantic_digital_twin.robots.stretch import Stretch
 
 
-def main():
-    rospy.init_node("giskard")
+def create_giskard() -> Giskard:
+    """
+    Build a Giskard that commands Stretch, described by what the robot publishes on
+    ``/robot_description``.
 
-    # the loaded urdf should be equivalent to the following xacro:
-    robot_description = load_xacro(Stretch.get_ros_file_path())
-    giskard = Giskard(
-        world_config=WorldWithStretchConfigDiffDrive(urdf=robot_description),
+    ..note:: The ros node has to be initialized first, because the robot description is
+        read from its topic.
+    """
+    return Giskard(
+        world_config=WorldWithStretchConfigDiffDrive(urdf=get_robot_description()),
         robot_interface_config=StretchVelocityInterface(),
         server_config=GiskardServerConfig(),
         qp_controller_config=QPControllerConfig(
@@ -27,7 +29,11 @@ def main():
             braking_time=timedelta(seconds=1.15),
         ),
     )
-    giskard.live()
+
+
+def main():
+    rospy.init_node("giskard")
+    create_giskard().live()
 
 
 if __name__ == "__main__":
