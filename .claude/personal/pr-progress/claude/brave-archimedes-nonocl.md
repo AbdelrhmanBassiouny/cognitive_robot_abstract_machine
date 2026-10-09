@@ -15,14 +15,18 @@ Based on main, since #185 merged on 2026-10-05. Auto mode. Baseline: 710 tests p
 5. [ ] Format docstrings, run the full suite, update the PR description, refresh the dashboard.
 
 ## Done
-- Branch re-cut from main, draft PR #501, manifest open+record, roadmap section written.
-- b931f268f src layout (716 pass). f90378beb environment + BASSTLER_PYTHON (727 pass).
-  Live: session-start created basstler/.venv via uv (3.13), second start "already installed".
-- Decisions: installer is `pip --python <venv python> install --editable ./basstler` (venvs made
-  --without-pip / by uv); ScriptRunner's PythonModuleRunner puts <root>/basstler/src on PYTHONPATH;
-  check-setup + save-plan no longer read an unparseable declaration as "nothing missing" (new tests).
-- No BASSTLER_PYTHON env override (YAGNI): venv if present, else python3.
+- All five steps. Commits: b931f268f src layout, f90378beb environment + BASSTLER_PYTHON,
+  e3228ac42 3.12 + PathEnumeration(Path, ReprEnum), 5eb.. docstring format, ff522d414 board copy + workflow.
+- 745 pass on 3.12 (scratchpad py312 uv venv) and 3.13. Live session-start created basstler/.venv via uv.
+- PR description rewritten to the final state; roadmap section "implemented on #501" recorded.
+- Decisions: `pip --python <venv> install --editable ./basstler`; dependencies module counts the package
+  itself; PYTHONPATH=basstler/src exported; member names via `_name_`.
+
+## Outstanding
+- CI on #501 not yet observed (not polled, by the user's rule).
+- Landing: #420/#424/#430/#437/#107 merge across the second move.
+- Pre-existing, recorded only: xdist race on board.json; add-plan-item/SKILL.md uses undefined
+  ${PLAN_ITEM_BOOTSTRAP_SCRIPT}.
 
 ## Next
-- Step 4: requires-python >=3.12 (pyproject + BASSTLER_PYTHON_REQUIREMENT), upstream-reviews.yml 3.12,
-  PathEnumeration(Path, ReprEnum); watch `ids=lambda member: member.name` in tests (Path.name shadows).
+- Waiting for the user's review of draft #501.
