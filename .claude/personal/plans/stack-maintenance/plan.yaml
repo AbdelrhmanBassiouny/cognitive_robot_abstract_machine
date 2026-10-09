@@ -173,7 +173,7 @@ items:
   branch: claude/plan-manifest-update-priority-ex2zst
   pull_request_number: 151
   status: in_progress
-  session: https://claude.ai/code/session_01RAcB6RV7AtLyfuipHeMyw8
+  session: https://claude.ai/code/session_01Rm1Xa8ujsXWBai4U8v6ThY
   track: pass
   blockers: []
   depends_on:
@@ -294,6 +294,18 @@ items:
     literal one, so every hard-wrapped line became a paragraph. Fixed on the branch test-first with
     BlockScalarStyle, which reads the indicator off the manifest text; the manifest was restored
     from the commit before and this paragraph appended with the fix.
+
+    Prepared for promotion on 2026-10-09. The publishing wording is now neutral: the rule and the
+    skills say to refresh the dashboard through /plan-dashboard rather than to republish an
+    Artifact, so they stay true after artifact-path-retirement. The stacked-pr-maintenance
+    instructions were dropped because routine-cutover replaces that pass with an Action. resolve,
+    block and unblock --branch stay as plain operations any automation can call. Two contract tests
+    went with the dropped text, leaving 826 tests passing.
+
+    The integration-conflict label from 2026-10-06 was a base-side failure, not this branch's. The
+    semantic_digital_twin test test_a_transformation_over_a_variable_keeps_its_child_frame also
+    failed on this branch merged with main alone, and main has been green since 2026-10-07.
+    Retitled, given a current-state description and a fresh promote link. Main merged at ee6a467c3.
 - id: pinned-stack-tooling
   title: Pin the stack tooling for the length of a maintenance pass
   branch: claude/stack-tooling-pinning-qf5r2m
