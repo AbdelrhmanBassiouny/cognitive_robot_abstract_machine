@@ -240,11 +240,9 @@ items:
   branch: claude/auto-run-setup-notes-02nhxv
   pull_request_number: 156
   status: in_progress
-  blockers: |-
-    Two outdated review threads on plan-item-resolve/SKILL.md, a deferral to #149, are still open for the
-    owner to close. The review thread on the guard's global constants is answered in a conversation
-    comment (an inline reply is rejected while the owner has a pending review) and left open for the
-    owner. The upstream pull request does not exist.
+  blockers:
+  - Two outdated review threads on plan-item-resolve/SKILL.md, a deferral to #149, are still open for the owner to close.
+  - The review thread on the guard's global constants is answered in a conversation comment (an inline reply is rejected while the owner has a pending review) and left open for the owner.
   session: https://claude.ai/code/session_01RydZutnNtFBYeT73Qt4Bxv
   track: conventions
   depends_on: []
