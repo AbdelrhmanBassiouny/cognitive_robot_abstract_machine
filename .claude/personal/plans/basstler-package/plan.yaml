@@ -214,11 +214,13 @@ items:
     `basstler-package`'s to fold in under the whichever-lands-second convention.
 - id: basstler-src-layout
   title: 'Move basstler to the src layout, importable through an editable install'
-  branch: null
-  status: not_started
+  branch: claude/brave-archimedes-nonocl
+  status: in progress
   track: extraction
   depends_on:
   - basstler-package
+  pull_request_number: 501
+  session: https://claude.ai/code/session_01DmYmRWYUV9qFEkWydytE7u
   notes: |-
     Move basstler to the `src` layout every other package here uses (`basstler/src/basstler/`), and
     make it importable through an editable install that `session-start.sh` performs when missing.
