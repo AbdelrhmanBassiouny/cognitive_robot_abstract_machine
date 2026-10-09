@@ -53,7 +53,7 @@ and a wrong guess points every push at the wrong repository.
 
 **a. Make the tooling present rather than assuming it.** Every step shells out to
 `basstler/`, and a failure in a later step lands after an earlier one has already changed pull
-requests. If `ls basstler/maintenance.py` fails, `git fetch` the ref you were told to resolve
+requests. If `ls basstler/src/basstler/maintenance.py` fails, `git fetch` the ref you were told to resolve
 this document from and restore it **into the working tree only**:
 
 ```bash

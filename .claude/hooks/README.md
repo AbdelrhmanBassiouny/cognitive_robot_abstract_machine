@@ -155,7 +155,7 @@ Override only what you need:
     config from them, and is a no-op if none are set.
 
 For Claude Code on the web, see <https://code.claude.com/docs/en/claude-code-on-the-web> for where
-either of those lives. [`basstler/setup_steps.py`](../../basstler/setup_steps.py), run as
+either of those lives. [`basstler/src/basstler/setup_steps.py`](../../basstler/src/basstler/setup_steps.py), run as
 `python3 -m basstler.setup_steps`, prints the exact variable lines your
 clone needs — only the settings you have moved off their defaults — alongside the other two steps
 no script can perform for you.
@@ -185,7 +185,7 @@ the narrative that doesn't belong in structured data.
 - Start or unblock one item → `/plan-item-kickoff <plan-id> <item-id>`,
   `/plan-item-resolve <plan-id> <item-id>`. Kickoff opens the item's branch and draft PR and
   marks it `in progress` as soon as its plan is approved — via
-  [`basstler/plan_item_bootstrap.py`](../../basstler/plan_item_bootstrap.py), which you can also
+  [`basstler/src/basstler/plan_item_bootstrap.py`](../../basstler/src/basstler/plan_item_bootstrap.py), which you can also
   run by hand as `python3 -m basstler.plan_item_bootstrap` — so the
   manifest never says `not started` while the work is underway.
 - Decide where a new piece of work goes → `/add-plan-item <description>`. It runs the shared scope
@@ -193,9 +193,9 @@ the narrative that doesn't belong in structured data.
   skills defer to for "is this new work, or a change to work already in flight?"
 - Choose whether either skill implements on its own, plans first, or asks → `/plan-item-mode
   <auto|plan|ask> [kickoff|resolve|both]`, or the
-  [`basstler/plan_item_mode.py`](../../basstler/plan_item_mode.py) `resolve|set` it calls, which you
+  [`basstler/src/basstler/plan_item_mode.py`](../../basstler/src/basstler/plan_item_mode.py) `resolve|set` it calls, which you
   can also run by hand as `python3 -m basstler.plan_item_mode`. Defaults in
-  [`plan-item-modes.toml`](../../basstler/plan-item-modes.toml) are `auto` for both; `set` pins a per-user
+  [`plan-item-modes.toml`](../../basstler/src/basstler/plan-item-modes.toml) are `auto` for both; `set` pins a per-user
   override at `.claude/personal/plan-item-modes.toml` on the notes branch. What each mode obliges
   the skill to do, and when `auto` still stops to ask →
   [`execution-modes.md`](../skills/plan-dashboard/execution-modes.md).

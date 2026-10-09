@@ -68,3 +68,25 @@ def test_the_package_directory_is_named_the_same_from_the_project_root():
         PackageLocation.REPOSITORY_ROOT / ProjectLocation.PACKAGE
         == PackageLocation.DIRECTORY.value
     )
+
+
+def test_the_package_directory_sits_under_the_source_trees_src_directory():
+    """
+    The package follows the ``src`` layout every other package in this repository uses.
+    """
+    assert (
+        PackageLocation.DIRECTORY.value
+        == PackageLocation.SOURCE_TREE / "src" / PackageLocation.DIRECTORY.value.name
+    )
+
+
+def test_the_dependency_declaration_is_the_source_trees_own_metadata():
+    """
+    ``pyproject.toml`` is read from the source tree, beside the ``src`` directory, rather
+    than shipped inside the package.
+    """
+    assert (
+        PackageLocation.DEPENDENCY_DECLARATION.value
+        == PackageLocation.SOURCE_TREE / "pyproject.toml"
+    )
+

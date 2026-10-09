@@ -286,8 +286,9 @@ PLAN_BRANCH_INDEX_PATH="${PLANS_DIR}/_generated/branch-index.tsv"
 # same defined-once reasoning as PLAN_BRANCH_INDEX_PATH above.
 DASHBOARD_URL_CACHE_PATH="${PLANS_DIR}/_generated/dashboard-urls.yaml"
 
-# BASSTLER_PACKAGE_DIRECTORY / *_MODULE / *_FILE: every Python entry point in
-# this system, and the package holding them - defined once, here, so
+# BASSTLER_SOURCE_TREE / BASSTLER_PACKAGE_DIRECTORY / *_MODULE / *_FILE: every
+# Python entry point in this system, and the package holding them - defined
+# once, here, so
 # refresh_dashboard.sh, every plan-*/SKILL.md, and .github/workflows/ci.yml
 # source this file and use these variables instead of each carrying its own
 # separately-typed literal (exactly the drift risk a reviewer flagged after
@@ -300,7 +301,14 @@ DASHBOARD_URL_CACHE_PATH="${PLANS_DIR}/_generated/dashboard-urls.yaml"
 # `python3 -m "${SOME_MODULE}"`. Running one by its file path instead would
 # put the package's own directory on sys.path in place of the project root,
 # so its absolute imports of its siblings would not resolve.
-BASSTLER_PACKAGE_DIRECTORY="basstler"
+# The source tree holds the package's pyproject.toml and README; the package
+# itself sits under its src directory, as every package in this repository does.
+BASSTLER_SOURCE_TREE="basstler"
+BASSTLER_PACKAGE_DIRECTORY="${BASSTLER_SOURCE_TREE}/src/basstler"
+# Exported so every module a caller runs is this clone's own source - a
+# worktree's or a scratch clone's included - whichever interpreter runs it, and
+# whatever a site-packages install of basstler elsewhere would resolve to.
+export PYTHONPATH="${PROJECT_ROOT}/${BASSTLER_SOURCE_TREE}/src${PYTHONPATH:+:${PYTHONPATH}}"
 # build_dashboard: renders one plan's dashboard HTML from its manifest
 # and live GitHub data - see the module's own docstring.
 BUILD_DASHBOARD_MODULE="basstler.build_dashboard"
@@ -352,7 +360,7 @@ BASSTLER_DEPENDENCIES_MODULE="basstler.dependencies"
 # PyYAML/Jinja2/markdown/nh3 dependencies are declared - installed by CI, by an
 # Actions workflow running a module, and by ./session-start.sh on every session
 # start (see install_dependencies below).
-BASSTLER_PYPROJECT_FILE="${BASSTLER_PACKAGE_DIRECTORY}/pyproject.toml"
+BASSTLER_PYPROJECT_FILE="${BASSTLER_SOURCE_TREE}/pyproject.toml"
 # stack.toml: the committed defaults stack.py's load_configuration layers a
 # personal-notes .claude/personal/stack.toml override on top of.
 STACK_CONFIG_FILE="${BASSTLER_PACKAGE_DIRECTORY}/stack.toml"

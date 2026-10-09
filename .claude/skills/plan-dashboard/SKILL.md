@@ -17,8 +17,8 @@ anything below is unclear about a field's meaning, rather than guessing.
 
 **Everything deterministic — schema validation, live-state classification,
 drift detection, HTML rendering — lives in the committed `basstler` package
-(`basstler/build_dashboard.py`, `basstler/build_index.py`,
-`basstler/render_common.py`), not in this document.** This file's job is only
+(`basstler/src/basstler/build_dashboard.py`, `build_index.py`,
+`render_common.py`), not in this document.** This file's job is only
 the parts a module can't do: resolving what to fetch, calling the GitHub API,
 and calling the `Artifact` tool. If you find yourself re-deriving rendering or
 validation logic in prose instead of just running the module, stop — that
@@ -175,7 +175,7 @@ its stderr says exactly what's wrong (which field, which value). Report
 that to the user instead of trying to patch around it yourself; a broken
 manifest is something they need to know about, not paper over. Requires
 PyYAML, Jinja2, and the `markdown` package —
-`pip install "./${BASSTLER_PACKAGE_DIRECTORY}"` if any are missing.
+`pip install --editable "./${BASSTLER_SOURCE_TREE}"` if any are missing.
 
 On success it prints one merged JSON summary on stdout: `sync_manifest_status.py`'s
 own `{"corrected": [...]}` plus `build_dashboard.py`'s status counts, drift

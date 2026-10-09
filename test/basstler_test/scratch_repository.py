@@ -48,19 +48,23 @@ def install_hook_scripts_into(project_root: Path, *script_names: str) -> None:
 
 def install_package_into(project_root: Path) -> None:
     """
-    Copy the real :mod:`basstler` package into a checkout, so a command line run there
-    resolves ``python3 -m basstler.<module>`` the way it does in a clone.
+    Copy the real :mod:`basstler` source tree into a checkout, so a command line run there
+    resolves ``python3 -m basstler.<module>`` to that checkout's own source, the way it
+    does in a clone.
 
-    The whole package rather than the modules one script happens to call: a scratch
+    The whole source tree rather than the modules one script happens to call: a scratch
     clone *is* a clone, so it carries what a clone carries, and a test then never has to
-    track which sibling a module imports.
+    track which sibling a module imports. Build output, the package's own environment and
+    the board snapshot are left behind, as a fresh clone has none of them.
 
     :param project_root: The checkout to copy it into.
     """
     shutil.copytree(
-        PackageLocation.DIRECTORY,
-        project_root / ProjectLocation.PACKAGE,
-        ignore=shutil.ignore_patterns("__pycache__"),
+        PackageLocation.SOURCE_TREE,
+        project_root / ProjectLocation.PACKAGE_SOURCE_TREE,
+        ignore=shutil.ignore_patterns(
+            "__pycache__", "*.egg-info", ".venv", PackageLocation.BOARD.value.name
+        ),
         dirs_exist_ok=True,
     )
 
@@ -75,7 +79,7 @@ class SetupPrerequisiteFile(StrEnum):
     following each other silently and asserting nothing.
     """
 
-    PACKAGE = "basstler/__init__.py"
+    PACKAGE = "basstler/src/basstler/__init__.py"
     """
     The package holding every module the hooks and skills run.
     """

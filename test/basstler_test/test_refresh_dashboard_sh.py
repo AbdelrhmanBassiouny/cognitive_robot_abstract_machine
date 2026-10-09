@@ -47,7 +47,7 @@ def scratch_project_root(tmp_path: Path) -> Path:
     hooks_directory = tmp_path / ProjectLocation.HOOKS
     package_directory = tmp_path / ProjectLocation.PACKAGE
     plan_dashboard_directory.mkdir(parents=True)
-    package_directory.mkdir()
+    package_directory.mkdir(parents=True)
 
     shutil.copy(
         PLAN_DASHBOARD_DIRECTORY / "refresh_dashboard.sh",

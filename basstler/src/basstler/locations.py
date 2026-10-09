@@ -49,13 +49,20 @@ class PackageLocation(PathEnumeration):
 
     DIRECTORY = Path(__file__).parent
     """
-    This package's own directory, which is also the directory it *is* rather than lives
-    under.
+    This package's own directory, under its source tree's ``src`` directory.
     """
 
-    REPOSITORY_ROOT = DIRECTORY.parent
+    SOURCE_TREE = DIRECTORY.parent.parent
     """
-    The repository root, which is the directory ``basstler`` imports from with no install.
+    The directory holding the package's ``pyproject.toml``, ``README.md`` and ``src``.
+
+    Found from the modules, so it is the clone's own source tree wherever the package is
+    imported from that source - through an editable install or ``PYTHONPATH``.
+    """
+
+    REPOSITORY_ROOT = SOURCE_TREE.parent
+    """
+    The repository root, which holds the source tree.
     """
 
     STACK_CONFIGURATION = DIRECTORY / "stack.toml"
@@ -68,7 +75,7 @@ class PackageLocation(PathEnumeration):
     The exported snapshot of the fork's open pull requests - scratch state, never committed.
     """
 
-    DEPENDENCY_DECLARATION = DIRECTORY / "pyproject.toml"
+    DEPENDENCY_DECLARATION = SOURCE_TREE / "pyproject.toml"
     """
     The package metadata, whose ``[project] dependencies`` this package installs.
     """
@@ -107,7 +114,19 @@ class ProjectLocation(PathEnumeration):
     Where the personal-notes branch keeps everything it holds.
     """
 
-    PACKAGE = Path(PackageLocation.DIRECTORY.value.name)
+    PACKAGE_SOURCE_TREE = PackageLocation.SOURCE_TREE.value.relative_to(
+        PackageLocation.REPOSITORY_ROOT.value
+    )
+    """
+    The directory holding the package's ``pyproject.toml``, ``README.md`` and ``src``.
+    """
+
+    PACKAGE_IMPORT_DIRECTORY = PACKAGE_SOURCE_TREE / "src"
+    """
+    The directory a caller puts on the import path to import this clone's own package.
+    """
+
+    PACKAGE = PACKAGE_IMPORT_DIRECTORY / PackageLocation.DIRECTORY.value.name
     """
     This package's own directory.
     """
