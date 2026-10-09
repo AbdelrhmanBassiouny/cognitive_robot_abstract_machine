@@ -6,8 +6,6 @@ from typing import TYPE_CHECKING, Dict, List, Union
 
 from geometry_msgs.msg import Twist
 from nav_msgs.msg import Odometry
-from sensor_msgs.msg import JointState
-from std_msgs.msg import Float64MultiArray
 
 from giskardpy.executor import NoPacing, Pacer, RealTimePacer
 from giskardpy.middleware.ros2 import rospy
@@ -19,6 +17,10 @@ from giskardpy.middleware.ros2.command_publishing import (
     MinimumVelocity,
 )
 from giskardpy.middleware.ros2.control_loop import ControlLoop
+from giskardpy.middleware.ros2.controller_manager import (
+    ControllerManager,
+    ControllerType,
+)
 from semantic_digital_twin.adapters.ros.input_synchronization import (
     PendingJointStateSynchronizer,
     OdometrySynchronizer,
@@ -26,10 +28,6 @@ from semantic_digital_twin.adapters.ros.input_synchronization import (
 )
 from giskardpy.middleware.ros2.motion_server import MotionServer
 from giskardpy.middleware.ros2.ros2_interface import (
-    call_service,
-    search_for_subscriber_of_node_with_type,
-    get_parameters,
-    search_for_publisher_of_node_with_type,
     search_for_unique_publisher_of_type,
     search_for_unique_subscriber_of_type,
 )
@@ -339,64 +337,59 @@ class ClosedLoopRobotInterfaceConfig(RobotInterfaceConfig, ABC):
         whitelist: List[str] | None = None,
     ) -> None:
         """
-        :param whitelist: list all controllers that should get added, if None, giskard will search automatically
+        Tell Giskard to read and command the robot through the active controllers of a
+        controller manager.
+
+        :param controller_manager_name: The controller manager node, including the
+            namespace it runs in.
+        :param whitelist: The names of the controllers to consider, all if ``None``.
         """
-        from controller_manager_msgs.srv import ListControllers
-
-        controllers: ListControllers.Response = call_service(
-            ListControllers,
-            f"{controller_manager_name}/list_controllers",
-            ListControllers.Request(),
+        self.sync_joint_states_from_controller_manager(
+            controller_manager_name, whitelist
+        )
+        self.add_velocity_controllers_from_controller_manager(
+            controller_manager_name, whitelist
         )
 
-        controllers_to_add = self.__filter_controllers_with_whitelist(
-            controllers.controller, whitelist
-        )
+    def sync_joint_states_from_controller_manager(
+        self,
+        controller_manager_name: str = "controller_manager",
+        whitelist: List[str] | None = None,
+    ) -> None:
+        """
+        Tell Giskard to sync the world state with the active joint state broadcasters of
+        a controller manager.
 
-        for controller in controllers_to_add:
-            if controller.state == "active":
-                if controller.type == "joint_state_broadcaster/JointStateBroadcaster":
-                    topic_name = search_for_publisher_of_node_with_type(
-                        topic_type=JointState, node_name=controller.name
-                    )
-                    self.sync_joint_state_topic(topic_name)
-                elif (
-                    controller.type
-                    == "velocity_controllers/JointGroupVelocityController"
-                ):
-                    cmt_topic = search_for_subscriber_of_node_with_type(
-                        topic_type=Float64MultiArray, node_name=controller.name
-                    )
-                    joints = (
-                        get_parameters(parameters=["joints"], node_name=controller.name)
-                        .values[0]
-                        .string_array_value
-                    )
-                    self.add_joint_velocity_group_controller(
-                        cmd_topic=cmt_topic, connections=joints
-                    )
-                elif controller.type == "diff_drive_controller/DiffDriveController":
-                    self.add_base_cmd_velocity(controller.name)
-
-    def __filter_controllers_with_whitelist(
-        self, controllers: list, whitelist: List[str] | None
-    ) -> list:
-        from controller_manager_msgs.msg import ControllerState
-
-        controllers_to_add: List[ControllerState]
-        if whitelist is None:
-            return controllers
-        else:
-            available_controllers = {controller.name for controller in controllers}
-            missing_controllers = [
-                controller
-                for controller in whitelist
-                if controller not in available_controllers
-            ]
-            if missing_controllers:
-                raise ValueError(
-                    f"The following controllers from the whitelist are not available: {missing_controllers}"
+        :param controller_manager_name: The controller manager node, including the
+            namespace it runs in.
+        :param whitelist: The names of the controllers to consider, all if ``None``.
+        """
+        controller_manager = ControllerManager(controller_manager_name)
+        for controller in controller_manager.active_controllers(whitelist):
+            if controller.type == ControllerType.JOINT_STATE_BROADCASTER:
+                self.sync_joint_state_topic(
+                    controller_manager.joint_state_topic_of(controller.name)
                 )
-            return [
-                controller for controller in controllers if controller.name in whitelist
-            ]
+
+    def add_velocity_controllers_from_controller_manager(
+        self,
+        controller_manager_name: str = "controller_manager",
+        whitelist: List[str] | None = None,
+    ) -> None:
+        """
+        Tell Giskard to command the joints of the active velocity controllers of a
+        controller manager.
+
+        :param controller_manager_name: The controller manager node, including the
+            namespace it runs in.
+        :param whitelist: The names of the controllers to consider, all if ``None``.
+        """
+        controller_manager = ControllerManager(controller_manager_name)
+        for controller in controller_manager.active_controllers(whitelist):
+            if controller.type == ControllerType.JOINT_GROUP_VELOCITY:
+                self.add_joint_velocity_group_controller(
+                    cmd_topic=controller_manager.command_topic_of(controller.name),
+                    connections=controller_manager.joints_of(controller.name),
+                )
+            elif controller.type == ControllerType.DIFF_DRIVE:
+                self.add_base_cmd_velocity(controller.name)

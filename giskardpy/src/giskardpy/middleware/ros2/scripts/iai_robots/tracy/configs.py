@@ -7,7 +7,7 @@ from giskardpy.middleware.ros2.robot_interface_config import (
 )
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.robots.robot_parts import AbstractRobot
-from semantic_digital_twin.robots.tracy import Tracy, TracyJoint
+from semantic_digital_twin.robots.tracy import Tracy, TracyControllerManager
 
 
 @dataclass
@@ -18,30 +18,8 @@ class TracyVelocityInterface(ClosedLoopRobotInterfaceConfig):
 
     def setup(self):
         self.sync_robot_parts()
-        joints_left = [
-            TracyJoint.LEFT_SHOULDER_PAN,
-            TracyJoint.LEFT_SHOULDER_LIFT,
-            TracyJoint.LEFT_ELBOW,
-            TracyJoint.LEFT_WRIST_1,
-            TracyJoint.LEFT_WRIST_2,
-            TracyJoint.LEFT_WRIST_3,
-        ]
-        self.add_joint_velocity_group_controller(
-            cmd_topic="/left_arm/forward_velocity_controller/commands",
-            connections=joints_left,
-        )
-        joints_right = [
-            TracyJoint.RIGHT_SHOULDER_PAN,
-            TracyJoint.RIGHT_SHOULDER_LIFT,
-            TracyJoint.RIGHT_ELBOW,
-            TracyJoint.RIGHT_WRIST_1,
-            TracyJoint.RIGHT_WRIST_2,
-            TracyJoint.RIGHT_WRIST_3,
-        ]
-        self.add_joint_velocity_group_controller(
-            cmd_topic="/right_arm/forward_velocity_controller/commands",
-            connections=joints_right,
-        )
+        for controller_manager in TracyControllerManager:
+            self.add_velocity_controllers_from_controller_manager(controller_manager)
 
 
 @dataclass

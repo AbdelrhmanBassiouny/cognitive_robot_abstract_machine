@@ -5,7 +5,7 @@ from giskardpy.middleware.ros2.robot_interface_config import (
     ClosedLoopRobotInterfaceConfig,
 )
 from giskardpy.model.world_config import WorldWithFixedRobot
-from semantic_digital_twin.robots.daisy import DAiSy, DAiSyJoint
+from semantic_digital_twin.robots.daisy import DAiSy
 from semantic_digital_twin.robots.robot_parts import AbstractRobot
 
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
@@ -19,30 +19,7 @@ class DAiSyVelocityInterface(ClosedLoopRobotInterfaceConfig):
 
     def setup(self):
         self.sync_robot_parts()
-        joints_left = [
-            DAiSyJoint.LEFT_SHOULDER_PAN,
-            DAiSyJoint.LEFT_SHOULDER_LIFT,
-            DAiSyJoint.LEFT_ELBOW,
-            DAiSyJoint.LEFT_WRIST_1,
-            DAiSyJoint.LEFT_WRIST_2,
-            DAiSyJoint.LEFT_WRIST_3,
-        ]
-        self.add_joint_velocity_group_controller(
-            cmd_topic="/left_forward_velocity_controller/commands",
-            connections=joints_left,
-        )
-        joints_right = [
-            DAiSyJoint.RIGHT_SHOULDER_PAN,
-            DAiSyJoint.RIGHT_SHOULDER_LIFT,
-            DAiSyJoint.RIGHT_ELBOW,
-            DAiSyJoint.RIGHT_WRIST_1,
-            DAiSyJoint.RIGHT_WRIST_2,
-            DAiSyJoint.RIGHT_WRIST_3,
-        ]
-        self.add_joint_velocity_group_controller(
-            cmd_topic="/right_forward_velocity_controller/commands",
-            connections=joints_right,
-        )
+        self.add_velocity_controllers_from_controller_manager()
 
 
 @dataclass

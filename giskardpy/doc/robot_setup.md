@@ -53,6 +53,25 @@ to be listed by hand.
 Because nothing in this file names a joint or a topic, it works unchanged for any
 fixed-base robot whose controller manager runs these two controllers.
 
+## Robots with a robot class or several controller managers
+
+A robot that has a robot class in `semantic_digital_twin.robots` already declares the
+topics its parts publish their state on, and it may run more than one controller manager.
+Tracy runs one per arm, each in its own namespace:
+
+```{literalinclude} ../src/giskardpy/middleware/ros2/scripts/iai_robots/tracy/configs.py
+:language: python
+:pyobject: TracyVelocityInterface
+```
+
+- `sync_robot_parts()` reads the state from the topics the robot class declares.
+- `add_velocity_controllers_from_controller_manager()` connects only to the velocity
+  controllers, so the joint states are not read a second time. It takes the name of the
+  controller manager including its namespace, for example `left_arm/controller_manager`.
+
+`discover_interfaces_from_controller_manager()`, used above, does both: it reads the
+joint state broadcaster and connects to the velocity controllers.
+
 ## Running it
 
 Start the robot on mock hardware, with the velocity controller active:

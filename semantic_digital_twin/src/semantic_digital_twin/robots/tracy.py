@@ -58,6 +58,15 @@ class TracyTopic(StrEnum):
     RIGHT_GRIPPER_JOINT_STATES = "right_gripper/joint_states"
 
 
+class TracyControllerManager(StrEnum):
+    """
+    The ros2_control controller managers of the Tracy, one per arm.
+    """
+
+    LEFT_ARM = "left_arm/controller_manager"
+    RIGHT_ARM = "right_arm/controller_manager"
+
+
 class TracyJoint(StrEnum):
     """
     Names of the Tracy's commandable connections, as spelled in its URDF.

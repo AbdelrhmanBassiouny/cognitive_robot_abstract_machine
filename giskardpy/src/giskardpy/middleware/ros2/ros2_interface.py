@@ -72,15 +72,23 @@ def get_robot_description(topic: str = "/robot_description") -> str:
     ].data
 
 
-def search_for_publisher_of_node_with_type(node_name: str, topic_type):
-    topics = rospy.get_node().get_publisher_names_and_types_by_node(node_name, "/")
+def search_for_publisher_of_node_with_type(
+    node_name: str, topic_type, namespace: str = "/"
+):
+    topics = rospy.get_node().get_publisher_names_and_types_by_node(
+        node_name, namespace
+    )
     return _search_in_topic_list(
         node_name=node_name, topic_list=topics, topic_type=topic_type
     )[0]
 
 
-def search_for_subscriber_of_node_with_type(node_name: str, topic_type):
-    topics = rospy.get_node().get_subscriber_names_and_types_by_node(node_name, "/")
+def search_for_subscriber_of_node_with_type(
+    node_name: str, topic_type, namespace: str = "/"
+):
+    topics = rospy.get_node().get_subscriber_names_and_types_by_node(
+        node_name, namespace
+    )
     return _search_in_topic_list(
         node_name=node_name, topic_list=topics, topic_type=topic_type
     )[0]
