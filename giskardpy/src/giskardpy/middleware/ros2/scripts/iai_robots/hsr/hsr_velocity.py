@@ -6,7 +6,7 @@ from giskardpy.middleware.ros2.scripts.iai_robots.hsr.configs import (
 )
 from giskardpy.middleware.ros2.utils.utils import load_xacro
 from giskardpy.qp.qp_controller_config import QPControllerConfig
-from giskardpy.middleware.ros2.server_config import ExecutionMode, GiskardServerConfig
+from giskardpy.middleware.ros2.server_config import GiskardServerConfig
 from giskardpy.middleware.ros2.giskard import Giskard
 from giskardpy.middleware.ros2 import rospy
 
@@ -23,9 +23,7 @@ def main():
             target_frequency=40,
             braking_time=timedelta(seconds=0.35),
         ),
-        server_config=GiskardServerConfig(
-            execution_mode=ExecutionMode.CLOSED_LOOP, debug_mode=False
-        ),
+        server_config=GiskardServerConfig(debug_mode=False),
     )
     giskard.live()
 

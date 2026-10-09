@@ -101,6 +101,7 @@ class WorldWithOmniDriveRobot(WorldConfig):
             rotation_velocity_limits=0.2,
             world=self.world,
         )
+        odom.has_hardware_interface = True
 
         self.world.merge_world(world_with_robot, odom)
 
@@ -134,6 +135,7 @@ class WorldWithDiffDriveRobot(WorldConfig):
             rotation_velocity_limits=0.2,
             world=self.world,
         )
+        odom.has_hardware_interface = True
 
         self.world.merge_world(world_with_robot, odom)
 

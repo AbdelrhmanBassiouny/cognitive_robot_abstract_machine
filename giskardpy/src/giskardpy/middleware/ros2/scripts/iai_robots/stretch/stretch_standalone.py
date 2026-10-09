@@ -2,9 +2,11 @@
 from datetime import timedelta
 
 from giskardpy.middleware.ros2 import rospy
-from giskardpy.middleware.ros2.server_config import ExecutionMode, GiskardServerConfig
+from giskardpy.middleware.ros2.robot_interface_config import (
+    StandAloneRobotInterfaceConfig,
+)
+from giskardpy.middleware.ros2.server_config import GiskardServerConfig
 from giskardpy.middleware.ros2.scripts.iai_robots.stretch.configs import (
-    StretchStandaloneInterface,
     WorldWithStretchConfigDiffDrive,
 )
 from giskardpy.middleware.ros2.giskard import Giskard
@@ -18,10 +20,8 @@ def main():
     robot_description = load_xacro(Stretch.get_ros_file_path())
     giskard = Giskard(
         world_config=WorldWithStretchConfigDiffDrive(urdf=robot_description),
-        robot_interface_config=StretchStandaloneInterface(),
-        server_config=GiskardServerConfig(
-            execution_mode=ExecutionMode.STANDALONE, debug_mode=True
-        ),
+        robot_interface_config=StandAloneRobotInterfaceConfig(),
+        server_config=GiskardServerConfig(debug_mode=True),
         qp_controller_config=QPControllerConfig(
             # reproduces the braking of the former prediction_horizon=30
             target_frequency=25,

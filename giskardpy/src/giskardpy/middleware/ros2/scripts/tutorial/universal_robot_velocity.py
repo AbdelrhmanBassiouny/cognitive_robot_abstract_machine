@@ -3,15 +3,17 @@ from dataclasses import dataclass
 
 from giskardpy.middleware.ros2 import rospy
 from giskardpy.middleware.ros2.giskard import Giskard
-from giskardpy.middleware.ros2.robot_interface_config import RobotInterfaceConfig
+from giskardpy.middleware.ros2.robot_interface_config import (
+    ClosedLoopRobotInterfaceConfig,
+)
 from giskardpy.middleware.ros2.ros2_interface import get_robot_description
-from giskardpy.middleware.ros2.server_config import ExecutionMode, GiskardServerConfig
+from giskardpy.middleware.ros2.server_config import GiskardServerConfig
 from giskardpy.model.world_config import WorldWithFixedRobot
 from giskardpy.qp.qp_controller_config import QPControllerConfig
 
 
 @dataclass
-class ControllerManagerInterface(RobotInterfaceConfig):
+class ControllerManagerInterface(ClosedLoopRobotInterfaceConfig):
     """
     Reads and commands a robot through the active controllers of its ros2_control
     controller manager.
@@ -32,7 +34,7 @@ def create_giskard() -> Giskard:
     return Giskard(
         world_config=WorldWithFixedRobot(urdf=get_robot_description()),
         robot_interface_config=ControllerManagerInterface(),
-        server_config=GiskardServerConfig(execution_mode=ExecutionMode.CLOSED_LOOP),
+        server_config=GiskardServerConfig(),
         qp_controller_config=QPControllerConfig(target_frequency=50),
     )
 

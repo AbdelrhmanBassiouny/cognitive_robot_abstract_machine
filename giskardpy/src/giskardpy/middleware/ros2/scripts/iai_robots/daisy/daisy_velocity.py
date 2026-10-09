@@ -1,7 +1,7 @@
 from datetime import timedelta
 
 from giskardpy.middleware.ros2 import rospy
-from giskardpy.middleware.ros2.server_config import ExecutionMode, GiskardServerConfig
+from giskardpy.middleware.ros2.server_config import GiskardServerConfig
 from giskardpy.middleware.ros2.giskard import Giskard
 from giskardpy.middleware.ros2.scripts.iai_robots.daisy.configs import (
     DAiSyVelocityInterface,
@@ -27,7 +27,7 @@ def main():
     giskard = Giskard(
         world_config=WorldWithDaisyConfig(urdf=robot_description),
         robot_interface_config=DAiSyVelocityInterface(),
-        server_config=GiskardServerConfig(execution_mode=ExecutionMode.CLOSED_LOOP),
+        server_config=GiskardServerConfig(),
         qp_controller_config=QPControllerConfig(
             # reproduces the braking of the former prediction_horizon=30
             target_frequency=80,

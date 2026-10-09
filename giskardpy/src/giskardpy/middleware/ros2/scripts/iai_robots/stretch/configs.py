@@ -1,19 +1,16 @@
 from dataclasses import dataclass, field
 
-from typing_extensions import List, Union
+from typing_extensions import List
 
 from giskardpy.middleware.ros2.robot_interface_config import (
-    StandAloneRobotInterfaceConfig,
-    RobotInterfaceConfig,
+    ClosedLoopRobotInterfaceConfig,
 )
 from giskardpy.model.world_config import (
     WorldWithOmniDriveRobot,
     WorldWithDiffDriveRobot,
 )
-from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.robots.robot_parts import AbstractRobot
 from semantic_digital_twin.robots.stretch import Stretch, StretchJoint
-from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.connections import (
     Connection6DoF,
     DifferentialDrive,
@@ -21,47 +18,7 @@ from semantic_digital_twin.world_description.connections import (
 
 
 @dataclass
-class StretchStandaloneInterface(StandAloneRobotInterfaceConfig):
-    """
-    Simulates the arm, gripper, head and drive of Stretch without talking to hardware.
-    """
-
-    joint_names: List[StretchJoint] = field(init=False, default_factory=list)
-    """
-    The arm, gripper, wheel and head joints of Stretch, without the base drive.
-    """
-
-    def __post_init__(self) -> None:
-        self.joint_names = [
-            StretchJoint.GRIPPER_LEFT_FINGER,
-            StretchJoint.GRIPPER_RIGHT_FINGER,
-            StretchJoint.RIGHT_WHEEL,
-            StretchJoint.LEFT_WHEEL,
-            StretchJoint.LIFT,
-            StretchJoint.ARM_L3,
-            StretchJoint.ARM_L2,
-            StretchJoint.ARM_L1,
-            StretchJoint.ARM_L0,
-            StretchJoint.WRIST_YAW,
-            StretchJoint.HEAD_PAN,
-            StretchJoint.HEAD_TILT,
-        ]
-
-    def controlled_joint_names(self, world: World) -> List[Union[str, PrefixedName]]:
-        """
-        The joints to control, with the base drive resolved from ``world``.
-
-        :param world: The world holding the robot and its base drive connection.
-        """
-        drive = world.get_connections_by_type(DifferentialDrive)[0]
-        return [drive.name, *self.joint_names]
-
-    def setup(self):
-        self.register_controlled_joints(self.controlled_joint_names(self.world))
-
-
-@dataclass
-class StretchVelocityInterface(RobotInterfaceConfig):
+class StretchVelocityInterface(ClosedLoopRobotInterfaceConfig):
     """
     Commands the arm, head and drive of Stretch through their velocity controllers.
     """

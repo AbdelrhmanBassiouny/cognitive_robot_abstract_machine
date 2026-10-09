@@ -1,9 +1,8 @@
 from dataclasses import dataclass, field
-from typing import List, Optional
+from typing import Optional
 
 from giskardpy.middleware.ros2.robot_interface_config import (
-    StandAloneRobotInterfaceConfig,
-    RobotInterfaceConfig,
+    ClosedLoopRobotInterfaceConfig,
 )
 from giskardpy.model.world_config import WorldWithFixedRobot
 from semantic_digital_twin.robots.daisy import DAiSy, DAiSyJoint
@@ -13,7 +12,7 @@ from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 
 
 @dataclass
-class DAiSyVelocityInterface(RobotInterfaceConfig):
+class DAiSyVelocityInterface(ClosedLoopRobotInterfaceConfig):
     """
     Commands both arms of DAiSy through their forward velocity controllers.
     """
@@ -65,35 +64,3 @@ class WorldWithDaisyConfig(WorldWithFixedRobot):
     def setup_world(self, robot_name: Optional[str] = None) -> None:
         super().setup_world()
         self.robot = self.world.get_semantic_annotations_by_type(DAiSy)[0]
-
-
-@dataclass
-class DaisyStandAloneRobotInterfaceConfig(StandAloneRobotInterfaceConfig):
-    """
-    Simulates both arms and both grippers of DAiSy without talking to hardware.
-    """
-
-    joint_names: List[str] = field(
-        init=False,
-        default_factory=lambda: [
-            DAiSyJoint.LEFT_SHOULDER_PAN,
-            DAiSyJoint.LEFT_SHOULDER_LIFT,
-            DAiSyJoint.LEFT_ELBOW,
-            DAiSyJoint.LEFT_WRIST_1,
-            DAiSyJoint.LEFT_WRIST_2,
-            DAiSyJoint.LEFT_WRIST_3,
-            DAiSyJoint.RIGHT_SHOULDER_PAN,
-            DAiSyJoint.RIGHT_SHOULDER_LIFT,
-            DAiSyJoint.RIGHT_ELBOW,
-            DAiSyJoint.RIGHT_WRIST_1,
-            DAiSyJoint.RIGHT_WRIST_2,
-            DAiSyJoint.RIGHT_WRIST_3,
-            DAiSyJoint.LEFT_GRIPPER_FINGER,
-            DAiSyJoint.LEFT_GRIPPER_RIGHT_FINGER,
-            DAiSyJoint.RIGHT_GRIPPER_FINGER,
-            DAiSyJoint.RIGHT_GRIPPER_RIGHT_FINGER,
-        ],
-    )
-    """
-    The arm and gripper joints of DAiSy.
-    """

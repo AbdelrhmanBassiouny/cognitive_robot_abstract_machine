@@ -9,9 +9,7 @@ from nav_msgs.msg import Odometry
 from sensor_msgs.msg import JointState
 from std_msgs.msg import Float64MultiArray
 
-from giskardpy.data_types.exceptions import (
-    JointRegistrationRequiresStandaloneModeError,
-)
+from giskardpy.executor import NoPacing, Pacer, RealTimePacer
 from giskardpy.middleware.ros2 import rospy
 from giskardpy.middleware.ros2.command_publishing import (
     DriveVelocityCommandPublisher,
@@ -36,12 +34,10 @@ from giskardpy.middleware.ros2.ros2_interface import (
     search_for_unique_subscriber_of_type,
 )
 from giskardpy.middleware.ros2.server_config import GiskardServerConfig
-from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.robots.robot_part_mixins import HasInputSource
 from semantic_digital_twin.robots.robot_parts import AbstractRobot
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.connections import (
-    ActiveConnection,
     ActiveConnection1DOF,
     Connection6DoF,
     DifferentialDrive,
@@ -56,6 +52,9 @@ if TYPE_CHECKING:
 class RobotInterfaceConfig(ABC):
     """
     Describes how Giskard reads the state of a robot and how it commands it.
+
+    The kind of interface decides whether the motion is simulated or executed on the
+    robot.
     """
 
     giskard: Giskard = field(init=False, repr=False, compare=False)
@@ -66,13 +65,6 @@ class RobotInterfaceConfig(ABC):
         interface.
     """
 
-    tf_frame_synchronizer: TfFrameSynchronizer | None = field(
-        init=False, default=None, repr=False, compare=False
-    )
-    """
-    Created on demand, tracks all 6 degree of freedom connections that follow tf.
-    """
-
     def attach(self, giskard: Giskard) -> None:
         """
         Bind this interface to the Giskard instance it configures.
@@ -80,12 +72,15 @@ class RobotInterfaceConfig(ABC):
         self.giskard = giskard
 
     @abstractmethod
-    def setup(self):
+    def create_pacer(self) -> Pacer:
         """
-        Implement this method to configure how Giskard can talk to the robot using it's
-        self.
+        Build the pacer of the control loop.
+        """
 
-        methods.
+    @abstractmethod
+    def connect(self) -> None:
+        """
+        Decide which joints Giskard controls and how it reaches them.
         """
 
     @property
@@ -108,6 +103,65 @@ class RobotInterfaceConfig(ABC):
     def control_loop(self) -> ControlLoop:
         return self.giskard.motion_server.control_loop
 
+
+@dataclass
+class StandAloneRobotInterfaceConfig(RobotInterfaceConfig):
+    """
+    Simulates the motion in place, without talking to any hardware.
+
+    Giskard controls the joints the robot class declares and the base drive of the world
+    config.
+    """
+
+    def create_pacer(self) -> Pacer:
+        """
+        A simulated motion runs as fast as the computer allows.
+        """
+        return NoPacing()
+
+    def connect(self) -> None:
+        pass
+
+
+@dataclass
+class ClosedLoopRobotInterfaceConfig(RobotInterfaceConfig, ABC):
+    """
+    Reads the state of a real robot and sends it the commands of the controller.
+
+    Giskard controls exactly the joints that :meth:`setup` adds a command publisher for.
+    """
+
+    tf_frame_synchronizer: TfFrameSynchronizer | None = field(
+        init=False, default=None, repr=False, compare=False
+    )
+    """
+    Created on demand, tracks all 6 degree of freedom connections that follow tf.
+    """
+
+    def create_pacer(self) -> Pacer:
+        """
+        A real robot has to be commanded in real time.
+        """
+        return RealTimePacer()
+
+    def connect(self) -> None:
+        """
+        Release every joint the robot class declared as controlled, then let
+        :meth:`setup` declare the ones that are commanded.
+        """
+        with self.world.modify_world():
+            self.world.set_dofs_has_hardware_interface(
+                self.world.degrees_of_freedom, False
+            )
+        self.setup()
+
+    @abstractmethod
+    def setup(self):
+        """
+        Implement this method to configure how Giskard reads the state of the robot and
+        how it sends commands, using the ``sync_*`` and ``add_*`` methods.
+        """
+
     # %% reading the state of the robot
 
     def sync_odometry_topic(
@@ -129,7 +183,7 @@ class RobotInterfaceConfig(ABC):
             connection=joint,
         )
         self.motion_server.inputs.synchronizers.append(synchronizer)
-        if sync_in_control_loop and self.server_config.is_closed_loop:
+        if sync_in_control_loop:
             self.control_loop.inputs.synchronizers.append(synchronizer)
 
     def sync_6dof_joint_with_tf_frame(
@@ -145,10 +199,7 @@ class RobotInterfaceConfig(ABC):
             self.motion_server.inputs.synchronizers.insert(
                 0, self.tf_frame_synchronizer
             )
-            if self.server_config.is_closed_loop:
-                self.control_loop.inputs.synchronizers.insert(
-                    0, self.tf_frame_synchronizer
-                )
+            self.control_loop.inputs.synchronizers.insert(0, self.tf_frame_synchronizer)
         self.tf_frame_synchronizer.track(joint, tf_parent_frame, tf_child_frame)
 
     def sync_robot_parts(self):
@@ -161,8 +212,7 @@ class RobotInterfaceConfig(ABC):
         """
         self.robot.use_real_sources(rospy.get_node())
         self.motion_server.inputs.add_robot_inputs(self.robot)
-        if self.server_config.is_closed_loop:
-            self.control_loop.inputs.add_robot_inputs(self.robot)
+        self.control_loop.inputs.add_robot_inputs(self.robot)
 
     def sync_robot_part(self, robot_part: HasInputSource):
         """
@@ -171,8 +221,7 @@ class RobotInterfaceConfig(ABC):
         """
         robot_part.use_real_source(rospy.get_node())
         self.motion_server.inputs.add_robot_part_input(robot_part)
-        if self.server_config.is_closed_loop:
-            self.control_loop.inputs.add_robot_part_input(robot_part)
+        self.control_loop.inputs.add_robot_part_input(robot_part)
 
     def sync_joint_state_topic(self, topic_name: str, group_name: str | None = None):
         """
@@ -185,7 +234,7 @@ class RobotInterfaceConfig(ABC):
                 world=self.world, node=rospy.get_node(), topic_name=topic_name
             )
         )
-        if not self.server_config.is_closed_loop or group_name != self.robot.name:
+        if group_name != self.robot.name:
             return
         self.control_loop.inputs.synchronizers.append(
             PendingJointStateSynchronizer(
@@ -216,8 +265,6 @@ class RobotInterfaceConfig(ABC):
         """
         if cmd_vel_topic is None:
             cmd_vel_topic = search_for_unique_subscriber_of_type(Twist)
-        if not self.server_config.is_closed_loop:
-            return
         self.control_loop.command_publishers.append(
             DriveVelocityCommandPublisher(
                 world=self.world,
@@ -235,9 +282,8 @@ class RobotInterfaceConfig(ABC):
         minimum_velocity_overrides: Dict[str, float] | None = None,
     ):
         """
-        For closed loop mode.
-
         Tell Giskard how it can send velocities to joints.
+
         :param namespaces: A list of namespaces where Giskard can find the topics and
             parameters.
         :param minimum_valid_velocity: magnitude that smaller joint velocities are
@@ -263,9 +309,8 @@ class RobotInterfaceConfig(ABC):
         minimum_velocity_overrides: Dict[str, float] | None = None,
     ):
         """
-        For closed loop mode.
-
         Tell Giskard how it can send velocities for a group of connections.
+
         :param minimum_valid_velocity: magnitude that smaller joint velocities are
             raised to so the hardware moves. ``0.0`` disables raising.
         :param minimum_velocity_overrides: minimum magnitude per joint name, overriding
@@ -285,25 +330,6 @@ class RobotInterfaceConfig(ABC):
                 ),
             )
         )
-
-    def register_controlled_joints(
-        self, joint_names: List[Union[str, PrefixedName]]
-    ) -> None:
-        """
-        Flag the given joints as controlled by Giskard itself.
-
-        :raises JointRegistrationRequiresStandaloneModeError: If Giskard is not in
-            standalone mode.
-        """
-        if not self.server_config.is_standalone:
-            raise JointRegistrationRequiresStandaloneModeError()
-        for joint_name in joint_names:
-            connection: ActiveConnection = self.world.get_connection_by_name(joint_name)
-            if not isinstance(connection, ActiveConnection):
-                raise Exception(
-                    f"{joint_name} is not an active connection and cannot be controlled."
-                )
-            connection.has_hardware_interface = True
 
     # %% discovery
 
@@ -374,18 +400,3 @@ class RobotInterfaceConfig(ABC):
             return [
                 controller for controller in controllers if controller.name in whitelist
             ]
-
-
-@dataclass
-class StandAloneRobotInterfaceConfig(RobotInterfaceConfig):
-    """
-    Controls the given joints without talking to any hardware.
-    """
-
-    joint_names: List[str]
-    """
-    The joints Giskard is allowed to control.
-    """
-
-    def setup(self):
-        self.register_controlled_joints(self.joint_names)

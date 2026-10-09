@@ -1,10 +1,9 @@
 from dataclasses import dataclass, field
-from typing import List, Optional
+from typing import Optional
 
 from giskardpy.model.world_config import WorldWithFixedRobot
 from giskardpy.middleware.ros2.robot_interface_config import (
-    RobotInterfaceConfig,
-    StandAloneRobotInterfaceConfig,
+    ClosedLoopRobotInterfaceConfig,
 )
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.robots.robot_parts import AbstractRobot
@@ -12,7 +11,7 @@ from semantic_digital_twin.robots.tracy import Tracy, TracyJoint
 
 
 @dataclass
-class TracyVelocityInterface(RobotInterfaceConfig):
+class TracyVelocityInterface(ClosedLoopRobotInterfaceConfig):
     """
     Commands both arms of Tracy through their forward velocity controllers.
     """
@@ -70,31 +69,3 @@ class WorldWithTracyConfig(WorldWithFixedRobot):
 #     def __init__(self, collision_checker: CollisionCheckerLib = CollisionCheckerLib.bpb):
 #         super().__init__('package://giskardpy_ros/self_collision_matrices/iai/tracy.srdf',
 #                          collision_checker)
-
-
-@dataclass
-class TracyStandAloneRobotInterfaceConfig(StandAloneRobotInterfaceConfig):
-    """
-    Simulates both arms of Tracy without talking to hardware.
-    """
-
-    joint_names: List[str] = field(
-        init=False,
-        default_factory=lambda: [
-            TracyJoint.LEFT_SHOULDER_PAN,
-            TracyJoint.LEFT_SHOULDER_LIFT,
-            TracyJoint.LEFT_ELBOW,
-            TracyJoint.LEFT_WRIST_1,
-            TracyJoint.LEFT_WRIST_2,
-            TracyJoint.LEFT_WRIST_3,
-            TracyJoint.RIGHT_SHOULDER_PAN,
-            TracyJoint.RIGHT_SHOULDER_LIFT,
-            TracyJoint.RIGHT_ELBOW,
-            TracyJoint.RIGHT_WRIST_1,
-            TracyJoint.RIGHT_WRIST_2,
-            TracyJoint.RIGHT_WRIST_3,
-        ],
-    )
-    """
-    The arm joints of Tracy.
-    """

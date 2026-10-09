@@ -20,8 +20,8 @@ Giskard is configured with four objects:
 | Object | What it decides |
 |---|---|
 | `WorldConfig` | Which robot description is loaded and how the robot is attached to the world. |
-| `RobotInterfaceConfig` | Where the state of the robot is read from and where commands are sent. |
-| `GiskardServerConfig` | Whether a motion is only simulated (`STANDALONE`) or sent to the robot (`CLOSED_LOOP`). |
+| `RobotInterfaceConfig` | Whether a motion is only simulated (`StandAloneRobotInterfaceConfig`) or sent to the robot (a `ClosedLoopRobotInterfaceConfig`), and for a real robot where its state is read from and where commands are sent. |
+| `GiskardServerConfig` | The goal lifecycle and the debug output of the motion server. |
 | `QPControllerConfig` | The control frequency and the tuning of the controller. |
 
 To command a robot, Giskard needs two things from it:
@@ -45,7 +45,9 @@ to be listed by hand.
 - `ControllerManagerInterface` asks the controller manager for its active controllers.
   It reads the joint states from the broadcaster and sends velocities to the velocity
   controller.
-- `ExecutionMode.CLOSED_LOOP` makes Giskard send its commands to the robot in real time.
+  Because it is a `ClosedLoopRobotInterfaceConfig`, Giskard sends its commands to the
+  robot in real time and controls only the joints a controller commands. Passing
+  `StandAloneRobotInterfaceConfig()` instead simulates the motion without hardware.
 - `target_frequency` is the control frequency in hertz.
 
 Because nothing in this file names a joint or a topic, it works unchanged for any

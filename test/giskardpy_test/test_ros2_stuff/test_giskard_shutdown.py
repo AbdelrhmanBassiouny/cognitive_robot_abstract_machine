@@ -4,7 +4,9 @@ from dataclasses import dataclass
 import rclpy
 
 from giskardpy.middleware.ros2.giskard import Giskard
-from giskardpy.middleware.ros2.robot_interface_config import RobotInterfaceConfig
+from giskardpy.middleware.ros2.robot_interface_config import (
+    StandAloneRobotInterfaceConfig,
+)
 from giskardpy.middleware.ros2.server_config import GiskardServerConfig
 from giskardpy.model.world_config import WorldConfig
 from giskardpy.qp.qp_controller_config import QPControllerConfig
@@ -27,12 +29,12 @@ class InterruptingInput(InputSynchronizer):
 
 
 @dataclass
-class InterruptedWhileIdleInterface(RobotInterfaceConfig):
+class InterruptedWhileIdleInterface(StandAloneRobotInterfaceConfig):
     """
     Lets the first idle cycle of Giskard be interrupted.
     """
 
-    def setup(self):
+    def connect(self):
         self.motion_server.inputs.add_input(InterruptingInput(world=self.world))
 
 

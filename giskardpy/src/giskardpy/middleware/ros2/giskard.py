@@ -61,11 +61,13 @@ class Giskard:
     Instantiate it with appropriate configs for you setup and then call giskard.live()
     :param world_config: A world configuration. Use a predefined one or implement your
         own WorldConfig class.
-    :param robot_interface_config: How Giskard talk to the robot. You probably have to
-        implement your own RobotInterfaceConfig.
+    :param robot_interface_config: How Giskard talks to the robot, which also decides
+        whether the motion is simulated or executed. Use
+        ``StandAloneRobotInterfaceConfig`` to simulate, or implement your own
+        ``ClosedLoopRobotInterfaceConfig`` to command a real robot.
     :param collision_avoidance_config: default is no collision avoidance or implement
         your own collision_avoidance_config.
-    :param server_config: how goals are executed, default is standalone mode
+    :param server_config: the goal lifecycle and debug output of the motion server
     :param qp_controller_config: default is good for almost all cases
     :param additional_goal_package_paths: specify paths that Giskard needs to import to
         find your custom Goals. Giskard will run 'from <additional path> import *' for
@@ -107,14 +109,14 @@ class Giskard:
                     world=self.world_config.world,
                     qp_controller_config=self.qp_controller_config,
                 ),
-                pacer=self.server_config.create_pacer(),
+                pacer=self.robot_interface_config.create_pacer(),
             )
 
         self.setup_world_model_ros_interface()
         self.motion_server = self.create_motion_server()
         node_logger.info("Connecting to the robot.")
         self.robot_interface_config.attach(self)
-        self.robot_interface_config.setup()
+        self.robot_interface_config.connect()
         self.sanity_check()
 
     def create_motion_server(self) -> MotionServer:
@@ -252,7 +254,7 @@ class Giskard:
     def _controlled_joints_sanity_check(self):
         world = self.world_config.world
         movable_joints = world.get_connections_by_type(ActiveConnection)
-        controlled_joints = self.robot.controlled_connections
+        controlled_joints = [joint for joint in movable_joints if joint.is_controlled]
         non_controlled_joints = set(movable_joints).difference(set(controlled_joints))
         if len(controlled_joints) == 0 and len(world.connections) > 0:
             raise NoControlledJointsError()
