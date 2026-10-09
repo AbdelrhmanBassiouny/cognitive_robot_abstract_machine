@@ -1969,9 +1969,16 @@ class EQLTranslator:
 
         :param condition: The EQL condition.
         :return: SQLAlchemy boolean expression or None if handled via JOINs.
+        :raises UnsupportedTranslationError: When the condition is a variable that is not
+            an attribute, whose truth has no SQL condition.
         """
         if isinstance(condition, Attribute):
             return self._attribute_condition(condition)
+        if isinstance(condition, Variable):
+            raise UnsupportedTranslationError(
+                condition,
+                "a variable used as a condition has no column whose truth SQL could test",
+            )
         return self.translate_query(condition)
 
     def _attribute_condition(self, attribute: Attribute) -> Any:

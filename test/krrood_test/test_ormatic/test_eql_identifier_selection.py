@@ -468,6 +468,14 @@ def test_join_inside_an_existential_over_an_element_is_rejected(session, academy
         translate(query, session)
 
 
+def test_variable_used_as_a_condition_is_rejected(session, academy):
+    m = variable(AcademyMember, domain=academy.members)
+    o = variable(AcademyOrganization, domain=academy.organizations)
+    query = an(entity(m).where(o))
+    with pytest.raises(UnsupportedTranslationError):
+        translate(query, session)
+
+
 def test_membership_of_a_domain_object_is_rejected(session, academy):
     s = variable(AcademyStudent, domain=academy.students)
     query = an(entity(s).where(contains(s.takes_course, academy.logic)))
