@@ -18,15 +18,15 @@ files, not just prose. You can render them yourself with no GitHub access at
 all:
 
 ```bash
-pip install ./bastler
-python3 -m bastler.build_dashboard \
+pip install ./basstler
+python3 -m basstler.build_dashboard \
   --plan .claude/skills/plan-dashboard/example/plan.yaml \
   --roadmap .claude/skills/plan-dashboard/example/roadmap.md \
   --pr-data .claude/skills/plan-dashboard/example/pr_data.json \
   --output /tmp/example-dashboard.html
 ```
 
-Run it from the repository root: `bastler` is a plain top-level directory, importable
+Run it from the repository root: `basstler` is a plain top-level directory, importable
 with no install, and `-m` is what puts the root on the import path.
 
 ## 1. Start with the idea, in plan mode
@@ -97,7 +97,7 @@ items:
     title: Circuit breaker around the retry loop
     branch: retry-circuit-breaker
     track: retry-logic
-    status: in_progress
+    status: in progress
     pull_request_number: 102
     depends_on: [retry-backoff-strategy]
 

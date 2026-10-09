@@ -1,4 +1,3 @@
-import gc
 import os
 import threading
 import time
@@ -6,7 +5,6 @@ from copy import deepcopy
 from dataclasses import dataclass, field
 
 import numpy as np
-import objgraph
 import pytest
 
 from semantic_digital_twin.api import (
@@ -25,6 +23,9 @@ from semantic_digital_twin.world_description.degree_of_freedom import (
     DegreeOfFreedomLimits,
 )
 
+from .living_worlds import (
+    LivingWorlds,
+)
 from .orm_interface_build import ORM_BUILD_OPTION, OrmBuild
 from .pytest_environment import PytestEnvironmentVariable
 
@@ -48,13 +49,12 @@ from semantic_digital_twin.adapters.package_resolver import PathResolver
 from semantic_digital_twin.collision_checking.collision_matrix import (
     MaxAvoidedCollisionsOverride,
 )
-from typing_extensions import List, Type, TypeVar
+from typing_extensions import Iterator, List, Type, TypeVar
 
 CallbackT = TypeVar("CallbackT", bound=Callback)
 """
 The kind of publisher a test started.
 """
-
 
 from krrood.class_diagrams.class_diagram import ClassDiagram
 from krrood.symbol_graph.symbol_graph import SymbolGraph, Symbol
@@ -173,6 +173,20 @@ The structure of fixtures in this conftest:
 """
 
 
+# %% repeatable location samples
+
+SAMPLING_SEED = 0
+"""
+The sampling seed of every plan context the tests build, so location samples repeat.
+"""
+
+
+LIVING_WORLDS = pytest.StashKey[LivingWorlds]()
+"""
+Where a run keeps the record of which test created each world.
+"""
+
+
 def pytest_addoption(parser: pytest.Parser) -> None:
     """
     Let a run state when it builds the ORM interfaces it reads.
@@ -196,12 +210,29 @@ def pytest_addoption(parser: pytest.Parser) -> None:
     )
 
 
-def pytest_configure(config):
+def pytest_configure(config: pytest.Config) -> None:
+    """
+    Give the run its own ROS domain, and start recording the worlds it creates.
+
+    ..note:: The record starts here rather than in a fixture so that it also sees the
+        worlds a test module creates while it is being imported.
+    """
     worker = os.environ.get(PytestEnvironmentVariable.XDIST_WORKER)
 
     if worker:
         worker_num = int(worker.removeprefix("gw"))
         os.environ["ROS_DOMAIN_ID"] = str(100 + worker_num)
+
+    living_worlds = LivingWorlds(world_type=World)
+    living_worlds.watch()
+    config.stash[LIVING_WORLDS] = living_worlds
+
+
+def pytest_runtest_setup(item: pytest.Item) -> None:
+    """
+    Attribute the worlds created from now on to the test that is about to run.
+    """
+    item.config.stash[LIVING_WORLDS].current_test = item.nodeid
 
 
 @pytest.fixture(scope="session")
@@ -228,19 +259,34 @@ def cleanup_after_test(_session_class_diagram):
 
 
 @pytest.fixture(autouse=True, scope="module")
-def count_worlds():
+def check_for_leaked_worlds(request: pytest.FixtureRequest) -> Iterator[None]:
+    """
+    Fail a test module that leaves too many worlds in memory, naming the tests that
+    created the ones that survived.
+    """
     yield
-    gc.collect()
-    world_in_mem = objgraph.count("World")
-    if world_in_mem > 30:
-        raise MemoryError(
-            "Something is leaking worlds, there are more than 20 worlds in memory after the test"
-        )
+    request.config.stash[LIVING_WORLDS].enforce_limit(module=request.node.nodeid)
 
 
 #############################################
 ############### Worlds ######################
 #############################################
+
+
+@pytest.fixture()
+def mini_world() -> World:
+    """
+    A world of two bodies joined by a revolute connection about the z axis.
+    """
+    world = World()
+    with world.modify_world():
+        body = Body(name=PrefixedName("root"))
+        body2 = Body(name=PrefixedName("tip"))
+        connection = RevoluteConnection.create_with_dofs(
+            world=world, parent=body, child=body2, axis=Vector3.Z()
+        )
+        world.add_connection(connection)
+    return world
 
 
 @pytest.fixture()
@@ -787,6 +833,7 @@ def apartment_world_pr2_copy_with_context(_apartment_world_setup, _pr2_world_set
         Context(
             result,
             result.get_semantic_annotations_by_type(AbstractRobot)[0],
+            sampling_seed=SAMPLING_SEED,
         ),
     )
 
@@ -1016,7 +1063,11 @@ def simple_pr2_world_setup(_pr2_world_setup, _simple_apartment_setup):
     pr2_copy = deepcopy(_pr2_world_setup)
     pr2_copy.merge_world(apartment_world)
     robot_view = pr2_copy.get_semantic_annotations_by_type(PR2)[0]
-    return pr2_copy, robot_view, Context(pr2_copy, robot_view)
+    return (
+        pr2_copy,
+        robot_view,
+        Context(pr2_copy, robot_view, sampling_seed=SAMPLING_SEED),
+    )
 
 
 @pytest.fixture(scope="session")
@@ -1029,7 +1080,11 @@ def hsr_apartment_world(_hsr_world_setup, _apartment_world_setup):
         hsr_copy, HomogeneousTransformationMatrix.from_xyz_rpy(1.5, 2, 0)
     )
 
-    return apartment_copy, robot_view, Context(apartment_copy, robot_view)
+    return (
+        apartment_copy,
+        robot_view,
+        Context(apartment_copy, robot_view, sampling_seed=SAMPLING_SEED),
+    )
 
 
 @pytest.fixture(scope="session")

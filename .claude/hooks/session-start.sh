@@ -124,7 +124,7 @@ set -euo pipefail
 # Only what is missing gets installed, so the usual run costs an import check
 # and nothing more, and a failure is reported rather than allowed to end the
 # run. See install_dependencies in ./resolve-personal-notes-config.sh, and
-# bastler/README.md, which tells a reader this happens.
+# basstler/README.md, which tells a reader this happens.
 #
 # Setup: the summary also carries ./check-setup.sh's verdict, naming any
 # check that still needs setup. It is reported rather than left to be run on
@@ -431,10 +431,10 @@ fi
 if ! MISSING_DEPENDENCIES="$(missing_dependencies)"; then
   SUMMARY_DEPENDENCIES="$(dependencies_line_not_checked)"
 elif [ -z "${MISSING_DEPENDENCIES}" ]; then
-  SUMMARY_DEPENDENCIES="$(dependencies_line_already_installed "${BASTLER_PYPROJECT_FILE}")"
+  SUMMARY_DEPENDENCIES="$(dependencies_line_already_installed "${BASSTLER_PYPROJECT_FILE}")"
 elif install_dependencies "${MISSING_DEPENDENCIES}"; then
   SUMMARY_DEPENDENCIES="$(dependencies_line_installed \
-    "${MISSING_DEPENDENCIES}" "${BASTLER_PYPROJECT_FILE}")"
+    "${MISSING_DEPENDENCIES}" "${BASSTLER_PYPROJECT_FILE}")"
 else
   SUMMARY_DEPENDENCIES="$(dependencies_line_install_failed \
     "${MISSING_DEPENDENCIES}" \
