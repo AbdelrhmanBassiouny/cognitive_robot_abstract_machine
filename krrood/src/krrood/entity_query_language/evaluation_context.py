@@ -279,6 +279,87 @@ class SubqueryResultCache:
 
 
 @dataclass
+class ProcedureCall:
+    """
+    One call of a predicate, a symbolic function or a plain function with fixed argument
+    objects.
+    """
+
+    procedure: Callable
+    """
+    The predicate class, symbolic function class or function that is called.
+    """
+
+    arguments: Dict[str, Any]
+    """
+    The argument objects, by parameter name.
+    """
+
+    @property
+    def key(self) -> Tuple[int, Tuple[Tuple[str, int], ...]]:
+        """
+        :return: A key that is equal for two calls of the same procedure with the same
+            argument objects, compared by identity.
+        """
+        return id(self.procedure), tuple(
+            sorted((name, id(value)) for name, value in self.arguments.items())
+        )
+
+
+@dataclass
+class ProcedureResults:
+    """
+    The value of each distinct procedure call made during one evaluation, and the truth
+    of each such value read as a condition.
+
+    A query reads a predicate as one relation during its evaluation, so a procedure is
+    called once per distinct tuple of argument objects and its result is reused. This
+    assumes that a procedure's result does not change while one query is evaluated.
+    """
+
+    values: Dict[Tuple, Tuple[ProcedureCall, Any]] = field(default_factory=dict)
+    """
+    The call and its value, per call key.
+
+    The call is kept so that its argument objects stay alive, and their identities
+    unique, for the whole evaluation.
+    """
+
+    falsities: Dict[int, Tuple[Any, bool]] = field(default_factory=dict)
+    """
+    The predicate instance and whether it reads as false, per identity of the instance.
+    """
+
+    def value_of(self, call: ProcedureCall, compute: Callable[[], Any]) -> Any:
+        """
+        :param call: The procedure call.
+        :param compute: Computes the value of *call*; invoked only for a call not made
+            before in this evaluation, or whose value was an iterator.
+        :return: The value of *call*.
+
+        ..note:: An iterator is consumed by its reader, so a call that returns one is not
+            reused.
+        """
+        key = call.key
+        if key in self.values:
+            return self.values[key][1]
+        value = compute()
+        if not isinstance(value, Iterator):
+            self.values[key] = (call, value)
+        return value
+
+    def is_false(self, value: Any, compute: Callable[[], bool]) -> bool:
+        """
+        :param value: A predicate instance.
+        :param compute: Reads whether *value* is false; invoked once per value.
+        :return: Whether *value* reads as false.
+        """
+        if id(value) not in self.falsities:
+            self.falsities[id(value)] = (value, compute())
+        return self.falsities[id(value)][1]
+
+
+@dataclass
 class EvaluationContext:
     """
     Carries observer state through the evaluation pipeline.
@@ -350,6 +431,11 @@ class EvaluationContext:
     )
     """
     Caches each nested subquery's result stream for the current evaluation pass.
+    """
+
+    procedure_results: ProcedureResults = field(default_factory=ProcedureResults)
+    """
+    The results of the procedure calls made during the current evaluation pass.
     """
 
     outer_visible_variables_cache: Dict[

@@ -39,6 +39,10 @@ from krrood.entity_query_language.core.inferred_object_registry import (
 )
 from krrood.entity_query_language.cache_data import ReEnterableLazyIterable
 from krrood.entity_query_language.enums import DomainSource
+from krrood.entity_query_language.evaluation_context import (
+    ProcedureCall,
+    get_evaluation_context,
+)
 from krrood.entity_query_language.exceptions import NoChildToReplace
 from krrood.entity_query_language.operators.set_operations import (
     MultiArityExpressionThatPerformsACartesianProduct,
@@ -285,7 +289,22 @@ class InstantiatedVariable(
             if inspect.isclass(self._type_) and issubclass(self._type_, HasBoundValue)
             else self._type_
         )
-        return bind(**arguments)
+        evaluation_context = get_evaluation_context()
+        if evaluation_context is None or not self._calls_procedure_:
+            return bind(**arguments)
+        return evaluation_context.procedure_results.value_of(
+            ProcedureCall(self._type_, arguments), lambda: bind(**arguments)
+        )
+
+    @cached_property
+    def _calls_procedure_(self) -> bool:
+        """
+        :return: Whether this variable binds the result of a predicate, a symbolic function
+            or a plain function, rather than a newly constructed object.
+        """
+        return not (
+            inspect.isclass(self._type_) and not issubclass(self._type_, HasBoundValue)
+        )
 
     def _replace_child_field_(
         self, old_child: SymbolicExpression, new_child: SymbolicExpression
