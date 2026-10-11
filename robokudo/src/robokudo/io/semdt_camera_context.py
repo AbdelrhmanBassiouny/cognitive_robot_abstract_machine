@@ -4,7 +4,8 @@ Resolve the Semantic Digital Twin world and camera used for rendering.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+# %% Imports
+from dataclasses import dataclass, field
 
 import robokudo.world as rk_world
 from robokudo.descriptors.camera_configs.config_semdt_raytracer import (
@@ -48,34 +49,26 @@ class RayTracingContext:
 # %% Context resolution
 
 
+@dataclass(eq=False)
 class SemDTCameraContextResolver:
     """
     Resolve and cache a ray-tracing context from a configured world source.
     """
 
-    def __init__(
-        self,
-        camera_config: SemDTRayTracerCameraConfig,
-        module_loader: ModuleLoader | None = None,
-    ) -> None:
-        """
-        Initialize source resolution.
+    camera_config: SemDTRayTracerCameraConfig
+    """
+    Camera configuration whose source is resolved.
+    """
 
-        :param camera_config: Camera configuration containing the world source.
-        :param module_loader: Optional loader supplied by focused tests.
-        """
-        self.camera_config = camera_config
-        """
-        Camera configuration whose source is resolved.
-        """
-        self.module_loader = module_loader or ModuleLoader()
-        """
-        Loader used to import configured SemDT world descriptors.
-        """
-        self._context: RayTracingContext | None = None
-        """
-        Resolved world-camera pair after successful source resolution.
-        """
+    module_loader: ModuleLoader = field(default_factory=ModuleLoader)
+    """
+    Loader for configured Semantic Digital Twin world descriptors.
+    """
+
+    _context: RayTracingContext | None = field(default=None, init=False, repr=False)
+    """
+    Cached world-camera pair after successful source resolution.
+    """
 
     def resolve(self) -> RayTracingContext:
         """
