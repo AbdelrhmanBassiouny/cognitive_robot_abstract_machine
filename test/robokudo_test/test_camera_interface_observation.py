@@ -842,3 +842,30 @@ def test_opencv_reader_stores_camera_observation(
     assert cas.camera_observation.world_T_camera is None
     assert cas.camera_observation.timestamp_nanoseconds == timestamp_nanoseconds
     assert not any(isinstance(view, CameraInfo) for view in cas.views.values())
+
+
+# %% Camera-root world binding
+
+
+def test_tf_binding_attaches_existing_camera_root_to_new_reference(
+    runtime_world: World,
+) -> None:
+    """
+    An existing camera root receives one mount when its world reference is created.
+    """
+    camera_body = Body(name=PrefixedName(name="standalone_camera"))
+    with runtime_world.modify_world():
+        runtime_world.add_body(camera_body)
+    numeric_pose = HomogeneousTransformationMatrix()
+
+    pose = CameraInterface.bind_world_T_camera(
+        world_frame="map",
+        camera_frame=str(camera_body.name),
+        world_T_camera=numeric_pose,
+    )
+
+    assert pose.child_frame is camera_body
+    assert runtime_world.root is pose.reference_frame
+    assert camera_body.parent_connection.parent is pose.reference_frame
+    assert len(runtime_world.connections) == 1
+    np.testing.assert_array_equal(pose.to_np(), numeric_pose.to_np())

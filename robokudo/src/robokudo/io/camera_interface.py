@@ -166,14 +166,13 @@ class CameraInterface(object):
                 if camera_body is None:
                     camera_body = Body(name=PrefixedName(name=camera_name))
                     world.add_body(camera_body)
-                if camera_body.parent_connection is None:
-                    mount = Connection6DoF.create_with_dofs(
-                        parent=world_body,
-                        child=camera_body,
-                        world=world,
-                        name=CameraInterface._standalone_mount_name(camera_body),
-                    )
-                    world.add_connection(mount)
+                mount = Connection6DoF.create_with_dofs(
+                    parent=world_body,
+                    child=camera_body,
+                    world=world,
+                    name=CameraInterface._standalone_mount_name(camera_body),
+                )
+                world.add_connection(mount)
         if (
             mount is None
             and camera_body.parent_connection is not None
