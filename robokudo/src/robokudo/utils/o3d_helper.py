@@ -118,8 +118,6 @@ def get_2d_corner_points_from_3d_bb(
     """
     # Create the 2D Boundingbox/ROI based on the OBB
     pointcloud_camera_model = cas.pointcloud_camera_model
-    if pointcloud_camera_model is None:
-        raise KeyError(CASViews.POINTCLOUD_CAMERA_MODEL)
     k = pointcloud_camera_model.intrinsic_matrix
     corner_points = np.asarray(object_bb.get_box_points())
     uvd = corner_points @ k.T
@@ -144,8 +142,6 @@ def project_points_to_image(
     Project 3D camera-frame points to 2D image pixels and validity mask.
     """
     pointcloud_camera_model = cas.pointcloud_camera_model
-    if pointcloud_camera_model is None:
-        raise KeyError(CASViews.POINTCLOUD_CAMERA_MODEL)
     k = pointcloud_camera_model.intrinsic_matrix
     uvd = points_camera @ k.T
     z = uvd[:, 2]

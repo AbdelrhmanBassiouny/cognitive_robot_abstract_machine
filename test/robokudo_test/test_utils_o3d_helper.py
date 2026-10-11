@@ -1,9 +1,11 @@
+# %% Imports
 import numpy as np
 import open3d as o3d
 import pytest
 
 import robokudo.cas
 from robokudo.cas import CAS, CASViews
+from robokudo.exceptions import PointCloudCameraModelMissing
 from robokudo.utils.o3d_helper import (
     put_obb_on_target_obb,
     transform_obb_relative_to_obb_center,
@@ -21,6 +23,7 @@ from semantic_digital_twin.datastructures.camera_model import PinholeCameraModel
 from semantic_digital_twin.datastructures.camera_resolution import CameraResolution
 
 
+# %% Point cloud geometry
 class TestUtilsO3DHelper(object):
     @pytest.fixture
     def cas(self, kinect_intrinsics: o3d.camera.PinholeCameraIntrinsic) -> CAS:
@@ -299,16 +302,20 @@ class TestUtilsO3DHelper(object):
             ]
         ), f"unexpected corner points, did the camera intrinsics change? {result}"
 
-    def test_get_2d_corner_points_from_3d_bb_requires_camera_model(self, cas: CAS):
+    def test_get_2d_corner_points_from_3d_bb_requires_camera_model(
+        self, cas: CAS
+    ) -> None:
+        """
+        Projection requires calibration for the current point cloud.
+        """
         cas.views.pop(CASViews.POINTCLOUD_CAMERA_MODEL)
 
         obb = o3d.geometry.OrientedBoundingBox(
             center=[0, 0, 1], R=np.eye(3), extent=[1, 1, 1]
         )
 
-        with pytest.raises(KeyError) as exception:
+        with pytest.raises(PointCloudCameraModelMissing):
             get_2d_corner_points_from_3d_bb(cas, obb)
-        assert exception.value.args[0] == CASViews.POINTCLOUD_CAMERA_MODEL
 
     def test_get_2d_corner_points_from_3d_bb_zero_depth(self, cas: CAS):
         obb = o3d.geometry.OrientedBoundingBox(

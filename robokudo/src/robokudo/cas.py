@@ -14,6 +14,7 @@ The module provides:
 * Timestamp management
 """
 
+# %% Imports
 from __future__ import annotations
 
 import copy
@@ -35,7 +36,7 @@ from typing_extensions import (
     TypeVar,
 )
 
-from robokudo.exceptions import CameraObservationMissing
+from robokudo.exceptions import CameraObservationMissing, PointCloudCameraModelMissing
 
 if TYPE_CHECKING:
     from semantic_digital_twin.datastructures.camera_model import PinholeCameraModel
@@ -45,6 +46,7 @@ if TYPE_CHECKING:
     from robokudo.types.camera import CameraObservation
 
 
+# %% View definitions
 class CASViews(StrEnum):
     """Standard view definitions for the Common Analysis Structure.
 
@@ -98,6 +100,7 @@ class CASViews(StrEnum):
     """
 
 
+# %% Common analysis structure
 @dataclass
 class CAS:
     """The main data representation in RoboKudo.
@@ -181,9 +184,15 @@ class CAS:
         return observation
 
     @property
-    def pointcloud_camera_model(self) -> Optional[PinholeCameraModel]:
-        """Return the calibration used to generate the current point cloud."""
-        return self.views.get(CASViews.POINTCLOUD_CAMERA_MODEL)
+    def pointcloud_camera_model(self) -> PinholeCameraModel:
+        """Return the calibration required for the current point cloud.
+
+        :raises PointCloudCameraModelMissing: If point cloud calibration is absent.
+        """
+        camera_model = self.views.get(CASViews.POINTCLOUD_CAMERA_MODEL)
+        if camera_model is None:
+            raise PointCloudCameraModelMissing()
+        return camera_model
 
     @pointcloud_camera_model.setter
     def pointcloud_camera_model(self, value: PinholeCameraModel) -> None:

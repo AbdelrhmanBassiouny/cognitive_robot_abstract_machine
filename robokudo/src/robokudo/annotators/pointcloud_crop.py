@@ -11,6 +11,7 @@ This module provides an annotator for:
    Cropping can be done in either sensor coordinates (default) or world coordinates.
 """
 
+# %% Imports
 from __future__ import annotations
 
 from timeit import default_timer
@@ -33,6 +34,7 @@ if TYPE_CHECKING:
     import numpy.typing as npt
 
 
+# %% Point cloud cropping
 class PointcloudCropAnnotator(BaseAnnotator):
     """Point cloud cropping using axis-aligned bounding boxes.
 
@@ -92,19 +94,9 @@ class PointcloudCropAnnotator(BaseAnnotator):
 
     @catch_and_raise_to_blackboard
     def update(self) -> Status:
-        """Process and crop point cloud data.
+        """Crop the cloud in the selected frame and publish its visualization.
 
-        The method:
-
-        * Loads point cloud and camera data from CAS
-        * Optionally transforms to world coordinates
-        * Crops using axis-aligned bounding box
-        * Generates visualization mask
-        * Updates CAS with cropped cloud
-        * Creates combined visualization
-
-        :return: SUCCESS after processing
-        :raises Exception: If world transform not found when needed
+        :return: Processing status, with failures recorded on the blackboard.
         """
         start_timer = default_timer()
         self.rk_logger.warning(f"{self.__class__.__name__} called for update()")
@@ -112,30 +104,12 @@ class PointcloudCropAnnotator(BaseAnnotator):
         cloud = self.get_cas().get(CASViews.CLOUD)
         self.color = self.get_cas().get(CASViews.COLOR_IMAGE)
         pointcloud_camera_model = self.get_cas().pointcloud_camera_model
-        if pointcloud_camera_model is None:
-            raise KeyError(CASViews.POINTCLOUD_CAMERA_MODEL)
         color2depth_ratio = self.get_cas().get(CASViews.COLOR2DEPTH_RATIO)
 
-        #
-        # Lookup camera information if the crop should be done relative to the world frame
-        #
-
         if self.descriptor.parameters.relative_to_world:
-            try:
-                cloud = transform_cloud_from_camera_to_world(self.get_cas(), cloud)
-            except Exception as e:
-                self.rk_logger.warning(
-                    f"Couldn't find camera viewpoint in the CAS and relative_to_world is true. "
-                    f"Fail. Error: {e}"
-                )
-                return Status.FAILURE
+            cloud = transform_cloud_from_camera_to_world(self.get_cas(), cloud)
 
-        #
-        # Crop the point cloud
-        #
-        assert isinstance(cloud, o3d.geometry.PointCloud)
-
-        abb = o3d.geometry.AxisAlignedBoundingBox(
+        bounding_box = o3d.geometry.AxisAlignedBoundingBox(
             [
                 self.descriptor.parameters.min_x,
                 self.descriptor.parameters.min_y,
@@ -148,16 +122,12 @@ class PointcloudCropAnnotator(BaseAnnotator):
             ],
         )
 
-        cropped_cloud = cloud.crop(abb)
+        cropped_cloud = cloud.crop(bounding_box)
 
-        # Transform cloud back to camera coordinates if it has been transformed to world before
         if self.descriptor.parameters.relative_to_world:
-            cropped_cloud_transformed = transform_cloud_from_world_to_camera(
+            cropped_cloud = transform_cloud_from_world_to_camera(
                 self.get_cas(), cropped_cloud
             )
-            cropped_cloud = cropped_cloud_transformed
-
-        assert isinstance(cropped_cloud, o3d.geometry.PointCloud)
 
         self.get_cas().set_ref(CASViews.CLOUD, cropped_cloud)
         self.get_annotator_output_struct().set_geometries(cropped_cloud)

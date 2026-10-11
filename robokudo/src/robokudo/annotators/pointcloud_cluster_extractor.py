@@ -31,7 +31,6 @@ from robokudo.cas import CASViews
 from robokudo.exceptions import (
     EmptyPointCloud,
     PlaneModelMissing,
-    PointCloudCameraModelMissing,
     PointCloudTooSmallForClustering,
 )
 from robokudo.types.annotation import Plane
@@ -307,8 +306,6 @@ class PointCloudClusterExtractor(ThreadedAnnotator):
         cloud = self.get_cas().get(CASViews.CLOUD)
         color2depth_ratio = self.get_cas().get(CASViews.COLOR2DEPTH_RATIO)
         pointcloud_camera_model = self.get_cas().pointcloud_camera_model
-        if pointcloud_camera_model is None:
-            raise PointCloudCameraModelMissing()
 
         color = self.get_cas().get(CASViews.COLOR_IMAGE)
         height, width, d = color.shape
@@ -500,8 +497,6 @@ class NaivePointCloudClusterExtractor(ThreadedAnnotator):
         cloud = self.get_cas().get(CASViews.CLOUD)
         color2depth_ratio = self.get_cas().get(CASViews.COLOR2DEPTH_RATIO)
         pointcloud_camera_model = self.get_cas().pointcloud_camera_model
-        if pointcloud_camera_model is None:
-            raise PointCloudCameraModelMissing()
 
         color = self.get_cas().get(CASViews.COLOR_IMAGE)
         height, width, d = color.shape
