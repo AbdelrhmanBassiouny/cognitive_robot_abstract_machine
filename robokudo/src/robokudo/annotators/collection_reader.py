@@ -200,7 +200,7 @@ class CollectionReaderAnnotator(BaseAnnotator):
             )
             if self.parent:
                 self.rk_logger.info("Current Behavior Tree:")
-                print(unicode_tree(self.parent))
+                self.rk_logger.info(unicode_tree(self.parent))
 
             return Status.SUCCESS
 

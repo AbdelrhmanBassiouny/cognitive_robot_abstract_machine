@@ -45,7 +45,6 @@ if TYPE_CHECKING:
     from robokudo.cas import CAS
 
 
-# TODO Needs to be migrated to ROS2 for new RGB-only use cases
 class ROSCameraWithoutDepthInterface(ROSCameraInterface):
     """
     A ROS camera interface for RGB-only cameras.
@@ -66,14 +65,12 @@ class ROSCameraWithoutDepthInterface(ROSCameraInterface):
         """
         super().__init__(camera_config)
 
-        # TODO Handle type hints like 'compressed', 'compressedDepth' and 'raw'
         self.color_subscriber: Subscriber = message_filters.Subscriber(
             camera_config.topic_color, Image
         )
         """
-        Subscriber for RGB image topic
+        Subscriber for RGB image topic.
         """
-
         self.camera_info_subscriber: Subscriber = message_filters.Subscriber(
             camera_config.topic_camera_info, CameraInfo
         )
@@ -93,45 +90,37 @@ class ROSCameraWithoutDepthInterface(ROSCameraInterface):
 
         self.color: Optional[Tuple[npt.NDArray]] = None
         """
-        Latest RGB image data
+        Latest RGB image data.
         """
-
         self.camera_info: Optional[CameraInfo] = None
         """
-        Latest camera calibration info
+        Latest camera calibration info.
         """
-
         self.color2depth_ratio: Optional[Tuple[float, float]] = (1.0, 1.0)
         """
-        Always (1.0, 1.0) since no depth data
+        Always (1.0, 1.0) since no depth data.
         """
-
         self.camera_translation: Optional[List[float]] = None
         """
-        Camera translation from TF
+        Camera translation from TF.
         """
-
         self.camera_quaternion: Optional[List[float]] = None
         """
-        Camera rotation as quaternion from TF
+        Camera rotation as quaternion from TF.
         """
-
         self.timestamp: Optional[builtin_interfaces.msg.Time] = None
         """
-        Timestamp of latest data
+        Timestamp of latest data.
         """
-
         self.lock: Lock = Lock()
         """
-        Thread synchronization lock
+        Thread synchronization lock.
         """
-
         self.bridge: CVBridgeWorkaround = CVBridgeWorkaround()
         """
         NumPy-compatible replacement for cv_bridge.
         """
-
-        print("ROSCameraWithoutDepthInterface initialized")
+        self.rk_logger.info("ROSCameraWithoutDepthInterface initialized")
 
     def rotate_camera_intrinsics(
         self, K: npt.NDArray, image_size: Tuple[int, int], rotation: str = "90_ccw"
@@ -254,18 +243,10 @@ class ROSCameraWithoutDepthInterface(ROSCameraInterface):
         """
         Process synchronized RGB image and camera info messages.
 
-        TODO make this generic. handle the encoding and order properly. For standard and
-        compressed images. this might also depend on the fix of image_transport_plugins
-        being published as a package. Startpoint can be found at the bottom of this
-        method.
-
         :param color_data: RGB image message
         :param camera_info: Camera calibration info message, defaults to None
         """
-        # hack becasue my rosbag has image topics
-        # color_arr = np.fromstring(color_data.data, np.uint8)
         self.lock.acquire()
-        # self.color = cv2.imdecode(color_arr, cv2.IMREAD_COLOR)
         self.color = self.bridge.imgmsg_to_cv2(color_data, desired_encoding="bgr8")
         self.timestamp = color_data.header.stamp
 
