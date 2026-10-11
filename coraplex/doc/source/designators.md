@@ -86,8 +86,8 @@ The grounded designator is carried out. If it fails (e.g., object moved, pose bl
   - Propose good places and orientations for doing something (e.g., where to stand to see or reach an object, where to place an item).
   - They balance feasibility (reachability, visibility, collision‑free) and preference (shorter, safer, semantically meaningful).
 
-An action designator that takes hold of an object takes one of the grasps that annotation offers
-(`annotation.grasp_candidates()`) as its `grasp` argument, and the grasp names the object it is on;
+An action designator that takes hold of an object takes one of the grasps that annotation offers 
+(`annotation.grasp_candidates()`) as its `grasp` argument, and the grasp names the object it is on; 
 one that releases an object it already holds, such as placing, takes the annotation itself as its `object_designator` argument.
 
 ## How designators fit into a plan
