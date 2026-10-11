@@ -48,7 +48,9 @@ class RecordedScene:
     """
 
     world: World
-    """Recorded semantic world."""
+    """
+    Recorded semantic world.
+    """
 
     observation: CameraObservation
     """
@@ -56,7 +58,9 @@ class RecordedScene:
     """
 
     source_root: Body
-    """Recorded world root outside the direct camera pose."""
+    """
+    Recorded world root outside the direct camera pose.
+    """
 
     inferred_body: Body
     """

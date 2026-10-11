@@ -42,7 +42,9 @@ class RenderedRGBDFrame:
     """
 
     color_bgr: np.ndarray
-    """Color image encoded in OpenCV BGR channel order."""
+    """
+    Color image encoded in OpenCV BGR channel order.
+    """
 
     depth_mm: np.ndarray
     """
@@ -50,7 +52,9 @@ class RenderedRGBDFrame:
     """
 
     segmentation: np.ndarray
-    """Body-index segmentation image aligned with the color and depth images."""
+    """
+    Body-index segmentation image aligned with the color and depth images.
+    """
 
     object_color_map: dict[str, str]
     """
@@ -58,7 +62,9 @@ class RenderedRGBDFrame:
     """
 
     camera_model: PinholeCameraModel
-    """Effective projection model used to render the frame."""
+    """
+    Effective projection model used to render the frame.
+    """
 
 
 # %% Semantic Digital Twin rendering

@@ -1,4 +1,5 @@
-"""Image preprocessing and point cloud generation.
+"""
+Image preprocessing and point cloud generation.
 
 This module provides an annotator for:
 
@@ -33,7 +34,8 @@ if TYPE_CHECKING:
 
 
 class ImagePreprocessorAnnotator(BaseAnnotator):
-    """RGB-D image preprocessor and point cloud generator.
+    """
+    RGB-D image preprocessor and point cloud generator.
 
     This annotator:
 
@@ -47,20 +49,28 @@ class ImagePreprocessorAnnotator(BaseAnnotator):
     """
 
     class ViewMode(StrEnum):
-        """Visualization mode enumeration."""
+        """
+        Visualization mode enumeration.
+        """
 
         COLOR = "color"
         DEPTH = "depth"
 
     class Descriptor(BaseAnnotator.Descriptor):
-        """Configuration descriptor for image preprocessing."""
+        """
+        Configuration descriptor for image preprocessing.
+        """
 
         class Parameters:
-            """Parameters for configuring preprocessing."""
+            """
+            Parameters for configuring preprocessing.
+            """
 
             def __init__(self):
                 self.depth_trunc: float = 9.0
-                """Maximum depth distance in meters, points beyond are discarded from cloud creation"""
+                """
+                Maximum depth distance in meters, points beyond are discarded from cloud creation
+                """
 
         # Overwrite the parameters explicitly to enable auto-completion
         parameters = Parameters()
@@ -70,7 +80,8 @@ class ImagePreprocessorAnnotator(BaseAnnotator):
         name: str = "ImagePreprocessor",
         descriptor: ImagePreprocessorAnnotator.Descriptor | None = None,
     ) -> None:
-        """Initialize the image preprocessor.
+        """
+        Initialize the image preprocessor.
 
         :param name: Name of this annotator instance
         :param descriptor: Configuration descriptor
@@ -79,16 +90,23 @@ class ImagePreprocessorAnnotator(BaseAnnotator):
         self.rk_logger.debug("%s.__init__()" % self.__class__.__name__)
 
         self.color: Optional[npt.NDArray] = None
-        """Optional color image currently being worked with"""
+        """
+        Optional color image currently being worked with
+        """
 
         self.depth: Optional[npt.NDArray] = None
-        """Optional depth image currently being worked with"""
+        """
+        Optional depth image currently being worked with
+        """
 
         self.display_mode: ImagePreprocessorAnnotator.ViewMode = self.ViewMode.COLOR
-        """The display mode to use (color or depth)"""
+        """
+        The display mode to use (color or depth)
+        """
 
     def update(self) -> Status:
-        """Process RGB-D images and generate point cloud.
+        """
+        Process RGB-D images and generate point cloud.
 
         The method:
 
@@ -170,7 +188,8 @@ class ImagePreprocessorAnnotator(BaseAnnotator):
         return Status.SUCCESS
 
     def key_callback(self, key: int) -> None:
-        """Handle keyboard input for view mode switching.
+        """
+        Handle keyboard input for view mode switching.
 
         :param key: ASCII value of pressed key
 

@@ -17,24 +17,35 @@ if TYPE_CHECKING:
 
 @dataclass(slots=True)
 class WorldDescriptorSource:
-    """Load a standalone semantic world and camera from a world descriptor."""
+    """
+    Load a standalone semantic world and camera from a world descriptor.
+    """
 
     ros_package: str = "robokudo"
-    """ROS package containing the world descriptor module."""
+    """
+    ROS package containing the world descriptor module.
+    """
 
     descriptor_name: str = "world_semdt_raytracer_tabletop"
-    """Module in ``descriptors/worlds`` that defines ``WorldDescriptor``."""
+    """
+    Module in ``descriptors/worlds`` that defines ``WorldDescriptor``.
+    """
 
     camera_name: PrefixedName | None = None
-    """Exact semantic camera name, or ``None`` for the descriptor's sole camera."""
+    """
+    Exact semantic camera name, or ``None`` for the descriptor's sole camera.
+    """
 
     camera_pose: HomogeneousTransformationMatrix | None = None
-    """Optional initial pose for the selected camera root."""
+    """
+    Optional initial pose for the selected camera root.
+    """
 
 
 @dataclass(slots=True)
 class RuntimeRobotWorldSource:
-    """Select a robot camera from RoboKudo's runtime semantic world.
+    """
+    Select a robot camera from RoboKudo's runtime semantic world.
 
     .. todo::
         Replace the current global runtime-world lookup with the synchronized world
@@ -42,20 +53,28 @@ class RuntimeRobotWorldSource:
     """
 
     robot_name: PrefixedName | None = None
-    """Exact robot name, or ``None`` when the runtime world contains one robot."""
+    """
+    Exact robot name, or ``None`` when the runtime world contains one robot.
+    """
 
 
 # %% Semantic Digital Twin ray-tracer configuration
 
 
 class SemDTRGBMode(StrEnum):
-    """Select how the ray tracer produces the color image."""
+    """
+    Select how the ray tracer produces the color image.
+    """
 
     SEMANTIC = "semantic"
-    """Color visible bodies with their semantic geometry colors."""
+    """
+    Color visible bodies with their semantic geometry colors.
+    """
 
     TRIMESH = "trimesh"
-    """Render mesh materials and fall back to semantic colors when unavailable."""
+    """
+    Render mesh materials and fall back to semantic colors when unavailable.
+    """
 
 
 @dataclass(slots=True)
@@ -77,7 +96,9 @@ class SemDTRayTracerCameraConfig(BaseCameraConfig):
     source: WorldDescriptorSource | RuntimeRobotWorldSource = field(
         default_factory=WorldDescriptorSource
     )
-    """World source and camera-selection policy used for rendering."""
+    """
+    World source and camera-selection policy used for rendering.
+    """
 
     color2depth_ratio: tuple[float, float] = (1.0, 1.0)
     """

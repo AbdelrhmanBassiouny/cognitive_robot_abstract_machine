@@ -1,4 +1,5 @@
-"""Point cloud cropping and visualization.
+"""
+Point cloud cropping and visualization.
 
 This module provides an annotator for:
 
@@ -36,7 +37,8 @@ if TYPE_CHECKING:
 
 # %% Point cloud cropping
 class PointcloudCropAnnotator(BaseAnnotator):
-    """Point cloud cropping using axis-aligned bounding boxes.
+    """
+    Point cloud cropping using axis-aligned bounding boxes.
 
     Crop a subset of points from a pointcloud data based on min/max X,Y,Z values.
     The crop is either done in sensor coordinates (default) or relative to the world frame.
@@ -46,32 +48,50 @@ class PointcloudCropAnnotator(BaseAnnotator):
     """
 
     class Descriptor(BaseAnnotator.Descriptor):
-        """Configuration descriptor for point cloud cropping."""
+        """
+        Configuration descriptor for point cloud cropping.
+        """
 
         class Parameters:
-            """Parameters for configuring point cloud cropping."""
+            """
+            Parameters for configuring point cloud cropping.
+            """
 
             def __init__(self) -> None:
                 self.min_x: float = -2.0
-                """Minimum X coordinate"""
+                """
+                Minimum X coordinate
+                """
 
                 self.min_y: float = -2.0
-                """Minimum Y coordinate"""
+                """
+                Minimum Y coordinate
+                """
 
                 self.min_z: float = -9.0
-                """Minimum Z coordinate"""
+                """
+                Minimum Z coordinate
+                """
 
                 self.max_x: float = 2.0
-                """Maximum X coordinate"""
+                """
+                Maximum X coordinate
+                """
 
                 self.max_y: float = 2.0
-                """Maximum Y coordinate"""
+                """
+                Maximum Y coordinate
+                """
 
                 self.max_z: float = 3.0
-                """Maximum Z coordinate"""
+                """
+                Maximum Z coordinate
+                """
 
                 self.relative_to_world: bool = False
-                """Whether to crop the PC in camera/sensor coordinates or whether it shoudl be transformed to world coordinates beforehand."""
+                """
+                Whether to crop the PC in camera/sensor coordinates or whether it shoudl be transformed to world coordinates beforehand.
+                """
 
         # Overwrite the parameters explicitly to enable auto-completion
         parameters = Parameters()
@@ -81,7 +101,8 @@ class PointcloudCropAnnotator(BaseAnnotator):
         name: str = "PointcloudCropAnnotator",
         descriptor: PointcloudCropAnnotator.Descriptor | None = None,
     ) -> None:
-        """Initialize the point cloud cropper.
+        """
+        Initialize the point cloud cropper.
 
         :param name: Name of this annotator instance
         :param descriptor: Configuration descriptor
@@ -90,11 +111,14 @@ class PointcloudCropAnnotator(BaseAnnotator):
         self.rk_logger.debug("%s.__init__()" % self.__class__.__name__)
 
         self.color: Optional[npt.NDArray] = None
-        """A copy of the color image currently being worked with."""
+        """
+        A copy of the color image currently being worked with.
+        """
 
     @catch_and_raise_to_blackboard
     def update(self) -> Status:
-        """Crop the cloud in the selected frame and publish its visualization.
+        """
+        Crop the cloud in the selected frame and publish its visualization.
 
         :return: Processing status, with failures recorded on the blackboard.
         """

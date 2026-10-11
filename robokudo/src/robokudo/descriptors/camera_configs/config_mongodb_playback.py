@@ -8,13 +8,19 @@ from robokudo.descriptors.camera_configs.components import WorldDescriptorCompon
 
 
 class MongoReplayMode(StrEnum):
-    """Choose which part of a recorded world playback restores."""
+    """
+    Choose which part of a recorded world playback restores.
+    """
 
     SENSOR_CONTEXT = "sensor_context"
-    """Restore only the camera and its required reference frames."""
+    """
+    Restore only the camera and its required reference frames.
+    """
 
     FULL_WORLD = "full_world"
-    """Restore the complete recorded world for each frame."""
+    """
+    Restore the complete recorded world for each frame.
+    """
 
 
 @dataclass(slots=True)
@@ -51,4 +57,6 @@ class MongoCameraConfig(BaseCameraConfig, WorldDescriptorComponent):
     """
 
     replay_mode: MongoReplayMode = MongoReplayMode.SENSOR_CONTEXT
-    """World content restored before decoding each recorded frame."""
+    """
+    World content restored before decoding each recorded frame.
+    """

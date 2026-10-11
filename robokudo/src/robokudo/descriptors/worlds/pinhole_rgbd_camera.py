@@ -1,4 +1,6 @@
-"""Reusable pinhole RGB-D camera specification for world descriptors."""
+"""
+Reusable pinhole RGB-D camera specification for world descriptors.
+"""
 
 from dataclasses import dataclass
 from enum import StrEnum
@@ -18,10 +20,14 @@ from semantic_digital_twin.spatial_types import HomogeneousTransformationMatrix,
 
 
 class PinholeRGBDCameraName(StrEnum):
-    """Provide stable names used by the standard pinhole RGB-D camera."""
+    """
+    Provide stable names used by the standard pinhole RGB-D camera.
+    """
 
     DEFAULT = "semdt_camera_optical_frame"
-    """Optical frame shared by the camera annotation and its root body."""
+    """
+    Optical frame shared by the camera annotation and its root body.
+    """
 
 
 # %% Camera specification
@@ -29,7 +35,8 @@ class PinholeRGBDCameraName(StrEnum):
 
 @dataclass(init=False)
 class PinholeRGBDCameraSpec(CameraSpec):
-    """Describe a standard pinhole RGB-D camera with segmentation output.
+    """
+    Describe a standard pinhole RGB-D camera with segmentation output.
 
     The caller supplies the pose because camera placement belongs to the containing
     world descriptor. Each instance owns its projection model and range so callers can
@@ -37,13 +44,18 @@ class PinholeRGBDCameraSpec(CameraSpec):
     """
 
     MINIMUM_DISTANCE: ClassVar[float] = 0.05
-    """Nearest usable distance in meters."""
+    """
+    Nearest usable distance in meters.
+    """
 
     MAXIMUM_DISTANCE: ClassVar[float] = 8.0
-    """Farthest usable distance in meters."""
+    """
+    Farthest usable distance in meters.
+    """
 
     def __init__(self, pose: HomogeneousTransformationMatrix) -> None:
-        """Initialize the standard camera at ``pose`` within its world.
+        """
+        Initialize the standard camera at ``pose`` within its world.
 
         :param pose: Camera-root pose relative to the body that receives the camera.
         """

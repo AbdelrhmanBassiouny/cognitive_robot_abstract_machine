@@ -41,67 +41,104 @@ from semantic_digital_twin.world_description.world_entity import Body
 
 @dataclass
 class LiveRGBDCameraConfig:
-    """Provide the options consumed by the RGB-D reader's frame conversion."""
+    """
+    Provide the options consumed by the RGB-D reader's frame conversion.
+    """
 
     tf_from: str = "color_optical_frame"
-    """Camera optical frame used when the message does not declare one."""
+    """
+    Camera optical frame used when the message does not declare one.
+    """
 
     hi_res_mode: bool = False
-    """Whether the legacy high-resolution crop is active."""
+    """
+    Whether the legacy high-resolution crop is active.
+    """
 
     color2depth_ratio: tuple[float, float] = (1.0, 1.0)
-    """Scale from color resolution to aligned depth resolution."""
+    """
+    Scale from color resolution to aligned depth resolution.
+    """
 
 
 @dataclass
 class LiveColorCameraConfig:
-    """Provide the options consumed by the RGB-only reader's frame conversion."""
+    """
+    Provide the options consumed by the RGB-only reader's frame conversion.
+    """
 
     tf_from: str = "color_optical_frame"
-    """Camera optical frame used when the message does not declare one."""
+    """
+    Camera optical frame used when the message does not declare one.
+    """
 
     rotate_image: str | None = None
-    """Optional rotation applied before publishing the frame to the CAS."""
+    """
+    Optional rotation applied before publishing the frame to the CAS.
+    """
 
 
 @dataclass
 class OpenCVCameraTestConfig:
-    """Provide the options consumed by one OpenCV frame conversion."""
+    """
+    Provide the options consumed by one OpenCV frame conversion.
+    """
 
     camera_info: CameraInfo
-    """Calibration for the configured capture resolution."""
+    """
+    Calibration for the configured capture resolution.
+    """
 
     camera_frame: str = "opencv_optical_frame"
-    """Fallback optical frame when the calibration declares no frame."""
+    """
+    Fallback optical frame when the calibration declares no frame.
+    """
 
     normalize_rgb: bool = False
-    """Whether to normalize the captured color values."""
+    """
+    Whether to normalize the captured color values.
+    """
 
     depth: np.ndarray | None = None
-    """Optional static depth image."""
+    """
+    Optional static depth image.
+    """
 
     camera_intrinsic: object | None = None
-    """Legacy intrinsic value replaced from the declared calibration."""
+    """
+    Legacy intrinsic value replaced from the declared calibration.
+    """
 
     color2depth_ratio: tuple[float, float] = (1.0, 1.0)
-    """Scale from color resolution to optional depth resolution."""
+    """
+    Scale from color resolution to optional depth resolution.
+    """
 
     update_global_with_depth_parameter: bool = False
-    """Whether to change the process-wide depth setting."""
+    """
+    Whether to change the process-wide depth setting.
+    """
 
 
 @dataclass
 class VideoCaptureMimic:
-    """Provide the metadata operations used after an OpenCV frame is retrieved."""
+    """
+    Provide the metadata operations used after an OpenCV frame is retrieved.
+    """
 
     frame_position: float = 1.0
-    """Current playback frame position."""
+    """
+    Current playback frame position.
+    """
 
     frame_count: float = 1.0
-    """Number of frames in the source."""
+    """
+    Number of frames in the source.
+    """
 
     def get(self, property_identifier: int) -> float:
-        """Return the requested playback metadata.
+        """
+        Return the requested playback metadata.
 
         :param property_identifier: OpenCV capture property identifier.
         :return: Stored value for the requested property.
@@ -111,7 +148,8 @@ class VideoCaptureMimic:
         return self.frame_count
 
     def set(self, property_identifier: int, value: float) -> bool:
-        """Accept a playback-position update.
+        """
+        Accept a playback-position update.
 
         :param property_identifier: OpenCV capture property identifier.
         :param value: Requested property value.
@@ -128,7 +166,9 @@ class VideoCaptureMimic:
 
 @pytest.fixture
 def runtime_world() -> Iterator[World]:
-    """Install an isolated semantic world for one camera-interface test."""
+    """
+    Install an isolated semantic world for one camera-interface test.
+    """
     previous_world = robokudo_world.world_instance()
     world = World()
     robokudo_world.set_world(world)
@@ -138,7 +178,9 @@ def runtime_world() -> Iterator[World]:
 
 @pytest.fixture
 def camera_info() -> CameraInfo:
-    """Provide a calibrated ROS camera-info message."""
+    """
+    Provide a calibrated ROS camera-info message.
+    """
     message = CameraInfo()
     message.header.frame_id = "color_optical_frame"
     message.width = 640
@@ -155,7 +197,9 @@ def camera_info() -> CameraInfo:
 def test_camera_info_conversion_preserves_effective_calibration(
     camera_info: CameraInfo,
 ) -> None:
-    """The semantic pinhole model represents every relevant CameraInfo value."""
+    """
+    The semantic pinhole model represents every relevant CameraInfo value.
+    """
     camera_model = RosCameraModelAdapter.from_camera_info(camera_info)
 
     assert camera_model.resolution == CameraResolution(width=640, height=480)
@@ -172,7 +216,9 @@ def test_camera_info_conversion_preserves_effective_calibration(
 def test_camera_model_conversion_preserves_ros_calibration(
     camera_info: CameraInfo,
 ) -> None:
-    """The reverse conversion recreates the ROS calibration values."""
+    """
+    The reverse conversion recreates the ROS calibration values.
+    """
     camera_model = RosCameraModelAdapter.from_camera_info(camera_info)
 
     converted_info = RosCameraModelAdapter.to_camera_info(
@@ -192,7 +238,9 @@ def test_camera_model_conversion_preserves_ros_calibration(
 
 
 def _mounted_camera_bodies(world: World) -> tuple[Body, Body]:
-    """Create a world-anchored camera body beneath a robot body."""
+    """
+    Create a world-anchored camera body beneath a robot body.
+    """
     reference = Body(name=PrefixedName(name="map"))
     robot_body = Body(name=PrefixedName(name="robot_head"))
     camera_body = Body(name=PrefixedName(name="color_optical_frame"))
@@ -213,7 +261,9 @@ def test_ros_frame_alias_reuses_robot_optical_body(
     runtime_world: World,
     camera_info: CameraInfo,
 ) -> None:
-    """A leading slash in CameraInfo does not duplicate a robot optical body."""
+    """
+    A leading slash in CameraInfo does not duplicate a robot optical body.
+    """
     _, camera_body = _mounted_camera_bodies(runtime_world)
     camera_info.header.frame_id = "/color_optical_frame"
     interface = CameraInterface(BaseCameraConfig(interface_type="test"))
@@ -233,7 +283,9 @@ def test_ros_frame_alias_reuses_robot_optical_body(
 
 
 def test_tf_binding_preserves_robot_camera_mount(runtime_world: World) -> None:
-    """A sampled TF pose does not add a parent to a robot optical body."""
+    """
+    A sampled TF pose does not add a parent to a robot optical body.
+    """
     reference, camera_body = _mounted_camera_bodies(runtime_world)
     original_parent = camera_body.parent_connection
     numeric_pose = HomogeneousTransformationMatrix.from_xyz_quaternion(
@@ -263,7 +315,9 @@ def test_mismatched_pose_child_is_rejected_at_acquisition(
     runtime_world: World,
     camera_info: CameraInfo,
 ) -> None:
-    """Do not label another physical frame's pose as the image camera pose."""
+    """
+    Do not label another physical frame's pose as the image camera pose.
+    """
     reference, camera_body = _mounted_camera_bodies(runtime_world)
     other_frame = camera_body.parent_connection.parent
     pose = HomogeneousTransformationMatrix(
@@ -288,7 +342,9 @@ def test_static_pose_uses_observation_camera_without_reparenting_robot(
     camera_info: CameraInfo,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """A static numeric pose overrides the observation, not the robot chain."""
+    """
+    A static numeric pose overrides the observation, not the robot chain.
+    """
     reference, camera_body = _mounted_camera_bodies(runtime_world)
     camera_info.header.frame_id = "/color_optical_frame"
     cas = CAS()
@@ -334,7 +390,9 @@ def test_static_pose_creates_isolated_world_reference(
     camera_info: CameraInfo,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """A static pose anchors a standalone camera without a robot model."""
+    """
+    A static pose anchors a standalone camera without a robot model.
+    """
     cas = CAS()
     CameraInterface(BaseCameraConfig(interface_type="test")).store_camera_observation(
         cas=cas,
@@ -375,7 +433,9 @@ def test_camera_observation_reuses_camera_rooted_in_stream_frame(
     runtime_world: World,
     camera_info: CameraInfo,
 ) -> None:
-    """A live stream reuses the semantic camera mounted on its optical frame."""
+    """
+    A live stream reuses the semantic camera mounted on its optical frame.
+    """
     camera_body = Body(name=PrefixedName(name=camera_info.header.frame_id))
     native_model = PinholeCameraModel.from_field_of_view(
         resolution=CameraResolution(width=1280, height=960),
@@ -417,7 +477,9 @@ def test_camera_observation_creates_standalone_camera_without_world_pose(
     runtime_world: World,
     camera_info: CameraInfo,
 ) -> None:
-    """A live stream can create its semantic camera without a robot or TF pose."""
+    """
+    A live stream can create its semantic camera without a robot or TF pose.
+    """
     interface = CameraInterface(BaseCameraConfig(interface_type="test"))
     cas = CAS()
 
@@ -443,7 +505,9 @@ def test_camera_observation_connects_new_camera_in_rooted_world_without_pose(
     runtime_world: World,
     camera_info: CameraInfo,
 ) -> None:
-    """An unlocalized camera preserves the world's single-root invariant."""
+    """
+    An unlocalized camera preserves the world's single-root invariant.
+    """
     world_root = Body(name=PrefixedName(name="world"))
     with runtime_world.modify_world():
         runtime_world.add_body(world_root)
@@ -470,7 +534,9 @@ def test_live_reader_rejects_tf_source_for_a_different_optical_frame(
     runtime_world: World,
     camera_info: CameraInfo,
 ) -> None:
-    """Reject a configured TF source that is not the image optical frame."""
+    """
+    Reject a configured TF source that is not the image optical frame.
+    """
     interface = object.__new__(KinectCameraInterface)
     interface.camera_config = LiveRGBDCameraConfig()
     interface._has_new_data = True
@@ -494,7 +560,9 @@ def test_live_reader_uses_robot_optical_body_for_tf_pose(
     runtime_world: World,
     camera_info: CameraInfo,
 ) -> None:
-    """The live reader does not add a second robot camera mount."""
+    """
+    The live reader does not add a second robot camera mount.
+    """
     reference, camera_body = _mounted_camera_bodies(runtime_world)
     camera_info.header.frame_id = "/color_optical_frame"
     original_parent = camera_body.parent_connection
@@ -529,7 +597,9 @@ def test_live_reader_creates_isolated_camera_mount_for_tf_pose(
     runtime_world: World,
     camera_info: CameraInfo,
 ) -> None:
-    """An isolated live camera gets a world reference and sampled mount."""
+    """
+    An isolated live camera gets a world reference and sampled mount.
+    """
     interface = object.__new__(KinectCameraInterface)
     interface.camera_config = LiveRGBDCameraConfig()
     interface._has_new_data = True
@@ -564,7 +634,9 @@ def test_rgbd_reader_stores_camera_observation(
     runtime_world: World,
     camera_info: CameraInfo,
 ) -> None:
-    """The live RGB-D reader publishes semantic metadata with each CAS frame."""
+    """
+    The live RGB-D reader publishes semantic metadata with each CAS frame.
+    """
     interface = object.__new__(KinectCameraInterface)
     interface.camera_config = LiveRGBDCameraConfig()
     interface._has_new_data = True
@@ -598,7 +670,9 @@ def test_rgb_only_reader_stores_camera_observation(
     runtime_world: World,
     camera_info: CameraInfo,
 ) -> None:
-    """The live RGB-only reader publishes the same semantic metadata contract."""
+    """
+    The live RGB-only reader publishes the same semantic metadata contract.
+    """
     interface = object.__new__(ROSCameraWithoutDepthInterface)
     interface.camera_config = LiveColorCameraConfig()
     interface._has_new_data = True
@@ -627,7 +701,9 @@ def test_rgb_only_rotation_updates_effective_calibration(
     runtime_world: World,
     camera_info: CameraInfo,
 ) -> None:
-    """A rotated frame publishes calibration matching the delivered image."""
+    """
+    A rotated frame publishes calibration matching the delivered image.
+    """
     original_width = camera_info.width
     original_height = camera_info.height
     original_focal_length_x = camera_info.k[0]
@@ -691,7 +767,9 @@ def test_rgbd_high_resolution_crop_updates_effective_resolution(
     runtime_world: World,
     camera_info: CameraInfo,
 ) -> None:
-    """The high-resolution crop publishes its delivered color-image dimensions."""
+    """
+    The high-resolution crop publishes its delivered color-image dimensions.
+    """
     camera_info.width = 1280
     camera_info.height = 1024
     camera_info.k = [900.0, 0.0, 640.0, 0.0, 910.0, 512.0, 0.0, 0.0, 1.0]
@@ -729,7 +807,9 @@ def test_opencv_reader_stores_camera_observation(
     camera_info: CameraInfo,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """The physical OpenCV reader publishes the common camera metadata contract."""
+    """
+    The physical OpenCV reader publishes the common camera metadata contract.
+    """
     interface = object.__new__(OpenCVCameraWithoutDepthInterface)
     interface.camera_config = OpenCVCameraTestConfig(camera_info=camera_info)
     interface.video_capture = VideoCaptureMimic()

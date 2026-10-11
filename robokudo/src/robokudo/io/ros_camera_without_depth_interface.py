@@ -70,7 +70,9 @@ class ROSCameraWithoutDepthInterface(ROSCameraInterface):
         self.color_subscriber: Subscriber = message_filters.Subscriber(
             camera_config.topic_color, Image
         )
-        """Subscriber for RGB image topic"""
+        """
+        Subscriber for RGB image topic
+        """
 
         self.camera_info_subscriber: Subscriber = message_filters.Subscriber(
             camera_config.topic_camera_info, CameraInfo
@@ -90,28 +92,44 @@ class ROSCameraWithoutDepthInterface(ROSCameraInterface):
         self.rk_logger.info(f"  {camera_config.topic_camera_info}")
 
         self.color: Optional[Tuple[npt.NDArray]] = None
-        """Latest RGB image data"""
+        """
+        Latest RGB image data
+        """
 
         self.camera_info: Optional[CameraInfo] = None
-        """Latest camera calibration info"""
+        """
+        Latest camera calibration info
+        """
 
         self.color2depth_ratio: Optional[Tuple[float, float]] = (1.0, 1.0)
-        """Always (1.0, 1.0) since no depth data"""
+        """
+        Always (1.0, 1.0) since no depth data
+        """
 
         self.camera_translation: Optional[List[float]] = None
-        """Camera translation from TF"""
+        """
+        Camera translation from TF
+        """
 
         self.camera_quaternion: Optional[List[float]] = None
-        """Camera rotation as quaternion from TF"""
+        """
+        Camera rotation as quaternion from TF
+        """
 
         self.timestamp: Optional[builtin_interfaces.msg.Time] = None
-        """Timestamp of latest data"""
+        """
+        Timestamp of latest data
+        """
 
         self.lock: Lock = Lock()
-        """Thread synchronization lock"""
+        """
+        Thread synchronization lock
+        """
 
         self.bridge: CVBridgeWorkaround = CVBridgeWorkaround()
-        """NumPy-compatible replacement for cv_bridge."""
+        """
+        NumPy-compatible replacement for cv_bridge.
+        """
 
         print("ROSCameraWithoutDepthInterface initialized")
 
@@ -166,7 +184,8 @@ class ROSCameraWithoutDepthInterface(ROSCameraInterface):
     def rotate_camera_distortion(
         coefficients: Sequence[float], distortion_model: str, rotation: str
     ) -> tuple[float, ...]:
-        """Express lens distortion in the rotated image-axis convention.
+        """
+        Express lens distortion in the rotated image-axis convention.
 
         :param coefficients: ROS distortion coefficients for the original image.
         :param distortion_model: ROS distortion model name.

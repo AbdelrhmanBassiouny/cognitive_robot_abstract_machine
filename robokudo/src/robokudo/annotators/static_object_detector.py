@@ -74,7 +74,8 @@ class StaticObjectMode(Enum):
 
 
 class StaticObjectDetectorAnnotator(BaseAnnotator):
-    """Find a cluster based on a preconfigured Bounding Box, Pose and Class name.
+    """
+    Find a cluster based on a preconfigured Bounding Box, Pose and Class name.
 
     This annotator can:
 
@@ -89,7 +90,8 @@ class StaticObjectDetectorAnnotator(BaseAnnotator):
     """
 
     class Descriptor(BaseAnnotator.Descriptor):
-        """Configuration descriptor for the StaticObjectDetectorAnnotator.
+        """
+        Configuration descriptor for the StaticObjectDetectorAnnotator.
 
         Defines all configurable parameters including:
 
@@ -100,7 +102,9 @@ class StaticObjectDetectorAnnotator(BaseAnnotator):
         """
 
         class Parameters:
-            """Parameters controlling the static object detection behavior."""
+            """
+            Parameters controlling the static object detection behavior.
+            """
 
             def __init__(self) -> None:
                 self.bounding_box_x: int = 1
@@ -109,7 +113,9 @@ class StaticObjectDetectorAnnotator(BaseAnnotator):
                 self.bounding_box_height: int = 10
 
                 self.mode: StaticObjectMode = StaticObjectMode.BOUNDING_BOX
-                """Defines the mode which mainly decide which sources of information are used to generate the Object Hypothesis"""
+                """
+                Defines the mode which mainly decide which sources of information are used to generate the Object Hypothesis
+                """
 
                 # # If setting this to True, we detect a certain object stored in the ObjectKnowledgeBase
                 # # This allows us to automatically infer the BoundingBox coordinates
@@ -122,22 +128,28 @@ class StaticObjectDetectorAnnotator(BaseAnnotator):
                 """
 
                 self.class_names: List[str] = []
-                """Used for StaticObjectMode.WORLD_DESCRIPTOR"""
+                """
+                Used for StaticObjectMode.WORLD_DESCRIPTOR
+                """
 
                 self.create_pose_annotation: bool = False
-                """If True a Pose will be created for the object. Pose is relative to the camera frame by default.
+                """
+                If True a Pose will be created for the object. Pose is relative to the camera frame by default.
 
                 Only effective in Mode=StaticObjectDetectorAnnotator.Mode.WORLD_DESCRIPTOR
                 """
 
                 self.create_bounding_box_annotation: bool = False
-                """If True a BoundingBox will be created for the object.
+                """
+                If True a BoundingBox will be created for the object.
 
                 Only effective in Mode=StaticObjectDetectorAnnotator.Mode.WORLD_DESCRIPTOR
                 """
 
                 self.create_mask: bool = True
-                """If this is a true, a mask based on the ROI will be generated that marks every pixel as ON"""
+                """
+                If this is a true, a mask based on the ROI will be generated that marks every pixel as ON
+                """
 
         # Overwrite the parameters explicitly to enable auto-completion
         parameters = Parameters()
@@ -147,7 +159,8 @@ class StaticObjectDetectorAnnotator(BaseAnnotator):
         name: str = "StaticObjectDetector",
         descriptor: StaticObjectDetectorAnnotator.Descriptor | None = None,
     ) -> None:
-        """Default construction. Minimal one-time init!
+        """
+        Default construction. Minimal one-time init!
 
         :param name: Name of the annotator instance
         :param descriptor: Configuration descriptor
@@ -236,7 +249,9 @@ class StaticObjectDetectorAnnotator(BaseAnnotator):
         object_id: int = 0,
         world_to_camera_transform_matrix: np.ndarray | None = None,
     ) -> ObjectHypothesis | None:
-        """Detect from singular, passed SDT Body instance"""
+        """
+        Detect from singular, passed SDT Body instance
+        """
         object_hypothesis = ObjectHypothesis()
         object_hypothesis.id = str(object_id)
         object_hypothesis.source = self.name
@@ -340,7 +355,8 @@ class StaticObjectDetectorAnnotator(BaseAnnotator):
 
     @catch_and_raise_to_blackboard
     def update(self) -> Status:
-        """Process current scene to detect configured static objects.
+        """
+        Process current scene to detect configured static objects.
 
         Steps:
 
@@ -497,7 +513,8 @@ class StaticObjectDetectorAnnotator(BaseAnnotator):
     def add_classification_annotation(
         object_hypothesis: ObjectHypothesis, class_name: str
     ) -> None:
-        """Add a classification annotation to the given object hypothesis.
+        """
+        Add a classification annotation to the given object hypothesis.
 
         :param object_hypothesis: The object hypothesis to annotate.
         :param class_name: The name of the annotation class.
@@ -511,7 +528,8 @@ class StaticObjectDetectorAnnotator(BaseAnnotator):
     def get_rotation_list_based_on_parameters(
         self, rotation_x: float, rotation_y: float, rotation_z: float, rotation_w: float
     ) -> List[float]:
-        """Return a quaternion based on the parametrization of the Annotator.
+        """
+        Return a quaternion based on the parametrization of the Annotator.
 
         :param rotation_x: rotation about x-axis
         :param rotation_y: rotation about y-axis

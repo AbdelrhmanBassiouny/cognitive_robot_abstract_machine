@@ -1,4 +1,5 @@
-"""Point cloud clustering and object detection.
+"""
+Point cloud clustering and object detection.
 
 This module provides annotators for:
 
@@ -55,7 +56,8 @@ def generate_roi_with_mask_from_points(
     cloud: o3d.geometry.PointCloud,
     color2depth_ratio: Tuple[int, int] = (1, 1),
 ) -> Tuple[ImageROI, npt.NDArray]:
-    """Generate ROI and mask from projected point cloud points.
+    """
+    Generate ROI and mask from projected point cloud points.
 
     Projects 3D points to image plane and creates:
 
@@ -109,7 +111,8 @@ def cluster_points(
     min_points: int,
     rk_logger: logging.Logger,
 ) -> List[int]:
-    """Cluster points using DBSCAN algorithm.
+    """
+    Cluster points using DBSCAN algorithm.
 
     :param input_cloud: Point cloud to cluster
     :param eps: DBSCAN epsilon parameter (density threshold)
@@ -144,7 +147,8 @@ def cluster_points(
 
 
 class PointCloudClusterExtractor(ThreadedAnnotator):
-    """Annotator for object detection.
+    """
+    Annotator for object detection.
 
     The main idea is to look for the Plane annotation in the CAS extract the points that belong to the plane,
     constructs an oriented bounding box around it, pull it up to create volume above the plane and
@@ -156,23 +160,35 @@ class PointCloudClusterExtractor(ThreadedAnnotator):
     """
 
     class Descriptor(BaseAnnotator.Descriptor):
-        """Configuration descriptor for point cloud clustering."""
+        """
+        Configuration descriptor for point cloud clustering.
+        """
 
         class Parameters:
-            """Parameters for configuring cluster extraction."""
+            """
+            Parameters for configuring cluster extraction.
+            """
 
             def __init__(self):
                 self.dbscan_min_cluster_count: int = 90
-                """Minimum points for DBSCAN cluster"""
+                """
+                Minimum points for DBSCAN cluster
+                """
 
                 self.min_cluster_count: int = 1000
-                """Minimum total points for valid cluster"""
+                """
+                Minimum total points for valid cluster
+                """
 
                 self.min_on_plane_point_count: int = 90
-                """Minimum points above plane"""
+                """
+                Minimum points above plane
+                """
 
                 self.eps: float = 0.04
-                """DBSCAN epsilon parameter (density threshold)"""
+                """
+                DBSCAN epsilon parameter (density threshold)
+                """
 
         # Overwrite the parameters explicitly to enable auto-completion
         parameters = Parameters()
@@ -182,7 +198,8 @@ class PointCloudClusterExtractor(ThreadedAnnotator):
         name: str = "PointCloudClusterExtractor",
         descriptor: PointCloudClusterExtractor.Descriptor | None = None,
     ) -> None:
-        """Initialize the cluster extractor.
+        """
+        Initialize the cluster extractor.
 
         :param name: The name of this annotator instance
         :param descriptor: Configuration descriptor
@@ -200,7 +217,8 @@ class PointCloudClusterExtractor(ThreadedAnnotator):
         List[int],
         o3d.geometry.PointCloud,
     ]:
-        """Extract points above a detected plane.
+        """
+        Extract points above a detected plane.
 
         Based on an input cloud and a plane model, extract all the points that are above that plane in the input cloud.
         Returns various data structures for further analysis and visualization.
@@ -286,7 +304,8 @@ class PointCloudClusterExtractor(ThreadedAnnotator):
 
     @catch_and_raise_to_blackboard
     def compute(self) -> Status:
-        """Process point cloud to detect and annotate object clusters.
+        """
+        Process point cloud to detect and annotate object clusters.
 
         The method:
 
@@ -438,30 +457,43 @@ class PointCloudClusterExtractor(ThreadedAnnotator):
 
 
 class NaivePointCloudClusterExtractor(ThreadedAnnotator):
-    """Annotator for object detection. Simply takes an input cloud and clusters it.
+    """
+    Annotator for object detection. Simply takes an input cloud and clusters it.
 
     .. note::
        Unlike PointCloudClusterExtractor, this does not require a plane model.
     """
 
     class Descriptor(BaseAnnotator.Descriptor):
-        """Configuration descriptor for naive point cloud clustering."""
+        """
+        Configuration descriptor for naive point cloud clustering.
+        """
 
         class Parameters:
-            """Parameters for configuring cluster extraction."""
+            """
+            Parameters for configuring cluster extraction.
+            """
 
             def __init__(self) -> None:
                 self.dbscan_min_cluster_count: int = 90
-                """Minimum points for DBSCAN cluster"""
+                """
+                Minimum points for DBSCAN cluster
+                """
 
                 self.min_cluster_count: int = 1000
-                """Minimum total points for valid cluster"""
+                """
+                Minimum total points for valid cluster
+                """
 
                 self.min_on_plane_point_count: int = 90
-                """Minimum points above plane"""
+                """
+                Minimum points above plane
+                """
 
                 self.eps: float = 0.04
-                """DBSCAN epsilon parameter (density threshold)"""
+                """
+                DBSCAN epsilon parameter (density threshold)
+                """
 
         # Overwrite the parameters explicitly to enable auto-completion
         parameters = Parameters()
@@ -471,7 +503,8 @@ class NaivePointCloudClusterExtractor(ThreadedAnnotator):
         name: str = "NaivePointCloudClusterExtractor",
         descriptor: NaivePointCloudClusterExtractor.Descriptor | None = None,
     ) -> None:
-        """Initialize the naive cluster extractor.
+        """
+        Initialize the naive cluster extractor.
 
         :param name: The name of this annotator instance
         :param descriptor: Configuration descriptor
@@ -480,7 +513,8 @@ class NaivePointCloudClusterExtractor(ThreadedAnnotator):
 
     @catch_and_raise_to_blackboard
     def compute(self) -> Status:
-        """Process point cloud to detect and annotate object clusters.
+        """
+        Process point cloud to detect and annotate object clusters.
 
         The method:
 

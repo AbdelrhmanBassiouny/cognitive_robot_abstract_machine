@@ -84,7 +84,9 @@ class CameraInterface(object):
     """
 
     STANDALONE_MOUNT_PREFIX: ClassVar[str] = "robokudo_camera_mount_"
-    """Connection-name prefix reserved for camera bodies created by RoboKudo."""
+    """
+    Connection-name prefix reserved for camera bodies created by RoboKudo.
+    """
 
     def __init__(self, camera_config: Any) -> None:
         """
@@ -119,7 +121,8 @@ class CameraInterface(object):
         camera_frame: str,
         world_T_camera: HomogeneousTransformationMatrix,
     ) -> HomogeneousTransformationMatrix:
-        """Bind a sampled pose without changing a robot camera's attachment.
+        """
+        Bind a sampled pose without changing a robot camera's attachment.
 
         :param world_frame: Name of the pose reference frame.
         :param camera_frame: Name of the camera frame.
@@ -192,14 +195,18 @@ class CameraInterface(object):
 
     @staticmethod
     def _standalone_mount_name(camera_body: Body) -> PrefixedName:
-        """Identify the adjustable mount created for one standalone camera."""
+        """
+        Identify the adjustable mount created for one standalone camera.
+        """
         return PrefixedName(
             name=f"{CameraInterface.STANDALONE_MOUNT_PREFIX}{camera_body.id}"
         )
 
     @staticmethod
     def _bodies_for_ros_frame(world: World, frame_id: str) -> list[Body]:
-        """Find bodies whose names identify the same ROS frame."""
+        """
+        Find bodies whose names identify the same ROS frame.
+        """
         normalized = normalize_ros_frame_id(frame_id)
         return [
             body
@@ -210,7 +217,9 @@ class CameraInterface(object):
     def static_world_T_camera_if_configured(
         self, camera_frame: str
     ) -> HomogeneousTransformationMatrix | None:
-        """Return the configured static camera pose bound to the runtime world."""
+        """
+        Return the configured static camera pose bound to the runtime world.
+        """
         if not self.camera_config.static_camera_transform_enabled:
             return None
 
@@ -229,7 +238,8 @@ class CameraInterface(object):
         modalities: tuple[CameraModality, ...],
         world_T_camera: HomogeneousTransformationMatrix | None,
     ) -> None:
-        """Store semantic identity and effective calibration for a camera frame.
+        """
+        Store semantic identity and effective calibration for a camera frame.
 
         :param cas: CAS receiving the observation.
         :param camera_model: Effective calibration of the delivered image.
@@ -279,7 +289,8 @@ class CameraInterface(object):
         camera_model: PinholeCameraModel,
         modalities: tuple[CameraModality, ...],
     ) -> Camera:
-        """Resolve the stream camera or add a standalone semantic camera.
+        """
+        Resolve the stream camera or add a standalone semantic camera.
 
         :param camera_frame: Optical frame associated with the image stream.
         :param camera_model: First trustworthy calibration for a new camera.
@@ -387,20 +398,29 @@ class ROSCameraInterface(CameraInterface):
             """
         else:
             self.lookup_viewpoint: bool = False
-            """Whether to look up camera transforms"""
+            """
+            Whether to look up camera transforms
+            """
 
         self.camera_translation: List[float] = [0.0, 0.0, 0.0]
-        """Camera translation from TF"""
+        """
+        Camera translation from TF
+        """
 
         self.camera_quaternion: List[float] = [0.0, 0.0, 0.0, 1.0]
-        """Camera rotation from TF"""
+        """
+        Camera rotation from TF
+        """
 
         if self.lookup_viewpoint:
             self.tf_buffer: Buffer = TFListenerProxy().buffer_for_node(self.node)
-            """TF buffer populated by the per-node transform listener."""
+            """
+            TF buffer populated by the per-node transform listener.
+            """
 
     def lookup_transform(self, timestamp: Time = Time()) -> bool:
-        """Look up the camera transform from TF.
+        """
+        Look up the camera transform from TF.
 
         :return: True if transform lookup succeeded, False otherwise
         """
@@ -437,7 +457,8 @@ class ROSCameraInterface(CameraInterface):
     def world_T_camera_from_tf(
         self, timestamp: builtin_interfaces.msg.Time
     ) -> HomogeneousTransformationMatrix | None:
-        """Return the sampled TF camera pose bound to the runtime world.
+        """
+        Return the sampled TF camera pose bound to the runtime world.
 
         :param timestamp: Acquisition time associated with the cached TF sample.
         :return: Bound camera pose, or ``None`` when TF lookup is disabled.
@@ -460,7 +481,9 @@ class ROSCameraInterface(CameraInterface):
         )
 
     def validate_camera_frame_for_tf(self, camera_frame: str) -> None:
-        """Require the image optical frame to match the configured TF source."""
+        """
+        Require the image optical frame to match the configured TF source.
+        """
         if self.lookup_viewpoint and normalize_ros_frame_id(
             camera_frame
         ) != normalize_ros_frame_id(self.tf_from):
@@ -559,14 +582,16 @@ class KinectCameraInterface(ROSCameraInterface):
             CompressedImage if self.compressed_depth_configured() else Image,
             camera_config.topic_depth,
         )
-        """Depth image subscriber"""
+        """
+        Depth image subscriber
+        """
 
         self.camera_info_subscriber: message_filters.Subscriber = Subscriber(
             self.node, CameraInfo, camera_config.topic_camera_info
         )
-        """Camera info subscriber"""
-        # self.camera_info_sub = self.node.create_subscription(CameraInfo, camera_config.topic_camera_info,
-        #                                                   self.blackhole_callback, 10)
+        """
+        Camera info subscriber
+        """
 
         ts = ApproximateTimeSynchronizer(
             [self.color_subscriber, self.depth_subscriber, self.camera_info_subscriber],
@@ -605,10 +630,14 @@ class KinectCameraInterface(ROSCameraInterface):
         """
 
         self.lock: Lock = Lock()
-        """Thread synchronization lock"""
+        """
+        Thread synchronization lock
+        """
 
         self.bridge: CVBridgeWorkaround = CVBridgeWorkaround()
-        """NumPy-compatible replacement for cv_bridge."""
+        """
+        NumPy-compatible replacement for cv_bridge.
+        """
 
     def compressed_depth_configured(self) -> bool:
         """

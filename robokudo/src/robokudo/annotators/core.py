@@ -446,7 +446,8 @@ class BaseAnnotator(Behaviour):
         )
 
     def publish_variables(self) -> None:
-        """Publish all collected variable updates at once.
+        """
+        Publish all collected variable updates at once.
 
         Use this function as a decorator (i.e. @robokudo.utils.decorators.publish_variables) on your update or
         compute method to automatically publish variables whenever the method is returning.

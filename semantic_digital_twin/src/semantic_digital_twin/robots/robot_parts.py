@@ -566,38 +566,56 @@ class Sensor(AbstractRobotPart, ABC):
 
 @dataclass(eq=False)
 class Camera(HasRootBody):
-    """A camera that captures images of the environment."""
+    """
+    A camera that captures images of the environment.
+    """
 
     forward_facing_axis: Vector3 = field(kw_only=True)
-    """Viewing direction expressed in the camera's root frame."""
+    """
+    Viewing direction expressed in the camera's root frame.
+    """
 
     camera_model: CameraModel = field(kw_only=True)
-    """Native projection model of the camera."""
+    """
+    Native projection model of the camera.
+    """
 
     camera_range: CameraRange = field(default_factory=CameraRange, kw_only=True)
-    """Usable distance interval of the camera."""
+    """
+    Usable distance interval of the camera.
+    """
 
     modalities: tuple[CameraModality, ...] = field(default_factory=tuple, kw_only=True)
-    """Kinds of image data the camera can produce."""
+    """
+    Kinds of image data the camera can produce.
+    """
 
     def __post_init__(self) -> None:
-        """Express the viewing direction in the camera root frame."""
+        """
+        Express the viewing direction in the camera root frame.
+        """
         super().__post_init__()
         self.forward_facing_axis.reference_frame = self.root
 
     @property
     def field_of_view(self) -> FieldOfView:
-        """Return the angular extent of the native camera model."""
+        """
+        Return the angular extent of the native camera model.
+        """
         return self.camera_model.field_of_view
 
     @property
     def resolution(self) -> CameraResolution:
-        """Return the native image resolution."""
+        """
+        Return the native image resolution.
+        """
         return self.camera_model.resolution
 
     @property
     def root_T_forward_view(self) -> HomogeneousTransformationMatrix:
-        """Return the camera pose with its x axis along the viewing direction."""
+        """
+        Return the camera pose with its x axis along the viewing direction.
+        """
         root_T_camera = self.root.global_transform
         root_V_forward = root_T_camera.rotation_matrix @ self.forward_facing_axis
         return HomogeneousTransformationMatrix.from_point_rotation_matrix(
@@ -615,16 +633,24 @@ A kind of camera.
 
 @dataclass(eq=False)
 class RobotCamera(Camera, Sensor, ABC):
-    """A camera that participates in robot-part lifecycle handling."""
+    """
+    A camera that participates in robot-part lifecycle handling.
+    """
 
     default_camera: bool = False
-    """Whether this camera is the robot's default camera."""
+    """
+    Whether this camera is the robot's default camera.
+    """
 
     minimal_height: float = 0.0
-    """Minimal camera height above the ground in meters."""
+    """
+    Minimal camera height above the ground in meters.
+    """
 
     maximal_height: float = 1.0
-    """Maximal camera height above the ground in meters."""
+    """
+    Maximal camera height above the ground in meters.
+    """
 
 
 @dataclass(eq=False)

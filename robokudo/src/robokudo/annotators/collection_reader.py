@@ -1,4 +1,5 @@
-"""Sensor data collection and CAS initialization.
+"""
+Sensor data collection and CAS initialization.
 
 This module provides an annotator for:
 
@@ -35,7 +36,8 @@ if TYPE_CHECKING:
 
 
 class CollectionReaderAnnotator(BaseAnnotator):
-    """Sensor data collection and CAS initialization.
+    """
+    Sensor data collection and CAS initialization.
 
     This annotator:
 
@@ -50,28 +52,37 @@ class CollectionReaderAnnotator(BaseAnnotator):
     """
 
     class Descriptor(BaseAnnotator.Descriptor):
-        """Configuration descriptor for collection reader."""
+        """
+        Configuration descriptor for collection reader.
+        """
 
         def __init__(
             self,
             camera_config: BaseCameraConfig,
             camera_interface: CameraInterface,
         ) -> None:
-            """Initialize descriptor with camera configuration.
+            """
+            Initialize descriptor with camera configuration.
 
             :param camera_config: Configuration for camera interface
             :param camera_interface: Interface for reading camera data
             """
 
             class Parameters:
-                """Parameters for configuring collection reader."""
+                """
+                Parameters for configuring collection reader.
+                """
 
                 def __init__(self) -> None:
                     self.camera_config: BaseCameraConfig = camera_config
-                    """Configuration for camera interface"""
+                    """
+                    Configuration for camera interface
+                    """
 
                     self.camera_interface: CameraInterface = camera_interface
-                    """Interface for reading camera data"""
+                    """
+                    Interface for reading camera data
+                    """
 
             self.parameters = Parameters()
 
@@ -80,7 +91,8 @@ class CollectionReaderAnnotator(BaseAnnotator):
         descriptor: CollectionReaderAnnotator.Descriptor,
         name: str = "CollectionReader",
     ) -> None:
-        """Initialize the collection reader.
+        """
+        Initialize the collection reader.
 
         :param descriptor: Configuration descriptor
         :param name: Name of this annotator instance
@@ -96,7 +108,8 @@ class CollectionReaderAnnotator(BaseAnnotator):
         self.iterations_since_last_data_warn_threshold: int = 40
 
     def initialise(self) -> None:
-        """Initialize the collection reader.
+        """
+        Initialize the collection reader.
 
         Called when:
 
@@ -115,7 +128,8 @@ class CollectionReaderAnnotator(BaseAnnotator):
     def add_collection_reader(
         self, descriptor: CollectionReaderAnnotator.Descriptor
     ) -> None:
-        """Add another collection reader descriptor.
+        """
+        Add another collection reader descriptor.
 
         :param descriptor: Configuration descriptor for additional reader
         """
@@ -126,7 +140,8 @@ class CollectionReaderAnnotator(BaseAnnotator):
         )
 
     def update(self) -> Status:
-        """Process sensor data and update CAS.
+        """
+        Process sensor data and update CAS.
 
         The method:
 
@@ -207,7 +222,8 @@ class CollectionReaderAnnotator(BaseAnnotator):
             return Status.RUNNING
 
     def terminate(self, new_status: Status) -> None:
-        """Handle behavior termination.
+        """
+        Handle behavior termination.
 
         :param new_status: New status (SUCCESS, FAILURE or INVALID)
         """
@@ -215,8 +231,3 @@ class CollectionReaderAnnotator(BaseAnnotator):
             "%s.terminate()[%s->%s]"
             % (self.__class__.__name__, self.status, new_status)
         )
-
-
-# ROS1 TO ROS2
-# The setup method in the ROS2 version has three parameters (timeout, node, visitor)
-# n the ROS2 version, STATUS are referenced as py_trees.common.Status.RUNNING and py_trees.common.Status.SUCCESS

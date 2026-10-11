@@ -35,7 +35,9 @@ class RayTracingContext:
     """
 
     world: World
-    """Semantic world rendered for the current camera source."""
+    """
+    Semantic world rendered for the current camera source.
+    """
 
     camera: Camera
     """

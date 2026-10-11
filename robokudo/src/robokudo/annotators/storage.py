@@ -34,24 +34,33 @@ from robokudo.io.storage import Storage, StorageDocumentField
 
 
 class StorageWriter(BaseAnnotator):
-    """Annotator for storing sensor data in MongoDB.
+    """
+    Annotator for storing sensor data in MongoDB.
 
     This annotator provides methods to store sensor data in a MongoDB database,
     allowing for data recording and offline processing without using ROS bag files.
     """
 
     class Descriptor(BaseAnnotator.Descriptor):
-        """Configuration descriptor for storage writer."""
+        """
+        Configuration descriptor for storage writer.
+        """
 
         class Parameters:
-            """Parameter container for storage configuration."""
+            """
+            Parameter container for storage configuration.
+            """
 
             def __init__(self) -> None:
                 self.db_name: str = "rk_scenes"
-                """Database name"""
+                """
+                Database name
+                """
 
                 self.drop_database_on_storage: bool = True
-                """Whether to clear database before recording"""
+                """
+                Whether to clear database before recording
+                """
 
         # Overwrite the parameters explicitly to enable auto-completion
         parameters = Parameters()
@@ -61,7 +70,8 @@ class StorageWriter(BaseAnnotator):
         name: str = "StorageWriter",
         descriptor: StorageWriter.Descriptor | None = None,
     ) -> None:
-        """Initialize the storage writer. Minimal one-time init!
+        """
+        Initialize the storage writer. Minimal one-time init!
 
         :param name: Annotator name
         :param descriptor: Configuration descriptor
@@ -95,7 +105,8 @@ class StorageWriter(BaseAnnotator):
         return True
 
     def update(self) -> Status:
-        """Store current CAS data in MongoDB.
+        """
+        Store current CAS data in MongoDB.
 
         Creates a deep copy of the CAS, flattens it into a dictionary,
         and stores both views and CAS data in the database.

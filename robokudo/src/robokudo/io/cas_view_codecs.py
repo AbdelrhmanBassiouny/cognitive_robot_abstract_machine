@@ -460,16 +460,22 @@ class HomogeneousTransformationMatrixCodec(ViewCodec):
 
 
 class CameraObservationCodec(ViewCodec):
-    """Codec for camera observations referenced by a recorded world."""
+    """
+    Codec for camera observations referenced by a recorded world.
+    """
 
     serializer_id: str = "robokudo_camera_observation_v3"
 
     def can_encode(self, value: Any) -> bool:
-        """Check whether a value is camera observation metadata."""
+        """
+        Check whether a value is camera observation metadata.
+        """
         return isinstance(value, CameraObservation)
 
     def encode(self, value: CameraObservation) -> ViewPayload:
-        """Encode frame data with a reference to its recorded camera."""
+        """
+        Encode frame data with a reference to its recorded camera.
+        """
         return ViewPayload(
             serializer_id=self.serializer_id,
             payload={
@@ -488,13 +494,17 @@ class CameraObservationCodec(ViewCodec):
         )
 
     def decode(self, payload: ViewPayload) -> CameraObservation:
-        """Decode against the active reasoning world."""
+        """
+        Decode against the active reasoning world.
+        """
         return self.decode_with_tracker(payload, world.get_world_entity_tracker())
 
     def decode_with_tracker(
         self, payload: ViewPayload, tracker: WorldEntityWithIDKwargsTracker
     ) -> CameraObservation:
-        """Decode against the world represented by a specific entity tracker."""
+        """
+        Decode against the world represented by a specific entity tracker.
+        """
         camera = tracker.get(UUID(payload.payload[CameraObservationField.CAMERA_ID]))
         if not isinstance(camera, Camera):
             raise InvalidCameraObservation(reason="recorded entity is not a camera")
@@ -522,19 +532,29 @@ class CameraObservationCodec(ViewCodec):
 
 
 class CameraObservationField(StrEnum):
-    """Name each field in a persisted camera observation."""
+    """
+    Name each field in a persisted camera observation.
+    """
 
     CAMERA_ID = "camera_id"
-    """Identifier of the camera in the recorded world."""
+    """
+    Identifier of the camera in the recorded world.
+    """
 
     MODEL = "effective_camera_model"
-    """Effective projection model."""
+    """
+    Effective projection model.
+    """
 
     WORLD_T_CAMERA = "world_T_camera"
-    """Sampled camera pose in the world frame."""
+    """
+    Sampled camera pose in the world frame.
+    """
 
     TIMESTAMP = "timestamp_nanoseconds"
-    """Frame acquisition time."""
+    """
+    Frame acquisition time.
+    """
 
 
 class KrroodCodec(ViewCodec):

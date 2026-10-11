@@ -23,7 +23,9 @@ if TYPE_CHECKING:
 
 
 class TSDFAnnotatorVisualizationModes(Enum):
-    """Enumeration of supported visualization modes for TSDF volumes."""
+    """
+    Enumeration of supported visualization modes for TSDF volumes.
+    """
 
     NONE = "none"
     MESH = "mesh"
@@ -32,7 +34,8 @@ class TSDFAnnotatorVisualizationModes(Enum):
 
 
 class TSDFAnnotator(ThreadedAnnotator):
-    """Annotator for per-object TSDF volume integration.
+    """
+    Annotator for per-object TSDF volume integration.
 
     .. note::
         The annotator requires a camera to world transform and object poses to integrate the TSDF volumes.
@@ -40,28 +43,42 @@ class TSDFAnnotator(ThreadedAnnotator):
     """
 
     class Descriptor(BaseAnnotator.Descriptor):
-        """Configuration descriptor for the TSDF annotator."""
+        """
+        Configuration descriptor for the TSDF annotator.
+        """
 
         class Parameters(BaseAnnotator.Descriptor.Parameters):
-            """Parameters for configuring the TSDF annotator."""
+            """
+            Parameters for configuring the TSDF annotator.
+            """
 
             def __init__(self) -> None:
                 self.voxel_length: float = 0.005
-                """Voxel length for the TSDF volume of each object."""
+                """
+                Voxel length for the TSDF volume of each object.
+                """
 
                 self.sdf_trunc: float = 0.04
-                """SDF truncation distance for the TSDF volume of each object."""
+                """
+                SDF truncation distance for the TSDF volume of each object.
+                """
 
                 self.depth_scale: float = 1000.0
-                """Depth scale for the TSDF volume integration."""
+                """
+                Depth scale for the TSDF volume integration.
+                """
 
                 self.depth_trunc: float = 3.0
-                """Depth truncation distance for the TSDF volume integration."""
+                """
+                Depth truncation distance for the TSDF volume integration.
+                """
 
                 self.geometry_visualization_mode: TSDFAnnotatorVisualizationModes = (
                     TSDFAnnotatorVisualizationModes.MESH
                 )
-                """Whether to visualize the TSDF as a mesh or a point cloud. """
+                """
+                Whether to visualize the TSDF as a mesh or a point cloud.
+                """
 
         # Overwrite the parameters explicitly to enable auto-completion
         parameters = Parameters()
@@ -76,15 +93,20 @@ class TSDFAnnotator(ThreadedAnnotator):
         self.translation_comparator = TranslationComparator(
             weight=1.0, max_distance=0.4
         )
-        """Translation comparator for comparing world positions between pipeline iterations."""
+        """
+        Translation comparator for comparing world positions between pipeline iterations.
+        """
 
         self.tracked_objects: List[Dict[str, Any]] = []
-        """A list of tracked object data, including the bounding box and the TSDF volume."""
+        """
+        A list of tracked object data, including the bounding box and the TSDF volume.
+        """
 
     def find_tracked_object(
         self, pose: PoseAnnotation, threshold: float = 0.75
     ) -> Optional[Dict[str, Any]]:
-        """Check whether the given bounding box is similar to one that has been seen before.
+        """
+        Check whether the given bounding box is similar to one that has been seen before.
 
         :param pose: The pose to check
         :param threshold: The similarity threshold between 0.0 and 1.0 for considering the bounding box similar.
@@ -102,7 +124,8 @@ class TSDFAnnotator(ThreadedAnnotator):
         return best_object if best_sim > threshold else None
 
     def compute(self) -> Status:
-        """Generate a TSDF volume for each object hypothesis or integrate into existing volumes.
+        """
+        Generate a TSDF volume for each object hypothesis or integrate into existing volumes.
 
         :return: Whether the TSDF integration was successful or not.
         """
@@ -253,7 +276,8 @@ class TSDFAnnotator(ThreadedAnnotator):
         ],
         masks: List[npt.NDArray[np.uint8]],
     ) -> npt.NDArray[np.uint8]:
-        """Get an image containing the bounding boxes and masks of objects.
+        """
+        Get an image containing the bounding boxes and masks of objects.
 
         :param image: The image to add the visualizations to.
         :param oh_data: The object hypotheses to visualize.
@@ -284,7 +308,8 @@ class TSDFAnnotator(ThreadedAnnotator):
     def get_visualization_geometries(
         self, volume: TSDFAnnotation
     ) -> List[o3d.geometry.Geometry]:
-        """Get visualization geometries for the TSDF volume depending on the visualization mode.
+        """
+        Get visualization geometries for the TSDF volume depending on the visualization mode.
 
         :param volume: The TSDF volume annotation to visualize.
         :return: List of visualization geometries for the given volume annotation.

@@ -52,7 +52,8 @@ class FileReaderInterface(CameraInterface):
     """
 
     class DictIteratorReader:
-        """Helper class for iterating over dictionary data in sequence.
+        """
+        Helper class for iterating over dictionary data in sequence.
 
         This class provides cursor-based iteration over dictionary data,
         maintaining the sequence order and supporting reset operations.
@@ -63,27 +64,35 @@ class FileReaderInterface(CameraInterface):
             data: Optional[Dict[str, Dict[str, Any]]] = None,
             data_sequence: Optional[List[str]] = None,
         ) -> None:
-            """Initialize the dictionary iterator.
+            """
+            Initialize the dictionary iterator.
 
             :param data: Dictionary containing the data, defaults to empty dict
             :param data_sequence: List defining iteration order
             """
 
             self.index: Optional[int] = None
-            """Current position in the sequence"""
+            """
+            Current position in the sequence
+            """
 
             self.data: Dict[str, Dict[str, Any]] = data if data else dict()
-            """Dictionary containing the data"""
+            """
+            Dictionary containing the data
+            """
 
             self.data_sequence: List[str] = data_sequence if data_sequence else list()
-            """List defining iteration order"""
+            """
+            List defining iteration order
+            """
 
             assert len(self.data_sequence) == len(self.data)
 
             self.reset_cursor()
 
         def reset_cursor(self) -> None:
-            """Reset the iterator to the beginning of the sequence.
+            """
+            Reset the iterator to the beginning of the sequence.
 
             Sets index to 0 if there is data, None otherwise.
             """
@@ -93,7 +102,8 @@ class FileReaderInterface(CameraInterface):
                 self.index = None
 
         def cursor_has_data(self) -> bool:
-            """Check if there is more data to read.
+            """
+            Check if there is more data to read.
 
             :return: True if more data is available, False otherwise
             """
@@ -103,7 +113,8 @@ class FileReaderInterface(CameraInterface):
             return self.index < len(self.data_sequence)
 
         def get_next_data(self) -> Optional[Dict]:
-            """Get the next data item in the sequence.
+            """
+            Get the next data item in the sequence.
 
             :return: Next data item if available, None otherwise
             """
@@ -116,7 +127,8 @@ class FileReaderInterface(CameraInterface):
             return data
 
     def __init__(self, camera_config: Any) -> None:
-        """Initialize the file reader interface.
+        """
+        Initialize the file reader interface.
 
         Sets up the directory structure and loads all matching data files.
         Raises exceptions for invalid configurations or missing files.
@@ -136,7 +148,9 @@ class FileReaderInterface(CameraInterface):
             )
 
         self.initialized: bool = False
-        """Whether the interface was successfully initialized"""
+        """
+        Whether the interface was successfully initialized
+        """
 
         # Compute the targeted directory by considering the target_ros_package variable
         if camera_config.target_ros_package:
@@ -160,10 +174,14 @@ class FileReaderInterface(CameraInterface):
                     )
 
                 self.target_dir: str = str(target_dir_path)
-                """Target directory path as string"""
+                """
+                Target directory path as string
+                """
 
                 self.target_dir_path: pathlib.PurePath = target_dir_path
-                """Target directory as Path object"""
+                """
+                Target directory as Path object
+                """
         else:
             if not camera_config.target_dir:
                 raise Exception(
@@ -177,13 +195,19 @@ class FileReaderInterface(CameraInterface):
             self.filename_prefix = camera_config.filename_prefix
         else:
             self.filename_prefix = "rk_"
-            """Prefix for data files. Make sure that this matches the filename_prefix in the FileReader."""
+            """
+            Prefix for data files. Make sure that this matches the filename_prefix in the FileReader.
+            """
 
         self.loaded_paths: Dict[str, Dict[str, Path]] = dict()
-        """Dictionary mapping timestamps to file paths"""
+        """
+        Dictionary mapping timestamps to file paths
+        """
 
         self.loaded_data: Dict[str, Dict[str, Any]] = dict()
-        """Dictionary mapping timestamps to loaded data"""
+        """
+        Dictionary mapping timestamps to loaded data
+        """
 
         # Matching all files with the set prefix and the timestamp
         file_paths_found = [
@@ -235,12 +259,15 @@ class FileReaderInterface(CameraInterface):
         self.data_reader = FileReaderInterface.DictIteratorReader(
             data=self.loaded_data, data_sequence=list(iter(self.loaded_data))
         )
-        """Iterator for accessing loaded data"""
+        """
+        Iterator for accessing loaded data
+        """
 
         self.initialized = True
 
     def has_new_data(self) -> bool:
-        """Check if new data is available to read.
+        """
+        Check if new data is available to read.
 
         Handles looping behavior based on camera configuration and
         maintains cursor position in the data sequence.
@@ -258,7 +285,8 @@ class FileReaderInterface(CameraInterface):
 
 
 class RGBDFileReaderInterface(FileReaderInterface):
-    """Specialized file reader interface for RGB-D camera data.
+    """
+    Specialized file reader interface for RGB-D camera data.
 
     This class extends FileReaderInterface to handle the specific case of
     reading RGB-D camera data, including color images, depth images, and
@@ -268,7 +296,8 @@ class RGBDFileReaderInterface(FileReaderInterface):
     """
 
     def set_data(self, cas: CAS) -> None:
-        """Set the next RGB-D data frame into the CAS.
+        """
+        Set the next RGB-D data frame into the CAS.
 
         This method:
         * Reads the next color and depth images
