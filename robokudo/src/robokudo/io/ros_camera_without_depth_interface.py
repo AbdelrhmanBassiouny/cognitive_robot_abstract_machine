@@ -81,12 +81,12 @@ class ROSCameraWithoutDepthInterface(ROSCameraInterface):
         """
         Subscriber for camera info topic.
         """
-        ts = message_filters.ApproximateTimeSynchronizer(
+        synchronizer = message_filters.ApproximateTimeSynchronizer(
             [self.color_subscriber, self.camera_info_subscriber],
             queue_size=10,
             slop=0.4,
         )
-        ts.registerCallback(self.callback)
+        synchronizer.registerCallback(self.callback)
 
         self.rk_logger.info("Subscribed to: ")
         self.rk_logger.info(f"  {camera_config.topic_color}")
@@ -306,27 +306,43 @@ class ROSCameraWithoutDepthInterface(ROSCameraInterface):
         width = self.camera_info.width
         height = self.camera_info.height
 
-        fx = self.camera_info.k[0]
-        cx = self.camera_info.k[2]
-        fy = self.camera_info.k[4]
-        cy = self.camera_info.k[5]
+        focal_length_x = self.camera_info.k[0]
+        principal_point_x = self.camera_info.k[2]
+        focal_length_y = self.camera_info.k[4]
+        principal_point_y = self.camera_info.k[5]
         if self.camera_config.rotate_image is not None:
-            # Rotate the image as desired AND fix camera parameters.
-            K = np.array([[fx, 0, cx], [0, fy, cy], [0, 0, 1]])
-            # 1) calculate camera intrinsics
-            # 2) modify ROS camera info setting
-            rotated_img, K_rotated, new_size = self.rotate_image_and_intrinsics(
-                self.color, intrinsic_matrix=K, rotation=self.camera_config.rotate_image
+            intrinsic_matrix = np.array(
+                [
+                    [focal_length_x, 0, principal_point_x],
+                    [0, focal_length_y, principal_point_y],
+                    [0, 0, 1],
+                ]
             )
-            self.color = rotated_img
-            k_flat = K_rotated.flatten()
-            fx = k_flat[0]
-            cx = k_flat[2]
-            fy = k_flat[4]
-            cy = k_flat[5]
+            rotated_image, rotated_intrinsics, new_size = (
+                self.rotate_image_and_intrinsics(
+                    self.color,
+                    intrinsic_matrix=intrinsic_matrix,
+                    rotation=self.camera_config.rotate_image,
+                )
+            )
+            self.color = rotated_image
+            flattened_intrinsics = rotated_intrinsics.flatten()
+            focal_length_x = flattened_intrinsics[0]
+            principal_point_x = flattened_intrinsics[2]
+            focal_length_y = flattened_intrinsics[4]
+            principal_point_y = flattened_intrinsics[5]
             width, height = new_size
-            # K is an immutable Tuple, so we have to override it completely
-            self.camera_info.k = (fx, 0, cx, 0, fy, cy, 0, 0, 1)
+            self.camera_info.k = (
+                focal_length_x,
+                0,
+                principal_point_x,
+                0,
+                focal_length_y,
+                principal_point_y,
+                0,
+                0,
+                1,
+            )
             self.camera_info.d = self.rotate_camera_distortion(
                 coefficients=self.camera_info.d,
                 distortion_model=self.camera_info.distortion_model,
