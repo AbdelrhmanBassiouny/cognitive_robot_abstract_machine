@@ -128,7 +128,7 @@ class PointcloudCropAnnotator(BaseAnnotator):
         cloud = self.get_cas().get(CASViews.CLOUD)
         self.color = self.get_cas().get(CASViews.COLOR_IMAGE)
         pointcloud_camera_model = self.get_cas().pointcloud_camera_model
-        color2depth_ratio = self.get_cas().get(CASViews.COLOR2DEPTH_RATIO)
+        color2depth_ratio = self.get_cas().color2depth_ratio
 
         if self.descriptor.parameters.relative_to_world:
             cloud = transform_cloud_from_camera_to_world(self.get_cas(), cloud)

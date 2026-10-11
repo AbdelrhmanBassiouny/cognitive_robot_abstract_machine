@@ -247,10 +247,7 @@ def resize_mask(annotator: BaseAnnotator, mask: npt.NDArray) -> npt.NDArray:
         # nothing to do
         return mask
 
-    color2depth_ratio = annotator.get_cas().get(CASViews.COLOR2DEPTH_RATIO)
-
-    if not color2depth_ratio:
-        raise ColorToDepthRatioMissing(operation="resize mask")
+    color2depth_ratio = annotator.get_cas().color2depth_ratio
 
     if color2depth_ratio == (1, 1):
         return mask

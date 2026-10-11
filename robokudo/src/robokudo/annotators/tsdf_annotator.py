@@ -137,7 +137,7 @@ class TSDFAnnotator(ThreadedAnnotator):
         if len(ohs) == 0:
             return Status.FAILURE
 
-        color2depth_ratio: Tuple[float, float] = cas.get(CASViews.COLOR2DEPTH_RATIO)
+        color2depth_ratio: Tuple[float, float] = cas.color2depth_ratio
 
         # Only process ohs with pose
         oh_data: List[

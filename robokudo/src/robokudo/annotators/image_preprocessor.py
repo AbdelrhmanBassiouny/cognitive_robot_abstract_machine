@@ -125,8 +125,6 @@ class ImagePreprocessorAnnotator(BaseAnnotator):
         self.color = self.get_cas().get(CASViews.COLOR_IMAGE)
         cas = self.get_cas()
         color2depth_ratio = cas.color2depth_ratio
-        if color2depth_ratio is None:
-            raise ColorToDepthRatioMissing()
         pointcloud_camera_model = (
             cas.require_camera_observation().effective_camera_model.scaled(
                 scale_x=color2depth_ratio[0],

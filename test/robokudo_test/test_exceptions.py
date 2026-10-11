@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from robokudo.cas import CASViews
+from robokudo.cas import CAS, CASViews
 from robokudo.exceptions import (
     CASCheckConfigurationError,
     CASCheckFailed,
@@ -190,7 +190,7 @@ class TestRoboKudoExceptions:
         color_image = np.zeros((2, 2, 3), dtype=np.uint8)
 
         with pytest.raises(ColorToDepthRatioMissing):
-            get_scaled_color_image_for_depth_image(_FakeCAS(), color_image)
+            get_scaled_color_image_for_depth_image(CAS(), color_image)
 
     def test_get_scale_coordinates_raises_color_to_depth_ratio_missing(self):
         with pytest.raises(ColorToDepthRatioMissing):

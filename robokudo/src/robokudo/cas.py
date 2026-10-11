@@ -36,7 +36,11 @@ from typing_extensions import (
     TypeVar,
 )
 
-from robokudo.exceptions import CameraObservationMissing, PointCloudCameraModelMissing
+from robokudo.exceptions import (
+    CameraObservationMissing,
+    ColorToDepthRatioMissing,
+    PointCloudCameraModelMissing,
+)
 
 if TYPE_CHECKING:
     from semantic_digital_twin.datastructures.camera_model import PinholeCameraModel
@@ -181,8 +185,16 @@ class CAS:
         self.views[CASViews.DEPTH_IMAGE] = value
 
     @property
-    def color2depth_ratio(self) -> Optional[Tuple[float, float]]:
-        return self.views.get(CASViews.COLOR2DEPTH_RATIO)
+    def color2depth_ratio(self) -> tuple[float, float]:
+        """
+        Return required color-to-depth scaling.
+
+        :raises ColorToDepthRatioMissing: If scaling is absent or unset.
+        """
+        ratio = self.views.get(CASViews.COLOR2DEPTH_RATIO)
+        if ratio is None:
+            raise ColorToDepthRatioMissing()
+        return ratio
 
     @color2depth_ratio.setter
     def color2depth_ratio(self, value: Tuple[float, float]) -> None:

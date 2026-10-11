@@ -428,8 +428,6 @@ class StaticObjectDetectorAnnotator(BaseAnnotator):
                 self.get_cas(), self.color
             )
             color2depth_ratio = self.get_cas().color2depth_ratio
-            if color2depth_ratio is None:
-                raise ColorToDepthRatioMissing()
             pointcloud_camera_model = (
                 self.get_cas()
                 .require_camera_observation()
@@ -562,7 +560,7 @@ class StaticObjectDetectorAnnotator(BaseAnnotator):
             + self.descriptor.parameters.bounding_box_height
         )
         # Respect possible color2depth scaling also for BoundingBox coordinates
-        color2depth_ratio = self.get_cas().get(CASViews.COLOR2DEPTH_RATIO)
+        color2depth_ratio = self.get_cas().color2depth_ratio
         sx1, sy1 = get_scale_coordinates(color2depth_ratio, (x1, y1))
         sx2, sy2 = get_scale_coordinates(color2depth_ratio, (x2, y2))
         mask[int(sy1) : int(sy2), int(sx1) : int(sx2)] = 255

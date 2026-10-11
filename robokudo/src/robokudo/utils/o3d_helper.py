@@ -127,7 +127,7 @@ def get_2d_corner_points_from_3d_bb(
     corner_points_in_2d_y = (uvd[:, 1] / uvd[:, 2]).astype(int)
     # We have to respect the ratio of the depth and rgb image to properly project back.
     # Invert from RGB-> Depth to Depth->RGB
-    color2depth_ratio = cas.get(CASViews.COLOR2DEPTH_RATIO)
+    color2depth_ratio = cas.color2depth_ratio
     depth2color_ratio = (1 / color2depth_ratio[0], 1 / color2depth_ratio[1])
     x_scaled = (corner_points_in_2d_x * depth2color_ratio[0]).astype(int)
     y_scaled = (corner_points_in_2d_y * depth2color_ratio[1]).astype(int)
@@ -149,7 +149,7 @@ def project_points_to_image(
     u = (uvd[valid, 0] / z[valid]).astype(int)
     v = (uvd[valid, 1] / z[valid]).astype(int)
 
-    color2depth_ratio = cas.get(CASViews.COLOR2DEPTH_RATIO)
+    color2depth_ratio = cas.color2depth_ratio
     depth2color_ratio = (1 / color2depth_ratio[0], 1 / color2depth_ratio[1])
     u = (u * depth2color_ratio[0]).astype(int)
     v = (v * depth2color_ratio[1]).astype(int)

@@ -270,8 +270,6 @@ class ImageClusterExtractor(BaseAnnotator):
         try:
             resized_color = get_scaled_color_image_for_depth_image(cas, self.color)
             color2depth_ratio = cas.color2depth_ratio
-            if color2depth_ratio is None:
-                raise ColorToDepthRatioMissing()
             pointcloud_camera_model = (
                 cas.require_camera_observation().effective_camera_model.scaled(
                     scale_x=color2depth_ratio[0],

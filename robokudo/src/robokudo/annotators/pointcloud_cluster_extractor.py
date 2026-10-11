@@ -323,7 +323,7 @@ class PointCloudClusterExtractor(ThreadedAnnotator):
         start_timer = default_timer()
         self.rk_logger.info("PCE Start")
         cloud = self.get_cas().get(CASViews.CLOUD)
-        color2depth_ratio = self.get_cas().get(CASViews.COLOR2DEPTH_RATIO)
+        color2depth_ratio = self.get_cas().color2depth_ratio
         pointcloud_camera_model = self.get_cas().pointcloud_camera_model
 
         color = self.get_cas().get(CASViews.COLOR_IMAGE)
@@ -529,7 +529,7 @@ class NaivePointCloudClusterExtractor(ThreadedAnnotator):
         """
         start_timer = default_timer()
         cloud = self.get_cas().get(CASViews.CLOUD)
-        color2depth_ratio = self.get_cas().get(CASViews.COLOR2DEPTH_RATIO)
+        color2depth_ratio = self.get_cas().color2depth_ratio
         pointcloud_camera_model = self.get_cas().pointcloud_camera_model
 
         color = self.get_cas().get(CASViews.COLOR_IMAGE)
