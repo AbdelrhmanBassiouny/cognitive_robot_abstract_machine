@@ -27,8 +27,10 @@ the statechart once per control cycle, before the QP controller computes the nex
   example, a Cartesian position task observes whether the distance to its target is below a
   threshold. Only running tasks influence the motion.
 - **Monitor**: A node that observes a condition of the world without adding constraints to the
-  motion, for example `PoseReached`, `JointPositionReached` or `Stalled`. A monitor is a plain
-  `MotionStatechartNode`.
+  motion, for example `PoseReached`, `JointPositionReached` or `Stalled`. A monitor is a
+  `MotionStatechartNode` that also says how it succeeds, usually by inheriting `EndedByOwner`
+  (see [Who ends a task](#who-ends-a-task)); a class that inherits only
+  `MotionStatechartNode` cannot be constructed.
 - **Goal**: A composite node that combines tasks and monitors into a reusable motion, for
   example a Cartesian goal or opening a door.
 - **EndMotion**: An `EndStatechart` that additionally waits for the robot to come to rest (see
@@ -38,12 +40,12 @@ the statechart once per control cycle, before the QP controller computes the nex
 
 A task that is ended stops being enforced, and the robot can then be pulled out of the pose
 that task had just reached, for example by another task that is still running. That is why
-every `Task` declares `SuccessDecider.OWNER`: it never ends itself on reaching its goal, and
+every `Task` is `EndedByOwner`: it never ends itself on reaching its goal, and
 whoever runs it writes its success and interrupt conditions. Monitors such as `PoseReached` and
 `JointPositionReached` do the same. Nodes whose ending undoes nothing, such as `SetOdometry` and
-`SetSeedConfiguration`, declare `SuccessDecider.ITSELF`. See
-[Who ends a node](https://cram2.github.io/cognitive_robot_abstract_machine/cramph/statecharts.html#who-ends-a-node)
-for how the ordering templates wrap such nodes in an `Attempt`.
+`SetSeedConfiguration`, are `SucceedsOnObservingTrue`. The ordering templates run those as
+they are and wrap every `EndedByOwner` node in an `Attempt`, see
+[Who ends a node](https://cram2.github.io/cognitive_robot_abstract_machine/cramph/statecharts.html#who-ends-a-node).
 
 ## RepeatOnStall
 

@@ -143,11 +143,17 @@ With the defaults a node starts right away and runs until the statechart ends. A
 pause condition is already True when it starts goes straight to PAUSED, so it never runs
 before its pause condition lets it.
 
+The table lists the conditions written on a node. For succeeding and failing, a node class can
+bring a condition of its own on top, its *inherent* condition, for example to succeed once the
+node observes True (see [Who ends a node](#who-ends-a-node)). A node succeeds or fails once
+either the written or the inherent condition holds; "success condition" and "fail condition"
+below mean that combination.
+
 **The condition that ends a node decides its outcome.** What the node observes at that moment
-has no say in it:
+has a say in it only where one of these conditions reads the observation:
 
 - **SUCCEEDED**: the node's success condition held.
-- **FAILED**: the node declared through its fail condition that it cannot continue.
+- **FAILED**: the node's fail condition held: it cannot continue.
 - **INTERRUPTED**: the node's interrupt condition held, or one of its ancestors ended. Neither
   is a judgement of the node itself.
 
@@ -334,41 +340,47 @@ then be undone, for example by another node that is still running. That is why s
 never ends itself on reaching its goal; whoever runs it, its **owner**, writes its success and
 interrupt conditions.
 
-Every node class therefore declares who decides that it succeeded, as the class attribute
-`success_decided_by`. Compiling a statechart that holds a node whose class leaves it unset raises a
-`SuccessDeciderNotDeclaredError`.
+Every node class therefore says how it succeeds, by inheriting one of two classes. They
+implement the abstract `inherent_success_condition`; constructing a node of a class that
+leaves it abstract raises a `TypeError`.
 
-- **`SuccessDecider.OWNER`**: the node's observation says whether it has reached its goal, but
+- **`EndedByOwner`**: the node's observation says whether it has reached its goal, but
   only its owner ends it. Monitors (`CountSeconds`, `CountTicks`, `Print`, …), `Parallel`
   and the monitored composite nodes are examples.
-- **`SuccessDecider.ITSELF`**: ending the node undoes nothing it did, so it ends itself. When
-  the statechart is compiled, the node's observation is added to its success condition, so it
-  succeeds once it observes True. Examples are `Attempt` and the ordering templates.
+- **`SucceedsOnObservingTrue`**: ending the node undoes nothing it did, so it ends itself: it
+  succeeds once it observes True. Examples are `Attempt`, the ordering templates,
+  `FunctionCall`, `MoveBranch` and `CompositeNodeChoosingItsChild`.
 
-Independently, a node class can set **`fails_when_observing_false = True`**: observing False
-means it can no longer reach its goal. When the statechart is compiled, such a node gets
-`not observation` added to its fail condition, so it fails once it observes False. `Attempt`
-and the ordering templates set it.
+Independently, a node class can inherit **`FailsOnObservingFalse`**: observing False
+means it can no longer reach its goal, so it fails once it observes False. `Attempt`,
+the ordering templates and `FunctionCall` do.
 
-A node may also fail on its own by setting its own fail condition: `Parallel` fails once too
-few of its nodes are left to reach `minimum_success`, and every monitored composite statechart
-node fails once its monitored node ended without succeeding.
+What a class brings is its *inherent* success and fail condition
+(`inherent_success_condition`, `inherent_fail_condition`). The conditions written on a node
+(`success_condition`, `fail_condition`) stay as they were written; a node succeeds or fails
+once either the written or the inherent condition holds.
+
+A node class with another reason to fail on its own overrides `inherent_fail_condition`
+instead of writing its fail condition: `Parallel` fails once too few of its nodes are left to
+reach `minimum_success`, and every monitored composite statechart node fails once its
+monitored node ended without succeeding.
 
 `Attempt` is the bridge between the two: it runs a node its owner ends and turns it into a node
 that ends itself.
 
 ```{mermaid}
 flowchart LR
-    subgraph owner ["success_decided_by = OWNER"]
+    subgraph owner ["EndedByOwner"]
         direction TB
         monitor(["monitors,<br/>counters"])
         parallel(["Parallel"])
         monitored(["PausedWhileTrue, PausedUntilTrue,<br/>StoppedWhenTrue, CancelledWhenTrue"])
     end
-    subgraph itself ["success_decided_by = ITSELF"]
+    subgraph itself ["SucceedsOnObservingTrue"]
         direction TB
         attempt(["Attempt"])
         ordering(["Sequence, TryInOrder,<br/>TryAll, RepeatUntil"])
+        steps(["FunctionCall, MoveBranch,<br/>CompositeNodeChoosingItsChild"])
     end
     owner -- "wrapped in an Attempt" --> attempt
     itself -- "usable as a step of" --> ordering
@@ -383,8 +395,8 @@ children start and end, so they check every child they are given:
 - `TryInOrder` (for every alternative but the last) and `RepeatUntil` only move on once an
   attempt failed. They reject an `Attempt` that cannot fail, written by hand or created
   automatically, with an `AttemptCannotFailError` at compile time. An attempt cannot fail if it
-  has no failure monitors and its task has neither a fail condition nor
-  `fails_when_observing_false`.
+  has no failure monitors and its task has neither a written nor an inherent fail
+  condition.
 - A child whose start, pause, success, interrupt or reset condition was already set is
   rejected with a `ChildTransitionAlreadyWiredError`, because those are the template's to
   decide. The fail condition is exempt, since a node declares its own failure.
