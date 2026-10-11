@@ -18,6 +18,7 @@ The module is used for cameras like:
 
 from __future__ import annotations
 
+# %% Imports
 from collections.abc import Sequence
 from threading import Lock
 
@@ -31,7 +32,9 @@ from typing_extensions import Any, Tuple, TYPE_CHECKING, Optional, List
 
 from robokudo.cas import CASViews
 from robokudo.exceptions import InvalidCameraObservation
+from robokudo.types.image import ImageRotation
 from robokudo.io.camera_interface import ROSCameraInterface
+from robokudo.io.exceptions import UnsupportedImageRotation
 from robokudo.io.camera_model_adapters import RosCameraModelAdapter
 from robokudo.utils.cv_bridge_workaround import CVBridgeWorkaround
 from semantic_digital_twin.datastructures.camera_model import (
@@ -45,6 +48,7 @@ if TYPE_CHECKING:
     from robokudo.cas import CAS
 
 
+# %% RGB-only camera interface
 class ROSCameraWithoutDepthInterface(ROSCameraInterface):
     """
     A ROS camera interface for RGB-only cameras.
@@ -123,8 +127,11 @@ class ROSCameraWithoutDepthInterface(ROSCameraInterface):
         self.rk_logger.info("ROSCameraWithoutDepthInterface initialized")
 
     def rotate_camera_intrinsics(
-        self, K: npt.NDArray, image_size: Tuple[int, int], rotation: str = "90_ccw"
-    ) -> Tuple[npt.NDArray, Tuple[int, int]]:
+        self,
+        intrinsic_matrix: npt.NDArray,
+        image_size: tuple[int, int],
+        rotation: ImageRotation = ImageRotation.COUNTERCLOCKWISE_90,
+    ) -> tuple[npt.NDArray, tuple[int, int]]:
         """
         Adjust camera intrinsics matrix for image rotation.
 
@@ -132,46 +139,56 @@ class ROSCameraWithoutDepthInterface(ROSCameraInterface):
         rotation to the image. Supports 90° counter-clockwise, 90° clockwise, and 180°
         rotations.
 
-        :param K: Original camera intrinsic matrix of shape (3, 3)
+        :param intrinsic_matrix: Original camera intrinsic matrix of shape (3, 3)
         :param image_size: Original image dimensions as (width, height)
-        :param rotation: '90_ccw', '90_cw', '180' (default is 90° counter-clockwise)
+        :param rotation: Rotation applied to the image.
         :return: Tuple of (new intrinsics matrix, new image dimensions)
-        :raises ValueError: If rotation type is not supported
+        :raises UnsupportedImageRotation: If the image rotation is unsupported.
         """
         width, height = image_size
-        f_x = K[0, 0]
-        f_y = K[1, 1]
-        c_x = K[0, 2]
-        c_y = K[1, 2]
+        focal_length_x = intrinsic_matrix[0, 0]
+        focal_length_y = intrinsic_matrix[1, 1]
+        principal_point_x = intrinsic_matrix[0, 2]
+        principal_point_y = intrinsic_matrix[1, 2]
 
-        if rotation == "90_ccw":
-            new_K = np.array([[f_y, 0, c_y], [0, f_x, width - 1.0 - c_x], [0, 0, 1]])
-            new_size = (height, width)
-
-        elif rotation == "90_cw":
-            new_K = np.array([[f_y, 0, height - 1.0 - c_y], [0, f_x, c_x], [0, 0, 1]])
-            new_size = (height, width)
-
-        elif rotation == "180":
-            new_K = np.array(
+        if rotation == ImageRotation.COUNTERCLOCKWISE_90:
+            rotated_intrinsics = np.array(
                 [
-                    [f_x, 0, width - 1.0 - c_x],
-                    [0, f_y, height - 1.0 - c_y],
+                    [focal_length_y, 0, principal_point_y],
+                    [0, focal_length_x, width - 1.0 - principal_point_x],
+                    [0, 0, 1],
+                ]
+            )
+            new_size = (height, width)
+
+        elif rotation == ImageRotation.CLOCKWISE_90:
+            rotated_intrinsics = np.array(
+                [
+                    [focal_length_y, 0, height - 1.0 - principal_point_y],
+                    [0, focal_length_x, principal_point_x],
+                    [0, 0, 1],
+                ]
+            )
+            new_size = (height, width)
+
+        elif rotation == ImageRotation.HALF_TURN:
+            rotated_intrinsics = np.array(
+                [
+                    [focal_length_x, 0, width - 1.0 - principal_point_x],
+                    [0, focal_length_y, height - 1.0 - principal_point_y],
                     [0, 0, 1],
                 ]
             )
             new_size = (width, height)
 
         else:
-            raise ValueError(
-                "Unsupported rotation type. Use '90_ccw', '90_cw', or '180'."
-            )
+            raise UnsupportedImageRotation(rotation=rotation)
 
-        return new_K, new_size
+        return rotated_intrinsics, new_size
 
     @staticmethod
     def rotate_camera_distortion(
-        coefficients: Sequence[float], distortion_model: str, rotation: str
+        coefficients: Sequence[float], distortion_model: str, rotation: ImageRotation
     ) -> tuple[float, ...]:
         """
         Express lens distortion in the rotated image-axis convention.
@@ -181,7 +198,11 @@ class ROSCameraWithoutDepthInterface(ROSCameraInterface):
         :param rotation: Rotation applied to the delivered image.
         :return: Distortion coefficients matching the rotated image axes.
         :raises InvalidCameraObservation: If tangential terms are missing.
+        :raises UnsupportedImageRotation: If the image rotation is unsupported.
         """
+        if rotation not in tuple(ImageRotation):
+            raise UnsupportedImageRotation(rotation=rotation)
+
         tangential_models = (
             CameraDistortionModel.PLUMB_BOB.value,
             CameraDistortionModel.RATIONAL_POLYNOMIAL.value,
@@ -199,41 +220,46 @@ class ROSCameraWithoutDepthInterface(ROSCameraInterface):
         rotated_coefficients = list(coefficients)
         tangential_x = coefficients[2]
         tangential_y = coefficients[3]
-        if rotation == "90_ccw":
+        if rotation == ImageRotation.COUNTERCLOCKWISE_90:
             rotated_coefficients[2] = -tangential_y
             rotated_coefficients[3] = tangential_x
-        elif rotation == "90_cw":
+        elif rotation == ImageRotation.CLOCKWISE_90:
             rotated_coefficients[2] = tangential_y
             rotated_coefficients[3] = -tangential_x
-        elif rotation == "180":
+        elif rotation == ImageRotation.HALF_TURN:
             rotated_coefficients[2] = -tangential_x
             rotated_coefficients[3] = -tangential_y
         return tuple(rotated_coefficients)
 
     def rotate_image_and_intrinsics(
-        self, img: npt.NDArray, K: npt.NDArray, rotation: str = "90_ccw"
-    ) -> Tuple[npt.NDArray, npt.NDArray, Tuple[int, int]]:
+        self,
+        image: npt.NDArray,
+        intrinsic_matrix: npt.NDArray,
+        rotation: ImageRotation = ImageRotation.COUNTERCLOCKWISE_90,
+    ) -> tuple[npt.NDArray, npt.NDArray, tuple[int, int]]:
         """
         Rotate an image and adjust its camera intrinsics accordingly.
 
-        :param img: Input image to rotate
-        :param K: Camera intrinsics matrix
-        :param rotation: Type of rotation to apply, defaults to '90_ccw'
+        :param image: Input image to rotate
+        :param intrinsic_matrix: Camera intrinsics matrix
+        :param rotation: Rotation applied to the image.
         :return: Tuple of (rotated image, new intrinsics matrix, new dimensions)
-        :raises ValueError: If rotation type is not supported
+        :raises UnsupportedImageRotation: If the image rotation is unsupported.
         """
-        h, w = img.shape[:2]
-        if rotation == "90_ccw":
-            img_rotated = cv2.rotate(img, cv2.ROTATE_90_COUNTERCLOCKWISE)
-        elif rotation == "90_cw":
-            img_rotated = cv2.rotate(img, cv2.ROTATE_90_CLOCKWISE)
-        elif rotation == "180":
-            img_rotated = cv2.rotate(img, cv2.ROTATE_180)
+        height, width = image.shape[:2]
+        if rotation == ImageRotation.COUNTERCLOCKWISE_90:
+            rotated_image = cv2.rotate(image, cv2.ROTATE_90_COUNTERCLOCKWISE)
+        elif rotation == ImageRotation.CLOCKWISE_90:
+            rotated_image = cv2.rotate(image, cv2.ROTATE_90_CLOCKWISE)
+        elif rotation == ImageRotation.HALF_TURN:
+            rotated_image = cv2.rotate(image, cv2.ROTATE_180)
         else:
-            raise ValueError("Unsupported rotation type.")
+            raise UnsupportedImageRotation(rotation=rotation)
 
-        K_new, new_size = self.rotate_camera_intrinsics(K, (w, h), rotation)
-        return img_rotated, K_new, new_size
+        rotated_intrinsics, new_size = self.rotate_camera_intrinsics(
+            intrinsic_matrix, (width, height), rotation
+        )
+        return rotated_image, rotated_intrinsics, new_size
 
     def callback(
         self,
@@ -290,7 +316,7 @@ class ROSCameraWithoutDepthInterface(ROSCameraInterface):
             # 1) calculate camera intrinsics
             # 2) modify ROS camera info setting
             rotated_img, K_rotated, new_size = self.rotate_image_and_intrinsics(
-                self.color, K=K, rotation=self.camera_config.rotate_image
+                self.color, intrinsic_matrix=K, rotation=self.camera_config.rotate_image
             )
             self.color = rotated_img
             k_flat = K_rotated.flatten()

@@ -13,6 +13,7 @@ from sensor_msgs.msg import CameraInfo
 import robokudo.world as robokudo_world
 from robokudo.annotators.static_camera_transform import StaticCameraTransformAnnotator
 from robokudo.cas import CAS
+from robokudo.types.image import ImageRotation
 from robokudo.descriptors.camera_configs.base_camera_config import BaseCameraConfig
 from robokudo.exceptions import InvalidCameraObservation
 from robokudo.io.camera_interface import CameraInterface, KinectCameraInterface
@@ -72,7 +73,7 @@ class LiveColorCameraConfig:
     Camera optical frame used when the message does not declare one.
     """
 
-    rotate_image: str | None = None
+    rotate_image: ImageRotation | None = None
     """
     Optional rotation applied before publishing the frame to the CAS.
     """
@@ -713,7 +714,9 @@ def test_rgb_only_rotation_updates_effective_calibration(
     original_tangential_x = camera_info.d[2]
     original_tangential_y = camera_info.d[3]
     interface = object.__new__(ROSCameraWithoutDepthInterface)
-    interface.camera_config = LiveColorCameraConfig(rotate_image="90_ccw")
+    interface.camera_config = LiveColorCameraConfig(
+        rotate_image=ImageRotation.COUNTERCLOCKWISE_90
+    )
     interface._has_new_data = True
     interface.lookup_viewpoint = False
     interface.color = np.zeros(
