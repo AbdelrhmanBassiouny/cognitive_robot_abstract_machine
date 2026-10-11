@@ -204,7 +204,7 @@ class CameraInterface(object):
         return [
             body
             for body in world.bodies
-            if normalize_ros_frame_id(body.name.name) == normalized
+            if normalize_ros_frame_id(str(body.name)) == normalized
         ]
 
     def static_world_T_camera_if_configured(

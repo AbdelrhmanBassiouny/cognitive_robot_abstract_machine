@@ -2,6 +2,7 @@
 Use this in scenarios where you do not have a world to camera transform published
 or when you develop the perception system in isolation."""
 
+# %% Imports
 from __future__ import annotations
 
 from timeit import default_timer
@@ -13,6 +14,7 @@ from robokudo.annotators.core import BaseAnnotator
 from robokudo.io.camera_interface import CameraInterface
 
 
+# %% Static camera pose
 class StaticCameraTransformAnnotator(BaseAnnotator):
     """Write a fixed camera-to-world transform to the current CAS."""
 
@@ -37,16 +39,17 @@ class StaticCameraTransformAnnotator(BaseAnnotator):
         super().__init__(name=name, descriptor=descriptor)
 
     def update(self) -> Status:
+        """Bind the configured pose to the observed camera and store it in the CAS."""
         start_timer = default_timer()
 
         cas = self.get_cas()
-        params = self.descriptor.parameters
+        parameters = self.descriptor.parameters
         observation = cas.require_camera_observation()
 
         world_T_camera = CameraInterface.bind_world_T_camera(
-            world_frame=params.world_frame,
-            camera_frame=observation.camera.root.name.name,
-            world_T_camera=params.world_T_camera,
+            world_frame=parameters.world_frame,
+            camera_frame=str(observation.camera.root.name),
+            world_T_camera=parameters.world_T_camera,
         )
         cas.camera_observation = observation.with_world_T_camera(world_T_camera)
 
