@@ -1,6 +1,8 @@
-"""Annotator for writing a configured static camera transform into the CAS.
+"""
+Annotator for writing a configured static camera transform into the CAS.
 Use this in scenarios where you do not have a world to camera transform published
-or when you develop the perception system in isolation."""
+or when you develop the perception system in isolation.
+"""
 
 # %% Imports
 from __future__ import annotations
@@ -16,18 +18,24 @@ from robokudo.io.camera_interface import CameraInterface
 
 # %% Static camera pose
 class StaticCameraTransformAnnotator(BaseAnnotator):
-    """Write a fixed camera-to-world transform to the current CAS."""
+    """
+    Write a fixed camera-to-world transform to the current CAS.
+    """
 
     class Descriptor(BaseAnnotator.Descriptor):
         class Parameters:
             def __init__(self) -> None:
                 self.world_frame: str = "map"
-                """Reference frame used for the camera-to-world transform."""
+                """
+                Reference frame used for the camera-to-world transform.
+                """
 
                 self.world_T_camera: HomogeneousTransformationMatrix = (
                     HomogeneousTransformationMatrix()
                 )
-                """Camera pose relative to the configured world frame."""
+                """
+                Camera pose relative to the configured world frame.
+                """
 
         parameters = Parameters()
 
@@ -39,7 +47,9 @@ class StaticCameraTransformAnnotator(BaseAnnotator):
         super().__init__(name=name, descriptor=descriptor)
 
     def update(self) -> Status:
-        """Bind the configured pose to the observed camera and store it in the CAS."""
+        """
+        Bind the configured pose to the observed camera and store it in the CAS.
+        """
         start_timer = default_timer()
 
         cas = self.get_cas()
