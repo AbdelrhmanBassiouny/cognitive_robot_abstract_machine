@@ -101,7 +101,7 @@ def _evidence_for(molecule: MutagenesisMolecule, circuit) -> dict:
     :param circuit: The circuit whose variables the evidence must be keyed on.
     :return: Mapping from each non-target variable to ``molecule``'s value for it.
     """
-    aggregations = MutagenesisMoleculeAggregations(instance=molecule)
+    aggregations = MutagenesisMoleculeAggregations(role_taker=molecule)
     values_by_name = {
         "MutagenesisMolecule.indicator_1": molecule.indicator_1,
         "MutagenesisMolecule.logp": molecule.logp,
