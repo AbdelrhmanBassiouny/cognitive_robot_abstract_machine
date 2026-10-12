@@ -1,6 +1,6 @@
 """
-Tests a plan that takes a bowl and a cup out of a kitchen drawer with both arms at once
-and sets them down on the kitchen island.
+Tests a plan that takes a bowl and a cup out of a kitchen drawer, one in each hand, and
+sets them down on the kitchen island, while avoiding collisions.
 """
 
 from __future__ import annotations
@@ -20,7 +20,7 @@ from coraplex.robot_plans.actions.core.robot_body import (
     MoveTorsoAction,
     ParkArmsAction,
 )
-from cramph.composites import Parallel, Sequence
+from cramph.composites import Sequence
 from cramph.context import ContextExtension
 from semantic_digital_twin.datastructures.definitions import TorsoState
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
@@ -162,6 +162,8 @@ def kitchen_with_filled_drawer(
     world = pr2_world_copy
     world.merge_world(deepcopy(kitchen_world))
     robot = world.get_semantic_annotations_by_type(PR2)[0]
+    # Collision avoidance moves the base, so the goals have to hold still in the world.
+    robot.mobile_base.full_body_controlled = True
     drawer = world.get_body_by_name("sink_area_left_middle_drawer_main")
     cup = Cup(
         root=add_cylinder(
@@ -246,29 +248,23 @@ def test_bowl_and_cup_are_moved_from_the_drawer_onto_the_kitchen_island(
 
     plan = Sequence(
         [
+            # The arms start stretched out, which would reach into the counter.
+            ParkArmsAction(robot.all_arms),
             NavigateAction(in_front_of_the_closed_drawer),
             OpenAction(kitchen.drawer_handle, robot.left_arm),
             ParkArmsAction(robot.all_arms),
             NavigateAction(in_front_of_the_open_drawer),
-            Parallel(
-                [
-                    PickUpAction(grasp_from_above(kitchen.bowl), robot.left_arm),
-                    PickUpAction(grasp_from_above(kitchen.cup), robot.right_arm),
-                ]
-            ),
+            PickUpAction(grasp_from_above(kitchen.bowl), robot.left_arm),
+            PickUpAction(grasp_from_above(kitchen.cup), robot.right_arm),
             ParkArmsAction(robot.all_arms),
             NavigateAction(facing_the_kitchen_island),
             MoveTorsoAction(TorsoState.HIGH),
-            Parallel(
-                [
-                    PlaceAction(kitchen.bowl, world_T_bowl_goal),
-                    PlaceAction(kitchen.cup, world_T_cup_goal),
-                ]
-            ),
+            PlaceAction(kitchen.bowl, world_T_bowl_goal),
+            PlaceAction(kitchen.cup, world_T_cup_goal),
             ParkArmsAction(robot.all_arms),
         ]
     )
-    run_plan(plan, kitchen.context_extensions)
+    run_plan(plan, kitchen.context_extensions, collision_avoidance=True)
 
     # A pick-up and a place each end within the position threshold of their goal.
     position_tolerance = 2 * MotionToleranceConfig().default_tcp_position_threshold
