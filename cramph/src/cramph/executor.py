@@ -299,7 +299,7 @@ class StatechartExecutor(Executor, RecompileCallback):
 
     def __post_init__(self):
         super().__post_init__()
-        for default_extension in self.default_extensions():
+        for default_extension in self.default_executor_extensions():
             if not any(
                 type(extension) is type(default_extension)
                 for extension in self.extensions
@@ -313,7 +313,7 @@ class StatechartExecutor(Executor, RecompileCallback):
     def default_context_extensions(self) -> list[ContextExtension]:
         return []
 
-    def default_extensions(self) -> list[ExecutorExtension]:
+    def default_executor_extensions(self) -> list[ExecutorExtension]:
         """
         :return: The executor extensions appended to :attr:`extensions` unless one of
             the same type was supplied.

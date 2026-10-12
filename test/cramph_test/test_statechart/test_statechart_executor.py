@@ -416,7 +416,7 @@ class ExecutorWithDefaults(StatechartExecutor):
     def default_context_extensions(self) -> list[ContextExtension]:
         return [CountingContext()]
 
-    def default_extensions(self) -> list[ExecutorExtension]:
+    def default_executor_extensions(self) -> list[ExecutorExtension]:
         return [ExtensionRecordingItsStages(records=[])]
 
 

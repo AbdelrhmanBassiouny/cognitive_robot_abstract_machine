@@ -44,7 +44,7 @@ class ActionOfSteps(Action, ABC):
     """
 
     @staticmethod
-    def _as_node(step: Action | Match[Action]) -> StatechartNode:
+    def _as_node(step: Action) -> StatechartNode:
         """
         Turns a step of this action into the node that runs it.
 
@@ -64,12 +64,12 @@ class TransportAction(ActionOfSteps):
     Picks an object up with one step and puts it down with another.
     """
 
-    pick_up: MoveAndPickUpAction | Match[MoveAndPickUpAction]
+    pick_up: MoveAndPickUpAction
     """
     The step that picks the object up, or an underspecified statement of it.
     """
 
-    place: MoveAndPlaceAction | Match[MoveAndPlaceAction]
+    place: MoveAndPlaceAction
     """
     The step that puts down what :attr:`pick_up` picked up, or an underspecified
     statement of it.
@@ -150,12 +150,12 @@ class PickAndPlaceAction(ActionOfSteps):
     base of the robot.
     """
 
-    pick_up: PickUpAction | Match[PickUpAction]
+    pick_up: PickUpAction
     """
     The step that picks the object up, or an underspecified statement of it.
     """
 
-    place: PlaceAction | Match[PlaceAction]
+    place: PlaceAction
     """
     The step that puts down what :attr:`pick_up` picked up, or an underspecified
     statement of it.
@@ -176,19 +176,19 @@ class MoveAndPlaceAction(ActionOfSteps):
     Navigates to where the robot stands, faces the target and places the object there.
     """
 
-    navigate: NavigateAction | Match[NavigateAction]
+    navigate: NavigateAction
     """
     The step to where the robot stands while placing, or an underspecified statement of
     it.
     """
 
-    face_and_look_at: FaceAndLookAtAction | Match[FaceAndLookAtAction]
+    face_and_look_at: FaceAndLookAtAction
     """
     The turn towards the target and the look at it, or an underspecified statement of
     them.
     """
 
-    place: PlaceAction | Match[PlaceAction]
+    place: PlaceAction
     """
     The step that puts the object down, or an underspecified statement of it.
     """
@@ -233,19 +233,19 @@ class MoveAndPickUpAction(ActionOfSteps):
     Navigates to where the robot stands, faces the object and picks it up.
     """
 
-    navigate: NavigateAction | Match[NavigateAction]
+    navigate: NavigateAction
     """
     The step to where the robot stands while picking up, or an underspecified statement
     of it.
     """
 
-    face_and_look_at: FaceAndLookAtAction | Match[FaceAndLookAtAction]
+    face_and_look_at: FaceAndLookAtAction
     """
     The turn towards the object and the look at it, or an underspecified statement of
     them.
     """
 
-    pick_up: PickUpAction | Match[PickUpAction]
+    pick_up: PickUpAction
     """
     The step that picks the object up, or an underspecified statement of it.
     """
@@ -350,19 +350,19 @@ class MoveAndOpenAction(ActionOfSteps):
     Navigates to where the robot stands, faces the handle and opens its container.
     """
 
-    navigate: NavigateAction | Match[NavigateAction]
+    navigate: NavigateAction
     """
     The step to where the robot stands while opening, or an underspecified statement of
     it.
     """
 
-    face_and_look_at: FaceAndLookAtAction | Match[FaceAndLookAtAction]
+    face_and_look_at: FaceAndLookAtAction
     """
     The turn towards the handle and the look at it, or an underspecified statement of
     them.
     """
 
-    open_container: OpenAction | Match[OpenAction]
+    open_container: OpenAction
     """
     The step that opens the container, or an underspecified statement of it.
     """

@@ -327,7 +327,7 @@ class SimulatedPlanExecutor(PlanExecutor, StatechartExecutor):
     The simulated time after which a plan is given up on, however it is progressing.
     """
 
-    def default_extensions(self) -> list[ExecutorExtension]:
+    def default_executor_extensions(self) -> list[ExecutorExtension]:
         return [RosNodeAccess(self.ros_node), MotionControl()]
 
     def _run(self) -> None:
