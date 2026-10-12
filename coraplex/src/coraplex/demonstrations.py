@@ -297,6 +297,7 @@ class RobotDemonstration(ABC):
                 with event_segmentation:
                     executor.compile(statechart)
                     executor.execute()
+                executor.close()
         finally:
             self.tear_down()
         return world
