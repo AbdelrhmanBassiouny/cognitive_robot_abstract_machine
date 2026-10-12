@@ -1,6 +1,6 @@
 """
-Tests a plan that takes a bowl and a cup out of a kitchen drawer, one in each hand, and
-sets them down on the kitchen island, while avoiding collisions.
+Tests a plan that takes a bowl and a cup out of a kitchen drawer, one in each hand and
+both at once, and sets them down on the kitchen island, while avoiding collisions.
 """
 
 from __future__ import annotations
@@ -10,7 +10,6 @@ from dataclasses import dataclass
 
 import numpy as np
 import pytest
-from typing_extensions import Iterator
 
 from coraplex.plans.context_extensions import MotionToleranceConfig
 from coraplex.robot_plans.actions.core.container import OpenAction
@@ -21,10 +20,8 @@ from coraplex.robot_plans.actions.core.robot_body import (
     MoveTorsoAction,
     ParkArmsAction,
 )
-from coraplex.visualization import RvizVisualization
 from cramph.composites import Parallel, Sequence
 from cramph.context import ContextExtension
-from cramph.executor import SimulationPacer
 from semantic_digital_twin.datastructures.definitions import TorsoState
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.grasping.grasp_candidates import (
@@ -229,21 +226,6 @@ def kitchen_with_filled_drawer(
     )
 
 
-@pytest.fixture
-def kitchen_shown_in_rviz(
-    kitchen_with_filled_drawer: KitchenWithFilledDrawer,
-) -> Iterator[KitchenWithFilledDrawer]:
-    """
-    The kitchen, published to RViz together with its collision results for as long as
-    the test runs.
-    """
-    visualization = RvizVisualization(
-        kitchen_with_filled_drawer.world, collision_visualization=True
-    ).start()
-    yield kitchen_with_filled_drawer
-    visualization.stop()
-
-
 def grasp_from_above(graspable: HasGraspCandidates) -> GraspCandidate:
     """
     :param graspable: The annotation of an object standing upright.
@@ -261,16 +243,12 @@ def grasp_from_above(graspable: HasGraspCandidates) -> GraspCandidate:
 # %% taking both objects out of the drawer and setting them down
 
 
-def transport_plan(
-    kitchen: KitchenWithFilledDrawer,
-    two_arm_step_type: type[Sequence] | type[Parallel],
-) -> Sequence:
+def transport_plan(kitchen: KitchenWithFilledDrawer) -> Sequence:
     """
     :param kitchen: The kitchen the plan is performed in.
-    :param two_arm_step_type: How the two arms work together where each has its own
-        object to handle: one after the other, or at once.
     :return: The plan that opens the drawer, takes the bowl with the left arm and the
-        cup with the right arm, and sets both down on the kitchen island.
+        cup with the right arm at once, and sets both down on the kitchen island at
+        once.
     """
     world, robot = kitchen.world, kitchen.robot
     in_front_of_the_closed_drawer = Pose.from_xyz_rpy(
@@ -290,7 +268,7 @@ def transport_plan(
             OpenAction(kitchen.drawer_handle, robot.left_arm),
             ParkArmsAction(robot.all_arms),
             NavigateAction(in_front_of_the_open_drawer),
-            two_arm_step_type(
+            Parallel(
                 [
                     PickUpAction(grasp_from_above(kitchen.bowl), robot.left_arm),
                     PickUpAction(grasp_from_above(kitchen.cup), robot.right_arm),
@@ -299,7 +277,7 @@ def transport_plan(
             ParkArmsAction(robot.all_arms),
             NavigateAction(facing_the_kitchen_island),
             MoveTorsoAction(TorsoState.HIGH),
-            two_arm_step_type(
+            Parallel(
                 [
                     PlaceAction(kitchen.bowl, kitchen.world_T_bowl_goal),
                     PlaceAction(kitchen.cup, kitchen.world_T_cup_goal),
@@ -331,30 +309,12 @@ def assert_bowl_and_cup_stand_on_the_kitchen_island(
 
 
 def test_bowl_and_cup_are_moved_from_the_drawer_onto_the_kitchen_island(
-    kitchen_shown_in_rviz: KitchenWithFilledDrawer,
+    kitchen_with_filled_drawer: KitchenWithFilledDrawer,
 ):
-    kitchen = kitchen_shown_in_rviz
+    kitchen = kitchen_with_filled_drawer
 
     run_plan(
-        transport_plan(kitchen, Sequence),
-        kitchen.context_extensions,
-        collision_avoidance=True,
-        pacer=SimulationPacer(real_time_factor=1),
-    )
-
-    assert_bowl_and_cup_stand_on_the_kitchen_island(kitchen)
-
-
-def test_bowl_and_cup_are_moved_with_both_arms_at_once(
-    kitchen_shown_in_rviz: KitchenWithFilledDrawer,
-):
-    kitchen = kitchen_shown_in_rviz
-
-    run_plan(
-        transport_plan(kitchen, Parallel),
-        kitchen.context_extensions,
-        collision_avoidance=True,
-        pacer=SimulationPacer(real_time_factor=1),
+        transport_plan(kitchen), kitchen.context_extensions, collision_avoidance=True
     )
 
     assert_bowl_and_cup_stand_on_the_kitchen_island(kitchen)
