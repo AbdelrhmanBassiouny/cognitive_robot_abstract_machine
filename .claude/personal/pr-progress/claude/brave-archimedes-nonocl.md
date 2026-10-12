@@ -22,11 +22,17 @@ Based on main, since #185 merged on 2026-10-05. Auto mode. Baseline: 710 tests p
 - Decisions: `pip --python <venv> install --editable ./basstler`; dependencies module counts the package
   itself; PYTHONPATH=basstler/src exported; member names via `_name_`.
 
+## Round two (2026-10-12, the user asked to fix the three recorded items)
+- 174d88f5e MaintenancePass carries its board; autouse board fixture deleted (xdist race gone).
+- 79360e121 add-plan-item uses PLAN_ITEM_BOOTSTRAP_MODULE; contract test on every ${NAME} in .claude docs.
+- 8a08808f0 3.11-only machine: pip install --target basstler/.uv uv, then uv fetches; uv venv --no-project;
+  uv pip install whenever a uv exists (system pip 24.0 broke on a uv-fetched 3.15).
+- 750 pass on 3.12 (serial and -n), 3.13, 3.15. PR description, roadmap section updated.
+
 ## Outstanding
-- CI on #501 not yet observed (not polled, by the user's rule).
+- CI on #501 not yet observed.
 - Landing: #420/#424/#430/#437/#107 merge across the second move.
-- Pre-existing, recorded only: xdist race on board.json; add-plan-item/SKILL.md uses undefined
-  ${PLAN_ITEM_BOOTSTRAP_SCRIPT}.
+- Open: uv picks the newest interpreter (3.15 here) while CI tests 3.12.
 
 ## Next
 - Waiting for the user's review of draft #501.
