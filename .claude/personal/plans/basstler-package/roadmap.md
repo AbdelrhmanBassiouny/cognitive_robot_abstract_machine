@@ -399,3 +399,16 @@ Two defects the tests turned up: `check-setup.sh` and `save-plan.sh` both read a
 Recorded rather than fixed: a `pytest -n` race on the real `board.json`, already on `main` and xdist-only, and `add-plan-item/SKILL.md`'s undefined `${PLAN_ITEM_BOOTSTRAP_SCRIPT}`.
 
 Landing: #420, #424, #430, #437 and #107 each merge across this second move. The new contract test fails on any module left directly under `basstler/`.
+
+## 2026-10-12 - basstler-src-layout: the 3.11 machine, the board race, a dangling variable
+
+The user asked for the three things #501 had only recorded to be fixed. All three are on #501, and 750 tests pass on 3.12, 3.13 and 3.15.
+
+- **A machine whose only Python is 3.11 now gets an environment** (`8a08808f0`). With neither `uv` nor a supported `python3.1x`, the session start runs `pip install --target basstler/.uv uv` with the pip that is there. That is not refused by an externally managed interpreter, and the installed `uv` fetches a supported interpreter.
+- **The live run found two more things in the same commit:**
+  - `uv venv` from the repository root applied the root workspace's Python requirement, so it now gets `--no-project`.
+  - The system pip 24.0 cannot install into a 3.15 environment, because `pip --python` runs pip's own code inside the target interpreter. `uv pip install` is now the installer wherever there is a `uv`.
+- **The `board.json` race** (`174d88f5e`). `MaintenancePass` now carries its board, so no test writes the real file, and the autouse fixture that renamed it aside is deleted.
+- **`${PLAN_ITEM_BOOTSTRAP_SCRIPT}`** (`79360e121`) is replaced in `add-plan-item/SKILL.md`. A contract test now holds every `${NAME}` a `.claude/` document uses to one the configuration defines or Claude Code sets.
+
+Left open: `uv` picks the newest interpreter it can get, 3.15 here, while CI tests 3.12.
