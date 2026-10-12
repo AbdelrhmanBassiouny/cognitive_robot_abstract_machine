@@ -105,19 +105,18 @@ class RayTracer:
         ]
         # Each collision geometry uses the body name with a geometry-index suffix.
         for body in bodies_to_add:
+            world_T_body = self.world.compute_forward_kinematics_np(
+                self.world.root, body
+            )
             for geometry_index, collision in enumerate(body.collision):
+                node_name = self.collision_node_name(body, geometry_index)
                 self.scene.add_geometry(
                     collision.mesh,
-                    node_name=body.name.name + f"_collision_{geometry_index}",
+                    node_name=node_name,
                     parent_node_name="world",
-                    transform=self.world.compute_forward_kinematics_np(
-                        self.world.root, body
-                    )
-                    @ collision.origin.to_np(),
+                    transform=world_T_body @ collision.origin.to_np(),
                 )
-                self.scene_to_index[body.name.name + f"_collision_{geometry_index}"] = (
-                    body.index
-                )
+                self.scene_to_index[node_name] = body.index
                 self.index_to_body[body.index] = body
 
     def update_transforms(self) -> None:
@@ -125,14 +124,25 @@ class RayTracer:
         Update scene geometry to the current world-body poses.
         """
         for body in self.world.bodies:
+            world_T_body = self.world.compute_forward_kinematics_np(
+                self.world.root, body
+            )
             for geometry_index, collision in enumerate(body.collision):
-                world_T_collision = (
-                    self.world.compute_forward_kinematics_np(self.world.root, body)
-                    @ collision.origin.to_np()
-                )
-                self.scene.graph[body.name.name + f"_collision_{geometry_index}"] = (
+                world_T_collision = world_T_body @ collision.origin.to_np()
+                self.scene.graph[self.collision_node_name(body, geometry_index)] = (
                     world_T_collision
                 )
+
+    @staticmethod
+    def collision_node_name(body: Body, geometry_index: int) -> str:
+        """
+        Return the scene node identifying a body's collision geometry.
+
+        :param body: Body owning the collision geometry.
+        :param geometry_index: Position of the geometry in the body's collision list.
+        :return: Scene node name identifying the collision geometry.
+        """
+        return body.name.name + f"_collision_{geometry_index}"
 
     # %% Camera depth and segmentation
     def create_segmentation_mask(
@@ -405,13 +415,7 @@ class RayTracer:
             max_distance=camera.camera_range.maximum_distance,
             depth_mode=depth_mode,
         )
-        color_frame = self._render_color_image(
-            world_T_camera,
-            frame.segmentation,
-            resolution,
-            field_of_view,
-            rgb_mode,
-        )
+        color_frame = self._render_color_image(frame.segmentation, resolution, rgb_mode)
         return RenderedRGBDFrame(
             color_bgr=color_frame.color_image,
             depth_in_millimeters=self.convert_depth_to_millimeters(frame.depth),
@@ -422,28 +426,21 @@ class RayTracer:
 
     def _render_color_image(
         self,
-        world_T_camera: GenericSpatialType,
         segmentation: np.ndarray,
         resolution: CameraResolution,
-        field_of_view: FieldOfView,
         rgb_mode: SemDTRGBMode,
     ) -> RenderedColorFrame:
         """
         Return BGR colors and their semantic names for the selected rendering mode.
 
-        :param world_T_camera: World pose of the camera in its x-forward viewing
-            convention.
         :param segmentation: Body indices identifying visible geometry at each pixel.
         :param resolution: Pixel dimensions of the rendered image.
-        :param field_of_view: Horizontal and vertical viewing angles.
         :param rgb_mode: Source of the rendered color values.
         :return: Width-first BGR colors and the semantic color-to-name mapping.
         """
         if rgb_mode == SemDTRGBMode.TEXTURED:
             return RenderedColorFrame(
-                color_image=self._render_textured_color(
-                    world_T_camera, resolution, field_of_view
-                ),
+                color_image=self._render_textured_color(resolution),
                 object_color_map={},
             )
         color_rgb = np.zeros((*segmentation.shape, 3), dtype=np.uint8)
@@ -460,22 +457,14 @@ class RayTracer:
 
     def _render_textured_color(
         self,
-        world_T_camera: GenericSpatialType,
         resolution: CameraResolution,
-        field_of_view: FieldOfView,
     ) -> np.ndarray:
         """
         Return width-first textured colors in BGR channel order.
 
-        :param world_T_camera: World pose of the camera in its x-forward viewing
-            convention.
         :param resolution: Pixel dimensions of the rendered image.
-        :param field_of_view: Horizontal and vertical viewing angles.
         :return: Width-first BGR colors representing surface textures and materials.
         """
-        self.create_camera_rays(
-            world_T_camera, resolution=resolution, field_of_view=field_of_view
-        )
         image_bytes = self.scene.save_image(
             resolution=(resolution.width, resolution.height), visible=False
         )

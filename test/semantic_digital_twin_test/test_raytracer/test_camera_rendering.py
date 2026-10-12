@@ -290,6 +290,23 @@ def test_textured_render_propagates_backend_errors(
 
 
 # %% Shared hit selection
+def test_textured_render_generates_camera_rays_once(
+    camera_intersections: CameraIntersections,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """
+    Textured rendering reuses the camera setup from the shared depth and label query.
+    """
+    fixture = camera_intersections
+    monkeypatch.setattr(
+        fixture.ray_tracer.scene, "save_image", Mock(side_effect=OSError)
+    )
+    with pytest.raises(OSError):
+        fixture.ray_tracer.render(fixture.camera, rgb_mode=SemDTRGBMode.TEXTURED)
+    fixture.ray_tracer.create_camera_rays.assert_called_once()
+    fixture.query.assert_called_once()
+
+
 @pytest.mark.parametrize("depth_mode", list(DepthMode))
 def test_combined_render_uses_same_first_hit_for_depth_and_segmentation(
     camera_intersections: CameraIntersections,
