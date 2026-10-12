@@ -1,4 +1,3 @@
-import pytest
 import json
 
 from geometry_msgs.msg import WrenchStamped
@@ -19,8 +18,6 @@ from giskardpy.motion_control import MotionControl
 from giskardpy.motion_statechart.ros_context import RosNodeAccess
 from cramph.context import StatechartContext
 from cramph.executor import StatechartExecutor
-
-pytestmark = pytest.mark.parked
 
 
 def test_force_impact_node(rclpy_node):

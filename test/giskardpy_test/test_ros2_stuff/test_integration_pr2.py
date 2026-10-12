@@ -467,7 +467,6 @@ class TestConstraints:
             lower_limit2 = center - joint_range / 2.0 * (1 - percentage / 100.0)
             assert upper_limit2 >= position >= lower_limit2
 
-    @pytest.mark.skip(reason="fixme")
     def test_insert_cylinder1(self, giskard_better_pose: PR2Tester):
         cylinder_name = "C"
         cylinder_height = 0.121
@@ -486,17 +485,33 @@ class TestConstraints:
             pose=pose,
             parent_link=giskard_better_pose.right_tip,
         )
-
-        inserted = giskard_better_pose.api.motion_goals.add_motion_goal(
-            class_name=InsertCylinder.__name__,
-            name="Insert Cyclinder",
-            cylinder_name=cylinder_name,
-            cylinder_height=0.121,
-            hole_point=hole_point,
+        cylinder = giskard_better_pose.api.world.get_kinematic_structure_entity_by_name(
+            cylinder_name
         )
-        giskard_better_pose.api.motion_goals.allow_all_collisions()
-        giskard_better_pose.api.monitors.add_end_motion(start_condition=inserted)
-        giskard_better_pose.execute(local_min_end=False)
+
+        msc = Statechart()
+        msc.add_node(
+            inserted := InsertCylinder(
+                name="Insert Cylinder",
+                tip_link=cylinder,
+                tip_P_tool=Point3(z=cylinder_height / 2, reference_frame=cylinder),
+                tip_V_axis=Vector3(z=-1.0, reference_frame=cylinder),
+                up_axis=Vector3.Z(reference_frame=giskard_better_pose.map),
+                hole_point=hole_point,
+            )
+        )
+        msc.add_node(EndMotion.when_true(inserted))
+        giskard_better_pose.api.execute(msc)
+
+        map_T_cylinder = giskard_better_pose.api.world.compute_forward_kinematics(
+            root=giskard_better_pose.map, tip=cylinder
+        )
+        map_V_cylinder_axis = map_T_cylinder.rotation_matrix.z_vector()
+        map_P_leading_end = map_T_cylinder.position + map_V_cylinder_axis * (
+            cylinder_height / 2
+        )
+        assert np.allclose(map_P_leading_end, hole_point, atol=0.02)
+        assert np.allclose(map_V_cylinder_axis, Vector3(z=-1.0), atol=0.02)
 
     def test_pointing_kitchen(self, kitchen_setup: PR2Tester, better_pose):
         pointing_axis = Vector3.X(reference_frame=kitchen_setup.camera)

@@ -224,7 +224,6 @@ class GiskardWrapperRecordingTheGoal:
         self.child_choosers.append(child_chooser)
 
 
-@pytest.mark.parked
 def test_an_underspecified_node_is_sent_as_a_node_choosing_its_child(
     pr2_apartment_context,
 ):
@@ -331,7 +330,6 @@ def test_an_underspecified_action_out_of_candidates_on_the_robot_says_it_is_empt
     assert failure.value.node is plan
 
 
-@pytest.mark.parked
 def test_an_expanded_action_is_received_with_the_nodes_it_runs(pr2_apartment_context):
     """
     A receiver does not expand the nodes of a statechart again, so an action has to

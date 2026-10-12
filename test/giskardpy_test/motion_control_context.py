@@ -1,9 +1,16 @@
 from __future__ import annotations
 
+from abc import ABC, abstractmethod
+from dataclasses import dataclass
+
 from cramph.context import StatechartContext
+from cramph.executor import StatechartExecutor
+from cramph.statechart import Statechart
 from giskardpy.motion_control import MotionControl
 from giskardpy.qp.qp_controller_config import QPControllerConfig
 from semantic_digital_twin.world import World
+
+from ..statechart_json_round_trip import StatechartSentThroughJSON
 
 
 def create_context_with_motion_control(
@@ -27,3 +34,72 @@ def create_context_with_motion_control(
     )
     motion_control.extend_context(context)
     return context
+
+
+# %% where the statechart an executor runs comes from
+
+
+class StatechartOrigin(ABC):
+    """
+    Where the statechart an executor runs was built.
+    """
+
+    @abstractmethod
+    def create_building_context(
+        self, executor: StatechartExecutor
+    ) -> StatechartContext:
+        """
+        :param executor: The executor that will run the statechart.
+        :return: The context to build the statechart in.
+        """
+
+    @abstractmethod
+    def hand_over(
+        self, statechart: Statechart, executor: StatechartExecutor
+    ) -> Statechart:
+        """
+        :param statechart: The statechart built in the context of
+            :meth:`create_building_context`.
+        :param executor: The executor that will run the statechart.
+        :return: The statechart `executor` compiles.
+        """
+
+
+@dataclass
+class BuiltForTheExecutor(StatechartOrigin):
+    """
+    The statechart is built in the context of the executor running it.
+    """
+
+    def create_building_context(
+        self, executor: StatechartExecutor
+    ) -> StatechartContext:
+        return executor.context
+
+    def hand_over(
+        self, statechart: Statechart, executor: StatechartExecutor
+    ) -> Statechart:
+        return statechart
+
+
+@dataclass
+class SentThroughJSON(StatechartOrigin):
+    """
+    The statechart is built in a context of its own and reaches the executor as JSON.
+    """
+
+    def create_building_context(
+        self, executor: StatechartExecutor
+    ) -> StatechartContext:
+        return create_context_with_motion_control(executor.context.world)
+
+    def hand_over(
+        self, statechart: Statechart, executor: StatechartExecutor
+    ) -> Statechart:
+        """
+        .. note:: The sender releases what it registered in the world it shares with
+            `executor` once its statechart is sent.
+        """
+        round_trip = StatechartSentThroughJSON.received_in(statechart, executor.context)
+        statechart.context.cleanup()
+        return round_trip.received

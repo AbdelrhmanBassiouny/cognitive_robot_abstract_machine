@@ -272,7 +272,6 @@ class TestClientWorldUpdates:
 
         world_updates.wait_for_the_changes_of_a_goal({})
 
-    @pytest.mark.parked
     def test_the_changes_of_a_goal_are_waited_for(self):
         synchronizer = PublishingSynchronizerMimic(applied_sequence_number=9)
         world_updates = ClientWorldUpdates(
@@ -290,7 +289,6 @@ class TestClientWorldUpdates:
             }
         )
 
-    @pytest.mark.parked
     def test_changes_that_never_arrive_are_reported(self):
         world_updates = ClientWorldUpdates(
             world_synchronizer=PublishingSynchronizerMimic(applied_sequence_number=8),

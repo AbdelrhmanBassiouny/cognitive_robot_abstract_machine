@@ -1,4 +1,3 @@
-import pytest
 import json
 
 from giskardpy.middleware.ros2.motion_goal import MotionGoal
@@ -7,7 +6,6 @@ from cramph.monitors import CountSimulationTimeSeconds
 from cramph.statechart import Statechart
 from semantic_digital_twin.adapters.ros.messages import MetaData, StreamPosition
 
-pytestmark = pytest.mark.parked
 
 # %% the payload a client sends
 

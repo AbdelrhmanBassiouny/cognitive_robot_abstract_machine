@@ -42,7 +42,6 @@ from .test_motion_server import (
     motion_server,
 )
 
-pytestmark = pytest.mark.parked
 
 # %% mimics
 

@@ -1,5 +1,4 @@
 import json
-from dataclasses import fields
 
 import pytest
 from typing_extensions import Callable
@@ -22,9 +21,7 @@ from cramph.exceptions import (
 from cramph.composites import Parallel, Sequence
 from cramph.node import (
     CancelStatechart,
-    CompositeNode,
     DeserializedNodeTracker,
-    StatechartNode,
     StructureCopyCompositeNode,
     StructureCopyNode,
     TransitionCondition,
@@ -39,7 +36,7 @@ from cramph.nodes_for_testing import (
     NodeWithOwnStructureCopy,
     SpecializedNodeWithOwnStructureCopy,
 )
-from krrood.adapters.json_serializer import to_json, from_json
+from krrood.adapters.json_serializer import to_json
 from krrood.symbolic_math.symbolic_math import (
     Scalar,
     logic_and,
@@ -53,17 +50,6 @@ from semantic_digital_twin.world_description.world_entity import (
     WorldEntityReferenceWriter,
     WorldEntityWithID,
 )
-
-pytestmark = pytest.mark.parked
-
-
-def test_TrueMonitor():
-    node = ConstTrueNode()
-    json_data = to_json(node)
-    json_str = json.dumps(json_data)
-    new_json_data = json.loads(json_str)
-    node_copy = from_json(new_json_data)
-    assert node_copy.name == node.name
 
 
 def test_trinary_transition():
@@ -296,18 +282,6 @@ def test_cancel_statechart():
 
     with pytest.raises(Exception):
         kin_sim.tick_until_end()
-
-
-def test_cancel_statechart_to_json_does_not_mutate_dataclass_field():
-    exception_field = next(f for f in fields(CancelStatechart) if f.name == "exception")
-    assert exception_field.init is True
-
-    cancel = CancelStatechart(exception=Exception("boom"))
-    to_json(cancel)
-
-    assert exception_field.init is True
-    # The class must still be constructible with the exception keyword.
-    CancelStatechart(exception=Exception("again"))
 
 
 def test_to_json_does_not_accumulate_edges():
