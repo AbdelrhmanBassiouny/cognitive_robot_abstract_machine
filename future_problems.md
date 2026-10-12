@@ -121,3 +121,41 @@ Stretch's way of closing a container are plan transformations now
   Options: check whether `MoveGripper(tolerate_stall=True, stall_minimum_time=...)`
   already covers what the Stretch needs; otherwise a transformation over `MoveGripper`
   that replaces it wherever it runs.
+
+## Problems the bowl and cup plan ran into
+
+These park no tests; `test/coraplex_test/test_bowl_and_cup.py` works around them.
+
+### An opened drawer slides shut while unrelated motions run
+
+After `OpenAction` pulled the kitchen's `sink_area_left_middle_drawer_main_joint` out
+to its limit of 0.48 m, the drawer stood at 0.31 m when the plan ended, in the run
+without collision avoidance. It moves while no running node refers to it: most of the
+way while `MoveTorsoAction` raises the torso (0.44 m to 0.32 m over about 400 ticks),
+and a few millimetres during each `ParkArmsAction`. With collision avoidance the same
+plan ended at 0.44 m. During the pick-ups it also moves towards the grippers, because
+their goals are expressed relative to the objects lying in the drawer, so the drawer
+joint is on the kinematic chain of the goal.
+
+The drawer is a degree of freedom of the environment that the controller is free to
+move. Why it gets a velocity from motions that do not involve it is not yet known. The
+test therefore asserts where the bowl and the cup end up, and not that the drawer stays
+open. Options: find out which constraint or solver tolerance moves it; or let the
+controller move a degree of freedom of the environment only while a node asks for it,
+as `Open` and `Close` do.
+
+### `OpenAction` grasps a handle along the x-axis of its body
+
+`OpenAction` and `CloseAction` take hold of a handle with
+`GraspCandidate.from_body_origin(handle)`: at the origin of the handle's body,
+approaching along its x-axis and closing the fingers along its y-axis. The handle links
+of `kitchen-small.urdf` and `kitchen.urdf` have their x-axis pointing out of the
+furniture and their y-axis along the bar, so the gripper is sent to the handle from
+inside the furniture and the motion stalls. The handles of the apartment happen to
+point the way the grasp expects.
+
+The test adds a frame at the handle's origin that points into the furniture and across
+the bar (`add_handle_frame`) and annotates that frame as the `Handle`. Options:
+`OpenAction` and `CloseAction` take the grasp from `Handle.grasp_candidates`, and
+`Handle` derives it from its geometry and the body it opens; or the annotations of the
+kitchen carry the grasp frame of each handle.

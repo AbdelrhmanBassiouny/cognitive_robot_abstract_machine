@@ -4,7 +4,7 @@ import json
 from dataclasses import dataclass, field
 from threading import Thread
 from time import sleep
-from typing import Dict, List
+from typing import List
 
 import rclpy
 from json_msgs.action import JsonAction
@@ -257,21 +257,6 @@ class GiskardClientExecutor(Executor):
         """
         result = await self._client.get_result()
         self._take_over_result(result)
-
-    def get_end_motion_reason(
-        self, move_result: JsonAction_Result | None = None, show_all: bool = False
-    ) -> Dict[str, bool]:
-        """
-        Analyzes a MoveResult msg to return a list of all monitors that hindered the
-        EndMotion Monitors from becoming active.
-
-        Uses the last received MoveResult msg from execute() or projection() when not
-        explicitly given.
-        :param move_result: the move_result msg to analyze
-        :param show_all: returns the state of all monitors when show_all==True
-        :return: Dict with monitor name as key and True or False as value
-        """
-        ...
 
     def close(self) -> None:
         """
