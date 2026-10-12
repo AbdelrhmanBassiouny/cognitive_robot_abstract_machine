@@ -181,3 +181,77 @@ had to absorb a conflict across 17 or more files.
 - **Open:** one #488 thread asks whether `HueCircle` (OpenCV's 180-step hue encoding)
   should also move to `semantic_digital_twin`. It was kept in `pieces.py` as image-processing
   rather than world description, and the thread is left open for the developer.
+  (Settled 2026-10-12, see below.)
+
+## `shape-vocabulary-on-main`: resolved and blocked (2026-10-12)
+
+`/plan-item-resolve` found three things stalling #488.
+
+**1. CI was red because of main, not this layer.** Main's #694 (`fff798615`) turned
+`Pose`/transform conversions into properties: `to_position()` → `position`,
+`to_rotation_matrix()` → `rotation_matrix`, `to_rpy()` → `rpy`. Main's `f70c1aff45` removed
+`Match.expression` in favour of `the(match)`, and `match.expression` now reads as an attribute
+of the matched class.
+
+The breakage reached far beyond this layer's two tests:
+- production code in `pipeline.py`, `overlay.py`, `detections.py`, `markers.py` and `node.py`;
+- four more test modules.
+
+**Decision (developer):** fix on #202 first, then re-cut. `d4abc697d` on
+`montessori_perception_on_main` migrates every caller. 174 passed, 1 skipped again.
+
+**2. The 2026-10-12 review asked to relate hue to `semantic_digital_twin`'s `Color`.**
+**Decision (developer):** do it in this round. `be578659e` on #202:
+- adds `Hue` (degrees, short-way-round `distance`, element by element on arrays);
+- adds `Color.from_hsv` and `Color.hue` to `geometry.py`, with `test_hue.py`;
+- makes `PieceHue` a `Hue` enum (`class PieceHue(Hue, Enum)`; CYAN 172°, YELLOW 42°, the old
+  86/21 OpenCV steps), so `KnownPiece.hue` is a `Hue` and `KnownPiece.color` is
+  `Color.from_hsv(hue)`;
+- sets `PieceSet.hue_tolerance` to 8° (the same 4 steps);
+- removes `HueCircle`. OpenCV's halved encoding is read only at the image, by `HueChannel` in
+  `pipeline.py`, and `SurfaceColors.measure_hue` returns a `Hue`.
+
+A piece keeps an exact `Hue` rather than only an RGB `Color`, because `colorsys` doesn't
+round-trip exactly (42° comes back as 41.999…). Tolerance checks at the boundary would
+otherwise flip. This also settles the HueCircle thread.
+
+Results: 196 passed, 1 skipped on #202. #488 re-cut as `91a1dfba6`: 11 files, byte-identical,
+52 passed.
+
+**3. The review asked to replace `KnownPiece` with EQL partial descriptions.** For example
+`a(CubeShape)(outline=a(Polygon2D.rectangle)(...)).where(HasColor(...), HasHeight(...))`,
+generalising "what is known about an entity". Brainstormed in the session and on the thread.
+
+What is already there:
+- The earlier Ontomatic work is `AnonymousClass`, not `AnonymousEntity`/`Proxy`. It lives on
+  `dl` (`krrood/ontomatic/utils.py`) and `dl2` (`ontology_info.py`), and is attributed
+  dynamically through `setattr`.
+- EQL's `Match` already gives typed partial descriptions:
+  - nested keyword patterns and `.where`;
+  - checking one object against a description with `.from_([obj])`;
+  - generation with `EntityQueryLanguageGenerativeBackend`.
+
+What is missing:
+- `MontessoriShape` has no `outline`, `height` or `color` properties.
+- Matching through a factory method fails: `a(Polygon2D.rectangle)` declares type `method`,
+  and `Polygon2D` has no `width`/`length`.
+- There are no tolerance predicates (`HasHue`/`HasHeight` with a tolerance).
+- `rotation_period` duplicates the outline's symmetry.
+- A holder for "this lab's set" of descriptions is still needed.
+
+**Decision (developer): #488 is blocked on the redesign.** It does not land with
+`KnownPiece`. The redesign is not yet broken into items. The general krrood/SemDT pieces
+(tolerance predicates, factory matching) may become their own PRs or plan, and the Montessori
+rewrite goes on #202 followed by another re-cut. Settle the shape with the developer before
+writing code.
+
+**For later layers and downstream branches:**
+- Every later layer cuts from `be578659e` or later.
+- `piece-recognition-on-main` and `detection-pipeline-on-main` carry the `Hue`-typed
+  `piece_matcher.match` and `SurfaceColors`, and `HueChannel`.
+- Branches stacked on #202 have to update anything naming `HueCircle`, an int `PieceHue`, or
+  `to_position()`/`to_rotation_matrix()`/`to_rpy()` when they next merge #202.
+
+**Found, not acted on:** `perception/colors.py`'s `DetectionColor` duplicates SemDT's `Color`
+(RGB plus a BGR conversion). It is the same kind of duplication the review calls out, and it
+lives in `detection-pipeline-on-main`'s files. Raised with the developer.
