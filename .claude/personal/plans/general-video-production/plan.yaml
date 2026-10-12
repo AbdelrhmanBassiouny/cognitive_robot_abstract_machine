@@ -98,7 +98,7 @@ items:
     status: not_started
     depends_on: [video-core]
     notes: >-
-      Stacked on #472. An AnimatedScene in experiments.video.animation (its own
+      Stacked on #472. An AnimatedScene in cramcorder.animation (its own
       optional extra, since Manim needs cairo and pango) turns a Manim scene into
       a timeline Scene: the storyboard hands it each line's spoken length
       (replacing timing.json), one beat per Line (the beats-used check becomes an
