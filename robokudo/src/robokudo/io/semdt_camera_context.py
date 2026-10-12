@@ -86,7 +86,8 @@ class SemDTCameraContextResolver:
         if isinstance(source, WorldDescriptorSource):
             world = self._load_descriptor_world(source)
             camera = self._select_descriptor_camera(world, source)
-            self._apply_camera_pose(world, camera, source.camera_pose)
+            if source.camera_pose is not None:
+                self._apply_camera_pose(world, camera, source.camera_pose)
             rk_world.set_world(world)
         else:
             world = self._load_runtime_world()
@@ -100,19 +101,16 @@ class SemDTCameraContextResolver:
     def _apply_camera_pose(
         world: World,
         camera: Camera,
-        camera_pose: HomogeneousTransformationMatrix | None,
+        camera_pose: HomogeneousTransformationMatrix,
     ) -> None:
         """
-        Apply the configured initial camera pose when one is present.
+        Apply the configured initial camera pose.
 
         :param world: Runtime world that owns the camera connection.
         :param camera: Selected semantic camera.
-        :param camera_pose: Initial camera-root pose, or ``None`` to preserve its pose.
+        :param camera_pose: Initial camera-root pose.
         :raises CameraPoseOverrideUnavailable: If the camera attachment is immutable.
         """
-        if camera_pose is None:
-            return
-
         parent_connection = camera.root.parent_connection
         if not isinstance(parent_connection, Connection6DoF):
             raise CameraPoseOverrideUnavailable(

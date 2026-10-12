@@ -149,16 +149,30 @@ def test_resolver_rejects_ambiguous_runtime_robot_selection():
 # %% Camera pose
 
 
-def test_resolver_preserves_camera_pose_without_override():
+def test_resolver_preserves_camera_pose_without_override(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """
-    Loading a camera without an override keeps its descriptor pose.
+    Resolution without an override preserves the descriptor pose without applying one.
     """
-    world = WorldDescriptor().world
+    descriptor = WorldDescriptor()
+    world = descriptor.world
     [camera] = world.get_semantic_annotations_by_type(Camera)
     descriptor_pose = camera.root.global_transform.to_np().copy()
-    SemDTCameraContextResolver._apply_camera_pose(world, camera, camera_pose=None)
+    module_loader = Mock()
+    module_loader.load_world_descriptor.return_value = descriptor
+    resolver = SemDTCameraContextResolver(
+        SemDTRayTracerCameraConfig(source=WorldDescriptorSource()),
+        module_loader=module_loader,
+    )
+    apply_camera_pose = Mock(wraps=SemDTCameraContextResolver._apply_camera_pose)
+    monkeypatch.setattr(resolver, "_apply_camera_pose", apply_camera_pose)
 
-    np.testing.assert_allclose(camera.root.global_transform.to_np(), descriptor_pose)
+    context = resolver.resolve()
+
+    apply_camera_pose.assert_not_called()
+    assert context.camera is camera
+    np.testing.assert_array_equal(camera.root.global_transform.to_np(), descriptor_pose)
 
 
 def test_resolver_applies_camera_pose_override_once():
