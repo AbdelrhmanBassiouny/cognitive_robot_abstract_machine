@@ -12,13 +12,13 @@ from __future__ import annotations
 import subprocess
 from dataclasses import dataclass, field
 from datetime import timedelta
+from enum import StrEnum
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
 import cv2
 import imageio_ffmpeg
 import numpy as np
-
 
 from cramcorder.exceptions import (
     EncodingFailed,
@@ -27,6 +27,48 @@ from cramcorder.exceptions import (
 )
 from cramcorder.frame import Frame, Resolution
 from cramcorder.timeline import Timeline
+
+# %% the encoder's names
+
+
+class PixelFormat(StrEnum):
+    """
+    How the encoder lays out the pixels of a frame, as it names the layouts.
+    """
+
+    RGB24 = "rgb24"
+    """
+    A byte each of red, green and blue per pixel: what a :class:`~cramcorder.frame.Frame`
+    holds.
+    """
+
+    YUV420P = "yuv420p"
+    """
+    Brightness per pixel and colour per square of four: the layout every player decodes,
+    which needs even frame sides.
+    """
+
+
+class EncoderPreset(StrEnum):
+    """
+    How long the encoder may take to make the file small, as it names its presets.
+    """
+
+    ULTRAFAST = "ultrafast"
+    """
+    As quick as it goes, for a file that is kept losslessly and read again.
+    """
+
+    FAST = "fast"
+    """
+    Quick, for a draft to look at.
+    """
+
+    SLOW = "slow"
+    """
+    Thorough, for the video handed on.
+    """
+
 
 # %% the file that comes out
 
@@ -184,9 +226,9 @@ class H264Encoder:
     The most bytes the file may take.
     """
 
-    preset: str = "slow"
+    preset: EncoderPreset = EncoderPreset.SLOW
     """
-    The encoder's speed-against-size trade, as it names them.
+    How long the encoder may take to make the file small.
     """
 
     ffmpeg: Path = field(default_factory=lambda: Path(imageio_ffmpeg.get_ffmpeg_exe()))
@@ -194,9 +236,9 @@ class H264Encoder:
     The encoder binary.
     """
 
-    pixel_format: str = "yuv420p"
+    pixel_format: PixelFormat = PixelFormat.YUV420P
     """
-    The chroma layout every player decodes, which needs even frame sides.
+    How the pixels of the file are laid out.
     """
 
     bit_rate_headroom: float = 0.90
@@ -247,7 +289,7 @@ class H264Encoder:
             "-f",
             "rawvideo",
             "-pix_fmt",
-            "rgb24",
+            PixelFormat.RGB24,
             "-s",
             f"{resolution.width}x{resolution.height}",
             "-r",
@@ -259,7 +301,7 @@ class H264Encoder:
             "-qp",
             "0",
             "-preset",
-            "ultrafast",
+            EncoderPreset.ULTRAFAST,
             str(master),
         ]
         process = subprocess.Popen(command, stdin=subprocess.PIPE)

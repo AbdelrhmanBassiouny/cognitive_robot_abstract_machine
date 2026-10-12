@@ -1,6 +1,6 @@
 """
-Tests for :mod:`cramcorder.production`: a minimal storyboard made into a narrated
-mp4, with its subtitles burned in or as a track, checked against a venue's limits.
+Tests for :mod:`cramcorder.production`: a minimal storyboard made into a narrated mp4,
+with its subtitles burned in or as a track, checked against a venue's limits.
 """
 
 from __future__ import annotations
@@ -15,12 +15,12 @@ import numpy as np
 import pytest
 
 from cramcorder.captions import BoxedCaption, Subtitled
-from cramcorder.encoding import SubmissionLimits, VideoFile
+from cramcorder.encoding import EncoderPreset, SubmissionLimits, VideoFile
 from cramcorder.exceptions import VideoOutsideTheLimits
 from cramcorder.frame import Frame, Resolution
 from cramcorder.narration import Line, NarratedScene, Storyboard
 from cramcorder.overlays import ProgressBar
-from cramcorder.production import EncoderPreset, Subtitling, VideoProduction
+from cramcorder.production import Subtitling, VideoProduction
 from cramcorder.slides import ResultRow, ResultsTable, TextCard
 from cramcorder.theme import VideoTheme
 from cramcorder.timeline import Still
@@ -32,7 +32,9 @@ FRAMES_PER_SECOND = 10
 SLIDE_HOLD = timedelta(seconds=1)
 DISSOLVE = timedelta(seconds=0.2)
 DARK = 128
-VOICE = EvenlyPacedVoice(time_per_word=timedelta(seconds=0.25), rate=16_000, level=0.1)
+VOICE = EvenlyPacedVoice(
+    time_per_word=timedelta(seconds=0.25), sample_rate=16_000, level=0.1
+)
 """
 A voice at a rate an audio encoder takes, quiet enough not to clip.
 """

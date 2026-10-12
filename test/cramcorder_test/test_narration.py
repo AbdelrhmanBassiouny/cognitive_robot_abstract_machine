@@ -1,6 +1,6 @@
 """
-Tests for :mod:`cramcorder.narration`: the lines the voice says over the scenes,
-where each starts, that none runs into the next, the subtitles cut from them, and the
+Tests for :mod:`cramcorder.narration`: the lines the voice says over the scenes, where
+each starts, that none runs into the next, the subtitles cut from them, and the
 soundtrack they are laid on.
 """
 
@@ -141,7 +141,7 @@ def test_the_soundtrack_lays_each_line_where_it_starts() -> None:
     narration = Narration([spoken("a", 1.0, 1.0), spoken("b", 3.0, 0.5)])
     track = narration.soundtrack(runs_for=seconds(5))
     assert isinstance(track, Soundtrack)
-    assert track.rate == SAMPLE_RATE and len(track.samples) == 5 * SAMPLE_RATE
+    assert track.sample_rate == SAMPLE_RATE and len(track.samples) == 5 * SAMPLE_RATE
     for silent_second in (0.5, 2.5, 4.0):
         assert track.samples[int(silent_second * SAMPLE_RATE)] == 0
     for spoken_second in (1.5, 3.2):

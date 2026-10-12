@@ -9,7 +9,6 @@ from datetime import timedelta
 
 from semantic_digital_twin.spatial_types.spatial_types import Point2
 from semantic_digital_twin.world_description.geometry import PlanarBoundingBox
-from typing_extensions import Optional
 
 from cramcorder.footage import FootageFrame, ViewOfTheRun
 from cramcorder.frame import Frame, Resolution
@@ -40,7 +39,7 @@ class InsetStill:
 
 
 @dataclass
-class FullBleedFootage(Scene):
+class FootageScene(Scene):
     """
     A stretch of a run filling the whole frame, played faster than recorded with the
     speed-up badged in the top right corner, and optionally a second view of the same
@@ -62,12 +61,12 @@ class FullBleedFootage(Scene):
     How many recorded seconds pass per second played.
     """
 
-    inset: Optional[ViewOfTheRun] = None
+    inset: ViewOfTheRun | None = None
     """
     The second view, or None to show the one camera.
     """
 
-    inset_still: Optional[InsetStill] = None
+    inset_still: InsetStill | None = None
     """
     What the inset shows before it runs, if anything.
     """

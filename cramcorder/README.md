@@ -57,12 +57,13 @@ Scenes that come with the package:
 - `timeline.Still`: one picture held.
 - `slides.TextCard`: a heading and a line. Use it as a title card or an end card.
 - `slides.ResultsTable`: rows of what was measured and its value.
-- `footage_scenes.FullBleedFootage`: a stretch of film filling the frame, sped up with
+- `footage_scenes.FootageScene`: a stretch of film filling the frame, sped up with
   the speed shown on a badge, and optionally a second view of the same stretch in the
   corner.
 - `footage_scenes.TitleOverFootage`: a title over a footage scene, fading out.
 
-A film is anything with a `length` and an `image_at(moment)`, both in `timedelta`s.
+A film is a subclass of `footage.Film`: it has a `length` and an `image_at(moment)`,
+both in `timedelta`s.
 `footage.VideoFilm` reads one from an mp4, for example what
 `semantic_digital_twin.adapters.mujoco_video_recording` records of a simulated run.
 `footage.Framing` cuts margins off a film's pictures.
@@ -98,9 +99,9 @@ scene.
 ## Keeping slow parts
 
 Slow parts of a scene, such as decoded recordings or rendered pictures, can be stored
-with `cache.SceneCache`. It keeps them under `SceneCache.DIRECTORY_VARIABLE`
-(the environment variable `CRAMCORDER_CACHE`)
-(`~/.cache/cramcorder` by default), so a second render does not recompute them.
+with `cache.SceneCache`. It keeps them in the directory the environment variable
+`CRAMCORDER_CACHE` names (`cache.EnvironmentVariable.CACHE_ROOT`), or in
+`~/.cache/cramcorder` by default, so a second render does not recompute them.
 
 ## The narrator
 
@@ -113,8 +114,8 @@ voice and its pace. Each line is trimmed of the silence around it, keeping a sho
 breath, and levelled to one loudness. Every line it says is kept in the cache, so
 re-rendering a video reuses the same speech.
 
-Any object with a `speaks(text, pace) -> Speech` method can narrate instead; see
-`speech.Voice`. A storyboard with no lines makes a silent video, and then no
+Any subclass of `speech.Voice`, which says a line with `speaks(text, pace) -> Speech`,
+can narrate instead. A storyboard with no lines makes a silent video, and then no
 speech model is needed.
 
 `Line(written, spoken=...)` is subtitled as written and said as spoken, for when the

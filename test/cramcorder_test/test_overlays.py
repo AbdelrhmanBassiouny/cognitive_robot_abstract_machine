@@ -1,6 +1,5 @@
 """
-Tests for :mod:`cramcorder.overlays`: the progress bar drawn over the whole
-video.
+Tests for :mod:`cramcorder.overlays`: the progress bar drawn over the whole video.
 """
 
 from __future__ import annotations

@@ -1,6 +1,6 @@
 """
-Tests for :mod:`cramcorder.code`: a line of Python cut into pieces, compared with
-an earlier line, and written in colour.
+Tests for :mod:`cramcorder.code`: a line of Python cut into pieces, compared with an
+earlier line, and written in colour.
 """
 
 from __future__ import annotations

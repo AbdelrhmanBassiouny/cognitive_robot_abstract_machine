@@ -15,7 +15,7 @@ from pathlib import Path
 
 import numpy as np
 from krrood.patterns.role import Role
-from typing_extensions import List, Optional, Sequence, Tuple
+from typing_extensions import Sequence
 
 from cramcorder.exceptions import NarrationOverrun
 from cramcorder.speech import Sound, Speech, Voice
@@ -67,7 +67,7 @@ class Line:
     @staticmethod
     def start_times(
         lines: Sequence[Line], voice: Voice, pause: timedelta
-    ) -> List[timedelta]:
+    ) -> list[timedelta]:
         """
         :param lines: The lines, in order.
         :param voice: What says the lines.
@@ -75,7 +75,7 @@ class Line:
         :return: How long after the first of the lines starts each of them starts, said
             one after the other: for a scene to time itself to its lines.
         """
-        starts: List[timedelta] = []
+        starts: list[timedelta] = []
         at = timedelta(0)
         for line in lines:
             starts.append(at)
@@ -114,7 +114,7 @@ class SpokenLine:
         """
         return self.starts + self.speech.duration
 
-    def cues(self, room: Optional[SubtitleRoom] = None) -> List[SubtitleCue]:
+    def cues(self, room: SubtitleRoom | None = None) -> list[SubtitleCue]:
         """
         :param room: How much text one subtitle may show; a player's one row if not
             given.
@@ -124,7 +124,7 @@ class SpokenLine:
         fitting = room if room is not None else SubtitleRoom.of_player()
         pieces = fitting.pieces(self.line.written)
         letters = sum(len(piece) for piece in pieces)
-        cues: List[SubtitleCue] = []
+        cues: list[SubtitleCue] = []
         start = self.starts
         for piece in pieces:
             end = start + self.speech.duration * len(piece) / letters
@@ -149,15 +149,15 @@ class Narration:
     Every line of the video, placed in time.
     """
 
-    lines: List[SpokenLine]
+    lines: list[SpokenLine]
     """
     The lines, in order.
     """
 
-    silent_rate: int = 24_000
+    silent_sample_rate: int = 24_000
     """
-    Samples per second of a soundtrack nothing is said over: the rate the Kokoro model
-    speaks at.
+    Samples per second of a soundtrack nothing is said over, in hertz: the rate the
+    Kokoro model speaks at.
     """
 
     def check(self, runs_for: timedelta) -> None:
@@ -178,13 +178,17 @@ class Narration:
         :param runs_for: How long the video lasts.
         :return: The lines laid where they start, on silence.
         """
-        rate = self.lines[0].speech.rate if self.lines else self.silent_rate
-        track = np.zeros(round(runs_for.total_seconds() * rate), dtype=np.float32)
+        sample_rate = (
+            self.lines[0].speech.sample_rate if self.lines else self.silent_sample_rate
+        )
+        track = np.zeros(
+            round(runs_for.total_seconds() * sample_rate), dtype=np.float32
+        )
         for line in self.lines:
-            first = round(line.starts.total_seconds() * rate)
+            first = round(line.starts.total_seconds() * sample_rate)
             last = min(first + len(line.speech.samples), len(track))
             track[first:last] = line.speech.samples[: last - first]
-        return Soundtrack(track, rate)
+        return Soundtrack(track, sample_rate)
 
     def report(self, runs_for: timedelta) -> str:
         """
@@ -204,7 +208,7 @@ class Narration:
             )
         return "\n".join(rows)
 
-    def cues(self, room: Optional[SubtitleRoom] = None) -> List[SubtitleCue]:
+    def cues(self, room: SubtitleRoom | None = None) -> list[SubtitleCue]:
         """
         :param room: How much text one subtitle may show; a player's one row if not
             given.
@@ -212,7 +216,7 @@ class Narration:
         """
         return [cue for line in self.lines for cue in line.cues(room)]
 
-    def written_to(self, path: Path, room: Optional[SubtitleRoom] = None) -> Path:
+    def written_to(self, path: Path, room: SubtitleRoom | None = None) -> Path:
         """
         :param path: Where the SubRip file goes.
         :param room: How much text one subtitle may show; a player's one row if not
@@ -265,7 +269,7 @@ class NarratedScene:
     The scene.
     """
 
-    lines: Tuple[Line, ...] = ()
+    lines: tuple[Line, ...] = ()
     """
     The lines that start with it, said one after the other, if any do.
     """
@@ -275,7 +279,7 @@ class NarratedScene:
     How long into the scene the line starts, beyond the lead every line has.
     """
 
-    waits: Tuple[timedelta, ...] = ()
+    waits: tuple[timedelta, ...] = ()
     """
     How long each line after the first waits beyond the pause, for what it speaks of to
     come up; nothing for every line to follow the one before at once.
@@ -301,7 +305,7 @@ class Storyboard:
     The scenes in order, each with the line that starts with it.
     """
 
-    narrated: List[NarratedScene]
+    narrated: list[NarratedScene]
     """
     The scenes.
     """
@@ -322,7 +326,7 @@ class Storyboard:
     """
 
     @property
-    def scenes(self) -> List[Scene]:
+    def scenes(self) -> list[Scene]:
         """
         The scenes alone, in order.
         """
@@ -357,7 +361,7 @@ class Storyboard:
         :return: The lines said and placed where their scenes start, as the timeline
             puts them.
         """
-        spoken: List[SpokenLine] = []
+        spoken: list[SpokenLine] = []
         for each, start in zip(
             self.narrated, Timeline(self.scenes, dissolve=dissolve).starts()
         ):

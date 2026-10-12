@@ -1,13 +1,13 @@
 """
-Tests for :mod:`cramcorder.subtitles`: a line cut into pieces that fit the room a
-player gives them, and the SubRip text written from them.
+Tests for :mod:`cramcorder.subtitles`: a line cut into pieces that fit the room a player
+gives them, and the SubRip text written from them.
 """
 
 from __future__ import annotations
 
 from datetime import timedelta
 
-from cramcorder.subtitles import SubRipFile, SubtitleCue, SubtitleRoom
+from cramcorder.subtitles import SubRipFile, SubtitleCue, SubtitleRoom, WordCuts
 
 PLAYER_ROOM = SubtitleRoom.of_player()
 TWO_ROWS = SubtitleRoom(characters_per_row=PLAYER_ROOM.characters_per_row, rows=2)
@@ -22,6 +22,18 @@ def seconds(amount: float) -> timedelta:
     :return: That many seconds.
     """
     return timedelta(seconds=amount)
+
+
+def test_words_are_cut_into_parts_after_each_cut_word() -> None:
+    words = ["one", "two", "three", "four"]
+    assert WordCuts((0, 2)).parts(words) == ["one", "two three", "four"]
+
+
+def test_every_even_cut_cuts_a_line_into_the_parts_asked_for() -> None:
+    words = LONG_SENTENCE.split()
+    parts = 3
+    for cuts in TWO_ROWS.even_cuts(words, parts):
+        assert len(cuts.parts(words)) == parts
 
 
 def test_the_rooms_of_a_player_and_of_the_picture_differ_in_rows_and_width() -> None:

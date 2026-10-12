@@ -10,7 +10,7 @@ from datetime import timedelta
 
 import numpy as np
 from semantic_digital_twin.spatial_types.spatial_types import Point2
-from typing_extensions import List, Optional, Sequence
+from typing_extensions import Sequence
 
 from cramcorder.frame import Frame
 from cramcorder.narration import NarratedTimeline
@@ -198,7 +198,7 @@ class Subtitled(Timeline):
     A timeline with its captions drawn into the picture.
     """
 
-    cues: List[SubtitleCue] = field(default_factory=list)
+    cues: list[SubtitleCue] = field(default_factory=list)
     """
     The subtitles, in order, each fitting the room.
     """
@@ -217,8 +217,8 @@ class Subtitled(Timeline):
     def over(
         cls,
         narrated: NarratedTimeline,
-        room: Optional[SubtitleRoom] = None,
-        style: Optional[CaptionStyle] = None,
+        room: SubtitleRoom | None = None,
+        style: CaptionStyle | None = None,
     ) -> Subtitled:
         """
         :param narrated: A timeline with what is said over it, its overlays kept.
@@ -238,7 +238,7 @@ class Subtitled(Timeline):
             style=style if style is not None else BandCaption(),
         )
 
-    def cue_at(self, moment: timedelta) -> Optional[SubtitleCue]:
+    def cue_at(self, moment: timedelta) -> SubtitleCue | None:
         """
         :param moment: A moment of the video.
         :return: The subtitle shown then, if one is.

@@ -15,10 +15,16 @@ import numpy as np
 import pytest
 from semantic_digital_twin.spatial_types.spatial_types import Point2
 
-from cramcorder.encoding import H264Encoder
-from cramcorder.footage import FootageFrame, Framing, VideoFilm, ViewOfTheRun
+from cramcorder.encoding import EncoderPreset, H264Encoder
+from cramcorder.footage import (
+    Film,
+    FootageFrame,
+    Framing,
+    VideoFilm,
+    ViewOfTheRun,
+)
 from cramcorder.footage_scenes import (
-    FullBleedFootage,
+    FootageScene,
     InsetStill,
     TitleOverFootage,
 )
@@ -70,7 +76,7 @@ def test_a_film_read_from_a_file_answers_its_last_image_past_its_end(
         frames_per_second=10,
         dissolve=NO_TIME,
     )
-    video = H264Encoder(size_budget=200_000, preset="fast").encode(
+    video = H264Encoder(size_budget=200_000, preset=EncoderPreset.FAST).encode(
         timeline, tmp_path / "film.mp4"
     )
     film = VideoFilm(video)
@@ -87,7 +93,7 @@ def test_a_film_read_from_a_file_answers_its_last_image_past_its_end(
 
 
 @dataclass
-class CountingFilm:
+class CountingFilm(Film):
     """
     A film whose every picture says which second it was asked for, in its red byte.
     """
@@ -120,7 +126,7 @@ def test_the_footage_fills_the_frame_with_the_inset_in_the_corner_in_step() -> N
     length, speed, moment = seconds(30), 2.0, seconds(2)
     own = ViewOfTheRun(CountingFilm(), starts_at=inset_start)
     by_hand = ViewOfTheRun(CountingFilm(), starts_at=main_start)
-    scene = FullBleedFootage(by_hand, length=length, speed=speed, inset=own)
+    scene = FootageScene(by_hand, length=length, speed=speed, inset=own)
     assert scene.duration == length / speed
     frame = scene.picture_at(moment)
     assert frame.resolution == scene.resolution
@@ -141,7 +147,7 @@ def test_the_inset_shows_what_it_is_given_before_it_runs() -> None:
     own = ViewOfTheRun(CountingFilm(), starts_at=inset_start)
     by_hand = ViewOfTheRun(CountingFilm(), starts_at=NO_TIME)
     picture = CAMERA_SIZE.blank(STILL_GREY)
-    scene = FullBleedFootage(
+    scene = FootageScene(
         by_hand,
         length=seconds(10),
         speed=1.0,
@@ -156,7 +162,7 @@ def test_the_inset_shows_what_it_is_given_before_it_runs() -> None:
 
 
 def test_the_title_stands_over_the_footage_and_fades_out_when_told() -> None:
-    footage = FullBleedFootage(
+    footage = FootageScene(
         ViewOfTheRun(CountingFilm(), NO_TIME), length=seconds(6), speed=1.0
     )
     title_for, fade = seconds(4), seconds(0.5)
@@ -179,14 +185,14 @@ def test_the_title_stands_over_the_footage_and_fades_out_when_told() -> None:
 def test_the_footage_lasts_the_stretch_divided_by_the_speed(
     length: timedelta, speed: float
 ) -> None:
-    scene = FullBleedFootage(
+    scene = FootageScene(
         ViewOfTheRun(CountingFilm(), NO_TIME), length=length, speed=speed
     )
     assert scene.duration == length / speed
 
 
 def test_footage_at_its_own_pace_carries_no_speed_badge() -> None:
-    scene = FullBleedFootage(
+    scene = FootageScene(
         ViewOfTheRun(CountingFilm(), NO_TIME), length=seconds(5), speed=1.0
     )
     main = scene.main.image_at(NO_TIME)

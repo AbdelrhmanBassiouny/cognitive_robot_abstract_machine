@@ -1,6 +1,6 @@
 """
-Tests for :mod:`cramcorder.slides`: a results table and a text card, drawn in
-greyscale on white and held as long as they are told.
+Tests for :mod:`cramcorder.slides`: a results table and a text card, drawn in greyscale
+on white and held as long as they are told.
 """
 
 from __future__ import annotations

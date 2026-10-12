@@ -1,6 +1,6 @@
 """
-Tests for :mod:`cramcorder.typesetting`: text written where asked and broken to
-fit a width.
+Tests for :mod:`cramcorder.typesetting`: text written where asked and broken to fit a
+width.
 """
 
 from __future__ import annotations

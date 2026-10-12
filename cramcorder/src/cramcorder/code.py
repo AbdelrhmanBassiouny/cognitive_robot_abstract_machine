@@ -11,7 +11,7 @@ from enum import StrEnum
 
 from semantic_digital_twin.spatial_types.spatial_types import Point2
 from semantic_digital_twin.world_description.geometry import Color
-from typing_extensions import ClassVar, List, Sequence
+from typing_extensions import Sequence
 
 from cramcorder.frame import Frame
 from cramcorder.lettering import Face
@@ -100,7 +100,7 @@ class CodeLine:
     The line.
     """
 
-    PIECE: ClassVar[re.Pattern] = re.compile(
+    piece_pattern: re.Pattern[str] = re.compile(
         r"\"[^\"]*\"|'[^']*'|\d+(?:\.\d+)?|[A-Za-z_]\w*|\s+|."
     )
     """
@@ -109,13 +109,13 @@ class CodeLine:
     """
 
     @property
-    def pieces(self) -> List[CodePiece]:
+    def pieces(self) -> list[CodePiece]:
         """
         The line cut into pieces, each with the kind it is coloured by: a name is a class
         when it is capitalised, a call when a parenthesis follows it.
         """
-        texts = self.PIECE.findall(self.text)
-        pieces: List[CodePiece] = []
+        texts = self.piece_pattern.findall(self.text)
+        pieces: list[CodePiece] = []
         for index, text in enumerate(texts):
             following = next(
                 (later for later in texts[index + 1 :] if not later.isspace()), ""
@@ -140,7 +140,7 @@ class CodeLine:
             return Token.CLASS
         return Token.CALL if following == "(" else Token.NAME
 
-    def changed_spans(self, earlier: CodeLine) -> List[Span]:
+    def changed_spans(self, earlier: CodeLine) -> list[Span]:
         """
         :param earlier: The line before this one.
         :return: The stretches of this line that differ from the earlier one: what a

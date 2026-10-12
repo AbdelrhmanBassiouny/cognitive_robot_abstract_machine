@@ -11,8 +11,7 @@ rows, so a box's ``min_x`` is its left edge and its ``min_y`` its top edge.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-
+from dataclasses import astuple, dataclass
 
 import cv2
 import numpy as np
@@ -22,7 +21,101 @@ from semantic_digital_twin.spatial_types.spatial_types import (
     Point2,
 )
 from semantic_digital_twin.world_description.geometry import Color, PlanarBoundingBox
-from typing_extensions import Tuple
+
+# %% whole pixels
+
+
+@dataclass(frozen=True)
+class Pixel:
+    """
+    The pixel at a column and row of a frame.
+    """
+
+    column: int
+    """
+    Pixels from the frame's left edge.
+    """
+
+    row: int
+    """
+    Pixels from the frame's top edge.
+    """
+
+    @classmethod
+    def nearest(cls, point: Point2) -> Pixel:
+        """
+        :param point: A position in pixels.
+        :return: The pixel it falls on.
+        """
+        return cls(round(float(point.x)), round(float(point.y)))
+
+
+@dataclass(frozen=True)
+class PixelBox:
+    """
+    A box of whole pixels of a frame.
+    """
+
+    left: int
+    """
+    The column of its left edge.
+    """
+
+    top: int
+    """
+    The row of its top edge.
+    """
+
+    width: int
+    """
+    How many columns wide it is.
+    """
+
+    height: int
+    """
+    How many rows tall it is.
+    """
+
+    @classmethod
+    def nearest(cls, box: PlanarBoundingBox) -> PixelBox:
+        """
+        :param box: A box in pixels.
+        :return: The whole pixels it covers, its edges rounded to the nearest.
+        """
+        left, top = round(box.min_x), round(box.min_y)
+        return cls(left, top, round(box.max_x) - left, round(box.max_y) - top)
+
+    @property
+    def right(self) -> int:
+        """
+        The column just right of the box.
+        """
+        return self.left + self.width
+
+    @property
+    def bottom(self) -> int:
+        """
+        The row just below the box.
+        """
+        return self.top + self.height
+
+    @property
+    def is_empty(self) -> bool:
+        """
+        Whether it covers no pixel.
+        """
+        return self.width <= 0 or self.height <= 0
+
+    def inside(self, resolution: Resolution) -> PixelBox:
+        """
+        :param resolution: The size of a frame.
+        :return: The part of the box inside a frame that size; empty if none is.
+        """
+        left, top = max(self.left, 0), max(self.top, 0)
+        right = min(self.right, resolution.width)
+        bottom = min(self.bottom, resolution.height)
+        return PixelBox(left, top, right - left, bottom - top)
+
 
 # %% the size of a frame
 
@@ -64,7 +157,7 @@ class Resolution:
         return cls(width=1280, height=720)
 
     @property
-    def shape(self) -> Tuple[int, int, int]:
+    def shape(self) -> tuple[int, int, int]:
         """
         The array shape of one frame this size.
         """
@@ -134,7 +227,7 @@ class Frame:
         return cls(np.full(resolution.shape, cls.bytes_of(color), dtype=np.uint8))
 
     @staticmethod
-    def bytes_of(color: Color) -> Tuple[int, int, int]:
+    def bytes_of(color: Color) -> tuple[int, int, int]:
         """
         :param color: A colour.
         :return: Its red, green and blue as the bytes a frame holds; the opacity is not
@@ -181,23 +274,6 @@ class Frame:
             height,
         )
 
-    @staticmethod
-    def rounded(box: PlanarBoundingBox) -> Tuple[int, int, int, int]:
-        """
-        :param box: A box.
-        :return: Its left, top, width and height as whole pixels.
-        """
-        left, top = round(box.min_x), round(box.min_y)
-        return left, top, round(box.max_x) - left, round(box.max_y) - top
-
-    @staticmethod
-    def _pixel(point: Point2) -> Tuple[int, int]:
-        """
-        :param point: A position.
-        :return: Its column and row as whole pixels.
-        """
-        return round(float(point.x)), round(float(point.y))
-
     def pasted(self, picture: Frame, into: PlanarBoundingBox) -> Frame:
         """
         :param picture: What to paste.
@@ -205,18 +281,17 @@ class Frame:
         :return: A copy with the picture resized into the box.
         """
         result = self.pixels.copy()
-        left, top, width, height = self.rounded(into)
-        if width <= 0 or height <= 0:
+        box = PixelBox.nearest(into)
+        shown = box.inside(self.resolution)
+        if box.is_empty or shown.is_empty:
             return Frame(result)
         resized = cv2.resize(
-            picture.pixels, (width, height), interpolation=cv2.INTER_AREA
+            picture.pixels, (box.width, box.height), interpolation=cv2.INTER_AREA
         )
-        frame_height, frame_width = result.shape[:2]
-        x0, y0 = max(left, 0), max(top, 0)
-        x1, y1 = min(left + width, frame_width), min(top + height, frame_height)
-        if x1 <= x0 or y1 <= y0:
-            return Frame(result)
-        result[y0:y1, x0:x1] = resized[y0 - top : y1 - top, x0 - left : x1 - left]
+        result[shown.top : shown.bottom, shown.left : shown.right] = resized[
+            shown.top - box.top : shown.bottom - box.top,
+            shown.left - box.left : shown.right - box.left,
+        ]
         return Frame(result)
 
     def fitted(self, picture: Frame, into: PlanarBoundingBox) -> Frame:
@@ -259,17 +334,18 @@ class Frame:
         :return: A copy with the band shaded.
         """
         result = self.pixels.copy()
-        left, top, width, height = self.rounded(over)
-        frame_height, frame_width = result.shape[:2]
-        top, bottom = max(top, 0), min(top + height, frame_height)
-        left, right = max(left, 0), min(left + width, frame_width)
-        if bottom <= top or right <= left:
+        band = PixelBox.nearest(over).inside(self.resolution)
+        if band.is_empty:
             return Frame(result)
-        rows = np.arange(bottom - top, dtype=np.float32)
-        weight = np.clip(rows / max((bottom - top) / 3.0, 1.0), 0.0, 1.0) * by
-        band = result[top:bottom, left:right].astype(np.float32)
-        band *= 1.0 - weight[:, None, None]
-        result[top:bottom, left:right] = np.clip(band + 0.5, 0, 255).astype(np.uint8)
+        rows = np.arange(band.height, dtype=np.float32)
+        weight = np.clip(rows / max(band.height / 3.0, 1.0), 0.0, 1.0) * by
+        shaded = result[band.top : band.bottom, band.left : band.right].astype(
+            np.float32
+        )
+        shaded *= 1.0 - weight[:, None, None]
+        result[band.top : band.bottom, band.left : band.right] = np.clip(
+            shaded + 0.5, 0, 255
+        ).astype(np.uint8)
         return Frame(result)
 
     def shaded(self, over: PlanarBoundingBox, by: float, corner_radius: int) -> Frame:
@@ -282,9 +358,9 @@ class Frame:
         """
         height, width = self.pixels.shape[:2]
         mask = Image.new("L", (width, height), 0)
-        left, top, box_width, box_height = self.rounded(over)
+        box = PixelBox.nearest(over)
         ImageDraw.Draw(mask).rounded_rectangle(
-            (left, top, left + box_width - 1, top + box_height - 1),
+            (box.left, box.top, box.right - 1, box.bottom - 1),
             radius=corner_radius,
             fill=255,
         )
@@ -302,11 +378,11 @@ class Frame:
         :return: A copy with the box outlined.
         """
         result = self.pixels.copy()
-        left, top, width, height = self.rounded(around)
+        box = PixelBox.nearest(around)
         cv2.rectangle(
             result,
-            (left, top),
-            (left + width, top + height),
+            (box.left, box.top),
+            (box.right, box.bottom),
             self.bytes_of(color),
             thickness,
         )
@@ -319,11 +395,11 @@ class Frame:
         :return: A copy with the box painted over.
         """
         result = self.pixels.copy()
-        left, top, width, height = self.rounded(around)
+        box = PixelBox.nearest(around)
         cv2.rectangle(
             result,
-            (left, top),
-            (left + width, top + height),
+            (box.left, box.top),
+            (box.right, box.bottom),
             self.bytes_of(color),
             -1,
         )
@@ -342,8 +418,8 @@ class Frame:
         result = self.pixels.copy()
         cv2.line(
             result,
-            self._pixel(start),
-            self._pixel(end),
+            astuple(Pixel.nearest(start)),
+            astuple(Pixel.nearest(end)),
             self.bytes_of(color),
             thickness,
             cv2.LINE_AA,
@@ -377,8 +453,8 @@ class Frame:
         )
         cv2.arrowedLine(
             result,
-            self._pixel(start),
-            self._pixel(end),
+            astuple(Pixel.nearest(start)),
+            astuple(Pixel.nearest(end)),
             self.bytes_of(color),
             thickness,
             cv2.LINE_AA,

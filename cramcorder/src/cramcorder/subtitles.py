@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from datetime import timedelta
 from itertools import product
 
-from typing_extensions import ClassVar, Iterator, List, Sequence, Tuple
+from typing_extensions import Iterator, Sequence
 
 # %% a subtitle
 
@@ -36,7 +36,7 @@ class SubtitleCue:
     What it shows.
     """
 
-    def rows(self, room: SubtitleRoom) -> List[str]:
+    def rows(self, room: SubtitleRoom) -> list[str]:
         """
         :param room: How much text one subtitle may show.
         :return: The text on one row where it fits, else on two as even as the words
@@ -46,7 +46,7 @@ class SubtitleCue:
             return [self.text]
         words = self.text.split()
         for cuts in room.even_cuts(words, 2):
-            halves = SubtitleRoom.cut(words, cuts)
+            halves = cuts.parts(words)
             if all(len(half) <= room.characters_per_row for half in halves):
                 return halves
         return SubtitleRoom.packed(words, room.characters_per_row)
@@ -71,6 +71,34 @@ class SubtitleCue:
         return f"{hours:02d}:{minutes:02d}:{whole:02d},{milliseconds:03d}"
 
 
+# %% where words are cut
+
+
+@dataclass(frozen=True)
+class WordCuts:
+    """
+    Where a run of words is cut into parts.
+    """
+
+    last_words: tuple[int, ...]
+    """
+    The index of the word each part but the last ends with, in order.
+    """
+
+    def parts(self, words: Sequence[str]) -> list[str]:
+        """
+        :param words: Words, in order.
+        :return: The parts they are cut into.
+        """
+        parts: list[str] = []
+        begin = 0
+        for last_word in self.last_words:
+            parts.append(" ".join(words[begin : last_word + 1]))
+            begin = last_word + 1
+        parts.append(" ".join(words[begin:]))
+        return parts
+
+
 # %% the room a subtitle has
 
 
@@ -78,16 +106,6 @@ class SubtitleCue:
 class SubtitleRoom:
     """
     How much text one subtitle may show: so many rows of so many characters.
-    """
-
-    CLAUSE_END_WORD: ClassVar[re.Pattern] = re.compile(r"[.;:?!,—]$")
-    """
-    A word a subtitle had better end after: one that ends a clause with its punctuation.
-    """
-
-    SENTENCE_END: ClassVar[re.Pattern] = re.compile(r"(?<=[.?!])\s+")
-    """
-    Where a written line falls into sentences.
     """
 
     characters_per_row: int
@@ -103,6 +121,16 @@ class SubtitleRoom:
     cuts_tried: int = 3
     """
     How many places near each even cut are tried, nearest first, before one more part.
+    """
+
+    clause_end_pattern: re.Pattern[str] = re.compile(r"[.;:?!,—]$")
+    """
+    A word a subtitle had better end after: one that ends a clause with its punctuation.
+    """
+
+    sentence_break_pattern: re.Pattern[str] = re.compile(r"(?<=[.?!])\s+")
+    """
+    Where a written line falls into sentences.
     """
 
     @classmethod
@@ -131,7 +159,7 @@ class SubtitleRoom:
         """
         return len(self.packed(text.split(), self.characters_per_row)) <= self.rows
 
-    def evenly(self, text: str) -> List[str]:
+    def evenly(self, text: str) -> list[str]:
         """
         :param text: A piece of text.
         :return: It, as it is if it fits, else cut between words into the fewest parts
@@ -143,20 +171,20 @@ class SubtitleRoom:
             return [text]
         for parts in range(2, len(words) + 1):
             for cuts in self.even_cuts(words, parts):
-                cut = self.cut(words, cuts)
+                cut = cuts.parts(words)
                 if all(self.holds(part) for part in cut):
                     return cut
         return words
 
-    def pieces(self, written: str) -> List[str]:
+    def pieces(self, written: str) -> list[str]:
         """
         :param written: A written line.
         :return: It cut into pieces that each fit the room: sentence by sentence, each
             cut into the fewest even parts that fit, at clause ends where one lies near
             enough, and short sentences joined where they fit together.
         """
-        pieces: List[str] = []
-        for sentence in self.SENTENCE_END.split(written):
+        pieces: list[str] = []
+        for sentence in self.sentence_break_pattern.split(written):
             for part in self.evenly(sentence):
                 if pieces and self.holds(pieces[-1] + " " + part):
                     pieces[-1] += " " + part
@@ -164,20 +192,20 @@ class SubtitleRoom:
                     pieces.append(part)
         return pieces
 
-    def even_cuts(self, words: Sequence[str], parts: int) -> Iterator[Tuple[int, ...]]:
+    def even_cuts(self, words: Sequence[str], parts: int) -> Iterator[WordCuts]:
         """
         :param words: Words, in order.
         :param parts: How many parts to cut them into.
-        :return: The words a cut may come after, one per cut, likeliest set first; a
-            word that ends a clause within a fifth of a part's length of where the cut
-            would fall comes before any other.
+        :return: The places the words may be cut, likeliest first; a cut after a word
+            that ends a clause within a fifth of a part's length of where the cut would
+            fall comes before any other.
         """
         ends = [
             sum(len(word) + 1 for word in words[: index + 1])
             for index in range(len(words))
         ]
         share = ends[-1] / parts
-        choices: List[List[int]] = []
+        choices: list[list[int]] = []
         for number in range(1, parts):
             target = share * number
             candidates = sorted(
@@ -193,39 +221,23 @@ class SubtitleRoom:
             choices.append(candidates[: self.cuts_tried])
         for cuts in product(*choices):
             if all(earlier < later for earlier, later in zip(cuts, cuts[1:])):
-                yield cuts
+                yield WordCuts(cuts)
 
-    @classmethod
-    def ends_a_clause(cls, word: str) -> bool:
+    def ends_a_clause(self, word: str) -> bool:
         """
         :param word: A word.
         :return: Whether a subtitle had better end after it.
         """
-        return bool(cls.CLAUSE_END_WORD.search(word))
+        return bool(self.clause_end_pattern.search(word))
 
     @staticmethod
-    def cut(words: Sequence[str], cuts: Sequence[int]) -> List[str]:
-        """
-        :param words: Words, in order.
-        :param cuts: The words the parts end after, in order.
-        :return: The parts.
-        """
-        pieces: List[str] = []
-        begin = 0
-        for cut in cuts:
-            pieces.append(" ".join(words[begin : cut + 1]))
-            begin = cut + 1
-        pieces.append(" ".join(words[begin:]))
-        return pieces
-
-    @staticmethod
-    def packed(words: Sequence[str], longest: int) -> List[str]:
+    def packed(words: Sequence[str], longest: int) -> list[str]:
         """
         :param words: Words, in order.
         :param longest: The most characters a piece takes.
         :return: The words packed into pieces no longer than that, in order.
         """
-        pieces: List[str] = []
+        pieces: list[str] = []
         for word in words:
             if pieces and len(pieces[-1]) + 1 + len(word) <= longest:
                 pieces[-1] += " " + word

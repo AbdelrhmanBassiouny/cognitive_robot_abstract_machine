@@ -6,12 +6,12 @@ corner.
 
 from __future__ import annotations
 
+from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from datetime import timedelta
 
 from krrood.patterns.role import Role
 from semantic_digital_twin.spatial_types.spatial_types import Point2
-from typing_extensions import Protocol
 
 from cramcorder.encoding import VideoFile
 from cramcorder.frame import Frame
@@ -67,18 +67,21 @@ class Framing:
 # %% a film
 
 
-class Film(Protocol):
+@dataclass
+class Film(ABC):
     """
     What a film is to a scene that shows it: an image for any moment of it, and how long
     it runs.
     """
 
     @property
+    @abstractmethod
     def length(self) -> timedelta:
         """
         How long it is from the film's first image to its last.
         """
 
+    @abstractmethod
     def image_at(self, moment: timedelta) -> Frame:
         """
         :param moment: A moment of the film, from its start.
@@ -87,7 +90,7 @@ class Film(Protocol):
 
 
 @dataclass
-class VideoFilm:
+class VideoFilm(Film):
     """
     A film read from a video file: a camera's recording, or a simulation filmed as it
     ran.

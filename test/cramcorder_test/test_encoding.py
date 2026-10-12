@@ -1,6 +1,6 @@
 """
-Tests for :mod:`cramcorder.encoding`: frames written out as an H.264 video that
-fits a venue's limits, and those limits checked on the file that came out.
+Tests for :mod:`cramcorder.encoding`: frames written out as an H.264 video that fits a
+venue's limits, and those limits checked on the file that came out.
 """
 
 from __future__ import annotations

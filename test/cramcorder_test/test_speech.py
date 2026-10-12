@@ -15,15 +15,15 @@ import pytest
 
 from cramcorder.cache import SceneCache
 from cramcorder.narration import Line
-from cramcorder.speech import KokoroVoice, Speech
+from cramcorder.speech import KokoroVoice, SoundLevel, Speech
 
 from .voices import EvenlyPacedVoice, ToneSpeechModel
 
 RATE = 24_000
-SILENCE_LEVEL = 0.01
+SILENCE_LEVEL = SoundLevel(decibels=-40.0)
 BREATH_BEFORE = timedelta(seconds=0.03)
 BREATH_AFTER = timedelta(seconds=0.12)
-PEAK = 0.89
+PEAK = SoundLevel(decibels=-1.0)
 
 
 def test_speech_lasts_its_samples_over_its_rate() -> None:
@@ -38,7 +38,7 @@ def test_sound_written_to_a_wave_file_reads_back_the_same(tmp_path: Path) -> Non
     path = Speech(samples, RATE).written_to(tmp_path / "line.wav")
     read = Speech.read_from(path)
     assert isinstance(read, Speech)
-    assert read.rate == RATE
+    assert read.sample_rate == RATE
     assert read.samples == pytest.approx(samples, abs=1e-4)
 
 
@@ -63,12 +63,21 @@ def test_speech_with_no_sound_is_kept_whole_when_trimmed() -> None:
 def test_speech_is_levelled_so_its_loudest_sample_reaches_the_peak() -> None:
     samples = np.array([0.1, -0.25, 0.2], dtype=np.float32)
     levelled = Speech(samples, 100).levelled(PEAK)
-    assert levelled.samples == pytest.approx(samples * PEAK / 0.25)
+    loudest = 0.25
+    assert levelled.samples == pytest.approx(samples * PEAK.amplitude / loudest)
 
 
 def test_silence_is_left_as_it_is_when_levelled() -> None:
     silence = Speech(np.zeros(10, dtype=np.float32), 100)
     assert silence.levelled(PEAK) is silence
+
+
+def test_a_level_of_minus_twenty_decibels_is_a_tenth_of_full_scale() -> None:
+    assert SoundLevel(decibels=-20.0).amplitude == pytest.approx(0.1)
+
+
+def test_a_level_of_zero_decibels_is_full_scale() -> None:
+    assert SoundLevel(decibels=0.0).amplitude == 1.0
 
 
 def test_a_line_at_half_pace_takes_twice_as_long_to_say() -> None:
@@ -90,11 +99,11 @@ def test_the_kokoro_voice_says_a_line_at_its_pace_trimmed_and_levelled(
     slowed = Line("one two", pace=half_pace).spoken_by(voice)
     at_its_pace = Line("one two").spoken_by(voice)
     breath = voice.breath_before + voice.breath_after
-    tone = ToneSpeechModel.TIME_PER_WORD * 2
-    tolerance = timedelta(seconds=1 / ToneSpeechModel.RATE)
+    tone = ToneSpeechModel.time_per_word * 2
+    tolerance = timedelta(seconds=1 / ToneSpeechModel.sample_rate)
     assert abs(slowed.duration - (tone / half_pace + breath)) <= tolerance
     assert abs(at_its_pace.duration - (tone + breath)) <= tolerance
-    assert np.abs(slowed.samples).max() == pytest.approx(voice.peak, abs=1e-4)
+    assert np.abs(slowed.samples).max() == pytest.approx(voice.peak.amplitude, abs=1e-4)
 
 
 def test_a_line_said_twice_is_synthesized_once(

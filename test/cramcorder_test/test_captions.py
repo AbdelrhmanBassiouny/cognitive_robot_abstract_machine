@@ -1,6 +1,6 @@
 """
-Tests for :mod:`cramcorder.captions`: subtitles drawn into the picture, in the
-band every scene keeps clear or on a box over the bottom of the frame.
+Tests for :mod:`cramcorder.captions`: subtitles drawn into the picture, in the band
+every scene keeps clear or on a box over the bottom of the frame.
 """
 
 from __future__ import annotations

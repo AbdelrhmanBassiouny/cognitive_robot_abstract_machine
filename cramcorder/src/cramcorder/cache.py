@@ -8,28 +8,35 @@ from __future__ import annotations
 import json
 import os
 from dataclasses import dataclass, field
+from enum import StrEnum
 from pathlib import Path
 
 import cv2
-from typing_extensions import Any, ClassVar, Dict, Optional
+from typing_extensions import Any
 
 from cramcorder.frame import Frame
+
+# %% where the cache lies
+
+
+class EnvironmentVariable(StrEnum):
+    """
+    The environment variables the package reads.
+    """
+
+    CACHE_ROOT = "CRAMCORDER_CACHE"
+    """
+    Where the video keeps what it computed.
+    """
+
+
+# %% one scene's corner of the cache
 
 
 @dataclass
 class SceneCache:
     """
     One scene's kept pictures and readings, under a name of its own.
-    """
-
-    DIRECTORY_VARIABLE: ClassVar[str] = "CRAMCORDER_CACHE"
-    """
-    Environment variable naming where the video keeps what it computed.
-    """
-
-    DEFAULT_ROOT: ClassVar[Path] = Path.home() / ".cache" / "cramcorder"
-    """
-    Where the video keeps what it computed unless told otherwise.
     """
 
     name: str
@@ -42,13 +49,17 @@ class SceneCache:
     Where every scene's corner lies.
     """
 
-    @classmethod
-    def configured_root(cls) -> Path:
+    @staticmethod
+    def configured_root(
+        fallback: Path = Path.home() / ".cache" / "cramcorder",
+    ) -> Path:
         """
-        :return: Where the video keeps what it computed, as the environment says or by
-            default.
+        :param fallback: Where the video keeps what it computed when the environment
+            does not say.
+        :return: Where the video keeps what it computed, as
+            :attr:`EnvironmentVariable.CACHE_ROOT` says or else the fallback.
         """
-        return Path(os.getenv(cls.DIRECTORY_VARIABLE, cls.DEFAULT_ROOT))
+        return Path(os.getenv(EnvironmentVariable.CACHE_ROOT, fallback))
 
     @property
     def directory(self) -> Path:
@@ -59,7 +70,7 @@ class SceneCache:
         directory.mkdir(parents=True, exist_ok=True)
         return directory
 
-    def picture(self, key: str) -> Optional[Frame]:
+    def picture(self, key: str) -> Frame | None:
         """
         :param key: What the picture was kept as.
         :return: The picture as red, green and blue, or None if none was kept.
@@ -79,7 +90,7 @@ class SceneCache:
             cv2.cvtColor(picture.pixels, cv2.COLOR_RGB2BGR),
         )
 
-    def record(self, key: str) -> Optional[Dict[str, Any]]:
+    def record(self, key: str) -> dict[str, Any] | None:
         """
         :param key: What the readings were kept as.
         :return: The readings, or None if none were kept.
@@ -89,7 +100,7 @@ class SceneCache:
             return None
         return json.loads(path.read_text())
 
-    def keep_record(self, key: str, readings: Dict[str, Any]) -> None:
+    def keep_record(self, key: str, readings: dict[str, Any]) -> None:
         """
         :param key: What to keep the readings as.
         :param readings: Readings JSON can carry.

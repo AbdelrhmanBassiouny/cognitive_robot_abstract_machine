@@ -11,7 +11,6 @@ from PIL import Image, ImageDraw
 import numpy as np
 from semantic_digital_twin.spatial_types.spatial_types import Point2
 from semantic_digital_twin.world_description.geometry import Color
-from typing_extensions import List
 
 from cramcorder.frame import Frame
 from cramcorder.lettering import Face, Typeface
@@ -185,7 +184,7 @@ class Typesetting:
         :param width: The widest a line may be, in pixels.
         :return: The text broken into lines no wider than given, at spaces.
         """
-        lines: List[str] = []
+        lines: list[str] = []
         line = ""
         for word in text.split():
             candidate = word if not line else f"{line} {word}"

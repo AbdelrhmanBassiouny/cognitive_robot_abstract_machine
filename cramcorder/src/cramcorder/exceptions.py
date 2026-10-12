@@ -10,7 +10,7 @@ from pathlib import Path
 
 
 from krrood.exceptions import DataclassException
-from typing_extensions import TYPE_CHECKING, List
+from typing_extensions import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from cramcorder.encoding import VideoFile
@@ -29,7 +29,7 @@ class VideoOutsideTheLimits(DataclassException):
     The video checked.
     """
 
-    broken: List[str]
+    broken: list[str]
     """
     What it breaks, one line each.
     """

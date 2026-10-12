@@ -17,7 +17,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from datetime import timedelta
 
-from typing_extensions import Iterator, List, Optional
+from typing_extensions import Iterator
 
 from cramcorder.exceptions import FramesOfDifferentSizes, MomentOutsideScene
 from cramcorder.frame import Frame, Resolution
@@ -167,7 +167,7 @@ class Timeline:
     Scenes laid end to end, each dissolving into the next, read out as frames.
     """
 
-    scenes: List[Scene]
+    scenes: list[Scene]
     """
     The scenes, in the order they play.
     """
@@ -182,7 +182,7 @@ class Timeline:
     How long each scene takes to dissolve into the next; the two overlap by that much.
     """
 
-    overlays: List[Overlay] = field(default_factory=list)
+    overlays: list[Overlay] = field(default_factory=list)
     """
     What is drawn over every frame, in order, after the scenes.
     """
@@ -214,7 +214,7 @@ class Timeline:
         """
         return round(self.duration.total_seconds() * self.frames_per_second)
 
-    def starts(self) -> List[timedelta]:
+    def starts(self) -> list[timedelta]:
         """
         :return: When each scene starts, from the video's start.
         """
@@ -275,7 +275,7 @@ class Timeline:
         :return: The frames.
         :raises FramesOfDifferentSizes: If two scenes draw frames of different sizes.
         """
-        size: Optional[Resolution] = None
+        size: Resolution | None = None
         for index in range(self.frame_count):
             frame = self.frame_at(timedelta(seconds=index / self.frames_per_second))
             if size is None:

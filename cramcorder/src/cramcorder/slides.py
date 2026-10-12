@@ -8,7 +8,6 @@ from dataclasses import dataclass, field
 from datetime import timedelta
 
 from semantic_digital_twin.spatial_types.spatial_types import Point2
-from typing_extensions import Tuple
 
 from cramcorder.frame import Frame, Resolution
 from cramcorder.lettering import Face
@@ -49,7 +48,7 @@ class ResultsTable(HeldScene):
     What the table is of, over it.
     """
 
-    rows: Tuple[ResultRow, ...]
+    rows: tuple[ResultRow, ...]
     """
     The rows.
     """

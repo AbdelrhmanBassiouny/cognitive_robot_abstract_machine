@@ -1,6 +1,6 @@
 """
-Tests for :mod:`cramcorder.frame`: frames of a size, pictures pasted and fitted
-into them, and the shapes drawn on them.
+Tests for :mod:`cramcorder.frame`: frames of a size, pictures pasted and fitted into
+them, and the shapes drawn on them.
 """
 
 from __future__ import annotations
@@ -10,7 +10,7 @@ import pytest
 from semantic_digital_twin.spatial_types.spatial_types import Point2
 from semantic_digital_twin.world_description.geometry import Color
 
-from cramcorder.frame import Frame, Resolution
+from cramcorder.frame import Frame, Pixel, PixelBox, Resolution
 
 FRAME_SIZE = Resolution(width=200, height=100)
 PICTURE_GREY = 200
@@ -47,7 +47,7 @@ def test_a_frame_of_a_colour_holds_its_bytes() -> None:
 
 def test_the_whole_frame_box_covers_every_pixel() -> None:
     box = FRAME_SIZE.whole
-    assert Frame.rounded(box) == (0, 0, FRAME_SIZE.width, FRAME_SIZE.height)
+    assert PixelBox.nearest(box) == PixelBox(0, 0, FRAME_SIZE.width, FRAME_SIZE.height)
 
 
 # %% boxes
@@ -56,10 +56,26 @@ def test_the_whole_frame_box_covers_every_pixel() -> None:
 def test_fitting_keeps_the_aspect_and_centres_in_the_room() -> None:
     room = FRAME_SIZE.whole
     square = Frame.fitting(room, 1.0)
-    assert Frame.rounded(square) == (50, 0, 100, 100)
+    assert PixelBox.nearest(square) == PixelBox(50, 0, 100, 100)
     wide_aspect = 4.0
     wide = Frame.fitting(room, wide_aspect)
-    assert Frame.rounded(wide) == (0, 25, 200, 50)
+    assert PixelBox.nearest(wide) == PixelBox(0, 25, 200, 50)
+
+
+def test_a_box_inside_a_frame_is_cut_to_the_frame() -> None:
+    hanging_over = PixelBox(-10, 90, 50, 30)
+    assert hanging_over.inside(FRAME_SIZE) == PixelBox(
+        0, 90, 40, FRAME_SIZE.height - 90
+    )
+
+
+def test_a_box_outside_a_frame_covers_no_pixel_of_it() -> None:
+    beyond = PixelBox(FRAME_SIZE.width + 5, 0, 10, 10)
+    assert beyond.inside(FRAME_SIZE).is_empty
+
+
+def test_a_position_falls_on_the_nearest_pixel() -> None:
+    assert Pixel.nearest(Point2(3.4, 7.6)) == Pixel(column=3, row=8)
 
 
 # %% pasting

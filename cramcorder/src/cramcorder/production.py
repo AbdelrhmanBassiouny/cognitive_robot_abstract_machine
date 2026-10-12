@@ -13,10 +13,14 @@ from datetime import timedelta
 from enum import StrEnum
 from pathlib import Path
 
-from typing_extensions import List, Optional
 
 from cramcorder.captions import BandCaption, CaptionStyle, Subtitled
-from cramcorder.encoding import H264Encoder, SubmissionLimits, VideoFile
+from cramcorder.encoding import (
+    EncoderPreset,
+    H264Encoder,
+    SubmissionLimits,
+    VideoFile,
+)
 from cramcorder.muxer import Muxer
 from cramcorder.narration import NarratedTimeline, Storyboard
 from cramcorder.speech import KokoroVoice, Voice
@@ -39,22 +43,6 @@ class Subtitling(StrEnum):
     """
     A text track the viewer can switch off, with the same cues as a SubRip file next to
     the mp4 for players that take one.
-    """
-
-
-class EncoderPreset(StrEnum):
-    """
-    How long the encoder may take to make the file small, as it names its presets.
-    """
-
-    FAST = "fast"
-    """
-    Quick, for a draft to look at.
-    """
-
-    SLOW = "slow"
-    """
-    Thorough, for the video handed on.
     """
 
 
@@ -94,13 +82,13 @@ class VideoProduction:
     How burned-in subtitles are drawn.
     """
 
-    overlays: List[Overlay] = field(default_factory=list)
+    overlays: list[Overlay] = field(default_factory=list)
     """
     What is drawn over every frame, whatever scene plays, such as a
     :class:`~cramcorder.overlays.ProgressBar`.
     """
 
-    limits: Optional[SubmissionLimits] = None
+    limits: SubmissionLimits | None = None
     """
     What a venue accepts the video as, if the video is made for one: the picture is
     then encoded to the venue's byte limit and the file checked against every limit.
@@ -184,7 +172,7 @@ class VideoProduction:
         )
         picture = self.picture_of(narrated)
         encoder = H264Encoder(
-            size_budget=self.picture_budget_for(duration), preset=self.preset.value
+            size_budget=self.picture_budget_for(duration), preset=self.preset
         )
         silent = encoder.encode(picture, path.with_name(path.stem + "_silent.mp4"))
         soundtrack = narrated.soundtrack().written_to(path.with_suffix(".wav"))

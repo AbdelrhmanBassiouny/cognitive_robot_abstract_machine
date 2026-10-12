@@ -9,14 +9,38 @@ from __future__ import annotations
 
 import hashlib
 import wave
+from abc import ABC, abstractmethod
 from dataclasses import dataclass, field, replace
 from datetime import timedelta
 from pathlib import Path
 
 import numpy as np
-from typing_extensions import ClassVar, Protocol
+from krrood.ormatic.utils import classproperty
 
 from cramcorder.cache import SceneCache
+
+# %% how loud
+
+
+@dataclass(frozen=True)
+class SoundLevel:
+    """
+    How loud a sample is, in decibels relative to full scale (dBFS): zero is the loudest
+    a sample holds, and every quieter level is negative.
+    """
+
+    decibels: float
+    """
+    Decibels relative to full scale.
+    """
+
+    @property
+    def amplitude(self) -> float:
+        """
+        The sample value of this level, from zero to one.
+        """
+        return 10 ** (self.decibels / 20)
+
 
 # %% sound
 
@@ -27,35 +51,38 @@ class Sound:
     One channel of sound, kept as samples.
     """
 
-    SAMPLE_WIDTH: ClassVar[int] = 2
-    """
-    Bytes a sample of a wave file takes: sixteen-bit sound, which every player reads.
-    """
-
     samples: np.ndarray
     """
     The sound, one channel, from minus one to one.
     """
 
-    rate: int
+    sample_rate: int
     """
-    Samples per second.
+    Samples per second, in hertz.
     """
+
+    @classproperty
+    def written_sample(cls) -> np.dtype:
+        """
+        How a sample is written to a wave file: a little-endian sixteen-bit integer,
+        which every player reads.
+        """
+        return np.dtype("<i2")
 
     @classmethod
     def loudest_sample(cls) -> int:
         """
-        :return: The largest value a sixteen-bit sample holds, which a sound at full scale
-            is written as.
+        :return: The largest value a written sample holds, which a sound at full scale is
+            written as.
         """
-        return 2 ** (8 * cls.SAMPLE_WIDTH - 1) - 1
+        return int(np.iinfo(cls.written_sample).max)
 
     @property
     def duration(self) -> timedelta:
         """
         How long it lasts.
         """
-        return timedelta(seconds=len(self.samples) / self.rate)
+        return timedelta(seconds=len(self.samples) / self.sample_rate)
 
     def written_to(self, path: Path) -> Path:
         """
@@ -65,24 +92,26 @@ class Sound:
         scaled = np.clip(self.samples, -1.0, 1.0) * self.loudest_sample()
         with wave.open(str(path), "wb") as written:
             written.setnchannels(1)
-            written.setsampwidth(self.SAMPLE_WIDTH)
-            written.setframerate(self.rate)
-            written.writeframes(np.round(scaled).astype("<i2").tobytes())
+            written.setsampwidth(self.written_sample.itemsize)
+            written.setframerate(self.sample_rate)
+            written.writeframes(np.round(scaled).astype(self.written_sample).tobytes())
         return path
 
     @classmethod
     def read_from(cls, path: Path) -> Sound:
         """
-        :param path: A wave file of one channel of sixteen-bit sound.
+        :param path: A wave file of one channel, its samples as :meth:`written_to`
+            writes them.
         :return: The sound it holds.
         """
         with wave.open(str(path), "rb") as read:
-            rate = read.getframerate()
+            sample_rate = read.getframerate()
             frames = read.readframes(read.getnframes())
         samples = (
-            np.frombuffer(frames, dtype="<i2").astype(np.float32) / cls.loudest_sample()
+            np.frombuffer(frames, dtype=cls.written_sample).astype(np.float32)
+            / cls.loudest_sample()
         )
-        return cls(samples, rate)
+        return cls(samples, sample_rate)
 
 
 @dataclass(frozen=True)
@@ -92,7 +121,10 @@ class Speech(Sound):
     """
 
     def trimmed(
-        self, silence_level: float, breath_before: timedelta, breath_after: timedelta
+        self,
+        silence_level: SoundLevel,
+        breath_before: timedelta,
+        breath_after: timedelta,
     ) -> Speech:
         """
         :param silence_level: The loudest a sample may be and still count as silence.
@@ -103,36 +135,38 @@ class Speech(Sound):
         :return: The speech without the silence around it; all of it where it holds no
             sound.
         """
-        loud = np.flatnonzero(np.abs(self.samples) > silence_level)
+        loud = np.flatnonzero(np.abs(self.samples) > silence_level.amplitude)
         if loud.size == 0:
             return self
-        first = max(0, loud[0] - int(breath_before.total_seconds() * self.rate))
+        first = max(0, loud[0] - int(breath_before.total_seconds() * self.sample_rate))
         after_last = min(
             len(self.samples),
-            loud[-1] + 1 + int(breath_after.total_seconds() * self.rate),
+            loud[-1] + 1 + int(breath_after.total_seconds() * self.sample_rate),
         )
         return replace(self, samples=self.samples[first:after_last])
 
-    def levelled(self, peak: float) -> Speech:
+    def levelled(self, peak: SoundLevel) -> Speech:
         """
-        :param peak: The loudest sample the speech is scaled to, from zero to one.
+        :param peak: The level the loudest sample of the speech is scaled to.
         :return: The speech scaled so its loudest sample reaches the peak; silence as it
             is.
         """
         loudest = float(np.abs(self.samples).max(initial=0.0))
         if loudest == 0.0:
             return self
-        return replace(self, samples=self.samples * (peak / loudest))
+        return replace(self, samples=self.samples * (peak.amplitude / loudest))
 
 
 # %% voices
 
 
-class Voice(Protocol):
+@dataclass
+class Voice(ABC):
     """
     Whatever turns a line into speech.
     """
 
+    @abstractmethod
     def speaks(self, text: str, pace: float = 1.0) -> Speech:
         """
         :param text: What to say.
@@ -142,7 +176,7 @@ class Voice(Protocol):
 
 
 @dataclass
-class KokoroVoice:
+class KokoroVoice(Voice):
     """
     The Kokoro speech model, run on this machine, one of its voices chosen.
 
@@ -188,7 +222,7 @@ class KokoroVoice:
     Where the lines said are kept.
     """
 
-    silence_level: float = 0.01
+    silence_level: SoundLevel = SoundLevel(decibels=-40.0)
     """
     The loudest a sample may be and still count as silence around a spoken line.
     """
@@ -203,10 +237,10 @@ class KokoroVoice:
     The quiet kept after the last sound of a line: the natural tail of its last word.
     """
 
-    peak: float = 0.89
+    peak: SoundLevel = SoundLevel(decibels=-1.0)
     """
-    The loudest sample of every spoken line, so every line is said at one loudness and
-    none clips.
+    The level of the loudest sample of every spoken line, so every line is said at one
+    loudness and none clips.
     """
 
     def speaks(self, text: str, pace: float = 1.0) -> Speech:
@@ -231,9 +265,9 @@ class KokoroVoice:
             reusing speech cut the old way.
         """
         said = (
-            f"{self.voice}|{speed}|{self.language}|{self.silence_level}|"
+            f"{self.voice}|{speed}|{self.language}|{self.silence_level.decibels}|"
             f"{self.breath_before.total_seconds()}|"
-            f"{self.breath_after.total_seconds()}|{self.peak}|{text}"
+            f"{self.breath_after.total_seconds()}|{self.peak.decibels}|{text}"
         )
         return hashlib.sha1(said.encode()).hexdigest()
 
@@ -243,15 +277,15 @@ class KokoroVoice:
         :param speed: The model's speed to say it at.
         :return: The line said by the model, trimmed and levelled.
         """
-        # the speech model is an optional dependency, the ``video`` extra
+        # the speech model is an optional dependency, the ``narrator`` extra
         from kokoro_onnx import Kokoro
 
         model = Kokoro(str(self.model), str(self.voices))
-        samples, rate = model.create(
+        samples, sample_rate = model.create(
             text, voice=self.voice, speed=speed, lang=self.language
         )
         return (
-            Speech(samples.astype(np.float32), rate)
+            Speech(samples.astype(np.float32), sample_rate)
             .trimmed(self.silence_level, self.breath_before, self.breath_after)
             .levelled(self.peak)
         )
