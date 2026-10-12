@@ -11,7 +11,7 @@ from json_msgs.action import JsonAction
 from json_msgs.action._json_action import JsonAction_Result
 from std_msgs.msg import String
 from cramph.composites import ChildChooserAccess
-from cramph.context import StatechartContext
+from cramph.context import ContextExtension, StatechartContext
 from cramph.executor import Executor
 from giskardpy.middleware.ros2 import rospy
 from giskardpy.middleware.ros2.child_choices import (
@@ -115,6 +115,9 @@ class GiskardClientExecutor(Executor):
         giskard_topic = f"{self.giskard_node_name}/command"
         self._client = MyActionClient(self.node_handle, JsonAction, giskard_topic)
         sleep(0.3)
+
+    def default_context_extensions(self) -> list[ContextExtension]:
+        return []
 
     @property
     def client(self) -> MetaData:

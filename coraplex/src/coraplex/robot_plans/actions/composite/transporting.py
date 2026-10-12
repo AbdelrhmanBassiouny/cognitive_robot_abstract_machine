@@ -44,11 +44,14 @@ class ActionOfSteps(Action, ABC):
     """
 
     @staticmethod
-    def _node_running(step: Action) -> StatechartNode:
+    def _as_node(step: Action) -> StatechartNode:
         """
-        :param step: A step of this action.
-        :return: The step itself, or the node grounding its statement once it is
-            reached.
+        Turns a step of this action into the node that runs it.
+
+        :param step: A step of this action, or an underspecified statement of it.
+        :return: The step itself, or an
+            :class:`~coraplex.plans.underspecified.UnderspecifiedNode` grounding its
+            statement once it is reached.
         """
         if isinstance(step, Match):
             return UnderspecifiedNode(statement=step)
@@ -132,9 +135,9 @@ class TransportAction(ActionOfSteps):
         return Sequence(
             [
                 ParkArmsAction(self.robot.all_arms),
-                self._node_running(self.pick_up),
+                self._as_node(self.pick_up),
                 ParkArmsAction(self.robot.all_arms),
-                self._node_running(self.place),
+                self._as_node(self.place),
                 ParkArmsAction(self.robot.all_arms),
             ]
         )
@@ -161,8 +164,8 @@ class PickAndPlaceAction(ActionOfSteps):
     def create_action_body(self) -> StatechartNode:
         return Sequence(
             [
-                self._node_running(self.pick_up),
-                self._node_running(self.place),
+                self._as_node(self.pick_up),
+                self._as_node(self.place),
             ]
         )
 
@@ -217,9 +220,9 @@ class MoveAndPlaceAction(ActionOfSteps):
     def create_action_body(self) -> StatechartNode:
         return Sequence(
             [
-                self._node_running(self.navigate),
-                self._node_running(self.face_and_look_at),
-                self._node_running(self.place),
+                self._as_node(self.navigate),
+                self._as_node(self.face_and_look_at),
+                self._as_node(self.place),
             ]
         )
 
@@ -334,9 +337,9 @@ class MoveAndPickUpAction(ActionOfSteps):
     def create_action_body(self) -> StatechartNode:
         return Sequence(
             [
-                self._node_running(self.navigate),
-                self._node_running(self.face_and_look_at),
-                self._node_running(self.pick_up),
+                self._as_node(self.navigate),
+                self._as_node(self.face_and_look_at),
+                self._as_node(self.pick_up),
             ]
         )
 
@@ -349,12 +352,14 @@ class MoveAndOpenAction(ActionOfSteps):
 
     navigate: NavigateAction
     """
-    The step to where the robot stands while opening.
+    The step to where the robot stands while opening, or an underspecified statement of
+    it.
     """
 
     face_and_look_at: FaceAndLookAtAction
     """
-    The turn towards the handle and the look at it.
+    The turn towards the handle and the look at it, or an underspecified statement of
+    them.
     """
 
     open_container: OpenAction
@@ -384,8 +389,8 @@ class MoveAndOpenAction(ActionOfSteps):
     def create_action_body(self) -> StatechartNode:
         return Sequence(
             [
-                self._node_running(self.navigate),
-                self._node_running(self.face_and_look_at),
-                self._node_running(self.open_container),
+                self._as_node(self.navigate),
+                self._as_node(self.face_and_look_at),
+                self._as_node(self.open_container),
             ]
         )

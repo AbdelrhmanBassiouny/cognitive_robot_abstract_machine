@@ -35,7 +35,7 @@ Which executor runs a plan decides how it is executed:
 
 ```python
 from coraplex.plans.context_extensions import RobotAccess
-from coraplex.plans.executors import RobotPlanExecutor, SimulatedPlanExecutor
+from coraplex.plans.executors import RealRobotPlanExecutor, SimulatedPlanExecutor
 from cramph.statechart import Statechart
 
 executor = SimulatedPlanExecutor(world, context_extensions=[RobotAccess(robot)])
@@ -46,7 +46,7 @@ executor.execute()
 ```
 
 A plan for the real robot is built and run the same way in a
-`RobotPlanExecutor(world, context_extensions=[RobotAccess(robot)], ros_node=node)`.
+`RealRobotPlanExecutor(world, context_extensions=[RobotAccess(robot)], ros_node=node)`.
 Code that is told how to execute at run time takes the executor type, as
 {attr}`~coraplex.demonstrations.RobotDemonstration.executor_type` does. The nodes of a plan read whether the robot is
 simulated from the {class}`~coraplex.plans.context_extensions.ExecutionMode` the executor puts into the context.
@@ -80,7 +80,7 @@ executor = SimulatedPlanExecutor(
   every plan node succeeded. A plan that stops approaching its goal gives up and raises
   {class}`~coraplex.plans.failures.MotionMadeNoProgress`, naming the tasks that stalled; one that keeps converging is
   never cut off for taking many ticks, only once it exceeds the simulated time limit.
-- {class}`~coraplex.plans.executors.RobotPlanExecutor`: the chart is sent to giskard via the `GiskardClientExecutor`, which
+- {class}`~coraplex.plans.executors.RealRobotPlanExecutor`: the chart is sent to giskard via the `GiskardClientExecutor`, which
   grounds underspecified actions while giskard runs it.
 - {meth}`~coraplex.plans.executors.PlanExecutor.prepare` builds the chart without compiling or running it, for
   inspecting a plan as it would run.
@@ -92,17 +92,17 @@ Some robots need a different implementation of a motion. Such a robot gets a
 action is expanded, and that applies only to its robot type, and where needed only to simulated or only to real
 execution:
 
-- {class}`~coraplex.robot_plans.plan_transformations.DriveStretchWithItsDifferentialDrive` and
-  {class}`~coraplex.robot_plans.plan_transformations.DriveSimulatedTiagoWithItsDifferentialDrive` drive the base with a
+- {class}`~coraplex.robot_plans.robot_specific_plan_transformations.DriveStretchWithItsDifferentialDrive` and
+  {class}`~coraplex.robot_plans.robot_specific_plan_transformations.DriveSimulatedTiagoWithItsDifferentialDrive` drive the base with a
   {class}`~giskardpy.motion_statechart.goals.cartesian_goals.DifferentialDriveBaseGoal`, which arrives within the
   {attr}`~coraplex.robot_plans.actions.core.navigation.DrivesBase.base_pose_threshold` of the action.
-- {class}`~coraplex.robot_plans.plan_transformations.KeepStretchInFrontOfTheContainerItCloses` keeps a simulated
+- {class}`~coraplex.robot_plans.robot_specific_plan_transformations.KeepStretchInFrontOfTheContainerItCloses` keeps a simulated
   Stretch in front of the container it closes.
 
 A transformation takes effect only for a plan whose executor was given it:
 
 ```python
-executor = RobotPlanExecutor(
+executor = RealRobotPlanExecutor(
     world,
     context_extensions=[
         RobotAccess(robot),

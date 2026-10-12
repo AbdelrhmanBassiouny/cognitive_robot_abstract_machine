@@ -35,7 +35,7 @@ pr2 = PR2.from_world(world)
 ## The Executor
 An executor runs plans in a world. What a plan's nodes read from their context, such as the robot performing them, is
 given to it as context extensions; the executor builds the statechart context out of them. A `SimulatedPlanExecutor`
-ticks the plan in the world itself, a `RobotPlanExecutor` sends it to Giskard driving the real robot.
+ticks the plan in the world itself, a `RealRobotPlanExecutor` sends it to Giskard driving the real robot.
 
 ```python
 executor = SimulatedPlanExecutor(world, context_extensions=[RobotAccess(pr2)])

@@ -12,9 +12,8 @@ from semantic_digital_twin.reasoning.predicates import allclose
 from semantic_digital_twin.robots.robot_parts import Arm, EndEffector
 from semantic_digital_twin.spatial_types.spatial_types import Pose
 
-from coraplex.plans.context_extensions import MotionToleranceConfig, RobotAccess
-from krrood.ormatic.utils import classproperty
-from cramph.context import ContextExtension, StatechartContext
+from coraplex.plans.context_extensions import RobotAccess
+from cramph.context import StatechartContext
 from coraplex.datastructures.trajectory import PoseTrajectory
 from coraplex.robot_plans.actions.base import Action
 from coraplex.robot_plans.mixins import (
@@ -134,7 +133,7 @@ class ParkArmsAction(Action, HasMaxJointVelocity):
 
 
 @dataclass(eq=False, repr=False)
-class FollowToolCenterPointPathAction(Action, MovesToolCenterPoint):
+class FollowToolCenterPointPathAction(MovesToolCenterPoint):
     """
     Represents an action to move a robotic arm's TCP (Tool Center Point) along a path of
     poses.
@@ -149,10 +148,6 @@ class FollowToolCenterPointPathAction(Action, MovesToolCenterPoint):
     """
     The arm to use.
     """
-
-    @classproperty
-    def required_context_extensions(cls) -> tuple[type[ContextExtension], ...]:
-        return super().required_context_extensions + (MotionToleranceConfig,)
 
     def create_action_body(self) -> StatechartNode:
         return Sequence(
@@ -186,7 +181,7 @@ class FollowToolCenterPointPathAction(Action, MovesToolCenterPoint):
 
 
 @dataclass(eq=False, repr=False)
-class MoveManipulatorAction(Action, MovesToolCenterPoint):
+class MoveManipulatorAction(MovesToolCenterPoint):
     """
     Move the end_effector to a specific pose.
     """
@@ -205,10 +200,6 @@ class MoveManipulatorAction(Action, MovesToolCenterPoint):
     """
     If the gripper can collide with something.
     """
-
-    @classproperty
-    def required_context_extensions(cls) -> tuple[type[ContextExtension], ...]:
-        return super().required_context_extensions + (MotionToleranceConfig,)
 
     def create_action_body(self) -> StatechartNode:
         goal = CartesianPose(

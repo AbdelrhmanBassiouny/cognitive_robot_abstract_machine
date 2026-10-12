@@ -403,6 +403,62 @@ def test_requiring_an_extension_the_executor_does_not_have_is_rejected(
         statechart_executor.require_extension(ExtensionRecordingItsStages)
 
 
+# %% default extensions
+
+
+@dataclass
+class ExecutorWithDefaults(StatechartExecutor):
+    """
+    An executor that brings a :class:`CountingContext` and an
+    :class:`ExtensionRecordingItsStages` unless it is given one of each.
+    """
+
+    def default_context_extensions(self) -> list[ContextExtension]:
+        return [CountingContext()]
+
+    def default_executor_extensions(self) -> list[ExecutorExtension]:
+        return [ExtensionRecordingItsStages(records=[])]
+
+
+def test_an_executor_adds_its_default_context_extensions(
+    statechart_context: StatechartContext,
+):
+    executor = ExecutorWithDefaults(context=statechart_context)
+
+    assert type(executor.context.require_extension(CountingContext)) is CountingContext
+
+
+def test_a_supplied_context_extension_replaces_the_default_of_its_type(
+    statechart_context: StatechartContext,
+):
+    supplied = CountingContext(builds=3)
+    statechart_context.add_extension(supplied)
+
+    executor = ExecutorWithDefaults(context=statechart_context)
+
+    assert executor.context.require_extension(CountingContext) is supplied
+
+
+def test_an_executor_adds_its_default_executor_extensions(
+    statechart_context: StatechartContext,
+):
+    executor = ExecutorWithDefaults(context=statechart_context)
+
+    assert [type(extension) for extension in executor.extensions] == [
+        ExtensionRecordingItsStages
+    ]
+
+
+def test_a_supplied_executor_extension_replaces_the_default_of_its_type(
+    statechart_context: StatechartContext,
+):
+    supplied = ExtensionRecordingItsStages(records=[])
+
+    executor = ExecutorWithDefaults(context=statechart_context, extensions=[supplied])
+
+    assert [extension is supplied for extension in executor.extensions] == [True]
+
+
 # %% the context a statechart is built in
 
 

@@ -21,7 +21,6 @@ from coraplex.querying.predicates import (
 from cramph.composites import Parallel, Sequence
 from cramph.node import StatechartNode
 from cramph.world_modification_nodes import MoveBranch
-from coraplex.robot_plans.actions.base import Action
 from coraplex.robot_plans.mixins import (
     HasApproachesGraspPoses,
     HasGraspDetectionThreshold,
@@ -63,11 +62,10 @@ class HasGraspChoice:
 
 @dataclass(eq=False, repr=False)
 class ReachAction(
-    Action,
+    MovesToolCenterPoint,
     HasApproachesGraspPoses,
     ReachTuningParameters,
     HasGraspDetectionThreshold,
-    MovesToolCenterPoint,
     MovesGripper,
 ):
     """
@@ -143,12 +141,11 @@ class ReachAction(
 
 @dataclass(eq=False, repr=False)
 class PickUpAction(
-    Action,
+    MovesToolCenterPoint,
     HasGraspChoice,
     HasApproachesGraspPoses,
     PickUpTuningParameters,
     HasGraspDetectionThreshold,
-    MovesToolCenterPoint,
     MovesGripper,
 ):
     """
@@ -244,12 +241,11 @@ class PickUpAction(
 
 @dataclass(eq=False, repr=False)
 class GraspingAction(
-    Action,
+    MovesToolCenterPoint,
     HasGraspChoice,
     HasApproachesGraspPoses,
     PickUpTuningParameters,
     HasGraspDetectionThreshold,
-    MovesToolCenterPoint,
     MovesGripper,
 ):
     """

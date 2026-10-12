@@ -1,8 +1,12 @@
+from abc import ABC
 from dataclasses import dataclass, field
 
 import numpy as np
 
 from coraplex.plans.context_extensions import MotionToleranceConfig
+from coraplex.robot_plans.actions.base import Action
+from cramph.context import ContextExtension
+from krrood.ormatic.utils import classproperty
 from cramph.composites import Parallel
 from giskardpy.motion_statechart.goals.collision_avoidance import (
     UpdateTemporaryCollisionRules,
@@ -275,16 +279,13 @@ class MovesGripper:
         )
 
 
-@dataclass
-class MovesToolCenterPoint:
+@dataclass(eq=False, repr=False)
+class MovesToolCenterPoint(Action, ABC):
     """
-    Builds the goals that move an arm's tool center point, with optional
-    goal-achievement thresholds that fall back to
-    the :class:`~coraplex.plans.context_extensions.MotionToleranceConfig` of the context when left
-    unset.
-
-    Meant to be mixed into an :class:`~coraplex.robot_plans.actions.base.Action`
-    subclass, whose ``context`` and ``controlled_root`` the methods below rely on.
+    An action that moves an arm's tool center point, with optional goal-achievement
+    thresholds that fall back to the
+    :class:`~coraplex.plans.context_extensions.MotionToleranceConfig` of the context
+    when left unset.
     """
 
     position_threshold: Optional[float] = field(default=None, kw_only=True)
@@ -298,6 +299,10 @@ class MovesToolCenterPoint:
     Rotation threshold in rad for goal achievement. ``None`` falls back to
     :attr:`~coraplex.plans.context_extensions.MotionToleranceConfig.tool_orientation_threshold`.
     """
+
+    @classproperty
+    def required_context_extensions(cls) -> tuple[type[ContextExtension], ...]:
+        return super().required_context_extensions + (MotionToleranceConfig,)
 
     def resolved_position_threshold(self) -> float:
         """

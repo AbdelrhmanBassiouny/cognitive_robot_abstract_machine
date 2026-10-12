@@ -30,7 +30,7 @@ from coraplex.ros_utils.robot_state_updater import WorldStateUpdater
 from tf.transformations import quaternion_from_matrix
 from coraplex.robot_plans import *
 from coraplex.plans.context_extensions import RobotAccess
-from coraplex.plans.executors import RobotPlanExecutor
+from coraplex.plans.executors import RealRobotPlanExecutor
 from cramph.statechart import Statechart
 from coraplex.external_interfaces.giskard import sync_worlds
 from coraplex.robot_plans import *
@@ -65,7 +65,7 @@ giskard_wrapper.execute()
 ```python
 from coraplex.robot_plans.actions.core.robot_body import ParkArmsAction
 
-executor = RobotPlanExecutor(world, context_extensions=[RobotAccess(robot)])
+executor = RealRobotPlanExecutor(world, context_extensions=[RobotAccess(robot)])
 statechart = Statechart(context=executor.context)
 statechart.add_node(ParkArmsAction(robot.all_arms))
 executor.compile(statechart)
@@ -124,7 +124,7 @@ def follow_path(waypoints):
     )
 
 
-executor = RobotPlanExecutor(world, context_extensions=[RobotAccess(robot)])
+executor = RealRobotPlanExecutor(world, context_extensions=[RobotAccess(robot)])
 statechart = Statechart(context=executor.context)
 statechart.add_node(follow_path(path[1:]))
 executor.compile(statechart)
@@ -159,7 +159,7 @@ print(len(new_path))
 
 ```python
 print('move along path to goal pose...')
-executor = RobotPlanExecutor(world, context_extensions=[RobotAccess(robot)])
+executor = RealRobotPlanExecutor(world, context_extensions=[RobotAccess(robot)])
 statechart = Statechart(context=executor.context)
 statechart.add_node(follow_path(filter_path(path)))
 executor.compile(statechart)

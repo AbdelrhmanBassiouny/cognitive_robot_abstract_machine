@@ -429,27 +429,27 @@ class RerunVisualization(WorldVisualization):
 
 # %% installed plan visualization
 @dataclass
-class ExecutorExtensionAttachment:
+class ObservedExecutor:
     """
-    An executor extension added to the executor whose statecharts it observes.
+    An executor whose statecharts an extension added to it observes.
     """
 
     executor: StatechartExecutor
     """
-    The executor the extension is added to.
+    The executor whose statecharts are observed.
     """
 
-    extension: ExecutorExtension
+    observer: ExecutorExtension
     """
-    The added extension.
+    The extension added to :attr:`executor` to observe its statecharts.
     """
 
     def detach(self) -> None:
         """
-        Remove the extension from the executor.
+        Remove :attr:`observer` from the executor.
         """
         self.executor.extensions[:] = [
-            added for added in self.executor.extensions if added is not self.extension
+            added for added in self.executor.extensions if added is not self.observer
         ]
 
 
@@ -465,11 +465,11 @@ class PluginVisualization(WorldVisualization):
     The optional installed browser visualization provider.
     """
 
-    _attachments: list[ExecutorExtensionAttachment] = field(
+    _observed_executors: list[ObservedExecutor] = field(
         default_factory=list, init=False
     )
     """
-    Executor extensions added by this owner, with the executors they observe.
+    The executors this visualization added an observer to.
     """
 
     @property
@@ -500,18 +500,18 @@ class PluginVisualization(WorldVisualization):
         """
         if self.provider is None:
             return
-        if any(attachment.executor is executor for attachment in self._attachments):
+        if any(observed.executor is executor for observed in self._observed_executors):
             return
-        extension = self.provider.executor_extension()
-        executor.extensions.append(extension)
-        self._attachments.append(
-            ExecutorExtensionAttachment(executor=executor, extension=extension)
+        observer = self.provider.executor_extension()
+        executor.extensions.append(observer)
+        self._observed_executors.append(
+            ObservedExecutor(executor=executor, observer=observer)
         )
 
     def _remove_extensions(self) -> None:
-        for attachment in self._attachments:
-            attachment.detach()
-        self._attachments.clear()
+        for observed in self._observed_executors:
+            observed.detach()
+        self._observed_executors.clear()
 
     def _stop_provider(self, provider: PlanVisualization) -> None:
         try:

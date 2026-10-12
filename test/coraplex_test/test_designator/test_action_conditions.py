@@ -48,8 +48,6 @@ def test_get_bound_variables(pr2_apartment_context):
 
     assert len(bound_variables) == 14
     assert list(bound_variables.keys()) == [
-        "position_threshold",
-        "orientation_threshold",
         "grasp_detection_threshold",
         "pre_approach_linear_velocity",
         "final_approach_linear_velocity",
@@ -61,6 +59,8 @@ def test_get_bound_variables(pr2_apartment_context):
         "retreat_distance",
         "grasp",
         "arm",
+        "position_threshold",
+        "orientation_threshold",
         "tolerate_grasp_stall",
     ]
     assert list(bound_variables["arm"]._domain_) == [view.left_arm]

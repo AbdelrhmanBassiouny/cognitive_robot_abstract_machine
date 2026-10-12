@@ -84,7 +84,7 @@ executor.execute()
   (`RobotAccess`) and how its statements are grounded (`StatementGrounding`).
 - `compile` adds to the statechart the collision avoidance when the executor is asked for it, and an `EndMotion` that
   ends the statechart once every top-level node of the plan succeeded.
-- `execute` runs that statechart: a `SimulatedPlanExecutor` in simulation, a `RobotPlanExecutor` by sending it to
+- `execute` runs that statechart: a `SimulatedPlanExecutor` in simulation, a `RealRobotPlanExecutor` by sending it to
   Giskard on the real robot. It raises `MotionDidNotFinish` if the plan did not succeed.
 - An executor runs one statechart, so every plan gets an executor of its own.
 

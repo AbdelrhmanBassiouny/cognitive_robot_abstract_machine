@@ -12,7 +12,7 @@ from typing_extensions import List
 from coraplex.plans.context_extensions import RobotAccess, StatementGrounding
 from coraplex.plans.executors import (
     PlanExecutor,
-    RobotPlanExecutor,
+    RealRobotPlanExecutor,
     SimulatedPlanExecutor,
 )
 from cramph.context import ContextExtension, StatechartContext
@@ -66,14 +66,16 @@ def simulated_executor(
     )
 
 
-def robot_executor(extensions: List[ContextExtension], **options) -> RobotPlanExecutor:
+def robot_executor(
+    extensions: List[ContextExtension], **options
+) -> RealRobotPlanExecutor:
     """
     :param extensions: The context extensions of the plan, holding a
         :class:`~coraplex.plans.context_extensions.RobotAccess`.
     :param options: Further arguments of the executor.
     :return: An executor sending plans to the real robot in `extensions`.
     """
-    return RobotPlanExecutor(
+    return RealRobotPlanExecutor(
         world_of(extensions), context_extensions=extensions, **options
     )
 

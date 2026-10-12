@@ -51,7 +51,7 @@ expansion would have to move to compile time. That is a cramph change of its own
 ### Underspecified statements as steps of a plan language node
 
 A composite action whose step may be an `a(...)` statement wraps the statement in an
-`UnderspecifiedNode` itself (`ActionOfSteps._node_running`). The plan language nodes
+`UnderspecifiedNode` itself (`ActionOfSteps._as_node`). The plan language nodes
 could accept a krrood `Match` among their children directly. Two ways to get there:
 
 - cramph defines a node carrying a krrood `Match` (cramph may import krrood), which
@@ -90,7 +90,7 @@ would run on stale state until the compile happened.
 The motion designators that `coraplex/alternative_motion_mappings` replaced per robot are
 gone, and so is that package. The drive goals of the Stretch and the Tiago and the
 Stretch's way of closing a container are plan transformations now
-(`coraplex/robot_plans/plan_transformations.py`). Three mappings were left out:
+(`coraplex/robot_plans/robot_specific_plan_transformations.py`). Three mappings were left out:
 
 - **HSRB, real robot: driving through Navigation 2.** The mapping replaced the drive goal
   with a `NavigateActionServerTask` on the action topic `/hsrb/move_base`, sending a

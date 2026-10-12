@@ -109,7 +109,7 @@ run(plan)
 
 Where a plan is performed is chosen by its executor: a
 {class}`~coraplex.plans.executors.SimulatedPlanExecutor` performs it on the simulated robot, a
-{class}`~coraplex.plans.executors.RobotPlanExecutor` on the real one.
+{class}`~coraplex.plans.executors.RealRobotPlanExecutor` on the real one.
 
 ## Move Torso
 

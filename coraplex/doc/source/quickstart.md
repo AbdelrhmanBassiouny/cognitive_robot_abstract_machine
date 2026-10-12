@@ -148,7 +148,7 @@ statechart.add_node(plan)
 
 What did we just do here?
 We first created an executor, which runs the plan in the world, by the PR2 its context extensions name. A
-`SimulatedPlanExecutor` runs it in simulation; a `RobotPlanExecutor` would send it to the real robot.
+`SimulatedPlanExecutor` runs it in simulation; a `RealRobotPlanExecutor` would send it to the real robot.
 Next, we retrieved the milk bottle body from the world to use it in the pick-up and place actions.
 Finally, we built a plan as a {class}`~cramph.composites.Sequence`, meaning all actions will be executed one after
 another in the order they are defined, and put it into a statechart of the executor's context.
