@@ -44,9 +44,6 @@ from cramph.composites import CramLanguageNode, Parallel
 from cramph.node import StatechartNode
 from giskardpy.motion_statechart.data_types import DefaultWeights
 from giskardpy.motion_statechart.goals.cartesian_goals import DifferentialDriveBaseGoal
-from giskardpy.motion_statechart.goals.collision_avoidance import (
-    UpdateTemporaryCollisionRules,
-)
 from giskardpy.motion_statechart.goals.open_close import Close
 from giskardpy.motion_statechart.tasks.align_planes import AlignPlanes
 from giskardpy.motion_statechart.tasks.cartesian_tasks import (
@@ -58,16 +55,13 @@ from krrood.entity_query_language.core.variable import Variable
 from krrood.entity_query_language.factories import a, variable
 from krrood.entity_query_language.query.match import Match
 from krrood.patterns.subclass_safe_generic import SubClassSafeGeneric
-from semantic_digital_twin.collision_checking.collision_rules import (
-    AllowCollisionForEndEffector,
-)
 from semantic_digital_twin.reasoning.predicates import InsideOf
 from semantic_digital_twin.grasping.grasp_candidates import (
     GraspCandidate,
     HasGraspCandidates,
 )
 from semantic_digital_twin.robots.justin import Justin
-from semantic_digital_twin.robots.robot_parts import Arm, EndEffector
+from semantic_digital_twin.robots.robot_parts import Arm
 from semantic_digital_twin.robots.stretch import Stretch
 from semantic_digital_twin.robots.tiago import Tiago
 from semantic_digital_twin.semantic_annotations.mixins import HasRootBody
@@ -588,64 +582,3 @@ class KeepStretchInFrontOfTheContainerItCloses(PlanTransformation[CloseAction]):
                 ]
             ),
         )
-
-
-# %% freeing the end effectors of steps that run at once
-
-
-@dataclass
-class FreeEndEffectorsOfParallelStepsTogether(PlanTransformation[Parallel]):
-    """
-    Lets every end effector that the steps of a :class:`~cramph.composites.Parallel`
-    free from collision avoidance stay free for as long as any of those steps frees one.
-
-    A node updating the temporary collision rules replaces the rules in force, so a step
-    freeing its own end effector takes the freedom of the end effector of a step running
-    beside it away.
-
-    .. note:: A step that joins the :class:`~cramph.composites.Parallel` after it was
-        rewritten, such as an action an underspecified node chooses, is left as it is.
-    """
-
-    def is_applicable(self, plan_node: Parallel) -> bool:
-        return len(self._freed_end_effectors(plan_node)) > 1
-
-    def apply(self, plan_node: Parallel) -> None:
-        end_effectors = self._freed_end_effectors(plan_node)
-        for rules_node in self._nodes_freeing_end_effectors(plan_node):
-            rules_node.temporary_rules = [
-                AllowCollisionForEndEffector(end_effector=end_effector)
-                for end_effector in end_effectors
-            ]
-
-    @staticmethod
-    def _nodes_freeing_end_effectors(
-        plan_node: Parallel,
-    ) -> list[UpdateTemporaryCollisionRules]:
-        """
-        :param plan_node: The steps running at once.
-        :return: The nodes below `plan_node` whose rules do nothing but free end
-            effectors, in the order the plan runs them.
-        """
-        return [
-            node
-            for node in plan_node.descendants
-            if isinstance(node, UpdateTemporaryCollisionRules)
-            and all(
-                isinstance(rule, AllowCollisionForEndEffector)
-                for rule in node.temporary_rules
-            )
-        ]
-
-    def _freed_end_effectors(self, plan_node: Parallel) -> list[EndEffector]:
-        """
-        :param plan_node: The steps running at once.
-        :return: Every end effector a node below `plan_node` frees, each once, in the
-            order the plan first frees them.
-        """
-        end_effectors = []
-        for rules_node in self._nodes_freeing_end_effectors(plan_node):
-            for rule in rules_node.temporary_rules:
-                if rule.end_effector not in end_effectors:
-                    end_effectors.append(rule.end_effector)
-        return end_effectors
