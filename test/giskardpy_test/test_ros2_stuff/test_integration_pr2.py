@@ -11,9 +11,6 @@ import pytest
 from numpy import pi
 
 import semantic_digital_twin.spatial_types.spatial_types as cas
-from giskardpy.data_types.exceptions import (
-    MaxTrajectoryLengthException,
-)
 from giskardpy.middleware.ros2.server_config import ExecutionMode, GiskardServerConfig
 from giskardpy.middleware.ros2.scripts.iai_robots.pr2.configs import (
     PR2StandaloneInterface,
@@ -78,7 +75,6 @@ from semantic_digital_twin.spatial_types import (
 from semantic_digital_twin.spatial_types.spatial_types import Pose
 from semantic_digital_twin.world_description.connections import (
     RevoluteConnection,
-    PrismaticConnection,
     ActiveConnection1DOF,
 )
 from semantic_digital_twin.world_description.world_entity import (
@@ -87,8 +83,6 @@ from semantic_digital_twin.world_description.world_entity import (
 )
 
 from .test_client_presence import wait_until
-
-pytestmark = pytest.mark.parked
 
 
 @dataclass
@@ -345,14 +339,15 @@ class TestJointGoals:
             PR2Joint.LEFT_WRIST_FLEX: -0.1,
             PR2Joint.LEFT_WRIST_ROLL: -6.062015047706399,
         }
-        msc = Statechart()
+        msc = Statechart(context=giskard.api.context)
         msc.add_node(
             joint_goal := JointPositionList(
                 goal_state=JointState.from_str_dict(js, giskard.api.world),
             )
         )
         msc.add_node(EndMotion.when_true(joint_goal))
-        giskard.api.execute(msc)
+        giskard.api.compile(msc)
+        giskard.api.execute()
         sleep(0.1)
         for joint, goal in js.items():
             connection = giskard.api.world.get_connection_by_name(joint)
@@ -382,7 +377,7 @@ class TestJointGoals:
         head_pan_joint: ActiveConnection1DOF = giskard.api.world.get_connection_by_name(
             PR2Joint.HEAD_PAN
         )
-        msc = Statechart()
+        msc = Statechart(context=giskard.api.context)
 
         min_joint_goal = JointPositionList(
             goal_state=JointState.from_mapping(
@@ -420,13 +415,14 @@ class TestJointGoals:
         end = EndMotion()
         msc.add_node(end)
         end.start_condition = max_joint_goal.observes_true
-        giskard.api.execute(msc)
+        giskard.api.compile(msc)
+        giskard.api.execute()
 
 
 class TestConstraints:
 
     def test_drive_into_apartment(self, apartment_setup: PR2Tester):
-        msc = Statechart()
+        msc = Statechart(context=apartment_setup.api.context)
         msc.add_node(
             cart_goal := CartesianPose(
                 root_link=apartment_setup.map,
@@ -437,37 +433,9 @@ class TestConstraints:
             )
         )
         msc.add_node(EndMotion.when_true(cart_goal))
-        apartment_setup.api.execute(msc)
+        apartment_setup.api.compile(msc)
+        apartment_setup.api.execute()
 
-    @pytest.mark.skip(reason="me todo")
-    def test_AvoidJointLimits(self, giskard: PR2Tester):
-        percentage = 10.0
-        giskard.api.motion_goals.allow_all_collisions()
-        giskard.api.motion_goals.add_avoid_joint_limits(percentage=percentage)
-        giskard.execute()
-
-        joint_non_continuous = [
-            j
-            for j in giskard.robot.controlled_connections
-            if isinstance(j, (PrismaticConnection, RevoluteConnection))
-            and j.dof.has_position_limits()
-        ]
-
-        current_joint_state = giskard.api.world.state.to_position_dict()
-        percentage *= (
-            0.95  # it will not reach the exact percentage, because the weight is so low
-        )
-        for joint in joint_non_continuous:
-            position = current_joint_state[joint.dof.name]
-            lower_limit = joint.dof.limits.upper.position
-            upper_limit = joint.dof.limits.upper.position
-            joint_range = upper_limit - lower_limit
-            center = (upper_limit + lower_limit) / 2.0
-            upper_limit2 = center + joint_range / 2.0 * (1 - percentage / 100.0)
-            lower_limit2 = center - joint_range / 2.0 * (1 - percentage / 100.0)
-            assert upper_limit2 >= position >= lower_limit2
-
-    @pytest.mark.skip(reason="fixme")
     def test_insert_cylinder1(self, giskard_better_pose: PR2Tester):
         cylinder_name = "C"
         cylinder_height = 0.121
@@ -486,17 +454,34 @@ class TestConstraints:
             pose=pose,
             parent_link=giskard_better_pose.right_tip,
         )
-
-        inserted = giskard_better_pose.api.motion_goals.add_motion_goal(
-            class_name=InsertCylinder.__name__,
-            name="Insert Cyclinder",
-            cylinder_name=cylinder_name,
-            cylinder_height=0.121,
-            hole_point=hole_point,
+        cylinder = giskard_better_pose.api.world.get_kinematic_structure_entity_by_name(
+            cylinder_name
         )
-        giskard_better_pose.api.motion_goals.allow_all_collisions()
-        giskard_better_pose.api.monitors.add_end_motion(start_condition=inserted)
-        giskard_better_pose.execute(local_min_end=False)
+
+        msc = Statechart(context=giskard_better_pose.api.context)
+        msc.add_node(
+            inserted := InsertCylinder(
+                name="Insert Cylinder",
+                tip_link=cylinder,
+                tip_P_tool=Point3(z=cylinder_height / 2, reference_frame=cylinder),
+                tip_V_axis=Vector3(z=-1.0, reference_frame=cylinder),
+                up_axis=Vector3.Z(reference_frame=giskard_better_pose.map),
+                hole_point=hole_point,
+            )
+        )
+        msc.add_node(EndMotion.when_true(inserted))
+        giskard_better_pose.api.compile(msc)
+        giskard_better_pose.api.execute()
+
+        map_T_cylinder = giskard_better_pose.api.world.compute_forward_kinematics(
+            root=giskard_better_pose.map, tip=cylinder
+        )
+        map_V_cylinder_axis = map_T_cylinder.rotation_matrix.z_vector()
+        map_P_leading_end = map_T_cylinder.position + map_V_cylinder_axis * (
+            cylinder_height / 2
+        )
+        assert np.allclose(map_P_leading_end, hole_point, atol=0.02)
+        assert np.allclose(map_V_cylinder_axis, Vector3(z=-1.0), atol=0.02)
 
     def test_pointing_kitchen(self, kitchen_setup: PR2Tester, better_pose):
         pointing_axis = Vector3.X(reference_frame=kitchen_setup.camera)
@@ -511,7 +496,7 @@ class TestConstraints:
             ),
         ).position
 
-        msc = Statechart()
+        msc = Statechart(context=kitchen_setup.api.context)
         msc.add_node(
             sequence := Sequence(
                 [
@@ -550,9 +535,10 @@ class TestConstraints:
             )
         )
         msc.add_node(EndMotion.when_true(sequence))
-        kitchen_setup.api.execute(msc)
+        kitchen_setup.api.compile(msc)
+        kitchen_setup.api.execute()
 
-        msc = Statechart()
+        msc = Statechart(context=kitchen_setup.api.context)
         msc.add_node(
             parallel := Parallel(
                 [
@@ -582,80 +568,11 @@ class TestConstraints:
             ),
         )
         msc.add_node(EndMotion.when_true(parallel))
-        kitchen_setup.api.execute(msc)
-
-    @pytest.mark.skip(reason="suturo")
-    def test_open_close_dishwasher(self, kitchen_setup: PR2Tester):
-        # TODO continue here
-        p = HomogeneousTransformationMatrix.from_xyz_rpy(
-            x=0.5, y=0.2, reference_frame=kitchen_setup.map
-        )
-        kitchen_setup.teleport_base(p)
-
-        hand = kitchen_setup.right_tip
-
-        goal_angle = np.pi / 4
-        handle_name = "sink_area_dish_washer_door_handle"
-        handle = kitchen_setup.api.world.get_kinematic_structure_entity_by_name(
-            handle_name
-        )
-        kitchen_setup.register_group(
-            new_group_name="dishwasher",
-            root_link_name="sink_area_dish_washer_main",
-        )
-        kitchen_setup.register_group(
-            new_group_name="handle",
-            root_link_name=handle_name,
-        )
-        bar_axis = Vector3.Y(reference_frame=handle)
-
-        bar_center = Point3(reference_frame=handle)
-
-        tip_grasp_axis = Vector3.Z(reference_frame=hand)
-
-        kitchen_setup.api.motion_goals.add_grasp_bar(
-            root_link=kitchen_setup.default_root,
-            tip_link=hand,
-            tip_grasp_axis=tip_grasp_axis,
-            bar_center=bar_center,
-            bar_axis=bar_axis,
-            bar_length=0.3,
-        )
-        # kitchen_setup.api.motion_goals.allow_collision([], 'kitchen', [handle_name])
-        # kitchen_setup.api.motion_goals.allow_all_collisions()
-
-        x_gripper = Vector3.X(reference_frame=hand)
-
-        x_goal = Vector3(x=-1.0, reference_frame=handle)
-        kitchen_setup.api.motion_goals.add_align_planes(
-            tip_link=hand,
-            root_link=kitchen_setup.map,
-            tip_normal=x_gripper,
-            goal_normal=x_goal,
-        )
-        # kitchen_setup.api.motion_goals.allow_all_collisions()
-
-        kitchen_setup.execute()
-
-        kitchen_setup.api.motion_goals.add_open_container(
-            tip_link=hand, environment_link=handle_name, goal_joint_state=goal_angle
-        )
-        # kitchen_setup.api.motion_goals.allow_all_collisions()
-        kitchen_setup.api.motion_goals.allow_collision(
-            group1=kitchen_setup.default_env_name, group2=kitchen_setup.r_gripper_group
-        )
-        kitchen_setup.execute()
-        kitchen_setup.set_env_state({"sink_area_dish_washer_door_joint": goal_angle})
-
-        kitchen_setup.api.motion_goals.add_open_container(
-            tip_link=hand, environment_link=handle_name, goal_joint_state=0
-        )
-        kitchen_setup.api.motion_goals.allow_all_collisions()
-        kitchen_setup.execute()
-        kitchen_setup.set_env_state({"sink_area_dish_washer_door_joint": 0})
+        kitchen_setup.api.compile(msc)
+        kitchen_setup.api.execute()
 
     def test_align_planes1(self, giskard: PR2Tester):
-        msc = Statechart()
+        msc = Statechart(context=giskard.api.context)
         msc.add_node(
             parallel := Parallel(
                 [
@@ -676,7 +593,8 @@ class TestConstraints:
         )
         msc.add_node(EndMotion.when_true(parallel))
 
-        giskard.api.execute(msc)
+        giskard.api.compile(msc)
+        giskard.api.execute()
 
 
 class TestCartGoals:
@@ -692,7 +610,7 @@ class TestCartGoals:
             pos_x=-0.2, reference_frame=tip
         )
 
-        msc = Statechart()
+        msc = Statechart(context=giskard.api.context)
         msc.add_node(
             cart_goal := CartesianPose(
                 root_link=root,
@@ -701,10 +619,11 @@ class TestCartGoals:
             )
         )
         msc.add_node(EndMotion.when_true(cart_goal))
-        giskard.api.execute(msc)
+        giskard.api.compile(msc)
+        giskard.api.execute()
 
     def test_cart_goal_unreachable(self, giskard: PR2Tester):
-        msc = Statechart()
+        msc = Statechart(context=giskard.api.context)
         msc.add_node(
             cart_goal := CartesianPose(
                 root_link=giskard.map,
@@ -718,10 +637,11 @@ class TestCartGoals:
         msc.add_node(local_min := LocalMinimumReached())
         msc.add_node(CancelStatechart.when_true(cart_goal))
         msc.add_node(EndMotion.when_true(local_min))
-        giskard.api.execute(msc)
+        giskard.api.compile(msc)
+        giskard.api.execute()
 
     def test_cart_goal_orientation_singularity(self, giskard: PR2Tester):
-        msc = Statechart()
+        msc = Statechart(context=giskard.api.context)
         msc.add_node(
             parallel := Parallel(
                 [
@@ -745,10 +665,11 @@ class TestCartGoals:
             )
         )
         msc.add_node(EndMotion.when_true(parallel))
-        giskard.api.execute(msc)
+        giskard.api.compile(msc)
+        giskard.api.execute()
 
     def test_cart_goal_left_right_chain(self, giskard: PR2Tester):
-        msc = Statechart()
+        msc = Statechart(context=giskard.api.context)
         msc.add_node(
             cart_goal := CartesianPose(
                 root_link=giskard.left_tip,
@@ -768,10 +689,11 @@ class TestCartGoals:
             )
         )
         msc.add_node(EndMotion.when_true(cart_goal))
-        giskard.api.execute(msc)
+        giskard.api.compile(msc)
+        giskard.api.execute()
 
     def test_root_link_not_equal_chain_root(self, giskard: PR2Tester):
-        msc = Statechart()
+        msc = Statechart(context=giskard.api.context)
         msc.add_node(
             cart_goal := CartesianPose(
                 root_link=giskard.torso_lift_link,
@@ -785,13 +707,14 @@ class TestCartGoals:
             )
         )
         msc.add_node(EndMotion.when_true(cart_goal))
-        giskard.api.execute(msc)
+        giskard.api.compile(msc)
+        giskard.api.execute()
 
 
 class TestSelfCollisionAvoidance:
 
     def test_cable_guide_collision(self, giskard: PR2Tester):
-        msc = Statechart()
+        msc = Statechart(context=giskard.api.context)
         msc.add_nodes(
             [
                 joint_goal := JointPositionList(
@@ -805,7 +728,8 @@ class TestSelfCollisionAvoidance:
             ]
         )
         msc.add_node(EndMotion.when_true(local_min))
-        giskard.api.execute(msc)
+        giskard.api.compile(msc)
+        giskard.api.execute()
         assert joint_goal.observation_state == ObservationStateValues.FALSE
 
     def test_attached_self_collision_avoid_stick(self, giskard: PR2Tester):
@@ -820,7 +744,7 @@ class TestSelfCollisionAvoidance:
             PR2Joint.TORSO_LIFT: 0.2,
         }
 
-        msc = Statechart()
+        msc = Statechart(context=giskard.api.context)
         msc.add_nodes(
             [
                 joint_goal := JointPositionList(
@@ -832,7 +756,8 @@ class TestSelfCollisionAvoidance:
             ]
         )
         msc.add_node(EndMotion.when_true(joint_goal))
-        giskard.api.execute(msc)
+        giskard.api.compile(msc)
+        giskard.api.execute()
 
         attached_link_name = "pocky"
         giskard.add_box_to_world(
@@ -844,7 +769,7 @@ class TestSelfCollisionAvoidance:
             ),
         )
 
-        msc = Statechart()
+        msc = Statechart(context=giskard.api.context)
         msc.add_nodes(
             [
                 JointPositionList(
@@ -873,7 +798,8 @@ class TestSelfCollisionAvoidance:
             ]
         )
         msc.add_node(EndMotion.when_true(cart_goal))
-        giskard.api.execute(msc)
+        giskard.api.compile(msc)
+        giskard.api.execute()
 
         giskard.check_cpi_geq(giskard.get_l_gripper_links(), 0.048)
         giskard.check_cpi_geq(
@@ -899,7 +825,7 @@ class TestSelfCollisionAvoidance:
             box_name
         )
 
-        msc = Statechart()
+        msc = Statechart(context=giskard_better_pose.api.context)
         msc.add_nodes(
             [
                 cart_goal := CartesianPose(
@@ -915,10 +841,11 @@ class TestSelfCollisionAvoidance:
         msc.add_node(EndMotion.when_true(cart_goal))
         msc.add_node(timeout := CountSimulationTimeSeconds(seconds=10))
         msc.add_node(CancelStatechart.when_true(timeout))
-        giskard_better_pose.api.execute(msc)
+        giskard_better_pose.api.compile(msc)
+        giskard_better_pose.api.execute()
 
     def test_avoid_self_collision_with_l_arm(self, giskard: PR2Tester):
-        msc = Statechart()
+        msc = Statechart(context=giskard.api.context)
         msc.add_nodes(
             [
                 sequence := Sequence(
@@ -952,11 +879,12 @@ class TestSelfCollisionAvoidance:
 
         msc.add_node(EndMotion.when_true(sequence))
 
-        giskard.api.execute(msc)
+        giskard.api.compile(msc)
+        giskard.api.execute()
         giskard.check_cpi_geq(giskard.get_r_gripper_links(), 0.048)
 
     def test_avoid_self_collision_specific_link(self, giskard: PR2Tester):
-        msc = Statechart()
+        msc = Statechart(context=giskard.api.context)
         msc.add_nodes(
             [
                 sequence := Sequence(
@@ -1002,12 +930,13 @@ class TestSelfCollisionAvoidance:
         )
 
         msc.add_node(EndMotion.when_true(sequence))
-        giskard.api.execute(msc)
+        giskard.api.compile(msc)
+        giskard.api.execute()
 
         giskard.check_cpi_geq(giskard.get_r_gripper_links(), 0.048)
 
     def test_get_out_of_self_collision(self, giskard: PR2Tester):
-        msc = Statechart()
+        msc = Statechart(context=giskard.api.context)
         msc.add_node(
             sequence := Sequence(
                 [
@@ -1036,9 +965,10 @@ class TestSelfCollisionAvoidance:
             )
         )
         msc.add_node(EndMotion.when_true(sequence))
-        giskard.api.execute(msc)
+        giskard.api.compile(msc)
+        giskard.api.execute()
 
-        msc = Statechart()
+        msc = Statechart(context=giskard.api.context)
         msc.add_nodes(
             [
                 SelfCollisionAvoidance(robot=giskard.api.robot),
@@ -1047,13 +977,14 @@ class TestSelfCollisionAvoidance:
         )
         msc.add_node(EndMotion.when_true(local_min))
         with pytest.raises(CollisionViolatedError):
-            giskard.api.execute(msc)
+            giskard.api.compile(msc)
+            giskard.api.execute()
 
 
 class TestCollisionAvoidanceGoals:
 
     def test_hard_constraints_violated(self, kitchen_setup: PR2Tester):
-        msc = Statechart()
+        msc = Statechart(context=kitchen_setup.api.context)
         msc.add_node(
             Sequence(
                 [
@@ -1067,10 +998,11 @@ class TestCollisionAvoidanceGoals:
             )
         )
         with pytest.raises(CollisionViolatedError):
-            kitchen_setup.api.execute(msc)
+            kitchen_setup.api.compile(msc)
+            kitchen_setup.api.execute()
 
     def test_avoid_collision_go_around_corner(self, fake_table_setup: PR2Tester):
-        msc = Statechart()
+        msc = Statechart(context=fake_table_setup.api.context)
 
         cart_goal = CartesianPose(
             root_link=fake_table_setup.default_root,
@@ -1101,7 +1033,8 @@ class TestCollisionAvoidanceGoals:
         msc.add_node(local_min := LocalMinimumReached())
         msc.add_node(EndMotion.when_true(local_min))
 
-        fake_table_setup.api.execute(msc)
+        fake_table_setup.api.compile(msc)
+        fake_table_setup.api.execute()
         fake_table_setup.check_cpi_geq(fake_table_setup.get_l_gripper_links(), 0.05)
         fake_table_setup.check_cpi_geq(
             [
@@ -1171,7 +1104,7 @@ class TestCollisionAvoidanceGoals:
 
         box = pocky_pose_setup.api.world.get_kinematic_structure_entity_by_name("box")
 
-        msc = Statechart()
+        msc = Statechart(context=pocky_pose_setup.api.context)
         msc.add_nodes(
             [
                 AlignPlanes(
@@ -1192,14 +1125,15 @@ class TestCollisionAvoidanceGoals:
         )
         msc.add_node(EndMotion.when_true(local_min))
 
-        pocky_pose_setup.api.execute(msc)
+        pocky_pose_setup.api.compile(msc)
+        pocky_pose_setup.api.execute()
         pocky_pose_setup.check_cpi_geq(pocky_pose_setup.get_r_gripper_links(), 0.04)
 
     def test_attached_two_items(self, giskard: PR2Tester):
         box1_name = "box1"
         box2_name = "box2"
 
-        msc = Statechart()
+        msc = Statechart(context=giskard.api.context)
         msc.add_node(
             node := Sequence(
                 [
@@ -1237,7 +1171,8 @@ class TestCollisionAvoidanceGoals:
             )
         )
         msc.add_node(EndMotion.when_true(node))
-        giskard.api.execute(msc)
+        giskard.api.compile(msc)
+        giskard.api.execute()
 
         giskard.add_box_to_world(
             box1_name,
@@ -1255,7 +1190,7 @@ class TestCollisionAvoidanceGoals:
                 x=0.1, reference_frame=giskard.left_tip
             ),
         )
-        msc = Statechart()
+        msc = Statechart(context=giskard.api.context)
         msc.add_nodes(
             [
                 SelfCollisionAvoidance(robot=giskard.api.robot),
@@ -1263,7 +1198,8 @@ class TestCollisionAvoidanceGoals:
             ]
         )
         msc.add_node(EndMotion.when_true(local_min))
-        giskard.api.execute(msc)
+        giskard.api.compile(msc)
+        giskard.api.execute()
 
         giskard.check_cpi_geq(
             [
@@ -1273,512 +1209,6 @@ class TestCollisionAvoidanceGoals:
             0.049,
         )
 
-    @pytest.mark.skip("fix grasp bar")
-    def test_get_milk_out_of_fridge(self, kitchen_setup: PR2Tester, better_pose):
-        milk_name = "milk"
-        iai_fridge_door_shelf1_bottom = (
-            kitchen_setup.api.world.get_kinematic_structure_entity_by_name(
-                "iai_fridge_door_shelf1_bottom"
-            )
-        )
-
-        # take milk out of fridge
-        hinge: ActiveConnection1DOF = kitchen_setup.api.world.get_connection_by_name(
-            "iai_fridge_door_joint"
-        )
-        hinge.position = 1.56
-
-        # spawn milk
-        milk_pose = HomogeneousTransformationMatrix.from_xyz_rpy(
-            z=0.12, reference_frame=iai_fridge_door_shelf1_bottom
-        )
-        kitchen_setup.add_box_to_world(
-            milk_name,
-            (0.05, 0.05, 0.2),
-            pose=milk_pose,
-        )
-
-        msc = Statechart()
-        msc.add_node(
-            Sequence(
-                [
-                    SetOdometry(
-                        base_pose=HomogeneousTransformationMatrix.from_xyz_quaternion(
-                            pos_x=0.565,
-                            pos_y=-0.5,
-                            quat_z=-0.51152562713,
-                            quat_w=0.85926802151,
-                            reference_frame=kitchen_setup.map,
-                        )
-                    ),
-                ]
-            )
-        )
-
-        milk_pre_pose = HomogeneousTransformationMatrix.from_xyz_rpy(
-            z=0.22, reference_frame=iai_fridge_door_shelf1_bottom
-        )
-
-        # grasp milk
-        kitchen_setup.open_l_gripper()
-
-        bar_axis = Vector3.Z(reference_frame=kitchen_setup.map)
-
-        bar_center = milk_pose.position
-
-        tip_grasp_axis = Vector3.Z(reference_frame=kitchen_setup.left_tip)
-        kitchen_setup.api.motion_goals.add_grasp_bar(
-            bar_center=bar_center,
-            bar_axis=bar_axis,
-            bar_length=0.12,
-            tip_link=kitchen_setup.left_tip,
-            tip_grasp_axis=tip_grasp_axis,
-            root_link=kitchen_setup.default_root,
-        )
-
-        x = Vector3.X(reference_frame=kitchen_setup.left_tip)
-        x_map = Vector3.X(
-            reference_frame=kitchen_setup.api.world.get_kinematic_structure_entity_by_name(
-                "iai_fridge_door"
-            )
-        )
-        kitchen_setup.api.motion_goals.add_align_planes(
-            tip_link=kitchen_setup.left_tip,
-            tip_normal=x,
-            goal_normal=x_map,
-            root_link=kitchen_setup.map,
-        )
-
-        kitchen_setup.execute()
-
-        kitchen_setup.update_parent_link_of_group(milk_name, kitchen_setup.left_tip)
-        kitchen_setup.close_l_gripper()
-
-        # Remove Milk
-        kitchen_setup.api.motion_goals.add_cartesian_pose(
-            milk_pre_pose, milk_name, kitchen_setup.default_root
-        )
-        kitchen_setup.execute()
-        base_goal = HomogeneousTransformationMatrix.from_xyz_rpy(
-            reference_frame=kitchen_setup.base_footprint
-        )
-        kitchen_setup.api.motion_goals.add_joint_position(better_pose)
-        kitchen_setup.move_base(base_goal)
-
-        # place milk back
-        kitchen_setup.api.motion_goals.add_cartesian_pose(
-            milk_pre_pose, milk_name, kitchen_setup.default_root
-        )
-        kitchen_setup.execute()
-
-        kitchen_setup.api.motion_goals.add_cartesian_pose(
-            milk_pose, milk_name, kitchen_setup.default_root
-        )
-        kitchen_setup.execute()
-
-        kitchen_setup.open_l_gripper()
-
-        kitchen_setup.detach_group(milk_name)
-
-        kitchen_setup.api.motion_goals.add_joint_position(better_pose)
-        kitchen_setup.execute()
-
-    @pytest.mark.skip("fix grasp bar")
-    def test_bowl_and_cup(self, kitchen_setup: PR2Tester, better_pose):
-        # kernprof -lv py.test -s test/test_integration_pr2.py::TestCollisionAvoidanceGoals::test_bowl_and_cup
-        bowl_name = "bowl"
-        cup_name = "cup"
-        percentage = 50.0
-        drawer_joint = "sink_area_left_middle_drawer_main_joint"
-        drawer = kitchen_setup.api.world.get_kinematic_structure_entity_by_name(
-            "sink_area_left_middle_drawer_main"
-        )
-        drawer_handle = kitchen_setup.api.world.get_kinematic_structure_entity_by_name(
-            "sink_area_left_middle_drawer_handle"
-        )
-        # spawn cup
-        cup_pose = HomogeneousTransformationMatrix.from_xyz_rpy(
-            x=0.1, y=0.2, z=-0.05, reference_frame=drawer
-        )
-
-        kitchen_setup.add_cylinder_to_world(
-            name=cup_name,
-            height=0.07,
-            radius=0.04,
-            pose=cup_pose,
-            parent_link=drawer,
-        )
-
-        # spawn bowl
-        bowl_pose = HomogeneousTransformationMatrix.from_xyz_rpy(
-            x=0.1, y=-0.2, z=-0.05, reference_frame=drawer
-        )
-
-        kitchen_setup.add_cylinder_to_world(
-            name=bowl_name,
-            height=0.05,
-            radius=0.07,
-            pose=bowl_pose,
-            parent_link=drawer,
-        )
-
-        # grasp drawer handle
-        bar_axis = Vector3.Y(reference_frame=drawer_handle)
-
-        bar_center = Point3(reference_frame=drawer_handle)
-
-        tip_grasp_axis = Vector3.Z(reference_frame=kitchen_setup.left_tip)
-
-        kitchen_setup.api.motion_goals.add_grasp_bar(
-            bar_center=bar_center,
-            bar_axis=bar_axis,
-            bar_length=0.4,
-            tip_link=kitchen_setup.left_tip,
-            tip_grasp_axis=tip_grasp_axis,
-            root_link=kitchen_setup.default_root,
-        )
-        x_gripper = Vector3.X(reference_frame=kitchen_setup.left_tip)
-
-        x_goal = Vector3(x=-1.0, reference_frame=drawer_handle)
-
-        kitchen_setup.api.motion_goals.add_align_planes(
-            tip_link=kitchen_setup.left_tip,
-            tip_normal=x_gripper,
-            root_link=kitchen_setup.default_root,
-            goal_normal=x_goal,
-        )
-        # kitchen_setup.api.motion_goals.allow_all_collisions()
-        kitchen_setup.execute()
-
-        # open drawer
-        kitchen_setup.api.motion_goals.add_open_container(
-            tip_link=kitchen_setup.left_tip, environment_link=drawer_handle
-        )
-        kitchen_setup.execute()
-        kitchen_setup.set_env_state({drawer_joint: 0.48})
-
-        kitchen_setup.api.motion_goals.add_joint_position(better_pose)
-        base_pose = HomogeneousTransformationMatrix.from_xyz_rpy(
-            x=0.1, y=1.0, reference_frame=kitchen_setup.map
-        )
-        kitchen_setup.move_base(base_pose)
-
-        # grasp bowl
-        grasp_from_above = RotationMatrix(
-            data=[[0, 1, 0, 0], [0, 0, -1, 0], [-1, 0, 0, 0], [0, 0, 0, 1.0]],
-            reference_frame=drawer,
-        )
-        l_goal_above_bowl = HomogeneousTransformationMatrix.from_point_rotation_matrix(
-            point=bowl_pose.position + Vector3(z=0.2),
-            rotation_matrix=grasp_from_above,
-            reference_frame=drawer,
-        )
-        l_goal_at_bowl = HomogeneousTransformationMatrix.from_point_rotation_matrix(
-            point=bowl_pose.position,
-            rotation_matrix=grasp_from_above,
-            reference_frame=drawer,
-        )
-        kitchen_setup.api.motion_goals.add_cartesian_pose(
-            goal_pose=l_goal_above_bowl,
-            tip_link=kitchen_setup.left_tip,
-            root_link=kitchen_setup.default_root,
-        )
-        kitchen_setup.api.motion_goals.allow_collision(
-            kitchen_setup.l_gripper_group, bowl_name
-        )
-
-        # grasp cup
-        r_goal_above_cup = HomogeneousTransformationMatrix.from_point_rotation_matrix(
-            point=cup_pose.position + Vector3(z=0.2),
-            rotation_matrix=grasp_from_above,
-            reference_frame=drawer,
-        )
-        r_goal_at_cup = HomogeneousTransformationMatrix.from_point_rotation_matrix(
-            point=cup_pose.position,
-            rotation_matrix=grasp_from_above,
-            reference_frame=drawer,
-        )
-        kitchen_setup.api.motion_goals.add_avoid_joint_limits(percentage=percentage)
-        kitchen_setup.api.motion_goals.add_cartesian_pose(
-            goal_pose=r_goal_above_cup,
-            tip_link=kitchen_setup.right_tip,
-            root_link=kitchen_setup.default_root,
-        )
-        kitchen_setup.execute()
-
-        kitchen_setup.api.motion_goals.add_cartesian_pose(
-            goal_pose=l_goal_at_bowl,
-            tip_link=kitchen_setup.left_tip,
-            root_link=kitchen_setup.default_root,
-        )
-        kitchen_setup.api.motion_goals.add_cartesian_pose(
-            goal_pose=r_goal_at_cup,
-            tip_link=kitchen_setup.right_tip,
-            root_link=kitchen_setup.default_root,
-        )
-        kitchen_setup.api.motion_goals.add_avoid_joint_limits(percentage=percentage)
-        kitchen_setup.api.motion_goals.avoid_all_collisions(0.05)
-        kitchen_setup.api.motion_goals.allow_collision(
-            group1=kitchen_setup.api.robot_name, group2=bowl_name
-        )
-        kitchen_setup.api.motion_goals.allow_collision(
-            group1=kitchen_setup.api.robot_name, group2=cup_name
-        )
-        kitchen_setup.execute()
-
-        kitchen_setup.update_parent_link_of_group(
-            name=bowl_name, parent_link=kitchen_setup.left_tip
-        )
-        kitchen_setup.update_parent_link_of_group(
-            name=cup_name, parent_link=kitchen_setup.right_tip
-        )
-
-        kitchen_setup.api.motion_goals.add_joint_position(better_pose)
-        kitchen_setup.execute()
-        base_goal = HomogeneousTransformationMatrix.from_xyz_axis_angle(
-            x=-0.1,
-            axis=Vector3.Z(),
-            angle=pi,
-            reference_frame=kitchen_setup.base_footprint,
-        )
-        kitchen_setup.move_base(base_goal)
-
-        # place bowl and cup
-        kitchen_island_surface = (
-            kitchen_setup.api.world.get_kinematic_structure_entity_by_name(
-                "kitchen_island_surface"
-            )
-        )
-        bowl_goal = HomogeneousTransformationMatrix.from_xyz_rpy(
-            x=0.2, y=0.0, z=0.05, reference_frame=kitchen_island_surface
-        )
-
-        cup_goal = HomogeneousTransformationMatrix.from_xyz_rpy(
-            x=0.15, y=0.25, z=0.07, reference_frame=kitchen_island_surface
-        )
-
-        kitchen_setup.api.motion_goals.add_cartesian_pose(
-            goal_pose=bowl_goal,
-            tip_link=bowl_name,
-            root_link=kitchen_setup.default_root,
-        )
-        kitchen_setup.api.motion_goals.add_cartesian_pose(
-            goal_pose=cup_goal, tip_link=cup_name, root_link=kitchen_setup.default_root
-        )
-        kitchen_setup.api.motion_goals.add_avoid_joint_limits(percentage=percentage)
-        kitchen_setup.api.motion_goals.avoid_all_collisions(0.05)
-        kitchen_setup.execute()
-
-        kitchen_setup.detach_group(name=bowl_name)
-        kitchen_setup.detach_group(name=cup_name)
-        kitchen_setup.api.motion_goals.allow_collision(
-            group1=kitchen_setup.api.robot_name, group2=cup_name
-        )
-        kitchen_setup.api.motion_goals.allow_collision(
-            group1=kitchen_setup.api.robot_name, group2=bowl_name
-        )
-        kitchen_setup.api.motion_goals.add_joint_position(better_pose)
-        kitchen_setup.execute()
-
-
-class TestManipulability:
-
-    @pytest.mark.skip(reason="future problem.")
-    def test_manip1(self, giskard: PR2Tester):
-        p = HomogeneousTransformationMatrix.from_xyz_rpy(
-            x=0.8, y=-0.3, z=1.0, reference_frame=giskard.map
-        )
-        giskard.api.motion_goals.allow_all_collisions()
-        giskard.api.motion_goals.add_cartesian_pose(p, giskard.right_tip, giskard.map)
-        giskard.api.motion_goals.add_maximize_manipulability(
-            root_link=giskard.torso_lift_link, tip_link=giskard.right_tip
-        )
-        giskard.execute()
-
-    @pytest.mark.skip(reason="future problem.")
-    def test_manip2(self, giskard: PR2Tester):
-        r_goal = HomogeneousTransformationMatrix.from_xyz_rpy(
-            x=1.0, y=-0.5, z=0.0, reference_frame=giskard.right_tip
-        )
-        giskard.api.motion_goals.allow_all_collisions()
-        giskard.api.motion_goals.add_cartesian_pose(
-            r_goal, giskard.right_tip, giskard.map
-        )
-        giskard.api.motion_goals.add_maximize_manipulability(
-            root_link=giskard.torso_lift_link, tip_link=giskard.right_tip
-        )
-        l_goal = HomogeneousTransformationMatrix.from_xyz_rpy(
-            x=1.0, y=0.1, z=0.0, reference_frame=giskard.right_tip
-        )
-        giskard.api.motion_goals.add_cartesian_pose(
-            l_goal, giskard.left_tip, giskard.map
-        )
-        giskard.api.motion_goals.add_maximize_manipulability(
-            root_link=giskard.torso_lift_link, tip_link=giskard.left_tip
-        )
-        giskard.execute()
-
-
-class TestWeightScaling:
-
-    @pytest.mark.skip(reason="use debug expressions to check result.")
-    def test_weight_scaling1(self, giskard):
-        js = {
-            # "torso_lift_joint": 0.2999225173357618,
-            PR2Joint.HEAD_PAN: 0.041880780651479044,
-            PR2Joint.HEAD_TILT: -0.37,
-            PR2Joint.RIGHT_UPPER_ARM_ROLL: -0.9487714747527726,
-            PR2Joint.RIGHT_SHOULDER_PAN: -1.0047307505973626,
-            PR2Joint.RIGHT_SHOULDER_LIFT: 0.48736790658811985,
-            PR2Joint.RIGHT_FOREARM_ROLL: -14.895833882874182,
-            PR2Joint.RIGHT_ELBOW_FLEX: -1.392377908925028,
-            PR2Joint.RIGHT_WRIST_FLEX: -0.4548695149411013,
-            PR2Joint.RIGHT_WRIST_ROLL: 0.11426798984097819,
-            PR2Joint.LEFT_UPPER_ARM_ROLL: 1.7383062350263658,
-            PR2Joint.LEFT_SHOULDER_PAN: 1.8799810286792007,
-            PR2Joint.LEFT_SHOULDER_LIFT: 0.011627231224188975,
-            PR2Joint.LEFT_FOREARM_ROLL: 312.67276414458695,
-            PR2Joint.LEFT_ELBOW_FLEX: -2.0300928925694675,
-            PR2Joint.LEFT_WRIST_FLEX: -0.10014623223021513,
-            PR2Joint.LEFT_WRIST_ROLL: -6.062015047706399,
-        }
-        giskard.api.motion_goals.add_joint_position(js)
-        giskard.api.motion_goals.allow_all_collisions()
-        giskard.execute()
-
-        goal_pose = HomogeneousTransformationMatrix.from_xyz_rpy(
-            x=2.01, y=-0.2, z=0.7, reference_frame=giskard.map
-        )
-
-        goal_pose2 = HomogeneousTransformationMatrix.from_point_rotation_matrix(
-            point=Point3(x=2.01, y=-0.6, z=0.8),
-            rotation_matrix=RotationMatrix(
-                data=[[0, 0, 1, 0], [0, 1, 0, 0], [-1, 0, 0, 0], [0, 0, 0, 1.0]]
-            ),
-            reference_frame=giskard.map,
-        )
-
-        giskard.api.motion_goals.add_cartesian_pose(
-            goal_pose, giskard.left_tip, giskard.map
-        )
-        giskard.api.motion_goals.add_cartesian_pose(
-            goal_pose2, giskard.right_tip, giskard.map
-        )
-
-        kinect_optical_frame = giskard.api.world.get_kinematic_structure_entity_by_name(
-            "head_mount_kinect_rgb_optical_frame"
-        )
-        goal_point = goal_pose.position
-        pointing_axis = Vector3.Z(reference_frame=kinect_optical_frame)
-        giskard.api.motion_goals.add_pointing(
-            goal_point, kinect_optical_frame, pointing_axis, giskard.map
-        )
-
-        x_base = Vector3.X(reference_frame=giskard.base_link)
-        x_goal = Vector3.X(reference_frame=giskard.map)
-        giskard.api.motion_goals.add_align_planes(
-            tip_link=giskard.base_link,
-            root_link=giskard.map,
-            tip_normal=x_base,
-            goal_normal=x_goal,
-        )
-
-        giskard.api.motion_goals.add_base_arm_weight_scaling(
-            root_link=giskard.map,
-            tip_link=giskard.left_tip,
-            tip_goal=goal_pose.position,
-            gain=100000,
-            arm_joints=[
-                PR2Joint.TORSO_LIFT,
-                # "head_pan_joint",
-                # "head_tilt_joint",
-                PR2Joint.RIGHT_UPPER_ARM_ROLL,
-                PR2Joint.RIGHT_SHOULDER_PAN,
-                PR2Joint.RIGHT_SHOULDER_LIFT,
-                PR2Joint.RIGHT_FOREARM_ROLL,
-                PR2Joint.RIGHT_ELBOW_FLEX,
-                PR2Joint.RIGHT_WRIST_FLEX,
-                PR2Joint.RIGHT_WRIST_ROLL,
-                PR2Joint.LEFT_UPPER_ARM_ROLL,
-                PR2Joint.LEFT_SHOULDER_PAN,
-                PR2Joint.LEFT_SHOULDER_LIFT,
-                PR2Joint.LEFT_FOREARM_ROLL,
-                PR2Joint.LEFT_ELBOW_FLEX,
-                PR2Joint.LEFT_WRIST_FLEX,
-                PR2Joint.LEFT_WRIST_ROLL,
-            ],
-            base_joints=["odom_combined_T_base_footprint"],
-        )
-        giskard.api.motion_goals.add_maximize_manipulability(
-            root_link=giskard.torso_lift_link, tip_link=giskard.right_tip
-        )
-        giskard.api.motion_goals.add_maximize_manipulability(
-            root_link=giskard.torso_lift_link, tip_link=giskard.left_tip
-        )
-        giskard.api.motion_goals.allow_all_collisions()
-        giskard.execute()
-        # assert (
-        #     god_map.debug_expression_manager.evaluated_debug_expressions[
-        #         PrefixedName(name="arm_scaling", prefix="")
-        #     ][0]
-        #     * 1000
-        #     < god_map.debug_expression_manager.evaluated_debug_expressions[
-        #         PrefixedName(name="base_scaling", prefix="")
-        #     ][0]
-        # )
-
-    @pytest.mark.skip(reason="use debug expressions to check result.")
-    def test_manip(self, giskard: PR2Tester):
-        p = HomogeneousTransformationMatrix.from_xyz_rpy(
-            x=0.8, y=-0.3, z=1.0, reference_frame=giskard.map
-        )
-        giskard.api.motion_goals.allow_all_collisions()
-        giskard.api.motion_goals.add_cartesian_pose(p, giskard.right_tip, giskard.map)
-        m_threshold = 0.16
-        done = giskard.api.motion_goals.add_maximize_manipulability(
-            root_link=giskard.torso_lift_link,
-            tip_link=giskard.right_tip,
-            m_threshold=m_threshold,
-        )
-        giskard.api.monitors.add_end_motion(done)
-        giskard.api.monitors.add_check_trajectory_length(20)
-        giskard.execute(local_min_end=False)
-        # assert (
-        #     god_map.debug_expression_manager.evaluated_debug_expressions[
-        #         PrefixedName(name=f"mIndex {giskard.r_tip}", prefix="")
-        #     ][0]
-        #     >= m_threshold - 0.01
-        # )
-
-    @pytest.mark.skip(reason="use debug expressions to check result.")
-    def test_manip2(self, giskard: PR2Tester):
-        m_threshold = 0.16
-        r_goal = HomogeneousTransformationMatrix.from_xyz_rpy(
-            x=1.0, y=-0.5, z=0.0, reference_frame=giskard.right_tip
-        )
-        giskard.api.motion_goals.allow_all_collisions()
-        giskard.api.motion_goals.add_cartesian_pose(
-            r_goal, giskard.right_tip, giskard.map
-        )
-
-        giskard.api.motion_goals.add_maximize_manipulability(
-            root_link=giskard.torso_lift_link,
-            tip_link=giskard.right_tip,
-            m_threshold=m_threshold,
-        )
-        l_goal = HomogeneousTransformationMatrix.from_xyz_rpy(
-            x=1.0, y=0.1, z=0.0, reference_frame=giskard.right_tip
-        )
-        giskard.api.motion_goals.add_cartesian_pose(
-            l_goal, giskard.left_tip, giskard.map
-        )
-
-        giskard.api.motion_goals.add_maximize_manipulability(
-            root_link=giskard.torso_lift_link,
-            tip_link=giskard.left_tip,
-            m_threshold=m_threshold,
-        )
-        giskard.execute()
         # assert (
         #     god_map.debug_expression_manager.evaluated_debug_expressions[
         #         PrefixedName(name=f"mIndex {giskard.r_tip}", prefix="")
@@ -1795,7 +1225,7 @@ class TestWeightScaling:
 
 class TestActionServerEvents:
     def test_wrong_params1(self, giskard: PR2Tester):
-        msc = Statechart()
+        msc = Statechart(context=giskard.api.context)
         msc.add_node(
             joint_goal := JointPositionList(
                 goal_state=HomogeneousTransformationMatrix(),
@@ -1803,9 +1233,10 @@ class TestActionServerEvents:
         )
         msc.add_node(EndMotion.when_true(joint_goal))
         with pytest.raises(AttributeError):
-            giskard.api.execute(msc)
+            giskard.api.compile(msc)
+            giskard.api.execute()
 
-        msc = Statechart()
+        msc = Statechart(context=giskard.api.context)
         msc.add_node(
             joint_goal := JointPositionList(
                 goal_state=JointState.from_str_dict(
@@ -1814,11 +1245,12 @@ class TestActionServerEvents:
             )
         )
         msc.add_node(EndMotion.when_true(joint_goal))
-        giskard.api.execute(msc)
+        giskard.api.compile(msc)
+        giskard.api.execute()
 
     @pytest.mark.asyncio
     async def test_cancel_with_new_goal(self, giskard: PR2Tester):
-        msc = Statechart()
+        msc = Statechart(context=giskard.api.context)
         msc.add_node(
             CartesianPose(
                 root_link=giskard.map,
@@ -1829,12 +1261,13 @@ class TestActionServerEvents:
             )
         )
 
-        goal_accepted_future = giskard.api.execute_async(msc)
+        giskard.api.compile(msc)
+        goal_accepted_future = giskard.api.execute_async()
         wait_for_future_to_complete(goal_accepted_future)
 
         await asyncio.sleep(2)
 
-        msc = Statechart()
+        msc = Statechart(context=giskard.api.context)
         msc.add_node(
             cart_goal := CartesianPose(
                 root_link=giskard.map,
@@ -1846,14 +1279,15 @@ class TestActionServerEvents:
         )
         msc.add_node(EndMotion.when_true(cart_goal))
 
-        goal_accepted_future = giskard.api.execute_async(msc)
+        giskard.api.compile(msc)
+        goal_accepted_future = giskard.api.execute_async()
         wait_for_future_to_complete(goal_accepted_future)
 
         await giskard.api.get_result()
 
     @pytest.mark.asyncio
     async def test_interrupt(self, giskard: PR2Tester):
-        msc = Statechart()
+        msc = Statechart(context=giskard.api.context)
         msc.add_node(
             CartesianPose(
                 root_link=giskard.map,
@@ -1864,7 +1298,8 @@ class TestActionServerEvents:
             )
         )
 
-        goal_accepted_future = giskard.api.execute_async(msc)
+        giskard.api.compile(msc)
+        goal_accepted_future = giskard.api.execute_async()
         wait_for_future_to_complete(goal_accepted_future)
 
         await asyncio.sleep(2)
@@ -1884,7 +1319,7 @@ class TestActionServerEvents:
         The motion ends by itself after a while, so that a client that is not noticed
         leaving fails this test instead of keeping the goal running forever.
         """
-        msc = Statechart()
+        msc = Statechart(context=giskard.api.context)
         msc.add_node(
             CartesianPose(
                 root_link=giskard.map,
@@ -1896,7 +1331,8 @@ class TestActionServerEvents:
         )
         msc.add_node(give_up := CountSeconds(seconds=30))
         msc.add_node(EndMotion.when_true(give_up))
-        goal_accepted_future = giskard.api.execute_async(msc)
+        giskard.api.compile(msc)
+        goal_accepted_future = giskard.api.execute_async()
         wait_for_future_to_complete(goal_accepted_future)
         client_watchdog = giskard.giskard.motion_server.client_watchdog
         assert wait_until(
@@ -1911,8 +1347,9 @@ class TestActionServerEvents:
         assert disconnect.value.client == giskard.api.client
 
     def test_empty_goal(self, giskard: PR2Tester):
+        giskard.api.compile(Statechart(context=giskard.api.context))
         with pytest.raises(EmptyStatechartError):
-            giskard.api.execute(Statechart())
+            giskard.api.execute()
 
     @pytest.mark.asyncio
     async def test_world_model_modification_terminates_the_motion(
@@ -1922,7 +1359,7 @@ class TestActionServerEvents:
         The running motion was compiled against the structure of the world, so a body
         added by another process ends it instead of being applied underneath it.
         """
-        msc = Statechart()
+        msc = Statechart(context=giskard.api.context)
         msc.add_node(
             CartesianPose(
                 root_link=giskard.map,
@@ -1933,7 +1370,8 @@ class TestActionServerEvents:
             )
         )
 
-        goal_accepted_future = giskard.api.execute_async(msc)
+        giskard.api.compile(msc)
+        goal_accepted_future = giskard.api.execute_async()
         wait_for_future_to_complete(goal_accepted_future)
 
         await asyncio.sleep(1)
@@ -1960,209 +1398,6 @@ class TestActionServerEvents:
 
 
 # kernprof -lv py.test -s test/test_integration_pr2.py
-
-
-class TestFeatureFunctions:
-    @pytest.mark.skip("suturo")
-    def test_feature_perpendicular(self, giskard: PR2Tester):
-        world_feature = Vector3.X(reference_frame=giskard.map)
-
-        robot_feature = Vector3.X(reference_frame=giskard.right_tip)
-
-        giskard.api.motion_goals.add_align_perpendicular(
-            root_link=giskard.map,
-            tip_link=giskard.right_tip,
-            reference_normal=world_feature,
-            tip_normal=robot_feature,
-        )
-        giskard.execute()
-
-    @pytest.mark.skip("suturo")
-    def test_feature_angle(self, giskard: PR2Tester):
-        world_feature = Vector3.Z(reference_frame=giskard.map)
-
-        robot_feature = Vector3.Z(reference_frame=giskard.right_tip)
-
-        giskard.api.motion_goals.add_angle(
-            root_link=giskard.map,
-            tip_link=giskard.right_tip,
-            reference_vector=world_feature,
-            tip_vector=robot_feature,
-            lower_angle=0.6,
-            upper_angle=0.9,
-        )
-        giskard.execute()
-
-    @pytest.mark.skip("suturo")
-    def test_feature_height(self, giskard: PR2Tester):
-        world_feature = Point3(reference_frame=giskard.map)
-
-        robot_feature = Point3(reference_frame=giskard.right_tip)
-
-        giskard.api.motion_goals.add_height(
-            root_link=giskard.map,
-            tip_link=giskard.right_tip,
-            reference_point=world_feature,
-            tip_point=robot_feature,
-            lower_limit=0.99,
-            upper_limit=1,
-        )
-        giskard.execute()
-
-    @pytest.mark.skip("suturo")
-    def test_feature_distance(self, giskard: PR2Tester):
-        world_feature = Point3(reference_frame=giskard.map)
-
-        robot_feature = Point3(reference_frame=giskard.right_tip)
-
-        giskard.api.motion_goals.add_distance(
-            root_link=giskard.map,
-            tip_link=giskard.right_tip,
-            reference_point=world_feature,
-            tip_point=robot_feature,
-            lower_limit=2,
-            upper_limit=2,
-        )
-        mon = giskard.api.monitors.add_distance(
-            root_link=giskard.map,
-            tip_link=giskard.right_tip,
-            reference_point=world_feature,
-            tip_point=robot_feature,
-            lower_limit=1.99,
-            upper_limit=2.01,
-        )
-
-        giskard.api.monitors.add_end_motion(mon)
-        giskard.execute()
-
-
-class TestEndMotionReason:
-    @pytest.mark.skip("malte")
-    def test_get_end_motion_reason_simple(self, giskard: PR2Tester):
-        goal_point = Point3(x=2.0, y=2.0, z=2.0, reference_frame=giskard.map)
-        controlled_point = Point3(reference_frame=giskard.right_tip)
-
-        mon_distance = giskard.api.monitors.add_distance(
-            root_link="map",
-            tip_link=giskard.right_tip,
-            reference_point=goal_point,
-            name="distance",
-            tip_point=controlled_point,
-            lower_limit=0,
-            upper_limit=0,
-        )
-        giskard.api.motion_goals.add_distance(
-            root_link="base_link",
-            tip_link=giskard.right_tip,
-            reference_point=goal_point,
-            tip_point=controlled_point,
-            lower_limit=0,
-            upper_limit=0,
-            name="reach distance",
-        )
-
-        giskard.api.monitors.add_check_trajectory_length(1)
-        giskard.api.monitors.add_end_motion(mon_distance)
-        result = giskard.execute(
-            expected_error_type=MaxTrajectoryLengthException, local_min_end=False
-        )
-        reason = giskard.api.get_end_motion_reason(move_result=result)
-        assert len(reason) == 1.0 and list(reason.keys())[0] == mon_distance
-
-    @pytest.mark.skip("malte")
-    def test_get_end_motion_reason_convoluted(self, giskard: PR2Tester):
-        goal_point = Point3(x=2.0, y=2.0, z=2.0, reference_frame=giskard.map)
-        controlled_point = Point3(reference_frame=giskard.right_tip)
-
-        mon_sleep1 = giskard.api.monitors.add_sleep(seconds=10, name="sleep1")
-        mon_sleep2 = giskard.api.monitors.add_sleep(
-            seconds=10, start_condition=mon_sleep1, name="sleep2"
-        )
-        mon_distance = giskard.api.monitors.add_distance(
-            root_link="map",
-            tip_link=giskard.right_tip,
-            reference_point=goal_point,
-            name="mon_distance",
-            tip_point=controlled_point,
-            lower_limit=0,
-            upper_limit=0,
-            start_condition=mon_sleep2,
-        )
-        giskard.api.motion_goals.add_distance(
-            root_link="base_link",
-            tip_link=giskard.right_tip,
-            reference_point=goal_point,
-            name="distance",
-            tip_point=controlled_point,
-            lower_limit=0,
-            upper_limit=0,
-        )
-
-        giskard.api.monitors.add_check_trajectory_length(1)
-        giskard.api.monitors.add_end_motion(mon_distance)
-        result = giskard.execute(
-            expected_error_type=MaxTrajectoryLengthException, local_min_end=False
-        )
-        reason = giskard.api.get_end_motion_reason(move_result=result)
-        print(reason)
-        assert (
-            len(reason) == 3
-            and list(reason.keys())[0] == mon_distance
-            and list(reason.keys())[2] == mon_sleep1
-            and list(reason.keys())[1] == mon_sleep2
-        )
-
-    @pytest.mark.skip("malte")
-    def test_multiple_end_motion_monitors(self, giskard: PR2Tester):
-        goal_point = Point3(x=2.0, y=2.0, z=2.0, reference_frame=giskard.map)
-        controlled_point = Point3(reference_frame=giskard.right_tip)
-
-        mon_sleep1 = giskard.api.monitors.add_sleep(seconds=10, name="sleep1")
-        mon_sleep2 = giskard.api.monitors.add_sleep(
-            seconds=10, start_condition=mon_sleep1, name="sleep2"
-        )
-        mon_distance = giskard.api.monitors.add_distance(
-            root_link="map",
-            tip_link=giskard.right_tip,
-            reference_point=goal_point,
-            name="g1",
-            tip_point=controlled_point,
-            lower_limit=0,
-            upper_limit=0,
-            start_condition=mon_sleep2,
-        )
-        giskard.api.motion_goals.add_distance(
-            root_link="base_link",
-            tip_link=giskard.right_tip,
-            reference_point=goal_point,
-            name="g2",
-            tip_point=controlled_point,
-            lower_limit=0,
-            upper_limit=0,
-        )
-
-        giskard.api.monitors.add_check_trajectory_length(1)
-        giskard.api.monitors.add_end_motion(mon_distance, name="endmotion 1")
-
-        mon_sleep3 = giskard.api.monitors.add_sleep(seconds=20, name="sleep3")
-        mon_sleep4 = giskard.api.monitors.add_sleep(
-            seconds=20, start_condition=mon_sleep3, name="sleep4"
-        )
-        giskard.api.monitors.add_end_motion(mon_sleep4)
-
-        result = giskard.execute(
-            expected_error_type=MaxTrajectoryLengthException, local_min_end=False
-        )
-        reason = giskard.api.get_end_motion_reason(move_result=result)
-        print(reason)
-        assert (
-            len(reason) == 5
-            and list(reason.keys())[0] == mon_distance
-            and list(reason.keys())[1] == mon_sleep2
-            and list(reason.keys())[2] == mon_sleep1
-            and list(reason.keys())[3] == mon_sleep4
-            and list(reason.keys())[4] == mon_sleep3
-        )
 
 
 # kernprof -lv py.test -s test/test_integration_pr2.py

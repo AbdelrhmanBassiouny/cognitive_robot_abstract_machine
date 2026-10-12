@@ -37,7 +37,6 @@ bedside table it is carried to in between, so a cereal left there fails this.
 """
 
 
-@pytest.mark.parked
 def test_demonstration_runs_against_a_controller_in_another_process(
     stretch_controller_process, cereal_perception_process
 ):

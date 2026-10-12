@@ -47,7 +47,7 @@ from giskardpy.motion_statechart.goals.collision_avoidance import (
 )
 from giskardpy.motion_statechart.graph_node import ConvergingTask, EndMotion
 from giskardpy.motion_statechart.monitors.progress_monitors import StillProgressing
-from giskardpy.middleware.ros2.python_interface import GiskardWrapper
+from giskardpy.middleware.ros2.python_interface import GiskardClientExecutor
 from giskardpy.motion_statechart.ros_context import RosNodeAccess
 from krrood.ormatic.utils import classproperty
 from krrood.symbolic_math.symbolic_math import logic_or
@@ -257,6 +257,12 @@ class PlanExecutor(Executor, ABC):
         it ended in.
         """
 
+    def close(self) -> None:
+        """
+        Release what this executor acquired to run its plans, once no further plan is
+        run with it.
+        """
+
     def _plan_failed(self) -> bool:
         """
         :return: Whether a plan node ended without succeeding, so the plan no longer
@@ -372,10 +378,25 @@ class RealRobotPlanExecutor(PlanExecutor):
     Giskard compiles the statechart once it receives it.
     """
 
+    _giskard: Optional[GiskardClientExecutor] = field(
+        default=None, init=False, repr=False
+    )
+    """
+    The connection to Giskard every plan is sent through, None until the first plan
+    runs.
+    """
+
     def _run(self) -> None:
         """
         Send the statechart to Giskard and wait until it ended there.
         """
-        GiskardWrapper(self.ros_node, world=self.world).execute(
-            self.statechart, child_chooser=self.child_chooser
-        )
+        if self._giskard is None:
+            self._giskard = GiskardClientExecutor(self.ros_node, context=self.context)
+        self._giskard.compile(self.statechart)
+        self._giskard.execute()
+
+    def close(self) -> None:
+        if self._giskard is None:
+            return
+        self._giskard.close()
+        self._giskard = None

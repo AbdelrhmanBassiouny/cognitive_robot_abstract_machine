@@ -32,6 +32,7 @@ from semantic_digital_twin.input_synchronization import InputSynchronizer
 from giskardpy.middleware.ros2.motion_goal import MotionGoal
 from giskardpy.motion_statechart.graph_node import EndMotion
 from krrood.adapters.json_serializer import from_json
+from semantic_digital_twin.adapters.ros.messages import MetaData
 from semantic_digital_twin.world import World
 
 from .test_motion_server import (
@@ -41,8 +42,6 @@ from .test_motion_server import (
     feedback_data,
     motion_server,
 )
-
-pytestmark = pytest.mark.parked
 
 # %% mimics
 
@@ -132,14 +131,21 @@ class ChoosingGoal:
             choosing node.
         :return: A goal running one choosing node until `end_node_factory` ends it.
         """
-        statechart = Statechart(context=StatechartContext(world=World()))
+        context = StatechartContext(world=World())
+        context.add_extension(ChildChooserAccess(chooser=ChooserAnsweringInTurn([])))
+        statechart = Statechart(context=context)
         choosing_node = CompositeNodeChoosingItsChild(name="choosing")
         statechart.add_node(choosing_node)
         statechart.add_node(end_node_factory(choosing_node))
         return cls(statechart=statechart, choosing_node=choosing_node)
 
     def goal_json(self) -> str:
-        return json.dumps(MotionGoal.for_motion_statechart(self.statechart).to_json())
+        return json.dumps(
+            MotionGoal.for_motion_statechart(
+                self.statechart,
+                client=MetaData(node_name="unwatched_client", process_id=0),
+            ).to_json()
+        )
 
 
 def _server_chooser(motion_server: MotionServerFixture) -> ChildSentByClient:

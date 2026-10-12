@@ -10,8 +10,6 @@ from coraplex.exceptions import (
     CannotMatchOnType,
     ReachHasNoFinalApproach,
 )
-from cramph.exceptions import NotRunByLanguageNodeError
-from cramph.nodes_for_testing import ConstFalseNode
 from coraplex.plans.plan_transformation import (
     InsertionTransformation,
     PlanRewriting,
@@ -20,31 +18,39 @@ from coraplex.plans.plan_transformation import (
 )
 from coraplex.plans.underspecified import UnderspecifiedNode
 from coraplex.robot_plans.actions.base import Action
-from coraplex.robot_plans.actions.core.misc import DetectAction
 from coraplex.robot_plans.actions.composite.facing import FaceAndLookAtAction
+from coraplex.robot_plans.actions.composite.transporting import (
+    MoveAndOpenAction,
+    MoveAndPickUpAction,
+    TransportAction,
+)
+from coraplex.robot_plans.actions.core.misc import DetectAction
 from coraplex.robot_plans.actions.core.navigation import (
     FaceAtAction,
     LookAtAction,
     NavigateAction,
 )
 from coraplex.robot_plans.actions.core.pick_up import PickUpAction, ReachAction
-from coraplex.robot_plans.actions.core.robot_body import MoveTorsoAction, ParkArmsAction
-from coraplex.robot_plans.actions.composite.transporting import (
-    MoveAndOpenAction,
-    MoveAndPickUpAction,
-    TransportAction,
-)
 from coraplex.robot_plans.actions.core.placing import PlaceAction
+from coraplex.robot_plans.actions.core.robot_body import MoveTorsoAction, ParkArmsAction
 from coraplex.robot_plans.plan_transformations import (
     DetectBeforeGrasp,
+    FreeEndEffectorsOfParallelStepsTogether,
     OpenDrawerBeforeMoveAndPickUp,
     OpenDrawerBeforePickUp,
     ParkArmsAroundPickAndPlaceSteps,
     ParkArmsBeforeFirstAction,
 )
 from cramph.composites import Attempt, ChildChooser, CramLanguageNode, Sequence
+from cramph.composites import Parallel
+from cramph.context import ContextExtension
 from cramph.context import StatechartContext
+from cramph.exceptions import NotRunByLanguageNodeError
 from cramph.node import StatechartNode
+from cramph.nodes_for_testing import ConstFalseNode
+from giskardpy.motion_statechart.goals.collision_avoidance import (
+    UpdateTemporaryCollisionRules,
+)
 from giskardpy.motion_statechart.goals.gripper import MoveGripper
 from giskardpy.motion_statechart.tasks.cartesian_tasks import CartesianPose
 from giskardpy.motion_statechart.tasks.joint_tasks import JointPositionList
@@ -52,9 +58,10 @@ from krrood.entity_query_language.factories import a, variable
 from krrood.entity_query_language.query.match import Match
 from krrood.exceptions import UnboundGenericParameter
 from semantic_digital_twin.datastructures.definitions import GripperState, TorsoState
+from semantic_digital_twin.grasping.grasp_candidates import GraspCandidate
+from semantic_digital_twin.robots.pr2 import PR2
 from semantic_digital_twin.robots.robot_parts import Arm, EndEffector
 from semantic_digital_twin.semantic_annotations.mixins import HasRootBody
-from semantic_digital_twin.grasping.grasp_candidates import GraspCandidate
 from semantic_digital_twin.semantic_annotations.semantic_annotations import (
     Drawer,
     Handle,
@@ -63,11 +70,10 @@ from semantic_digital_twin.semantic_annotations.semantic_annotations import (
 )
 from semantic_digital_twin.spatial_types.spatial_types import Pose
 from semantic_digital_twin.world import World
-
 from ..test_transporting import pick_and_place_of_the_milk
 from ...plan_running import context_of, simulated_executor, statechart_of
 from ...sampling import SAMPLING_SEED
-from cramph.context import ContextExtension
+
 
 # %% expanding a plan without running it
 
@@ -1212,6 +1218,72 @@ def test_the_arms_are_parked_around_every_step_of_a_pick_and_place(
         PlaceAction,
         ParkArmsAction,
     ]
+
+
+# %% freeing the end effectors of steps that run at once
+
+
+def end_effectors_freed_below(node: StatechartNode) -> List[List[EndEffector]]:
+    """
+    :param node: An expanded part of a plan.
+    :return: The end effectors each collision rules node below `node` frees, in the
+        order the plan runs those nodes.
+    """
+    return [
+        [rule.end_effector for rule in rules_node.temporary_rules]
+        for rules_node in node.descendants
+        if isinstance(rules_node, UpdateTemporaryCollisionRules)
+    ]
+
+
+def pick_ups_of_the_milk_and_the_spoon(world: World, robot: PR2) -> List[PickUpAction]:
+    """
+    :return: A pick-up of the milk with the left arm and one of the spoon with the
+        right arm.
+    """
+    milk = world.get_semantic_annotations_by_type(Milk)[0]
+    spoon = world.get_semantic_annotations_by_type(Spoon)[0]
+    return [
+        PickUpAction(milk.grasp_candidates()[0], robot.left_arm),
+        PickUpAction(spoon.grasp_candidates()[0], robot.right_arm),
+    ]
+
+
+def test_steps_running_at_once_free_the_end_effectors_of_each_other(
+    pr2_apartment_context,
+):
+    world, robot, extensions = pr2_apartment_context
+    both_arms = Parallel(pick_ups_of_the_milk_and_the_spoon(world, robot))
+
+    rewritten(both_arms, extensions, [FreeEndEffectorsOfParallelStepsTogether()])
+
+    freed = end_effectors_freed_below(both_arms)
+    both_end_effectors = [
+        robot.left_arm.end_effector,
+        robot.right_arm.end_effector,
+    ]
+    assert freed == [both_end_effectors] * len(freed)
+    assert freed
+
+
+def test_steps_running_one_after_the_other_free_only_their_own_end_effector(
+    pr2_apartment_context,
+):
+    world, robot, extensions = pr2_apartment_context
+    left_pick_up, right_pick_up = pick_ups_of_the_milk_and_the_spoon(world, robot)
+
+    rewritten(
+        Sequence([left_pick_up, right_pick_up]),
+        extensions,
+        [FreeEndEffectorsOfParallelStepsTogether()],
+    )
+
+    freed_by_the_left = end_effectors_freed_below(left_pick_up)
+    freed_by_the_right = end_effectors_freed_below(right_pick_up)
+    assert freed_by_the_left == [[robot.left_arm.end_effector]] * len(freed_by_the_left)
+    assert freed_by_the_right == [[robot.right_arm.end_effector]] * len(
+        freed_by_the_right
+    )
 
 
 # %% transformations that collide on one node

@@ -1,4 +1,3 @@
-import pytest
 import json
 
 from geometry_msgs.msg import WrenchStamped
@@ -20,8 +19,6 @@ from giskardpy.motion_statechart.ros_context import RosNodeAccess
 from cramph.context import StatechartContext
 from cramph.executor import StatechartExecutor
 
-pytestmark = pytest.mark.parked
-
 
 def test_force_impact_node(rclpy_node):
     topic_name = "force_torque_topic"
@@ -31,7 +28,7 @@ def test_force_impact_node(rclpy_node):
     msg_above = WrenchStamped()
     msg_above.wrench.force.x = 20.0
 
-    msc = Statechart()
+    msc = Statechart(context=StatechartContext(world=World()))
     msc.add_node(
         parallel := Parallel(
             [
@@ -51,12 +48,11 @@ def test_force_impact_node(rclpy_node):
     json_data = msc.to_json()
     json_str = json.dumps(json_data)
     new_json_data = json.loads(json_str)
-    msc_copy = Statechart.from_json(new_json_data)
-
     kin_sim = StatechartExecutor(
         context=StatechartContext(world=World()),
         extensions=[RosNodeAccess(rclpy_node), MotionControl()],
     )
+    msc_copy = Statechart.from_json(new_json_data, context=kin_sim.context)
     kin_sim.compile(statechart=msc_copy)
 
     ft_node = msc_copy.nodes[0].nodes[0]

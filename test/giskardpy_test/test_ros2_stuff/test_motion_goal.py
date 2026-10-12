@@ -1,13 +1,12 @@
-import pytest
 import json
 
 from giskardpy.middleware.ros2.motion_goal import MotionGoal
 from giskardpy.motion_statechart.graph_node import EndMotion
+from cramph.context import StatechartContext
 from cramph.monitors import CountSimulationTimeSeconds
 from cramph.statechart import Statechart
 from semantic_digital_twin.adapters.ros.messages import MetaData, StreamPosition
-
-pytestmark = pytest.mark.parked
+from semantic_digital_twin.world import World
 
 # %% the payload a client sends
 
@@ -23,7 +22,7 @@ def create_motion_statechart() -> Statechart:
     """
     Build a motion statechart that ends after some simulated time.
     """
-    motion_statechart = Statechart()
+    motion_statechart = Statechart(context=StatechartContext(world=World()))
     motion_statechart.add_node(counter := CountSimulationTimeSeconds(seconds=0.5))
     motion_statechart.add_node(EndMotion.when_true(counter))
     return motion_statechart

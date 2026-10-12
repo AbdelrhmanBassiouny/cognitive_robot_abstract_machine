@@ -37,8 +37,6 @@ from semantic_digital_twin.world_description.world_entity import (
     KinematicStructureEntity,
 )
 
-pytestmark = pytest.mark.parked
-
 
 @pytest.fixture()
 def default_joint_state():
@@ -124,7 +122,7 @@ def box_setup(giskard: HSRTester) -> HSRTester:
 class TestJointGoals:
 
     def test_mimic_joints(self, giskard: HSRTester):
-        msc = Statechart()
+        msc = Statechart(context=giskard.api.context)
         msc.add_node(
             joint_goal := JointPositionList(
                 goal_state=JointState.from_str_dict(
@@ -134,7 +132,8 @@ class TestJointGoals:
             ),
         )
         msc.add_node(EndMotion.when_true(joint_goal))
-        giskard.api.execute(msc)
+        giskard.api.compile(msc)
+        giskard.api.execute()
 
         arm_lift_joint: ActiveConnection1DOF = giskard.world.get_connection_by_name(
             HSRBJoint.ARM_LIFT
@@ -172,7 +171,7 @@ class TestJointGoals:
         compare_poses(base_T_torso_current, base_T_torso_expected)
 
     def test_mimic_joints2(self, giskard: HSRTester):
-        msc = Statechart()
+        msc = Statechart(context=giskard.api.context)
         msc.add_node(
             node := CartesianPose(
                 root_link=giskard.base_footprint,
@@ -185,7 +184,8 @@ class TestJointGoals:
         )
         msc.add_node(EndMotion.when_true(node))
 
-        giskard.api.execute(msc)
+        giskard.api.compile(msc)
+        giskard.api.execute()
 
         arm_lift_joint: ActiveConnection1DOF = giskard.world.get_connection_by_name(
             HSRBJoint.ARM_LIFT
@@ -205,7 +205,7 @@ class TestJointGoals:
 
     def test_mimic_joints3(self, giskard: HSRTester):
         head = giskard.api.world.get_body_by_name("head_pan_link")
-        msc = Statechart()
+        msc = Statechart(context=giskard.api.context)
         msc.add_node(
             node := CartesianPose(
                 root_link=giskard.base_footprint,
@@ -218,7 +218,8 @@ class TestJointGoals:
         )
         msc.add_node(EndMotion.when_true(node))
 
-        giskard.api.execute(msc)
+        giskard.api.compile(msc)
+        giskard.api.execute()
 
         arm_lift_joint: ActiveConnection1DOF = giskard.world.get_connection_by_name(
             HSRBJoint.ARM_LIFT
@@ -247,7 +248,7 @@ class TestJointGoals:
         )
         assert torso_lift_joints.dof.limits.lower.velocity == -0.075
         assert torso_lift_joints.dof.limits.upper.velocity == 0.075
-        msc = Statechart()
+        msc = Statechart(context=giskard.api.context)
         msc.add_node(
             joint_goal := JointPositionList(
                 goal_state=JointState.from_str_dict(
@@ -258,7 +259,8 @@ class TestJointGoals:
         )
         msc.add_node(EndMotion.when_true(joint_goal))
         state_version = giskard.api.world.state.version
-        giskard.api.execute(msc)
+        giskard.api.compile(msc)
+        giskard.api.execute()
         for i in range(1000):
             try:
                 np.testing.assert_almost_equal(
@@ -276,7 +278,7 @@ class TestJointGoals:
 
 class TestCartGoals:
     def test_move_base(self, giskard: HSRTester):
-        msc = Statechart()
+        msc = Statechart(context=giskard.api.context)
         msc.add_node(
             node := Sequence(
                 [
@@ -303,10 +305,11 @@ class TestCartGoals:
             )
         )
         msc.add_node(EndMotion.when_true(node))
-        giskard.api.execute(msc)
+        giskard.api.compile(msc)
+        giskard.api.execute()
 
     def test_move_base_1m_forward(self, giskard: HSRTester):
-        msc = Statechart()
+        msc = Statechart(context=giskard.api.context)
         msc.add_node(
             node := CartesianPose(
                 root_link=giskard.default_root,
@@ -318,10 +321,11 @@ class TestCartGoals:
             ),
         )
         msc.add_node(EndMotion.when_true(node))
-        giskard.api.execute(msc)
+        giskard.api.compile(msc)
+        giskard.api.execute()
 
     def test_move_base_1m_left(self, giskard: HSRTester):
-        msc = Statechart()
+        msc = Statechart(context=giskard.api.context)
         msc.add_node(
             node := CartesianPose(
                 root_link=giskard.default_root,
@@ -333,10 +337,11 @@ class TestCartGoals:
             ),
         )
         msc.add_node(EndMotion.when_true(node))
-        giskard.api.execute(msc)
+        giskard.api.compile(msc)
+        giskard.api.execute()
 
     def test_move_base_1m_diagonal(self, giskard: HSRTester):
-        msc = Statechart()
+        msc = Statechart(context=giskard.api.context)
         msc.add_node(
             node := CartesianPose(
                 root_link=giskard.default_root,
@@ -349,10 +354,11 @@ class TestCartGoals:
             ),
         )
         msc.add_node(EndMotion.when_true(node))
-        giskard.api.execute(msc)
+        giskard.api.compile(msc)
+        giskard.api.execute()
 
     def test_move_base_rotate(self, giskard: HSRTester):
-        msc = Statechart()
+        msc = Statechart(context=giskard.api.context)
         msc.add_node(
             node := CartesianPose(
                 root_link=giskard.default_root,
@@ -365,10 +371,11 @@ class TestCartGoals:
             ),
         )
         msc.add_node(EndMotion.when_true(node))
-        giskard.api.execute(msc)
+        giskard.api.compile(msc)
+        giskard.api.execute()
 
     def test_move_base_forward_rotate(self, giskard: HSRTester):
-        msc = Statechart()
+        msc = Statechart(context=giskard.api.context)
         msc.add_node(
             node := CartesianPose(
                 root_link=giskard.default_root,
@@ -382,10 +389,11 @@ class TestCartGoals:
             ),
         )
         msc.add_node(EndMotion.when_true(node))
-        giskard.api.execute(msc)
+        giskard.api.compile(msc)
+        giskard.api.execute()
 
     def test_rotate_gripper(self, giskard: HSRTester):
-        msc = Statechart()
+        msc = Statechart(context=giskard.api.context)
         msc.add_node(
             node := CartesianPose(
                 root_link=giskard.default_root,
@@ -399,52 +407,8 @@ class TestCartGoals:
             ),
         )
         msc.add_node(EndMotion.when_true(node))
-        giskard.api.execute(msc)
-
-    @pytest.mark.skip(reason="not yet fixed")
-    def test_wiggle_insert(self, default_pose_giskard: HSRTester):
-        goal_state = {
-            HSRBJoint.ARM_FLEX: -1.5,
-            HSRBJoint.ARM_LIFT: 0.5,
-            HSRBJoint.ARM_ROLL: 0.0,
-            HSRBJoint.HEAD_PAN: 0.0,
-            HSRBJoint.HEAD_TILT: 0.0,
-            HSRBJoint.WRIST_FLEX: -1.5,
-            HSRBJoint.WRIST_ROLL: 0.0,
-        }
-
-        default_pose_giskard.api.monitors.add_set_seed_configuration(
-            seed_configuration=goal_state
-        )
-        default_pose_giskard.execute()
-
-        hpl = (
-            default_pose_giskard.apdefault_pose_giskard.api.world.search_for_link_name(
-                link_name="hand_gripper_tool_frame", group_name="hsrb"
-            )
-        )
-        root_link = default_pose_giskard.api.world.search_for_link_name(link_name="map")
-        hole_point = Point3(x=0.5, z=0.3, reference_frame=default_pose_giskard.map)
-        wiggle = "wiggle"
-        default_pose_giskard.api.motion_goals.add_wiggle_insert(
-            name=wiggle,
-            root_link=root_link,
-            tip_link=hpl,
-            hole_point=hole_point,
-            end_condition=wiggle,
-        )
-        resistence_point = Point3(
-            x=0.5, z=0.4, reference_frame=default_pose_giskard.map
-        )
-        timer = default_pose_giskard.api.monitors.add_sleep(5)
-        default_pose_giskard.api.motion_goals.add_cartesian_position(
-            root_link=root_link,
-            tip_link=hpl,
-            goal_point=resistence_point,
-            end_condition=timer,
-        )
-        default_pose_giskard.api.monitors.add_end_motion(start_condition=wiggle)
-        default_pose_giskard.execute(local_min_end=False)
+        giskard.api.compile(msc)
+        giskard.api.execute()
 
 
 class TestConstraints:
@@ -452,7 +416,7 @@ class TestConstraints:
     def test_Pointing(self, giskard: HSRTester):
         kopf = giskard.api.world.get_body_by_name("head_rgbd_sensor_gazebo_frame")
 
-        msc = Statechart()
+        msc = Statechart(context=giskard.api.context)
         msc.add_node(
             node := Pointing(
                 tip_link=kopf,
@@ -462,7 +426,8 @@ class TestConstraints:
             )
         )
         msc.add_node(EndMotion.when_true(node))
-        giskard.api.execute(msc)
+        giskard.api.compile(msc)
+        giskard.api.execute()
 
     def test_open_fridge(self, kitchen_setup: HSRTester, better_pose):
         handle_frame_id = kitchen_setup.api.world.get_body_by_name(
@@ -470,7 +435,7 @@ class TestConstraints:
         )
         handle_name = kitchen_setup.api.world.get_body_by_name("iai_fridge_door_handle")
 
-        msc = Statechart()
+        msc = Statechart(context=kitchen_setup.api.context)
         msc.add_nodes(
             [
                 sequence := Sequence(
@@ -513,13 +478,14 @@ class TestConstraints:
             ]
         )
         msc.add_node(EndMotion.when_true(sequence))
-        kitchen_setup.api.execute(msc)
+        kitchen_setup.api.compile(msc)
+        kitchen_setup.api.execute()
 
 
 class TestCollisionAvoidanceGoals:
 
     def test_self_collision_avoidance(self, giskard: HSRTester):
-        msc = Statechart()
+        msc = Statechart(context=giskard.api.context)
         msc.add_nodes(
             [
                 cart_goal := CartesianPose(
@@ -534,12 +500,13 @@ class TestCollisionAvoidanceGoals:
             ]
         )
         msc.add_node(EndMotion.when_true(cart_goal))
-        giskard.api.execute(msc)
+        giskard.api.compile(msc)
+        giskard.api.execute()
 
     def test_self_collision_avoidance2(self, giskard: HSRTester):
         hand_palm_link = giskard.api.world.get_body_by_name("hand_palm_link")
 
-        msc = Statechart()
+        msc = Statechart(context=giskard.api.context)
         msc.add_nodes(
             [
                 sequence := Sequence(
@@ -572,7 +539,8 @@ class TestCollisionAvoidanceGoals:
             ]
         )
         msc.add_node(EndMotion.when_true(sequence))
-        giskard.api.execute(msc)
+        giskard.api.compile(msc)
+        giskard.api.execute()
 
 
 class TestAddObject:
@@ -587,7 +555,7 @@ class TestAddObject:
             parent_link=giskard.api.world.get_body_by_name("hand_palm_link"),
         )
 
-        msc = Statechart()
+        msc = Statechart(context=giskard.api.context)
         msc.add_node(
             joint_goal := JointPositionList(
                 goal_state=JointState.from_str_dict(
@@ -597,4 +565,5 @@ class TestAddObject:
             ),
         )
         msc.add_node(EndMotion.when_true(joint_goal))
-        giskard.api.execute(msc)
+        giskard.api.compile(msc)
+        giskard.api.execute()

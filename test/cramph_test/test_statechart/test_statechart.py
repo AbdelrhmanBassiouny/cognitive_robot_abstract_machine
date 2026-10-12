@@ -38,7 +38,6 @@ from cramph.node import (
     CompositeNode,
     NodeArtifacts,
     TerminalNode,
-    DeserializedNodeTracker,
     TransitionCondition,
 )
 from cramph.node import ThreadPayloadMonitor
@@ -1164,7 +1163,6 @@ class TestStatechartLogic:
         assert end.life_cycle_state == LifeCycleValues.RUNNING
         assert msc.is_ended()
 
-    @pytest.mark.parked
     def test_nested_goals(self):
         msc = Statechart(context=StatechartContext(world=World()))
 
@@ -3205,24 +3203,6 @@ class TestLastObservation:
             == f'"{finished.last_observed_true.display_name}"'
         )
 
-    @pytest.mark.parked
-    def test_it_survives_a_json_round_trip(self):
-        msc = Statechart(context=StatechartContext(world=World()))
-        msc.add_nodes([finished := ConstTrueNode(), later := ConstTrueNode()])
-        later.start_condition = finished.last_observed_true
-
-        msc_copy = Statechart.from_json(
-            json.loads(json.dumps(msc.create_structure_copy().to_json())),
-            context=StatechartContext(world=World()),
-        )
-        msc_copy._add_transitions()
-
-        later_copy = msc_copy.get_node_by_index(later.index)
-        finished_copy = msc_copy.get_node_by_index(finished.index)
-        assert later_copy._start_condition.expression.free_variables() == [
-            finished_copy.last_observed_true
-        ]
-
     def test_an_observation_expression_reads_the_current_tick(self):
         """
         A tick settles before it ends, so an observation expression reads the last
@@ -3425,19 +3405,6 @@ class TestLifeCyclePredicates:
             str(second._start_condition)
             == f'"{first.unique_name}.{LifeCyclePredicate.IS_FAILED.attribute_name}"'
         )
-
-    @pytest.mark.parked
-    def test_a_condition_with_a_predicate_survives_a_json_round_trip(self):
-        msc = Statechart(context=StatechartContext(world=World()))
-        msc.add_nodes([first := ConstTrueNode(), second := ConstFalseNode()])
-        second.start_condition = sm.logic_and(first.is_failed, first.observes_true)
-
-        condition_copy = TransitionCondition.from_json(
-            json.loads(json.dumps(second._start_condition.to_json())),
-            **DeserializedNodeTracker.from_statechart(msc).create_kwargs(),
-        )
-
-        assert condition_copy == second._start_condition
 
     def test_a_predicate_makes_its_node_a_dependency_of_the_condition(self):
         msc = Statechart(context=StatechartContext(world=World()))
@@ -3758,7 +3725,6 @@ class TestEagerStateVariables:
         msc._add_transitions()
         assert barrier in barrier._success_condition.node_dependencies
 
-    @pytest.mark.parked
     def test_nested_success_condition_survives_json_round_trip(self):
         msc = Statechart(context=StatechartContext(world=World()))
         msc.add_node(

@@ -3,12 +3,10 @@ from __future__ import division
 from dataclasses import dataclass, field
 from datetime import timedelta
 
-
-from cramph.node import (
-    StatechartNode,
-)
-from giskardpy.motion_statechart.monitors.progress_monitors import Stalled
 from cramph.composites import Attempt, RepeatUntil
+from cramph.context import StatechartContext
+from cramph.node import StatechartNode
+from giskardpy.motion_statechart.monitors.progress_monitors import Stalled
 
 
 @dataclass(repr=False, eq=False)
@@ -31,25 +29,26 @@ class RepeatOnStall(RepeatUntil):
     task's own threshold per second.
     """
 
-    def __post_init__(self) -> None:
+    def expand(self, context: StatechartContext) -> None:
         """
         Turn the task into an attempt that gives up on a stall, which is the decision
-        this subclass exists to make for the caller.
+        this subclass exists to make for the caller, then wire the retry loop as
+        :meth:`~cramph.composites.RepeatUntil.expand` does.
 
         A task that already is an :class:`Attempt` keeps its own failure monitors and
         gives up on a stall as well.
         """
-        super().__post_init__()
         if isinstance(self.task, Attempt):
             self.task.failure_monitors.append(
                 self._create_stall_monitor(self.task.task)
             )
-            return
-        self.task = Attempt(
-            name=f"{self.name}/attempt",
-            task=self.task,
-            failure_monitors=[self._create_stall_monitor(self.task)],
-        )
+        else:
+            self.task = Attempt(
+                name=f"{self.name}/attempt",
+                task=self.task,
+                failure_monitors=[self._create_stall_monitor(self.task)],
+            )
+        super().expand(context)
 
     def _create_stall_monitor(self, monitored_node: StatechartNode) -> Stalled:
         """

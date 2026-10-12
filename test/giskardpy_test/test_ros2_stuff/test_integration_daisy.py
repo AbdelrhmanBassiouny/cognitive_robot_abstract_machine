@@ -40,8 +40,6 @@ from semantic_digital_twin.world_description.world_entity import (
     KinematicStructureEntity,
 )
 
-pytestmark = pytest.mark.parked
-
 # %% trajectory length limit
 
 MAX_TRAJECTORY_LENGTH_SECONDS = 60.0
@@ -195,7 +193,7 @@ def box_setup(giskard: DAiSyTester) -> DAiSyTester:
 class TestJointGoals:
 
     def test_joints1(self, giskard: DAiSyTester):
-        msc = Statechart()
+        msc = Statechart(context=giskard.api.context)
         msc.add_node(
             joint_goal := JointPositionList(
                 goal_state=JointState.from_str_dict(
@@ -210,7 +208,8 @@ class TestJointGoals:
         )
         msc.add_node(EndMotion.when_true(joint_goal))
         add_trajectory_length_limit(msc)
-        giskard.api.execute(msc)
+        giskard.api.compile(msc)
+        giskard.api.execute()
 
         base = giskard.world.get_kinematic_structure_entity_by_name("left_base_link")
         finger_tip = giskard.world.get_kinematic_structure_entity_by_name(
@@ -238,7 +237,7 @@ class TestJointGoals:
         tip = giskard.api.world.get_kinematic_structure_entity_by_name(
             "left_gripper_left_finger_tip_link"
         )
-        msc = Statechart()
+        msc = Statechart(context=giskard.api.context)
         msc.add_node(
             node := CartesianPose(
                 root_link=base,
@@ -252,7 +251,8 @@ class TestJointGoals:
         msc.add_node(EndMotion.when_true(node))
         add_trajectory_length_limit(msc)
 
-        giskard.api.execute(msc)
+        giskard.api.compile(msc)
+        giskard.api.execute()
 
         controlled_base = giskard.world.get_kinematic_structure_entity_by_name(
             "left_base_link"
@@ -287,12 +287,13 @@ class TestJointGoals:
         else:
             assert False
 
-        msc = Statechart()
+        msc = Statechart(context=giskard.api.context)
         msc.add_node(node := JointPositionList(goal_state=park_state))
         msc.add_node(EndMotion.when_true(node))
         add_trajectory_length_limit(msc)
 
-        giskard.api.execute(msc)
+        giskard.api.compile(msc)
+        giskard.api.execute()
 
         for i in range(1000):
             try:
@@ -308,7 +309,7 @@ class TestJointGoals:
 class TestCollisionAvoidanceGoals:
     @pytest.mark.skip("daisy collision setup is fucked, not a giskard bug")
     def test_self_collision_avoidance(self, giskard_better_pose: DAiSyTester):
-        msc = Statechart()
+        msc = Statechart(context=giskard_better_pose.api.context)
 
         # In the wrist frame the dominant component points downwards, so both arms are
         # driven into the table and blocked there.
@@ -348,13 +349,14 @@ class TestCollisionAvoidanceGoals:
         )
         msc.add_node(EndMotion.when_true(local_min))
         add_trajectory_length_limit(msc)
-        giskard_better_pose.api.execute(msc)
+        giskard_better_pose.api.compile(msc)
+        giskard_better_pose.api.execute()
 
         assert parallel.observation_state == ObservationStateValues.FALSE
 
     @pytest.mark.skip("daisy collision setup is fucked, not a giskard bug")
     def test_self_collision_avoidance2(self, giskard_better_pose: DAiSyTester):
-        msc = Statechart()
+        msc = Statechart(context=giskard_better_pose.api.context)
         goal = Pose.from_xyz_axis_angle(
             x=0.3, y=0.6, z=1.0, reference_frame=giskard_better_pose.map
         )
@@ -385,6 +387,7 @@ class TestCollisionAvoidanceGoals:
         )
         msc.add_node(EndMotion.when_true(cycles))
         add_trajectory_length_limit(msc)
-        giskard_better_pose.api.execute(msc)
+        giskard_better_pose.api.compile(msc)
+        giskard_better_pose.api.execute()
 
         assert parallel.observation_state == ObservationStateValues.FALSE

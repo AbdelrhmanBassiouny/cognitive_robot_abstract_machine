@@ -255,6 +255,16 @@ def test_the_closest_preceding_node_is_the_last_in_a_left_siblings_subtree(
     ) is node_named(nested_statechart, "inner_last")
 
 
+def test_the_preceding_nodes_are_listed_closest_first(
+    nested_statechart: Statechart,
+):
+    last = node_named(nested_statechart, "last")
+
+    assert names_of(
+        nested_statechart.get_preceding_nodes_by_type(last, ConstTrueNode)
+    ) == ["inner_last", "inner_first", "first"]
+
+
 def test_a_preceding_node_is_found_left_of_an_ancestor(
     nested_statechart: Statechart,
 ):

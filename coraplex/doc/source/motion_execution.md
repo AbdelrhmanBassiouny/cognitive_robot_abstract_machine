@@ -80,7 +80,7 @@ executor = SimulatedPlanExecutor(
   every plan node succeeded. A plan that stops approaching its goal gives up and raises
   {class}`~coraplex.plans.failures.MotionMadeNoProgress`, naming the tasks that stalled; one that keeps converging is
   never cut off for taking many ticks, only once it exceeds the simulated time limit.
-- {class}`~coraplex.plans.executors.RealRobotPlanExecutor`: the chart is sent to giskard via the `GiskardWrapper`, which
+- {class}`~coraplex.plans.executors.RealRobotPlanExecutor`: the chart is sent to giskard via the `GiskardClientExecutor`, which
   grounds underspecified actions while giskard runs it.
 - {meth}`~coraplex.plans.executors.PlanExecutor.prepare` builds the chart without compiling or running it, for
   inspecting a plan as it would run.

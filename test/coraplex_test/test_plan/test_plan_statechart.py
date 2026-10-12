@@ -20,6 +20,7 @@ from coraplex.robot_plans.actions.core.robot_body import MoveTorsoAction
 from coraplex.plans import executors
 from cramph.composites import (
     ChildChooser,
+    ChildChooserAccess,
     CompositeNodeChoosingItsChild,
     PausedUntilTrue,
     Sequence,
@@ -31,6 +32,7 @@ from cramph.statechart import Statechart
 from cramph.world_modification_nodes import MoveBranch
 from giskardpy.motion_control import MotionControl
 from giskardpy.motion_statechart.graph_node import EndMotion
+from giskardpy.motion_statechart.tasks.cartesian_tasks import CartesianPose
 from krrood.adapters.json_serializer import from_json, to_json
 from krrood.entity_query_language.factories import a, variable
 from semantic_digital_twin.adapters.world_entity_kwargs_tracker import (
@@ -38,7 +40,10 @@ from semantic_digital_twin.adapters.world_entity_kwargs_tracker import (
 )
 from semantic_digital_twin.datastructures.definitions import TorsoState
 from semantic_digital_twin.robots.robot_parts import AbstractRobot
-from semantic_digital_twin.semantic_annotations.semantic_annotations import Milk
+from semantic_digital_twin.semantic_annotations.semantic_annotations import (
+    Milk,
+    Spoon,
+)
 from semantic_digital_twin.spatial_types.spatial_types import Pose
 from semantic_digital_twin.world import World
 from ...plan_running import robot_executor, run_plan, simulated_executor, statechart_of
@@ -200,13 +205,47 @@ def test_a_place_below_a_pausing_composite_finds_the_pick_up_before_that(
     assert statechart.get_preceding_node_by_type(place, PickUpAction) is pick_up
 
 
+def test_a_place_after_several_pick_ups_uses_the_arm_that_picked_its_object(
+    pr2_apartment_context,
+):
+    world, robot, extensions = pr2_apartment_context
+    milk = world.get_semantic_annotations_by_type(Milk)[0]
+    spoon = world.get_semantic_annotations_by_type(Spoon)[0]
+    place_milk = PlaceAction(
+        milk, Pose.from_xyz_rpy(0.8, -1.9, 0.7, reference_frame=world.root)
+    )
+    statechart = Statechart(context=simulated_executor(extensions).context)
+
+    statechart.add_node(
+        Sequence(
+            [
+                PickUpAction(milk.grasp_candidates()[0], robot.left_arm),
+                PickUpAction(spoon.grasp_candidates()[0], robot.right_arm),
+                place_milk,
+            ]
+        )
+    )
+
+    moved_tool_frames = {
+        node.tip_link
+        for node in place_milk.descendants
+        if isinstance(node, CartesianPose)
+    }
+    assert moved_tool_frames == {robot.left_arm.end_effector.tool_frame}
+
+
 # %% running on the robot
 
 
 @dataclass
-class GiskardWrapperRecordingTheGoal:
+class GiskardRecordingTheGoal:
     """
     Stands in for the connection to Giskard, recording what it is asked to execute.
+    """
+
+    compiled: Statechart | None = None
+    """
+    The statechart handed over last.
     """
 
     executed: List[Statechart] = field(default_factory=list)
@@ -216,15 +255,27 @@ class GiskardWrapperRecordingTheGoal:
 
     child_choosers: List[ChildChooser] = field(default_factory=list)
     """
-    The chooser handed along with every statechart.
+    The chooser of the context every sent statechart was built in.
     """
 
-    def execute(self, motion_statechart: Statechart, child_chooser: ChildChooser):
-        self.executed.append(motion_statechart)
-        self.child_choosers.append(child_chooser)
+    closed: bool = False
+    """
+    Whether the connection was closed.
+    """
+
+    def compile(self, statechart: Statechart) -> None:
+        self.compiled = statechart
+
+    def execute(self) -> None:
+        self.executed.append(self.compiled)
+        self.child_choosers.append(
+            self.compiled.context.require_extension(ChildChooserAccess).chooser
+        )
+
+    def close(self) -> None:
+        self.closed = True
 
 
-@pytest.mark.parked
 def test_an_underspecified_node_is_sent_as_a_node_choosing_its_child(
     pr2_apartment_context,
 ):
@@ -245,8 +296,10 @@ def test_a_plan_on_the_robot_is_sent_once_with_the_chooser_grounding_its_actions
     pr2_apartment_context, monkeypatch
 ):
     world, robot, extensions = pr2_apartment_context
-    giskard = GiskardWrapperRecordingTheGoal()
-    monkeypatch.setattr(executors, "GiskardWrapper", lambda ros_node, world: giskard)
+    giskard = GiskardRecordingTheGoal()
+    monkeypatch.setattr(
+        executors, "GiskardClientExecutor", lambda ros_node, context: giskard
+    )
     plan = Sequence(
         [
             MoveTorsoAction(TorsoState.HIGH),
@@ -270,6 +323,64 @@ def test_a_plan_on_the_robot_is_sent_once_with_the_chooser_grounding_its_actions
     assert chooser is executor.child_chooser
 
 
+def test_plans_run_one_after_another_share_one_connection_to_giskard(
+    pr2_apartment_context, monkeypatch
+):
+    world, robot, extensions = pr2_apartment_context
+    connections = []
+
+    def connect(ros_node, context) -> GiskardRecordingTheGoal:
+        connections.append(GiskardRecordingTheGoal())
+        return connections[-1]
+
+    monkeypatch.setattr(executors, "GiskardClientExecutor", connect)
+    executor = robot_executor(extensions)
+    plans = [MoveTorsoAction(TorsoState.HIGH), MoveTorsoAction(TorsoState.LOW)]
+
+    for plan in plans:
+        executor.compile(statechart_of(executor, plan))
+        executor.execute()
+
+    [connection] = connections
+    assert [statechart.top_level_nodes[0] for statechart in connection.executed] == (
+        plans
+    )
+
+
+def test_closing_the_executor_closes_its_connection_to_giskard(
+    pr2_apartment_context, monkeypatch
+):
+    world, robot, extensions = pr2_apartment_context
+    giskard = GiskardRecordingTheGoal()
+    monkeypatch.setattr(
+        executors, "GiskardClientExecutor", lambda ros_node, context: giskard
+    )
+    executor = robot_executor(extensions)
+    executor.compile(statechart_of(executor, MoveTorsoAction(TorsoState.HIGH)))
+    executor.execute()
+
+    executor.close()
+
+    assert giskard.closed
+
+
+def test_an_executor_that_never_ran_a_plan_connects_to_nothing(
+    pr2_apartment_context, monkeypatch
+):
+    world, robot, extensions = pr2_apartment_context
+    connections = []
+    monkeypatch.setattr(
+        executors,
+        "GiskardClientExecutor",
+        lambda ros_node, context: connections.append(GiskardRecordingTheGoal()),
+    )
+    executor = robot_executor(extensions)
+
+    executor.close()
+
+    assert connections == []
+
+
 @dataclass
 class GiskardTickingTheGoalUntilItEnded:
     """
@@ -282,11 +393,19 @@ class GiskardTickingTheGoalUntilItEnded:
     The number of ticks after which a statechart that did not end is given up on.
     """
 
-    def execute(self, motion_statechart: Statechart, child_chooser: ChildChooser):
+    compiled: Statechart | None = None
+    """
+    The statechart handed over last.
+    """
+
+    def compile(self, statechart: Statechart) -> None:
+        self.compiled = statechart
+
+    def execute(self) -> None:
         giskard = StatechartExecutor(
-            context=motion_statechart.context, extensions=[MotionControl()]
+            context=self.compiled.context, extensions=[MotionControl()]
         )
-        giskard.compile(motion_statechart)
+        giskard.compile(self.compiled)
         giskard.tick_until_end(timeout=self.tick_limit)
 
 
@@ -296,8 +415,8 @@ def test_a_plan_that_fails_on_the_robot_raises_motion_did_not_finish(
     world, robot, extensions = pr2_apartment_context
     monkeypatch.setattr(
         executors,
-        "GiskardWrapper",
-        lambda ros_node, world: GiskardTickingTheGoalUntilItEnded(),
+        "GiskardClientExecutor",
+        lambda ros_node, context: GiskardTickingTheGoalUntilItEnded(),
     )
     plan = NodeFailingOnObservingFalse(observation=ObservationStateValues.FALSE)
     executor = robot_executor(extensions)
@@ -316,8 +435,8 @@ def test_an_underspecified_action_out_of_candidates_on_the_robot_says_it_is_empt
     world, robot, extensions = pr2_apartment_context
     monkeypatch.setattr(
         executors,
-        "GiskardWrapper",
-        lambda ros_node, world: GiskardTickingTheGoalUntilItEnded(),
+        "GiskardClientExecutor",
+        lambda ros_node, context: GiskardTickingTheGoalUntilItEnded(),
     )
     plan = UnderspecifiedNode(
         statement=a(NavigateAction)(target_location=variable(Pose, domain=[]))
@@ -331,7 +450,6 @@ def test_an_underspecified_action_out_of_candidates_on_the_robot_says_it_is_empt
     assert failure.value.node is plan
 
 
-@pytest.mark.parked
 def test_an_expanded_action_is_received_with_the_nodes_it_runs(pr2_apartment_context):
     """
     A receiver does not expand the nodes of a statechart again, so an action has to

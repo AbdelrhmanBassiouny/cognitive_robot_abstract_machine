@@ -1023,7 +1023,7 @@ class ExpressionGraph(SubclassJSONSerializer):
         casadi_function = ca.Function(
             cls.__name__,
             [ca.vertcat(*[variable.casadi_sx for variable in free_variables])],
-            [expression.casadi_sx],
+            [ca.densify(expression.casadi_sx)],
         )
         return cls(free_variables=free_variables, casadi_function=casadi_function)
 

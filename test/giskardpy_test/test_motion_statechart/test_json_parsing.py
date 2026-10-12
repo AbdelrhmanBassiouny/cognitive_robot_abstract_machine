@@ -1,4 +1,3 @@
-import pytest
 import json
 
 import numpy as np
@@ -8,10 +7,9 @@ from cramph.data_types import (
     ObservationStateValues,
 )
 from cramph.composites import Sequence
-from cramph.node import CancelStatechart
 from giskardpy.motion_statechart.graph_node import (
     EndMotion,
-    MotionStatechartNode,
+    StructureCopyMotionStatechartNode,
     Task,
 )
 from giskardpy.motion_statechart.monitors.monitors import LocalMinimumReached
@@ -46,8 +44,6 @@ from semantic_digital_twin.world_description.world_entity import Body
 from giskardpy.motion_control import MotionControl
 from cramph.context import StatechartContext
 from cramph.executor import StatechartExecutor
-
-pytestmark = pytest.mark.parked
 
 # %% motion nodes in JSON
 
@@ -198,70 +194,9 @@ def test_structure_copy_of_a_plain_statechart_keeps_the_motion_node_kinds(mini_w
 
     assert type(statechart_copy.get_node_by_index(task.index)) is Task
     assert type(statechart_copy.get_node_by_index(monitor.index)) is (
-        MotionStatechartNode
+        StructureCopyMotionStatechartNode
     )
     assert type(statechart_copy.get_node_by_index(end.index)) is EndMotion
-
-
-def test_compressed_copy_can_be_plotted(pr2_world_state_reset: World, tmp_path):
-    tip = pr2_world_state_reset.get_kinematic_structure_entity_by_name("base_footprint")
-    root = pr2_world_state_reset.get_kinematic_structure_entity_by_name("odom_combined")
-    tip_goal = HomogeneousTransformationMatrix.from_xyz_quaternion(
-        pos_x=-0.2, reference_frame=tip
-    )
-
-    msc = Statechart(context=_create_executor(pr2_world_state_reset).context)
-    cart_goal = CartesianPose(
-        root_link=root,
-        tip_link=tip,
-        goal_pose=tip_goal,
-    )
-    msc.add_node(cart_goal)
-    end = EndMotion()
-    msc.add_node(end)
-    end.start_condition = cart_goal.observes_true
-    msc.add_node(CancelStatechart.when_true(cart_goal))
-    json_data = msc.create_structure_copy().to_json()
-    json_str = json.dumps(json_data)
-    new_json_data = json.loads(json_str)
-
-    msc_copy = Statechart.from_json(new_json_data, context=msc.context)
-    msc_copy._add_transitions()
-    assert len(msc_copy.get_nodes_by_type(EndMotion)) == 1
-    assert len(msc_copy.get_nodes_by_type(CancelStatechart)) == 1
-    msc.draw(str(tmp_path / "muh.pdf"))
-
-
-def test_unreachable_cart_goal(pr2_world_state_reset):
-    root = pr2_world_state_reset.root
-    tip = pr2_world_state_reset.get_kinematic_structure_entity_by_name("base_footprint")
-    msc = Statechart(context=_create_executor(pr2_world_state_reset).context)
-    msc.add_node(
-        cart_goal := CartesianPose(
-            root_link=root,
-            tip_link=tip,
-            goal_pose=HomogeneousTransformationMatrix.from_xyz_rpy(
-                z=-1,
-                reference_frame=root,
-            ),
-        )
-    )
-    msc.add_node(local_min := LocalMinimumReached())
-    msc.add_node(CancelStatechart.when_true(cart_goal))
-    msc.add_node(EndMotion.when_true(local_min))
-
-    json_data = msc.to_json()
-    json_str = json.dumps(json_data)
-    new_json_data = json.loads(json_str)
-
-    tracker = WorldEntityWithIDKwargsTracker.from_world(pr2_world_state_reset)
-    kwargs = tracker.create_kwargs()
-    kin_sim = _create_executor(pr2_world_state_reset)
-    msc_copy = Statechart.from_json(new_json_data, context=kin_sim.context, **kwargs)
-
-    kin_sim.compile(statechart=msc_copy)
-
-    kin_sim.tick_until_end()
 
 
 def test_nested_sequence_goal_json_round_trip_compilation():

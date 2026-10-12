@@ -4,24 +4,30 @@ import json
 from dataclasses import dataclass, field
 from threading import Thread
 from time import sleep
-from typing import Dict, List, Optional
+from typing import List
 
 import rclpy
 from json_msgs.action import JsonAction
 from json_msgs.action._json_action import JsonAction_Result
 from std_msgs.msg import String
+from cramph.composites import ChildChooserAccess
+from cramph.context import ContextExtension, StatechartContext
+from cramph.executor import Executor
 from giskardpy.middleware.ros2 import rospy
-from cramph.composites import ChildChooser
 from giskardpy.middleware.ros2.child_choices import (
     ChildChoiceClient,
     child_choices_topic,
 )
 from giskardpy.middleware.ros2.client_presence import ClientHeartbeatPublisher
-from giskardpy.middleware.ros2.exceptions import NoActiveGoalToCancelError
+from giskardpy.middleware.ros2.exceptions import (
+    NoActiveGoalToCancelError,
+    StatechartNotEndedByResultError,
+)
 from giskardpy.middleware.ros2.feedback_publisher import MotionStatechartPayloadKey
 from giskardpy.middleware.ros2.motion_goal import MotionGoal
 from giskardpy.middleware.ros2.ros2_interface import MyActionClient
 from giskardpy.middleware.ros2.world_updates import ClientWorldUpdates
+from giskardpy.motion_control import MotionControl
 from cramph.statechart import (
     LastObservationState,
     LifeCycleState,
@@ -41,14 +47,29 @@ from semantic_digital_twin.world import World
 
 
 @dataclass
-class GiskardWrapper:
+class GiskardClientExecutor(Executor):
     """
-    Python wrapper for the ROS interface of Giskard.
+    Executes a statechart by sending it to Giskard over ROS and waiting until it ended
+    there.
+
+    The statechart is built in :attr:`context`, whose world is kept in step with the
+    world of Giskard. The nodes of the statechart that choose their child are answered
+    with the :class:`~cramph.composites.ChildChooserAccess` of :attr:`context`, if it
+    has one.
 
     :param node_handle: node used to talk to Giskard
     :param giskard_node_name: node name of Giskard
     :param world: world to keep in step with the world of Giskard, fetched from Giskard
-        when not given
+        when neither it nor :attr:`context` is given
+    """
+
+    context: StatechartContext | None = field(default=None, kw_only=True)
+    """
+    The context the statecharts sent to Giskard are built in.
+
+    When not given, it is built over :attr:`world` with what
+    :class:`~giskardpy.motion_control.MotionControl` adds to a context, which the motion
+    nodes need to expand.
     """
 
     node_handle: Node
@@ -69,9 +90,10 @@ class GiskardWrapper:
     Announces to Giskard that this client is still waiting for its goal.
     """
 
-    _statechart: Statechart | None = field(init=False, default=None, repr=False)
-
     def __post_init__(self):
+        super().__post_init__()
+        if self.context is not None:
+            self.world = self.context.world
         if self.world is None:
             self.node_handle.get_logger().info(
                 "No world provided, fetching from service"
@@ -79,6 +101,9 @@ class GiskardWrapper:
             self.world = fetch_world_from_service(self.node_handle, timeout_seconds=300)
             self.node_handle.get_logger().info("world synced")
             WorldSynchronizer(_world=self.world, node=self.node_handle)
+        if self.context is None:
+            self.context = StatechartContext(world=self.world)
+            MotionControl().extend_context(self.context)
         self.world_updates = ClientWorldUpdates(
             world_synchronizer=WorldSynchronizer.of_world(self.world)
         )
@@ -90,6 +115,9 @@ class GiskardWrapper:
         giskard_topic = f"{self.giskard_node_name}/command"
         self._client = MyActionClient(self.node_handle, JsonAction, giskard_topic)
         sleep(0.3)
+
+    def default_context_extensions(self) -> list[ContextExtension]:
+        return []
 
     @property
     def client(self) -> MetaData:
@@ -106,51 +134,47 @@ class GiskardWrapper:
     def robot(self) -> AbstractRobot:
         return self.world.get_semantic_annotations_by_type(AbstractRobot)[0]
 
-    def execute_async(self, motion_statechart: Statechart) -> Future:
-        self._statechart = motion_statechart
-        motion_statechart.sanity_check()
-        return self._send_action_goal_async(motion_statechart)
-
-    def execute(
-        self,
-        motion_statechart: Statechart,
-        child_chooser: Optional[ChildChooser] = None,
-    ):
+    def execute_async(self) -> Future:
         """
-        Executes a Statechart and syncs its state with the result of Giskard.
+        Sends the compiled statechart to Giskard without waiting for it to end, see
+        :meth:`get_result`.
+
+        :return: future that completes once Giskard accepted or rejected the goal
+        """
+        self.statechart.sanity_check()
+        return self._client.send_goal_async(self._create_goal_message())
+
+    def execute(self) -> None:
+        """
+        Sends the compiled statechart to Giskard, waits until it ended there and syncs
+        its state with the result.
 
         A goal that fails raises the exception that made Giskard abort it, for example
         :class:`WorldModelModifiedDuringMotionError` when another process modified the
         world model while the motion was running.
-
-        :param motion_statechart: statechart to execute
-        :param child_chooser: Chooses the child of every node of the statechart that
-            chooses its child, on `motion_statechart`, while Giskard runs it.
         """
-        motion_statechart.sanity_check()
-        if child_chooser is None:
-            result = self._send_action_goal(motion_statechart)
+        self.statechart.sanity_check()
+        child_chooser_access = self.context.get_extension(ChildChooserAccess)
+        if child_chooser_access is None:
+            result = self._client.send_goal(self._create_goal_message())
         else:
-            result = self._send_action_goal_choosing_children(
-                motion_statechart, child_chooser
-            )
-        self._take_over_result(result, motion_statechart)
+            result = self._send_action_goal_choosing_children(child_chooser_access)
+        self._take_over_result(result)
 
     def _send_action_goal_choosing_children(
-        self, motion_statechart: Statechart, child_chooser: ChildChooser
+        self, child_chooser_access: ChildChooserAccess
     ) -> JsonAction_Result:
         """
         Send the goal and answer every node Giskard reports as waiting for a child.
 
         .. note:: The children are chosen in the thread that receives the feedback.
 
-        :param motion_statechart: statechart to send to Giskard
-        :param child_chooser: chooses the children on `motion_statechart`
+        :param child_chooser_access: holds the chooser of the children
         :return: result of the finished goal
         """
         client = ChildChoiceClient(
-            statechart=motion_statechart,
-            chooser=child_chooser,
+            statechart=self.statechart,
+            chooser=child_chooser_access.chooser,
             required_position=self.world_updates.required_position(),
         )
         publisher = self.node_handle.create_publisher(
@@ -164,68 +188,55 @@ class GiskardWrapper:
 
         try:
             return self._client.send_goal(
-                self._create_goal_message(motion_statechart), feedback_callback=answer
+                self._create_goal_message(), feedback_callback=answer
             )
         finally:
             self.node_handle.destroy_publisher(publisher)
 
-    def _take_over_result(
-        self, result: JsonAction_Result, motion_statechart: Statechart
-    ) -> None:
+    def _take_over_result(self, result: JsonAction_Result) -> None:
         """
-        Copy the final states of a finished goal into the given motion statechart.
+        Copy the final states of a finished goal into the compiled statechart.
 
         Only reached for a goal that succeeded; a failed one raises while its result is
         awaited.
 
         :param result: result of the finished goal
-        :param motion_statechart: statechart the goal was built from
         """
         result_json = json.loads(result.result.result)
         self.world_updates.wait_for_the_changes_of_a_goal(result_json)
         parsed_life_cycle_state = LifeCycleState.from_json(
             result_json[MotionStatechartPayloadKey.LIFE_CYCLE_STATE],
-            statechart=motion_statechart,
+            statechart=self.statechart,
         )
         parsed_observation_state = ObservationState.from_json(
             result_json[MotionStatechartPayloadKey.OBSERVATION_STATE],
-            statechart=motion_statechart,
+            statechart=self.statechart,
         )
         parsed_last_observation_state = LastObservationState.from_json(
             result_json[MotionStatechartPayloadKey.LAST_OBSERVATION_STATE],
-            statechart=motion_statechart,
+            statechart=self.statechart,
         )
-        motion_statechart.life_cycle_state.data = parsed_life_cycle_state.data
-        motion_statechart.observation_state.data = parsed_observation_state.data
-        motion_statechart.last_observation_state.data = (
-            parsed_last_observation_state.data
-        )
-        assert motion_statechart.is_ended()
+        self.statechart.life_cycle_state.data = parsed_life_cycle_state.data
+        self.statechart.observation_state.data = parsed_observation_state.data
+        self.statechart.last_observation_state.data = parsed_last_observation_state.data
+        if not self.statechart.is_ended():
+            raise StatechartNotEndedByResultError()
 
-    def _create_goal_message(self, motion_statechart: Statechart) -> JsonAction.Goal:
+    def _create_goal_message(self) -> JsonAction.Goal:
         """
-        Wrap the motion statechart into a goal that names the change of this world it
+        Wrap the compiled statechart into a goal that names the change of this world it
         was built on.
 
-        :param motion_statechart: statechart to send to Giskard
         :return: action goal message holding the serialized motion goal
         """
         goal_msg = JsonAction.Goal()
         goal = MotionGoal.for_motion_statechart(
-            motion_statechart,
+            self.statechart,
             client=self.client,
             required_position=self.world_updates.required_position(),
         )
         goal_msg.goal = json.dumps(goal.to_json())
         return goal_msg
-
-    def _send_action_goal_async(self, motion_statechart: Statechart) -> Future:
-        return self._client.send_goal_async(
-            self._create_goal_message(motion_statechart)
-        )
-
-    def _send_action_goal(self, motion_statechart: Statechart) -> JsonAction_Result:
-        return self._client.send_goal(self._create_goal_message(motion_statechart))
 
     def cancel_goal_async(self) -> Future:
         """
@@ -248,40 +259,25 @@ class GiskardWrapper:
         world model while the motion was running.
         """
         result = await self._client.get_result()
-        self._take_over_result(result, self._statechart)
-
-    def get_end_motion_reason(
-        self, move_result: JsonAction_Result | None = None, show_all: bool = False
-    ) -> Dict[str, bool]:
-        """
-        Analyzes a MoveResult msg to return a list of all monitors that hindered the
-        EndMotion Monitors from becoming active.
-
-        Uses the last received MoveResult msg from execute() or projection() when not
-        explicitly given.
-        :param move_result: the move_result msg to analyze
-        :param show_all: returns the state of all monitors when show_all==True
-        :return: Dict with monitor name as key and True or False as value
-        """
-        ...
+        self._take_over_result(result)
 
     def close(self) -> None:
         """
         Stop announcing this client's heartbeat to Giskard.
 
-        Does not touch :attr:`node_handle`: it was given to this wrapper by its caller,
+        Does not touch :attr:`node_handle`: it was given to this executor by its caller,
         who owns its lifecycle.
         """
         self.heartbeat_publisher.stop()
 
 
 @dataclass
-class GiskardWrapperNode(GiskardWrapper):
+class GiskardClientExecutorNode(GiskardClientExecutor):
     is_spinning: bool = False
     node_name: str = "giskard_client"
     giskard_node_name: str = "giskard"
     avoid_name_conflict: bool = True
-    context: Context | None = field(kw_only=True, default=None)
+    ros_context: Context | None = field(kw_only=True, default=None)
     cli_args: List[str] | None = field(kw_only=True, default=None)
     namespace: str | None = field(kw_only=True, default=None)
     use_global_arguments: bool = field(kw_only=True, default=True)
@@ -298,7 +294,7 @@ class GiskardWrapperNode(GiskardWrapper):
     def __post_init__(self):
         self.node_handle = Node(
             self.node_name,
-            context=self.context,
+            context=self.ros_context,
             cli_args=self.cli_args,
             namespace=self.namespace,
             use_global_arguments=self.use_global_arguments,
@@ -328,7 +324,7 @@ class GiskardWrapperNode(GiskardWrapper):
 
     def close(self) -> None:
         """
-        Stop the heartbeat and destroy the node this wrapper created for itself.
+        Stop the heartbeat and destroy the node this executor created for itself.
 
         Removes the node from Giskard's shared executor before destroying it, since a
         destroyed node left registered there would break the next spin.

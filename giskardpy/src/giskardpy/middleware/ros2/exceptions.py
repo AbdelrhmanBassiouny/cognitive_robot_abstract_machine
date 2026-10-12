@@ -406,6 +406,23 @@ class StatechartOutOfStepError(ExecutionException):
 
 
 @dataclass
+class StatechartNotEndedByResultError(ExecutionException):
+    """
+    Raised when the result of a goal that succeeded leaves the client's statechart in a
+    state that has not ended.
+    """
+
+    def error_message(self) -> str:
+        return "The result of the finished goal does not end the client's statechart."
+
+    def suggest_correction(self) -> str:
+        return (
+            "Check that the statechart Giskard ran holds the same nodes as the "
+            "client's copy of it."
+        )
+
+
+@dataclass
 class MotionServerThreadStillRunningError(GiskardException):
     """
     Raised when a motion server's background thread does not stop in time.

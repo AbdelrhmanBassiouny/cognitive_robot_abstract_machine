@@ -37,8 +37,9 @@ def _left_gripper(world: World) -> EndEffector:
 
 def _expanded_nodes(goal: MoveGripper, world: World):
     """
-    :return: The children the goal is made of.
+    :return: The children the goal is made of, once it joined a statechart.
     """
+    Statechart(context=create_context_with_motion_control(world)).add_node(goal)
     return goal.nodes
 
 

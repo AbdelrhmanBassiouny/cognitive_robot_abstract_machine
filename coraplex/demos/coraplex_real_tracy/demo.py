@@ -186,6 +186,7 @@ try:
     executor.compile(statechart)
     executor.execute()
 finally:
+    executor.close()
     rclpy.shutdown()
     os.killpg(os.getpgid(giskard_process.pid), signal.SIGTERM)
     giskard_process.wait()

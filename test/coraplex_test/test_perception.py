@@ -884,7 +884,6 @@ def receiving_world_kwargs(world: World) -> dict:
     return {"world": world, **tracker.create_kwargs()}
 
 
-@pytest.mark.parked
 def test_perception_task_survives_a_json_round_trip(
     pr2_apartment_context, whole_scene_region
 ):
@@ -932,7 +931,6 @@ def test_detect_action_reads_the_world_model_when_the_robot_is_simulated(
     assert tasks[0].answered_by is PerceptionSource.WORLD_MODEL
 
 
-@pytest.mark.parked
 def test_perception_task_survives_a_chart_round_trip(
     pr2_apartment_context, whole_scene_region
 ):

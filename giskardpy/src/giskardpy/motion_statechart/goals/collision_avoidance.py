@@ -348,7 +348,7 @@ class UpdateTemporaryCollisionRules(SucceedsOnObservingTrue, MotionStatechartNod
     def build_artifacts(self, context: StatechartContext) -> MotionNodeArtifacts:
         artifacts = MotionNodeArtifacts()
         # safe old rules
-        old_temporary_rules = context.world.collision_manager.temporary_rules
+        old_temporary_rules = list(context.world.collision_manager.temporary_rules)
 
         # compute collision matrix with new rules
         context.world.collision_manager.clear_temporary_rules()
@@ -385,7 +385,7 @@ class SetInitialTemporaryCollisionRules(SucceedsOnObservingTrue, MotionStatechar
     def build_artifacts(self, context: StatechartContext) -> MotionNodeArtifacts:
         artifacts = MotionNodeArtifacts()
         # safe old rules
-        old_temporary_rules = context.world.collision_manager.temporary_rules
+        old_temporary_rules = list(context.world.collision_manager.temporary_rules)
 
         # compute collision matrix with new rules
         context.world.collision_manager.clear_temporary_rules()

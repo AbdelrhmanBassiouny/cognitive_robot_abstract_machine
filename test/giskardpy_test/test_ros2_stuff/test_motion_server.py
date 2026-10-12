@@ -44,7 +44,6 @@ from giskardpy.motion_control import MotionControl
 from cramph.context import StatechartContext
 from cramph.executor import StatechartExecutor
 
-pytestmark = pytest.mark.parked
 
 from .test_client_presence import SteppingClock, heartbeat_of, let_heartbeats_stop
 

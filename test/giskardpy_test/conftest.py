@@ -93,7 +93,7 @@ def giskard_factory(init_rospy, robot: GiskardTester):
             robot.api.world.get_connection_by_name(name): target
             for name, target in seed_joint_state.items()
         }
-        msc = Statechart()
+        msc = Statechart(context=robot.api.context)
 
         initial_config = SetSeedConfiguration(
             name="initial configuration",
@@ -116,7 +116,8 @@ def giskard_factory(init_rospy, robot: GiskardTester):
         end = EndMotion(name="end")
         msc.add_node(end)
         end.start_condition = done
-        robot.api.execute(msc)
+        robot.api.compile(msc)
+        robot.api.execute()
         return robot
 
     return _create_giskard

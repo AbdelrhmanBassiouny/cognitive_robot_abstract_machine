@@ -2062,15 +2062,27 @@ class Statechart(SubclassJSONSerializer):
         """
         :param node: A node of this statechart.
         :param node_type: The node type to look for.
-        :return: The closest node of `node_type` that runs before `node`, searching the
-            nodes left of `node` and of each of its ancestors, or None if there is none.
+        :return: The closest node of `node_type` that runs before `node`, see
+            :meth:`get_preceding_nodes_by_type`, or None if there is none.
         """
-        for ancestor_or_self in [node, *node.path]:
-            for sibling in reversed(ancestor_or_self.left_siblings):
-                for earlier in reversed([sibling, *sibling.descendants]):
-                    if isinstance(earlier, node_type):
-                        return earlier
-        return None
+        return next(iter(self.get_preceding_nodes_by_type(node, node_type)), None)
+
+    def get_preceding_nodes_by_type(
+        self, node: StatechartNode, node_type: Type[GenericStatechartNode]
+    ) -> list[GenericStatechartNode]:
+        """
+        :param node: A node of this statechart.
+        :param node_type: The node type to look for.
+        :return: Every node of `node_type` that runs before `node`, closest first,
+            searching the nodes left of `node` and of each of its ancestors.
+        """
+        return [
+            earlier
+            for ancestor_or_self in [node, *node.path]
+            for sibling in reversed(ancestor_or_self.left_siblings)
+            for earlier in reversed([sibling, *sibling.descendants])
+            if isinstance(earlier, node_type)
+        ]
 
     def is_ended(self) -> bool:
         """
