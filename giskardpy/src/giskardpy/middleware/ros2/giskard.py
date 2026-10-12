@@ -5,6 +5,8 @@ import os
 from dataclasses import dataclass, field
 from typing import List
 
+from typing_extensions import Callable, Self
+
 import rclpy
 from json_msgs.action import JsonAction
 from sqlalchemy.orm import sessionmaker
@@ -26,7 +28,10 @@ from giskardpy.middleware.ros2.post_goal_plotters import (
     MotionStatechartPlotter,
     PostGoalPlotter,
 )
-from giskardpy.middleware.ros2.robot_interface_config import RobotInterfaceConfig
+from giskardpy.middleware.ros2.robot_interface_config import (
+    RobotInterfaceConfig,
+    StandAloneRobotInterfaceConfig,
+)
 from giskardpy.middleware.ros2.server_config import GiskardServerConfig
 from giskardpy.middleware.ros2.world_updates import IncomingWorldUpdates
 from giskardpy.model.world_config import WorldConfig
@@ -126,6 +131,39 @@ class Giskard:
     """
     Serves the whole world to processes that join later.
     """
+
+    @classmethod
+    def standalone(
+        cls, world_config: WorldConfig, qp_controller_config: QPControllerConfig
+    ) -> Self:
+        """
+        :param world_config: Which robot description is loaded and how the robot is
+            attached to the world.
+        :param qp_controller_config: The control frequency and the tuning of the
+            controller.
+        :return: A Giskard that simulates the robot instead of commanding it, with
+            debug output enabled.
+        """
+        return cls(
+            world_config=world_config,
+            robot_interface_config=StandAloneRobotInterfaceConfig(),
+            server_config=GiskardServerConfig(debug_mode=True),
+            qp_controller_config=qp_controller_config,
+        )
+
+    @classmethod
+    def launch(
+        cls, create_giskard: Callable[[], Giskard], node_name: str = "giskard"
+    ) -> None:
+        """
+        Run a Giskard as a ros node until ROS shuts down.
+
+        :param create_giskard: Builds the Giskard to run. It is called once the ros node
+            exists, so it can read from topics.
+        :param node_name: The name of the ros node.
+        """
+        rospy.init_node(node_name)
+        create_giskard().live()
 
     def setup(self):
         """

@@ -1,6 +1,5 @@
 from datetime import timedelta
 
-from giskardpy.middleware.ros2 import rospy
 from giskardpy.middleware.ros2.giskard import Giskard
 from giskardpy.middleware.ros2.ros2_interface import get_robot_description
 from giskardpy.middleware.ros2.scripts.iai_robots.hsr.configs import (
@@ -32,8 +31,7 @@ def create_giskard() -> Giskard:
 
 
 def main():
-    rospy.init_node("giskard")
-    create_giskard().live()
+    Giskard.launch(create_giskard)
 
 
 if __name__ == "__main__":

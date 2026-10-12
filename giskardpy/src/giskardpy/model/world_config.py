@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 
 from sqlalchemy import select
 
+from giskardpy.model.exceptions import RobotDescriptionMissingError
 from krrood.ormatic.data_access_objects.helper import get_data_access_object_class
 from semantic_digital_twin.adapters.urdf import URDFParser
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
@@ -52,9 +53,11 @@ class WorldWithRobot(WorldConfig, ABC):
     A world holding one robot that is described by a URDF.
     """
 
-    urdf: str = field(kw_only=True)
+    urdf: str | None = field(kw_only=True, default=None)
     """
-    The description of the robot.
+    The URDF of the robot as XML, not a path to it.
+
+    ``None`` loads the description file :attr:`robot_class` declares.
     """
 
     root_name: PrefixedName = field(default=PrefixedName("map"))
@@ -72,9 +75,23 @@ class WorldWithRobot(WorldConfig, ABC):
         :return: A world of its own holding the described robot, with the robot class
             applied to it.
         """
-        world_with_robot = URDFParser(urdf=self.urdf, prefix="").parse()
+        world_with_robot = self.create_urdf_parser().parse()
         self.robot_class.from_world(world_with_robot)
         return world_with_robot
+
+    def create_urdf_parser(self) -> URDFParser:
+        """
+        :return: A parser of :attr:`urdf`, or of the description file
+            :attr:`robot_class` declares when no URDF is given.
+        :raises RobotDescriptionMissingError: If no URDF is given and the robot class
+            declares no description file.
+        """
+        if self.urdf is not None:
+            return URDFParser(urdf=self.urdf, prefix="")
+        description_file_path = self.robot_class.get_ros_file_path()
+        if not description_file_path:
+            raise RobotDescriptionMissingError(robot_class=self.robot_class)
+        return URDFParser.from_file(description_file_path, prefix="")
 
 
 @dataclass
@@ -84,10 +101,10 @@ class WorldWithFixedRobot(WorldWithRobot):
     """
 
     def setup_world(self):
+        world_with_robot = self.parse_robot()
+
         root = Body(name=self.root_name)
         self.world.add_body(root)
-
-        world_with_robot = self.parse_robot()
         root_C_robot = FixedConnection(parent=root, child=world_with_robot.root)
 
         self.world.merge_world(world_with_robot, root_C_robot)
@@ -121,14 +138,14 @@ class WorldWithMobileRobot(WorldWithRobot):
     """
 
     def setup_world(self):
+        world_with_robot = self.parse_robot()
+
         root = Body(name=self.root_name)
         odom = Body(name=self.odom_body_name)
         localization = Connection6DoF.create_with_dofs(
             parent=root, child=odom, world=self.world
         )
         self.world.add_connection(localization)
-
-        world_with_robot = self.parse_robot()
 
         drive = self.drive_class.create_with_dofs(
             parent=odom,

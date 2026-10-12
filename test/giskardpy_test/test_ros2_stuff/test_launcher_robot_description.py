@@ -32,7 +32,6 @@ from giskardpy.middleware.ros2.scripts.iai_robots.tracy import (
     tracy_standalone,
     tracy_velocity,
 )
-from giskardpy.middleware.ros2.utils.utils import load_xacro
 from semantic_digital_twin.robots.daisy import DAiSy
 from semantic_digital_twin.robots.hsrb import HSRB
 from semantic_digital_twin.robots.pr2 import PR2
@@ -109,4 +108,5 @@ def test_a_standalone_launcher_uses_the_description_its_robot_class_declares(
 ):
     giskard = launcher.create_giskard()
 
-    assert giskard.world_config.urdf == load_xacro(robot_class.get_ros_file_path())
+    assert giskard.world_config.urdf is None
+    assert giskard.world_config.robot_class is robot_class

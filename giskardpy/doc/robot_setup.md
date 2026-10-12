@@ -126,8 +126,8 @@ always applied first.
 - A script that commands a robot reads the description from the `/robot_description`
   topic with `get_robot_description()`. Giskard then uses the model the robot uses. It
   waits until the description is published.
-- A script that simulates loads the file its robot class declares, with
-  `load_xacro(Robot.get_ros_file_path())`, so nothing has to publish the description.
+- A script that simulates passes no `urdf` to its world config, which then loads the file
+  its robot class declares, so nothing has to publish the description.
 
 ## Running it
 
