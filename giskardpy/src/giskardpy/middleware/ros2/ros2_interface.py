@@ -141,7 +141,7 @@ def call_service(
     """
     Call a service through Giskard's node and wait for its response.
 
-    ..warning:: The response is delivered by the executor that spins Giskard's node, so
+    .. warning:: The response is delivered by the executor that spins Giskard's node, so
         this must not be called from one of that node's callbacks.
 
     :param service_type: The type of the service.

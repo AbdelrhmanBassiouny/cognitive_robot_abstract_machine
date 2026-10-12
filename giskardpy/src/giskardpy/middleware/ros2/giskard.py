@@ -273,7 +273,7 @@ class Giskard:
         kept, and a callback that publishes on a destroyed node fails. Nothing may
         therefore stay registered on the world.
 
-        ..note:: Giskard can fail before all of them exist, so only the ones that were
+        .. note:: Giskard can fail before all of them exist, so only the ones that were
             created are closed.
         """
         if self.world_synchronizer is not None:

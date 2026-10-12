@@ -49,7 +49,7 @@ def published_robot_description(init_rospy) -> Iterator[str]:
     """
     Publishes a robot description the way a robot does and yields it.
 
-    ..note:: The description is of none of the robots that have a launcher, so it cannot
+    .. note:: The description is of none of the robots that have a launcher, so it cannot
         be confused with the one a robot class declares.
     """
     description = (

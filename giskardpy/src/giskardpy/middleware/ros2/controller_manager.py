@@ -6,10 +6,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import StrEnum
-from typing import TYPE_CHECKING, List
 
+from controller_manager_msgs.srv import ListControllers
 from sensor_msgs.msg import JointState
 from std_msgs.msg import Float64MultiArray
+from typing_extensions import TYPE_CHECKING
 
 from giskardpy.middleware.ros2.exceptions import (
     ControllersNotActiveError,
@@ -83,8 +84,8 @@ class ControllerManager:
         return "/" + self.name.strip("/").rpartition("/")[0]
 
     def active_controllers(
-        self, whitelist: List[str] | None = None
-    ) -> List[ControllerStateMessage]:
+        self, whitelist: list[str] | None = None
+    ) -> list[ControllerStateMessage]:
         """
         :param whitelist: The names of the controllers to consider, all if ``None``.
         :return: The controllers that currently run.
@@ -93,8 +94,6 @@ class ControllerManager:
         :raises ControllersNotActiveError: If the whitelist names a controller that is
             loaded but does not run.
         """
-        from controller_manager_msgs.srv import ListControllers
-
         controllers = call_service(
             ListControllers, f"{self.name}/list_controllers", ListControllers.Request()
         ).controller
@@ -127,7 +126,7 @@ class ControllerManager:
             if controller.state == ControllerState.ACTIVE
         ]
 
-    def joints_of(self, controller_name: str) -> List[str]:
+    def joints_of(self, controller_name: str) -> list[str]:
         """
         :return: The joints the controller commands, in the order of its command layout.
         """

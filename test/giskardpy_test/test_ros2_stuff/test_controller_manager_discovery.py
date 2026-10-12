@@ -8,6 +8,7 @@ process, so no driver has to run.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from datetime import timedelta
 from threading import Thread
 from time import sleep, time
 from typing import Iterator
@@ -62,11 +63,6 @@ controller_manager_messages = pytest.importorskip("controller_manager_msgs.msg")
 controller_manager_services = pytest.importorskip("controller_manager_msgs.srv")
 
 # %% the mimicked controller manager
-
-GRAPH_TIMEOUT_SECONDS = 10.0
-"""
-How long the mimicked nodes may take to become visible to Giskard's node.
-"""
 
 
 @dataclass
@@ -213,6 +209,11 @@ class ControllerManagerMimics:
     The controller managers that are served.
     """
 
+    graph_timeout: timedelta = timedelta(seconds=10)
+    """
+    How long the mimicked nodes may take to become visible to Giskard's node.
+    """
+
     executor: SingleThreadedExecutor = field(
         init=False, default_factory=SingleThreadedExecutor
     )
@@ -236,7 +237,7 @@ class ControllerManagerMimics:
                 self.executor.add_node(node)
         self.thread = Thread(target=self.serve, daemon=True)
         self.thread.start()
-        deadline = time() + GRAPH_TIMEOUT_SECONDS
+        deadline = time() + self.graph_timeout.total_seconds()
         while not all(
             manager.is_visible_to(rospy.get_node()) for manager in self.managers
         ):

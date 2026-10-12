@@ -16,7 +16,7 @@ def create_giskard() -> Giskard:
     Build a Giskard that commands DAiSy, described by what the robot publishes on
     ``/robot_description``.
 
-    ..note:: The ros node has to be initialized first, because the robot description is
+    .. note:: The ros node has to be initialized first, because the robot description is
         read from its topic.
     """
     return Giskard(
