@@ -11,10 +11,16 @@ from coraplex.datastructures.dataclasses import Context
 from coraplex.datastructures.enums import (
     MovementType,
 )
-from coraplex.execution_environment import real_robot, semi_real_robot, simulated_robot
+from coraplex.execution_environment import (
+    PhysicallySimulatedRobot,
+    real_robot,
+    semi_real_robot,
+    kinematically_simulated_robot,
+)
 from coraplex.plans.executables import MoveBranchExecutable
-from coraplex.plans.factories import execute_single, sequential
-from coraplex.plans.plan_node import ActionNode, MotionNode
+from giskardpy.motion_statechart.monitors.overwrite_state_monitors import SetOdometry
+from coraplex.plans.factories import sequential, execute_single
+from coraplex.plans.plan_node import MotionNode, ActionNode
 from coraplex.robot_plans.actions.core.navigation import NavigateAction
 from coraplex.robot_plans.actions.core.pick_up import GraspingAction, PickUpAction
 from coraplex.robot_plans.actions.core.placing import PlaceAction
@@ -125,7 +131,7 @@ def test_pick_up_motion(pr2_apartment_context):
         context=test_context,
     )
     assert pick_up.plan is not None
-    with simulated_robot:
+    with kinematically_simulated_robot:
         root.perform()
 
     pick_up_node = root.plan.get_nodes_by_designator_type(PickUpAction)[0]
@@ -159,6 +165,41 @@ def test_move_motion_chart(pr2_apartment_context):
 
     assert msc
     np.testing.assert_equal(msc.goal_pose.position.to_np(), np.array([1, 1, 1, 1]))
+
+
+def test_a_simulated_base_is_written_where_it_was_sent(pr2_apartment_context):
+    """
+    A robot simulated against the world's own belief about where it is can be put at a
+    pose by saying so.
+    """
+    world, _, context = pr2_apartment_context
+    motion = MoveMotion(
+        Pose(Point3.from_iterable([1, 1, 1]), reference_frame=world.root)
+    )
+
+    with kinematically_simulated_robot:
+        execute_single(motion, context=context)
+
+        assert isinstance(motion.motion_chart, SetOdometry)
+
+
+def test_a_physically_simulated_base_is_driven_where_it_was_sent(
+    pr2_apartment_context,
+):
+    """
+    A robot whose wheels have to carry it cannot be put at a pose by saying so, which is
+    why performing in physics is told apart from performing against the world's own
+    belief.
+    """
+    world, _, context = pr2_apartment_context
+    motion = MoveMotion(
+        Pose(Point3.from_iterable([1, 1, 1]), reference_frame=world.root)
+    )
+
+    with PhysicallySimulatedRobot(simulation=None):
+        execute_single(motion, context=context)
+
+        assert isinstance(motion.motion_chart, CartesianPose)
 
 
 def test_move_tool_center_point_motion_uses_tight_threshold(pr2_apartment_context):
@@ -846,7 +887,7 @@ def test_stretch_base_motion_follows_the_execution_environment(
         assert motion.get_alternative_motion() is StretchMoveReal
         assert isinstance(motion.motion_chart, DifferentialDriveBaseGoal)
 
-    with simulated_robot:
+    with kinematically_simulated_robot:
         assert motion.get_alternative_motion() is StretchMoveSim
 
 
@@ -981,14 +1022,14 @@ class TestDAiSyGripMotion:
 
     def test_simulated_returns_joint_position_list(self, immutable_daisy_world):
         motion = self._grip_motion(immutable_daisy_world)
-        with simulated_robot:
+        with kinematically_simulated_robot:
             chart = motion._motion_chart
         assert isinstance(chart, JointPositionList)
         assert chart.name == "left_gripper_close"
 
     def test_simulated_open_returns_joint_position_list(self, immutable_daisy_world):
         motion = self._grip_motion(immutable_daisy_world, state_type=GripperState.OPEN)
-        with simulated_robot:
+        with kinematically_simulated_robot:
             chart = motion._motion_chart
         assert isinstance(chart, JointPositionList)
         assert chart.name == "left_gripper_open"
@@ -1060,7 +1101,7 @@ class TestDAiSyFlexGripMotion:
 
     def test_simulated_returns_joint_position_list(self, immutable_daisy_world):
         motion = self._flex_motion(immutable_daisy_world)
-        with simulated_robot:
+        with kinematically_simulated_robot:
             chart = motion._motion_chart
         assert isinstance(chart, JointPositionList)
         assert chart.name == "flexgrip"
@@ -1193,7 +1234,7 @@ class TestDAiSyGripperConfigurationRouting:
             immutable_daisy_world,
             end_effector.default_configuration(GripperState.CLOSE),
         )
-        with simulated_robot:
+        with kinematically_simulated_robot:
             chart = motion.motion_chart
         assert isinstance(chart, JointPositionList)
         assert chart.name == "left_gripper_close"

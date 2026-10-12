@@ -133,7 +133,7 @@ class TestBuildContext:
 class TestExecutionSwitch:
     def test_switch_covers_all_execution_types(self):
         assert set(EXECUTION_CHOICES.values()) == {
-            ExecutionType.SIMULATED,
+            ExecutionType.KINEMATICALLY_SIMULATED,
             ExecutionType.SEMI_REAL,
             ExecutionType.REAL,
         }

@@ -40,7 +40,7 @@ from coraplex.demonstrations import RobotDemonstration, RobotDemonstrationRosSes
 from coraplex.execution_environment import (
     real_robot,
     semi_real_robot,
-    simulated_robot,
+    kinematically_simulated_robot,
 )
 from coraplex.language import ParallelNode, SequentialNode
 from coraplex.plans.factories import code, make_node
@@ -60,7 +60,7 @@ from semantic_digital_twin.world import World
 logger = logging.getLogger(__name__)
 
 EXECUTION_CHOICES = {
-    "simulated": ExecutionType.SIMULATED,
+    "simulated": ExecutionType.KINEMATICALLY_SIMULATED,
     "semi-real": ExecutionType.SEMI_REAL,
     "real": ExecutionType.REAL,
 }
@@ -222,7 +222,7 @@ class DAiSyGripperDemonstration(RobotDemonstration):
                     with semi_real_robot:
                         plan.perform()
                 else:
-                    with simulated_robot:
+                    with kinematically_simulated_robot:
                         plan.perform()
         finally:
             self.tear_down()
@@ -366,7 +366,7 @@ def show_announcements_in_terminal() -> None:
     logger.addHandler(handler)
 
 
-def main(execution_type: ExecutionType = ExecutionType.SIMULATED) -> None:
+def main(execution_type: ExecutionType = ExecutionType.KINEMATICALLY_SIMULATED) -> None:
     """
     Run the demonstration.
 

@@ -45,7 +45,7 @@ class DAiSyGripperMotion(MoveGripperMotion[TGripperConfiguration]):
     execution_type: tuple[ExecutionType, ...] = (
         ExecutionType.REAL,
         ExecutionType.SEMI_REAL,
-        ExecutionType.SIMULATED,
+        ExecutionType.KINEMATICALLY_SIMULATED,
     )
     """
     Execution types this alternative applies to.
@@ -77,7 +77,7 @@ class DAiSyGripperMotion(MoveGripperMotion[TGripperConfiguration]):
         """
         if (
             GiskardExecutable.execution_type == ExecutionType.SEMI_REAL
-            or GiskardExecutable.execution_type == ExecutionType.SIMULATED
+            or GiskardExecutable.execution_type == ExecutionType.KINEMATICALLY_SIMULATED
         ):
             return super()._motion_chart
 

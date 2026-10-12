@@ -27,9 +27,14 @@ from experiments.causal_reasoning.mutagenesis.dataset import (
     is_mutagenesis_dataset_reachable,
     synthetic_mutagenesis_molecules,
 )
-from probabilistic_model.probabilistic_circuit.relational.rspn import (
+from probabilistic_model.probabilistic_circuit.relational.exchangeable_grounding import (
     ExchangeablePartGrounder,
+)
+from probabilistic_model.probabilistic_circuit.relational.rspn import (
     RelationalProbabilisticCircuit,
+)
+from probabilistic_model.probabilistic_circuit.relational.rustworkx_grounding import (
+    RustworkxExchangeablePartGrounder,
 )
 
 CHLORINE_COUNT_VARIABLE_NAME = "MutagenesisMoleculeAggregations.chlorine_count()"
@@ -101,7 +106,7 @@ def _evidence_for(molecule: MutagenesisMolecule, circuit) -> dict:
     :param circuit: The circuit whose variables the evidence must be keyed on.
     :return: Mapping from each non-target variable to ``molecule``'s value for it.
     """
-    aggregations = MutagenesisMoleculeAggregations(instance=molecule)
+    aggregations = MutagenesisMoleculeAggregations(role_taker=molecule)
     values_by_name = {
         "MutagenesisMolecule.indicator_1": molecule.indicator_1,
         "MutagenesisMolecule.logp": molecule.logp,
@@ -196,6 +201,7 @@ def test_mutagenesis_chlorine_count_is_not_a_split_feature(mutagenesis_rpc):
         v for v in circuit.variables if v.name == CHLORINE_COUNT_VARIABLE_NAME
     )
     marginal = circuit.marginal([chlorine_count_variable])
+    branches = RustworkxExchangeablePartGrounder.partition_branches(marginal)
     assert not ExchangeablePartGrounder._undetermined_latents_partition_disjointly(
-        marginal
+        [branch.support for branch in branches]
     )

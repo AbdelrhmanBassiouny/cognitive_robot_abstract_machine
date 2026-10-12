@@ -43,7 +43,7 @@ class StretchMoveToolCenterPoint(MoveToolCenterPointMotion, AlternativeMotion[St
     full body control to move the TCP to the goal.
     """
 
-    execution_type = ExecutionType.SIMULATED, ExecutionType.REAL
+    execution_type = ExecutionType.KINEMATICALLY_SIMULATED, ExecutionType.REAL
 
     def perform(self):
         return
@@ -86,7 +86,7 @@ class StretchMoveSim(MoveMotion, AlternativeMotion[Stretch]):
     for a diff drive.
     """
 
-    execution_type = ExecutionType.SIMULATED
+    execution_type = ExecutionType.KINEMATICALLY_SIMULATED
 
     def perform(self):
         return
@@ -127,7 +127,7 @@ class StretchClose(ClosingMotion, AlternativeMotion[Stretch]):
     and then pushes it arm forward to close the container.
     """
 
-    execution_type = ExecutionType.SIMULATED
+    execution_type = ExecutionType.KINEMATICALLY_SIMULATED
 
     def perform(self):
         return
@@ -159,7 +159,7 @@ class StretchMoveGripperMotion(
     second so the local minimum isn't reported before the gripper has actually moved.
     """
 
-    execution_type = ExecutionType.SIMULATED, ExecutionType.REAL
+    execution_type = ExecutionType.KINEMATICALLY_SIMULATED, ExecutionType.REAL
 
     def perform(self):
         return

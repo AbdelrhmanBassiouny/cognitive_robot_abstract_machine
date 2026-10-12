@@ -100,6 +100,11 @@ class DiracDeltaLayer(AbstractContinuousLayer):
             layers[0].tolerance,
         )
 
+    def has_equal_parameters(self, other: Self) -> bool:
+        return np.array_equal(self.location, other.location) and np.array_equal(
+            self.density_cap, other.density_cap
+        )
+
     def log_likelihood_of_nodes_from_column(
         self, values: SampleColumn
     ) -> SampleNodeValues:
@@ -158,7 +163,7 @@ class DiracDeltaLayer(AbstractContinuousLayer):
         Truncating a Dirac delta either keeps it unchanged or makes it impossible, so
         the whole layer is truncated by testing which locations the assignment contains.
 
-        See :meth:`~probabilistic_model.probabilistic_circuit.tensorized.input_layer.base.InputLayer.log_truncated_of_assignment`
+        See :meth:`~probabilistic_model.probabilistic_circuit.tensorized.input_layer.base.UnivariateInputLayer.log_truncated_of_assignment`
         for the parameters and the result.
         """
         return LayerWithLogProbabilities(

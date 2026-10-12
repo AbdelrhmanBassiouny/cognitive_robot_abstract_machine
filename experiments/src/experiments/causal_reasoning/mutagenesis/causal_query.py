@@ -324,7 +324,7 @@ class BranchingAtomCountCausalQuery:
             :meth:`classify_by_branching_atom_count_and_indicator_1` groups by.
         """
         return (
-            MutagenesisMoleculeAggregations(instance=molecule).branching_atom_count(),
+            MutagenesisMoleculeAggregations(role_taker=molecule).branching_atom_count(),
             molecule.indicator_1,
         )
 
