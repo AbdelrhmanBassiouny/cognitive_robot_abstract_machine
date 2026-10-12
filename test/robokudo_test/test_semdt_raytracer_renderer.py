@@ -1,4 +1,7 @@
+# %% Imports
 import logging
+
+import pytest
 
 import numpy as np
 
@@ -56,3 +59,13 @@ def test_renderer_converts_projective_depth_to_millimeters():
         depth_mm,
         np.array([[0, 0, 1235, 65535]], dtype=np.uint16),
     )
+
+
+# %% Rendering mode configuration
+@pytest.mark.parametrize("mode", list(SemDTRGBMode))
+def test_renderer_preserves_rendering_mode(mode: SemDTRGBMode) -> None:
+    """
+    Construction retains each supported rendering-mode enum member.
+    """
+    renderer = SemDTRayTracerRenderer(mode, logging.getLogger(__name__))
+    assert renderer.rgb_mode is mode

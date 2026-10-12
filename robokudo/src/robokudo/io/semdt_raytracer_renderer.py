@@ -88,7 +88,7 @@ class SemDTRayTracerRenderer:
 
     def __init__(
         self,
-        rgb_mode: SemDTRGBMode | str,
+        rgb_mode: SemDTRGBMode,
         logger: logging.Logger,
     ) -> None:
         """
@@ -97,13 +97,9 @@ class SemDTRayTracerRenderer:
         :param rgb_mode: Method used to produce the color image.
         :param logger: Logger used to report mesh-rendering fallback.
         """
-        self.rgb_mode = (
-            rgb_mode
-            if isinstance(rgb_mode, SemDTRGBMode)
-            else SemDTRGBMode(rgb_mode.strip().lower())
-        )
+        self.rgb_mode = rgb_mode
         """
-        Normalized color-rendering mode.
+        Color-rendering mode.
         """
         self.logger = logger
         """
