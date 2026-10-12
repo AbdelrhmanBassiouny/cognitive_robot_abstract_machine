@@ -14,13 +14,12 @@ no sense in reporting that it was turned by more.
 
 from __future__ import annotations
 
-import colorsys
 import math
-from dataclasses import dataclass, field
-from enum import IntEnum
+from dataclasses import dataclass
+from enum import Enum
 
 import numpy as np
-from typing_extensions import Optional, Tuple, Type, Union
+from typing_extensions import Optional, Tuple, Type
 
 from experiments.montessori.semantics import (
     CubeShape,
@@ -29,58 +28,22 @@ from experiments.montessori.semantics import (
     RectangularPrismShape,
     TriangularPrismShape,
 )
-from semantic_digital_twin.world_description.geometry import Color, Polygon2D
+from semantic_digital_twin.world_description.geometry import Color, Hue, Polygon2D
 
 # %% the colours they were measured to be
 
 
-@dataclass(frozen=True)
-class HueCircle:
+class PieceHue(Hue, Enum):
     """
-    The colour circle as OpenCV encodes hue in a byte: hues run from zero up to
-    :attr:`size` and wrap around there.
+    The hues the pieces in this set wear, measured off the rectified camera image.
     """
 
-    size: int = 180
-    """
-    Number of hues OpenCV fits into a byte.
-    """
-
-    def distance(
-        self, one: Union[int, np.ndarray], other: int
-    ) -> Union[int, np.ndarray]:
-        """
-        How far apart two hues lie on the colour circle, the short way round.
-
-        :param one: A hue as OpenCV reports it, or an array of them.
-        :param other: The hue to compare it against.
-        :return: The distance, element by element when ``one`` is an array.
-        """
-        apart = np.abs(np.asarray(one, dtype=int) - int(other))
-        return np.minimum(apart, self.size - apart)
-
-    def pure_color(self, hue: int) -> Color:
-        """
-        A hue at full saturation and brightness.
-
-        :param hue: A hue as OpenCV reports it.
-        """
-        red, green, blue = colorsys.hsv_to_rgb(hue / self.size, 1.0, 1.0)
-        return Color(red, green, blue)
-
-
-class PieceHue(IntEnum):
-    """
-    The hues the pieces in this set wear, measured off the rectified camera image as
-    OpenCV reports hue.
-    """
-
-    CYAN = 86
+    CYAN = 172.0
     """
     Hue of the pale blue pieces.
     """
 
-    YELLOW = 21
+    YELLOW = 42.0
     """
     Hue of the yellow pieces.
 
@@ -115,9 +78,9 @@ class KnownPiece:
     How far its top face stands above the surface it rests on, in metres.
     """
 
-    hue: int
+    hue: Hue
     """
-    The colour it was measured to be, as OpenCV reports hue.
+    The colour it was measured to be.
     """
 
     rotation_period: Optional[float]
@@ -138,7 +101,7 @@ class KnownPiece:
         saturation and brightness -- the pure form of the colour it wears, rather than
         the shade any one photograph of it happened to catch.
         """
-        return HueCircle().pure_color(self.hue)
+        return Color.from_hsv(self.hue)
 
     @property
     def radius(self) -> float:
@@ -176,19 +139,15 @@ class PieceSet:
     Every kind of loose piece in the set.
     """
 
-    hue_tolerance: int = 4
+    hue_tolerance: float = 8.0
     """
-    How far a measured colour may sit from a piece's own and still be taken for it.
+    How far a measured colour may sit from a piece's own and still be taken for it, in
+    degrees round the colour circle.
 
-    Measured on this table, every piece read within 2 of its own recorded colour while
-    the two things standing on the table that are not pieces read 6 and 7 away, so this
-    sits midway between and turns them away. It is the one number here that a real
-    change of lighting would have to be re-measured for.
-    """
-
-    hue_circle: HueCircle = field(default_factory=HueCircle)
-    """
-    The colour circle the pieces' hues lie on.
+    Measured on this table, every piece read within 4 degrees of its own recorded colour
+    while the two things standing on the table that are not pieces read 12 and 14
+    degrees away, so this sits midway between and turns them away. It is the one number
+    here that a real change of lighting would have to be re-measured for.
     """
 
     @classmethod
@@ -232,15 +191,17 @@ class PieceSet:
         )
 
     @property
-    def hues(self) -> Tuple[int, ...]:
+    def hues(self) -> Tuple[Hue, ...]:
         """
-        Every colour a piece in this set wears.
+        Every colour a piece in this set wears, in order round the colour circle.
 
         What a piece stands on is whatever the table happens to be covered with, so it
         is these that say a pixel belongs to a piece rather than anything about the
         surface under it.
         """
-        return tuple(sorted({piece.hue for piece in self.pieces}))
+        return tuple(
+            sorted({piece.hue for piece in self.pieces}, key=lambda hue: hue.degrees)
+        )
 
     def piece_for(self, category: Type[MontessoriShape]) -> Optional[KnownPiece]:
         """
@@ -253,7 +214,7 @@ class PieceSet:
                 return piece
         return None
 
-    def could_be(self, piece: KnownPiece, hue: Optional[int]) -> bool:
+    def could_be(self, piece: KnownPiece, hue: Optional[Hue]) -> bool:
         """
         Whether a piece's own colour is close enough to a measured one to be it.
 
@@ -262,14 +223,14 @@ class PieceSet:
         """
         if hue is None:
             return True
-        return bool(self.hue_circle.distance(hue, piece.hue) <= self.hue_tolerance)
+        return bool(piece.hue.distance(hue.degrees) <= self.hue_tolerance)
 
-    def wears_a_piece_colour(self, hue: np.ndarray) -> np.ndarray:
+    def wears_a_piece_colour(self, degrees: np.ndarray) -> np.ndarray:
         """
         Which of the given hues lie close enough to one a piece in this set wears.
 
-        :param hue: Hues as OpenCV reports them, of any shape.
+        :param degrees: Hues in degrees round the colour circle, of any shape.
         :return: A boolean array of the same shape.
         """
-        apart = np.stack([self.hue_circle.distance(hue, worn) for worn in self.hues])
+        apart = np.stack([worn.distance(degrees) for worn in self.hues])
         return apart.min(axis=0) <= self.hue_tolerance
