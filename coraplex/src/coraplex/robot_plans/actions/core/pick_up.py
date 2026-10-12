@@ -18,7 +18,7 @@ from coraplex.querying.predicates import (
     GripperIsFree,
     ToolFrameIsAtGrasp,
 )
-from cramph.composites import Sequence
+from cramph.composites import Parallel, Sequence
 from cramph.node import StatechartNode
 from cramph.world_modification_nodes import MoveBranch
 from coraplex.robot_plans.actions.base import Action
@@ -280,13 +280,26 @@ class GraspingAction(
                     orientation_threshold=self.orientation_threshold,
                     grasp_detection_threshold=self.grasp_detection_threshold,
                 ),
-                self.gripper_goal(
-                    GripperState.CLOSE,
-                    self.arm.end_effector,
-                    allow_gripper_collision=True,
-                    finger_velocity=self.grasp_closing_velocity,
-                    stall_minimum_time=self.grasp_stall_minimum_time,
-                    tolerate_stall=self.tolerate_grasp_stall,
+                Parallel(
+                    [
+                        self.gripper_goal(
+                            GripperState.CLOSE,
+                            self.arm.end_effector,
+                            allow_gripper_collision=True,
+                            finger_velocity=self.grasp_closing_velocity,
+                            stall_minimum_time=self.grasp_stall_minimum_time,
+                            tolerate_stall=self.tolerate_grasp_stall,
+                        ),
+                        # Keeps the gripper in place while it closes, whatever else
+                        # moves the robot meanwhile.
+                        self.tool_center_point_goal(
+                            self.grasp_pose_sequence(
+                                self.grasp.grasp_pose, self.arm.end_effector, self.grasp
+                            ).grasp,
+                            self.arm,
+                            allow_gripper_collision=True,
+                        ),
+                    ]
                 ),
             ]
         )

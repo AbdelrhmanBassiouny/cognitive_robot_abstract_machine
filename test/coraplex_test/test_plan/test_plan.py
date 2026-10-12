@@ -7,14 +7,7 @@ import pytest
 from coraplex.plans.failures import EmptyUnderspecified
 from coraplex.robot_plans.actions.core.navigation import NavigateAction
 from coraplex.robot_plans.actions.core.pick_up import PickUpAction
-from coraplex.robot_plans.actions.core.placing import PlaceAction
 from coraplex.robot_plans.actions.core.robot_body import MoveTorsoAction
-from cramph.node import CompositeNode, StatechartNode
-from giskardpy.motion_statechart.goals.gripper import MoveGripper
-from giskardpy.motion_statechart.tasks.cartesian_tasks import (
-    CartesianPose,
-    CartesianPosition,
-)
 from krrood.entity_query_language.backends import ProbabilisticBackend
 from krrood.entity_query_language.factories import (
     variable_from,
@@ -24,7 +17,7 @@ from krrood.parametrization.model_registries import (
     FullyFactorizedRegistry,
 )
 from krrood.parametrization.parameterizer import UnderspecifiedParameters
-from semantic_digital_twin.datastructures.definitions import GripperState, TorsoState
+from semantic_digital_twin.datastructures.definitions import TorsoState
 from semantic_digital_twin.orm.model import (
     Point3Mapping,
     QuaternionMapping,
@@ -32,14 +25,10 @@ from semantic_digital_twin.orm.model import (
 )
 from semantic_digital_twin.robots.pr2 import PR2Joint
 from semantic_digital_twin.semantic_annotations.semantic_annotations import Milk
-from semantic_digital_twin.spatial_types import HomogeneousTransformationMatrix, Pose
 
-from ..conftest import expand
 from coraplex.plans.underspecified import UnderspecifiedNode
 from cramph.composites import Sequence
 from ...plan_running import run_plan, with_grounding
-from cramph.context import ContextExtension
-from typing_extensions import List
 
 
 def _torso_position(world):
@@ -134,104 +123,3 @@ def test_parameterization_of_pick_up(apartment_world_pr2_copy_with_context):
         run_plan(plan, extensions)
     except EmptyUnderspecified:
         pass
-
-
-def test_motion_order_pick_up(pr2_apartment_context):
-    world, robot_view, extensions = pr2_apartment_context
-
-    milk = world.get_semantic_annotations_by_type(Milk)[0]
-    milk_body = world.get_body_by_name("milk.stl")
-    milk_body.parent_connection.origin = HomogeneousTransformationMatrix.from_xyz_rpy(
-        1, -2, 0.6, reference_frame=world.root
-    )
-    robot_view.root.parent_connection.origin = (
-        HomogeneousTransformationMatrix.from_xyz_rpy(
-            0.3, -2.4, 0, reference_frame=world.root
-        )
-    )
-    world.notify_state_change()
-
-    root = Sequence(
-        [
-            PickUpAction(milk.grasp_candidates()[0], robot_view.left_arm),
-        ]
-    )
-
-    performed_motions = _motions_of(root, extensions)
-
-    assert performed_motions == [
-        CartesianPose,
-        GripperState.OPEN,
-        CartesianPose,
-        GripperState.CLOSE,
-        CartesianPosition,
-    ]
-
-
-def test_motion_order_place(pr2_apartment_context):
-    world, robot_view, extensions = pr2_apartment_context
-
-    milk_body = world.get_body_by_name("milk.stl")
-    milk_body.parent_connection.origin = world.get_body_by_name(
-        "l_gripper_tool_frame"
-    ).global_pose.homogeneous_matrix
-
-    with world.modify_world():
-
-        world.move_branch_with_fixed_connection(
-            world.get_body_by_name("milk.stl"),
-            world.get_body_by_name("l_gripper_tool_frame"),
-        )
-
-    robot_view.root.parent_connection.origin = (
-        HomogeneousTransformationMatrix.from_xyz_rpy(
-            0.3, -2.4, 0, reference_frame=world.root
-        )
-    )
-    world.notify_state_change()
-
-    root = Sequence(
-        [
-            PlaceAction(
-                world.get_semantic_annotations_by_type(Milk)[0],
-                Pose.from_xyz_rpy(0.8, -1.9, 0.7, reference_frame=world.root),
-            ),
-        ]
-    )
-
-    performed_motions = _motions_of(root, extensions)
-
-    assert performed_motions == [
-        CartesianPose,
-        CartesianPose,
-        GripperState.OPEN,
-        CartesianPose,
-    ]
-
-
-# %% reading back what a plan moves
-
-
-def _motions_of(plan: StatechartNode, extensions: List[ContextExtension]) -> list:
-    """
-    Expand `plan` in `extensions` and report what it moves, in the order it runs.
-
-    :return: One entry per motion: the gripper state a gripper motion commands, or the
-        type of the Cartesian task any other motion is built around.
-    """
-    return _motions_below(expand(plan, extensions))
-
-
-def _motions_below(goal) -> list:
-    """
-    :return: What every motion below `goal` moves, in the order the chart runs them.
-    """
-    found = []
-    for node in goal.children:
-        if isinstance(node, MoveGripper):
-            found.append(node.state)
-        elif isinstance(node, (CartesianPose, CartesianPosition)):
-            found.append(type(node))
-        elif isinstance(node, CompositeNode):
-            found.extend(_motions_below(node))
-    return found

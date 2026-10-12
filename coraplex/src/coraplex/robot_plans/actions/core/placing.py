@@ -18,7 +18,7 @@ from coraplex.exceptions import ObjectIsNotHeld
 from coraplex.querying.predicates import GripperHolds
 from cramph.node import StatechartNode
 from coraplex.robot_plans.actions.base import Action
-from cramph.composites import Sequence
+from cramph.composites import Parallel, Sequence
 from cramph.world_modification_nodes import MoveBranch
 from coraplex.robot_plans.actions.core.pick_up import PickUpAction
 from coraplex.robot_plans.mixins import (
@@ -91,11 +91,20 @@ class PlaceAction(
                     allow_gripper_collision=True,
                     max_linear_velocity=self.placing_linear_velocity,
                 ),
-                self.gripper_goal(
-                    GripperState.OPEN,
-                    arm.end_effector,
-                    allow_gripper_collision=True,
-                    finger_velocity=self.release_opening_velocity,
+                Parallel(
+                    [
+                        self.gripper_goal(
+                            GripperState.OPEN,
+                            arm.end_effector,
+                            allow_gripper_collision=True,
+                            finger_velocity=self.release_opening_velocity,
+                        ),
+                        # Keeps the gripper in place while it opens, whatever else
+                        # moves the robot meanwhile.
+                        self.tool_center_point_goal(
+                            poses.grasp, arm, allow_gripper_collision=True
+                        ),
+                    ]
                 ),
                 self._retract(arm, poses.pre_grasp),
             ]

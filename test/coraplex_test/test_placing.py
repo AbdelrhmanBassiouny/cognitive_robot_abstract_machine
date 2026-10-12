@@ -99,9 +99,11 @@ def test_a_place_runs_the_grasp_backwards(pr2_holding_milk):
 
     tool_goals = [goal.goal_pose for goal in _tool_goals_of(place)]
 
-    assert len(tool_goals) == 3
+    # The grasp pose is commanded twice: to come down onto the target, and to stay there
+    # while the gripper opens.
+    assert len(tool_goals) == 4
     for expected, actual in zip(
-        [poses.retreat, poses.grasp, poses.pre_grasp], tool_goals
+        [poses.retreat, poses.grasp, poses.grasp, poses.pre_grasp], tool_goals
     ):
         np.testing.assert_allclose(expected.to_np(), actual.to_np(), atol=1e-9)
 
