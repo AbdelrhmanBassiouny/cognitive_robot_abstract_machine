@@ -15,14 +15,18 @@ from semantic_digital_twin.robots.daisy import DAiSy
 
 def test_closed_configuration_carries_the_end_effectors_own_joint_state(daisy_world):
     """
-    ``GripperStateConfiguration.closed(gripper).joint_state`` is the very object
-    ``gripper.get_joint_state_by_type(GripperState.CLOSE)`` returns -- not a copy.
+    The configuration built from a gripper's declared close state commands the very.
+
+    joint state object ``gripper.get_joint_state_by_type(GripperState.CLOSE)`` returns
+    -- not a copy.
     """
     daisy = daisy_world.get_semantic_annotations_by_type(DAiSy)[0]
 
     for end_effector in daisy.all_end_effectors:
         expected = end_effector.get_joint_state_by_type(GripperState.CLOSE)
-        configuration = GripperStateConfiguration.closed(end_effector)
+        configuration = GripperStateConfiguration.from_state_type(
+            end_effector, GripperState.CLOSE
+        )
         assert configuration.joint_state is expected
 
 
@@ -51,7 +55,9 @@ def test_configuration_end_effector_and_joint_state_are_carried(daisy_world):
     end_effector = daisy.left_arm.end_effector
     close_state = end_effector.get_joint_state_by_type(GripperState.CLOSE)
 
-    configuration = GripperStateConfiguration.closed(end_effector)
+    configuration = GripperStateConfiguration.from_state_type(
+        end_effector, GripperState.CLOSE
+    )
     assert configuration.end_effector is end_effector
     assert configuration.joint_state is close_state
 
@@ -87,8 +93,8 @@ def test_flex_configuration_interpolates_between_the_declared_states(daisy_world
 
 def test_flex_configuration_without_grip_position_commands_the_open_state(daisy_world):
     """
-    Without a configured opening width, a flex configuration commands the declared
-    open state, i.e. the fully opened state.
+    Without a configured opening width, a flex configuration commands the declared open
+    state, i.e. the fully opened state.
     """
     daisy = daisy_world.get_semantic_annotations_by_type(DAiSy)[0]
     end_effector = daisy.left_arm.end_effector
@@ -109,9 +115,9 @@ def test_flexclose_configuration_without_grip_position_commands_the_fully_closed
     Without a configured opening width, a ``FLEXCLOSE`` configuration commands the
     declared close state, i.e. the state where the fingers touch.
 
-    The joint's upper position limit is not the closed state: beyond the close state
-    the fingers cross and separate again, so anchoring the interpolation on the limit
-    makes a flex close visually open the gripper.
+    The joint's upper position limit is not the closed state: beyond the close state the
+    fingers cross and separate again, so anchoring the interpolation on the limit makes
+    a flex close visually open the gripper.
     """
     daisy = daisy_world.get_semantic_annotations_by_type(DAiSy)[0]
     end_effector = daisy.left_arm.end_effector
@@ -128,9 +134,8 @@ def test_flexclose_configuration_without_grip_position_commands_the_fully_closed
 def test_flexclose_target_closes_the_fingers(daisy_world):
     """
     Commanding the flex close configuration's target brings the fingers to the same
-    separation as the declared close state, i.e. the gripper closes instead of
-    stopping short or moving past the closed state, where the fingers cross and
-    separate again.
+    separation as the declared close state, i.e. the gripper closes instead of stopping
+    short or moving past the closed state, where the fingers cross and separate again.
     """
     daisy = daisy_world.get_semantic_annotations_by_type(DAiSy)[0]
     end_effector = daisy.left_arm.end_effector

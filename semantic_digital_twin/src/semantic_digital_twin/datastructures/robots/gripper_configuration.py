@@ -98,11 +98,3 @@ class GripperStateConfiguration(GripperConfiguration):
     The configuration a robot description already declares for a gripper, selected by
     its :class:`~semantic_digital_twin.datastructures.definitions.GripperState`.
     """
-
-    @classmethod
-    def closed(cls, end_effector: EndEffector) -> Self:
-        """
-        :param end_effector: The end effector to build the configuration for.
-        :return: The configuration for the end effector's closed state.
-        """
-        return cls.from_state_type(end_effector, GripperState.CLOSE)
