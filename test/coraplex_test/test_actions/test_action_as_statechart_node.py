@@ -17,7 +17,7 @@ from coraplex.robot_plans.actions.core.robot_body import (
     ParkArmsAction,
     SetGripperAction,
 )
-from cramph.composites import Attempt, Parallel, Sequence
+from cramph.composites import Parallel, Sequence
 from cramph.data_types import LifeCycleValues, ObservationStateValues
 from cramph.exceptions import (
     CompositeNodeWithoutChildrenError,
@@ -194,8 +194,7 @@ def test_an_action_whose_body_its_owner_decides_succeeds_once_the_body_arrives(
     simple_pr2_context,
 ):
     """
-    A single task never ends on its own, so the action decides it, through the attempt
-    it runs the task in.
+    A single task never ends on its own, so the action ends it once it is at its goal.
     """
     _, _, extensions = simple_pr2_context
     task = NodeObservingAFixedValue(
@@ -206,8 +205,8 @@ def test_an_action_whose_body_its_owner_decides_succeeds_once_the_body_arrives(
 
     _run_until(statechart, EndStatechart.when_true(action))
 
-    assert isinstance(action.action_body, Attempt)
-    assert action.action_body.task is task
+    assert action.action_body is task
+    assert task.life_cycle_state == LifeCycleValues.SUCCEEDED
     assert action.life_cycle_state == LifeCycleValues.SUCCEEDED
 
 

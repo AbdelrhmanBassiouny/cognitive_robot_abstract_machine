@@ -492,7 +492,7 @@ def test_adding_the_same_node_to_a_goal_twice_makes_it_its_child_once():
     goal.add_node(node)
     goal.add_node(node)
 
-    assert goal.nodes == [goal.find_child_running(node)]
+    assert goal.nodes == [node]
 
 
 def test_node_added_to_a_joined_goal_joins_the_statechart_right_away():
@@ -501,7 +501,9 @@ def test_node_added_to_a_joined_goal_joins_the_statechart_right_away():
     """
     msc = Statechart(context=StatechartContext(world=World()))
     msc.add_node(goal := Sequence())
-    goal.add_node(node := Attempt(task=ConstTrueNode(), failure_monitors=[]))
+    goal.add_node(
+        node := Attempt(task=ConstTrueNode(), failure_monitors=[ConstFalseNode()])
+    )
 
     assert node in msc.nodes
     assert node.parent_node is goal
@@ -530,8 +532,8 @@ def test_goal_populated_before_compile_matches_one_populated_by_expand():
         while not msc.is_ended():
             executor.tick()
 
-    assert [node.name for node in goal.nodes] == ["a/attempt", "b/attempt"]
-    assert [node.name for node in expanded_goal.nodes] == ["a/attempt", "b/attempt"]
+    assert [node.name for node in goal.nodes] == ["a", "b"]
+    assert [node.name for node in expanded_goal.nodes] == ["a", "b"]
     assert sorted(node.name for node in populated_before_compile.nodes) == sorted(
         node.name for node in populated_by_expand.nodes
     )
@@ -1606,12 +1608,9 @@ class TestTemplates:
         kin_sim.compile(statechart=msc)
         kin_sim.tick_until_end()
 
-        assert all(
-            step.parent_node.life_cycle_state == LifeCycleValues.SUCCEEDED
-            for step in steps
-        )
+        assert all(step.life_cycle_state == LifeCycleValues.SUCCEEDED for step in steps)
         starts = [
-            msc.history.get_life_cycle_history_of_node(step.parent_node).index(
+            msc.history.get_life_cycle_history_of_node(step).index(
                 LifeCycleValues.RUNNING
             )
             for step in steps
@@ -1653,7 +1652,7 @@ class TestTemplates:
             for transition_kind in TransitionKind.ending_kinds()
         ] == [[] for _ in TransitionKind.ending_kinds()]
 
-    def test_a_sequence_wraps_a_bare_task_in_an_attempt(self):
+    def test_a_sequence_ends_a_bare_task_once_it_observes_true(self):
         """
         A task observes whether its constraints are satisfied, which is enough to decide
         that it reached its goal, so a sequence can supply the ending itself rather than
@@ -1665,12 +1664,26 @@ class TestTemplates:
 
         _compile_msc(msc).tick()
 
-        assert isinstance(task.parent_node, Attempt)
-        assert task.parent_node.parent_node is sequence
+        assert task.parent_node is sequence
+        assert task.life_cycle_state == LifeCycleValues.SUCCEEDED
+
+    def test_a_sequence_fails_a_bare_task_that_fails_while_observing_true(self):
+        """
+        A task declaring its own failure on the tick it observes True did not reach its
+        goal, so the ending the sequence supplies stands back.
+        """
+        msc = Statechart(context=StatechartContext(world=World()))
+        task = ConstTrueNode(name="step")
+        task.fail_condition = task.observes_true
+        msc.add_node(Sequence(nodes=[task]))
+
+        _compile_msc(msc).tick()
+
+        assert task.life_cycle_state == LifeCycleValues.FAILED
 
     def test_a_sequence_runs_a_step_deciding_its_own_success_as_it_is(self):
         """
-        A step that succeeds on its own needs no attempt to end it.
+        A step that succeeds on its own needs nothing to end it.
         """
         msc = Statechart(context=StatechartContext(world=World()))
         step = NodeSucceedingOnObservingTrue(observation=ObservationStateValues.TRUE)
@@ -2844,7 +2857,7 @@ class TestReadingChildrenThatEnded:
             executor.tick()
 
         assert sequence.last_observation_state == ObservationStateValues.FALSE
-        assert last_step.parent_node.life_cycle_state == LifeCycleValues.NOT_STARTED
+        assert last_step.life_cycle_state == LifeCycleValues.NOT_STARTED
 
     def test_a_sequence_fails_once_its_last_step_ended_short_of_its_goal(self):
         """

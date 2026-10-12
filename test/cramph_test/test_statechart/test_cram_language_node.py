@@ -20,6 +20,7 @@ from cramph.exceptions import (
 from cramph.executor import StatechartExecutor
 from cramph.node import EndStatechart, StatechartNode
 from cramph.nodes_for_testing import (
+    ConstFalseNode,
     ConstTrueNode,
     NodeFailingOnObservingFalse,
     NodeObservingAFixedValue,
@@ -150,21 +151,6 @@ def test_a_replaced_step_leaves_the_statechart_and_its_replacement_runs_in_its_p
     assert _start_order(statechart, [third, second, first]) == [first, second, third]
 
 
-def test_replacing_a_wrapped_step_removes_its_attempt_as_well(
-    statechart_executor: StatechartExecutor,
-):
-    statechart = Statechart(context=statechart_executor.context)
-    replaced = ConstTrueNode()
-    statechart.add_node(sequence := Sequence(nodes=[replaced]))
-    attempt = sequence.find_child_running(replaced)
-
-    sequence.replace(replaced, replacement := _succeeding("replacement"))
-
-    assert attempt not in statechart.nodes
-    assert replaced not in statechart.nodes
-    assert sequence.nodes == [replacement]
-
-
 def test_a_sequence_that_did_not_join_yet_only_changes_its_list(
     statechart_executor: StatechartExecutor,
 ):
@@ -253,7 +239,7 @@ def test_the_language_node_running_a_nested_node_is_the_first_one_above_it(
 ):
     statechart = Statechart(context=statechart_executor.context)
     nested = _succeeding("nested")
-    attempt = Attempt(name="attempt", task=nested, failure_monitors=[])
+    attempt = Attempt(name="attempt", task=nested, failure_monitors=[ConstFalseNode()])
     statechart.add_node(sequence := Sequence(nodes=[attempt]))
 
     assert CramLanguageNode.running(nested) is sequence
@@ -264,7 +250,7 @@ def test_a_step_inserted_before_a_nested_node_runs_before_what_holds_it(
 ):
     statechart = Statechart(context=statechart_executor.context)
     first, nested = _succeeding("1"), _succeeding("nested")
-    attempt = Attempt(name="attempt", task=nested, failure_monitors=[])
+    attempt = Attempt(name="attempt", task=nested, failure_monitors=[ConstFalseNode()])
     statechart.add_node(sequence := Sequence(nodes=[attempt]))
 
     CramLanguageNode.running(nested).insert_before(nested, first)

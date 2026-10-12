@@ -344,9 +344,7 @@ def test_child_added_to_goal_is_its_child_once_after_json_round_trip():
         new_json_data, context=StatechartContext(world=World())
     )
     sequence_copy = msc_copy.get_node_by_index(sequence.index)
-    assert [node.name for node in sequence_copy.nodes] == [
-        sequence.find_child_running(child).name
-    ]
+    assert [node.name for node in sequence_copy.nodes] == [child.name]
 
 
 def test_children_of_compiled_goal_are_its_children_once_after_json_round_trip(

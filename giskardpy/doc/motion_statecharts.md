@@ -44,7 +44,7 @@ every `Task` is `EndedByOwner`: it never ends itself on reaching its goal, and
 whoever runs it writes its success and interrupt conditions. Monitors such as `PoseReached` and
 `JointPositionReached` do the same. Nodes whose ending undoes nothing, such as `SetOdometry` and
 `SetSeedConfiguration`, are `SucceedsOnObservingTrue`. The ordering templates run those as
-they are and wrap every `EndedByOwner` node in an `Attempt`, see
+they are and end every `EndedByOwner` node once it observes True, see
 [Who ends a node](https://cram2.github.io/cognitive_robot_abstract_machine/cramph/statecharts.html#who-ends-a-node).
 
 ## RepeatOnStall

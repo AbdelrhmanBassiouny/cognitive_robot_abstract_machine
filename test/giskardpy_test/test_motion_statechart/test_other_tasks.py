@@ -947,9 +947,8 @@ class TestOpenClose:
         kin_sim.tick_until_end()
         msc.draw(str(tmp_path / "muh.pdf"))
 
-        # A step's outcome belongs to the attempt the sequence wrapped it in.
-        assert opening.parent_node.life_cycle_state == LifeCycleValues.SUCCEEDED
-        assert closing.parent_node.life_cycle_state == LifeCycleValues.SUCCEEDED
+        assert opening.life_cycle_state == LifeCycleValues.SUCCEEDED
+        assert closing.life_cycle_state == LifeCycleValues.SUCCEEDED
 
     def test_unscrew_and_tighten_bottle_cap(self, pr2_world_copy):
         screw_pitch = 0.03
@@ -1024,8 +1023,7 @@ class TestOpenClose:
         kin_sim.compile(statechart=unscrew_statechart)
         kin_sim.tick_until_end()
 
-        # A step's outcome belongs to the attempt the sequence wrapped it in.
-        assert open.parent_node.life_cycle_state == LifeCycleValues.SUCCEEDED
+        assert open.life_cycle_state == LifeCycleValues.SUCCEEDED
 
         # One full turn must have moved the cap one screw pitch along the screw axis,
         # away from the bottle (towards the robot, -x).

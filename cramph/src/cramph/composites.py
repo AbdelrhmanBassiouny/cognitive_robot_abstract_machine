@@ -17,7 +17,8 @@ from cramph.data_types import (
 )
 from cramph.exceptions import (
     NotRunByLanguageNodeError,
-    AttemptCannotFailError,
+    AttemptWithoutFailureMonitorsError,
+    ChildCannotFailError,
     NodeAlreadyAChildError,
     NodeIsNotAChildError,
 )
@@ -70,44 +71,26 @@ class Attempt(SucceedsOnObservingTrue, FailsOnObservingFalse, CompositeNode):
 
     failure_monitors: List[StatechartNode] = field(kw_only=True)
     """
-    The nodes whose observing True gives up on the task, any one of which is enough.
+    The nodes whose observing True gives up on the task, any one of which is enough, so
+    there has to be at least one.
 
-    An empty list states that this node cannot fail, leaving reaching its goal as the
-    only way it ends. A monitor is read the way it is written, so one that observes
-    being *well* has to be negated before it can be passed here.
+    A monitor is read the way it is written, so one that observes being *well* has to be
+    negated before it can be passed here.
     """
 
-    @classmethod
-    def deciding(cls, node: StatechartNode) -> StatechartNode:
-        """
-        :param node: A node to run until it is decided.
-        :return: `node` itself if it decides its own success, otherwise an attempt
-            without failure monitors deciding it, which fails only if `node` fails on its
-            own.
-        """
-        if node.decides_its_own_success:
-            return node
-        return cls(name=f"{node.name}/attempt", task=node, failure_monitors=[])
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        if not self.failure_monitors:
+            raise AttemptWithoutFailureMonitorsError(node=self)
 
     @property
     def any_failure_monitor_fired(self) -> Scalar:
         """
-        :return: True once a failure monitor fired, and false while none has or there
-            are none to fire.
+        :return: True once a failure monitor fired, and false while none has.
         """
-        if not self.failure_monitors:
-            return Scalar.const_false()
         return trinary_logic_or(
             *[monitor.last_observed_true for monitor in self.failure_monitors]
         )
-
-    @property
-    def can_fail(self) -> bool:
-        """
-        Whether this goal has a way to fail: a failure monitor, or a task that fails on
-        its own.
-        """
-        return bool(self.failure_monitors) or self.task.can_fail_on_its_own
 
     @property
     def failure_reasons(self) -> List[StatechartNode]:
@@ -168,49 +151,56 @@ class Attempt(SucceedsOnObservingTrue, FailsOnObservingFalse, CompositeNode):
         )
 
 
-# %% goals built from nodes that end on their own
+# %% goals that decide when their children end
 
 
 @dataclass(repr=False, eq=False)
-class CompositeNodeOverSelfDecidingNodes(
+class CompositeNodeEndingItsChildren(
     SucceedsOnObservingTrue, FailsOnObservingFalse, CompositeNode, ABC
 ):
     """
     Base for the goals that order or choose between children, which only works if each
-    child reaches a terminal state by itself.
+    child reaches a terminal state.
 
     Such a goal reads its children's outcomes and never their observations, and it owns
-    their life cycles: what starts and ends a child is this goal's to decide. What comes
-    out decides itself in turn, which is what lets one be a step of another.
+    their life cycles: what starts and ends a child is this goal's to decide. A child
+    whose owner decides its success is ended by this goal once it observes True. What
+    comes out decides itself in turn, which is what lets one be a step of another.
     """
 
-    def _convert_to_self_deciding(self, node: StatechartNode) -> StatechartNode:
+    def _check_can_decide(self, node: StatechartNode) -> None:
         """
-        Checks that this goal can run `node` and converts it into a node that ends on
-        its own, without touching :attr:`nodes` or the statechart.
-
-        A node whose owner decides its success observes whether it reached its goal, so
-        one is wrapped in an :class:`Attempt` without failure monitors, which fails only
-        if the node fails on its own.
+        Rejects a child whose life cycle is not this goal's to decide.
 
         :param node: The child the caller passed.
-        :return: The child to run in its place, which may be `node` itself.
+        :raises NodeAlreadyBelongsToDifferentNodeError: If another node runs `node`.
+        :raises ChildTransitionAlreadyWiredError: If the caller already wired one of the
+            transitions of `node`.
         """
-        self._check_caller_wired_no_transitions(node)
         self._check_node_doesnt_belong_to_different_parent(node)
-        return Attempt.deciding(node)
+        self._check_caller_wired_no_transitions(node)
 
-    def _check_attempt_can_fail(self, node: StatechartNode) -> None:
+    def _succeed_children_at_their_goals(self) -> None:
         """
-        Rejects a child this goal only moves on from once it failed, if it is an attempt
-        that cannot fail.
+        Ends every child whose owner decides its success once it observes True, see
+        :meth:`~cramph.node.CompositeNode._succeed_at_its_goal`.
 
-        :param node: The child this goal waits on to fail.
-        :raises AttemptCannotFailError: If `node` is an :class:`Attempt` that cannot
-            fail.
+        A node that ends the statechart decides nothing and is left alone.
         """
-        if isinstance(node, Attempt) and not node.can_fail:
-            raise AttemptCannotFailError(node=self, attempt=node)
+        for child in self.nodes:
+            if not isinstance(child, TerminalNode):
+                self._succeed_at_its_goal(child)
+
+    def _check_child_can_fail(self, child: StatechartNode) -> None:
+        """
+        Rejects a child this goal only moves on from once it failed, if it has no way to
+        fail.
+
+        :param child: The child this goal waits on to fail.
+        :raises ChildCannotFailError: If `child` cannot fail on its own.
+        """
+        if not child.can_fail_on_its_own:
+            raise ChildCannotFailError(node=self, child=child)
 
 
 # %% the plan language: running a list of nodes
@@ -229,9 +219,6 @@ class CramLanguageNode(CompositeNode, ABC):  # ControlStructureNode?
     nodes: List[StatechartNode] = field(default_factory=list, init=True)
     """
     The nodes this goal runs, in order.
-
-    Once this goal joined a statechart, a node whose owner decides its success is held
-    through the :class:`Attempt` running it.
     """
 
     def add_node(self, node: StatechartNode) -> None:
@@ -287,7 +274,9 @@ class CramLanguageNode(CompositeNode, ABC):  # ControlStructureNode?
             self.nodes[position] = node
             return
         replaced = self.nodes[position]
-        self._adopt(position, self._convert_to_child(node))
+        self._check_can_run(node)
+        self.nodes[position] = node
+        self._place_child_in_statechart(node)
         self._wire_children()
         self.statechart.remove_node(replaced)
 
@@ -304,30 +293,13 @@ class CramLanguageNode(CompositeNode, ABC):  # ControlStructureNode?
                 return ancestor
         raise NotRunByLanguageNodeError(node=node)
 
-    def find_child_running(self, node: StatechartNode) -> StatechartNode:
-        """
-        :param node: A node this goal runs.
-        :return: The child running `node`, which is `node` itself or the
-            :class:`Attempt` wrapping it.
-        :raises NodeIsNotAChildError: If this goal does not run `node`.
-        """
-        child = self._child_running(node)
-        if child is None:
-            raise NodeIsNotAChildError(node=self, child=node)
-        return child
-
     def expand(self, context: StatechartContext) -> None:
         """
         Adopt every node this goal was handed and wire them.
-
-        While a node expands, :attr:`nodes` already holds the child running it and the
-        children before that, and still holds the nodes after it as they were handed
-        over.
         """
-        handed_over_nodes = self.nodes
-        self.nodes = list(handed_over_nodes)
-        for position, node in enumerate(handed_over_nodes):
-            self._adopt(position, self._convert_to_child(node))
+        for node in list(self.nodes):
+            self._check_can_run(node)
+            self._place_child_in_statechart(node)
         self._wire_children()
 
     def check_children(self) -> None:
@@ -336,50 +308,25 @@ class CramLanguageNode(CompositeNode, ABC):  # ControlStructureNode?
         """
         self._check_has_children()
 
-    @abstractmethod
-    def _convert_to_child(self, node: StatechartNode) -> StatechartNode:
+    def _check_can_run(self, node: StatechartNode) -> None:
         """
-        Checks that this goal can run `node` and converts it where it needs converting,
-        without touching :attr:`nodes` or the statechart.
+        Rejects a node this goal cannot run as its child, before it joins the
+        statechart.
 
         :param node: The node the caller handed over.
-        :return: The child running `node`, which may be `node` itself.
         """
-
-    def _adopt(self, position: int, child: StatechartNode) -> None:
-        """
-        Makes `child` a child of this goal in the statechart, in place of what
-        :attr:`nodes` holds at `position`.
-
-        :attr:`nodes` holds `child` before it joins the statechart, so that the tree can
-        be navigated from below `child` while it expands.
-
-        :param position: The position among :attr:`nodes` that `child` takes.
-        :param child: The child to run, as :meth:`_convert_to_child` returned it.
-        """
-        self.nodes[position] = child
-        self._place_child_in_statechart(child)
 
     def _wire_children(self) -> None:
         """
         Wires the conditions of the current children to each other.
         """
 
-    def _child_running(self, node: StatechartNode) -> Optional[StatechartNode]:
-        """
-        :return: The child that is `node` or the :class:`Attempt` wrapping it, or None
-            if this goal does not run `node`.
-        """
-        for child in self.nodes:
-            if child is node or (isinstance(child, Attempt) and child.task is node):
-                return child
-        return None
-
     def _runs(self, node: StatechartNode) -> bool:
         """
-        :return: Whether one of the children runs `node`.
+        :return: Whether `node` itself is one of the children, whatever other child it
+            compares equal to.
         """
-        return self._child_running(node) is not None
+        return any(child is node for child in self.nodes)
 
     def _position_of(self, reference: StatechartNode) -> int:
         """
@@ -406,29 +353,32 @@ class CramLanguageNode(CompositeNode, ABC):  # ControlStructureNode?
         if not self.belongs_to_statechart():
             self.nodes.insert(position, node)
             return
-        child = self._convert_to_child(node)
-        self.nodes.insert(position, child)
-        self._adopt(position, child)
+        self._check_can_run(node)
+        self.nodes.insert(position, node)
+        self._place_child_in_statechart(node)
         self._wire_children()
 
 
 @dataclass(repr=False, eq=False)
 class CramLanguageNodeRunningItsChildrenInTurn(
-    CramLanguageNode, CompositeNodeOverSelfDecidingNodes, ABC
+    CramLanguageNode, CompositeNodeEndingItsChildren, ABC
 ):
     """
     A plan language construct that starts each child only once the one before it ended
     in a way it defines.
     """
 
-    def _convert_to_child(self, node: StatechartNode) -> StatechartNode:
-        return self._convert_to_self_deciding(node)
+    def _check_can_run(self, node: StatechartNode) -> None:
+        self._check_can_decide(node)
 
     def _wire_children(self) -> None:
         """
         Starts the first child right away, and every other one once the child before it
         ended the way :meth:`_start_condition_after` asks for.
+
+        A child whose owner decides its success ends once it observes True.
         """
+        self._succeed_children_at_their_goals()
         previous: Optional[StatechartNode] = None
         for child in self.nodes:
             child.start_condition = (
@@ -458,16 +408,15 @@ class Sequence(CramLanguageNodeRunningItsChildrenInTurn):
     .. note:: corresponds to the RPL's SEQ. (McDermott, Drew. A reactive plan language, 1991)
     """
 
-    def _convert_to_child(self, node: StatechartNode) -> StatechartNode:
+    def _check_can_run(self, node: StatechartNode) -> None:
         """
-        Each step is a node that ends on its own.
-
-        A node that ends the statechart decides nothing and has nothing to convert.
+        A node that ends the statechart may be a step although it belongs to no other
+        node's life cycle, see :meth:`CramLanguageNode._check_can_run`.
         """
         if isinstance(node, TerminalNode):
             self._check_caller_wired_no_transitions(node)
-            return node
-        return super()._convert_to_child(node)
+            return
+        super()._check_can_run(node)
 
     def _start_condition_after(self, previous: StatechartNode) -> Scalar:
         """
@@ -508,9 +457,8 @@ class Parallel(EndedByOwner, CramLanguageNode):
     their goals on the same tick.
 
     Unlike the goals that run steps, this one ends none of its nodes and reads what they
-    observe now, because releasing a node that reached its goal would let a sibling
-    undo what it reached. For the same reason its own owner decides
-    when it succeeded: a plan step built from one is an attempt wrapping it.
+    observe now, because releasing a node that reached its goal would let a sibling undo
+    what it reached. For the same reason its own owner decides when it succeeded.
     """
 
     minimum_success: Optional[int] = field(default=None, kw_only=True)
@@ -530,12 +478,6 @@ class Parallel(EndedByOwner, CramLanguageNode):
             return len(self.nodes)
         return self.minimum_success
 
-    def _convert_to_child(self, node: StatechartNode) -> StatechartNode:
-        """
-        Every node runs as it is, side by side with the others.
-        """
-        return node
-
     @property
     def inherent_fail_condition(self) -> Scalar:
         """
@@ -543,7 +485,7 @@ class Parallel(EndedByOwner, CramLanguageNode):
         :meth:`~cramph.node.StatechartNode.inherent_fail_condition`.
 
         Observing False means the nodes are not at their goals, which is not a failure
-        and is left to the attempt this goal is wrapped in. A node that ended without
+        and is left to whoever runs this goal. A node that ended without
         succeeding is different: nothing brings it back, so once too few are left this
         goal can no longer arrive and says so rather than holding its owner open forever.
         """
@@ -589,8 +531,8 @@ class Parallel(EndedByOwner, CramLanguageNode):
         says where it was cut off rather than where it is.
 
         Observing False means the nodes are not at their goals, not that anything went
-        wrong: whether that is worth giving up on is decided outside, by the attempt this
-        goal is wrapped in.
+        wrong: whether that is worth giving up on is decided outside, by whoever runs
+        this goal.
         """
         nodes_at_their_goals = [
             trinary_logic_and(
@@ -608,7 +550,7 @@ class Parallel(EndedByOwner, CramLanguageNode):
 
 
 @dataclass(repr=False, eq=False)
-class RepeatUntil(CompositeNodeOverSelfDecidingNodes):
+class RepeatUntil(CompositeNodeEndingItsChildren):
     """
     Runs a task again from the start whenever an attempt at it fails.
 
@@ -619,8 +561,7 @@ class RepeatUntil(CompositeNodeOverSelfDecidingNodes):
     What counts as a failed attempt is stated on the task itself: hand it an
     :class:`Attempt` carrying the failure monitors that decide it, or see
     :class:`RepeatOnStall`, which derives that decision from the task's own progress. A
-    task that never ends on its own is attempted without failure monitors, which is
-    rejected unless the task fails on its own, since it would never be retried.
+    task that cannot fail on its own is rejected, since it would never be retried.
     """
 
     task: StatechartNode = field(kw_only=True)
@@ -642,19 +583,11 @@ class RepeatUntil(CompositeNodeOverSelfDecidingNodes):
     retrying off, or None to only observe False then.
     """
 
-    @property
-    def _attempt(self) -> StatechartNode:
-        """
-        The node actually run, which is :attr:`task` wrapped in an attempt if it needed
-        one.
-        """
-        return self.nodes[0]
-
     def expand(self, context: StatechartContext) -> None:
         """
         Wire the retry loop.
 
-        The attempt declares its own failure, and that outcome is what starts the next
+        The task declares its own failure, and that outcome is what starts the next
         try: a node takes at most one transition triggered by its own conditions per
         tick, so the reset lands the tick after the failure rather than on it.
 
@@ -662,23 +595,25 @@ class RepeatUntil(CompositeNodeOverSelfDecidingNodes):
         monitor that ends itself on reaching what it counts, and which a monitor that has
         not observed anything yet has not reached either.
         """
-        self._add_child_to_statechart(self._convert_to_self_deciding(self.task))
+        self._check_can_decide(self.task)
+        self._add_child_to_statechart(self.task)
+        self._succeed_at_its_goal(self.task)
         self._add_child_to_statechart(self.stop_retry_monitor)
 
         retrying_stopped = self._retrying_stopped
         still_trying = logic_not(retrying_stopped)
         # Starting is gated as well as ending, because a reset task is not started and
         # ending is not considered while it is not.
-        self._attempt.start_condition = still_trying
-        self._attempt.reset_condition = logic_and(self._attempt.is_failed, still_trying)
-        self._attempt.interrupt_condition = retrying_stopped
+        self.task.start_condition = still_trying
+        self.task.reset_condition = logic_and(self.task.is_failed, still_trying)
+        self.task.interrupt_condition = retrying_stopped
         self._end_statechart_once_retrying_stops()
 
     def check_children(self) -> None:
         """
-        Rejects an attempt that cannot fail, since it would never be retried.
+        Rejects a task that cannot fail, since it would never be retried.
         """
-        self._check_attempt_can_fail(self._attempt)
+        self._check_child_can_fail(self.task)
 
     @property
     def _retrying_stopped(self) -> Scalar:
@@ -705,14 +640,14 @@ class RepeatUntil(CompositeNodeOverSelfDecidingNodes):
         """
         Report success, giving up, or neither.
 
-        Both children are read through something that outlasts them: the attempt through
+        Both children are read through something that outlasts them: the task through
         its outcome, which the reset that starts the next try clears again, and the stop
         monitor through its last observation.
         """
         return NodeArtifacts(
             observation=trinary_if_cases(
                 cases=[
-                    (self._attempt.is_succeeded, Scalar.const_true()),
+                    (self.task.is_succeeded, Scalar.const_true()),
                     (self._retrying_stopped, Scalar.const_false()),
                 ],
                 else_result=Scalar.const_trinary_unknown(),
@@ -724,7 +659,7 @@ class RepeatUntil(CompositeNodeOverSelfDecidingNodes):
 
 
 @dataclass(repr=False, eq=False)
-class TryAll(CramLanguageNode, CompositeNodeOverSelfDecidingNodes):
+class TryAll(CramLanguageNode, CompositeNodeEndingItsChildren):
     """
     Runs a list of alternatives at once and takes the first one that works.
 
@@ -732,11 +667,15 @@ class TryAll(CramLanguageNode, CompositeNodeOverSelfDecidingNodes):
     every one of them ended without doing so.
     """
 
-    def _convert_to_child(self, node: StatechartNode) -> StatechartNode:
+    def _check_can_run(self, node: StatechartNode) -> None:
+        self._check_can_decide(node)
+
+    def _wire_children(self) -> None:
         """
-        Every alternative runs side by side with the others.
+        Every alternative runs side by side with the others, and one whose owner decides
+        its success ends once it observes True.
         """
-        return self._convert_to_self_deciding(node)
+        self._succeed_children_at_their_goals()
 
     def build_artifacts(self, context: StatechartContext) -> NodeArtifacts:
         """
@@ -778,8 +717,8 @@ class TryInOrder(CramLanguageNodeRunningItsChildrenInTurn):
 
     Each alternative decides for itself when to give up, which is why this goal reduces
     to ordering: wrap one in an :class:`Attempt` carrying the monitors that decide it.
-    An attempt that cannot fail is rejected anywhere but last, since the alternatives
-    after it could never start.
+    An alternative that cannot fail is rejected anywhere but last, since the
+    alternatives after it could never start.
 
     .. note:: corresponds to the RPL's TRY-IN-ORDER. (McDermott, Drew. A reactive plan language, 1991)
     """
@@ -793,12 +732,12 @@ class TryInOrder(CramLanguageNodeRunningItsChildrenInTurn):
 
     def check_children(self) -> None:
         """
-        Rejects an attempt that cannot fail before the last alternative, since the
+        Rejects an alternative that cannot fail before the last one, since the
         alternatives after it could never start.
         """
         super().check_children()
         for alternative in self.nodes[:-1]:
-            self._check_attempt_can_fail(alternative)
+            self._check_child_can_fail(alternative)
 
     def build_artifacts(self, context: StatechartContext) -> NodeArtifacts:
         """
@@ -1111,6 +1050,15 @@ class CompositeNodeChoosingItsChild(SucceedsOnObservingTrue, CompositeNode):
         if self._out_of_children:
             return Scalar.const_true()
         return super().inherent_fail_condition
+
+    @property
+    def can_fail_on_its_own(self) -> bool:
+        """
+        Always, because the chooser may run out of children at any choice, which no
+        condition says before it happens, see
+        :meth:`~cramph.node.StatechartNode.can_fail_on_its_own`.
+        """
+        return True
 
     @property
     def latest_child(self) -> Optional[StatechartNode]:

@@ -10,7 +10,7 @@ from cramph.exceptions import (
 )
 from cramph.executor import StatechartExecutor
 from cramph.node import CancelStatechart, EndStatechart
-from cramph.nodes_for_testing import ConstTrueNode
+from cramph.nodes_for_testing import ConstFalseNode, ConstTrueNode
 from cramph.statechart import Statechart
 
 # %% removing nodes
@@ -61,12 +61,10 @@ def test_removing_a_child_takes_its_descendants_along(
     statechart = Statechart(context=statechart_executor.context)
     statechart.add_node(ConstTrueNode())
     statechart.add_node(sequence := Sequence(nodes=[task := ConstTrueNode()]))
-    attempt = sequence.find_child_running(task)
     statechart.add_node(later := ConstTrueNode())
 
-    statechart.remove_node(attempt)
+    statechart.remove_node(task)
 
-    assert attempt not in statechart.nodes
     assert task not in statechart.nodes
     assert sequence.nodes == []
     assert later.parent_node is None
@@ -82,8 +80,7 @@ def test_a_child_keeps_its_parent_when_a_node_before_them_is_removed(
 
     statechart.remove_node(removed)
 
-    assert sequence.find_child_running(task).parent_node is sequence
-    assert task.parent_node is sequence.find_child_running(task)
+    assert task.parent_node is sequence
 
 
 def test_removing_a_terminal_node_forgets_it_as_a_way_to_end(
@@ -129,7 +126,9 @@ def test_a_statechart_runs_after_a_node_was_removed(
     statechart = Statechart(context=statechart_executor.context)
     statechart.add_node(removed := ConstTrueNode())
     statechart.add_node(
-        sequence := Sequence(nodes=[Attempt(task=ConstTrueNode(), failure_monitors=[])])
+        sequence := Sequence(
+            nodes=[Attempt(task=ConstTrueNode(), failure_monitors=[ConstFalseNode()])]
+        )
     )
     statechart.add_node(EndStatechart.when_true(sequence))
 

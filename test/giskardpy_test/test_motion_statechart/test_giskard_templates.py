@@ -14,7 +14,7 @@ from math import ceil
 import pytest
 from cramph.data_types import LifeCycleValues, ObservationStateValues
 from cramph.exceptions import (
-    AttemptCannotFailError,
+    ChildCannotFailError,
     CompositeNodeWithoutChildrenError,
 )
 from cramph.composites import Attempt, Sequence, TryAll, TryInOrder
@@ -349,29 +349,16 @@ def test_a_try_in_order_without_nodes_is_rejected():
 
 def test_a_try_in_order_rejects_a_plain_task_before_its_last_alternative():
     """
-    A plain task is attempted with no way of failing, so the alternatives after it could
-    never start.
+    A plain task has no way of failing, so the alternatives after it could never start.
     """
     task = ConstFalseNode(name="first")
     goal = TryInOrder(nodes=[task, _alternative(ConstTrueNode(name="second"))])
 
-    with pytest.raises(AttemptCannotFailError) as error:
+    with pytest.raises(ChildCannotFailError) as error:
         _compile_and_tick(goal, ticks=0)
 
     assert error.value.node is goal
-    assert error.value.attempt.task is task
-
-
-def test_a_try_in_order_rejects_an_attempt_without_failure_monitors_before_its_last_alternative():
-    first = Attempt(
-        name="first", task=ConstFalseNode(name="first task"), failure_monitors=[]
-    )
-    goal = TryInOrder(nodes=[first, _alternative(ConstTrueNode(name="second"))])
-
-    with pytest.raises(AttemptCannotFailError) as error:
-        _compile_and_tick(goal, ticks=0)
-
-    assert error.value.attempt is first
+    assert error.value.child is task
 
 
 def test_a_try_in_order_accepts_a_plain_task_as_its_last_alternative():
@@ -388,8 +375,8 @@ def test_a_try_in_order_accepts_a_plain_task_as_its_last_alternative():
 
 def test_a_try_in_order_accepts_a_plain_task_that_fails_on_its_own():
     """
-    A task declaring its own failure gives its attempt a way to fail, so the next
-    alternative is reachable.
+    A task declaring its own failure has a way to fail, so the next alternative is
+    reachable.
     """
     first = ConstTrueNode(name="first")
     first.fail_condition = first.observes_true
@@ -404,7 +391,7 @@ def test_a_try_in_order_accepts_a_plain_task_that_fails_on_its_own():
 def test_a_try_in_order_accepts_a_monitored_node_that_is_stopped_before_its_last_alternative():
     """
     A monitored template fails once its monitor stopped the monitored node, which is a
-    way for its attempt to fail.
+    way for it to fail.
     """
     first = StoppedWhenTrue(
         name="first",

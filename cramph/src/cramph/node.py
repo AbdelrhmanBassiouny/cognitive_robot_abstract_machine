@@ -2159,6 +2159,21 @@ class CompositeNode(StatechartNode):
                     node=self, child=node, transition_kind=transition_kind
                 )
 
+    def _succeed_at_its_goal(self, child: StatechartNode) -> None:
+        """
+        Ends a child whose owner decides its success once it observes True, which is
+        this node deciding it as its owner. A child that fails on the same tick fails,
+        and a child that decides its own success is left as it is.
+
+        :param child: A child of this node that already joined the statechart.
+        """
+        if child.decides_its_own_success:
+            return
+        child.success_condition = sm.logic_and(
+            child.observes_true,
+            sm.logic_not(child.effective_condition(TransitionKind.FAIL)),
+        )
+
     def _check_has_children(self) -> None:
         """
         Rejects a node that was built without the child nodes it exists to run.

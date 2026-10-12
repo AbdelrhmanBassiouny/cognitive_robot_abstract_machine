@@ -10,7 +10,6 @@ from coraplex.exceptions import (
     CannotMatchOnType,
     ReachHasNoFinalApproach,
 )
-from cramph.exceptions import NotRunByLanguageNodeError
 from coraplex.plans.plan_transformation import (
     InsertionTransformation,
     PlanRewriting,
@@ -19,21 +18,21 @@ from coraplex.plans.plan_transformation import (
 )
 from coraplex.plans.underspecified import UnderspecifiedNode
 from coraplex.robot_plans.actions.base import Action
-from coraplex.robot_plans.actions.core.misc import DetectAction
 from coraplex.robot_plans.actions.composite.facing import FaceAndLookAtAction
+from coraplex.robot_plans.actions.composite.transporting import (
+    MoveAndOpenAction,
+    MoveAndPickUpAction,
+    TransportAction,
+)
+from coraplex.robot_plans.actions.core.misc import DetectAction
 from coraplex.robot_plans.actions.core.navigation import (
     FaceAtAction,
     LookAtAction,
     NavigateAction,
 )
 from coraplex.robot_plans.actions.core.pick_up import PickUpAction, ReachAction
-from coraplex.robot_plans.actions.core.robot_body import MoveTorsoAction, ParkArmsAction
-from coraplex.robot_plans.actions.composite.transporting import (
-    MoveAndOpenAction,
-    MoveAndPickUpAction,
-    TransportAction,
-)
 from coraplex.robot_plans.actions.core.placing import PlaceAction
+from coraplex.robot_plans.actions.core.robot_body import MoveTorsoAction, ParkArmsAction
 from coraplex.robot_plans.plan_transformations import (
     DetectBeforeGrasp,
     FreeEndEffectorsOfParallelStepsTogether,
@@ -42,9 +41,13 @@ from coraplex.robot_plans.plan_transformations import (
     ParkArmsAroundPickAndPlaceSteps,
     ParkArmsBeforeFirstAction,
 )
-from cramph.composites import Attempt, ChildChooser, Parallel, Sequence
+from cramph.composites import Attempt, ChildChooser, CramLanguageNode, Sequence
+from cramph.composites import Parallel
+from cramph.context import ContextExtension
 from cramph.context import StatechartContext
+from cramph.exceptions import NotRunByLanguageNodeError
 from cramph.node import StatechartNode
+from cramph.nodes_for_testing import ConstFalseNode
 from giskardpy.motion_statechart.goals.collision_avoidance import (
     UpdateTemporaryCollisionRules,
 )
@@ -55,10 +58,10 @@ from krrood.entity_query_language.factories import a, variable
 from krrood.entity_query_language.query.match import Match
 from krrood.exceptions import UnboundGenericParameter
 from semantic_digital_twin.datastructures.definitions import GripperState, TorsoState
+from semantic_digital_twin.grasping.grasp_candidates import GraspCandidate
 from semantic_digital_twin.robots.pr2 import PR2
 from semantic_digital_twin.robots.robot_parts import Arm, EndEffector
 from semantic_digital_twin.semantic_annotations.mixins import HasRootBody
-from semantic_digital_twin.grasping.grasp_candidates import GraspCandidate
 from semantic_digital_twin.semantic_annotations.semantic_annotations import (
     Drawer,
     Handle,
@@ -67,11 +70,10 @@ from semantic_digital_twin.semantic_annotations.semantic_annotations import (
 )
 from semantic_digital_twin.spatial_types.spatial_types import Pose
 from semantic_digital_twin.world import World
-
 from ..test_transporting import pick_and_place_of_the_milk
 from ...plan_running import context_of, simulated_executor, statechart_of
 from ...sampling import SAMPLING_SEED
-from cramph.context import ContextExtension
+
 
 # %% expanding a plan without running it
 
@@ -97,13 +99,13 @@ def rewritten(
 def steps_of(node: StatechartNode) -> List[StatechartNode]:
     """
     :param node: An expanded action, or a plan language node.
-    :return: The steps it runs, in order, each read through the attempt holding it.
+    :return: The steps it runs, in order, which is its body alone for an action whose
+        body is a single node.
     """
-    language_node = node.action_body if isinstance(node, Action) else node
-    return [
-        child.task if isinstance(child, Attempt) else child
-        for child in language_node.nodes
-    ]
+    body = node.action_body if isinstance(node, Action) else node
+    if not isinstance(body, CramLanguageNode):
+        return [body]
+    return list(body.nodes)
 
 
 def kind_of(step: StatechartNode) -> type:
@@ -996,7 +998,9 @@ def test_the_opening_joins_the_sequence_a_grounded_pick_up_runs_in(
     candidate_steps = Sequence([candidate])
 
     underspecified.choose_child_with(
-        ChoosesTheGivenChild(child=Attempt(task=candidate_steps, failure_monitors=[])),
+        ChoosesTheGivenChild(
+            child=Attempt(task=candidate_steps, failure_monitors=[ConstFalseNode()])
+        ),
         plan.statechart.context,
     )
 

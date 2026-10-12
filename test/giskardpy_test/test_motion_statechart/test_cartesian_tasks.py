@@ -1404,10 +1404,9 @@ class TestDiffDriveBaseGoal:
 
         executor.compile(statechart=motion_statechart)
 
-        # Each step is a maintenance node, so the sequence runs it inside an attempt.
         for step in goal.sequence.nodes[1:]:
-            assert step.task.translation_threshold == 0.3
-            assert step.task.orientation_threshold == 0.3
+            assert step.translation_threshold == 0.3
+            assert step.orientation_threshold == 0.3
 
     def test_second_goal_drives_from_where_the_first_one_ended(
         self, cylinder_bot_diff_world
