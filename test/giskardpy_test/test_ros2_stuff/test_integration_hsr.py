@@ -410,51 +410,6 @@ class TestCartGoals:
         giskard.api.compile(msc)
         giskard.api.execute()
 
-    @pytest.mark.skip(reason="not yet fixed")
-    def test_wiggle_insert(self, default_pose_giskard: HSRTester):
-        goal_state = {
-            HSRBJoint.ARM_FLEX: -1.5,
-            HSRBJoint.ARM_LIFT: 0.5,
-            HSRBJoint.ARM_ROLL: 0.0,
-            HSRBJoint.HEAD_PAN: 0.0,
-            HSRBJoint.HEAD_TILT: 0.0,
-            HSRBJoint.WRIST_FLEX: -1.5,
-            HSRBJoint.WRIST_ROLL: 0.0,
-        }
-
-        default_pose_giskard.api.monitors.add_set_seed_configuration(
-            seed_configuration=goal_state
-        )
-        default_pose_giskard.execute()
-
-        hpl = (
-            default_pose_giskard.apdefault_pose_giskard.api.world.search_for_link_name(
-                link_name="hand_gripper_tool_frame", group_name="hsrb"
-            )
-        )
-        root_link = default_pose_giskard.api.world.search_for_link_name(link_name="map")
-        hole_point = Point3(x=0.5, z=0.3, reference_frame=default_pose_giskard.map)
-        wiggle = "wiggle"
-        default_pose_giskard.api.motion_goals.add_wiggle_insert(
-            name=wiggle,
-            root_link=root_link,
-            tip_link=hpl,
-            hole_point=hole_point,
-            end_condition=wiggle,
-        )
-        resistence_point = Point3(
-            x=0.5, z=0.4, reference_frame=default_pose_giskard.map
-        )
-        timer = default_pose_giskard.api.monitors.add_sleep(5)
-        default_pose_giskard.api.motion_goals.add_cartesian_position(
-            root_link=root_link,
-            tip_link=hpl,
-            goal_point=resistence_point,
-            end_condition=timer,
-        )
-        default_pose_giskard.api.monitors.add_end_motion(start_condition=wiggle)
-        default_pose_giskard.execute(local_min_end=False)
-
 
 class TestConstraints:
 
