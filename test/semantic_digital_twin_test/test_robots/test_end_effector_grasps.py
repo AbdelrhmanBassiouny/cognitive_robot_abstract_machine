@@ -13,6 +13,7 @@ from semantic_digital_twin.exceptions import (
     NothingHeld,
 )
 from semantic_digital_twin.robots.pr2 import PR2
+from semantic_digital_twin.robots.robot_part_mixins import HasTwoFingers
 from semantic_digital_twin.robots.robot_parts import Camera, EndEffector
 from semantic_digital_twin.robots.tracy import Tracy
 from semantic_digital_twin.semantic_annotations.semantic_annotations import Milk
@@ -271,3 +272,125 @@ def test_the_held_grasp_is_the_offset_the_body_hangs_at(pr2_gripper):
         atol=1e-9,
     )
     assert pr2_gripper.held_body_T_grasp.reference_frame is body
+
+
+# %% where a two-finger gripper's fingers meet
+
+
+def test_the_fingertips_are_the_tips_of_the_two_fingers(pr2_gripper):
+    assert pr2_gripper.fingertips.both == (
+        pr2_gripper.thumb.tip,
+        pr2_gripper.finger.tip,
+    )
+
+
+def test_the_grasp_point_lies_midway_between_the_fingertips(pr2_gripper):
+    thumb_tip, finger_tip = (
+        pr2_gripper.fingertips._bounding_box(fingertip).center.to_np()[:3].ravel()
+        for fingertip in pr2_gripper.fingertips.both
+    )
+
+    np.testing.assert_allclose(
+        pr2_gripper.fingertips.tool_P_grasp.to_np()[:3].ravel(),
+        (thumb_tip + finger_tip) / 2,
+        atol=1e-9,
+    )
+
+
+def test_the_grasp_point_is_read_in_the_frame_it_belongs_to(pr2_gripper):
+    assert pr2_gripper.fingertips.tool_P_grasp.reference_frame is pr2_gripper.tool_frame
+
+
+def test_every_two_finger_gripper_can_measure_where_its_fingers_meet(
+    supported_abstract_robots,
+):
+    """
+    The measurements are read off the robot's own description, so every two-finger
+    gripper there is answers them rather than only the one they were written against.
+    """
+    for abstract_robot in supported_abstract_robots:
+        world = URDFParser.from_file(abstract_robot.get_ros_file_path()).parse()
+        abstract_robot.from_world(world)
+
+        for gripper in world.get_semantic_annotations_by_type(EndEffector):
+            if not isinstance(gripper, HasTwoFingers):
+                continue
+            assert gripper.fingertips.tool_P_grasp.reference_frame is gripper.tool_frame
+            assert gripper.fingertips.surface_depth >= 0.0
+            assert np.linalg.norm(
+                gripper.fingertips.finger_P_thumb(0.05).to_np()[:3].ravel()
+            ) > np.linalg.norm(
+                gripper.fingertips.finger_P_thumb(0.02).to_np()[:3].ravel()
+            )
+
+
+# %% aiming the fingers rather than the tool frame
+
+
+def test_the_tool_frame_goal_for_a_grasp_puts_the_grasp_point_on_it(
+    pr2_gripper, graspable_box
+):
+    """
+    Reaching the returned pose with the tool frame leaves the point where the fingers
+    meet on the grasp frame, which is what the plain tool frame goal does not do.
+    """
+    grasp = graspable_box.grasp_candidates()[0].grasp_pose
+
+    goal = pr2_gripper.tool_frame_goal_for_grasp(grasp)
+
+    reached = goal.homogeneous_matrix.to_np()
+    grasp_point_once_reached = (
+        reached[:3, :3] @ pr2_gripper.fingertips.tool_P_grasp.to_np()[:3].ravel()
+        + reached[:3, 3]
+    )
+    np.testing.assert_allclose(
+        grasp_point_once_reached, grasp.position.to_np()[:3].ravel(), atol=1e-9
+    )
+
+
+def test_the_goal_for_a_grasp_turns_the_gripper_the_same_way_as_the_tool_frame_goal(
+    pr2_gripper, graspable_box
+):
+    grasp = graspable_box.grasp_candidates()[0].grasp_pose
+
+    np.testing.assert_allclose(
+        pr2_gripper.tool_frame_goal_for_grasp(grasp).rotation_matrix.to_np(),
+        pr2_gripper.tool_frame_goal(grasp).rotation_matrix.to_np(),
+        atol=1e-9,
+    )
+
+
+# %% how wide the fingers are sent
+
+
+def test_a_wider_object_sends_the_fingertip_frames_further_apart(pr2_gripper):
+    narrower = np.linalg.norm(
+        pr2_gripper.fingertips.finger_P_thumb(0.02).to_np()[:3].ravel()
+    )
+    wider = np.linalg.norm(
+        pr2_gripper.fingertips.finger_P_thumb(0.05).to_np()[:3].ravel()
+    )
+
+    assert wider - narrower == pytest.approx(0.03)
+
+
+def test_the_separation_a_goal_is_built_for_is_the_one_asked_for(pr2_gripper):
+    """
+    The surfaces stand where they were asked to, which is the distance between the
+    fingertip frames less what each surface sits inside its own frame.
+    """
+    separation = 0.04
+
+    frames_apart = np.linalg.norm(
+        pr2_gripper.fingertips.finger_P_thumb(separation).to_np()[:3].ravel()
+    )
+
+    assert frames_apart - 2 * pr2_gripper.fingertips.surface_depth == pytest.approx(
+        separation
+    )
+
+
+def test_the_thumb_tip_goal_is_read_in_the_other_fingertips_frame(pr2_gripper):
+    goal = pr2_gripper.fingertips.finger_P_thumb(0.04)
+
+    assert goal.reference_frame is pr2_gripper.finger.tip

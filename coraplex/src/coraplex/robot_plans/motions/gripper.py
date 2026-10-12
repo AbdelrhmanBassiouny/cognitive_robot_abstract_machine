@@ -26,7 +26,10 @@ from semantic_digital_twin.datastructures.robots.gripper_configuration import (
     TGripperConfiguration,
 )
 from semantic_digital_twin.robots.justin import Justin
-from semantic_digital_twin.robots.robot_part_mixins import HasMobileBase
+from semantic_digital_twin.robots.robot_part_mixins import (
+    HasMobileBase,
+    HasTwoFingers,
+)
 from semantic_digital_twin.robots.robot_parts import Arm, EndEffector
 from semantic_digital_twin.spatial_types import Point3, Vector3
 from semantic_digital_twin.spatial_types.spatial_types import Pose
@@ -36,7 +39,12 @@ from coraplex.datastructures.enums import (
     MovementType,
     WaypointsMovementType,
 )
-from coraplex.exceptions import MissingToolFrame, MissingWaypoints
+from coraplex.exceptions import (
+    FingerWidthNeedsPhysics,
+    MissingToolFrame,
+    MissingWaypoints,
+)
+from coraplex.plans.executables import GiskardExecutable
 from coraplex.robot_plans.mixins import (
     CartesianVelocityLimitParameters,
     GripperStallToleranceParameters,
@@ -138,6 +146,67 @@ class MoveGripperMotion(
             # binds no concrete configuration type it could check against.
             return True
         return isinstance(motion.configuration, configuration_type)
+
+
+@dataclass
+class MoveFingersToWidthMotion(BaseMotion):
+    """
+    Closes a two-finger gripper until its fingertips stand a given distance apart,
+    rather than driving it to a gripper state of its own.
+
+    Closing a gripper all the way onto an object that is not centred between the
+    fingers wedges it sideways instead of holding it, so an object held by contact alone
+    is better met at its own width. Giskard is given the distance between the fingertips
+    as the goal and finds the joint positions that realise it, which is what keeps this
+    independent of how a gripper's fingers are driven.
+
+    ..note:: This only means anything where something pushes back. Where the world is
+        moved kinematically a held object hangs off the tool frame however the fingers
+        stand, and :class:`MoveGripperMotion` says what is meant more directly.
+    """
+
+    gripper: HasTwoFingers
+    """
+    The gripper whose fingers close.
+    """
+
+    width: float
+    """
+    How far apart the fingertips' facing surfaces are to stand, in metres.
+    """
+
+    squeeze: float = 0.0
+    """
+    How far past that width each fingertip is sent, in metres, so the fingers press into
+    an object rather than merely touching it.
+
+    Keep it small, since it is commanded penetration into a body that does not yield.
+    """
+
+    threshold: float = 0.0005
+    """
+    How close, in metres, the fingertips have to come to the goal for the motion to
+    count as done: well under a squeeze, so the squeeze is not lost to the tolerance.
+    """
+
+    def perform(self):
+        return
+
+    @property
+    def _motion_chart(self) -> Task:
+        execution_type = GiskardExecutable.execution_type
+        if execution_type is None or not execution_type.objects_push_back:
+            raise FingerWidthNeedsPhysics(execution_type)
+        fingertips = self.gripper.fingertips
+        return CartesianPosition(
+            root_link=fingertips.finger,
+            tip_link=fingertips.thumb,
+            goal_point=fingertips.finger_P_thumb(
+                max(0.0, self.width - 2 * self.squeeze)
+            ),
+            name="MoveFingersToWidth",
+            threshold=self.threshold,
+        )
 
 
 @dataclass

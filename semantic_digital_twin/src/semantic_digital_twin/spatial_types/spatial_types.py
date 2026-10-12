@@ -1322,6 +1322,13 @@ class Point3(Point):
         frame_P_nearest = frame_P_line_start + frame_V_offset
         return dist, frame_P_nearest
 
+    def midpoint(self, other: Point3) -> Point3:
+        """
+        :param other: The point to meet halfway.
+        :return: The point midway between this one and ``other``.
+        """
+        return self + (other - self) / 2
+
     @property
     def vector3(self) -> Vector3:
         """

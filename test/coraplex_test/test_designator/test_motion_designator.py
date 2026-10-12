@@ -17,6 +17,7 @@ from coraplex.execution_environment import (
     semi_real_robot,
     kinematically_simulated_robot,
 )
+from coraplex.exceptions import FingerWidthNeedsPhysics
 from coraplex.plans.executables import MoveBranchExecutable
 from giskardpy.motion_statechart.monitors.overwrite_state_monitors import SetOdometry
 from coraplex.plans.factories import sequential, execute_single
@@ -27,6 +28,7 @@ from coraplex.robot_plans.actions.core.placing import PlaceAction
 from coraplex.robot_plans.actions.core.robot_body import MoveTorsoAction
 from coraplex.robot_plans.motions.container import ClosingMotion, OpeningMotion
 from coraplex.robot_plans.motions.gripper import (
+    MoveFingersToWidthMotion,
     MoveGripperMotion,
     MoveTCPWaypointsAlignedMotion,
     MoveTCPWaypointsMotion,
@@ -45,6 +47,7 @@ from giskardpy.motion_statechart.monitors.monitors import LocalMinimumReached
 from giskardpy.motion_statechart.tasks.cartesian_tasks import (
     CartesianOrientation,
     CartesianPose,
+    CartesianPosition,
     CartesianPositionTrajectory,
     CartesianPositionVelocityLimit,
     CartesianRotationVelocityLimit,
@@ -988,6 +991,7 @@ def test_grasping_action_frees_the_gripper_for_its_whole_approach(
     assert all(node.designator.allow_gripper_collision is True for node in reach_nodes)
 
 
+
 @pytest.mark.skipif(
     not daisy_mappings_available,
     reason="DAiSy motion mappings not available",
@@ -1322,3 +1326,63 @@ class TestDAiSyGripperConfigurationRouting:
         assert task.grip_position == configuration.grip_position
         assert task.grip_velocity == configuration.grip_velocity
         assert task.grip_acceleration == configuration.grip_acceleration
+
+
+# %% sending the fingers to a width
+
+
+def test_fingers_sent_to_a_width_aim_one_fingertip_at_the_other(pr2_apartment_context):
+    """
+    The distance between the fingertips is what Giskard is given, so it finds the joint
+    positions that realise it rather than being told them.
+    """
+    _, _, context = pr2_apartment_context
+    gripper = context.robot.left_arm.end_effector
+    motion = MoveFingersToWidthMotion(gripper=gripper, width=0.04)
+
+    with PhysicallySimulatedRobot(simulation=None):
+        execute_single(motion, context=context)
+
+        chart = motion.motion_chart
+        assert isinstance(chart, CartesianPosition)
+        assert chart.root_link is gripper.finger.tip
+        assert chart.tip_link is gripper.thumb.tip
+
+
+def test_a_squeeze_sends_the_fingers_past_the_width(pr2_apartment_context):
+    _, _, context = pr2_apartment_context
+    gripper = context.robot.left_arm.end_effector
+    width = 0.04
+    squeeze = 0.001
+
+    with PhysicallySimulatedRobot(simulation=None):
+        touching = MoveFingersToWidthMotion(gripper=gripper, width=width)
+        pressing = MoveFingersToWidthMotion(
+            gripper=gripper, width=width, squeeze=squeeze
+        )
+        execute_single(touching, context=context)
+        execute_single(pressing, context=context)
+
+        apart = touching.motion_chart.goal_point.to_np()[:3].ravel()
+        pressed = pressing.motion_chart.goal_point.to_np()[:3].ravel()
+
+    assert np.linalg.norm(pressed) == pytest.approx(np.linalg.norm(apart) - 2 * squeeze)
+
+
+def test_fingers_are_not_sent_to_a_width_where_nothing_pushes_back(
+    pr2_apartment_context,
+):
+    """
+    Closing to an object's own width only means something where the object resists; in a
+    world moved kinematically a held body hangs off the tool frame however the fingers
+    stand.
+    """
+    _, _, context = pr2_apartment_context
+    gripper = context.robot.left_arm.end_effector
+    motion = MoveFingersToWidthMotion(gripper=gripper, width=0.04)
+
+    with kinematically_simulated_robot:
+        execute_single(motion, context=context)
+
+        with pytest.raises(FingerWidthNeedsPhysics):
+            motion.motion_chart

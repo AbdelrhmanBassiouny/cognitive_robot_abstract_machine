@@ -552,3 +552,23 @@ def test_a_physically_simulated_place_is_released_by_its_own_grip(
         plan.perform()
 
     assert milk.parent_connection.parent is gripper
+
+
+# %% which execution types let an object push back
+
+
+def test_only_a_real_or_physically_simulated_robot_meets_resistance():
+    """
+    Whether contact decides what is held is what tells the two simulated types apart,
+    and a plan that depends on contact has to be able to ask.
+    """
+    pushing_back = {
+        execution_type
+        for execution_type in ExecutionType
+        if execution_type.objects_push_back
+    }
+
+    assert pushing_back == {
+        ExecutionType.REAL,
+        ExecutionType.PHYSICALLY_SIMULATED,
+    }

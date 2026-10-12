@@ -145,6 +145,14 @@ class ExecutionType(Enum):
     plan to be inspected rather than carried out.
     """
 
+    @property
+    def objects_push_back(self) -> bool:
+        """
+        Whether a body the robot touches resists it, so that contact rather than the
+        world model decides what is held.
+        """
+        return self in (ExecutionType.REAL, ExecutionType.PHYSICALLY_SIMULATED)
+
 
 class VisualizationBackend(StrEnum):
     """The renderer selected for a simulated world."""

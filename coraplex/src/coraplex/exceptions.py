@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from abc import ABC
 from dataclasses import dataclass
-from typing_extensions import TYPE_CHECKING, Type
+from typing_extensions import Optional, TYPE_CHECKING, Type
 
 from krrood.entity_query_language.factories import ConditionType, get_false_statements
 from krrood.exceptions import DataclassException
@@ -284,6 +284,33 @@ class ObjectIsNotHeld(DataclassException):
 
     def suggest_correction(self) -> str:
         return "place the object after a pick-up of it."
+
+
+@dataclass
+class FingerWidthNeedsPhysics(DataclassException):
+    """
+    Raised when fingers are sent to a width while the execution is not physically
+    simulated.
+    """
+
+    execution_type: Optional[ExecutionType]
+    """
+    The execution type the motion was performed under.
+    """
+
+    def error_message(self) -> str:
+        return (
+            f"closing the fingers to a width has no effect under "
+            f"{self.execution_type}"
+        )
+
+    def suggest_correction(self) -> str:
+        return (
+            "Perform the plan inside a PhysicallySimulatedRobot or on the real robot, "
+            "where the fingers meet the object. Where the world is only moved "
+            "kinematically, a held object hangs off the tool frame and a gripper state "
+            "of its own is enough: use MoveGripperMotion instead."
+        )
 
 
 @dataclass
