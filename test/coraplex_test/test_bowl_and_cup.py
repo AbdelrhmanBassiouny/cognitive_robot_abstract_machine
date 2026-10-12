@@ -10,6 +10,7 @@ from dataclasses import dataclass
 
 import numpy as np
 import pytest
+from typing_extensions import Iterator
 
 from coraplex.plans.context_extensions import MotionToleranceConfig
 from coraplex.robot_plans.actions.core.container import OpenAction
@@ -20,8 +21,10 @@ from coraplex.robot_plans.actions.core.robot_body import (
     MoveTorsoAction,
     ParkArmsAction,
 )
-from cramph.composites import Sequence
+from coraplex.visualization import RvizVisualization
+from cramph.composites import Parallel, Sequence
 from cramph.context import ContextExtension
+from cramph.executor import SimulationPacer
 from semantic_digital_twin.datastructures.definitions import TorsoState
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.grasping.grasp_candidates import (
@@ -92,6 +95,28 @@ class KitchenWithFilledDrawer:
         :return: The surface of the kitchen island the objects are set down on.
         """
         return self.world.get_body_by_name("kitchen_island_surface")
+
+    @property
+    def world_T_bowl_goal(self) -> Pose:
+        """
+        :return: Where the bowl is set down on the kitchen island.
+        """
+        return self.world.transform(
+            Pose.from_xyz_rpy(x=0.2, z=0.05, reference_frame=self.kitchen_island),
+            self.world.root,
+        )
+
+    @property
+    def world_T_cup_goal(self) -> Pose:
+        """
+        :return: Where the cup is set down on the kitchen island.
+        """
+        return self.world.transform(
+            Pose.from_xyz_rpy(
+                x=0.15, y=0.25, z=0.07, reference_frame=self.kitchen_island
+            ),
+            self.world.root,
+        )
 
 
 def add_cylinder(
@@ -204,6 +229,21 @@ def kitchen_with_filled_drawer(
     )
 
 
+@pytest.fixture
+def kitchen_shown_in_rviz(
+    kitchen_with_filled_drawer: KitchenWithFilledDrawer,
+) -> Iterator[KitchenWithFilledDrawer]:
+    """
+    The kitchen, published to RViz together with its collision results for as long as
+    the test runs.
+    """
+    visualization = RvizVisualization(
+        kitchen_with_filled_drawer.world, collision_visualization=True
+    ).start()
+    yield kitchen_with_filled_drawer
+    visualization.stop()
+
+
 def grasp_from_above(graspable: HasGraspCandidates) -> GraspCandidate:
     """
     :param graspable: The annotation of an object standing upright.
@@ -221,21 +261,18 @@ def grasp_from_above(graspable: HasGraspCandidates) -> GraspCandidate:
 # %% taking both objects out of the drawer and setting them down
 
 
-def test_bowl_and_cup_are_moved_from_the_drawer_onto_the_kitchen_island(
-    kitchen_with_filled_drawer: KitchenWithFilledDrawer,
-):
-    kitchen = kitchen_with_filled_drawer
+def transport_plan(
+    kitchen: KitchenWithFilledDrawer,
+    two_arm_step_type: type[Sequence] | type[Parallel],
+) -> Sequence:
+    """
+    :param kitchen: The kitchen the plan is performed in.
+    :param two_arm_step_type: How the two arms work together where each has its own
+        object to handle: one after the other, or at once.
+    :return: The plan that opens the drawer, takes the bowl with the left arm and the
+        cup with the right arm, and sets both down on the kitchen island.
+    """
     world, robot = kitchen.world, kitchen.robot
-    world_T_bowl_goal = world.transform(
-        Pose.from_xyz_rpy(x=0.2, z=0.05, reference_frame=kitchen.kitchen_island),
-        world.root,
-    )
-    world_T_cup_goal = world.transform(
-        Pose.from_xyz_rpy(
-            x=0.15, y=0.25, z=0.07, reference_frame=kitchen.kitchen_island
-        ),
-        world.root,
-    )
     in_front_of_the_closed_drawer = Pose.from_xyz_rpy(
         x=0.4, y=0.7, reference_frame=world.root
     )
@@ -245,8 +282,7 @@ def test_bowl_and_cup_are_moved_from_the_drawer_onto_the_kitchen_island(
     facing_the_kitchen_island = Pose.from_xyz_rpy(
         x=-0.3, y=1.85, yaw=np.pi, reference_frame=world.root
     )
-
-    plan = Sequence(
+    return Sequence(
         [
             # The arms start stretched out, which would reach into the counter.
             ParkArmsAction(robot.all_arms),
@@ -254,27 +290,71 @@ def test_bowl_and_cup_are_moved_from_the_drawer_onto_the_kitchen_island(
             OpenAction(kitchen.drawer_handle, robot.left_arm),
             ParkArmsAction(robot.all_arms),
             NavigateAction(in_front_of_the_open_drawer),
-            PickUpAction(grasp_from_above(kitchen.bowl), robot.left_arm),
-            PickUpAction(grasp_from_above(kitchen.cup), robot.right_arm),
+            two_arm_step_type(
+                [
+                    PickUpAction(grasp_from_above(kitchen.bowl), robot.left_arm),
+                    PickUpAction(grasp_from_above(kitchen.cup), robot.right_arm),
+                ]
+            ),
             ParkArmsAction(robot.all_arms),
             NavigateAction(facing_the_kitchen_island),
             MoveTorsoAction(TorsoState.HIGH),
-            PlaceAction(kitchen.bowl, world_T_bowl_goal),
-            PlaceAction(kitchen.cup, world_T_cup_goal),
+            two_arm_step_type(
+                [
+                    PlaceAction(kitchen.bowl, kitchen.world_T_bowl_goal),
+                    PlaceAction(kitchen.cup, kitchen.world_T_cup_goal),
+                ]
+            ),
             ParkArmsAction(robot.all_arms),
         ]
     )
-    run_plan(plan, kitchen.context_extensions, collision_avoidance=True)
 
+
+def assert_bowl_and_cup_stand_on_the_kitchen_island(
+    kitchen: KitchenWithFilledDrawer,
+) -> None:
+    """
+    Assert that both objects were released at their goals on the kitchen island.
+    """
     # A pick-up and a place each end within the position threshold of their goal.
     position_tolerance = 2 * MotionToleranceConfig().default_tcp_position_threshold
     for placed, world_T_goal in [
-        (kitchen.bowl, world_T_bowl_goal),
-        (kitchen.cup, world_T_cup_goal),
+        (kitchen.bowl, kitchen.world_T_bowl_goal),
+        (kitchen.cup, kitchen.world_T_cup_goal),
     ]:
-        assert placed.root.parent_connection.parent is world.root
+        assert placed.root.parent_connection.parent is kitchen.world.root
         np.testing.assert_allclose(
             placed.root.global_pose.position.to_np(),
             world_T_goal.position.to_np(),
             atol=position_tolerance,
         )
+
+
+def test_bowl_and_cup_are_moved_from_the_drawer_onto_the_kitchen_island(
+    kitchen_shown_in_rviz: KitchenWithFilledDrawer,
+):
+    kitchen = kitchen_shown_in_rviz
+
+    run_plan(
+        transport_plan(kitchen, Sequence),
+        kitchen.context_extensions,
+        collision_avoidance=True,
+        pacer=SimulationPacer(real_time_factor=1),
+    )
+
+    assert_bowl_and_cup_stand_on_the_kitchen_island(kitchen)
+
+
+def test_bowl_and_cup_are_moved_with_both_arms_at_once(
+    kitchen_shown_in_rviz: KitchenWithFilledDrawer,
+):
+    kitchen = kitchen_shown_in_rviz
+
+    run_plan(
+        transport_plan(kitchen, Parallel),
+        kitchen.context_extensions,
+        collision_avoidance=True,
+        pacer=SimulationPacer(real_time_factor=1),
+    )
+
+    assert_bowl_and_cup_stand_on_the_kitchen_island(kitchen)

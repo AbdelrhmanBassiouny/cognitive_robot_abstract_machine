@@ -1,9 +1,10 @@
-from __future__ import division
+from __future__ import annotations
 
 from dataclasses import dataclass, field
 from typing import Optional
 
 from krrood.symbolic_math.symbolic_math import trinary_logic_and
+from semantic_digital_twin.robots.robot_parts import EndEffector
 from semantic_digital_twin.spatial_types.spatial_types import Pose
 from semantic_digital_twin.world_description.connections import ActiveConnection1DOF
 from semantic_digital_twin.world_description.world_entity import (
@@ -12,6 +13,9 @@ from semantic_digital_twin.world_description.world_entity import (
 from cramph.node import EndedByOwner
 from cramph.context import StatechartContext
 from giskardpy.motion_statechart.data_types import DefaultWeights
+from giskardpy.motion_statechart.goals.collision_avoidance import (
+    UpdateTemporaryCollisionRules,
+)
 from cramph.node import CompositeNode, NodeArtifacts
 from giskardpy.motion_statechart.tasks.cartesian_tasks import CartesianPose
 from giskardpy.motion_statechart.tasks.joint_tasks import JointPositionList, JointState
@@ -66,6 +70,12 @@ class Open(EndedByOwner, CompositeNode):
     letting the end effector drift off the grasped part, and the two move independently.
     """
 
+    grasping_end_effector: EndEffector | None = field(default=None, kw_only=True)
+    """
+    The end effector grasping the part, which may then touch its surroundings while the
+    mechanism moves; ``None`` leaves collision avoidance as it is.
+    """
+
     def expand(self, context: StatechartContext) -> None:
         self.connection = self.environment_link.get_first_parent_connection_of_type(
             ActiveConnection1DOF
@@ -90,6 +100,14 @@ class Open(EndedByOwner, CompositeNode):
                 ),
             ]
         )
+        if self.grasping_end_effector is not None:
+            self._add_children_to_statechart(
+                [
+                    UpdateTemporaryCollisionRules.for_end_effector(
+                        self.grasping_end_effector
+                    )
+                ]
+            )
 
     def _reachable_goal_joint_state(self) -> float:
         """

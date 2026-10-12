@@ -57,7 +57,10 @@ if TYPE_CHECKING:
     from semantic_digital_twin.world_description.world_modification import (
         WorldModification,
     )
-    from semantic_digital_twin.collision_checking.collision_matrix import CollisionCheck
+    from semantic_digital_twin.collision_checking.collision_matrix import (
+        CollisionCheck,
+        CollisionRule,
+    )
 
 
 @dataclass
@@ -1738,6 +1741,37 @@ class BodyHasNoGeometryError(InvalidCollisionCheckError):
 
     def suggest_correction(self) -> str:
         return ""
+
+
+@dataclass
+class TemporaryCollisionRulesDependOnOrder(CollisionCheckingError):
+    """
+    Raised when temporary collision rules are put in force next to others, and which
+    body pairs are checked at which distance would depend on which of them came first.
+    """
+
+    rules_in_force: list[CollisionRule]
+    """
+    The temporary rules that were in force already.
+    """
+
+    added_rules: list[CollisionRule]
+    """
+    The temporary rules that were to be put in force next to them.
+    """
+
+    def error_message(self) -> str:
+        return (
+            f"The temporary collision rules {self.added_rules} and the ones already "
+            f"in force, {self.rules_in_force}, decide differently about the same "
+            f"body pairs, so the outcome would depend on which were added first."
+        )
+
+    def suggest_correction(self) -> str:
+        return (
+            "Put rules that overrule each other in force together, in the order "
+            "they are meant to apply, or do not let them be in force at once."
+        )
 
 
 @dataclass

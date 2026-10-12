@@ -578,6 +578,7 @@ class KeepStretchInFrontOfTheContainerItCloses(PlanTransformation[CloseAction]):
                         tip_link=tool_frame,
                         environment_link=handle,
                         goal_joint_state=closing_goal.goal_joint_state,
+                        grasping_end_effector=closing_goal.grasping_end_effector,
                     ),
                 ]
             ),

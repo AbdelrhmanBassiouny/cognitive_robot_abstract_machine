@@ -64,7 +64,9 @@ class OpenAction(Action):
                     approach_clearance=self.approach_clearance,
                 ),
                 Open(
-                    tip_link=end_effector.tool_frame, environment_link=self.handle.root
+                    tip_link=end_effector.tool_frame,
+                    environment_link=self.handle.root,
+                    grasping_end_effector=end_effector,
                 ),
                 MoveGripper(
                     end_effector=end_effector,
@@ -147,6 +149,7 @@ class CloseAction(Action):
                     tip_link=end_effector.tool_frame,
                     environment_link=self.handle.root,
                     goal_joint_state=ActionConfig.closed_container_joint_state,
+                    grasping_end_effector=end_effector,
                 ),
                 MoveGripper(
                     end_effector=end_effector,

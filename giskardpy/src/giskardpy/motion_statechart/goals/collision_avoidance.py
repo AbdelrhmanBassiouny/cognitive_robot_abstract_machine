@@ -324,13 +324,16 @@ class _CancelBecauseExternalCollisionViolated(_CancelBecauseCollisionViolated):
 
 
 @dataclass(eq=False, repr=False)
-class UpdateTemporaryCollisionRules(SucceedsOnObservingTrue, MotionStatechartNode):
+class UpdateTemporaryCollisionRules(EndedByOwner, MotionStatechartNode):
     """
-    Updates the temporary collision rules for the robot.
+    Keeps temporary collision rules in force while it runs, next to the temporary rules
+    of every other node running at the same time.
     """
 
     temporary_rules: list[CollisionRule] = field(kw_only=True)
-    collision_matrix: CollisionMatrix = field(init=False)
+    """
+    The rules in force while this node runs.
+    """
 
     @classmethod
     def for_end_effector(
@@ -338,8 +341,8 @@ class UpdateTemporaryCollisionRules(SucceedsOnObservingTrue, MotionStatechartNod
     ) -> UpdateTemporaryCollisionRules:
         """
         :param end_effector: The end effector that may touch its surroundings.
-        :return: A node that lets only this end effector, together with whatever it
-            holds, collide with the environment.
+        :return: A node that lets this end effector, together with whatever it holds,
+            collide with the environment.
         """
         return cls(
             temporary_rules=[AllowCollisionForEndEffector(end_effector=end_effector)]
@@ -347,26 +350,25 @@ class UpdateTemporaryCollisionRules(SucceedsOnObservingTrue, MotionStatechartNod
 
     def build_artifacts(self, context: StatechartContext) -> MotionNodeArtifacts:
         artifacts = MotionNodeArtifacts()
-        # safe old rules
-        old_temporary_rules = list(context.world.collision_manager.temporary_rules)
-
-        # compute collision matrix with new rules
-        context.world.collision_manager.clear_temporary_rules()
-        context.world.collision_manager.extend_temporary_rule(self.temporary_rules)
+        # The world may have changed since the rules in force were applied to it.
         context.world.collision_manager.update_collision_matrix()
-        self.collision_matrix = context.world.collision_manager.collision_matrix
-
-        context.world.collision_manager.clear_temporary_rules()
-        context.world.collision_manager.extend_temporary_rule(old_temporary_rules)
-        context.world.collision_manager.update_collision_matrix()
-
         artifacts.observation = sm.Scalar.const_true()
         return artifacts
 
     def on_start(self, context: StatechartContext):
-        context.world.collision_manager.clear_temporary_rules()
-        context.world.collision_manager.extend_temporary_rule(self.temporary_rules)
-        context.world.collision_manager.set_collision_matrix(self.collision_matrix)
+        """
+        :raises TemporaryCollisionRulesDependOnOrder: If it would matter whether
+            :attr:`temporary_rules` or the temporary rules already in force are applied
+            first.
+        """
+        context.world.collision_manager.put_temporary_rules_in_force(
+            self.temporary_rules
+        )
+
+    def on_end(self, context: StatechartContext):
+        context.world.collision_manager.take_temporary_rules_out_of_force(
+            self.temporary_rules
+        )
 
 
 @dataclass(eq=False, repr=False)

@@ -123,9 +123,11 @@ class PlaceAction(
                 MoveBranch(
                     body=self.object_designator.root, new_parent=self.world.root
                 ),
+                # The gripper starts out around the object it has just let go of.
                 self.tool_center_point_goal(
                     retract_pose,
                     arm,
+                    allow_gripper_collision=True,
                     max_linear_velocity=self.retract_linear_velocity,
                 ),
             ],

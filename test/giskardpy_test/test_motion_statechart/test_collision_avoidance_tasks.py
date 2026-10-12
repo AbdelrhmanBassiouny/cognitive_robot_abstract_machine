@@ -57,6 +57,7 @@ from semantic_digital_twin.collision_checking.collision_rules import (
     AllowCollisionForEndEffector,
 )
 from semantic_digital_twin.datastructures.definitions import StaticJointState
+from semantic_digital_twin.exceptions import TemporaryCollisionRulesDependOnOrder
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.robots.minimal_robot import MinimalRobot
 from semantic_digital_twin.robots.pr2 import PR2, PR2Joint
@@ -379,16 +380,6 @@ def test_update_collision_matrix_later(cylinder_bot_world: World):
     msc = Statechart(context=kin_sim.context)
     msc.add_nodes(
         [
-            UpdateTemporaryCollisionRules(
-                temporary_rules=[
-                    AvoidCollisionBetweenGroups(
-                        buffer_zone_distance=0.05,
-                        violated_distance=0.0,
-                        body_group_a=[tip],
-                        body_group_b=[env1],
-                    )
-                ]
-            ),
             ExternalCollisionAvoidance(robot=robot),
             cart_goal_reached := CartesianPose(
                 root_link=cylinder_bot_world.root,
@@ -397,11 +388,32 @@ def test_update_collision_matrix_later(cylinder_bot_world: World):
                     x=1, reference_frame=cylinder_bot_world.root
                 ),
             ),
+            # The avoidance rules are in force until the robot is stuck in front of the
+            # obstacle; only then do the rules allowing every collision start.
             Sequence(
                 [
-                    LocalMinimumReached(),
-                    UpdateTemporaryCollisionRules(
-                        temporary_rules=[AllowAllCollisions()]
+                    Parallel(
+                        [
+                            LocalMinimumReached(),
+                            UpdateTemporaryCollisionRules(
+                                temporary_rules=[
+                                    AvoidCollisionBetweenGroups(
+                                        buffer_zone_distance=0.05,
+                                        violated_distance=0.0,
+                                        body_group_a=[tip],
+                                        body_group_b=[env1],
+                                    )
+                                ]
+                            ),
+                        ]
+                    ),
+                    Parallel(
+                        [
+                            ConstFalseNode(),
+                            UpdateTemporaryCollisionRules(
+                                temporary_rules=[AllowAllCollisions()]
+                            ),
+                        ]
                     ),
                 ]
             ),
@@ -982,17 +994,20 @@ def test_hard_constraints_violated(
         extensions=[MotionControl()],
     )
     msc = Statechart(context=statechart_origin.create_building_context(kin_sim))
+    # In force for the whole motion, next to the steps below.
+    msc.add_node(
+        UpdateTemporaryCollisionRules(
+            temporary_rules=[
+                AvoidAllCollisions(
+                    buffer_zone_distance=0.05,
+                    violated_distance=0.0,
+                )
+            ]
+        )
+    )
     msc.add_node(
         Sequence(
             [
-                UpdateTemporaryCollisionRules(
-                    temporary_rules=[
-                        AvoidAllCollisions(
-                            buffer_zone_distance=0.05,
-                            violated_distance=0.0,
-                        )
-                    ]
-                ),
                 SetOdometry(
                     base_pose=HomogeneousTransformationMatrix.from_xyz_rpy(
                         x=1, reference_frame=cylinder_bot_world.root
@@ -1205,3 +1220,70 @@ def test_building_a_rules_node_keeps_the_temporary_rules_in_force(
 
     assert rules_node.life_cycle_state == LifeCycleValues.NOT_STARTED
     assert collision_manager.temporary_rules == [rule_in_force]
+
+
+# %% how long the rules of a rules node are in force
+
+
+def _executor_of(world: World) -> StatechartExecutor:
+    """
+    :return: An executor running motion statecharts in `world`.
+    """
+    return StatechartExecutor(
+        context=StatechartContext(world=world), extensions=[MotionControl()]
+    )
+
+
+def test_rules_nodes_running_at_once_keep_the_rules_of_each_other_in_force(
+    pr2_world_copy: World,
+):
+    robot = pr2_world_copy.get_semantic_annotations_by_type(PR2)[0]
+    left = UpdateTemporaryCollisionRules.for_end_effector(robot.left_arm.end_effector)
+    right = UpdateTemporaryCollisionRules.for_end_effector(robot.right_arm.end_effector)
+    executor = _executor_of(pr2_world_copy)
+    statechart = Statechart(context=executor.context)
+    statechart.add_nodes([left, right])
+
+    executor.compile(statechart)
+    executor.tick()
+
+    assert pr2_world_copy.collision_manager.temporary_rules == [
+        *left.temporary_rules,
+        *right.temporary_rules,
+    ]
+
+
+def test_the_rules_of_a_rules_node_are_out_of_force_once_it_ended(
+    cylinder_bot_world: World,
+):
+    collision_manager = cylinder_bot_world.collision_manager
+    rule_in_force = AllowAllCollisions()
+    collision_manager.add_temporary_rule(rule_in_force)
+    executor = _executor_of(cylinder_bot_world)
+    statechart = Statechart(context=executor.context)
+    rules_node = UpdateTemporaryCollisionRules(temporary_rules=[AllowAllCollisions()])
+    statechart.add_node(Sequence([rules_node, ConstFalseNode()]))
+
+    executor.compile(statechart)
+    executor.tick()
+    executor.tick()
+
+    assert rules_node.life_cycle_state.is_terminal
+    assert collision_manager.temporary_rules == [rule_in_force]
+
+
+def test_rules_nodes_whose_order_changes_what_is_checked_do_not_run_at_once(
+    cylinder_bot_world: World,
+):
+    executor = _executor_of(cylinder_bot_world)
+    statechart = Statechart(context=executor.context)
+    statechart.add_nodes(
+        [
+            UpdateTemporaryCollisionRules(temporary_rules=[AvoidAllCollisions()]),
+            UpdateTemporaryCollisionRules(temporary_rules=[AllowAllCollisions()]),
+        ]
+    )
+
+    with pytest.raises(TemporaryCollisionRulesDependOnOrder):
+        executor.compile(statechart)
+        executor.tick()
