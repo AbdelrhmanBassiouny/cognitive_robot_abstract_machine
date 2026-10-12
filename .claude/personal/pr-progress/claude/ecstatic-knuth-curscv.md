@@ -38,7 +38,31 @@ Done:
     - MontessoriShape has no outline/height/color.
     - There is no HasColor/HasHeight predicate.
     - Color is RGBA only, with no hue.
-  - Stopped to ask the developer: where the CI fix goes, the hue direction, and the KnownPiece scope.
+  - Stopped to ask the developer. Answers:
+    - the CI fix goes on #202, then re-cut;
+    - hue moves into SemDT Color in this round;
+    - #488 is blocked on the KnownPiece redesign.
+  - d4abc697d on #202 migrates Pose to_* to properties across the whole package (main's #694 also broke
+    pipeline/overlay/detections/markers/node and four other test modules). It also replaces
+    the(match.expression) with the(match) (main's f70c1aff45). 174 passed, 1 skipped.
+  - be578659e on #202:
+    - SemDT gains Hue (degrees, distance), Color.from_hsv and Color.hue, with test_hue.py;
+    - PieceHue(Hue, Enum) is CYAN 172 / YELLOW 42 and KnownPiece.hue is a Hue;
+    - hue_tolerance is 8 degrees;
+    - HueCircle is gone and HueChannel in pipeline.py reads the OpenCV channel.
+    - 196 passed, 1 skipped.
+  - 91a1dfba6 re-cuts #488 from be578659e: 11 files byte-identical, 52 passed. Pushed.
+  - Threads:
+    - replied on the hue thread and the HueCircle/SemDT thread, then resolved both;
+    - replied on the KnownPiece thread with the brainstorm, left open.
+    - Description updated; still a draft.
+  - #202's ready/draft state was not changed. It was ready before, as in the 10-04 round.
+  - Plan: item status blocked, with blockers, notes and roadmap section.
 
-Next: the developer's answers. The CI fix goes on #202 first then re-cut (precedent 6dda1916e), but pushing to
-montessori_perception_on_main needs permission. Downstream branches of #202 need a merge.
+Next: settle the KnownPiece -> EQL descriptions design with the developer:
+- MontessoriShape properties;
+- factory matching or Polygon2D subclasses;
+- tolerance predicates;
+- rotation_period derived from the outline.
+Then implement on #202 (plus any krrood/SemDT PRs) and re-cut. CI on d4abc697d/be578659e (#202) and 91a1dfba6 (#488)
+is not polled. DetectionColor duplicates SemDT Color; raised with the developer.
