@@ -108,6 +108,12 @@ recorded playback, EQL questions and plan/statechart inspection. Start `cramera`
 from the activated environment, then run an existing demo with
 `cramera-live path/to/demo.py`.
 
+## Videos of experiments
+
+[cramcorder](cramcorder/README.md) makes narrated, subtitled mp4 videos of experiments
+from scenes you write: slides, recorded footage and your own scenes on a timeline,
+encoded to a venue's limits.
+
 ## To run tests
 
 **1. Install system dependencies, set up and build the ROS 2 workspace**
