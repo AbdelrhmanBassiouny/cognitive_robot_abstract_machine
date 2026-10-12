@@ -9,7 +9,7 @@ from cramph.data_types import (
 from cramph.composites import Sequence
 from giskardpy.motion_statechart.graph_node import (
     EndMotion,
-    MotionStatechartNode,
+    StructureCopyMotionStatechartNode,
     Task,
 )
 from giskardpy.motion_statechart.monitors.monitors import LocalMinimumReached
@@ -44,7 +44,6 @@ from semantic_digital_twin.world_description.world_entity import Body
 from giskardpy.motion_control import MotionControl
 from cramph.context import StatechartContext
 from cramph.executor import StatechartExecutor
-
 
 # %% motion nodes in JSON
 
@@ -195,7 +194,7 @@ def test_structure_copy_of_a_plain_statechart_keeps_the_motion_node_kinds(mini_w
 
     assert type(statechart_copy.get_node_by_index(task.index)) is Task
     assert type(statechart_copy.get_node_by_index(monitor.index)) is (
-        MotionStatechartNode
+        StructureCopyMotionStatechartNode
     )
     assert type(statechart_copy.get_node_by_index(end.index)) is EndMotion
 

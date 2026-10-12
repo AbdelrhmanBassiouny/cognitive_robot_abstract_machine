@@ -28,7 +28,7 @@ def test_force_impact_node(rclpy_node):
     msg_above = WrenchStamped()
     msg_above.wrench.force.x = 20.0
 
-    msc = Statechart()
+    msc = Statechart(context=StatechartContext(world=World()))
     msc.add_node(
         parallel := Parallel(
             [
@@ -48,12 +48,11 @@ def test_force_impact_node(rclpy_node):
     json_data = msc.to_json()
     json_str = json.dumps(json_data)
     new_json_data = json.loads(json_str)
-    msc_copy = Statechart.from_json(new_json_data)
-
     kin_sim = StatechartExecutor(
         context=StatechartContext(world=World()),
         extensions=[RosNodeAccess(rclpy_node), MotionControl()],
     )
+    msc_copy = Statechart.from_json(new_json_data, context=kin_sim.context)
     kin_sim.compile(statechart=msc_copy)
 
     ft_node = msc_copy.nodes[0].nodes[0]

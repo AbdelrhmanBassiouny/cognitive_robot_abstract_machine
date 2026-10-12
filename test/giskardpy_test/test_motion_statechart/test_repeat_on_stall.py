@@ -41,16 +41,18 @@ A stall timeout no world free test below runs long enough to reach.
 
 def _repeat_on_stall(**timeout_argument) -> RepeatOnStall:
     """
-    Build a loop around a placeholder task, to read back how its stall timeout reached
-    the progress monitor.
+    Build a loop around a placeholder task and let it join a statechart, to read back
+    how its stall timeout reached the progress monitor.
     """
     task = ConstFalseNode(name="task")
-    return RepeatOnStall(
+    loop = RepeatOnStall(
         name="loop",
         task=task,
         stop_retry_monitor=CountNodeResets(name="counter", node=task, target=1),
         **timeout_argument,
     )
+    Statechart(context=StatechartContext(world=World())).add_node(loop)
+    return loop
 
 
 def test_repeat_on_stall_retries_when_a_failure_monitor_of_its_attempt_fires():
@@ -112,6 +114,7 @@ def test_repeat_on_stall_watches_the_task_of_an_attempt_it_is_handed():
         task=attempt,
         stop_retry_monitor=CountNodeResets(name="counter", node=attempt, target=1),
     )
+    Statechart(context=StatechartContext(world=World())).add_node(loop)
 
     assert loop.task is attempt
     [kept_monitor, stall_monitor] = attempt.failure_monitors

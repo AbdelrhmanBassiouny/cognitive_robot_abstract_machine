@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from cramph.composites import Parallel
+from cramph.context import StatechartContext
 from cramph.node import StatechartNode
 from giskardpy.motion_statechart.goals.collision_avoidance import (
     UpdateTemporaryCollisionRules,
@@ -69,8 +70,11 @@ class MoveGripper(Parallel):
     for.
     """
 
-    def __post_init__(self):
-        super().__post_init__()
+    def expand(self, context: StatechartContext) -> None:
+        """
+        Create the finger goal, the speed cap and the collision allowance, then adopt
+        them as :meth:`~cramph.composites.CramLanguageNode.expand` does.
+        """
         goal_state = self.end_effector.get_joint_state_by_type(self.state)
         self.nodes.append(self._finger_goal(goal_state))
         if self.finger_velocity is not None:
@@ -84,6 +88,7 @@ class MoveGripper(Parallel):
             self.nodes.append(
                 UpdateTemporaryCollisionRules.for_end_effector(self.end_effector)
             )
+        super().expand(context)
 
     def _finger_goal(self, goal_state: JointState) -> StatechartNode:
         """
@@ -98,7 +103,9 @@ class MoveGripper(Parallel):
         joint_goal = JointPositionList(goal_state=goal_state)
         if not self.tolerate_stall:
             return joint_goal
-        return Parallel([joint_goal, self._stall_monitor(goal_state)], minimum_success=1)
+        return Parallel(
+            [joint_goal, self._stall_monitor(goal_state)], minimum_success=1
+        )
 
     def _stall_monitor(self, goal_state: JointState) -> LocalMinimumReached:
         """

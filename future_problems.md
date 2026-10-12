@@ -7,9 +7,8 @@ the marker from its tests and its entry from this file.
 
 ## Sending statecharts as JSON
 
-The JSON tests run again and are no longer parked; the ones that fail show what is
-left to do. Every node class is sent through JSON by a `test_node_json_round_trips.py`
-per package (`test/cramph_test/test_statechart`,
+The JSON tests run again and are no longer parked. Every node class is sent through
+JSON by a `test_node_json_round_trips.py` per package (`test/cramph_test/test_statechart`,
 `test/giskardpy_test/test_motion_statechart`, `test/giskardpy_test/test_ros2_stuff`,
 `test/coraplex_test/test_plan`), built on `test/statechart_json_round_trip.py`.
 
@@ -27,12 +26,14 @@ Open questions:
   whose context lacks them rejects the action with
   `NodesMissingContextExtensionsError`. Either the receiver's context gets them, or
   requirements needed to expand are told apart from those needed to build and tick.
-- A giskardpy `MoveGripper` does not survive a JSON round trip: its fail condition
-  references nodes outside its scope after deserialization
-  (`UnserializableGoalError`/`ConditionScopeError`). This breaks the real-stretch
-  cross-process demo,
+- `FunctionCall` and `ThreadedPredicateMonitor` hold a Python callable and cannot be
+  sent; writing a statechart holding one raises `ClassNotSerializableError`. They have
+  no round-trip case.
+- The real-stretch cross-process demo,
   `test/experiments_test/real_stretch_demo_test/test_real_stretch_demo_process_boundary.py`:
-  `test_demonstration_runs_against_a_controller_in_another_process`.
+  `test_demonstration_runs_against_a_controller_in_another_process`, failed because
+  `MoveGripper` did not survive a round trip. `MoveGripper` does now; the demo itself
+  still has to be run where `robokudo_msgs` is installed.
 
 ## ROS 2 goals
 
