@@ -341,7 +341,8 @@ class SimulatedPlanExecutor(PlanExecutor, StatechartExecutor):
 
     def _run(self) -> None:
         """
-        Tick the statechart until it or the plan ended.
+        Tick the statechart until it or the plan ended, waiting for :attr:`pacer` after
+        every tick.
 
         The statechart's own stall monitor decides when a plan is hopeless, so a plan
         that keeps converging is never cut off for taking many ticks.
@@ -359,6 +360,7 @@ class SimulatedPlanExecutor(PlanExecutor, StatechartExecutor):
                 if self.tick_count >= maximum_ticks:
                     raise MotionExceededSimulationTimeLimit(self.simulation_time_limit)
                 self.tick()
+                self.pacer.sleep()
         finally:
             MotionControl.set_velocity_acceleration_jerk_to_zero(self.world)
             self.finish_run()

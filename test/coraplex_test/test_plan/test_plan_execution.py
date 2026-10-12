@@ -3,6 +3,7 @@ Tests for compiling and executing a plan with a
 :class:`~coraplex.plans.executors.PlanExecutor`.
 """
 
+from dataclasses import dataclass
 from datetime import timedelta
 
 import pytest
@@ -29,7 +30,7 @@ from coraplex.robot_plans.actions.core.robot_body import (
 )
 from cramph.exceptions import StatechartOfDifferentContextError
 from cramph.data_types import LifeCycleValues, ObservationStateValues
-from cramph.executor import StatechartExecutor
+from cramph.executor import Pacer, StatechartExecutor
 from cramph.node import CancelStatechart
 from cramph.nodes_for_testing import NodeFailingOnObservingFalse
 from giskardpy.motion_statechart.exceptions import CollisionViolatedError
@@ -41,6 +42,24 @@ from semantic_digital_twin.robots.pr2 import PR2Joint
 from semantic_digital_twin.semantic_annotations.semantic_annotations import Milk
 from semantic_digital_twin.spatial_types import HomogeneousTransformationMatrix
 from ...plan_running import simulated_executor, statechart_of
+
+# %% counting the waits between ticks
+
+
+@dataclass
+class WaitCountingPacer(Pacer):
+    """
+    Counts how often a loop waited for its next cycle, without waiting.
+    """
+
+    wait_count: int = 0
+    """
+    How often the loop waited so far.
+    """
+
+    def sleep(self) -> None:
+        self.wait_count += 1
+
 
 # %% compiling
 
@@ -217,6 +236,19 @@ def test_a_plan_is_given_up_on_at_the_simulation_time_limit_of_its_own_executor(
         executor.execute()
 
     assert error.value.time_limit == executor.simulation_time_limit
+
+
+def test_a_simulated_plan_waits_for_its_pacer_after_every_tick(
+    pr2_apartment_context,
+):
+    world, robot_view, extensions = pr2_apartment_context
+    pacer = WaitCountingPacer()
+    executor = simulated_executor(extensions, pacer=pacer)
+
+    executor.compile(statechart_of(executor, MoveTorsoAction(TorsoState.HIGH)))
+    executor.execute()
+
+    assert pacer.wait_count == executor.tick_count
 
 
 def test_a_plan_that_violates_collision_avoidance_fails_as_a_plan_failure(
