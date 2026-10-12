@@ -127,7 +127,7 @@ class PlaceAction(
         The arm that holds :attr:`object_designator`, and the grasp it holds it by.
 
         Read off the gripper while it holds the object; while the statechart is still
-        being built, taken from the latest pick-up before this place.
+        being built, taken from the latest pick-up of the object before this place.
 
         :return: The arm and its grasp on the object.
         :raises ObjectIsNotHeld: If no arm holds the object and no pick-up precedes this
@@ -140,10 +140,12 @@ class PlaceAction(
                 return arm, GraspCandidate(
                     self.object_designator, end_effector.held_body_T_grasp
                 )
-        previous_pick = self.statechart.get_preceding_node_by_type(self, PickUpAction)
-        if previous_pick is None:
-            raise ObjectIsNotHeld(self.object_designator)
-        return previous_pick.arm, previous_pick.grasp
+        for previous_pick in self.statechart.get_preceding_nodes_by_type(
+            self, PickUpAction
+        ):
+            if previous_pick.grasp.graspable.root is object_body:
+                return previous_pick.arm, previous_pick.grasp
+        raise ObjectIsNotHeld(self.object_designator)
 
     def _grasp_on_the_held_object(self) -> GraspCandidate:
         """
