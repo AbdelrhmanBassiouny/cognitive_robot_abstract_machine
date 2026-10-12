@@ -206,7 +206,11 @@ class MotionServer:
     def execute_goal(self) -> None:
         """
         Execute the accepted goal and answer the client, whatever happens.
+
+        The statechart of the previous goal is dropped first, so a goal that fails
+        before its own statechart compiled reports no states.
         """
+        self.executor.statechart = None
         self._published_sequence_number_before_goal = (
             self.world_synchronizer.published_sequence_number
         )

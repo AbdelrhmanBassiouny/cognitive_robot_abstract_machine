@@ -879,6 +879,24 @@ class TestGoalResult:
         )
 
 
+class TestStatesOfAFailedGoal:
+    """
+    A goal reports only the states of its own statechart.
+    """
+
+    def test_a_goal_failing_before_it_compiled_reports_no_states(
+        self, motion_server: MotionServerFixture
+    ):
+        motion_server.action_server.goal_json = create_goal_json()
+        motion_server.motion_server.run_idle_cycle()
+        motion_server.action_server.goal_json = "not a goal"
+
+        motion_server.motion_server.run_idle_cycle()
+
+        result = json.loads(motion_server.action_server.sent_results[-1].result)
+        assert MotionStatechartPayloadKey.LIFE_CYCLE_STATE not in result
+
+
 class TestCleanupAfterGoal:
     """
     Whatever happens to a goal, the robot is stopped and the client is answered.
@@ -970,6 +988,25 @@ class TestCleanupAfterGoal:
         assert motion_server.plotter.plotted_goal_ids == [
             motion_server.action_server.goal_id
         ]
+
+
+class TestStateFeedback:
+    """
+    The client learns at which tick the states it is sent were taken.
+    """
+
+    def test_the_last_feedback_carries_the_tick_the_goal_ended_on(
+        self, motion_server: MotionServerFixture
+    ):
+        motion_server.action_server.goal_json = create_goal_json()
+
+        motion_server.motion_server.run_idle_cycle()
+
+        last_feedback = feedback_data(motion_server.action_server.feedback_messages[-1])
+        assert (
+            last_feedback[MotionStatechartPayloadKey.TICK_COUNT]
+            == motion_server.executor.tick_count
+        )
 
 
 class TestGoalStructureFeedback:

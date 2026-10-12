@@ -8,7 +8,7 @@ from cramph.composites import Sequence
 from cramph.context import StatechartContext
 from cramph.data_types import LifeCycleValues, ObservationStateValues
 from cramph.exceptions import StatechartAlreadyCompiledError
-from cramph.executor import ExecutorExtension, StatechartExecutor
+from cramph.executor import StatechartExecutor, TickingExecutorExtension
 from cramph.nodes_for_testing import NodeSucceedingOnObservingTrue
 from cramph.statechart import Statechart
 
@@ -22,7 +22,7 @@ class ModificationDeliberatelyFailed(Exception):
 
 
 @dataclass
-class ExtensionCountingCompiles(ExecutorExtension):
+class ExtensionCountingCompiles(TickingExecutorExtension):
     """
     An executor extension that counts how often it was told the statechart compiled.
     """
@@ -37,7 +37,7 @@ class ExtensionCountingCompiles(ExecutorExtension):
 
 
 @dataclass
-class ExtensionTellingRecompilesApart(ExecutorExtension):
+class ExtensionTellingRecompilesApart(TickingExecutorExtension):
     """
     An executor extension that counts separately how often it was told the statechart
     compiled and how often that it compiled again.

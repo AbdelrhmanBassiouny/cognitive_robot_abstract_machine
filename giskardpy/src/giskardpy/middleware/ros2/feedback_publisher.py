@@ -32,6 +32,11 @@ class MotionStatechartPayloadKey(StrEnum):
     The observation every node took most recently.
     """
 
+    TICK_COUNT = "tick_count"
+    """
+    The tick the states were taken at.
+    """
+
     MOTION_STATECHART = "motion_statechart"
     """
     The structure of the motion statechart, sent once per goal.
@@ -113,10 +118,11 @@ class ActionFeedbackPublisher:
     def create_states(self) -> Dict[str, Any]:
         """
         Collect the life cycle, observation and last observation state of the motion
-        statechart, and the nodes waiting for a child.
+        statechart, the tick they were taken at, and the nodes waiting for a child.
         """
         motion_statechart = self.executor.statechart
         return {
+            MotionStatechartPayloadKey.TICK_COUNT: self.executor.tick_count,
             MotionStatechartPayloadKey.LIFE_CYCLE_STATE: motion_statechart.life_cycle_state.to_json(),
             MotionStatechartPayloadKey.OBSERVATION_STATE: motion_statechart.observation_state.to_json(),
             MotionStatechartPayloadKey.LAST_OBSERVATION_STATE: motion_statechart.last_observation_state.to_json(),

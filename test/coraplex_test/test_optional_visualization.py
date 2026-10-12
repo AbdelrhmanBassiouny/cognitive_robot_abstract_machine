@@ -16,6 +16,7 @@ from coraplex.exceptions import (
     UnknownVisualizationOption,
     VisualizationBackendUnavailable,
 )
+from coraplex.plans.executors import RealRobotPlanExecutor
 from cramph.context import StatechartContext
 from cramph.executor import ExecutorExtension, StatechartExecutor
 from coraplex.visualization import (
@@ -133,6 +134,25 @@ def test_explicit_backend_selection_uses_installed_provider(
     assert provider.stopped
     assert executor.extensions == []
     assert not selected.is_rendering
+
+
+def test_a_provider_observes_a_plan_run_on_the_real_robot(
+    monkeypatch, installed_scene
+) -> None:
+    """
+    A plan sent to the robot's controller is observed like one that ticks here.
+    """
+    monkeypatch.setenv(VisualizationOption.BACKEND, VisualizationBackend.CRAMERA.value)
+    selected = WorldVisualization.from_environment(World()).start()
+    executor = RealRobotPlanExecutor(World())
+
+    selected.attach_plan(executor)
+
+    assert [
+        any(added is extension for added in executor.extensions)
+        for extension in selected.provider.extensions
+    ] == [True]
+    selected.stop()
 
 
 def test_missing_provider_has_actionable_native_error(monkeypatch) -> None:
