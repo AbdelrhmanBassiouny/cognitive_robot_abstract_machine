@@ -17,7 +17,7 @@ from giskardpy.motion_statechart.graph_node import EndMotion
 from cramph.monitors import CountSeconds
 from cramph.statechart import Statechart
 from giskardpy.motion_statechart.tasks.cartesian_tasks import CartesianPose
-from giskardpy.middleware.ros2.python_interface import GiskardWrapper
+from giskardpy.middleware.ros2.python_interface import GiskardClientExecutor
 from giskardpy.middleware.ros2 import rospy
 from semantic_digital_twin.exceptions import WorldEntityNotFoundError
 from semantic_digital_twin.spatial_types import HomogeneousTransformationMatrix
@@ -63,9 +63,9 @@ class InteractiveMarkerNode:
     """
     Timeout in seconds for motion execution.
     """
-    giskard: GiskardWrapper = field(init=False)
+    giskard: GiskardClientExecutor = field(init=False)
     """
-    Wrapper for Giskard motion planner.
+    Sends the motions to Giskard.
     """
     markers: Dict[str, KinematicChainMarker] = field(init=False)
     """
@@ -86,14 +86,14 @@ class InteractiveMarkerNode:
 
     def __post_init__(self) -> None:
         """
-        Sets up the Giskard wrapper, reads parameters, creates kinematic chain markers,
+        Sets up the Giskard client, reads parameters, creates kinematic chain markers,
         and initializes the interactive marker server. Retries up to world_entity_retry_attempts
         times if world entities are not found initially.
 
         :raises WorldEntityNotFoundError: If kinematic structure entities cannot be found
             after all retry attempts.
         """
-        self.giskard = GiskardWrapper(
+        self.giskard = GiskardClientExecutor(
             node_handle=rospy.get_node(), giskard_node_name="giskard"
         )
         self.markers = {}
@@ -172,7 +172,7 @@ class InteractiveMarkerNode:
             reference_frame=kinematic_chain_marker.tip_body,
         )
 
-        motion_statechart = Statechart()
+        motion_statechart = Statechart(context=self.giskard.context)
         motion_statechart.add_nodes(
             [
                 goal_transformation := CartesianPose(
@@ -186,7 +186,8 @@ class InteractiveMarkerNode:
         motion_statechart.add_node(
             EndMotion.when_any_true([goal_transformation, motion_timeout])
         )
-        self.giskard.execute_async(motion_statechart)
+        self.giskard.compile(motion_statechart)
+        self.giskard.execute_async()
 
         # Reset marker pose
         kinematic_chain_marker.reset_pose()

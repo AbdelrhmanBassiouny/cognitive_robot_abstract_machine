@@ -239,7 +239,7 @@ class BenchmarkRobot(GiskardTester):
             self.api.world.get_connection_by_name(name): target
             for name, target in joint_state.items()
         }
-        motion_statechart = Statechart()
+        motion_statechart = Statechart(context=self.api.context)
         seed_configuration = SetSeedConfiguration(
             name="initial configuration",
             seed_configuration=JointState.from_mapping(connections),
@@ -258,7 +258,8 @@ class BenchmarkRobot(GiskardTester):
         end = EndMotion(name="end")
         end.start_condition = reached
         motion_statechart.add_node(end)
-        self.api.execute(motion_statechart)
+        self.api.compile(motion_statechart)
+        self.api.execute()
 
     def add_environment(self, name: str, package_path: str, pose: Pose) -> None:
         """
@@ -330,7 +331,7 @@ class CartesianGoalScenario(BenchmarkScenario):
 
     def build_motion_statechart(self, robot: BenchmarkRobot) -> Statechart:
         tip = robot.get_kinematic_structure_entity("r_gripper_tool_frame")
-        motion_statechart = Statechart()
+        motion_statechart = Statechart(context=robot.api.context)
         motion_statechart.add_node(
             cartesian_goal := CartesianPose(
                 root_link=robot.get_kinematic_structure_entity("base_footprint"),
@@ -367,7 +368,7 @@ class CollisionAvoidanceScenario(BenchmarkScenario):
         )
 
     def build_motion_statechart(self, robot: BenchmarkRobot) -> Statechart:
-        motion_statechart = Statechart()
+        motion_statechart = Statechart(context=robot.api.context)
         motion_statechart.add_node(
             CartesianPose(
                 root_link=robot.default_root,
@@ -421,7 +422,7 @@ class ApartmentDrivingScenario(BenchmarkScenario):
 
     def build_motion_statechart(self, robot: BenchmarkRobot) -> Statechart:
         base = robot.get_kinematic_structure_entity("base_footprint")
-        motion_statechart = Statechart()
+        motion_statechart = Statechart(context=robot.api.context)
         motion_statechart.add_node(
             cartesian_goal := CartesianPose(
                 root_link=robot.get_kinematic_structure_entity("map"),
@@ -467,7 +468,7 @@ class KitchenPointingScenario(BenchmarkScenario):
             for name, position in robot.better_pose.items()
             if name not in (PR2Joint.HEAD_PAN, PR2Joint.HEAD_TILT)
         }
-        motion_statechart = Statechart()
+        motion_statechart = Statechart(context=robot.api.context)
         motion_statechart.add_node(
             sequence := Sequence(
                 [
@@ -548,7 +549,7 @@ class LongSequenceScenario(BenchmarkScenario):
             )
             for index, offset in enumerate(self.waypoint_offsets)
         ]
-        motion_statechart = Statechart()
+        motion_statechart = Statechart(context=robot.api.context)
         motion_statechart.add_node(sequence := Sequence(waypoints))
         motion_statechart.add_node(SelfCollisionAvoidance(robot=robot.api.robot))
         motion_statechart.add_node(EndMotion.when_true(sequence))
@@ -662,10 +663,12 @@ class ScenarioRunner:
         :param motion_statechart: The motion that is executed.
         """
         if self.python_profiler is None:
-            robot.api.execute(motion_statechart)
+            robot.api.compile(motion_statechart)
+            robot.api.execute()
             return
         self.python_profiler.enable()
         try:
-            robot.api.execute(motion_statechart)
+            robot.api.compile(motion_statechart)
+            robot.api.execute()
         finally:
             self.python_profiler.disable()

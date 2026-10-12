@@ -19,8 +19,6 @@ from cramph.statechart import Statechart
 from giskardpy.motion_statechart.tasks.joint_tasks import JointPositionList, JointState
 from semantic_digital_twin.world_description.connections import DifferentialDrive
 
-pytestmark = pytest.mark.parked
-
 
 @pytest.fixture()
 def default_joint_state():
@@ -105,7 +103,7 @@ def test_lift_goal_moves_the_tool_frame(giskard: StretchTester):
     """
     height_before = tool_frame_height(giskard)
 
-    motion_statechart = Statechart()
+    motion_statechart = Statechart(context=giskard.api.context)
     motion_statechart.add_node(
         lift_goal := JointPositionList(
             goal_state=JointState.from_str_dict(
@@ -114,7 +112,8 @@ def test_lift_goal_moves_the_tool_frame(giskard: StretchTester):
         )
     )
     motion_statechart.add_node(EndMotion.when_true(lift_goal))
-    giskard.api.execute(motion_statechart)
+    giskard.api.compile(motion_statechart)
+    giskard.api.execute()
 
     height_after = tool_frame_height(giskard)
     np.testing.assert_allclose(
@@ -130,7 +129,7 @@ def test_local_minimum_ends_a_motion(giskard: StretchTester):
     """
     height_before = tool_frame_height(giskard)
 
-    motion_statechart = Statechart()
+    motion_statechart = Statechart(context=giskard.api.context)
     motion_statechart.add_node(
         JointPositionList(
             goal_state=JointState.from_str_dict(
@@ -143,7 +142,8 @@ def test_local_minimum_ends_a_motion(giskard: StretchTester):
     )
     motion_statechart.add_node(EndMotion.when_true(local_minimum))
 
-    giskard.api.execute(motion_statechart)
+    giskard.api.compile(motion_statechart)
+    giskard.api.execute()
 
     height_after = tool_frame_height(giskard)
     np.testing.assert_allclose(

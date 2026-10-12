@@ -7,7 +7,7 @@ import numpy as np
 
 import semantic_digital_twin.spatial_types.spatial_types as cas
 from giskardpy.middleware.ros2.giskard import Giskard
-from giskardpy.middleware.ros2.python_interface import GiskardWrapperNode
+from giskardpy.middleware.ros2.python_interface import GiskardClientExecutorNode
 from giskardpy.middleware.ros2.scripts.iai_robots.stretch.configs import (
     StretchStandaloneInterface,
     WorldWithStretchConfigDiffDrive,
@@ -106,7 +106,7 @@ def compare_orientations(
 
 @dataclass
 class GiskardTester(ABC):
-    api: GiskardWrapperNode = field(init=False)
+    api: GiskardClientExecutorNode = field(init=False)
     giskard: Giskard = field(init=False)
 
     default_env_name: str | None = None
@@ -117,7 +117,7 @@ class GiskardTester(ABC):
         self.default_root = self.world.root
         self.giskard.motion_server.start_in_background()
         self.wait_for_cycles(1)
-        self.api = GiskardWrapperNode(node_name="tests")
+        self.api = GiskardClientExecutorNode(node_name="tests")
 
     @abstractmethod
     def setup_giskard(self) -> Giskard: ...

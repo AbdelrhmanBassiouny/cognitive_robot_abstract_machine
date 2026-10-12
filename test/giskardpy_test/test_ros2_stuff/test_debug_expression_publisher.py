@@ -25,10 +25,10 @@ from cramph.executor import StatechartExecutor
 from ..motion_control_context import create_context_with_motion_control
 
 
-def align_planes_statechart(world: World) -> Statechart:
-    root = world.root
-    tip = world.get_body_by_name("bot")
-    motion_statechart = Statechart()
+def align_planes_statechart(context: StatechartContext) -> Statechart:
+    root = context.world.root
+    tip = context.world.get_body_by_name("bot")
+    motion_statechart = Statechart(context=context)
     motion_statechart.add_node(
         AlignPlanes(
             root_link=root,
@@ -105,7 +105,9 @@ def test_attach_visualizes_spatial_debug_expressions_only(
     task.debug_expressions.append(
         DebugExpression(name="scalar_only", expression=sm.Scalar(1.0))
     )
-    motion_statechart = Statechart()
+    motion_statechart = Statechart(
+        context=create_context_with_motion_control(cylinder_bot_world)
+    )
     motion_statechart.add_node(task)
 
     publisher = DebugExpressionPublisher(world=cylinder_bot_world, node=rclpy_node)
@@ -130,7 +132,9 @@ def test_vector_with_reference_frame_is_transformed_to_visualisation_frame(
 
 def test_stop_clears_previously_published_markers(rclpy_node, cylinder_bot_world):
     task = build_align_planes_task(cylinder_bot_world)
-    motion_statechart = Statechart()
+    motion_statechart = Statechart(
+        context=create_context_with_motion_control(cylinder_bot_world)
+    )
     motion_statechart.add_node(task)
 
     publisher = DebugExpressionPublisher(world=cylinder_bot_world, node=rclpy_node)
@@ -144,7 +148,9 @@ def test_stop_clears_previously_published_markers(rclpy_node, cylinder_bot_world
 
 def test_attach_publisher_tracks_state_changes(rclpy_node, cylinder_bot_world):
     task = build_align_planes_task(cylinder_bot_world)
-    motion_statechart = Statechart()
+    motion_statechart = Statechart(
+        context=create_context_with_motion_control(cylinder_bot_world)
+    )
     motion_statechart.add_node(task)
 
     publisher = DebugExpressionPublisher(world=cylinder_bot_world, node=rclpy_node)
@@ -165,7 +171,7 @@ def test_executor_publishes_debug_expressions_when_enabled(
         ],
     )
 
-    executor.compile(align_planes_statechart(cylinder_bot_world))
+    executor.compile(align_planes_statechart(executor.context))
 
     namespaces = {
         request.namespace
@@ -182,7 +188,7 @@ def test_executor_skips_debug_expressions_by_default(rclpy_node, cylinder_bot_wo
         extensions=[RosNodeAccess(rclpy_node), MotionControl()],
     )
 
-    executor.compile(align_planes_statechart(cylinder_bot_world))
+    executor.compile(align_planes_statechart(executor.context))
 
     with pytest.raises(MissingExecutorExtensionError):
         executor.require_extension(DebugExpressionPublishing)
@@ -199,12 +205,12 @@ def test_recompile_stops_previous_debug_expression_publisher(
             DebugExpressionPublishing(rclpy_node),
         ],
     )
-    executor.compile(align_planes_statechart(cylinder_bot_world))
+    executor.compile(align_planes_statechart(executor.context))
     previous_publisher = executor.require_extension(
         DebugExpressionPublishing
     ).publisher._publisher
 
-    executor.compile(align_planes_statechart(cylinder_bot_world))
+    executor.compile(align_planes_statechart(executor.context))
 
     callbacks = cylinder_bot_world.state.state_change_callbacks
     assert all(callback is not previous_publisher for callback in callbacks)

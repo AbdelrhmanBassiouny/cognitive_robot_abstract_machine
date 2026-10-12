@@ -431,13 +431,13 @@ def control_loop(init_rospy) -> ControlLoopFixture:
             )
         ],
     )
-    motion_statechart = Statechart()
+    motion_statechart = Statechart(context=StatechartContext(world=controlled_world))
     motion_statechart.add_node(counter := CountSimulationTimeSeconds(seconds=1000.0))
     motion_statechart.add_node(EndMotion.when_true(counter))
     executor.compile(
         Statechart.from_json(
             json.loads(json.dumps(motion_statechart.to_json())),
-            world=controlled_world,
+            context=executor.context,
         )
     )
     action_server = GoalQueueStub()
@@ -466,7 +466,6 @@ def control_loop(init_rospy) -> ControlLoopFixture:
     fixture.close()
 
 
-@pytest.mark.parked
 class TestRealWorldUpdatesDuringAMotion:
     """
     Against a real synchronizer: the world a motion was compiled against only changes
@@ -557,7 +556,7 @@ class CommandPublisherRecordingCalls(CommandPublisher):
 
 
 @pytest.fixture()
-def local_control_loop() -> ControlLoop:
+def local_control_loop(init_rospy) -> ControlLoop:
     """
     :return: A control loop running a long motion on a world no other process updates.
     """
@@ -580,6 +579,9 @@ def local_control_loop() -> ControlLoop:
     return ControlLoop(
         executor=executor,
         action_server=action_server,
+        client_watchdog=ClientWatchdog(
+            presence=HeartbeatPresence(node=rospy.get_node())
+        ),
         feedback_publisher=ActionFeedbackPublisher(
             executor=executor, action_server=action_server
         ),
@@ -591,16 +593,15 @@ def local_control_loop() -> ControlLoop:
     )
 
 
-@pytest.mark.parked
 class TestModelChangesOfTheMotionItself:
 
-    def test_the_robot_is_halted_before_the_motion_is_built_again(
+    def test_commands_keep_being_published_while_the_motion_is_built_again(
         self, local_control_loop: ControlLoop
     ):
         """
-        No command is computed while the motion statechart is built again after the
-        motion changed the model, so the robot is halted first, and not left running
-        with the last command.
+        The controller slows the robot down while the motion statechart is built again
+        after the motion changed the model, so the command publishers are not stopped
+        and a command is published in that cycle too.
         """
         publisher = CommandPublisherRecordingCalls()
         local_control_loop.command_publishers.append(publisher)
@@ -612,7 +613,4 @@ class TestModelChangesOfTheMotionItself:
 
         local_control_loop.run_cycle()
 
-        assert publisher.calls == [
-            CommandPublisherRecordingCalls.stop.__name__,
-            CommandPublisherRecordingCalls.publish.__name__,
-        ]
+        assert publisher.calls == [CommandPublisherRecordingCalls.publish.__name__]

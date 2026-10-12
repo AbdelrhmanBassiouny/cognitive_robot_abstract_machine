@@ -6,8 +6,8 @@ from json_msgs.action import JsonAction
 from giskardpy.middleware.ros2 import rospy
 from giskardpy.middleware.ros2.action_server import ActionServerHandler
 from giskardpy.middleware.ros2.python_interface import (
-    GiskardWrapper,
-    GiskardWrapperNode,
+    GiskardClientExecutor,
+    GiskardClientExecutorNode,
 )
 from semantic_digital_twin.adapters.ros.world_synchronizer import WorldSynchronizer
 from semantic_digital_twin.world import World
@@ -24,7 +24,7 @@ def giskard_command_server(init_rospy) -> ActionServerHandler:
     return ActionServerHandler(action_name="giskard/command", action_type=JsonAction)
 
 
-class TestGiskardWrapperClose:
+class TestGiskardClientExecutorClose:
     """
     Closing a client has to stop announcing its heartbeat, or the timer keeps ticking on
     a node nobody is using any more.
@@ -34,14 +34,14 @@ class TestGiskardWrapperClose:
         world = World()
         WorldSynchronizer(node=rospy.get_node(), _world=world)
 
-        wrapper = GiskardWrapper(node_handle=rospy.get_node(), world=world)
+        executor = GiskardClientExecutor(node_handle=rospy.get_node(), world=world)
 
-        wrapper.close()
+        executor.close()
 
-        assert wrapper.heartbeat_publisher.timer.is_canceled
+        assert executor.heartbeat_publisher.timer.is_canceled
 
 
-class TestGiskardWrapperNodeClose:
+class TestGiskardClientExecutorNodeClose:
     """
     A client that created its own node has to remove it from Giskard's shared executor
     and destroy it again, or every client leaves one more node in that executor's list
@@ -54,7 +54,7 @@ class TestGiskardWrapperNodeClose:
         world = World()
         WorldSynchronizer(node=rospy.get_node(), _world=world)
 
-        client = GiskardWrapperNode(node_name="test_client", world=world)
+        client = GiskardClientExecutorNode(node_name="test_client", world=world)
         assert client.node_handle in rospy.executor.get_nodes()
 
         client.close()

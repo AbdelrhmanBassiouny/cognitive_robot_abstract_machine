@@ -35,28 +35,6 @@ Open questions:
   `MoveGripper` did not survive a round trip. `MoveGripper` does now; the demo itself
   still has to be run where `robokudo_msgs` is installed.
 
-## ROS 2 goals
-
-The tests sending a goal to Giskard over ROS 2 run again, apart from the integration
-suites, which stay parked: their fixtures still build a `Statechart` without a context.
-
-- `test/giskardpy_test/test_ros2_stuff/test_integration_pr2.py`,
-  `test_integration_hsr.py`, `test_integration_stretch.py`, `test_integration_daisy.py`
-
-## Feedback publishing
-
-`giskardpy/middleware/ros2/feedback_publisher.py` reports a running goal's state to the
-client, including the nodes waiting for a child. It is parked with the ROS 2 goals.
-
-- `test/giskardpy_test/test_ros2_stuff/test_world_updates.py`:
-  `TestRealWorldUpdatesDuringAMotion`, `TestModelChangesOfTheMotionItself`.
-  `test_the_robot_is_halted_before_the_motion_is_built_again` expects the control loop
-  to halt its command publishers before a recompile. The robot is now decelerated to
-  rest by the controller instead (`MotionControl.before_recompile`), so the test has to
-  assert that once it is picked up again.
-- The feedback assertions of `test_motion_server.py` and `test_child_choices.py`, parked
-  with those modules above.
-
 ## Design questions set aside
 
 These park no tests; they are design changes the review of ichumuh#8 raised and that
