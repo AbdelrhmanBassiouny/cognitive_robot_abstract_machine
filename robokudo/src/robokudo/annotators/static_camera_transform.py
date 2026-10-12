@@ -34,7 +34,7 @@ class StaticCameraTransformAnnotator(BaseAnnotator):
                     HomogeneousTransformationMatrix()
                 )
                 """
-                Camera pose relative to the configured world frame.
+                Image-frame pose relative to the configured world frame.
                 """
 
         parameters = Parameters()
@@ -48,7 +48,7 @@ class StaticCameraTransformAnnotator(BaseAnnotator):
 
     def update(self) -> Status:
         """
-        Bind the configured pose to the observed camera and store it in the CAS.
+        Bind the configured optical pose through the observed root-to-optical attachment.
         """
         start_timer = default_timer()
 
@@ -56,10 +56,19 @@ class StaticCameraTransformAnnotator(BaseAnnotator):
         parameters = self.descriptor.parameters
         observation = cas.require_camera_observation()
 
-        world_T_camera = CameraInterface.bind_world_T_camera(
+        configured_observation = observation.with_world_T_camera(
+            parameters.world_T_camera
+        )
+        world_T_root = CameraInterface.bind_world_T_camera(
             world_frame=parameters.world_frame,
             camera_frame=str(observation.camera.root.name),
-            world_T_camera=parameters.world_T_camera,
+            world_T_camera=configured_observation.world_T_root,
+        )
+        root_T_optical = observation.optical_attachment
+        world_T_camera = (
+            world_T_root @ root_T_optical
+            if root_T_optical is not None
+            else world_T_root
         )
         cas.camera_observation = observation.with_world_T_camera(world_T_camera)
 

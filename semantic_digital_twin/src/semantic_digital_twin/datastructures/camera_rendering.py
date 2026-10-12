@@ -68,7 +68,7 @@ class SegmentationDepthFrame:
 @dataclass
 class RenderedRGBDFrame:
     """
-    Contain the aligned image products of one ray-traced camera frame.
+    Contain aligned width-first images with their origin at the top-left pixel.
     """
 
     color_bgr: np.ndarray
@@ -114,7 +114,7 @@ class CameraRays:
     """
     pixel_coordinates: np.ndarray
     """
-    Width-first image coordinates corresponding to the viewing rays.
+    Width-first image coordinates with their origin at the top-left pixel.
     """
 
 

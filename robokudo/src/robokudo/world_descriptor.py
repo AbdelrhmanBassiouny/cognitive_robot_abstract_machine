@@ -96,6 +96,11 @@ class CameraSpec:
     Native projection model of the camera.
     """
 
+    root_T_optical: HomogeneousTransformationMatrix | None = None
+    """
+    Optical pose relative to the camera root, with x right, y down, and z forward.
+    """
+
     camera_range: CameraRange = field(default_factory=CameraRange)
     """
     Usable distance interval of the camera.
@@ -274,6 +279,7 @@ class BaseWorldDescriptor:
                 name=PrefixedName(name=spec.name),
                 root=camera_body,
                 forward_facing_axis=spec.forward_facing_axis,
+                root_T_optical=spec.root_T_optical,
                 camera_model=spec.camera_model,
                 camera_range=spec.camera_range,
                 modalities=spec.modalities,

@@ -91,7 +91,7 @@ def test_interface_publishes_effective_model_for_field_of_view_camera():
 
 def test_interface_publishes_shared_rendered_frame(monkeypatch: MonkeyPatch) -> None:
     """
-    The camera interface publishes Semantic Digital Twin's frame without conversion.
+    The camera interface publishes row-first images from a shared width-first frame.
     """
     interface = SemDTRayTracerCameraInterface(
         SemDTRayTracerCameraConfig(
@@ -118,8 +118,12 @@ def test_interface_publishes_shared_rendered_frame(monkeypatch: MonkeyPatch) -> 
         context.camera, rgb_mode=interface.camera_config.rgb_mode
     )
     assert interface.camera_config.rgb_mode is SemDTRGBMode.SEMANTIC
-    np.testing.assert_array_equal(cas.color_image, frame.color_bgr)
-    np.testing.assert_array_equal(cas.depth_image, frame.depth_in_millimeters)
-    np.testing.assert_array_equal(cas.get(CASViews.OBJECT_IMAGE), frame.segmentation)
+    np.testing.assert_array_equal(cas.color_image, frame.color_bgr.swapaxes(0, 1))
+    np.testing.assert_array_equal(
+        cas.depth_image, frame.depth_in_millimeters.swapaxes(0, 1)
+    )
+    np.testing.assert_array_equal(
+        cas.get(CASViews.OBJECT_IMAGE), frame.segmentation.swapaxes(0, 1)
+    )
     assert cas.get(CASViews.OBJECT_COLOR_MAP) == frame.object_color_map
     assert cas.camera_observation.effective_camera_model is frame.camera_model

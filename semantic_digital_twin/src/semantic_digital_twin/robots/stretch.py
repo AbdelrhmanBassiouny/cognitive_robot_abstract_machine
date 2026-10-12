@@ -44,7 +44,7 @@ from semantic_digital_twin.robots.robot_parts import (
     MobileBase,
     EndEffector,
 )
-from semantic_digital_twin.spatial_types import Vector3
+from semantic_digital_twin.spatial_types import HomogeneousTransformationMatrix, Vector3
 from semantic_digital_twin.world_description.connections import DifferentialDrive
 from semantic_digital_twin.world_description.world_entity import (
     KinematicStructureEntity,
@@ -219,17 +219,26 @@ class StretchArm(Arm[StretchGripper]):
 
 @dataclass(eq=False)
 class StretchCameraColor(RobotCamera):
+    """
+    Camera attached to its robot model's optical frame.
+    """
 
-    def setup_hardware_interfaces(self):
+    def setup_hardware_interfaces(self) -> None:
         pass
 
-    def setup_joint_states(self) -> List[JointState]:
+    def setup_joint_states(self) -> list[JointState]:
         return []
 
     @classmethod
     def setup_default_configuration_in_world_below_robot_root(
         cls, robot_root: KinematicStructureEntity
     ) -> Self:
+        """
+        Attach the camera to the optical frame below the supplied robot root.
+
+        :param robot_root: Root of the robot branch containing the optical frame.
+        :return: Camera configured for the model's optical frame.
+        """
         return cls(
             root=robot_root._world.get_body_in_branch_by_name(
                 robot_root, "camera_color_optical_frame"
@@ -237,6 +246,7 @@ class StretchCameraColor(RobotCamera):
             minimal_height=1.322,
             maximal_height=1.322,
             forward_facing_axis=Vector3.Z(),
+            root_T_optical=HomogeneousTransformationMatrix(),
             camera_model=FieldOfViewCameraModel(
                 view=FieldOfView(horizontal_angle=0.99483, vertical_angle=0.75049)
             ),
@@ -246,17 +256,26 @@ class StretchCameraColor(RobotCamera):
 
 @dataclass(eq=False)
 class StretchCameraDepth(RobotCamera):
+    """
+    Camera attached to its robot model's optical frame.
+    """
 
-    def setup_hardware_interfaces(self):
+    def setup_hardware_interfaces(self) -> None:
         pass
 
-    def setup_joint_states(self) -> List[JointState]:
+    def setup_joint_states(self) -> list[JointState]:
         return []
 
     @classmethod
     def setup_default_configuration_in_world_below_robot_root(
         cls, robot_root: KinematicStructureEntity
     ) -> Self:
+        """
+        Attach the camera to the optical frame below the supplied robot root.
+
+        :param robot_root: Root of the robot branch containing the optical frame.
+        :return: Camera configured for the model's optical frame.
+        """
         return cls(
             root=robot_root._world.get_body_in_branch_by_name(
                 robot_root, "camera_depth_optical_frame"
@@ -264,6 +283,7 @@ class StretchCameraDepth(RobotCamera):
             minimal_height=1.307,
             maximal_height=1.307,
             forward_facing_axis=Vector3.Z(),
+            root_T_optical=HomogeneousTransformationMatrix(),
             camera_model=FieldOfViewCameraModel(
                 view=FieldOfView(horizontal_angle=0.99483, vertical_angle=0.75049)
             ),
@@ -272,17 +292,26 @@ class StretchCameraDepth(RobotCamera):
 
 @dataclass(eq=False)
 class StretchCameraInfra1(RobotCamera):
+    """
+    Camera attached to its robot model's optical frame.
+    """
 
-    def setup_hardware_interfaces(self):
+    def setup_hardware_interfaces(self) -> None:
         pass
 
-    def setup_joint_states(self) -> List[JointState]:
+    def setup_joint_states(self) -> list[JointState]:
         return []
 
     @classmethod
     def setup_default_configuration_in_world_below_robot_root(
         cls, robot_root: KinematicStructureEntity
     ) -> Self:
+        """
+        Attach the camera to the optical frame below the supplied robot root.
+
+        :param robot_root: Root of the robot branch containing the optical frame.
+        :return: Camera configured for the model's optical frame.
+        """
         return cls(
             root=robot_root._world.get_body_in_branch_by_name(
                 robot_root, "camera_infra1_optical_frame"
@@ -290,6 +319,7 @@ class StretchCameraInfra1(RobotCamera):
             minimal_height=1.307,
             maximal_height=1.307,
             forward_facing_axis=Vector3.Z(),
+            root_T_optical=HomogeneousTransformationMatrix(),
             camera_model=FieldOfViewCameraModel(
                 view=FieldOfView(horizontal_angle=0.99483, vertical_angle=0.75049)
             ),
@@ -298,17 +328,26 @@ class StretchCameraInfra1(RobotCamera):
 
 @dataclass(eq=False)
 class StretchCameraInfra2(RobotCamera):
+    """
+    Camera attached to its robot model's optical frame.
+    """
 
-    def setup_hardware_interfaces(self):
+    def setup_hardware_interfaces(self) -> None:
         pass
 
-    def setup_joint_states(self) -> List[JointState]:
+    def setup_joint_states(self) -> list[JointState]:
         return []
 
     @classmethod
     def setup_default_configuration_in_world_below_robot_root(
         cls, robot_root: KinematicStructureEntity
     ) -> Self:
+        """
+        Attach the camera to the optical frame below the supplied robot root.
+
+        :param robot_root: Root of the robot branch containing the optical frame.
+        :return: Camera configured for the model's optical frame.
+        """
         return cls(
             root=robot_root._world.get_body_in_branch_by_name(
                 robot_root, "camera_infra2_optical_frame"
@@ -316,6 +355,7 @@ class StretchCameraInfra2(RobotCamera):
             minimal_height=1.257,
             maximal_height=1.257,
             forward_facing_axis=Vector3.Z(),
+            root_T_optical=HomogeneousTransformationMatrix(),
             camera_model=FieldOfViewCameraModel(
                 view=FieldOfView(horizontal_angle=0.99483, vertical_angle=0.75049)
             ),

@@ -41,6 +41,13 @@ class PinholeRGBDCameraSpec(CameraSpec):
     Viewing direction expressed in the camera root frame.
     """
 
+    root_T_optical: HomogeneousTransformationMatrix = field(
+        default_factory=HomogeneousTransformationMatrix
+    )
+    """
+    Optical pose relative to the root, which uses optical axes by default.
+    """
+
     camera_model: PinholeCameraModel = field(
         default_factory=lambda: PinholeCameraModel.from_field_of_view(
             resolution=CameraResolution(), field_of_view=FieldOfView()

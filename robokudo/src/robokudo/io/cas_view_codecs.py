@@ -12,6 +12,9 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 from uuid import UUID
 
+from krrood.adapters.json_serializer import DataclassJSONSerializer
+from krrood.ormatic.utils import classproperty
+
 import numpy as np
 from typing_extensions import Any, Dict, Iterable, List, Optional
 from robokudo import world
@@ -459,102 +462,107 @@ class HomogeneousTransformationMatrixCodec(ViewCodec):
         return HomogeneousTransformationMatrix.from_json(payload.payload, **kwargs)
 
 
+# %% Recorded camera observations
+@dataclass
+class RecordedCameraObservation:
+    """
+    Image calibration, optical attachment, and pose linked to a recorded camera.
+    """
+
+    camera_id: str
+    """
+    Identifier of the semantic camera in the recorded world.
+    """
+
+    effective_camera_model: PinholeCameraModel
+    """
+    Projection model matching the recorded image.
+    """
+
+    world_T_camera: HomogeneousTransformationMatrix | None
+    """
+    Sampled optical-frame pose in world coordinates.
+    """
+
+    timestamp_nanoseconds: int
+    """
+    Frame acquisition time in nanoseconds since the Unix epoch.
+    """
+    root_T_optical: HomogeneousTransformationMatrix | None = None
+    """
+    Sampled optical attachment for reconstructing the recorded physical-root pose.
+    """
+
+
+@dataclass
 class CameraObservationCodec(ViewCodec):
     """
-    Codec for camera observations referenced by a recorded world.
+    Persist image observations and optical attachments linked to recorded cameras.
     """
 
-    serializer_id: str = "robokudo_camera_observation_v3"
+    @classproperty
+    def serializer_id(cls: type[CameraObservationCodec]) -> str:
+        """
+        Identifier of the recorded camera observation format.
+
+        :return: Serialization identifier used by the codec registry.
+        """
+        return "robokudo_camera_observation_v3"
 
     def can_encode(self, value: Any) -> bool:
-        """
-        Check whether a value is camera observation metadata.
-        """
         return isinstance(value, CameraObservation)
 
     def encode(self, value: CameraObservation) -> ViewPayload:
         """
-        Encode frame data with a reference to its recorded camera.
+        Record the optical pose and attachment needed to reconstruct the physical root.
+
+        :param value: Camera observation to persist.
+        :return: Serialized observation linked to its semantic camera.
         """
+        recorded = RecordedCameraObservation(
+            camera_id=str(value.camera.id),
+            effective_camera_model=value.effective_camera_model,
+            world_T_camera=value.world_T_camera,
+            timestamp_nanoseconds=value.timestamp_nanoseconds,
+            root_T_optical=value.root_T_optical,
+        )
         return ViewPayload(
             serializer_id=self.serializer_id,
-            payload={
-                CameraObservationField.CAMERA_ID: str(value.camera.id),
-                CameraObservationField.MODEL: krrood_to_json(
-                    value.effective_camera_model
-                ),
-                CameraObservationField.WORLD_T_CAMERA: (
-                    value.world_T_camera.to_json()
-                    if value.world_T_camera is not None
-                    else None
-                ),
-                CameraObservationField.TIMESTAMP: value.timestamp_nanoseconds,
-            },
+            payload=DataclassJSONSerializer.to_json(recorded),
             type_name=_full_type_name(value),
         )
 
     def decode(self, payload: ViewPayload) -> CameraObservation:
-        """
-        Decode against the active reasoning world.
-        """
         return self.decode_with_tracker(payload, world.get_world_entity_tracker())
 
     def decode_with_tracker(
         self, payload: ViewPayload, tracker: WorldEntityWithIDKwargsTracker
     ) -> CameraObservation:
         """
-        Decode against the world represented by a specific entity tracker.
+        Restore the observation against a recorded world's entity tracker.
+
+        :param payload: Serialized optical image observation.
+        :param tracker: Entity tracker resolving the recorded camera and pose frames.
+        :return: Observation referencing the tracked semantic camera.
+        :raises InvalidCameraObservation: If the recorded camera or model is invalid.
         """
-        camera = tracker.get(UUID(payload.payload[CameraObservationField.CAMERA_ID]))
+        recorded = DataclassJSONSerializer.from_json(
+            payload.payload, RecordedCameraObservation, **tracker.create_kwargs()
+        )
+        camera = tracker.get(UUID(recorded.camera_id))
         if not isinstance(camera, Camera):
             raise InvalidCameraObservation(reason="recorded entity is not a camera")
-        camera_model = krrood_from_json(payload.payload[CameraObservationField.MODEL])
-        if not isinstance(camera_model, PinholeCameraModel):
+        if not isinstance(recorded.effective_camera_model, PinholeCameraModel):
             raise InvalidCameraObservation(
                 reason="the payload does not contain a pinhole camera model"
             )
-        pose_document = payload.payload[CameraObservationField.WORLD_T_CAMERA]
-        world_T_camera = (
-            HomogeneousTransformationMatrix.from_json(
-                pose_document, **tracker.create_kwargs()
-            )
-            if pose_document is not None
-            else None
-        )
         return CameraObservation(
             camera=camera,
-            effective_camera_model=camera_model,
-            world_T_camera=world_T_camera,
-            timestamp_nanoseconds=int(
-                payload.payload[CameraObservationField.TIMESTAMP]
-            ),
+            effective_camera_model=recorded.effective_camera_model,
+            world_T_camera=recorded.world_T_camera,
+            timestamp_nanoseconds=recorded.timestamp_nanoseconds,
+            root_T_optical=recorded.root_T_optical,
         )
-
-
-class CameraObservationField(StrEnum):
-    """
-    Name each field in a persisted camera observation.
-    """
-
-    CAMERA_ID = "camera_id"
-    """
-    Identifier of the camera in the recorded world.
-    """
-
-    MODEL = "effective_camera_model"
-    """
-    Effective projection model.
-    """
-
-    WORLD_T_CAMERA = "world_T_camera"
-    """
-    Sampled camera pose in the world frame.
-    """
-
-    TIMESTAMP = "timestamp_nanoseconds"
-    """
-    Frame acquisition time.
-    """
 
 
 class KrroodCodec(ViewCodec):

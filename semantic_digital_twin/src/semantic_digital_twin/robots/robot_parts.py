@@ -52,7 +52,9 @@ from semantic_digital_twin.exceptions import (
     MissingDefaultCameraError,
 )
 from semantic_digital_twin.input_synchronization import InputSynchronizer
-from semantic_digital_twin.robots.exceptions import MissingDriveConnectionError
+from semantic_digital_twin.robots.exceptions import (
+    MissingDriveConnectionError,
+)
 from semantic_digital_twin.robots.input_source import (
     BasePoseSource,
     JointPositionSource,
@@ -573,11 +575,21 @@ class Camera(HasRootBody):
     forward_facing_axis: Vector3 = field(kw_only=True)
     """
     Viewing direction expressed in the camera's root frame.
+
+    This axis leaves rotation around the viewing direction unspecified.
+    :attr:`root_T_optical` additionally defines image right and down.
     """
 
     camera_model: CameraModel = field(kw_only=True)
     """
     Native projection model of the camera.
+    """
+
+    root_T_optical: HomogeneousTransformationMatrix | None = field(
+        default=None, kw_only=True
+    )
+    """
+    Optical pose relative to the camera root, with x right, y down, and z forward.
     """
 
     camera_range: CameraRange = field(default_factory=CameraRange, kw_only=True)
@@ -592,10 +604,16 @@ class Camera(HasRootBody):
 
     def __post_init__(self) -> None:
         """
-        Express the viewing direction in the camera root frame.
+        Express the viewing direction and optical attachment in the camera root frame.
         """
         super().__post_init__()
         self.forward_facing_axis.reference_frame = self.root
+        if self.root_T_optical is not None:
+            self.root_T_optical.reference_frame = self.root
+            if self.root_T_optical.child_frame is None and np.array_equal(
+                self.root_T_optical.to_np(), np.eye(4)
+            ):
+                self.root_T_optical.child_frame = self.root
 
     @property
     def field_of_view(self) -> FieldOfView:
@@ -610,6 +628,29 @@ class Camera(HasRootBody):
         Return the native image resolution.
         """
         return self.camera_model.resolution
+
+    @property
+    def world_T_optical(self) -> HomogeneousTransformationMatrix:
+        """
+        Return the optical pose in world coordinates.
+
+        A defined optical attachment preserves the root's complete orientation.
+        Otherwise, image axes follow the viewing-direction convention.
+
+        :return: Optical pose with right-down-forward image axes.
+        """
+        if self.root_T_optical is None:
+            return self.root_T_forward_view @ self.optical_R_forward_view.inverse()
+        return self.root.global_transform @ self.root_T_optical
+
+    @classproperty
+    def optical_R_forward_view(cls: type[Camera]) -> HomogeneousTransformationMatrix:
+        """
+        Express the x-forward viewing frame in right-down-forward optical axes.
+
+        :return: Rotation from the forward-view frame into optical axes.
+        """
+        return HomogeneousTransformationMatrix.from_xyz_rpy(pitch=-np.pi / 2)
 
     @property
     def root_T_forward_view(self) -> HomogeneousTransformationMatrix:

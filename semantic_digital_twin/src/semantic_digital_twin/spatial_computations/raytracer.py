@@ -25,7 +25,10 @@ from semantic_digital_twin.datastructures.camera_rendering import (
     SemDTRGBMode,
 )
 from semantic_digital_twin.datastructures.field_of_view import FieldOfView
-from semantic_digital_twin.spatial_types.spatial_types import GenericSpatialType
+from semantic_digital_twin.spatial_types.spatial_types import (
+    GenericSpatialType,
+    HomogeneousTransformationMatrix,
+)
 from semantic_digital_twin.world_description.world_entity import Body
 
 if TYPE_CHECKING:
@@ -291,7 +294,8 @@ class RayTracer:
         field_of_view: FieldOfView | None = None,
     ) -> CameraRays:
         """
-        Return world-space rays and width-first pixels for an x-forward camera pose.
+        Return world-space rays and width-first, top-left-origin pixels for an x-forward
+        camera pose.
 
         :param camera_pose: Camera pose in world coordinates, with its viewing direction
             along x.
@@ -316,6 +320,7 @@ class RayTracer:
         )
 
         origins, directions, pixels = self.scene.camera_rays()
+        pixels[:, 1] = resolution.height - 1 - pixels[:, 1]
         return CameraRays(
             origin_points=origins,
             direction_vectors=directions,
@@ -406,9 +411,13 @@ class RayTracer:
             )
         resolution = camera_model.resolution
         field_of_view = camera_model.field_of_view
-        world_T_camera = camera.root_T_forward_view
+        world_T_optical = camera.world_T_optical
+        world_T_forward_view = HomogeneousTransformationMatrix(
+            data=world_T_optical.to_np() @ camera.optical_R_forward_view.to_np(),
+            reference_frame=world_T_optical.reference_frame,
+        )
         frame = self.create_segmentation_and_depth(
-            world_T_camera,
+            world_T_forward_view,
             resolution=resolution,
             field_of_view=field_of_view,
             min_distance=camera.camera_range.minimum_distance,

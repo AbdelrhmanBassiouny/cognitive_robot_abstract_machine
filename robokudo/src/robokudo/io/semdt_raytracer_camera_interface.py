@@ -90,12 +90,12 @@ class SemDTRayTracerCameraInterface(CameraInterface):
         """
         world = context.world
         camera = context.camera
-        world_T_camera = camera.root.global_transform
+        world_T_camera = camera.world_T_optical
 
-        cas.set(CASViews.COLOR_IMAGE, frame.color_bgr)
-        cas.set(CASViews.DEPTH_IMAGE, frame.depth_in_millimeters)
+        cas.set(CASViews.COLOR_IMAGE, frame.color_bgr.swapaxes(0, 1).copy())
+        cas.set(CASViews.DEPTH_IMAGE, frame.depth_in_millimeters.swapaxes(0, 1).copy())
         cas.set(CASViews.COLOR2DEPTH_RATIO, self.camera_config.color2depth_ratio)
-        cas.set(CASViews.OBJECT_IMAGE, frame.segmentation)
+        cas.set(CASViews.OBJECT_IMAGE, frame.segmentation.swapaxes(0, 1).copy())
         cas.set(CASViews.OBJECT_COLOR_MAP, frame.object_color_map)
         cas.set_ref(CASViews.GROUND_TRUTH_WORLD_REFERENCE, world)
         cas.camera_observation = CameraObservation(
@@ -103,4 +103,5 @@ class SemDTRayTracerCameraInterface(CameraInterface):
             effective_camera_model=camera_model,
             world_T_camera=world_T_camera,
             timestamp_nanoseconds=timestamp_ns,
+            root_T_optical=camera.root.global_transform.inverse() @ world_T_camera,
         )

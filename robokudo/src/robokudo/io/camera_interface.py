@@ -336,6 +336,7 @@ class CameraInterface(object):
                 name=PrefixedName(name=camera_frame),
                 root=camera_body,
                 forward_facing_axis=Vector3.Z(),
+                root_T_optical=HomogeneousTransformationMatrix(),
                 camera_model=camera_model,
                 modalities=modalities,
             )

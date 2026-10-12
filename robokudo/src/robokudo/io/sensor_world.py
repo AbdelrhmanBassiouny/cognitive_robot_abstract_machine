@@ -21,7 +21,7 @@ from semantic_digital_twin.world_description.world_entity import Body
 @dataclass(frozen=True)
 class SensorWorldProjector:
     """
-    Create a world containing only a recorded camera and its pose frames.
+    Create a world containing the recorded camera and its physical-root pose.
 
     The sampled pose connects to its reference frame. A camera root with an equivalent
     ROS frame name attaches directly to that pose's child frame.
@@ -46,7 +46,8 @@ class SensorWorldProjector:
 
     def project(self) -> World:
         """
-        Copy the camera and direct pose reference with their recorded identifiers.
+        Project the camera into an optical root with its sampled world pose and
+        identifiers.
         """
         source_camera = self.observation.camera
         source_root = source_camera.root
@@ -86,12 +87,18 @@ class SensorWorldProjector:
             raise InvalidCameraObservation(
                 reason="aliased camera pose has no separate reference frame"
             )
+        root_T_optical = (
+            HomogeneousTransformationMatrix(data=source_camera.root_T_optical)
+            if source_camera.root_T_optical is not None
+            else None
+        )
         axis = source_camera.forward_facing_axis.to_np().reshape(-1)
         camera = Camera(
             id=source_camera.id,
             name=deepcopy(source_camera.name),
             root=root,
             forward_facing_axis=Vector3(*axis[:3]),
+            root_T_optical=root_T_optical,
             camera_model=deepcopy(source_camera.camera_model),
             camera_range=deepcopy(source_camera.camera_range),
             modalities=tuple(source_camera.modalities),
@@ -130,7 +137,7 @@ class SensorWorldProjector:
         if connection is not None:
             with sensor_world.modify_world():
                 connection.origin = HomogeneousTransformationMatrix(
-                    data=source_pose,
+                    data=self.observation.world_T_root,
                     reference_frame=reference,
                     child_frame=pose_child,
                 )
@@ -154,12 +161,15 @@ class SensorWorldProjector:
         with reasoning_world.modify_world():
             camera.root = root
             camera.forward_facing_axis.reference_frame = root
+            if camera.root_T_optical is not None:
+                camera.root_T_optical.reference_frame = root
         return camera
 
     @staticmethod
     def apply_pose(world: World, observation: CameraObservation) -> None:
         """
-        Apply one sampled camera pose to its direct sensor connection.
+        Apply the physical-root pose recovered from the sampled optical pose and
+        attachment.
         """
         pose = observation.world_T_camera
         pose_child = (
@@ -190,4 +200,8 @@ class SensorWorldProjector:
                 reason="camera pose is not connected to its reference frame"
             )
         with world.modify_world():
-            connection.origin = pose
+            connection.origin = HomogeneousTransformationMatrix(
+                data=observation.world_T_root,
+                reference_frame=pose.reference_frame,
+                child_frame=pose_child,
+            )

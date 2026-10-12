@@ -106,6 +106,8 @@ def camera_intersections(
     )
     camera.camera_range = CameraRange(minimum_distance=0.1, maximum_distance=8.0)
     camera.root_T_forward_view = HomogeneousTransformationMatrix()
+    camera.world_T_optical = HomogeneousTransformationMatrix()
+    camera.optical_R_forward_view = Camera.optical_R_forward_view
     return CameraIntersections(ray_tracer, camera, body, query, resolution)
 
 

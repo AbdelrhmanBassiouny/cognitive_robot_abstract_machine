@@ -19,6 +19,10 @@ class CameraObservation:
     """
     Describe the camera state used to produce one perception frame.
 
+    :attr:`world_T_camera` alone transforms optical-frame points into world coordinates.
+    :attr:`root_T_optical` additionally allows replay to recover the physical pose of
+    :attr:`camera.root`, which may differ from the optical frame.
+
     An annotator can access native and effective parameters from its CAS::
 
         observation = self.get_cas().camera_observation
@@ -39,12 +43,24 @@ class CameraObservation:
 
     world_T_camera: HomogeneousTransformationMatrix | None
     """
-    Sampled camera pose in the world frame, if available.
+    Sampled optical-frame pose in world coordinates, if available.
+
+    This transform alone places optical-frame points in the world.
     """
 
     timestamp_nanoseconds: int
     """
     Acquisition time as nanoseconds since the Unix epoch.
+    """
+
+    root_T_optical: HomogeneousTransformationMatrix | None = None
+    """
+    Sampled optical pose relative to the physical camera root.
+
+    Combined with :attr:`world_T_camera`, this recovers the physical root pose for
+    replay; it is not needed to transform optical-frame points into world coordinates.
+    The offset can change between frames when image axes follow the viewing-direction
+    convention, so the configured camera attachment alone may not describe the image.
     """
 
     @property
@@ -65,12 +81,37 @@ class CameraObservation:
         """
         Return the sampled pose or raise when the producer had none.
 
-        :return: Transform from the camera frame into the world frame.
+        :return: Transform from the optical frame into the world frame.
         :raises CameraPoseMissing: If the observation has no sampled pose.
         """
         if self.world_T_camera is None:
             raise CameraPoseMissing()
         return self.world_T_camera
+
+    @property
+    def optical_attachment(self) -> HomogeneousTransformationMatrix | None:
+        """
+        Return the sampled optical attachment, or the camera's configured attachment.
+
+        :return: Optical pose relative to the physical root, if available.
+        """
+        if self.root_T_optical is not None:
+            return self.root_T_optical
+        return self.camera.root_T_optical
+
+    @property
+    def world_T_root(self) -> HomogeneousTransformationMatrix | None:
+        """
+        Return the sampled physical-root pose from the optical pose and attachment.
+
+        :return: Camera-root pose, or no pose when none was sampled.
+        """
+        if self.world_T_camera is None:
+            return None
+        root_T_optical = self.optical_attachment
+        if root_T_optical is None:
+            return self.world_T_camera
+        return self.world_T_camera @ root_T_optical.inverse()
 
     @property
     def camera_T_world(self) -> HomogeneousTransformationMatrix:
@@ -87,7 +128,7 @@ class CameraObservation:
         """
         Return a copy carrying the supplied sampled camera pose.
 
-        :param world_T_camera: Transform from the camera frame into the world frame.
+        :param world_T_camera: Transform from the optical frame into the world frame.
         :return: Observation containing the supplied pose.
         """
         return replace(self, world_T_camera=world_T_camera)
