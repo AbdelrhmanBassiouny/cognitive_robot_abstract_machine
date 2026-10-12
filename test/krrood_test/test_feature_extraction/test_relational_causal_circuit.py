@@ -388,8 +388,8 @@ def test_fit_stratifies_the_class_circuit_by_every_given_variable(
     model.fit(many_chair_count_rooms)
     joint_values = {
         (
-            SceneRoomAggregations(instance=room).chair_count(),
-            SceneRoomAggregations(instance=room).table_count(),
+            SceneRoomAggregations(role_taker=room).chair_count(),
+            SceneRoomAggregations(role_taker=room).table_count(),
         )
         for room in many_chair_count_rooms
     }
