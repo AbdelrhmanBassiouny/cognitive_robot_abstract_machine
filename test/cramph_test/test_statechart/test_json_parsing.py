@@ -30,10 +30,12 @@ from cramph.node import (
     TransitionCondition,
 )
 from cramph.node import EndStatechart
-from cramph.statechart import Statechart
+from cramph.statechart import LifeCycleState, ObservationState, Statechart
 from cramph.nodes_for_testing import (
     ConstTrueNode,
     CompositeNodeWithNestedCompositeChild,
+    NodeObservingAPredicate,
+    NodeReferringToAWorldEntity,
     NodeWithOwnStructureCopy,
     SpecializedNodeWithOwnStructureCopy,
 )
@@ -43,7 +45,14 @@ from krrood.symbolic_math.symbolic_math import (
     logic_and,
     logic_or,
 )
+from semantic_digital_twin.adapters.world_entity_kwargs_tracker import (
+    WorldEntityWithIDKwargsTracker,
+)
 from semantic_digital_twin.world import World
+from semantic_digital_twin.world_description.world_entity import (
+    WorldEntityReferenceWriter,
+    WorldEntityWithID,
+)
 
 pytestmark = pytest.mark.parked
 
@@ -205,9 +214,7 @@ def test_structure_copy_keeps_the_base_kinds_of_the_statechart_nodes():
     msc_copy = msc.create_structure_copy()
 
     assert type(msc_copy.get_node_by_index(trigger.index)) is StructureCopyNode
-    assert (
-        type(msc_copy.get_node_by_index(goal.index)) is StructureCopyCompositeNode
-    )
+    assert type(msc_copy.get_node_by_index(goal.index)) is StructureCopyCompositeNode
     assert type(msc_copy.get_node_by_index(end.index)) is EndStatechart
     cancel_copy = msc_copy.get_node_by_index(cancel.index)
     assert type(cancel_copy) is CancelStatechart
@@ -237,6 +244,37 @@ def test_structure_copy_conditions_read_the_copied_nodes():
         for condition in original_node.conditions
         for variable in condition.variables
     ]
+
+
+def test_start_condition(statechart_executor: StatechartExecutor):
+    msc = Statechart(context=statechart_executor.context)
+    node1 = ConstTrueNode()
+    msc.add_node(node1)
+    node2 = ConstTrueNode()
+    msc.add_node(node2)
+    node3 = ConstTrueNode()
+    msc.add_node(node3)
+    end = ConstTrueNode()
+    msc.add_node(end)
+
+    node1.success_condition = node1.observes_true
+    node2.start_condition = node1.observes_true
+    node2.pause_condition = node3.observes_true
+    end.start_condition = logic_and(node2.observes_true, node3.observes_true)
+
+    json_data = msc.to_json()
+    json_str = json.dumps(json_data)
+    new_json_data = json.loads(json_str)
+    kin_sim = StatechartExecutor(context=StatechartContext(world=World()))
+    msc_copy = Statechart.from_json(new_json_data, context=kin_sim.context)
+
+    statechart_executor.compile(statechart=msc)
+    kin_sim.compile(statechart=msc_copy)
+    for index, node in enumerate(msc.nodes):
+        assert node.name == msc_copy.nodes[index].name
+    assert len(msc.edges) == len(msc_copy.edges)
+    for index, edge in enumerate(msc.edges):
+        assert edge == msc_copy.edges[index]
 
 
 def test_cancel_statechart():
@@ -360,6 +398,65 @@ def test_children_of_compiled_goal_are_its_children_once_after_json_round_trip(
     assert sequence_copy.nodes == [
         msc_copy.get_node_by_index(node.index) for node in sequence.nodes
     ]
+
+
+def test_node_referenced_by_another_node_is_one_instance_after_json_round_trip():
+    """
+    A node that another node refers to is deserialized as the node of the statechart,
+    not as a detached copy.
+    """
+    msc = Statechart(context=StatechartContext(world=World()))
+    msc.add_node(watched := ConstTrueNode())
+    msc.add_node(watching := NodeObservingAPredicate(watched_node=watched))
+    msc.add_node(EndStatechart.when_true(watched))
+
+    new_json_data = json.loads(json.dumps(msc.to_json()))
+
+    msc_copy = Statechart.from_json(
+        new_json_data, context=StatechartContext(world=World())
+    )
+    watching_copy = msc_copy.get_node_by_index(watching.index)
+    assert watching_copy.watched_node is msc_copy.get_node_by_index(watched.index)
+
+
+# %% world entities
+
+
+def _root_body(world: World) -> WorldEntityWithID:
+    return world.get_kinematic_structure_entity_by_name("root")
+
+
+def _connection(world: World) -> WorldEntityWithID:
+    return world.get_connection_by_name("root_T_tip")
+
+
+@pytest.mark.parametrize(
+    "entity_of", [_root_body, _connection], ids=["a body", "a connection"]
+)
+def test_a_statechart_refers_to_world_entities_by_reference(
+    mini_world: World, entity_of: Callable[[World], WorldEntityWithID]
+):
+    """
+    Whoever reads a statechart has the world it was built for, so its nodes point at the
+    entities of that world instead of carrying copies of them.
+    """
+    world_entity = entity_of(mini_world)
+    msc = Statechart(context=StatechartContext(world=mini_world))
+    msc.add_node(node := NodeReferringToAWorldEntity(world_entity=world_entity))
+
+    json_data = json.loads(json.dumps(msc.to_json()))
+
+    assert json_data[StatechartJSONKey.NODES][node.index][
+        "world_entity"
+    ] == WorldEntityReferenceWriter().write_reference(world_entity)
+
+    tracker = WorldEntityWithIDKwargsTracker.from_world(mini_world)
+    msc_copy = Statechart.from_json(
+        json_data,
+        context=StatechartContext(world=mini_world),
+        **tracker.create_kwargs(),
+    )
+    assert msc_copy.get_node_by_index(node.index).world_entity is world_entity
 
 
 # %% conditions of a chart that is not compiled yet
@@ -527,3 +624,36 @@ def test_written_conditions_of_a_compiled_statechart_survive_json_round_trip(
 
     sequence_copy = msc_copy.get_node_by_index(sequence.index)
     assert [str(condition) for condition in sequence_copy.conditions] == written
+
+
+# %% states of a ticked statechart
+
+
+@pytest.mark.parametrize("state_type", [LifeCycleState, ObservationState])
+def test_state_of_an_executed_json_parsed_statechart_survives_json_round_trip(
+    state_type: type[LifeCycleState] | type[ObservationState],
+):
+    """
+    The states a statechart parsed from JSON reached by ticking read back as they were.
+    """
+    msc = Statechart(context=StatechartContext(world=World()))
+    msc.add_nodes([first := ConstTrueNode(), second := ConstTrueNode()])
+    second.start_condition = first.observes_true
+    msc.add_node(EndStatechart.when_true(second))
+    executor = StatechartExecutor(context=StatechartContext(world=World()))
+    msc_copy = Statechart.from_json(
+        json.loads(json.dumps(msc.to_json())), context=executor.context
+    )
+    executor.compile(statechart=msc_copy)
+    executor.tick_until_end()
+    [state] = [
+        state
+        for state in (msc_copy.life_cycle_state, msc_copy.observation_state)
+        if type(state) is state_type
+    ]
+
+    state_copy = state_type.from_json(
+        json.loads(json.dumps(state.to_json())), statechart=msc_copy
+    )
+
+    assert state_copy == state

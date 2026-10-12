@@ -20,6 +20,7 @@ from cramph.node import (
 )
 from cramph.monitors import CountTicks, Pulse
 from krrood.symbolic_math.symbolic_math import FloatVariable
+from semantic_digital_twin.world_description.world_entity import WorldEntityWithID
 
 
 @dataclass
@@ -58,6 +59,18 @@ class ConstFalseNode(EndedByOwner, StatechartNode):
 
     def build_artifacts(self, context: StatechartContext) -> NodeArtifacts:
         return NodeArtifacts(observation=sm.Scalar.const_false())
+
+
+@dataclass(eq=False, repr=False)
+class NodeReferringToAWorldEntity(ConstTrueNode):
+    """
+    A node holding an entity of the world its statechart runs in.
+    """
+
+    world_entity: WorldEntityWithID = field(kw_only=True)
+    """
+    The entity of the world this node refers to.
+    """
 
 
 @dataclass(eq=False, repr=False)
