@@ -35,7 +35,14 @@ Based on main, since #185 merged on 2026-10-05. Auto mode. Baseline: 710 tests p
   [project] tables; check-setup declaration as dataset file. 750 pass on 3.12 and 3.13.
 - All 9 threads replied and resolved. PathEnumeration -> krrood.patterns recorded in plan (af80c15e0).
 
+## Round four (2026-10-12, one thread on constants.py:316: enums in source?)
+- b8f5d565d: ClaudeCodeVariable -> basstler.locations (plan_item_bootstrap/mode read it);
+  GitHubClient -> basstler.maintenance_constants (upstream_reviews gh default);
+  ScratchBranch.PERSONAL_NOTES = PersonalNotesSetting.BRANCH.default. 750 pass on 3.12/3.13.
+- Replied; thread left OPEN (PackageManager etc. kept in tests: no Python reader). StackLabel waits on #107.
+
 ## Outstanding
+- Thread on constants.py:316 open for the user.
 - CI on #501 not yet observed.
 - Landing: #420/#424/#430/#437/#107 merge across the second move.
 - Open: uv picks the newest interpreter (3.15 here) while CI tests 3.12.
