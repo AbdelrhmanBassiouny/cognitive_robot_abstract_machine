@@ -1,15 +1,17 @@
-## #472 video-core: review round (2026-10-12)
+## #472 video-core: review rounds (2026-10-12)
 
 Plan item: general-video-production / video-core.
 
-Done (e6447b6af, 127 tests pass locally with --noconftest; cram2/main merged in bab5c6c98):
-- Frame dataclass with drawing methods; SemDT Color/Point2/PlanarBoundingBox; timedelta
-  everywhere; NarratedTimeline = Role[Timeline]; FootageFrame = Role[Frame];
-  exceptions.py; constants -> fields/enums; narration/canvas/footage split <400 lines.
-- 43 threads replied and resolved; 7 left open for the reviewer (Pygments, presentation
-  library, Framing as a box, InsetStill name, test literals, SemDT depth/width naming,
-  code-formatting parts).
-- PR description updated; PR is a draft.
+Round 1 (e6447b6af): Frame dataclass, SemDT types, timedelta, Role[Timeline], split modules.
 
-Next: nothing planned; waiting on the reviewer for the open threads. CI risk: ORM
-generation for experiments (Role classes, Color fields) could not be run locally (needs ROS).
+Round 2 (d7a86bdf7, cc1b7b499), on the user's request:
+- Package moved out of experiments into its own workspace member `cramcorder`
+  (authors Abdelrhman Bassiouny, Naren Vasantakumaar; LGPL; `narrator` extra for kokoro-onnx;
+  CI matrix lib: cramcorder; tests in test/cramcorder_test; experiments/pyproject back to main).
+- 9 new threads: Pixel/PixelBox, WordCuts, muxer Tracks, Voice/Film abstract dataclasses,
+  SoundLevel dBFS + sample_rate, PixelFormat/EncoderPreset StrEnums, no ClassVar, FootageScene.
+  6 resolved; open: cache ClassVars (answered via StrEnum/parameter/classproperty), FootageScene
+  name, Pygments (recommended, waiting for dependency approval).
+- 143 tests pass locally (--noconftest). PR title/body updated; draft.
+
+Next: waiting on the reviewer (Pygments approval, names, Framing box, test literals, SemDT naming).
