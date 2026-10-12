@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from enum import StrEnum
 
 from typing_extensions import TYPE_CHECKING, ClassVar
 
 from robokudo.descriptors.camera_configs.base_camera_config import BaseCameraConfig
+from semantic_digital_twin.datastructures.camera_rendering import SemDTRGBMode
 
 if TYPE_CHECKING:
     from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
@@ -59,22 +59,6 @@ class RuntimeRobotWorldSource:
 
 
 # %% Semantic Digital Twin ray-tracer configuration
-
-
-class SemDTRGBMode(StrEnum):
-    """
-    Select how the ray tracer produces the color image.
-    """
-
-    SEMANTIC = "semantic"
-    """
-    Color visible bodies with their semantic geometry colors.
-    """
-
-    TRIMESH = "trimesh"
-    """
-    Render mesh materials and fall back to semantic colors when unavailable.
-    """
 
 
 @dataclass(slots=True)

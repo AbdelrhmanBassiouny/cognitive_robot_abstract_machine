@@ -15,12 +15,9 @@ from robokudo.io.semdt_camera_context import (
     RayTracingContext,
     SemDTCameraContextResolver,
 )
-from robokudo.io.semdt_raytracer_renderer import (
-    RenderedRGBDFrame,
-    SemDTRayTracerRenderer,
-)
 from robokudo.types.camera import CameraObservation
 from semantic_digital_twin.datastructures.camera_model import PinholeCameraModel
+from semantic_digital_twin.datastructures.camera_rendering import RenderedRGBDFrame
 
 # %% Semantic Digital Twin ray-tracer interface
 
@@ -44,13 +41,6 @@ class SemDTRayTracerCameraInterface(CameraInterface):
         """
         Resolver for the configured world and semantic camera.
         """
-        self.renderer = SemDTRayTracerRenderer(
-            rgb_mode=camera_config.rgb_mode,
-            logger=self.rk_logger,
-        )
-        """
-        Renderer that produces aligned image values from a resolved context.
-        """
 
     def has_new_data(self) -> bool:
         """
@@ -67,7 +57,9 @@ class SemDTRayTracerCameraInterface(CameraInterface):
         :param cas: CAS that receives rendered camera data and frame metadata.
         """
         context = self.context_resolver.resolve()
-        frame = self.renderer.render(context)
+        frame = context.world.ray_tracer.render(
+            context.camera, rgb_mode=self.camera_config.rgb_mode
+        )
         camera_model = frame.camera_model
 
         timestamp_ns = time.time_ns()
@@ -101,7 +93,7 @@ class SemDTRayTracerCameraInterface(CameraInterface):
         world_T_camera = camera.root.global_transform
 
         cas.set(CASViews.COLOR_IMAGE, frame.color_bgr)
-        cas.set(CASViews.DEPTH_IMAGE, frame.depth_mm)
+        cas.set(CASViews.DEPTH_IMAGE, frame.depth_in_millimeters)
         cas.set(CASViews.COLOR2DEPTH_RATIO, self.camera_config.color2depth_ratio)
         cas.set(CASViews.OBJECT_IMAGE, frame.segmentation)
         cas.set(CASViews.OBJECT_COLOR_MAP, frame.object_color_map)

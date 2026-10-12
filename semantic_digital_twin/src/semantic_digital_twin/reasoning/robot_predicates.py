@@ -1,3 +1,4 @@
+# %% Imports
 from __future__ import annotations
 
 from copy import deepcopy
@@ -59,6 +60,7 @@ from semantic_digital_twin.world_description.world_entity import (
 )
 
 
+# %% Robot predicates
 @symbolic_function
 def robot_in_collision(
     robot: AbstractRobot,
@@ -177,11 +179,12 @@ def bodies_in_gripper(gripper: HasTwoFingers, sample_size: int = 100) -> List[Bo
     finger_points = trimesh.sample.sample_surface(finger_mesh, sample_size)[0]
     thumb_points = trimesh.sample.sample_surface(thumb_mesh, sample_size)[0]
 
-    rt = gripper._world.ray_tracer
-    rt.update_scene()
-
-    points, index_ray, bodies = rt.ray_test(finger_points, thumb_points)
-    return list(set(bodies) - set(gripper.finger.bodies) - set(gripper.thumb.bodies))
+    ray_intersections = gripper._world.ray_tracer.ray_test(finger_points, thumb_points)
+    return list(
+        set(ray_intersections.bodies)
+        - set(gripper.finger.bodies)
+        - set(gripper.thumb.bodies)
+    )
 
 
 @symbolic_function

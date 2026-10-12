@@ -1,3 +1,12 @@
+from __future__ import annotations
+
+# %% Imports
+from unittest.mock import Mock
+from typing_extensions import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from pytest import MonkeyPatch
+
 import numpy as np
 from sensor_msgs.msg import CameraInfo
 
@@ -11,6 +20,10 @@ from robokudo.io.semdt_raytracer_camera_interface import (
 )
 from semantic_digital_twin.datastructures.camera_model import FieldOfViewCameraModel
 from semantic_digital_twin.datastructures.camera_resolution import CameraResolution
+from semantic_digital_twin.datastructures.camera_rendering import (
+    RenderedRGBDFrame,
+    SemDTRGBMode,
+)
 
 # %% Interface integration
 
@@ -71,3 +84,42 @@ def test_interface_publishes_effective_model_for_field_of_view_camera():
         native_field_of_view.vertical_angle,
     )
     assert not any(isinstance(view, CameraInfo) for view in cas.views.values())
+
+
+# %% Shared renderer integration
+
+
+def test_interface_publishes_shared_rendered_frame(monkeypatch: MonkeyPatch) -> None:
+    """
+    The camera interface publishes Semantic Digital Twin's frame without conversion.
+    """
+    interface = SemDTRayTracerCameraInterface(
+        SemDTRayTracerCameraConfig(
+            source=WorldDescriptorSource(
+                descriptor_name="world_semdt_raytracer_cylinders"
+            )
+        )
+    )
+    context = interface.context_resolver.resolve()
+    frame = RenderedRGBDFrame(
+        color_bgr=np.zeros((2, 3, 3), dtype=np.uint8),
+        depth_in_millimeters=np.full((2, 3), 1000, dtype=np.uint16),
+        segmentation=np.full((2, 3), context.camera.root.index, dtype=np.int32),
+        object_color_map={},
+        camera_model=context.camera.camera_model,
+    )
+    render = Mock(return_value=frame)
+    monkeypatch.setattr(context.world.ray_tracer, "render", render)
+    cas = CAS()
+
+    interface.set_data(cas)
+
+    render.assert_called_once_with(
+        context.camera, rgb_mode=interface.camera_config.rgb_mode
+    )
+    assert interface.camera_config.rgb_mode is SemDTRGBMode.SEMANTIC
+    np.testing.assert_array_equal(cas.color_image, frame.color_bgr)
+    np.testing.assert_array_equal(cas.depth_image, frame.depth_in_millimeters)
+    np.testing.assert_array_equal(cas.get(CASViews.OBJECT_IMAGE), frame.segmentation)
+    assert cas.get(CASViews.OBJECT_COLOR_MAP) == frame.object_color_map
+    assert cas.camera_observation.effective_camera_model is frame.camera_model
