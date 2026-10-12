@@ -155,7 +155,7 @@ class Attempt(SucceedsOnObservingTrue, FailsOnObservingFalse, CompositeNode):
 
 
 @dataclass(repr=False, eq=False)
-class CompositeNodeOverSelfDecidingNodes(
+class CompositeNodeEndingItsChildren(
     SucceedsOnObservingTrue, FailsOnObservingFalse, CompositeNode, ABC
 ):
     """
@@ -361,7 +361,7 @@ class CramLanguageNode(CompositeNode, ABC):  # ControlStructureNode?
 
 @dataclass(repr=False, eq=False)
 class CramLanguageNodeRunningItsChildrenInTurn(
-    CramLanguageNode, CompositeNodeOverSelfDecidingNodes, ABC
+    CramLanguageNode, CompositeNodeEndingItsChildren, ABC
 ):
     """
     A plan language construct that starts each child only once the one before it ended
@@ -550,7 +550,7 @@ class Parallel(EndedByOwner, CramLanguageNode):
 
 
 @dataclass(repr=False, eq=False)
-class RepeatUntil(CompositeNodeOverSelfDecidingNodes):
+class RepeatUntil(CompositeNodeEndingItsChildren):
     """
     Runs a task again from the start whenever an attempt at it fails.
 
@@ -659,7 +659,7 @@ class RepeatUntil(CompositeNodeOverSelfDecidingNodes):
 
 
 @dataclass(repr=False, eq=False)
-class TryAll(CramLanguageNode, CompositeNodeOverSelfDecidingNodes):
+class TryAll(CramLanguageNode, CompositeNodeEndingItsChildren):
     """
     Runs a list of alternatives at once and takes the first one that works.
 
