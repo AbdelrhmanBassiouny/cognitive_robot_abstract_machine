@@ -5,12 +5,15 @@ from dataclasses import dataclass, field
 from typing_extensions import List, Optional
 
 from cramph.composites import (
+    Attempt,
     ChildChooser,
     ChildChooserAccess,
     CompositeNodeChoosingItsChild,
+    RepeatUntil,
 )
 from cramph.data_types import LifeCycleValues, ObservationStateValues
 from cramph.executor import ExecutorExtension, StatechartExecutor
+from cramph.monitors import CountNodeResets, CountTicks
 from cramph.node import EndStatechart, StatechartNode
 from cramph.nodes_for_testing import (
     ConstFalseNode,
@@ -93,6 +96,55 @@ def _failing_child(name: str) -> NodeFailingOnObservingFalse:
     return NodeFailingOnObservingFalse(
         name=name, observation=ObservationStateValues.FALSE
     )
+
+
+def _undecided_child(name: str) -> NodeSucceedingOnObservingTrue:
+    """
+    :return: A node that never ends on its own.
+    """
+    return NodeSucceedingOnObservingTrue(
+        name=name, observation=ObservationStateValues.UNKNOWN
+    )
+
+
+def _run_count(statechart: Statechart, node: StatechartNode) -> int:
+    """
+    :return: How often `node` went from not started to running.
+    """
+    life_cycles = statechart.history.get_life_cycle_history_of_node(node)
+    return sum(
+        previous == LifeCycleValues.NOT_STARTED and current == LifeCycleValues.RUNNING
+        for previous, current in zip(life_cycles, life_cycles[1:])
+    )
+
+
+def _run_repeated_until_decided(
+    executor: StatechartExecutor,
+    chooser: ChildChooser,
+    task: StatechartNode,
+    resets_until_stopped: int,
+) -> Statechart:
+    """
+    Run `task` again whenever it failed, until it succeeds or was reset
+    `resets_until_stopped` times.
+
+    :return: The statechart that ran.
+    """
+    executor.context.add_extension(ChildChooserAccess(chooser=chooser))
+    statechart = Statechart(context=executor.context)
+    loop = RepeatUntil(
+        name="loop",
+        task=task,
+        stop_retry_monitor=CountNodeResets(
+            name="counter", node=task, target=resets_until_stopped
+        ),
+    )
+    statechart.add_node(loop)
+    statechart.add_node(EndStatechart.when_true(loop))
+    statechart.add_node(EndStatechart.when_failed(loop))
+    executor.compile(statechart)
+    executor.tick_until_end(timeout=60)
+    return statechart
 
 
 def _run_choosing_node(
@@ -306,3 +358,48 @@ def test_the_extensions_hold_still_before_a_node_chooses(statechart_context):
     executor.compile(statechart)
 
     assert chooser.held_still_when_asked == [True]
+
+
+# %% choosing again after a reset
+
+
+def test_a_reset_node_chooses_again_instead_of_running_its_earlier_children(
+    statechart_executor: StatechartExecutor,
+):
+    failing = _failing_child("failing")
+    undecided = _undecided_child("undecided")
+    succeeding = _succeeding_child("succeeding")
+    chooser = ChooserAnsweringInTurn([failing, undecided, succeeding])
+    choosing_node = CompositeNodeChoosingItsChild(name="choosing")
+    attempt = Attempt(
+        name="attempt",
+        task=choosing_node,
+        failure_monitors=[CountTicks(name="timeout", ticks=6)],
+    )
+
+    statechart = _run_repeated_until_decided(
+        statechart_executor, chooser, attempt, resets_until_stopped=3
+    )
+
+    assert chooser.asked_nodes == [choosing_node] * 3
+    assert choosing_node.children == [failing, undecided, succeeding]
+    assert _run_count(statechart, failing) == 1
+    assert _run_count(statechart, undecided) == 1
+    assert choosing_node.life_cycle_state == LifeCycleValues.SUCCEEDED
+
+
+def test_a_node_that_ran_out_of_children_chooses_again_after_a_reset(
+    statechart_executor: StatechartExecutor,
+):
+    succeeding = _succeeding_child("succeeding")
+    chooser = ChooserAnsweringInTurn([None, succeeding])
+    choosing_node = CompositeNodeChoosingItsChild(name="choosing")
+
+    _run_repeated_until_decided(
+        statechart_executor, chooser, choosing_node, resets_until_stopped=3
+    )
+
+    assert chooser.asked_nodes == [choosing_node] * 2
+    assert choosing_node.children == [succeeding]
+    assert not choosing_node.ran_out_of_children
+    assert choosing_node.life_cycle_state == LifeCycleValues.SUCCEEDED

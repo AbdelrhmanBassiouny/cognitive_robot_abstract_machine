@@ -181,11 +181,20 @@ class ExecutorExtension:
 
     def after_compile(self, executor: StatechartExecutor) -> None:
         """
-        Called once the statechart is compiled, before its first tick, and again every
-        time it compiled again.
+        Called once the statechart is compiled, before its first tick.
 
         :param executor: The executor this extension belongs to.
         """
+
+    def after_recompile(self, executor: StatechartExecutor) -> None:
+        """
+        Called every time a statechart that already compiled compiled again, which
+        keeps its state, its history and the tick count. Does what
+        :meth:`after_compile` does unless overridden.
+
+        :param executor: The executor this extension belongs to.
+        """
+        self.after_compile(executor)
 
     def before_tick(self, executor: StatechartExecutor) -> None:
         """
@@ -337,7 +346,8 @@ class StatechartExecutor(Executor, RecompileCallback):
         self.tick_count = 0
         self.statechart.compile()
         self.statechart.add_recompile_callback(self)
-        self.after_recompile()
+        for extension in self.extensions:
+            extension.after_compile(self)
         self.statechart.tick()
 
     def before_recompile(self) -> bool:
@@ -355,7 +365,7 @@ class StatechartExecutor(Executor, RecompileCallback):
         every node of the statechart. The tick count is not restarted.
         """
         for extension in self.extensions:
-            extension.after_compile(self)
+            extension.after_recompile(self)
 
     def tick(self):
         """

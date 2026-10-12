@@ -10,7 +10,6 @@ from cramph.node import CancelStatechart
 from cramph.node import EndStatechart, StatechartNode
 from cramph.monitors import Pulse
 from cramph.exceptions import TickDoesNotSettleError
-from cramph.statechart import CompiledTick
 from cramph.statechart import Statechart
 from cramph.nodes_for_testing import (
     CompositeNodeObservingItsCancellingChildRun,
@@ -304,7 +303,7 @@ class TestUnsettledTick:
         with pytest.raises(TickDoesNotSettleError) as error:
             executor.tick()
 
-        assert error.value.pass_limit == CompiledTick.pass_limit
+        assert error.value.pass_limit == statechart.pass_limit
         assert error.value.unsettled_nodes == [first, second]
 
     def test_observations_contradicting_each_other_are_stopped_once_they_repeat(self):
@@ -339,6 +338,46 @@ class TestUnsettledTick:
         _tick_until(
             executor, lambda: plan.life_cycle_state == LifeCycleValues.SUCCEEDED
         )
+
+    def test_a_pass_limit_given_to_a_statechart_still_applies_after_it_compiled_again(
+        self,
+    ):
+        statechart = Statechart(context=StatechartContext(world=World()), pass_limit=7)
+        first = NodeObservingTheOppositeOfAnObservationPredicate()
+        second = NodeObservingTheOppositeOfAnObservationPredicate(watched_node=first)
+        first.watched_node = second
+        statechart.add_nodes([first, second])
+        executor = _compile(statechart)
+        statechart.add_node(ConstTrueNode())
+
+        with pytest.raises(TickDoesNotSettleError) as error:
+            executor.tick()
+
+        assert error.value.pass_limit == statechart.pass_limit
+
+    def test_a_statechart_given_no_passes_per_nesting_level_stops_deeply_nested_steps(
+        self,
+    ):
+        """
+        The passes a tick may take grow with the nesting only by what the statechart was
+        given per nesting level.
+        """
+        statechart = Statechart(
+            context=StatechartContext(world=World()), passes_per_nesting_level=0
+        )
+        plan = ConstTrueNode()
+        for _ in range(DEEP_NESTING):
+            plan = Sequence(nodes=[plan])
+        statechart.add_node(plan)
+        executor = _compile(statechart)
+
+        with pytest.raises(TickDoesNotSettleError) as error:
+            _tick_until(
+                executor, lambda: plan.life_cycle_state == LifeCycleValues.SUCCEEDED
+            )
+
+        assert error.value.pass_limit == statechart.pass_limit
+        assert error.value.passes_taken == statechart.pass_limit
 
 
 # %% life cycle callbacks

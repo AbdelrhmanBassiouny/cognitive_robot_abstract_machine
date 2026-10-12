@@ -184,11 +184,10 @@ class CompositeNodeOverSelfDecidingNodes(
     out decides itself in turn, which is what lets one be a step of another.
     """
 
-    def _adopt_self_deciding(self, node: StatechartNode) -> StatechartNode:
+    def _convert_to_self_deciding(self, node: StatechartNode) -> StatechartNode:
         """
-        Makes a node that ends on its own a child of this goal in the statechart,
-        converting the caller's node where it needs converting, without touching
-        :attr:`nodes`.
+        Checks that this goal can run `node` and converts it into a node that ends on
+        its own, without touching :attr:`nodes` or the statechart.
 
         A node whose owner decides its success observes whether it reached its goal, so
         one is wrapped in an :class:`Attempt` without failure monitors, which fails only
@@ -199,9 +198,7 @@ class CompositeNodeOverSelfDecidingNodes(
         """
         self._check_caller_wired_no_transitions(node)
         self._check_node_doesnt_belong_to_different_parent(node)
-        child = Attempt.deciding(node)
-        self._place_child_in_statechart(child)
-        return child
+        return Attempt.deciding(node)
 
     def _check_attempt_can_fail(self, node: StatechartNode) -> None:
         """
@@ -290,7 +287,7 @@ class CramLanguageNode(CompositeNode, ABC):  # ControlStructureNode?
             self.nodes[position] = node
             return
         replaced = self.nodes[position]
-        self.nodes[position] = self._adopt(node)
+        self._adopt(position, self._convert_to_child(node))
         self._wire_children()
         self.statechart.remove_node(replaced)
 
@@ -322,8 +319,15 @@ class CramLanguageNode(CompositeNode, ABC):  # ControlStructureNode?
     def expand(self, context: StatechartContext) -> None:
         """
         Adopt every node this goal was handed and wire them.
+
+        While a node expands, :attr:`nodes` already holds the child running it and the
+        children before that, and still holds the nodes after it as they were handed
+        over.
         """
-        self.nodes = [self._adopt(node) for node in list(self.nodes)]
+        handed_over_nodes = self.nodes
+        self.nodes = list(handed_over_nodes)
+        for position, node in enumerate(handed_over_nodes):
+            self._adopt(position, self._convert_to_child(node))
         self._wire_children()
 
     def check_children(self) -> None:
@@ -333,14 +337,28 @@ class CramLanguageNode(CompositeNode, ABC):  # ControlStructureNode?
         self._check_has_children()
 
     @abstractmethod
-    def _adopt(self, node: StatechartNode) -> StatechartNode:
+    def _convert_to_child(self, node: StatechartNode) -> StatechartNode:
         """
-        Makes `node` a child of this goal in the statechart, without touching
-        :attr:`nodes`.
+        Checks that this goal can run `node` and converts it where it needs converting,
+        without touching :attr:`nodes` or the statechart.
 
         :param node: The node the caller handed over.
-        :return: The child running `node`.
+        :return: The child running `node`, which may be `node` itself.
         """
+
+    def _adopt(self, position: int, child: StatechartNode) -> None:
+        """
+        Makes `child` a child of this goal in the statechart, in place of what
+        :attr:`nodes` holds at `position`.
+
+        :attr:`nodes` holds `child` before it joins the statechart, so that the tree can
+        be navigated from below `child` while it expands.
+
+        :param position: The position among :attr:`nodes` that `child` takes.
+        :param child: The child to run, as :meth:`_convert_to_child` returned it.
+        """
+        self.nodes[position] = child
+        self._place_child_in_statechart(child)
 
     def _wire_children(self) -> None:
         """
@@ -388,7 +406,9 @@ class CramLanguageNode(CompositeNode, ABC):  # ControlStructureNode?
         if not self.belongs_to_statechart():
             self.nodes.insert(position, node)
             return
-        self.nodes.insert(position, self._adopt(node))
+        child = self._convert_to_child(node)
+        self.nodes.insert(position, child)
+        self._adopt(position, child)
         self._wire_children()
 
 
@@ -401,8 +421,8 @@ class CramLanguageNodeRunningItsChildrenInTurn(
     in a way it defines.
     """
 
-    def _adopt(self, node: StatechartNode) -> StatechartNode:
-        return self._adopt_self_deciding(node)
+    def _convert_to_child(self, node: StatechartNode) -> StatechartNode:
+        return self._convert_to_self_deciding(node)
 
     def _wire_children(self) -> None:
         """
@@ -438,7 +458,7 @@ class Sequence(CramLanguageNodeRunningItsChildrenInTurn):
     .. note:: corresponds to the RPL's SEQ. (McDermott, Drew. A reactive plan language, 1991)
     """
 
-    def _adopt(self, node: StatechartNode) -> StatechartNode:
+    def _convert_to_child(self, node: StatechartNode) -> StatechartNode:
         """
         Each step is a node that ends on its own.
 
@@ -446,9 +466,8 @@ class Sequence(CramLanguageNodeRunningItsChildrenInTurn):
         """
         if isinstance(node, TerminalNode):
             self._check_caller_wired_no_transitions(node)
-            self._place_child_in_statechart(node)
             return node
-        return super()._adopt(node)
+        return super()._convert_to_child(node)
 
     def _start_condition_after(self, previous: StatechartNode) -> Scalar:
         """
@@ -511,11 +530,10 @@ class Parallel(EndedByOwner, CramLanguageNode):
             return len(self.nodes)
         return self.minimum_success
 
-    def _adopt(self, node: StatechartNode) -> StatechartNode:
+    def _convert_to_child(self, node: StatechartNode) -> StatechartNode:
         """
         Every node runs as it is, side by side with the others.
         """
-        self._place_child_in_statechart(node)
         return node
 
     @property
@@ -644,7 +662,7 @@ class RepeatUntil(CompositeNodeOverSelfDecidingNodes):
         monitor that ends itself on reaching what it counts, and which a monitor that has
         not observed anything yet has not reached either.
         """
-        self.nodes.append(self._adopt_self_deciding(self.task))
+        self._add_child_to_statechart(self._convert_to_self_deciding(self.task))
         self._add_child_to_statechart(self.stop_retry_monitor)
 
         retrying_stopped = self._retrying_stopped
@@ -714,11 +732,11 @@ class TryAll(CramLanguageNode, CompositeNodeOverSelfDecidingNodes):
     every one of them ended without doing so.
     """
 
-    def _adopt(self, node: StatechartNode) -> StatechartNode:
+    def _convert_to_child(self, node: StatechartNode) -> StatechartNode:
         """
         Every alternative runs side by side with the others.
         """
-        return self._adopt_self_deciding(node)
+        return self._convert_to_self_deciding(node)
 
     def build_artifacts(self, context: StatechartContext) -> NodeArtifacts:
         """
@@ -1052,15 +1070,24 @@ class CompositeNodeChoosingItsChild(SucceedsOnObservingTrue, CompositeNode):
     its latest child ended without succeeding. It succeeds with the first child that
     succeeds, and fails once the chooser has no child left.
 
+    A reset puts it back to choosing: the children it chose before never run again, and
+    it asks the chooser anew once it starts again.
+
     .. note:: A chosen child joins the statechart after it compiled, which compiles it
-        again, see :meth:`~cramph.statechart.Statechart.modify`.
+        again, see :meth:`~cramph.statechart.Statechart.modify`. So does a reset of a
+        node that had chosen a child or had none left.
     """
 
-    accepts_children_after_compile = True
+    accepts_children_after_compile: bool = field(init=False, default=True)
 
     _out_of_children: bool = field(default=False, init=False, repr=False)
     """
     Whether the chooser said that no child is left.
+    """
+
+    _children_of_earlier_runs: int = field(default=0, init=False, repr=False)
+    """
+    How many of :attr:`nodes` were chosen before the latest reset.
     """
 
     @classproperty
@@ -1070,16 +1097,28 @@ class CompositeNodeChoosingItsChild(SucceedsOnObservingTrue, CompositeNode):
     @property
     def ran_out_of_children(self) -> bool:
         """
-        :return: Whether the chooser said that no child is left.
+        :return: Whether the chooser said that no child is left, since the latest
+            reset.
         """
         return self._out_of_children
 
     @property
+    def inherent_fail_condition(self) -> Scalar:
+        """
+        Fails as well once the chooser has no child left, see
+        :meth:`~cramph.node.StatechartNode.inherent_fail_condition`.
+        """
+        if self._out_of_children:
+            return Scalar.const_true()
+        return super().inherent_fail_condition
+
+    @property
     def latest_child(self) -> Optional[StatechartNode]:
         """
-        :return: The child chosen last, or None before the first choice.
+        :return: The child chosen last since the latest reset, or None before the first
+            such choice.
         """
-        if not self.nodes:
+        if len(self.nodes) == self._children_of_earlier_runs:
             return None
         return self.nodes[-1]
 
@@ -1138,8 +1177,25 @@ class CompositeNodeChoosingItsChild(SucceedsOnObservingTrue, CompositeNode):
         Fail, because no child is left to run.
         """
         self._out_of_children = True
-        self.fail_condition = Scalar.const_true()
         self.statechart.request_rebuild(self)
+
+    def on_reset(self, context: StatechartContext) -> None:
+        """
+        Go back to choosing: the children chosen so far never start again, and a node
+        that had no child left may be given one again.
+
+        .. warning:: Unlike :meth:`~cramph.node.StatechartNode.on_reset` this compiles
+            the statechart again, unless nothing was chosen since the latest reset.
+        """
+        children_of_this_run = self.nodes[self._children_of_earlier_runs :]
+        if not children_of_this_run and not self._out_of_children:
+            return
+        with self.statechart.modify():
+            for child in children_of_this_run:
+                child.start_condition = Scalar.const_false()
+            self._children_of_earlier_runs = len(self.nodes)
+            self._out_of_children = False
+            self.statechart.request_rebuild(self)
 
     def build_artifacts(self, context: StatechartContext) -> NodeArtifacts:
         """

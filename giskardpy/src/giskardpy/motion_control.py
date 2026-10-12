@@ -2,8 +2,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from typing_extensions import ClassVar
-
 import numpy as np
 
 from cramph.context import StatechartContext
@@ -45,7 +43,7 @@ class MotionControl(ExecutorExtension):
     one tick.
     """
 
-    speed_at_rest: ClassVar[float] = 1e-3
+    speed_at_rest: float = 1e-3
     """
     The fastest a degree of freedom may move for the robot to count as at rest.
     """
@@ -241,10 +239,25 @@ class WorldStateTrajectoryRecording(ExecutorExtension):
     def after_compile(self, executor: StatechartExecutor) -> None:
         self.plotter.reset(executor.context.world.state, executor.time)
 
+    def after_recompile(self, executor: StatechartExecutor) -> None:
+        """
+        Keeps the recorded trajectory, unlike :meth:`after_compile`.
+        """
+
     def after_tick(self, executor: StatechartExecutor) -> None:
-        self.plotter.world_state_trajectory.append(
-            executor.context.world.state, executor.time
-        )
+        """
+        Appends the world state to the recorded trajectory.
+
+        .. note:: A trajectory holds one set of degrees of freedom, so a world whose
+            degrees of freedom changed starts the trajectory anew.
+        """
+        state = executor.context.world.state
+        trajectory = self.plotter.world_state_trajectory
+        if not trajectory.records_degrees_of_freedom_of(state):
+            self.plotter.reset(state, executor.time)
+            return
+        trajectory.adopt_world_model_of(state)
+        trajectory.append(state, executor.time)
 
 
 @dataclass
@@ -266,6 +279,16 @@ class DebugExpressionRecording(ExecutorExtension):
     def after_compile(self, executor: StatechartExecutor) -> None:
         self.plotter.reset(DebugExpression.collect_from(executor.statechart))
         self.plotter.debug_expression_trajectory.append(executor.time)
+
+    def after_recompile(self, executor: StatechartExecutor) -> None:
+        """
+        Keeps the recorded values, unlike :meth:`after_compile`, and records the debug
+        expressions the statechart has now, see :meth:`~giskardpy.motion_statechart.debu
+        g_expression_trajectory.DebugExpressionTrajectory.follow`.
+        """
+        self.plotter.debug_expression_trajectory.follow(
+            DebugExpression.collect_from(executor.statechart)
+        )
 
     def after_tick(self, executor: StatechartExecutor) -> None:
         self.plotter.debug_expression_trajectory.append(executor.time)

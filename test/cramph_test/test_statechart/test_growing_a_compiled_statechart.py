@@ -36,6 +36,30 @@ class ExtensionCountingCompiles(ExecutorExtension):
         self.compile_count += 1
 
 
+@dataclass
+class ExtensionTellingRecompilesApart(ExecutorExtension):
+    """
+    An executor extension that counts separately how often it was told the statechart
+    compiled and how often that it compiled again.
+    """
+
+    compile_count: int = 0
+    """
+    How often :meth:`after_compile` ran.
+    """
+
+    recompile_count: int = 0
+    """
+    How often :meth:`after_recompile` ran.
+    """
+
+    def after_compile(self, executor: StatechartExecutor) -> None:
+        self.compile_count += 1
+
+    def after_recompile(self, executor: StatechartExecutor) -> None:
+        self.recompile_count += 1
+
+
 # %% helpers
 
 
@@ -155,6 +179,34 @@ def test_an_added_composite_node_runs_its_children(
 
     for step in steps:
         _tick_until_succeeded(statechart_executor, step)
+
+
+# %% telling the extensions
+
+
+def test_an_extension_is_told_apart_that_the_statechart_compiled_again(
+    statechart_executor: StatechartExecutor,
+):
+    telling_apart = ExtensionTellingRecompilesApart()
+    statechart_executor.extensions.append(telling_apart)
+    _compile_and_run_one_node(statechart_executor)
+
+    statechart_executor.statechart.add_node(_node_arriving_at_once("second"))
+
+    assert telling_apart.compile_count == 1
+    assert telling_apart.recompile_count == 1
+
+
+def test_an_extension_not_telling_them_apart_takes_a_recompile_as_a_compile(
+    statechart_executor: StatechartExecutor,
+):
+    counting = ExtensionCountingCompiles()
+    statechart_executor.extensions.append(counting)
+    _compile_and_run_one_node(statechart_executor)
+
+    statechart_executor.statechart.add_node(_node_arriving_at_once("second"))
+
+    assert counting.compile_count == 2
 
 
 # %% batching

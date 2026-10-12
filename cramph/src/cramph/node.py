@@ -2049,7 +2049,7 @@ def expanded_child_field() -> Any:
 
 @dataclass(eq=False, repr=False)
 class CompositeNode(StatechartNode):
-    accepts_children_after_compile: ClassVar[bool] = False
+    accepts_children_after_compile: bool = field(init=False, default=False)
     """
     Whether children may join this node once the statechart compiled it, rather than
     only while it expands.

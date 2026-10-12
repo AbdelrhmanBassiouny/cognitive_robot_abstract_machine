@@ -9,17 +9,27 @@ from dataclasses import dataclass, field
 
 from typing_extensions import Iterator, List
 
+from coraplex.exceptions import MotionDidNotFinish
 from coraplex.locations.base import Location
+from coraplex.plans.failures import EmptyUnderspecified
 from coraplex.plans.underspecified import UnderspecifiedNode
 from coraplex.robot_plans.actions.core.navigation import NavigateAction
 from coraplex.robot_plans.actions.core.pick_up import PickUpAction
 from coraplex.robot_plans.actions.core.placing import PlaceAction
 from coraplex.robot_plans.actions.core.robot_body import MoveTorsoAction
 from coraplex.plans import executors
-from cramph.composites import ChildChooser, CompositeNodeChoosingItsChild, Sequence
-from cramph.data_types import LifeCycleValues
+from cramph.composites import (
+    ChildChooser,
+    CompositeNodeChoosingItsChild,
+    PausedUntilTrue,
+    Sequence,
+)
+from cramph.data_types import LifeCycleValues, ObservationStateValues
+from cramph.executor import StatechartExecutor
+from cramph.nodes_for_testing import ConstTrueNode, NodeFailingOnObservingFalse
 from cramph.statechart import Statechart
 from cramph.world_modification_nodes import MoveBranch
+from giskardpy.motion_control import MotionControl
 from giskardpy.motion_statechart.graph_node import EndMotion
 from krrood.adapters.json_serializer import from_json, to_json
 from krrood.entity_query_language.factories import a, variable
@@ -173,6 +183,23 @@ def test_a_place_finds_the_grasp_of_the_pick_up_before_it(pr2_apartment_context)
     assert statechart.get_preceding_node_by_type(place, PickUpAction) is pick_up
 
 
+def test_a_place_below_a_pausing_composite_finds_the_pick_up_before_that(
+    pr2_apartment_context,
+):
+    world, robot, extensions = pr2_apartment_context
+    milk = world.get_semantic_annotations_by_type(Milk)[0]
+    pick_up = PickUpAction(milk.grasp_candidates()[0], robot.left_arm)
+    place = PlaceAction(
+        milk, Pose.from_xyz_rpy(0.8, -1.9, 0.7, reference_frame=world.root)
+    )
+    paused_place = PausedUntilTrue(monitor=ConstTrueNode(), monitored_node=place)
+    statechart = Statechart(context=simulated_executor(extensions).context)
+
+    statechart.add_node(Sequence([pick_up, paused_place]))
+
+    assert statechart.get_preceding_node_by_type(place, PickUpAction) is pick_up
+
+
 # %% running on the robot
 
 
@@ -241,6 +268,67 @@ def test_a_plan_on_the_robot_is_sent_once_with_the_chooser_grounding_its_actions
     assert plan.statechart is statechart
     [chooser] = giskard.child_choosers
     assert chooser is executor.child_chooser
+
+
+@dataclass
+class GiskardTickingTheGoalUntilItEnded:
+    """
+    Stands in for Giskard, ticking what it is asked to execute until the statechart
+    ended, which is the only way Giskard's control loop finishes a goal by itself.
+    """
+
+    tick_limit: int = 50
+    """
+    The number of ticks after which a statechart that did not end is given up on.
+    """
+
+    def execute(self, motion_statechart: Statechart, child_chooser: ChildChooser):
+        giskard = StatechartExecutor(
+            context=motion_statechart.context, extensions=[MotionControl()]
+        )
+        giskard.compile(motion_statechart)
+        giskard.tick_until_end(timeout=self.tick_limit)
+
+
+def test_a_plan_that_fails_on_the_robot_raises_motion_did_not_finish(
+    pr2_apartment_context, monkeypatch
+):
+    world, robot, extensions = pr2_apartment_context
+    monkeypatch.setattr(
+        executors,
+        "GiskardWrapper",
+        lambda ros_node, world: GiskardTickingTheGoalUntilItEnded(),
+    )
+    plan = NodeFailingOnObservingFalse(observation=ObservationStateValues.FALSE)
+    executor = robot_executor(extensions)
+    executor.compile(statechart_of(executor, plan))
+
+    with pytest.raises(MotionDidNotFinish) as failure:
+        executor.execute()
+
+    assert failure.value.unfinished_motions == [plan]
+    assert plan.life_cycle_state == LifeCycleValues.FAILED
+
+
+def test_an_underspecified_action_out_of_candidates_on_the_robot_says_it_is_empty(
+    pr2_apartment_context, monkeypatch
+):
+    world, robot, extensions = pr2_apartment_context
+    monkeypatch.setattr(
+        executors,
+        "GiskardWrapper",
+        lambda ros_node, world: GiskardTickingTheGoalUntilItEnded(),
+    )
+    plan = UnderspecifiedNode(
+        statement=a(NavigateAction)(target_location=variable(Pose, domain=[]))
+    )
+    executor = robot_executor(extensions)
+    executor.compile(statechart_of(executor, plan))
+
+    with pytest.raises(EmptyUnderspecified) as failure:
+        executor.execute()
+
+    assert failure.value.node is plan
 
 
 @pytest.mark.parked

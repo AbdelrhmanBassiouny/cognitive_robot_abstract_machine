@@ -29,7 +29,11 @@ from semantic_digital_twin.world_description.geometry import Box, Scale, Color
 from semantic_digital_twin.world_description.shape_collection import ShapeCollection
 from semantic_digital_twin.world_description.world_entity import Body
 from coraplex.plans.context_extensions import RobotAccess
-from coraplex.plans.executors import PlanExecutor
+from coraplex.plans.executors import (
+    PlanExecutor,
+    RobotPlanExecutor,
+    SimulatedPlanExecutor,
+)
 from cramph.statechart import Statechart
 from cramph.composites import Sequence
 
@@ -136,16 +140,22 @@ with world.modify_world():
 
 # The executor needs the ROS node to reach the real robot
 tracy = world.get_semantic_annotations_by_type(Tracy)[0]
-executor = PlanExecutor.type_for(execition_mode)(
-    world, context_extensions=[RobotAccess(tracy)], ros_node=node
+executor_type: type[PlanExecutor] = (
+    RobotPlanExecutor if drives_real_robot else SimulatedPlanExecutor
 )
+executor = executor_type(world, context_extensions=[RobotAccess(tracy)], ros_node=node)
 
 plan = Sequence(
     [
         # Stack Box 2
         ParkArmsAction(tracy.all_arms),
         PickUpAction(
-            GraspCandidate(box2_annotation, Pose.from_xyz_rpy(pitch=np.pi/2, reference_frame=box2_annotation.root)),
+            GraspCandidate(
+                box2_annotation,
+                Pose.from_xyz_rpy(
+                    pitch=np.pi / 2, reference_frame=box2_annotation.root
+                ),
+            ),
             tracy.left_arm,
         ),
         PlaceAction(
@@ -155,7 +165,12 @@ plan = Sequence(
         # Stack Box 3
         ParkArmsAction(tracy.all_arms),
         PickUpAction(
-            GraspCandidate(box3_annotation, Pose.from_xyz_rpy(pitch=np.pi/2, reference_frame=box3_annotation.root)),
+            GraspCandidate(
+                box3_annotation,
+                Pose.from_xyz_rpy(
+                    pitch=np.pi / 2, reference_frame=box3_annotation.root
+                ),
+            ),
             tracy.right_arm,
         ),
         PlaceAction(

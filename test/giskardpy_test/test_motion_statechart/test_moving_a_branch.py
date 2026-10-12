@@ -176,8 +176,9 @@ def test_a_moving_robot_decelerates_to_rest_before_a_child_is_chosen(
     """
     world = cylinder_bot_world
     robot = world.get_kinematic_structure_entity_by_name("bot")
+    motion_control = MotionControl()
     executor = StatechartExecutor(
-        context=StatechartContext(world=world), extensions=[MotionControl()]
+        context=StatechartContext(world=world), extensions=[motion_control]
     )
     chooser = ChooserNotingTheSpeed(world=world, child=ConstTrueNode())
     executor.context.add_extension(ChildChooserAccess(chooser=chooser))
@@ -207,9 +208,9 @@ def test_a_moving_robot_decelerates_to_rest_before_a_child_is_chosen(
             speeds_while_holding.append(_fastest_velocity(world))
 
     [speed_when_chosen] = chooser.speeds_when_asked
-    assert speed_when_chosen <= MotionControl.speed_at_rest
+    assert speed_when_chosen <= motion_control.speed_at_rest
     assert len(speeds_while_holding) > 2
-    assert speeds_while_holding[0] > MotionControl.speed_at_rest
+    assert speeds_while_holding[0] > motion_control.speed_at_rest
     assert speeds_while_holding == sorted(speeds_while_holding, reverse=True)
 
 
@@ -245,3 +246,30 @@ def test_a_degree_of_freedom_the_controller_does_not_command_leaves_the_robot_at
     world.state[free_connection.dofs[0].id].velocity = 1.0
 
     assert motion_control.before_recompile(executor)
+
+
+def test_the_speed_at_rest_given_to_a_motion_control_decides_when_the_robot_is_at_rest(
+    cylinder_bot_world: World,
+):
+    world = cylinder_bot_world
+    robot = world.get_kinematic_structure_entity_by_name("bot")
+    motion_control = MotionControl(speed_at_rest=0.5)
+    executor = StatechartExecutor(
+        context=StatechartContext(world=world), extensions=[motion_control]
+    )
+    statechart = Statechart(context=executor.context)
+    statechart.add_node(
+        CartesianPose(
+            root_link=world.root,
+            tip_link=robot,
+            goal_pose=Pose.from_xyz_rpy(x=0.2, reference_frame=world.root),
+        )
+    )
+    executor.compile(statechart)
+    commanded = motion_control.qp_controller.active_degrees_of_freedom[0]
+
+    world.state[commanded.id].velocity = motion_control.speed_at_rest / 2
+    assert motion_control.before_recompile(executor)
+
+    world.state[commanded.id].velocity = motion_control.speed_at_rest * 2
+    assert not motion_control.before_recompile(executor)

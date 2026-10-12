@@ -19,6 +19,35 @@ if TYPE_CHECKING:
     from cramph.statechart import Statechart
 
 
+# %% bar data
+
+
+@dataclass
+class StateSpan:
+    """
+    A stretch of ticks over which a node kept one state.
+    """
+
+    state: LifeCycleValues | ObservationStateValues
+    """
+    The state the node kept.
+    """
+
+    start_tick: int
+    """
+    The tick of the first snapshot showing the node in :attr:`state`.
+    """
+
+    end_tick: int
+    """
+    The tick of the snapshot showing the node's next state, or the last recorded tick if
+    the node kept :attr:`state` until then.
+    """
+
+
+# %% plotter
+
+
 @dataclass
 class HistoryGanttChartPlotter:
     """
@@ -74,7 +103,56 @@ class HistoryGanttChartPlotter:
 
     @property
     def num_bars(self) -> int:
-        return len(self.statechart.history.history[0].life_cycle_state)
+        """
+        :return: The number of rows of the chart, one per node of the statechart.
+        """
+        return len(self.statechart.nodes)
+
+    def life_cycle_spans(self, node: StatechartNode) -> list[StateSpan]:
+        """
+        :param node: The node to look up.
+        :return: The life cycle states `node` went through since it joined the
+            statechart, in order; empty if no snapshot records it.
+        """
+        snapshots = self.statechart.history.items_recording(node)
+        return self._merge_into_spans(
+            ticks=[snapshot.tick_count for snapshot in snapshots],
+            states=[snapshot.life_cycle_state[node] for snapshot in snapshots],
+        )
+
+    def observation_spans(self, node: StatechartNode) -> list[StateSpan]:
+        """
+        :param node: The node to look up.
+        :return: The observation states `node` went through since it joined the
+            statechart, in order; empty if no snapshot records it.
+        """
+        snapshots = self.statechart.history.items_recording(node)
+        return self._merge_into_spans(
+            ticks=[snapshot.tick_count for snapshot in snapshots],
+            states=[snapshot.observation_state[node] for snapshot in snapshots],
+        )
+
+    def _merge_into_spans(
+        self,
+        ticks: list[int],
+        states: list[LifeCycleValues] | list[ObservationStateValues],
+    ) -> list[StateSpan]:
+        """
+        :param ticks: The tick of every snapshot recording a node, in order.
+        :param states: The state of that node in each of those snapshots.
+        :return: One span per run of equal consecutive states, the last one reaching
+            the last recorded tick.
+        """
+        change_indices = [
+            index
+            for index in range(len(states))
+            if index == 0 or states[index] != states[index - 1]
+        ]
+        end_ticks = [ticks[index] for index in change_indices[1:]] + [self.total_ticks]
+        return [
+            StateSpan(state=states[index], start_tick=ticks[index], end_tick=end_tick)
+            for index, end_tick in zip(change_indices, end_ticks)
+        ]
 
     @property
     def use_seconds_for_x_axis(self) -> bool:
@@ -127,9 +205,18 @@ class HistoryGanttChartPlotter:
         ax_main, ax_final = self._build_subplots(ordered_nodes)
 
         for node_idx, node in enumerate(ordered_nodes):
-            self._plot_lifecycle_bar(axis=ax_main, node=node, node_idx=node_idx)
-            self._plot_observation_bar(axis=ax_main, node=node, node_idx=node_idx)
-            # Draw the final-state-only blocks on the right axis
+            self._plot_spans(
+                axis=ax_main,
+                node_idx=node_idx,
+                spans=self.life_cycle_spans(node),
+                top=True,
+            )
+            self._plot_spans(
+                axis=ax_main,
+                node_idx=node_idx,
+                spans=self.observation_spans(node),
+                top=False,
+            )
             self._plot_final_state_column(axis=ax_final, node=node, node_idx=node_idx)
 
         self._format_axes(
@@ -228,159 +315,64 @@ class HistoryGanttChartPlotter:
         ]
         return list(reversed(ordered))
 
-    def _plot_lifecycle_bar(
-        self,
-        axis: plt.Axes,
-        node: StatechartNode,
-        node_idx: int,
-    ):
-        """
-        Plots the lifecycle bar for a given node onto the supplied Axes object.
-
-        The plot visualizes the lifecycle state of the node as a bar in the context of
-        ticks. This method utilizes the lifecycle history of the node and maps the
-        states to corresponding colors defined in the color map.
-
-        :param axis: The matplotlib Axes on which to plot the lifecycle bar.
-        :param node: The specific statechart node whose lifecycle is being plotted.
-        :param node_idx: The index of the node being plotted in the node list.
-        """
-        life_cycle_history = self.statechart.history.get_life_cycle_history_of_node(
-            node
-        )
-        tick_indices = [h.tick_count for h in self.statechart.history.history]
-        self._plot_node_bar(
-            axis=axis,
-            node_idx=node_idx,
-            history=life_cycle_history,
-            tick_indices=tick_indices,
-            top=True,
-        )
-
-    def _plot_observation_bar(
-        self,
-        axis: plt.Axes,
-        node: StatechartNode,
-        node_idx: int,
-    ):
-        """
-        Plots the observation state bar for a given statechart node in the specified
-        matplotlib Axes. The visualization represents the changes in observation states
-        over ticks, providing insights into the node's observation behavior over time.
-
-        :param axis: The matplotlib Axes object where the observation bar will be
-            plotted.
-        :param node: The statechart node for which the observation history will be
-            represented.
-        :param node_idx: Index of the node in the statechart used for positioning the
-            bar in the plot.
-        """
-        obs_history = self.statechart.history.get_observation_history_of_node(node)
-        tick_indices = [h.tick_count for h in self.statechart.history.history]
-        self._plot_node_bar(
-            axis=axis,
-            node_idx=node_idx,
-            history=obs_history,
-            tick_indices=tick_indices,
-            top=False,
-        )
-
     def _plot_final_state_column(
         self,
         axis: plt.Axes,
         node: StatechartNode,
         node_idx: int,
         column_padding: float = 0.1,
-    ):
+    ) -> None:
         """
-        Draw the final state for both lifecycle (top half) and observation (bottom half)
-        as a compact column on the right axes.
+        Draw the last recorded life cycle state (upper half) and observation state
+        (lower half) of a node; nothing if no snapshot records it.
 
-        :param axis: The matplotlib axis on which the final state column will be
-            plotted.
-        :param node: The statechart node whose final state is to be plotted.
-        :param node_idx: The index of the node within the statechart.
-        :param column_padding: The padding on each side of the column. Determines how
-            far the edges of the column are from the axis boundaries. Default is 0.1.
+        :param axis: The axis to draw on.
+        :param node: The node whose final state is drawn.
+        :param node_idx: The row of the node.
+        :param column_padding: The space left free on each side of the column, as a
+            fraction of its width.
         """
-        # Determine last lifecycle and observation states
-        life_cycle_history = self.statechart.history.get_life_cycle_history_of_node(
-            node
-        )
-        obs_history = self.statechart.history.get_observation_history_of_node(node)
-        last_lifecycle = life_cycle_history[-1]
-        last_observation = obs_history[-1]
+        snapshots = self.statechart.history.items_recording(node)
+        if not snapshots:
+            return
+        final_states = [
+            snapshots[-1].life_cycle_state[node],
+            snapshots[-1].observation_state[node],
+        ]
+        for state, top in zip(final_states, [True, False]):
+            self._draw_block(
+                axis=axis,
+                node_idx=node_idx,
+                block_start=column_padding,
+                block_width=max(0.0, 1.0 - 2 * column_padding),
+                color=state.color,
+                top=top,
+            )
 
-        # Column spans from padding to 1 - padding
-        width = max(0.0, 1.0 - 2 * column_padding)
-        start = column_padding
-
-        # Draw top (lifecycle) and bottom (observation) halves
-        self._draw_block(
-            axis=axis,
-            node_idx=node_idx,
-            block_start=start,
-            block_width=width,
-            color=last_lifecycle.color,
-            top=True,
-        )
-        self._draw_block(
-            axis=axis,
-            node_idx=node_idx,
-            block_start=start,
-            block_width=width,
-            color=last_observation.color,
-            top=False,
-        )
-
-    def _plot_node_bar(
+    def _plot_spans(
         self,
         axis: plt.Axes,
         node_idx: int,
-        history: List[LifeCycleValues | ObservationStateValues],
-        tick_indices: List[int],
+        spans: list[StateSpan],
         top: bool,
-    ):
+    ) -> None:
         """
-        Plots a bar segment corresponding to the state changes of a node as per the
-        history and its associated tick indices. Each state transition is represented as
-        a block drawn in the color of the state it stands for.
+        Draw one block per span, in the color of its state.
 
-        :param axis: The matplotlib Axes instance where the bar will be plotted.
-        :param node_idx: The index of the node for which the bar is being plotted.
-        :param history: A list of state values indicating the historical lifecycle or
-            observation state of the node.
-        :param tick_indices: A list of indices representing the ticks associated with
-            the state transitions.
-        :param top: Indicates if the bar is to be plotted in the upper or lower part of
-            the chart.
+        :param axis: The axis to draw on.
+        :param node_idx: The row of the node the spans belong to.
+        :param spans: The spans to draw.
+        :param top: Whether to draw in the upper half of the row instead of the lower.
         """
-        current_state = history[0]
-        start_idx = 0
-        for idx, next_state in zip(tick_indices[1:], history[1:]):
-            if current_state != next_state:
-                life_cycle_width = (idx - start_idx) * self.x_width_per_tick
-                self._draw_block(
-                    axis=axis,
-                    node_idx=node_idx,
-                    block_start=start_idx * self.x_width_per_tick,
-                    block_width=life_cycle_width,
-                    color=current_state.color,
-                    top=top,
-                )
-                start_idx = idx
-                current_state = next_state
-        # plot last stretch until final index
-        last_idx = tick_indices[-1]
-        life_cycle_width = (last_idx - start_idx) * self.x_width_per_tick
-        self._draw_block(
-            axis=axis,
-            node_idx=node_idx,
-            block_start=start_idx * self.x_width_per_tick,
-            block_width=life_cycle_width,
-            color=current_state.color,
-            top=top,
-        )
+        for span in spans:
+            self._draw_block(
+                axis=axis,
+                node_idx=node_idx,
+                block_start=span.start_tick * self.x_width_per_tick,
+                block_width=(span.end_tick - span.start_tick) * self.x_width_per_tick,
+                color=span.state.color,
+                top=top,
+            )
 
     def _draw_block(
         self,

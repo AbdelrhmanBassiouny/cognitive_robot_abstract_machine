@@ -442,24 +442,11 @@ class CompiledTick:
     The statechart whose nodes are updated.
     """
 
-    pass_limit: ClassVar[int] = 20
-    """
-    The most passes that may change a statechart without nested nodes within one
-    tick, so that even at the limit a statechart of a few hundred nodes settles
-    within a 50 Hz tick.
-    """
-
-    passes_per_nesting_level: ClassVar[int] = 2
-    """
-    The passes added to :attr:`pass_limit` for every nesting level: one to pass an
-    outcome on to the parent, and one for a sibling of that parent to react to it.
-    """
-
     _pass_budget: int = field(init=False)
     """
     The most passes that may change :attr:`statechart` within one tick,
-    :attr:`pass_limit` extended by :attr:`passes_per_nesting_level` for every nesting
-    level it has.
+    :attr:`Statechart.pass_limit` extended by
+    :attr:`Statechart.passes_per_nesting_level` for every nesting level it has.
     """
 
     _nodes: List[StatechartNode] = field(init=False)
@@ -523,7 +510,8 @@ class CompiledTick:
         self._nodes = self.statechart.nodes
         deepest_nesting = max(node.depth for node in self._nodes)
         self._pass_budget = (
-            self.pass_limit + self.passes_per_nesting_level * deepest_nesting
+            self.statechart.pass_limit
+            + self.statechart.passes_per_nesting_level * deepest_nesting
         )
         self._life_cycle_at_cycle_start = PassInput.create(
             PassInputKind.LIFE_CYCLE_AT_CYCLE_START, self._nodes
@@ -1293,6 +1281,19 @@ class Statechart(SubclassJSONSerializer):
     context: StatechartContext = field(kw_only=True, repr=False)
     """
     The context the nodes of this statechart are expanded, built and ticked in.
+    """
+
+    pass_limit: int = field(default=20, kw_only=True, repr=False)
+    """
+    The most passes that may change a statechart without nested nodes within one
+    tick, so that even at the limit a statechart of a few hundred nodes settles
+    within a 50 Hz tick.
+    """
+
+    passes_per_nesting_level: int = field(default=2, kw_only=True, repr=False)
+    """
+    The passes added to :attr:`pass_limit` for every nesting level: one to pass an
+    outcome on to the parent, and one for a sibling of that parent to react to it.
     """
 
     rx_graph: rx.PyDiGraph[StatechartNode] = field(

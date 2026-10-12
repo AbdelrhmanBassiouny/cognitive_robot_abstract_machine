@@ -21,6 +21,7 @@ from typing_extensions import Any, Dict, List, Optional, Self, Set, Tuple
 
 from cramph.composites import ChildChooser, CompositeNodeChoosingItsChild
 from cramph.context import StatechartContext
+from cramph.data_types import LifeCycleValues
 from cramph.node import StatechartNode
 from cramph.statechart import Statechart
 from giskardpy.middleware.ros2.action_server import ActionServerHandler
@@ -33,10 +34,18 @@ from semantic_digital_twin.adapters.world_entity_kwargs_tracker import (
     WorldEntityWithIDKwargsTracker,
 )
 
-CHILD_CHOICES_TOPIC_SUFFIX = "child_choices"
-"""
-The topic below Giskard's node name a client sends its child choices to.
-"""
+# %% where the client sends it
+
+
+class GiskardTopicSuffix(StrEnum):
+    """
+    The names of the topics below Giskard's node name.
+    """
+
+    CHILD_CHOICES = "child_choices"
+    """
+    The topic a client sends its child choices to.
+    """
 
 
 def child_choices_topic(giskard_node_name: str) -> str:
@@ -44,7 +53,7 @@ def child_choices_topic(giskard_node_name: str) -> str:
     :param giskard_node_name: The name of Giskard's node.
     :return: The topic a client sends its child choices to.
     """
-    return f"{giskard_node_name}/{CHILD_CHOICES_TOPIC_SUFFIX}"
+    return f"{giskard_node_name}/{GiskardTopicSuffix.CHILD_CHOICES}"
 
 
 # %% what the client sends
@@ -171,6 +180,10 @@ class ChildSentByClient(ChildChooser):
     """
     Lets every node of a running goal run the child the client sent for it, and wait
     until one arrived.
+
+    The choices are taken in the order the client made them, whatever order the nodes
+    ask in, so the running statechart gains its nodes in the order the client's copy
+    did.
     """
 
     world_updates: IncomingWorldUpdates
@@ -206,8 +219,9 @@ class ChildSentByClient(ChildChooser):
         """
         A choice for another goal is dropped.
 
-        :return: Whether a choice for `node` in the running goal was received, and the
-            world contains what it was made on.
+        :return: Whether a choice for `node` in the running goal was received, every
+            choice made before it was taken, and the world contains what it was made
+            on.
         """
         with self._lock:
             message = self._received.get(node.index)
@@ -216,9 +230,30 @@ class ChildSentByClient(ChildChooser):
             if message.goal_id != self.action_server.goal_id:
                 del self._received[node.index]
                 return False
+            if self._is_made_after_a_choice_still_to_take(message, node.statechart):
+                return False
             return message.required_position is None or (
                 self.world_updates.has_applied(message.required_position)
             )
+
+    def _is_made_after_a_choice_still_to_take(
+        self, message: ChildChoiceMessage, statechart: Statechart
+    ) -> bool:
+        """
+        A choice whose node ended can no longer be taken, so nothing waits for it.
+
+        :param message: A received choice.
+        :param statechart: The running statechart.
+        :return: Whether the client made another received choice of the same goal
+            before `message`, and the node of that choice can still take it.
+        """
+        return any(
+            earlier.goal_id == message.goal_id
+            and earlier.first_node_index < message.first_node_index
+            and statechart.get_node_by_index(earlier.node_index).life_cycle_state
+            in (LifeCycleValues.RUNNING, LifeCycleValues.PAUSED)
+            for earlier in self._received.values()
+        )
 
     def choose_child(
         self, node: CompositeNodeChoosingItsChild, context: StatechartContext

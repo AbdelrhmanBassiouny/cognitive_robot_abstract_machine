@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from abc import ABC
+from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 
-from typing_extensions import Optional, Any, Dict
+from typing_extensions import Any, Callable, Dict, Optional
 
 from coraplex.plans.context_extensions import ExecutionMode, RobotAccess
 from krrood.ormatic.utils import classproperty
@@ -13,6 +13,7 @@ from cramph.node import StatechartNode
 from cramph.world_modification_nodes import MoveBranch
 from coraplex.robot_plans.actions.base import Action
 from cramph.composites import Parallel, PausedUntilTrue, Sequence
+from giskardpy.motion_statechart.goals.cartesian_goals import DifferentialDriveBaseGoal
 from giskardpy.motion_statechart.graph_node import MotionStatechartNode
 from giskardpy.motion_statechart.monitors.joint_monitors import (
     JointPositionReached,
@@ -51,9 +52,34 @@ class DrivesBase(Action, ABC):
     Base class for the actions that move the robot's base to a pose.
     """
 
+    base_pose_threshold: float = field(
+        default=DifferentialDriveBaseGoal.threshold, kw_only=True
+    )
+    """
+    How far the base may be from a pose it drives to, in meters and in radians, to count
+    as arrived.
+
+    .. note:: Only a
+        :class:`~giskardpy.motion_statechart.goals.cartesian_goals.DifferentialDriveBaseGoal`
+        driving the base reads it.
+    """
+
     @classproperty
     def required_context_extensions(cls) -> tuple[type[ContextExtension], ...]:
         return super().required_context_extensions + (ExecutionMode,)
+
+    def create_action_body(self) -> StatechartNode:
+        return self.create_body_driving_with(self._drive_to)
+
+    @abstractmethod
+    def create_body_driving_with(
+        self, drive_to: Callable[[Pose], StatechartNode]
+    ) -> StatechartNode:
+        """
+        :param drive_to: Creates the node that puts the base at the pose it is given.
+        :return: A new node running what this action does, moving the base with the
+            nodes `drive_to` creates.
+        """
 
     def _drive_to(self, target: Pose) -> MotionStatechartNode:
         """
@@ -86,8 +112,10 @@ class NavigateAction(DrivesBase):
     x-axis.
     """
 
-    def create_action_body(self) -> StatechartNode:
-        return self._drive_to(self.robot.mobile_base.pose_facing(self.target_location))
+    def create_body_driving_with(
+        self, drive_to: Callable[[Pose], StatechartNode]
+    ) -> StatechartNode:
+        return drive_to(self.robot.mobile_base.pose_facing(self.target_location))
 
     @staticmethod
     def pre_condition(
@@ -217,8 +245,10 @@ class PathPlanningNavigateAction(DrivesBase):
     Where the robot should stand at the end of the path, with its base.
     """
 
-    def create_action_body(self) -> StatechartNode:
-        return Sequence([self._drive_to(waypoint) for waypoint in self._path()])
+    def create_body_driving_with(
+        self, drive_to: Callable[[Pose], StatechartNode]
+    ) -> StatechartNode:
+        return Sequence([drive_to(waypoint) for waypoint in self._path()])
 
     @property
     def _floor(self) -> Floor:

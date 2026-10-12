@@ -191,18 +191,32 @@ def test_a_plan_that_stops_approaching_its_goal_is_given_up_on(
 
 
 def test_a_plan_that_outlasts_the_simulation_time_limit_is_given_up_on(
-    pr2_apartment_context, monkeypatch
+    pr2_apartment_context,
 ):
     """
     A simulated plan is given up on once it exceeds the simulation time limit.
     """
     world, robot_view, extensions = pr2_apartment_context
-    monkeypatch.setattr(SimulatedPlanExecutor, "simulation_time_limit", timedelta(0))
-    executor = simulated_executor(extensions)
+    executor = simulated_executor(extensions, simulation_time_limit=timedelta(0))
 
     with pytest.raises(MotionExceededSimulationTimeLimit):
         executor.compile(statechart_of(executor, MoveTorsoAction(TorsoState.HIGH)))
         executor.execute()
+
+
+def test_a_plan_is_given_up_on_at_the_simulation_time_limit_of_its_own_executor(
+    pr2_apartment_context,
+):
+    world, robot_view, extensions = pr2_apartment_context
+    executor = simulated_executor(
+        extensions, simulation_time_limit=timedelta(milliseconds=100)
+    )
+
+    with pytest.raises(MotionExceededSimulationTimeLimit) as error:
+        executor.compile(statechart_of(executor, MoveTorsoAction(TorsoState.HIGH)))
+        executor.execute()
+
+    assert error.value.time_limit == executor.simulation_time_limit
 
 
 def test_a_plan_that_violates_collision_avoidance_fails_as_a_plan_failure(

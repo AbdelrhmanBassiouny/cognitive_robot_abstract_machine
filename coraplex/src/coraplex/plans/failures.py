@@ -84,7 +84,7 @@ class MotionExceededSimulationTimeLimit(PlanFailure):
     def suggest_correction(self) -> str:
         return (
             "Check that every goal of the motion can be reached and that nothing holds "
-            "the chart, or raise GiskardExecutable.simulation_time_limit for a motion "
+            "the chart, or raise SimulatedPlanExecutor.simulation_time_limit for a motion "
             "that is meant to take this long."
         )
 

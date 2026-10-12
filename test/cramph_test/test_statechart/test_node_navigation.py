@@ -1,12 +1,29 @@
 from __future__ import annotations
 
-import pytest
-from typing_extensions import List
+from dataclasses import dataclass, field
 
-from cramph.composites import Parallel, Sequence
+import pytest
+from typing_extensions import Callable, List, Optional, Type
+
+from cramph.composites import (
+    CramLanguageNode,
+    Parallel,
+    PausedUntilTrue,
+    RepeatUntil,
+    Sequence,
+    TryAll,
+    TryInOrder,
+)
+from cramph.context import StatechartContext
+from cramph.data_types import ObservationStateValues
 from cramph.executor import StatechartExecutor
-from cramph.node import StatechartNode
-from cramph.nodes_for_testing import ConstTrueNode
+from cramph.node import CompositeNode, EndedByOwner, StatechartNode
+from cramph.nodes_for_testing import (
+    ConstFalseNode,
+    ConstTrueNode,
+    NodeObservingAFixedValue,
+    NodeSucceedingOnObservingTrue,
+)
 from cramph.statechart import Statechart
 
 # %% the tree the navigation is read from
@@ -276,3 +293,153 @@ def test_a_sequence_answers_the_children_it_wrapped_its_steps_in(
 
     assert sequence.children == sequence.nodes
     assert sequence.children[0].descendants == [node_named(statechart, "step")]
+
+
+# %% navigating while the tree is still expanding
+
+
+@dataclass(eq=False, repr=False)
+class CompositeNodeNavigatingWhileItExpands(EndedByOwner, CompositeNode):
+    """
+    A node that reads the tree around it while it expands, which is the moment the plan
+    language node above it is still adopting its children.
+    """
+
+    preceding_fixed_value_node: Optional[NodeObservingAFixedValue] = field(
+        default=None, init=False
+    )
+    """
+    The closest :class:`NodeObservingAFixedValue` before this node, as found while
+    expanding.
+    """
+
+    children_of_language_node: List[StatechartNode] = field(
+        default_factory=list, init=False
+    )
+    """
+    The children of the closest plan language node above this node, as read while
+    expanding.
+    """
+
+    def expand(self, context: StatechartContext) -> None:
+        self.preceding_fixed_value_node = self.statechart.get_preceding_node_by_type(
+            self, NodeObservingAFixedValue
+        )
+        self.children_of_language_node = CramLanguageNode.running(self).children
+
+
+def _self_deciding_step() -> NodeObservingAFixedValue:
+    """
+    :return: A node a plan language node runs as it is.
+    """
+    return NodeSucceedingOnObservingTrue(observation=ObservationStateValues.TRUE)
+
+
+def _step_decided_by_its_owner() -> NodeObservingAFixedValue:
+    """
+    :return: A node a plan language node only runs wrapped in an
+        :class:`~cramph.composites.Attempt`.
+    """
+    return NodeObservingAFixedValue(observation=ObservationStateValues.TRUE)
+
+
+def _paused_until_true(monitored_node: StatechartNode) -> PausedUntilTrue:
+    """
+    :return: A composite running `monitored_node` one layer below itself.
+    """
+    return PausedUntilTrue(monitor=ConstFalseNode(), monitored_node=monitored_node)
+
+
+@pytest.mark.parametrize(
+    "preceding_step_factory", [_self_deciding_step, _step_decided_by_its_owner]
+)
+@pytest.mark.parametrize("language_node_type", [Sequence, TryInOrder, TryAll, Parallel])
+def test_a_step_finds_the_step_before_it_while_it_expands(
+    statechart_executor: StatechartExecutor,
+    language_node_type: Type[CramLanguageNode],
+    preceding_step_factory: Callable[[], NodeObservingAFixedValue],
+):
+    statechart = Statechart(context=statechart_executor.context)
+    preceding_step = preceding_step_factory()
+    navigating = CompositeNodeNavigatingWhileItExpands()
+
+    statechart.add_node(language_node_type(nodes=[preceding_step, navigating]))
+
+    assert navigating.preceding_fixed_value_node is preceding_step
+
+
+@pytest.mark.parametrize(
+    "preceding_step_factory", [_self_deciding_step, _step_decided_by_its_owner]
+)
+@pytest.mark.parametrize("language_node_type", [Sequence, TryInOrder, TryAll, Parallel])
+def test_a_node_below_a_step_finds_the_step_before_that_while_it_expands(
+    statechart_executor: StatechartExecutor,
+    language_node_type: Type[CramLanguageNode],
+    preceding_step_factory: Callable[[], NodeObservingAFixedValue],
+):
+    statechart = Statechart(context=statechart_executor.context)
+    preceding_step = preceding_step_factory()
+    navigating = CompositeNodeNavigatingWhileItExpands()
+
+    statechart.add_node(
+        language_node_type(nodes=[preceding_step, _paused_until_true(navigating)])
+    )
+
+    assert navigating.preceding_fixed_value_node is preceding_step
+
+
+def test_an_expanding_step_sees_the_children_before_it_and_the_nodes_still_to_join(
+    statechart_executor: StatechartExecutor,
+):
+    statechart = Statechart(context=statechart_executor.context)
+    navigating = CompositeNodeNavigatingWhileItExpands()
+    following_step = _step_decided_by_its_owner()
+    sequence = Sequence(
+        nodes=[_step_decided_by_its_owner(), navigating, following_step]
+    )
+
+    statechart.add_node(sequence)
+
+    assert navigating.children_of_language_node == [
+        *sequence.children[:2],
+        following_step,
+    ]
+
+
+def test_an_inserted_step_finds_the_step_before_it_while_it_expands(
+    statechart_executor: StatechartExecutor,
+):
+    statechart = Statechart(context=statechart_executor.context)
+    preceding_step = _step_decided_by_its_owner()
+    statechart.add_node(sequence := Sequence(nodes=[preceding_step]))
+    navigating = CompositeNodeNavigatingWhileItExpands()
+
+    sequence.insert_after(preceding_step, navigating)
+
+    assert navigating.preceding_fixed_value_node is preceding_step
+
+
+def test_a_replacing_step_finds_the_step_before_it_while_it_expands(
+    statechart_executor: StatechartExecutor,
+):
+    statechart = Statechart(context=statechart_executor.context)
+    preceding_step, replaced = _step_decided_by_its_owner(), ConstTrueNode()
+    statechart.add_node(sequence := Sequence(nodes=[preceding_step, replaced]))
+    navigating = CompositeNodeNavigatingWhileItExpands()
+
+    sequence.replace(replaced, navigating)
+
+    assert navigating.preceding_fixed_value_node is preceding_step
+
+
+def test_a_repeated_task_finds_the_step_before_its_repetition_while_it_expands(
+    statechart_executor: StatechartExecutor,
+):
+    statechart = Statechart(context=statechart_executor.context)
+    preceding_step = _step_decided_by_its_owner()
+    navigating = CompositeNodeNavigatingWhileItExpands()
+    repetition = RepeatUntil(task=navigating, stop_retry_monitor=ConstFalseNode())
+
+    statechart.add_node(Sequence(nodes=[preceding_step, repetition]))
+
+    assert navigating.preceding_fixed_value_node is preceding_step

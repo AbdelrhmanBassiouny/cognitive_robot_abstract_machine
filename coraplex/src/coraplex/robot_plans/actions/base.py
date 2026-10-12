@@ -10,6 +10,7 @@ from typing_extensions import (
     Optional,
 )
 
+from coraplex.exceptions import ActionNotExpanded
 from coraplex.plans.context_extensions import RobotAccess, StatementGrounding
 from coraplex.plans.designator import DesignatorParameters
 from krrood.ormatic.utils import classproperty
@@ -104,6 +105,22 @@ class Action(
         Puts the node this action creates below it.
         """
         self._add_child_to_statechart(Attempt.deciding(self.create_action_body()))
+
+    def replace_action_body(self, node: StatechartNode) -> None:
+        """
+        Runs `node` as what this action does, in place of its :attr:`action_body`, which
+        leaves the statechart together with everything below it.
+
+        :param node: The node to run instead, which belongs to no statechart yet.
+        :raises ActionNotExpanded: If this action was not expanded yet.
+        :raises StatechartAlreadyCompiledError: If the statechart of this action is
+            compiled.
+        """
+        replaced = self.action_body
+        if replaced is None:
+            raise ActionNotExpanded(self)
+        self.statechart.remove_node(replaced)
+        self._add_child_to_statechart(Attempt.deciding(node))
 
     def build_artifacts(self, context: StatechartContext) -> NodeArtifacts:
         """

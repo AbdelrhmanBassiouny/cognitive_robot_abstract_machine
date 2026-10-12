@@ -140,3 +140,40 @@ rebuild and before a node chooses its child (`Statechart._when_held_still`), not
 with nodes it has not compiled yet, but the state arrays grow the moment a node joins
 and the compiled tick keeps reading the arrays it was compiled against, so the tick
 would run on stale state until the compile happened.
+
+### Robot-specific motions that were not ported to plan transformations
+
+The motion designators that `coraplex/alternative_motion_mappings` replaced per robot are
+gone, and so is that package. The drive goals of the Stretch and the Tiago and the
+Stretch's way of closing a container are plan transformations now
+(`coraplex/robot_plans/plan_transformations.py`). Three mappings were left out:
+
+- **HSRB, real robot: driving through Navigation 2.** The mapping replaced the drive goal
+  with a `NavigateActionServerTask` on the action topic `/hsrb/move_base`, sending a
+  `nav2_msgs` `NavigateToPose`. It does not fit yet, because `nav2_msgs` is an optional
+  dependency that the old module, like `giskardpy/motion_statechart/ros2_nodes/ros_tasks.py`,
+  imported inside a try-except, and the topic was a literal in the code. Options: a
+  transformation over `DrivesBase` like the differential drive ones, with `nav2_msgs`
+  imported unguarded and the topic as a field of the transformation; or the HSRB's robot
+  view naming its navigation action server.
+- **Stretch, simulated and real: moving the tool center point.** The mapping held the
+  base's orientation (`CartesianOrientation`, bound on start) while a
+  `CartesianPoseStraight` moved the tool frame relative to the world root, and counted
+  the motion as done once the joints stood still (`LocalMinimumReached`, threshold
+  0.025). It does not fit yet, because the tool center point goal is no node of a type
+  of its own: `MovesToolCenterPoint.tool_center_point_goal` builds a plain
+  `CartesianPose` or `CartesianPosition` inside many actions, so a transformation would
+  have to recognise it among every Cartesian goal by its tip, and the reachability checks
+  of the pose validator would not see the replacement. Options: a goal type of its own
+  for moving a tool center point, which a transformation can match; a context extension
+  that `MovesToolCenterPoint` asks for the goal; or dropping the mapping as tuning of one
+  demonstration.
+- **Stretch, simulated and real: gripper thresholds.** The mapping moved the gripper with a
+  `JointPositionList` of threshold 0 beside a `LocalMinimumReached` with a joint
+  convergence threshold of 0.1 and a minimum threshold of 0, either of which ended the
+  motion. It does not fit yet, because `MoveGripper` builds its children when it is
+  created, so its fields cannot be changed afterwards and the whole goal has to be
+  replaced, and it may be the body of an action or a step of a plan language node.
+  Options: check whether `MoveGripper(tolerate_stall=True, stall_minimum_time=...)`
+  already covers what the Stretch needs; otherwise a transformation over `MoveGripper`
+  that replaces it wherever it runs.

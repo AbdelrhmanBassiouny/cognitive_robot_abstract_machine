@@ -325,8 +325,8 @@ A few rules keep a tick predictable:
   brings the statechart back to a state it already had in this tick, and the tick
   raises `TickDoesNotSettleError` naming the nodes still changing.
 - A tick may take a bounded number of passes, so it always fits into the control
-  loop: `CompiledTick.pass_limit`, plus
-  `CompiledTick.passes_per_nesting_level` for every nesting level of the
+  loop: `Statechart.pass_limit`, plus
+  `Statechart.passes_per_nesting_level` for every nesting level of the
   statechart, because an outcome moves up one level per pass. A tick that needs more passes
   raises `TickDoesNotSettleError` as well.
 

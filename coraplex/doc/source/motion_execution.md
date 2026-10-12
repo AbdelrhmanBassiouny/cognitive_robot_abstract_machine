@@ -87,13 +87,33 @@ executor = SimulatedPlanExecutor(
 
 ## Robot-Specific Motions
 
-Some robots need a different implementation of a motion.
+Some robots need a different implementation of a motion. Such a robot gets a
+{class}`~coraplex.plans.plan_transformation.PlanTransformation` that replaces the goal an action builds once the
+action is expanded, and that applies only to its robot type, and where needed only to simulated or only to real
+execution:
 
-```{warning}
-The motion designators that robot-specific motions used to replace are gone, so the mappings kept in
-`coraplex/alternative_motion_mappings` no longer import. They stay as a reference while robot-specific overrides
-are rebuilt on top of the giskard goals.
+- {class}`~coraplex.robot_plans.plan_transformations.DriveStretchWithItsDifferentialDrive` and
+  {class}`~coraplex.robot_plans.plan_transformations.DriveSimulatedTiagoWithItsDifferentialDrive` drive the base with a
+  {class}`~giskardpy.motion_statechart.goals.cartesian_goals.DifferentialDriveBaseGoal`, which arrives within the
+  {attr}`~coraplex.robot_plans.actions.core.navigation.DrivesBase.base_pose_threshold` of the action.
+- {class}`~coraplex.robot_plans.plan_transformations.KeepStretchInFrontOfTheContainerItCloses` keeps a simulated
+  Stretch in front of the container it closes.
+
+A transformation takes effect only for a plan whose executor was given it:
+
+```python
+executor = RobotPlanExecutor(
+    world,
+    context_extensions=[
+        RobotAccess(robot),
+        PlanRewriting(transformations=[DriveStretchWithItsDifferentialDrive()]),
+    ],
+)
 ```
+
+A transformation replaces the goal an action runs with
+{meth}`~coraplex.robot_plans.actions.base.Action.replace_action_body`, or with
+{meth}`~cramph.composites.CramLanguageNode.replace` for a step of a plan language node.
 
 ## Key takeaways
 
