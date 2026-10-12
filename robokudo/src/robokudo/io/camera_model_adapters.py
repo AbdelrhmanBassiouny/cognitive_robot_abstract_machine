@@ -2,12 +2,18 @@
 Conversions between semantic camera models and library boundary types.
 """
 
+from __future__ import annotations
+
+# %% Imports
 from dataclasses import dataclass
 
 import open3d as o3d
 from sensor_msgs.msg import CameraInfo
 
-from robokudo.exceptions import InvalidCameraObservation
+from robokudo.io.exceptions import (
+    CameraDistortionModelMissing,
+    UnsupportedCameraDistortionModel,
+)
 from semantic_digital_twin.datastructures.camera_model import (
     CameraDistortion,
     CameraDistortionModel,
@@ -32,7 +38,8 @@ class RosCameraModelAdapter:
 
         :param camera_info: Calibration supplied by a ROS image stream.
         :return: Semantic pinhole calibration.
-        :raises InvalidCameraObservation: If the distortion model is unsupported.
+        :raises CameraDistortionModelMissing: If nonzero coefficients have no model.
+        :raises UnsupportedCameraDistortionModel: If the model is unsupported.
         """
         distortion_models = {
             model.value: model
@@ -41,12 +48,7 @@ class RosCameraModelAdapter:
         }
         if camera_info.distortion_model == "":
             if any(coefficient != 0.0 for coefficient in camera_info.d):
-                raise InvalidCameraObservation(
-                    reason=(
-                        "a ROS camera-info message without a distortion model "
-                        "contains nonzero distortion coefficients"
-                    )
-                )
+                raise CameraDistortionModelMissing(coefficients=tuple(camera_info.d))
             distortion = NoCameraDistortion()
         elif camera_info.distortion_model in distortion_models:
             distortion_model = distortion_models[camera_info.distortion_model]
@@ -55,11 +57,8 @@ class RosCameraModelAdapter:
                 coefficients=camera_info.d,
             )
         else:
-            raise InvalidCameraObservation(
-                reason=(
-                    "the ROS distortion model "
-                    f"'{camera_info.distortion_model}' is unsupported"
-                )
+            raise UnsupportedCameraDistortionModel(
+                distortion_model=camera_info.distortion_model
             )
 
         return PinholeCameraModel(
