@@ -11,27 +11,9 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 import cv2
-import numpy as np
-from typing_extensions import Any, Dict, Optional
+from typing_extensions import Any, ClassVar, Dict, Optional
 
-from experiments.video.timeline import Frame
-
-CACHE_DIRECTORY_VARIABLE = "EXPERIMENTS_VIDEO_CACHE"
-"""
-Environment variable naming where the video keeps what it computed.
-"""
-
-DEFAULT_CACHE_DIRECTORY = Path.home() / ".cache" / "experiments" / "video"
-"""
-Where the video keeps what it computed unless told otherwise.
-"""
-
-
-def configured_cache_directory() -> Path:
-    """
-    Where the video keeps what it computed, as the environment says or by default.
-    """
-    return Path(os.getenv(CACHE_DIRECTORY_VARIABLE, DEFAULT_CACHE_DIRECTORY))
+from experiments.video.frame import Frame
 
 
 @dataclass
@@ -40,15 +22,33 @@ class SceneCache:
     One scene's kept pictures and readings, under a name of its own.
     """
 
+    DIRECTORY_VARIABLE: ClassVar[str] = "EXPERIMENTS_VIDEO_CACHE"
+    """
+    Environment variable naming where the video keeps what it computed.
+    """
+
+    DEFAULT_ROOT: ClassVar[Path] = Path.home() / ".cache" / "experiments" / "video"
+    """
+    Where the video keeps what it computed unless told otherwise.
+    """
+
     name: str
     """
     What the scene's corner of the cache is called.
     """
 
-    root: Path = field(default_factory=configured_cache_directory)
+    root: Path = field(default_factory=lambda: SceneCache.configured_root())
     """
     Where every scene's corner lies.
     """
+
+    @classmethod
+    def configured_root(cls) -> Path:
+        """
+        :return: Where the video keeps what it computed, as the environment says or by
+            default.
+        """
+        return Path(os.getenv(cls.DIRECTORY_VARIABLE, cls.DEFAULT_ROOT))
 
     @property
     def directory(self) -> Path:
@@ -67,7 +67,7 @@ class SceneCache:
         path = self.directory / f"{key}.png"
         if not path.is_file():
             return None
-        return cv2.cvtColor(cv2.imread(str(path)), cv2.COLOR_BGR2RGB)
+        return Frame(cv2.cvtColor(cv2.imread(str(path)), cv2.COLOR_BGR2RGB))
 
     def keep_picture(self, key: str, picture: Frame) -> None:
         """
@@ -75,7 +75,8 @@ class SceneCache:
         :param picture: The picture, as red, green and blue.
         """
         cv2.imwrite(
-            str(self.directory / f"{key}.png"), cv2.cvtColor(picture, cv2.COLOR_RGB2BGR)
+            str(self.directory / f"{key}.png"),
+            cv2.cvtColor(picture.pixels, cv2.COLOR_RGB2BGR),
         )
 
     def record(self, key: str) -> Optional[Dict[str, Any]]:

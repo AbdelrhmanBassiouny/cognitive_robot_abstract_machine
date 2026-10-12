@@ -5,111 +5,132 @@ another, and read out as a stream of frames at a fixed rate.
 
 from __future__ import annotations
 
-import numpy as np
+from datetime import timedelta
+
 import pytest
 
-from experiments.video.timeline import (
-    Frame,
-    Resolution,
-    Scene,
-    SUBTITLE_BAND_SHARE,
-    Still,
-    Timeline,
-    eased,
-)
+from experiments.video.exceptions import FramesOfDifferentSizes, MomentOutsideScene
+from experiments.video.frame import Frame, Resolution
+from experiments.video.timeline import Fade, Still, Timeline
 
 from .marks import ProgressStamp, stamped_value
 
-RESOLUTION = Resolution(width=64, height=32)
+FRAME_SIZE = Resolution(width=64, height=32)
+NO_TIME = timedelta(0)
 
 
-def flat(value: int) -> Frame:
+def seconds(amount: float) -> timedelta:
     """
-    A frame of one grey value.
+    :return: That many seconds.
     """
-    return np.full((RESOLUTION.height, RESOLUTION.width, 3), value, dtype=np.uint8)
+    return timedelta(seconds=amount)
+
+
+def flat(grey: int) -> Frame:
+    """
+    :return: A frame of one grey value.
+    """
+    return FRAME_SIZE.blank(grey)
+
+
+def first_grey(frame: Frame) -> int:
+    """
+    :return: The grey of a frame's first pixel.
+    """
+    return int(frame.pixels[0, 0, 0])
 
 
 # %% one scene
 
 
 def test_a_still_shows_the_same_frame_for_its_whole_duration() -> None:
-    still = Still(picture=flat(200), held_for=1.5)
-    assert still.duration == 1.5
-    assert np.array_equal(still.frame_at(0.0), flat(200))
-    assert np.array_equal(still.frame_at(1.4), flat(200))
+    held = seconds(1.5)
+    still = Still(picture=flat(200), held_for=held)
+    assert still.duration == held
+    assert first_grey(still.frame_at(NO_TIME)) == 200
+    assert first_grey(still.frame_at(held - seconds(0.1))) == 200
 
 
 def test_a_scene_refuses_a_moment_outside_its_duration() -> None:
-    still = Still(picture=flat(0), held_for=1.0)
-    with pytest.raises(ValueError):
-        still.frame_at(1.0)
+    held = seconds(1)
+    still = Still(picture=flat(0), held_for=held)
+    with pytest.raises(MomentOutsideScene):
+        still.frame_at(held)
+
+
+def test_progress_through_a_scene_is_the_moment_over_the_duration() -> None:
+    still = Still(picture=flat(0), held_for=seconds(4))
+    assert still.progress_at(seconds(1)) == 0.25
 
 
 # %% the timeline
 
 
 def test_the_timeline_lays_scenes_end_to_end_without_a_dissolve() -> None:
+    first_hold, second_hold = seconds(0.5), seconds(0.25)
     timeline = Timeline(
-        scenes=[Still(flat(10), held_for=0.5), Still(flat(20), held_for=0.25)],
+        scenes=[
+            Still(flat(10), held_for=first_hold),
+            Still(flat(20), held_for=second_hold),
+        ],
         frames_per_second=4,
-        dissolve=0.0,
+        dissolve=NO_TIME,
     )
     frames = list(timeline.frames())
-    assert timeline.duration == 0.75
-    assert len(frames) == 3
-    assert [int(frame[0, 0, 0]) for frame in frames] == [10, 10, 20]
+    assert timeline.duration == first_hold + second_hold
+    assert [first_grey(frame) for frame in frames] == [10, 10, 20]
 
 
 def test_a_dissolve_blends_the_end_of_one_scene_into_the_start_of_the_next() -> None:
+    hold, dissolve = seconds(1), seconds(0.5)
+    first_grey_level, second_grey_level = 0, 100
     timeline = Timeline(
-        scenes=[Still(flat(0), held_for=1.0), Still(flat(100), held_for=1.0)],
+        scenes=[
+            Still(flat(first_grey_level), held_for=hold),
+            Still(flat(second_grey_level), held_for=hold),
+        ],
         frames_per_second=4,
-        dissolve=0.5,
+        dissolve=dissolve,
     )
-    assert timeline.duration == 1.5
-    values = [int(frame[0, 0, 0]) for frame in timeline.frames()]
-    assert len(values) == 6
-    assert values[:2] == [0, 0]
-    assert values[-2:] == [100, 100]
+    assert timeline.duration == 2 * hold - dissolve
+    values = [first_grey(frame) for frame in timeline.frames()]
+    assert len(values) == timeline.frame_count
+    assert values[:2] == [first_grey_level] * 2
+    assert values[-2:] == [second_grey_level] * 2
     # the two frames in the dissolve climb from the first scene towards the second
-    assert 0 <= values[2] < values[3] < 100
+    assert first_grey_level <= values[2] < values[3] < second_grey_level
 
 
 def test_the_timeline_rejects_scenes_of_different_sizes() -> None:
-    other = np.zeros((RESOLUTION.height, RESOLUTION.width + 1, 3), dtype=np.uint8)
-    with pytest.raises(ValueError):
-        list(
-            Timeline(
-                scenes=[Still(flat(0), held_for=0.25), Still(other, held_for=0.25)],
-                frames_per_second=4,
-                dissolve=0.0,
-            ).frames()
-        )
+    wider = Resolution(FRAME_SIZE.width + 1, FRAME_SIZE.height)
+    hold = seconds(0.25)
+    timeline = Timeline(
+        scenes=[Still(flat(0), held_for=hold), Still(wider.blank(0), held_for=hold)],
+        frames_per_second=4,
+        dissolve=NO_TIME,
+    )
+    with pytest.raises(FramesOfDifferentSizes):
+        list(timeline.frames())
 
 
-# %% easing
+# %% fading
 
 
-@pytest.mark.parametrize("progress, expected", [(0.0, 0.0), (0.5, 0.5), (1.0, 1.0)])
-def test_easing_keeps_the_ends_and_the_middle(progress: float, expected: float) -> None:
-    assert eased(progress) == pytest.approx(expected)
+@pytest.mark.parametrize("elapsed, expected", [(0.0, 0.0), (0.5, 0.5), (1.0, 1.0)])
+def test_a_fade_keeps_its_ends_and_its_middle(elapsed: float, expected: float) -> None:
+    assert Fade(seconds(1)).weight_at(seconds(elapsed)) == pytest.approx(expected)
 
 
-def test_easing_starts_and_ends_slowly() -> None:
-    assert eased(0.1) < 0.1
-    assert eased(0.9) > 0.9
+def test_a_fade_starts_and_ends_slowly() -> None:
+    fade = Fade(seconds(1))
+    assert fade.weight_at(seconds(0.1)) < 0.1
+    assert fade.weight_at(seconds(0.9)) > 0.9
 
 
-def test_easing_clamps_beyond_its_range() -> None:
-    assert eased(-1.0) == 0.0
-    assert eased(2.0) == 1.0
-
-
-def test_a_scene_may_draw_down_to_the_band_left_for_subtitles() -> None:
-    resolution = Resolution(width=1600, height=900)
-    assert resolution.stage_height == pytest.approx(900 * (1 - SUBTITLE_BAND_SHARE))
-    assert 0.10 <= SUBTITLE_BAND_SHARE <= 0.15
+def test_a_fade_stays_at_its_ends_beyond_its_duration() -> None:
+    fade = Fade(seconds(1))
+    assert fade.weight_at(seconds(-1)) == 0.0
+    assert fade.weight_at(seconds(2)) == 1.0
 
 
 # %% a scene that cuts in
@@ -126,45 +147,46 @@ class Cut(Still):
 
 
 def test_a_scene_that_cuts_in_takes_no_dissolve_from_the_scene_before() -> None:
+    hold, dissolve = seconds(1), seconds(0.5)
+    greys = (10, 20, 30)
     timeline = Timeline(
         scenes=[
-            Still(flat(10), held_for=1.0),
-            Cut(flat(20), held_for=1.0),
-            Still(flat(30), held_for=1.0),
+            Still(flat(greys[0]), held_for=hold),
+            Cut(flat(greys[1]), held_for=hold),
+            Still(flat(greys[2]), held_for=hold),
         ],
         frames_per_second=10,
-        dissolve=0.5,
+        dissolve=dissolve,
     )
-    assert (
-        timeline.dissolve_into(1) == 0.0
-        and timeline.dissolve_into(2) == 0.5
-        and timeline.dissolve_into(0) == 0.0
-    )
-    assert timeline.duration == pytest.approx(2.5)
-    assert timeline.starts() == pytest.approx([0.0, 1.0, 1.5])
-    assert int(timeline.frame_at(1.0)[0, 0, 0]) == 20  # no blend at the cut
-    assert int(timeline.frame_at(0.9)[0, 0, 0]) == 10
-    assert (
-        20 < int(timeline.frame_at(1.75)[0, 0, 0]) < 30
-    )  # the dissolve after it as usual
+    assert timeline.dissolve_into(0) == NO_TIME
+    assert timeline.dissolve_into(1) == NO_TIME
+    assert timeline.dissolve_into(2) == dissolve
+    assert timeline.duration == 3 * hold - dissolve
+    assert timeline.starts() == [NO_TIME, hold, 2 * hold - dissolve]
+    assert first_grey(timeline.frame_at(hold)) == greys[1]  # no blend at the cut
+    assert first_grey(timeline.frame_at(hold - seconds(0.1))) == greys[0]
+    # the dissolve after it as usual
+    assert greys[1] < first_grey(timeline.frame_at(seconds(1.75))) < greys[2]
 
 
 # %% overlays
 
 
 def test_every_overlay_is_drawn_over_each_frame_at_that_moment_of_the_video() -> None:
+    hold, grey = seconds(2), 100
     timeline = Timeline(
-        [Still(flat(100), held_for=2.0), Still(flat(100), held_for=2.0)],
+        [Still(flat(grey), held_for=hold), Still(flat(grey), held_for=hold)],
         frames_per_second=10,
-        dissolve=0.0,
+        dissolve=NO_TIME,
         overlays=[ProgressStamp()],
     )
-    for seconds in (1.0, 3.0):
-        frame = timeline.frame_at(seconds)
-        assert (frame[0, 0] == stamped_value(seconds, timeline.duration)).all()
-        assert (frame[1:] == 100).all()
+    for moment in (seconds(1), seconds(3)):
+        frame = timeline.frame_at(moment)
+        assert (frame.pixels[0, 0] == stamped_value(moment, timeline.duration)).all()
+        assert (frame.pixels[1:] == grey).all()
 
 
 def test_a_timeline_without_overlays_shows_its_scenes_alone() -> None:
-    timeline = Timeline([Still(flat(100), held_for=2.0)], frames_per_second=10)
-    assert np.array_equal(timeline.frame_at(1.0), flat(100))
+    grey = 100
+    timeline = Timeline([Still(flat(grey), held_for=seconds(2))], frames_per_second=10)
+    assert (timeline.frame_at(seconds(1)).pixels == grey).all()

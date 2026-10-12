@@ -5,38 +5,48 @@ video.
 
 from __future__ import annotations
 
+from datetime import timedelta
+
 import numpy as np
 import pytest
 
-from experiments.video.canvas import DARK_THEME
+from experiments.video.frame import Frame, Resolution
 from experiments.video.overlays import ProgressBar
-from experiments.video.timeline import Resolution, Still, Timeline
+from experiments.video.theme import VideoTheme
+from experiments.video.timeline import Still, Timeline
 
-RESOLUTION = Resolution(width=200, height=100)
+FRAME_SIZE = Resolution(width=200, height=100)
+RUNS_FOR = timedelta(seconds=4)
 
 
-@pytest.mark.parametrize("seconds", [0.0, 1.0, 2.0, 4.0])
+@pytest.mark.parametrize("played_seconds", [0.0, 1.0, 2.0, 4.0])
 def test_the_progress_bar_fills_the_top_of_the_frame_as_far_as_the_video_has_played(
-    seconds: float,
+    played_seconds: float,
 ) -> None:
-    bar = ProgressBar(theme=DARK_THEME)
-    drawn = bar.drawn_over(DARK_THEME.page_of(RESOLUTION), seconds, runs_for=4.0)
-    played = round(RESOLUTION.width * seconds / 4.0)
-    assert (drawn[: bar.thickness, :played] == DARK_THEME.accent).all()
-    assert (drawn[: bar.thickness, played:] == DARK_THEME.panel).all()
-    assert (drawn[bar.thickness :] == DARK_THEME.page).all()
+    theme = VideoTheme.dark()
+    bar = ProgressBar(theme=theme)
+    drawn = bar.drawn_over(
+        theme.page_of(FRAME_SIZE), timedelta(seconds=played_seconds), RUNS_FOR
+    ).pixels
+    played = round(FRAME_SIZE.width * played_seconds / RUNS_FOR.total_seconds())
+    assert (drawn[: bar.thickness, :played] == Frame.bytes_of(theme.accent)).all()
+    assert (drawn[: bar.thickness, played:] == Frame.bytes_of(theme.panel)).all()
+    assert (drawn[bar.thickness :] == Frame.bytes_of(theme.page)).all()
 
 
 def test_the_progress_bar_runs_on_across_the_scenes_of_a_timeline() -> None:
-    bar = ProgressBar(theme=DARK_THEME)
-    page = DARK_THEME.page_of(RESOLUTION)
+    theme = VideoTheme.dark()
+    page = theme.page_of(FRAME_SIZE)
+    hold = timedelta(seconds=2)
+    moment = timedelta(seconds=3)
     timeline = Timeline(
-        [Still(page, held_for=2.0), Still(page, held_for=2.0)],
+        [Still(page, held_for=hold), Still(page, held_for=hold)],
         frames_per_second=10,
-        dissolve=0.0,
-        overlays=[bar],
+        dissolve=timedelta(0),
+        overlays=[ProgressBar(theme=theme)],
     )
+    top_row = timeline.frame_at(moment).pixels[0]
     accent_columns = np.flatnonzero(
-        (timeline.frame_at(3.0)[0] == DARK_THEME.accent).all(axis=1)
+        (top_row == Frame.bytes_of(theme.accent)).all(axis=1)
     )
-    assert len(accent_columns) == round(RESOLUTION.width * 3.0 / timeline.duration)
+    assert len(accent_columns) == round(FRAME_SIZE.width * moment / timeline.duration)

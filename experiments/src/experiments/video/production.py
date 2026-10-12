@@ -9,36 +9,20 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
+from datetime import timedelta
 from enum import StrEnum
 from pathlib import Path
 
-from typing_extensions import List, Optional, Tuple
+from typing_extensions import List, Optional
 
-from experiments.video.encoding import (
-    H264Encoder,
-    Muxer,
-    SubmissionLimits,
-    VideoFile,
-    bytes_for_sound,
-)
-from experiments.video.narration import (
-    BandCaption,
-    CaptionStyle,
-    KokoroVoice,
-    Narration,
-    Storyboard,
-    Subtitled,
-    Voice,
-)
+from experiments.video.captions import BandCaption, CaptionStyle, Subtitled
+from experiments.video.encoding import H264Encoder, SubmissionLimits, VideoFile
+from experiments.video.muxer import Muxer
+from experiments.video.narration import NarratedTimeline, Storyboard
+from experiments.video.speech import KokoroVoice, Voice
 from experiments.video.timeline import Overlay, Timeline
 
 logger = logging.getLogger(__name__)
-
-BYTES_PER_SECOND = 250_000
-"""
-The bytes one second of picture may take where no venue limits the file: two megabits a
-second, which keeps slides and footage at 720 rows sharp.
-"""
 
 
 class Subtitling(StrEnum):
@@ -95,9 +79,9 @@ class VideoProduction:
     The rate the video plays at.
     """
 
-    dissolve: float = 0.5
+    dissolve: timedelta = timedelta(seconds=0.5)
     """
-    Seconds each scene takes to dissolve into the next.
+    How long each scene takes to dissolve into the next.
     """
 
     subtitling: Subtitling = Subtitling.BURNED_IN
@@ -127,11 +111,23 @@ class VideoProduction:
     How long the encoder may take to make the file small.
     """
 
-    def narrated_timeline(self) -> Tuple[Timeline, Narration]:
-        """
-        The timeline with its slides grown to hold their lines, and the narration
-        placed on it, checked to run clear of itself and of the video's end.
+    bytes_per_second: int = 250_000
+    """
+    The bytes one second of picture may take where no venue limits the file: two
+    megabits a second, which keeps slides and footage at 720 rows sharp.
+    """
 
+    muxer: Muxer = field(default_factory=Muxer)
+    """
+    What joins the picture, the narration and the subtitles.
+    """
+
+    def narrated_timeline(self) -> NarratedTimeline:
+        """
+        The timeline with its slides grown to hold their lines, and the narration placed
+        on it, checked to run clear of itself and of the video's end.
+
+        :return: The timeline with its narration.
         :raises NarrationOverrun: If a line runs into the next or past the end.
         """
         self.storyboard.fitted_to(self.voice)
@@ -141,32 +137,34 @@ class VideoProduction:
             dissolve=self.dissolve,
             overlays=self.overlays,
         )
-        narration = self.storyboard.narrated_by(self.voice, dissolve=self.dissolve)
-        narration.check(runs_for=timeline.duration)
-        return timeline, narration
+        narrated = NarratedTimeline(
+            role_taker=timeline,
+            narration=self.storyboard.narrated_by(self.voice, dissolve=self.dissolve),
+        )
+        narrated.check()
+        return narrated
 
-    def picture_of(self, timeline: Timeline, narration: Narration) -> Timeline:
+    def picture_of(self, narrated: NarratedTimeline) -> Timeline:
         """
-        :param timeline: The narrated timeline.
-        :param narration: What is said over it.
+        :param narrated: The narrated timeline.
         :return: What is encoded as the picture: the timeline with its subtitles drawn
             in when they are burned in, else the timeline alone.
         """
         if self.subtitling is not Subtitling.BURNED_IN:
-            return timeline
-        return Subtitled.over(timeline, narration, style=self.captions)
+            return narrated.role_taker
+        return Subtitled.over(narrated, style=self.captions)
 
-    def picture_budget_for(self, duration: float) -> int:
+    def picture_budget_for(self, duration: timedelta) -> int:
         """
-        :param duration: How long the video plays, in seconds.
+        :param duration: How long the video plays.
         :return: The bytes the picture may take, leaving room for the sound.
         """
         allowed = (
-            BYTES_PER_SECOND * duration
+            self.bytes_per_second * duration.total_seconds()
             if self.limits is None
             else self.limits.byte_budget_for(duration)
         )
-        return int(allowed) - bytes_for_sound(duration)
+        return int(allowed) - self.muxer.bytes_for_sound(duration)
 
     def written_to(self, path: Path) -> VideoFile:
         """
@@ -177,27 +175,33 @@ class VideoProduction:
         :return: The file written.
         :raises VideoOutsideTheLimits: If the limits are given and the file breaks one.
         """
-        timeline, narration = self.narrated_timeline()
+        narrated = self.narrated_timeline()
+        duration = narrated.duration
         logger.info(
-            "%.1f s of video in %d scenes", timeline.duration, len(timeline.scenes)
+            "%.1f s of video in %d scenes",
+            duration.total_seconds(),
+            len(narrated.scenes),
         )
-        burned_in = self.subtitling is Subtitling.BURNED_IN
-        picture = self.picture_of(timeline, narration)
+        picture = self.picture_of(narrated)
         encoder = H264Encoder(
-            size_budget=self.picture_budget_for(timeline.duration),
-            preset=self.preset.value,
+            size_budget=self.picture_budget_for(duration), preset=self.preset.value
         )
         silent = encoder.encode(picture, path.with_name(path.stem + "_silent.mp4"))
-        soundtrack = narration.soundtrack(runs_for=timeline.duration).written_to(
-            path.with_suffix(".wav")
-        )
+        soundtrack = narrated.soundtrack().written_to(path.with_suffix(".wav"))
         subtitles = (
-            None if burned_in else narration.written_to(path.with_suffix(".srt"))
+            narrated.narration.written_to(path.with_suffix(".srt"))
+            if self.subtitling is Subtitling.SOFT
+            else None
         )
-        video = Muxer().joined(silent, soundtrack, path, subtitles=subtitles)
+        video = self.muxer.joined(silent, soundtrack, path, subtitles=subtitles)
         silent.path.unlink()
         soundtrack.unlink()
         if self.limits is not None:
             self.limits.check(video)
-        logger.info("%s: %.1f s, %d bytes", video.path, video.duration, video.size)
+        logger.info(
+            "%s: %.1f s, %d bytes",
+            video.path,
+            video.duration.total_seconds(),
+            video.size,
+        )
         return video

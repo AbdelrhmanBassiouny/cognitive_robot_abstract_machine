@@ -5,7 +5,7 @@ The faces a video writes in, found the same way on every machine.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from enum import Enum, auto
+from enum import Enum, StrEnum, auto
 
 from matplotlib import font_manager
 from PIL import ImageFont
@@ -32,23 +32,60 @@ class Face(Enum):
     """
 
 
+class FontName(StrEnum):
+    """
+    The fonts that come with matplotlib, named as it finds fonts.
+    """
+
+    SANS = "DejaVu Sans"
+    """
+    The sans-serif font.
+    """
+
+    SANS_BOLD = "DejaVu Sans:bold"
+    """
+    The sans-serif font in bold.
+    """
+
+    SANS_MONO = "DejaVu Sans Mono"
+    """
+    The monospaced font.
+    """
+
+
+class FontStyle(StrEnum):
+    """
+    The style names a font file reports for itself.
+    """
+
+    BOOK = "Book"
+    """
+    The regular weight.
+    """
+
+    BOLD = "Bold"
+    """
+    The bold weight.
+    """
+
+
 @dataclass(frozen=True)
 class Typeface:
     """
     The fonts a video sets each face in, named as matplotlib finds fonts.
     """
 
-    regular: str = "DejaVu Sans"
+    regular: str = FontName.SANS
     """
     The font of running text.
     """
 
-    bold: str = "DejaVu Sans:bold"
+    bold: str = FontName.SANS_BOLD
     """
     The font of headings.
     """
 
-    mono: str = "DejaVu Sans Mono"
+    mono: str = FontName.SANS_MONO
     """
     The font of code.
     """
@@ -70,6 +107,7 @@ class Typeface:
 
         :param face: Which face.
         :param size: The size in pixels.
+        :return: The font.
         :raises ValueError: If no font of the face's name is installed.
         """
         found = font_manager.findfont(

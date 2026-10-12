@@ -16,6 +16,7 @@ with it. `VideoProduction` then:
 ## A minimal video
 
 ```python
+from datetime import timedelta
 from pathlib import Path
 
 from experiments.video.narration import Line, NarratedScene, Storyboard
@@ -25,7 +26,7 @@ from experiments.video.slides import ResultRow, ResultsTable, TextCard
 storyboard = Storyboard(
     [
         NarratedScene(
-            TextCard("Pouring in simulation", "12 runs", held_for=2.0),
+            TextCard("Pouring in simulation", "12 runs", held_for=timedelta(seconds=2)),
             (Line("The robot pours into a cup twelve times."),),
         ),
         NarratedScene(
@@ -43,7 +44,8 @@ a test voice in place of the speech model.
 ## Scenes
 
 A scene is a subclass of `timeline.Scene`: it says how long it lasts (`duration`) and
-what it shows at each moment (`picture_at`, which returns an RGB frame). A slide
+what it shows at each moment (`picture_at`, which takes a `timedelta` and returns a
+`frame.Frame`). A slide
 subclasses `timeline.HeldScene` instead: it lasts as long as it is held
 (`held_for`), and the storyboard holds it longer when its lines need the time. A
 scene whose length comes from what it shows, such as footage, keeps that length, and
@@ -55,34 +57,37 @@ Scenes that come with the package:
 - `timeline.Still`: one picture held.
 - `slides.TextCard`: a heading and a line. Use it as a title card or an end card.
 - `slides.ResultsTable`: rows of what was measured and its value.
-- `footage.FullBleedFootage`: a stretch of film filling the frame, sped up with the
-  speed shown on a badge, and optionally a second view of the same stretch in the
+- `footage_scenes.FullBleedFootage`: a stretch of film filling the frame, sped up with
+  the speed shown on a badge, and optionally a second view of the same stretch in the
   corner.
-- `footage.TitleOverFootage`: a title over a footage scene, fading out.
+- `footage_scenes.TitleOverFootage`: a title over a footage scene, fading out.
 
-A film is anything with a `length` and an `image_at(seconds)`. `footage.VideoFilm`
-reads one from an mp4, for example what
+A film is anything with a `length` and an `image_at(moment)`, both in `timedelta`s.
+`footage.VideoFilm` reads one from an mp4, for example what
 `semantic_digital_twin.adapters.mujoco_video_recording` records of a simulated run.
 `footage.Framing` cuts margins off a film's pictures.
 
-`canvas.py` holds the drawing: `Area` for rectangles, pasting and fitting pictures,
-`Typesetting` for text, `CodeTypesetting` for a line of Python coloured as an editor
-would, and the three letter sizes (`CLAIM_SIZE`, `BODY_SIZE`, `LABEL_SIZE`) sized for
-`VIDEO_RESOLUTION` (1280 × 720). Every scene leaves the bottom band of the frame clear
-for the subtitles (`Resolution.stage_height`).
+Drawing is on `frame.Frame`, the pixels of one picture: pasting and fitting pictures,
+shading, outlines, lines and arrows. Colours are `Color`, positions `Point2` and
+rectangles `PlanarBoundingBox` of `semantic_digital_twin`, in pixels from the top left
+corner (`Frame.box` makes a box from its left, top, width and height).
+`typesetting.Typesetting` writes text, with the three letter sizes in
+`typesetting.TextSize`, and `code.CodeTypesetting` writes a line of Python coloured as
+an editor would. `Resolution.standard()` is 1280 × 720. Every scene leaves the bottom
+band of the frame clear for the subtitles (`Resolution.stage_height`).
 
 ## The look
 
-A `canvas.VideoTheme` holds the colours and fonts the slides and captions are drawn
+A `theme.VideoTheme` holds the colours and fonts the slides and captions are drawn
 in: the page, text, muted, hairline, panel, marker and accent colours, how code is
 coloured, and a `lettering.Typeface` (DejaVu by default, since matplotlib ships it). Slides
-take one as `theme=`. `NEUTRAL_THEME`, dark text on white, is the default;
-`DARK_THEME` is light text on a near-black page. Footage keeps white text and dark
+take one as `theme=`. `VideoTheme.neutral()`, dark text on white, is the default;
+`VideoTheme.dark()` is light text on a near-black page. Footage keeps white text and dark
 badges whatever the theme.
 
 Burned-in subtitles are drawn in the band every scene keeps clear
-(`narration.BandCaption`, given the video's theme), or in white on a shaded box over
-the bottom of the picture (`narration.BoxedCaption`); pass the style to
+(`captions.BandCaption`, given the video's theme), or in white on a shaded box over
+the bottom of the picture (`captions.BoxedCaption`); pass the style to
 `VideoProduction(captions=...)`.
 
 Anything drawn over the whole video rather than one scene is a `timeline.Overlay`,
@@ -93,7 +98,8 @@ scene.
 ## Keeping slow parts
 
 Slow parts of a scene, such as decoded recordings or rendered pictures, can be stored
-with `cache.SceneCache`. It keeps them under `EXPERIMENTS_VIDEO_CACHE`
+with `cache.SceneCache`. It keeps them under `SceneCache.DIRECTORY_VARIABLE`
+(the environment variable `EXPERIMENTS_VIDEO_CACHE`)
 (`~/.cache/experiments/video` by default), so a second render does not recompute them.
 
 ## The narrator
@@ -108,20 +114,20 @@ breath, and levelled to one loudness. Every line it says is kept in the cache, s
 re-rendering a video reuses the same speech.
 
 Any object with a `speaks(text, pace) -> Speech` method can narrate instead; see
-`narration.Voice`. A storyboard with no lines makes a silent video, and then no
+`speech.Voice`. A storyboard with no lines makes a silent video, and then no
 speech model is needed.
 
 `Line(written, spoken=...)` is subtitled as written and said as spoken, for when the
 two differ (for example numbers). `Line(..., pace=0.9)` says a line slower than the
-voice's own speed, for one the viewer needs time to follow. To time steps of a scene to the narration, measure
-the lines with `narration.starts_of`. `Narration.report()` prints when each line
+voice's own speed, for one the viewer needs time to follow. To time steps of a scene
+to the narration, measure the lines with `Line.start_times`. `Narration.report()` prints when each line
 starts and how much silence follows it.
 
 ## Size and limits
 
-With no limits given, the picture is encoded at `production.BYTES_PER_SECOND`. For a
+With no limits given, the picture is encoded at `VideoProduction.bytes_per_second`. For a
 venue with limits, pass
-`SubmissionLimits(longest=..., largest=..., lowest=..., slowest=...)`: the picture is
+`encoding.SubmissionLimits(longest=..., largest=..., lowest=..., slowest=...)`: the picture is
 then encoded to that venue's byte budget, and the finished file is checked against
-every limit (`VideoOutsideTheLimits`). `preset=EncoderPreset.FAST` encodes a quick
+every limit (`exceptions.VideoOutsideTheLimits`). `preset=EncoderPreset.FAST` encodes a quick
 draft.

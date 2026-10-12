@@ -11,27 +11,22 @@ from __future__ import annotations
 
 import subprocess
 from dataclasses import dataclass, field
+from datetime import timedelta
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
 import cv2
 import imageio_ffmpeg
 import numpy as np
-from krrood.exceptions import DataclassException
-from typing_extensions import List, Optional
 
-from experiments.video.timeline import Frame, Resolution, Timeline
 
-PIXEL_FORMAT = "yuv420p"
-"""
-The chroma layout every player decodes, which needs even frame sides.
-"""
-
-BIT_RATE_HEADROOM = 0.90
-"""
-How much of the byte budget the video stream is aimed at, leaving the container and the
-encoder's own overshoot room under the limit.
-"""
+from experiments.video.exceptions import (
+    EncodingFailed,
+    NothingToRead,
+    VideoOutsideTheLimits,
+)
+from experiments.video.frame import Frame, Resolution
+from experiments.video.timeline import Timeline
 
 # %% the file that comes out
 
@@ -55,6 +50,9 @@ class VideoFile:
         return self.path.stat().st_size
 
     def _opened(self) -> cv2.VideoCapture:
+        """
+        :return: The file opened for reading.
+        """
         return cv2.VideoCapture(str(self.path))
 
     @property
@@ -83,53 +81,30 @@ class VideoFile:
         return int(self._opened().get(cv2.CAP_PROP_FRAME_COUNT))
 
     @property
-    def duration(self) -> float:
+    def duration(self) -> timedelta:
         """
-        How long it plays, in seconds.
+        How long it plays.
         """
-        return self.frame_count / self.frames_per_second
+        return timedelta(seconds=self.frame_count / self.frames_per_second)
 
-    def frame_at(self, seconds: float) -> Frame:
+    def frame_at(self, moment: timedelta) -> Frame:
         """
-        One frame read back, as red, green and blue.
-
-        :param seconds: The moment, from the video's start.
+        :param moment: The moment, from the video's start.
+        :return: The frame there, as red, green and blue.
+        :raises NothingToRead: If the file holds no frame there.
         """
         opened = self._opened()
-        opened.set(cv2.CAP_PROP_POS_FRAMES, round(seconds * self.frames_per_second))
+        opened.set(
+            cv2.CAP_PROP_POS_FRAMES,
+            round(moment.total_seconds() * self.frames_per_second),
+        )
         read, frame = opened.read()
         if not read:
-            raise ValueError(f"nothing to read at {seconds:.3f} s of {self.path}")
-        return cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            raise NothingToRead(path=self.path, moment=moment)
+        return Frame(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
 
 
 # %% the limits
-
-
-@dataclass
-class VideoOutsideTheLimits(DataclassException):
-    """
-    Raised when a video breaks a limit a venue states for a submission.
-    """
-
-    video: VideoFile
-    """
-    The video checked.
-    """
-
-    broken: List[str]
-    """
-    What it breaks, one line each.
-    """
-
-    def error_message(self) -> str:
-        return f"{self.video.path} cannot be submitted: " + "; ".join(self.broken)
-
-    def suggest_correction(self) -> str:
-        return (
-            "Shorten the script, lower the size budget or raise the frame rate or "
-            "resolution the timeline is rendered at."
-        )
 
 
 @dataclass(frozen=True)
@@ -138,9 +113,9 @@ class SubmissionLimits:
     What a venue accepts a video attachment as.
     """
 
-    longest: float
+    longest: timedelta
     """
-    The longest it may play, in seconds.
+    The longest it may play.
     """
 
     largest: int
@@ -158,9 +133,9 @@ class SubmissionLimits:
     The fewest frames one second may hold.
     """
 
-    def byte_budget_for(self, duration: float) -> int:
+    def byte_budget_for(self, duration: timedelta) -> int:
         """
-        :param duration: How long the video plays, in seconds.
+        :param duration: How long the video plays.
         :return: The bytes a video that long may take: the largest file allowed, in
             proportion to how much of the longest allowed length it plays.
         """
@@ -173,7 +148,10 @@ class SubmissionLimits:
         """
         broken = []
         if video.duration > self.longest:
-            broken.append(f"plays {video.duration:.1f} s, over {self.longest:.0f} s")
+            broken.append(
+                f"plays {video.duration.total_seconds():.1f} s, over "
+                f"{self.longest.total_seconds():.0f} s"
+            )
         if video.size > self.largest:
             broken.append(f"takes {video.size} bytes, over {self.largest}")
         if video.resolution.height < self.lowest:
@@ -216,6 +194,17 @@ class H264Encoder:
     The encoder binary.
     """
 
+    pixel_format: str = "yuv420p"
+    """
+    The chroma layout every player decodes, which needs even frame sides.
+    """
+
+    bit_rate_headroom: float = 0.90
+    """
+    How much of the byte budget the video stream is aimed at, leaving the container and
+    the encoder's own overshoot room under the limit.
+    """
+
     def encode(self, timeline: Timeline, path: Path) -> VideoFile:
         """
         Write the timeline out.
@@ -231,19 +220,25 @@ class H264Encoder:
             self._two_passes(master, path, timeline.duration, Path(scratch) / "pass")
         return VideoFile(path=path)
 
-    def bit_rate_for(self, duration: float) -> int:
+    def bit_rate_for(self, duration: timedelta) -> int:
         """
-        :param duration: How long the video plays, in seconds.
+        :param duration: How long the video plays.
         :return: The bits per second that fill the budget over that time, less headroom.
         """
-        return int(self.size_budget * 8 * BIT_RATE_HEADROOM / duration)
+        return int(
+            self.size_budget * 8 * self.bit_rate_headroom / duration.total_seconds()
+        )
 
     def _keep_losslessly(self, timeline: Timeline, master: Path) -> None:
         """
         Pipe every frame into a lossless file.
+
+        :param timeline: What to keep.
+        :param master: Where the lossless file goes.
+        :raises EncodingFailed: If the encoder program exits with an error.
         """
         first = next(iter(timeline.frames()))
-        resolution = Resolution.of(first)
+        resolution = first.resolution
         command = [
             str(self.ffmpeg),
             "-y",
@@ -269,17 +264,22 @@ class H264Encoder:
         ]
         process = subprocess.Popen(command, stdin=subprocess.PIPE)
         for frame in timeline.frames():
-            process.stdin.write(np.ascontiguousarray(frame).tobytes())
+            process.stdin.write(np.ascontiguousarray(frame.pixels).tobytes())
         process.stdin.close()
         if process.wait() != 0:
-            raise RuntimeError(f"ffmpeg failed to keep the frames of {master}")
+            raise EncodingFailed(path=master)
 
     def _two_passes(
-        self, master: Path, path: Path, duration: float, log_prefix: Path
+        self, master: Path, path: Path, duration: timedelta, log_prefix: Path
     ) -> None:
         """
         Encode the master twice at the budget's bit rate, the second pass reading the
         first's log.
+
+        :param master: The lossless file.
+        :param path: Where the mp4 goes.
+        :param duration: How long the video plays.
+        :param log_prefix: Where the first pass keeps what the second reads.
         """
         bit_rate = self.bit_rate_for(duration)
         shared = [
@@ -296,7 +296,7 @@ class H264Encoder:
             "-profile:v",
             "high",
             "-pix_fmt",
-            PIXEL_FORMAT,
+            self.pixel_format,
             "-b:v",
             str(bit_rate),
             "-maxrate",
@@ -312,96 +312,3 @@ class H264Encoder:
             shared + ["-pass", "1", "-an", "-f", "mp4", "/dev/null"], check=True
         )
         subprocess.run(shared + ["-pass", "2", "-an", str(path)], check=True)
-
-
-# %% the voice and the subtitles, joined to the picture
-
-AUDIO_BIT_RATE = 64_000
-"""
-Bits per second the narration is encoded at: one channel of speech needs no more.
-"""
-
-SUBTITLE_ALLOWANCE = 40_000
-"""
-Bytes set aside for the subtitle track and what joining the streams adds to the file.
-"""
-
-
-def bytes_for_sound(duration: float) -> int:
-    """
-    :param duration: How long the video plays, in seconds.
-    :return: The bytes the narration and the subtitles take over it, to keep out of the
-        picture's budget.
-    """
-    return int(AUDIO_BIT_RATE / 8 * duration) + SUBTITLE_ALLOWANCE
-
-
-@dataclass
-class Muxer:
-    """
-    Joins a silent video, its narration and its subtitles into one mp4.
-
-    The picture is copied as it is; the narration is encoded as AAC, the codec every
-    player decodes; the subtitles, where they are not burned into the picture, go in as
-    a text track the viewer can switch off, on by default.
-    """
-
-    ffmpeg: Path = field(default_factory=lambda: Path(imageio_ffmpeg.get_ffmpeg_exe()))
-    """
-    The encoder binary.
-    """
-
-    def joined(
-        self,
-        video: VideoFile,
-        soundtrack: Path,
-        path: Path,
-        subtitles: Optional[Path] = None,
-    ) -> VideoFile:
-        """
-        :param video: The silent video.
-        :param soundtrack: The narration, as a wave file as long as the video.
-        :param path: Where the joined mp4 goes.
-        :param subtitles: The subtitles, as a SubRip file, or None where they are
-            already in the picture.
-        :return: The file written.
-        """
-        command = [
-            str(self.ffmpeg),
-            "-y",
-            "-loglevel",
-            "error",
-            "-i",
-            str(video.path),
-            "-i",
-            str(soundtrack),
-        ]
-        if subtitles is not None:
-            command += ["-i", str(subtitles)]
-        command += ["-map", "0:v:0", "-map", "1:a:0"]
-        if subtitles is not None:
-            command += ["-map", "2:s:0"]
-        command += [
-            "-c:v",
-            "copy",
-            "-c:a",
-            "aac",
-            "-b:a",
-            str(AUDIO_BIT_RATE),
-            "-ac",
-            "1",
-            "-metadata:s:a:0",
-            "language=eng",
-        ]
-        if subtitles is not None:
-            command += [
-                "-c:s",
-                "mov_text",
-                "-metadata:s:s:0",
-                "language=eng",
-                "-disposition:s:0",
-                "default",
-            ]
-        command += ["-movflags", "+faststart", str(path)]
-        subprocess.run(command, check=True)
-        return VideoFile(path=path)

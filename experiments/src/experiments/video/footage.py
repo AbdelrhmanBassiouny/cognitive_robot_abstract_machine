@@ -7,27 +7,17 @@ corner.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from datetime import timedelta
 
-import numpy as np
-from typing_extensions import Optional, Protocol, Tuple
+from krrood.patterns.role import Role
+from semantic_digital_twin.spatial_types.spatial_types import Point2
+from typing_extensions import Protocol
 
-from experiments.video.canvas import (
-    BODY_SIZE,
-    CLAIM_SIZE,
-    LABEL_SIZE,
-    MARGIN,
-    VIDEO_RESOLUTION,
-    Anchor,
-    Area,
-    FOOTAGE_BADGE,
-    FOOTAGE_TEXT,
-    Typesetting,
-    filled,
-    pasted,
-)
 from experiments.video.encoding import VideoFile
+from experiments.video.frame import Frame
 from experiments.video.lettering import Face
-from experiments.video.timeline import Frame, Resolution, Scene, blended, eased
+from experiments.video.theme import VideoTheme
+from experiments.video.typesetting import Anchor, TextSize, Typesetting
 
 # %% what of a picture is shown
 
@@ -66,8 +56,12 @@ class Framing:
         :param picture: A picture.
         :return: What is left of it inside the margins.
         """
-        height, width = picture.shape[:2]
-        return picture[self.top : height - self.bottom, self.left : width - self.right]
+        height, width = picture.pixels.shape[:2]
+        return Frame(
+            picture.pixels[
+                self.top : height - self.bottom, self.left : width - self.right
+            ]
+        )
 
 
 # %% a film
@@ -80,14 +74,15 @@ class Film(Protocol):
     """
 
     @property
-    def length(self) -> float:
+    def length(self) -> timedelta:
         """
-        Seconds from the film's first image to its last.
+        How long it is from the film's first image to its last.
         """
 
-    def image_at(self, seconds: float) -> Frame:
+    def image_at(self, moment: timedelta) -> Frame:
         """
-        The image at a moment of the film, as red, green and blue.
+        :param moment: A moment of the film, from its start.
+        :return: The image then, as red, green and blue.
         """
 
 
@@ -104,12 +99,20 @@ class VideoFilm:
     """
 
     @property
-    def length(self) -> float:
+    def length(self) -> timedelta:
+        """
+        How long the file plays.
+        """
         return self.video.duration
 
-    def image_at(self, seconds: float) -> Frame:
-        last = self.length - 1.0 / self.video.frames_per_second
-        return self.video.frame_at(min(seconds, last))
+    def image_at(self, moment: timedelta) -> Frame:
+        """
+        :param moment: A moment of the film, from its start; past its end counts as its
+            last image.
+        :return: The image then, as red, green and blue.
+        """
+        last = self.length - timedelta(seconds=1 / self.video.frames_per_second)
+        return self.video.frame_at(min(moment, last))
 
 
 # %% a stretch of a film
@@ -126,7 +129,7 @@ class ViewOfTheRun:
     What the camera recorded.
     """
 
-    from_second: float
+    starts_at: timedelta
     """
     Where in the film the stretch starts: the moment that matches the stretch's start in
     every other viewpoint of it.
@@ -137,232 +140,74 @@ class ViewOfTheRun:
     What of each picture is shown.
     """
 
-    def image_at(self, into: float) -> Frame:
+    def image_at(self, into: timedelta) -> Frame:
         """
-        :param into: Seconds into the stretch.
+        :param into: How far into the stretch.
         :return: What the camera saw then, framed.
         """
-        return self.framing.of(self.film.image_at(self.from_second + into))
+        return self.framing.of(self.film.image_at(self.starts_at + into))
 
 
-# %% the frame filled with footage
+# %% badges on footage
 
 
-INSET_WIDTH = 300
-"""
-Pixels wide the second view is in the corner of the footage, at the video's size.
-"""
-
-BADGE_HEIGHT = 36
-"""
-Pixels a badge on the footage is tall: the speed-up, or a label.
-"""
-
-BADGE_PADDING = 14
-"""
-Pixels between a badge's edge and its text.
-"""
-
-
-def badged(
-    frame: Frame, text: str, at: Tuple[float, float], anchor: Anchor = Anchor.LEFT_TOP
-) -> Frame:
+@dataclass(eq=False)
+class FootageFrame(Role[Frame]):
     """
-    A copy of the frame with a dark badge carrying a short text, its top left, top right
-    or bottom right corner at a point.
-
-    :param frame: The frame.
-    :param text: What the badge says.
-    :param at: Where its corner goes.
-    :param anchor: Which corner: the left top, the right top or the right middle
-        standing for the right bottom.
-    """
-    lettering = Typesetting(size=LABEL_SIZE, face=Face.BOLD, color=FOOTAGE_TEXT)
-    width = lettering.width_of(text) + 2 * BADGE_PADDING
-    if anchor is Anchor.LEFT_TOP:
-        badge = Area(at[0], at[1], width, BADGE_HEIGHT)
-    elif anchor is Anchor.RIGHT_TOP:
-        badge = Area(at[0] - width, at[1], width, BADGE_HEIGHT)
-    else:
-        badge = Area(at[0] - width, at[1] - BADGE_HEIGHT, width, BADGE_HEIGHT)
-    frame = filled(frame, badge, FOOTAGE_BADGE)
-    return lettering.written(frame, text, badge.centre, Anchor.CENTRE_MIDDLE)
-
-
-def speed_badged(frame: Frame, speed: float) -> Frame:
-    """
-    A copy of the frame with the speed-up in its top right corner.
-    """
-    resolution = Resolution.of(frame)
-    return badged(
-        frame, f"×{speed:g}", (resolution.width - MARGIN, MARGIN), Anchor.RIGHT_TOP
-    )
-
-
-@dataclass(frozen=True)
-class HeldInset:
-    """
-    A picture the inset holds before it runs, such as what a camera saw at one moment
-    with what was found on it drawn, and for how long it is held.
+    A frame of footage, which carries badges: short labels on dark boxes, in white
+    letters whatever the theme.
     """
 
-    picture: Frame
+    theme: VideoTheme = field(default_factory=VideoTheme.neutral)
     """
-    The picture.
-    """
-
-    held_for: float
-    """
-    Seconds it is held, from the scene's start.
+    The colours the badge is drawn in.
     """
 
-
-@dataclass
-class FullBleedFootage(Scene):
+    badge_height: int = 36
     """
-    A stretch of a run filling the whole frame, played faster than recorded with the
-    speed-up badged in the top right corner, and optionally a second view of the same
-    stretch small in the bottom right corner, in step.
+    Pixels a badge is tall.
     """
 
-    main: ViewOfTheRun
+    badge_padding: int = 14
     """
-    The camera that fills the frame.
-    """
-
-    length: float
-    """
-    Seconds of the recording the stretch runs for.
+    Pixels between a badge's edge and its text.
     """
 
-    speed: float = 2.0
-    """
-    How many recorded seconds pass per second played.
-    """
-
-    inset: Optional[ViewOfTheRun] = None
-    """
-    The second view, or None to show the one camera.
-    """
-
-    inset_held: Optional[HeldInset] = None
-    """
-    What the inset holds before it runs, if anything.
-    """
-
-    resolution: Resolution = VIDEO_RESOLUTION
-    """
-    The size the scene draws itself at: the video's own, the footage filling it.
-    """
-
-    @property
-    def duration(self) -> float:
-        return self.length / self.speed
-
-    @property
-    def inset_panel(self) -> Area:
+    def badged(self, text: str, at: Point2, anchor: Anchor = Anchor.LEFT_TOP) -> Frame:
         """
-        Where the inset lies: the bottom right corner of the footage, above the band the
-        captions are read on.
+        :param text: What the badge says.
+        :param at: Where its corner goes.
+        :param anchor: Which corner: the left top, the right top or the right middle
+            standing for the right bottom.
+        :return: A copy of the frame with the badge on it.
         """
-        sample = self.inset.image_at(0.0)
-        height = INSET_WIDTH * sample.shape[0] / sample.shape[1]
-        return Area(
-            self.resolution.width - MARGIN - INSET_WIDTH,
-            self.resolution.stage_height - MARGIN / 2 - height,
-            INSET_WIDTH,
-            height,
+        lettering = Typesetting(
+            size=TextSize.LABEL, face=Face.BOLD, color=self.theme.footage_text
         )
-
-    def inset_picture_at(self, seconds: float) -> Frame:
-        """
-        What the inset shows at a moment: what it holds first, else the second view.
-        """
-        if self.inset_held is not None and seconds < self.inset_held.held_for:
-            return self.inset_held.picture
-        return self.inset.image_at(seconds * self.speed)
-
-    def picture_at(self, seconds: float) -> Frame:
-        frame = pasted(
-            self.resolution.blank(0),
-            self.main.image_at(seconds * self.speed),
-            Area.whole(self.resolution),
+        width = lettering.width_of(text) + 2 * self.badge_padding
+        x, y = float(at.x), float(at.y)
+        if anchor is Anchor.LEFT_TOP:
+            badge = Frame.box(x, y, width, self.badge_height)
+        elif anchor is Anchor.RIGHT_TOP:
+            badge = Frame.box(x - width, y, width, self.badge_height)
+        else:
+            badge = Frame.box(
+                x - width, y - self.badge_height, width, self.badge_height
+            )
+        frame = self.role_taker.filled(badge, self.theme.footage_badge)
+        centre = Point2(
+            (badge.min_x + badge.max_x) / 2, (badge.min_y + badge.max_y) / 2
         )
-        if self.inset is not None:
-            panel = self.inset_panel
-            frame = filled(frame, panel.inset(-3), FOOTAGE_TEXT)
-            frame = pasted(frame, self.inset_picture_at(seconds), panel)
-        # footage at its own pace carries no badge
-        return speed_badged(frame, self.speed) if self.speed != 1.0 else frame
+        return lettering.written(frame, text, centre, Anchor.CENTRE_MIDDLE)
 
-
-@dataclass
-class TitleOverFootage(Scene):
-    """
-    A title over footage, the footage shaded so the title is what is read; the title
-    fades out at the end.
-    """
-
-    footage: Scene
-    """
-    What plays under the title, for the scene's whole duration.
-    """
-
-    title: str
-    """
-    The title.
-    """
-
-    line: str
-    """
-    What stands under the title, in smaller letters.
-    """
-
-    title_for: float
-    """
-    Seconds the title stands, before it fades out.
-    """
-
-    fade: float = 0.25
-    """
-    Seconds the title takes to fade out.
-    """
-
-    shade: float = 0.55
-    """
-    How far the footage is shaded under the title.
-    """
-
-    @property
-    def duration(self) -> float:
-        return self.footage.duration
-
-    def title_at(self, seconds: float) -> float:
+    def speed_badged(self, speed: float) -> Frame:
         """
-        How far the title is up at a moment, from zero to one.
+        :param speed: How many recorded seconds pass per second played.
+        :return: A copy of the frame with the speed-up in its top right corner.
         """
-        return 1.0 - eased((seconds - self.title_for) / self.fade)
-
-    def picture_at(self, seconds: float) -> Frame:
-        frame = self.footage.picture_at(seconds)
-        weight = self.title_at(seconds)
-        if weight <= 0.0:
-            return frame
-        resolution = Resolution.of(frame)
-        shaded = np.clip(
-            frame.astype(np.float32) * (1.0 - self.shade) + 0.5, 0, 255
-        ).astype(np.uint8)
-        heading = Typesetting(size=CLAIM_SIZE, face=Face.BOLD, color=FOOTAGE_TEXT)
-        text = heading.wrapped(self.title, resolution.width - 2 * MARGIN - 120)
-        rows = text.count("\n") + 1
-        middle = resolution.stage_height / 2 - 20
-        written = heading.written(
-            shaded, text, (resolution.width / 2, middle), Anchor.CENTRE_MIDDLE
+        resolution = self.role_taker.resolution
+        return self.badged(
+            f"×{speed:g}",
+            Point2(resolution.width - resolution.margin, resolution.margin),
+            Anchor.RIGHT_TOP,
         )
-        written = Typesetting(size=BODY_SIZE, color=FOOTAGE_TEXT).written(
-            written,
-            self.line,
-            (resolution.width / 2, middle + rows * CLAIM_SIZE * 0.7 + 44),
-            Anchor.CENTRE_MIDDLE,
-        )
-        return blended(frame, written, weight)
