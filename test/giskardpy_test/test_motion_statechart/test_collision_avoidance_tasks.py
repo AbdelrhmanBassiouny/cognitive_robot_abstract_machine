@@ -20,6 +20,8 @@ from giskardpy.motion_statechart.goals.collision_avoidance import (
     UpdateTemporaryCollisionRules,
 )
 from cramph.composites import Sequence, Parallel
+from cramph.data_types import LifeCycleValues
+from cramph.nodes_for_testing import ConstFalseNode
 from giskardpy.motion_statechart.graph_node import EndMotion
 from cramph.node import CancelStatechart
 from giskardpy.motion_statechart.monitors.monitors import LocalMinimumReached
@@ -1180,3 +1182,26 @@ def test_end_effector_rules_free_only_that_end_effector(pr2_world_copy):
         AllowCollisionForEndEffector
     ]
     assert node.temporary_rules[0].end_effector is end_effector
+
+
+# %% rules in force while a rules node is built
+
+
+def test_building_a_rules_node_keeps_the_temporary_rules_in_force(
+    cylinder_bot_world: World,
+):
+    collision_manager = cylinder_bot_world.collision_manager
+    rule_in_force = AllowAllCollisions()
+    collision_manager.add_temporary_rule(rule_in_force)
+    executor = StatechartExecutor(
+        context=StatechartContext(world=cylinder_bot_world),
+        extensions=[MotionControl()],
+    )
+    statechart = Statechart(context=executor.context)
+    rules_node = UpdateTemporaryCollisionRules(temporary_rules=[AvoidAllCollisions()])
+    statechart.add_node(Sequence([ConstFalseNode(), rules_node]))
+
+    executor.compile(statechart)
+
+    assert rules_node.life_cycle_state == LifeCycleValues.NOT_STARTED
+    assert collision_manager.temporary_rules == [rule_in_force]
