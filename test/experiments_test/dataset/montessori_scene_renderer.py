@@ -19,6 +19,7 @@ from typing_extensions import List, Sequence, Tuple, Type
 
 from experiments.montessori.hole_geometry import HoleFootprint, ShapeSortingBoardMesh
 from experiments.montessori.perception.camera import CameraIntrinsics, RgbdFrame
+from experiments.montessori.perception.pipeline import HueChannel
 from experiments.montessori.pieces import KnownPiece, PieceSet
 from experiments.montessori.semantics import MontessoriShape
 from semantic_digital_twin.spatial_types.spatial_types import (
@@ -70,7 +71,7 @@ def piece_color(piece: KnownPiece) -> Tuple[int, int, int]:
 
     :param piece: The piece to colour.
     """
-    return (piece.hue, PIECE_SATURATION, PIECE_BRIGHTNESS)
+    return (HueChannel().value_of(piece.hue), PIECE_SATURATION, PIECE_BRIGHTNESS)
 
 
 def piece_side_color(piece: KnownPiece) -> Tuple[int, int, int]:
@@ -79,7 +80,7 @@ def piece_side_color(piece: KnownPiece) -> Tuple[int, int, int]:
 
     :param piece: The piece to colour.
     """
-    return (piece.hue, PIECE_SATURATION, PIECE_SIDE_BRIGHTNESS)
+    return (HueChannel().value_of(piece.hue), PIECE_SATURATION, PIECE_SIDE_BRIGHTNESS)
 
 
 # %% what is in the scene
@@ -321,7 +322,7 @@ class MontessoriSceneRenderer:
         canvas[lit] = (
             (1 - share) * np.array(TABLE_COLOR, dtype=float) + share * smeared
         ).astype(np.uint8)[lit]
-        canvas[lit, 0] = known.hue
+        canvas[lit, 0] = HueChannel().value_of(known.hue)
 
     def _pixels_across(
         self, boundary: Sequence[Tuple[float, float]], reach: float

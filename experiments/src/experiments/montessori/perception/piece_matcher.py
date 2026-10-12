@@ -28,6 +28,7 @@ from typing_extensions import List, Optional, Sequence, Tuple
 
 from experiments.montessori.perception.edges import EdgeDistances
 from experiments.montessori.pieces import KnownPiece, PieceSet
+from semantic_digital_twin.world_description.geometry import Hue
 
 # %% what a fit came to
 
@@ -150,7 +151,7 @@ class PieceMatcher:
         self,
         edges: EdgeDistances,
         seed: Tuple[float, float],
-        hue: Optional[int],
+        hue: Optional[Hue],
     ) -> Optional[MatchedPiece]:
         """
         Recognise the piece standing around one spot.

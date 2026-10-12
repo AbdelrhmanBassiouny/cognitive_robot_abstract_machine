@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import colorsys
 import itertools
 import logging
 import math
@@ -64,6 +65,34 @@ if TYPE_CHECKING:
     )
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True)
+class Hue:
+    """
+    Where a color lies on the colour circle, running from red through yellow, green,
+    cyan, blue and magenta back to red.
+    """
+
+    degrees: float
+    """
+    How far round the colour circle from red it lies, in degrees.
+    """
+
+    FULL_TURN: ClassVar[float] = 360.0
+    """
+    How many degrees take a hue once round the colour circle, back to where it started.
+    """
+
+    def distance(self, degrees: npt.ArrayLike) -> npt.ArrayLike:
+        """
+        How far the given hues lie from this one, the short way round the colour circle.
+
+        :param degrees: A hue in degrees, or an array of them.
+        :return: The distance in degrees, element by element when given an array.
+        """
+        apart = np.abs(np.asarray(degrees, dtype=float) - self.degrees) % self.FULL_TURN
+        return np.minimum(apart, self.FULL_TURN - apart)
 
 
 @dataclass
@@ -229,6 +258,29 @@ class Color:
                 for index in range(0, len(digits), 2)
             ]
         )
+
+    @classmethod
+    def from_hsv(cls, hue: Hue, saturation: float = 1.0, value: float = 1.0) -> Self:
+        """
+        Build a fully opaque color from where it lies on the colour circle, how
+        colourful it is and how bright.
+
+        :param hue: Where it lies on the colour circle.
+        :param saturation: How colourful it is, from zero (grey) to one.
+        :param value: How bright it is, from zero (black) to one.
+        :return: The color.
+        """
+        return cls(*colorsys.hsv_to_rgb(hue.degrees / Hue.FULL_TURN, saturation, value))
+
+    @property
+    def hue(self) -> Hue:
+        """
+        Where this color lies on the colour circle.
+
+        ..note:: A color with no saturation has no hue to speak of and reads as red.
+        """
+        fraction_of_a_turn, _, _ = colorsys.rgb_to_hsv(*self.to_rgb())
+        return Hue(fraction_of_a_turn * Hue.FULL_TURN)
 
     @classmethod
     def PINK(cls) -> Self:

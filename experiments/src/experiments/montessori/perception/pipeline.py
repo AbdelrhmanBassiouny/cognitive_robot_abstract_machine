@@ -51,9 +51,40 @@ from experiments.montessori.perception.piece_matcher import PieceMatcher
 from experiments.montessori.pieces import PieceSet
 from experiments.montessori.world import BOARD_SCALE
 from semantic_digital_twin.spatial_types.spatial_types import Pose
+from semantic_digital_twin.world_description.geometry import Hue
 from semantic_digital_twin.world_description.world_entity import (
     KinematicStructureEntity,
 )
+
+# %% reading hue off an image
+
+
+@dataclass(frozen=True)
+class HueChannel:
+    """
+    The hue channel of an 8-bit hue-saturation-value image as OpenCV converts one: a
+    full turn of the colour circle halved so that it fits into a byte.
+    """
+
+    degrees_per_step: float = 2.0
+    """
+    How many degrees round the colour circle one step of the channel covers.
+    """
+
+    def to_degrees(self, channel: np.ndarray) -> np.ndarray:
+        """
+        :param channel: Values read off the hue channel, of any shape.
+        :return: The hues they stand for, in degrees, of the same shape.
+        """
+        return np.asarray(channel, dtype=float) * self.degrees_per_step
+
+    def value_of(self, hue: Hue) -> int:
+        """
+        :param hue: A hue to write into the channel.
+        :return: The channel value nearest to it.
+        """
+        return round(hue.degrees / self.degrees_per_step)
+
 
 # %% segmentation
 
@@ -120,6 +151,10 @@ class SurfaceColors:
     """
     The pieces whose colours :meth:`piece_mask` marks.
     """
+    hue_channel: HueChannel = field(default_factory=HueChannel)
+    """
+    How the image's hue channel encodes a hue.
+    """
 
     def piece_mask(self, orthophoto: Orthophoto) -> np.ndarray:
         """
@@ -134,8 +169,9 @@ class SurfaceColors:
         :return: A ``uint8`` mask, 255 on a piece's colour and 0 elsewhere.
         """
         hue_saturation_value = cv2.cvtColor(orthophoto.image, cv2.COLOR_BGR2HSV)
-        hue = hue_saturation_value[:, :, 0].astype(int)
-        wears_one = self.piece_set.wears_a_piece_colour(hue)
+        wears_one = self.piece_set.wears_a_piece_colour(
+            self.hue_channel.to_degrees(hue_saturation_value[:, :, 0])
+        )
         mask = (
             wears_one
             & (hue_saturation_value[:, :, 1] >= self.minimum_hue_saturation)
@@ -144,7 +180,7 @@ class SurfaceColors:
         )
         return mask.astype(np.uint8) * 255
 
-    def measure_hue(self, orthophoto: Orthophoto, region: np.ndarray) -> Optional[int]:
+    def measure_hue(self, orthophoto: Orthophoto, region: np.ndarray) -> Optional[Hue]:
         """
         Read the colour one region of a rectified image is.
 
@@ -163,7 +199,8 @@ class SurfaceColors:
         )
         if not colored.any():
             return None
-        return int(np.median(hue_saturation_value[:, :, 0][colored]))
+        middle = int(np.median(hue_saturation_value[:, :, 0][colored]))
+        return Hue(float(self.hue_channel.to_degrees(middle)))
 
     @staticmethod
     def dark_mask(orthophoto: Orthophoto, region: np.ndarray) -> np.ndarray:

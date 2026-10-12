@@ -26,7 +26,7 @@ from experiments.montessori.semantics import (
     CylinderShape,
     TriangularPrismShape,
 )
-from semantic_digital_twin.world_description.geometry import Polygon2D
+from semantic_digital_twin.world_description.geometry import Hue, Polygon2D
 
 from .dataset import montessori_scene_fixtures
 from .dataset.montessori_scene_renderer import MontessoriSceneRenderer, PlacedPiece
@@ -59,19 +59,26 @@ def _painted(hue_saturation_value: np.ndarray) -> Orthophoto:
 
 
 def test_a_region_is_read_as_the_colour_of_its_own_pixels():
+    colors = SurfaceColors()
     painted = np.zeros((8, 8, 3), dtype=np.uint8)
-    painted[:, :4] = (PieceHue.CYAN, 200, 200)
-    painted[:, 4:] = (PieceHue.YELLOW, 200, 200)
+    painted[:, :4] = (colors.hue_channel.value_of(PieceHue.CYAN), 200, 200)
+    painted[:, 4:] = (colors.hue_channel.value_of(PieceHue.YELLOW), 200, 200)
     region = np.zeros((8, 8), dtype=np.uint8)
     region[:, :4] = 255
 
-    assert SurfaceColors().measure_hue(_painted(painted), region) == PieceHue.CYAN
+    measured = colors.measure_hue(_painted(painted), region)
+
+    assert measured.degrees == PieceHue.CYAN.degrees
 
 
 def test_a_washed_out_region_carries_no_colour_to_read():
     colors = SurfaceColors()
     painted = np.zeros((8, 8, 3), dtype=np.uint8)
-    painted[:, :] = (PieceHue.CYAN, colors.minimum_hue_saturation - 1, 250)
+    painted[:, :] = (
+        colors.hue_channel.value_of(PieceHue.CYAN),
+        colors.minimum_hue_saturation - 1,
+        250,
+    )
 
     assert colors.measure_hue(_painted(painted), np.full((8, 8), 255, np.uint8)) is None
 
@@ -205,7 +212,7 @@ def test_a_piece_is_never_recognised_as_one_of_the_other_colour():
 
 def test_a_colour_no_piece_wears_leaves_nothing_to_recognise():
     cube = PieceSet.this_lab().piece_for(CubeShape)
-    unworn = (PieceHue.CYAN + PieceHue.YELLOW) // 2
+    unworn = Hue((PieceHue.CYAN.degrees + PieceHue.YELLOW.degrees) / 2)
 
     assert PieceMatcher().match(_drawn(cube.outline), (0.0, 0.0), unworn) is None
 
