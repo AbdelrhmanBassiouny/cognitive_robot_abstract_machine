@@ -7,7 +7,7 @@ from datetime import timedelta
 
 from typing_extensions import TYPE_CHECKING, List, Type, TypeVar
 
-from cramph.context import StatechartContext
+from cramph.context import ContextExtension, StatechartContext
 from cramph.exceptions import (
     MissingExecutorExtensionError,
     StatechartOfDifferentContextError,
@@ -245,8 +245,17 @@ class Executor(ABC):
 
     def __post_init__(self):
         """
-        Lets every executor in a hierarchy finish its initialization through
-        ``super().__post_init__()``.
+        Adds the :meth:`default_context_extensions` to :attr:`context`, keeping any
+        extension of the same type that is already there.
+        """
+        for default_extension in self.default_context_extensions():
+            self.context.ensure_extension(default_extension)
+
+    @abstractmethod
+    def default_context_extensions(self) -> list[ContextExtension]:
+        """
+        :return: The context extensions :attr:`context` holds unless one of the same
+            type was supplied.
         """
 
     def compile(self, statechart: Statechart) -> None:
@@ -290,10 +299,26 @@ class StatechartExecutor(Executor, RecompileCallback):
 
     def __post_init__(self):
         super().__post_init__()
+        for default_extension in self.default_extensions():
+            if not any(
+                type(extension) is type(default_extension)
+                for extension in self.extensions
+            ):
+                self.extensions.append(default_extension)
         for extension in self.extensions:
             extension.extend_context(self.context)
         self.pacer.pace_ticks_of(self.context)
         self._create_tick_variable()
+
+    def default_context_extensions(self) -> list[ContextExtension]:
+        return []
+
+    def default_extensions(self) -> list[ExecutorExtension]:
+        """
+        :return: The executor extensions appended to :attr:`extensions` unless one of
+            the same type was supplied.
+        """
+        return []
 
     def _create_tick_variable(self):
         """

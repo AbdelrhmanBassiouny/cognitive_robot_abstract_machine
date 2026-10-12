@@ -14,7 +14,7 @@ from coraplex.exceptions import (
     PlanNotCompiled,
 )
 from coraplex.plans.executors import (
-    RobotPlanExecutor,
+    RealRobotPlanExecutor,
     SimulatedPlanExecutor,
 )
 from coraplex.plans.failures import (
@@ -141,7 +141,7 @@ def test_a_statechart_of_another_context_is_refused(pr2_apartment_context):
 
 @pytest.mark.parametrize(
     "executor_type, drives_a_simulated_robot",
-    [(SimulatedPlanExecutor, True), (RobotPlanExecutor, False)],
+    [(SimulatedPlanExecutor, True), (RealRobotPlanExecutor, False)],
 )
 def test_an_executor_says_whether_it_drives_a_simulated_robot(
     executor_type, drives_a_simulated_robot

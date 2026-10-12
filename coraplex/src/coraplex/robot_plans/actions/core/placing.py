@@ -17,7 +17,6 @@ from cramph.context import StatechartContext
 from coraplex.exceptions import ObjectIsNotHeld
 from coraplex.querying.predicates import GripperHolds
 from cramph.node import StatechartNode
-from coraplex.robot_plans.actions.base import Action
 from cramph.composites import Sequence
 from cramph.world_modification_nodes import MoveBranch
 from coraplex.robot_plans.actions.core.pick_up import PickUpAction
@@ -41,11 +40,10 @@ from semantic_digital_twin.spatial_types.spatial_types import Pose
 
 @dataclass(eq=False, repr=False)
 class PlaceAction(
-    Action,
+    MovesToolCenterPoint,
     HasApproachesGraspPoses,
     PlaceTuningParameters,
     HasGraspDetectionThreshold,
-    MovesToolCenterPoint,
     MovesGripper,
 ):
     """

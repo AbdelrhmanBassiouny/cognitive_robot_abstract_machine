@@ -34,7 +34,7 @@ from semantic_digital_twin.world_description.shape_collection import ShapeCollec
 from semantic_digital_twin.world_description.world_entity import Body
 
 from coraplex.plans.plan_transformation import PlanRewriting
-from coraplex.robot_plans.plan_transformations import (
+from coraplex.robot_plans.robot_specific_plan_transformations import (
     KeepTheTorsoUprightWhileUsingATool,
 )
 from semantic_digital_twin.adapters.urdf import URDFParser
@@ -384,7 +384,7 @@ def justin_world():
 def _rewritten_mixing(world, robot):
     """
     :return: A mixing action of `robot` in `world`, expanded and rewritten by
-        :class:`~coraplex.robot_plans.plan_transformations.KeepTheTorsoUprightWhileUsingATool`.
+        :class:`~coraplex.robot_plans.robot_specific_plan_transformations.KeepTheTorsoUprightWhileUsingATool`.
     """
     container = _add_box_body(world, "mixed_container", (0.2, 0.2, 0.1), (1, 0, 1))
     tool_body = _add_box_body(world, "mixing_tool", (0.04, 0.04, 0.2), (1, 0.3, 1))

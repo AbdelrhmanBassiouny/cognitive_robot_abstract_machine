@@ -16,7 +16,7 @@ from coraplex.robot_plans.actions.core.navigation import (
     PathPlanningNavigateAction,
 )
 from coraplex.robot_plans.actions.core.robot_body import MoveTorsoAction
-from coraplex.robot_plans.plan_transformations import (
+from coraplex.robot_plans.robot_specific_plan_transformations import (
     DriveSimulatedTiagoWithItsDifferentialDrive,
     DriveStretchWithItsDifferentialDrive,
     KeepStretchInFrontOfTheContainerItCloses,

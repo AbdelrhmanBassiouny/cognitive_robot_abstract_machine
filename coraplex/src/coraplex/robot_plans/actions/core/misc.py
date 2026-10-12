@@ -4,7 +4,7 @@ from dataclasses import dataclass
 
 from typing_extensions import Optional, Type
 
-from coraplex.plans.context_extensions import ExecutionMode, MotionToleranceConfig
+from coraplex.plans.context_extensions import ExecutionMode
 from cramph.context import ContextExtension
 from krrood.ormatic.utils import classproperty
 from coraplex.datastructures.enums import (
@@ -147,7 +147,7 @@ class DetectAction(Action):
 
 
 @dataclass(eq=False, repr=False)
-class MoveToReach(Action, HasApproachesGraspPoses, MovesToolCenterPoint):
+class MoveToReach(MovesToolCenterPoint, HasApproachesGraspPoses):
     """
     Let the robot move to a position facing the target and reach with a end_effector.
     """
@@ -173,10 +173,6 @@ class MoveToReach(Action, HasApproachesGraspPoses, MovesToolCenterPoint):
     """
     The end effector that should reach it.
     """
-
-    @classproperty
-    def required_context_extensions(cls) -> tuple[type[ContextExtension], ...]:
-        return super().required_context_extensions + (MotionToleranceConfig,)
 
     def create_action_body(self) -> StatechartNode:
         return Sequence(

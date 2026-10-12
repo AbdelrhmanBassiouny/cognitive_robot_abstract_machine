@@ -2,7 +2,7 @@
 Stretch fetches a cereal box from a shelf, places it on a bedside table and puts it
 back again.
 
-Running with :class:`~coraplex.plans.executors.RobotPlanExecutor` drives the actual
+Running with :class:`~coraplex.plans.executors.RealRobotPlanExecutor` drives the actual
 robot and fetches the world from the running world server. The default runs the whole plan
 in simulation against a world built from the Stretch URDF, so nothing on the network is
 needed.
@@ -41,7 +41,7 @@ from coraplex.datastructures.enums import DetectionTechnique
 from coraplex.demonstrations import RobotDemonstration
 from coraplex.plans.executors import (
     PlanExecutor,
-    RobotPlanExecutor,
+    RealRobotPlanExecutor,
     SimulatedPlanExecutor,
 )
 from coraplex.robot_plans.actions.core.misc import DetectAction
@@ -52,8 +52,8 @@ from coraplex.robot_plans.actions.core.robot_body import (
     ParkArmsAction,
     SetGripperAction,
 )
-from coraplex.robot_plans.plan_transformations import (
-    DetectBeforeGrasp,
+from coraplex.robot_plans.plan_transformations import DetectBeforeGrasp
+from coraplex.robot_plans.robot_specific_plan_transformations import (
     DriveStretchWithItsDifferentialDrive,
     KeepStretchInFrontOfTheContainerItCloses,
 )
@@ -291,4 +291,6 @@ def main(
 
 
 if __name__ == "__main__":
-    main(executor_type=RobotPlanExecutor, repetitions=LIVE_DEMONSTRATION_REPETITIONS)
+    main(
+        executor_type=RealRobotPlanExecutor, repetitions=LIVE_DEMONSTRATION_REPETITIONS
+    )

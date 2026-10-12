@@ -31,7 +31,7 @@ from semantic_digital_twin.world_description.world_entity import Body
 from coraplex.plans.context_extensions import RobotAccess
 from coraplex.plans.executors import (
     PlanExecutor,
-    RobotPlanExecutor,
+    RealRobotPlanExecutor,
     SimulatedPlanExecutor,
 )
 from cramph.statechart import Statechart
@@ -141,7 +141,7 @@ with world.modify_world():
 # The executor needs the ROS node to reach the real robot
 tracy = world.get_semantic_annotations_by_type(Tracy)[0]
 executor_type: type[PlanExecutor] = (
-    RobotPlanExecutor if drives_real_robot else SimulatedPlanExecutor
+    RealRobotPlanExecutor if drives_real_robot else SimulatedPlanExecutor
 )
 executor = executor_type(world, context_extensions=[RobotAccess(tracy)], ros_node=node)
 

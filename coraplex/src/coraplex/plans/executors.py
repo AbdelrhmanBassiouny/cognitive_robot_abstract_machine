@@ -33,7 +33,7 @@ from cramph.composites import ChildChooserAccess
 from cramph.context import ContextExtension, StatechartContext
 from cramph.data_types import LifeCycleValues
 from cramph.exceptions import EmptyStatechartError
-from cramph.executor import Executor, StatechartExecutor
+from cramph.executor import Executor, ExecutorExtension, StatechartExecutor
 from cramph.node import StatechartNode, TerminalNode
 from cramph.statechart import Statechart
 from giskardpy.motion_control import MotionControl
@@ -141,12 +141,6 @@ class PlanExecutor(Executor, ABC):
         self.context = StatechartContext(world=self.world)
         for extension in self.context_extensions:
             self.context.add_extension(extension)
-        for default_extension in (
-            StatementGrounding(),
-            MotionToleranceConfig(),
-            PlanRewriting(),
-        ):
-            self.context.ensure_extension(default_extension)
         self.context.add_extension(
             ExecutionMode(
                 simulated=self.simulated,
@@ -158,6 +152,9 @@ class PlanExecutor(Executor, ABC):
         )
         self.context.add_extension(ChildChooserAccess(chooser=self.child_chooser))
         super().__post_init__()
+
+    def default_context_extensions(self) -> list[ContextExtension]:
+        return [StatementGrounding(), MotionToleranceConfig(), PlanRewriting()]
 
     def prepare(self, statechart: Statechart) -> None:
         """
@@ -324,14 +321,8 @@ class SimulatedPlanExecutor(PlanExecutor, StatechartExecutor):
     The simulated time after which a plan is given up on, however it is progressing.
     """
 
-    def __post_init__(self):
-        for default_extension in (RosNodeAccess(self.ros_node), MotionControl()):
-            if not any(
-                type(extension) is type(default_extension)
-                for extension in self.extensions
-            ):
-                self.extensions.append(default_extension)
-        super().__post_init__()
+    def default_extensions(self) -> list[ExecutorExtension]:
+        return [RosNodeAccess(self.ros_node), MotionControl()]
 
     def _run(self) -> None:
         """
@@ -373,7 +364,7 @@ class SimulatedPlanExecutor(PlanExecutor, StatechartExecutor):
 
 
 @dataclass
-class RobotPlanExecutor(PlanExecutor):
+class RealRobotPlanExecutor(PlanExecutor):
     """
     Sends the plan's statechart to Giskard, grounding every underspecified action
     Giskard reaches against the world as it is then.

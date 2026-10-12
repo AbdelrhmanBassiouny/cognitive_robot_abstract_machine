@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from abc import ABC, abstractmethod
+from abc import ABC
 from dataclasses import dataclass, field
 
-from typing_extensions import Any, Callable, Dict, Optional
+from typing_extensions import Any, Dict, Optional
 
 from coraplex.plans.context_extensions import ExecutionMode, RobotAccess
 from krrood.ormatic.utils import classproperty
@@ -59,35 +59,34 @@ class DrivesBase(Action, ABC):
     How far the base may be from a pose it drives to, in meters and in radians, to count
     as arrived.
 
-    .. note:: Only a
-        :class:`~giskardpy.motion_statechart.goals.cartesian_goals.DifferentialDriveBaseGoal`
-        driving the base reads it.
+    .. note:: Only read while the base :attr:`drives_differentially`.
+    """
+
+    drives_differentially: bool = field(default=False, init=False)
+    """
+    Whether the base is moved with a goal for its differential drive, which turns
+    towards a pose, drives there and turns again, instead of a goal that asks the base
+    to move sideways.
     """
 
     @classproperty
     def required_context_extensions(cls) -> tuple[type[ContextExtension], ...]:
         return super().required_context_extensions + (ExecutionMode,)
 
-    def create_action_body(self) -> StatechartNode:
-        return self.create_body_driving_with(self._drive_to)
-
-    @abstractmethod
-    def create_body_driving_with(
-        self, drive_to: Callable[[Pose], StatechartNode]
-    ) -> StatechartNode:
-        """
-        :param drive_to: Creates the node that puts the base at the pose it is given.
-        :return: A new node running what this action does, moving the base with the
-            nodes `drive_to` creates.
-        """
-
     def _drive_to(self, target: Pose) -> MotionStatechartNode:
         """
         :param target: Where the base should end up.
-        :return: The node that puts the base there. A simulated run writes the odometry
-            directly, because there is no drive to follow the pose; a real one commands
-            the pose and lets the controller drive there.
+        :return: The node that puts the base there. A differential drive gets a goal of
+            its own; otherwise a simulated run writes the odometry directly, because
+            there is no drive to follow the pose, and a real one commands the pose and
+            lets the controller drive there.
         """
+        if self.drives_differentially:
+            return DifferentialDriveBaseGoal(
+                diff_drive_connection=self.robot.drive,
+                goal_pose=target,
+                threshold=self.base_pose_threshold,
+            )
         if self.context.require_extension(ExecutionMode).simulated:
             return SetOdometry(
                 base_pose=target.homogeneous_matrix,
@@ -112,10 +111,8 @@ class NavigateAction(DrivesBase):
     x-axis.
     """
 
-    def create_body_driving_with(
-        self, drive_to: Callable[[Pose], StatechartNode]
-    ) -> StatechartNode:
-        return drive_to(self.robot.mobile_base.pose_facing(self.target_location))
+    def create_action_body(self) -> StatechartNode:
+        return self._drive_to(self.robot.mobile_base.pose_facing(self.target_location))
 
     @staticmethod
     def pre_condition(
@@ -245,10 +242,8 @@ class PathPlanningNavigateAction(DrivesBase):
     Where the robot should stand at the end of the path, with its base.
     """
 
-    def create_body_driving_with(
-        self, drive_to: Callable[[Pose], StatechartNode]
-    ) -> StatechartNode:
-        return Sequence([drive_to(waypoint) for waypoint in self._path()])
+    def create_action_body(self) -> StatechartNode:
+        return Sequence([self._drive_to(waypoint) for waypoint in self._path()])
 
     @property
     def _floor(self) -> Floor:

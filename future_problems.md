@@ -146,7 +146,7 @@ would run on stale state until the compile happened.
 The motion designators that `coraplex/alternative_motion_mappings` replaced per robot are
 gone, and so is that package. The drive goals of the Stretch and the Tiago and the
 Stretch's way of closing a container are plan transformations now
-(`coraplex/robot_plans/plan_transformations.py`). Three mappings were left out:
+(`coraplex/robot_plans/robot_specific_plan_transformations.py`). Three mappings were left out:
 
 - **HSRB, real robot: driving through Navigation 2.** The mapping replaced the drive goal
   with a `NavigateActionServerTask` on the action topic `/hsrb/move_base`, sending a
