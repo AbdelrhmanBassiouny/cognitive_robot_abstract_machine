@@ -52,14 +52,14 @@ class MontessoriDetection(ABC):
         A detection sits on the plane it was rectified from, so its pose already names
         that height.
         """
-        return float(self.pose.to_position().to_np()[2])
+        return float(self.pose.position.to_np()[2])
 
     @property
     def yaw(self) -> float:
         """
         How far it is turned about the world frame's z-axis, in radians.
         """
-        return float(self.pose.to_rotation_matrix().to_rpy()[2])
+        return float(self.pose.rotation_matrix.rpy[2])
 
     @property
     def top_height(self) -> float:
@@ -132,7 +132,7 @@ class MontessoriShapeDetection(MontessoriDetection):
         Its pose stands half its own height above that surface, unlike a detection that
         lies flat in the plane it was found in.
         """
-        return float(self.pose.to_position().to_np()[2]) - self.height / 2
+        return float(self.pose.position.to_np()[2]) - self.height / 2
 
     @property
     def top_height(self) -> float:

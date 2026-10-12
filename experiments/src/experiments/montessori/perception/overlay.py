@@ -221,7 +221,7 @@ class DetectionOverlay:
             self.line_width,
         )
         [center] = view.to_pixels(
-            detection.pose.to_position().to_np()[:2].reshape(1, 2),
+            detection.pose.position.to_np()[:2].reshape(1, 2),
             detection.surface_height,
         )
         cv2.circle(

@@ -725,7 +725,7 @@ def _position_of(detection: MontessoriDetection) -> np.ndarray:
 
     :param detection: The detection to read.
     """
-    return detection.pose.to_position().to_np()[:2].astype(float)
+    return detection.pose.position.to_np()[:2].astype(float)
 
 
 def _to_world_outline(contour: np.ndarray, orthophoto: Orthophoto) -> np.ndarray:

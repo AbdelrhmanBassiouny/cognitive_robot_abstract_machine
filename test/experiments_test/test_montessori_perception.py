@@ -45,7 +45,7 @@ def test_pipeline_finds_every_hole_the_board_has(
 def test_pipeline_puts_each_hole_within_three_millimetres_of_its_true_centre(
     scene: MontessoriScene, renderer: MontessoriSceneRenderer
 ):
-    detected = [tuple(hole.pose.to_position().to_np()[:2]) for hole in scene.holes]
+    detected = [tuple(hole.pose.position.to_np()[:2]) for hole in scene.holes]
 
     for footprint in renderer.hole_footprints():
         expected_x, expected_y = renderer.hole_center(footprint)
@@ -57,7 +57,7 @@ def test_pipeline_reports_hole_centres_on_the_board_lid(
     scene: MontessoriScene, renderer: MontessoriSceneRenderer
 ):
     for hole in scene.holes:
-        assert float(hole.pose.to_position().to_np()[2]) == pytest.approx(
+        assert float(hole.pose.position.to_np()[2]) == pytest.approx(
             renderer.lid_height
         )
 
@@ -77,7 +77,7 @@ def test_pipeline_recognises_the_shape_of_the_widest_holes(
 def test_pipeline_finds_each_loose_piece_where_it_stands(
     scene: MontessoriScene, placed_pieces: list[PlacedPiece]
 ):
-    detected = [tuple(piece.pose.to_position().to_np()[:2]) for piece in scene.shapes]
+    detected = [tuple(piece.pose.position.to_np()[:2]) for piece in scene.shapes]
 
     for placed in placed_pieces:
         nearest = min(math.hypot(x - placed.x, y - placed.y) for x, y in detected)
@@ -96,8 +96,8 @@ def test_pipeline_cancels_the_parallax_that_stretches_a_piece(
     nearest = min(
         scene.shapes,
         key=lambda piece: math.hypot(
-            float(piece.pose.to_position().to_np()[0]) - cube.x,
-            float(piece.pose.to_position().to_np()[1]) - cube.y,
+            float(piece.pose.position.to_np()[0]) - cube.x,
+            float(piece.pose.position.to_np()[1]) - cube.y,
         ),
     )
 
@@ -111,7 +111,7 @@ def test_pipeline_does_not_report_the_board_lid_as_a_loose_piece(
 ):
     assert scene.board is not None
     for piece in scene.shapes:
-        position = piece.pose.to_position().to_np()
+        position = piece.pose.position.to_np()
         assert not scene.board.encloses(float(position[0]), float(position[1]))
 
 
@@ -166,14 +166,10 @@ def test_a_query_answers_a_pose_a_plan_can_reach_for(scene: MontessoriScene):
     ][:1]
 
     hole = the(
-        a(ShapeSortingHoleDetection)(category=TriangularPrismShape)
-        .from_(perceived)
-        .expression
+        a(ShapeSortingHoleDetection)(category=TriangularPrismShape).from_(perceived)
     ).tolist()[0]
 
-    assert hole.pose.to_position().to_np() == pytest.approx(
-        expected.pose.to_position().to_np()
-    )
+    assert hole.pose.position.to_np() == pytest.approx(expected.pose.position.to_np())
 
 
 def test_a_query_over_one_kind_does_not_return_the_other(scene: MontessoriScene):

@@ -156,16 +156,14 @@ def test_a_piece_rests_half_its_height_below_its_own_pose(scene: MontessoriScene
     piece = scene.shapes[0]
 
     assert piece.surface_height == pytest.approx(
-        float(piece.pose.to_position().to_np()[2]) - piece.height / 2
+        float(piece.pose.position.to_np()[2]) - piece.height / 2
     )
 
 
 def test_a_hole_lies_on_the_surface_its_pose_names(scene: MontessoriScene):
     hole = scene.holes[0]
 
-    assert hole.surface_height == pytest.approx(
-        float(hole.pose.to_position().to_np()[2])
-    )
+    assert hole.surface_height == pytest.approx(float(hole.pose.position.to_np()[2]))
 
 
 def test_drawing_nothing_leaves_the_frame_as_it_was():

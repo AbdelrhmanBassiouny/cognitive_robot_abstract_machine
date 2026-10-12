@@ -135,7 +135,7 @@ class DetectionMarkerPublisher:
         marker.scale.x = _OUTLINE_WIDTH
         red, green, blue, alpha = color.to_rgba()
         marker.color = ColorRGBA(r=red, g=green, b=blue, a=alpha)
-        height = float(detection.pose.to_position().to_np()[2])
+        height = float(detection.pose.position.to_np()[2])
         points = [Point(x=float(x), y=float(y), z=height) for x, y in detection.outline]
         marker.points = points + points[:1]
         return marker
@@ -155,7 +155,7 @@ class DetectionMarkerPublisher:
         marker.scale.z = 0.02
         red, green, blue, alpha = LABEL_COLOR.to_rgba()
         marker.color = ColorRGBA(r=red, g=green, b=blue, a=alpha)
-        position = detection.pose.to_position().to_np()
+        position = detection.pose.position.to_np()
         marker.pose.position = Point(
             x=float(position[0]), y=float(position[1]), z=float(position[2]) + 0.05
         )

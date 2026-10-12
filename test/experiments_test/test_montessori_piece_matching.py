@@ -294,7 +294,7 @@ def test_a_piece_is_reported_where_it_stands_and_not_where_its_reflection_reache
 
     stands_at = {placed.category: (placed.x, placed.y) for placed in placed_pieces}
     for detected in scene.shapes:
-        assert detected.pose.to_position().to_np()[:2] == pytest.approx(
+        assert detected.pose.position.to_np()[:2] == pytest.approx(
             stands_at[detected.category], abs=0.003
         )
 

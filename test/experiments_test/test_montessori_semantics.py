@@ -75,7 +75,7 @@ def test_montessori_shape_computes_its_insertion_pose_relative_to_the_hole(world
     )
 
     assert pose.reference_frame is hole.root
-    position = pose.to_position()
+    position = pose.position
     assert float(position.x) == pytest.approx(0.01)
     assert float(position.y) == pytest.approx(-0.02)
     assert float(position.z) == pytest.approx(0.03)
@@ -103,7 +103,7 @@ def test_disk_shape_tips_onto_its_edge_to_pass_through_its_slot(world):
         hole, horizontal_offset=Point3(0.0, 0.0, 0.0), hover_height=0.03
     )
 
-    roll, pitch, yaw = pose.to_rotation_matrix().to_rpy()
+    roll, pitch, yaw = pose.rotation_matrix.rpy
     assert float(pitch) == pytest.approx(math.pi / 2)
     assert float(roll) == pytest.approx(0.0)
     assert float(yaw) == pytest.approx(0.0)

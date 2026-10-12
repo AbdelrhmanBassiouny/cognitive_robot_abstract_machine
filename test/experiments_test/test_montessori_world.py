@@ -103,7 +103,7 @@ def _collision_box_world_bounds(shapes, position) -> list:
     """
     bounds = []
     for shape in shapes:
-        origin = shape.origin.to_position()
+        origin = shape.origin.position
         half_x, half_y = shape.scale.x / 2, shape.scale.y / 2
         bounds.append(
             (
@@ -120,7 +120,7 @@ def _hole_world_bounds(hole: ShapeSortingHole) -> tuple:
     """
     A hole's true (x, y) bounding box, in the world frame, with tolerance applied.
     """
-    position = hole.global_transform.to_position()
+    position = hole.global_transform.position
     local_bounds = hole.root.area.combined_mesh.bounds
     return (
         float(position.x) + local_bounds[0][0] + _BOUNDS_TOLERANCE,
@@ -134,7 +134,7 @@ def test_montessori_world_board_collision_leaves_every_holes_bounding_box_open()
     montessori = MontessoriWorld()
     montessori.world.update_forward_kinematics()
 
-    board_position = montessori.board.global_transform.to_position()
+    board_position = montessori.board.global_transform.position
     collision_box_bounds = _collision_box_world_bounds(
         montessori.board.root.collision.shapes, board_position
     )
@@ -179,7 +179,7 @@ def test_montessori_world_drawer_collision_leaves_overlapping_holes_open():
 
     assert montessori.board.drawers
     for drawer in montessori.board.drawers:
-        drawer_position = drawer.global_transform.to_position()
+        drawer_position = drawer.global_transform.position
         collision_box_bounds = _collision_box_world_bounds(
             drawer.root.collision.shapes, drawer_position
         )
@@ -277,7 +277,7 @@ def test_montessori_world_places_loose_shapes_resting_on_the_table():
 
     y_positions = []
     for shape in shapes:
-        position = shape.global_transform.to_position()
+        position = shape.global_transform.position
         lowest_local_z = shape.root.collision.combined_mesh.bounds[0][2]
 
         # the shape's lowest point rests exactly on the table's surface
@@ -314,7 +314,7 @@ def test_movable_loose_shapes_still_rest_on_the_table():
 
     table_top_z = float(TABLE_POSITION.z) + TABLE_SCALE.z / 2
     for shape in montessori.world.get_semantic_annotations_by_type(MontessoriShape):
-        position = shape.global_transform.to_position()
+        position = shape.global_transform.position
         lowest_local_z = shape.root.collision.combined_mesh.bounds[0][2]
         assert float(position.z) + lowest_local_z == pytest.approx(table_top_z)
         assert float(position.x) == pytest.approx(TABLE_SHAPE_ROW_X)
@@ -334,7 +334,7 @@ def test_montessori_world_table_stands_on_the_floor():
     montessori.world.update_forward_kinematics()
 
     [table] = montessori.world.get_semantic_annotations_by_type(Table)
-    position = table.global_transform.to_position()
+    position = table.global_transform.position
     lowest_local_z = table.root.collision.combined_mesh.bounds[0][2]
 
     assert float(position.z) + lowest_local_z == pytest.approx(FLOOR_Z)
@@ -392,11 +392,11 @@ def test_mount_stationary_robot_places_the_robot_at_the_given_position_and_yaw()
     )
     montessori.world.update_forward_kinematics()
 
-    position = robot.root.global_transform.to_position()
+    position = robot.root.global_transform.position
     assert float(position.x) == pytest.approx(float(MOUNT_POSITION.x))
     assert float(position.y) == pytest.approx(float(MOUNT_POSITION.y))
     assert float(position.z) == pytest.approx(float(MOUNT_POSITION.z))
-    yaw = robot.root.global_transform.to_rotation_matrix().to_rpy()[2]
+    yaw = robot.root.global_transform.rotation_matrix.rpy[2]
     assert float(yaw) == pytest.approx(MOUNT_YAW)
 
 
@@ -425,7 +425,7 @@ def test_add_robot_stand_spawns_a_table_at_the_mount_height():
 
     assert isinstance(stand, Table)
     assert len(montessori.world.bodies) > body_count_before
-    position = stand.global_transform.to_position()
+    position = stand.global_transform.position
     highest_local_z = stand.root.collision.combined_mesh.bounds[1][2]
     assert float(position.x) == pytest.approx(float(MOUNT_POSITION.x))
     assert float(position.y) == pytest.approx(float(MOUNT_POSITION.y))
