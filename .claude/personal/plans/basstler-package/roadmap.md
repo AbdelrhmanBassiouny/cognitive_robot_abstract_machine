@@ -412,3 +412,10 @@ The user asked for the three things #501 had only recorded to be fixed. All thre
 - **`${PLAN_ITEM_BOOTSTRAP_SCRIPT}`** (`79360e121`) is replaced in `add-plan-item/SKILL.md`. A contract test now holds every `${NAME}` a `.claude/` document uses to one the configuration defines or Claude Code sets.
 
 Left open: `uv` picks the newest interpreter it can get, 3.15 here, while CI tests 3.12.
+
+## 2026-10-12 - #501 review round
+
+The user's fork review on #501 had nine threads, applied in `1d3674cfd`. Most of them name a fixed string once. There are now enums for environment variables, the stubs' variables, package managers, the GitHub clients, file modes and the session-start report's labels. A `ProjectDeclaration` dataclass reads and writes `[project]` tables in the tests. `stack.py` spells out pull requests. The per-version classifiers are gone, since `requires-python` is what gates an install. 750 tests pass on 3.12 and 3.13.
+
+One thread is recorded rather than built: `PathEnumeration` could move to `krrood.patterns` once basstler depends on krrood (decision 14).
+

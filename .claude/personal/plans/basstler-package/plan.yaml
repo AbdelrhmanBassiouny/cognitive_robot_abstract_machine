@@ -279,6 +279,11 @@ items:
     directly under `basstler/` then merges cleanly and silently stays in the old location, the same
     shape recorded three times for `.claude/`. The move ships a contract test that fails on any
     module directly under `basstler/`, as #185's test does for `.claude/`.
+
+    **Recorded for later, not acted on** (the user, 2026-10-12, on #501's `test_locations.py:42`
+    thread). `PathEnumeration` is a pattern other packages could use, so it is a candidate for
+    `krrood.patterns`. Move it there once basstler depends on krrood (decision 14); until then it
+    stays in `basstler/locations.py`, since `krrood` must not import from basstler.
 - id: basstler-notes-core-python
   title: 'Bash→Python 1: notes-core modules (config, git seam, writer, markers)'
   branch: null
