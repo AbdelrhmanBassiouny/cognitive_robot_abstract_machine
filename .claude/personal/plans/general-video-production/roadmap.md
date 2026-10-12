@@ -68,3 +68,16 @@ namespace of every scanned class (the same trap as #472's earlier Sequence field
 2026-10-12 review round (e6447b6af): the fork's main was 114 commits behind cram2/main, so SemDT's Point2 and PlanarBoundingBox were missed; cram2/main merged in. Reworked per ~50 review threads: Frame dataclass with drawing methods (FootageFrame is a Role[Frame]), SemDT Color/Point2/PlanarBoundingBox, timedelta everywhere, NarratedTimeline as Role[Timeline], exceptions.py, no module constants, narration/canvas/footage split under 400 lines, 127 tests. 43 threads replied and resolved; 7 left open for the reviewer: Pygments for code colouring, presentation library, Framing as a box, InsetStill name, test literals, SemDT depth/width naming for PlanarBoundingBox. ORM generation for experiments not run locally (needs ROS); Role and SemDT-typed fields are the CI risk.
 
 The fork's main had fallen 114 commits behind cram2/main, which hid SemDT's Point2 and PlanarBoundingBox from the first pass; the user caught it. PlanarBoundingBox names the x extent `depth` and the y extent `width`, which reads backwards for pixels.
+
+## The package becomes cramcorder (2026-10-12)
+
+Asked by the user in the second review round: the video machinery leaves `experiments` and
+becomes its own workspace member, `cramcorder`, with Abdelrhman Bassiouny and Naren
+Vasantakumaar as authors. The split audit found nothing of #472's code specific to
+`experiments`, so nothing stays behind; experiments that make videos (the ICRA video in
+#429) import `cramcorder`. Being outside `experiments` also takes the package out of that
+package's ORM generation, which was the open CI risk. The same round replaced bare tuples
+with dataclasses, Protocols with abstract dataclasses, ClassVars with fields, enums or a
+classproperty, and moved sound levels to dBFS. Pygments for code colouring is recommended
+on the thread and waits for the user's approval of the new dependency.
+
