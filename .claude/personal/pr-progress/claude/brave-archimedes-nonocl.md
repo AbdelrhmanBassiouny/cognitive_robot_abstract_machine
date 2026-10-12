@@ -29,6 +29,12 @@ Based on main, since #185 merged on 2026-10-05. Auto mode. Baseline: 710 tests p
   uv pip install whenever a uv exists (system pip 24.0 broke on a uv-fetched 3.15).
 - 750 pass on 3.12 (serial and -n), 3.13, 3.15. PR description, roadmap section updated.
 
+## Round three (2026-10-12, fork review, 9 threads)
+- 1d3674cfd: prs -> pull_requests in stack.py; version classifiers dropped; test enums EnvironmentVariable,
+  StubVariable, PackageManager, GitHubClient, FileMode, SummaryLine; ProjectDeclaration dataclass for
+  [project] tables; check-setup declaration as dataset file. 750 pass on 3.12 and 3.13.
+- All 9 threads replied and resolved. PathEnumeration -> krrood.patterns recorded in plan (af80c15e0).
+
 ## Outstanding
 - CI on #501 not yet observed.
 - Landing: #420/#424/#430/#437/#107 merge across the second move.
