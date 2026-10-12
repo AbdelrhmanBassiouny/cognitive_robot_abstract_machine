@@ -12,7 +12,6 @@ from krrood.symbolic_math.symbolic_math import FloatVariable, Scalar
 if TYPE_CHECKING:
     from cramph.context import ContextExtension
     from cramph.data_types import TransitionKind
-    from cramph.composites import Attempt
     from cramph.node import NodeStateVariable, StatechartNode, TransitionCondition
 
 
@@ -85,26 +84,43 @@ class EndInCompositeNodeError(NodeInitializationError):
 
 
 @dataclass
-class AttemptCannotFailError(NodeInitializationError):
+class AttemptWithoutFailureMonitorsError(NodeInitializationError):
     """
-    Raised when a template that only moves on once an attempt failed is handed an
-    attempt that cannot fail.
+    Raised when an attempt is created without a failure monitor, which leaves nothing
+    that could give up on its task.
     """
 
-    attempt: Attempt
+    def error_message(self) -> str:
+        return f'The attempt "{self.node.name}" has no failure monitors.'
+
+    def suggest_correction(self) -> str:
+        return (
+            "Pass at least one failure monitor, or hand the task to a template as it "
+            "is, which ends it once it observes True."
+        )
+
+
+@dataclass
+class ChildCannotFailError(NodeInitializationError):
     """
-    The attempt that has no failure monitors and whose task cannot fail on its own.
+    Raised when a template that only moves on once a child failed is handed a child that
+    cannot fail.
+    """
+
+    child: StatechartNode
+    """
+    The child that has no way to fail on its own.
     """
 
     def error_message(self) -> str:
         return (
-            f'"{self.attempt.unique_name}" cannot fail, but "{self.node.unique_name}" '
+            f'"{self.child.unique_name}" cannot fail, but "{self.node.unique_name}" '
             f"only moves on once it failed."
         )
 
     def suggest_correction(self) -> str:
         return (
-            "Wrap the task in an Attempt whose failure monitors decide when to give up "
+            "Wrap the child in an Attempt whose failure monitors decide when to give up "
             "on it."
         )
 

@@ -15,7 +15,7 @@ import pytest
 from cramph.executor import StatechartExecutor
 from cramph.context import StatechartContext
 from cramph.data_types import LifeCycleValues, ObservationStateValues
-from cramph.exceptions import AttemptCannotFailError
+from cramph.exceptions import ChildCannotFailError
 from cramph.composites import Attempt, RepeatUntil
 from cramph.node import EndStatechart, StatechartNode
 from cramph.statechart import Statechart
@@ -181,7 +181,7 @@ def test_repeat_until_starts_its_task_while_the_stop_monitor_has_not_decided():
 
 def test_repeat_until_rejects_a_task_that_cannot_fail():
     """
-    A plain task is attempted with no way of failing, so it would never be retried.
+    A plain task has no way of failing, so it would never be retried.
     """
     task = ConstTrueNode(name="task")
     loop = RepeatUntil(
@@ -193,11 +193,11 @@ def test_repeat_until_rejects_a_task_that_cannot_fail():
     statechart = Statechart(context=executor.context)
     statechart.add_node(loop)
 
-    with pytest.raises(AttemptCannotFailError) as error:
+    with pytest.raises(ChildCannotFailError) as error:
         executor.compile(statechart=statechart)
 
     assert error.value.node is loop
-    assert error.value.attempt.task is task
+    assert error.value.child is task
 
 
 def test_repeat_until_ends_the_statechart_with_its_exception_once_retrying_stops(

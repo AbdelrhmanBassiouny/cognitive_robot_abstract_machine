@@ -16,11 +16,10 @@ from coraplex.plans.designator import DesignatorParameters
 from krrood.ormatic.utils import classproperty
 from cramph.node import SucceedsOnObservingTrue, FailsOnObservingFalse
 from cramph.context import ContextExtension, StatechartContext
-from cramph.composites import Attempt
 from cramph.node import CompositeNode, NodeArtifacts, StatechartNode
 from krrood.entity_query_language.core.base_expressions import SymbolicExpression
 from krrood.entity_query_language.core.variable import Variable
-from krrood.symbolic_math.symbolic_math import Scalar
+from krrood.symbolic_math.symbolic_math import Scalar, trinary_if_cases
 from semantic_digital_twin.robots.robot_parts import AbstractRobot
 from semantic_digital_twin.world_description.world_entity import (
     KinematicStructureEntity,
@@ -44,8 +43,8 @@ class Action(
     What it does is its :attr:`action_body`, the node :meth:`create_action_body`
     creates. The action reaches its goal once its body did, and declares itself failed
     as soon as the body failed, so an action can be a step of another one. A body whose
-    owner decides its success, such as a single task, is run in an
-    :class:`~cramph.composites.Attempt` that decides it.
+    owner decides its success, such as a single task, is ended by the action once it
+    observes True.
 
     .. note:: :class:`~coraplex.plans.designator.DesignatorParameters` is the last
         base, because ORMatic resolves a data access object's parent by walking the
@@ -68,10 +67,8 @@ class Action(
     @property
     def action_body(self) -> Optional[StatechartNode]:
         """
-        :return: The child running what this action does: the node
-            :meth:`create_action_body` created, or the
-            :class:`~cramph.composites.Attempt` holding it if its owner decides its
-            success. None until the action was expanded.
+        :return: The child running what this action does, which is the node
+            :meth:`create_action_body` created. None until the action was expanded.
         """
         if not self.children:
             return None
@@ -104,7 +101,7 @@ class Action(
         """
         Puts the node this action creates below it.
         """
-        self._add_child_to_statechart(Attempt.deciding(self.create_action_body()))
+        self._run_as_action_body(self.create_action_body())
 
     def replace_action_body(self, node: StatechartNode) -> None:
         """
@@ -120,13 +117,29 @@ class Action(
         if replaced is None:
             raise ActionNotExpanded(self)
         self.statechart.remove_node(replaced)
-        self._add_child_to_statechart(Attempt.deciding(node))
+        self._run_as_action_body(node)
+
+    def _run_as_action_body(self, node: StatechartNode) -> None:
+        """
+        Puts `node` below this action and ends it once it is at its goal, unless it
+        decides its own success.
+        """
+        self._add_child_to_statechart(node)
+        self._succeed_at_its_goal(node)
 
     def build_artifacts(self, context: StatechartContext) -> NodeArtifacts:
         """
-        Report what the body reached, which this action ends with in the same tick.
+        Report how the body ended, or nothing while it has not.
         """
-        return NodeArtifacts(observation=Scalar(self.action_body.observation_variable))
+        return NodeArtifacts(
+            observation=trinary_if_cases(
+                cases=[
+                    (self.action_body.is_succeeded, Scalar.const_true()),
+                    (self.action_body.is_failed_or_interrupted, Scalar.const_false()),
+                ],
+                else_result=Scalar.const_trinary_unknown(),
+            )
+        )
 
     @staticmethod
     def pre_condition(

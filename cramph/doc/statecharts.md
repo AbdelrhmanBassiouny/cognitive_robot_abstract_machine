@@ -365,8 +365,9 @@ instead of writing its fail condition: `Parallel` fails once too few of its node
 reach `minimum_success`, and every monitored composite statechart node fails once its
 monitored node ended without succeeding.
 
-`Attempt` is the bridge between the two: it runs a node its owner ends and turns it into a node
-that ends itself.
+A node its owner ends becomes a step by being handed to an ordering template, which is then
+its owner and ends it once it observes True. `Attempt` does the same for a single node and
+adds failure monitors that decide when to give up on it.
 
 ```{mermaid}
 flowchart LR
@@ -382,21 +383,20 @@ flowchart LR
         ordering(["Sequence, TryInOrder,<br/>TryAll, RepeatUntil"])
         steps(["FunctionCall, MoveBranch,<br/>CompositeNodeChoosingItsChild"])
     end
-    owner -- "wrapped in an Attempt" --> attempt
+    owner -- "task of" --> attempt
+    owner -- "ended at its goal by" --> ordering
     itself -- "usable as a step of" --> ordering
 ```
 
 The ordering templates (`Sequence`, `TryInOrder`, `TryAll`, `RepeatUntil`) decide when their
 children start and end, so they check every child they are given:
 
-- A child whose owner decides its success is wrapped in an `Attempt` without failure monitors
-  automatically. Such an attempt fails only if the child fails on its own, as `Parallel` and
-  the monitored composite statechart nodes can.
-- `TryInOrder` (for every alternative but the last) and `RepeatUntil` only move on once an
-  attempt failed. They reject an `Attempt` that cannot fail, written by hand or created
-  automatically, with an `AttemptCannotFailError` at compile time. An attempt cannot fail if it
-  has no failure monitors and its task has neither a written nor an inherent fail
-  condition.
+- A child whose owner decides its success gets its success condition from the template: it
+  succeeds once it observes True, unless it fails on the same tick. Such a child fails only if
+  it fails on its own, as `Parallel` and the monitored composite statechart nodes can.
+- `TryInOrder` (for every alternative but the last) and `RepeatUntil` only move on once a
+  child failed. They reject a child that cannot fail with a `ChildCannotFailError` at compile
+  time. A child cannot fail if it has neither a written nor an inherent fail condition.
 - A child whose start, pause, success, interrupt or reset condition was already set is
   rejected with a `ChildTransitionAlreadyWiredError`, because those are the template's to
   decide. The fail condition is exempt, since a node declares its own failure.
@@ -423,8 +423,9 @@ reaches its goal or a monitor gives up on it.
 The task is never ended by the attempt directly. It keeps running until the attempt
 itself ends and interrupts it. The attempt fails on the tick a failure monitor fires,
 which interrupts the monitor and keeps what it observed as its last observation, so
-`attempt.failure_reasons` can list the monitors that caused a failure after the fact. An empty
-`failure_monitors` list states that the attempt cannot fail.
+`attempt.failure_reasons` can list the monitors that caused a failure after the fact. An
+attempt needs at least one failure monitor; creating one without raises an
+`AttemptWithoutFailureMonitorsError`.
 
 ```{mermaid}
 flowchart LR
@@ -482,7 +483,7 @@ nodes are left to reach `minimum_success` at all.
 that is still running undo what it achieved. For the same reason it is a
 node whose owner decides its success and never succeeds on its own; it only fails on its own,
 once too few nodes are left. Put it into an `Attempt`, or hand it to an
-ordering template, which does that for you, to get a step that finishes once all nodes are at
+ordering template, to get a step that finishes once all nodes are at
 their goals together.
 
 ```{mermaid}
@@ -510,8 +511,8 @@ alternative starts once the previous one ended without succeeding.
 - It observes **False** once every alternative ended without succeeding.
 
 Each alternative decides for itself when to give up, typically as an `Attempt` with failure
-monitors. An attempt that cannot fail would keep the later alternatives from ever starting, so
-it is rejected anywhere but last.
+monitors. An alternative that cannot fail would keep the later alternatives from ever
+starting, so it is rejected anywhere but last.
 
 ```{mermaid}
 flowchart LR
@@ -542,15 +543,15 @@ Runs all of its `nodes` at the same time and takes the first one that works.
 `RepeatUntil` runs a `task` and resets it whenever it fails, until either the task succeeds or
 `stop_retry_monitor` calls the retrying off.
 
-- The task is wrapped in an attempt if it needs one. Its failure monitors decide what counts
-  as a failed try. An attempt that cannot fail would never be retried, so it is rejected.
+- What counts as a failed try is stated on the task, typically as an `Attempt` with failure
+  monitors. A task that cannot fail would never be retried, so it is rejected.
 - A failed try is reset on the next tick, as long as the stop monitor has not
   observed True. Resetting a goal resets everything below it, so a composite task starts over as a
   whole.
-- Once the stop monitor's `last_observed_true` is True, the attempt is interrupted and not
-  started again. A stop monitor that has not observed anything yet does not hold the attempt
+- Once the stop monitor's `last_observed_true` is True, the task is interrupted and not
+  started again. A stop monitor that has not observed anything yet does not hold the task
   back.
-- It observes **True** once the attempt succeeded, and **False** once the stop monitor
+- It observes **True** once the task succeeded, and **False** once the stop monitor
   observed True.
 - If an `exception` is given, a `CancelStatechart` raises it as soon as the stop monitor's
   `last_observed_true` is True.
@@ -560,11 +561,11 @@ flowchart LR
     subgraph repeat ["RepeatUntil"]
         direction LR
         stop(["stop_retry_monitor"])
-        attempt(["attempt"])
+        task(["task"])
         cancel(["CancelStatechart<br/>(only with an exception)"])
     end
-    stop -- "start: not last_observed_true<br/>interrupt: last_observed_true" --> attempt
-    attempt -- "reset: is_failed and not<br/>last_observed_true of the stop monitor" --> attempt
+    stop -- "start: not last_observed_true<br/>interrupt: last_observed_true" --> task
+    task -- "reset: is_failed and not<br/>last_observed_true of the stop monitor" --> task
     stop -- "start: last_observed_true" --> cancel
 ```
 
@@ -650,9 +651,8 @@ statechart.add_node(EndStatechart.when_true(plan))
 After running it:
 
 - `slow_approach` is FAILED, and `slow_approach.failure_reasons` names the `timeout` monitor.
-- `fast_approach` and `retreat` were wrapped in attempts, which both SUCCEEDED.
-- `plan` is SUCCEEDED, and the counters themselves are INTERRUPTED, because their attempts
-  ended them.
+- `fast_approach` and `retreat` are SUCCEEDED, ended by the templates running them.
+- `plan` is SUCCEEDED, and the `slow` counter is INTERRUPTED, because its attempt ended it.
 
 [Running a Statechart](examples/running_a_statechart.md) executes this plan and plots it.
 

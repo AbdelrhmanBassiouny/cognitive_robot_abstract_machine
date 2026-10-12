@@ -290,7 +290,7 @@ def test_a_template_whose_monitored_node_failed_observing_true_fails_its_attempt
     goal = goal_type(
         monitor=ConstFalseNode(name="monitor"), monitored_node=monitored_node
     )
-    attempt = Attempt(task=goal, failure_monitors=[])
+    attempt = Attempt(task=goal, failure_monitors=[ConstFalseNode()])
 
     tick_compiled(attempt)
 

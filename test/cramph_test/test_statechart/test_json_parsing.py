@@ -205,9 +205,7 @@ def test_structure_copy_keeps_the_base_kinds_of_the_statechart_nodes():
     msc_copy = msc.create_structure_copy()
 
     assert type(msc_copy.get_node_by_index(trigger.index)) is StructureCopyNode
-    assert (
-        type(msc_copy.get_node_by_index(goal.index)) is StructureCopyCompositeNode
-    )
+    assert type(msc_copy.get_node_by_index(goal.index)) is StructureCopyCompositeNode
     assert type(msc_copy.get_node_by_index(end.index)) is EndStatechart
     cancel_copy = msc_copy.get_node_by_index(cancel.index)
     assert type(cancel_copy) is CancelStatechart
@@ -332,9 +330,7 @@ def test_child_added_to_goal_is_its_child_once_after_json_round_trip():
         new_json_data, context=StatechartContext(world=World())
     )
     sequence_copy = msc_copy.get_node_by_index(sequence.index)
-    assert [node.name for node in sequence_copy.nodes] == [
-        sequence.find_child_running(child).name
-    ]
+    assert [node.name for node in sequence_copy.nodes] == [child.name]
 
 
 def test_children_of_compiled_goal_are_its_children_once_after_json_round_trip(

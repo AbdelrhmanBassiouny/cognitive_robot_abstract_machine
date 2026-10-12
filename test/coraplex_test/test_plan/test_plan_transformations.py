@@ -11,6 +11,7 @@ from coraplex.exceptions import (
     ReachHasNoFinalApproach,
 )
 from cramph.exceptions import NotRunByLanguageNodeError
+from cramph.nodes_for_testing import ConstFalseNode
 from coraplex.plans.plan_transformation import (
     InsertionTransformation,
     PlanRewriting,
@@ -41,7 +42,7 @@ from coraplex.robot_plans.plan_transformations import (
     ParkArmsAroundPickAndPlaceSteps,
     ParkArmsBeforeFirstAction,
 )
-from cramph.composites import Attempt, ChildChooser, Sequence
+from cramph.composites import Attempt, ChildChooser, CramLanguageNode, Sequence
 from cramph.context import StatechartContext
 from cramph.node import StatechartNode
 from giskardpy.motion_statechart.goals.gripper import MoveGripper
@@ -92,13 +93,13 @@ def rewritten(
 def steps_of(node: StatechartNode) -> List[StatechartNode]:
     """
     :param node: An expanded action, or a plan language node.
-    :return: The steps it runs, in order, each read through the attempt holding it.
+    :return: The steps it runs, in order, which is its body alone for an action whose
+        body is a single node.
     """
-    language_node = node.action_body if isinstance(node, Action) else node
-    return [
-        child.task if isinstance(child, Attempt) else child
-        for child in language_node.nodes
-    ]
+    body = node.action_body if isinstance(node, Action) else node
+    if not isinstance(body, CramLanguageNode):
+        return [body]
+    return list(body.nodes)
 
 
 def kind_of(step: StatechartNode) -> type:
@@ -991,7 +992,9 @@ def test_the_opening_joins_the_sequence_a_grounded_pick_up_runs_in(
     candidate_steps = Sequence([candidate])
 
     underspecified.choose_child_with(
-        ChoosesTheGivenChild(child=Attempt(task=candidate_steps, failure_monitors=[])),
+        ChoosesTheGivenChild(
+            child=Attempt(task=candidate_steps, failure_monitors=[ConstFalseNode()])
+        ),
         plan.statechart.context,
     )
 

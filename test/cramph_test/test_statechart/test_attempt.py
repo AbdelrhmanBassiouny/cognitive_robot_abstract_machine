@@ -12,6 +12,7 @@ from cramph.executor import StatechartExecutor
 from cramph.context import StatechartContext
 from cramph.data_types import LifeCycleValues, ObservationStateValues
 from cramph.composites import Attempt, Sequence
+from cramph.exceptions import AttemptWithoutFailureMonitorsError
 from cramph.node import StatechartNode
 from cramph.statechart import Statechart
 from cramph.monitors import CountTicks, Pulse
@@ -20,7 +21,6 @@ from cramph.nodes_for_testing import (
     ConstTrueNode,
     NodeDeclaringItsOwnFailure,
     NodeObservingNothingYet,
-    NodeSucceedingOnObservingTrue,
 )
 from semantic_digital_twin.world import World
 
@@ -78,7 +78,7 @@ def test_an_attempt_succeeds_once_its_task_reaches_its_goal():
     task it held open is only taken down with it.
     """
     task = ConstTrueNode(name="task")
-    attempt = Attempt(task=task, failure_monitors=[])
+    attempt = Attempt(task=task, failure_monitors=[ConstFalseNode()])
 
     _compile_and_tick(attempt)
 
@@ -92,7 +92,9 @@ def test_an_attempt_ends_itself_without_anything_wiring_a_success_condition():
     Supplying the ending a task cannot produce is the whole point of the template, so it
     must not depend on a parent having wired one.
     """
-    attempt = Attempt(task=ConstTrueNode(name="task"), failure_monitors=[])
+    attempt = Attempt(
+        task=ConstTrueNode(name="task"), failure_monitors=[ConstFalseNode()]
+    )
 
     _compile_and_tick(attempt)
 
@@ -172,12 +174,24 @@ def test_an_attempt_observes_nothing_while_neither_outcome_has_happened():
     }
 
 
-def test_an_attempt_without_failure_monitors_never_gives_up():
+def test_an_attempt_without_failure_monitors_is_rejected():
     """
-    An empty list of failure monitors is the caller stating that this task cannot fail,
-    which leaves nothing that could end an attempt short of its goal.
+    Without a failure monitor nothing could give up on the task, which is what an
+    attempt exists to decide.
     """
-    attempt = Attempt(task=ConstFalseNode(name="task"), failure_monitors=[])
+    with pytest.raises(AttemptWithoutFailureMonitorsError):
+        Attempt(task=ConstFalseNode(name="task"), failure_monitors=[])
+
+
+def test_an_attempt_whose_failure_monitors_never_fire_never_gives_up():
+    """
+    Being short of its goal is no failure, so only a failure monitor ends an attempt
+    short of it.
+    """
+    attempt = Attempt(
+        task=ConstFalseNode(name="task"),
+        failure_monitors=[ConstFalseNode(name="never gives up")],
+    )
 
     _, executor = _compile(attempt)
 
@@ -194,7 +208,7 @@ def test_an_attempt_fails_once_its_task_ended_without_succeeding():
         task=ConstFalseNode(name="inner_task"),
         failure_monitors=[CountTicks(ticks=TICKS_UNTIL_GIVING_UP, name="gave_up")],
     )
-    attempt = Attempt(task=task, failure_monitors=[])
+    attempt = Attempt(task=task, failure_monitors=[ConstFalseNode()])
 
     _compile_and_tick(attempt)
 
@@ -210,7 +224,7 @@ def test_an_attempt_fails_once_its_task_failed_while_observing_true():
     """
     task = ConstTrueNode(name="task")
     task.fail_condition = task.observes_true
-    attempt = Attempt(task=task, failure_monitors=[])
+    attempt = Attempt(task=task, failure_monitors=[ConstFalseNode()])
 
     _compile_and_tick(attempt)
 
@@ -322,8 +336,12 @@ def test_an_attempt_is_a_usable_sequence_step():
     A step that ends itself is what a sequence needs to move on, which is what wrapping
     a task in an attempt buys.
     """
-    first = Attempt(task=ConstTrueNode(name="first_task"), failure_monitors=[])
-    second = Attempt(task=ConstTrueNode(name="second_task"), failure_monitors=[])
+    first = Attempt(
+        task=ConstTrueNode(name="first_task"), failure_monitors=[ConstFalseNode()]
+    )
+    second = Attempt(
+        task=ConstTrueNode(name="second_task"), failure_monitors=[ConstFalseNode()]
+    )
 
     _compile_and_tick(Sequence(nodes=[first, second]))
 
@@ -346,7 +364,10 @@ def test_a_failed_attempt_makes_its_sequence_report_a_failure():
     sequence = Sequence(
         nodes=[
             failing_step,
-            Attempt(task=ConstTrueNode(name="never_reached"), failure_monitors=[]),
+            Attempt(
+                task=ConstTrueNode(name="never_reached"),
+                failure_monitors=[ConstFalseNode()],
+            ),
         ]
     )
 
@@ -358,8 +379,8 @@ def test_a_failed_attempt_makes_its_sequence_report_a_failure():
 
 def test_a_task_that_fails_on_its_own_makes_its_sequence_report_a_failure():
     """
-    A task may declare that it cannot continue, and the attempt a sequence wraps it in
-    has to pass that on rather than hold the sequence open forever.
+    A task may declare that it cannot continue, and the sequence running it has to
+    report that rather than stay open forever.
     """
     task = NodeDeclaringItsOwnFailure(name="task")
     sequence = Sequence(nodes=[task])
@@ -367,25 +388,5 @@ def test_a_task_that_fails_on_its_own_makes_its_sequence_report_a_failure():
     _compile_and_tick(sequence)
 
     assert task.life_cycle_state == LifeCycleValues.FAILED
-    assert task.parent_node.life_cycle_state == LifeCycleValues.FAILED
     assert sequence.life_cycle_state == LifeCycleValues.FAILED
     assert sequence.last_observation_state == ObservationStateValues.FALSE
-
-
-# %% deciding a node
-
-
-def test_a_node_deciding_itself_needs_no_attempt_to_decide_it():
-    node = NodeSucceedingOnObservingTrue(
-        name="deciding itself", observation=ObservationStateValues.TRUE
-    )
-
-    assert Attempt.deciding(node) is node
-
-
-def test_a_node_its_owner_decides_is_decided_by_an_attempt_that_cannot_give_up():
-    node = ConstTrueNode(name="decided by its owner")
-
-    attempt = Attempt.deciding(node)
-
-    assert (attempt.task, attempt.failure_monitors) == (node, [])

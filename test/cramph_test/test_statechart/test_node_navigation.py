@@ -281,18 +281,17 @@ def test_an_ancestor_does_not_precede_its_descendants(
     assert nested_statechart.get_preceding_node_by_type(inner_last, Parallel) is None
 
 
-# %% a goal that wraps its children
+# %% the children of a goal
 
 
-def test_a_sequence_answers_the_children_it_wrapped_its_steps_in(
+def test_the_children_of_a_sequence_are_the_steps_it_was_handed(
     statechart_executor: StatechartExecutor,
 ):
     statechart = Statechart(context=statechart_executor.context)
-    sequence = Sequence(nodes=[ConstTrueNode(name="step"), ConstTrueNode(name="next")])
-    statechart.add_node(sequence)
+    steps = [ConstTrueNode(name="step"), ConstTrueNode(name="next")]
+    statechart.add_node(sequence := Sequence(nodes=list(steps)))
 
-    assert sequence.children == sequence.nodes
-    assert sequence.children[0].descendants == [node_named(statechart, "step")]
+    assert sequence.children == steps
 
 
 # %% navigating while the tree is still expanding
@@ -337,8 +336,7 @@ def _self_deciding_step() -> NodeObservingAFixedValue:
 
 def _step_decided_by_its_owner() -> NodeObservingAFixedValue:
     """
-    :return: A node a plan language node only runs wrapped in an
-        :class:`~cramph.composites.Attempt`.
+    :return: A node a plan language node ends once it observes True.
     """
     return NodeObservingAFixedValue(observation=ObservationStateValues.TRUE)
 
