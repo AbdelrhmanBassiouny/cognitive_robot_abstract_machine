@@ -14,7 +14,6 @@ from coraplex.exceptions import (
     ReachHasNoFinalApproach,
 )
 from coraplex.locations.locations import ReachabilityLocation
-from coraplex.plans.underspecified import UnderspecifiedNode
 from coraplex.plans.plan_transformation import (
     InsertionTransformation,
     MatchedType,
@@ -36,6 +35,7 @@ from coraplex.robot_plans.actions.core.navigation import (
 )
 from coraplex.robot_plans.actions.core.pick_up import PickUpAction, ReachAction
 from coraplex.robot_plans.actions.core.robot_body import ParkArmsAction
+from cramph.composites import StatementNode
 from cramph.node import StatechartNode
 from giskardpy.motion_statechart.tasks.cartesian_tasks import (
     CartesianPose,
@@ -204,7 +204,7 @@ class DrawerOpening(
             ),
             open_container=a(OpenAction)(handle=drawer.handle, arm=arm),
         )
-        return [UnderspecifiedNode(statement=open_the_drawer)]
+        return [StatementNode(statement=open_the_drawer)]
 
     def anchor(self, plan_node: StatechartNode) -> StatechartNode:
         return plan_node
@@ -247,7 +247,7 @@ class OpenDrawerBeforePickUp(DrawerOpening[PickUpAction]):
         nodes.extend(
             [
                 ParkArmsAction(plan_node.robot.all_arms),
-                UnderspecifiedNode(statement=drive_to_the_object),
+                StatementNode(statement=drive_to_the_object),
             ]
         )
         return nodes
@@ -283,20 +283,18 @@ class OpenDrawerBeforeMoveAndPickUp(DrawerOpening[MoveAndPickUpAction]):
     """
 
     def matches_node(self, plan_node: StatechartNode) -> bool:
-        if isinstance(plan_node, UnderspecifiedNode):
+        if isinstance(plan_node, StatementNode):
             return issubclass(plan_node.statement._type_, MoveAndPickUpAction)
         return super().matches_node(plan_node)
 
-    def is_applicable(
-        self, plan_node: MoveAndPickUpAction | UnderspecifiedNode
-    ) -> bool:
+    def is_applicable(self, plan_node: MoveAndPickUpAction | StatementNode) -> bool:
         target = self._pick_up_target(plan_node)
         return target is not None and bool(
             self._closed_drawers_containing(target.graspable, plan_node.context.world)
         )
 
     def nodes_to_insert(
-        self, plan_node: MoveAndPickUpAction | UnderspecifiedNode
+        self, plan_node: MoveAndPickUpAction | StatementNode
     ) -> List[StatechartNode]:
         target = self._pick_up_target(plan_node)
         nodes = []
@@ -304,7 +302,7 @@ class OpenDrawerBeforeMoveAndPickUp(DrawerOpening[MoveAndPickUpAction]):
             target.graspable, plan_node.context.world
         ):
             nodes.extend(self.opening_nodes(drawer, target.arm, plan_node.context))
-        if isinstance(plan_node, UnderspecifiedNode):
+        if isinstance(plan_node, StatementNode):
             # The candidates are grounded after the opening, which leaves the arms at
             # the handle, where they would stand in collision at every standing pose.
             robot = plan_node.context.require_extension(RobotAccess).robot
@@ -312,14 +310,14 @@ class OpenDrawerBeforeMoveAndPickUp(DrawerOpening[MoveAndPickUpAction]):
         return nodes
 
     def _pick_up_target(
-        self, plan_node: MoveAndPickUpAction | UnderspecifiedNode
+        self, plan_node: MoveAndPickUpAction | StatementNode
     ) -> Optional[PickUpTarget]:
         """
         :param plan_node: A node this matches.
         :return: What the move-and-pick-up picks up and with which arm, or ``None`` if
             it is still to be grounded and its candidates differ in either.
         """
-        if isinstance(plan_node, UnderspecifiedNode):
+        if isinstance(plan_node, StatementNode):
             return self._pick_up_target_shared_by_candidates_of(plan_node.statement)
         pick_up = plan_node.pick_up
         return PickUpTarget(graspable=pick_up.grasp.graspable, arm=pick_up.arm)

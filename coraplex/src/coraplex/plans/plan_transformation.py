@@ -17,8 +17,11 @@ from typing_extensions import (
 
 from coraplex.datastructures.enums import InsertionPosition
 from coraplex.exceptions import CannotMatchOnType
-from cramph.composites import CramLanguageNode
-from cramph.context import ContextExtension
+from cramph.composites import (
+    ChosenChildObserver,
+    CompositeNodeChoosingItsChild,
+    CramLanguageNode,
+)
 from cramph.node import StatechartNode
 from krrood.patterns.subclass_safe_generic import SubClassSafeGeneric
 
@@ -144,7 +147,7 @@ class InsertionTransformation(
 
 
 @dataclass
-class PlanRewriting(ContextExtension):
+class PlanRewriting(ChosenChildObserver):
     """
     Offers the nodes of a plan to the transformations that may rewrite it.
 
@@ -171,6 +174,14 @@ class PlanRewriting(ContextExtension):
             since the nodes offered so far belong to the statechart this one rewrites.
         """
         return PlanRewriting(transformations=list(self.transformations))
+
+    def observe_chosen_child(
+        self, node: CompositeNodeChoosingItsChild, child: StatechartNode
+    ) -> None:
+        """
+        Rewrites `child`, since it joined the plan while it runs.
+        """
+        self.rewrite(child)
 
     def rewrite(self, root: StatechartNode) -> None:
         """

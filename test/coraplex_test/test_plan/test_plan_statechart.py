@@ -12,13 +12,13 @@ from typing_extensions import Iterator, List
 from coraplex.exceptions import MotionDidNotFinish
 from coraplex.locations.base import Location
 from coraplex.plans.failures import EmptyUnderspecified
-from coraplex.plans.underspecified import UnderspecifiedNode
 from coraplex.robot_plans.actions.core.navigation import NavigateAction
 from coraplex.robot_plans.actions.core.pick_up import PickUpAction
 from coraplex.robot_plans.actions.core.placing import PlaceAction
 from coraplex.robot_plans.actions.core.robot_body import MoveTorsoAction
 from coraplex.plans import executors
 from cramph.composites import (
+    StatementNode,
     ChildChooser,
     ChildChooserAccess,
     CompositeNodeChoosingItsChild,
@@ -100,7 +100,7 @@ def test_a_plan_grounding_an_action_mid_sequence_runs_as_one_statechart(
     plan = Sequence(
         [
             torso,
-            UnderspecifiedNode(
+            StatementNode(
                 statement=a(NavigateAction)(
                     target_location=variable(
                         Pose, domain=[_pose_in_front_of_the_robot(world, robot)]
@@ -113,7 +113,7 @@ def test_a_plan_grounding_an_action_mid_sequence_runs_as_one_statechart(
     run_plan(plan, extensions)
 
     statechart: Statechart = plan.statechart
-    navigate = plan.nodes[1].chosen_actions[-1]
+    navigate = plan.nodes[1].grounded_nodes[-1]
     assert isinstance(navigate, NavigateAction)
     assert navigate.statechart is statechart
     assert torso.statechart is statechart
@@ -132,7 +132,7 @@ def test_an_underspecified_action_is_grounded_against_the_world_the_steps_before
     plan = Sequence(
         [
             MoveTorsoAction(TorsoState.HIGH),
-            UnderspecifiedNode(
+            StatementNode(
                 statement=a(NavigateAction)(
                     target_location=variable(Pose, domain=location)
                 )
@@ -284,7 +284,7 @@ def test_an_underspecified_node_is_sent_as_a_node_choosing_its_child(
     itself, and not the statement it is grounded from.
     """
     world, robot, extensions = pr2_apartment_context
-    node = UnderspecifiedNode(statement=a(NavigateAction)(target_location=...))
+    node = StatementNode(statement=a(NavigateAction)(target_location=...))
 
     received = from_json(json.loads(json.dumps(to_json(node))))
 
@@ -303,7 +303,7 @@ def test_a_plan_on_the_robot_is_sent_once_with_the_chooser_grounding_its_actions
     plan = Sequence(
         [
             MoveTorsoAction(TorsoState.HIGH),
-            UnderspecifiedNode(
+            StatementNode(
                 statement=a(NavigateAction)(
                     target_location=variable(
                         Pose, domain=[_pose_in_front_of_the_robot(world, robot)]
@@ -438,7 +438,7 @@ def test_an_underspecified_action_out_of_candidates_on_the_robot_says_it_is_empt
         "GiskardClientExecutor",
         lambda ros_node, context: GiskardTickingTheGoalUntilItEnded(),
     )
-    plan = UnderspecifiedNode(
+    plan = StatementNode(
         statement=a(NavigateAction)(target_location=variable(Pose, domain=[]))
     )
     executor = robot_executor(extensions)

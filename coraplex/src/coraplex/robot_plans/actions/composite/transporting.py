@@ -1,13 +1,11 @@
 from __future__ import annotations
 
-from abc import ABC
 from dataclasses import dataclass
 
 from typing_extensions import Optional, Self
 
 from krrood.entity_query_language.factories import a, variable
 from coraplex.locations.locations import ReachabilityLocation
-from coraplex.plans.underspecified import UnderspecifiedNode
 from cramph.composites import Sequence
 from cramph.context import StatechartContext
 from cramph.node import StatechartNode
@@ -37,29 +35,7 @@ from semantic_digital_twin.spatial_types.spatial_types import Pose
 
 
 @dataclass(eq=False, repr=False)
-class ActionOfSteps(Action, ABC):
-    """
-    An action running other actions as its steps, each given either as the action or as
-    an underspecified statement of it.
-    """
-
-    @staticmethod
-    def _as_node(step: Action) -> StatechartNode:
-        """
-        Turns a step of this action into the node that runs it.
-
-        :param step: A step of this action, or an underspecified statement of it.
-        :return: The step itself, or an
-            :class:`~coraplex.plans.underspecified.UnderspecifiedNode` grounding its
-            statement once it is reached.
-        """
-        if isinstance(step, Match):
-            return UnderspecifiedNode(statement=step)
-        return step
-
-
-@dataclass(eq=False, repr=False)
-class TransportAction(ActionOfSteps):
+class TransportAction(Action):
     """
     Picks an object up with one step and puts it down with another.
     """
@@ -135,16 +111,16 @@ class TransportAction(ActionOfSteps):
         return Sequence(
             [
                 ParkArmsAction(self.robot.all_arms),
-                self._as_node(self.pick_up),
+                self.pick_up,
                 ParkArmsAction(self.robot.all_arms),
-                self._as_node(self.place),
+                self.place,
                 ParkArmsAction(self.robot.all_arms),
             ]
         )
 
 
 @dataclass(eq=False, repr=False)
-class PickAndPlaceAction(ActionOfSteps):
+class PickAndPlaceAction(Action):
     """
     Picks an object up with one step and puts it down with another, without moving the
     base of the robot.
@@ -164,14 +140,14 @@ class PickAndPlaceAction(ActionOfSteps):
     def create_action_body(self) -> StatechartNode:
         return Sequence(
             [
-                self._as_node(self.pick_up),
-                self._as_node(self.place),
+                self.pick_up,
+                self.place,
             ]
         )
 
 
 @dataclass(eq=False, repr=False)
-class MoveAndPlaceAction(ActionOfSteps):
+class MoveAndPlaceAction(Action):
     """
     Navigates to where the robot stands, faces the target and places the object there.
     """
@@ -220,15 +196,15 @@ class MoveAndPlaceAction(ActionOfSteps):
     def create_action_body(self) -> StatechartNode:
         return Sequence(
             [
-                self._as_node(self.navigate),
-                self._as_node(self.face_and_look_at),
-                self._as_node(self.place),
+                self.navigate,
+                self.face_and_look_at,
+                self.place,
             ]
         )
 
 
 @dataclass(eq=False, repr=False)
-class MoveAndPickUpAction(ActionOfSteps):
+class MoveAndPickUpAction(Action):
     """
     Navigates to where the robot stands, faces the object and picks it up.
     """
@@ -337,15 +313,15 @@ class MoveAndPickUpAction(ActionOfSteps):
     def create_action_body(self) -> StatechartNode:
         return Sequence(
             [
-                self._as_node(self.navigate),
-                self._as_node(self.face_and_look_at),
-                self._as_node(self.pick_up),
+                self.navigate,
+                self.face_and_look_at,
+                self.pick_up,
             ]
         )
 
 
 @dataclass(eq=False, repr=False)
-class MoveAndOpenAction(ActionOfSteps):
+class MoveAndOpenAction(Action):
     """
     Navigates to where the robot stands, faces the handle and opens its container.
     """
@@ -389,8 +365,8 @@ class MoveAndOpenAction(ActionOfSteps):
     def create_action_body(self) -> StatechartNode:
         return Sequence(
             [
-                self._as_node(self.navigate),
-                self._as_node(self.face_and_look_at),
-                self._as_node(self.open_container),
+                self.navigate,
+                self.face_and_look_at,
+                self.open_container,
             ]
         )

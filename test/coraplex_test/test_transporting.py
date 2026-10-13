@@ -11,9 +11,8 @@ from typing_extensions import Callable, List, Type
 from krrood.entity_query_language.factories import a, variable
 from krrood.entity_query_language.query.match import Match
 from coraplex.locations.locations import ReachabilityLocation
-from cramph.composites import Sequence
+from cramph.composites import Sequence, StatementNode
 from cramph.node import StatechartNode
-from coraplex.plans.underspecified import UnderspecifiedNode
 from coraplex.robot_plans.actions.base import Action
 from coraplex.robot_plans.actions.core.navigation import (
     FaceAtAction,
@@ -74,7 +73,7 @@ def _underspecified_steps(transport: TransportAction) -> List[Type[Action]]:
     return [
         child.statement._type_
         for child in _steps_of(transport)
-        if isinstance(child, UnderspecifiedNode)
+        if isinstance(child, StatementNode)
     ]
 
 
@@ -229,7 +228,7 @@ def test_a_pick_and_place_grounds_the_steps_it_is_given(pr2_apartment_context):
     assert [
         child.statement._type_
         for child in _steps_of(pick_and_place)
-        if isinstance(child, UnderspecifiedNode)
+        if isinstance(child, StatementNode)
     ] == [PickUpAction, PlaceAction]
 
 

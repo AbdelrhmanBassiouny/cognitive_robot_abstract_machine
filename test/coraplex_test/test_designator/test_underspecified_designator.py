@@ -9,7 +9,7 @@ from krrood.entity_query_language.backends import (
     ProbabilisticBackend,
 )
 from krrood.entity_query_language.factories import a, variable, variable_from
-from cramph.composites import ChildChooserAccess, Sequence
+from cramph.composites import ChildChooserAccess, Sequence, StatementNode
 from cramph.data_types import LifeCycleValues
 from cramph.node import StatechartNode
 
@@ -24,7 +24,6 @@ from cramph.statechart import StateHistory, StateHistoryObserver
 from coraplex.plans.underspecified import (
     ActionTrial,
     UnderspecifiedChildChooser,
-    UnderspecifiedNode,
 )
 from coraplex.robot_plans.actions.base import Action
 from coraplex.robot_plans.actions.core.navigation import NavigateAction
@@ -170,11 +169,11 @@ def test_underspecified_action(apartment_world_pr2_copy_with_context):
         ),
     )
 
-    plan = UnderspecifiedNode(statement=action)
+    plan = StatementNode(statement=action)
     run_plan(plan, extensions)
 
     assert plan.life_cycle_state == LifeCycleValues.SUCCEEDED
-    assert isinstance(plan.chosen_actions[-1], NavigateAction)
+    assert isinstance(plan.grounded_nodes[-1], NavigateAction)
 
 
 def test_underspecified_action_with_ellipsis(apartment_world_pr2_copy_with_context):
@@ -196,11 +195,11 @@ def test_underspecified_action_with_ellipsis(apartment_world_pr2_copy_with_conte
         ),
     )
 
-    plan = UnderspecifiedNode(statement=action)
+    plan = StatementNode(statement=action)
     run_plan(plan, extensions)
 
     assert plan.life_cycle_state == LifeCycleValues.SUCCEEDED
-    assert isinstance(plan.chosen_actions[-1], NavigateAction)
+    assert isinstance(plan.grounded_nodes[-1], NavigateAction)
 
 
 def test_underspecified_language(apartment_world_pr2_copy_with_context):
@@ -255,12 +254,12 @@ def test_isolation_rejected_candidate_never_touches_real_world(
         dof_id=dof.id,
         fail_on_attempt_number=variable_from([1, None]),
     )
-    plan = UnderspecifiedNode(statement=action)
+    plan = StatementNode(statement=action)
     run_plan(plan, extensions)
 
     assert plan.life_cycle_state == LifeCycleValues.SUCCEEDED
     assert len(plan.children) == 1
-    assert plan.chosen_actions[0].fail_on_attempt_number is None
+    assert plan.grounded_nodes[0].fail_on_attempt_number is None
 
     probe = _registered_probes[probe_key]
     assert len(probe.calls) == 3
@@ -295,7 +294,7 @@ def test_rejected_candidates_are_tried_against_one_copy(
         dof_id=dof.id,
         fail_on_attempt_number=variable_from([1, 2, None]),
     )
-    plan = UnderspecifiedNode(statement=action)
+    plan = StatementNode(statement=action)
     run_plan(plan, extensions)
 
     probe = _registered_probes[probe_key]
@@ -326,13 +325,13 @@ def test_real_failure_keeps_state_and_next_trial_reflects_it(
         dof_id=dof.id,
         fail_on_attempt_number=variable_from([2, None]),
     )
-    plan = UnderspecifiedNode(statement=action)
+    plan = StatementNode(statement=action)
     run_plan(plan, extensions)
 
     assert plan.life_cycle_state == LifeCycleValues.SUCCEEDED
     # Both the failed and the accepted candidate are attached to the tree - a real
     # failure is not undone, only worked around by trying the next candidate.
-    assert [action.fail_on_attempt_number for action in plan.chosen_actions] == [
+    assert [action.fail_on_attempt_number for action in plan.grounded_nodes] == [
         2,
         None,
     ]
@@ -370,7 +369,7 @@ def test_the_underspecified_steps_of_one_plan_are_tried_against_one_copy(
     probe_key = register_probe()
     plan = Sequence(
         [
-            UnderspecifiedNode(
+            StatementNode(
                 statement=a(RecordingAction)(
                     probe_key=probe_key,
                     dof_id=dof.id,
@@ -415,7 +414,7 @@ def _plan_of_two_underspecified_steps(world: World) -> Sequence:
     probe_key = register_probe()
     return Sequence(
         [
-            UnderspecifiedNode(
+            StatementNode(
                 statement=a(RecordingAction)(
                     probe_key=probe_key,
                     dof_id=dof.id,
@@ -501,7 +500,7 @@ def test_a_step_gives_up_after_as_many_candidates_as_the_context_allows(
     world, robot, extensions = apartment_world_pr2_copy_with_context
     extensions = with_grounding(extensions, candidates_to_try=2)
     probe_key = register_probe()
-    plan = UnderspecifiedNode(
+    plan = StatementNode(
         statement=a(RecordingAction)(
             probe_key=probe_key,
             dof_id=world.degrees_of_freedom[0].id,
@@ -533,7 +532,7 @@ def test_a_step_keeps_its_own_limit_over_the_contexts(
 ):
     world, robot, extensions = apartment_world_pr2_copy_with_context
     extensions = with_grounding(extensions, candidates_to_try=2)
-    plan = UnderspecifiedNode(
+    plan = StatementNode(
         statement=a(RecordingAction)(
             probe_key=register_probe(),
             dof_id=world.degrees_of_freedom[0].id,
@@ -552,7 +551,7 @@ def test_a_step_that_runs_out_of_candidates_below_its_limit_says_it_is_empty(
     apartment_world_pr2_copy_with_context,
 ):
     world, robot, extensions = apartment_world_pr2_copy_with_context
-    plan = UnderspecifiedNode(
+    plan = StatementNode(
         statement=a(RecordingAction)(
             probe_key=register_probe(),
             dof_id=world.degrees_of_freedom[0].id,
@@ -690,7 +689,7 @@ def test_a_plan_stops_publishing_its_trial_copy_once_it_has_run(debugging_execut
     world, robot, executor = debugging_executor
     dof = world.degrees_of_freedom[0]
     probe_key = register_probe()
-    plan = UnderspecifiedNode(
+    plan = StatementNode(
         statement=a(RecordingAction)(
             probe_key=probe_key,
             dof_id=dof.id,

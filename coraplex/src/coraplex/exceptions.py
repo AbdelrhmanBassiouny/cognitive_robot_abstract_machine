@@ -93,7 +93,7 @@ class PlanNotCompiled(DataclassException):
 
 
 @dataclass
-class NotAnUnderspecifiedNode(DataclassException):
+class NotAStatementNode(DataclassException):
     """
     Raised when a node asks for a child to be grounded that carries no underspecified
     statement.

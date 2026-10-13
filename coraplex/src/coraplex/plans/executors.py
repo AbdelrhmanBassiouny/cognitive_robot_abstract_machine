@@ -25,11 +25,8 @@ from coraplex.plans.failures import (
     MotionViolatedCollisionAvoidance,
 )
 from coraplex.plans.plan_transformation import PlanRewriting
-from coraplex.plans.underspecified import (
-    UnderspecifiedChildChooser,
-    UnderspecifiedNode,
-)
-from cramph.composites import ChildChooserAccess
+from coraplex.plans.underspecified import UnderspecifiedChildChooser
+from cramph.composites import ChildChooserAccess, StatementNode
 from cramph.context import ContextExtension, StatechartContext
 from cramph.data_types import LifeCycleValues
 from cramph.exceptions import EmptyStatechartError
@@ -200,10 +197,10 @@ class PlanExecutor(Executor, ABC):
         """
         Cancel the statechart once a plan node stops approaching its goal.
 
-        Only the motions a plan node holds when it is compiled are watched; an action an
-        underspecified node chooses later is watched by its own stall monitor. A plan
-        node holding no motion yet is not watched at all, since it would read as stalled
-        from its first tick.
+        Only the motions a plan node holds when it is compiled are watched; an action a
+        statement node chooses later is watched by its own stall monitor. A plan node
+        holding no motion yet is not watched at all, since it would read as stalled from
+        its first tick.
 
         :param statechart: The statechart the plan was added to, which expanded it.
         """
@@ -279,9 +276,9 @@ class PlanExecutor(Executor, ABC):
 
     def _raise_if_plan_failed(self) -> None:
         """
-        :raises CandidateLimitReached: If an underspecified node tried as many actions
+        :raises CandidateLimitReached: If a statement node tried as many actions
             as it may, which is why the plan failed.
-        :raises EmptyUnderspecified: If an underspecified node ran out of actions to
+        :raises EmptyUnderspecified: If a statement node ran out of actions to
             try, which is why the plan failed.
         :raises MotionDidNotFinish: If the plan failed for any other reason.
         """
@@ -302,12 +299,12 @@ class PlanExecutor(Executor, ABC):
 
     def _raise_if_out_of_candidates(self) -> None:
         """
-        :raises CandidateLimitReached: If an underspecified node tried as many actions
+        :raises CandidateLimitReached: If a statement node tried as many actions
             as it may.
-        :raises EmptyUnderspecified: If an underspecified node ran out of actions to
+        :raises EmptyUnderspecified: If a statement node ran out of actions to
             try.
         """
-        for node in self.statechart.get_nodes_by_type(UnderspecifiedNode):
+        for node in self.statechart.get_nodes_by_type(StatementNode):
             if not node.ran_out_of_children:
                 continue
             if node.reached_candidate_limit:

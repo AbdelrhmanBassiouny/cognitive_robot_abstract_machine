@@ -18,6 +18,7 @@ from cramph.composites import (
     PausedWhileTrue,
     RepeatUntil,
     Sequence,
+    StatementNode,
     StoppedWhenTrue,
     TryAll,
     TryInOrder,
@@ -47,6 +48,7 @@ from cramph.node import (
 from cramph.nodes_for_testing import ConstFalseNode, ConstTrueNode
 from cramph.threaded_nodes import FunctionCall
 from cramph.world_modification_nodes import MoveBranch
+from krrood.entity_query_language.factories import a
 from semantic_digital_twin.world import World
 
 from .test_composite_node_choosing_its_child import ChooserAnsweringInTurn
@@ -142,6 +144,10 @@ def _cases() -> list[NodeRoundTripCase]:
         NodeRoundTripCase(
             CompositeNodeChoosingItsChild,
             lambda world: [CompositeNodeChoosingItsChild()],
+        ),
+        NodeRoundTripCase(
+            StatementNode,
+            lambda world: [StatementNode(statement=a(ConstTrueNode)())],
         ),
         NodeRoundTripCase(
             Attempt,
