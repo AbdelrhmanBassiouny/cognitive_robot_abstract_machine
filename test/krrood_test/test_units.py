@@ -1,14 +1,28 @@
 """
-Tests for :mod:`cramcorder.units`: amounts of data and how fast they flow.
+Tests for :mod:`krrood.units`: amounts kept apart by their unit, and how fast they flow.
 """
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import timedelta
 
-from cramcorder.units import BitRate, DataSize
+import pytest
+
+from krrood.exceptions import DifferentQuantities
+from krrood.units import BitRate, DataSize, Quantity
 
 TEN_SECONDS = timedelta(seconds=10)
+
+# %% a quantity counted in fractions
+
+
+@dataclass(order=True)
+class FractionalQuantity(Quantity[float]):
+    """
+    A quantity counted in fractions of its unit, standing in for any such quantity.
+    """
+
 
 # %% amounts of data
 
@@ -27,6 +41,26 @@ def test_amounts_of_data_add_subtract_and_compare() -> None:
 
 def test_an_amount_of_data_scales_to_the_nearest_bit() -> None:
     assert DataSize(10).scaled(0.25) == DataSize(2)
+
+
+def test_dividing_an_amount_by_another_gives_how_often_it_fits() -> None:
+    assert DataSize(300) / DataSize(100) == 3.0
+
+
+# %% quantities counted in fractions
+
+
+def test_a_fractional_quantity_scales_without_rounding() -> None:
+    assert FractionalQuantity(1.0).scaled(0.25) == FractionalQuantity(0.25)
+
+
+def test_amounts_of_different_quantities_do_not_add() -> None:
+    with pytest.raises(DifferentQuantities):
+        DataSize(1) + FractionalQuantity(1.0)
+
+
+def test_amounts_of_different_quantities_are_not_equal() -> None:
+    assert DataSize(1) != FractionalQuantity(1.0)
 
 
 # %% rates

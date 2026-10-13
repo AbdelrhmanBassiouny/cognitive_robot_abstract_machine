@@ -22,11 +22,11 @@ from cramcorder.frame import Frame, Resolution
 from cramcorder.narration import Line, NarratedScene, Storyboard
 from cramcorder.overlays import ProgressBar
 from cramcorder.production import Subtitling, VideoProduction
-from cramcorder.slides import ResultRow, ResultsTable, TextCard
+from cramcorder.slides import ResultRow, ResultsTable, Still, TextCard
 from cramcorder.speech import SoundLevel
 from cramcorder.theme import VideoTheme
-from cramcorder.timeline import Still
-from cramcorder.units import DataSize
+from cramcorder.timeline import Transition
+from krrood.units import DataSize
 
 from .voices import EvenlyPacedVoice
 
@@ -61,15 +61,18 @@ def minimal_storyboard() -> Storyboard:
     return Storyboard(
         [
             NarratedScene(
-                TextCard("A minimal video", "made by a test", held_for=SLIDE_HOLD),
-                (Line("This video was made by a test."),),
+                role_taker=TextCard(
+                    "A minimal video", "made by a test", held_for=SLIDE_HOLD
+                ),
+                lines=(Line("This video was made by a test."),),
             ),
-            NarratedScene(Still(gradient(), held_for=SLIDE_HOLD)),
+            NarratedScene(role_taker=Still(gradient(), held_for=SLIDE_HOLD)),
             NarratedScene(
-                ResultsTable(
+                role_taker=ResultsTable(
                     "Results", (ResultRow("Trials", "2 of 2"),), held_for=SLIDE_HOLD
                 ),
-                (Line("Both trials succeeded."),),
+                lines=(Line("Both trials succeeded."),),
+                transition=Transition.CUT,
             ),
         ]
     )

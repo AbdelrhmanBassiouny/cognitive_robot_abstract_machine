@@ -13,7 +13,8 @@ import pytest
 from cramcorder.frame import Frame, Resolution
 from cramcorder.overlays import ProgressBar
 from cramcorder.theme import VideoTheme
-from cramcorder.timeline import Still, Timeline
+from cramcorder.slides import Still
+from cramcorder.timeline import Scene, Timeline
 
 FRAME_SIZE = Resolution(width=200, height=100)
 RUNS_FOR = timedelta(seconds=4)
@@ -40,7 +41,10 @@ def test_the_progress_bar_runs_on_across_the_scenes_of_a_timeline() -> None:
     hold = timedelta(seconds=2)
     moment = timedelta(seconds=3)
     timeline = Timeline(
-        [Still(page, held_for=hold), Still(page, held_for=hold)],
+        [
+            Scene(role_taker=Still(page, held_for=hold)),
+            Scene(role_taker=Still(page, held_for=hold)),
+        ],
         frames_per_second=10,
         dissolve=timedelta(0),
         overlays=[ProgressBar(theme=theme)],

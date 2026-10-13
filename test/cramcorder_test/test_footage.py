@@ -1,5 +1,5 @@
 """
-Tests for :mod:`cramcorder.footage` and :mod:`cramcorder.footage_scenes`:
+Tests for :mod:`cramcorder.footage` and :mod:`cramcorder.footage_playback`:
 
 footage framed, filling the frame at a speed with a second view in its corner, and a
 title over it.
@@ -15,8 +15,8 @@ import pytest
 from semantic_digital_twin.spatial_types.spatial_types import Point2
 
 from cramcorder.footage import FootageFrame, Framing, ViewOfTheRun
-from cramcorder.footage_scenes import (
-    FootageScene,
+from cramcorder.footage_playback import (
+    FootagePlayback,
     InsetStill,
     TitleOverFootage,
 )
@@ -89,9 +89,9 @@ def test_the_footage_fills_the_frame_with_the_inset_in_the_corner_in_step() -> N
     length, speed, moment = seconds(30), 2.0, seconds(2)
     own = ViewOfTheRun(CountingVideo(), starts_at=inset_start)
     by_hand = ViewOfTheRun(CountingVideo(), starts_at=main_start)
-    scene = FootageScene(by_hand, length=length, speed=speed, inset=own)
+    scene = FootagePlayback(by_hand, length=length, speed=speed, inset=own)
     assert scene.duration == length / speed
-    frame = scene.picture_at(moment)
+    frame = scene.frame_at(moment)
     assert frame.resolution == scene.resolution
     assert own.video.asked[-1] == inset_start + moment * speed
     assert by_hand.video.asked[-1] == main_start + moment * speed
@@ -110,7 +110,7 @@ def test_the_inset_shows_what_it_is_given_before_it_runs() -> None:
     own = ViewOfTheRun(CountingVideo(), starts_at=inset_start)
     by_hand = ViewOfTheRun(CountingVideo(), starts_at=NO_TIME)
     picture = CAMERA_SIZE.blank(STILL_GREY)
-    scene = FootageScene(
+    scene = FootagePlayback(
         by_hand,
         length=seconds(10),
         speed=1.0,
@@ -125,7 +125,7 @@ def test_the_inset_shows_what_it_is_given_before_it_runs() -> None:
 
 
 def test_the_title_stands_over_the_footage_and_fades_out_when_told() -> None:
-    footage = FootageScene(
+    footage = FootagePlayback(
         ViewOfTheRun(CountingVideo(), NO_TIME), length=seconds(6), speed=1.0
     )
     title_for, fade = seconds(4), seconds(0.5)
@@ -135,11 +135,11 @@ def test_the_title_stands_over_the_footage_and_fades_out_when_told() -> None:
     assert titled.duration == footage.duration
     assert titled.title_at(seconds(1)) == 1.0
     assert titled.title_at(title_for + fade) == 0.0
-    with_title = titled.picture_at(seconds(1))
+    with_title = titled.frame_at(seconds(1))
     after_the_fade = seconds(5)
-    without = titled.picture_at(after_the_fade)
+    without = titled.frame_at(after_the_fade)
     assert not np.array_equal(with_title.pixels, without.pixels)
-    assert np.array_equal(without.pixels, footage.picture_at(after_the_fade).pixels)
+    assert np.array_equal(without.pixels, footage.frame_at(after_the_fade).pixels)
 
 
 @pytest.mark.parametrize(
@@ -148,19 +148,19 @@ def test_the_title_stands_over_the_footage_and_fades_out_when_told() -> None:
 def test_the_footage_lasts_the_stretch_divided_by_the_speed(
     length: timedelta, speed: float
 ) -> None:
-    scene = FootageScene(
+    scene = FootagePlayback(
         ViewOfTheRun(CountingVideo(), NO_TIME), length=length, speed=speed
     )
     assert scene.duration == length / speed
 
 
 def test_footage_at_its_own_pace_carries_no_speed_badge() -> None:
-    scene = FootageScene(
+    scene = FootagePlayback(
         ViewOfTheRun(CountingVideo(), NO_TIME), length=seconds(5), speed=1.0
     )
     main = scene.main.frame_at(NO_TIME)
     unbadged = scene.resolution.blank(0).pasted(main, scene.resolution.whole)
-    assert np.array_equal(scene.picture_at(NO_TIME).pixels, unbadged.pixels)
+    assert np.array_equal(scene.frame_at(NO_TIME).pixels, unbadged.pixels)
 
 
 # %% badges

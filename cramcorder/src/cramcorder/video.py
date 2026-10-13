@@ -1,5 +1,5 @@
 """
-Moving pictures: what any video, scene or recording is to what plays it.
+Moving pictures: what any slide, footage, timeline or recording is to what plays it.
 """
 
 from __future__ import annotations

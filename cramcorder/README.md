@@ -22,16 +22,22 @@ from pathlib import Path
 from cramcorder.narration import Line, NarratedScene, Storyboard
 from cramcorder.production import VideoProduction
 from cramcorder.slides import ResultRow, ResultsTable, TextCard
+from cramcorder.timeline import Transition
 
 storyboard = Storyboard(
     [
         NarratedScene(
-            TextCard("Pouring in simulation", "12 runs", held_for=timedelta(seconds=2)),
-            (Line("The robot pours into a cup twelve times."),),
+            role_taker=TextCard(
+                "Pouring in simulation", "12 runs", held_for=timedelta(seconds=2)
+            ),
+            lines=(Line("The robot pours into a cup twelve times."),),
         ),
         NarratedScene(
-            ResultsTable("Results", (ResultRow("Poured without spilling", "11 of 12"),)),
-            (Line("It spilled once."),),
+            role_taker=ResultsTable(
+                "Results", (ResultRow("Poured without spilling", "11 of 12"),)
+            ),
+            lines=(Line("It spilled once."),),
+            transition=Transition.CUT,
         ),
     ]
 )
@@ -41,30 +47,33 @@ VideoProduction(storyboard).written_to(Path("pouring.mp4"))
 `test/cramcorder_test/test_production.py` makes a video just like this one, with
 a test voice in place of the speech model.
 
-## Scenes
+## Videos and scenes
 
 Everything that plays is a `video.Video`: it has a `duration` and a `frame_at(moment)`,
-both in `timedelta`s. Scenes, the timeline and a video file on disk
-(`encoding.VideoFile`) are all videos, so any of them can be shown as footage.
-
-A scene is a subclass of `timeline.Scene`: it says how long it lasts (`duration`) and
-what it shows at each moment (`picture_at`, which takes a `timedelta` and returns a
-`frame.Frame`). A slide
-subclasses `timeline.HeldScene` instead: it lasts as long as it is held
-(`held_for`), and the storyboard holds it longer when its lines need the time. A
-scene whose length comes from what it shows, such as footage, keeps that length, and
-a line that would still be being said when the next begins is refused with
+both in `timedelta`s. A slide, footage, a timeline and a video file on disk
+(`encoding.VideoFile`) are all videos. A new kind of picture is a subclass of
+`video.Video`; a slide subclasses `slides.Slide` instead, which lasts as long as it is
+held (`held_for`), and the storyboard holds it longer when its lines need the time. A
+video whose length comes from what it shows, such as footage, keeps that length, and a
+line that would still be being said when the next begins is refused with
 `NarrationOverrun`.
 
-Scenes that come with the package:
+A `timeline.Scene` is the part a video plays in a timeline: `Scene(role_taker=video)`.
+Any video can be a scene, a whole timeline included, so a chapter can be one scene of a
+longer video. Each scene says how the scene before passes into it (`transition`):
+`Transition.DISSOLVE` by default, or `Transition.CUT`, for example where the two would
+write different text in one place. `narration.NarratedScene` is a scene with the lines
+that start with it.
 
-- `timeline.Still`: one picture held.
+Videos that come with the package:
+
+- `slides.Still`: one picture held.
 - `slides.TextCard`: a heading and a line. Use it as a title card or an end card.
 - `slides.ResultsTable`: rows of what was measured and its value.
-- `footage_scenes.FootageScene`: a stretch of a recording filling the frame, sped up with
-  the speed shown on a badge, and optionally a second view of the same stretch in the
-  corner.
-- `footage_scenes.TitleOverFootage`: a title over a footage scene, fading out.
+- `footage_playback.FootagePlayback`: a stretch of a recording filling the frame, sped
+  up with the speed shown on a badge, and optionally a second view of the same stretch
+  in the corner.
+- `footage_playback.TitleOverFootage`: a title over footage, fading out.
 
 `footage.ViewOfTheRun` is a stretch of any video, for example an `encoding.VideoFile` of
 what `semantic_digital_twin.adapters.mujoco_video_recording` records of a simulated run.
@@ -128,7 +137,7 @@ starts and how much silence follows it.
 
 ## Size and limits
 
-Sizes are `units.DataSize` and bit rates `units.BitRate` (`DataSize.of_bytes(40_000)`,
+Sizes are `krrood.units.DataSize` and bit rates `krrood.units.BitRate` (`DataSize.of_bytes(40_000)`,
 `BitRate(DataSize(64_000))` for 64 kilobits a second). With no limits given, the picture
 is encoded at `VideoProduction.picture_bit_rate`. For a venue with limits, pass
 `encoding.SubmissionLimits(longest=..., largest=..., lowest=..., slowest=...)`: the picture is

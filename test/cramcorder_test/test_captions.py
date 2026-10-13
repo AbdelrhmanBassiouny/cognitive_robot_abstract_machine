@@ -16,7 +16,8 @@ from cramcorder.narration import Line, NarratedTimeline, Narration, SpokenLine
 from cramcorder.speech import Speech
 from cramcorder.subtitles import SubtitleCue, SubtitleRoom
 from cramcorder.theme import VideoTheme
-from cramcorder.timeline import Still, Timeline
+from cramcorder.slides import Still
+from cramcorder.timeline import Scene, Timeline
 
 from .marks import ProgressStamp, stamped_value
 
@@ -38,7 +39,7 @@ def timeline_of(
     :return: A timeline of one still of a grey.
     """
     return Timeline(
-        [Still(resolution.blank(grey), held_for=HOLD)],
+        [Scene(role_taker=Still(resolution.blank(grey), held_for=HOLD))],
         frames_per_second=10,
         dissolve=NO_TIME,
         **changes,
@@ -197,7 +198,7 @@ def test_a_band_caption_on_the_page_of_its_theme_is_written_in_its_text_colour()
 ):
     theme = VideoTheme.dark()
     subtitled = Subtitled(
-        [Still(theme.page_of(SMALL), held_for=HOLD)],
+        [Scene(role_taker=Still(theme.page_of(SMALL), held_for=HOLD))],
         frames_per_second=10,
         dissolve=NO_TIME,
         cues=[CAPTION],

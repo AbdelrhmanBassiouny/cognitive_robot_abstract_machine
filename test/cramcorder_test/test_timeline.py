@@ -11,7 +11,8 @@ import pytest
 
 from cramcorder.exceptions import FramesOfDifferentSizes, MomentOutsideScene
 from cramcorder.frame import Frame, Resolution
-from cramcorder.timeline import Fade, Still, Timeline
+from cramcorder.slides import Still
+from cramcorder.timeline import Fade, Scene, Timeline, Transition
 
 from .marks import ProgressStamp, stamped_value
 
@@ -51,16 +52,22 @@ def test_a_still_shows_the_same_frame_for_its_whole_duration() -> None:
     assert first_grey(still.frame_at(held - seconds(0.1))) == 200
 
 
-def test_a_scene_refuses_a_moment_outside_its_duration() -> None:
+def test_a_scene_refuses_a_moment_outside_its_video() -> None:
     held = seconds(1)
-    still = Still(picture=flat(0), held_for=held)
+    scene = Scene(role_taker=Still(picture=flat(0), held_for=held))
     with pytest.raises(MomentOutsideScene):
-        still.frame_at(held)
+        scene.frame_at(held)
+
+
+def test_a_scene_shows_what_its_video_shows() -> None:
+    scene = Scene(role_taker=Still(picture=flat(200), held_for=seconds(1)))
+    assert first_grey(scene.frame_at(NO_TIME)) == 200
+    assert scene.duration == scene.role_taker.duration
 
 
 def test_progress_through_a_scene_is_the_moment_over_the_duration() -> None:
-    still = Still(picture=flat(0), held_for=seconds(4))
-    assert still.progress_at(seconds(1)) == 0.25
+    scene = Scene(role_taker=Still(picture=flat(0), held_for=seconds(4)))
+    assert scene.progress_at(seconds(1)) == 0.25
 
 
 # %% the timeline
@@ -70,8 +77,8 @@ def test_the_timeline_lays_scenes_end_to_end_without_a_dissolve() -> None:
     first_hold, second_hold = seconds(0.5), seconds(0.25)
     timeline = Timeline(
         scenes=[
-            Still(flat(10), held_for=first_hold),
-            Still(flat(20), held_for=second_hold),
+            Scene(role_taker=Still(flat(10), held_for=first_hold)),
+            Scene(role_taker=Still(flat(20), held_for=second_hold)),
         ],
         frames_per_second=4,
         dissolve=NO_TIME,
@@ -86,8 +93,8 @@ def test_a_dissolve_blends_the_end_of_one_scene_into_the_start_of_the_next() -> 
     first_grey_level, second_grey_level = 0, 100
     timeline = Timeline(
         scenes=[
-            Still(flat(first_grey_level), held_for=hold),
-            Still(flat(second_grey_level), held_for=hold),
+            Scene(role_taker=Still(flat(first_grey_level), held_for=hold)),
+            Scene(role_taker=Still(flat(second_grey_level), held_for=hold)),
         ],
         frames_per_second=4,
         dissolve=dissolve,
@@ -105,12 +112,37 @@ def test_the_timeline_rejects_scenes_of_different_sizes() -> None:
     wider = Resolution(FRAME_SIZE.width + 1, FRAME_SIZE.height)
     hold = seconds(0.25)
     timeline = Timeline(
-        scenes=[Still(flat(0), held_for=hold), Still(wider.blank(0), held_for=hold)],
+        scenes=[
+            Scene(role_taker=Still(flat(0), held_for=hold)),
+            Scene(role_taker=Still(wider.blank(0), held_for=hold)),
+        ],
         frames_per_second=4,
         dissolve=NO_TIME,
     )
     with pytest.raises(FramesOfDifferentSizes):
         list(timeline.frames())
+
+
+def test_a_timeline_plays_as_one_scene_of_a_longer_timeline() -> None:
+    hold, greys = seconds(0.5), (10, 20, 30)
+    chapter = Timeline(
+        [
+            Scene(role_taker=Still(flat(greys[0]), held_for=hold)),
+            Scene(role_taker=Still(flat(greys[1]), held_for=hold)),
+        ],
+        dissolve=NO_TIME,
+    )
+    whole = Timeline(
+        [
+            Scene(role_taker=chapter),
+            Scene(role_taker=Still(flat(greys[2]), held_for=hold)),
+        ],
+        dissolve=NO_TIME,
+    )
+    assert whole.duration == chapter.duration + hold
+    assert [first_grey(whole.frame_at(seconds(t))) for t in (0.25, 0.75, 1.25)] == [
+        *greys
+    ]
 
 
 # %% fading
@@ -136,24 +168,17 @@ def test_a_fade_stays_at_its_ends_beyond_its_duration() -> None:
 # %% a scene that cuts in
 
 
-class Cut(Still):
-    """
-    A still that cuts in rather than dissolving.
-    """
-
-    @property
-    def dissolves_in(self) -> bool:
-        return False
-
-
 def test_a_scene_that_cuts_in_takes_no_dissolve_from_the_scene_before() -> None:
     hold, dissolve = seconds(1), seconds(0.5)
     greys = (10, 20, 30)
     timeline = Timeline(
         scenes=[
-            Still(flat(greys[0]), held_for=hold),
-            Cut(flat(greys[1]), held_for=hold),
-            Still(flat(greys[2]), held_for=hold),
+            Scene(role_taker=Still(flat(greys[0]), held_for=hold)),
+            Scene(
+                role_taker=Still(flat(greys[1]), held_for=hold),
+                transition=Transition.CUT,
+            ),
+            Scene(role_taker=Still(flat(greys[2]), held_for=hold)),
         ],
         frames_per_second=10,
         dissolve=dissolve,
@@ -175,7 +200,10 @@ def test_a_scene_that_cuts_in_takes_no_dissolve_from_the_scene_before() -> None:
 def test_every_overlay_is_drawn_over_each_frame_at_that_moment_of_the_video() -> None:
     hold, grey = seconds(2), 100
     timeline = Timeline(
-        [Still(flat(grey), held_for=hold), Still(flat(grey), held_for=hold)],
+        [
+            Scene(role_taker=Still(flat(grey), held_for=hold)),
+            Scene(role_taker=Still(flat(grey), held_for=hold)),
+        ],
         frames_per_second=10,
         dissolve=NO_TIME,
         overlays=[ProgressStamp()],
@@ -188,5 +216,7 @@ def test_every_overlay_is_drawn_over_each_frame_at_that_moment_of_the_video() ->
 
 def test_a_timeline_without_overlays_shows_its_scenes_alone() -> None:
     grey = 100
-    timeline = Timeline([Still(flat(grey), held_for=seconds(2))], frames_per_second=10)
+    timeline = Timeline(
+        [Scene(role_taker=Still(flat(grey), held_for=seconds(2)))], frames_per_second=10
+    )
     assert (timeline.frame_at(seconds(1)).pixels == grey).all()

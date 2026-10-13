@@ -1,13 +1,11 @@
 """
 A video as scenes laid end to end.
 
-A scene is anything that can say how long it lasts and what it looks like at any moment
-of that; the timeline lays scenes one after another, dissolving each into the next, and
-reads the whole out as frames at one rate. Nothing here knows what a scene shows, so a
-title, a chart being drawn and a recording being replayed are all laid out the same way.
-
-A scene is written by subclassing :class:`Scene` (or :class:`HeldScene` for a slide) and
-saying what it shows at each moment in :meth:`Scene.picture_at`.
+A scene is the part a video plays in a timeline: any video, whether a slide, footage or
+another timeline, can be one. The timeline lays its scenes one after another, dissolving
+or cutting from each into the next, and reads the whole out as frames at one rate.
+Nothing here knows what a scene shows, so a title, a chart being drawn and a recording
+being replayed are all laid out the same way.
 """
 
 from __future__ import annotations
@@ -16,7 +14,9 @@ import math
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from datetime import timedelta
+from enum import Enum, auto
 
+from krrood.patterns.role import Role
 from typing_extensions import Iterator
 
 from cramcorder.exceptions import FramesOfDifferentSizes, MomentOutsideScene
@@ -50,87 +50,52 @@ class Fade:
 # %% one scene
 
 
-@dataclass
-class Scene(Video, ABC):
+class Transition(Enum):
     """
-    One stretch of the video, read out picture by picture.
+    How the scene before passes into a scene.
     """
 
-    @abstractmethod
-    def picture_at(self, moment: timedelta) -> Frame:
-        """
-        :param moment: A moment of the scene's own time, from its start; never past its
-            duration.
-        :return: What the scene shows then.
-        """
+    DISSOLVE = auto()
+    """
+    The scene before fades into it while the two overlap.
+    """
+
+    CUT = auto()
+    """
+    It replaces the scene before at once, as where the two would write different text in
+    one place.
+    """
+
+
+@dataclass(eq=False)
+class Scene(Role[Video]):
+    """
+    The part a video plays in a timeline: one stretch of it, joined to the stretch
+    before.
+    """
+
+    transition: Transition = Transition.DISSOLVE
+    """
+    How the scene before passes into this one.
+    """
 
     def frame_at(self, moment: timedelta) -> Frame:
         """
-        What the scene shows at a moment of its own time, refusing a moment outside it,
-        unlike :meth:`Video.frame_at`.
-
-        :param moment: The moment, from the scene's start.
+        :param moment: A moment of the scene's own time, from its start.
         :return: What the scene shows then.
         :raises MomentOutsideScene: If the moment lies before the scene starts or after
             it ends.
         """
-        if not timedelta(0) <= moment < self.duration:
-            raise MomentOutsideScene(moment=moment, duration=self.duration)
-        return self.picture_at(moment)
+        if not timedelta(0) <= moment < self.role_taker.duration:
+            raise MomentOutsideScene(moment=moment, duration=self.role_taker.duration)
+        return self.role_taker.frame_at(moment)
 
     def progress_at(self, moment: timedelta) -> float:
         """
         :param moment: A moment of the scene's own time.
         :return: How far through the scene that moment is, from zero to one.
         """
-        return moment / self.duration
-
-    @property
-    def dissolves_in(self) -> bool:
-        """
-        Whether the scene before dissolves into this one, or this one cuts in: a cut
-        where the two would write different text in one place.
-        """
-        return True
-
-
-@dataclass
-class HeldScene(Scene, ABC):
-    """
-    A scene that lasts as long as it is held, rather than as long as what it shows: a
-    slide, which may be held longer to make room for what is said over it.
-    """
-
-    held_for: timedelta = field(kw_only=True)
-    """
-    How long it is held.
-    """
-
-    @property
-    def duration(self) -> timedelta:
-        """
-        How long the scene is held.
-        """
-        return self.held_for
-
-
-@dataclass
-class Still(HeldScene):
-    """
-    One picture held for a while.
-    """
-
-    picture: Frame
-    """
-    The picture.
-    """
-
-    def picture_at(self, moment: timedelta) -> Frame:
-        """
-        :param moment: A moment of the scene, from its start.
-        :return: The picture, the same at every moment.
-        """
-        return self.picture
+        return moment / self.role_taker.duration
 
 
 # %% what is drawn over every scene
@@ -159,7 +124,8 @@ class Overlay(ABC):
 @dataclass
 class Timeline(Video):
     """
-    Scenes laid end to end, each dissolving into the next, read out as frames.
+    Scenes laid end to end, each dissolving or cutting into the next, read out as
+    frames.
     """
 
     scenes: list[Scene]
@@ -174,7 +140,7 @@ class Timeline(Video):
 
     dissolve: timedelta = timedelta(seconds=0.5)
     """
-    How long each scene takes to dissolve into the next; the two overlap by that much.
+    How long a scene takes to dissolve into the next; the two overlap by that much.
     """
 
     overlays: list[Overlay] = field(default_factory=list)
@@ -198,7 +164,7 @@ class Timeline(Video):
         :param index: Which scene, from zero.
         :return: How long the scene before dissolves into it: no time where it cuts in.
         """
-        if index > 0 and self.scenes[index].dissolves_in:
+        if index > 0 and self.scenes[index].transition is Transition.DISSOLVE:
             return self.dissolve
         return timedelta(0)
 

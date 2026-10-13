@@ -25,7 +25,7 @@ from cramcorder.muxer import Muxer
 from cramcorder.narration import NarratedTimeline, Storyboard
 from cramcorder.speech import KokoroVoice, Voice
 from cramcorder.timeline import Overlay, Timeline
-from cramcorder.units import BitRate, DataSize
+from krrood.units import BitRate, DataSize
 
 logger = logging.getLogger(__name__)
 

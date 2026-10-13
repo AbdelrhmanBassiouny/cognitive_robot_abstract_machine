@@ -26,7 +26,9 @@ from cramcorder.narration import (
 )
 from cramcorder.speech import Sound, Speech
 from cramcorder.subtitles import SubtitleCue, SubtitleRoom
-from cramcorder.timeline import HeldScene, Scene, Still, Timeline
+from cramcorder.slides import Slide, Still
+from cramcorder.timeline import Scene, Timeline
+from cramcorder.video import Video
 
 from .voices import EvenlyPacedVoice
 
@@ -182,12 +184,12 @@ def test_a_report_row_says_how_much_silence_follows_each_line() -> None:
 
 
 @dataclass
-class Page(HeldScene):
+class Page(Slide):
     """
     A held slide that dissolves in, like most.
     """
 
-    def picture_at(self, moment: timedelta) -> Frame:
+    def frame_at(self, moment: timedelta) -> Frame:
         return SLIDE_SIZE.blank(255)
 
 
@@ -199,9 +201,9 @@ def slide(held_for: float) -> Page:
 
 
 @dataclass
-class CloseUp(Scene):
+class CloseUp(Video):
     """
-    A scene whose length comes from what it shows, not from a hold.
+    A video whose length comes from what it shows, not from a hold.
     """
 
     shown_for: timedelta = seconds(2)
@@ -210,7 +212,7 @@ class CloseUp(Scene):
     def duration(self) -> timedelta:
         return self.shown_for
 
-    def picture_at(self, moment: timedelta) -> Frame:
+    def frame_at(self, moment: timedelta) -> Frame:
         return SLIDE_SIZE.blank(255)
 
 
@@ -219,25 +221,28 @@ def test_a_slide_grows_to_hold_its_line_and_a_close_up_does_not() -> None:
     held = 3.0
     board = Storyboard(
         [
-            NarratedScene(slide(held), (Line(EIGHT_WORDS),)),
-            NarratedScene(slide(held), (Line("one"),)),
-            NarratedScene(close_up, (Line(EIGHT_WORDS),)),
-            NarratedScene(close_up),
+            NarratedScene(role_taker=slide(held), lines=(Line(EIGHT_WORDS),)),
+            NarratedScene(role_taker=slide(held), lines=(Line("one"),)),
+            NarratedScene(role_taker=close_up, lines=(Line(EIGHT_WORDS),)),
+            NarratedScene(role_taker=close_up),
         ]
     )
     board.fitted_to(VOICE)
     assert board.scenes[0].held_for == FOUR_SECONDS + board.lead + board.tail
     assert board.scenes[1].held_for == seconds(held)
-    assert board.scenes[2] is close_up and close_up.duration == close_up.shown_for
+    assert (
+        board.scenes[2].role_taker is close_up
+        and close_up.duration == close_up.shown_for
+    )
 
 
 def test_the_lines_start_where_their_scenes_start_plus_the_lead() -> None:
     dissolve = seconds(0.5)
     board = Storyboard(
         [
-            NarratedScene(slide(3.0), (Line("one two"),)),
-            NarratedScene(slide(3.0)),
-            NarratedScene(slide(3.0), (Line("three"),)),
+            NarratedScene(role_taker=slide(3.0), lines=(Line("one two"),)),
+            NarratedScene(role_taker=slide(3.0)),
+            NarratedScene(role_taker=slide(3.0), lines=(Line("three"),)),
         ]
     )
     narration = board.narrated_by(VOICE, dissolve)
@@ -250,7 +255,9 @@ def test_the_lines_start_where_their_scenes_start_plus_the_lead() -> None:
 
 
 def test_two_lines_on_one_scene_are_said_one_after_the_other_with_a_pause() -> None:
-    board = Storyboard([NarratedScene(slide(1.0), (Line("one two"), Line("three")))])
+    board = Storyboard(
+        [NarratedScene(role_taker=slide(1.0), lines=(Line("one two"), Line("three")))]
+    )
     board.fitted_to(VOICE)
     first, second = 2 * ONE_WORD_TIME, ONE_WORD_TIME
     assert board.scenes[0].held_for == (
@@ -269,8 +276,10 @@ def test_a_line_that_runs_on_leaves_its_slide_alone_and_a_delay_moves_its_start(
     first_hold, delay, dissolve = 1.0, seconds(2.5), seconds(0.5)
     board = Storyboard(
         [
-            NarratedScene(slide(first_hold), (Line(EIGHT_WORDS),), runs_on=True),
-            NarratedScene(slide(3.0), (Line("five"),), delay=delay),
+            NarratedScene(
+                role_taker=slide(first_hold), lines=(Line(EIGHT_WORDS),), runs_on=True
+            ),
+            NarratedScene(role_taker=slide(3.0), lines=(Line("five"),), delay=delay),
         ]
     )
     board.fitted_to(VOICE)
@@ -289,7 +298,9 @@ def test_a_later_line_waits_beyond_the_pause_for_what_it_speaks_of() -> None:
     board = Storyboard(
         [
             NarratedScene(
-                slide(1.0), (Line("one"), Line("two"), Line("three")), waits=waits
+                role_taker=slide(1.0),
+                lines=(Line("one"), Line("two"), Line("three")),
+                waits=waits,
             )
         ],
         pause=seconds(0.5),
@@ -311,7 +322,8 @@ def test_a_narrated_timeline_is_a_timeline_that_checks_its_narration_against_its
     None
 ):
     timeline = Timeline(
-        [Still(SLIDE_SIZE.blank(0), held_for=seconds(10))], frames_per_second=10
+        [Scene(role_taker=Still(SLIDE_SIZE.blank(0), held_for=seconds(10)))],
+        frames_per_second=10,
     )
     fine = NarratedTimeline(
         role_taker=timeline, narration=Narration([spoken("a", 0, 4)])

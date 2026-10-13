@@ -20,7 +20,7 @@ from cramcorder.muxer import (
     SubtitleTrack,
     Track,
 )
-from cramcorder.units import BitRate, DataSize
+from krrood.units import BitRate, DataSize
 
 TRACK_FILE = Path("track")
 INPUT_INDEX = 2
@@ -48,7 +48,9 @@ def test_the_narration_is_encoded_at_its_bit_rate() -> None:
     options = NarrationTrack(TRACK_FILE, bit_rate=NARRATION_BIT_RATE).options(
         INPUT_INDEX
     )
-    assert options[options.index("-b:a") + 1] == str(NARRATION_BIT_RATE.per_second.bits)
+    assert options[options.index("-b:a") + 1] == str(
+        NARRATION_BIT_RATE.per_second.magnitude
+    )
 
 
 def test_a_track_is_labelled_with_its_language() -> None:

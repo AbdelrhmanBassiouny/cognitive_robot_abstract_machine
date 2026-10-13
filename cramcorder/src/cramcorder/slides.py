@@ -1,9 +1,11 @@
 """
-The slides of plain text: a table of results, and a card of a heading and a line.
+Slides, shown for as long as they are held: a still picture, a table of results, and a
+card of a heading and a line.
 """
 
 from __future__ import annotations
 
+from abc import ABC
 from dataclasses import dataclass, field
 from datetime import timedelta
 
@@ -12,8 +14,50 @@ from semantic_digital_twin.spatial_types.spatial_types import Point2
 from cramcorder.frame import Frame, Resolution
 from cramcorder.lettering import Face
 from cramcorder.theme import VideoTheme
-from cramcorder.timeline import HeldScene
 from cramcorder.typesetting import Anchor, TextSize
+from cramcorder.video import Video
+
+# %% a slide
+
+
+@dataclass
+class Slide(Video, ABC):
+    """
+    A video that lasts as long as it is held, rather than as long as what it shows, so
+    it may be held longer to make room for what is said over it.
+    """
+
+    held_for: timedelta = field(kw_only=True)
+    """
+    How long it is held.
+    """
+
+    @property
+    def duration(self) -> timedelta:
+        """
+        How long the slide is held.
+        """
+        return self.held_for
+
+
+@dataclass
+class Still(Slide):
+    """
+    One picture held for a while.
+    """
+
+    picture: Frame
+    """
+    The picture.
+    """
+
+    def frame_at(self, moment: timedelta) -> Frame:
+        """
+        :param moment: A moment of the slide, from its start.
+        :return: The picture, the same at every moment.
+        """
+        return self.picture
+
 
 # %% the results table
 
@@ -36,7 +80,7 @@ class ResultRow:
 
 
 @dataclass
-class ResultsTable(HeldScene):
+class ResultsTable(Slide):
     """
     Results as a table: a plain title over it, one hairline over each row, the values
     bold and right-aligned with their units, centred on the page with nothing else on
@@ -88,15 +132,7 @@ class ResultsTable(HeldScene):
     Pixels between a cell's text and the table's edge.
     """
 
-    @property
-    def dissolves_in(self) -> bool:
-        """
-        Whether the scene before dissolves into this one: it does not, since that scene
-        writes text where this one does, so this one cuts in.
-        """
-        return False
-
-    def picture_at(self, moment: timedelta) -> Frame:
+    def frame_at(self, moment: timedelta) -> Frame:
         """
         :param moment: A moment of the slide, from its start.
         :return: The table, the same at every moment.
@@ -144,7 +180,7 @@ class ResultsTable(HeldScene):
 
 
 @dataclass
-class TextCard(HeldScene):
+class TextCard(Slide):
     """
     A heading in bold with one line under it, centred on the page: a title card, or an
     end card with a link.
@@ -180,15 +216,7 @@ class TextCard(HeldScene):
     Pixels from the heading's middle to the line's middle.
     """
 
-    @property
-    def dissolves_in(self) -> bool:
-        """
-        Whether the scene before dissolves into this one: it does not, since that scene
-        writes text where this one does, so this one cuts in.
-        """
-        return False
-
-    def picture_at(self, moment: timedelta) -> Frame:
+    def frame_at(self, moment: timedelta) -> Frame:
         """
         :param moment: A moment of the slide, from its start.
         :return: The card, the same at every moment.

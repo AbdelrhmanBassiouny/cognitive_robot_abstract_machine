@@ -20,7 +20,8 @@ from typing_extensions import Sequence
 from cramcorder.exceptions import NarrationOverrun
 from cramcorder.speech import Sound, Speech, Voice
 from cramcorder.subtitles import SubRipFile, SubtitleCue, SubtitleRoom
-from cramcorder.timeline import HeldScene, Scene, Timeline
+from cramcorder.slides import Slide
+from cramcorder.timeline import Scene, Timeline
 
 # %% a line and its speech
 
@@ -258,15 +259,10 @@ class NarratedTimeline(Role[Timeline]):
 # %% the scenes with their lines
 
 
-@dataclass
-class NarratedScene:
+@dataclass(eq=False)
+class NarratedScene(Scene):
     """
-    A scene and the line that starts with it, if one does.
-    """
-
-    scene: Scene
-    """
-    The scene.
+    A scene and the lines that start with it, if any do.
     """
 
     lines: tuple[Line, ...] = ()
@@ -288,7 +284,7 @@ class NarratedScene:
     runs_on: bool = False
     """
     Whether the line may run on into the scenes that follow instead of the scene growing
-    to hold it; a close-up never grows, whatever this says.
+    to hold it; a scene that is not a slide never grows, whatever this says.
     """
 
     def wait_before(self, number: int) -> timedelta:
@@ -305,9 +301,9 @@ class Storyboard:
     The scenes in order, each with the line that starts with it.
     """
 
-    narrated: list[NarratedScene]
+    scenes: list[NarratedScene]
     """
-    The scenes.
+    The scenes, in the order they play.
     """
 
     tail: timedelta = timedelta(seconds=0.6)
@@ -325,21 +321,14 @@ class Storyboard:
     How long a line starts after its scene has, so it is not heard over the dissolve in.
     """
 
-    @property
-    def scenes(self) -> list[Scene]:
-        """
-        The scenes alone, in order.
-        """
-        return [each.scene for each in self.narrated]
-
     def fitted_to(self, voice: Voice) -> None:
         """
         Grow every held scene to hold the lines that start with it.
 
         :param voice: What says the lines.
         """
-        for each in self.narrated:
-            if not each.lines or each.runs_on or not isinstance(each.scene, HeldScene):
+        for each in self.scenes:
+            if not each.lines or each.runs_on or not isinstance(each.role_taker, Slide):
                 continue
             said = sum(
                 (line.spoken_by(voice).duration for line in each.lines), timedelta(0)
@@ -352,7 +341,7 @@ class Storyboard:
                 + sum(each.waits, timedelta(0))
                 + self.tail
             )
-            each.scene.held_for = max(each.scene.held_for, needed)
+            each.role_taker.held_for = max(each.role_taker.held_for, needed)
 
     def narrated_by(self, voice: Voice, dissolve: timedelta) -> Narration:
         """
@@ -363,7 +352,7 @@ class Storyboard:
         """
         spoken: list[SpokenLine] = []
         for each, start in zip(
-            self.narrated, Timeline(self.scenes, dissolve=dissolve).starts()
+            self.scenes, Timeline(list(self.scenes), dissolve=dissolve).starts()
         ):
             at = start + self.lead + each.delay
             for number, line in enumerate(each.lines):

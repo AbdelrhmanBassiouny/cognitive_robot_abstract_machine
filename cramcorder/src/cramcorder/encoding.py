@@ -27,7 +27,7 @@ from cramcorder.exceptions import (
 )
 from cramcorder.frame import Frame, Resolution
 from cramcorder.timeline import Timeline
-from cramcorder.units import BitRate, DataSize
+from krrood.units import BitRate, DataSize
 from cramcorder.video import Video
 
 # %% the encoder's names
@@ -352,11 +352,11 @@ class H264Encoder:
             "-pix_fmt",
             self.pixel_format,
             "-b:v",
-            str(bit_rate.per_second.bits),
+            str(bit_rate.per_second.magnitude),
             "-maxrate",
-            str(bit_rate.scaled(self.peak_bit_rate_factor).per_second.bits),
+            str(bit_rate.scaled(self.peak_bit_rate_factor).per_second.magnitude),
             "-bufsize",
-            str(bit_rate.over(self.rate_control_buffer).bits),
+            str(bit_rate.over(self.rate_control_buffer).magnitude),
             "-passlogfile",
             str(log_prefix),
             "-movflags",

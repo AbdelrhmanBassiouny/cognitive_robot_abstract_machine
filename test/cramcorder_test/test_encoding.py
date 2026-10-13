@@ -13,8 +13,9 @@ import pytest
 from cramcorder.encoding import H264Encoder, SubmissionLimits, VideoFile
 from cramcorder.exceptions import NothingToRead, VideoOutsideTheLimits
 from cramcorder.frame import Frame, Resolution
-from cramcorder.timeline import Still, Timeline
-from cramcorder.units import DataSize
+from cramcorder.slides import Still
+from cramcorder.timeline import Scene, Timeline
+from krrood.units import DataSize
 
 FRAME_SIZE = Resolution(width=320, height=480)
 FRAMES_PER_SECOND = 20
@@ -49,7 +50,11 @@ def encoded(tmp_path_factory: pytest.TempPathFactory) -> VideoFile:
     frames = moving_frames(round(VIDEO_LENGTH.total_seconds() * FRAMES_PER_SECOND))
     timeline = Timeline(
         scenes=[
-            Still(frame, held_for=timedelta(seconds=1 / FRAMES_PER_SECOND))
+            Scene(
+                role_taker=Still(
+                    frame, held_for=timedelta(seconds=1 / FRAMES_PER_SECOND)
+                )
+            )
             for frame in frames
         ],
         frames_per_second=FRAMES_PER_SECOND,

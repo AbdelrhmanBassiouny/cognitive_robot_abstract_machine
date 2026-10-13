@@ -14,7 +14,7 @@ from pathlib import Path
 import imageio_ffmpeg
 
 from cramcorder.encoding import VideoFile
-from cramcorder.units import BitRate, DataSize
+from krrood.units import BitRate, DataSize
 
 # %% the tracks of the mp4
 
@@ -79,7 +79,7 @@ class NarrationTrack(Track):
             "-c:a",
             "aac",
             "-b:a",
-            str(self.bit_rate.per_second.bits),
+            str(self.bit_rate.per_second.magnitude),
             "-ac",
             "1",
             "-metadata:s:a:0",
@@ -126,7 +126,9 @@ class Muxer:
     no more.
     """
 
-    subtitle_allowance: DataSize = DataSize.of_bytes(40_000)
+    subtitle_allowance: DataSize = field(
+        default_factory=lambda: DataSize.of_bytes(40_000)
+    )
     """
     What is set aside for the subtitle track and what joining the streams adds to the
     file.

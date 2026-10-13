@@ -1,5 +1,5 @@
 """
-Scenes made of footage: a stretch of a run filling the frame, and a title over it.
+Footage played back: a stretch of a run filling the frame, and a title over it.
 """
 
 from __future__ import annotations
@@ -14,8 +14,9 @@ from cramcorder.footage import FootageFrame, ViewOfTheRun
 from cramcorder.frame import Frame, Resolution
 from cramcorder.lettering import Face
 from cramcorder.theme import VideoTheme
-from cramcorder.timeline import Fade, Scene
+from cramcorder.timeline import Fade
 from cramcorder.typesetting import Anchor, TextSize, Typesetting
+from cramcorder.video import Video
 
 # %% the frame filled with footage
 
@@ -34,12 +35,12 @@ class InsetStill:
 
     shown_for: timedelta
     """
-    How long it is shown, from the scene's start.
+    How long it is shown, from the footage's start.
     """
 
 
 @dataclass
-class FootageScene(Scene):
+class FootagePlayback(Video):
     """
     A stretch of a run filling the whole frame, played faster than recorded with the
     speed-up badged in the top right corner, and optionally a second view of the same
@@ -73,7 +74,7 @@ class FootageScene(Scene):
 
     resolution: Resolution = field(default_factory=Resolution.standard)
     """
-    The size the scene draws itself at: the video's own, the footage filling it.
+    The size it is drawn at: the video's own, the footage filling it.
     """
 
     inset_width: int = 300
@@ -111,16 +112,16 @@ class FootageScene(Scene):
 
     def inset_picture_at(self, moment: timedelta) -> Frame:
         """
-        :param moment: A moment of the scene.
+        :param moment: A moment of the footage played back.
         :return: What the inset shows then: what it holds first, else the second view.
         """
         if self.inset_still is not None and moment < self.inset_still.shown_for:
             return self.inset_still.picture
         return self.inset.frame_at(moment * self.speed)
 
-    def picture_at(self, moment: timedelta) -> Frame:
+    def frame_at(self, moment: timedelta) -> Frame:
         """
-        :param moment: A moment of the scene, from its start.
+        :param moment: A moment of the footage played back, from its start.
         :return: The footage then, with the inset in its corner and the speed badged.
         """
         frame = self.resolution.blank(0).pasted(
@@ -137,15 +138,15 @@ class FootageScene(Scene):
 
 
 @dataclass
-class TitleOverFootage(Scene):
+class TitleOverFootage(Video):
     """
     A title over footage, the footage shaded so the title is what is read; the title
     fades out at the end.
     """
 
-    footage: Scene
+    footage: Video
     """
-    What plays under the title, for the scene's whole duration.
+    What plays under the title, for as long as it lasts.
     """
 
     title: str
@@ -208,17 +209,17 @@ class TitleOverFootage(Scene):
 
     def title_at(self, moment: timedelta) -> float:
         """
-        :param moment: A moment of the scene.
+        :param moment: A moment from the start.
         :return: How far the title is up then, from zero to one.
         """
         return 1.0 - Fade(self.fade).weight_at(moment - self.title_for)
 
-    def picture_at(self, moment: timedelta) -> Frame:
+    def frame_at(self, moment: timedelta) -> Frame:
         """
-        :param moment: A moment of the scene, from its start.
+        :param moment: A moment from the start.
         :return: The footage then, with the title over it while it stands.
         """
-        frame = self.footage.picture_at(moment)
+        frame = self.footage.frame_at(moment)
         weight = self.title_at(moment)
         if weight <= 0.0:
             return frame
