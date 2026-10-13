@@ -83,5 +83,24 @@ Done:
     - footprint caching for PieceMatcher;
     - the simulated world switching to the measured sizes.
 
-Next: the developer's answers on the instance design. Then break the redesign into items or PRs and implement
-(#202 first, then re-cut). CI on d4abc697d/be578659e/d350dabb3 (#202) and 91a1dfba6 (#488) is not polled.
+  - The developer answered:
+    - there are two physical sets, of slightly different size and colour;
+    - the builder in pieces.py, placed by world.py, is fine;
+    - the simulated world uses only ground-truth values.
+  - Scope check: everything depends on #488's unlanded SemDT types (Polygon2D, Hue). So it all lands through
+    #202 plus re-cuts, with no new plan or item. The SemDT part goes to layer 2, the matcher/pipeline to
+    5a/5b, and world.py to 3.
+  - 83019e34d on #202: ShapeCollection.convex_footprint_in_frame (scipy ConvexHull of the projected meshes;
+    shapely is not installed), Polygon2D.rotational_symmetry_angle (CORNER_MATCH_TOLERANCE) and
+    NoShapesToProject. New test_footprint.py, plus tests in test_polygon.py. 208 passed, 1 skipped.
+  - 13b021da8 re-cuts #488 from 83019e34d: 14 files (adds shape_collection.py, exceptions.py,
+    test_footprint.py), byte-identical, 62 passed. Description updated; still a draft.
+  - Asked the developer for the second set's measurements (size per piece, hue), whether both sets are on the
+    table at once, and whether the disk/sphere (no ground truth) leave the simulated world.
+
+Next: the Montessori rewrite once the second set's numbers arrive. Set 1 can start now:
+- the lab pieces as SemDT bodies annotated with MontessoriShape, built in pieces.py from ground truth;
+- PieceMatcher reading footprint/symmetry/hue from them;
+- world.py and the renderer using them;
+- KnownPiece removed.
+Then re-cut layer 2. CI on #202's d4abc697d..83019e34d and #488's 13b021da8 is not polled.
