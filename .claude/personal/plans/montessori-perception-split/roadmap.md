@@ -252,6 +252,51 @@ writing code.
 - Branches stacked on #202 have to update anything naming `HueCircle`, an int `PieceHue`, or
   `to_position()`/`to_rotation_matrix()`/`to_rpy()` when they next merge #202.
 
-**Found, not acted on:** `perception/colors.py`'s `DetectionColor` duplicates SemDT's `Color`
-(RGB plus a BGR conversion). It is the same kind of duplication the review calls out, and it
-lives in `detection-pipeline-on-main`'s files. Raised with the developer.
+**Found, then acted on (2026-10-13):** `perception/colors.py`'s `DetectionColor` duplicated
+SemDT's `Color` (RGB plus a BGR conversion). It is the same kind of duplication the review calls
+out, and it lives in `detection-pipeline-on-main`'s files. The developer said to fold it.
+
+`d350dabb3` on #202:
+- the drawing colours are SemDT `Color`s;
+- rviz markers use SemDT's existing `ColorToRos2Converter`;
+- the OpenCV overlay writes pixels through `BgrPixel`, which holds only OpenCV's BGR order and 0-255 steps.
+
+`detection-pipeline-on-main` carries this. #488 does not, so it needed no re-cut.
+
+### The `KnownPiece` redesign: design discussion (2026-10-13)
+
+**The developer's challenge:** `outline`, `height` and `hue` are general concepts. Putting them on
+`MontessoriShape` would be duplication or wrong design.
+
+**Agreed.** Each is a property of any body's geometry:
+- **Height** is how far the top stands above what supports it. That is already
+  `VolumetricBoundingBox.height` of the body's collision geometry in the supporting frame. It
+  depends on how the body rests, so it is read, not stored.
+- **Outline** is the body's *footprint*, its geometry projected onto the plane it rests on.
+  SemDT has no general one; `graph_of_convex_sets/polygons.py` only projects convex meshes
+  privately for planning. Proposed: a general footprint on `ShapeCollection`, returning a
+  `Polygon2D`.
+- **Colour** is already the visual `Shape.color`, plus `Color.hue`. A body can have several
+  colours, so the rule for comparing one belongs in a predicate rather than a `Body.color`.
+- **`rotation_period`** is the footprint's rotational symmetry. Proposed: a `Polygon2D` method.
+- Tolerance predicates (hue, footprint, height) belong in SemDT's reasoning predicates.
+
+**The developer's question:** should the lab set be normal instances rather than EQL
+descriptions, since everything about them is known?
+
+**Agreed.** They become real bodies with the measured geometry and colour, annotated as their
+`MontessoriShape`. The partial description is then the *observation* — a seen footprint, a
+measured hue, an often-unknown height — queried against those instances. That is the
+"describe what we know" the review asked for.
+
+**Found along the way:** `world.py` builds the simulated pieces from the hole footprints,
+scaled for clearance and with its own thicknesses (the triangular prism is 0.02 m against
+`KnownPiece`'s 0.03 m). Only the colour comes from `PieceSet`. So two descriptions of the same
+pieces exist today and disagree. Real instances would unify them.
+
+**Open with the developer:**
+- Is there exactly one piece of each kind in the set?
+- Where do the instances live? Proposed: a builder in `pieces.py` (layer 2, SemDT only), placed
+  by `world.py` (layer 3), which keeps the layer order.
+- Computing footprints once per instance for `PieceMatcher`.
+- The simulated world switching to the measured sizes.
