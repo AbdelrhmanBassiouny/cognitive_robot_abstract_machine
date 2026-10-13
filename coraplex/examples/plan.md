@@ -62,6 +62,12 @@ statechart.add_node(plan)
 
 This creates a plan with a `Sequence` at the top level of the statechart and the two actions as its children.
 
+You can open an interactive, real-time visualization of the statechart the plan runs in using its `visualize` method.
+
+```python
+statechart.visualize()
+```
+
 ## Plan Execution
 `compile` prepares the statechart, adding what the plan runs with, and compiles it; `execute` runs it until every
 top-level node of the plan succeeded. Underspecified actions are grounded while the plan runs.
@@ -97,10 +103,4 @@ print(plan.life_cycle_state)
 print(plan.children[0].life_cycle_state)
 print(plan.start_time)
 print(plan.end_time)
-```
-
-You can open an interactive visualization of the statechart the plan ran in using its `visualize` method.
-
-```python
-statechart.visualize()
 ```
