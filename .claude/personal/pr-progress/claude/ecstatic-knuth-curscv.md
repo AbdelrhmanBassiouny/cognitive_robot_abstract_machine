@@ -59,10 +59,29 @@ Done:
   - #202's ready/draft state was not changed. It was ready before, as in the 10-04 round.
   - Plan: item status blocked, with blockers, notes and roadmap section.
 
-Next: settle the KnownPiece -> EQL descriptions design with the developer:
-- MontessoriShape properties;
-- factory matching or Polygon2D subclasses;
-- tolerance predicates;
-- rotation_period derived from the outline.
-Then implement on #202 (plus any krrood/SemDT PRs) and re-cut. CI on d4abc697d/be578659e (#202) and 91a1dfba6 (#488)
-is not polled. DetectionColor duplicates SemDT Color; raised with the developer.
+- 2026-10-13, the developer's answers:
+  - (2) fold DetectionColor -> done in d350dabb3 on #202. Detection colours are SemDT Colors, markers.py
+    uses ColorToRos2Converter, and BgrPixel in colors.py holds OpenCV's BGR/255 encoding. 197 passed, 1 skipped.
+    None of those files is in #488's layer, so no re-cut.
+  - (1) The developer asked whether height/outline/hue are really MontessoriShape's. Answer: no, they are
+    general body geometry.
+    - height = VolumetricBoundingBox.height of the collision in the supporting frame (exists).
+    - outline = a footprint projected onto the resting plane (missing; proposed
+      ShapeCollection.footprint -> Polygon2D).
+    - colour = Shape.color, with Color.hue (exists).
+    - rotation period = symmetry of the footprint (proposed Polygon2D method).
+    - Tolerance predicates go in SemDT.
+  - The developer asked whether the lab set should be normal instances. Answer: agreed. Real bodies with the
+    measured geometry and colour, annotated with their MontessoriShape. The partial EQL description is then
+    the observation, queried against those instances.
+  - Found: world.py builds the simulated pieces from the hole footprints (clearance-scaled, its own thicknesses),
+    taking only the colour from PieceSet. That is a second description that disagrees (triangular prism
+    0.02 vs 0.03 m).
+  - Questions put to the developer:
+    - is there exactly one piece of each kind?
+    - where do the instances live (builder in pieces.py, placed by world.py)?
+    - footprint caching for PieceMatcher;
+    - the simulated world switching to the measured sizes.
+
+Next: the developer's answers on the instance design. Then break the redesign into items or PRs and implement
+(#202 first, then re-cut). CI on d4abc697d/be578659e/d350dabb3 (#202) and 91a1dfba6 (#488) is not polled.
