@@ -1,11 +1,9 @@
 from __future__ import annotations
 
-from typing_extensions import Any, Callable, Generic, Type, TypeVar
-
-T = TypeVar("T")
+from collections.abc import Callable
 
 
-class classproperty(Generic[T]):
+class classproperty[ValueType]:
     """
     A decorator that allows a class method to be accessed as a property.
 
@@ -14,7 +12,7 @@ class classproperty(Generic[T]):
     instantiation like any other missing abstract member.
     """
 
-    def __init__(self, fget: Callable[[Type[Any]], T]) -> None:
+    def __init__(self, fget: Callable[[type], ValueType]) -> None:
         """
         Stores the accessor function invoked when the property is read on the owning
         class.
@@ -27,7 +25,7 @@ class classproperty(Generic[T]):
         self.__isabstractmethod__ = getattr(fget, "__isabstractmethod__", False)
         self.__doc__ = fget.__doc__
 
-    def __get__(self, instance: Any, owner: Type[Any] | None = None) -> T:
+    def __get__(self, instance: object, owner: type | None = None) -> ValueType:
         """
         Returns the property value by invoking the accessor with the owning class.
         """

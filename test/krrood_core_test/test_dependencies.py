@@ -10,6 +10,7 @@ from types import ModuleType
 import pytest
 from packaging.requirements import Requirement
 
+import krrood_core.class_property
 import krrood_core.exceptions
 import krrood_core.path_enumeration
 
@@ -51,7 +52,11 @@ def test_importing_every_module_loads_only_the_declared_dependencies():
 
 @pytest.mark.parametrize(
     "module",
-    [krrood_core.exceptions, krrood_core.path_enumeration],
+    [
+        krrood_core.exceptions,
+        krrood_core.path_enumeration,
+        krrood_core.class_property,
+    ],
     ids=lambda m: m.__name__,
 )
 def test_the_modules_a_tool_reads_before_installing_need_only_the_standard_library(
