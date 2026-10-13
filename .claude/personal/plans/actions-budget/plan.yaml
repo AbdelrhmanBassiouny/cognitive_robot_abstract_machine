@@ -52,9 +52,10 @@ items:
   notes: 'Reworked after review: no per-workflow manifest. basstler checks every workflow
     file against generic rules (no schedule, cancel on every pull-request push, job timeouts,
     fork-push skip, label check, and at most jobs_per_push_run jobs on every push). The repository''s
-    `.github/actions-budget.toml` holds only limits plus per-workflow overrides (ci.yml 16 jobs,
-    update_docker 120 min / fork pushes); `python -m basstler.actions_budget` writes its first
-    version.' 
+    `.github/actions_budget.py` (`actions_budget()` returning an `ActionsBudget`) holds only
+    limits plus per-workflow overrides (ci.yml 16 jobs, update_docker 120 min / fork pushes),
+    and an override naming no workflow file is reported; `python -m basstler.actions_budget`
+    writes its first version.'
   blockers:
   - 'Based on #501 (basstler src layout) at the user''s request; retargets to main once #501
     lands.'
@@ -82,7 +83,7 @@ items:
   - budget-manifest
   status: not started
   notes: 'A basstler module counts the last 24 hours of runs and jobs per workflow from the
-    Actions API and compares them with daily ceilings it adds to `.github/actions-budget.toml`. Three surfaces, none on a
+    Actions API and compares them with daily ceilings it adds to `WorkflowLimits` in `.github/actions_budget.py`. Three surfaces, none on a
     timer: the session-start summary prints a warning line at 80% and an over-budget line
     at 100%; the first job of ci.yml writes the same comparison as a `::warning::` annotation
     and step summary, and past the hard limit skips the heavy matrix unless the pull request
