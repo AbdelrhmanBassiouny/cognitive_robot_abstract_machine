@@ -47,6 +47,8 @@ from pathlib import Path
 from typing import ClassVar
 from urllib.parse import quote
 
+from krrood_core.adapters.json_serializer import from_json
+
 from basstler.locations import PackageLocation, ProjectLocation
 from basstler.repository import Repository
 from basstler.standard_streams import StandardStreamHandler
@@ -456,19 +458,7 @@ def load_board(path: Path = PackageLocation.BOARD.value) -> list[PullRequest]:
     """
     if not path.exists():
         raise BoardUnavailable(path=path)
-    data = json.loads(path.read_text())
-    return [
-        PullRequest(
-            number=pull_request["number"],
-            head=pull_request["head"],
-            base=pull_request["base"],
-            draft=bool(pull_request["draft"]),
-            labels=list(pull_request.get("labels", [])),
-            ci=pull_request.get("ci"),
-            session=pull_request.get("session"),
-        )
-        for pull_request in data["pull_requests"]
-    ]
+    return list(from_json(json.loads(path.read_text())).pull_requests)
 
 
 def derive_status(draft: bool, merged: bool, in_review: bool) -> BranchStatus:

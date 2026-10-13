@@ -11,10 +11,12 @@ from __future__ import annotations
 import dataclasses
 import json
 from collections.abc import Iterable, Mapping
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 from enum import Enum, StrEnum
 from pathlib import Path
 from typing import Any
+
+from krrood_core.adapters.json_serializer import to_json
 
 from basstler.locations import PackageLocation
 from basstler.maintenance_constants import SESSION_LINK_PATTERN
@@ -236,10 +238,7 @@ class BoardExport:
 
     def as_json(self) -> str:
         """:return: The export, in the document :func:`stack.load_board` parses."""
-        return json.dumps(
-            {"pull_requests": [asdict(entry) for entry in self.pull_requests]},
-            indent=2,
-        )
+        return json.dumps(to_json(self), indent=2)
 
     def write(self, path: Path = PackageLocation.BOARD.value) -> Path:
         """
