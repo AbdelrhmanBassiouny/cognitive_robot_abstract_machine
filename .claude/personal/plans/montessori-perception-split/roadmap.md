@@ -318,3 +318,29 @@ so by the scope rule it lands through #202 and re-cuts rather than as new items 
 - `NoShapesToProject`.
 
 #488 re-cut as `13b021da8`: 14 files, 62 passed.
+
+**Round 3 (2026-10-13).**
+
+*Answers:*
+- The second set is #265's `SMALLER_PIECES`: the full-size set at 0.8, with hues 196° and 52°, on the
+  table since September 2026.
+- The two sets are never on the table together, so which set to match is a setting. It defaults to the
+  full-size set, which the captures hold.
+- The disk and sphere keep their simulated sizes.
+
+*Shapely, asked and answered:* it would give exact non-convex footprints and polygon overlap.
+The pieces are convex, and the matcher is numpy/OpenCV, so it is not needed now.
+
+*Found:* switching the simulated pieces to ground truth is not mechanical.
+- The board has two cylinder holes (32 and 40 mm) against one 28 mm cylinder per set.
+- The measured triangle is turned against its hole.
+
+Both were put to the developer, so `world.py` still builds its pieces from the holes.
+
+*Done, unpushed:* `d85a50a2b` on #202's branch rebuilds `pieces.py` around real bodies, removes
+`KnownPiece`, and moves the matcher, pipeline and renderer onto them.
+
+*One test is red:* the triangle "found where it stands" test. SemDT's `Mesh` round-trips through
+an OBJ file, which rounds the vertices by about 1e-11, and the chaotic coarse search then settles one
+grid step off, a floating-point hair past the test's `abs=step`. The fit it settles on is a better one
+(0.909 against 0.900). The test is unmodified, and the call is with the developer.
