@@ -33,7 +33,10 @@ from semantic_digital_twin.collision_checking.collision_matrix import (
 if TYPE_CHECKING:
     from semantic_digital_twin.world import World
     from semantic_digital_twin.robots.robot_parts import AbstractRobot, EndEffector
-    from semantic_digital_twin.world_description.world_entity import Body
+    from semantic_digital_twin.world_description.world_entity import (
+        Body,
+        KinematicStructureEntity,
+    )
 
 
 @dataclass
@@ -656,20 +659,41 @@ class AllowCollisionForAdjacentPairs(AllowCollisionRule):
     """
 
     def _update(self, world: World):
-        for body_a, body_b in combinations(world.bodies_with_collision, 2):
-            if self._no_controlled_connection_between_bodies(world, body_a, body_b):
+        bodies_with_collision = world.bodies_with_collision
+        bodies_by_highest_uncontrolled_ancestor = defaultdict(list)
+        for body in bodies_with_collision:
+            bodies_by_highest_uncontrolled_ancestor[
+                self._highest_ancestor_reached_without_controlled_connection(body)
+            ].append(body)
+        for bodies in bodies_by_highest_uncontrolled_ancestor.values():
+            for body_a, body_b in combinations(bodies, 2):
                 self.allowed_collision_pairs.add(
                     CollisionCheck.create_for_bodies_with_collision(body_a, body_b)
                 )
+        bodies_with_collision = set(bodies_with_collision)
+        for body in bodies_with_collision:
+            parent = body.parent_kinematic_structure_entity
+            if parent in bodies_with_collision:
+                self.allowed_collision_pairs.add(
+                    CollisionCheck.create_for_bodies_with_collision(parent, body)
+                )
 
-    def _no_controlled_connection_between_bodies(
-        self, world: World, body_a: Body, body_b: Body
-    ) -> bool:
-        return (
-            not world.is_controlled_connection_in_chain(body_a, body_b)
-            or body_a == body_b.parent_kinematic_structure_entity
-            or body_b == body_a.parent_kinematic_structure_entity
-        )
+    @staticmethod
+    def _highest_ancestor_reached_without_controlled_connection(
+        body: Body,
+    ) -> KinematicStructureEntity:
+        """
+        :param body: The body to start from.
+        :return: The highest ancestor of `body`, or `body` itself, that no controlled
+            connection separates from `body`. Two bodies are connected by a chain
+            without a controlled connection exactly if they share this ancestor.
+        """
+        ancestor = body
+        parent_connection = ancestor.parent_connection
+        while parent_connection is not None and not parent_connection.is_controlled:
+            ancestor = parent_connection.parent
+            parent_connection = ancestor.parent_connection
+        return ancestor
 
 
 @dataclass

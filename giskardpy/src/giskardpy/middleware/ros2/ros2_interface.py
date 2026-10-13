@@ -1,6 +1,7 @@
 import json
 import threading
-from typing import List, Tuple, Union, Any
+from functools import partial
+from typing_extensions import Callable, List, Tuple, Union, Any
 
 from action_msgs.msg import GoalStatus
 from rcl_interfaces.srv._get_parameters import (
@@ -169,6 +170,7 @@ class MyActionClient:
         self._goal_result = None
         self._result_future = None
         self._current_goal_id = None
+        self._feedback_error = None
         self.result = None
         self.node_handle = node_handle
         self.action_name = action_name
@@ -181,9 +183,33 @@ class MyActionClient:
     def send_goal_async(self, goal, feedback_callback=None) -> Future:
         self._goal_counter += 1
         self._current_goal_id = self._goal_counter
+        self._feedback_error = None
+        if feedback_callback is not None:
+            feedback_callback = partial(self._receive_feedback, feedback_callback)
         future = self._client.send_goal_async(goal, feedback_callback=feedback_callback)
         future.add_done_callback(self.__goal_accepted_cb)
         return future
+
+    def _receive_feedback(
+        self, feedback_callback: Callable[[Any], None], feedback_message: Any
+    ) -> None:
+        """
+        Hand `feedback_message` to `feedback_callback`.
+
+        The first error the callback raises cancels the goal and is raised by
+        :meth:`get_result`; the feedback that follows it is dropped.
+
+        :param feedback_callback: The callback given with the goal.
+        :param feedback_message: One feedback of the goal sent last.
+        """
+        if self._feedback_error is not None:
+            return
+        try:
+            feedback_callback(feedback_message)
+        except Exception as error:
+            self._feedback_error = error
+            if self._goal_handle is not None:
+                self._goal_handle.cancel_goal_async()
 
     def send_goal(self, goal, feedback_callback=None):
         async def muh():
@@ -204,11 +230,15 @@ class MyActionClient:
         :meth:`create_abort_exception`.
 
         :raises ExecutionCanceledException: If the goal was canceled.
+        :raises Exception: The error the feedback callback of the goal raised, see
+            :meth:`_receive_feedback`.
         """
         goal_id = self._current_goal_id
         await wait_until_not_none(lambda: self.result)
         result = self.result
         self.result = None
+        if self._feedback_error is not None:
+            raise self._feedback_error
         match result.status:
             case GoalStatus.STATUS_ABORTED | GoalStatus.STATUS_SUCCEEDED:
                 return result
@@ -263,6 +293,8 @@ class MyActionClient:
         self.node_handle.get_logger().info(
             f"{self.action_name} Goal #{goal_id} accepted"
         )
+        if self._feedback_error is not None:
+            goal_handle.cancel_goal_async()
 
         self._result_future = self._goal_handle.get_result_async()
         self._result_future.add_done_callback(lambda f: self.__goal_done_cb(f, goal_id))

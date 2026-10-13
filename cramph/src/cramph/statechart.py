@@ -591,8 +591,8 @@ class CompiledTick:
         last_observations = [
             sm.if_else(
                 condition=sm.logic_or(
-                    LifeCyclePredicate.IS_TERMINATED.expression(
-                        node.life_cycle_variable
+                    node.life_cycle_predicate_expression(
+                        LifeCyclePredicate.IS_TERMINATED
                     ),
                     LifeCyclePredicate.IS_TERMINATED.expression(
                         self._life_cycle_at_cycle_start.variables[index]
@@ -643,8 +643,8 @@ class CompiledTick:
         )
         return sm.if_else(
             condition=sm.logic_or(
-                LifeCyclePredicate.IS_RUNNING.expression(node.life_cycle_variable),
-                LifeCyclePredicate.IS_PAUSED.expression(node.life_cycle_variable),
+                node.life_cycle_predicate_expression(LifeCyclePredicate.IS_RUNNING),
+                node.life_cycle_predicate_expression(LifeCyclePredicate.IS_PAUSED),
             ),
             if_result=sm.if_eq_cases(
                 a=self._life_cycle_at_cycle_start.variables[index],
@@ -1725,24 +1725,23 @@ class Statechart(SubclassJSONSerializer):
     def _add_transitions(self):
         """
         Rebuilds the graph's edges from the current transition conditions of every node.
+
+        .. note:: Must run after goal expansion, because parent relationships are only
+            known then.
+
+        :raises ConditionScopeError: If a condition references a node from a different
+            scope level, in which case the edges are left as they were.
         """
-        self._validate_condition_scopes()
+        conditions_by_owner = [
+            (node, condition)
+            for node in self.nodes
+            for condition in node.effective_conditions
+        ]
+        for owner, condition in conditions_by_owner:
+            self._validate_condition_scope(owner, condition)
         self.rx_graph.clear_edges()
-        for node in self.nodes:
-            for condition in node.effective_conditions:
-                self._create_edge_for_condition(node, condition)
-
-    def _validate_condition_scopes(self):
-        """
-        Ensures that every condition only references its owning node or siblings of it.
-
-        .. note:: Must run after goal expansion, because parent relationships are only known then.
-
-        :raises ConditionScopeError: If a condition references a node from a different scope level.
-        """
-        for node in self.nodes:
-            for condition in node.effective_conditions:
-                self._validate_condition_scope(node, condition)
+        for owner, condition in conditions_by_owner:
+            self._create_edge_for_condition(owner, condition)
 
     def _validate_condition_scope(
         self, owner: StatechartNode, condition: TransitionCondition

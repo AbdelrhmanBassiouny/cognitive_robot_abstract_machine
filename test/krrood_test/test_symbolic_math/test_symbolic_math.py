@@ -98,7 +98,7 @@ def test_to_sx():
 
 class TestBinaryLogic:
     """
-    The two-valued logic operators and the rendered form of expressions built from them.
+    The two-valued logic operators.
     """
 
     @pytest.mark.parametrize(
@@ -126,7 +126,7 @@ class TestBinaryLogic:
         a = sm.FloatVariable(name="a")
 
         assert logic_operator(a).free_variables() == [a]
-        assert sm.logic_to_str(logic_operator(a)) == sm.logic_to_str(a)
+        assert ca.is_equal(logic_operator(a).casadi_sx, a.casadi_sx)
 
     @pytest.mark.parametrize("logic_operator", [sm.logic_and, sm.logic_or])
     def test_an_operator_without_arguments_is_rejected(self, logic_operator):
@@ -134,42 +134,6 @@ class TestBinaryLogic:
             logic_operator()
         assert error.value.minimum_number_of_arguments == 1
         assert error.value.actual_number_of_arguments == 0
-
-    def test_logic_to_str_renders_and_or_not_over_variables(self):
-        a = sm.FloatVariable(name="a")
-        b = sm.FloatVariable(name="b")
-        c = sm.FloatVariable(name="c")
-        expression = sm.logic_and(a, sm.logic_or(b, sm.logic_not(c)))
-
-        assert sm.logic_to_str(expression) == '("a" and ("b" or not "c"))'
-
-    @pytest.mark.parametrize(
-        "constant, rendered",
-        [(sm.Scalar.const_true(), "True"), (sm.Scalar.const_false(), "False")],
-    )
-    def test_logic_to_str_renders_constants(self, constant, rendered):
-        assert sm.logic_to_str(constant) == rendered
-
-    @pytest.mark.parametrize(
-        "build_expression",
-        [
-            lambda a, b: sm.trinary_logic_and(a, b),
-            lambda a, b: sm.trinary_logic_or(a, b),
-            lambda a, b: sm.trinary_logic_not(a),
-            lambda a, b: a.is_true(),
-            lambda a, b: sm.logic_and(a, sm.Scalar.const_trinary_unknown()),
-        ],
-        ids=["trinary and", "trinary or", "trinary not", "comparison", "unknown"],
-    )
-    def test_logic_to_str_rejects_anything_but_two_valued_logic(self, build_expression):
-        """
-        Only an expression the two-valued operators built has a rendered form.
-        """
-        a = sm.FloatVariable(name="a")
-        b = sm.FloatVariable(name="b")
-
-        with pytest.raises(CannotConvertToStringError):
-            sm.logic_to_str(build_expression(a, b))
 
 
 class TestLogic3:

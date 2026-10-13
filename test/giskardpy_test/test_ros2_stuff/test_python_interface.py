@@ -1,10 +1,15 @@
 from __future__ import annotations
 
-import pytest
-from json_msgs.action import JsonAction
+from dataclasses import dataclass
 
+import pytest
+
+from cramph.executor import Executor, ExecutorExtension
+from cramph.monitors import CountTicks
+from cramph.statechart import Statechart
 from giskardpy.middleware.ros2 import rospy
-from giskardpy.middleware.ros2.action_server import ActionServerHandler
+from giskardpy.middleware.ros2.action_server import ActionServerHandler, GoalOutcome
+from giskardpy.middleware.ros2.exceptions import ExecutionAbortedException
 from giskardpy.middleware.ros2.python_interface import (
     GiskardClientExecutor,
     GiskardClientExecutorNode,
@@ -12,16 +17,93 @@ from giskardpy.middleware.ros2.python_interface import (
 from semantic_digital_twin.adapters.ros.world_synchronizer import WorldSynchronizer
 from semantic_digital_twin.world import World
 
+from .test_action_client import ServerAnsweringOneGoal, giskard_command_server
+
+# %% mimics
+
+
+@dataclass
+class ExtensionCountingCompilesAndRuns(ExecutorExtension):
+    """
+    An executor extension that counts how often it was told that a statechart compiled
+    and that a run stopped.
+    """
+
+    compile_count: int = 0
+    """
+    How often the extension was told that the statechart compiled.
+    """
+
+    run_count: int = 0
+    """
+    How often the extension was told that a run stopped.
+    """
+
+    def after_compile(self, executor: Executor) -> None:
+        self.compile_count += 1
+
+    def after_run(self, executor: Executor) -> None:
+        self.run_count += 1
+
+
 # %% fixtures
 
 
 @pytest.fixture()
-def giskard_command_server(init_rospy) -> ActionServerHandler:
+def extension() -> ExtensionCountingCompilesAndRuns:
     """
-    A real "giskard/command" action server, just present enough for a client's own
-    action client to find on construction.
+    :return: The extension of :func:`executor_with_a_statechart`.
     """
-    return ActionServerHandler(action_name="giskard/command", action_type=JsonAction)
+    return ExtensionCountingCompilesAndRuns()
+
+
+@pytest.fixture()
+def executor_with_a_statechart(
+    giskard_command_server: ActionServerHandler,
+    extension: ExtensionCountingCompilesAndRuns,
+) -> GiskardClientExecutor:
+    """
+    :return: A client with `extension` that compiled a statechart of one node.
+    """
+    world = World()
+    WorldSynchronizer(node=rospy.get_node(), _world=world)
+    executor = GiskardClientExecutor(
+        node_handle=rospy.get_node(), world=world, extensions=[extension]
+    )
+    statechart = Statechart(context=executor.context)
+    statechart.add_node(CountTicks(ticks=1))
+    executor.compile(statechart)
+    yield executor
+    executor.close()
+
+
+# %% extensions
+
+
+def test_an_extension_is_told_that_the_statechart_compiled(
+    executor_with_a_statechart: GiskardClientExecutor,
+    extension: ExtensionCountingCompilesAndRuns,
+):
+    assert extension.compile_count == 1
+
+
+def test_an_extension_is_told_that_an_aborted_goal_stopped(
+    giskard_command_server: ActionServerHandler,
+    executor_with_a_statechart: GiskardClientExecutor,
+    extension: ExtensionCountingCompilesAndRuns,
+):
+    ServerAnsweringOneGoal(
+        action_server=giskard_command_server,
+        outcome_unless_canceled=GoalOutcome.ABORTED,
+    )
+
+    with pytest.raises(ExecutionAbortedException):
+        executor_with_a_statechart.execute()
+
+    assert extension.run_count == 1
+
+
+# %% closing
 
 
 class TestGiskardClientExecutorClose:
