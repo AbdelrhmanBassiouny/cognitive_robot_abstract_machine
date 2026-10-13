@@ -59,11 +59,12 @@ items:
     made it conform to the manifest.
 - id: budget-manifest
   title: Declare every workflow in a tested budget manifest, and make main's workflows conform
-  branch: null
+  branch: claude/inspiring-pascal-u7ruus
   track: manifest
   depends_on: []
-  status: not_started
-  session: https://claude.ai/code/session_01UU92wpF3jQ4RosKZTLGE9s
+  status: in progress
+  session: https://claude.ai/code/session_01RiyB21wDi8SaFucjBG6K3Y
+  pull_request_number: 503
   notes: |-
     One pull request off `main`. `basstler/actions_budget.toml` names every workflow allowed in the
     repository - including the ones that only exist on unlanded branches (integration-*, stack
