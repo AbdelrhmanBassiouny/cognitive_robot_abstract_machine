@@ -11,13 +11,28 @@ hold each file to the manifest and say exactly what is wrong with one that drift
 from __future__ import annotations
 
 import tomllib
-from abc import ABC, abstractmethod
 from collections.abc import Mapping
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
 from typing import Any
 
+from basstler.class_property import classproperty
+from basstler.exceptions import (
+    BudgetViolation,
+    ConcurrencyDiffers,
+    JobTimeoutOverCeiling,
+    MissingForkGuard,
+    MissingJobTimeout,
+    MissingLabelGuard,
+    MissingPullRequestCancellation,
+    ScheduleDeclaredError,
+    ScheduledWorkflow,
+    TriggerDiffers,
+    UnansweredTrigger,
+    UndeclaredTrigger,
+    UndeclaredWorkflow,
+)
 from basstler.locations import PackageLocation
 from basstler.workflows import (
     ActivityType,
@@ -28,21 +43,6 @@ from basstler.workflows import (
 )
 
 # %% vocabulary
-
-
-FORK_PUSH_GUARD = "github.event_name != 'push' || !github.event.repository.fork"
-"""
-The condition that skips a job on a push to a fork, which only re-tests code the upstream
-repository has already tested. Read off the event, so no repository is named.
-"""
-
-
-def label_guard(label: str) -> str:
-    """
-    :param label: The label a ``labeled`` event has to be about.
-    :return: The condition that skips a job when any other label was added.
-    """
-    return f"github.event.action != 'labeled' || github.event.label.name == '{label}'"
 
 
 class ManifestKey(StrEnum):
@@ -150,6 +150,19 @@ class TriggerBudget:
     For a trigger answering ``labeled``, the label its first jobs have to be about.
     """
 
+    @property
+    def label_condition(self) -> str | None:
+        """
+        :return: The condition that skips a first job when a label other than
+            :attr:`required_label` was added, or none when no label is required.
+        """
+        if self.required_label is None:
+            return None
+        return (
+            "github.event.action != 'labeled' || "
+            f"github.event.label.name == '{self.required_label}'"
+        )
+
     @classmethod
     def from_manifest(cls, declared: Mapping[str, Any]) -> TriggerBudget:
         """
@@ -204,6 +217,15 @@ class WorkflowBudget:
     """
     Whether a push to a fork has to skip its first jobs.
     """
+
+    @classproperty
+    def fork_push_condition(cls) -> str:
+        """
+        The condition that skips a job on a push to a fork, which only re-tests code the
+        upstream repository has already tested. Read off the event, so no repository is
+        named.
+        """
+        return "github.event_name != 'push' || !github.event.repository.fork"
 
     @classmethod
     def from_manifest(cls, declared: Mapping[str, Any]) -> WorkflowBudget:
@@ -373,9 +395,13 @@ class WorkflowBudget:
         """
         unguarded_push = (
             tuple(
-                MissingForkGuard(workflow=workflow.file_name, job=job.identifier)
+                MissingForkGuard(
+                    workflow=workflow.file_name,
+                    job=job.identifier,
+                    condition=self.fork_push_condition,
+                )
                 for job in workflow.first_jobs
-                if FORK_PUSH_GUARD not in job.condition
+                if self.fork_push_condition not in job.condition
             )
             if self.skips_push_on_fork
             else ()
@@ -384,12 +410,12 @@ class WorkflowBudget:
             MissingLabelGuard(
                 workflow=workflow.file_name,
                 job=job.identifier,
-                label=budget.required_label,
+                condition=budget.label_condition,
             )
             for budget in self.triggers
-            if budget.required_label is not None
+            if budget.label_condition is not None
             for job in workflow.first_jobs
-            if label_guard(budget.required_label) not in job.condition
+            if budget.label_condition not in job.condition
         )
         return (*unguarded_push, *unguarded_label)
 
@@ -448,232 +474,3 @@ class ActionsBudget:
         if declaration is None:
             return (UndeclaredWorkflow(workflow=workflow.file_name),)
         return declaration.violations_of(workflow)
-
-
-# %% failures
-
-
-@dataclass
-class BudgetViolation(Exception, ABC):
-    """
-    One way a workflow breaks the budget, carrying what a reader needs to fix it.
-    """
-
-    workflow: str
-    """
-    The file name of the workflow that breaks it.
-    """
-
-    def __post_init__(self) -> None:
-        """
-        Compose the message from the subclass's own description.
-        """
-        super().__init__(f"{self.workflow}: {self.error_message()}")
-
-    def __str__(self) -> str:
-        """
-        The composed message, rather than a repr of the dataclass fields.
-        """
-        return Exception.__str__(self)
-
-    @abstractmethod
-    def error_message(self) -> str:
-        """
-        :return: What is wrong.
-        """
-
-
-@dataclass
-class UndeclaredWorkflow(BudgetViolation):
-    """
-    The manifest does not declare the workflow at all.
-    """
-
-    def error_message(self) -> str:
-        return f"not declared in {PackageLocation.ACTIONS_BUDGET.value.name}"
-
-
-@dataclass
-class ScheduledWorkflow(BudgetViolation):
-    """
-    The workflow runs on a schedule, which nothing in this repository may.
-    """
-
-    def error_message(self) -> str:
-        return "runs on a schedule; trigger it on the event it is waiting for instead"
-
-
-@dataclass
-class UndeclaredTrigger(BudgetViolation):
-    """
-    The workflow answers an event the manifest does not declare for it.
-    """
-
-    event: TriggerEvent
-    """
-    The undeclared event.
-    """
-
-    def error_message(self) -> str:
-        return f"answers {self.event}, which is not declared"
-
-
-@dataclass
-class UnansweredTrigger(BudgetViolation):
-    """
-    The manifest declares an event the workflow does not answer.
-    """
-
-    event: TriggerEvent
-    """
-    The declared event.
-    """
-
-    def error_message(self) -> str:
-        return f"is declared on {self.event}, which it does not answer"
-
-
-@dataclass
-class TriggerDiffers(BudgetViolation):
-    """
-    The workflow answers a declared event with other activity types or branches.
-    """
-
-    declared: Trigger
-    """
-    The trigger as the manifest declares it.
-    """
-
-    answered: Trigger
-    """
-    The trigger as the workflow answers it.
-    """
-
-    def error_message(self) -> str:
-        return f"answers {self.answered}, declared as {self.declared}"
-
-
-@dataclass
-class MissingPullRequestCancellation(BudgetViolation):
-    """
-    The workflow runs on every push to a pull request without cancelling the run for the
-    commit before.
-    """
-
-    def error_message(self) -> str:
-        return "runs on every pull-request push without cancel-in-progress concurrency"
-
-
-@dataclass
-class ConcurrencyDiffers(BudgetViolation):
-    """
-    The workflow's concurrency is not the declared one.
-    """
-
-    declared: Concurrency | None
-    """
-    The concurrency as the manifest declares it.
-    """
-
-    answered: Concurrency | None
-    """
-    The concurrency as the workflow declares it.
-    """
-
-    def error_message(self) -> str:
-        return f"has concurrency {self.answered}, declared as {self.declared}"
-
-
-@dataclass
-class MissingJobTimeout(BudgetViolation):
-    """
-    A job that takes a runner declares no ``timeout-minutes``, so a hang holds the runner
-    for GitHub's six-hour default.
-    """
-
-    job: str
-    """
-    The job's key.
-    """
-
-    def error_message(self) -> str:
-        return f"job {self.job} has no timeout-minutes"
-
-
-@dataclass
-class JobTimeoutOverCeiling(BudgetViolation):
-    """
-    A job's ``timeout-minutes`` is above the workflow's declared ceiling.
-    """
-
-    job: str
-    """
-    The job's key.
-    """
-
-    timeout_minutes: int
-    """
-    The job's timeout.
-    """
-
-    ceiling_minutes: int
-    """
-    The declared ceiling.
-    """
-
-    def error_message(self) -> str:
-        return (
-            f"job {self.job} times out after {self.timeout_minutes} minutes, "
-            f"above the declared {self.ceiling_minutes}"
-        )
-
-
-@dataclass
-class MissingForkGuard(BudgetViolation):
-    """
-    A first job of a workflow declared to skip pushes to a fork does not skip them.
-    """
-
-    job: str
-    """
-    The job's key.
-    """
-
-    def error_message(self) -> str:
-        return f"job {self.job} does not skip a push to a fork: if: {FORK_PUSH_GUARD}"
-
-
-@dataclass
-class MissingLabelGuard(BudgetViolation):
-    """
-    A first job of a workflow answering ``labeled`` runs for any label, not only the one
-    declared.
-    """
-
-    job: str
-    """
-    The job's key.
-    """
-
-    label: str
-    """
-    The label the job has to be about.
-    """
-
-    def error_message(self) -> str:
-        return f"job {self.job} runs for any label: if: {label_guard(self.label)}"
-
-
-@dataclass
-class ScheduleDeclaredError(ValueError):
-    """
-    The manifest declares a ``schedule`` trigger, which nothing in this repository may
-    answer.
-    """
-
-    def __str__(self) -> str:
-        """
-        :return: What is wrong with the manifest.
-        """
-        manifest = PackageLocation.ACTIONS_BUDGET.value.name
-        return f"{manifest} declares a schedule; declare the event it waits for instead"

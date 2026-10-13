@@ -11,8 +11,8 @@ from __future__ import annotations
 
 import pytest
 
-from basstler.actions_budget import (
-    ActionsBudget,
+from basstler.actions_budget import ActionsBudget, WorkflowBudget
+from basstler.exceptions import (
     ConcurrencyDiffers,
     JobTimeoutOverCeiling,
     MissingForkGuard,
@@ -233,7 +233,11 @@ def test_a_first_job_without_the_fork_guard_is_reported(budget: ActionsBudget):
     (first_job,) = workflow.first_jobs
 
     assert budget.violations_of(workflow) == (
-        MissingForkGuard(workflow=workflow.file_name, job=first_job.identifier),
+        MissingForkGuard(
+            workflow=workflow.file_name,
+            job=first_job.identifier,
+            condition=WorkflowBudget.fork_push_condition,
+        ),
     )
 
 
@@ -248,7 +252,7 @@ def test_a_first_job_without_the_label_guard_is_reported(budget: ActionsBudget):
         MissingLabelGuard(
             workflow=workflow.file_name,
             job=first_job.identifier,
-            label=declared.required_label,
+            condition=declared.label_condition,
         ),
     )
 

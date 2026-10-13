@@ -15,6 +15,7 @@ from typing import Any
 
 import yaml
 
+from basstler.class_property import classproperty
 from basstler.locations import PackageLocation, ProjectLocation
 
 # %% vocabulary
@@ -101,13 +102,12 @@ class ActivityType(StrEnum):
     A watched workflow's run finished.
     """
 
-
-DEFAULT_PULL_REQUEST_ACTIVITY_TYPES = frozenset(
-    {ActivityType.OPENED, ActivityType.SYNCHRONIZE, ActivityType.REOPENED}
-)
-"""
-What GitHub runs a ``pull_request`` workflow on when the trigger names no types.
-"""
+    @classproperty
+    def pull_request_defaults(cls) -> frozenset[ActivityType]:
+        """
+        What GitHub runs a ``pull_request`` workflow on when the trigger names no types.
+        """
+        return frozenset({cls.OPENED, cls.SYNCHRONIZE, cls.REOPENED})
 
 
 class WorkflowKey(StrEnum):
@@ -203,7 +203,7 @@ class Trigger:
         """
         if self.event is not TriggerEvent.PULL_REQUEST:
             return False
-        activity_types = self.activity_types or DEFAULT_PULL_REQUEST_ACTIVITY_TYPES
+        activity_types = self.activity_types or ActivityType.pull_request_defaults
         return ActivityType.SYNCHRONIZE in activity_types
 
     @classmethod
