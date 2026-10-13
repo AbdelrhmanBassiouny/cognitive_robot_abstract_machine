@@ -108,7 +108,7 @@ items:
   depends_on: []
   status: in progress
   session: https://claude.ai/code/session_01Xxsd3jwKjjEsHdyyfC8Azo
-  notes: 'Per-field limits (basstler/plan_size_limits.py), landed items pruned and finished
-    plans removed on save, progress notes capped, session start loads only the branch item.
-    Supersedes the approach of #207/#273/#279; the user decides whether those close. Personal-notes
-    data already migrated to the limits (prior state 37831be62).'
+  notes: 'Per-field limits (basstler/plan_size_limits.py) checked on every save: landed items
+    pruned, finished plans removed, progress notes capped, and finished branches'' progress
+    notes deleted on each progress save. Session start loads only the branch item. Supersedes
+    #207/#273/#279; the user decides whether those close.'
