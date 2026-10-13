@@ -143,41 +143,6 @@ class PixelBox(Bounds[Pixel]):
         )
 
 
-# %% the colour of a pixel
-
-
-@dataclass(frozen=True)
-class PixelColor:
-    """
-    The red, green and blue bytes one pixel of a frame holds.
-    """
-
-    red: int
-    """
-    The red byte.
-    """
-
-    green: int
-    """
-    The green byte.
-    """
-
-    blue: int
-    """
-    The blue byte.
-    """
-
-    @classmethod
-    def of(cls, color: Color) -> PixelColor:
-        """
-        :param color: A colour.
-        :return: Its red, green and blue as the bytes a frame holds; the opacity is not
-            part of it.
-        """
-        red, green, blue = color.to_rgb()
-        return cls(round(red * 255), round(green * 255), round(blue * 255))
-
-
 # %% the size of a frame
 
 
@@ -286,7 +251,7 @@ class Frame:
         :return: A frame that size of one colour.
         """
         return cls(
-            np.full(resolution.shape, astuple(PixelColor.of(color)), dtype=np.uint8)
+            np.full(resolution.shape, tuple(color.to_rgb_bytes()), dtype=np.uint8)
         )
 
     @staticmethod
@@ -436,7 +401,7 @@ class Frame:
             result,
             (box.left, box.top),
             (box.right, box.bottom),
-            astuple(PixelColor.of(color)),
+            tuple(color.to_rgb_bytes()),
             thickness,
         )
         return Frame(result)
@@ -453,7 +418,7 @@ class Frame:
             result,
             (box.left, box.top),
             (box.right, box.bottom),
-            astuple(PixelColor.of(color)),
+            tuple(color.to_rgb_bytes()),
             -1,
         )
         return Frame(result)
@@ -473,7 +438,7 @@ class Frame:
             result,
             astuple(Pixel.nearest(start)),
             astuple(Pixel.nearest(end)),
-            astuple(PixelColor.of(color)),
+            tuple(color.to_rgb_bytes()),
             thickness,
             cv2.LINE_AA,
         )
@@ -508,7 +473,7 @@ class Frame:
             result,
             astuple(Pixel.nearest(start)),
             astuple(Pixel.nearest(end)),
-            astuple(PixelColor.of(color)),
+            tuple(color.to_rgb_bytes()),
             thickness,
             cv2.LINE_AA,
             tipLength=min(head_length / length, 0.5),

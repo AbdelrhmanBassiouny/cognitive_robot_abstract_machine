@@ -4,14 +4,13 @@ Tests for :mod:`cramcorder.overlays`: the progress bar drawn over the whole vide
 
 from __future__ import annotations
 
-from dataclasses import astuple
 
 from datetime import timedelta
 
 import numpy as np
 import pytest
 
-from cramcorder.frame import Frame, PixelColor, Resolution
+from cramcorder.frame import Frame, Resolution
 from cramcorder.overlays import ProgressBar
 from cramcorder.theme import VideoTheme
 from cramcorder.timeline import Still, Timeline
@@ -30,13 +29,9 @@ def test_the_progress_bar_fills_the_top_of_the_frame_as_far_as_the_video_has_pla
         theme.page_of(FRAME_SIZE), timedelta(seconds=played_seconds), RUNS_FOR
     ).pixels
     played = round(FRAME_SIZE.width * played_seconds / RUNS_FOR.total_seconds())
-    assert (
-        drawn[: bar.thickness, :played] == astuple(PixelColor.of(theme.accent))
-    ).all()
-    assert (
-        drawn[: bar.thickness, played:] == astuple(PixelColor.of(theme.panel))
-    ).all()
-    assert (drawn[bar.thickness :] == astuple(PixelColor.of(theme.page))).all()
+    assert (drawn[: bar.thickness, :played] == tuple(theme.accent.to_rgb_bytes())).all()
+    assert (drawn[: bar.thickness, played:] == tuple(theme.panel.to_rgb_bytes())).all()
+    assert (drawn[bar.thickness :] == tuple(theme.page.to_rgb_bytes())).all()
 
 
 def test_the_progress_bar_runs_on_across_the_scenes_of_a_timeline() -> None:
@@ -52,6 +47,6 @@ def test_the_progress_bar_runs_on_across_the_scenes_of_a_timeline() -> None:
     )
     top_row = timeline.frame_at(moment).pixels[0]
     accent_columns = np.flatnonzero(
-        (top_row == astuple(PixelColor.of(theme.accent))).all(axis=1)
+        (top_row == tuple(theme.accent.to_rgb_bytes())).all(axis=1)
     )
     assert len(accent_columns) == round(FRAME_SIZE.width * moment / timeline.duration)

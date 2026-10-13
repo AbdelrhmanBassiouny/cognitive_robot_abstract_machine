@@ -5,7 +5,6 @@ with its subtitles burned in or as a track, checked against a venue's limits.
 
 from __future__ import annotations
 
-from dataclasses import astuple
 
 import subprocess
 from datetime import timedelta
@@ -19,7 +18,7 @@ import pytest
 from cramcorder.captions import BoxedCaption, Subtitled
 from cramcorder.encoding import EncoderPreset, SubmissionLimits, VideoFile
 from cramcorder.exceptions import VideoOutsideTheLimits
-from cramcorder.frame import Frame, PixelColor, Resolution
+from cramcorder.frame import Frame, Resolution
 from cramcorder.narration import Line, NarratedScene, Storyboard
 from cramcorder.overlays import ProgressBar
 from cramcorder.production import Subtitling, VideoProduction
@@ -249,7 +248,7 @@ def test_a_production_draws_its_overlays_and_its_captions_in_their_style() -> No
     assert isinstance(picture.style, BoxedCaption)
     assert picture.overlays == [bar]
     top = picture.frame_at(timedelta(0)).pixels[: bar.thickness]
-    assert (top == astuple(PixelColor.of(VideoTheme.neutral().panel))).all()
+    assert (top == tuple(VideoTheme.neutral().panel.to_rgb_bytes())).all()
 
 
 def test_soft_subtitles_leave_the_picture_its_overlays_and_no_captions() -> None:

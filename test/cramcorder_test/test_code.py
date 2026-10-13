@@ -5,12 +5,11 @@ earlier line, and written in colour.
 
 from __future__ import annotations
 
-from dataclasses import astuple
 
 from semantic_digital_twin.spatial_types.spatial_types import Point2
 
 from cramcorder.code import CodeLine, CodeTypesetting, Span, Token
-from cramcorder.frame import Frame, PixelColor, Resolution
+from cramcorder.frame import Frame, Resolution
 from cramcorder.lettering import Face
 from cramcorder.theme import VideoTheme
 from cramcorder.typesetting import Typesetting
@@ -81,7 +80,7 @@ def test_coloured_code_is_as_wide_as_the_same_line_in_one_colour_and_carries_its
     blank = Frame.of_color(FRAME_SIZE, VideoTheme.neutral().page)
     inks = inks_of(code.written(blank, line, Point2(10, 30)))
     for token in (Token.CLASS, Token.STRING, Token.CALL):
-        assert astuple(PixelColor.of(code.color_of(token))) in inks
+        assert tuple(code.color_of(token).to_rgb_bytes()) in inks
 
 
 def test_a_marked_stretch_of_code_is_filled_behind_in_the_marker_and_nothing_else_is() -> (
@@ -89,7 +88,7 @@ def test_a_marked_stretch_of_code_is_filled_behind_in_the_marker_and_nothing_els
 ):
     line = CodeLine("pickup := a(PickUpEvent)()")
     code = CodeTypesetting(size=CODE_SIZE)
-    marker = astuple(PixelColor.of(code.theme.marker))
+    marker = tuple(code.theme.marker.to_rgb_bytes())
     blank = Frame.of_color(FRAME_SIZE, code.theme.page)
     start = Point2(10, 30)
     marked = code.written(blank, line, start, marked=[Span(10, 24)])
@@ -106,6 +105,6 @@ def test_code_is_coloured_in_the_colours_of_its_theme() -> None:
     line = CodeLine('Tick(name="pick")')
     written = dark.written(dark.theme.page_of(FRAME_SIZE), line, Point2(10, 30))
     inks = inks_of(written)
-    assert astuple(PixelColor.of(dark.color_of(Token.CLASS))) in inks
-    assert astuple(PixelColor.of(dark.color_of(Token.STRING))) in inks
-    assert astuple(PixelColor.of(neutral.color_of(Token.CLASS))) not in inks
+    assert tuple(dark.color_of(Token.CLASS).to_rgb_bytes()) in inks
+    assert tuple(dark.color_of(Token.STRING).to_rgb_bytes()) in inks
+    assert tuple(neutral.color_of(Token.CLASS).to_rgb_bytes()) not in inks

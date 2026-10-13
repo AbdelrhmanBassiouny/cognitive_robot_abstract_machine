@@ -5,14 +5,13 @@ every scene keeps clear or on a box over the bottom of the frame.
 
 from __future__ import annotations
 
-from dataclasses import astuple
 
 from datetime import timedelta
 
 import numpy as np
 
 from cramcorder.captions import BandCaption, BoxedCaption, Subtitled
-from cramcorder.frame import Frame, PixelColor, Resolution
+from cramcorder.frame import Frame, Resolution
 from cramcorder.narration import Line, NarratedTimeline, Narration, SpokenLine
 from cramcorder.speech import Speech
 from cramcorder.subtitles import SubtitleCue, SubtitleRoom
@@ -188,7 +187,7 @@ def test_a_boxed_caption_is_written_light_on_a_shaded_box_over_the_bottom_of_the
     ]
     assert box_rows.min() > resolution.height / 2
     assert 0 < box_columns.min() and box_columns.max() < resolution.width - 1
-    assert astuple(PixelColor.of(style.theme.footage_text)) in inks_of(Frame(box))
+    assert tuple(style.theme.footage_text.to_rgb_bytes()) in inks_of(Frame(box))
     assert (written.pixels[: box_rows.min()] == WHITE).all()
     assert (written.pixels[box_rows.max() + 1 :] == WHITE).all()
 
@@ -207,5 +206,5 @@ def test_a_band_caption_on_the_page_of_its_theme_is_written_in_its_text_colour()
     written = subtitled.frame_at(WHILE_CAPTIONED)
     band = written.pixels[band_rows(written)]
     edge = 10
-    assert astuple(PixelColor.of(theme.text)) in inks_of(Frame(band))
-    assert (band[:, :edge] == astuple(PixelColor.of(theme.page))).all()  # not shaded
+    assert tuple(theme.text.to_rgb_bytes()) in inks_of(Frame(band))
+    assert (band[:, :edge] == tuple(theme.page.to_rgb_bytes())).all()  # not shaded

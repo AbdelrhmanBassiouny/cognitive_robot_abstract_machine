@@ -5,14 +5,13 @@ them, and the shapes drawn on them.
 
 from __future__ import annotations
 
-from dataclasses import astuple
 
 import numpy as np
 import pytest
 from semantic_digital_twin.spatial_types.spatial_types import Point2
 from semantic_digital_twin.world_description.geometry import Color
 
-from cramcorder.frame import Frame, Pixel, PixelBox, PixelColor, Resolution
+from cramcorder.frame import Frame, Pixel, PixelBox, Resolution
 
 FRAME_SIZE = Resolution(width=200, height=100)
 PICTURE_GREY = 200
@@ -43,8 +42,7 @@ def test_a_blank_frame_is_one_grey_and_knows_its_size() -> None:
 def test_a_frame_of_a_colour_holds_its_bytes() -> None:
     color = Color.from_hex("#1F2328")
     frame = Frame.of_color(FRAME_SIZE, color)
-    assert (frame.pixels == astuple(PixelColor.of(color))).all()
-    assert PixelColor.of(color) == PixelColor(red=0x1F, green=0x23, blue=0x28)
+    assert (frame.pixels == tuple(color.to_rgb_bytes())).all()
 
 
 def test_the_whole_frame_box_covers_every_pixel() -> None:
@@ -161,7 +159,7 @@ def test_shading_a_box_darkens_inside_and_leaves_the_rest() -> None:
 def test_filling_a_box_paints_it_in_the_colour() -> None:
     color = Color.from_hex("#FF8800")
     filled = FRAME_SIZE.blank(0).filled(Frame.box(10, 10, 20, 20), color)
-    assert tuple(filled.pixels[20, 20]) == astuple(PixelColor.of(color))
+    assert tuple(filled.pixels[20, 20]) == tuple(color.to_rgb_bytes())
     assert filled.pixels[50, 50].max() == 0
 
 

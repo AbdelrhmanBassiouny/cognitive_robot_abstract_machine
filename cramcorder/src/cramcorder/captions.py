@@ -5,14 +5,14 @@ Subtitles drawn into the picture, so they are part of the video itself.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from dataclasses import dataclass, field, astuple
+from dataclasses import dataclass, field
 from datetime import timedelta
 
 import numpy as np
 from semantic_digital_twin.spatial_types.spatial_types import Point2
 from typing_extensions import Sequence
 
-from cramcorder.frame import Frame, PixelColor
+from cramcorder.frame import Frame
 from cramcorder.narration import NarratedTimeline
 from cramcorder.subtitles import SubtitleCue, SubtitleRoom
 from cramcorder.theme import VideoTheme
@@ -113,7 +113,7 @@ class BandCaption(CaptionStyle):
         :return: Whether it is the theme's page rather than footage.
         """
         mean = band.pixels.reshape(-1, 3).mean(axis=0)
-        page = np.array(astuple(PixelColor.of(self.theme.page)))
+        page = np.array(tuple(self.theme.page.to_rgb_bytes()))
         return bool(np.abs(mean - page).max() <= self.page_likeness)
 
 

@@ -4,10 +4,10 @@ What is drawn over a whole video rather than one scene of it.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field, astuple
+from dataclasses import dataclass, field
 from datetime import timedelta
 
-from cramcorder.frame import Frame, PixelColor
+from cramcorder.frame import Frame
 from cramcorder.theme import VideoTheme
 from cramcorder.timeline import Overlay
 
@@ -40,6 +40,6 @@ class ProgressBar(Overlay):
         width = frame.resolution.width
         played = round(width * min(max(moment / runs_for, 0.0), 1.0))
         drawn = frame.pixels.copy()
-        drawn[: self.thickness, :played] = astuple(PixelColor.of(self.theme.accent))
-        drawn[: self.thickness, played:] = astuple(PixelColor.of(self.theme.panel))
+        drawn[: self.thickness, :played] = tuple(self.theme.accent.to_rgb_bytes())
+        drawn[: self.thickness, played:] = tuple(self.theme.panel.to_rgb_bytes())
         return Frame(drawn)

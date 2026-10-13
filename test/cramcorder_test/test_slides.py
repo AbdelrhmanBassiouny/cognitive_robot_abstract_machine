@@ -5,13 +5,12 @@ on white and held as long as they are told.
 
 from __future__ import annotations
 
-from dataclasses import astuple
 
 from datetime import timedelta
 
 import numpy as np
 
-from cramcorder.frame import Frame, PixelColor
+from cramcorder.frame import Frame
 from cramcorder.slides import ResultRow, ResultsTable, TextCard
 from cramcorder.theme import VideoTheme
 from cramcorder.timeline import HeldScene
@@ -77,8 +76,6 @@ def test_slides_are_drawn_on_the_page_of_their_theme_in_its_text_colour() -> Non
         ResultsTable("On the real robot", ROWS, theme=theme),
     ):
         pixels = slide.frame_at(timedelta(0)).pixels
-        assert (
-            pixels[:THEME_TOP_BLANK_ROWS] == astuple(PixelColor.of(theme.page))
-        ).all()
+        assert (pixels[:THEME_TOP_BLANK_ROWS] == tuple(theme.page.to_rgb_bytes())).all()
         inks = {tuple(pixel) for pixel in pixels.reshape(-1, 3)}
-        assert astuple(PixelColor.of(theme.text)) in inks
+        assert tuple(theme.text.to_rgb_bytes()) in inks
