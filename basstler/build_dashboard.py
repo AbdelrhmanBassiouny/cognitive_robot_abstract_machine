@@ -895,6 +895,15 @@ class Item:
         drift_suffix = " has-drift" if self.drift_description else ""
         return f"status-{self.status.name.lower()}{drift_suffix}"
 
+    @property
+    def visibility_toggle_element_id(self) -> str | None:
+        """The ``id`` of the sidebar checkbox that hides this item's status,
+        or ``None`` when its status is shown by default."""
+        for hideable in DefaultHiddenStatus:
+            if hideable.status is self.status:
+                return hideable.toggle_element_id
+        return None
+
     @classmethod
     def from_mapping(cls, data: dict[str, Any]) -> Item:
         """Build an item from one entry of plan.yaml's ``items[]`` - only

@@ -643,7 +643,7 @@
 
 {% macro item_card(stacked) %}
 {% set item = stacked.item %}
-    <article id="item-{{ item.identifier }}" class="item {{ item.status_and_drift_css_class }}" style="{{ stacked.indent_style }}">
+    <article id="item-{{ item.identifier }}" class="item {{ item.status_and_drift_css_class }}"{% if item.visibility_toggle_element_id %} data-visibility-toggle="{{ item.visibility_toggle_element_id }}"{% endif %} style="{{ stacked.indent_style }}">
       {% for visibility_filter, position in stacked.positions.items() if position.wrap_parent %}
       <div class="wrap-arrow {{ visibility_filter.wrap_arrow_css_class }}">◄ continues from <span class="mono">{{ position.wrap_parent.identifier }}</span> <span class="wrap-parent-title">({{ position.wrap_parent.title }})</span></div>
       {% endfor %}
@@ -887,6 +887,11 @@
       return;
     }
     event.preventDefault();
+    var visibilityToggle = document.getElementById(target.getAttribute("data-visibility-toggle"));
+    if (visibilityToggle && !visibilityToggle.checked) {
+      visibilityToggle.checked = true;
+      visibilityToggle.dispatchEvent(new Event("change"));
+    }
     target.scrollIntoView({behavior: "smooth", block: "center"});
     target.classList.remove("item-highlighted");
     void target.offsetWidth;

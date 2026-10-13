@@ -1544,6 +1544,18 @@ def test_hideable_status_page_class_and_toggle_identifier_follow_the_status():
     assert deferred.toggle_element_id == "show-deferred-toggle"
 
 
+def test_item_names_the_checkbox_that_hides_its_status():
+    for hideable in DefaultHiddenStatus:
+        assert (
+            item("a", hideable.status).visibility_toggle_element_id
+            == hideable.toggle_element_id
+        )
+
+
+def test_item_with_a_status_shown_by_default_names_no_checkbox():
+    assert item("a", ItemStatus.IN_PROGRESS).visibility_toggle_element_id is None
+
+
 # %% DashboardRenderer - dependency stacking / hidden-status dedent
 
 
@@ -2232,6 +2244,41 @@ def test_render_links_a_drift_sidebar_entry_to_its_item_card():
     output, _ = renderer.render()
     assert 'href="#item-a"' in output
     assert 'data-item-identifier="a"' in output
+
+
+def test_render_marks_a_hidden_item_card_with_the_checkbox_that_reveals_it():
+    plan = Plan(
+        id="test-plan",
+        title="Test Plan",
+        description="desc",
+        default_repository="owner/repo",
+        waves=[Wave(id="wave-1", name="Wave One")],
+        tracks=[Track(id="track-1", name="Track One", wave="wave-1")],
+        items=[item("a", ItemStatus.DEFERRED)],
+    )
+    renderer = DashboardRenderer(
+        plan=plan, roadmap_text="", pull_requests_by_repository={}, tracking_url=None
+    )
+    output, _ = renderer.render()
+    toggle_element_id = plan.items[0].visibility_toggle_element_id
+    assert f'data-visibility-toggle="{toggle_element_id}"' in output
+
+
+def test_render_leaves_a_card_shown_by_default_without_a_revealing_checkbox():
+    plan = Plan(
+        id="test-plan",
+        title="Test Plan",
+        description="desc",
+        default_repository="owner/repo",
+        waves=[Wave(id="wave-1", name="Wave One")],
+        tracks=[Track(id="track-1", name="Track One", wave="wave-1")],
+        items=[item("a", ItemStatus.IN_PROGRESS)],
+    )
+    renderer = DashboardRenderer(
+        plan=plan, roadmap_text="", pull_requests_by_repository={}, tracking_url=None
+    )
+    output, _ = renderer.render()
+    assert "data-visibility-toggle=" not in output
 
 
 # %% status counts
