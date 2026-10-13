@@ -8,7 +8,8 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 from datetime import timedelta
-from itertools import product
+from functools import cached_property, partial
+from itertools import accumulate, product
 
 from typing_extensions import Iterator, Sequence
 
@@ -45,7 +46,7 @@ class SubtitleCue:
         if len(self.text) <= room.characters_per_row:
             return [self.text]
         words = self.text.split()
-        for cuts in room.even_cuts(words, 2):
+        for cuts in EvenCuts(words, 2, room):
             halves = cuts.parts(words)
             if all(len(half) <= room.characters_per_row for half in halves):
                 return halves
@@ -80,7 +81,7 @@ class WordCuts:
     Where a run of words is cut into parts.
     """
 
-    last_words: tuple[int, ...]
+    last_words: list[int]
     """
     The index of the word each part but the last ends with, in order.
     """
@@ -170,7 +171,7 @@ class SubtitleRoom:
         if self.holds(text):
             return [text]
         for parts in range(2, len(words) + 1):
-            for cuts in self.even_cuts(words, parts):
+            for cuts in EvenCuts(words, parts, self):
                 cut = cuts.parts(words)
                 if all(self.holds(part) for part in cut):
                     return cut
@@ -191,37 +192,6 @@ class SubtitleRoom:
                 else:
                     pieces.append(part)
         return pieces
-
-    def even_cuts(self, words: Sequence[str], parts: int) -> Iterator[WordCuts]:
-        """
-        :param words: Words, in order.
-        :param parts: How many parts to cut them into.
-        :return: The places the words may be cut, likeliest first; a cut after a word
-            that ends a clause within a fifth of a part's length of where the cut would
-            fall comes before any other.
-        """
-        ends = [
-            sum(len(word) + 1 for word in words[: index + 1])
-            for index in range(len(words))
-        ]
-        share = ends[-1] / parts
-        choices: list[list[int]] = []
-        for number in range(1, parts):
-            target = share * number
-            candidates = sorted(
-                range(number - 1, len(words) - (parts - number)),
-                key=lambda index: (
-                    not (
-                        self.ends_a_clause(words[index])
-                        and abs(ends[index] - target) <= share / 5
-                    ),
-                    abs(ends[index] - target),
-                ),
-            )
-            choices.append(candidates[: self.cuts_tried])
-        for cuts in product(*choices):
-            if all(earlier < later for earlier, later in zip(cuts, cuts[1:])):
-                yield WordCuts(cuts)
 
     def ends_a_clause(self, word: str) -> bool:
         """
@@ -244,6 +214,88 @@ class SubtitleRoom:
             else:
                 pieces.append(word)
         return pieces
+
+
+# %% where a run of words may be cut
+
+
+@dataclass(frozen=True)
+class EvenCuts:
+    """
+    The places a run of words may be cut into parts of about even length, likeliest
+    first: a cut after a word that ends a clause within a fifth of a part's length of
+    where an even cut would fall comes before any other.
+    """
+
+    words: Sequence[str]
+    """
+    The words, in order.
+    """
+
+    parts: int
+    """
+    How many parts to cut them into.
+    """
+
+    room: SubtitleRoom
+    """
+    The room the parts go into: how many places it tries for each cut, and which words
+    end a clause.
+    """
+
+    def __iter__(self) -> Iterator[WordCuts]:
+        tried = product(*map(self.last_words_for, range(1, self.parts)))
+        for last_words in tried:
+            if list(last_words) == sorted(set(last_words)):
+                yield WordCuts(list(last_words))
+
+    @cached_property
+    def word_ends(self) -> list[int]:
+        """
+        How many characters lie up to the end of each word, its space included.
+        """
+        return list(accumulate(len(word) + 1 for word in self.words))
+
+    @property
+    def part_length(self) -> float:
+        """
+        How many characters each part takes when the parts are exactly even.
+        """
+        return self.word_ends[-1] / self.parts
+
+    def last_words_for(self, cut: int) -> list[int]:
+        """
+        :param cut: Which cut, counting from one.
+        :return: The indices of the words the cut may come after, likeliest first, as
+            many as the room tries.
+        """
+        even_end = self.part_length * cut
+        possible = range(cut - 1, len(self.words) - (self.parts - cut))
+        nearest = sorted(possible, key=partial(self.distance_from, even_end))
+        clause_ends_first = sorted(
+            nearest, key=partial(self.is_far_from_a_clause_end, even_end)
+        )
+        return clause_ends_first[: self.room.cuts_tried]
+
+    def distance_from(self, even_end: float, index: int) -> float:
+        """
+        :param even_end: Where an even cut would fall, in characters.
+        :param index: The index of a word.
+        :return: How many characters the word's end lies from there.
+        """
+        return abs(self.word_ends[index] - even_end)
+
+    def is_far_from_a_clause_end(self, even_end: float, index: int) -> bool:
+        """
+        :param even_end: Where an even cut would fall, in characters.
+        :param index: The index of a word.
+        :return: Whether a cut after the word misses ending a clause within a fifth of a
+            part's length of there.
+        """
+        return not (
+            self.room.ends_a_clause(self.words[index])
+            and self.distance_from(even_end, index) <= self.part_length / 5
+        )
 
 
 # %% the file they are written to

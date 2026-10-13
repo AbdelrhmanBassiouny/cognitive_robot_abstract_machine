@@ -43,6 +43,10 @@ a test voice in place of the speech model.
 
 ## Scenes
 
+Everything that plays is a `video.Video`: it has a `duration` and a `frame_at(moment)`,
+both in `timedelta`s. Scenes, the timeline and a video file on disk
+(`encoding.VideoFile`) are all videos, so any of them can be shown as footage.
+
 A scene is a subclass of `timeline.Scene`: it says how long it lasts (`duration`) and
 what it shows at each moment (`picture_at`, which takes a `timedelta` and returns a
 `frame.Frame`). A slide
@@ -57,16 +61,14 @@ Scenes that come with the package:
 - `timeline.Still`: one picture held.
 - `slides.TextCard`: a heading and a line. Use it as a title card or an end card.
 - `slides.ResultsTable`: rows of what was measured and its value.
-- `footage_scenes.FootageScene`: a stretch of film filling the frame, sped up with
+- `footage_scenes.FootageScene`: a stretch of a recording filling the frame, sped up with
   the speed shown on a badge, and optionally a second view of the same stretch in the
   corner.
 - `footage_scenes.TitleOverFootage`: a title over a footage scene, fading out.
 
-A film is a subclass of `footage.Film`: it has a `length` and an `image_at(moment)`,
-both in `timedelta`s.
-`footage.VideoFilm` reads one from an mp4, for example what
-`semantic_digital_twin.adapters.mujoco_video_recording` records of a simulated run.
-`footage.Framing` cuts margins off a film's pictures.
+`footage.ViewOfTheRun` is a stretch of any video, for example an `encoding.VideoFile` of
+what `semantic_digital_twin.adapters.mujoco_video_recording` records of a simulated run.
+`footage.Framing` cuts margins off its pictures.
 
 Drawing is on `frame.Frame`, the pixels of one picture: pasting and fitting pictures,
 shading, outlines, lines and arrows. Colours are `Color`, positions `Point2` and
@@ -126,9 +128,10 @@ starts and how much silence follows it.
 
 ## Size and limits
 
-With no limits given, the picture is encoded at `VideoProduction.bytes_per_second`. For a
-venue with limits, pass
+Sizes are `units.DataSize` and bit rates `units.BitRate` (`DataSize.of_bytes(40_000)`,
+`BitRate(DataSize(64_000))` for 64 kilobits a second). With no limits given, the picture
+is encoded at `VideoProduction.picture_bit_rate`. For a venue with limits, pass
 `encoding.SubmissionLimits(longest=..., largest=..., lowest=..., slowest=...)`: the picture is
-then encoded to that venue's byte budget, and the finished file is checked against
+then encoded to that venue's size budget, and the finished file is checked against
 every limit (`exceptions.VideoOutsideTheLimits`). `preset=EncoderPreset.FAST` encodes a quick
 draft.

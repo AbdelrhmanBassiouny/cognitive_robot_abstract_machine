@@ -1,23 +1,22 @@
 """
-Film played back in a video: a recording read from its file, framed, filling the frame,
-sped up and saying by how much, with a second view of the same stretch small in its
-corner.
+Footage played back in a video: a recording read from its file, framed, filling the
+frame, sped up and saying by how much, with a second view of the same stretch small in
+its corner.
 """
 
 from __future__ import annotations
 
-from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from datetime import timedelta
 
 from krrood.patterns.role import Role
 from semantic_digital_twin.spatial_types.spatial_types import Point2
 
-from cramcorder.encoding import VideoFile
 from cramcorder.frame import Frame
 from cramcorder.lettering import Face
 from cramcorder.theme import VideoTheme
 from cramcorder.typesetting import Anchor, TextSize, Typesetting
+from cramcorder.video import Video
 
 # %% what of a picture is shown
 
@@ -64,61 +63,7 @@ class Framing:
         )
 
 
-# %% a film
-
-
-@dataclass
-class Film(ABC):
-    """
-    What a film is to a scene that shows it: an image for any moment of it, and how long
-    it runs.
-    """
-
-    @property
-    @abstractmethod
-    def length(self) -> timedelta:
-        """
-        How long it is from the film's first image to its last.
-        """
-
-    @abstractmethod
-    def image_at(self, moment: timedelta) -> Frame:
-        """
-        :param moment: A moment of the film, from its start.
-        :return: The image then, as red, green and blue.
-        """
-
-
-@dataclass
-class VideoFilm(Film):
-    """
-    A film read from a video file: a camera's recording, or a simulation filmed as it
-    ran.
-    """
-
-    video: VideoFile
-    """
-    The file.
-    """
-
-    @property
-    def length(self) -> timedelta:
-        """
-        How long the file plays.
-        """
-        return self.video.duration
-
-    def image_at(self, moment: timedelta) -> Frame:
-        """
-        :param moment: A moment of the film, from its start; past its end counts as its
-            last image.
-        :return: The image then, as red, green and blue.
-        """
-        last = self.length - timedelta(seconds=1 / self.video.frames_per_second)
-        return self.video.frame_at(min(moment, last))
-
-
-# %% a stretch of a film
+# %% a stretch of a recording
 
 
 @dataclass
@@ -127,15 +72,15 @@ class ViewOfTheRun:
     One camera's view of a stretch of a run.
     """
 
-    film: Film
+    video: Video
     """
     What the camera recorded.
     """
 
     starts_at: timedelta
     """
-    Where in the film the stretch starts: the moment that matches the stretch's start in
-    every other viewpoint of it.
+    Where in the video the stretch starts: the moment that matches the stretch's start
+    in every other viewpoint of it.
     """
 
     framing: Framing = field(default_factory=Framing)
@@ -143,12 +88,12 @@ class ViewOfTheRun:
     What of each picture is shown.
     """
 
-    def image_at(self, into: timedelta) -> Frame:
+    def frame_at(self, into: timedelta) -> Frame:
         """
         :param into: How far into the stretch.
         :return: What the camera saw then, framed.
         """
-        return self.framing.of(self.film.image_at(self.starts_at + into))
+        return self.framing.of(self.video.frame_at(self.starts_at + into))
 
 
 # %% badges on footage

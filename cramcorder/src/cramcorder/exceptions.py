@@ -149,7 +149,7 @@ class FramesOfDifferentSizes(DataclassException):
 @dataclass
 class NothingToRead(DataclassException):
     """
-    Raised when a video file holds no frame at the moment asked for.
+    Raised when a video file holds no frame to read.
     """
 
     path: Path
@@ -172,7 +172,7 @@ class NothingToRead(DataclassException):
         """
         :return: How to put it right.
         """
-        return "Ask for a moment within the file's duration."
+        return "Check that the file exists and holds a video."
 
 
 @dataclass

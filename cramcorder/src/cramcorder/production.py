@@ -1,6 +1,6 @@
 """
 A storyboard turned into a finished mp4: the slides grown to hold their lines, the
-narration said and placed, the picture encoded to a byte budget, the narration and the
+narration said and placed, the picture encoded to a size budget, the narration and the
 subtitles joined to it, and the file checked against a venue's limits where one is
 given.
 """
@@ -25,6 +25,7 @@ from cramcorder.muxer import Muxer
 from cramcorder.narration import NarratedTimeline, Storyboard
 from cramcorder.speech import KokoroVoice, Voice
 from cramcorder.timeline import Overlay, Timeline
+from cramcorder.units import BitRate, DataSize
 
 logger = logging.getLogger(__name__)
 
@@ -91,7 +92,7 @@ class VideoProduction:
     limits: SubmissionLimits | None = None
     """
     What a venue accepts the video as, if the video is made for one: the picture is
-    then encoded to the venue's byte limit and the file checked against every limit.
+    then encoded to the venue's size limit and the file checked against every limit.
     """
 
     preset: EncoderPreset = EncoderPreset.SLOW
@@ -99,10 +100,12 @@ class VideoProduction:
     How long the encoder may take to make the file small.
     """
 
-    bytes_per_second: int = 250_000
+    picture_bit_rate: BitRate = field(
+        default_factory=lambda: BitRate(DataSize(2_000_000))
+    )
     """
-    The bytes one second of picture may take where no venue limits the file: two
-    megabits a second, which keeps slides and footage at 720 rows sharp.
+    How much data one second of picture may take where no venue limits the file: what
+    keeps slides and footage at 720 rows sharp.
     """
 
     muxer: Muxer = field(default_factory=Muxer)
@@ -142,17 +145,17 @@ class VideoProduction:
             return narrated.role_taker
         return Subtitled.over(narrated, style=self.captions)
 
-    def picture_budget_for(self, duration: timedelta) -> int:
+    def picture_budget_for(self, duration: timedelta) -> DataSize:
         """
         :param duration: How long the video plays.
-        :return: The bytes the picture may take, leaving room for the sound.
+        :return: What the picture may take, leaving room for the sound.
         """
         allowed = (
-            self.bytes_per_second * duration.total_seconds()
+            self.picture_bit_rate.over(duration)
             if self.limits is None
-            else self.limits.byte_budget_for(duration)
+            else self.limits.size_budget_for(duration)
         )
-        return int(allowed) - self.muxer.bytes_for_sound(duration)
+        return allowed - self.muxer.size_of_sound(duration)
 
     def written_to(self, path: Path) -> VideoFile:
         """
@@ -190,6 +193,6 @@ class VideoProduction:
             "%s: %.1f s, %d bytes",
             video.path,
             video.duration.total_seconds(),
-            video.size,
+            video.size.bytes,
         )
         return video

@@ -4,19 +4,24 @@ Lines of Python written on a frame, coloured piece by piece as an editor would.
 
 from __future__ import annotations
 
-import re
 from dataclasses import dataclass, field
 from difflib import SequenceMatcher
 from enum import StrEnum
 
+from pygments.lexer import Lexer
+from pygments.lexers import PythonLexer
+from pygments.token import Comment, Keyword, Name, Number, Operator, String
 from semantic_digital_twin.spatial_types.spatial_types import Point2
 from semantic_digital_twin.world_description.geometry import Color
-from typing_extensions import Sequence
+from typing_extensions import TYPE_CHECKING, Sequence
 
 from cramcorder.frame import Frame
 from cramcorder.lettering import Face
 from cramcorder.theme import VideoTheme
 from cramcorder.typesetting import Anchor, Typesetting
+
+if TYPE_CHECKING:
+    from pygments.token import _TokenType
 
 
 class Token(StrEnum):
@@ -44,6 +49,16 @@ class Token(StrEnum):
     A number.
     """
 
+    KEYWORD = "keyword"
+    """
+    A word of the language itself, such as ``for``, ``in`` or ``None``.
+    """
+
+    COMMENT = "comment"
+    """
+    A comment.
+    """
+
     NAME = "name"
     """
     Any other name.
@@ -53,6 +68,29 @@ class Token(StrEnum):
     """
     Anything else.
     """
+
+    @classmethod
+    def of(cls, kind: _TokenType, text: str, following: str) -> Token:
+        """
+        :param kind: What the lexer took a piece of a line for.
+        :param text: The piece.
+        :param following: The piece after it that is not a space, if any.
+        :return: The kind of piece it is coloured by: a name is a class when it is
+            capitalised, a call when a parenthesis follows it.
+        """
+        if kind in String:
+            return cls.STRING
+        if kind in Number:
+            return cls.NUMBER
+        if kind in Comment:
+            return cls.COMMENT
+        if kind in Keyword or kind in Operator.Word:
+            return cls.KEYWORD
+        if kind not in Name:
+            return cls.PUNCTUATION
+        if text[0].isupper():
+            return cls.CLASS
+        return cls.CALL if following.startswith("(") else cls.NAME
 
 
 @dataclass(frozen=True)
@@ -100,45 +138,33 @@ class CodeLine:
     The line.
     """
 
-    piece_pattern: re.Pattern[str] = re.compile(
-        r"\"[^\"]*\"|'[^']*'|\d+(?:\.\d+)?|[A-Za-z_]\w*|\s+|."
+    lexer: Lexer = field(
+        default_factory=lambda: PythonLexer(stripnl=False, ensurenl=False),
+        compare=False,
+        repr=False,
     )
     """
-    How a line comes apart: a string, a number, a name, a run of spaces, or one other
-    character at a time.
+    What cuts the line into the pieces of the language.
     """
 
     @property
     def pieces(self) -> list[CodePiece]:
         """
-        The line cut into pieces, each with the kind it is coloured by: a name is a class
-        when it is capitalised, a call when a parenthesis follows it.
+        The line cut into pieces, each with the kind it is coloured by; neighbouring
+        pieces of one kind are one piece.
         """
-        texts = self.piece_pattern.findall(self.text)
+        lexed = list(self.lexer.get_tokens(self.text))
         pieces: list[CodePiece] = []
-        for index, text in enumerate(texts):
+        for index, (kind, text) in enumerate(lexed):
             following = next(
-                (later for later in texts[index + 1 :] if not later.isspace()), ""
+                (later for _, later in lexed[index + 1 :] if not later.isspace()), ""
             )
-            pieces.append(CodePiece(text, self._token_of(text, following)))
+            token = Token.of(kind, text, following)
+            if pieces and pieces[-1].token is token:
+                pieces[-1] = CodePiece(pieces[-1].text + text, token)
+            else:
+                pieces.append(CodePiece(text, token))
         return pieces
-
-    @staticmethod
-    def _token_of(text: str, following: str) -> Token:
-        """
-        :param text: One piece of the line.
-        :param following: The piece after it that is not a space, if any.
-        :return: The kind of piece it is.
-        """
-        if text[0] in "\"'":
-            return Token.STRING
-        if text[0].isdigit():
-            return Token.NUMBER
-        if not (text[0].isalpha() or text[0] == "_"):
-            return Token.PUNCTUATION
-        if text[0].isupper():
-            return Token.CLASS
-        return Token.CALL if following == "(" else Token.NAME
 
     def changed_spans(self, earlier: CodeLine) -> list[Span]:
         """
@@ -195,6 +221,8 @@ class CodeTypesetting:
             Token.CLASS: self.theme.syntax.class_name,
             Token.STRING: self.theme.syntax.string,
             Token.NUMBER: self.theme.syntax.number,
+            Token.KEYWORD: self.theme.syntax.keyword,
+            Token.COMMENT: self.theme.muted,
             Token.NAME: self.theme.text,
             Token.PUNCTUATION: self.theme.muted,
         }[token]

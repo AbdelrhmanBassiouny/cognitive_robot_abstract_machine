@@ -10,7 +10,7 @@ from datetime import timedelta
 
 import numpy as np
 
-from cramcorder.speech import Speech, Voice
+from cramcorder.speech import SoundLevel, Speech, Voice
 
 
 @dataclass
@@ -29,9 +29,9 @@ class EvenlyPacedVoice(Voice):
     Samples per second of the speech, in hertz.
     """
 
-    level: float = 1.0
+    level: SoundLevel = SoundLevel(decibels=0.0)
     """
-    The value every sample holds.
+    How loud every sample is.
     """
 
     def speaks(self, text: str, pace: float = 1.0) -> Speech:
@@ -39,7 +39,7 @@ class EvenlyPacedVoice(Voice):
         return Speech(
             np.full(
                 int(duration.total_seconds() * self.sample_rate),
-                self.level,
+                self.level.amplitude,
                 dtype=np.float32,
             ),
             self.sample_rate,
@@ -50,18 +50,20 @@ class EvenlyPacedVoice(Voice):
 class ToneSpeechModel:
     """
     Stands in for the Kokoro speech model: it says every word as one steady tone lasting
-    :attr:`TIME_PER_WORD` at its own speed, with the silence before and after that a
+    :attr:`time_per_word` at its own speed, with the silence before and after that a
     speech model leaves.
+
+    It is made as :class:`kokoro_onnx.Kokoro` is, from the paths of the model's files.
     """
 
-    model: str
+    model_path: str
     """
-    The weights it was given, unread.
+    The path of the file of weights it was given, unread.
     """
 
-    voices: str
+    voices_path: str
     """
-    The voices it was given, unread.
+    The path of the file of voices it was given, unread.
     """
 
     sample_rate: int = 1000
@@ -74,9 +76,9 @@ class ToneSpeechModel:
     How long the tone model says each word at its own speed.
     """
 
-    level: float = 0.3
+    level: SoundLevel = SoundLevel(decibels=-10.0)
     """
-    The value every sample of its tone holds.
+    How loud every sample of its tone is.
     """
 
     silence_before: timedelta = timedelta(seconds=0.2)
@@ -95,7 +97,7 @@ class ToneSpeechModel:
         words = len(text.split())
         tone = np.full(
             int(self.time_per_word.total_seconds() * words / speed * self.sample_rate),
-            self.level,
+            self.level.amplitude,
             dtype=np.float32,
         )
         before = np.zeros(

@@ -18,7 +18,7 @@ from cramcorder.typesetting import Typesetting
 class SyntaxColors:
     """
     What the kinds of piece of a line of code are written in, as an editor colours them;
-    names and punctuation take the theme's text and muted colours.
+    names take the theme's text colour, punctuation and comments its muted one.
     """
 
     call: Color
@@ -39,6 +39,11 @@ class SyntaxColors:
     number: Color
     """
     A number.
+    """
+
+    keyword: Color
+    """
+    A word of the language itself.
     """
 
 
@@ -112,6 +117,7 @@ class VideoTheme:
                 class_name=Color.from_hex("#6D28D9"),
                 string=Color.from_hex("#15803D"),
                 number=Color.from_hex("#B45309"),
+                keyword=Color.from_hex("#BE123C"),
             ),
         )
 
@@ -134,6 +140,7 @@ class VideoTheme:
                 class_name=Color.from_hex("#BC8CFF"),
                 string=Color.from_hex("#3FB97A"),
                 number=Color.from_hex("#E3B341"),
+                keyword=Color.from_hex("#FF7B72"),
             ),
         )
 

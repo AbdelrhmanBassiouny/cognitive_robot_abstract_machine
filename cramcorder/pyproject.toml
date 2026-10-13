@@ -25,6 +25,7 @@ dependencies = [
     "numpy",
     "opencv-python",
     "pillow",
+    "pygments",  # cuts code into the tokens it is coloured by
     "semantic_digital_twin",
     "typing_extensions",
 ]

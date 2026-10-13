@@ -20,7 +20,11 @@ from semantic_digital_twin.spatial_types.spatial_types import (
     HomogeneousTransformationMatrix,
     Point2,
 )
-from semantic_digital_twin.world_description.geometry import Color, PlanarBoundingBox
+from semantic_digital_twin.world_description.geometry import (
+    Bounds,
+    Color,
+    PlanarBoundingBox,
+)
 
 # %% whole pixels
 
@@ -50,31 +54,22 @@ class Pixel:
         return cls(round(float(point.x)), round(float(point.y)))
 
 
-@dataclass(frozen=True)
-class PixelBox:
+@dataclass
+class PixelBox(Bounds[Pixel]):
     """
-    A box of whole pixels of a frame.
-    """
-
-    left: int
-    """
-    The column of its left edge.
+    A box of whole pixels of a frame, from its top left pixel to its bottom right one.
     """
 
-    top: int
-    """
-    The row of its top edge.
-    """
-
-    width: int
-    """
-    How many columns wide it is.
-    """
-
-    height: int
-    """
-    How many rows tall it is.
-    """
+    @classmethod
+    def between(cls, left: int, top: int, right: int, bottom: int) -> PixelBox:
+        """
+        :param left: The column of its left edge.
+        :param top: The row of its top edge.
+        :param right: The column just right of it.
+        :param bottom: The row just below it.
+        :return: The box of the pixels between those edges.
+        """
+        return cls(Pixel(left, top), Pixel(right - 1, bottom - 1))
 
     @classmethod
     def nearest(cls, box: PlanarBoundingBox) -> PixelBox:
@@ -82,22 +77,51 @@ class PixelBox:
         :param box: A box in pixels.
         :return: The whole pixels it covers, its edges rounded to the nearest.
         """
-        left, top = round(box.min_x), round(box.min_y)
-        return cls(left, top, round(box.max_x) - left, round(box.max_y) - top)
+        return cls.between(
+            round(box.min_x), round(box.min_y), round(box.max_x), round(box.max_y)
+        )
+
+    @property
+    def left(self) -> int:
+        """
+        The column of its left edge.
+        """
+        return self.lower.column
+
+    @property
+    def top(self) -> int:
+        """
+        The row of its top edge.
+        """
+        return self.lower.row
 
     @property
     def right(self) -> int:
         """
         The column just right of the box.
         """
-        return self.left + self.width
+        return self.upper.column + 1
 
     @property
     def bottom(self) -> int:
         """
         The row just below the box.
         """
-        return self.top + self.height
+        return self.upper.row + 1
+
+    @property
+    def width(self) -> int:
+        """
+        How many columns wide it is.
+        """
+        return self.right - self.left
+
+    @property
+    def height(self) -> int:
+        """
+        How many rows tall it is.
+        """
+        return self.bottom - self.top
 
     @property
     def is_empty(self) -> bool:
@@ -111,10 +135,47 @@ class PixelBox:
         :param resolution: The size of a frame.
         :return: The part of the box inside a frame that size; empty if none is.
         """
-        left, top = max(self.left, 0), max(self.top, 0)
-        right = min(self.right, resolution.width)
-        bottom = min(self.bottom, resolution.height)
-        return PixelBox(left, top, right - left, bottom - top)
+        return PixelBox.between(
+            max(self.left, 0),
+            max(self.top, 0),
+            min(self.right, resolution.width),
+            min(self.bottom, resolution.height),
+        )
+
+
+# %% the colour of a pixel
+
+
+@dataclass(frozen=True)
+class PixelColor:
+    """
+    The red, green and blue bytes one pixel of a frame holds.
+    """
+
+    red: int
+    """
+    The red byte.
+    """
+
+    green: int
+    """
+    The green byte.
+    """
+
+    blue: int
+    """
+    The blue byte.
+    """
+
+    @classmethod
+    def of(cls, color: Color) -> PixelColor:
+        """
+        :param color: A colour.
+        :return: Its red, green and blue as the bytes a frame holds; the opacity is not
+            part of it.
+        """
+        red, green, blue = color.to_rgb()
+        return cls(round(red * 255), round(green * 255), round(blue * 255))
 
 
 # %% the size of a frame
@@ -224,17 +285,9 @@ class Frame:
         :param color: What every pixel is set to.
         :return: A frame that size of one colour.
         """
-        return cls(np.full(resolution.shape, cls.bytes_of(color), dtype=np.uint8))
-
-    @staticmethod
-    def bytes_of(color: Color) -> tuple[int, int, int]:
-        """
-        :param color: A colour.
-        :return: Its red, green and blue as the bytes a frame holds; the opacity is not
-            part of it.
-        """
-        red, green, blue = color.to_rgb()
-        return round(red * 255), round(green * 255), round(blue * 255)
+        return cls(
+            np.full(resolution.shape, astuple(PixelColor.of(color)), dtype=np.uint8)
+        )
 
     @staticmethod
     def box(left: float, top: float, width: float, height: float) -> PlanarBoundingBox:
@@ -383,7 +436,7 @@ class Frame:
             result,
             (box.left, box.top),
             (box.right, box.bottom),
-            self.bytes_of(color),
+            astuple(PixelColor.of(color)),
             thickness,
         )
         return Frame(result)
@@ -400,7 +453,7 @@ class Frame:
             result,
             (box.left, box.top),
             (box.right, box.bottom),
-            self.bytes_of(color),
+            astuple(PixelColor.of(color)),
             -1,
         )
         return Frame(result)
@@ -420,7 +473,7 @@ class Frame:
             result,
             astuple(Pixel.nearest(start)),
             astuple(Pixel.nearest(end)),
-            self.bytes_of(color),
+            astuple(PixelColor.of(color)),
             thickness,
             cv2.LINE_AA,
         )
@@ -455,7 +508,7 @@ class Frame:
             result,
             astuple(Pixel.nearest(start)),
             astuple(Pixel.nearest(end)),
-            self.bytes_of(color),
+            astuple(PixelColor.of(color)),
             thickness,
             cv2.LINE_AA,
             tipLength=min(head_length / length, 0.5),

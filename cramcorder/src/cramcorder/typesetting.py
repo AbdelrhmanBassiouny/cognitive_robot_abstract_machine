@@ -4,7 +4,7 @@ Writing text on a frame: where it goes, what it is written in and how it breaks.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, astuple
 from enum import IntEnum, StrEnum
 
 from PIL import Image, ImageDraw
@@ -12,7 +12,7 @@ import numpy as np
 from semantic_digital_twin.spatial_types.spatial_types import Point2
 from semantic_digital_twin.world_description.geometry import Color
 
-from cramcorder.frame import Frame
+from cramcorder.frame import Frame, PixelColor
 from cramcorder.lettering import Face, Typeface
 
 
@@ -163,7 +163,7 @@ class Typesetting:
         drawing.multiline_text(
             position,
             text,
-            fill=Frame.bytes_of(self.color),
+            fill=astuple(PixelColor.of(self.color)),
             font=font,
             anchor=anchor_value,
             align="center" if anchor.is_horizontally_centred else "left",

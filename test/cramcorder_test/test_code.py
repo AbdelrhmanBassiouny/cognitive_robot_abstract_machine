@@ -5,10 +5,12 @@ earlier line, and written in colour.
 
 from __future__ import annotations
 
+from dataclasses import astuple
+
 from semantic_digital_twin.spatial_types.spatial_types import Point2
 
 from cramcorder.code import CodeLine, CodeTypesetting, Span, Token
-from cramcorder.frame import Frame, Resolution
+from cramcorder.frame import Frame, PixelColor, Resolution
 from cramcorder.lettering import Face
 from cramcorder.theme import VideoTheme
 from cramcorder.typesetting import Typesetting
@@ -38,6 +40,21 @@ def test_a_line_of_code_comes_apart_into_calls_classes_names_strings_and_numbers
     assert "".join(piece.text for piece in pieces) == QUERY
 
 
+def test_keywords_and_comments_are_pieces_of_their_own() -> None:
+    kinds = {
+        piece.text: piece.token
+        for piece in CodeLine("for event in events:  # every event").pieces
+    }
+    assert kinds["for"] is Token.KEYWORD and kinds["in"] is Token.KEYWORD
+    assert kinds["# every event"] is Token.COMMENT
+
+
+def test_a_formatted_string_is_coloured_as_a_string_around_its_names() -> None:
+    kinds = {piece.text: piece.token for piece in CodeLine('f"{name}!"').pieces}
+    assert kinds['f"{'] is Token.STRING and kinds['}!"'] is Token.STRING
+    assert kinds["name"] is Token.NAME
+
+
 def test_the_changed_spans_of_a_line_are_the_pieces_that_differ_from_the_earlier_line() -> (
     None
 ):
@@ -64,7 +81,7 @@ def test_coloured_code_is_as_wide_as_the_same_line_in_one_colour_and_carries_its
     blank = Frame.of_color(FRAME_SIZE, VideoTheme.neutral().page)
     inks = inks_of(code.written(blank, line, Point2(10, 30)))
     for token in (Token.CLASS, Token.STRING, Token.CALL):
-        assert Frame.bytes_of(code.color_of(token)) in inks
+        assert astuple(PixelColor.of(code.color_of(token))) in inks
 
 
 def test_a_marked_stretch_of_code_is_filled_behind_in_the_marker_and_nothing_else_is() -> (
@@ -72,7 +89,7 @@ def test_a_marked_stretch_of_code_is_filled_behind_in_the_marker_and_nothing_els
 ):
     line = CodeLine("pickup := a(PickUpEvent)()")
     code = CodeTypesetting(size=CODE_SIZE)
-    marker = Frame.bytes_of(code.theme.marker)
+    marker = astuple(PixelColor.of(code.theme.marker))
     blank = Frame.of_color(FRAME_SIZE, code.theme.page)
     start = Point2(10, 30)
     marked = code.written(blank, line, start, marked=[Span(10, 24)])
@@ -89,6 +106,6 @@ def test_code_is_coloured_in_the_colours_of_its_theme() -> None:
     line = CodeLine('Tick(name="pick")')
     written = dark.written(dark.theme.page_of(FRAME_SIZE), line, Point2(10, 30))
     inks = inks_of(written)
-    assert Frame.bytes_of(dark.color_of(Token.CLASS)) in inks
-    assert Frame.bytes_of(dark.color_of(Token.STRING)) in inks
-    assert Frame.bytes_of(neutral.color_of(Token.CLASS)) not in inks
+    assert astuple(PixelColor.of(dark.color_of(Token.CLASS))) in inks
+    assert astuple(PixelColor.of(dark.color_of(Token.STRING))) in inks
+    assert astuple(PixelColor.of(neutral.color_of(Token.CLASS))) not in inks

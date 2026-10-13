@@ -6,6 +6,7 @@ venue's limits, and those limits checked on the file that came out.
 from __future__ import annotations
 
 from datetime import timedelta
+from pathlib import Path
 
 import pytest
 
@@ -13,11 +14,12 @@ from cramcorder.encoding import H264Encoder, SubmissionLimits, VideoFile
 from cramcorder.exceptions import NothingToRead, VideoOutsideTheLimits
 from cramcorder.frame import Frame, Resolution
 from cramcorder.timeline import Still, Timeline
+from cramcorder.units import DataSize
 
 FRAME_SIZE = Resolution(width=320, height=480)
 FRAMES_PER_SECOND = 20
 VIDEO_LENGTH = timedelta(seconds=2)
-SIZE_BUDGET = 1_000_000
+SIZE_BUDGET = DataSize.of_bytes(1_000_000)
 BACKGROUND_GREY = 30
 SQUARE_COLOUR = (250, 120, 30)
 SQUARE_ROWS = slice(100, 200)
@@ -64,7 +66,7 @@ def limits(**changes: object) -> SubmissionLimits:
     """
     satisfied = dict(
         longest=timedelta(seconds=3),
-        largest=2 * SIZE_BUDGET,
+        largest=SIZE_BUDGET.scaled(2),
         lowest=FRAME_SIZE.height,
         slowest=FRAMES_PER_SECOND,
     )
@@ -85,7 +87,7 @@ def test_the_encoded_file_has_the_timeline_size_rate_and_length(
 
 
 def test_the_encoded_file_stays_inside_its_size_budget(encoded: VideoFile) -> None:
-    assert 0 < encoded.size <= SIZE_BUDGET
+    assert DataSize(0) < encoded.size <= SIZE_BUDGET
 
 
 def test_the_frames_read_back_resemble_the_ones_written(encoded: VideoFile) -> None:
@@ -98,11 +100,17 @@ def test_the_frames_read_back_resemble_the_ones_written(encoded: VideoFile) -> N
     )
 
 
-def test_a_moment_past_the_end_of_the_file_has_nothing_to_read(
+def test_a_moment_past_the_end_of_the_file_shows_its_last_frame(
     encoded: VideoFile,
 ) -> None:
+    last = timedelta(seconds=(encoded.frame_count - 1) / encoded.frames_per_second)
+    past_the_end = encoded.frame_at(encoded.duration + VIDEO_LENGTH)
+    assert (past_the_end.pixels == encoded.frame_at(last).pixels).all()
+
+
+def test_a_file_without_frames_has_nothing_to_read(tmp_path: Path) -> None:
     with pytest.raises(NothingToRead):
-        encoded.frame_at(encoded.duration + VIDEO_LENGTH)
+        VideoFile(tmp_path / "missing.mp4").frame_at(timedelta(0))
 
 
 # %% the limits
@@ -116,7 +124,7 @@ def test_the_limits_accept_a_file_inside_them(encoded: VideoFile) -> None:
     "broken_limit",
     [
         dict(longest=timedelta(seconds=1)),
-        dict(largest=10),
+        dict(largest=DataSize.of_bytes(10)),
         dict(lowest=720),
         dict(slowest=30),
     ],
@@ -129,9 +137,12 @@ def test_each_limit_refuses_a_file_outside_it(
         limits(**broken_limit).check(encoded)
 
 
-def test_the_byte_budget_is_the_largest_file_in_proportion_to_the_length() -> None:
+def test_the_size_budget_is_the_largest_file_in_proportion_to_the_length() -> None:
     venue = SubmissionLimits(
-        longest=timedelta(seconds=100), largest=1_000_000, lowest=480, slowest=20
+        longest=timedelta(seconds=100),
+        largest=SIZE_BUDGET,
+        lowest=480,
+        slowest=20,
     )
-    assert venue.byte_budget_for(timedelta(seconds=25)) == venue.largest // 4
-    assert venue.byte_budget_for(2 * venue.longest) == venue.largest
+    assert venue.size_budget_for(venue.longest / 4) == venue.largest.scaled(1 / 4)
+    assert venue.size_budget_for(2 * venue.longest) == venue.largest

@@ -99,7 +99,7 @@ class FootageScene(Scene):
         Where the inset lies: the bottom right corner of the footage, above the band the
         captions are read on.
         """
-        sample = self.inset.image_at(timedelta(0))
+        sample = self.inset.frame_at(timedelta(0))
         sample_height, sample_width = sample.pixels.shape[:2]
         height = self.inset_width * sample_height / sample_width
         return Frame.box(
@@ -116,7 +116,7 @@ class FootageScene(Scene):
         """
         if self.inset_still is not None and moment < self.inset_still.shown_for:
             return self.inset_still.picture
-        return self.inset.image_at(moment * self.speed)
+        return self.inset.frame_at(moment * self.speed)
 
     def picture_at(self, moment: timedelta) -> Frame:
         """
@@ -124,7 +124,7 @@ class FootageScene(Scene):
         :return: The footage then, with the inset in its corner and the speed badged.
         """
         frame = self.resolution.blank(0).pasted(
-            self.main.image_at(moment * self.speed), self.resolution.whole
+            self.main.frame_at(moment * self.speed), self.resolution.whole
         )
         if self.inset is not None:
             panel = self.inset_panel

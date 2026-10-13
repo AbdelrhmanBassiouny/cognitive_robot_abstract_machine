@@ -30,7 +30,7 @@ class EnvironmentVariable(StrEnum):
     """
 
 
-# %% one scene's corner of the cache
+# %% one scene's directory of the cache
 
 
 @dataclass
@@ -41,12 +41,12 @@ class SceneCache:
 
     name: str
     """
-    What the scene's corner of the cache is called.
+    What the scene's directory of the cache is called.
     """
 
     root: Path = field(default_factory=lambda: SceneCache.configured_root())
     """
-    Where every scene's corner lies.
+    Where every scene's directory lies.
     """
 
     @staticmethod
@@ -64,7 +64,7 @@ class SceneCache:
     @property
     def directory(self) -> Path:
         """
-        This scene's corner, made if it is not there yet.
+        This scene's directory under the root, made if it is not there yet.
         """
         directory = self.root / self.name
         directory.mkdir(parents=True, exist_ok=True)

@@ -5,6 +5,8 @@ with its subtitles burned in or as a track, checked against a venue's limits.
 
 from __future__ import annotations
 
+from dataclasses import astuple
+
 import subprocess
 from datetime import timedelta
 from enum import StrEnum
@@ -17,13 +19,15 @@ import pytest
 from cramcorder.captions import BoxedCaption, Subtitled
 from cramcorder.encoding import EncoderPreset, SubmissionLimits, VideoFile
 from cramcorder.exceptions import VideoOutsideTheLimits
-from cramcorder.frame import Frame, Resolution
+from cramcorder.frame import Frame, PixelColor, Resolution
 from cramcorder.narration import Line, NarratedScene, Storyboard
 from cramcorder.overlays import ProgressBar
 from cramcorder.production import Subtitling, VideoProduction
 from cramcorder.slides import ResultRow, ResultsTable, TextCard
+from cramcorder.speech import SoundLevel
 from cramcorder.theme import VideoTheme
 from cramcorder.timeline import Still
+from cramcorder.units import DataSize
 
 from .voices import EvenlyPacedVoice
 
@@ -33,7 +37,9 @@ SLIDE_HOLD = timedelta(seconds=1)
 DISSOLVE = timedelta(seconds=0.2)
 DARK = 128
 VOICE = EvenlyPacedVoice(
-    time_per_word=timedelta(seconds=0.25), sample_rate=16_000, level=0.1
+    time_per_word=timedelta(seconds=0.25),
+    sample_rate=16_000,
+    level=SoundLevel(decibels=-20.0),
 )
 """
 A voice at a rate an audio encoder takes, quiet enough not to clip.
@@ -169,8 +175,8 @@ def test_the_subtitles_are_burned_into_the_band_while_a_line_is_said(
 def test_the_video_is_encoded_to_the_budget_where_no_venue_limits_it(
     burned_in: VideoFile,
 ) -> None:
-    allowed = production().bytes_per_second * burned_in.duration.total_seconds()
-    assert 0 < burned_in.size <= allowed
+    allowed = production().picture_bit_rate.over(burned_in.duration)
+    assert DataSize(0) < burned_in.size <= allowed
 
 
 # %% the slides grow to hold their lines
@@ -205,7 +211,7 @@ def test_soft_subtitles_go_in_as_a_track_and_a_subrip_file_beside_it(
 def test_a_video_longer_than_the_venue_allows_is_refused(tmp_path: Path) -> None:
     too_short = SubmissionLimits(
         longest=SLIDE_HOLD,
-        largest=10_000_000,
+        largest=DataSize.of_bytes(10_000_000),
         lowest=RESOLUTION.height,
         slowest=FRAMES_PER_SECOND,
     )
@@ -218,12 +224,12 @@ def test_a_video_inside_the_venues_limits_is_encoded_to_its_budget(
 ) -> None:
     limits = SubmissionLimits(
         longest=timedelta(seconds=60),
-        largest=2_000_000,
+        largest=DataSize.of_bytes(2_000_000),
         lowest=RESOLUTION.height,
         slowest=FRAMES_PER_SECOND,
     )
     video = production(limits=limits).written_to(tmp_path / "minimal.mp4")
-    assert video.size <= limits.byte_budget_for(video.duration)
+    assert video.size <= limits.size_budget_for(video.duration)
 
 
 # %% what is drawn over the scenes
@@ -243,7 +249,7 @@ def test_a_production_draws_its_overlays_and_its_captions_in_their_style() -> No
     assert isinstance(picture.style, BoxedCaption)
     assert picture.overlays == [bar]
     top = picture.frame_at(timedelta(0)).pixels[: bar.thickness]
-    assert (top == Frame.bytes_of(VideoTheme.neutral().panel)).all()
+    assert (top == astuple(PixelColor.of(VideoTheme.neutral().panel))).all()
 
 
 def test_soft_subtitles_leave_the_picture_its_overlays_and_no_captions() -> None:

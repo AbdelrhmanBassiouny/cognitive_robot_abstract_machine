@@ -5,12 +5,14 @@ them, and the shapes drawn on them.
 
 from __future__ import annotations
 
+from dataclasses import astuple
+
 import numpy as np
 import pytest
 from semantic_digital_twin.spatial_types.spatial_types import Point2
 from semantic_digital_twin.world_description.geometry import Color
 
-from cramcorder.frame import Frame, Pixel, PixelBox, Resolution
+from cramcorder.frame import Frame, Pixel, PixelBox, PixelColor, Resolution
 
 FRAME_SIZE = Resolution(width=200, height=100)
 PICTURE_GREY = 200
@@ -41,13 +43,15 @@ def test_a_blank_frame_is_one_grey_and_knows_its_size() -> None:
 def test_a_frame_of_a_colour_holds_its_bytes() -> None:
     color = Color.from_hex("#1F2328")
     frame = Frame.of_color(FRAME_SIZE, color)
-    assert (frame.pixels == Frame.bytes_of(color)).all()
-    assert Frame.bytes_of(color) == (0x1F, 0x23, 0x28)
+    assert (frame.pixels == astuple(PixelColor.of(color))).all()
+    assert PixelColor.of(color) == PixelColor(red=0x1F, green=0x23, blue=0x28)
 
 
 def test_the_whole_frame_box_covers_every_pixel() -> None:
     box = FRAME_SIZE.whole
-    assert PixelBox.nearest(box) == PixelBox(0, 0, FRAME_SIZE.width, FRAME_SIZE.height)
+    assert PixelBox.nearest(box) == PixelBox.between(
+        0, 0, FRAME_SIZE.width, FRAME_SIZE.height
+    )
 
 
 # %% boxes
@@ -56,22 +60,30 @@ def test_the_whole_frame_box_covers_every_pixel() -> None:
 def test_fitting_keeps_the_aspect_and_centres_in_the_room() -> None:
     room = FRAME_SIZE.whole
     square = Frame.fitting(room, 1.0)
-    assert PixelBox.nearest(square) == PixelBox(50, 0, 100, 100)
+    assert PixelBox.nearest(square) == PixelBox.between(50, 0, 150, 100)
     wide_aspect = 4.0
     wide = Frame.fitting(room, wide_aspect)
-    assert PixelBox.nearest(wide) == PixelBox(0, 25, 200, 50)
+    assert PixelBox.nearest(wide) == PixelBox.between(0, 25, 200, 75)
 
 
 def test_a_box_inside_a_frame_is_cut_to_the_frame() -> None:
-    hanging_over = PixelBox(-10, 90, 50, 30)
-    assert hanging_over.inside(FRAME_SIZE) == PixelBox(
-        0, 90, 40, FRAME_SIZE.height - 90
+    hanging_over = PixelBox.between(-10, 90, 40, 120)
+    assert hanging_over.inside(FRAME_SIZE) == PixelBox.between(
+        0, 90, 40, FRAME_SIZE.height
     )
 
 
 def test_a_box_outside_a_frame_covers_no_pixel_of_it() -> None:
-    beyond = PixelBox(FRAME_SIZE.width + 5, 0, 10, 10)
+    beyond = PixelBox.between(FRAME_SIZE.width + 5, 0, FRAME_SIZE.width + 15, 10)
     assert beyond.inside(FRAME_SIZE).is_empty
+
+
+def test_a_pixel_box_runs_from_its_top_left_pixel_to_its_bottom_right_one() -> None:
+    left, top, width, height = 10, 20, 10, 5
+    box = PixelBox.between(left, top, left + width, top + height)
+    assert box.lower == Pixel(column=left, row=top)
+    assert box.upper == Pixel(column=left + width - 1, row=top + height - 1)
+    assert box.width == width and box.height == height
 
 
 def test_a_position_falls_on_the_nearest_pixel() -> None:
@@ -149,7 +161,7 @@ def test_shading_a_box_darkens_inside_and_leaves_the_rest() -> None:
 def test_filling_a_box_paints_it_in_the_colour() -> None:
     color = Color.from_hex("#FF8800")
     filled = FRAME_SIZE.blank(0).filled(Frame.box(10, 10, 20, 20), color)
-    assert tuple(filled.pixels[20, 20]) == Frame.bytes_of(color)
+    assert tuple(filled.pixels[20, 20]) == astuple(PixelColor.of(color))
     assert filled.pixels[50, 50].max() == 0
 
 

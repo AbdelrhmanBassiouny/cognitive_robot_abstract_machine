@@ -8,13 +8,23 @@ import subprocess
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from datetime import timedelta
+from enum import StrEnum
 from pathlib import Path
 
 import imageio_ffmpeg
 
 from cramcorder.encoding import VideoFile
+from cramcorder.units import BitRate, DataSize
 
 # %% the tracks of the mp4
+
+
+class Language(StrEnum):
+    """
+    A language a track is in, as its ISO 639-2 code.
+    """
+
+    ENGLISH = "eng"
 
 
 @dataclass(frozen=True)
@@ -28,9 +38,9 @@ class Track(ABC):
     The file the stream is read from.
     """
 
-    language: str = "eng"
+    language: Language = Language.ENGLISH
     """
-    The language the track is in, as an ISO 639-2 code.
+    The language the track is in.
     """
 
     @abstractmethod
@@ -57,9 +67,9 @@ class NarrationTrack(Track):
     The narration, encoded as AAC, the codec every player decodes, in one channel.
     """
 
-    bit_rate: int = field(kw_only=True)
+    bit_rate: BitRate = field(kw_only=True)
     """
-    Bits per second the narration is encoded at.
+    How much data each second of narration is encoded into.
     """
 
     def options(self, input_index: int) -> list[str]:
@@ -69,7 +79,7 @@ class NarrationTrack(Track):
             "-c:a",
             "aac",
             "-b:a",
-            str(self.bit_rate),
+            str(self.bit_rate.per_second.bits),
             "-ac",
             "1",
             "-metadata:s:a:0",
@@ -110,27 +120,25 @@ class Muxer:
     The encoder binary.
     """
 
-    audio_bit_rate: int = 64_000
+    audio_bit_rate: BitRate = field(default_factory=lambda: BitRate(DataSize(64_000)))
     """
-    Bits per second the narration is encoded at: one channel of speech needs no more.
+    How much data each second of narration is encoded into: one channel of speech needs
+    no more.
     """
 
-    subtitle_allowance: int = 40_000
+    subtitle_allowance: DataSize = DataSize.of_bytes(40_000)
     """
-    Bytes set aside for the subtitle track and what joining the streams adds to the
+    What is set aside for the subtitle track and what joining the streams adds to the
     file.
     """
 
-    def bytes_for_sound(self, duration: timedelta) -> int:
+    def size_of_sound(self, duration: timedelta) -> DataSize:
         """
         :param duration: How long the video plays.
-        :return: The bytes the narration and the subtitles take over it, to keep out of
-            the picture's budget.
+        :return: What the narration and the subtitles take over it, to keep out of the
+            picture's budget.
         """
-        return (
-            int(self.audio_bit_rate / 8 * duration.total_seconds())
-            + self.subtitle_allowance
-        )
+        return self.audio_bit_rate.over(duration) + self.subtitle_allowance
 
     def joined(
         self,

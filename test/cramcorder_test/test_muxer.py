@@ -6,15 +6,25 @@ are joined into.
 from __future__ import annotations
 
 import subprocess
+from datetime import timedelta
 from pathlib import Path
 
 import pytest
 
 from cramcorder.encoding import VideoFile
-from cramcorder.muxer import Muxer, NarrationTrack, PictureTrack, SubtitleTrack, Track
+from cramcorder.muxer import (
+    Language,
+    Muxer,
+    NarrationTrack,
+    PictureTrack,
+    SubtitleTrack,
+    Track,
+)
+from cramcorder.units import BitRate, DataSize
 
 TRACK_FILE = Path("track")
 INPUT_INDEX = 2
+NARRATION_BIT_RATE = BitRate(DataSize(48_000))
 
 # %% the tracks
 
@@ -23,7 +33,7 @@ INPUT_INDEX = 2
     "track, stream_kind",
     [
         (PictureTrack(TRACK_FILE), "v"),
-        (NarrationTrack(TRACK_FILE, bit_rate=64_000), "a"),
+        (NarrationTrack(TRACK_FILE, bit_rate=NARRATION_BIT_RATE), "a"),
         (SubtitleTrack(TRACK_FILE), "s"),
     ],
 )
@@ -35,9 +45,26 @@ def test_a_track_takes_its_stream_from_its_own_input(
 
 
 def test_the_narration_is_encoded_at_its_bit_rate() -> None:
-    bit_rate = 48_000
-    options = NarrationTrack(TRACK_FILE, bit_rate=bit_rate).options(INPUT_INDEX)
-    assert options[options.index("-b:a") + 1] == str(bit_rate)
+    options = NarrationTrack(TRACK_FILE, bit_rate=NARRATION_BIT_RATE).options(
+        INPUT_INDEX
+    )
+    assert options[options.index("-b:a") + 1] == str(NARRATION_BIT_RATE.per_second.bits)
+
+
+def test_a_track_is_labelled_with_its_language() -> None:
+    options = SubtitleTrack(TRACK_FILE, language=Language.ENGLISH).options(INPUT_INDEX)
+    assert f"language={Language.ENGLISH}" in options
+
+
+def test_the_sound_takes_the_narration_over_the_video_and_the_subtitle_allowance() -> (
+    None
+):
+    muxer = Muxer(
+        ffmpeg=Path("ffmpeg"),
+        audio_bit_rate=BitRate(DataSize(8_000)),
+        subtitle_allowance=DataSize(100),
+    )
+    assert muxer.size_of_sound(timedelta(seconds=10)) == DataSize(80_100)
 
 
 # %% the tracks joined

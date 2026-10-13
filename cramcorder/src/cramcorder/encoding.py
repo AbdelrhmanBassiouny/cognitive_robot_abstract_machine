@@ -1,5 +1,5 @@
 """
-Frames written out as one H.264 video no larger than a byte budget.
+Frames written out as one H.264 video no larger than a size budget.
 
 A venue takes a video no longer, larger, shorter in height or slower in frame rate than
 it states, so the encoder is told the size it may not exceed and picks the bit rate from
@@ -27,6 +27,8 @@ from cramcorder.exceptions import (
 )
 from cramcorder.frame import Frame, Resolution
 from cramcorder.timeline import Timeline
+from cramcorder.units import BitRate, DataSize
+from cramcorder.video import Video
 
 # %% the encoder's names
 
@@ -74,9 +76,10 @@ class EncoderPreset(StrEnum):
 
 
 @dataclass(frozen=True)
-class VideoFile:
+class VideoFile(Video):
     """
-    A video on disk, read for what a submission is checked on.
+    A video on disk: a camera's recording, a simulation filmed as it ran, or a video
+    written out, read for what a submission is checked on.
     """
 
     path: Path
@@ -85,11 +88,11 @@ class VideoFile:
     """
 
     @property
-    def size(self) -> int:
+    def size(self) -> DataSize:
         """
-        How many bytes it takes.
+        How much it takes on disk.
         """
-        return self.path.stat().st_size
+        return DataSize.of_bytes(self.path.stat().st_size)
 
     def _opened(self) -> cv2.VideoCapture:
         """
@@ -131,15 +134,14 @@ class VideoFile:
 
     def frame_at(self, moment: timedelta) -> Frame:
         """
-        :param moment: The moment, from the video's start.
+        :param moment: The moment, from the video's start; past its end counts as its
+            last frame.
         :return: The frame there, as red, green and blue.
-        :raises NothingToRead: If the file holds no frame there.
+        :raises NothingToRead: If the file holds no frame.
         """
         opened = self._opened()
-        opened.set(
-            cv2.CAP_PROP_POS_FRAMES,
-            round(moment.total_seconds() * self.frames_per_second),
-        )
+        index = round(moment.total_seconds() * self.frames_per_second)
+        opened.set(cv2.CAP_PROP_POS_FRAMES, min(index, self.frame_count - 1))
         read, frame = opened.read()
         if not read:
             raise NothingToRead(path=self.path, moment=moment)
@@ -160,9 +162,9 @@ class SubmissionLimits:
     The longest it may play.
     """
 
-    largest: int
+    largest: DataSize
     """
-    The most bytes it may take.
+    The most it may take on disk.
     """
 
     lowest: int
@@ -175,13 +177,13 @@ class SubmissionLimits:
     The fewest frames one second may hold.
     """
 
-    def byte_budget_for(self, duration: timedelta) -> int:
+    def size_budget_for(self, duration: timedelta) -> DataSize:
         """
         :param duration: How long the video plays.
-        :return: The bytes a video that long may take: the largest file allowed, in
+        :return: What a video that long may take: the largest file allowed, in
             proportion to how much of the longest allowed length it plays.
         """
-        return int(self.largest * min(duration / self.longest, 1.0))
+        return self.largest.scaled(min(duration / self.longest, 1.0))
 
     def check(self, video: VideoFile) -> None:
         """
@@ -195,7 +197,7 @@ class SubmissionLimits:
                 f"{self.longest.total_seconds():.0f} s"
             )
         if video.size > self.largest:
-            broken.append(f"takes {video.size} bytes, over {self.largest}")
+            broken.append(f"takes {video.size.bytes} bytes, over {self.largest.bytes}")
         if video.resolution.height < self.lowest:
             broken.append(
                 f"is {video.resolution.height} rows tall, under {self.lowest}"
@@ -215,15 +217,15 @@ class SubmissionLimits:
 @dataclass
 class H264Encoder:
     """
-    Writes a timeline out as an H.264 mp4 no larger than a byte budget.
+    Writes a timeline out as an H.264 mp4 no larger than a size budget.
 
     The frames are first kept losslessly, since two passes have to read them, and then
     encoded twice at the bit rate the budget and the length allow.
     """
 
-    size_budget: int
+    size_budget: DataSize
     """
-    The most bytes the file may take.
+    The most the file may take on disk.
     """
 
     preset: EncoderPreset = EncoderPreset.SLOW
@@ -243,8 +245,18 @@ class H264Encoder:
 
     bit_rate_headroom: float = 0.90
     """
-    How much of the byte budget the video stream is aimed at, leaving the container and
+    How much of the size budget the video stream is aimed at, leaving the container and
     the encoder's own overshoot room under the limit.
+    """
+
+    peak_bit_rate_factor: float = 1.5
+    """
+    How far above the average bit rate the encoder may go for a moment.
+    """
+
+    rate_control_buffer: timedelta = timedelta(seconds=2)
+    """
+    How long a stretch the encoder holds to the average bit rate over.
     """
 
     def encode(self, timeline: Timeline, path: Path) -> VideoFile:
@@ -262,13 +274,13 @@ class H264Encoder:
             self._two_passes(master, path, timeline.duration, Path(scratch) / "pass")
         return VideoFile(path=path)
 
-    def bit_rate_for(self, duration: timedelta) -> int:
+    def bit_rate_for(self, duration: timedelta) -> BitRate:
         """
         :param duration: How long the video plays.
-        :return: The bits per second that fill the budget over that time, less headroom.
+        :return: The bit rate that fills the budget over that time, less headroom.
         """
-        return int(
-            self.size_budget * 8 * self.bit_rate_headroom / duration.total_seconds()
+        return BitRate.filling(self.size_budget, duration).scaled(
+            self.bit_rate_headroom
         )
 
     def _keep_losslessly(self, timeline: Timeline, master: Path) -> None:
@@ -340,11 +352,11 @@ class H264Encoder:
             "-pix_fmt",
             self.pixel_format,
             "-b:v",
-            str(bit_rate),
+            str(bit_rate.per_second.bits),
             "-maxrate",
-            str(int(bit_rate * 1.5)),
+            str(bit_rate.scaled(self.peak_bit_rate_factor).per_second.bits),
             "-bufsize",
-            str(bit_rate * 2),
+            str(bit_rate.over(self.rate_control_buffer).bits),
             "-passlogfile",
             str(log_prefix),
             "-movflags",

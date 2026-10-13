@@ -21,6 +21,7 @@ from typing_extensions import Iterator
 
 from cramcorder.exceptions import FramesOfDifferentSizes, MomentOutsideScene
 from cramcorder.frame import Frame, Resolution
+from cramcorder.video import Video
 
 # %% fading
 
@@ -50,17 +51,10 @@ class Fade:
 
 
 @dataclass
-class Scene(ABC):
+class Scene(Video, ABC):
     """
     One stretch of the video, read out picture by picture.
     """
-
-    @property
-    @abstractmethod
-    def duration(self) -> timedelta:
-        """
-        How long the scene lasts.
-        """
 
     @abstractmethod
     def picture_at(self, moment: timedelta) -> Frame:
@@ -72,7 +66,8 @@ class Scene(ABC):
 
     def frame_at(self, moment: timedelta) -> Frame:
         """
-        What the scene shows at a moment of its own time, refusing a moment outside it.
+        What the scene shows at a moment of its own time, refusing a moment outside it,
+        unlike :meth:`Video.frame_at`.
 
         :param moment: The moment, from the scene's start.
         :return: What the scene shows then.
@@ -162,7 +157,7 @@ class Overlay(ABC):
 
 
 @dataclass
-class Timeline:
+class Timeline(Video):
     """
     Scenes laid end to end, each dissolving into the next, read out as frames.
     """
