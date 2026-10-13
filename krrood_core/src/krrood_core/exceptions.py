@@ -4,8 +4,6 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import Protocol
 
-from typing_extensions import Type
-
 # %% exception base
 
 
@@ -79,7 +77,7 @@ class NoGenericError(DataclassException, TypeError):
     with it.
     """
 
-    clazz: Type
+    clazz: type
 
     def error_message(self) -> str:
         return f"Cannot determine original class for {self.clazz}."
