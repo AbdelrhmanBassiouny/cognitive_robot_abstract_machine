@@ -146,37 +146,6 @@ def add_cylinder(
     return cylinder
 
 
-def add_handle_frame(world: World, handle_link: Body) -> Body:
-    """
-    The kitchen's handle links have their x-axis pointing out of the furniture and their
-    y-axis along the bar. A handle is grasped at its origin along its x-axis, with the
-    fingers closing along its y-axis, so it needs a frame that points into the furniture
-    and across the bar.
-
-    :param world: The world `handle_link` is in.
-    :param handle_link: The link of a handle of the kitchen.
-    :return: A frame at the origin of `handle_link` that a gripper can grasp it by.
-    """
-    handle_frame = Body(name=PrefixedName(f"{handle_link.name.name}_grasp_frame"))
-    link_T_frame = HomogeneousTransformationMatrix.from_point_rotation_matrix(
-        rotation_matrix=RotationMatrix(
-            data=[[-1, 0, 0, 0], [0, 0, 1, 0], [0, 1, 0, 0], [0, 0, 0, 1]],
-            reference_frame=handle_link,
-        ),
-        reference_frame=handle_link,
-    )
-    with world.modify_world():
-        world.add_kinematic_structure_entity(handle_frame)
-        world.add_connection(
-            FixedConnection(
-                parent=handle_link,
-                child=handle_frame,
-                parent_T_connection_expression=link_T_frame,
-            )
-        )
-    return handle_frame
-
-
 @pytest.fixture
 def kitchen_with_filled_drawer(
     pr2_world_copy: World, kitchen_world: World
@@ -210,9 +179,7 @@ def kitchen_with_filled_drawer(
         )
     )
     drawer_handle = Handle(
-        root=add_handle_frame(
-            world, world.get_body_by_name("sink_area_left_middle_drawer_handle")
-        )
+        root=world.get_body_by_name("sink_area_left_middle_drawer_handle")
     )
     with world.modify_world():
         world.add_semantic_annotations([cup, bowl, drawer_handle])
@@ -265,7 +232,7 @@ def transport_plan(kitchen: KitchenWithFilledDrawer) -> Sequence:
             # The arms start stretched out, which would reach into the counter.
             ParkArmsAction(robot.all_arms),
             NavigateAction(in_front_of_the_closed_drawer),
-            OpenAction(kitchen.drawer_handle, robot.left_arm),
+            OpenAction.from_handle(kitchen.drawer_handle, robot.left_arm),
             ParkArmsAction(robot.all_arms),
             NavigateAction(in_front_of_the_open_drawer),
             Parallel(

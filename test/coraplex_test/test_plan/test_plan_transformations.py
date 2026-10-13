@@ -708,7 +708,9 @@ def handle_opened_by(opening: Match) -> Handle:
     :param opening: The step that opens a drawer.
     :return: The handle it opens the drawer by.
     """
-    return opening._kwargs_["open_container"]._kwargs_["handle"]
+    grasps = opening._kwargs_["open_container"]._kwargs_["grasp"]._domain_.domain
+    [handle] = {grasp.graspable for grasp in grasps}
+    return handle
 
 
 def arm_opening_with(opening: Match) -> Arm:

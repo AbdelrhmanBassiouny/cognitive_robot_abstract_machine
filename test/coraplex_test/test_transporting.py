@@ -27,6 +27,7 @@ from coraplex.robot_plans.actions.composite.transporting import (
     PickAndPlaceAction,
     TransportAction,
 )
+from coraplex.robot_plans.actions.core.container import OpenAction
 from coraplex.robot_plans.actions.core.pick_up import PickUpAction
 from coraplex.querying.predicates import IsAmongTheClosestGraspsTo
 from coraplex.robot_plans.actions.core.placing import PlaceAction
@@ -744,7 +745,7 @@ def test_a_move_and_open_faces_the_handle_where_it_is_when_it_opens_the_containe
     world, robot, extensions = pr2_apartment_context
     handle = Handle(root=world.get_body_by_name(DRAWER_HANDLE))
     move_and_open = MoveAndOpenAction.from_standing_position(
-        Pose(reference_frame=world.root), handle, robot.left_arm
+        Pose(reference_frame=world.root), handle.grasp_candidates()[0], robot.left_arm
     )
 
     world.get_connection_by_name(f"{DRAWER}_joint").position = OPENED_DRAWER_POSITION
@@ -795,15 +796,37 @@ def test_a_move_and_open_from_a_standing_position_opens_the_given_handle(
 ):
     world, robot, extensions = pr2_apartment_context
     handle = Handle(root=world.get_body_by_name(DRAWER_HANDLE))
+    [grasp, *_] = handle.grasp_candidates()
     standing_position = Pose(reference_frame=world.root)
 
     move_and_open = MoveAndOpenAction.from_standing_position(
-        standing_position, handle, robot.left_arm
+        standing_position, grasp, robot.left_arm
     )
 
     assert move_and_open.navigate.target_location is standing_position
-    assert move_and_open.open_container.handle is handle
+    assert move_and_open.open_container.grasp is grasp
     assert move_and_open.open_container.arm is robot.left_arm
+
+
+# %% opening a container by any grasp its handle offers
+
+
+def test_an_opening_of_a_handle_is_grounded_by_every_grasp_the_handle_offers(
+    pr2_apartment_context,
+):
+    world, robot, extensions = pr2_apartment_context
+    handle = Handle(root=world.get_body_by_name(DRAWER_HANDLE))
+
+    openings = list(
+        EntityQueryLanguageGenerativeBackend().evaluate(
+            OpenAction.from_handle(handle, robot.left_arm)
+        )
+    )
+
+    assert [opening.grasp.grasp_pose.to_np().tolist() for opening in openings] == [
+        grasp.grasp_pose.to_np().tolist() for grasp in handle.grasp_candidates()
+    ]
+    assert all(opening.arm is robot.left_arm for opening in openings)
 
 
 # %% a move-and-act step acts from where it moved to

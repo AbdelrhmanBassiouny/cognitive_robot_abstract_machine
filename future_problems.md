@@ -130,19 +130,3 @@ test therefore asserts where the bowl and the cup end up, and not that the drawe
 open. Options: find out which constraint or solver tolerance moves it; or let the
 controller move a degree of freedom of the environment only while a node asks for it,
 as `Open` and `Close` do.
-
-### `OpenAction` grasps a handle along the x-axis of its body
-
-`OpenAction` and `CloseAction` take hold of a handle with
-`GraspCandidate.from_body_origin(handle)`: at the origin of the handle's body,
-approaching along its x-axis and closing the fingers along its y-axis. The handle links
-of `kitchen-small.urdf` and `kitchen.urdf` have their x-axis pointing out of the
-furniture and their y-axis along the bar, so the gripper is sent to the handle from
-inside the furniture and the motion stalls. The handles of the apartment happen to
-point the way the grasp expects.
-
-The test adds a frame at the handle's origin that points into the furniture and across
-the bar (`add_handle_frame`) and annotates that frame as the `Handle`. Options:
-`OpenAction` and `CloseAction` take the grasp from `Handle.grasp_candidates`, and
-`Handle` derives it from its geometry and the body it opens; or the annotations of the
-kitchen carry the grasp frame of each handle.

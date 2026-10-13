@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from typing_extensions import Optional, Self
 
 from krrood.entity_query_language.factories import a, variable
+from coraplex.datastructures.enums import ReachFraction
 from coraplex.locations.locations import ReachabilityLocation
 from cramph.composites import Sequence
 from cramph.context import StatechartContext
@@ -345,21 +346,78 @@ class MoveAndOpenAction(Action):
 
     @classmethod
     def from_standing_position(
-        cls, standing_position: Pose, handle: Handle, arm: Arm
+        cls, standing_position: Pose, grasp: GraspCandidate, arm: Arm
     ) -> Self:
         """
         :param standing_position: Where the robot stands while opening.
-        :param handle: The handle of the container to open.
+        :param grasp: The grasp to take the handle by, which also names the handle.
         :param arm: The arm to open with.
         :return: The step opening the container from `standing_position`.
         """
-        handle_pose = Pose(reference_frame=handle.root)
+        handle_pose = Pose(reference_frame=grasp.graspable.root)
         return cls(
             navigate=NavigateAction(standing_position),
             face_and_look_at=FaceAndLookAtAction(
                 face_at=FaceAtAction(handle_pose), look_at=LookAtAction(handle_pose)
             ),
-            open_container=OpenAction(handle=handle, arm=arm),
+            open_container=OpenAction(grasp=grasp, arm=arm),
+        )
+
+    @classmethod
+    def from_handle_by_closest_grasps(
+        cls,
+        handle: Handle,
+        arm: Arm,
+        context: StatechartContext,
+        number_of_grasps: int = IsAmongTheClosestGraspsTo.number_of_grasps,
+        seed: Optional[int] = None,
+    ) -> Match:
+        """
+        An opening of the container `handle` belongs to, standing wherever the handle
+        can be worked from and taking it by the grasps that face the robot there.
+
+        The closeness is a ``where`` condition on the returned match,
+        :class:`~coraplex.querying.predicates.IsAmongTheClosestGraspsTo`.
+
+        :param handle: The handle of the container to open.
+        :param arm: The arm to open with.
+        :param context: The context of the plan the steps run in, whose robot performs
+            them.
+        :param number_of_grasps: How many of the handle's grasps closest to a standing
+            pose are tried from there.
+        :param seed: Seed for sampling the standing poses; ``None`` samples afresh.
+        :return: The opening, with the standing pose and the grasp left open.
+        """
+        grasps = handle.grasp_candidates()
+        handle_pose = Pose(reference_frame=handle.root)
+        step = a(cls)(
+            navigate=a(NavigateAction)(
+                target_location=variable(
+                    Pose,
+                    domain=ReachabilityLocation(
+                        target_pose=handle_pose,
+                        arm=arm,
+                        reach_fraction=ReachFraction.ACCESSING,
+                        context=context,
+                        seed=seed,
+                    ),
+                )
+            ),
+            face_and_look_at=a(FaceAndLookAtAction)(
+                face_at=a(FaceAtAction)(target=handle_pose),
+                look_at=a(LookAtAction)(target=handle_pose),
+            ),
+            open_container=a(OpenAction)(
+                grasp=variable(GraspCandidate, domain=grasps), arm=arm
+            ),
+        )
+        return step.where(
+            IsAmongTheClosestGraspsTo(
+                step.open_container.grasp,
+                step.navigate.target_location,
+                grasps,
+                number_of_grasps,
+            )
         )
 
     def create_action_body(self) -> StatechartNode:

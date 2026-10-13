@@ -324,7 +324,7 @@ def close_action(world: World, robot: AbstractRobot) -> CloseAction:
     :return: An action closing a container of the apartment with the arm of `robot`.
     """
     handle = world.get_semantic_annotations_by_type(Handle)[0]
-    return CloseAction(handle, robot.all_arms[0])
+    return CloseAction(handle.grasp_candidates()[0], robot.all_arms[0])
 
 
 def closing_step_of(action: CloseAction) -> StatechartNode:
@@ -353,7 +353,7 @@ def test_a_simulated_stretch_stays_in_front_of_the_container_it_closes(
     assert type(closing_step) is Parallel
     holding, facing, close = closing_step.nodes
     assert type(holding) is CartesianPose
-    assert holding.root_link is action.handle.root
+    assert holding.root_link is action.grasp.graspable.root
     assert holding.tip_link is tool_frame
     np.testing.assert_allclose(holding.goal_pose.to_np(), Pose().to_np())
     assert holding.goal_pose.reference_frame is tool_frame
@@ -361,7 +361,7 @@ def test_a_simulated_stretch_stays_in_front_of_the_container_it_closes(
     assert facing.root_link is world.root
     assert facing.tip_link is robot.root
     np.testing.assert_allclose(facing.goal_normal.to_np()[:3], [1, 0, 0])
-    assert facing.goal_normal.reference_frame is action.handle.root
+    assert facing.goal_normal.reference_frame is action.grasp.graspable.root
     np.testing.assert_allclose(facing.tip_normal.to_np()[:3], [0, -1, 0])
     assert facing.tip_normal.reference_frame is robot.root
     assert type(close) is Close

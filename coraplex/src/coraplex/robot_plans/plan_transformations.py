@@ -8,7 +8,6 @@ from typing_extensions import TYPE_CHECKING, Generic, List, Optional
 from coraplex.datastructures.enums import (
     DetectionTechnique,
     InsertionPosition,
-    ReachFraction,
 )
 from coraplex.exceptions import (
     ReachHasNoFinalApproach,
@@ -20,16 +19,13 @@ from coraplex.plans.plan_transformation import (
     PlanTransformation,
 )
 from coraplex.robot_plans.actions.base import Action
-from coraplex.robot_plans.actions.composite.facing import FaceAndLookAtAction
 from coraplex.robot_plans.actions.composite.transporting import (
     MoveAndOpenAction,
     MoveAndPickUpAction,
     PickAndPlaceAction,
 )
-from coraplex.robot_plans.actions.core.container import OpenAction
 from coraplex.robot_plans.actions.core.misc import DetectAction
 from coraplex.robot_plans.actions.core.navigation import (
-    FaceAtAction,
     LookAtAction,
     NavigateAction,
 )
@@ -182,27 +178,11 @@ class DrawerOpening(
             sampled with
         :return: The opening, from a standing pose tried together with it.
         """
-        handle_pose = Pose(reference_frame=drawer.handle.root)
-        open_the_drawer = a(MoveAndOpenAction)(
-            navigate=a(NavigateAction)(
-                target_location=variable(
-                    Pose,
-                    domain=ReachabilityLocation(
-                        handle_pose,
-                        arm,
-                        ReachFraction.ACCESSING,
-                        context=context,
-                        seed=context.require_extension(
-                            StatementGrounding
-                        ).sampling_seed,
-                    ),
-                )
-            ),
-            face_and_look_at=a(FaceAndLookAtAction)(
-                face_at=a(FaceAtAction)(target=handle_pose),
-                look_at=a(LookAtAction)(target=handle_pose),
-            ),
-            open_container=a(OpenAction)(handle=drawer.handle, arm=arm),
+        open_the_drawer = MoveAndOpenAction.from_handle_by_closest_grasps(
+            drawer.handle,
+            arm,
+            context,
+            seed=context.require_extension(StatementGrounding).sampling_seed,
         )
         return [StatementNode(statement=open_the_drawer)]
 

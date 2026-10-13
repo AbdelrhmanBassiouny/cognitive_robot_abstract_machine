@@ -151,6 +151,46 @@ class Handle(HasGraspCandidates):
             name, handle_event, connection_specification=connection_specification
         )
 
+    def grasp_candidates(self) -> List[GraspCandidate]:
+        """
+        The grasps at the handle's origin that close around its bar, one approaching
+        from each of the four sides around it.
+
+        The bar runs along the longest extent of the root's collision geometry.
+
+        :raises NoGraspGeometry: If the root body has no collision geometry to tell
+            which way the bar runs.
+        """
+        if not self.root.has_collision():
+            raise NoGraspGeometry(self)
+        scale = (
+            self.root.collision.as_bounding_box_collection_in_frame(self.root)
+            .bounding_box()
+            .scale
+        )
+        extents = [scale.x, scale.y, scale.z]
+        directions = [
+            (Vector3.X(), Vector3.NEGATIVE_X()),
+            (Vector3.Y(), Vector3.NEGATIVE_Y()),
+            (Vector3.Z(), Vector3.NEGATIVE_Z()),
+        ]
+        bar_axis = extents.index(max(extents))
+        bar_direction, _ = directions[bar_axis]
+        return [
+            GraspCandidate(
+                self,
+                Pose(
+                    orientation=RotationMatrix.from_vectors(
+                        x=approach, y=bar_direction.cross(approach)
+                    ).quaternion,
+                    reference_frame=self.root,
+                ),
+            )
+            for axis, both_ways in enumerate(directions)
+            if axis != bar_axis
+            for approach in both_ways
+        ]
+
 
 @dataclass(eq=False)
 class Dishwasher(HasCaseAsRootBody, HasDoors, HasDrawers):

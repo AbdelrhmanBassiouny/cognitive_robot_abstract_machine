@@ -639,7 +639,7 @@ def test_open(multiple_robot_apartment_context):
                     reference_frame=world.root,
                 )
             ),
-            OpenAction(
+            OpenAction.from_handle(
                 _handle_annotation(world, "handle_cab10_m"),
                 left_or_only_arm(robot),
             ),
@@ -673,7 +673,7 @@ def test_close(multiple_robot_apartment_context, rclpy_node):
                     world,
                 )
             ),
-            CloseAction(handle, left_or_only_arm(robot)),
+            CloseAction.from_handle(handle, left_or_only_arm(robot)),
         ]
     )
     run_plan(plan, extensions)
