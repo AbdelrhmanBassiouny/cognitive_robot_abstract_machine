@@ -1,15 +1,10 @@
-## PR progress: claude/trusting-clarke-32il0l (AbdelrhmanBassiouny/cognitive_robot_abstract_machine#492, draft, base main)
+## PR progress: claude/trusting-clarke-32il0l (#492, draft, base claude/brave-archimedes-nonocl = #501)
 
-Goal: stack maintenance restacks keep one restack merge per branch instead of adding one per pass.
+Plan:
+- Restack keeps one parent merge per branch (SupersededMerges in basstler/src/basstler/maintenance_restack_steps.py).
 
 Done:
-- Re-cut branch from main (was cut from integration).
-- SupersededMerges in maintenance_restack_steps.py; IntegrateParent merges onto the commit beneath
-  superseded tip merges, falling back to the tip on failure; PublishBranch leases the push when the
-  published tip is no longer contained (ProposedPush.publishing(replaces_superseded_merges=...)).
-- 8 tests in test_maintenance.py; full .claude/stack/tests suite green (162).
-- Docs: README section, SKILL.md force-push exception, stack.py docstrings.
+- Rebased onto #501's src layout; 69/69 test_maintenance.py pass on 3.12.
 
 Next:
-- Await review. Possible follow-up if wanted: report how many merges a push replaced in BranchOutcome.
-- In-flight branches (integration) also edit maintenance_restack_steps.py; expect a merge there.
+- Await review. When #501 lands, retarget #492 to main.
