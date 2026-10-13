@@ -110,3 +110,16 @@ basstler module. Whoever lands second moves `actions_budget.py`/`.toml` and re-a
 
 **Left open**: the roadmap's "Stack maintenance on candidates" call (which workflows an integration
 candidate may run) is not settled here; the manifest declares triggers per workflow only.
+
+## budget-manifest: implemented (2026-10-13, b66263166 on #503)
+
+Built as settled above, with two changes from the plan:
+
+- The workflow reader is its own module, `basstler/workflows.py`, beside `basstler/actions_budget.py`, so it
+  can converge with #211's `workflow_document.py` when the second of them lands.
+- `ProjectLocation.WORKFLOWS` and `PackageLocation.ACTIONS_BUDGET` name the two paths; the package-contract
+  test now reads the workflow directory through the former.
+
+Flagged on the PR for the user: Examples no longer runs on a pull request opened ready, which on upstream is
+most of them (the item asks for exactly this, and `integration-pipeline-event-only` relies on it). The
+timeouts and runs-per-day values are first estimates. Still a draft awaiting review; nothing else outstanding.
