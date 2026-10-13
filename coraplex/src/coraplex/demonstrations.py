@@ -16,7 +16,7 @@ from dataclasses import dataclass, field
 from datetime import timedelta
 
 import rclpy
-from rclpy.executors import SingleThreadedExecutor
+from rclpy.executors import MultiThreadedExecutor
 from rclpy.node import Node
 from typing_extensions import List, Type
 
@@ -65,9 +65,10 @@ class RobotDemonstrationRosSession:
     The node that service calls and synchronizers are attached to.
     """
 
-    executor: SingleThreadedExecutor
+    executor: MultiThreadedExecutor
     """
-    Executor delivering this node's callbacks.
+    Executor delivering this node's callbacks, those of different callback groups at the
+    same time.
     """
 
     owns_context: bool
@@ -91,7 +92,7 @@ class RobotDemonstrationRosSession:
         if owns_context:
             rclpy.init()
         node = rclpy.create_node(node_name)
-        executor = SingleThreadedExecutor()
+        executor = MultiThreadedExecutor()
         executor.add_node(node)
         session = cls(node=node, executor=executor, owns_context=owns_context)
         session.spin_thread = threading.Thread(
