@@ -19,9 +19,9 @@ Round 3 (223c6d706): Pygments lexer colours code (KEYWORD, COMMENT added); units
 PixelBox is SemDT Bounds[Pixel]; PixelColor replaces Frame.bytes_of; video.Video base of
 Scene/Timeline/VideoFile (Film, VideoFilm gone); EvenCuts replaces nested even_cuts loops;
 cache "directory"; test voices SoundLevel + model_path/voices_path. 154 tests pass.
-Replies NOT posted: the user's own pending review (id 5500054903) blocks every reply under
-their account. Drafts noted in the session scratchpad round3-replies.md; post them once the
-user submits their pending review, then resolve the 8 done threads.
+Replies posted after the user submitted their pending review (it had blocked them):
+8 resolved (Pygments x3, cache directory, Language, bytes, EvenCuts, SoundLevel); 7 left open
+(tuples left, PixelBox/Bounds x2, units home, LICENSE, voices str, Video vs Film).
 
-Next: post round-3 replies; then waiting on the reviewer (units in krrood?, AxisAlignedBox as
+Next: waiting on the reviewer (units in krrood?, AxisAlignedBox as
 Bounds?, remaining tuples, names, Framing box, test literals, SemDT naming).
