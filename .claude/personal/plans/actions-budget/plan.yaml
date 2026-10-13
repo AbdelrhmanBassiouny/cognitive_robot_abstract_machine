@@ -1,0 +1,132 @@
+schema_version: 1
+id: actions-budget
+title: 'Actions budget: every workflow declared, event-driven, measured and warned on'
+description: GitHub disabled Actions on the fork for wasted compute. This plan brings it back on
+  quietly, then makes every workflow's triggers and expected volume an explicit, tested manifest in
+  basstler, cuts pull request CI down to what a change touches, turns the integration and stack
+  pipelines event-only, and adds a usage monitor that warns before a rate is exceeded.
+default_repository: AbdelrhmanBassiouny/cognitive_robot_abstract_machine
+tracking_issue: 502
+waves:
+- id: unblock
+  name: Unblock
+  description: Get Actions back on without the load that got them switched off. No code.
+- id: budget
+  name: Budget in code
+  description: The manifest, the trigger changes that make main's workflows conform to it, the
+    changed-library matrix and the usage monitor. Highest priority - everything else waits on it.
+- id: pipelines
+  name: Pipelines event-only
+  description: The fork's own pipelines brought under the manifest. Edits to the unlanded pull
+    requests that introduce them, not new branches.
+- id: hygiene
+  name: Hygiene
+  description: Removing what no longer runs but still clutters the Actions page and branch list.
+tracks:
+- id: operations
+  name: Repository settings (done by the user)
+  wave: unblock
+- id: manifest
+  name: Budget manifest and conforming triggers
+  wave: budget
+- id: monitor
+  name: Usage monitor and warnings
+  wave: budget
+- id: pipelines
+  name: Integration and stack pipelines
+  wave: pipelines
+- id: hygiene
+  name: Dead workflows and stale branches
+  wave: hygiene
+items:
+- id: re-enable-quietly
+  title: Re-enable Actions with only CI and Upstream reviews switched on
+  track: operations
+  depends_on: []
+  status: not_started
+  notes: |-
+    Settings -> Actions: re-enable, then on the Actions tab disable each of these workflows by hand
+    before anything triggers them: Integration refresh, Integration probe, Integration checks,
+    Examples and Demos, Build Documentation, the four "Publish ... to PyPI", update_docker, Stack
+    maintenance, Tooling label, Plan dashboards. CI already cancels a superseded run on `main`'s copy,
+    so it is the one heavy workflow left on. Each one is switched back on only once its item below has
+    made it conform to the manifest.
+- id: budget-manifest
+  title: Declare every workflow in a tested budget manifest, and make main's workflows conform
+  track: manifest
+  depends_on: []
+  status: not_started
+  session: https://claude.ai/code/session_01UU92wpF3jQ4RosKZTLGE9s
+  notes: |-
+    One pull request off `main`. `basstler/actions_budget.toml` names every workflow allowed in the
+    repository - including the ones that only exist on unlanded branches (integration-*, stack
+    maintenance, tooling label, plan dashboards) - with its triggers, concurrency group, job timeout,
+    jobs per trigger and expected runs per day. A basstler module reads it into dataclasses, and a test
+    over every `.github/workflows/*.yml` on the branch fails on an undeclared workflow, a trigger the
+    manifest does not list, any `schedule`, a pull-request workflow without cancel-in-progress
+    concurrency, or a job without `timeout-minutes`. A branch carrying a non-conforming workflow fails
+    that test once it merges `main`, which is the enforcement.
+
+    Trigger changes in the same PR: Examples and Demos only on `ready_for_review`, a `full-ci` label or
+    dispatch; every `push: main` job (CI, Examples, docs, the publish workflows, update_docker) only when
+    the repository is the upstream one; `timeout-minutes` on every job.
+- id: changed-library-matrix
+  title: Pull request CI tests the libraries a change touches and their dependents
+  track: manifest
+  depends_on: [budget-manifest]
+  status: not_started
+  notes: |-
+    A first job in ci.yml maps the changed paths to libraries, adds every library that depends on them
+    (read from each package's own declared dependencies, not a second hand-kept list), and feeds that
+    set to the matrix. Draft pull requests run that set; `ready_for_review`, a `full-ci` label and
+    dispatch run everything. A change only under `.claude/`, `basstler/` or docs runs the tooling job
+    alone. #284 already reads a pull request's tooling label off its changed files - reuse its
+    classifier if it has landed first rather than writing a second one.
+- id: usage-monitor
+  title: Measure run volume against the manifest and warn before it is exceeded
+  track: monitor
+  depends_on: [budget-manifest]
+  status: not_started
+  notes: |-
+    A basstler module counts the last 24 hours of runs and jobs per workflow from the Actions API and
+    compares them with the manifest's budgets. Three surfaces, none on a timer: the session-start
+    summary prints a warning line at 80% and an over-budget line at 100%; the first job of ci.yml writes
+    the same comparison as a `::warning::` annotation and step summary, and past the hard limit skips the
+    heavy matrix unless the pull request carries a `budget-override` label; and an on-demand report
+    command for a full breakdown.
+- id: integration-pipeline-event-only
+  title: Integration refresh, checks and probe run on events only
+  track: pipelines
+  depends_on: [budget-manifest]
+  pull_request_number: 211
+  status: not_started
+  notes: |-
+    Edits to #211, the open pull request that carries `integration-refresh.yml` (#282, #285 and #291
+    stack on it), not a branch of its own. Drop the four-a-day `schedule`, keeping `workflow_run`, `ready_for_review` and
+    dispatch. A candidate pull request runs CI only, which the budget-manifest Examples trigger already
+    gives it since it is opened ready. Probes bisect the merge order instead of dispatching every prefix,
+    and run one at a time. The default branch is `integration`, which is where a `schedule` is read from,
+    so the workflow stays disabled in the UI until a build carrying the change has published.
+- id: stack-maintenance-event-only
+  title: Stack maintenance runs on events only and bounds a restack's CI fan-out
+  track: pipelines
+  depends_on: [budget-manifest]
+  pull_request_number: 280
+  status: not_started
+  notes: |-
+    Edits to #280. Drop the six-hourly `schedule`. A restack pushes to every branch above a moved parent
+    at once, and each push started a full 24-job matrix - the `action_required` runs pushed by
+    `github-actions[bot]` across ten branches in the audit window are those. With the changed-library
+    matrix a rebase-only push costs little, and the pass additionally pushes the restacked branches of
+    one stack in sequence rather than all together. The branch belongs to the workflow-cutover plan,
+    so it is not repeated here.
+- id: dead-workflows-and-branches
+  title: Disable dead workflows and delete stale build and probe branches
+  track: hygiene
+  depends_on: [re-enable-quietly]
+  status: not_started
+  notes: |-
+    Coraplex hang diagnosis (temporary), Integration token probe and board are still registered as
+    active with no file on any branch. 406 remote branches exist, many of them `integration-<date>` and
+    `integration-probe-*` builds that are never pushed to again. Deleting branches is destructive, so it
+    is listed for the user to approve rather than done by a session on its own.
