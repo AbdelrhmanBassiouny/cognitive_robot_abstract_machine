@@ -1,6 +1,6 @@
 ---
 name: plan-item-kickoff
-description: Gather everything available about one tracked plan item (its plan.yaml entry, roadmap.md history/design context, its dependency chain's live GitHub state, and patterns from already-landed sibling items in the same track), then start it in whichever execution mode is in force - presenting a plan for approval, implementing it directly, or asking which - opening the item's branch and draft pull request and recording its manifest state before implementation begins. Invoke as "/plan-item-kickoff <plan-id> <item-id>". Use when starting work on a specific item from a plan-dashboard's "Start now" link, or when the user asks to "start", "kick off", or "plan out" a specific tracked item.
+description: Gather everything available about one tracked plan item (its plan.yaml entry, the plan's standing rules, its dependency chain's live GitHub state, and patterns from already-landed sibling items in the same track), then start it in whichever execution mode is in force - presenting a plan for approval, implementing it directly, or asking which - opening the item's branch and draft pull request and recording its manifest state before implementation begins. Invoke as "/plan-item-kickoff <plan-id> <item-id>". Use when starting work on a specific item from a plan-dashboard's "Start now" link, or when the user asks to "start", "kick off", or "plan out" a specific tracked item.
 allowed-tools: Bash, Read, Grep, Glob, Edit, Write, AskUserQuestion, Skill, EnterPlanMode, ExitPlanMode, mcp__github__list_pull_requests, mcp__github__pull_request_read, mcp__github__get_file_contents, mcp__github__create_pull_request, mcp__github__update_pull_request, mcp__Claude_Code_Remote__subscribe_pr_activity
 ---
 
@@ -26,7 +26,7 @@ the item stops reading as `not started` the moment it isn't.
 
 Follow `${PLAN_ITEM_GATHERING_DOCUMENT}` end to end — the setup check, the
 item's resolution off the personal-notes branch, the tracking-issue
-subscription, its recorded state, the full roadmap read, the dependency
+subscription, its recorded state, the plan's standing rules, the dependency
 chain, and the standing conventions. `plan-item-resolve` runs the same
 procedure, which is why it lives there rather than in either skill.
 
@@ -53,7 +53,7 @@ call, and if the answer is `ask`, put its question — with a recommendation
 drawn from what step 1 just turned up, and the reasons behind it.
 
 Do this only once step 1 is done. The recommendation is worth something
-only if it can cite whether the item's `notes` and `roadmap.md` section
+only if it can cite whether the item's `notes` and the roadmap's rules
 actually settle the design calls, whether every dependency came back ready,
 and whether a sibling PR already established the pattern — none of which is
 known before then.
@@ -78,19 +78,19 @@ build the same thing twice.
 Draft a concrete implementation plan: what changes, in which files, in what
 order, and how each part will be verified (tests first, per TDD). Cite where
 each part of the plan came from (the item's own notes, a specific sibling
-PR, a `roadmap.md` section) so it can be sanity-checked against the source
+PR, a roadmap rule) so it can be sanity-checked against the source
 instead of just trusted. Flag explicitly, never silently paper over:
 
 - Any dependency that isn't actually ready to build on yet.
-- Any conflict between the item's `notes` and what a sibling PR or
-  `roadmap.md` actually says.
+- Any conflict between the item's `notes` and what a sibling PR or a
+  roadmap rule actually says.
 - Anything the gathered context left genuinely unresolved after the check
   above — say so rather than filling the gap with an assumption.
 
 In `plan` mode, present it via `ExitPlanMode` and stop there — nothing below
 happens until the user approves it. In `auto` mode, don't ask: the plan is
-settled the moment it is drafted, and the flags above go into the roadmap
-section and the pull request description instead of into a question.
+settled the moment it is drafted, and the flags above go into the pull
+request description instead of into a question.
 
 Either way, do not touch git, create a branch, or write any code in this
 step — its only output is the plan itself.
@@ -98,8 +98,8 @@ step — its only output is the plan itself.
 ## 4. Bootstrap the item — before implementing, not after
 
 The moment the plan is settled, the branch, the draft pull request, the
-item's `branch`/`session`/`pull_request_number` fields and its roadmap
-section are all derivable, and none of them depends on a line of the
+item's `branch`/`session`/`pull_request_number` fields and its status
+are all derivable, and none of them depends on a line of the
 implementation. Doing them at the end instead means the manifest says
 `not started` with no branch for the entire length of the work, which every
 dashboard, kickoff and resolve run downstream reads as truth.
@@ -122,13 +122,14 @@ source .claude/hooks/resolve-personal-notes-config.sh
     --pull-request-number <number>
 "${BASSTLER_PYTHON}" -m "${PLAN_ITEM_BOOTSTRAP_MODULE}" record \
     --plan <plan-id> --item <item-id> \
-    --status "in progress" --roadmap-section <file>
+    --status "in progress" [--roadmap-entry "<a standing rule the plan settled>"]
 ```
 
 `open` before `record`: the pull request number does not exist until the pull
 request does. `open` writes the branch, session and pull request number onto
-the item and flips it to `in progress`; `record` appends the settled plan to
-`roadmap.md`. Both print a one-line JSON report led by `status` and
+the item and flips it to `in progress`; `record` sets the status and, when
+the plan settled a rule every later item must follow, adds it to
+`roadmap.md` as one entry. Both print a one-line JSON report led by `status` and
 `exit_code`.
 
 **Why a session creates the pull request rather than the script.** The script
@@ -149,11 +150,18 @@ from whatever this session is designated to develop on.
 leaving it only in the conversation that produced it — in `auto` mode this is
 the only record it will ever have:
 
-- **`roadmap.md`**, via `record`'s `--roadmap-section` — the durable record of
-  what was decided and *why*, including any assumption or open question the
-  plan carries. Not a restatement of the diff.
-- **The PR-progress note** — the plan, what is done, and what is next, kept
-  current as the work goes. Write it between `CLAUDE.local.md`'s
+- **The pull request's description** — what was decided and *why*, including
+  any assumption or open question the plan carries. That is where its
+  reviewer reads, and it costs no later session anything.
+- **`roadmap.md`, only for a standing rule** — via `record`'s
+  `--roadmap-entry`, one sentence that binds every later item of the plan.
+  Never a dated section or this item's own history: `save-plan.sh` refuses a
+  roadmap that is anything but a short list of rules (see
+  `${PLAN_SIZE_LIMITS_MODULE}`).
+- **The PR-progress note** — the plan, what is done, and what is next, as
+  three short lists kept current as the work goes; replace finished steps
+  rather than accumulating them, since `save-pr-progress.sh` refuses notes
+  over their limit. Write it between `CLAUDE.local.md`'s
   `BEGIN-PR-PROGRESS`/`END-PR-PROGRESS` markers and run
   `.claude/hooks/save-pr-progress.sh` to push it. Do this as soon as the
   branch exists, not at the end: a note written afterwards is a summary, and

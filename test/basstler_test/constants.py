@@ -164,6 +164,11 @@ class PersonalNotesPath(PathEnumeration):
     The recorded git identity a clone with none of its own is given.
     """
 
+    PULL_REQUEST_PROGRESS = ProjectLocation.PERSONAL_NOTES / "pr-progress"
+    """
+    The directory holding each pull request branch's progress notes, by branch name.
+    """
+
     SETTINGS_ON_NOTES_BRANCH = ProjectLocation.PERSONAL_NOTES / "settings.local.json"
     """
     The Claude Code settings the branch carries.

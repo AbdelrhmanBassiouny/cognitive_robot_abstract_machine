@@ -203,221 +203,14 @@ SUMMARY_PROGRESS="not applicable (no current PR on this branch)"
 # path that forgets into a loud failure rather than the silently uninformative
 # report this hook used to print.
 
-if git cat-file -e "FETCH_HEAD:${NOTES_PATH}" 2>/dev/null; then
-  cat <<HEADER >> "${OUTPUT_FILE}"
-<!--
-Personal notes, synced from '${NOTES_BRANCH}' (${NOTES_PATH}) on remote
-'${ACTIVE_NOTES_REMOTE}' by session-start.sh.
-To edit: change the notes between the markers below, then run
-  "\$CLAUDE_PROJECT_DIR/.claude/hooks/save-personal-notes.sh"
-to push the change back. This header and the markers are regenerated every
-session from git config/environment/default (plus a same-branch-upstream
-fallback) - editing them has no effect; only content between the markers is
-ever saved.
--->
-<!-- BEGIN-PERSONAL-NOTES -->
-HEADER
-  git show "FETCH_HEAD:${NOTES_PATH}" >> "${OUTPUT_FILE}"
-  echo "<!-- END-PERSONAL-NOTES -->" >> "${OUTPUT_FILE}"
-  WROTE_ANYTHING=1
-  SUMMARY_NOTES="loaded from '${NOTES_BRANCH}' (${NOTES_PATH}) on '${ACTIVE_NOTES_REMOTE}'"
-fi
-
-PROGRESS_PATH="$(pr_progress_path || true)"
-if [ -n "${PROGRESS_PATH}" ]; then
-  [ "${WROTE_ANYTHING}" = "1" ] && printf '\n' >> "${OUTPUT_FILE}"
-  cat <<PROGRESS_HEADER >> "${OUTPUT_FILE}"
-<!--
-PR progress for branch '${CURRENT_BRANCH_FOR_COMMENT}', synced from
-'${NOTES_BRANCH}' (${PROGRESS_PATH}) on remote '${ACTIVE_NOTES_REMOTE}' by
-session-start.sh. Maintain the current plan, what's done, and what's next
-here throughout work on this PR. It is never merged: it lives only on
-'${NOTES_BRANCH}', never on this branch. A stale file left behind after the
-PR merges is harmless (just unread from then on) - delete it directly on
-'${NOTES_BRANCH}' if you want to tidy it up.
-To edit: change the notes between the markers below, then run
-  "\$CLAUDE_PROJECT_DIR/.claude/hooks/save-pr-progress.sh"
-to push the change back. This header and the markers are regenerated every
-session - editing them has no effect; only content between the markers is
-ever saved.
--->
-<!-- BEGIN-PR-PROGRESS -->
-PROGRESS_HEADER
-  if git cat-file -e "FETCH_HEAD:${PROGRESS_PATH}" 2>/dev/null; then
-    git show "FETCH_HEAD:${PROGRESS_PATH}" >> "${OUTPUT_FILE}"
-    SUMMARY_PROGRESS="loaded for branch '${CURRENT_BRANCH}' (${PROGRESS_PATH})"
-  else
-    cat <<'SCAFFOLD' >> "${OUTPUT_FILE}"
-No progress recorded yet for this branch. Initialize it now: a short plan,
-what's done so far, and what's next. Keep it current as you work.
-SCAFFOLD
-    SUMMARY_PROGRESS="no saved progress yet for branch '${CURRENT_BRANCH}' - scaffold written"
-  fi
-  echo "<!-- END-PR-PROGRESS -->" >> "${OUTPUT_FILE}"
-  WROTE_ANYTHING=1
-fi
-
-PLAN_ID="$(plan_id_for_branch "${CURRENT_BRANCH}" || true)"
-
-# A branch with no plan item is several different situations, and reporting
-# them all as a bare "none" is what let a session read "the plan you were told
-# about has no item for this branch yet" as "no plan applies here" and start
-# work without recording an item. Each one now says which it is; the wording
-# is deliberately even-handed, because belonging to no plan is a perfectly
-# ordinary state for most branches and must not read as a reprimand.
-#
-# The first case answers a different question than the rest: on a branch no
-# plan item could ever track, there is nothing to prompt about at all.
-if [ -z "${PLAN_ID}" ]; then
-  if ! branch_can_hold_plan_item "${CURRENT_BRANCH}"; then
-    SUMMARY_PLAN="$(plan_line_not_applicable)"
-  elif plan_branch_index_exists; then
-    SUMMARY_PLAN="$(plan_line_no_item_tracks_branch "${CURRENT_BRANCH}" "$(tracked_plan_count)")"
-  else
-    SUMMARY_PLAN="$(plan_line_no_plans_tracked "${NOTES_BRANCH}")"
-  fi
-else
-  PLAN_MANIFEST_PATH="$(plan_manifest_path "${PLAN_ID}")"
-  PLAN_ROADMAP_PATH="$(plan_roadmap_path "${PLAN_ID}")"
-  # An index entry pointing at a manifest that isn't there means the index and
-  # the plan data have drifted apart - previously indistinguishable from having
-  # no plan at all, so it went unnoticed.
-  SUMMARY_PLAN="$(plan_line_manifest_missing "${PLAN_ID}" "${PLAN_MANIFEST_PATH}" "${NOTES_BRANCH}")"
-  if git cat-file -e "FETCH_HEAD:${PLAN_MANIFEST_PATH}" 2>/dev/null; then
-    [ "${WROTE_ANYTHING}" = "1" ] && printf '\n' >> "${OUTPUT_FILE}"
-    # TRACKING_ISSUE: a plain top-level scalar, so grep/sed suffices here too -
-    # same dependency-free reasoning as plan_id_for_branch above. Empty if
-    # the plan has no tracking_issue set (nothing to extract, not an error).
-    # Named for the mailbox's role, not necessarily a literal GitHub Issue -
-    # see plan-schema.md's PR-fallback note for repos with Issues disabled.
-    # The `|| true` is load-bearing: under `set -o pipefail` a plan with no
-    # tracking_issue makes grep exit 1, which `set -e` turns into the whole
-    # hook dying here with no output at all.
-    TRACKING_ISSUE="$(git show "FETCH_HEAD:${PLAN_MANIFEST_PATH}" 2>/dev/null \
-      | grep -oE '^tracking_issue:[[:space:]]*[0-9]+' | head -1 \
-      | grep -oE '[0-9]+$' || true)"
-    if [ -n "${TRACKING_ISSUE}" ]; then
-      TRACKING_ISSUE_NOTE="Structural changes (a new wave/phase, deferring a track, splitting an
-item, reprioritizing) can be made directly to the manifest by any session -
-there is no designated steward gatekeeping them. Before making one, ask the
-user in this session (e.g. via AskUserQuestion) rather than deciding
-unilaterally - a structural change is the user's call, not something to
-infer and apply silently just because editing the manifest directly is
-technically allowed. Once they confirm, make the edit and always also leave
-a comment on the tracking issue (#${TRACKING_ISSUE}) describing it, since
-the user reviews structural changes there and it is the shared record other
-sessions working this plan can check - see plan-schema.md's 'Proposing
-structural changes' section. If this session is actively working an item in
-this plan, also subscribe to the tracking issue itself so a structural change
-another session makes reaches you while you're still working, not just next
-session start."
-    else
-      TRACKING_ISSUE_NOTE="This plan has no tracking_issue set, so there is no coordination
-mailbox for structural changes yet - edit the manifest directly as usual."
-    fi
-    cat <<PLAN_HEADER >> "${OUTPUT_FILE}"
-<!--
-Plan manifest for '${PLAN_ID}', synced from '${NOTES_BRANCH}'
-(${PLAN_MANIFEST_PATH}) on remote '${ACTIVE_NOTES_REMOTE}' by
-session-start.sh. This branch is tracked as an item in this plan - see
-.claude/skills/plan-dashboard/plan-schema.md for the schema and
-.claude/skills/plan-dashboard/SKILL.md for how it's used and refreshed.
-To edit: change the manifest between the markers below, then run
-  "\$CLAUDE_PROJECT_DIR/.claude/hooks/save-plan.sh"
-to push the change back (this also regenerates the branch index), then run
-/plan-dashboard ${PLAN_ID} to refresh its dashboard - save-plan.sh can't call
-the Artifact tool itself. This header and the markers are regenerated every
-session - editing them has no effect; only content between the markers is
-ever saved.
-
-${TRACKING_ISSUE_NOTE}
--->
-<!-- BEGIN-PLAN-MANIFEST: ${PLAN_ID} -->
-PLAN_HEADER
-    git show "FETCH_HEAD:${PLAN_MANIFEST_PATH}" >> "${OUTPUT_FILE}"
-    echo "<!-- END-PLAN-MANIFEST -->" >> "${OUTPUT_FILE}"
-
-    printf '\n' >> "${OUTPUT_FILE}"
-    cat <<ROADMAP_HEADER >> "${OUTPUT_FILE}"
-<!--
-Plan roadmap (narrative) for '${PLAN_ID}' - the "why", history, and design
-decisions behind the manifest above. Same edit/save mechanism: change
-between the markers below, then run save-plan.sh.
--->
-<!-- BEGIN-PLAN-ROADMAP: ${PLAN_ID} -->
-ROADMAP_HEADER
-    if git cat-file -e "FETCH_HEAD:${PLAN_ROADMAP_PATH}" 2>/dev/null; then
-      git show "FETCH_HEAD:${PLAN_ROADMAP_PATH}" >> "${OUTPUT_FILE}"
-    fi
-    echo "<!-- END-PLAN-ROADMAP -->" >> "${OUTPUT_FILE}"
-    WROTE_ANYTHING=1
-    SUMMARY_PLAN="$(plan_line_tracked "${PLAN_ID}" "${TRACKING_ISSUE:-none}")"
-  fi
-fi
-
-if [ "${WROTE_ANYTHING}" = "1" ]; then
-  mv "${OUTPUT_FILE}" "${CLAUDE_LOCAL_MD}"
-else
-  rm -f "${OUTPUT_FILE}"
-fi
-
-# Git identity, from the notes branch - so a fresh clone commits as the person
-# working in it rather than as whatever the environment's global git config
-# happens to be. Only ever fills a gap: a clone that already has its own
-# repository-local identity keeps it, and nothing here touches global config.
-#
-# Written before the setup check below, so check-setup.sh's git_identity row
-# reports on the identity this run has just set rather than the absence it was
-# about to fix - the same ordering, for the same reason, as CLAUDE.local.md.
-if ! recorded_git_identity_exists; then
-  SUMMARY_GIT_IDENTITY="$(git_identity_line_not_recorded \
-    "${NOTES_BRANCH}" "${PERSONAL_GIT_IDENTITY_PATH}")"
-elif ! RECORDED_GIT_IDENTITY="$(recorded_git_identity)"; then
-  SUMMARY_GIT_IDENTITY="$(git_identity_line_incomplete \
-    "${PERSONAL_GIT_IDENTITY_PATH}" "${NOTES_BRANCH}")"
-elif LOCAL_GIT_IDENTITY="$(repository_local_git_identity)"; then
-  IFS=$'\t' read -r LOCAL_NAME LOCAL_EMAIL <<< "${LOCAL_GIT_IDENTITY}"
-  SUMMARY_GIT_IDENTITY="$(git_identity_line_already_set \
-    "$(format_git_identity "${LOCAL_NAME}" "${LOCAL_EMAIL}")")"
-else
-  IFS=$'\t' read -r RECORDED_NAME RECORDED_EMAIL <<< "${RECORDED_GIT_IDENTITY}"
-  git config --local user.name "${RECORDED_NAME}"
-  git config --local user.email "${RECORDED_EMAIL}"
-  SUMMARY_GIT_IDENTITY="$(git_identity_line_written "${NOTES_BRANCH}" \
-    "${PERSONAL_GIT_IDENTITY_PATH}" \
-    "$(format_git_identity "${RECORDED_NAME}" "${RECORDED_EMAIL}")")"
-fi
-
-# Personal settings: unlike everything above, these don't go into CLAUDE.local.md -
-# they are copied verbatim to .claude/settings.local.json, the file Claude Code
-# itself reads as this project's local settings (see PERSONAL_SETTINGS_PATH in
-# ./resolve-personal-notes-config.sh). No header or markers: it is strict JSON,
-# which has no comment syntax to carry them.
-#
-# Locally modified settings are never overwritten. Claude Code writes to this same
-# file whenever a permission is granted with "don't ask again", so a blind copy
-# every session start would silently drop those grants - see
-# personal_settings_are_locally_modified. Run ./save-personal-settings.sh to push
-# such edits up, which makes them the new baseline and lets syncing resume.
-SUMMARY_SETTINGS="none on '${NOTES_BRANCH}' (${PERSONAL_SETTINGS_PATH})"
-if git cat-file -e "FETCH_HEAD:${PERSONAL_SETTINGS_PATH}" 2>/dev/null; then
-  if personal_settings_are_locally_modified; then
-    SUMMARY_SETTINGS="kept local edits to ${LOCAL_SETTINGS_RELATIVE_PATH} - run save-personal-settings.sh to push them"
-  else
-    mkdir -p "$(dirname "${LOCAL_SETTINGS_JSON}")"
-    git show "FETCH_HEAD:${PERSONAL_SETTINGS_PATH}" > "${LOCAL_SETTINGS_JSON}"
-    record_personal_settings_sync
-    SUMMARY_SETTINGS="synced to ${LOCAL_SETTINGS_RELATIVE_PATH}"
-  fi
-fi
-
 # Dependencies: give the package its own environment, with the package and its
 # dependencies installed in it, wherever any of that is missing - so nothing
 # downstream has to run without them. Reached only after the notes branch
 # resolved above, which is the signal that this is somebody who has run the
 # setup - a clone that never did installs nothing.
 #
-# Run before the setup check below, so check-setup.sh's dashboard_dependencies
+# Run before the plan section, which reads its item with the package, and
+# before the setup check below, so check-setup.sh's dashboard_dependencies
 # row reports on what this run has just installed rather than on the absence it
 # was about to fix - the same ordering, for the same reason, as CLAUDE.local.md
 # and the git identity.
@@ -481,6 +274,199 @@ create_and_install_basstler_environment() {
 }
 
 ensure_basstler_environment
+
+if git cat-file -e "FETCH_HEAD:${NOTES_PATH}" 2>/dev/null; then
+  cat <<HEADER >> "${OUTPUT_FILE}"
+<!--
+Personal notes, synced from '${NOTES_BRANCH}' (${NOTES_PATH}) on remote
+'${ACTIVE_NOTES_REMOTE}' by session-start.sh.
+To edit: change the notes between the markers below, then run
+  "\$CLAUDE_PROJECT_DIR/.claude/hooks/save-personal-notes.sh"
+to push the change back. This header and the markers are regenerated every
+session from git config/environment/default (plus a same-branch-upstream
+fallback) - editing them has no effect; only content between the markers is
+ever saved.
+-->
+<!-- BEGIN-PERSONAL-NOTES -->
+HEADER
+  git show "FETCH_HEAD:${NOTES_PATH}" >> "${OUTPUT_FILE}"
+  echo "<!-- END-PERSONAL-NOTES -->" >> "${OUTPUT_FILE}"
+  WROTE_ANYTHING=1
+  SUMMARY_NOTES="loaded from '${NOTES_BRANCH}' (${NOTES_PATH}) on '${ACTIVE_NOTES_REMOTE}'"
+fi
+
+PROGRESS_PATH="$(pr_progress_path || true)"
+if [ -n "${PROGRESS_PATH}" ]; then
+  [ "${WROTE_ANYTHING}" = "1" ] && printf '\n' >> "${OUTPUT_FILE}"
+  cat <<PROGRESS_HEADER >> "${OUTPUT_FILE}"
+<!--
+PR progress for branch '${CURRENT_BRANCH_FOR_COMMENT}', from '${NOTES_BRANCH}'
+(${PROGRESS_PATH}) on '${ACTIVE_NOTES_REMOTE}'. Holds only the plan, what is
+done and what is next - history belongs in the commits and on the pull
+request; save-pr-progress.sh refuses notes over the limit in
+${PLAN_SIZE_LIMITS_MODULE}. Edit between the markers, then run
+  "\$CLAUDE_PROJECT_DIR/.claude/hooks/save-pr-progress.sh"
+-->
+<!-- BEGIN-PR-PROGRESS -->
+PROGRESS_HEADER
+  if git cat-file -e "FETCH_HEAD:${PROGRESS_PATH}" 2>/dev/null; then
+    git show "FETCH_HEAD:${PROGRESS_PATH}" >> "${OUTPUT_FILE}"
+    SUMMARY_PROGRESS="loaded for branch '${CURRENT_BRANCH}' (${PROGRESS_PATH})"
+  else
+    cat <<'SCAFFOLD' >> "${OUTPUT_FILE}"
+No progress recorded yet for this branch. Initialize it now as three short
+lists - Plan, Done, Next - and keep it current as you work.
+SCAFFOLD
+    SUMMARY_PROGRESS="no saved progress yet for branch '${CURRENT_BRANCH}' - scaffold written"
+  fi
+  echo "<!-- END-PR-PROGRESS -->" >> "${OUTPUT_FILE}"
+  WROTE_ANYTHING=1
+fi
+
+PLAN_ID="$(plan_id_for_branch "${CURRENT_BRANCH}" || true)"
+
+# A branch with no plan item is several different situations, and reporting
+# them all as a bare "none" is what let a session read "the plan you were told
+# about has no item for this branch yet" as "no plan applies here" and start
+# work without recording an item. Each one now says which it is; the wording
+# is deliberately even-handed, because belonging to no plan is a perfectly
+# ordinary state for most branches and must not read as a reprimand.
+#
+# The first case answers a different question than the rest: on a branch no
+# plan item could ever track, there is nothing to prompt about at all.
+if [ -z "${PLAN_ID}" ]; then
+  if ! branch_can_hold_plan_item "${CURRENT_BRANCH}"; then
+    SUMMARY_PLAN="$(plan_line_not_applicable)"
+  elif plan_branch_index_exists; then
+    SUMMARY_PLAN="$(plan_line_no_item_tracks_branch "${CURRENT_BRANCH}" "$(tracked_plan_count)")"
+  else
+    SUMMARY_PLAN="$(plan_line_no_plans_tracked "${NOTES_BRANCH}")"
+  fi
+else
+  PLAN_MANIFEST_PATH="$(plan_manifest_path "${PLAN_ID}")"
+  PLAN_ROADMAP_PATH="$(plan_roadmap_path "${PLAN_ID}")"
+  # An index entry pointing at a manifest that isn't there means the index and
+  # the plan data have drifted apart - previously indistinguishable from having
+  # no plan at all, so it went unnoticed.
+  SUMMARY_PLAN="$(plan_line_manifest_missing "${PLAN_ID}" "${PLAN_MANIFEST_PATH}" "${NOTES_BRANCH}")"
+  if git cat-file -e "FETCH_HEAD:${PLAN_MANIFEST_PATH}" 2>/dev/null; then
+    [ "${WROTE_ANYTHING}" = "1" ] && printf '\n' >> "${OUTPUT_FILE}"
+    # TRACKING_ISSUE: a plain top-level scalar, so grep/sed suffices here too -
+    # same dependency-free reasoning as plan_id_for_branch above. Empty if
+    # the plan has no tracking_issue set (nothing to extract, not an error).
+    # Named for the mailbox's role, not necessarily a literal GitHub Issue -
+    # see plan-schema.md's PR-fallback note for repos with Issues disabled.
+    # The `|| true` is load-bearing: under `set -o pipefail` a plan with no
+    # tracking_issue makes grep exit 1, which `set -e` turns into the whole
+    # hook dying here with no output at all.
+    TRACKING_ISSUE="$(git show "FETCH_HEAD:${PLAN_MANIFEST_PATH}" 2>/dev/null \
+      | grep -oE '^tracking_issue:[[:space:]]*[0-9]+' | head -1 \
+      | grep -oE '[0-9]+$' || true)"
+    if [ -n "${TRACKING_ISSUE}" ]; then
+      TRACKING_ISSUE_NOTE="Structural changes (a wave, a deferral, a split, a reprioritization) are
+the user's call: ask first, then edit the manifest and comment on tracking
+issue #${TRACKING_ISSUE}. While working an item of this plan, subscribe to that issue."
+    else
+      TRACKING_ISSUE_NOTE="This plan has no tracking_issue set, so there is no coordination
+mailbox for structural changes yet - edit the manifest directly as usual."
+    fi
+    # Only this branch's own item and the plan's standing rules are loaded:
+    # the rest of the manifest is other sessions' work, and every line written
+    # here is paid for by every turn of this session. Edits go through a fresh
+    # copy of the whole manifest, so a save never writes back a slice.
+    MANIFEST_COPY="$(mktemp)"
+    git show "FETCH_HEAD:${PLAN_MANIFEST_PATH}" > "${MANIFEST_COPY}"
+    if ! PLAN_ITEM="$("${BASSTLER_PYTHON}" -m "${PLAN_MANIFEST_TOOLS_MODULE}" item \
+        "${MANIFEST_COPY}" --branch "${CURRENT_BRANCH}" 2>&1)"; then
+      PLAN_ITEM="(could not read this branch's item: ${PLAN_ITEM})"
+    fi
+    rm -f "${MANIFEST_COPY}"
+    cat <<PLAN_HEADER >> "${OUTPUT_FILE}"
+<!--
+This branch's item in plan '${PLAN_ID}', read from '${NOTES_BRANCH}'
+(${PLAN_MANIFEST_PATH}) on remote '${ACTIVE_NOTES_REMOTE}' by
+session-start.sh, followed by the plan's standing rules (${PLAN_ROADMAP_PATH}).
+Read-only: editing it here changes nothing. To read another item, run
+  basstler/.venv/bin/python -m ${PLAN_MANIFEST_TOOLS_MODULE} item <manifest-file> --id <item-id>
+on a copy from 'git show FETCH_HEAD:${PLAN_MANIFEST_PATH}' after fetching
+'${NOTES_BRANCH}' - never read the whole manifest when one item will do.
+To change the plan, record the item with plan_item_bootstrap's 'record', or
+fetch both files fresh, edit them, and run
+  "\$CLAUDE_PROJECT_DIR/.claude/hooks/save-plan.sh" ${PLAN_ID} --manifest <file> --roadmap <file>
+which drops landed items, removes a plan with none left, and refuses a plan
+over the limits in ${PLAN_SIZE_LIMITS_MODULE}. Then run
+/plan-dashboard ${PLAN_ID}.
+
+${TRACKING_ISSUE_NOTE}
+-->
+<!-- BEGIN-PLAN-ITEM: ${PLAN_ID} -->
+${PLAN_ITEM}
+<!-- END-PLAN-ITEM -->
+PLAN_HEADER
+    if git cat-file -e "FETCH_HEAD:${PLAN_ROADMAP_PATH}" 2>/dev/null; then
+      printf '\n' >> "${OUTPUT_FILE}"
+      git show "FETCH_HEAD:${PLAN_ROADMAP_PATH}" >> "${OUTPUT_FILE}"
+    fi
+    WROTE_ANYTHING=1
+    SUMMARY_PLAN="$(plan_line_tracked "${PLAN_ID}" "${TRACKING_ISSUE:-none}")"
+  fi
+fi
+
+if [ "${WROTE_ANYTHING}" = "1" ]; then
+  mv "${OUTPUT_FILE}" "${CLAUDE_LOCAL_MD}"
+else
+  rm -f "${OUTPUT_FILE}"
+fi
+
+# Git identity, from the notes branch - so a fresh clone commits as the person
+# working in it rather than as whatever the environment's global git config
+# happens to be. Only ever fills a gap: a clone that already has its own
+# repository-local identity keeps it, and nothing here touches global config.
+#
+# Written before the setup check below, so check-setup.sh's git_identity row
+# reports on the identity this run has just set rather than the absence it was
+# about to fix - the same ordering, for the same reason, as CLAUDE.local.md.
+if ! recorded_git_identity_exists; then
+  SUMMARY_GIT_IDENTITY="$(git_identity_line_not_recorded \
+    "${NOTES_BRANCH}" "${PERSONAL_GIT_IDENTITY_PATH}")"
+elif ! RECORDED_GIT_IDENTITY="$(recorded_git_identity)"; then
+  SUMMARY_GIT_IDENTITY="$(git_identity_line_incomplete \
+    "${PERSONAL_GIT_IDENTITY_PATH}" "${NOTES_BRANCH}")"
+elif LOCAL_GIT_IDENTITY="$(repository_local_git_identity)"; then
+  IFS=$'\t' read -r LOCAL_NAME LOCAL_EMAIL <<< "${LOCAL_GIT_IDENTITY}"
+  SUMMARY_GIT_IDENTITY="$(git_identity_line_already_set \
+    "$(format_git_identity "${LOCAL_NAME}" "${LOCAL_EMAIL}")")"
+else
+  IFS=$'\t' read -r RECORDED_NAME RECORDED_EMAIL <<< "${RECORDED_GIT_IDENTITY}"
+  git config --local user.name "${RECORDED_NAME}"
+  git config --local user.email "${RECORDED_EMAIL}"
+  SUMMARY_GIT_IDENTITY="$(git_identity_line_written "${NOTES_BRANCH}" \
+    "${PERSONAL_GIT_IDENTITY_PATH}" \
+    "$(format_git_identity "${RECORDED_NAME}" "${RECORDED_EMAIL}")")"
+fi
+
+# Personal settings: unlike everything above, these don't go into CLAUDE.local.md -
+# they are copied verbatim to .claude/settings.local.json, the file Claude Code
+# itself reads as this project's local settings (see PERSONAL_SETTINGS_PATH in
+# ./resolve-personal-notes-config.sh). No header or markers: it is strict JSON,
+# which has no comment syntax to carry them.
+#
+# Locally modified settings are never overwritten. Claude Code writes to this same
+# file whenever a permission is granted with "don't ask again", so a blind copy
+# every session start would silently drop those grants - see
+# personal_settings_are_locally_modified. Run ./save-personal-settings.sh to push
+# such edits up, which makes them the new baseline and lets syncing resume.
+SUMMARY_SETTINGS="none on '${NOTES_BRANCH}' (${PERSONAL_SETTINGS_PATH})"
+if git cat-file -e "FETCH_HEAD:${PERSONAL_SETTINGS_PATH}" 2>/dev/null; then
+  if personal_settings_are_locally_modified; then
+    SUMMARY_SETTINGS="kept local edits to ${LOCAL_SETTINGS_RELATIVE_PATH} - run save-personal-settings.sh to push them"
+  else
+    mkdir -p "$(dirname "${LOCAL_SETTINGS_JSON}")"
+    git show "FETCH_HEAD:${PERSONAL_SETTINGS_PATH}" > "${LOCAL_SETTINGS_JSON}"
+    record_personal_settings_sync
+    SUMMARY_SETTINGS="synced to ${LOCAL_SETTINGS_RELATIVE_PATH}"
+  fi
+fi
 
 # Setup verdict, from ./check-setup.sh - the single read-only source of truth
 # for whether this clone is set up. Reported here because remembering to run it

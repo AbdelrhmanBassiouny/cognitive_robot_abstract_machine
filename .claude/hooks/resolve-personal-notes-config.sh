@@ -337,6 +337,9 @@ PLAN_ITEM_MODE_MODULE="basstler.plan_item_mode"
 # plan_manifest_tools: reads a plan id out of a manifest and regenerates
 # the branch index - the manifest plumbing save-plan.sh calls.
 PLAN_MANIFEST_TOOLS_MODULE="basstler.plan_manifest_tools"
+# plan_size_limits: prunes landed items and refuses a plan or progress
+# notes over their limits - the gate save-plan.sh and save-pr-progress.sh run.
+PLAN_SIZE_LIMITS_MODULE="basstler.plan_size_limits"
 # plan_updates_since_support: renders the plan-state delta
 # plan-updates-since.sh reports.
 PLAN_UPDATES_SINCE_SUPPORT_MODULE="basstler.plan_updates_since_support"

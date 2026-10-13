@@ -1,6 +1,6 @@
 ---
 name: plan-item-resolve
-description: Gather everything available about one already-underway tracked plan item (its plan.yaml entry, roadmap.md history, the real state of its branch/PR - conflicts, CI, review comments, and any unresolved review threads on its upstream pull request - and any relevant discussion on its plan's tracking issue), then resolve whatever is stalling it in whichever execution mode is in force - presenting a plan for approval, carrying it out directly on the item's existing branch, or asking which. Invoke as "/plan-item-resolve <plan-id> <item-id>". Use when resolving a blocked, in-progress, or deferred item from a plan-dashboard's "Resolve"/"Resume"/"Reconsider" link, or when the user asks to "resolve", "unblock", "resume", or "reconsider" a specific tracked item.
+description: Gather everything available about one already-underway tracked plan item (its plan.yaml entry, the plan's standing rules, the real state of its branch/PR - conflicts, CI, review comments, and any unresolved review threads on its upstream pull request - and any relevant discussion on its plan's tracking issue), then resolve whatever is stalling it in whichever execution mode is in force - presenting a plan for approval, carrying it out directly on the item's existing branch, or asking which. Invoke as "/plan-item-resolve <plan-id> <item-id>". Use when resolving a blocked, in-progress, or deferred item from a plan-dashboard's "Resolve"/"Resume"/"Reconsider" link, or when the user asks to "resolve", "unblock", "resume", or "reconsider" a specific tracked item.
 allowed-tools: Bash, Read, Grep, Glob, Edit, Write, AskUserQuestion, Skill, EnterPlanMode, ExitPlanMode, mcp__github__list_pull_requests, mcp__github__pull_request_read, mcp__github__issue_read, mcp__github__get_file_contents, mcp__github__update_pull_request, mcp__Claude_Code_Remote__subscribe_pr_activity
 ---
 
@@ -28,7 +28,7 @@ resume any other session.
 
 Follow `${PLAN_ITEM_GATHERING_DOCUMENT}` end to end — the setup check, the
 item's resolution off the personal-notes branch, the tracking-issue
-subscription, its recorded state, the full roadmap read, the dependency
+subscription, its recorded state, the plan's standing rules, the dependency
 chain, and the standing conventions. `plan-item-kickoff` runs the same
 procedure, which is why it lives there rather than in either skill.
 
@@ -150,12 +150,13 @@ own git identity, no assistant author or co-author trailer.
 bar for stopping to ask anyway. Two things are this skill's own, because the
 item is already underway rather than being started:
 
-- **The record is an update, not a first draft.** Append what the resolution
-  turned out to be to `roadmap.md` — especially a blocker whose recorded
-  cause turned out to be wrong — and refresh the PR-progress note and the
-  pull request description rather than writing them from scratch. Update the
-  item's `blockers`, `notes` and `status` where the resolution changed what
-  the item means, then republish the dashboard with `/plan-dashboard`.
+- **The record is an update, not a first draft.** Rewrite the item's
+  `blockers`, `notes` and `status` to say what is true now - replacing a
+  blocker whose recorded cause turned out to be wrong rather than adding to
+  it - and refresh the PR-progress note and the pull request description the
+  same way. What the resolution was, and why, belongs in the pull request,
+  not in `roadmap.md`; add a roadmap entry only for a rule every later item
+  must follow. Then republish the dashboard with `/plan-dashboard`.
 - **The pull request goes back to draft after the push**, per the user's own
   convention, unless they marked it ready themselves — in which case the
   item was finished and this skill should not have been resolving it.

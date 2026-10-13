@@ -22,6 +22,9 @@ from pathlib import Path
 import pytest
 
 from basstler.locations import ProjectLocation
+from basstler.plan_manifest_tools import item_summary
+from basstler.plan_model import ManifestField, PlanManifest
+from basstler.plan_size_limits import read_manifest, write_manifest
 
 from .constants import (
     ConfigurationVariable,
@@ -252,6 +255,92 @@ def test_reports_a_tracked_branch_whose_manifest_is_missing(
         str(MANIFEST_PATH),
         ScratchBranch.PERSONAL_NOTES,
     )
+
+
+# %% the item a tracked branch loads
+
+
+PLAN_WITH_LANDED_ITEMS = DatasetLocation.DIRECTORY / "plan-with-landed-items.yaml"
+"""
+A plan of three items, one of which this suite moves onto the work branch.
+"""
+
+ROADMAP_OF_STANDING_RULES = DatasetLocation.DIRECTORY / "roadmap-of-standing-rules.md"
+"""
+A roadmap of standing rules.
+"""
+
+
+def manifest_with_work_branch_item(tmp_path: Path) -> PlanManifest:
+    """
+    :return: The three-item plan, with its ``open`` item worked on the work branch.
+    """
+    manifest = read_manifest(PLAN_WITH_LANDED_ITEMS)
+    items = [
+        (
+            {**item.content, ManifestField.BRANCH.value: str(ScratchBranch.WORK)}
+            if item.identifier == "open"
+            else item.content
+        )
+        for item in manifest.items
+    ]
+    moved = PlanManifest({**manifest.content, ManifestField.ITEMS.value: items})
+    write_manifest(moved, tmp_path / "moved-plan.yaml")
+    return moved
+
+
+def run_on_tracked_branch(
+    repository: ScratchRepository, manifest: PlanManifest, manifest_text: str
+) -> str:
+    """
+    Publish *manifest* as the plan tracking the work branch, run session-start.sh, and
+    return the CLAUDE.local.md it wrote.
+    """
+    plan_directory = ProjectLocation.PLANS / manifest.identifier
+    result = publish_and_run(
+        repository,
+        {
+            PersonalNotesPath.BRANCH_INDEX: branch_index(
+                {ScratchBranch.WORK: manifest.identifier}
+            ),
+            plan_directory / "plan.yaml": manifest_text,
+            plan_directory / "roadmap.md": ROADMAP_OF_STANDING_RULES.read_text(),
+        },
+    )
+    assert result.returncode == 0, result.stderr
+    return (repository.project_root / CLAUDE_LOCAL_MD).read_text()
+
+
+def test_a_tracked_branch_loads_only_its_own_item(
+    session_start_repository: ScratchRepository, tmp_path: Path
+):
+    manifest = manifest_with_work_branch_item(tmp_path)
+    claude_local = run_on_tracked_branch(
+        session_start_repository,
+        manifest,
+        (tmp_path / "moved-plan.yaml").read_text(),
+    )
+
+    item_block = claude_local.split(
+        f"<!-- BEGIN-PLAN-ITEM: {manifest.identifier} -->\n"
+    )[1]
+    item_block = item_block.split("<!-- END-PLAN-ITEM -->")[0]
+    assert item_block == item_summary(
+        manifest, manifest.item_on_branch(ScratchBranch.WORK)
+    )
+    assert "id: queued" not in claude_local
+
+
+def test_a_tracked_branch_loads_the_plan_s_standing_rules(
+    session_start_repository: ScratchRepository, tmp_path: Path
+):
+    manifest = manifest_with_work_branch_item(tmp_path)
+    claude_local = run_on_tracked_branch(
+        session_start_repository,
+        manifest,
+        (tmp_path / "moved-plan.yaml").read_text(),
+    )
+    assert ROADMAP_OF_STANDING_RULES.read_text() in claude_local
 
 
 # %% branches no plan item can ever track

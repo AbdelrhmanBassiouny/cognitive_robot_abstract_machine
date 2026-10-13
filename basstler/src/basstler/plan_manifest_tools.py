@@ -11,6 +11,7 @@ Usage:
     python3 plan_manifest_tools.py regenerate-branch-index \\
         --scratch-dir <dir> --plans-dir <relative-dir> \\
         --manifest-filename <name> --output <relative-path>
+    python3 plan_manifest_tools.py item <manifest-file> (--id <item-id> | --branch <branch>)
 """
 
 from __future__ import annotations
@@ -22,6 +23,8 @@ import sys
 from pathlib import Path
 
 import yaml
+
+from basstler.plan_model import ManifestField, PlanItem, PlanManifest
 from basstler.standard_streams import StandardStreamHandler
 
 logger = StandardStreamHandler.logger_for(__name__)
@@ -123,6 +126,27 @@ def regenerate_branch_index(
     return "\n".join(lines) + ("\n" if lines else "")
 
 
+def item_summary(manifest: PlanManifest, item: PlanItem) -> str:
+    """
+    The part of a plan one item's session needs: the plan's id, title and tracking
+    issue, and that item's own entry.
+
+    :param manifest: The plan.
+    :param item: The item to summarize.
+    :return: The summary as YAML.
+    """
+    summary = {
+        field_name.value: manifest.content.get(field_name)
+        for field_name in (
+            ManifestField.IDENTIFIER,
+            ManifestField.TITLE,
+            ManifestField.TRACKING_ISSUE,
+        )
+    }
+    summary["item"] = item.content
+    return yaml.safe_dump(summary, sort_keys=False, allow_unicode=True, width=88)
+
+
 def main() -> int:
     """
     Parse arguments and dispatch to the requested subcommand.
@@ -147,6 +171,14 @@ def main() -> int:
         "--output", required=True, type=Path, help="Path to write the index to"
     )
 
+    item_parser = subcommands.add_parser(
+        "item", help="Print the plan's header and one item's entry"
+    )
+    item_parser.add_argument("manifest_path", type=Path)
+    item_selector = item_parser.add_mutually_exclusive_group(required=True)
+    item_selector.add_argument("--id", dest="item_identifier")
+    item_selector.add_argument("--branch")
+
     arguments = parser.parse_args()
 
     if arguments.subcommand == "read-id":
@@ -156,6 +188,14 @@ def main() -> int:
             arguments.scratch_dir, arguments.plans_dir, arguments.manifest_filename
         )
         arguments.output.write_text(index_content)
+    elif arguments.subcommand == "item":
+        manifest = PlanManifest(yaml.safe_load(arguments.manifest_path.read_text()))
+        item = (
+            manifest.item_on_branch(arguments.branch)
+            if arguments.branch is not None
+            else manifest.item_named(arguments.item_identifier)
+        )
+        logger.info(item_summary(manifest, item).rstrip("\n"))
 
     return 0
 

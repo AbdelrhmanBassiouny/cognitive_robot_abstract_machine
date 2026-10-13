@@ -42,6 +42,20 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/resolve-personal-notes-config.sh"
 
+if ! command -v "${BASSTLER_PYTHON}" > /dev/null 2>&1; then
+  echo "${BASSTLER_PYTHON} is required to check the progress notes against their size limit." >&2
+  exit 1
+fi
+if ! MISSING_DEPENDENCIES="$(missing_dependencies)"; then
+  echo "Could not read what the basstler package requires from ${BASSTLER_PYPROJECT_FILE}." >&2
+  exit 1
+fi
+if [ -n "${MISSING_DEPENDENCIES}" ]; then
+  echo "The basstler package's requirements are not installed for ${BASSTLER_PYTHON}: ${MISSING_DEPENDENCIES}" >&2
+  echo "Start a new session, or run: pip --python ${BASSTLER_PYTHON} install --editable ./${BASSTLER_SOURCE_TREE}" >&2
+  exit 1
+fi
+
 PROGRESS_PATH="$(pr_progress_path || true)"
 if [ -z "${PROGRESS_PATH}" ]; then
   echo "Not on a PR branch (or on the personal-notes branch itself) - nothing to save." >&2
@@ -78,6 +92,13 @@ trap cleanup EXIT
 
 awk '/^<!-- BEGIN-PR-PROGRESS -->$/{flag=1; next} /^<!-- END-PR-PROGRESS -->$/{flag=0} flag' \
   "${CLAUDE_LOCAL_MD}" > "${CONTENT_FILE}"
+
+if ! "${BASSTLER_PYTHON}" -m "${PLAN_SIZE_LIMITS_MODULE}" check-progress "${CONTENT_FILE}"; then
+  echo "Refusing to save the progress notes: they are over the limit above. Keep" >&2
+  echo "the plan, what is done and what is next - history belongs in the commits" >&2
+  echo "and on the pull request, not here." >&2
+  exit 1
+fi
 
 git branch -D __save-pr-progress-tmp > /dev/null 2>&1 || true
 # FETCH_HEAD: see the note on FETCH_HEAD vs. "<remote>/<branch>" refs in

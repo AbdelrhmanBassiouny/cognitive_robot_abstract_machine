@@ -12,8 +12,9 @@ downstream reads as truth.
 Two operations, so each caller depends only on the surface it uses:
 
 ``record``
-    Write or update the item's ``plan.yaml`` entry and append its ``roadmap.md``
-    section, set its status, and push both through ``save-plan.sh``.
+    Write or update the item's ``plan.yaml`` entry, set its status, add a standing
+    rule to ``roadmap.md`` when the item settled one, and push both through
+    ``save-plan.sh``.
 
 ``open``
     Create the branch, publish it, open the draft pull request, then write ``branch``,
@@ -26,7 +27,7 @@ exist until the pull request does.
 
 Usage:
     python3 plan_item_bootstrap.py record --plan <plan-id> --item <item-id> \\
-        --status <status> --roadmap-section <file> [--title <title>] [--track <track>]
+        --status <status> [--roadmap-entry <rule>] [--title <title>] [--track <track>]
     python3 plan_item_bootstrap.py open --plan <plan-id> --item <item-id> \\
         --branch <branch> --base <branch> --session <url> \\
         (--pull-request-number <number> | --pull-request-title <title> \\
@@ -1025,11 +1026,6 @@ class ItemRecordRequest:
     The status to set on the item.
     """
 
-    roadmap_section_path: Path
-    """
-    A file whose markdown is appended to the plan's roadmap.
-    """
-
     title: str | None = None
     """
     The item's title, required only when the entry does not exist yet.
@@ -1038,6 +1034,12 @@ class ItemRecordRequest:
     track: str | None = None
     """
     The track the item belongs to, required only when the entry does not exist yet.
+    """
+
+    roadmap_entry: str | None = None
+    """
+    A standing rule of the plan the item settled, added to its roadmap; ``None`` leaves
+    the roadmap as it is.
     """
 
 
@@ -1112,7 +1114,8 @@ class BootstrapReport:
 
 def record_item(request: ItemRecordRequest, project_root: Path) -> BootstrapReport:
     """
-    Write or update one item's manifest entry and roadmap section, then push both.
+    Write or update one item's manifest entry, and add its roadmap entry when it has
+    one, then push both.
 
     :param request: The item to record.
     :param project_root: The repository to run within.
@@ -1133,9 +1136,9 @@ def record_item(request: ItemRecordRequest, project_root: Path) -> BootstrapRepo
             {ManifestKey.STATUS: request.status.value},
         )
 
-    roadmap_text = append_roadmap_section(
-        documents.roadmap_text, request.roadmap_section_path.read_text()
-    )
+    roadmap_text = documents.roadmap_text
+    if request.roadmap_entry is not None:
+        roadmap_text = append_roadmap_entry(roadmap_text, request.roadmap_entry)
     documents.save(manifest_text, roadmap_text, project_root)
     return BootstrapReport(
         exit_code=ExitCode.SUCCESS,
@@ -1145,15 +1148,15 @@ def record_item(request: ItemRecordRequest, project_root: Path) -> BootstrapRepo
     )
 
 
-def append_roadmap_section(roadmap_text: str, section: str) -> str:
+def append_roadmap_entry(roadmap_text: str, entry: str) -> str:
     """
-    Add one section to the end of a roadmap, separated by a blank line.
+    Add one entry to the end of a roadmap's list of standing rules.
 
     :param roadmap_text: The roadmap as it stands.
-    :param section: The markdown to append.
+    :param entry: The rule, on one or several lines.
     :return: The extended roadmap.
     """
-    return f"{roadmap_text.rstrip(chr(10))}\n\n{section.lstrip(chr(10))}"
+    return f"{roadmap_text.rstrip(chr(10))}\n- {' '.join(entry.split())}\n"
 
 
 # %% opening the work
@@ -1507,12 +1510,12 @@ def build_parser() -> argparse.ArgumentParser:
     subcommands = parser.add_subparsers(dest="subcommand", required=True)
 
     record = subcommands.add_parser(
-        "record", help="Write an item's manifest entry and roadmap section"
+        "record", help="Write an item's manifest entry and its roadmap entry, if any"
     )
     record.add_argument("--plan", required=True)
     record.add_argument("--item", required=True)
     record.add_argument("--status", required=True, type=ItemStatus)
-    record.add_argument("--roadmap-section", required=True, type=Path)
+    record.add_argument("--roadmap-entry")
     record.add_argument("--title")
     record.add_argument("--track")
 
@@ -1560,7 +1563,7 @@ def main() -> int:
                     plan_identifier=arguments.plan,
                     item_identifier=arguments.item,
                     status=arguments.status,
-                    roadmap_section_path=arguments.roadmap_section,
+                    roadmap_entry=arguments.roadmap_entry,
                     title=arguments.title,
                     track=arguments.track,
                 ),

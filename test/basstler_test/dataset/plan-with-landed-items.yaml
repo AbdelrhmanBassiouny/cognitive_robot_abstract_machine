@@ -1,0 +1,41 @@
+schema_version: 1
+id: limits-plan
+title: Limits Plan
+description: A plan with one landed item and two that build on it.
+default_repository: owner/repo
+tracking_issue: 7
+waves:
+- id: wave-1
+  name: Wave 1
+tracks:
+- id: track-1
+  name: Track 1
+  wave: wave-1
+items:
+  - id: landed
+    title: Landed item
+    branch: landed
+    pull_request_number: 1
+    track: track-1
+    depends_on: []
+    status: done
+    notes: >
+      Merged; nothing here is needed again.
+  - id: open
+    title: Open item
+    branch: open
+    pull_request_number: 2
+    track: track-1
+    depends_on: [landed]
+    status: in_progress
+    notes: >
+      Builds on the landed item.
+  - id: queued
+    title: Queued item
+    branch: null
+    pull_request_number: null
+    track: track-1
+    depends_on: [landed, open]
+    status: not_started
+    notes: >
+      Waits on the open item.

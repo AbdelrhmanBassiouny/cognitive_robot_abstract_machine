@@ -3,8 +3,8 @@
 The full field-by-field reference for a plan manifest: a generalized
 replacement for one-off master-roadmap docs when tracking a
 multi-PR/multi-session initiative. A structured `plan.yaml` drives
-generation; a sibling `roadmap.md` carries the narrative ("why", history,
-design decisions) that doesn't belong in structured data.
+generation; a sibling `roadmap.md` carries the plan's standing rules. Both
+hold only what a future session needs to act - see "Size limits" below.
 
 This document lives on `main`, alongside the tooling that reads it — it is
 generic, plan-agnostic reference material, so every clone has it with no
@@ -17,8 +17,8 @@ New to the system and want to see it end to end before reading the schema?
 Start with [`example-walkthrough.md`](./example-walkthrough.md), a short
 worked example from a plan-mode idea to a published dashboard. A complete,
 schema-conformant manifest you can read alongside this reference is
-committed at [`example/plan.yaml`](./example/plan.yaml), with its narrative
-half at [`example/roadmap.md`](./example/roadmap.md).
+committed at [`example/plan.yaml`](./example/plan.yaml), with its standing
+rules at [`example/roadmap.md`](./example/roadmap.md).
 
 ## Layout
 
@@ -41,7 +41,7 @@ schema_version: 1
 id: <plan-id>                  # matches the directory name
 title: "Human-readable title"
 description: >
-  One short paragraph. Long-form narrative goes in roadmap.md, not here.
+  One short paragraph.
 default_repository: <owner>/<repo>   # used by every item unless it sets its own `repository`
                                        # (roadmap.md is a fixed sibling filename, not configurable)
 tracking_issue: <int, optional> # see "Proposing structural changes" below
@@ -134,14 +134,37 @@ same checks `plan-dashboard` runs, asks before assuming anything that's a real
 structural judgment call, then runs `save-plan.sh` and `/plan-dashboard`
 itself.
 
+## Size limits
+
+Every session that loads a plan pays for every line of it, so the plan holds
+only what a future session needs to act. `save-plan.sh` enforces this with
+the limits `basstler/plan_size_limits.py` names (`Measure`):
+
+- **Landed items are dropped on save**, along with every `depends_on` edge to
+  them: the work is in the code and its history in git. A plan left with no
+  items is removed.
+- **Fields are bounded**: items per plan, characters of the description,
+  characters of each item's `notes`, blockers per item and characters of each.
+  `notes` hold the item's scope and the decisions that bind it, not a log of
+  sessions; a blocker names what is awaited and from whom, in a sentence.
+- **`roadmap.md` is a list of standing rules**: a `# ` title, then `- `
+  entries (continuation lines indented two spaces), bounded in count and
+  length. Any other line - a dated section, a paragraph, a heading - is
+  refused.
+- **PR progress notes** are bounded too, enforced by `save-pr-progress.sh`:
+  the plan, what is done, and what is next.
+
+A save over a limit is refused with every violation named. Read one item
+rather than the manifest with
+`basstler/.venv/bin/python -m basstler.plan_manifest_tools item <file> --id <item-id>`.
+
 ## Editing an existing plan
 
-Edit `plans/<plan-id>/plan.yaml` and `roadmap.md` directly (in
-`CLAUDE.local.md` if a session already pulled the plan in, or by fetching the
-personal-notes branch otherwise), then run
+Fetch the personal-notes branch, copy `plans/<plan-id>/plan.yaml` and
+`roadmap.md` to scratch files, edit them, then run
 
 ```bash
-"$CLAUDE_PROJECT_DIR/.claude/hooks/save-plan.sh" <plan-id>
+"$CLAUDE_PROJECT_DIR/.claude/hooks/save-plan.sh" <plan-id> --manifest <file> --roadmap <file>
 ```
 
 to push both files and regenerate the reverse index in one commit. This
