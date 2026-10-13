@@ -33,6 +33,7 @@ from basstler.stack import (
     Stack,
     build_stack,
     load_board,
+    reparents,
 )
 
 import basstler.maintenance
@@ -52,6 +53,7 @@ from basstler.maintenance_commands import (
     MaintenancePass,
     RestackCommand,
     RunReportCommand,
+    UnattendedRunCommand,
 )
 from basstler.maintenance_constants import CREDENTIAL_VARIABLES, PROMOTION_LINK_LABEL
 from basstler.maintenance_fast_forward import (
@@ -71,11 +73,17 @@ from basstler.maintenance_promotion import (
     description_with_promotion_link,
     promote,
 )
+from basstler.maintenance_reparent_notice import (
+    RetargetOutcome,
+    reparent_notice,
+    resolve_reparents,
+)
 from basstler.maintenance_report import (
     MaintenanceExitCode,
     MaintenanceReport,
     build_report,
     exit_code_for,
+    unattended_exit_code_for,
 )
 from basstler.maintenance_restack_procedure import restack
 from basstler.maintenance_restack_steps import (
@@ -1075,6 +1083,23 @@ class RecordedDescription:
 
 
 @dataclass(frozen=True)
+class RecordedRetarget:
+    """
+    One base-branch retarget attempted on a pull request.
+    """
+
+    pull_request_number: int
+    """
+    The pull request retargeted.
+    """
+
+    base: str
+    """
+    The branch it was pointed at.
+    """
+
+
+@dataclass(frozen=True)
 class RecordingPullRequests(ForkPullRequests):
     """
     Stands in for the fork, recording every write instead of making it.
@@ -1121,6 +1146,18 @@ class RecordingPullRequests(ForkPullRequests):
     )
     """
     Every description written, in order.
+    """
+
+    retarget_refusals: frozenset[int] = dataclasses_field(default_factory=frozenset)
+    """
+    Pull request numbers whose retarget this stand-in refuses, as the live API refuses
+    one whose base change is not permitted or whose pull request is a Stack member.
+    Every other number's retarget succeeds.
+    """
+
+    retargets: list[RecordedRetarget] = dataclasses_field(default_factory=list)
+    """
+    Every retarget attempted, in order, whether or not it was refused.
     """
 
     def open_pull_requests(self) -> list[dict]:
@@ -1170,6 +1207,15 @@ class RecordingPullRequests(ForkPullRequests):
         """
         self.description_writes.append(RecordedDescription(number, body))
         self.descriptions[number] = body
+
+    def retarget_base(self, number: int, base: str) -> bool:
+        """
+        :param number: The pull request to retarget.
+        :param base: The branch it must target instead.
+        :return: Whether *number* is not in :attr:`retarget_refusals`.
+        """
+        self.retargets.append(RecordedRetarget(number, base))
+        return number not in self.retarget_refusals
 
 
 @dataclass(frozen=True)
@@ -1351,6 +1397,137 @@ def test_a_branch_that_no_longer_conflicts_has_its_label_cleared_and_is_restacke
     child = next(outcome for outcome in outcomes if outcome.branch == StackBranch.CHILD)
     assert child.outcome == RestackOutcome.PUSHED
     assert fork.label_writes == [RecordedLabelWrite(41, ())]
+
+
+# %% reparent notification
+
+
+def a_landed_parent_and_unreparented_child(fork_checkout: ForkCheckout) -> None:
+    """
+    Publish ``a-parent`` and, on top of it, ``a-child`` - then land ``a-parent`` on the
+    upstream base directly, so the derived stack reads it as landed while ``a-child``'s
+    pull request still names it as the base.
+
+    :param fork_checkout: The checkout to build the branches in and land the parent on.
+    """
+    a_parent_and_child(fork_checkout)
+    fork_checkout.run_git("push", "--quiet", "cram2", f"a-parent:{UPSTREAM_BASE}")
+    fork_checkout.run_git("fetch", "--quiet", "cram2")
+
+
+def the_board_with_only_the_child(
+    labels: list[str] | None = None,
+) -> list[PullRequest]:
+    """
+    :param labels: The labels the child's pull request carries.
+    :return: A board naming only the child - its parent's own pull request closed
+        rather than merged, which leaves the board with no entry for it at all.
+    """
+    return [
+        PullRequest(
+            number=41, head="a-child", base="a-parent", draft=False, labels=labels or []
+        )
+    ]
+
+
+def test_a_reparent_this_credential_may_retarget_is_retargeted_without_notifying(
+    fork_checkout: ForkCheckout,
+):
+    """
+    A Claude session's own proxied credential was refused this write, but this pass's
+    is not that credential - it authenticates its own requests directly - so the
+    retarget is attempted rather than assumed refused, and nobody needs telling when
+    GitHub allows it.
+    """
+    a_landed_parent_and_unreparented_child(fork_checkout)
+    stack = a_stack(fork_checkout, the_board_with_only_the_child())
+    fork = RecordingPullRequests()
+
+    outcomes = resolve_reparents(reparents(stack), stack, fork)
+
+    assert outcomes == (RetargetOutcome(reparents(stack)[0], retargeted=True),)
+    assert fork.retargets == [RecordedRetarget(41, UPSTREAM_BASE)]
+    assert fork.label_writes == []
+    assert fork.comments == []
+
+
+def test_a_refused_reparent_is_labelled_and_reported(fork_checkout: ForkCheckout):
+    """
+    When GitHub does refuse the retarget - a genuinely stricter credential, or a pull
+    request that is a Stack member - the branch's owner has to be told, the same
+    treatment a restack conflict already gets.
+    """
+    a_landed_parent_and_unreparented_child(fork_checkout)
+    board = the_board_with_only_the_child()
+    board[0].session = "https://claude.ai/code/session_01ABCdef"
+    stack = a_stack(fork_checkout, board)
+    fork = RecordingPullRequests(retarget_refusals=frozenset({41}))
+
+    outcomes = resolve_reparents(reparents(stack), stack, fork)
+
+    assert outcomes == (RetargetOutcome(reparents(stack)[0], retargeted=False),)
+    assert fork.label_writes == [
+        RecordedLabelWrite(41, (make_configuration().needs_resolution_label,))
+    ]
+    comment = fork.comments[0]
+    assert comment.pull_request_number == 41
+    assert "a-child" in comment.body
+    assert f"`{UPSTREAM_BASE}`" in comment.body
+    assert "https://claude.ai/code/session_01ABCdef" in comment.body
+
+
+def test_a_refused_reparent_notice_keeps_every_label_the_branch_already_carried(
+    fork_checkout: ForkCheckout,
+):
+    """
+    The write replaces the whole set, so a label this pass knows nothing about has to be
+    sent back with it - the same rule a restack conflict's label write already follows.
+
+    Seeded on the fork stand-in's own current-label channel, not the board: the label
+    read has to survive a write another step made since the board was exported, which is
+    exactly what that channel stands for.
+    """
+    a_landed_parent_and_unreparented_child(fork_checkout)
+    stack = a_stack(fork_checkout, the_board_with_only_the_child())
+    fork = RecordingPullRequests(
+        labels={41: [A_LABEL_THIS_TOOL_NEVER_WRITES]},
+        retarget_refusals=frozenset({41}),
+    )
+
+    resolve_reparents(reparents(stack), stack, fork)
+
+    assert fork.label_writes == [
+        RecordedLabelWrite(
+            41,
+            (
+                A_LABEL_THIS_TOOL_NEVER_WRITES,
+                make_configuration().needs_resolution_label,
+            ),
+        )
+    ]
+
+
+def test_no_reparents_writes_nothing(fork_checkout: ForkCheckout):
+    a_parent_and_child(fork_checkout)
+    stack = a_stack(fork_checkout, the_board())
+    fork = RecordingPullRequests()
+
+    assert resolve_reparents(reparents(stack), stack, fork) == ()
+    assert fork.retargets == []
+    assert fork.label_writes == []
+    assert fork.comments == []
+
+
+def test_a_reparent_notice_names_no_session_when_the_description_has_none(
+    fork_checkout: ForkCheckout,
+):
+    a_landed_parent_and_unreparented_child(fork_checkout)
+    stack = a_stack(fork_checkout, the_board_with_only_the_child())
+    branch = next(branch for branch in stack.branches if branch.name == "a-child")
+
+    body = reparent_notice(branch, reparents(stack)[0])
+
+    assert "names no session to address" in body
 
 
 # %% promotion
@@ -1535,6 +1712,54 @@ def test_a_whole_pass_leaves_no_board_behind(fork_checkout: ForkCheckout):
     assert not board_path.exists()
 
 
+def test_a_whole_pass_retargets_a_pending_reparent(fork_checkout: ForkCheckout):
+    """
+    ``run-report`` is what a scheduled Action calls with nobody watching, so a pending
+    reparent has to be resolved from inside the pass itself when GitHub allows it.
+    """
+    a_landed_parent_and_unreparented_child(fork_checkout)
+    maintenance_pass = AlreadyResolvedPass.over(
+        fork_checkout, the_board_with_only_the_child()
+    )
+
+    RunReportCommand().run(maintenance_pass, argparse.Namespace(json=True))
+
+    assert maintenance_pass.recorded_fork.retargets == [
+        RecordedRetarget(41, UPSTREAM_BASE)
+    ]
+    needs_resolution = make_configuration().needs_resolution_label
+    assert all(
+        needs_resolution not in write.labels
+        for write in maintenance_pass.recorded_fork.label_writes
+    )
+    assert maintenance_pass.recorded_fork.comments == []
+
+
+def test_a_whole_pass_reports_a_reparent_github_refuses(fork_checkout: ForkCheckout):
+    """
+    When GitHub refuses the retarget, the notice has to reach the branch's owner from
+    inside the pass itself - a run summary nobody without a session reads is not one.
+    """
+    a_landed_parent_and_unreparented_child(fork_checkout)
+    maintenance_pass = AlreadyResolvedPass(
+        configuration=make_configuration(),
+        git=fork_checkout.git,
+        resolved_stack=a_stack(fork_checkout, the_board_with_only_the_child()),
+        recorded_fork=RecordingPullRequests(retarget_refusals=frozenset({41})),
+    )
+
+    RunReportCommand().run(maintenance_pass, argparse.Namespace(json=True))
+
+    needs_resolution = make_configuration().needs_resolution_label
+    reparent_write = next(
+        write
+        for write in maintenance_pass.recorded_fork.label_writes
+        if needs_resolution in write.labels
+    )
+    assert reparent_write == RecordedLabelWrite(41, (needs_resolution,))
+    assert "a-child" in maintenance_pass.recorded_fork.comments[0].body
+
+
 # %% the exit status every command derives from what it left behind
 
 
@@ -1601,6 +1826,66 @@ def test_a_branch_left_unpublished_is_never_reported_as_a_clean_pass(
     assert (
         exit_code_for(a_report(restack_outcome=left_behind))
         == MaintenanceExitCode.BRANCH_NEEDS_ATTENTION
+    )
+
+
+@pytest.mark.parametrize("reported", [RestackOutcome.CONFLICT, RestackOutcome.WITHHELD])
+def test_an_unattended_pass_succeeds_when_every_branch_left_behind_was_reported(
+    reported: RestackOutcome,
+):
+    """
+    A conflict is labelled and commented on its own pull request, and a withheld branch
+    still carries that label, so its owner already has it. Failing the job over it as
+    well would turn every scheduled run red while any branch anywhere waits on a person.
+    """
+    assert (
+        unattended_exit_code_for(a_report(restack_outcome=reported))
+        == MaintenanceExitCode.SUCCESS
+    )
+
+
+@pytest.mark.parametrize(
+    "unreported", [RestackOutcome.PUSH_REJECTED, RestackOutcome.INTEGRATION_FAILED]
+)
+def test_an_unattended_pass_fails_on_a_branch_nobody_was_told_about(
+    unreported: RestackOutcome,
+):
+    """
+    A rejected push or an integration that failed without conflicting is a fault in the
+    pass rather than in the branch, and nobody is commented at for it - so the job
+    status is the only place it surfaces.
+    """
+    assert unattended_exit_code_for(
+        a_report(restack_outcome=unreported)
+    ) == exit_code_for(a_report(restack_outcome=unreported))
+
+
+def test_an_unattended_pass_still_fails_on_a_refused_fast_forward():
+    refused = a_report(fast_forward_outcome=FastForwardOutcome.REFUSED_NOT_FAST_FORWARD)
+
+    assert unattended_exit_code_for(refused) == MaintenanceExitCode.NOT_FAST_FORWARD
+
+
+def test_an_unattended_run_reports_a_conflict_on_its_pull_request_and_succeeds(
+    fork_checkout: ForkCheckout, capsys: pytest.CaptureFixture[str]
+):
+    """
+    ``run-unattended`` is the whole pass a scheduled job runs: the conflict reaches its
+    owner as a comment, the document reaches the job log, and the job stays green.
+    """
+    a_parent_and_child(fork_checkout)
+    fork_checkout.commit_on("a-parent", "a-contested-file", "the parent's version\n")
+    fork_checkout.commit_on("a-child", "a-contested-file", "the child's version\n")
+    maintenance_pass = AlreadyResolvedPass.over(fork_checkout, the_board())
+
+    status = UnattendedRunCommand().run(maintenance_pass, argparse.Namespace())
+
+    assert status == MaintenanceExitCode.SUCCESS
+    assert maintenance_pass.recorded_fork.comments[0].pull_request_number == 41
+    document = json.loads(capsys.readouterr().out)
+    assert (
+        document["status"]
+        == MaintenanceExitCode.BRANCH_NEEDS_ATTENTION.name_for_a_caller
     )
 
 

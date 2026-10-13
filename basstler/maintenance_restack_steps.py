@@ -15,8 +15,8 @@ from enum import StrEnum
 from typing import Any
 
 from basstler.maintenance_constants import (
-    CONFLICT_COMMENT_PREFIX,
     MERGEABLE_STATE_WITH_CONFLICTS,
+    NEEDS_RESOLUTION_COMMENT_PREFIX,
 )
 from basstler.maintenance_board import PullRequestField
 from basstler.maintenance_git_commands import GitCommandRunner, ProposedPush
@@ -79,6 +79,14 @@ class RestackOutcome(StrEnum):
     It is still conflicted against its base from a previous pass, so it was left
     untouched rather than re-reported.
     """
+
+    @property
+    def is_reported_to_its_owner(self) -> bool:
+        """
+        :return: Whether the branch's owner has been told on its pull request - this
+            pass for a conflict, an earlier one for a branch still withheld.
+        """
+        return self in {RestackOutcome.CONFLICT, RestackOutcome.WITHHELD}
 
 
 @dataclass(frozen=True)
@@ -153,7 +161,7 @@ def conflict_report(
         else "\n\nThis pull request's description names no session to address."
     )
     return (
-        f"{CONFLICT_COMMENT_PREFIX} integrating `{parent}` into `{branch.name}` "
+        f"{NEEDS_RESOLUTION_COMMENT_PREFIX} integrating `{parent}` into `{branch.name}` "
         f"conflicts, so this branch was left untouched and skipped.\n\n"
         f"Conflicting files:\n{files}\n\n"
         f"Please resolve and push. This branch is labelled "
