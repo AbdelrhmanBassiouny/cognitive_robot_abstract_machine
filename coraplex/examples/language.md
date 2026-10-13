@@ -197,9 +197,11 @@ run(plan)
 
 ## Exception Handling
 
-A {class}`~coraplex.plans.failures.PlanFailure` raised by a step makes that step fail, and its composite decides what
-follows: a Sequence fails as well, while TryInOrder and TryAll go on with their other children and only fail if all of
-them failed. Any other exception, such as a KeyError, is raised out of the execution.
+A step that fails lets its composite decide what follows: a Sequence fails as well, while TryInOrder and TryAll go on
+with their other children and only fail if all of them failed. A
+{class}`~cramph.threaded_nodes.FunctionCall` fails when its function raises one of its `failure_types`, here a
+{class}`~coraplex.plans.failures.PlanFailure`. Any other exception, such as a KeyError, is raised out of the
+execution.
 
 We will see how a failure is handled at a simple example using TryAll, so that a failing step does not fail the whole
 plan.
@@ -217,7 +219,7 @@ def code_test():
 
 
 navigate = NavigateAction(Pose.from_xyz_rpy(1, 1, 0, reference_frame=world.root))
-code_func = FunctionCall(function=code_test)
+code_func = FunctionCall(function=code_test, failure_types=(PlanFailure,))
 
 plan = TryAll([navigate, code_func])
 

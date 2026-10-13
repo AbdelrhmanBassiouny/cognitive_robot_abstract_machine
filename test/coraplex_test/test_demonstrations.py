@@ -9,6 +9,7 @@ context. None of it needs a controller.
 import logging
 from contextlib import contextmanager
 from dataclasses import dataclass, field
+from datetime import timedelta
 
 import pytest
 import rclpy
@@ -23,6 +24,7 @@ from ..plan_running import robot_extensions
 from cramph.context import ContextExtension, StatechartContext
 from coraplex.plans.context_extensions import ExecutionMode
 from coraplex.plans.executors import SimulatedPlanExecutor
+from coraplex.plans.failures import MotionExceededSimulationTimeLimit
 from cramph.statechart import Statechart
 
 
@@ -207,6 +209,21 @@ def test_run_returns_the_world_it_acted_on(cylinder_bot_world):
     )
 
     assert demonstration.run() is cylinder_bot_world
+
+
+def test_a_simulated_plan_is_given_up_on_at_the_time_limit_of_its_demonstration(
+    cylinder_bot_world,
+):
+    demonstration = RecordingDemonstration(
+        world=cylinder_bot_world,
+        used_robot=MinimalRobot,
+        simulation_time_limit=timedelta(0),
+    )
+
+    with pytest.raises(MotionExceededSimulationTimeLimit) as error:
+        demonstration.run()
+
+    assert error.value.time_limit == demonstration.simulation_time_limit
 
 
 # %% event segmentation

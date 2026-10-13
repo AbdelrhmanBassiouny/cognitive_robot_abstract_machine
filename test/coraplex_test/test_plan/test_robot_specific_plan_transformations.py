@@ -9,6 +9,7 @@ from typing_extensions import List
 from coraplex.exceptions import ActionNotExpanded
 from coraplex.plans.executors import PlanExecutor
 from coraplex.plans.plan_transformation import PlanRewriting, PlanTransformation
+from coraplex.plans.underspecified import UnderspecifiedNode
 from coraplex.robot_plans.actions.core.container import CloseAction
 from coraplex.robot_plans.actions.core.navigation import (
     DrivesBase,
@@ -27,10 +28,12 @@ from cramph.exceptions import StatechartAlreadyCompiledError
 from cramph.node import StatechartNode
 from giskardpy.motion_statechart.goals.cartesian_goals import DifferentialDriveBaseGoal
 from giskardpy.motion_statechart.goals.open_close import Close
+from giskardpy.motion_statechart.graph_node import ConvergingTask
 from giskardpy.motion_statechart.monitors.overwrite_state_monitors import SetOdometry
 from giskardpy.motion_statechart.tasks.align_planes import AlignPlanes
 from giskardpy.motion_statechart.tasks.cartesian_tasks import CartesianPose
 from giskardpy.motion_statechart.tasks.joint_tasks import JointPositionList
+from krrood.entity_query_language.factories import a, variable_from
 from semantic_digital_twin.datastructures.definitions import TorsoState
 from semantic_digital_twin.robots.robot_parts import AbstractRobot
 from semantic_digital_twin.robots.tiago import Tiago
@@ -178,6 +181,26 @@ def test_the_body_of_a_compiled_action_cannot_be_replaced(pr2_apartment_context)
         action.replace_action_body(goal)
 
 
+def test_an_action_joining_a_compiled_statechart_runs_the_body_it_is_given_instead(
+    pr2_apartment_context,
+):
+    world, robot, extensions = pr2_apartment_context
+    executor = simulated_executor(extensions)
+    statechart = statechart_of(executor, MoveTorsoAction(TorsoState.HIGH))
+    executor.compile(statechart)
+    action = MoveTorsoAction(TorsoState.LOW)
+    goal = JointPositionList(
+        goal_state=robot.get_torso().get_joint_state_by_type(TorsoState.LOW)
+    )
+
+    with statechart.modify():
+        statechart.add_node(action)
+        action.replace_action_body(goal)
+
+    assert action.action_body is goal
+    assert statechart.latest_compile_covers(goal)
+
+
 # %% driving a differential drive
 
 
@@ -314,6 +337,54 @@ def test_a_simulated_stretch_arrives_driving_with_its_differential_drive(
         robot.mobile_base.pose_facing(action.target_location).to_np(),
         atol=2 * action.base_pose_threshold,
     )
+
+
+def test_a_simulated_stretch_drives_differentially_to_a_pose_chosen_while_running(
+    stretch_apartment_context,
+):
+    world, robot, extensions = stretch_apartment_context
+    executor = simulated_executor(
+        rewriting_with(extensions, DriveStretchWithItsDifferentialDrive())
+    )
+    navigation = UnderspecifiedNode(
+        statement=a(NavigateAction)(
+            target_location=variable_from([navigation_to(world).target_location])
+        )
+    )
+    executor.compile(statechart_of(executor, navigation))
+
+    executor.execute()
+
+    [action] = navigation.chosen_actions
+    assert_drives_differentially_to(action.action_body, action, robot)
+
+
+def test_a_drive_chosen_while_running_is_watched_for_stalling_as_it_is_driven(
+    stretch_apartment_context,
+):
+    """
+    The transformation replaces the body of the chosen drive, so the monitor giving up
+    on a stalled attempt has to watch the tasks of the body that runs.
+    """
+    world, robot, extensions = stretch_apartment_context
+    executor = simulated_executor(
+        rewriting_with(extensions, DriveStretchWithItsDifferentialDrive())
+    )
+    navigation = UnderspecifiedNode(
+        statement=a(NavigateAction)(
+            target_location=variable_from([navigation_to(world).target_location])
+        )
+    )
+    executor.compile(statechart_of(executor, navigation))
+
+    executor.execute()
+
+    [attempt] = navigation.children
+    [stalled] = attempt.failure_monitors
+    [action] = navigation.chosen_actions
+    assert stalled.monitored_tasks == [
+        node for node in action.descendants if isinstance(node, ConvergingTask)
+    ]
 
 
 # %% closing a container

@@ -70,8 +70,10 @@ class DrivesBase(Action, ABC):
     """
 
     @classproperty
-    def required_context_extensions(cls) -> tuple[type[ContextExtension], ...]:
-        return super().required_context_extensions + (ExecutionMode,)
+    def context_extensions_required_to_expand(
+        cls,
+    ) -> tuple[type[ContextExtension], ...]:
+        return super().context_extensions_required_to_expand + (ExecutionMode,)
 
     def _drive_to(self, target: Pose) -> MotionStatechartNode:
         """

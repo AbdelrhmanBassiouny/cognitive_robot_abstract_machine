@@ -8,11 +8,11 @@ import json
 
 import pytest
 
+from coraplex.plans.context_extensions import RobotAccess
 from coraplex.robot_plans.actions.core.robot_body import (
     ParkArmsAction,
     SetGripperAction,
 )
-from cramph.context import StatechartContext
 from cramph.data_types import LifeCycleValues
 from cramph.statechart import Statechart
 from krrood.entity_query_language.factories import inference
@@ -28,6 +28,7 @@ from cramera.live.bridge import Bridge
 from cramera.recording_fields import SceneField
 
 from .test_live_bridge import ActionDescription, make_plan_node, make_statechart
+from ..plan_running import context_of
 
 # %% lifecycle publication
 
@@ -94,7 +95,7 @@ def test_designator_description_uses_native_parameter_verbalization(
     [robot] = pr2_world_copy.get_semantic_annotations_by_type(PR2)
     gripper = robot.all_arms[gripper_index].end_effector
     action = SetGripperAction(gripper=gripper, motion=GripperState.CLOSE)
-    statechart = Statechart(context=StatechartContext(world=pr2_world_copy))
+    statechart = Statechart(context=context_of([RobotAccess(robot)]))
     statechart.add_node(action)
     bridge = Bridge()
 
@@ -119,7 +120,7 @@ def test_native_arm_selection_is_verbalized(
     """
     [robot] = pr2_world_copy.get_semantic_annotations_by_type(PR2)
     action = ParkArmsAction(arms=[robot.all_arms[index] for index in arm_indices])
-    statechart = Statechart(context=StatechartContext(world=pr2_world_copy))
+    statechart = Statechart(context=context_of([RobotAccess(robot)]))
     statechart.add_node(action)
     bridge = Bridge()
 
@@ -141,7 +142,7 @@ def test_gripper_state_enum_is_not_mistaken_for_a_target_body(
     motion = GripperState.CLOSE
     body = Body(name=PrefixedName(motion.name))
     [robot] = pr2_world_copy.get_semantic_annotations_by_type(PR2)
-    statechart = Statechart(context=StatechartContext(world=pr2_world_copy))
+    statechart = Statechart(context=context_of([RobotAccess(robot)]))
     statechart.add_node(
         SetGripperAction(gripper=robot.all_arms[0].end_effector, motion=motion)
     )

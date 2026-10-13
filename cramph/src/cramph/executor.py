@@ -26,9 +26,9 @@ class Pacer(ABC):
     Decides how long a loop waits between two cycles.
     """
 
-    target_frequency: float = field(init=False)
+    target_frequency: float | None = field(default=None, init=False)
     """
-    Frequency of the loop in hertz, set by whoever runs the loop.
+    Frequency of the loop in hertz, set by whoever runs the loop; None until then.
     """
 
     def pace_ticks_of(self, context: StatechartContext) -> None:

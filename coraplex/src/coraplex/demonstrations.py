@@ -13,6 +13,7 @@ import threading
 from abc import ABC, abstractmethod
 from contextlib import AbstractContextManager, nullcontext
 from dataclasses import dataclass, field
+from datetime import timedelta
 
 import rclpy
 from rclpy.executors import SingleThreadedExecutor
@@ -181,6 +182,12 @@ class RobotDemonstration(ABC):
     one carrying an object away and back again.
     """
 
+    simulation_time_limit: timedelta | None = None
+    """
+    The simulated time after which a simulated run gives up on the plan; ``None`` keeps
+    the limit of the executor.
+    """
+
     default_visualization_backend: VisualizationBackend = VisualizationBackend.RVIZ
     """Renderer used unless explicitly selected through the environment."""
 
@@ -268,6 +275,25 @@ class RobotDemonstration(ABC):
         WorldSynchronizer(_world=world, node=self.ros_session.node)
         return world
 
+    def create_executor(self, world: World) -> PlanExecutor:
+        """
+        :param world: The world the plan is performed in.
+        :return: An executor of :attr:`executor_type`, set up the way this demonstration
+            performs its plan.
+        """
+        executor = self.executor_type(
+            world,
+            context_extensions=self.build_context_extensions(world),
+            ros_node=self.ros_node,
+            collision_avoidance=self.collision_avoidance,
+            debug=self.debug,
+        )
+        if self.simulation_time_limit is not None and isinstance(
+            executor, SimulatedPlanExecutor
+        ):
+            executor.simulation_time_limit = self.simulation_time_limit
+        return executor
+
     def run(self) -> World:
         """
         Acquire a world, populate it if needed, and perform the plan against it.
@@ -279,13 +305,7 @@ class RobotDemonstration(ABC):
             if not self.is_scene_populated(world):
                 self.populate_scene(world)
             for _ in range(self.repetitions):
-                executor = self.executor_type(
-                    world,
-                    context_extensions=self.build_context_extensions(world),
-                    ros_node=self.ros_node,
-                    collision_avoidance=self.collision_avoidance,
-                    debug=self.debug,
-                )
+                executor = self.create_executor(world)
                 statechart = self.build_statechart(executor.context)
                 if self.visualization is not None:
                     self.visualization.attach_plan(executor)

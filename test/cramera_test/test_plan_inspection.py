@@ -5,8 +5,8 @@ Keep recorded plan inspection separate from the active execution stream.
 import json
 from pathlib import Path
 
+from coraplex.plans.context_extensions import RobotAccess
 from coraplex.robot_plans.actions.core.robot_body import ParkArmsAction
-from cramph.context import StatechartContext
 from cramph.statechart import Statechart
 from krrood.entity_query_language.factories import inference
 from krrood.entity_query_language.verbalization.pipeline import verbalize_expression
@@ -18,6 +18,8 @@ from cramera.knowledge.knowledge_base import EpisodeKnowledgeBase
 from cramera.knowledge.views.plan_tree import PlanViewPayload
 from cramera.live.bridge import Bridge
 from cramera.recording_fields import SceneField
+
+from ..plan_running import context_of
 
 
 # %% recorded and live plan sources
@@ -54,7 +56,7 @@ def test_recorded_plan_keeps_native_designator_description(
     """
     [robot] = pr2_world_copy.get_semantic_annotations_by_type(PR2)
     action = ParkArmsAction(arms=robot.all_arms)
-    statechart = Statechart(context=StatechartContext(world=pr2_world_copy))
+    statechart = Statechart(context=context_of([RobotAccess(robot)]))
     statechart.add_node(action)
     bridge = Bridge()
     bridge.begin_plan(statechart)

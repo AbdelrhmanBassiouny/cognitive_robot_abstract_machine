@@ -50,6 +50,7 @@ from coraplex.robot_plans.actions.core.robot_body import ParkArmsAction
 from coraplex.robot_plans.actions.core.navigation import NavigateAction
 from cramph.composites import Sequence
 from cramph.statechart import Statechart
+from semantic_digital_twin.spatial_types.spatial_types import Pose
 
 navigate = NavigateAction(Pose.from_xyz_quaternion(1, 1, 0, reference_frame=world.root))
 park = ParkArmsAction(pr2.all_arms)

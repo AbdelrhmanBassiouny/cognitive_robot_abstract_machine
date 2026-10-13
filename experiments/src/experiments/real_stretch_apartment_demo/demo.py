@@ -29,6 +29,7 @@ classifying annotator to that engine removes both without changing this demo.
 """
 
 from dataclasses import dataclass, field
+from datetime import timedelta
 
 import numpy as np
 from typing_extensions import List, Type
@@ -110,6 +111,8 @@ class StretchApartmentDemonstration(RobotDemonstration):
     """
 
     ros_node_name: str = "stretch_demo_node"
+
+    simulation_time_limit: timedelta | None = timedelta(minutes=10)
 
     def build_simulated_world(self) -> World:
         """

@@ -843,6 +843,10 @@ class TestCompiledFunction:
         assert np.allclose(f().toarray(), expected)
         assert np.allclose(f(np.array([], dtype=float)).toarray(), expected)
 
+    def test_function_of_an_expression_without_entries_has_a_representation(self):
+        function = sm.Matrix().compile()
+        assert repr(function.expression) in repr(function)
+
     def test_dense(self):
         s1_value = 420.0
         s2_value = 69.0

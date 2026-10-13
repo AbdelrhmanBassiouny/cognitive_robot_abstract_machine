@@ -20,4 +20,4 @@ from krrood.utils import recursive_subclasses
 def test_an_action_moving_the_tool_center_point_requires_the_motion_tolerances(
     action_type: type[MovesToolCenterPoint],
 ):
-    assert MotionToleranceConfig in action_type.required_context_extensions
+    assert MotionToleranceConfig in action_type.context_extensions_required_to_expand

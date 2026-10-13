@@ -62,6 +62,10 @@ def test_no_pacing_does_not_wait():
     assert perf_counter() - start_time < 0.01
 
 
+def test_a_pacer_has_no_target_frequency_before_it_paces_a_loop():
+    assert NoPacing().target_frequency is None
+
+
 def test_real_time_pacer_holds_the_target_frequency():
     pacer = RealTimePacer()
     pacer.target_frequency = 50

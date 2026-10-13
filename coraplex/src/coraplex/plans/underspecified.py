@@ -45,6 +45,28 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+# %% attempting a grounded action
+
+
+@dataclass(eq=False, repr=False)
+class AttemptRewritingItsTask(Attempt):
+    """
+    An attempt whose task is rewritten by the plan transformations of its statechart
+    before its failure monitors join it, so that they watch the task as it is run.
+    """
+
+    def expand(self, context: StatechartContext) -> None:
+        """
+        Differs from :meth:`~cramph.composites.Attempt.expand` in rewriting the task
+        once it is added, before the monitors are.
+        """
+        self._add_child_to_statechart(self.task)
+        rewriting = context.get_extension(PlanRewriting)
+        if rewriting is not None:
+            rewriting.rewrite(self.task)
+        self._add_children_to_statechart(self.failure_monitors)
+
+
 # %% the node running an underspecified action
 
 
@@ -174,7 +196,7 @@ class UnderspecifiedNode(CompositeNodeChoosingItsChild):
             goal, so this node can try the next action instead.
         """
         steps = Sequence(name=f"{proposal.name}/steps", nodes=[proposal])
-        return Attempt(
+        return AttemptRewritingItsTask(
             name=f"{proposal.name}/attempt",
             task=steps,
             failure_monitors=[Stalled(monitored_node=steps)],

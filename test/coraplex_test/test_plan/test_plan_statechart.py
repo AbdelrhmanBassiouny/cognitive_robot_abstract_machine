@@ -25,6 +25,7 @@ from cramph.composites import (
     PausedUntilTrue,
     Sequence,
 )
+from cramph.context import StatechartContext
 from cramph.data_types import LifeCycleValues, ObservationStateValues
 from cramph.executor import StatechartExecutor
 from cramph.nodes_for_testing import ConstTrueNode, NodeFailingOnObservingFalse
@@ -47,6 +48,7 @@ from semantic_digital_twin.semantic_annotations.semantic_annotations import (
 from semantic_digital_twin.spatial_types.spatial_types import Pose
 from semantic_digital_twin.world import World
 from ...plan_running import robot_executor, run_plan, simulated_executor, statechart_of
+from ...statechart_json_round_trip import StatechartSentThroughJSON
 
 # %% helpers
 
@@ -234,6 +236,38 @@ def test_a_place_after_several_pick_ups_uses_the_arm_that_picked_its_object(
     assert moved_tool_frames == {robot.left_arm.end_effector.tool_frame}
 
 
+def test_a_place_after_an_earlier_place_uses_the_arm_that_picked_its_object(
+    pr2_apartment_context,
+):
+    world, robot, extensions = pr2_apartment_context
+    milk = world.get_semantic_annotations_by_type(Milk)[0]
+    spoon = world.get_semantic_annotations_by_type(Spoon)[0]
+    place_spoon = PlaceAction(
+        spoon, Pose.from_xyz_rpy(0.8, -1.9, 0.7, reference_frame=world.root)
+    )
+    statechart = Statechart(context=simulated_executor(extensions).context)
+
+    statechart.add_node(
+        Sequence(
+            [
+                PickUpAction(milk.grasp_candidates()[0], robot.left_arm),
+                PlaceAction(
+                    milk, Pose.from_xyz_rpy(0.8, -1.5, 0.7, reference_frame=world.root)
+                ),
+                PickUpAction(spoon.grasp_candidates()[0], robot.right_arm),
+                place_spoon,
+            ]
+        )
+    )
+
+    moved_tool_frames = {
+        node.tip_link
+        for node in place_spoon.descendants
+        if isinstance(node, CartesianPose)
+    }
+    assert moved_tool_frames == {robot.right_arm.end_effector.tool_frame}
+
+
 # %% running on the robot
 
 
@@ -274,6 +308,37 @@ class GiskardRecordingTheGoal:
 
     def close(self) -> None:
         self.closed = True
+
+
+def test_a_sent_plan_compiles_without_what_its_actions_read_to_expand(
+    pr2_apartment_context,
+):
+    """
+    Giskard compiles the plan it receives in a context of its own, which holds what
+    motions need and nothing of what the actions read while the client expanded them.
+    """
+    world, robot, extensions = pr2_apartment_context
+    milk = world.get_semantic_annotations_by_type(Milk)[0]
+    client = robot_executor(extensions)
+    sent = statechart_of(
+        client,
+        Sequence(
+            [
+                MoveTorsoAction(TorsoState.HIGH),
+                NavigateAction(_pose_in_front_of_the_robot(world, robot)),
+                PickUpAction(milk.grasp_candidates()[0], robot.left_arm),
+            ]
+        ),
+    )
+    client.prepare(sent)
+    receiver = StatechartExecutor(
+        context=StatechartContext(world=world), extensions=[MotionControl()]
+    )
+    received = StatechartSentThroughJSON.received_in(sent, receiver.context).received
+
+    receiver.compile(received)
+
+    assert received.is_compiled
 
 
 def test_an_underspecified_node_is_sent_as_a_node_choosing_its_child(

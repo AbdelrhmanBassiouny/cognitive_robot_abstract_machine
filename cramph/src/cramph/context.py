@@ -24,7 +24,9 @@ class ContextExtension:
     :class:`StatechartContext`, on top of what every statechart has.
 
     A node names the extensions it reads in
-    :attr:`~cramph.node.StatechartNode.required_context_extensions`.
+    :attr:`~cramph.node.StatechartNode.required_context_extensions`, and those it reads
+    only while it expands in
+    :attr:`~cramph.node.CompositeNode.context_extensions_required_to_expand`.
     """
 
     def cleanup(self) -> None:

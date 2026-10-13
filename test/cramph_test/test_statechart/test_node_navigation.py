@@ -242,6 +242,44 @@ def test_the_rightmost_node_has_no_right_neighbour(nested_statechart: Statechart
     assert last.right_neighbour is None
 
 
+@dataclass
+class ComparedByItsSpeed:
+    """
+    Gives a node a parameter and, with it, an equality over that parameter alone.
+    """
+
+    speed: float = 1.0
+    """
+    The parameter two nodes of the same class are compared by.
+    """
+
+
+@dataclass(eq=False, repr=False)
+class NodeComparedByItsSpeed(ConstTrueNode, ComparedByItsSpeed):
+    """
+    A node that compares equal to every node of its class running at the same speed.
+    """
+
+
+def test_siblings_that_compare_equal_are_told_apart(
+    statechart_executor: StatechartExecutor,
+):
+    statechart = Statechart(context=statechart_executor.context)
+    statechart.add_node(
+        Parallel(
+            nodes=[
+                NodeComparedByItsSpeed(name="first"),
+                NodeComparedByItsSpeed(name="second"),
+                NodeComparedByItsSpeed(name="third"),
+            ]
+        )
+    )
+    second = node_named(statechart, "second")
+
+    assert names_of(second.left_siblings) == ["first"]
+    assert names_of(second.right_siblings) == ["third"]
+
+
 # %% the closest node of a type that runs before a node
 
 
