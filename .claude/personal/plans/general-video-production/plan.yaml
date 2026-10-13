@@ -1,117 +1,82 @@
 schema_version: 1
 id: general-video-production
 title: General video production for experiments
-description: >-
-  Pull the reusable video-making machinery out of the ICRA 2027 supplementary
-  video (#429) into a general package on main that any experiment can use to
-  render narrated, subtitled videos from its own scenes, then rebuild the ICRA
-  video on top of it.
+description: Pull the reusable video-making machinery out of the ICRA 2027 supplementary video
+  (#429) into a general package on main that any experiment can use to render narrated, subtitled
+  videos from its own scenes, then rebuild the ICRA video on top of it.
 default_repository: AbdelrhmanBassiouny/cognitive_robot_abstract_machine
 tracking_issue: 471
-
 waves:
-  - id: wave-1
-    name: "Wave 1: General package on main"
-    description: A usable video package on main, proven by rendering a minimal video in its tests.
-  - id: wave-2
-    name: "Wave 2: Built on the package"
-    description: >-
-      The ICRA video keeps only its own scenes and imports the rest; animated
-      explainer scenes (Naren's Manim reference) join the package as a second
-      kind of scene.
-  - id: wave-3
-    name: "Wave 3: Figure close-ups for everyone"
-    description: The typst-figure scenes made general.
-
+- id: wave-1
+  name: 'Wave 1: General package on main'
+  description: A usable video package on main, proven by rendering a minimal video in its
+    tests.
+- id: wave-2
+  name: 'Wave 2: Built on the package'
+  description: The ICRA video keeps only its own scenes and imports the rest; animated explainer
+    scenes (Naren's Manim reference) join the package as a second kind of scene.
+- id: wave-3
+  name: 'Wave 3: Figure close-ups for everyone'
+  description: The typst-figure scenes made general.
 tracks:
-  - id: video-package
-    name: Video package
-    wave: wave-1
-  - id: icra-video
-    name: ICRA video
-    wave: wave-2
-  - id: figure-scenes
-    name: Figure scenes
-    wave: wave-3
-  - id: explainer-animation
-    name: Explainer animation
-    wave: wave-2
-
+- id: video-package
+  name: Video package
+  wave: wave-1
+- id: icra-video
+  name: ICRA video
+  wave: wave-2
+- id: figure-scenes
+  name: Figure scenes
+  wave: wave-3
+- id: explainer-animation
+  name: Explainer animation
+  wave: wave-2
 items:
-  - id: video-core
-    title: A general video package on main that renders a minimal narrated video end to end
-    branch: claude/pensive-albattani-2j50zr
-    pull_request_number: 472
-    track: video-package
-    status: in_progress
-    session: https://claude.ai/code/session_01UbbxurNq8r1WpeBqe8HU5Z
-    depends_on: []
-    notes: >-
-      Timeline, encoding (without the ICRA preset), cache, canvas (neutral inks),
-      lettering, narration, the general half of footage and the end card, with
-      tests including one that renders a minimal video to an mp4. Draft #472 pushed
-      2026-09-29 (86dcf114); its first CI run failed at ORM generation (a field typed
-      Sequence[...] collided with giskardpy's goal class Sequence), fixed in 2b481f16.
-      Field annotations in experiments must not reuse a workspace class name.
-      2026-10-07, reconciliation with Naren's Manim explainer reference: these
-      parts change files #472 adds, so they go into #472 rather than a new PR:
-      a speed for each Line (part of the speech cache key); silence trimmed and
-      volume levelled in KokoroVoice; a boxed subtitle style beside the clear
-      band; a progress bar across the whole video drawn as a timeline overlay
-      like Subtitled; and a Theme (colours and fonts) replacing the fixed
-      neutral Inks. All five pushed 2026-10-07 (1ca3a28a..455968e9, 100 tests):
-      Line.pace; trimmed and levelled KokoroVoice speech; timeline.Overlay with
-      overlays.ProgressBar; CaptionStyle (BandCaption, BoxedCaption);
-      VideoTheme (named so, not Theme: semantic_digital_twin has a class Theme
-      and the ORM generator resolves hints in one namespace) with NEUTRAL_THEME
-      as the default and DARK_THEME as the explainer look.
-      2026-10-12 review round (e6447b6af): the fork's main was 114 commits behind cram2/main, so SemDT's Point2 and PlanarBoundingBox were missed; cram2/main merged in. Reworked per ~50 review threads: Frame dataclass with drawing methods (FootageFrame is a Role[Frame]), SemDT Color/Point2/PlanarBoundingBox, timedelta everywhere, NarratedTimeline as Role[Timeline], exceptions.py, no module constants, narration/canvas/footage split under 400 lines, 127 tests. 43 threads replied and resolved; 7 left open for the reviewer: Pygments for code colouring, presentation library, Framing as a box, InsetStill name, test literals, SemDT depth/width naming for PlanarBoundingBox. ORM generation for experiments not run locally (needs ROS); Role and SemDT-typed fields are the CI risk.
-      2026-10-12 second round (d7a86bdf7, cc1b7b499): on the user's request the package left experiments and became its own workspace member, cramcorder (authors Abdelrhman Bassiouny and Naren Vasantakumaar), with tests in test/cramcorder_test and its own CI matrix entry; nothing stayed in experiments. That also removes the ORM-generation risk. Nine new threads addressed (Pixel/PixelBox, WordCuts, muxer Tracks, abstract Voice/Film, SoundLevel in dBFS, encoder StrEnums, no ClassVar, FootageScene); Pygments recommended and waiting for dependency approval. 143 tests.
-      2026-10-13 third round (223c6d706): Pygments approved and in (already a krrood dependency); cramcorder.units (DataSize, Rate, BitRate); PixelBox is SemDT's Bounds[Pixel]; one video.Video base for Scene, Timeline and VideoFile replaces Film/VideoFilm (#429 must follow: VideoFilm(file) becomes the VideoFile itself, image_at becomes frame_at); 154 tests. Open for the user: units moving to krrood repo-wide, SemDT AxisAlignedBox as a Bounds, remaining tuple types. Thread replies wait on the user's own pending review, which blocks replies.
-      2026-10-13 follow-up (24208b31c): cramcorder's PixelColor removed; SemDT Color gained to_rgb_bytes (to_hex now writes it). Two design questions put to the user on the PR, not implemented: Scene as Role[Video] with Timeline and VideoFile kinds of Video (so a timeline or clip can be a scene), and Quantity as a generic over its magnitude (Quantity[int]) rather than a Role[int], which would lose operators, value equality and unit safety.
-
-  - id: icra-video-on-core
-    title: "#429 rebuilt on the general package, keeping only the ICRA scenes"
-    branch: claude/the-icra-video-shows-the-plan-being-answered
-    pull_request_number: 429
-    track: icra-video
-    status: not_started
-    depends_on: [video-core]
-    notes: >-
-      #429 imports cramcorder (the package's name since 2026-10-12, no longer
-      experiments.video). #429 is based on real-experiments-tracy-icra-2026, so the package must reach
-      that branch first (merge main into it once video-core lands). The ICRA
-      branch keeps sources, perception, twin, grasp, rules, attribution,
-      perturbations, long_term, script, icra_video, the framework.typ changes,
-      backend inks, TABLE_FRAMING and the icra_2027 limits.
-
-  - id: figure-stages-general
-    title: Typst-figure close-ups (magnify, pointer, answering) made general
-    branch: claude/general-figure-scenes
-    track: figure-scenes
-    status: not_started
-    depends_on: [icra-video-on-core]
-    notes: stages.py and figure.py behind a figure abstraction, so other experiments grow close-ups from their own figures.
-
-  - id: manim-scenes
-    title: Animated explainer scenes drawn with Manim, narrated and timed by the package
-    branch: claude/video-manim-scenes
-    track: explainer-animation
-    status: not_started
-    depends_on: [video-core]
-    notes: >-
-      Stacked on #472. An AnimatedScene in cramcorder.animation (its own
-      optional extra, since Manim needs cairo and pango) turns a Manim scene into
-      a timeline Scene: the storyboard hands it each line's spoken length
-      (replacing timing.json), one beat per Line (the beats-used check becomes an
-      exception), no sound or captions of its own, rendered to PNG frames or a
-      lossless clip and read back so the picture is compressed once. Ports
-      Naren's generic helpers (chip, card, box_node, arrow, check and cross
-      marks, glow, bar charts, waffle, counter, constellation, code_block,
-      chapter intro) as dataclass builders, plus the title, numbered-cards,
-      three-card overview and summary/thank-you scenes. Tests render a tiny
-      scene at low quality without LaTeX. None of the reference's paper content
-      (scenes, narration_v6, timing_v6, stills) is committed: the paper is under
-      double-blind review. Naren writes it (decided 2026-10-07), branched from
-      #472's branch with the PR based on it; the prompt handed to Naren is on
-      the write-up page (https://claude.ai/artifact/TiTcfZbU2wQnNasrodhFZ5).
+- id: video-core
+  title: A general video package on main that renders a minimal narrated video end to end
+  branch: claude/pensive-albattani-2j50zr
+  pull_request_number: 472
+  track: video-package
+  status: in progress
+  session: https://claude.ai/code/session_01UbbxurNq8r1WpeBqe8HU5Z
+  depends_on: []
+  notes: 'Timeline, encoding (without the ICRA preset), cache, canvas (neutral inks), lettering,
+    narration, the general half of footage and the end card, with tests including one that
+    renders a minimal video to an mp4. Draft #472 pushed 2026-09-29 (86dcf114); its first
+    CI run failed at ORM generation (a field typed Sequence[...] collided with giskardpy''s
+    goal class Sequence), fixed in 2b481f16. Field annotations in experiments must not reuse
+    a workspace class name.'
+- id: icra-video-on-core
+  title: '#429 rebuilt on the general package, keeping only the ICRA scenes'
+  branch: claude/the-icra-video-shows-the-plan-being-answered
+  pull_request_number: 429
+  track: icra-video
+  status: not started
+  depends_on:
+  - video-core
+  notes: '#429 imports cramcorder (the package''s name since 2026-10-12, no longer experiments.video).
+    #429 is based on real-experiments-tracy-icra-2026, so the package must reach that branch
+    first (merge main into it once video-core lands). The ICRA branch keeps sources, perception,
+    twin, grasp, rules, attribution, perturbations, long_term, script, icra_video, the framework.typ
+    changes, backend inks, TABLE_FRAMING and the icra_2027 limits.'
+- id: figure-stages-general
+  title: Typst-figure close-ups (magnify, pointer, answering) made general
+  branch: claude/general-figure-scenes
+  track: figure-scenes
+  status: not started
+  depends_on:
+  - icra-video-on-core
+  notes: stages.py and figure.py behind a figure abstraction, so other experiments grow close-ups
+    from their own figures.
+- id: manim-scenes
+  title: Animated explainer scenes drawn with Manim, narrated and timed by the package
+  branch: claude/video-manim-scenes
+  track: explainer-animation
+  status: not started
+  depends_on:
+  - video-core
+  notes: 'Stacked on #472. An AnimatedScene in cramcorder.animation (its own optional extra,
+    since Manim needs cairo and pango) turns a Manim scene into a timeline Scene: the storyboard
+    hands it each line''s spoken length (replacing timing.json), one beat per Line (the beats-used
+    check becomes an exception), no sound or captions of its own, rendered to PNG frames or
+    a lossless clip and read back so the picture is compressed once.'

@@ -1,263 +1,124 @@
 schema_version: 1
 id: icra-evidence
-title: >-
-  ICRA experiments: experiments in simulation, then on the robot, then released
-description: >-
-  The evidence wave of icra-experiments (split 2026-09-05 for the plan size budget -- see plan-size-limits' roadmap.md for why): Experiments A, B, C and D, each run end to end in simulation before the robot, and the released artifact. Organised 2026-09-08 by the levels of Bloom's taxonomy the questions exercise -- Remembering over long-term memory (D), Understanding over working memory (A), and Applying under knowledge ablations (C), with B showing that all three run on one representation -- and carrying the resource cost of every answer beside its correctness, which is the comparison against vision-language models the paper actually makes. Every experiment stacks on icra-foundation's scenario model and episode recording, and most stack on icra-mechanism's routing, control and baselines too; those depends_on edges could not cross the plan boundary and are recorded as blockers instead (see roadmap.md).
+title: 'ICRA experiments: experiments in simulation, then on the robot, then released'
+description: 'The evidence wave of icra-experiments (split 2026-09-05 for the plan size budget
+  -- see plan-size-limits'' roadmap.md for why): Experiments A, B, C and D, each run end to
+  end in simulation before the robot, and the released artifact.'
 default_repository: AbdelrhmanBassiouny/cognitive_robot_abstract_machine
 tracking_issue: 252
 waves:
 - id: evidence
   name: Experiments in simulation, then on the robot, then released
-  description: >-
-    Each experiment runs end to end in simulation first, with its episodes in the database and its report generated, and only then on the robot. The artifact packages what both produced.
+  description: Each experiment runs end to end in simulation first, with its episodes in the
+    database and its report generated, and only then on the robot. The artifact packages what
+    both produced.
 tracks:
 - id: experiment-a
   name: 'Experiment A: understanding the current scene'
   wave: evidence
-  description: >-
-    Lane 3 in simulation, robot time shared. Bloom's Understanding level: the questions are answered from what is already represented, in the query language, without inferring anything new.
+  description: 'Lane 3 in simulation, robot time shared. Bloom''s Understanding level: the
+    questions are answered from what is already represented, in the query language, without
+    inferring anything new.'
 - id: experiment-b
   name: 'Experiment B: one representation across the subsystems'
   wave: evidence
-  description: >-
-    Lane 1. That perception, control, memory and event segmentation are answered through one query language over one representation, shown by decomposing a mixed statement across backends and by swapping a backend without changing anything above it.
+  description: Lane 1. That perception, control, memory and event segmentation are answered
+    through one query language over one representation, shown by decomposing a mixed statement
+    across backends and by swapping a backend without changing anything above it.
 - id: experiment-c
   name: 'Experiment C: applying the knowledge under ablations'
   wave: evidence
-  description: >-
-    Lane 2. Bloom's Applying level: the demo runs on the whole representation, then with one part of it removed at a time, and the failures that follow are typed and predicted.
+  description: 'Lane 2. Bloom''s Applying level: the demo runs on the whole representation,
+    then with one part of it removed at a time, and the failures that follow are typed and
+    predicted.'
 - id: experiment-d
   name: 'Experiment D: remembering across episodes'
   wave: evidence
-  description: >-
-    Lane 2. Bloom's Remembering level: the questions Experiment A asks about the current scene, asked instead of the episode history, against a vision-language model given the whole recorded corpus. Simulation only.
+  description: 'Lane 2. Bloom''s Remembering level: the questions Experiment A asks about
+    the current scene, asked instead of the episode history, against a vision-language model
+    given the whole recorded corpus. Simulation only.'
 - id: efficiency
   name: What an answer costs
   wave: evidence
-  description: >-
-    Lane 3. The resource cost of every answer on every system, reported beside its correctness, which is what the comparison against vision-language models rests on.
+  description: Lane 3. The resource cost of every answer on every system, reported beside
+    its correctness, which is what the comparison against vision-language models rests on.
 - id: release
   name: Figures and the artifact
   wave: evidence
   description: Lane 3.
 items:
-- id: question-set-and-ground-truth
-  title: >-
-    The question set in six buckets, as EQL and English, each labelled by Bloom level, with ground truth and structural requirements
-  branch: claude/plan-item-kickoff-icra-evidence-zyzfnj
-  pull_request_number: 295
-  track: experiment-a
-  session: https://claude.ai/code/session_01LrEoLWVFPJUoLjAKjFPb9f
-  depends_on: []
-  status: done
-  notes: >-
-    Freeze first; everything downstream is written against it. Each question is a Question dataclass carrying its EQL, its English, its answer type, the Bloom level it exercises and the inputs it structurally requires. Six buckets, widened from four on 2026-09-08 so that the control program and the robot's own body are questioned in the same language as the scene: scene (what objects do you see now, what colours are they, where are they), support and spatial relations (what surfaces are they standing on, is the cube left or right of the cylinder), temporal and agency (did anything recently move, which, did you move it, was the cube recently picked up), embodiment (is it currently in your hand), self-model (where is your gripper left finger, how many links do you have, how many joints do you have) and control (what are you constrained by right now, which task is active, why did the motion stop). Every bucket has two spellings, not only the temporal one: over working memory (the twin plus the segmind event log) and over long-term memory (the SQL backend), which is what makes Understanding and Remembering separately measurable.
-
-    The Bloom labelling is the paper's evaluation frame and it is deliberately bounded. Remembering is recall from the store; Understanding is interpreting what is already represented well enough to answer a direct question in the query language, whether spatial, temporal or logical; Applying is Experiment C. Questions that need new knowledge inferred by combining facts - what can you pick up, and why or why not - are above Understanding and are explicitly out of scope, stated as such in the paper rather than left for a reviewer to ask about. Ground truth is the twin in simulation, exact, and the calibrated twin plus a human check on the robot, stated as such. Several of these already exist as presets in the console stack's live_query_source; reuse their EQL.
-
-    Reviewed 2026-09-08 and largely rebuilt in response. Nothing is handed to a question any more: every variable is domainless and ranges over the symbol graph, what a question is about is a condition, and what is left of the source is the robot itself, which is whose memory it is. `DetectionEvent` inherits `Symbol` so an event joins working memory by being made; agency is asked through a new `ManipulatesBodies` mixin rather than through `PickUpEvent` alone; and the set is read off the question subclasses, each saying how a scene fills it in, rather than from a hand-maintained list. Two defects were measured rather than assumed: `exists` answers the agency shape with every object that moved whether the robot acted on it or not - a wrong answer rather than the dropped row eql-existential-semantics predicts - so both spellings use a join; and a membership condition over a collection does not translate to a join, which is what blocks the long-term half. Selecting a collection was the other half of that and is fixed in krrood.
-
-    Resolved 2026-09-08 (second pass). Two review threads had gone unanswered since 13:25 that day and were what actually stalled the item, neither recorded here at the time. The first asked for the collection-membership defect to be fixed in the EQL-to-SQL converter rather than left as a strict xfail, which overrides the earlier call that per-variable aliasing "belongs to an EQL plan rather than to this item"; it is fixed here. The second said the `ManipulatesBodies` mixin was meant for coraplex actions rather than segmind events, because an event's tracked object is already the object acted on, and named `AgentInteractionEvent` as what segmind should carry instead.
-
-
-    CI on that round is what first ran the long-term questions end to end, and it found the fix half-made: the join translated, but a question selecting an attribute reached through a collection answered nine rows where three and one were right, because the table it selects from was left with nothing joining it and a condition relating two members was dropped as a table-level join between two aliases of one class. Both are fixed, each with a failing krrood test first, and the ORM suite is 140 passed. The lesson for whoever asserts a query's answer: assert the rows, not the set of them - every test of the first round sorted distinct names, so a duplicated row was invisible to all of them.
-    The membership fix is per-variable aliasing after all, and it is what unblocks the long-term half: each variable now ranges over a FROM element of its own, so an owner and a member whose classes share a mapped base are told apart in the ON clause, and two variables of one class over one collection reach two of its members. So the long-term spellings are answerable rather than frozen-and-expected-to-fail, and the accuracy table this item's successor produces is no longer bounded to the working-memory half. `AgentInteractionEvent` also removes the one long-term question shape that could not translate at all: `manipulated_bodies` was a Python property, while `tracked_object` is a mapped relationship.
-  blockers:
-  - >-
-    Cross-plan: depends on icra-foundation's `scenario-domain-model` (in_progress, PR #261), split out of icra-experiments on 2026-09-05; depends_on cannot cross a plan boundary.
-  - >-
-    Awaiting the developer on one review thread left deliberately open, which does not block the branch from being reviewed: the robot's own degree-of-freedom count over long-term memory. The recording half of it is answered - the robot is a semantic annotation, so the world an episode records carries it, proven by a round-trip test - and what is left are two calls of his. No run sets `Episode.world` at all, because the runner releases a trial's world before the trial is recorded, so keeping it means the `Trial` carrying its world and the decision between one world per episode and one per trial. And even with the robot recorded, its own count is not one query: `SemanticAnnotation.bodies` is a computed property and no mapped path runs from an annotation to its entities, so it is either a mapping change in semantic_digital_twin or a recall-then-count in Python.
-  - >-
-    Cross-plan: the self-model and control buckets need their long-term-memory spelling from icra-foundation's `episodes-recorded-through-ormatic` (PR #271), which is where the episode gains a reference to the world it ran in and the motion statechart it ran, and from icra-mechanism's `control-constraints-and-degrees-of-freedom-queried`, which is what gives the constraints and the used degrees of freedom a name and an EQL spelling. The working-memory spelling of the self-model bucket needs neither: the live twin already holds bodies, connections and degrees of freedom, and all of them are already ORMatic-mapped.
-- id: question-set-answered-from-memory
-  title: >-
-    Every bucket answered through EQL over working memory and over long-term memory, before any baseline exists
-  branch: claude/plan-item-kickoff-icra-evidence-dm8ctb
-  pull_request_number: 304
-  track: experiment-a
-  session: https://claude.ai/code/session_01CeBaw39xNxHaYphUsVzXow
-  depends_on:
-  - question-set-and-ground-truth
-  status: done
-  notes: >
-    Prioritised to the front on 2026-09-08 at the developer's direction, and the item two people can
-    run in parallel from the day the question set is frozen: one takes the working-memory spelling
-    over a live simulated scene, the other the long-term-memory spelling over the recorded corpus,
-    and neither waits for the other or for a vision-language model. Every question in all six
-    buckets, scored against ground truth, with its answer, its latency and its resource cost
-    recorded as an episode row like any other query. It is the paper's own numbers standing alone -
-    what the system can answer and what it cannot - and it is what the Understanding and Remembering
-    claims are made of; Experiment A and Experiment D then layer the baselines on top of it rather
-    than establishing it. Because it needs no external model and no credentials, it is also the
-    fallback if the baseline arms are cut: the accuracy, latency and footprint tables exist without
-    them.
-
-    Updated 2026-09-08 from `question-set-and-ground-truth` (#295), which froze the set this item
-    scores: the long-term-memory half is thinner than the working-memory one, and three buckets have
-    no long-term spelling to answer yet. Support and spatial relations needs icra-mechanism's
-    `query-routed-per-predicate`, because the spatial relations are geometric predicates and
-    answering them from rows is a routed predicate. Embodiment reduces to the pick-up record the
-    temporal bucket already asks, unless an episode also records which links were the robot's -
-    recording the world does not answer that, since a held object hangs off a link without becoming
-    one. Control has no spelling in either memory until
-    `control-constraints-and-degrees-of-freedom-queried`. So the accuracy table this item produces
-    is over five buckets live and three recorded until those land.
-
-    Updated again 2026-09-08 after #295's review round, and the long-term half is not merely thinner but currently unanswerable: every long-term question reaches a run's ticks and their events through a to-many collection, and a membership condition over a collection does not translate to a join - each variable translates to its unaliased data access object, so an owner and a member whose classes share a mapped base cannot be told apart in the ON clause. #295 fixes the other half (selecting a collection now returns its members rather than the association rows) and records this one as a strict xfail in krrood's own suite; the fix is per-variable aliasing in the translator and belongs to an EQL plan. Until it lands this item's long-term half produces no accuracy table at all, so the working-memory half is the whole of what two people can run in parallel today.
-
-    Kicked off 2026-09-09 as #304, cut off #265 directly rather than argued through depends_on
-    (see roadmap for why `tracy_icra` could not be the base yet). `question-set-and-ground-truth`
-    (#295) landed on #265 with its long-term half fully answerable (the join-translation fix cited
-    above shipped on that same branch), so this item scores the set as #295 left it rather than
-    against the thinner shape described above.
-
-    Built 2026-09-09: `RecordedQuery` gained `bucket`/`bloom_level`/`answered_correctly`,
-    `QuestionSet.answer_and_record` scores every question of a set against ground truth, and two
-    new figures report the accuracy tables `paper-figures-from-episodes` (#297) left unstubbed.
-    The working-memory half is implemented and tested; the long-term half is deliberately left
-    without a test of its own, because `test_long_term_questions.py` compares a list-valued
-    answer by sorted name rather than position-by-position the way the working-memory test does,
-    and it is not yet known whether that is because the database's row order genuinely does not
-    match ground truth's or only ever a convenience. Left to the developer rather than guessed at;
-    see roadmap for the full reasoning. Neither half was run in this session's container, which
-    cannot install the workspace at all (a `uv`/`pyproject.toml` parse error unrelated to this
-    branch); CI is what verifies both.
-
-    Reviewed 2026-09-09. CI's dominant failure was root-caused to #265 itself (a
-    `GiskardExecutable.is_paused`/`is_interrupted` pair lost in tracy_icra's merge into #265, not
-    this item's diff) and fixed there, not on this branch; see `integrated-simulation-pipeline`'s
-    own entry for that fix. On review, `RecordedQuery.bucket`/`bloom_level` were replaced with
-    `question_type: Optional[Type[Question]]` - a reference to the `Question` subclass itself,
-    mapped by ORMatic's existing `TypeType` decorator - with `bucket`/`bloom_level` becoming
-    read-only properties read off it, so they can no longer drift from the class that defines
-    them. See roadmap's "reviewed 2026-09-09" section for the full reasoning.
-
-    Reviewed again 2026-09-09, and the class-only reference was wrong, not just less than what
-    was asked for: `LongTermMemoryQuestion` carries a real per-instance `episode_identifier`, which
-    `question_type: Type[Question]` silently discarded, so a recorded long-term answer could not
-    say which episode it was about. `RecordedQuery.question_type` is now `question: Optional[Question]`
-    - the instance, not the class - persisted by having `Question` inherit
-    `krrood.adapters.json_serializer.SubclassJSONSerializer`, which ORMatic already maps to a JSON
-    column by inheritance distance; no new column type or `AlternativeMapping` needed. Left
-    unresolved and flagged rather than guessed at: making `question` required and dropping `text`,
-    as literally asked, would conflict with `QueryDeterminism` (#297, already merged), which groups
-    any recorded query - including ones with no `Question` at all - by its literal text. See
-    roadmap's "reviewed again 2026-09-09" section.
-
-    Resolved 2026-09-10. The developer answered: "the question required and it becomes the
-    role_taker and RecordedQuestion is a Role[Question]". `RecordedQuery` is split rather than
-    mutated - the base keeps only what an ordinary query needs, and a new
-    `ScoredQuery(RecordedQuery, Role[Question])` carries `question` as the required `role_taker`.
-    Verified the ORMatic mapping in a standalone krrood-only mimic first (nothing in krrood's own
-    suite exercised `Role` through ORMatic), then built and imported the real `experiments` package
-    directly with `pip install -e` under a Python 3.12 venv, bypassing this container's still-broken
-    `uv sync` - the furthest any session on this branch has gotten locally, though the actual
-    database round trip still needs CI (giskardpy's `generate_orm.py` still needs `rclpy`). `text`
-    is kept rather than dropped, since `QueryDeterminism` still needs it for ad hoc queries with no
-    `Question`; replied on the thread and left it unresolved, since only half the ask is done. Two
-    more CI failures found and confirmed pre-existing/unrelated
-    (`test_park_arms_is_actually_reached`'s `DofNotInWorldStateError`, and an `AttachNode`
-    `ImportError` behind three collection errors); one real CI bug in this item's own test fixed
-    (`test_question_scoring.py` was missing the `two_arm_robot_world` import `scene` needs). See
-    roadmap's "resolved 2026-09-10" section for the full reasoning.
-
-    Resolved further 2026-09-11. The developer rejected the `ScoredQuery` split outright: "I
-    don't like that we have a new class now. I said RecordedQuestion should be a Role[Question]
-    and remove text because this is in the Question object." `RecordedQuery` is now merged back
-    into one class - `RecordedQuery(Role[Question])` itself, `role_taker` required by `Role`,
-    `ScoredQuery` gone. `text` is no longer a stored field; it is a property reading
-    `role_taker.english`. The "ordinary ad hoc query with no Question" case that justified keeping
-    `text` across two prior rounds turned out to be a test-fixture artifact only - nothing in
-    production constructs a `RecordedQuery` outside `QuestionSet.answer_and_record` - so every
-    fixture that built one now passes a real `Question` instead of a raw EQL string.
-    `scored_queries_of` now filters by `answered_correctly is not None` rather than an
-    `isinstance` check, since only one class exists now. Verified again against the real classes
-    via the pip-installed Python 3.12 venv; pushed in `86d40a450`; replied and resolved the
-    thread - the first round the full ask was carried out as stated. See roadmap's "resolved
-    further 2026-09-11" section for the full reasoning.
-
-    Merged into #265 2026-09-11 (`db9561fa6`), since #304 was itself cut off #265's tip and
-    #265 had since moved on (the `tracy_icra` merge, two `main` merges, the `LongTermMemory`
-    CI fix). The merge applied cleanly - none of those intervening commits touched the files
-    #304 changed - and GitHub closed #304 as merged automatically once its head became an
-    ancestor of #265's branch. Item done; #265's own entry in `icra-foundation` records the
-    merge in full.
-  blockers: []
 - id: objects-seen-asked-of-the-perception-system
-  title: >-
-    What the robot sees is what its perception system reports, from detectors built for what the belief state says is detectable
+  title: What the robot sees is what its perception system reports, from detectors built for
+    what the belief state says is detectable
   branch: null
   pull_request_number: null
   track: experiment-a
-  depends_on:
-  - question-set-and-ground-truth
-  status: not_started
-  notes: >-
-    Added 2026-09-08 at the developer's direction on #295's review, where `ObjectsSeen` answers from the belief state directly. It should ask the perception system instead, and the query it puts is open-ended: give me every object you can detect. The backend answers it by reading what the belief state (the symbol graph) already holds -- semantic annotations and bodies -- finding which of them carry perceptually detectable properties it has detectors for, combining those properties into a detection pipeline, running it, and returning what it found. Where it has a detector that finds whatever is in view rather than one keyed to a property (YOLO, or SAM with CLIP, or their like), it uses that and returns hypotheses: semantic annotations filled in as far as the evidence goes and no further.
-
-    That makes what the robot sees a perception result rather than a reading of what it already believes, which is what the scene bucket claims to measure. It is also the sharpest form of the knowledge-directed claim in the question set: the detectors are chosen by what the robot knows is out there, so the same question asked of a scene the robot knows nothing about is answered by the general detector alone.
-
-    Until it lands, `ObjectsSeen` keeps the implementation #295 froze -- every object in the belief state visible to the simulated camera view in MuJoCo -- which the developer asked for explicitly rather than as a placeholder nobody chose.
-
-    Recorded in this plan because that is where the question it changes lives, and because #295's review is where it was asked for. It may belong in icra-mechanism's `backend-routing` track instead, beside `backends-declare-their-capabilities` (which is where a perception backend says what it can answer) and `perception-backends-are-interchangeable`; moving it is a one-line change to `track` and the plan file it sits in.
+  depends_on: []
+  status: not started
+  notes: 'Added 2026-09-08 at the developer''s direction on #295''s review, where `ObjectsSeen`
+    answers from the belief state directly. It should ask the perception system instead, and
+    the query it puts is open-ended: give me every object you can detect. The backend answers
+    it by reading what the belief state (the symbol graph) already holds -- semantic annotations
+    and bodies -- finding which of them carry perceptually detectable properties it has detectors
+    for, combining those properties into a detection pipeline, running it, and returning what
+    it found.'
   blockers:
-  - >-
-    Cross-plan: needs icra-mechanism's `backends-declare-their-capabilities` for the perception backend to say which detectors it has, and `query-routed-per-predicate` for a question to reach it at all; both not_started. depends_on cannot cross a plan boundary.
+  - 'Cross-plan: needs icra-mechanism''s `backends-declare-their-capabilities` for the perception
+    backend to say which detectors it has, and `query-routed-per-predicate` for a question
+    to reach it at all; both not_started. depends_on cannot cross a plan boundary.'
 - id: experiment-a-in-simulation
-  title: >-
-    Experiment A run end to end in simulation: scenes, temporal scenarios, determinism, three systems, report
+  title: 'Experiment A run end to end in simulation: scenes, temporal scenarios, determinism,
+    three systems, report'
   branch: null
   pull_request_number: null
   track: experiment-a
-  depends_on:
-  - question-set-and-ground-truth
-  - question-set-answered-from-memory
-  status: not_started
-  notes: >-
-    Every scene and scripted scenario through the runner, every question through EQL and both VLM systems, five repetitions for variance, episodes in the database, the accuracy-per-bucket, latency, variance and footprint tables generated. The point is that the robot runs are a rerun of a script that already works, with only the scenes replaced. Since 2026-09-08 this item is the baseline comparison layered onto question-set-answered-from-memory rather than the first place the questions are asked, so a cut here costs the comparison and not the result.
+  depends_on: []
+  status: not started
+  notes: Every scene and scripted scenario through the runner, every question through EQL
+    and both VLM systems, five repetitions for variance, episodes in the database, the accuracy-per-bucket,
+    latency, variance and footprint tables generated. The point is that the robot runs are
+    a rerun of a script that already works, with only the scenes replaced. Since 2026-09-08
+    this item is the baseline comparison layered onto question-set-answered-from-memory rather
+    than the first place the questions are asked, so a cut here costs the comparison and not
+    the result.
   blockers:
-  - >-
-    Cross-plan: depends on icra-foundation's `montessori-scenarios` (not_started), split out of icra-experiments on 2026-09-05; depends_on cannot cross a plan boundary.
-  - >-
-    Cross-plan: depends on icra-mechanism's `query-routed-per-predicate` (not_started), split out of icra-experiments on 2026-09-05; depends_on cannot cross a plan boundary.
-  - >-
-    Cross-plan: depends on icra-mechanism's `vlm-baseline-harness` (not_started), split out of icra-experiments on 2026-09-05; depends_on cannot cross a plan boundary.
-  - >-
-    Cross-plan: depends on icra-foundation's `episodes-recorded-through-ormatic` (in_progress, PR #271), split out of icra-experiments on 2026-09-05; depends_on cannot cross a plan boundary.
+  - 'Cross-plan: depends on icra-foundation''s `montessori-scenarios` (not_started), split
+    out of icra-experiments on 2026-09-05; depends_on cannot cross a plan boundary.'
+  - 'Cross-plan: depends on icra-mechanism''s `query-routed-per-predicate` (not_started),
+    split out of icra-experiments on 2026-09-05; depends_on cannot cross a plan boundary.'
 - id: experiment-a-on-the-robot
-  title: >-
-    Experiment A on the UR10: random, partial and ambiguous scenes, temporal scenarios, determinism
+  title: 'Experiment A on the UR10: random, partial and ambiguous scenes, temporal scenarios,
+    determinism'
   branch: null
   pull_request_number: null
   track: experiment-a
   depends_on:
   - experiment-a-in-simulation
-  status: not_started
-  notes: >-
-    15 to 20 random scenes, five partial, five near-ambiguous, the four temporal scenarios five times each, every query five times; lighting only if time remains. Robot state recorded with the camera in every take. Ground truth annotated the same day.
+  status: not started
+  notes: 15 to 20 random scenes, five partial, five near-ambiguous, the four temporal scenarios
+    five times each, every query five times; lighting only if time remains. Robot state recorded
+    with the camera in every take. Ground truth annotated the same day.
   blockers:
-  - >-
-    Cross-plan: depends on icra-foundation's `tracy-demo-takes-the-integrated-branch` (not_started), split out of icra-experiments on 2026-09-05; depends_on cannot cross a plan boundary.
+  - 'Cross-plan: depends on icra-foundation''s `tracy-demo-takes-the-integrated-branch` (not_started),
+    split out of icra-experiments on 2026-09-05; depends_on cannot cross a plan boundary.'
 - id: experiment-b-in-simulation
-  title: >-
-    Experiment B in simulation: mixed-predicate routing with and without the twin's knowledge, and verification under injected errors
+  title: 'Experiment B in simulation: mixed-predicate routing with and without the twin''s
+    knowledge, and verification under injected errors'
   branch: null
   pull_request_number: null
   track: experiment-b
   depends_on: []
-  status: not_started
-  notes: >-
-    H1 and H3. The mixed statements with the triangle believed in versus not, reporting per-predicate assignment, region size, detector calls and latency, extending the ratios #238 already measured on the six captures. Then about thirty injected events (offsets, wrong object, pushes) through the perceive-commit-verify loop, reporting precision and recall of disagreement as a detector.
+  status: not started
+  notes: 'H1 and H3. The mixed statements with the triangle believed in versus not, reporting
+    per-predicate assignment, region size, detector calls and latency, extending the ratios
+    #238 already measured on the six captures. Then about thirty injected events (offsets,
+    wrong object, pushes) through the perceive-commit-verify loop, reporting precision and
+    recall of disagreement as a detector.'
   blockers:
-  - >-
-    Cross-plan: depends on icra-mechanism's `query-routed-per-predicate` (not_started), split out of icra-experiments on 2026-09-05; depends_on cannot cross a plan boundary.
-  - >-
-    Cross-plan: depends on icra-mechanism's `physics-verification-backend` (not_started), split out of icra-experiments on 2026-09-05; depends_on cannot cross a plan boundary.
-  - >-
-    Cross-plan: depends on icra-mechanism's `perturbations` (not_started), split out of icra-experiments on 2026-09-05; depends_on cannot cross a plan boundary.
-  - >-
-    Cross-plan: depends on icra-foundation's `episodes-recorded-through-ormatic` (in_progress, PR #271), split out of icra-experiments on 2026-09-05; depends_on cannot cross a plan boundary.
+  - 'Cross-plan: depends on icra-mechanism''s `query-routed-per-predicate` (not_started),
+    split out of icra-experiments on 2026-09-05; depends_on cannot cross a plan boundary.'
+  - 'Cross-plan: depends on icra-mechanism''s `physics-verification-backend` (not_started),
+    split out of icra-experiments on 2026-09-05; depends_on cannot cross a plan boundary.'
 - id: experiment-b-on-the-robot
   title: Experiment B on the UR10
   branch: null
@@ -265,33 +126,32 @@ items:
   track: experiment-b
   depends_on:
   - experiment-b-in-simulation
-  status: not_started
-  notes: >-
-    The same script on the live feed. The memo's cut order drops the injection half first and keeps the decomposition half; the simulation numbers stand in for whatever is cut, stated as such.
+  status: not started
+  notes: The same script on the live feed. The memo's cut order drops the injection half first
+    and keeps the decomposition half; the simulation numbers stand in for whatever is cut,
+    stated as such.
   blockers:
-  - >-
-    Cross-plan: depends on icra-foundation's `tracy-demo-takes-the-integrated-branch` (not_started), split out of icra-experiments on 2026-09-05; depends_on cannot cross a plan boundary.
+  - 'Cross-plan: depends on icra-foundation''s `tracy-demo-takes-the-integrated-branch` (not_started),
+    split out of icra-experiments on 2026-09-05; depends_on cannot cross a plan boundary.'
 - id: experiment-c-in-simulation
-  title: >-
-    Experiment C in simulation: every condition, twenty to thirty trials, typed and predicted failures
+  title: 'Experiment C in simulation: every condition, twenty to thirty trials, typed and
+    predicted failures'
   branch: null
   pull_request_number: null
   track: experiment-c
   depends_on: []
-  status: not_started
+  status: not started
   blockers:
-  - >-
-    Cross-plan: the failure-detection story (perception looks where the action promised and reports the difference) is knowledge-directed-perception's expectations-from-events, which that plan owns and has not started. Without it Experiment C reports typed failures but not detected ones.
-  - >-
-    Cross-plan: depends on icra-mechanism's `knowledge-ablations` (not_started), split out of icra-experiments on 2026-09-05; depends_on cannot cross a plan boundary.
-  - >-
-    Cross-plan: depends on icra-mechanism's `perturbations` (not_started), split out of icra-experiments on 2026-09-05; depends_on cannot cross a plan boundary.
-  - >-
-    Cross-plan: depends on icra-mechanism's `failure-predicted-from-the-query` (not_started), split out of icra-experiments on 2026-09-05; depends_on cannot cross a plan boundary.
-  - >-
-    Cross-plan: depends on icra-foundation's `episodes-queried-by-eql` (not_started), split out of icra-experiments on 2026-09-05; depends_on cannot cross a plan boundary.
-  notes: >-
-    The insertion trial from a randomised start pose under every condition, board-level completion reported too, every failure typed and every prediction scored, the stacked failure-type bars generated from the database. Runs in batches the way batch_runner already does, so hundreds of trials survive the process's memory growth.
+  - 'Cross-plan: the failure-detection story (perception looks where the action promised and
+    reports the difference) is knowledge-directed-perception''s expectations-from-events,
+    which that plan owns and has not started. Without it Experiment C reports typed failures
+    but not detected ones.'
+  - 'Cross-plan: depends on icra-mechanism''s `knowledge-ablations` (not_started), split out
+    of icra-experiments on 2026-09-05; depends_on cannot cross a plan boundary.'
+  notes: The insertion trial from a randomised start pose under every condition, board-level
+    completion reported too, every failure typed and every prediction scored, the stacked
+    failure-type bars generated from the database. Runs in batches the way batch_runner already
+    does, so hundreds of trials survive the process's memory growth.
 - id: experiment-c-on-the-robot
   title: 'Experiment C on the UR10: twenty trials per condition'
   branch: null
@@ -299,69 +159,48 @@ items:
   track: experiment-c
   depends_on:
   - experiment-c-in-simulation
-  status: not_started
-  notes: >-
-    Twenty trials per condition, thirty only if the pipeline is stable; the perturbation conditions are never cut. Two days of robot time.
+  status: not started
+  notes: Twenty trials per condition, thirty only if the pipeline is stable; the perturbation
+    conditions are never cut. Two days of robot time.
   blockers:
-  - >-
-    Cross-plan: depends on icra-foundation's `tracy-demo-takes-the-integrated-branch` (not_started), split out of icra-experiments on 2026-09-05; depends_on cannot cross a plan boundary.
+  - 'Cross-plan: depends on icra-foundation''s `tracy-demo-takes-the-integrated-branch` (not_started),
+    split out of icra-experiments on 2026-09-05; depends_on cannot cross a plan boundary.'
 - id: cross-episode-question-set-and-ground-truth
-  title: >-
-    The questions asked of the episode history, with ground truth read from what the runner recorded
+  title: The questions asked of the episode history, with ground truth read from what the
+    runner recorded
   branch: null
   pull_request_number: null
   track: experiment-d
-  depends_on:
-  - question-set-and-ground-truth
-  status: not_started
-  notes: >-
-    Widened 2026-09-08 with the question set itself: every bucket has a long-term-memory spelling, and these four kinds are the ones that only long-term memory can answer at all. Each is a Question in the shape question-set-and-ground-truth already defines - EQL, English, answer type, and the facts it structurally requires - but spelled over the SQL backend and reaching across episodes rather than into the current scene: has this happened to the robot before and in which episode; what the goal and the conditions were at that time; what differed between the earlier episodes and the current one that bears on the question; and how a failure was resolved the last time it happened. This is the second spelling question-set-and-ground-truth already names for the temporal bucket, carried to every bucket. Ground truth is read from the recorded trial log directly and never through the query under test - the runner's record is what actually happened, and a query checked against itself proves nothing.
+  depends_on: []
+  status: not started
+  notes: 'Widened 2026-09-08 with the question set itself: every bucket has a long-term-memory
+    spelling, and these four kinds are the ones that only long-term memory can answer at all.'
   blockers:
-  - >-
-    Cross-plan: depends on icra-foundation's `episodes-queried-by-eql` (not_started), split out of icra-experiments on 2026-09-05; depends_on cannot cross a plan boundary.
+  - 'Cross-plan: depends on icra-foundation''s `episodes-queried-by-eql` (not_started), split
+    out of icra-experiments on 2026-09-05; depends_on cannot cross a plan boundary.'
 - id: experiment-d-in-simulation
-  title: >-
-    Experiment D in simulation: the episode history questioned through EQL and through the vision-language baseline
+  title: 'Experiment D in simulation: the episode history questioned through EQL and through
+    the vision-language baseline'
   branch: null
   pull_request_number: null
   track: experiment-d
   depends_on:
   - cross-episode-question-set-and-ground-truth
-  status: not_started
-  notes: >-
-    First a corpus worth asking about: the scenarios run under varied conditions and perturbations so the history holds repeats, failures resolved differently, and goals that changed between runs. Then every question through both systems, repeated for variance the way Experiment A does, reporting accuracy against the recorded ground truth, latency, determinism across repetitions, and information availability - whether the corpus holds the facts a question declares it requires. Availability is measured on the corpus once rather than per system, because both systems see the same episodes, so a question nothing could have answered is scored apart from one both had the evidence for. Simulation only, decided 2026-09-04: the questions are about recorded episodes, so the robot episodes Experiments A and C record join the same corpus without a robot session of their own.
+  status: not started
+  notes: 'First a corpus worth asking about: the scenarios run under varied conditions and
+    perturbations so the history holds repeats, failures resolved differently, and goals that
+    changed between runs. Then every question through both systems, repeated for variance
+    the way Experiment A does, reporting accuracy against the recorded ground truth, latency,
+    determinism across repetitions, and information availability - whether the corpus holds
+    the facts a question declares it requires.'
   blockers:
-  - >-
-    Cross-plan: depends on icra-mechanism's `episode-corpus-given-whole-to-the-vlm` (not_started), split out of icra-experiments on 2026-09-05; depends_on cannot cross a plan boundary.
-  - >-
-    Cross-plan: depends on icra-foundation's `montessori-scenarios` (not_started), split out of icra-experiments on 2026-09-05; depends_on cannot cross a plan boundary.
-- id: paper-figures-from-episodes
-  title: >-
-    Every table and figure in the paper regenerated by one script from the episode database
-  branch: claude/paper-figures-episodes-bkfozu
-  pull_request_number: 297
-  track: release
-  session: https://claude.ai/code/session_0143PRk7LAujLic5ZXN9jB35
-  depends_on: []
-  status: done
-  notes: >
-    The writer's item, started before any experiment has run so the first draft's tables are
-    already the script's output on simulated data and the robot numbers drop in by rerunning it.
-    Confidence intervals on every rate.
-
-    Cut off #278 on 2026-09-08 rather than off main or #295: `LongTermMemory.answer` is the seam
-    every table reads through, and #278 carries #271, #262 and #261, so the item's one recorded
-    blocker is satisfied through it. What the script can regenerate is bounded by what an episode
-    currently records - trial outcomes, insertion attempts with their predicted and observed
-    failures, and recorded queries with their latency and the backend each predicate was routed
-    to. The accuracy-per-bucket and resource-cost tables wait on
-    `question-set-answered-from-memory` and `resource-cost-measured-per-system` respectively,
-    because neither the answers nor the cost columns exist on an episode row yet; the figure the
-    script adds for each is that item's work, not this one's.
-  blockers: []
+  - 'Cross-plan: depends on icra-mechanism''s `episode-corpus-given-whole-to-the-vlm` (not_started),
+    split out of icra-experiments on 2026-09-05; depends_on cannot cross a plan boundary.'
+  - 'Cross-plan: depends on icra-foundation''s `montessori-scenarios` (not_started), split
+    out of icra-experiments on 2026-09-05; depends_on cannot cross a plan boundary.'
 - id: benchmark-artifact
-  title: >-
-    The released artifact: scenes, ground truth, questions, prompts, conditions, captures and the episode database
+  title: 'The released artifact: scenes, ground truth, questions, prompts, conditions, captures
+    and the episode database'
   branch: null
   pull_request_number: null
   track: release
@@ -369,17 +208,22 @@ items:
   - experiment-a-on-the-robot
   - experiment-b-on-the-robot
   - experiment-c-on-the-robot
-  status: not_started
-  notes: >-
-    A repository a reader can run the simulation experiments from and compare against the robot episodes with: the Scenario definitions, the question set, the VLM prompts, the Condition and Perturbation definitions, the six captures plus every new one, and a dump of the episode database. The rosbags stay out (4.7 GB). Packaged on the memo's 12 to 13 September.
+  status: not started
+  notes: 'A repository a reader can run the simulation experiments from and compare against
+    the robot episodes with: the Scenario definitions, the question set, the VLM prompts,
+    the Condition and Perturbation definitions, the six captures plus every new one, and a
+    dump of the episode database. The rosbags stay out (4.7 GB). Packaged on the memo''s 12
+    to 13 September.'
 - id: resource-cost-measured-per-system
-  title: >-
-    What every answer costs, on every system, reported beside whether it was right
+  title: What every answer costs, on every system, reported beside whether it was right
   branch: null
   pull_request_number: null
   track: efficiency
-  depends_on:
-  - question-set-answered-from-memory
-  status: not_started
-  notes: >-
-    The claim the paper makes about vision-language models is about cost, not about accuracy alone, so the cost is measured rather than asserted. Per question and per system: wall-clock latency, processor time, peak resident memory, and the size of what had to be held - the database on disk and in memory for the query backends, the model's parameters and the tokens sent and received for the vision-language arms, with the monetary and energy figures those imply stated with the assumption behind them. Reported per bucket and per Bloom level, so the shape of the difference is visible rather than one aggregate: recall from a database against recall from a sampled video corpus is a different comparison from answering a spatial relation about the scene in front of the robot. Every number comes from the episode rows the runner already writes, so the table is regenerated by the figures script rather than transcribed. A measurement item, not an experiment: it instruments what the other experiments run.
+  depends_on: []
+  status: not started
+  notes: 'The claim the paper makes about vision-language models is about cost, not about
+    accuracy alone, so the cost is measured rather than asserted. Per question and per system:
+    wall-clock latency, processor time, peak resident memory, and the size of what had to
+    be held - the database on disk and in memory for the query backends, the model''s parameters
+    and the tokens sent and received for the vision-language arms, with the monetary and energy
+    figures those imply stated with the assumption behind them.'

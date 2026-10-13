@@ -106,6 +106,9 @@ file itself must never be merged into `main`.
 - Keep it current: update it whenever the plan changes, whenever you update
   your task list, and before ending any turn that changed either. Run
   `save-pr-progress.sh` whenever you update it.
+- Keep it to three short lists - Plan, Done, Next - and replace finished steps rather than
+  accumulating them; review rounds and history belong in the commits and the PR.
+  `save-pr-progress.sh` refuses notes over the limit.
 - Never write this plan into any file tracked on the PR branch itself. It
   must live only in the PR-progress section, which is stored on the
   `claude/personal-notes` branch and is never merged.
@@ -164,9 +167,9 @@ file itself must never be merged into `main`.
   a conclusion that changes what an item means: all of it goes into the manifest, not only
   into the chat.
 - What to write: the item's `status`, `branch`, `pull_request_number` and `session` as soon
-  as each is known, plus `notes` when a conclusion changes the item's substance. Record the
-  narrative and the reasoning in the sibling `roadmap.md` - especially a premise that turned
-  out to be wrong, a decision I overrode, or a dependency rule that no longer applies.
+  as each is known, plus `notes` when a conclusion changes the item's substance - rewritten
+  to say what is true now, never appended to. The reasoning goes in the pull request;
+  `roadmap.md` gets an entry only for a rule every later item must follow.
 - Then run `save-plan.sh <plan-id>` so it lands on the personal-notes branch, and immediately
   run `/plan-dashboard <plan-id>` yourself to republish the dashboard. A script cannot call
   the Artifact tool, so only a live session can - do not stop at telling me it needs doing.
@@ -186,6 +189,19 @@ Add new personal-only rules below this line. Keep each rule short and
 imperative, same style as above.
 -->
 
+## Plan and progress size
+
+- **Store only what the next session needs to act, and read only what this one needs.**
+  Every line of a plan or progress note costs every session that loads it. Landed work,
+  session history and settled rationale live in git and on the PRs, never in the notes.
+- The limits are enforced, not advisory: `save-plan.sh` drops landed items, removes a
+  finished plan, and refuses a plan over the limits in `basstler/plan_size_limits.py`;
+  `save-pr-progress.sh` refuses long progress notes. Condense to fit - never raise a limit
+  or work around the gate without asking me.
+- Read one item with `python3 -m basstler.plan_manifest_tools item <file> --id <item-id>`,
+  never the whole manifest, and fetch only the files and PR fields the task needs (pass
+  `minimal_output`/`fields`, read diffs rather than whole files).
+
 ## Plan updates: recheck deltas, don't reread
 
 - Note the personal-notes commit SHA whenever you read plan state (the fetch you read it
@@ -194,7 +210,7 @@ imperative, same style as above.
   you have been idle or stale for a while, (b) when starting a new task or plan item, and
   (c) **always immediately before any `save-plan.sh` write** - fetch first and re-apply
   your edits onto the latest manifest, never write back a copy loaded earlier (two silent
-  stale-save reverts are already on record in workflow-unification's roadmap).
+  stale-save reverts are on record).
 - Recheck means reading the *delta only*: fetch the notes branch, then
   `git diff <last-seen-sha>..FETCH_HEAD -- .claude/personal/plans/<plan-id>/`; for the
   plan's tracking issue, read only comments newer than your stamp. Do not reread whole
@@ -207,8 +223,8 @@ imperative, same style as above.
 
 - The plan's tracking issue always gets the structural record.
 - Comment on a PR only when that PR's owner must act or its review context materially
-  changes (scope change, landing hazard). Pure FYIs go in the manifest/roadmap only - nobody
-  is watching that PR, so an FYI there is just noise its owner has to triage.
+  changes (scope change, landing hazard). Pure FYIs go nowhere - nobody is watching that PR,
+  so an FYI there is just noise its owner has to triage.
 
 ## When your PR's job ends
 

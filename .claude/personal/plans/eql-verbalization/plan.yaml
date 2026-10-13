@@ -2,12 +2,10 @@ schema_version: 1
 id: eql-verbalization
 title: EQL verbalization follow-up (operand naming, disambiguation, sdt migration)
 description: 'Programme following up PR #33''s review: extract a reusable verbalization surface-verification
-  framework onto main, redesign operand naming and same-noun disambiguation to live in the coreference/referring
-  machinery, add abstract-to-concrete-subclass expansion plus first-order (value-agnostic) rendering,
-  then apply all of it to migrate semantic_digital_twin''s predicates off the framework PR #33 currently
-  carries a duplicate of.
-
-  '
+  framework onto main, redesign operand naming and same-noun disambiguation to live in the
+  coreference/referring machinery, add abstract-to-concrete-subclass expansion plus first-order
+  (value-agnostic) rendering, then apply all of it to migrate semantic_digital_twin''s predicates
+  off the framework PR #33 currently carries a duplicate of.'
 default_repository: AbdelrhmanBassiouny/cognitive_robot_abstract_machine
 tracking_issue: 104
 waves:
@@ -18,195 +16,56 @@ tracks:
   name: Framework extraction, operand naming, sdt migration
   wave: verbalization-framework
 items:
-- id: p1-surface-verification
-  title: 'P1: extract the verbalization surface-verification framework'
-  branch: claude/eql-verbalization-p1-surface-verification-eqltzc
-  pull_request_number: 86
-  track: framework-migration
-  depends_on: []
-  status: done
-  notes: 'Merged to main. Extracted the surface-verification framework (VerbalizationSurface, OverriddenOperand,
-    SymbolicSurfaceSnapshot) out of krrood''s own surface test into a reusable module so any package defining
-    SymbolicCallable subclasses can verify its surfaces. Later renamed/moved by unrelated main-branch
-    work to krrood.entity_query_language.testing.result_verification (VerbalizationResultsOfPackage).
-    Full review-round history: pr-progress/claude/eql-verbalization-p1-surface-verification-eqltzc.md.
-
-    '
-- id: p2-operand-naming
-  title: 'P2: redesign operand naming and same-noun disambiguation'
-  branch: claude/eql-verbalization-operand-naming-n0gb95
-  pull_request_number: 87
-  track: framework-migration
-  depends_on: []
-  status: done
-  notes: 'Merged to main. The keystone redesign: operand naming and same-noun disambiguation moved entirely
-    into ReferringExpressions/DistinguisherIndex (coreference-driven, identity-keyed), replacing the original
-    parallel predicate-side operand_naming.py module. Gated P3 and P4. Full review-round history: pr-progress/claude/eql-verbalization-operand-naming-n0gb95.md.
-
-    '
-- id: p3-concrete-subclass-expansion
-  title: 'P3: abstract-to-concrete-subclass expansion + first-order rendering'
-  branch: claude/eql-verbalization-p3-albw76
-  pull_request_number: 88
-  track: framework-migration
-  depends_on:
-  - p2-operand-naming
-  status: done
-  notes: 'Merged to main. Abstract-to-concrete-subclass expansion ("a Body or a Region") plus first-order
-    (value-agnostic) rendering promoted to production. Also carries P1''s commits merged in directly (confirmed
-    via AskUserQuestion) to reuse its first-order-rendering mechanism rather than duplicate it. Full review-round
-    history: pr-progress/claude/eql-verbalization-p3-albw76.md.
-
-    '
 - id: p4-sdt-migration
   title: 'P4: migrate semantic_digital_twin predicates off the framework'
   branch: eql-symbolic-function-sdt
   pull_request_number: 33
   track: framework-migration
   session: https://claude.ai/code/session_017Sij3r2He3kzGwr7zBSc5m
-  depends_on:
-  - p1-surface-verification
-  - p2-operand-naming
-  - p3-concrete-subclass-expansion
+  depends_on: []
   status: blocked
   blockers:
-    - >-
-      The rebase this item owes cannot start yet: #229 (`sdt_predicates_answer_whether_they_hold`),
-      which the developer decided on 2026-08-31 should carry the predicate classes, is still **open
-      and unmerged** as of 2026-09-04 (state `open`, not draft, `mergeable_state: clean`). `main`'s
-      `reasoning/predicates.py` therefore still has the twelve `@symbolic_function` helpers and the
-      `Symbol`-derived spatial relations, not #229's `Predicate` classes. This branch cannot drop
-      its own `predicates.py` migration and take `main`'s side until then, because its own coverage
-      test `test_every_symbolic_callable_declares_its_own_verbalization_fragment` asserts every
-      discovered symbolic callable in sdt implements its own `_verbalization_fragment_` - `main`'s
-      un-migrated helpers do not, so taking `main`'s file today turns this branch's own test red.
-      The drop and #229's landing are one step, not two. Nothing an agent can do moves this; #229 is
-      ready for review and waiting on the developer to merge it.
-    - >-
-      Three review threads on #33 are still open, not two as previously recorded (9 of 37 threads
-      are unresolved, but six of them are the same decision repeated on consecutive lines of
-      `verbalization_surfaces.py`). All three are collected in one comment for the developer:
-      https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/33#issuecomment-5536810182
-      (1) type-level display noun - `a Point3` -> `a point` (r3608352891, plus the five repeats
-      r3608358590, r3608359011, r3608377541, r3608394028, r3608473110); P2 shipped the opposite
-      precedence to roadmap decision 1, so this needs a type-level display noun in krrood
-      (`value_lexicon.type_noun`), and three options were put to the developer; (2) whether to widen
-      the IK chain so `Reachable.pose` / `BlockingBodies.pose` can be typed `Pose` rather than
-      `HomogeneousTransformationMatrix` (r3608385653 and r3608444608); (3) not previously recorded:
-      `ClassNameLowercased` renders *"the lower case form of the name of a type"* rather than the
-      reviewer's literal *"the lower case form of a class name"* (r3608403117), deliberately, to
-      keep the operand in the sentence - offered as a choice and left unresolved. This one blocks
-      nothing; it just needs a yes or no.
-    - >-
-      sdt `ormatic_interface.py` needs regenerating where ROS is installed - `ignored_base_classes`
-      drops 10 predicate DAOs, but a ROS-less local run also drops every ROS-derived DAO. CI
-      regenerates before tests, so the suite is unaffected.
-  notes: >
-    2026-07-30: merged main (605 commits), dropping the duplicated surface-verification framework;
-    rebuilt the snapshot on the generated-results pattern; applied every wording from the review
-    plus the no-abbreviation sweep; replied to all 36 review threads and resolved 34. Two krrood
-    additions were needed: phrase() as the value counterpart of clause(), and ORMatic
-    ignored_base_classes replacing a mid-method SymbolicCallable import. Full detail:
-    pr-progress/eql-symbolic-function-sdt.md.
-
-    2026-09-03 resolve run: the `Reachable` wording question this item was recorded as waiting on is
-    no longer open. #229's thread r3896606294 — the developer's *"Pose Is reachable by Tip"*,
-    replied to with decision 11's longer *"a Pose is reachable for the kinematic chain rooted at
-    <root> and ending at <tip>"* as the alternative and deliberately left open for him to pick — now
-    reads resolved on #229, where the shorter wording is what stands. A resolve is not a sentence,
-    so this is read rather than stated: treat #229's shorter wording as the one to apply in the
-    rebase, and put it back to the developer if he says otherwise. Decision 11 in `roadmap.md` is
-    superseded to that extent.
-
-    2026-09-04 resolve run: merged current `main` into the branch (`f97e7a99`) and cleared the
-    `predicates.py` conflict the routine had re-reported ten times since 2026-08-28. Resolved by
-    keeping this branch's migrated classes and re-applying `main`'s three changes to them -
-    `camera.root_T_forward_view` plus an explicit `field_of_view` in
-    `GetVisibleBodies`/`OccludingBodies`, `BoundingBox` -> `VolumetricBoundingBox` on
-    `IsPlaceOccupied.box`, and the unused `SemanticAnnotation` import dropped. `git merge-tree` now
-    reports the branch clean against `main`. Verified on the merged tree: 30 symbolic callables
-    discovered, all declaring their own fragment; both snapshot assertions pass; the regenerated
-    snapshot changes only `IsPlaceOccupied`'s sentence (following the rename) and the generator's
-    own `tuple`/`Tuple` spelling.
+  - 'The rebase this item owes cannot start yet: #229 (`sdt_predicates_answer_whether_they_hold`),
+    which the developer decided on 2026-08-31 should carry the predicate classes, is still
+    **open and unmerged** as of 2026-09-04 (state `open`, not draft, `mergeable_state: clean`).'
+  - 'Three review threads on #33 are still open, not two as previously recorded (9 of 37 threads
+    are unresolved, but six of them are the same decision repeated on consecutive lines of
+    `verbalization_surfaces.py`).'
+  notes: '2026-07-30: merged main (605 commits), dropping the duplicated surface-verification
+    framework; rebuilt the snapshot on the generated-results pattern; applied every wording
+    from the review plus the no-abbreviation sweep; replied to all 36 review threads and resolved
+    34. Two krrood additions were needed: phrase() as the value counterpart of clause(), and
+    ORMatic ignored_base_classes replacing a mid-method SymbolicCallable import. Full detail:
+    pr-progress/eql-symbolic-function-sdt.md. 2026-09-03 resolve run: the `Reachable` wording
+    question this item was recorded as waiting on is no longer open.'
 - id: p5-first-mention-type-annotation
   title: 'P5: name a referent by value and type on first mention'
   branch: null
   pull_request_number: null
   track: framework-migration
-  depends_on:
-  - p2-operand-naming
-  status: not_started
-  notes: 'Split out of P4''s BodiesInGripper review thread (confirmed via AskUserQuestion, 2026-07-30):
-    render a referent''s first mention as both its name and its type ("a gripper of type HasTwoFingers"),
-    reverting to the plain noun on later mentions. Belongs in the ReferringExpressions/coreference machinery
-    P2 built, not in any one package''s predicate wordings, so it is its own item rather than part of
-    P4''s sdt surface work.
-
-    '
+  depends_on: []
+  status: not started
+  notes: 'Split out of P4''s BodiesInGripper review thread (confirmed via AskUserQuestion,
+    2026-07-30): render a referent''s first mention as both its name and its type ("a gripper
+    of type HasTwoFingers"), reverting to the plain noun on later mentions. Belongs in the
+    ReferringExpressions/coreference machinery P2 built, not in any one package''s predicate
+    wordings, so it is its own item rather than part of P4''s sdt surface work.'
 - id: aggregate-repeat-reduction-ignores-same-kind-siblings
-  title: "Bug: reducing a repeated aggregate mention to \"the sum\" is ambiguous when another aggregate of the same kind is also selected"
+  title: 'Bug: reducing a repeated aggregate mention to "the sum" is ambiguous when another
+    aggregate of the same kind is also selected'
   branch: claude/eql-verbalization-aggregate-repeat-gdz9g2
   pull_request_number: 264
   track: framework-migration
   session: https://claude.ai/code/session_01Hwf7n1eUMVXD4vLdQwMYvP
   blockers:
-    - >-
-      integration-conflict-triage: Sequence collision with PR #196
-      (`claude/plan-item-kickoff-match-query-npzr78`, `match-query-ergonomics`). Both branches
-      independently pass their own suites and are correct on their own; combined on the integration
-      branch, `test_set_of_ranking.py` turns because both change the same expected string.
-
-      This branch's `RankedRow`/`group_label` change (`ccb7a780a`) renames the ranked frame from the
-      entity to the group key for every grouped ranked report — e.g. "For the ProfitAndLossStatement
-      with the highest sum ..." becomes "For the month with the highest sum ...". #196 adds
-      `test_ranking_names_the_ordered_by_aggregate_not_the_first_selected` to the same file,
-      asserting the pre-existing entity-frame wording ("For the Invoice with the highest sum of the
-      amount of its tax, ..."), which this branch's change also rewords to name the group instead.
-
-      Already documented on PR #264 itself (its "## Scope" section): "Whichever merges second needs
-      that one string updated — a wording collision, not a logic one." Verdict: sequence. Nothing to
-      fix on either branch now; once one lands, updating the other's one expectation string is
-      ordinary follow-up work on a normal base. Neither branch is defective and neither should adapt
-      to the other pre-emptively, since #196's own fix (`_expression_signature` reading the
-      aggregator's `_child_`) and this branch's fix (`AggregatorRule.build` +
-      `_assemble_ranked_report`) are unrelated mechanisms that both happen to touch one shared test
-      file.
-  depends_on:
-  - p2-operand-naming
+  - 'integration-conflict-triage: Sequence collision with PR #196 (`claude/plan-item-kickoff-match-query-npzr78`,
+    `match-query-ergonomics`).'
+  depends_on: []
   status: blocked
-  notes: >
-    Found and measured on match-query-ergonomics's PR #196
-    (aggregate-signature-reads-a-missing-attribute) self-review round: a ranked
-    set_of selecting two aggregates of one kind (two Sums) verbalizes as "...the
-    sum of the amount of its net, and the sum" - the trailing "the sum" is a
-    correct-by-identity repeat mention of the aggregate named in the ranking
-    frame several clauses earlier (AggregatorRule.build's referent_id=node._id_,
-    verbalization/grammar/aggregation/rules.py), but reads to a human as
-    referring to the just-mentioned net instead, since proximity is how anaphora
-    normally resolves. All 17 tests in test_set_of_ranking.py pass with the
-    text as generated; this is a wording-ambiguity bug, not a test failure.
-    Not fixed on #196 itself: that PR's fix is _expression_signature reading
-    the aggregator's _child_ (verbalization/grammar/query/assembler.py), a
-    different file and a different mechanism from the one this item owns.
-    Placed in eql-verbalization rather than match-query-ergonomics (developer
-    decision, AskUserQuestion 2026-09-02, PR #196 review threads
-    https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/196#discussion_r3908782904
-    and
-    https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/196#discussion_r3919032569):
-    the reduction that produces the ambiguous text lives in
-    CoreferenceProcessor/DistinguisherIndex (verbalization/rendering/coreference_processor.py,
-    verbalization/microplanning/referring.py) - the exact "same-noun-group
-    disambiguation" machinery P2 built for repeated nouns of one type ("a Robot"
-    / "another Robot"), and p5-first-mention-type-annotation already sits in
-    this same track for an analogous refinement of that machinery ("belongs in
-    the ReferringExpressions/coreference machinery P2 built, not in any one
-    package's ... wordings"). check_scope_overlap.py against every open pull
-    request touching aggregation/rules.py, coreference_processor.py or
-    referring.py (match-underscore-rename-and-forwarding #192,
-    chain-signature-reads-attribute-only-names #248, p4-sdt-migration #33)
-    reports no shared paths and no duplicate intent. The fix likely needs
-    AggregatorRule.build's reduction (or the coreference pass itself) to know
-    when an identity match is one of several same-kind aggregates in the same
-    scope and spell it out in full in that case rather than reducing on
-    identity alone - the design is not yet worked out, only the symptom and
-    its mechanism are measured.
+  notes: 'Found and measured on match-query-ergonomics''s PR #196 (aggregate-signature-reads-a-missing-attribute)
+    self-review round: a ranked set_of selecting two aggregates of one kind (two Sums) verbalizes
+    as "...the sum of the amount of its net, and the sum" - the trailing "the sum" is a correct-by-identity
+    repeat mention of the aggregate named in the ranking frame several clauses earlier (AggregatorRule.build''s
+    referent_id=node._id_, verbalization/grammar/aggregation/rules.py), but reads to a human
+    as referring to the just-mentioned net instead, since proximity is how anaphora normally
+    resolves.'

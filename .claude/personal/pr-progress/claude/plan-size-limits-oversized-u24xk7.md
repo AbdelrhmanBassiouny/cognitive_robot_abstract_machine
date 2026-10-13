@@ -26,7 +26,3 @@ Done:
 
 Outstanding (not mine to act on, since the PR is out of draft):
 - Still cannot *merge* until #207 lands - the same `depends_on` reasoning as before, just
-  now satisfied on the split side.
-- Found two more plans over budget as a side effect of the final report -
-  `match-query-ergonomics` (174 lines over) and `montessori-eql-stack` (413 lines over) -
-  neither part of what was asked; flagged to the user rather than acted on.

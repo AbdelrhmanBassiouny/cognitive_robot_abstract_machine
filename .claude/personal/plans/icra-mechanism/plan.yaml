@@ -1,295 +1,252 @@
 schema_version: 1
 id: icra-mechanism
 title: 'ICRA experiments: what the paper measures'
-description: >-
-  The mechanism wave of icra-experiments (split 2026-09-05 for the plan size budget -- see plan-size-limits' roadmap.md for why). Refocused 2026-09-08 on what makes the architecture one system rather than on any one subsystem's quality: backends of every kind - the twin, a detector stack, a vision-language model, physics, SQL - declare what they answer in the same vocabulary and are interchangeable behind it; the control program reads that same representation as the constraints of its optimization and reports back into it; and snapshot working memory, typed and predicted failure and the verbalised-memory/VLM baselines rest on both. Everything here stacks on icra-foundation's integrated pipeline, scenario model and episode recording, and one item stacks on icra-evidence's question set; those depends_on edges could not cross the plan boundary and are recorded as blockers instead (see roadmap.md).
+description: The mechanism wave of icra-experiments (split 2026-09-05 for the plan size budget
+  -- see plan-size-limits' roadmap.md for why).
 default_repository: AbdelrhmanBassiouny/cognitive_robot_abstract_machine
 tracking_issue: 252
 waves:
 - id: mechanism
   name: What the paper measures
-  description: >-
-    What makes the subsystems one system: capability declaration and per-predicate routing across interchangeable backends, a control program whose constraints are queries over the same knowledge, physics as one more answerer of the same predicates, the snapshot working memory the agency questions rest on, failure typing and prediction, and the baselines the experiments compare against.
+  description: 'What makes the subsystems one system: capability declaration and per-predicate
+    routing across interchangeable backends, a control program whose constraints are queries
+    over the same knowledge, physics as one more answerer of the same predicates, the snapshot
+    working memory the agency questions rest on, failure typing and prediction, and the baselines
+    the experiments compare against.'
 tracks:
 - id: backend-routing
   name: One representation, interchangeable backends
   wave: mechanism
-  description: >-
-    Lane 1. Backends of every kind declare what they can answer in one vocabulary, a statement is routed per predicate by capability and knowledge state, a perception backend can be a detector stack or a vision-language model without anything above it changing, derived facts are verified in a physics copy of the world, and working memory is a snapshot refreshed only when it is worth refreshing.
+  description: Lane 1. Backends of every kind declare what they can answer in one vocabulary,
+    a statement is routed per predicate by capability and knowledge state, a perception backend
+    can be a detector stack or a vision-language model without anything above it changing,
+    derived facts are verified in a physics copy of the world, and working memory is a snapshot
+    refreshed only when it is worth refreshing.
 - id: failure
   name: Typed and predicted failures
   wave: mechanism
-  description: >-
-    Lane 2. The failure taxonomy, typing from evidence, prediction from the query result before execution, and the knowledge ablations and perturbations that produce failures on purpose.
+  description: Lane 2. The failure taxonomy, typing from evidence, prediction from the query
+    result before execution, and the knowledge ablations and perturbations that produce failures
+    on purpose.
 - id: control
   name: The control system answers for itself
   wave: mechanism
-  description: >-
-    Lane 1. The control program is already dataclasses over the same world model, so it is asked what it was constrained by and which degrees of freedom it used in the same query language as the scene - a read over what the motion statechart already holds, not a change to how a motion is built.
+  description: Lane 1. The control program is already dataclasses over the same world model,
+    so it is asked what it was constrained by and which degrees of freedom it used in the
+    same query language as the scene - a read over what the motion statechart already holds,
+    not a change to how a motion is built.
 - id: baselines
   name: Verbalised memory and the VLM baselines
   wave: mechanism
-  description: >-
-    Lane 3. The deterministic English rendering of working memory, and the harness that asks a vision-language model the same questions with and without it.
+  description: Lane 3. The deterministic English rendering of working memory, and the harness
+    that asks a vision-language model the same questions with and without it.
 items:
-- id: backends-declare-their-capabilities
-  title: >-
-    Every query backend declares what it can answer, as an EQL condition plus preconditions on the twin
-  branch: claude/backends-declare-capabilities-roscma
-  pull_request_number: 303
-  track: backend-routing
-  depends_on: []
-  status: done
-  session: https://claude.ai/code/session_015KwEoJ9rBZHtB8LYBxbD7v
-  notes: >
-    The capability table the memo publishes, as code rather than a table written by hand, and the
-    joint the whole architecture turns on: QueryBackend gains capability(), the same shape #231 gave
-    detectors, stating the predicate and statement forms the backend answers and the precondition on
-    the knowledge state under which it answers them. Every kind of answerer declares in that one
-    vocabulary - the native twin backend for a body already believed in, a perception backend for a
-    pose that has to be looked at, the SQL backend for anything about a past episode, physics for a
-    derived physical fact, the motion statechart for what the controller is currently constrained
-    by, and a vision-language or visual-question-answering backend for whatever it claims to answer.
-    That last is what makes the vision-language model a backend rather than only a baseline, and it
-    is why the declaration is a capability rather than a class name. Rendering the declarations is
-    what prints the paper's table. Tests pin one declaration per backend against a statement it
-    accepts and one it refuses.
-
-    Amended 2026-09-09, from the fourth review round on icra-foundation's #298, and it is narrower
-    than it sounds because the detector half already exists. PerceptionDetector.capability(look)
-    already states what a detector answers as an entity-query-language condition, DetectorChoice is
-    already an EQLSingleClassRDR over the underspecified statement "a look whose detector is to be
-    worked out", and AttributeEqualityToLiteral.read_from already reads an equality about the
-    selected variable's own attribute back out of a condition -- all three on #265 through #275 and
-    #77. What this item takes on top of raising that shape from detectors to every query backend is
-    two things the developer asked for in as many words: a capability that names "specific fields of
-    specific classes as well, and this can be specified using EQL Attributes or MappedVariable in
-    general instead of writing a field string name", so a backend answers "I can supply at least
-    that field" against a description that says which field it wants; and the helper that fills an
-    underspecified description out from the model, so that an asker naming a class -- his example is
-    a MontessoriBoard -- has the features the twin already knows about one added to the description
-    before any backend is chosen. Nothing does that second one today.
-  blockers: []
 - id: query-routed-per-predicate
-  title: >-
-    A statement is routed per predicate by capability and knowledge state, and the routing is reported
+  title: A statement is routed per predicate by capability and knowledge state, and the routing
+    is reported
   branch: null
   pull_request_number: null
   track: backend-routing
-  depends_on:
-  - backends-declare-their-capabilities
-  status: not_started
-  notes: >-
-    The mechanism the thesis sentence names. A planner splits a statement into its predicates, assigns each to the backend whose capability admits it under the current twin state, orders them twin first, then perception for what the twin cannot answer, then physics for derived facts, and falls back to the next capable backend when one refuses. It returns a QueryPlan beside the answer: per-predicate assignment, detector calls, region searched and latency, which is exactly what Experiment B tabulates. #238 already does this implicitly for one statement (the lid and the hole are answered from the twin before the look); this item makes it general and visible. The mixed statement "the cyan piece left of the triangle on the table", with the triangle believed in versus not, is the test.
+  depends_on: []
+  status: not started
+  notes: 'The mechanism the thesis sentence names. A planner splits a statement into its predicates,
+    assigns each to the backend whose capability admits it under the current twin state, orders
+    them twin first, then perception for what the twin cannot answer, then physics for derived
+    facts, and falls back to the next capable backend when one refuses. It returns a QueryPlan
+    beside the answer: per-predicate assignment, detector calls, region searched and latency,
+    which is exactly what Experiment B tabulates.'
 - id: physics-verification-backend
-  title: >-
-    Perceive, commit, verify: detections spawned into a physics copy of the world and derived facts re-evaluated there
+  title: 'Perceive, commit, verify: detections spawned into a physics copy of the world and
+    derived facts re-evaluated there'
   branch: null
   pull_request_number: null
   track: backend-routing
-  depends_on:
-  - backends-declare-their-capabilities
-  status: not_started
-  notes: >-
-    A backend that spawns what perception reported into a copy of the world, steps MuJoCo, and evaluates the derived predicates there: Stable, contact and penetration, InsideOf, the directional relations and Reachable, all of which #229 already made predicates. It reports agreement or disagreement with the perception backend per fact, never re-checking the committed pose itself. This is the narrow form of knowledge-directed-perception's imagination-world item, built here because the paper measures it; that plan's item is noted as covered by this one. Tests inject a floating piece, a penetrating piece and a wrongly classified piece and assert each disagreement fires. Its place in the argument narrowed 2026-09-08: it is one more backend answering the same predicates from a different source, which is the integrative point, and it moved off the critical path - if the week runs short it is cut before anything in the memory or control tracks.
-- id: snapshot-working-memory
-  title: >-
-    Working memory as a snapshot: the twin follows kinematics while acting and writes every idle look onto the twin
-  branch: claude/plan-item-kickoff-icra-snapshot-f69vef
-  pull_request_number: 301
-  track: backend-routing
   depends_on: []
-  status: done
-  session: https://claude.ai/code/session_018u8WnZp55ZMNsZRZizhiyk
-  notes: >-
-    During manipulation the grasped piece moves with the gripper through the attachment #169 restored, and perception is not consulted. While idle, a look is taken at a low rate (throttled the same way #236's MontessoriPerceptionNode throttles its own camera-rate runs -- its 0.56 s/frame layout fit is fine against the node's 0.5 s period at idle rate), each detection matched to the nearest believed piece of its own kind and written onto it unconditionally. Revised 2026-09-10 on #301's review (r3976899473, r3976912789): the original design gated that write behind a measured pose-change threshold, correcting a piece only when it seemed to have moved; the developer's direction removed the threshold entirely -- perception writes whatever it currently sees, and deciding whether a piece actually moved belongs to Segmind's TranslationDetector (to be extended to trigger on sudden big distance moves and to work off a snapshot-triggered look rather than continuous perception), not to this class. That extension is deliberately not built on this PR -- Segmind is a different subsystem than this item's own track -- and is recorded as a follow-up rather than folded in silently; see roadmap.md. This is also where the agency questions get their answer: because the twin follows the gripper's kinematics while the robot acts and re-perceives only while idle, the record distinguishes a piece the robot moved from a piece that moved on its own, which is what "did it move, and did you move it" asks and what a single image cannot hold. Working memory carries no level of its own in Bloom's taxonomy, and that is the paper's point rather than a gap in it - see roadmap.md.
+  status: not started
+  notes: 'A backend that spawns what perception reported into a copy of the world, steps MuJoCo,
+    and evaluates the derived predicates there: Stable, contact and penetration, InsideOf,
+    the directional relations and Reachable, all of which #229 already made predicates. It
+    reports agreement or disagreement with the perception backend per fact, never re-checking
+    the committed pose itself. This is the narrow form of knowledge-directed-perception''s
+    imagination-world item, built here because the paper measures it; that plan''s item is
+    noted as covered by this one.'
 - id: failure-taxonomy-and-typing
-  title: >-
-    Every failed trial typed as semantic, geometric, perceptual or execution from the evidence
+  title: Every failed trial typed as semantic, geometric, perceptual or execution from the
+    evidence
   branch: null
   pull_request_number: null
   track: failure
   depends_on: []
-  status: not_started
+  status: not started
   blockers:
-  - >-
-    Cross-plan: the violated-expectation input comes from knowledge-directed-perception's expectations-from-events (not started there), which that plan owns. Typing from the plan's failure and the segmind events can be built first; the expectation-derived type waits on it.
-  - >-
-    Cross-plan: depends on icra-foundation's `scenario-domain-model` (in_progress, PR #261), split out of icra-experiments on 2026-09-05; depends_on cannot cross a plan boundary.
-  notes: >-
-    A FailureType enum with the four members, and the rule that assigns one to a finished trial from the plan's own failure, the segmind events and the violated expectation. Extends insertion_diagnosis.InsertionDiagnosis and InsertionFailureReason, which already diagnose an attempt from events, rather than a second diagnosis; each existing reason maps to one type. Recorded on the Trial and so in the episode. Tests cover one trial per type.
+  - 'Cross-plan: the violated-expectation input comes from knowledge-directed-perception''s
+    expectations-from-events (not started there), which that plan owns. Typing from the plan''s
+    failure and the segmind events can be built first; the expectation-derived type waits
+    on it.'
+  - 'Cross-plan: depends on icra-foundation''s `scenario-domain-model` (in_progress, PR #261),
+    split out of icra-experiments on 2026-09-05; depends_on cannot cross a plan boundary.'
+  notes: A FailureType enum with the four members, and the rule that assigns one to a finished
+    trial from the plan's own failure, the segmind events and the violated expectation. Extends
+    insertion_diagnosis.InsertionDiagnosis and InsertionFailureReason, which already diagnose
+    an attempt from events, rather than a second diagnosis; each existing reason maps to one
+    type. Recorded on the Trial and so in the episode. Tests cover one trial per type.
 - id: knowledge-ablations
-  title: >-
-    Each knowledge source switched off through a Condition, never through a code branch
+  title: Each knowledge source switched off through a Condition, never through a code branch
   branch: null
   pull_request_number: null
   track: failure
   depends_on: []
-  status: not_started
-  notes: >-
-    The memo's conditions as Condition instances: full; no working memory; no hole-shape knowledge (the board's holes unknown to the twin, which also needs the mesh scale 0.865 #236 measured to be in the twin first, so the full condition is honest); no degree-of-freedom limits (a twin edit, since DegreeOfFreedomLimits lives on the twin's own DegreeOfFreedom and the controller reads it there); no pickup detection; no predicate-narrowed perception. Each condition removes one thing the action reads from the twin or the backends, so the action's code has no ablation flags of its own. A test per condition asserts the knowledge really is absent (the query that would read it fails or returns nothing).
+  status: not started
+  notes: 'The memo''s conditions as Condition instances: full; no working memory; no hole-shape
+    knowledge (the board''s holes unknown to the twin, which also needs the mesh scale 0.865
+    #236 measured to be in the twin first, so the full condition is honest); no degree-of-freedom
+    limits (a twin edit, since DegreeOfFreedomLimits lives on the twin''s own DegreeOfFreedom
+    and the controller reads it there); no pickup detection; no predicate-narrowed perception.
+    Each condition removes one thing the action reads from the twin or the backends, so the
+    action''s code has no ablation flags of its own.'
   blockers:
-  - >-
-    Cross-plan: depends on icra-foundation's `montessori-scenarios` (not_started), split out of icra-experiments on 2026-09-05; depends_on cannot cross a plan boundary.
-- id: perturbations
-  title: >-
-    Perturbations applied to a running trial: a moved target, a perception offset, a wrong object, a push
-  branch: claude/icra-mechanism-perturbations-o1wkof
-  pull_request_number: 311
-  track: failure
-  depends_on: []
-  status: done
-  session: https://claude.ai/code/session_01MqrDfMMRbJNPZzHGDTj2jp
-  notes: >-
-    Perturbation instances the runner applies at a named step: the target hole moved 10 cm, a fixed offset added to a reported pose, a detection relabelled as another piece, an external body pushing a piece while the robot is idle. In simulation they act on the MuJoCo world or on the perception result; on the robot the same Perturbation renders a one-line instruction to the person at the table, so the protocol is the same object. Experiment B's ~30 injected events and Experiment C's perturbation conditions are drawn from these.
-  blockers: []
+  - 'Cross-plan: depends on icra-foundation''s `montessori-scenarios` (not_started), split
+    out of icra-experiments on 2026-09-05; depends_on cannot cross a plan boundary.'
 - id: expectation-checked-under-perturbation-in-simulation
-  title: >-
-    A robot plan run in simulation under a perturbation, and the violated expectation reported as the failure
+  title: A robot plan run in simulation under a perturbation, and the violated expectation
+    reported as the failure
   branch: null
   pull_request_number: null
   track: failure
-  depends_on:
-  - perturbations
-  status: not_started
-  notes: >-
-    Added 2026-09-05 at the developer's ask on knowledge-directed-perception's #257 (r3940274577). The expectation process - an action's declared effect armed as relations of the twin's vocabulary, Segmind's events moving the belief by what each declares, a look asked for the same relations, and the violated ones reported as the failure - is tested there over a rendered scene and a hand-built world, never over a plan the robot actually executes. This item runs the insertion plan in the integrated simulation and applies one perturbation from `perturbations` at a named step, asserting that the expectation the release armed is contradicted in exactly the relation the perturbation breaks: a piece pushed off the lid after the release contradicts Near and InsideRegion, a release that stops short so the piece rests on the lid contradicts InsideRegion alone, a piece the gripper never let go of is reported as nothing found, and an unperturbed run contradicts nothing. It is also the first place the
-    success case is checked against a look rather than a stated sighting, which is where a piece sunk in its hole has to be told from one standing over it. A test of the mechanism end to end rather than an experiment, so it sits in the failure track beside the perturbations it draws on; experiment-c-in-simulation reads its result rather than re-establishing it. Cross-plan: the mechanism is knowledge-directed-perception's expectations-from-events (#257) and its general half lives in segmind.expectations; this item does not start before that branch is merged into the integrated branch.
+  depends_on: []
+  status: not started
+  notes: 'Added 2026-09-05 at the developer''s ask on knowledge-directed-perception''s #257
+    (r3940274577). The expectation process - an action''s declared effect armed as relations
+    of the twin''s vocabulary, Segmind''s events moving the belief by what each declares,
+    a look asked for the same relations, and the violated ones reported as the failure - is
+    tested there over a rendered scene and a hand-built world, never over a plan the robot
+    actually executes.'
   blockers:
-  - >-
-    Cross-plan: depends on icra-foundation's `integrated-simulation-pipeline` (in_progress, PR #265), split out of icra-experiments on 2026-09-05; depends_on cannot cross a plan boundary.
+  - 'Cross-plan: depends on icra-foundation''s `integrated-simulation-pipeline` (in_progress,
+    PR #265), split out of icra-experiments on 2026-09-05; depends_on cannot cross a plan
+    boundary.'
 - id: failure-predicted-from-the-query
-  title: >-
-    The failure type predicted from the query result before execution, and scored against what happened
+  title: The failure type predicted from the query result before execution, and scored against
+    what happened
   branch: null
   pull_request_number: null
   track: failure
   depends_on:
   - failure-taxonomy-and-typing
   - query-routed-per-predicate
-  status: not_started
-  notes: >-
-    H4. Before an insertion executes, the QueryPlan and its answer predict the type: several candidate holes answer the target description, so semantic; Reachable is false for the grasp or the release pose, so geometric; the physics backend disagrees with perception or nothing was detected, so perceptual; otherwise none predicted. Precision and recall of prediction against the observed type are Metrics on the Report. Tests build one query result per predicted type.
+  status: not started
+  notes: 'H4. Before an insertion executes, the QueryPlan and its answer predict the type:
+    several candidate holes answer the target description, so semantic; Reachable is false
+    for the grasp or the release pose, so geometric; the physics backend disagrees with perception
+    or nothing was detected, so perceptual; otherwise none predicted. Precision and recall
+    of prediction against the observed type are Metrics on the Report. Tests build one query
+    result per predicted type.'
 - id: working-memory-verbalised
-  title: >-
-    Working memory rendered as deterministic English: objects, poses, relations, events, gripper contents
+  title: 'Working memory rendered as deterministic English: objects, poses, relations, events,
+    gripper contents'
   branch: null
   pull_request_number: null
   track: baselines
   depends_on: []
-  status: not_started
-  notes: >-
-    A fixed set of EQL queries over the twin whose answers are rendered through the verbalization framework on main, concatenated in a fixed order with rounded numbers, so the same state always produces the same text. The scene wordings #33 carries (support, the directional relations, visibility, reachability) are the ones to use; where #33 is not yet rebased onto #229, take its reviewed wordings rather than inventing new ones. A snapshot test pins the text for one simulated scene.
+  status: not started
+  notes: 'A fixed set of EQL queries over the twin whose answers are rendered through the
+    verbalization framework on main, concatenated in a fixed order with rounded numbers, so
+    the same state always produces the same text. The scene wordings #33 carries (support,
+    the directional relations, visibility, reachability) are the ones to use; where #33 is
+    not yet rebased onto #229, take its reviewed wordings rather than inventing new ones.
+    A snapshot test pins the text for one simulated scene.'
   blockers:
-  - >-
-    Cross-plan: depends on icra-foundation's `integrated-simulation-pipeline` (in_progress, PR #265), split out of icra-experiments on 2026-09-05; depends_on cannot cross a plan boundary.
+  - 'Cross-plan: depends on icra-foundation''s `integrated-simulation-pipeline` (in_progress,
+    PR #265), split out of icra-experiments on 2026-09-05; depends_on cannot cross a plan
+    boundary.'
 - id: vlm-baseline-harness
-  title: >-
-    The same questions asked of a vision-language model, image only and image plus verbalised memory
+  title: The same questions asked of a vision-language model, image only and image plus verbalised
+    memory
   branch: null
   pull_request_number: null
   track: baselines
   depends_on:
   - working-memory-verbalised
-  status: not_started
-  notes: >-
-    A harness that sends each question with the camera image, and again with the verbalised working memory prepended, parses the answer into the question's answer type and scores it against ground truth. The model sits behind an interface so the provider is one class; CI runs against a recorded-answer mock, and the live test is skipped without credentials. Each question is also run five times on the same scene to report answer variance, for the VLM systems and for EQL alike. Which provider and model to use is the developer's call and is not taken here. What it sends is an assembled context rather than an image and a prepended string, so the episode corpus of Experiment D is a third system on the same harness rather than a second one.
+  status: not started
+  notes: A harness that sends each question with the camera image, and again with the verbalised
+    working memory prepended, parses the answer into the question's answer type and scores
+    it against ground truth. The model sits behind an interface so the provider is one class;
+    CI runs against a recorded-answer mock, and the live test is skipped without credentials.
+    Each question is also run five times on the same scene to report answer variance, for
+    the VLM systems and for EQL alike. Which provider and model to use is the developer's
+    call and is not taken here.
   blockers:
-  - >-
-    Cross-plan: depends on icra-evidence's `question-set-and-ground-truth` (not_started), split out of icra-experiments on 2026-09-05; depends_on cannot cross a plan boundary.
+  - 'Cross-plan: depends on icra-evidence''s `question-set-and-ground-truth` (not_started),
+    split out of icra-experiments on 2026-09-05; depends_on cannot cross a plan boundary.'
 - id: episode-corpus-given-whole-to-the-vlm
-  title: >-
-    The vision-language model is given the whole episode corpus: every episode's video, files and transcript in one context
+  title: 'The vision-language model is given the whole episode corpus: every episode''s video,
+    files and transcript in one context'
   branch: null
   pull_request_number: null
   track: baselines
   depends_on:
   - vlm-baseline-harness
-  status: not_started
-  notes: >-
-    What makes Experiment D's comparison fair, and the reason a loss there reads as reasoning rather than lookup: every episode a question may reach over goes into one context - sampled video frames, the run's files, the question-and-answer transcript - so the model is given everything the SQL backend can see over the same episodes. That is only possible with a cap, and the cap is derived rather than chosen: how many episodes fit once the frames are sampled to the model's context budget. It is the baseline's stated limit in the paper, and it bounds how far back a question can reach. Assembled from what episode-artifacts-recorded wrote. A retrieval step over an unbounded corpus was considered and rejected on 2026-09-04; roadmap.md carries why.
+  status: not started
+  notes: 'What makes Experiment D''s comparison fair, and the reason a loss there reads as
+    reasoning rather than lookup: every episode a question may reach over goes into one context
+    - sampled video frames, the run''s files, the question-and-answer transcript - so the
+    model is given everything the SQL backend can see over the same episodes. That is only
+    possible with a cap, and the cap is derived rather than chosen: how many episodes fit
+    once the frames are sampled to the model''s context budget. It is the baseline''s stated
+    limit in the paper, and it bounds how far back a question can reach.'
   blockers:
-  - >-
-    Cross-plan: depends on icra-foundation's `episode-artifacts-recorded` (not_started), split out of icra-experiments on 2026-09-05; depends_on cannot cross a plan boundary.
+  - 'Cross-plan: depends on icra-foundation''s `episode-artifacts-recorded` (not_started),
+    split out of icra-experiments on 2026-09-05; depends_on cannot cross a plan boundary.'
 - id: perception-backends-are-interchangeable
-  title: >-
-    A vision-language model answers a look behind the same interface the detector stack does, into the same twin
+  title: A vision-language model answers a look behind the same interface the detector stack
+    does, into the same twin
   branch: null
   pull_request_number: null
   track: backend-routing
-  depends_on:
-  - backends-declare-their-capabilities
-  status: not_started
-  notes: >-
-    The sharpest demonstration that the representation is what the architecture is built on rather than any one perception method. A vision-language backend and a visual-question-answering backend implement the same interface the detector stack implements, take the same RgbdFrame, declare their capability in the same vocabulary, and write what they find into the twin as the same bodies, poses and relations - so everything above them, the routing, the control program, the event monitor, the episode record and the query language, is unchanged by the swap. What the paper reports from this is that the same questions are answered over each, at the cost each incurs, not that one detects better. The classical stack stays the default because it is what the resource comparison is measured against. Tests answer one look through two backends over the same simulated scene and assert the twin holds the same kinds of fact either way, with a recorded-answer mock standing in for the model in CI.
+  depends_on: []
+  status: not started
+  notes: The sharpest demonstration that the representation is what the architecture is built
+    on rather than any one perception method. A vision-language backend and a visual-question-answering
+    backend implement the same interface the detector stack implements, take the same RgbdFrame,
+    declare their capability in the same vocabulary, and write what they find into the twin
+    as the same bodies, poses and relations - so everything above them, the routing, the control
+    program, the event monitor, the episode record and the query language, is unchanged by
+    the swap.
   blockers:
-  - >-
-    Cross-plan: depends on icra-foundation's `simulated-camera-feeds-perception` (not_started), which is what gives every backend the same frames; depends_on cannot cross a plan boundary.
+  - 'Cross-plan: depends on icra-foundation''s `simulated-camera-feeds-perception` (not_started),
+    which is what gives every backend the same frames; depends_on cannot cross a plan boundary.'
 - id: control-constraints-and-degrees-of-freedom-queried
-  title: >-
-    A task is asked what it is constrained by and which degrees of freedom it used, in the same query language as the scene
+  title: A task is asked what it is constrained by and which degrees of freedom it used, in
+    the same query language as the scene
   branch: null
   pull_request_number: null
   track: control
   depends_on: []
-  status: not_started
-  notes: >-
-    The control half of the thesis, and it is a read rather than a rewrite: the motion statechart is already dataclasses over the same world model, so the questions are answerable from what it holds. What the paper asks of it - what is the constraint for inserting the cube, and how does it differ from the triangle's; which degrees of freedom did the insertion use, and which did it fix or ignore; the same for the pick-up - are answered with the giskardpy constraint objects themselves, not with prose about them.
-
-    What already exists: GiskardConstraint is a dataclass carrying its name, its constrained expression, its quadratic and linear weights and its normalization factor; ConstraintCollection holds a task's equality and inequality constraints grouped by the enforcement strategy that turns them into rows of the quadratic program; every MotionStatechartNode owns one, and NodeArtifacts.constraints is its assembled shape; coraplex's executable holds the MotionStatechart a plan node ran; and a constraint's expression answers free_variables(), which is what says which of the world's DegreeOfFreedom instances it actually touches.
-
-    What is missing is only the reach and the naming. The collection and the statechart are private attributes, the executable keeps only the motion it is currently running rather than the one each plan node ran, and nothing names the degrees of freedom a task constrains as against the ones it leaves free - that has to be derived from the expressions' free variables against the world's own set. Give those a name and an EQL spelling and the bucket is answered. Tests ask the cube's insertion and the triangle's for their constraints and assert they differ in the named constraint rather than in a rendered string, and ask one insertion which degrees of freedom it used, asserting the ones it fixed are absent from the answer.
-
-    Rewritten 2026-09-08 at the developer's correction: the first version of this item had the statechart's constraints *built* from queries over the twin, which has never been implemented and is a far larger task than the week holds. Building is not what the claim needs - the representation is already shared, so questioning it is what shows that.
+  status: not started
+  notes: 'The control half of the thesis, and it is a read rather than a rewrite: the motion
+    statechart is already dataclasses over the same world model, so the questions are answerable
+    from what it holds. What the paper asks of it - what is the constraint for inserting the
+    cube, and how does it differ from the triangle''s; which degrees of freedom did the insertion
+    use, and which did it fix or ignore; the same for the pick-up - are answered with the
+    giskardpy constraint objects themselves, not with prose about them.'
   blockers:
-  - >-
-    Cross-plan: depends on icra-foundation's `integrated-simulation-pipeline` (in_progress, PR #265); depends_on cannot cross a plan boundary.
-
+  - 'Cross-plan: depends on icra-foundation''s `integrated-simulation-pipeline` (in_progress,
+    PR #265); depends_on cannot cross a plan boundary.'
 - id: holes-answered-as-predicates
-  title: "A hole is a predicate any surface can be asked about, and the board detector states no number of its own"
+  title: A hole is a predicate any surface can be asked about, and the board detector states
+    no number of its own
   branch: null
   track: backend-routing
   blockers:
-    - >-
-      Cross-plan: needs icra-foundation's integrated-simulation-pipeline (#265), which carries the
-      detector stack and BoardDetector, and reads on the frames simulated-camera-feeds-perception
-      (#298) renders; depends_on cannot cross a plan boundary. Both are expected to be merged into
-      #265 and then into tracy_icra before this starts, per the branching change of 2026-09-09, so
-      this item is cut off tracy_icra rather than off either of them.
-  notes: >
-    Raised by the fourth review round on icra-foundation's simulated-camera-feeds-perception (#298),
-    2026-09-09, in the developer's words: he does not want BoardDetector's stated defaults at all --
-    "I want it knowledge dependent and calculable" -- and names the concepts under them as the real
-    subject: "counting a specific feature on a percieved body, Hole related features and mechanisms,
-    Area of a surface that may have holes", to be raised "to a meta level, maybe as predicates
-    classes for each or as a generalization of a Hole and a Surface with Holes or without Holes
-    detectors with capabilities".
-
-    Two halves, and the second is what makes the first honest. A hole and a perforated surface
-    become things any body can be asked about -- predicates beside the ones semantic_digital_twin
-    already carries -- rather than knowledge living inside one Montessori detector; and the
-    detectors that answer them are a family, so the one that reads a surface's colour and the one
-    that reads its depth stand beside each other rather than being two branches inside
-    BoardDetector.detect. That second detector is the sibling ask on the same round (r3965517956):
-    the depth is already read, but inside BoardDetector rather than by a detector of its own.
-
-    With those in place BoardDetector states no number of its own. All five of today's defaults are
-    calculable from what the twin already holds about the board: minimum_hole_count is the layout's
-    own hole count, hole_size the holes' own footprints, minimum_lid_area the board's own lid, and
-    minimum_hole_depth the lid-to-drawer gap #298 measured (10 mm -- drawers at z 0.553 with
-    DRAWER_SCALE.z 0.06, tops at 0.583 against a lid at 0.593). seed_reach is the one that is
-    genuinely about the search rather than about the board and may honestly stay a parameter.
-
-    Much less new machinery than the round assumed, and it was checked rather than taken on trust:
-    PerceptionDetector.capability(look) already states what a detector answers as an
-    entity-query-language condition, DetectorChoice is already an EQLSingleClassRDR over the
-    underspecified statement "a look whose detector is to be worked out", and SceneRequest is
-    already that statement. All three are on #265 by way of #275 and #77. So what this item adds is
-    the predicates and the detector family that answers them, not a selection mechanism.
-
-    Tests assert the predicates against the twin rather than against a picture -- a board the twin
-    cut six holes in answers six, a plain table answers none -- and then that a look at a rendered
-    scene and a look at tracy_pickup_demo both find the board with BoardDetector stating no number
-    of its own.
+  - 'Cross-plan: needs icra-foundation''s integrated-simulation-pipeline (#265), which carries
+    the detector stack and BoardDetector, and reads on the frames simulated-camera-feeds-perception
+    (#298) renders; depends_on cannot cross a plan boundary.'
+  notes: 'Raised by the fourth review round on icra-foundation''s simulated-camera-feeds-perception
+    (#298), 2026-09-09, in the developer''s words: he does not want BoardDetector''s stated
+    defaults at all -- "I want it knowledge dependent and calculable" -- and names the concepts
+    under them as the real subject: "counting a specific feature on a percieved body, Hole
+    related features and mechanisms, Area of a surface that may have holes", to be raised
+    "to a meta level, maybe as predicates classes for each or as a generalization of a Hole
+    and a Surface with Holes or without Holes detectors with capabilities".'
   depends_on: []
-  status: not_started
+  status: not started

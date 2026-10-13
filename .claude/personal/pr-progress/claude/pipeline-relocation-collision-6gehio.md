@@ -33,6 +33,3 @@ tests/test_integration_build.py (TDD - both fail against the pre-fix
 code). Full suite on this branch: 549 passed.
 
 Next: nothing outstanding from this session. Per personal notes, this
-session's obligation ends now that the draft PR is open - no subscription,
-no scheduled check-in. If CI or review comments come in, they'll need a
-prompt to be picked up.

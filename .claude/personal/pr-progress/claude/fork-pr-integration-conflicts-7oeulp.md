@@ -24,21 +24,3 @@ What it does:
   other silent left-out case (raw SKIPPED conflict, INTEGRATION_FAILED, and cascaded
   BLOCKED/BLOCKED_WITHOUT_RECORD/CHECKS_FAILED/UNREVIEWED - only when attributed to an
   ancestor, never a branch's own label/red-check/draft). Gated by a new purely
-  informational `integration-left-out` label (not in blocking_labels) that clears
-  silently on rejoin, same pattern as needs-resolution's auto-clear.
-- New `build --report-left-out` flag; only RefreshPipeline's unfiltered rebuild passes
-  it (never plan-filtered rebuilds, never ad-hoc/triage `build` runs) - so
-  /integration-conflict-triage's existing "never comments for a defer" behavior is
-  unaffected. Added a short note to that skill's SKILL.md distinguishing the two.
-
-Known follow-up NOT done here (told the user in the PR body): the
-`integration-left-out` label needs to be created by hand on the fork on GitHub, the
-same way needs-resolution/integration-conflict were - nothing here can create a
-missing label.
-
-Branch-base scope check performed per the mechanical rule: `.claude/stack/` and this
-skill's tooling do not exist on origin/main (`git ls-tree origin/main -- .claude/stack`
-is near-empty vs. ~77 files on the stack this PR builds on) - confirmed this is real,
-separable work on top of PR #211 (candidate-failure localisation), not a change to
-#211 itself: removing this PR's edits leaves #211 fully coherent, and this PR's own
-diff (909 insertions across 15 files, one new module) stands on its own.

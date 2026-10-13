@@ -1,11 +1,10 @@
-# episodes-queried-by-eql — PR #278 (draft)
+## Next
+- CI is the only verification available; read it when it reports and fix what
+  it finds.
+- Keep the PR description matching the work if it changes.
 
-Plan `icra-foundation`, track `long-term-memory`. Base: #271
-(`claude/icra-experiments-ormatic-episodes-ib9lr3`), which is open and not a
-draft. Stack: #278 -> #271 -> #262 -> main.
 
 ## The plan
-
 Long-term memory: the same EQL query language that asks a live world a question
 asks the recorded episodes one, and gets domain objects back. With that, the
 `Report` of an experiment is computed from the database rather than from the
@@ -23,40 +22,3 @@ results still in the process that made them.
 
 Design decisions and their reasoning are in the plan's `roadmap.md` section
 `episodes-queried-by-eql (#278), as planned 2026-09-06`.
-
-## Done
-
-- Setup check run; dashboard dependencies installed. `branch_base` was resolved
-  by cutting this branch off #271 rather than off `integration`.
-- Branch cut and pushed; draft PR #278 opened.
-- Manifest recorded (branch/PR/session/`in_progress`) and roadmap section
-  appended, both on `claude/personal-notes`.
-- All four steps implemented and pushed as `b63c5930c`: the test module, the
-  `LongTermMemory` module, the `MeasuredTrial` protocol, and the generator's
-  ignore list.
-- Dropped a planned `render_figure`-equality test after writing it:
-  `render_figure` is a pure function of the metric summaries the neighbouring
-  test already compares, and `test_scenarios.py` already pins the rendering, so
-  it could only ever fail alongside a test that had already failed. Recorded in
-  `roadmap.md` too.
-
-## Next
-
-- CI is the only verification available; read it when it reports and fix what
-  it finds.
-- Keep the PR description matching the work if it changes.
-
-## Known hazards
-
-- **Nothing here runs in this container.** `test/experiments_test/conftest.py`
-  imports `rclpy` and regenerates the ORM interface; `random_events` needs a C++
-  library that will not build here. Everything is CI-verified, as #262 and #271
-  were. So: no speculative EQL shapes. Only what
-  `test/krrood_test/test_ormatic/test_eql.py` already proves — single-table
-  column filters and many-to-one joins.
-- **`plan_item_bootstrap.py` corrupts this manifest.** It renders item fields at
-  4-space indentation (`ITEM_FIELD_INDENT`), but 22 of the 28 plans — this one
-  included — put item fields at 2 spaces under a column-0 `- id:`. Its `open`
-  subcommand therefore wrote invalid YAML and `save-plan.sh` rejected it. Worked
-  around by editing `plan.yaml` by hand this run; the script itself is still
-  broken and is not this PR's to fix.

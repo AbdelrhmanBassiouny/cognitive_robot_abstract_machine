@@ -1,20 +1,21 @@
 schema_version: 1
 id: stack-tooling-install
 title: Stack tooling on main, and the skills that install it anywhere
-description: 'Getting the stacked-pull-request workflow''s machinery out of a personal tooling branch
-  and onto main as reviewed code, with guided setup for a repository that takes it natively and for
-  a fork that has to overlay it. Portability is the rule throughout: no repository names outside configuration
-  defaults.'
+description: 'Getting the stacked-pull-request workflow''s machinery out of a personal tooling
+  branch and onto main as reviewed code, with guided setup for a repository that takes it
+  natively and for a fork that has to overlay it. Portability is the rule throughout: no repository
+  names outside configuration defaults.'
 default_repository: AbdelrhmanBassiouny/cognitive_robot_abstract_machine
 tracking_issue: 102
 waves:
 - id: landing
   name: The tooling reaches main
-  description: The base pull request, the tooling port, and the native-stacks evaluation that re-scoped
-    it.
+  description: The base pull request, the tooling port, and the native-stacks evaluation that
+    re-scoped it.
 - id: install
   name: Setup, scripted
-  description: Each setup skill keeps only the questions; everything mechanical becomes a script.
+  description: Each setup skill keeps only the questions; everything mechanical becomes a
+    script.
 - id: base-correctness
   name: What a branch is cut from
   description: Bugs in which refs the tooling fetches and which branch new work is based on.
@@ -29,666 +30,68 @@ tracks:
   name: Branch bases and refs
   wave: base-correctness
 items:
-- id: setup-personal-notes-pr101
-  title: 'Land /setup-personal-notes (PR #101) — the foundation the stack PRs base on'
-  branch: claude/patch-pr-rheubx
-  pull_request_number: 101
-  status: done
-  session: https://claude.ai/code/session_01GR1i6dZb8goJpCZBMCnVLM
-  track: landing
-  depends_on: []
-  notes: |-
-    Merged. A pre-existing pull request, not authored by this work, tracked because everything in the
-    upstream wave stacks on its branch - and stacking never waited for the merge.
-
-    Content beyond the original patch: the hooks README rewritten as a step-based guide, from 378 to
-    about 140 lines, with the worked example surfaced at the top; a skill step checking the
-    `merged`/`bug`/`in-review` labels exist in the fork; and a review round that moved the duplicated
-    hook-test scratch repository onto one shared `ScratchRepository` dataclass and made the setup report
-    typed.
-
-    Two things worth carrying. Three merge commits authored as an assistant identity landed on this
-    branch from outside any session, against AGENTS.md's rule, and were left unrewritten rather than
-    force-pushing shared history - which is what `git-identity-from-personal-notes` exists to prevent
-    going forward. And the robotics CI jobs flaked repeatedly on tests this `.claude/`-only diff cannot
-    reach; the user instructed those be ignored rather than chased, which became the standing treatment
-    for unrelated robotics noise on tooling pull requests.
-- id: stack-tooling-on-main
-  title: 'PR 1: stack workflow tooling on main (.claude/stack/)'
-  branch: claude/stack-tooling-on-main
-  pull_request_number: 106
-  status: done
-  session: https://claude.ai/code/session_01Y9egTHHu5RTXmkFL4SwXM9
-  track: landing
-  depends_on:
-  - setup-personal-notes-pr101
-  notes: |-
-    Merged. `stack.py` ported to `.claude/stack/` minus the round-robin and WIP-cap subsystem, with
-    per-user configuration layered from the personal-notes branch, a canonical doctrine document, and
-    tests. Landed as plain scripts; the package they eventually move into is created separately.
-
-    **Re-scoped twice, and the second was a cut rather than a trim.** After the native-stacks evaluation,
-    the restack subsystem - restack-plan, next, structure derivation - was removed from the pull request
-    entirely rather than adapted: native stacks own structure, `gh stack` and the Rebase-stack button own
-    cascading, and a preview-less-repository fallback is unnecessary, the preview being account-wide.
-    Then the doctrine document was deleted in favour of a `/stacked-pr-maintenance` skill, and four
-    recipes became subcommands, each replacing a rule a reader had to remember: `labels` (the complete
-    set a label write must send, since a write replaces rather than adds), `preflight` (refusing a wrong
-    checked-out branch, a mismatched refspec, a non-fork destination, and the
-    child-becomes-ancestor-of-parent false merge), `promotion-link` (owning the compare URL's encoding and
-    length limit), and `reparents`/`landed` (derived from git ancestry rather than pull request state).
-
-    **Three review decisions were the user's, each taken after the options were costed.** GitHub marks a
-    pull request *merged*, not closed, the moment its head becomes an ancestor of its base - proven from
-    live data, three pull requests carrying the same merge timestamp as a fast-forward, two without any
-    `merged` label - so the label-then-close step was duplicating the fast-forward and is deleted, and
-    the fast-forward moves after the reparent sweep, because auto-detection only fires for a pull request
-    whose own base moved. The skill never writes code: a conflict it cannot merge cleanly, or a red
-    check, is reported to the branch's owner and skipped, which removed every repository-specific mention
-    and made the instructions generic. And the pointer document and its prose tests are deleted, the
-    registered prompt being a skill call now; one test survives, that the skill names no fork of its own -
-    an absence computed from live configuration rather than a sentence asserted against a document.
-
-    **One consequence to carry, which reverses design decision 4**: the hard rules no longer bind before
-    the first file is read. The window is one turn, and the cutover deletes the scheduled run anyway.
-
-    `stack.py` is deliberately not split here (the user's decision): it stays about 1,540 lines, and the
-    package extraction does the surgery once when it moves every `.claude/` Python file, rather than
-    twice with two dependants rebasing across the first attempt.
-
-    **A cross-fork CI topology bug worth knowing**: a cross-fork pull request's base-repository CI run has
-    only `origin`, pointing at the upstream itself, so there are zero fork candidates and
-    `load_configuration()` treated that as an error. The fix computes candidate forks from the checkout's
-    remotes and tolerates zero of them.
-
-    The fork-internal merge is done; the separate upstream promotion is still a manual step, so the
-    cutover's gate is not met by this alone.
-- id: native-stacks-prototype
-  title: Prototype GitHub's native stacked-PRs preview against our stack tooling
-  branch: null
-  status: done
-  session: https://claude.ai/code/session_015db4P7UfiFTTfrbxYjU5yW
-  track: landing
-  depends_on: []
-  notes: |-
-    Done, no pull request: an evaluation and live prototype of GitHub's stacked-pull-requests public
-    preview, run on throwaway branches. All probes conclusive, and the pivot they produced re-scoped four
-    other items.
-
-    Every stacks REST endpoint works from a session's installation token - read, create (drafts accepted,
-    non-main trunk, works beyond the fork, so the preview is account-wide), extend, dissolve. Merge is a
-    new asynchronous endpoint that merges everything below in one operation and auto-retargets the pull
-    requests above within seconds, refusing stale stacks with a precise not-a-linear-descendant error and
-    refusing drafts. The classic merge and update-branch APIs are hard-403'd for stacked pull requests.
-
-    **The one gap**: no REST endpoint triggers the server-side cascading rebase. Cascade is UI-only or a
-    local rebase and force-push, which preserves stack membership.
-
-    Webhook and Actions payloads carry a stack object, retargets arrive as `edited` events, and the
-    stack's base SHA lagging the real trunk head is a machine-readable staleness signal.
-
-    Second round of probes: `PATCH base` 422s on stack members, which is the reparent hazard;
-    push-based merges are detected as merged but do *not* auto-retarget children, unlike the async merge;
-    and unstack, then PATCH base, is the API-only recovery.
-
-    User decisions recorded here: one dashboard only - the plan dashboards, with the stack board retired -
-    and every fork pull request must belong to a plan, enforceable at dashboard build.
-
-    Leftover cleanup: the prototype branches need out-of-harness deletion, sessions being unable to delete
-    a branch.
 - id: setup-personal-notes-script
   title: Extract a deterministic setup script from /setup-personal-notes
   branch: claude/setup-personal-notes-script
   pull_request_number: 107
-  status: in_progress
+  status: in progress
   session: https://claude.ai/code/session_01DbUfzLJEFqE4U3fKBFd2WA
   track: install
-  depends_on:
-  - setup-personal-notes-pr101
-  - stack-tooling-on-main
+  depends_on: []
   blockers:
-  - >-
-    Cross-plan dependency, not representable in depends_on: stacked on basstler-package (#185,
-    basstler-package plan, upstream cram2#659) since 2026-10-04. Promote only after #185 lands and
-    the maintenance pass has moved #107's base back to main, then rebuild its promotion link, since
-    the one in its description was built against main before the stack.
-  notes: >
-    Extracts the mechanical half of `/setup-personal-notes` into a script, leaving the skill only
-    the
-
-    questions.
-
-    **The item's original premise is disproved and no longer applies.** Two steps recorded as
-
-    session-only are both scriptable - the login and the label read and create are all plain API
-    calls,
-
-    and the "no create-label tool" limit is true of MCP, not of the API. So the whole setup runs
-    with no
-
-    session, and the skill became a thin question-asking wrapper (238 lines to 153) rather than the
-
-    "script plus two API steps" split originally described.
-
-    Based on its parent branch rather than main, the user having overridden this item's "requires
-    the
-
-    base merged" rule - which was never really about ordering, since all six files it builds on
-    arrive
-
-    with that pull request. Restacked so the upstream wave is one linear chain rather than two
-    siblings:
-
-    the next item needs both `.claude/stack/*` and `github-api.sh`, and a diamond would have been
-
-    invisible to a restack plan that derives exactly one parent per branch from the pull request
-    base.
-
-    Carries two incidental fixes as their own commits, both hard prerequisites: an upstream-remote
-    lookup
-
-    returning git's exit 128 instead of "no upstream", which aborted branch creation on any branch
-    never
-
-    pushed with `-u`, and a test helper that hid an executable by dropping its whole `PATH` entry.
-
-    Still unverified for the same reason throughout this track: live label creation, since this
-
-    environment's token is a fine-grained installation token, so the create call is exercised only
-    through
-
-    a stub.
-
-    **Resolved 2026-08-30** (sessions https://claude.ai/code/session_01RR4BLkfHBADKRuiTYh2Pv3), over
-
-    two review rounds, clearing both blockers.
-
-    The CI red was this branch's own and the first round is what surfaced it: merging `main` gave
-
-    `session-start.sh` a companion it sources, while each test module named the scripts to install
-    into
-
-    the scratch layout by hand, so only the module whose list omitted it broke.
-    `install_hook_scripts`
-
-    reads a script's own dependencies now - a shell `source` of a quoted path, or, for a hook
-    written in
-
-    Python, an import of a sibling module read from the syntax tree. The Python half was forced
-    rather
-
-    than foreseen: moving `HookScript` into a shared module made `plan_item_bootstrap.py` import
-
-    something no caller names, so the defect the round was fixing produced a new instance of itself
-    one
-
-    layer down. Fourth occurrence of the shape on this track - a fix applied three times at three
-    call
-
-    sites is a missing mechanism, not three bugs.
-
-    First round, sixteen threads and one rule: a literal naming a fixed thing where a named
-    definition
-
-    already exists. `.claude/hooks/tooling_files.py` became the one place production and tests both
-
-    resolve a tooling file from; `github_api.py` names the shell functions, labels and remote-URL
-    forms
-
-    with a runner that makes the calls; `setup_report.py` holds the report vocabulary two modules
-    parse.
-
-    Fifteen resolved. One is answered differently and stays open: whether one git runner should
-    serve
-
-    every caller, which is `basstler-notes-core-python`'s seam by name and now has five callers
-    waiting.
-
-    `--name`/`--email` (the user's call, offered against two alternatives) is what lets a full run
-    reach
-
-    exit 0 again now that main's `check-setup.sh` has a `git_identity` check. Both halves required
-
-    together, refused before anything is written; given neither, the run finishes everything else
-    and
-
-    leaves that row to the report rather than guessing what somebody's commits should say.
-
-    Second round, one thread: the label list named only the three the dashboard reads while the
-
-    stacked-PR workflow applies three more nothing was creating. It names all six now, each with a
-
-    description of its own. The fork's own labels are the evidence for why that matters - the three
-    the
-
-    reviewer named each carry a hand-written description, so they were created by hand, while
-    `in-review`
-
-    is the default grey with none and `rebase` does not exist at all despite 21 references. So what
-
-    creating one ahead of time buys is that it explains itself to whoever meets it later.
-
-    Two defects fell out of adding them: a `*)` fallback that would have given a newly declared
-    label a
-
-    sentence saying nothing, and a description resolved inside the creation call's arguments, where
-    a
-
-    failing command substitution still runs the command with an empty one. The test enum became
-
-    `RepositoryLabel`, since it is no longer the dashboard's set - that is what the dashboard
-
-    *interprets*, this is what the tooling *applies*.
-
-    `integration-conflict` is deliberately left out: it lives only on the integration-branch pull
-
-    requests, so nothing here or on `main` applies it, and a list naming labels no code applies
-    stops
-
-    being something a test can hold to anything. Left open on the thread for the user, along with
-    two
-
-    judgement calls - that this widens `/setup-personal-notes` into creating labels for a workflow
-    it
-
-    does not configure, and that `cram2-link-sent` is a plain constant rather than a setting, so
-    unlike
-
-    its neighbours its name is fixed and names a particular upstream.
-
-    577 tests pass across the four directories CI runs, from 555. Ten mutations checked across the
-    two
-
-    rounds, each caught by the test naming its rule - and one that was not, which is the part worth
-
-    carrying: the test asserting the run *says* how to record an identity passed with that guidance
-
-    deleted, because `check-setup.sh`'s own row already names both flags. Accidental coverage of
-    somebody
-
-    else's message. The same class recurred in the second round, where a description parser
-    splitting on
-
-    whitespace read only each sentence's first word, which happened to be distinct.
-
-    **CI red found and fixed 2026-09-01** (session resolving this item via `/plan-item-resolve`).
-    `test_claude_dev_tooling` was failing on the pushed head with a collection error, not a genuine
-    test failure: `test_setup_steps.py` still imported `SCRUBBED_ENVIRONMENT_PREFIXES` from
-    `scratch_repository`, the name the 2026-08-30 review round renamed to
-    `SCRUBBED_VARIABLE_PREFIXES` when it moved the constant onto `stub_executables.py`'s enum —
-    missed because that round never touched this test module. Separately, `setup_steps.py` had no
-    `HookScript` member of its own, so the one test that installs it through `install_hook_scripts`
-    (which derives a script's dependencies from `HookScript` members) was passed a bare string where
-    an enum member was required.
-
-    Both fixed in `bc53ec33`, pushed. 607 tests pass on the exact CI scope, up from a hard
-    collection failure. PR converted back to draft after the push, per the standing convention.
-
-    Then merged into `setup-stacked-prs-skill` (#110), which is based on this branch and inherited
-    the same break: one conflict, in `tooling_files.py`, where #110's own `HookScript` additions sit
-    next to the new `SETUP_STEPS` member — resolved by keeping both. 668 tests pass there afterward;
-    see that item's own notes.
-
-    **Merge conflicts and integration-conflict resolved 2026-09-06** (session
-    https://claude.ai/code/session_01U7PnqKcjgBbmFfwouGPMeN, via `/plan-item-resolve`).
-
-    The reported "merge conflicts when rebasing on main" were real under `git rebase` (this branch
-    had fallen 103 commits behind `main`): rebase replays the branch's original commits one at a
-    time and re-hits the add/add conflict on `.claude/hooks/tests/stubs/{curl,gh}.sh`, plus a real
-    conflict in `scratch_repository.py`, that the earlier "two stub files united" merge had already
-    resolved once - a linear rebase discards that merge commit's resolution and starts over. A plain
-    `git merge` of `main`, which is this repo's actual convention throughout this stack, does not
-    reopen it. Merged clean and pushed as `053de8eb`; the `integration_test_command` scope is green
-    (598 passed).
-
-    Separately, this branch had carried `integration-conflict` since 2026-08-31, from an automated
-    integration build finding it "merges cleanly with `D-deco` and the suite fails on the result."
-    No reproduction test was ever pushed for that finding (the block-branch pass only commented and
-    labelled), so nothing had re-checked it since. Verified by hand: merging `main` + `D-deco`'s
-    current tip + this branch is clean with no conflicts and the exact `integration_test_command`
-    suite passes (598/0). `D-deco` touches nothing outside `test/krrood_test/` and `AGENTS.md` - no
-    overlap with this branch's `.claude/`-only diff -and its own pull request records it was rebuilt
-    as a branch reset on 2026-08-31, the same day, to drop a since-forbidden symbol carried from a
-    dead base. The likely explanation is that the original build tested against `D-deco`'s
-    pre-rebuild tip. Label removed from #107.
-
-    `setup-stacked-prs-skill` (#110) merges cleanly onto this branch's new head and was updated to
-    match (`9a192041`, 659 passed). Its own `integration-conflict` (against `D-store`, same shape -
-    rebuilt the same day for the same reason) was cleared the same way and removed.
-
-    Both pull requests were open as ready-for-review (not draft) going into this session; both were
-    converted back to draft after the push, per the standing convention, since it could not be
-    established from here that the ready flip was the user's own rather than left over from an
-    earlier round.
-
-    **Restacked onto basstler-package (#185) 2026-10-04** (session
-    https://claude.ai/code/session_01DbUfzLJEFqE4U3fKBFd2WA), the user's call: #185 merges first, and
-    it moves every Python file this branch touches. Merged #185's tip `37e8cf88` into this branch
-    (`6e712cec`, 26 conflicts) and retargeted #107 onto `claude/plan-item-kickoff-workflow-cuare2`;
-    against it the diff is this branch's own 36 files. `tooling_files.py` is gone: `HookScript`
-    moved into `basstler/locations.py` naming the shell entry points only. This branch's test
-    helpers folded into the package suite's rather than standing beside them: `stub_executables.py`
-    into `executable_stubs.py`, `RepositoryLabel` replacing `StackLabel` in `constants.py` (a strict
-    superset), `ProjectFile` and the credential variables into `constants.py`, and the gh/curl stubs
-    united a second time. `setup-personal-notes.sh` dropped its own pip step, since the requirements
-    file is gone and `session-start.sh` now installs the package's missing dependencies. 767 tests
-    pass in `test/basstler_test`.
-
-    **Rebuilt in basstler's shape 2026-10-04** (`57480ed4`, same session), the user asking for it
-    to be as clean as possible with less duplication. The setup is
-    `basstler/setup_personal_notes.py` and `setup-personal-notes.sh` a three-line shim.
-    `github-api.sh` is deleted: GitHub calls go through `basstler/maintenance_github.py`, whose
-    new `GitHubConnection` owns the HTTP call and the credential lookup - GH_TOKEN, GITHUB_TOKEN,
-    then `gh auth token` (the user's choice, so `gh` is a credential source, not a second
-    backend). One label list, `basstler/repository_label.py`, now read by `setup_steps`,
-    `stack.py`'s defaults, `PROMOTION_LINK_LABEL` and the tests; `PULL_REQUEST_LABELS` is gone.
-    `setup_report.py` moved into the package. The owner is checked before anything is written.
-    Tests run the setup in-process against a replaying REST stand-in; 763 pass, four mutations
-    each caught by the test naming them, and a live read-only run against the fork verified the
-    owner through `gh auth token` and found only `rebase` missing.
+  - 'Cross-plan dependency, not representable in depends_on: stacked on basstler-package (#185,
+    basstler-package plan, upstream cram2#659) since 2026-10-04.'
+  notes: Extracts the mechanical half of `/setup-personal-notes` into a script, leaving the
+    skill only the questions. **The item's original premise is disproved and no longer applies.**
+    Two steps recorded as session-only are both scriptable - the login and the label read
+    and create are all plain API calls, and the "no create-label tool" limit is true of MCP,
+    not of the API. So the whole setup runs with no session, and the skill became a thin question-asking
+    wrapper (238 lines to 153) rather than the "script plus two API steps" split originally
+    described.
 - id: setup-stacked-prs-skill
   title: 'PR 2: /setup-stacked-prs guided one-command setup skill'
   branch: claude/setup-stacked-prs-skill
   pull_request_number: 110
-  status: in_progress
+  status: in progress
   session: https://claude.ai/code/session_015HBn7bNMj6Ao5inyStmrMN
   track: install
-  depends_on:
-  - stack-tooling-on-main
+  depends_on: []
   blockers:
-  - >-
-    Its base, setup-personal-notes-script (#107), was restacked onto basstler-package (#185) and
-    rebuilt in basstler's shape on 2026-10-04 (`57480ed4`): `github-api.sh`, which this branch's
-    `setup-stacked-prs.sh` sources, no longer exists. Merging #107's head means moving this
-    branch's setup onto `basstler.maintenance_github` and `basstler.repository_label` too, not
-    only across the file move.
-  notes: >
-    Mirrors its two siblings' read-only-check plus guided-skill pattern, with two install modes:
-    native
-
-    (tooling on the target repository's main) and fork-overlay (a never-merged tooling branch on the
-
-    user's fork, where re-running the skill is the updater). Creates missing labels, writes the
-    personal
-
-    configuration, emits the prompt.
-
-    Based on `setup-personal-notes-script` rather than directly on the tooling port, because its own
-
-    script sources `github-api.sh`, which exists on no other branch. Scope was assessed rather than
-
-    assumed: removing this item's edits to its parent's files leaves about 2,645 lines of standalone
-
-    setup infrastructure, so this is ordinary stacking, not a disguised modification of its parent.
-
-    **One real defect, found by reading the script rather than reasoning about the deletions**: the
-    setup
-
-    check required two constants pointing at files that exist nowhere, and reported them present by
-    name -
-
-    so it reported needs-setup on a correctly installed checkout. That also fixed fork-overlay for
-    free,
-
-    since the overlay file list already named both and an overlay was about to ship tooling with no
-
-    instructions.
-
-    The remote inference is deleted here, about 120 lines, closing two threads its parent had left
-    open
-
-    deliberately. One error class disappears because ambiguity is unreachable once the fork is
-    named;
-
-    another is renamed at the same exit code so the maintenance skill's step 0 keeps the status it
-    keys
-
-    on. Setup writes the fork repository at install time and *merges* the override file rather than
-
-    replacing it - both writers exist now, and a whole-file write silently discarded whichever ran
-    first,
-
-    a defect nobody had recorded.
-
-    **Four base merges, and the lesson each time is the same one**: the integration break is behind
-    clean
-
-    markers, not in them. A test arriving from main installed the hook scripts it calls, but this
-    branch
-
-    had made one script delegate to a new sibling that does not exist on main, so two tests went red
-    only
-
-    *after* the merge. That happened three times running, which is why `install_hook_scripts` now
-    derives
-
-    the siblings a script runs from the scripts themselves rather than listing them at each call
-    site -
-
-    and doing so fixed two of the base's own failures for free. Resolving the markers alone would
-    have
-
-    left the suite broken every time.
-
-    One conflict was not resolvable by keeping either side: a test parses through main's new
-
-    environment-scrubbing runner while still passing this branch's check enum, which works only
-    because
-
-    the shared report module takes that enum from its caller and the inline copy did not.
-
-    Scratch fixtures now build their bare repositories at paths naming an owner and name, addressed
-    as
-
-    `file://` URLs. Not cosmetic: remotes are matched by the repository their URL names, and a bare
-    local
-
-    path deliberately names none.
-
-    Both review threads sit inside a pending, unsubmitted review, so GitHub refuses every inline
-    reply -
-
-    one pending review per user - and submitting that draft is the user's. The replies went into a
-
-    conversation comment and both threads stay open; they are answered in code, not outstanding.
-
-    626 tests pass. The 5 that fail are a strict subset of the 7 red on the base itself, measured by
-
-    running the base's own tree: main added a git-identity check that the base's setup script does
-    not
-
-    record, so a full setup run cannot return 0. Left to the base, whose script it is and which
-    lands
-
-    first.
-
-    **Blocked as found on 2026-08-30** (session
-    https://claude.ai/code/session_011CSkHuoVfSeyoTxmD2oMTz), on two
-
-    things at once, neither recorded here before this run.
-
-    The pull request was `dirty` against its own base: `claude/setup-personal-notes-script` had
-    advanced by the two
-
-    commits of its own review round (`5dbdfdc9` naming the tooling's files once, `66ba4f01` naming
-    every label the
-
-    tooling applies), and this branch had not merged either. Five files conflict -
-
-    `tests/scratch_repository.py`, `tests/setup_report.py` (add/add),
-    `tests/test_check_setup_sh.py`,
-
-    `tests/test_personal_settings_sync.py`, `tests/test_setup_personal_notes_sh.py`.
-
-    And the pending review the previous session could not reply into has been submitted, which
-    turned two
-
-    invisible threads into **27 unresolved ones** - 25 of them a new round dated 2026-08-30. They
-    are almost
-
-    entirely one rule, the same one the base's own round settled: a literal naming a fixed thing
-    where a named
-
-    definition belongs. The base's `5dbdfdc9` is what makes that answerable rather than a second
-    copy - it
-
-    created `.claude/hooks/tooling_files.py` and `tests/github_api.py`'s `RepositoryLabel`, so the
-    merge and the
-
-    review round are one piece of work rather than two.
-
-    `test_claude_dev_tooling` is red on the head, which is the base's own five inherited failures,
-    not this
-
-    branch's.
-
-    **Resolved 2026-08-30** (session https://claude.ai/code/session_011CSkHuoVfSeyoTxmD2oMTz),
-    clearing
-
-    both: the pull request is mergeable against its base again, and all 27 review threads are
-    answered -
-
-    25 resolved, 2 left open on purpose because they are answered differently from what they asked.
-
-    The merge and the round were one piece of work, which is the finding worth carrying. The round's
-
-    single rule - a literal naming a fixed thing where a named definition belongs - was answerable
-    only
-
-    because the base's own round had just created the definitions those literals were copies of
-
-    (`tooling_files.py`, and `RepositoryLabel`). Applying it first would have built a second copy of
-
-    exactly what the review objected to having two of.
-
-    The merge found the same shape a fifth time: both branches had independently built the mechanism
-    that
-
-    installs a hook script's siblings into the scratch layout. The base's survives, being typed by
-
-    `HookScript` rather than by file name, with this branch's one extra capability folded in -
-    resolving
-
-    a sibling named through a configuration constant, the only way `setup-stacked-prs.sh` reaches
-
-    `github-api.sh`.
-
-    Two of the round's finds were not literals but retyped copies of a value the run under test had
-    used:
-
-    the printed configuration, asserted against a dict retyping what the fixture had just set, and
-    the
-
-    overlay branch, a second copy of the script's own default. Both read the definition now.
-
-    `Repository` gained `remote_url` and `compare_url` - production, not tests: the GitHub host was
-
-    written out in the `git remote add` line the tool prints and again in the promotion compare URL.
-
-    The two open threads are both the same question in two places: whether `GitCommandRunner` should
-    serve
-
-    every caller. In `test_maintenance.py` it could and does, since that module is under
-    `.claude/stack/tests/`;
-
-    from `.claude/hooks/tests/` it cannot without a production `sys.path` insert, which is
-
-    `basstler-notes-core-python`'s seam. The third is whether the `git remote add` line `stack.py`
-    prints
-
-    should come from a command factory, when nothing ever runs it.
-
-    638 tests pass, from 626 - and the five inherited failures are gone, having been the base's own
-    all
-
-    along. Live label creation is still unverified for the reason that holds across this track.
-
-    **CI red found and fixed 2026-09-01** (session resolving `setup-personal-notes-script`,
-    propagated here per its own request to merge and fix conflicts with this item).
-    `test_claude_dev_tooling` was failing on this branch's merge commit with the same collection
-    error as #107: a stale `SCRUBBED_ENVIRONMENT_PREFIXES` import and a `setup_steps.py` missing
-    from `HookScript`, both inherited from the base.
-
-    Fixed on #107 (`bc53ec33`) and merged into this branch (`c08cde6e`). One conflict, in
-    `tooling_files.py`: this branch's own
-    `HookScript.WRITE_BRANCH_FILES`/`CHECK_STACK_SETUP`/`SETUP_STACKED_PRS` members sit next to
-    where #107 added `SETUP_STEPS` — resolved by keeping both, nothing dropped from either side.
-
-    668 tests pass on the exact CI scope, the same count as before the base's regression (it was
-    already inherited before this branch's own tests ran, so the total is unchanged — the suite just
-    collects and runs again instead of erroring out). PR converted back to draft after the push, per
-    the standing convention.
-
+  - 'Its base, setup-personal-notes-script (#107), was restacked onto basstler-package (#185)
+    and rebuilt in basstler''s shape on 2026-10-04 (`57480ed4`): `github-api.sh`, which this
+    branch''s `setup-stacked-prs.sh` sources, no longer exists.'
+  notes: 'Mirrors its two siblings'' read-only-check plus guided-skill pattern, with two install
+    modes: native (tooling on the target repository''s main) and fork-overlay (a never-merged
+    tooling branch on the user''s fork, where re-running the skill is the updater). Creates
+    missing labels, writes the personal configuration, emits the prompt. Based on `setup-personal-notes-script`
+    rather than directly on the tooling port, because its own script sources `github-api.sh`,
+    which exists on no other branch.'
 - id: unfetched-parent-branches
-  title: Fetch every parent branch the pass decides about, and refuse to decide from a missing ref
+  title: Fetch every parent branch the pass decides about, and refuse to decide from a missing
+    ref
   branch: claude/maintenance-tooling-pinning-gdod18
   pull_request_number: 198
-  status: in_progress
+  status: in progress
   session: https://claude.ai/code/session_01THzpHsajMptZ3X1DmwAU2c
   track: base-correctness
   depends_on: []
-  notes: |-
-    Bug fix, root-caused while asking why a pull request was never reparented onto main nor promoted after
-    its parent merged that morning. `load_stack()` fetches only the *head* branches of the open pull
-    requests on the board, so a parent whose own pull request is closed or merged is never fetched; the
-    merged predicate then runs `merge-base --is-ancestor` through a helper that cannot tell exit 128 (ref
-    missing) from exit 1 (not an ancestor). **A ref the pass failed to obtain therefore reads as "has not
-    landed", suppressing the reparent, the restack and the promotion at once.**
-
-    Proven read-only: with the parent ref present, the pass names the reparent and lists the pull request
-    as promotable; after deleting that ref - the state a fresh maintenance clone is in - both go silent.
-
-    This is the unfinished half of `landed-parent-detection`, which made the decision ancestry-based but
-    never made the ref that decision reads present. Three layers, one pull request, each with its failing
-    test first: fetch the union of board heads *and* bases; make an unresolvable ref and a failed fetch
-    raise instead of answering False; and give a parent whose pull request is gone a policy derived from
-    where its commits actually are - in the upstream base, in another open board branch, or nowhere, the
-    last reported to the branch's owner the way a conflict is rather than merged every run.
-
-    **Layer 2 reverses a decision recorded on the maintenance executor** - that a git helper returning
-    `""` on failure is correct for derivation, where a missing ref simply means no answer. Here a missing
-    ref is not no answer; it is a confidently wrong one that drives writes.
-
-    Landing order rather than a dependency: the package extraction carries this bug verbatim at the moved
-    path, so this small fix lands first and is picked up in the re-merge that branch already needs.
-    Cross-reference: the cutover's event-triggered re-sweep addresses *when* the sweep runs; this
-    addresses the sweep computing the wrong answer whenever it does.
+  notes: Bug fix, root-caused while asking why a pull request was never reparented onto main
+    nor promoted after its parent merged that morning. `load_stack()` fetches only the *head*
+    branches of the open pull requests on the board, so a parent whose own pull request is
+    closed or merged is never fetched; the merged predicate then runs `merge-base --is-ancestor`
+    through a helper that cannot tell exit 128 (ref missing) from exit 1 (not an ancestor).
 - id: session-branch-base
   title: Cut session branches from main, not the integration branch
   branch: claude/plan-item-kickoff-workflow-s3mfvk
   pull_request_number: 199
-  status: in_progress
+  status: in progress
   session: https://claude.ai/code/session_014Fp9aaMYx1E6toT2jDDWdW
   track: base-correctness
   depends_on: []
-  notes: |-
-    Found while checking whether the fork's default branch caused the sibling bug. It did not, but it is
-    causing something else and is already live: the fork's `HEAD` resolves to the regenerated
-    `integration` branch, whose whole design is to be rebuilt and never merged out of. A session
-    investigating that bug was handed a branch byte-identical to `origin/integration` - 78 commits behind
-    main, carrying eight unlanded branches' merge commits - because the branch existed only locally, so
-    the clone created it at the default branch's tip. Every future session cut from this fork does the
-    same.
-
-    Not the cause of the sibling bug: the upstream's default is still main, it has no integration branch,
-    and the upstream base is pinned in configuration, so the stack tooling never reads a default branch.
-    What *does* read it: the default-branch helper in the shell configuration, so PR-progress keys on the
-    wrong branch in any clone with the ref set, and a pull request opened through the GitHub UI would
-    default its base to `integration`, corrupting the base-is-parent invariant.
-
-    **Re-scoped on the user's objection, which reverses this item's own recorded fix.** Making
-    `integration` the default is deliberate - it is the whole point of the fast-review process, putting
-    reviewed-but-unlanded work into every fresh checkout - so restoring main as the default would destroy
-    the thing it exists for. The requirement is instead that a pull request be based on main or on a
-    parent pull request, never on `integration`, and the two are not in conflict: where a clone starts and
-    where a work branch is cut from are separate events, and only the second is a defect.
-
-    So the check's subject moves from the repository setting to the branch in hand, as a row refusing a
-    branch that descends from the staging default. **The ancestry test this item's kickoff had rejected is
-    the right one, tested against the wrong thing**: against main it flags every branch that has not
-    merged main recently and cannot tell a branch cut from `integration` from one stacked on a parent;
-    against `integration` it flags 0 of this fork's 198 remote branches and never references main, so it
-    is stable as main moves.
-
-    Found while measuring it and not this item's to fix: `integration` was 124 commits and five days
-    behind main, so the process was serving unlanded work on a stale base - a rebuild-cadence question.
+  notes: 'Found while checking whether the fork''s default branch caused the sibling bug.
+    It did not, but it is causing something else and is already live: the fork''s `HEAD` resolves
+    to the regenerated `integration` branch, whose whole design is to be rebuilt and never
+    merged out of. A session investigating that bug was handed a branch byte-identical to
+    `origin/integration` - 78 commits behind main, carrying eight unlanded branches'' merge
+    commits - because the branch existed only locally, so the clone created it at the default
+    branch''s tip. Every future session cut from this fork does the same.'

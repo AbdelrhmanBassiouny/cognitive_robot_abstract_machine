@@ -30,5 +30,3 @@
   collides with #185). Left open.
 
 **Next.** Nothing until one of those two is answered. CI on 6cde496:
-`test_claude_dev_tooling` (the job running these tests) passed, 16 checks green,
-7 still running, none failing.

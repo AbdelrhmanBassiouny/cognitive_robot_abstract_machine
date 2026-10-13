@@ -30,12 +30,3 @@ remembering: `grasp_detector_nodes.py` calls `contact()` expecting a bool while
 no ROS in a web session (`rclpy` has no PyPI distribution, and
 `segmind.datastructures.events` imports `geometry_msgs` at module scope). CI
 triggers only on `main` pushes and pull requests, so this push ran nothing.
-**Both suites still need a run** — in the ROS container, or on the next pull
-request carrying this branch. What did run locally: every touched file parses,
-the six sweeps, and `test_dependency_declarations.py` over all ten workspace
-members (20 checks, all passing).
-
-**Also worth a second look:** `GRASP_HEIGHT_OFFSET = 0.04`. If that 0.04 was
-tuned against the old spawn-hovering geometry rather than against where the arm
-has to reach, it is the one number in the merge to revisit.
-

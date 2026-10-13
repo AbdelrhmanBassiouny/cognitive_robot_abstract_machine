@@ -1,5 +1,9 @@
-## Plan
+## Next
+Nothing outstanding. Dashboard republished (same URL), structural change recorded on
+tracking issue #102. PR #188 is open as a draft with the `bug` label; per my notes,
+opening it ends this session's obligation to it.
 
+## Plan
 Make every session start from a fresh base: a deterministic SessionStart step that
 fast-forwards the fork's default branch from the upstream repository, locally and on
 the fork, and reports how stale the checked-out branch is.
@@ -16,77 +20,3 @@ Design decisions (all implemented):
 - Only the default branch is touched; the checked-out branch's staleness is reported,
   never merged or rebased automatically.
 - Never fatal: every refusal reports and exits 0.
-
-## Done
-
-- Hook, wording in session-start-messages.sh, `default branch` line in the report.
-- 19 tests in `.claude/hooks/tests/test_default_branch_fast_forward.py`, no network:
-  fork and upstream are local bare repos laid out under `<owner>/<name>.git` so their
-  URLs name a repository the way GitHub does; the GitHub-URL route is reached through
-  git's own URL rewriting. No test-only seam in the script.
-- Mutation-checked: disabling the push fails 4 tests; dropping the divergence guard
-  fails the diverged test.
-- Second fix, same root cause: the summary's `plan state SHA` was re-reading
-  FETCH_HEAD, which the upstream fetch clobbers. Now prints the recorded stamp.
-  Reproduced with a failing test first.
-- Verified live: origin/main was 86 commits behind cram2/main, fast-forwarded in 3.9s.
-- Merged the fresh main into this branch. Full suites green (280 hooks+stack, 497
-  including plan-dashboard).
-- Plan item and roadmap entry saved to the notes branch.
-
-## Review round 2026-08-22 (b0e28437)
-
-Three threads, all one finding: the tests hand-rolled git where GitCommandRunner
-already exists on main, and the harness holding them together was a plain class.
-
-- The fork layout moved out of `scratch_repository.py` into a new
-  `forked_scratch_repository.py`. That leaves the shared harness every other hook
-  test builds on byte-identical to main, and gives the fork-specific setup a home
-  that can use the runner. Using it for my new methods alone would have left two
-  conventions in one class; converting `ScratchRepository` wholesale is 66 call
-  sites across seven modules and belongs to the basstler migration.
-- `ForkedScratchRepository` and `GitHubRepositoryStandIn` are frozen dataclasses
-  built by a `laid_out_in` classmethod - the `ToolingCheckout` shape from #158.
-- Every git call goes through `GitCommandRunner`; the push is a `ProposedPush`;
-  `branch_tip` no longer shells out. One call stays spelled out with a comment:
-  creating the default branch on an unborn HEAD, where `checkout -B main HEAD`
-  fails because there is no commit for a starting point to name.
-- Reached by adding `.claude/stack` to the hooks conftest path. No new coupling:
-  the hook under test already resolves its upstream through that directory, and
-  `.claude/stack/tests/conftest.py` already adds the hooks directory the other way.
-
-Re-verified: 19 tests here, 280 across hooks+stack, and the mutation check still
-bites (disabling the fork push fails the same 4). All three threads replied to and
-resolved; PR description updated; still a draft.
-
-## Review round 2026-08-22 (3be1f191)
-
-Two threads, one rule: reaching for the runner's raw `run` means it is missing a
-command method. Applied to all seven calls - `grep "git\.run("` over the harness
-returns nothing now.
-
-`GitCommandRunner` gains `checkout_orphan`, `move_branch`, `add_remote`,
-`remove_remote`, `configure` and `remove_setting`. Four of those names
-(`checkout_orphan`, `remove_remote`, `configure`, and the `GitSetting` it takes)
-are taken verbatim from #154's copy of the class so the two converge rather than
-collide when it lands.
-
-- `checkout_orphan` removed a special case rather than dressing one up: the
-  two-line comment about creating a branch on an unborn HEAD is gone, because a
-  branch with no history behind it is exactly what `--orphan` means.
-- The runner stays generic - what a config key means is not its business - so the
-  stand-in names its own `url_rewriting` as a `GitSetting` and the harness passes
-  that, building the key once instead of at both call sites.
-- Flagged rather than pre-empted: four of the six new methods have no production
-  caller, which is the same question left open on #154 about its six additions.
-- No unit tests for them - each is a one-line wrapper exercised against real git by
-  all 19 tests here. Mutation-checked: pointing `move_branch` at `rev-parse` fails 3.
-
-280 pass across hooks+stack; hook verified live again. Both threads replied to and
-resolved; still a draft.
-
-## Next
-
-Nothing outstanding. Dashboard republished (same URL), structural change recorded on
-tracking issue #102. PR #188 is open as a draft with the `bug` label; per my notes,
-opening it ends this session's obligation to it.

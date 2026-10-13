@@ -32,18 +32,3 @@ which CI does install. So the merge adds 18 passing tests and no failures.
 PR's: every run of that workflow has failed for days, on `#291`, `#293` and on
 the scheduled runs of `integration`. It checks out the *default branch* on a
 `pull_request` event but runs the *PR's* workflow file, so its
-`integration.py block-branch` call hits a main that has no such subcommand -
-exit 2, `USAGE`. Belongs to whoever owns `integration-refresh.yml`, not here.
-A push does not re-trigger it (it fires on schedule / dispatch /
-`ready_for_review` only).
-
-**Left alone deliberately**
-- The `needs-resolution` label: a maintenance pass owns setting and clearing it.
-- Draft state: #284 is ready-for-review and was most likely marked so by hand,
-  so it was not flipped back.
-- `integration_test_command` in `basstler/stack.toml` still names
-  `.claude/stack/tests`, which #185's move deleted. Pre-existing on the base,
-  not this PR's to widen into.
-
-**Knock-on** #293 is based on this branch and will need the same package move
-applied to `integration_tooling.py` and its test once this lands.

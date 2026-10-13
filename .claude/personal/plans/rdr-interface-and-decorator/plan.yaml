@@ -1,9 +1,10 @@
 schema_version: 1
 id: rdr-interface-and-decorator
 title: The interactive expert interface and the @rdr decorator
-description: 'What a user of the engine touches: the case-table rendering, the IPython shell and its magics
-  that ask the expert for conditions and conclusions, the @rdr decorator that declares a model, and the
-  file store that holds it. Stacked on the core engine''s tip and merged after it.'
+description: 'What a user of the engine touches: the case-table rendering, the IPython shell
+  and its magics that ask the expert for conditions and conclusions, the @rdr decorator that
+  declares a model, and the file store that holds it. Stacked on the core engine''s tip and
+  merged after it.'
 default_repository: AbdelrhmanBassiouny/cognitive_robot_abstract_machine
 tracking_issue: 94
 waves:
@@ -26,42 +27,19 @@ items:
   pull_request_number: 79
   track: interactive
   depends_on: []
-  status: in_progress
+  status: in progress
   session: https://claude.ai/code/session_01W5rkhDr2xdFuFVExi6bXb4
-  notes: 'Rebuilt onto `D-core-backend` (#210) on 2026-08-30, which is what unblocked it: its old base
-    `D-ui-splice-fix` (#78, closed unmerged) led nowhere, and the re-target its own note prescribed —
-    `D-core-engine` (#68) — is deferred and leads nowhere either. Rebuilt as a branch reset rather than
-    a merge so #78''s production commit (reintroducing `_last_parent_of_type_`, superseded by #118 and
-    forbidden by dag-facade-hardening''s Wave-1 guard) stays out of #79''s diff; pre-rebuild tip `0a305c68`
-    if it is ever wanted back. `depends_on` now names `d-core-backend`, which is where the branch actually
-    sits.
-
-    Three interfaces had moved under the branch in the six weeks it spent on a dead base and the ported
-    tests were brought up to them; the two `save_path` test classes went with `EQLSingleClassRDR.save_path`
-    itself, their replacement already covered by `test_fit_convergence.py` and `test_serialization.py`.
-    See roadmap.md §34.
-
-    2026-08-30 (later): a fresh `/plan-item-resolve` session picked this item up again and found a review
-    round the rebuild above had drawn minutes after it pushed — 11 threads (missing docstrings and `:param:`/`:return:`
-    docs, missing dataclass field docstrings, four abbreviated names, one box-drawing divider), never
-    recorded here since the previous session had already reported itself finished. Applied and pushed
-    as `8dc1a7c8`: every function/method/field across all eight files this PR adds now has a docstring,
-    the flagged abbreviations (`_val`/`attr` in `case_table.py`, `ser` in `test_case_serializer.py`, `_animal_var`/`_mixed_alt_then_ref_query`
-    in `test_rule_order.py`) are spelled out along with the rest of the same names in the same functions,
-    and the divider is `# %%`. All eleven threads replied to individually (naming the commit) and resolved.
-    `test_eql_rdr` unchanged: 341 passed, 0 failed. Draft was already `true`, so no restore-to-draft was
-    needed. See roadmap.md §35.
-
-
-    2026-08-30 (resolve): `case_table.py` gained `CaseColumnLabel` (`5a84033eb`), the `StrEnum` behind
-    `render_cases_side_by_side`''s `new_label`/`corner_label` defaults. The ask was raised on #76 and
-    the reviewer directed it here, since the file is this slice''s. `test_case_table_side_by_side.py`
-    asserts against the members instead of retyping the strings, and #76 reads them too. Collected set
-    unchanged (341); of those, 262 passed and 79 skipped under the --noconftest run this container allowed,
-    identical before and after.'
+  notes: 'Rebuilt onto `D-core-backend` (#210) on 2026-08-30, which is what unblocked it:
+    its old base `D-ui-splice-fix` (#78, closed unmerged) led nowhere, and the re-target its
+    own note prescribed — `D-core-engine` (#68) — is deferred and leads nowhere either. Rebuilt
+    as a branch reset rather than a merge so #78''s production commit (reintroducing `_last_parent_of_type_`,
+    superseded by #118 and forbidden by dag-facade-hardening''s Wave-1 guard) stays out of
+    #79''s diff; pre-rebuild tip `0a305c68` if it is ever wanted back. `depends_on` now names
+    `d-core-backend`, which is where the branch actually sits.'
   blockers:
-  - Stacked on d-core-backend (#210) in the rdr-core-engine plan. depends_on cannot name an item in another
-    plan, so this edge is recorded here instead and carries no dependency chip or automatic readiness.
+  - Stacked on d-core-backend (#210) in the rdr-core-engine plan. depends_on cannot name an
+    item in another plan, so this edge is recorded here instead and carries no dependency
+    chip or automatic readiness.
 - id: D-ui
   title: 'RDR engine: interactive expert interface (IPython shell, magics, prompt sections/examples)'
   branch: D-ui
@@ -69,85 +47,17 @@ items:
   track: interactive
   depends_on:
   - D-ui-rendering
-  status: in_progress
+  status: in progress
   session: https://claude.ai/code/session_01W5rkhDr2xdFuFVExi6bXb4
-  notes: '2026-08-23: outstanding work added from the #159 review - **default the progress reporter to
-    IPythonProgressBar here**. The engine keeps NullProgressReporter, which is the only default correct
-    for a caller it knows nothing about; the developer agreed the interactive default belongs in this
-    layer, which is the one that knows there is a shell to draw on. Done 2026-08-30, as part of the same
-    change as the ExpertInterface segregation below - see roadmap.md sections 30 and 36.
-
-    2026-08-30: rebuilt as a branch reset onto the rebuilt `D-ui-rendering` (`5269a778`), so #78''s superseded
-    `_last_parent_of_type_` commit `cfe32ad0` does not survive the restack; pre-rebuild tip `c50d2109`
-    if it is ever wanted back. That commit is why the maintenance pass could not integrate the new base
-    and reported 19 conflicting files. The interactive layer is now on the segregated `ExpertInterface`:
-    `%save` persists through the RDR''s `ModelSaver`, and attaching an RDR to an `IPythonInterface` installs
-    the shell''s progress bar in place of the engine''s null default. Also ported to `AnswerName`/`NamespaceName`,
-    `conclusion_helper`''s presenter/suggester mixins, `...` for `UNSET`, and the validator/backward-inference
-    renames. Two defects fixed with a failing test each: the `%conclusion`/`%conditions` magics no longer
-    rejected invalid answers after `validate()` became a list, and the shipped user guide - which CI executes
-    through `test_eql_documentation.sh` - still called `FunctionInterface(answer_fn=...)`. Every function,
-    method and field across the 21 files this PR adds now carries a docstring. test_eql_rdr: 524 passed,
-    2 skipped (341 on the base, 183 added). See roadmap.md section 36.
-
-
-    2026-08-30 (later): a fresh `/plan-item-resolve` session found a 50-thread review round opened on
-    #76 between 14:34Z and 17:13Z - twenty-five minutes after the rebuild session posted its own completion
-    note and stopped - and none of it recorded here. Sixth instance of that staleness class on this plan.
-    Applied as `a07a4458` and `c40da8fa`. The substantive part is a redesign the round asked for rather
-    than conformance: the magics are classes under a `Magic` base, each carrying its own name, collaborators
-    and `register(shell)`; `MagicName`, `MagicKind` and `NamespaceKey` replace the name literals and the
-    four private key constants; `%knows` becomes `%sufficient_conditions_for`; the prompt sections become
-    eleven `PromptSection` subclasses identified by a `PromptSectionName` member; and the 1,456-line prompt-sections
-    test splits into four files named for their subjects. `rdr/__init__.py` is restored to the base, so
-    the pull request no longer touches it. Magic selection and registration were reachable only through
-    a real terminal, so eight tests now cover them against a shell stub. test_eql_rdr: 532 passed, 2 skipped.
-    Forty-five threads replied to and resolved; five replied to and left open, because the answer differed
-    from the ask or the identifier belongs to #79, #67 or the base template - see roadmap.md decisions
-    5 and 6.
-
-
-    2026-08-30 (later still): a `/plan-item-resolve` session read the pull request''s live state and found
-    the round was not finished. The roadmap''s count of five threads answered-and-left-open is stale:
-    the developer resolved three of them, accepting the answers as given (the `match`/`case` lookup table,
-    the removed `except Exception: pass`, and the `elision` rename declined for want of a better word).
-    The remaining two carry fresh instructions rather than agreement, and neither change lands on #76:
-    the generated-model header goes to the pull request that owns `templates/rdr_module.py.jinja`, which
-    is #66 (`D-core-serialization`), open and unmerged; the side-by-side column labels go to #79.
-
-
-    Both dependencies read ready and the head is current: #76''s base sha is #79''s head sha, so there
-    is no restack owed here. The pull request is out of draft, and nothing in the record says a session
-    marked it so, which is why it was left ready rather than restored to draft.
-
-
-    2026-08-30 (resolve): the two threads the reviewer answered at 21.55Z/21.56Z are worked. The side-by-side
-    labels became `CaseColumnLabel` in `case_table.py` on `D-ui-rendering` where he directed them (`5a84033eb`),
-    and this branch merged that tip and put `test_ipython_side_by_side.py` onto the members (`783546029`);
-    that thread is replied to and resolved. `rdr/__init__.py` is out of #76''s diff for real now - the
-    round''s own reply had claimed it was, but the PR-wide `format_docstrings.py` sweep had reflowed the
-    base''s one-line module docstring into three, so the file stayed modified; the formatter reproduces
-    that every time it runs over the file, so the sweep has to skip it. The generated-model header is
-    the one thread still open, and deliberately - `templates/rdr_module.py.jinja` belongs to #66 (`D-core-serialization`),
-    open and unmerged, so by the reviewer''s own rule it changes there, five branches down and in another
-    plan. Replied with the proposed wording and left open pending the developer''s word on whether this
-    session pushes to #66. See roadmap.md sections 7 to 9.
-
-
-    2026-08-30 (resolve, second half): the developer chose to have the header change pushed rather than
-    deferred, so it landed in #66 (`bb01256df`) with the first test of that header, and #76 brought its
-    three `fitted_models/` copies onto the new wording (`1045c6d5a`). Both threads from the round are
-    now replied to and resolved, and the item has no open review threads left. `rdr-core-engine`''s D-core-serialization
-    item records the #66 side. What is knowingly inconsistent until the stack restacks: `rdr_module.py.jinja`
-    on this branch is #66''s file and untouched here, so it still reads the old line while the three generated
-    modules beside it read the new one, and regenerating a model on this branch before #66 arrives would
-    put the old header back.'
+  notes: '2026-08-23: outstanding work added from the #159 review - **default the progress
+    reporter to IPythonProgressBar here**. The engine keeps NullProgressReporter, which is
+    the only default correct for a caller it knows nothing about; the developer agreed the
+    interactive default belongs in this layer, which is the one that knows there is a shell
+    to draw on. Done 2026-08-30, as part of the same change as the ExpertInterface segregation
+    below - see roadmap.md sections 30 and 36.'
   blockers:
-  - CI has never run on this branch - the pull request reports zero check runs on any head it has had
-    - so every figure recorded for it is a local measurement. This session could not close that gap either,
-    because the container has no project interpreter provisioned; the suite ran with --noconftest against
-    the packages the rdr modules import (415 passed, 119 skipped of 534 collected, identical before and
-    after the change) and the conftest-dependent tests were not exercised.
+  - CI has never run on this branch - the pull request reports zero check runs on any head
+    it has had - so every figure recorded for it is a local measurement.
 - id: D-ui-splice-fix
   title: 'RDR engine: fix rule-tree splice for attributes reused across sibling branches'
   branch: D-ui-splice-fix
@@ -156,17 +66,15 @@ items:
   depends_on: []
   status: deferred
   session: https://claude.ai/code/session_01B3Ji1kNxRinif4y1dD2xPy
-  notes: 'Closed 2026-07-31 as superseded by #118, which fixed the same rule-tree splice defect at the
-    façade level from the owning rule-tree context, rather than by reintroducing `_last_parent_of_type_`
-    — a symbol main had deleted, and a structural-accessor read dag-facade-hardening''s guard test forbids.
-    Its regression test was not carried over: it lives in `test/krrood_test/test_eql_rdr/`, absent on
-    main, and asserts through `walk_rules`/`classify_case`, so #118 covers the defect DSL-only at the
-    accessor''s own contract level. The test can be re-added against the fixed API once `test_eql_rdr/`
-    lands, and needs no production change to pass. The branch is kept, which is what let D-ui-rendering
-    and D-ui be rebuilt without it.'
+  notes: 'Closed 2026-07-31 as superseded by #118, which fixed the same rule-tree splice defect
+    at the façade level from the owning rule-tree context, rather than by reintroducing `_last_parent_of_type_`
+    — a symbol main had deleted, and a structural-accessor read dag-facade-hardening''s guard
+    test forbids. Its regression test was not carried over: it lives in `test/krrood_test/test_eql_rdr/`,
+    absent on main, and asserts through `walk_rules`/`classify_case`, so #118 covers the defect
+    DSL-only at the accessor''s own contract level.'
   blockers:
-  - 'Recorded against d-core-backend (#210) in the rdr-core-engine plan, though the item is deferred and
-    its own pull request is closed as superseded by #118.'
+  - 'Recorded against d-core-backend (#210) in the rdr-core-engine plan, though the item is
+    deferred and its own pull request is closed as superseded by #118.'
 - id: D-store
   title: 'D-store: RDRFileStore for the @rdr model-file lifecycle'
   branch: D-store
@@ -174,49 +82,12 @@ items:
   track: decorator
   depends_on:
   - D-ui
-  status: in_progress
-  notes: 'Path resolution + model-file lifecycle; standalone, no decorator dependency.
-
-
-    2026-08-30 (later): a `/plan-item-resolve` session read the branch''s live state and found the restack
-    the roadmap''s Open section predicted, never recorded on the item: the head is from 2026-07-19, its
-    CI is red, and the branch was skipped by two maintenance passes. Recorded as blockers before any work
-    started.
-
-
-    The slice''s own content survives the rebuild intact - one commit, two new files, and neither exists
-    on the rebuilt base - but it was written against interfaces that have since moved, the same class
-    of drift #79 and #76 each hit: `FunctionInterface(answer_fn=...)` is `answer_function`, `rdr.utils.UNSET`
-    is gone in favour of `...`, and the answer-dictionary keys are `AnswerName` members.
-
-
-    The rebuilt base also now carries a `ModelSaver` abstraction whose `FileModelSaver` performs `RDRFileStore.save`''s
-    exact body, so the store is rebuilt as a `ModelSaver` rather than as a second, parallel persistence
-    path - which is also what lets `@rdr` hand the store straight to `rdr.model_saver`, the seam #76 moved
-    `%save` onto.
-
-
-    2026-08-31 (resolved): rebuilt as a branch reset onto `D-ui`, per decision 1, so #78''s `cfe32ad0`
-    does not survive the restack; pre-rebuild tip `07cb6831`. The slice''s own work replayed unchanged
-    in shape - one commit, `rdr/file_store.py` and its test - and #80 now reads 417 additions across 5
-    files rather than 14,994 across 47. Restacked a second time onto `1045c6d5a` when `D-ui` gained a
-    commit mid-session. `test_eql_rdr`: 548 passed, 2 skipped, against 532 passed, 2 skipped on the base;
-    whole `krrood_test`, 2359 passed, with only the two Graphviz-binary failures that fail identically
-    on `main`. Verified on Python 3.12, matching CI, because on 3.11 `code_generation.imports.validate_annotations`
-    raises on `parameter_name in PythonBuiltinParameterNames` - a `StrEnum` value-containment check that
-    only works from 3.12, though `requires-python` says 3.10.
-
-
-    The store is now a `ModelSaver`. The base grew that abstraction while this branch sat on a dead base,
-    and `FileModelSaver` already performs the body `save()` would have duplicated; being one is also what
-    lets `@rdr` hand the store to `rdr.model_saver`, the seam #76 moved `%save` onto. Reading a model
-    before one exists raises `ModelFileMissing` rather than a bare `FileNotFoundError`.
-
-
-    Two defects outside this slice had to be fixed for a saved model to load at all - see roadmap sections
-    11 and 12. The template one is #226 off `main`, ported here; the `save_rdr_with_case` base-class one
-    belongs to #66 and was applied here, because this is the first slice that writes a generated case
-    type to a file and imports it back.'
+  status: in progress
+  notes: 'Path resolution + model-file lifecycle; standalone, no decorator dependency. 2026-08-30
+    (later): a `/plan-item-resolve` session read the branch''s live state and found the restack
+    the roadmap''s Open section predicted, never recorded on the item: the head is from 2026-07-19,
+    its CI is red, and the branch was skipped by two maintenance passes. Recorded as blockers
+    before any work started.'
   session: https://claude.ai/code/session_01Lr5K9cBX5g6YrFEErmJMYZ
 - id: D-deco
   title: 'D-deco: @rdr decorator + RDR file store (final rdr-engine slice)'
@@ -225,56 +96,12 @@ items:
   track: decorator
   depends_on:
   - D-store
-  status: in_progress
+  status: in progress
   session: https://claude.ai/code/session_01Wf62T3vDfRPgxbi4ew7KAm
-  notes: >-
-    rdr() factory + RDRWrapper, stacked on D-store.
-
-    2026-08-31 (resolve): the restack the roadmap's Open section had predicted since the rebuilds.
-    The head was from 2026-07-19 and still merged D-store's pre-rebuild tip `07cb6831`, so it
-    carried #78's `cfe32ad0`; GitHub read the pull request `dirty` at 16,493 additions across 52
-    files, and two maintenance passes had each hit 44 conflicting files and left it `needs-
-    resolution`. Rebuilt as a branch reset onto `ae3fdb05`, per decision 1, never a merge; pre-
-    rebuild tip `c46c0c5b`. The slice's own work replays as one commit, 1,529 lines in 6 files.
-
-    The same interface drift #79, #76 and #80 each hit: `rdr.utils.UNSET` is `...`,
-    `EQLSingleClassRDR.save_path` is the `ModelSaver` strategy so the wrapper hands the store to
-    `rdr.model_saver`, `RDRFileStore.func` is `function`, `FunctionInterface(answer_fn=)` is
-    `answer_function`, and the answer keys are `AnswerName` members. Generation also passes
-    `base_class=FunctionCase` - the rdr layer's own - which is #80's second defect applied on the
-    generate path rather than only the save path.
-
-    The defect this slice surfaced is that `@rdr` could not work as a decorator at all on the
-    rebuilt base. A model file imports the decorated function back by name and the decorator reads
-    that file during decoration, while the defining module is still executing its own body, so the
-    `@` has not bound the name and the import fails on a partially initialized module - for every
-    function, in a real module and in `__main__` alike. The developer chose the fix in
-    `decorator.py` over `FunctionCaseGenerator` or `RDRFileStore`, both of which belong to other
-    slices: `function_bound_to_its_own_name` binds the undecorated function for the duration of
-    the read and restores what the module held. See roadmap decision 13.
-
-    One deliberate behaviour change: only `...` means no rule fired, so a rule concluding `None`
-    is honoured rather than discarded. See roadmap decision 14.
-
-    Verified on Python 3.12, matching CI. `test_eql_rdr`: 576 passed, 2 skipped, against 549
-    passed, 2 skipped measured on the base itself - exactly the 27 added, nothing else moved. Both
-    guides' code cells were extracted and executed, which is not optional for the user guide since
-    `test_eql_documentation.sh` runs it as a CI job. CI has never run on this branch's current
-    stack, so every figure is a local measurement.
-
-    2026-09-02 (integration): the `integration-conflict` block from 2026-08-31 is cleared - the
-    break no longer reproduces. It was recorded with no named partner (`breaks_against` null), so
-    there was never a second branch to re-check against; what could be re-measured is whether a
-    current build still carries the failure, and it does not. Merging this branch's head
-    `6d97d494` into the published build `dabaf6f2` (`integration-20260901-200409`) is
-    conflict-free and brings the whole `D-core-backend` to `D-deco` stack in, none of which that
-    build carried; the configured integration suite gives 1041 passed, 0 failed on that tree and
-    1041 passed, 0 failed on the build without it, over the same collected set, since this branch
-    adds no `.claude/` tests. The tree the 08-31 failure was found in no longer exists: this
-    branch was restacked on 2026-09-02 21:12, and `D-store`, `D-ui` and `D-ui-rendering` the same
-    day.
-
-    Nothing could have lifted that block on its own. No reproduction test was pushed onto the
-    branch when it was blocked, and `clear-fixed-breaks` reads an empty reproduction run as
-    nothing recorded rather than everything fixed, so a branch withheld from every build is
-    exactly the one nobody re-measures. See roadmap decision 15.
+  notes: 'rdr() factory + RDRWrapper, stacked on D-store. 2026-08-31 (resolve): the restack
+    the roadmap''s Open section had predicted since the rebuilds. The head was from 2026-07-19
+    and still merged D-store''s pre-rebuild tip `07cb6831`, so it carried #78''s `cfe32ad0`;
+    GitHub read the pull request `dirty` at 16,493 additions across 52 files, and two maintenance
+    passes had each hit 44 conflicting files and left it `needs- resolution`. Rebuilt as a
+    branch reset onto `ae3fdb05`, per decision 1, never a merge; pre- rebuild tip `c46c0c5b`.
+    The slice''s own work replays as one commit, 1,529 lines in 6 files.'
