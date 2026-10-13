@@ -53,14 +53,22 @@ items:
   session: https://claude.ai/code/session_015Fy3XzLVV5i2amFd9Mkh5Q
   track: legibility
   blockers:
-  - Under upstream review as cram2/cognitive_robot_abstract_machine#725, which sits on this
-    branch's current head 3fe59780d.
+    - >-
+      Changes requested on cram2/cognitive_robot_abstract_machine#725 by sunava (2026-10-12), one
+      unresolved thread at basstler/templates/dashboard.html:705: clicking a hidden (deferred)
+      item's sidebar link, e.g. a deferred item with a merged PR listed under "Fix the manifest",
+      does nothing because its card stays hidden. The link should reveal the card. tomsch420
+      approved.
   depends_on: []
-  notes: 'A deferred item is intentionally paused or superseded, so it is the same kind of
-    noise on a dashboard as a done one, and done items have been hidden behind a sidebar toggle
-    since the dashboard existed. `rdr-refactor` shows it: eight of its items are deferred
-    and sit inline among the live ones. This gives deferred its own checkbox, hidden by default,
-    parallel to "Show done / merged items". The substance is the indentation, not the checkbox.'
+  notes: >
+    A deferred item is intentionally paused or superseded, so it is the same kind of noise on a
+    dashboard as a done one, and done items have been hidden behind a sidebar toggle since the
+    dashboard existed. `rdr-refactor` shows it: eight of its items are deferred and sit inline among
+    the live ones. This gives deferred its own checkbox, hidden by default, parallel to "Show done /
+    merged items". The substance is the indentation, not the checkbox.
+
+    2026-10-13: upstream review read via /upstream-reviews. One open thread (sunava): sidebar links
+    to hidden items must reveal the card. Not yet fixed on the branch.
 - id: dashboard-refresh-button
   title: Refresh button in the dashboard masthead, copying the command that rebuilds the page
   branch: claude/rdr-dashboard-refresh-button-tpuvo9
