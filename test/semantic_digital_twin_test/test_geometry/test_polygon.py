@@ -145,3 +145,23 @@ def test_a_polygon_turns_about_its_own_centroid_wherever_it_lies():
     moved = Polygon2D(square.vertices + np.array([5.0, -3.0]))
 
     assert moved.rotational_symmetry_angle() == square.rotational_symmetry_angle()
+
+
+# %% how far points lie from a polygon's edges
+
+
+def test_a_corner_lies_on_the_boundary():
+    square = Polygon2D.rectangle(width=2.0, length=2.0)
+
+    assert square.distance_to_boundary(square.vertices) == pytest.approx(
+        np.zeros(len(square.vertices))
+    )
+
+
+def test_a_point_is_as_far_from_the_boundary_as_from_its_nearest_edge():
+    square = Polygon2D.rectangle(width=2.0, length=2.0)
+    points = np.array([(0.0, 0.0), (3.0, 0.0), (2.0, 2.0)])
+
+    assert square.distance_to_boundary(points) == pytest.approx(
+        [1.0, 2.0, math.sqrt(2.0)]
+    )

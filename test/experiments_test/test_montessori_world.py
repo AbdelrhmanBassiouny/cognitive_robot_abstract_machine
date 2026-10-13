@@ -435,8 +435,8 @@ def test_add_robot_stand_spawns_a_table_at_the_mount_height():
 def test_a_loose_shape_wears_the_colour_measured_off_the_real_piece():
     montessori = MontessoriWorld()
 
-    pieces = PieceSet.this_lab()
-    measured = {piece.category: piece.color for piece in pieces.pieces}
+    pieces = PieceSet.full_size()
+    measured = {type(piece): PieceSet.color_of(piece) for piece in pieces.pieces}
     coloured = {
         type(shape): shape.root.visual[0].color
         for shape in montessori.world.get_semantic_annotations_by_type(MontessoriShape)

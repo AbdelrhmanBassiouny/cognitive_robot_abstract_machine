@@ -84,6 +84,12 @@ class Hue:
     How many degrees take a hue once round the colour circle, back to where it started.
     """
 
+    DECIMAL_PLACES: ClassVar[int] = 9
+    """
+    How many decimal places of a degree a hue read off a color keeps, which drops the
+    rounding error that converting to red, green and blue and back leaves behind.
+    """
+
     def distance(self, degrees: npt.ArrayLike) -> npt.ArrayLike:
         """
         How far the given hues lie from this one, the short way round the colour circle.
@@ -280,7 +286,8 @@ class Color:
         ..note:: A color with no saturation has no hue to speak of and reads as red.
         """
         fraction_of_a_turn, _, _ = colorsys.rgb_to_hsv(*self.to_rgb())
-        return Hue(fraction_of_a_turn * Hue.FULL_TURN)
+        degrees = round(fraction_of_a_turn * Hue.FULL_TURN, Hue.DECIMAL_PLACES)
+        return Hue(degrees % Hue.FULL_TURN)
 
     @classmethod
     def PINK(cls) -> Self:
@@ -2174,6 +2181,27 @@ class Polygon2D:
         """
         cosine, sine = math.cos(angle), math.sin(angle)
         return Polygon2D(self.vertices @ np.array([[cosine, sine], [-sine, cosine]]))
+
+    def distance_to_boundary(self, points: np.ndarray) -> np.ndarray:
+        """
+        How far points lie from this polygon's nearest edge, inside or out.
+
+        :param points: The points, as ``(n, 2)`` ``(x, y)`` pairs.
+        :return: Each point's distance to the boundary.
+        """
+        starts = self.vertices
+        edges = np.roll(starts, -1, axis=0) - starts
+        offsets = np.asarray(points, dtype=float)[:, None, :] - starts[None, :, :]
+        along = np.clip(
+            np.einsum("pek,ek->pe", offsets, edges)
+            / np.einsum("ek,ek->e", edges, edges),
+            0.0,
+            1.0,
+        )
+        nearest = starts[None, :, :] + along[..., None] * edges[None, :, :]
+        return np.linalg.norm(
+            np.asarray(points, dtype=float)[:, None, :] - nearest, axis=-1
+        ).min(axis=1)
 
     def rotational_symmetry_angle(self) -> float:
         """

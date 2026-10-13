@@ -27,8 +27,77 @@ import numpy as np
 from typing_extensions import List, Optional, Sequence, Tuple
 
 from experiments.montessori.perception.edges import EdgeDistances
-from experiments.montessori.pieces import KnownPiece, PieceSet
-from semantic_digital_twin.world_description.geometry import Hue
+from experiments.montessori.pieces import PieceSet
+from experiments.montessori.semantics import MontessoriShape
+from semantic_digital_twin.world_description.geometry import Hue, Polygon2D
+
+# %% one piece as it is fitted
+
+
+@dataclass(frozen=True, eq=False)
+class PieceOutline:
+    """
+    One piece's outline as a fit lays it over the edges: what the piece covers resting
+    on its own flat face, and the turns it can be told apart in.
+    """
+
+    piece: MontessoriShape
+    """
+    The piece the outline belongs to.
+    """
+
+    outline: Polygon2D
+    """
+    What the piece covers resting on its own flat face, about its own centre, in metres.
+    """
+
+    distinct_turn: Optional[float]
+    """
+    The smallest turn about its centre, in radians, that changes how the outline looks
+    at the resolution it is fitted at, or None when no turn does.
+
+    An orientation is only ever reported within half of this either way, since a larger
+    turn is indistinguishable from a smaller one.
+    """
+
+    @classmethod
+    def of(cls, piece: MontessoriShape, resolution: float) -> PieceOutline:
+        """
+        The outline of a piece, with the turns it can be told apart in.
+
+        A piece is taken to look the same at every turn when turning it by half its
+        symmetry moves its outline by less than the resolution: the pieces' round
+        outlines are many-cornered polygons, whose corners no picture resolves.
+
+        :param piece: A piece of a set.
+        :param resolution: The smallest distance, in metres, the fit can tell apart.
+        """
+        outline = PieceSet.outline_of(piece)
+        symmetry = outline.rotational_symmetry_angle()
+        half_turned = outline.turned(symmetry / 2)
+        moved = max(
+            outline.distance_to_boundary(half_turned.vertices).max(),
+            half_turned.distance_to_boundary(outline.vertices).max(),
+        )
+        return cls(
+            piece=piece,
+            outline=outline,
+            distinct_turn=symmetry if moved >= resolution else None,
+        )
+
+    def smallest_equivalent_turn(self, angle: float) -> float:
+        """
+        The smallest turn that leaves this piece looking the way the given one does.
+
+        :param angle: A turn about the world frame's z-axis, in radians.
+        :return: The same turn brought within half a :attr:`distinct_turn` of zero, or
+            zero for a piece no turn changes.
+        """
+        if self.distinct_turn is None:
+            return 0.0
+        half = self.distinct_turn / 2
+        return (angle + half) % self.distinct_turn - half
+
 
 # %% what a fit came to
 
@@ -39,7 +108,7 @@ class MatchedPiece:
     Which known piece the edges were recognised as, and where it stands.
     """
 
-    piece: KnownPiece
+    piece: MontessoriShape
     """
     The piece the edges were recognised as.
     """
@@ -79,7 +148,7 @@ class PieceMatcher:
     that placement, to settle its position and its turn.
     """
 
-    piece_set: PieceSet = field(default_factory=PieceSet.this_lab)
+    piece_set: PieceSet = field(default_factory=PieceSet.full_size)
     """
     The pieces that may be found on the table, and how closely a measured colour must
     match one of theirs.
@@ -170,7 +239,10 @@ class PieceMatcher:
         if not candidates:
             return None
         best = max(
-            (self._fit(piece, edges, seed) for piece in candidates),
+            (
+                self._fit(PieceOutline.of(piece, self.step), edges, seed)
+                for piece in candidates
+            ),
             key=lambda fit: fit.outline_agreement,
         )
         if best.outline_agreement < self.minimum_agreement:
@@ -178,7 +250,7 @@ class PieceMatcher:
         return best
 
     def _fit(
-        self, piece: KnownPiece, edges: EdgeDistances, seed: Tuple[float, float]
+        self, piece: PieceOutline, edges: EdgeDistances, seed: Tuple[float, float]
     ) -> MatchedPiece:
         """
         Place and turn one piece until its outline follows the edges as closely as it
@@ -210,7 +282,7 @@ class PieceMatcher:
 
     def _sweep(
         self,
-        piece: KnownPiece,
+        piece: PieceOutline,
         edges: EdgeDistances,
         center: Tuple[float, float],
         angles: Sequence[float],
@@ -244,7 +316,7 @@ class PieceMatcher:
 
     def _best_position(
         self,
-        piece: KnownPiece,
+        piece: PieceOutline,
         edges: EdgeDistances,
         positions: np.ndarray,
         angle: float,
@@ -264,27 +336,27 @@ class PieceMatcher:
         agreements = edges.agreement(outline[None, :, :] + positions[:, None, :], reach)
         best = int(np.argmax(agreements))
         return MatchedPiece(
-            piece=piece,
+            piece=piece.piece,
             center=(float(positions[best][0]), float(positions[best][1])),
             yaw=piece.smallest_equivalent_turn(angle),
             outline_agreement=float(agreements[best]),
         )
 
     @staticmethod
-    def _turns_of(piece: KnownPiece, step: float) -> List[float]:
+    def _turns_of(piece: PieceOutline, step: float) -> List[float]:
         """
-        The turns a piece is worth trying, which span one of its rotation periods about
+        The turns a piece is worth trying, which span one of its distinct turns about
         zero and so hold every orientation it can be told apart in.
 
         :param piece: The piece to turn.
         :param step: How finely to turn it, in radians.
         """
-        if piece.rotation_period is None:
+        if piece.distinct_turn is None:
             return [0.0]
-        steps = int(piece.rotation_period / 2 / step)
+        steps = int(piece.distinct_turn / 2 / step)
         return list(np.arange(-steps, steps + 1) * step)
 
-    def _turns_around(self, piece: KnownPiece, angle: float) -> List[float]:
+    def _turns_around(self, piece: PieceOutline, angle: float) -> List[float]:
         """
         The turns worth trying either side of one the coarse search settled on, which
         reach a full coarse step in both directions.
@@ -292,7 +364,7 @@ class PieceMatcher:
         :param piece: The piece to turn.
         :param angle: The turn to search around, in radians.
         """
-        if piece.rotation_period is None:
+        if piece.distinct_turn is None:
             return [0.0]
         steps = int(round(self.coarse_angle_step / self.angle_step))
         return list(angle + np.arange(-steps, steps + 1) * self.angle_step)

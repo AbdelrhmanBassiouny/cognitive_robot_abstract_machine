@@ -147,7 +147,7 @@ class SurfaceColors:
     colourful enough for its hue to mean something, and the pale pieces in this set wash
     out towards white where they catch the light.
     """
-    piece_set: PieceSet = field(default_factory=PieceSet.this_lab)
+    piece_set: PieceSet = field(default_factory=PieceSet.full_size)
     """
     The pieces whose colours :meth:`piece_mask` marks.
     """
@@ -683,9 +683,9 @@ class LoosePieceDetector:
                         reference_frame=reference_frame,
                     ),
                     footprint=footprint,
-                    outline=match.piece.outline.turned(match.yaw).vertices
+                    outline=PieceSet.outline_of(match.piece).turned(match.yaw).vertices
                     + np.asarray(match.center),
-                    category=match.piece.category,
+                    category=type(match.piece),
                     height=height,
                     outline_agreement=match.outline_agreement,
                 )

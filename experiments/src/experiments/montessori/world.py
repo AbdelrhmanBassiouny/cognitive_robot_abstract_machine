@@ -159,15 +159,15 @@ Default distance the spawned robot stands in front of the Montessori table's nea
 _SHAPE_COLORS: Dict[Type[MontessoriShape], Color] = {
     DiskShape: Color.YELLOW(),
     SphereShape: Color.MAGENTA(),
-} | {piece.category: piece.color for piece in PieceSet.this_lab().pieces}
+} | {type(piece): PieceSet.color_of(piece) for piece in PieceSet.full_size().pieces}
 """
 The color used to render a loose shape and the hole it fits through, keyed by the
 :class:`~experiments.montessori.semantics.MontessoriShape` subclass they share.
 
-Every kind of piece the physical set contains is drawn in the colour measured off the real
-piece (see :class:`~experiments.montessori.pieces.KnownPiece`), so the simulated scene
-and the camera are looking at the same thing. The disk and the sphere, which this set
-has none of, keep a colour of their own.
+Every kind of piece the full-size set contains is drawn in the colour measured off the
+real piece (see :class:`~experiments.montessori.pieces.PieceSet`), so the simulated
+scene and the camera are looking at the same thing. The disk and the sphere, which the
+lab's sets have none of, keep a colour of their own.
 """
 
 

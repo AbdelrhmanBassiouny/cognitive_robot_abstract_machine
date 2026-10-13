@@ -31,8 +31,7 @@ from experiments.montessori.perception.overlay import (
     project_to_pixels,
 )
 from experiments.montessori.perception.pipeline import MontessoriPerceptionPipeline
-from experiments.montessori.pieces import KnownPiece
-from experiments.montessori.semantics import CubeShape
+from experiments.montessori.semantics import CubeShape, MontessoriShape
 from semantic_digital_twin.world_description.geometry import Color
 
 from .dataset import montessori_scene_fixtures
@@ -236,7 +235,7 @@ def test_a_standing_piece_is_boxed_around_the_top_face_the_camera_sees(
 # %% cutting the view down to the workspace
 
 
-def _colored_pixels(image: np.ndarray, piece: KnownPiece) -> int:
+def _colored_pixels(image: np.ndarray, piece: MontessoriShape) -> int:
     """
     How many pixels of an image the renderer drew in one piece's own colour.
 
@@ -272,9 +271,8 @@ def test_everything_standing_in_the_workspace_stays_in_view(
     clipped = pipeline.workspace.clip(frame.color, frame)
 
     for placed in placed_pieces:
-        assert _colored_pixels(clipped, placed.known_piece) == _colored_pixels(
-            frame.color, placed.known_piece
-        )
+        piece = renderer.piece_of(placed)
+        assert _colored_pixels(clipped, piece) == _colored_pixels(frame.color, piece)
 
 
 def test_the_depth_image_is_cut_down_the_same_way_as_the_colour_one(

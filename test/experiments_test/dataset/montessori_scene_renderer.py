@@ -20,7 +20,7 @@ from typing_extensions import List, Sequence, Tuple, Type
 from experiments.montessori.hole_geometry import HoleFootprint, ShapeSortingBoardMesh
 from experiments.montessori.perception.camera import CameraIntrinsics, RgbdFrame
 from experiments.montessori.perception.pipeline import HueChannel
-from experiments.montessori.pieces import KnownPiece, PieceSet
+from experiments.montessori.pieces import PieceSet
 from experiments.montessori.semantics import MontessoriShape
 from semantic_digital_twin.spatial_types.spatial_types import (
     HomogeneousTransformationMatrix,
@@ -62,25 +62,33 @@ turns to it, and the crease between the two is an edge perception can find.
 """
 
 
-def piece_color(piece: KnownPiece) -> Tuple[int, int, int]:
+def piece_color(piece: MontessoriShape) -> Tuple[int, int, int]:
     """
     Hue, saturation and value one loose piece's top face is drawn in.
 
-    Each piece carries its own measured hue, since that is what tells the two colours in
-    this set apart.
+    Each piece wears its own measured hue, since that is what tells the two colours in
+    a set apart.
 
     :param piece: The piece to colour.
     """
-    return (HueChannel().value_of(piece.hue), PIECE_SATURATION, PIECE_BRIGHTNESS)
+    return (
+        HueChannel().value_of(PieceSet.hue_of(piece)),
+        PIECE_SATURATION,
+        PIECE_BRIGHTNESS,
+    )
 
 
-def piece_side_color(piece: KnownPiece) -> Tuple[int, int, int]:
+def piece_side_color(piece: MontessoriShape) -> Tuple[int, int, int]:
     """
     Hue, saturation and value one loose piece's sides are drawn in.
 
     :param piece: The piece to colour.
     """
-    return (HueChannel().value_of(piece.hue), PIECE_SATURATION, PIECE_SIDE_BRIGHTNESS)
+    return (
+        HueChannel().value_of(PieceSet.hue_of(piece)),
+        PIECE_SATURATION,
+        PIECE_SIDE_BRIGHTNESS,
+    )
 
 
 # %% what is in the scene
@@ -112,14 +120,6 @@ class PlacedPiece:
     How far it is turned about the world frame's z-axis, in radians.
     """
 
-    @property
-    def known_piece(self) -> KnownPiece:
-        """
-        The piece of this kind the physical set contains, which fixes its outline, its
-        height and its colour.
-        """
-        return PieceSet.this_lab().piece_for(self.category)
-
 
 @dataclass
 class MontessoriSceneRenderer:
@@ -135,6 +135,12 @@ class MontessoriSceneRenderer:
     board_height: float = 0.08
     """
     How far the board's lid stands above the table, in metres.
+    """
+
+    piece_set: PieceSet = field(default_factory=PieceSet.full_size)
+    """
+    The set the placed pieces are taken from, which fixes each one's outline, height and
+    colour.
     """
 
     reflection_spread: float = 0.0
@@ -304,7 +310,7 @@ class MontessoriSceneRenderer:
         """
         if self.reflection_spread <= 0.0:
             return
-        known = piece.known_piece
+        known = self.piece_of(piece)
         boundary = self._piece_boundary(piece)
         spread = self._pixels_across(boundary, self.reflection_spread)
         cast = np.zeros(canvas.shape[:2], dtype=np.uint8)
@@ -322,7 +328,7 @@ class MontessoriSceneRenderer:
         canvas[lit] = (
             (1 - share) * np.array(TABLE_COLOR, dtype=float) + share * smeared
         ).astype(np.uint8)[lit]
-        canvas[lit, 0] = HueChannel().value_of(known.hue)
+        canvas[lit, 0] = HueChannel().value_of(PieceSet.hue_of(known))
 
     def _pixels_across(
         self, boundary: Sequence[Tuple[float, float]], reach: float
@@ -349,23 +355,30 @@ class MontessoriSceneRenderer:
         :param canvas: The hue-saturation-value image to draw into.
         :param piece: The piece to draw.
         """
-        known = piece.known_piece
+        known = self.piece_of(piece)
         boundary = self._piece_boundary(piece)
         base = self._project(boundary, self.table_height)
-        top = self._project(boundary, self.table_height + known.height)
+        top = self._project(boundary, self.table_height + PieceSet.height_of(known))
         silhouette = cv2.convexHull(np.vstack([base, top]).astype(np.int32))
         cv2.fillPoly(canvas, [silhouette], piece_side_color(known))
         cv2.fillPoly(canvas, [top.astype(np.int32)], piece_color(known))
 
-    @staticmethod
-    def _piece_boundary(piece: PlacedPiece) -> List[Tuple[float, float]]:
+    def piece_of(self, placed: PlacedPiece) -> MontessoriShape:
+        """
+        The piece of the set a placed piece is.
+
+        :param placed: A piece placed on the table.
+        """
+        return self.piece_set.piece_for(placed.category)
+
+    def _piece_boundary(self, piece: PlacedPiece) -> List[Tuple[float, float]]:
         """
         A piece's own outline in the world frame, as the physical piece was measured and
         turned to where it was placed.
 
         :param piece: The piece to outline.
         """
-        turned = piece.known_piece.outline.turned(piece.yaw)
+        turned = PieceSet.outline_of(self.piece_of(piece)).turned(piece.yaw)
         return [(piece.x + x, piece.y + y) for x, y in turned.vertices]
 
     def _fill(

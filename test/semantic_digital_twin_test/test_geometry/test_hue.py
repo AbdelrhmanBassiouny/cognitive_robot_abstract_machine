@@ -50,3 +50,8 @@ def test_a_colour_is_read_back_at_the_hue_it_was_built_from():
     assert Color.from_hsv(built_from).hue.distance(built_from.degrees) == pytest.approx(
         0.0
     )
+
+
+def test_a_whole_degree_hue_is_read_back_exactly_from_the_colour_built_from_it():
+    for degrees in range(0, int(Hue.FULL_TURN)):
+        assert Color.from_hsv(Hue(float(degrees))).hue == Hue(float(degrees))

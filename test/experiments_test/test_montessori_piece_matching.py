@@ -10,20 +10,21 @@ import math
 import cv2
 import numpy as np
 import pytest
-from typing_extensions import List, Tuple
+from typing_extensions import List, Tuple, Type
 
 from experiments.montessori.perception.edges import EdgeDistances
 from experiments.montessori.perception.detections import MontessoriScene
 from experiments.montessori.perception.orthophoto import Orthophoto, WorkspaceRegion
-from experiments.montessori.perception.piece_matcher import PieceMatcher
+from experiments.montessori.perception.piece_matcher import PieceMatcher, PieceOutline
 from experiments.montessori.perception.pipeline import (
     MontessoriPerceptionPipeline,
     SurfaceColors,
 )
-from experiments.montessori.pieces import KnownPiece, PieceHue, PieceSet
+from experiments.montessori.pieces import PieceHue, PieceSet
 from experiments.montessori.semantics import (
     CubeShape,
     CylinderShape,
+    MontessoriShape,
     TriangularPrismShape,
 )
 from semantic_digital_twin.world_description.geometry import Hue, Polygon2D
@@ -85,11 +86,30 @@ def test_a_washed_out_region_carries_no_colour_to_read():
 
 # %% recognising a piece and how it is turned
 
-TURNABLE_PIECES = [
-    piece for piece in PieceSet.this_lab().pieces if piece.rotation_period is not None
-]
+PIECES = PieceSet.full_size()
 """
-The pieces a turn can be told on at all, so the ones a period means something for.
+The set the tests below draw and recognise pieces of.
+"""
+
+KINDS = [type(piece) for piece in PIECES.pieces]
+"""
+Every kind of piece in that set.
+"""
+
+
+def _outline(kind: Type[MontessoriShape]) -> PieceOutline:
+    """
+    The outline of the set's piece of one kind, as the matcher fits it.
+
+    :param kind: The kind of piece.
+    """
+    return PieceOutline.of(PIECES.piece_for(kind), PieceMatcher().step)
+
+
+TURNABLE_KINDS = [kind for kind in KINDS if _outline(kind).distinct_turn is not None]
+"""
+The kinds of piece a turn can be told on at all, so the ones a distinct turn means
+something for.
 """
 
 DRAWN_TABLE_COLOR = (60, 60, 60)
@@ -111,8 +131,8 @@ off the line that drew it, which costs a share of every point of the outline.
 """
 
 
-def _piece_id(piece: KnownPiece) -> str:
-    return piece.category.__name__
+def _kind_id(kind: Type[MontessoriShape]) -> str:
+    return kind.__name__
 
 
 def _drawn(
@@ -145,80 +165,95 @@ def _drawn(
     return EdgeDistances.of(Orthophoto(image=image, region=region, plane_height=0.0))
 
 
-@pytest.mark.parametrize("piece", PieceSet.this_lab().pieces, ids=_piece_id)
-def test_each_known_piece_is_recognised_from_its_own_outline(piece: KnownPiece):
+@pytest.mark.parametrize("kind", KINDS, ids=_kind_id)
+def test_each_known_piece_is_recognised_from_its_own_outline(
+    kind: Type[MontessoriShape],
+):
+    piece = _outline(kind)
     matcher = PieceMatcher()
     placed = math.radians(17)
 
-    match = matcher.match(_drawn(piece.outline.turned(placed)), (0.0, 0.0), piece.hue)
+    match = matcher.match(
+        _drawn(piece.outline.turned(placed)), (0.0, 0.0), PieceSet.hue_of(piece.piece)
+    )
 
-    assert match.piece.category is piece.category
+    assert type(match.piece) is kind
     assert match.outline_agreement > CLEAN_FIT_AGREEMENT
     assert match.yaw == pytest.approx(
         piece.smallest_equivalent_turn(placed), abs=matcher.angle_step
     )
 
 
-@pytest.mark.parametrize("piece", TURNABLE_PIECES, ids=_piece_id)
-def test_a_piece_turned_by_its_own_period_looks_untouched(piece: KnownPiece):
+@pytest.mark.parametrize("kind", TURNABLE_KINDS, ids=_kind_id)
+def test_a_piece_turned_by_its_own_period_looks_untouched(kind: Type[MontessoriShape]):
+    piece = _outline(kind)
     matcher = PieceMatcher()
 
     match = matcher.match(
-        _drawn(piece.outline.turned(piece.rotation_period)), (0.0, 0.0), piece.hue
+        _drawn(piece.outline.turned(piece.distinct_turn)),
+        (0.0, 0.0),
+        PieceSet.hue_of(piece.piece),
     )
 
-    assert match.piece.category is piece.category
+    assert type(match.piece) is kind
     assert match.yaw == pytest.approx(0.0, abs=matcher.angle_step)
 
 
 def test_an_orientation_is_reported_as_the_smallest_turn_that_reaches_it():
-    cube = PieceSet.this_lab().piece_for(CubeShape)
+    cube = _outline(CubeShape)
     matcher = PieceMatcher()
-    placed = cube.rotation_period - math.radians(10)
+    placed = cube.distinct_turn - math.radians(10)
 
-    match = matcher.match(_drawn(cube.outline.turned(placed)), (0.0, 0.0), cube.hue)
+    match = matcher.match(
+        _drawn(cube.outline.turned(placed)), (0.0, 0.0), PieceSet.hue_of(cube.piece)
+    )
 
     assert match.yaw == pytest.approx(math.radians(-10), abs=matcher.angle_step)
 
 
-@pytest.mark.parametrize("piece", PieceSet.this_lab().pieces, ids=_piece_id)
+@pytest.mark.parametrize("kind", KINDS, ids=_kind_id)
 def test_a_piece_is_found_where_it_stands_and_not_where_it_was_looked_for(
-    piece: KnownPiece,
+    kind: Type[MontessoriShape],
 ):
     """
     A piece read together with its reflection is seeded from the middle of the two, so
     the fit has to walk to the piece itself.
     """
+    piece = _outline(kind)
     matcher = PieceMatcher()
     stands_at = (0.6, 0.2)
     looked_for = (stands_at[0] - 0.012, stands_at[1] + 0.009)
 
-    match = matcher.match(_drawn(piece.outline, stands_at), looked_for, piece.hue)
+    match = matcher.match(
+        _drawn(piece.outline, stands_at), looked_for, PieceSet.hue_of(piece.piece)
+    )
 
     assert match.center == pytest.approx(stands_at, abs=matcher.step)
 
 
 def test_a_piece_is_never_recognised_as_one_of_the_other_colour():
-    cylinder = PieceSet.this_lab().piece_for(CylinderShape)
+    cylinder = _outline(CylinderShape)
     matcher = PieceMatcher()
     edges = _drawn(cylinder.outline)
 
-    recognised = matcher.match(edges, (0.0, 0.0), cylinder.hue)
+    recognised = matcher.match(edges, (0.0, 0.0), PieceSet.hue_of(cylinder.piece))
     seen_yellow = matcher.match(edges, (0.0, 0.0), PieceHue.YELLOW)
 
-    assert recognised.piece.category is CylinderShape
-    assert seen_yellow is None or seen_yellow.piece.hue == PieceHue.YELLOW
+    assert type(recognised.piece) is CylinderShape
+    assert seen_yellow is None or PieceSet.hue_of(seen_yellow.piece) == Hue(
+        PieceHue.YELLOW.degrees
+    )
 
 
 def test_a_colour_no_piece_wears_leaves_nothing_to_recognise():
-    cube = PieceSet.this_lab().piece_for(CubeShape)
+    cube = _outline(CubeShape)
     unworn = Hue((PieceHue.CYAN.degrees + PieceHue.YELLOW.degrees) / 2)
 
     assert PieceMatcher().match(_drawn(cube.outline), (0.0, 0.0), unworn) is None
 
 
 def test_edges_no_known_piece_follows_are_refused():
-    reach = max(piece.radius for piece in PieceSet.this_lab().pieces) * 1.5
+    reach = max(np.abs(_outline(kind).outline.vertices).max() for kind in KINDS) * 1.5
     sprawl = np.array(
         [[-reach, -reach], [reach, -reach], [reach, reach], [-reach, reach]]
     )
@@ -230,11 +265,11 @@ def test_edges_no_known_piece_follows_are_refused():
 
 
 def test_an_outline_with_no_colour_to_read_is_recognised_by_its_shape_alone():
-    triangle = PieceSet.this_lab().piece_for(TriangularPrismShape)
+    triangle = _outline(TriangularPrismShape)
 
     match = PieceMatcher().match(_drawn(triangle.outline), (0.0, 0.0), None)
 
-    assert match.piece.category is TriangularPrismShape
+    assert type(match.piece) is TriangularPrismShape
 
 
 def test_a_reflection_around_a_piece_does_not_move_where_it_is_recognised():
@@ -243,30 +278,32 @@ def test_a_reflection_around_a_piece_does_not_move_where_it_is_recognised():
     by colour takes in along with the piece; the edges the fit follows are the piece's
     own.
     """
-    cube = PieceSet.this_lab().piece_for(CubeShape)
+    cube = _outline(CubeShape)
     stands_at = (0.6, 0.2)
     edges = _drawn(cube.outline, stands_at)
 
-    match = PieceMatcher().match(edges, (stands_at[0] - 0.015, stands_at[1]), cube.hue)
+    match = PieceMatcher().match(
+        edges, (stands_at[0] - 0.015, stands_at[1]), PieceSet.hue_of(cube.piece)
+    )
 
-    assert match.piece.category is CubeShape
+    assert type(match.piece) is CubeShape
     assert match.center == pytest.approx(stands_at, abs=0.002)
 
 
-@pytest.mark.parametrize("piece", TURNABLE_PIECES, ids=_piece_id)
+@pytest.mark.parametrize("kind", TURNABLE_KINDS, ids=_kind_id)
 def test_a_piece_is_detected_at_the_angle_it_was_placed(
     renderer: MontessoriSceneRenderer,
     pipeline: MontessoriPerceptionPipeline,
-    piece: KnownPiece,
+    kind: Type[MontessoriShape],
 ):
     placed = math.radians(25)
-    frame = renderer.render([PlacedPiece(piece.category, x=0.58, y=0.15, yaw=placed)])
+    frame = renderer.render([PlacedPiece(kind, x=0.58, y=0.15, yaw=placed)])
 
     [detected] = pipeline.detect(frame).shapes
 
-    assert detected.category is piece.category
+    assert detected.category is kind
     assert detected.yaw == pytest.approx(
-        piece.smallest_equivalent_turn(placed), abs=math.radians(4)
+        _outline(kind).smallest_equivalent_turn(placed), abs=math.radians(4)
     )
 
 
