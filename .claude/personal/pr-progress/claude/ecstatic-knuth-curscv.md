@@ -11,7 +11,8 @@ Done:
 - #488 = #202 at 136ea6888 (ab39a37e7, 14 files, 79 passed). #202 montessori tests: 65 passed, 1 skipped.
 - hole_for finds a shape's hole by fit alone (name preference removed); that thread is resolved.
 - Answered the partial-description question on the KnownPiece thread: #265 has EQL look requests,
-  not observation-vs-PieceSet matching. Proposed tracking that separately; thread left open.
+  not observation-vs-PieceSet matching. #265 is an integration branch (never merged; extract from
+  it), so that work would be its own PR extracting LookRequest/PerceptionBackend. Thread left open.
 
 Next:
 - CI on #202 136ea6888 and #488 ab39a37e7 (not polled; ORM mapping of PieceSet unverified here).
