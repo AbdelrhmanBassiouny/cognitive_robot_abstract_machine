@@ -130,6 +130,12 @@ Short of one because an edge found in a millimetre-resolution picture lies about
 off the line that drew it, which costs a share of every point of the outline.
 """
 
+GRID_ROUNDING = 1e-9
+"""
+How far, in metres, floating-point arithmetic may carry a placement past a whole number
+of the matcher's grid steps.
+"""
+
 
 def _kind_id(kind: Type[MontessoriShape]) -> str:
     return kind.__name__
@@ -228,7 +234,7 @@ def test_a_piece_is_found_where_it_stands_and_not_where_it_was_looked_for(
         _drawn(piece.outline, stands_at), looked_for, PieceSet.hue_of(piece.piece)
     )
 
-    assert match.center == pytest.approx(stands_at, abs=matcher.step)
+    assert match.center == pytest.approx(stands_at, abs=matcher.step + GRID_ROUNDING)
 
 
 def test_a_piece_is_never_recognised_as_one_of_the_other_colour():
