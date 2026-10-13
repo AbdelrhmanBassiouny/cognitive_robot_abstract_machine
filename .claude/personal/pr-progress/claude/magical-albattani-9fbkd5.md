@@ -1,17 +1,18 @@
-Two PRs, decided with the user: full krrood is 2 GB / ~2.5 min install, unfit for a plugin.
+PR B (not yet opened): basstler adopts krrood_core. Stacked on #501, with #506
+(claude/krrood-core-package, krrood_core package) merged in.
 
 Plan
-- PR A `claude/krrood-core-package` off main: new light workspace package `krrood_core`
-  (deps: typing_extensions only) holding DataclassException, classproperty, singleton,
-  SubclassJSONSerializer/DataclassJSONSerializer core, SubClassSafeGeneric, PathEnumeration;
-  krrood depends on it and re-exports at the old paths; numpy/scipy/SortedSet serializers stay.
-- PR B (this branch) off #501 with PR A merged in: basstler depends on krrood_core; exceptions
-  -> DataclassException; board.json/run report round-trips -> serializer; drop basstler's
-  classproperty/PathEnumeration; session start installs ./krrood_core editable.
-- Add both as items to plan basstler-package.
+- Exceptions -> DataclassException in one basstler/exceptions.py. User chose: tool exit
+  codes move to basstler/exit_codes.py as PlanItemBootstrapExitCode/PlanItemModeExitCode;
+  ExecutionMode to its own small module; ClassVar exit_code -> classproperty.
+- board.json round-trip (BoardExport.as_json / stack.load_board) -> krrood_core serializer.
+  Stdout reports stay hand-shaped (user: round-trips only).
+- Live-verify a fresh session start (delete basstler/.venv), open draft PR (base #501's
+  branch claude/brave-archimedes-nonocl), add both PRs as items in plan basstler-package.
 
 Done
-- Branch re-cut from #501 head. Measured krrood cost.
+- Install wiring (BASSTLER_WORKSPACE_DEPENDENCIES etc.), classproperty/PathEnumeration
+  from krrood_core. Suite: 751 pass (CI-like env: scratchpad cienv first on PATH).
 
 Next
-- Build PR A.
+- exit_codes module, then exceptions.py.
