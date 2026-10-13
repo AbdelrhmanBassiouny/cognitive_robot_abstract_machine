@@ -178,11 +178,24 @@ class GitHubRepository(ForkPullRequests):
         :return: The client.
         :raises GitHubCredentialUnavailableError: If no token is set.
         """
-        for variable in CREDENTIAL_VARIABLES:
-            token = os.environ.get(variable)
-            if token:
-                return cls(repository, token)
-        raise GitHubCredentialUnavailableError(CREDENTIAL_VARIABLES)
+        token = cls.environment_token()
+        if token is None:
+            raise GitHubCredentialUnavailableError(CREDENTIAL_VARIABLES)
+        return cls(repository, token)
+
+    @staticmethod
+    def environment_token() -> str | None:
+        """
+        :return: The first non-empty credential the environment carries, if any.
+        """
+        return next(
+            (
+                os.environ[variable]
+                for variable in CREDENTIAL_VARIABLES
+                if os.environ.get(variable)
+            ),
+            None,
+        )
 
     def open_pull_requests(self) -> list[PullRequestRecord]:
         return self.pull_requests(ListedPullRequestState.OPEN)

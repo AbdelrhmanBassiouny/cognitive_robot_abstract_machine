@@ -602,6 +602,27 @@ missing_dependencies() {
   echo ${missing}
 }
 
+# require_basstler_python: exits the calling script, saying what to run, unless
+# BASSTLER_PYTHON exists and has every requirement of the package. A session
+# start installs them; a checkout where that never ran reaches this message
+# instead of a traceback.
+require_basstler_python() {
+  if ! command -v "${BASSTLER_PYTHON}" > /dev/null 2>&1; then
+    echo "${BASSTLER_PYTHON} is required to run the basstler package." >&2
+    exit 1
+  fi
+  local missing
+  if ! missing="$(missing_dependencies)"; then
+    echo "Could not read what the basstler package requires from ${BASSTLER_PYPROJECT_FILE}." >&2
+    exit 1
+  fi
+  if [ -n "${missing}" ]; then
+    echo "The basstler package's requirements are not installed for ${BASSTLER_PYTHON}: ${missing}" >&2
+    echo "Start a new session, or run: pip --python ${BASSTLER_PYTHON} install --editable ./${BASSTLER_SOURCE_TREE}" >&2
+    exit 1
+  fi
+}
+
 # create_basstler_environment: creates BASSTLER_ENVIRONMENT_DIRECTORY from an
 # interpreter satisfying BASSTLER_PYTHON_REQUIREMENT, leaving what the creating
 # tool said in BASSTLER_ENVIRONMENT_OUTPUT and returning its exit status.

@@ -8,7 +8,10 @@ branch.
 
 Usage:
     python3 -m basstler.progress_notes prune --directory <pr-progress-directory> \\
-        --remote-url <url> --remote-branches <file> --keep <branch>
+        --remote <name> --keep <branch>
+
+Pruning is never fatal to a save: without a GitHub credential or a readable remote it
+says why and removes nothing.
 """
 
 from __future__ import annotations
@@ -20,6 +23,7 @@ from enum import StrEnum
 from pathlib import Path
 
 from basstler.maintenance_board import PullRequestRecord
+from basstler.maintenance_git_commands import GitCommandRunner
 from basstler.maintenance_github import GitHubRepository, ListedPullRequestState
 from basstler.repository import Repository
 from basstler.standard_streams import StandardStreamHandler
@@ -194,12 +198,89 @@ class EmptyRemoteBranchListError(ValueError):
         )
 
 
+# %% pruning against the remote
+
+
+class PruningSkipped(StrEnum):
+    """
+    Why a prune removed nothing without judging any branch.
+    """
+
+    NO_CREDENTIAL = "no GH_TOKEN or GITHUB_TOKEN is set"
+    """
+    The pull requests cannot be listed.
+    """
+
+    REMOTE_UNREADABLE = "the remote's URL or branches could not be read"
+    """
+    Which branches still exist is unknown.
+    """
+
+
+@dataclass(frozen=True)
+class ProgressNotesPruning:
+    """
+    One prune of a progress-notes directory against a checkout's remote.
+    """
+
+    directory: ProgressNotesDirectory
+    """
+    The notes to prune.
+    """
+
+    git: GitCommandRunner
+    """
+    The checkout whose remote the branches live on.
+    """
+
+    remote: str
+    """
+    The remote the branches and pull requests belong to.
+    """
+
+    kept_branch: str
+    """
+    The branch whose notes are being saved.
+    """
+
+    def run(self) -> list[str] | PruningSkipped:
+        """
+        :return: The branches whose notes were deleted, or why nothing was judged.
+        """
+        token = GitHubRepository.environment_token()
+        if token is None:
+            return PruningSkipped.NO_CREDENTIAL
+        url = self.git.attempt("remote", "get-url", self.remote)
+        heads = self.git.attempt("ls-remote", "--heads", self.remote)
+        if not (
+            url.succeeded
+            and Repository.names_a_repository(url.output)
+            and heads.succeeded
+            and heads.output
+        ):
+            return PruningSkipped.REMOTE_UNREADABLE
+        repository = Repository.from_remote_url(url.output)
+        pull_requests = BranchPullRequests.from_pull_requests(
+            GitHubRepository(repository, token).pull_requests(
+                ListedPullRequestState.ALL
+            ),
+            repository,
+        )
+        remote_branches = frozenset(
+            line.split("refs/heads/", 1)[1] for line in heads.output.splitlines()
+        )
+        return self.directory.remove_finished(
+            pull_requests, remote_branches, self.kept_branch
+        )
+
+
 # %% command line
 
 
 def main() -> int:
     """
-    Prune a progress-notes directory and print each branch whose notes were removed.
+    Prune a progress-notes directory and report which branches' notes were removed,
+    or why none were judged.
     """
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
@@ -209,28 +290,22 @@ def main() -> int:
         "prune", help="Delete the progress notes of finished pull requests"
     )
     prune.add_argument("--directory", required=True, type=Path)
-    prune.add_argument("--remote-url", required=True)
-    prune.add_argument(
-        "--remote-branches",
-        required=True,
-        type=Path,
-        help="A file naming every branch the remote has, one per line",
-    )
+    prune.add_argument("--remote", required=True)
     prune.add_argument("--keep", required=True)
     arguments = parser.parse_args()
 
-    repository = Repository.from_remote_url(arguments.remote_url)
-    remote_branches = frozenset(arguments.remote_branches.read_text().split())
-    pull_requests = BranchPullRequests.from_pull_requests(
-        GitHubRepository.from_environment(repository).pull_requests(
-            ListedPullRequestState.ALL
-        ),
-        repository,
-    )
-    for branch in ProgressNotesDirectory(arguments.directory).remove_finished(
-        pull_requests, remote_branches, arguments.keep
-    ):
-        logger.info(branch)
+    outcome = ProgressNotesPruning(
+        directory=ProgressNotesDirectory(arguments.directory),
+        git=GitCommandRunner(Path.cwd()),
+        remote=arguments.remote,
+        kept_branch=arguments.keep,
+    ).run()
+    if isinstance(outcome, PruningSkipped):
+        logger.warning(f"Finished branches' progress notes were not pruned: {outcome}.")
+    elif outcome:
+        logger.info(
+            "Removed the progress notes of finished branches:\n" + "\n".join(outcome)
+        )
     return 0
 
 

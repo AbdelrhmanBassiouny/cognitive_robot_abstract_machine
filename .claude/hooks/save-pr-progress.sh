@@ -42,19 +42,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/resolve-personal-notes-config.sh"
 
-if ! command -v "${BASSTLER_PYTHON}" > /dev/null 2>&1; then
-  echo "${BASSTLER_PYTHON} is required to check the progress notes against their size limit." >&2
-  exit 1
-fi
-if ! MISSING_DEPENDENCIES="$(missing_dependencies)"; then
-  echo "Could not read what the basstler package requires from ${BASSTLER_PYPROJECT_FILE}." >&2
-  exit 1
-fi
-if [ -n "${MISSING_DEPENDENCIES}" ]; then
-  echo "The basstler package's requirements are not installed for ${BASSTLER_PYTHON}: ${MISSING_DEPENDENCIES}" >&2
-  echo "Start a new session, or run: pip --python ${BASSTLER_PYTHON} install --editable ./${BASSTLER_SOURCE_TREE}" >&2
-  exit 1
-fi
+require_basstler_python
 
 PROGRESS_PATH="$(pr_progress_path || true)"
 if [ -z "${PROGRESS_PATH}" ]; then
@@ -93,12 +81,7 @@ trap cleanup EXIT
 awk '/^<!-- BEGIN-PR-PROGRESS -->$/{flag=1; next} /^<!-- END-PR-PROGRESS -->$/{flag=0} flag' \
   "${CLAUDE_LOCAL_MD}" > "${CONTENT_FILE}"
 
-if ! "${BASSTLER_PYTHON}" -m "${PLAN_SIZE_LIMITS_MODULE}" check-progress "${CONTENT_FILE}"; then
-  echo "Refusing to save the progress notes: they are over the limit above. Keep" >&2
-  echo "the plan, what is done and what is next - history belongs in the commits" >&2
-  echo "and on the pull request, not here." >&2
-  exit 1
-fi
+"${BASSTLER_PYTHON}" -m "${PLAN_SIZE_LIMITS_MODULE}" check-progress "${CONTENT_FILE}" || exit 1
 
 git branch -D __save-pr-progress-tmp > /dev/null 2>&1 || true
 # FETCH_HEAD: see the note on FETCH_HEAD vs. "<remote>/<branch>" refs in
@@ -112,27 +95,12 @@ cp "${CONTENT_FILE}" "${SCRATCH_DIR}/${PROGRESS_PATH}"
 
 # Progress notes no session will read again - a branch gone from the remote,
 # or one whose pull requests have all merged or closed - are deleted in the
-# same commit. Never fatal: without a credential or a branch listing the save
-# goes ahead unpruned, and the next save tries again.
-WORK_REMOTE="$(git config "branch.${CURRENT_BRANCH}.remote" || echo origin)"
-REMOTE_BRANCHES_FILE="${SCRATCH_DIR}.remote-branches"
-if [ -z "${GH_TOKEN:-}${GITHUB_TOKEN:-}" ]; then
-  echo "No GH_TOKEN or GITHUB_TOKEN, so finished pull requests' progress notes were not pruned." >&2
-elif ! WORK_REMOTE_URL="$(git remote get-url "${WORK_REMOTE}" 2>/dev/null)" \
-    || ! git ls-remote --heads "${WORK_REMOTE}" 2>/dev/null \
-      | sed 's#.*refs/heads/##' > "${REMOTE_BRANCHES_FILE}" \
-    || [ ! -s "${REMOTE_BRANCHES_FILE}" ]; then
-  echo "Could not list the branches of '${WORK_REMOTE}', so finished pull requests' progress notes were not pruned." >&2
-elif PRUNED_BRANCHES="$("${BASSTLER_PYTHON}" -m "${PROGRESS_NOTES_MODULE}" prune \
-    --directory "${SCRATCH_DIR}/${PR_PROGRESS_DIRECTORY}" \
-    --remote-url "${WORK_REMOTE_URL}" \
-    --remote-branches "${REMOTE_BRANCHES_FILE}" \
-    --keep "${CURRENT_BRANCH}")"; then
-  [ -n "${PRUNED_BRANCHES}" ] && printf 'Removed the progress notes of finished branches:\n%s\n' "${PRUNED_BRANCHES}"
-else
-  echo "Pruning finished pull requests' progress notes failed (above); saving without it." >&2
-fi
-rm -f "${REMOTE_BRANCHES_FILE}"
+# same commit. Never fatal: the save goes ahead unpruned if this fails.
+"${BASSTLER_PYTHON}" -m "${PROGRESS_NOTES_MODULE}" prune \
+  --directory "${SCRATCH_DIR}/${PR_PROGRESS_DIRECTORY}" \
+  --remote "$(git config "branch.${CURRENT_BRANCH}.remote" || echo origin)" \
+  --keep "${CURRENT_BRANCH}" \
+  || echo "Pruning finished branches' progress notes failed (above); saving without it." >&2
 git -C "${SCRATCH_DIR}" add --all -- "${PR_PROGRESS_DIRECTORY}"
 
 if git -C "${SCRATCH_DIR}" diff --cached --quiet -- "${PR_PROGRESS_DIRECTORY}"; then

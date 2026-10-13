@@ -8,8 +8,8 @@ the pull requests themselves. The save hooks run these checks and refuse a save 
 breaks one, so the limits hold without anyone having to remember them.
 
 Usage:
-    python3 -m basstler.plan_size_limits prune <manifest-file>
-    python3 -m basstler.plan_size_limits check-plan <manifest-file> <roadmap-file>
+    python3 -m basstler.plan_size_limits stage <manifest-file> <roadmap-file> \\
+        --manifest-destination <path> --roadmap-destination <path>
     python3 -m basstler.plan_size_limits check-progress <progress-file>
 """
 
@@ -17,9 +17,10 @@ from __future__ import annotations
 
 import argparse
 import re
+import shutil
 import sys
 from dataclasses import dataclass
-from enum import Enum
+from enum import Enum, StrEnum
 from pathlib import Path
 
 import yaml
@@ -171,10 +172,41 @@ def measured_violation(
     return [SizeViolation(measure=measure, location=location, measured=measured)]
 
 
+class LimitedDocument(Enum):
+    """
+    A document the limits are enforced on, with what to keep when it is refused.
+    """
+
+    PLAN = ("the plan", "the next step, what blocks it and the plan's standing rules")
+    """
+    A plan's manifest and roadmap.
+    """
+
+    PROGRESS_NOTES = ("the progress notes", "the plan, what is done and what is next")
+    """
+    A pull request's progress notes.
+    """
+
+    def __init__(self, description: str, content_to_keep: str) -> None:
+        self.description = description
+        """
+        The document, as a phrase.
+        """
+        self.content_to_keep = content_to_keep
+        """
+        What the document is for, which is all it should hold.
+        """
+
+
 @dataclass
 class DocumentOverLimitError(Exception):
     """
     Raised when a document breaks one of its limits.
+    """
+
+    document: LimitedDocument
+    """
+    The document that was refused.
     """
 
     violations: list[Violation]
@@ -184,9 +216,16 @@ class DocumentOverLimitError(Exception):
 
     def __str__(self) -> str:
         """
-        :return: One line per violation.
+        :return: One line per violation, then what the document should hold instead.
         """
-        return "\n".join(str(violation) for violation in self.violations)
+        return "\n".join(
+            [f"Refusing to save {self.document.description}:"]
+            + [f"  {violation}" for violation in self.violations]
+            + [
+                f"Keep only {self.document.content_to_keep}; history belongs in git "
+                "and on the pull requests."
+            ]
+        )
 
 
 # %% the documents
@@ -317,33 +356,64 @@ def write_manifest(manifest: PlanManifest, path: Path) -> None:
     )
 
 
-def prune_manifest_file(path: Path) -> int:
+class StagedPlan(StrEnum):
     """
-    Remove the landed items from a manifest file, leaving it untouched when none have.
+    What staging a plan's files left at their destination.
+    """
 
-    :param path: The ``plan.yaml`` file to prune.
-    :return: How many items the plan still tracks.
+    SAVED = "saved"
     """
-    manifest = read_manifest(path)
-    if not manifest.landed_identifiers:
-        return len(manifest.items)
-    pruned = manifest.without_landed_items()
-    write_manifest(pruned, path)
-    return len(pruned.items)
+    The pruned manifest and the roadmap were written.
+    """
+
+    REMOVED = "removed"
+    """
+    Every item had landed, so the plan's directory was deleted.
+    """
 
 
-def check_plan_files(manifest_path: Path, roadmap_path: Path) -> None:
+@dataclass(frozen=True)
+class PlanFiles:
     """
-    :param manifest_path: The plan's ``plan.yaml``.
-    :param roadmap_path: The plan's ``roadmap.md``.
-    :raises DocumentOverLimitError: If either breaks a limit.
+    A plan's manifest and roadmap.
     """
-    violations: list[Violation] = list(
-        manifest_violations(read_manifest(manifest_path))
-    )
-    violations += Roadmap.from_text(roadmap_path.read_text()).violations()
-    if violations:
-        raise DocumentOverLimitError(violations)
+
+    manifest: Path
+    """
+    The plan's ``plan.yaml``.
+    """
+
+    roadmap: Path
+    """
+    The plan's ``roadmap.md``.
+    """
+
+    def stage(self, destination: PlanFiles) -> StagedPlan:
+        """
+        Write the plan, without its landed items, to *destination*; a plan with no
+        items left is finished, and its directory is deleted instead. A manifest with
+        nothing landed is copied unchanged.
+
+        :param destination: Where the plan is saved; both files share one directory.
+        :raises DocumentOverLimitError: If the pruned plan breaks a limit.
+        :return: Which of the two happened.
+        """
+        original = read_manifest(self.manifest)
+        manifest = original.without_landed_items()
+        if not manifest.items:
+            shutil.rmtree(destination.manifest.parent, ignore_errors=True)
+            return StagedPlan.REMOVED
+        violations: list[Violation] = list(manifest_violations(manifest))
+        violations += Roadmap.from_text(self.roadmap.read_text()).violations()
+        if violations:
+            raise DocumentOverLimitError(LimitedDocument.PLAN, violations)
+        destination.manifest.parent.mkdir(parents=True, exist_ok=True)
+        if original.landed_identifiers:
+            write_manifest(manifest, destination.manifest)
+        else:
+            shutil.copyfile(self.manifest, destination.manifest)
+        shutil.copyfile(self.roadmap, destination.roadmap)
+        return StagedPlan.SAVED
 
 
 def check_progress_file(path: Path) -> None:
@@ -353,7 +423,7 @@ def check_progress_file(path: Path) -> None:
     """
     violations = progress_violations(path.read_text())
     if violations:
-        raise DocumentOverLimitError(list(violations))
+        raise DocumentOverLimitError(LimitedDocument.PROGRESS_NOTES, list(violations))
 
 
 # %% command line
@@ -361,21 +431,20 @@ def check_progress_file(path: Path) -> None:
 
 def build_parser() -> argparse.ArgumentParser:
     """
-    :return: The parser for the three subcommands.
+    :return: The parser for the two subcommands.
     """
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
     subcommands = parser.add_subparsers(dest="subcommand", required=True)
-    prune = subcommands.add_parser(
-        "prune", help="Remove landed items and print how many remain"
+    stage = subcommands.add_parser(
+        "stage",
+        help="Write a plan without its landed items, or delete it once all have landed",
     )
-    prune.add_argument("manifest_path", type=Path)
-    check_plan = subcommands.add_parser(
-        "check-plan", help="Refuse a manifest or roadmap over its limits"
-    )
-    check_plan.add_argument("manifest_path", type=Path)
-    check_plan.add_argument("roadmap_path", type=Path)
+    stage.add_argument("manifest_path", type=Path)
+    stage.add_argument("roadmap_path", type=Path)
+    stage.add_argument("--manifest-destination", required=True, type=Path)
+    stage.add_argument("--roadmap-destination", required=True, type=Path)
     check_progress = subcommands.add_parser(
         "check-progress", help="Refuse progress notes over their limit"
     )
@@ -385,16 +454,18 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main() -> int:
     """
-    Run the requested subcommand; a document over its limits exits with status 1 and
-    names every violation on standard error.
+    Run the requested subcommand. ``stage`` prints what it left at the destination; a
+    document over its limits exits with status 1 and names every violation on standard
+    error.
     """
     arguments = build_parser().parse_args()
-    if arguments.subcommand == "prune":
-        logger.info(prune_manifest_file(arguments.manifest_path))
-        return 0
     try:
-        if arguments.subcommand == "check-plan":
-            check_plan_files(arguments.manifest_path, arguments.roadmap_path)
+        if arguments.subcommand == "stage":
+            source = PlanFiles(arguments.manifest_path, arguments.roadmap_path)
+            destination = PlanFiles(
+                arguments.manifest_destination, arguments.roadmap_destination
+            )
+            logger.info(source.stage(destination))
         else:
             check_progress_file(arguments.progress_path)
     except DocumentOverLimitError as error:

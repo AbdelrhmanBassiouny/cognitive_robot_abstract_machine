@@ -5,24 +5,23 @@ progress notes are held to.
 
 from __future__ import annotations
 
-import shutil
 from pathlib import Path
 
 import pytest
-import yaml
 
-from basstler.plan_model import ItemStatus, ManifestField, PlanManifest
+from basstler.plan_model import ManifestField, PlanManifest
 from basstler.plan_size_limits import (
     DocumentOverLimitError,
+    LimitedDocument,
     Measure,
+    PlanFiles,
     Roadmap,
     RoadmapFormatViolation,
     SizeViolation,
-    check_plan_files,
+    StagedPlan,
     check_progress_file,
     manifest_violations,
     progress_violations,
-    prune_manifest_file,
     read_manifest,
 )
 
@@ -49,11 +48,12 @@ A roadmap a session appended a dated section to.
 """
 
 
-def copied(source: Path, directory: Path) -> Path:
+def destination_in(directory: Path) -> PlanFiles:
     """
-    :return: A copy of *source* inside *directory*, safe to rewrite.
+    :return: Where a staged plan lands inside *directory*.
     """
-    return Path(shutil.copy(source, directory / source.name))
+    plan_directory = directory / "plan"
+    return PlanFiles(plan_directory / "plan.yaml", plan_directory / "roadmap.md")
 
 
 def manifest_with_item_fields(**fields: object) -> PlanManifest:
@@ -91,34 +91,41 @@ def test_pruning_keeps_every_other_field_of_a_remaining_item():
     }
 
 
-def test_pruning_a_file_rewrites_it_and_reports_what_remains(tmp_path):
-    manifest_path = copied(PLAN_WITH_LANDED_ITEMS, tmp_path)
-    remaining = prune_manifest_file(manifest_path)
-    assert remaining == len(read_manifest(manifest_path).items) == 2
-    assert ItemStatus.DONE not in {
-        item.status for item in read_manifest(manifest_path).items
-    }
-
-
-def test_pruning_a_file_with_nothing_landed_leaves_its_text_alone(tmp_path):
-    manifest_path = copied(PLAN_WITH_LANDED_ITEMS, tmp_path)
-    prune_manifest_file(manifest_path)
-    pruned_text = manifest_path.read_text()
-    prune_manifest_file(manifest_path)
-    assert manifest_path.read_text() == pruned_text
-
-
-def test_a_plan_with_every_item_landed_prunes_to_nothing(tmp_path):
-    assert prune_manifest_file(copied(PLAN_ALL_LANDED, tmp_path)) == 0
-
-
-def test_a_pruned_file_is_still_a_mapping_of_the_same_plan(tmp_path):
-    manifest_path = copied(PLAN_WITH_LANDED_ITEMS, tmp_path)
-    prune_manifest_file(manifest_path)
-    assert (
-        yaml.safe_load(manifest_path.read_text())[ManifestField.IDENTIFIER]
-        == read_manifest(PLAN_WITH_LANDED_ITEMS).identifier
+def test_staging_writes_the_plan_without_its_landed_items(tmp_path):
+    destination = destination_in(tmp_path)
+    staged = PlanFiles(PLAN_WITH_LANDED_ITEMS, ROADMAP_OF_STANDING_RULES).stage(
+        destination
     )
+    assert staged == StagedPlan.SAVED
+    assert read_manifest(destination.manifest).content == (
+        read_manifest(PLAN_WITH_LANDED_ITEMS).without_landed_items().content
+    )
+    assert destination.roadmap.read_text() == ROADMAP_OF_STANDING_RULES.read_text()
+
+
+def test_staging_a_plan_with_nothing_landed_copies_its_text_unchanged(tmp_path):
+    first = destination_in(tmp_path / "first")
+    PlanFiles(PLAN_WITH_LANDED_ITEMS, ROADMAP_OF_STANDING_RULES).stage(first)
+    second = destination_in(tmp_path / "second")
+    PlanFiles(first.manifest, first.roadmap).stage(second)
+    assert second.manifest.read_text() == first.manifest.read_text()
+
+
+def test_staging_a_plan_with_every_item_landed_removes_its_directory(tmp_path):
+    destination = destination_in(tmp_path)
+    destination.manifest.parent.mkdir()
+    destination.manifest.write_text("stale\n")
+    staged = PlanFiles(PLAN_ALL_LANDED, ROADMAP_OF_STANDING_RULES).stage(destination)
+    assert staged == StagedPlan.REMOVED
+    assert not destination.manifest.parent.exists()
+
+
+def test_staging_refuses_a_plan_over_its_limits_and_writes_nothing(tmp_path):
+    destination = destination_in(tmp_path)
+    with pytest.raises(DocumentOverLimitError) as raised:
+        PlanFiles(PLAN_WITH_LANDED_ITEMS, ROADMAP_WITH_DATED_SECTION).stage(destination)
+    assert raised.value.document == LimitedDocument.PLAN
+    assert not destination.manifest.parent.exists()
 
 
 # %% manifest limits
@@ -210,15 +217,6 @@ def test_a_long_roadmap_entry_is_a_violation():
     ]
 
 
-def test_check_plan_files_accepts_documents_within_their_limits():
-    check_plan_files(PLAN_WITH_LANDED_ITEMS, ROADMAP_OF_STANDING_RULES)
-
-
-def test_check_plan_files_raises_on_a_roadmap_violation():
-    with pytest.raises(DocumentOverLimitError):
-        check_plan_files(PLAN_WITH_LANDED_ITEMS, ROADMAP_WITH_DATED_SECTION)
-
-
 # %% progress notes
 
 
@@ -232,6 +230,7 @@ def test_progress_notes_over_the_limit_are_a_violation(tmp_path):
     progress_path.write_text("x" * measured)
     with pytest.raises(DocumentOverLimitError) as raised:
         check_progress_file(progress_path)
-    assert raised.value.violations == [
-        SizeViolation(Measure.PROGRESS_LENGTH, "progress notes", measured)
-    ]
+    assert raised.value == DocumentOverLimitError(
+        LimitedDocument.PROGRESS_NOTES,
+        [SizeViolation(Measure.PROGRESS_LENGTH, "progress notes", measured)],
+    )

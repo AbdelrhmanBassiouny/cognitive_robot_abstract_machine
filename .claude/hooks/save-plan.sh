@@ -28,7 +28,8 @@ set -euo pipefail
 #
 # Before anything is pushed, landed items are dropped (with every depends_on
 # edge to them), a plan left with no items is removed, and a plan over the
-# limits in basstler/plan_size_limits.py is refused with each violation named.
+# limits in basstler/src/basstler/plan_size_limits.py is refused, naming
+# each violation.
 #
 # This script pushes data only. It never calls the Artifact tool (only a
 # live Claude session can), so it does not regenerate the dashboard itself -
@@ -54,23 +55,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/resolve-personal-notes-config.sh"
 
-if ! command -v "${BASSTLER_PYTHON}" > /dev/null 2>&1; then
-  echo "${BASSTLER_PYTHON} is required to parse/validate plan manifests and regenerate the branch index." >&2
-  exit 1
-fi
-# Asked through the package's own declaration rather than by importing one
-# name here, so this script carries no Python of its own and no second opinion
-# about what the tooling needs. A session start installs these; a checkout
-# where that never ran reaches this message instead of a traceback.
-if ! MISSING_DEPENDENCIES="$(missing_dependencies)"; then
-  echo "Could not read what the basstler package requires from ${BASSTLER_PYPROJECT_FILE}." >&2
-  exit 1
-fi
-if [ -n "${MISSING_DEPENDENCIES}" ]; then
-  echo "The basstler package's requirements are not installed for ${BASSTLER_PYTHON}: ${MISSING_DEPENDENCIES}" >&2
-  echo "Start a new session, or run: pip --python ${BASSTLER_PYTHON} install --editable ./${BASSTLER_SOURCE_TREE}" >&2
-  exit 1
-fi
+require_basstler_python
 
 PLAN_ID=""
 MANIFEST_SOURCE_FILE=""
@@ -192,32 +177,18 @@ if [ "${MANIFEST_PLAN_ID}" != "${PLAN_ID}" ]; then
   exit 1
 fi
 
-# A landed item is dropped rather than saved: its work is in the code and its
-# history in git, so it would only cost every later session context. A plan
-# left with no items has finished, and is removed along with its roadmap.
-REMAINING_ITEMS="$("${BASSTLER_PYTHON}" -m "${PLAN_SIZE_LIMITS_MODULE}" prune "${MANIFEST_FILE}")"
-if [ "${REMAINING_ITEMS}" != "0" ] \
-    && ! "${BASSTLER_PYTHON}" -m "${PLAN_SIZE_LIMITS_MODULE}" check-plan "${MANIFEST_FILE}" "${ROADMAP_FILE}"; then
-  echo "Refusing to save plan '${PLAN_ID}': it is over the limits above (see" >&2
-  echo "${PLAN_SIZE_LIMITS_MODULE}). Keep only what the next session needs to act -" >&2
-  echo "history belongs in git and on the pull requests, not in the plan." >&2
-  exit 1
-fi
-
 git branch -D "${SCRATCH_BRANCH}" > /dev/null 2>&1 || true
 git worktree add -b "${SCRATCH_BRANCH}" "${SCRATCH_DIR}" FETCH_HEAD --quiet
 
 PLAN_DIRECTORY_PATH="$(plan_directory_path "${PLAN_ID}")"
-PLAN_DIR="${SCRATCH_DIR}/${PLAN_DIRECTORY_PATH}"
 MANIFEST_PATH="$(plan_manifest_path "${PLAN_ID}")"
 ROADMAP_PATH="$(plan_roadmap_path "${PLAN_ID}")"
-if [ "${REMAINING_ITEMS}" = "0" ]; then
-  rm -rf "${PLAN_DIR}"
-else
-  mkdir -p "${PLAN_DIR}"
-  cp "${MANIFEST_FILE}" "${SCRATCH_DIR}/${MANIFEST_PATH}"
-  cp "${ROADMAP_FILE}" "${SCRATCH_DIR}/${ROADMAP_PATH}"
-fi
+# Prints "saved", or "removed" once every item has landed; exits 1 naming each
+# limit a plan breaks.
+STAGED_PLAN="$("${BASSTLER_PYTHON}" -m "${PLAN_SIZE_LIMITS_MODULE}" stage \
+  "${MANIFEST_FILE}" "${ROADMAP_FILE}" \
+  --manifest-destination "${SCRATCH_DIR}/${MANIFEST_PATH}" \
+  --roadmap-destination "${SCRATCH_DIR}/${ROADMAP_PATH}")" || exit 1
 
 mkdir -p "$(dirname "${SCRATCH_DIR}/${PLAN_BRANCH_INDEX_PATH}")"
 "${BASSTLER_PYTHON}" -m "${PLAN_MANIFEST_TOOLS_MODULE}" regenerate-branch-index \
@@ -235,15 +206,12 @@ if git -C "${SCRATCH_DIR}" diff --cached --quiet; then
   exit 0
 fi
 
-if [ "${REMAINING_ITEMS}" = "0" ]; then
-  git -C "${SCRATCH_DIR}" commit --quiet -m "Remove finished plan ${PLAN_ID}"
-  git -C "${SCRATCH_DIR}" push "${ACTIVE_NOTES_REMOTE}" "HEAD:${NOTES_BRANCH}"
-  echo "Every item of plan '${PLAN_ID}' has landed, so the plan was removed from '${NOTES_BRANCH}' on '${ACTIVE_NOTES_REMOTE}'."
-  exit 0
-fi
-
 git -C "${SCRATCH_DIR}" commit --quiet -m "Update plan manifest for ${PLAN_ID}"
 git -C "${SCRATCH_DIR}" push "${ACTIVE_NOTES_REMOTE}" "HEAD:${NOTES_BRANCH}"
 
+if [ "${STAGED_PLAN}" = "removed" ]; then
+  echo "Every item of plan '${PLAN_ID}' has landed, so the plan was removed from '${NOTES_BRANCH}' on '${ACTIVE_NOTES_REMOTE}'."
+  exit 0
+fi
 echo "Saved plan '${PLAN_ID}' (plan.yaml, roadmap.md, and the branch index) back to '${NOTES_BRANCH}' on '${ACTIVE_NOTES_REMOTE}'."
 echo "Run /plan-dashboard ${PLAN_ID} to refresh its dashboard Artifact - this script only pushes data, it can't call the Artifact tool itself."
