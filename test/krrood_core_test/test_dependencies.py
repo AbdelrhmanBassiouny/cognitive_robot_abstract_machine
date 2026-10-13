@@ -8,11 +8,17 @@ from pathlib import Path
 
 from packaging.requirements import Requirement
 
-from .dataset import loaded_top_level_modules
+import krrood_core.exceptions
 
 PACKAGE_DIRECTORY = Path(__file__).parents[2] / "krrood_core"
 """
 The directory holding the package's ``pyproject.toml``.
+"""
+
+PROBES_DIRECTORY = Path(__file__).parent / "dataset"
+"""
+The scripts each test runs in an interpreter of its own, so that what they load is not
+already loaded by the test run.
 """
 
 
@@ -28,7 +34,7 @@ def test_importing_every_module_loads_only_the_declared_dependencies():
         for requirement in declaration["project"]["dependencies"]
     }
     probe = subprocess.run(
-        [sys.executable, "-I", loaded_top_level_modules.__file__],
+        [sys.executable, "-I", PROBES_DIRECTORY / "loaded_top_level_modules.py"],
         capture_output=True,
         text=True,
         check=True,
@@ -38,3 +44,23 @@ def test_importing_every_module_loads_only_the_declared_dependencies():
     undeclared = loaded - sys.stdlib_module_names - declared - {"krrood_core"}
 
     assert undeclared == set()
+
+
+def test_the_exceptions_need_only_the_standard_library():
+    """
+    A tool that checks what it has to install raises these before anything is installed,
+    with the package's source on its import path and nothing else.
+    """
+    probe = subprocess.run(
+        [
+            sys.executable,
+            "-I",
+            PROBES_DIRECTORY / "standard_library_only.py",
+            krrood_core.exceptions.__name__,
+        ],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+
+    assert json.loads(probe.stdout) == []
