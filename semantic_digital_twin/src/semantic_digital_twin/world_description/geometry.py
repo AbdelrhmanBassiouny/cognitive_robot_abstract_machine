@@ -2055,6 +2055,12 @@ class Polygon2D:
     circle.
     """
 
+    ALIGNMENT_ANGLE_STEP: ClassVar[float] = math.radians(1.0)
+    """
+    How finely, in radians, :meth:`turn_onto` tries turns: a degree moves a corner of a
+    polygon a few centimetres across by under half a millimetre.
+    """
+
     CORNER_MATCH_TOLERANCE: ClassVar[float] = 1e-9
     """
     How far a corner may lie from another, in the polygon's own units, and still be
@@ -2202,6 +2208,32 @@ class Polygon2D:
         return np.linalg.norm(
             np.asarray(points, dtype=float)[:, None, :] - nearest, axis=-1
         ).min(axis=1)
+
+    def turn_onto(self, other: Polygon2D) -> float:
+        """
+        The turn about its centroid, in radians, at which this polygon best follows
+        another's shape, the two compared at equal area.
+
+        :param other: The polygon to line this one up with.
+        :return: The turn, between zero and this polygon's
+            :meth:`rotational_symmetry_angle`.
+        """
+        own = self.centered()
+        target = other.centered()
+        target = Polygon2D(target.vertices * math.sqrt(own.area / target.area))
+        turns = np.arange(
+            0.0, own.rotational_symmetry_angle(), self.ALIGNMENT_ANGLE_STEP
+        )
+        mismatches = []
+        for turn in turns:
+            turned = own.turned(turn)
+            mismatches.append(
+                max(
+                    target.distance_to_boundary(turned.vertices).max(),
+                    turned.distance_to_boundary(target.vertices).max(),
+                )
+            )
+        return float(turns[int(np.argmin(mismatches))])
 
     def rotational_symmetry_angle(self) -> float:
         """

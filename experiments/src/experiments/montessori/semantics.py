@@ -47,26 +47,36 @@ class MontessoriShape(HasRootBody):
         The :class:`Pose`, expressed in ``hole``'s own frame, at which this shape must
         be released to drop through it.
 
-        Every shape's loose body and its matching hole are built from the same local
-        cross-section (see
-        :func:`~experiments.montessori.world._footprint_shape_mesh`) and spawned
-        without any relative rotation, so hovering directly above the hole's own
-        origin, unrotated, already lines any shape up with its hole whatever its
-        shape; a subclass whose fit depends on some other relative orientation
-        overrides this.
+        The shape hovers above the hole, turned about the hole's vertical axis so that
+        its own footprint follows the hole's; a subclass whose fit depends on some other
+        relative orientation overrides this. A shape with no geometry of its own has no
+        footprint to line up and is released unturned.
 
         :param hole: The hole this shape is being inserted through.
-        :param horizontal_offset: Offset from the hole's own origin, in its local
-            ``(x, y)`` plane, to release the shape at.
-        :param hover_height: Height above the hole's own origin, along its local
-            z-axis, to release the shape at.
+        :param horizontal_offset: Offset from the hole's own origin, in its local ``(x,
+            y)`` plane, to release the shape at.
+        :param hover_height: Height above the hole's own origin, along its local z-axis,
+            to release the shape at.
         """
         return Pose.from_xyz_rpy(
             horizontal_offset.x,
             horizontal_offset.y,
             hover_height,
+            yaw=self._turn_onto(hole),
             reference_frame=hole.root,
         )
+
+    def _turn_onto(self, hole: ShapeSortingHole) -> float:
+        """
+        The turn about the vertical axis, in radians, at which this shape's footprint
+        follows the hole's.
+
+        :param hole: The hole to line this shape up with.
+        """
+        if not self.root.collision.shapes:
+            return 0.0
+        own = self.root.collision.convex_footprint_in_frame(self.root)
+        return own.turn_onto(hole.root.area.convex_footprint_in_frame(hole.root))
 
     @property
     def cross_section_size(self) -> float:
@@ -83,9 +93,8 @@ class MontessoriShape(HasRootBody):
         Whether this shape can actually pass through ``hole``.
 
         Being of the hole's :attr:`~ShapeSortingHole.shape_category` is necessary but
-        not sufficient once more than one hole is cut for the same class (e.g. the
-        board's two circular holes are both :class:`CylinderShape`, but sized
-        differently), so this also requires this shape to be no larger than ``hole``.
+        not sufficient once more than one hole is cut for the same class, sized
+        differently, so this also requires this shape to be no larger than ``hole``.
 
         :param hole: The hole to check this shape against.
         """
@@ -222,17 +231,13 @@ class ShapeSortingBoard(HasCaseAsRootBody, HasDrawers, HasApertures):
         Find this board's :class:`ShapeSortingHole` that ``montessori_shape`` actually
         fits through (see :meth:`MontessoriShape.fits_through`).
 
-        More than one hole can be cut for the same class (e.g. the board's two circular holes
-        are both for a :class:`CylinderShape`, but sized differently). A
-        hole whose name matches ``montessori_shape``'s own name (stripped of its
-        ``"_shape"`` suffix, the naming convention :meth:`~experiments.montessori.world.MontessoriWorld._build_shapes`
-        pairs a shape and the hole it was built for with) is preferred: relying on
-        size alone breaks once a shape sized after one hole (see
-        :func:`~experiments.montessori.world._footprint_shape_mesh`) is also small
-        enough to fit through a different, hole cut for the same class, which silently resolves
-        it to the wrong one instead of the hole it was actually built for. Falls back
-        to the smallest fitting hole (for shapes with no such name pairing, e.g. in
-        tests) when no name matches.
+        More than one hole can be cut for the same class. A hole whose name matches
+        ``montessori_shape``'s own name (stripped of its ``"_shape"`` suffix, the
+        naming convention :meth:`~experiments.montessori.world.MontessoriWorld._build_shapes`
+        pairs a shape and its hole with) is preferred, since a shape small enough for
+        one hole of its class is often small enough for another. Falls back to the
+        smallest fitting hole (for shapes with no such name pairing, e.g. in tests) when
+        no name matches.
 
         :raises NoMatchingHoleError: If this board has no hole ``montessori_shape``
             fits through.

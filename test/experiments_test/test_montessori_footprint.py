@@ -20,6 +20,7 @@ from experiments.montessori.semantics import (
     DiskShape,
     MontessoriShape,
     RectangularPrismShape,
+    SphereShape,
     TriangularPrismShape,
 )
 
@@ -93,6 +94,21 @@ def test_classifier_names_each_shape_from_its_proportions(
     )
 
     assert CrossSectionClassifier().classify(footprint) is expected
+
+
+def test_a_round_outline_wider_than_the_sphere_hole_width_is_the_spheres():
+    classifier = CrossSectionClassifier()
+    width = classifier.sphere_hole_width * 1.1
+    footprint = Footprint(
+        area=math.pi / 4 * width * width,
+        width=width,
+        length=width,
+        fill_ratio=math.pi / 4,
+        corner_count=4,
+        yaw=0.0,
+    )
+
+    assert classifier.classify(footprint) is SphereShape
 
 
 def test_footprint_yaw_follows_a_rotated_rectangle():

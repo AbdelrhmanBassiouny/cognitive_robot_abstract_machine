@@ -20,6 +20,7 @@ from experiments.montessori.semantics import (
     DiskShape,
     MontessoriShape,
     RectangularPrismShape,
+    SphereShape,
     TriangularPrismShape,
 )
 from semantic_digital_twin.spatial_types.spatial_types import Point2
@@ -64,6 +65,15 @@ class HoleShapeClassifier:
     rather than square.
     """
 
+    sphere_hole_width: float = 0.036
+    """
+    Width, in metres, above which a circular hole is the sphere's rather than the
+    cylinder's.
+
+    The board has two circular holes, 32 and 40 millimetres across, and this sits midway
+    between them.
+    """
+
     def classify(self, outline: Polygon2D) -> Type[MontessoriShape]:
         """
         The kind of piece a hole of this cross-section is cut for.
@@ -73,6 +83,8 @@ class HoleShapeClassifier:
         bounding_box = outline.bounding_box
         aspect_ratio = max(bounding_box.dimensions) / min(bounding_box.dimensions)
         if len(outline.vertices) > self.circle_vertex_count:
+            if min(bounding_box.dimensions) > self.sphere_hole_width:
+                return SphereShape
             return CylinderShape
         if outline.area / bounding_box.area < self.triangle_fill_ratio:
             return TriangularPrismShape

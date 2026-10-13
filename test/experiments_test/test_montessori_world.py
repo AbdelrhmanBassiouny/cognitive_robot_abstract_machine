@@ -1,21 +1,14 @@
-import numpy as np
 import pytest
-from trimesh import Trimesh
 
 from experiments.montessori.pieces import PieceSet
 from experiments.montessori.semantics import (
-    CylinderShape,
     MontessoriShape,
-    RectangularPrismShape,
     ShapeSortingBoard,
     ShapeSortingHole,
-    SphereShape,
-    TriangularPrismShape,
 )
 from experiments.montessori.world import (
     BOARD_SCALE,
     FLOOR_Z,
-    SHAPE_FOOTPRINT_CLEARANCE_SCALE,
     TABLE_POSITION,
     TABLE_SCALE,
     TABLE_SHAPE_ROW_X,
@@ -33,16 +26,6 @@ from semantic_digital_twin.world_description.connections import (
 from semantic_digital_twin.world_description.world_entity import Actuator
 
 from .dataset.synthetic_fixed_arm_robot import SyntheticFixedArmRobot
-
-
-def _sorted_xy(mesh: Trimesh) -> np.ndarray:
-    """
-    A mesh's vertices, projected to (x, y) and sorted into a canonical order, so two
-    meshes built from the same footprint can be compared regardless of internal vertex
-    ordering.
-    """
-    xy = np.round(mesh.vertices[:, :2], 6)
-    return xy[np.lexsort((xy[:, 1], xy[:, 0]))]
 
 
 def test_montessori_world_creates_one_board_with_holes_and_drawers():
@@ -195,75 +178,50 @@ def test_montessori_world_drawer_collision_leaves_overlapping_holes_open():
             assert not overlapping_boxes, error
 
 
-def test_montessori_world_creates_one_shape_per_hole_category_plus_the_sphere():
+def test_montessori_world_creates_one_shape_per_hole():
     montessori = MontessoriWorld()
 
     holes = montessori.world.get_semantic_annotations_by_type(ShapeSortingHole)
-    hole_categories = {hole.shape_category for hole in holes}
     shape_categories = [
         type(shape)
         for shape in montessori.world.get_semantic_annotations_by_type(MontessoriShape)
     ]
 
-    # one shape per hole (some categories repeat, e.g. the two circular holes), plus
-    # the sphere, which has no matching hole
-    assert set(shape_categories) == hole_categories | {SphereShape}
-    assert len(shape_categories) == len(holes) + 1
+    assert sorted(shape_categories, key=lambda kind: kind.__name__) == sorted(
+        [hole.shape_category for hole in holes], key=lambda kind: kind.__name__
+    )
 
 
-def test_montessori_world_pairs_each_circular_shape_with_its_own_sized_hole():
+def test_every_loose_shape_is_paired_with_its_own_hole():
     montessori = MontessoriWorld()
     montessori.world.update_forward_kinematics()
 
-    cylinder_shapes = [
-        shape
-        for shape in montessori.world.get_semantic_annotations_by_type(MontessoriShape)
-        if type(shape) is CylinderShape
-    ]
-
-    # the board has two circular holes of different sizes; each cylinder shape must be
-    # sized after its own hole's footprint (not a single shared, fixed size), and must
-    # resolve back to that same hole rather than to the other, differently-sized one
-    cross_section_sizes = {shape.cross_section_size for shape in cylinder_shapes}
-    assert len(cylinder_shapes) == 2
-    assert len(cross_section_sizes) == 2
-
-    for shape in cylinder_shapes:
+    for shape in montessori.world.get_semantic_annotations_by_type(MontessoriShape):
         hole = montessori.board.hole_for(shape)
+        assert hole.shape_category is type(shape)
         assert hole.name.name == shape.name.name.removesuffix("_shape")
-        assert shape.cross_section_size <= hole.cross_section_size
 
 
 @pytest.mark.parametrize(
     "category",
-    [
-        TriangularPrismShape,
-        RectangularPrismShape,
-    ],
+    [type(piece) for piece in PieceSet.full_size().pieces],
+    ids=lambda category: category.__name__,
 )
-def test_orientation_sensitive_shape_matches_its_holes_footprint_orientation(category):
+def test_a_loose_piece_is_the_measured_piece_in_its_own_orientation(category):
     montessori = MontessoriWorld()
     montessori.world.update_forward_kinematics()
 
+    measured = montessori.piece_set.piece_for(category)
     [shape] = [
         shape
         for shape in montessori.world.get_semantic_annotations_by_type(MontessoriShape)
         if type(shape) is category
     ]
-    hole = montessori.board.hole_for(shape)
 
-    # a shape whose fit through its hole depends on rotation (unlike e.g. a cube or a
-    # cylinder) must be a scaled, same-orientation copy of that hole's true footprint,
-    # not an independently authored shape that merely shares its category: scaling the
-    # shape's cross-section back up must recover the hole's own footprint, not some
-    # rotation of it.
-    shape_xy = _sorted_xy(shape.root.collision.combined_mesh)
-    hole_xy = _sorted_xy(hole.root.area.combined_mesh)
-
-    assert shape_xy.shape == hole_xy.shape
-    np.testing.assert_allclose(
-        shape_xy / SHAPE_FOOTPRINT_CLEARANCE_SCALE, hole_xy, atol=1e-4
+    assert PieceSet.outline_of(shape).vertices == pytest.approx(
+        PieceSet.outline_of(measured).vertices
     )
+    assert PieceSet.height_of(shape) == pytest.approx(PieceSet.height_of(measured))
 
 
 def test_montessori_world_places_loose_shapes_resting_on_the_table():

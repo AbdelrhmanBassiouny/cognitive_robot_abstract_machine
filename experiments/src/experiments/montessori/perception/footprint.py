@@ -16,12 +16,14 @@ import cv2
 import numpy as np
 from typing_extensions import Optional, Self, Type
 
+from experiments.montessori.hole_geometry import HoleShapeClassifier
 from experiments.montessori.semantics import (
     CubeShape,
     CylinderShape,
     DiskShape,
     MontessoriShape,
     RectangularPrismShape,
+    SphereShape,
     TriangularPrismShape,
 )
 
@@ -145,7 +147,8 @@ class CrossSectionClassifier(FootprintClassifier):
     :class:`~experiments.montessori.hole_geometry.HoleShapeClassifier`), but from counts
     of mesh vertices, which a rectified camera outline has no counterpart for; the
     proportions below stand in for them and hold for any outline of the same shape at
-    any size.
+    any size. Only the cylinder's and the sphere's round holes share their proportions,
+    so those two are told apart by size.
     """
 
     triangle_fill_ratio: float = 0.65
@@ -176,12 +179,21 @@ class CrossSectionClassifier(FootprintClassifier):
     :attr:`~experiments.montessori.hole_geometry.HoleShapeClassifier.rectangle_aspect_ratio`.
     """
 
+    sphere_hole_width: float = HoleShapeClassifier.sphere_hole_width
+    """
+    Width, in metres, above which a round outline is the sphere's rather than the
+    cylinder's, read from
+    :attr:`~experiments.montessori.hole_geometry.HoleShapeClassifier.sphere_hole_width`.
+    """
+
     def classify(self, footprint: Footprint) -> Optional[Type[MontessoriShape]]:
         if footprint.fill_ratio <= 0.0:
             return None
         if footprint.fill_ratio < self.triangle_fill_ratio:
             return TriangularPrismShape
         if footprint.fill_ratio < self.circle_fill_ratio:
+            if footprint.width > self.sphere_hole_width:
+                return SphereShape
             return CylinderShape
         if footprint.aspect_ratio > self.slot_aspect_ratio:
             return DiskShape

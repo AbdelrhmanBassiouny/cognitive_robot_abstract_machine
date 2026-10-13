@@ -9,6 +9,7 @@ from experiments.montessori.semantics import (
     CylinderShape,
     DiskShape,
     RectangularPrismShape,
+    SphereShape,
     TriangularPrismShape,
 )
 from semantic_digital_twin.spatial_types.spatial_types import Point2
@@ -27,7 +28,7 @@ def test_hole_footprints_has_one_footprint_per_hole():
         [
             CubeShape,
             CylinderShape,
-            CylinderShape,
+            SphereShape,
             TriangularPrismShape,
             RectangularPrismShape,
             DiskShape,
@@ -116,6 +117,7 @@ def test_hole_marker_is_as_thick_as_the_marker_thickness():
     "outline, expected",
     [
         (Polygon2D.circle(0.03), CylinderShape),
+        (Polygon2D.circle(0.04), SphereShape),
         (Polygon2D.equilateral_triangle(0.04), TriangularPrismShape),
         (Polygon2D.rectangle(0.004, 0.045), DiskShape),
         (Polygon2D.rectangle(0.02, 0.04), RectangularPrismShape),
