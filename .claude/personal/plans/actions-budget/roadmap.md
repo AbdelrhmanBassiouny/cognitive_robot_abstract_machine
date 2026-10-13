@@ -123,3 +123,11 @@ Built as settled above, with two changes from the plan:
 Flagged on the PR for the user: Examples no longer runs on a pull request opened ready, which on upstream is
 most of them (the item asks for exactly this, and `integration-pipeline-event-only` relies on it). The
 timeouts and runs-per-day values are first estimates. Still a draft awaiting review; nothing else outstanding.
+
+## budget-manifest: restacked onto #501 (2026-10-13, ebfab8687)
+
+At the user's request #503 is based on #501 (`claude/brave-archimedes-nonocl`, plan `basstler-package`,
+the basstler src layout) rather than `main`; the new modules moved to `basstler/src/basstler/`. #503
+retargets to `main` once #501 lands. #501 was `dirty` against `main` at the time. In this sandbox #501's own
+head fails 23 basstler tests (bootstrap, session-start, save-plan, check-setup); #503 adds 40 passing and
+no new failures.
