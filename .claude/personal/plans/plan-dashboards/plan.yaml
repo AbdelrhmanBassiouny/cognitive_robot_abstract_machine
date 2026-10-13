@@ -224,10 +224,11 @@ items:
   track: legibility
   blockers:
     - >-
-      The pull request carries an `integration-conflict` label from 2026-09-09 ("merges cleanly with
-      `D-deco` and the suite fails on the result"). It was not re-checked in the 2026-10-09 resolve:
-      the branch is a draft again with no failing checks, but the label stays until the integration
-      build is re-run and passes.
+      Under upstream review as cram2/cognitive_robot_abstract_machine#725, which sits on this
+      branch's current head 3fe59780d. Its review threads were not read on 2026-10-13: the
+      upstream-reviews Action cannot be dispatched because Actions are disabled on the fork, and a
+      session cannot read cram2's pull request API. Enable Actions on the fork (Settings ->
+      Actions), then run /upstream-reviews claude/hidden-deferred-plan-items-6weef1.
   depends_on: []
   notes: >
     A deferred item is intentionally paused or superseded, so it is the same kind of noise on a
@@ -265,6 +266,13 @@ items:
     `VisibilityFilter` (one per combination, from the cached
     `VisibilityFilter.every_combination()`), with `StackedItem.positions` keyed by filter. There is
     no `StatusFilter` enum and no module-level constant for either set; the reviewer asked for both.
+
+    2026-10-13 resolve: the recorded blocker had gone stale. The integration-conflict label
+    (2026-09-09, "breaks D-deco") no longer reproduced. The integration suite passed with 726 tests
+    both on this branch alone and merged with D-deco (71545b909), so the label was removed with the
+    evidence on the pull request. The developer took the pull request out of draft on 2026-10-09
+    15:33 and promoted it (in-review, cram2#725), so fork-side work is finished. What remains is the
+    upstream review.
 - id: dashboard-refresh-button
   title: Refresh button in the dashboard masthead, copying the command that rebuilds the page
   branch: claude/rdr-dashboard-refresh-button-tpuvo9
