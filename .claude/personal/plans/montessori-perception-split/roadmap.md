@@ -294,9 +294,27 @@ scaled for clearance and with its own thicknesses (the triangular prism is 0.02 
 `KnownPiece`'s 0.03 m). Only the colour comes from `PieceSet`. So two descriptions of the same
 pieces exist today and disagree. Real instances would unify them.
 
-**Open with the developer:**
-- Is there exactly one piece of each kind in the set?
-- Where do the instances live? Proposed: a builder in `pieces.py` (layer 2, SemDT only), placed
-  by `world.py` (layer 3), which keeps the layer order.
-- Computing footprints once per instance for `PieceMatcher`.
-- The simulated world switching to the measured sizes.
+**Asked of the developer, and answered (2026-10-13):**
+- Is there exactly one piece of each kind? **No: the lab has two physical sets, of slightly
+  different size and colour.** Only one set's measurements are in the code (cyan/yellow, the
+  sizes in `PieceSet.this_lab()`). The second set's are recorded nowhere: the captures all show
+  the known set. They were asked for, not invented.
+- Where do the instances live? **A builder in `pieces.py`, placed by `world.py`: fine.**
+- Should the simulated world switch to the measured sizes? **Yes: only ground-truth values.**
+  `world.py`'s clearance-scaled, hole-derived piece sizes go.
+- Still open: whether the disk and sphere, which have no ground truth, leave the simulated world,
+  and whether both sets are on the table at once.
+
+**Scope decision:** everything depends on #488's unlanded SemDT types (`Polygon2D`, `Hue`),
+so by the scope rule it lands through #202 and re-cuts rather than as new items or a plan:
+- the SemDT part goes to layer 2;
+- the piece matcher and pipeline to 5a/5b;
+- `world.py` to layer 3.
+
+**Done so far:** `83019e34d` on #202 adds the general geometry:
+- `ShapeCollection.convex_footprint_in_frame`, using scipy's `ConvexHull` of the projected meshes,
+  since shapely is not installed;
+- `Polygon2D.rotational_symmetry_angle`;
+- `NoShapesToProject`.
+
+#488 re-cut as `13b021da8`: 14 files, 62 passed.
