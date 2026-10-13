@@ -40,12 +40,9 @@ items:
   status: in progress
   session: https://claude.ai/code/session_01UbbxurNq8r1WpeBqe8HU5Z
   depends_on: []
-  notes: 'Timeline, encoding (without the ICRA preset), cache, canvas (neutral inks), lettering,
-    narration, the general half of footage and the end card, with tests including one that
-    renders a minimal video to an mp4. Draft #472 pushed 2026-09-29 (86dcf114); its first
-    CI run failed at ORM generation (a field typed Sequence[...] collided with giskardpy''s
-    goal class Sequence), fixed in 2b481f16. Field annotations in experiments must not reuse
-    a workspace class name.'
+  notes: 'Draft #472: the workspace package cramcorder (narrated, subtitled videos from
+    any experiment), in review. Scene is the Role[Video] a video plays in a timeline; units
+    live in krrood.units (Quantity[T]). Waiting on the reviewer for the remaining open threads.'
 - id: icra-video-on-core
   title: '#429 rebuilt on the general package, keeping only the ICRA scenes'
   branch: claude/the-icra-video-shows-the-plan-being-answered
@@ -54,7 +51,7 @@ items:
   status: not started
   depends_on:
   - video-core
-  notes: '#429 imports cramcorder (the package''s name since 2026-10-12, no longer experiments.video).
+  notes: '#429 imports cramcorder and must follow its API changes listed on #471 (Video base, Scene as Role[Video] with Transition, FootagePlayback, krrood.units).
     #429 is based on real-experiments-tracy-icra-2026, so the package must reach that branch
     first (merge main into it once video-core lands). The ICRA branch keeps sources, perception,
     twin, grasp, rules, attribution, perturbations, long_term, script, icra_video, the framework.typ
