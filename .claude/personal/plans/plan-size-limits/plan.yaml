@@ -39,67 +39,20 @@ tracks:
   name: The save gate and the writing skills
   wave: enforcement
 items:
-- id: size-budget-and-report
-  title: A named size budget, and a report of every plan against it
-  branch: claude/plan-size-limits-budget-alp8p2
-  pull_request_number: 207
-  track: budget-measurement
-  depends_on: []
-  status: in progress
-  session: https://claude.ai/code/session_01SziLFUkhv1REwwQM8dQoJj
-  blockers:
-  - 'Two review threads on #207 are open on questions only the reviewer can answer, both replied
-    to and neither resolved: whether the eight scripts already on main that spell "create-personal-notes-branch.sh"
-    should be converted to the new CREATE_PERSONAL_NOTES_BRANCH_SCRIPT constant in this PR
-    or a…'
-  notes: 'The budget as named constants - 15 items and 2,000 combined plan.yaml + roadmap.md
-    lines - with a typed check and a command reporting every plan against it. Report-only:
-    nothing is refused at this stage, so it can land while workflow-unification and rdr-refactor
-    are still over. Numbers chosen from the live measurement on 2026-08-28: the largest healthy
-    plan is montessori-eql-stack at 13 items / 1,634 lines, and the two outliers are 3,676
-    and 14,259 lines, so the budget clears six of eight plans untouched.'
-- id: refuse-oversized-save
-  title: Refuse a save that leaves a plan over budget
-  branch: claude/plan-size-limits-oversized-u24xk7
-  pull_request_number: 273
-  track: gate-and-skills
-  depends_on:
-  - size-budget-and-report
-  status: in progress
-  session: https://claude.ai/code/session_01XWy1uT1i7FozWdNhLEtcKk
-  notes: 'save-plan.sh gains the gate, with a typed error naming which half of the budget
-    was blown and by how much. The natural seam is alongside the existing `plan_manifest_tools.py
-    read-id` call the script already makes before pushing. Depends on every split: landing
-    this while any plan is still over would refuse every save of that plan, including the
-    ones recording this plan''s own progress.'
 - id: new-plan-when-full
   title: Open a new plan instead of growing a full one
   branch: claude/plan-size-limits-newplan-ukbbri
   pull_request_number: 277
   track: gate-and-skills
-  depends_on:
-  - size-budget-and-report
+  depends_on: []
   status: in progress
   session: https://claude.ai/code/session_01GhTbjxmunfCd5vuXRid6m9
   notes: '/plan-create and /add-plan-item read the budget and route new work to a new plan
     when the plan they would otherwise grow is at it. Only needs the budget to exist, not
     the splits, so it can land ahead of wave 2. This item is the reason the plan exists: without
     it the budget is a wall with no door.'
-- id: minimal-roadmap-writing
-  title: Write roadmap sections against the budget, not against completeness
-  branch: claude/plan-size-limits-minimal-roadmap-n3qz8f
-  pull_request_number: 279
-  track: gate-and-skills
-  depends_on:
-  - size-budget-and-report
-  status: in progress
-  session: https://claude.ai/code/session_01CqcnoLDrWd3RHWepDqDsWz
-  notes: 'plan-create/SKILL.md currently instructs the opposite - "preserve its detail rather
-    than compressing it away" - and plan-item-kickoff and plan-item-resolve append unbounded
-    narrative through record''s --roadmap-section. Both change so the budget is not re-spent
-    within weeks of a split. Measured evidence that per-item discipline cannot catch this:
-    during the session that created this plan, workflow-unification grew 51 manifest and 103
-    roadmap lines while gaining zero items.'
+  blockers:
+  - 'Built on #207''s SizeBudget, closed as superseded by #504; must be retargeted to plan_size_limits.Measure.ITEM_COUNT.'
 - id: strict-limits-and-item-slices
   title: Typed per-field limits enforced on every save, and one item loaded per session
   branch: claude/happy-wozniak-nizfnv
