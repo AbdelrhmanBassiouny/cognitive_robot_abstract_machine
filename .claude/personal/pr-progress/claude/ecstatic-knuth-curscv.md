@@ -2,19 +2,18 @@
 
 Layer = verbatim files of #202 (montessori_perception_on_main), re-cut after every #202 change.
 Work happens in the /home/user/wt202 worktree; tests: PYTHONPATH=$(ls -d /home/user/wt202/*/src | tr '\n' ':')
-pytest --noconftest.
+.venv/bin/python -m pytest --noconftest. Format with the venv's bin on PATH (docformatter).
 
 Plan:
 - Land the layer once the developer is happy with the KnownPiece replacement and CI is green.
 
 Done:
-- #488 = #202 at 3b1beec32 (823fef2a0, 14 files, 78 passed). #202: 227 passed, 1 skipped.
-- KnownPiece replaced by PieceSet worlds of bodies (full_size; smaller from #265). The 40 mm hole is the
-  sphere's. The world copies the measured pieces. The insertion pose turns a piece onto its hole.
-  GRID_ROUNDING was added to the matcher test (developer chose (a)).
-- Replied on the KnownPiece thread and left it open (its EQL side is not done). Both descriptions updated.
+- #488 = #202 at 136ea6888 (ab39a37e7, 14 files, 79 passed). #202 montessori tests: 65 passed, 1 skipped.
+- hole_for finds a shape's hole by fit alone (name preference removed); that thread is resolved.
+- Answered the partial-description question on the KnownPiece thread: #265 has EQL look requests,
+  not observation-vs-PieceSet matching. Proposed tracking that separately; thread left open.
 
 Next:
-- CI on #202 3b1beec32 and #488 823fef2a0 (not polled; ORM mapping of PieceSet/PieceOutline unverified here).
-- The developer's answer on the open KnownPiece thread: do the EQL observation query, or close it.
+- CI on #202 136ea6888 and #488 ab39a37e7 (not polled; ORM mapping of PieceSet unverified here).
+- The developer's answer on the KnownPiece thread: a separate item for EQL observation matching, or close it.
 - Sim insertion now has only real clearance (1 mm/side for the cube); the physics demos were not run here.
