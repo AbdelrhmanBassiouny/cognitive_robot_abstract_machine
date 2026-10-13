@@ -145,3 +145,54 @@ def test_a_polygon_turns_about_its_own_centroid_wherever_it_lies():
     moved = Polygon2D(square.vertices + np.array([5.0, -3.0]))
 
     assert moved.rotational_symmetry_angle() == square.rotational_symmetry_angle()
+
+
+# %% how far points lie from a polygon's edges
+
+
+def test_a_corner_lies_on_the_boundary():
+    square = Polygon2D.rectangle(width=2.0, length=2.0)
+
+    assert square.distance_to_boundary(square.vertices) == pytest.approx(
+        np.zeros(len(square.vertices))
+    )
+
+
+def test_a_point_is_as_far_from_the_boundary_as_from_its_nearest_edge():
+    square = Polygon2D.rectangle(width=2.0, length=2.0)
+    points = np.array([(0.0, 0.0), (3.0, 0.0), (2.0, 2.0)])
+
+    assert square.distance_to_boundary(points) == pytest.approx(
+        [1.0, 2.0, math.sqrt(2.0)]
+    )
+
+
+# %% turning one polygon onto another
+
+
+def test_a_polygon_already_lined_up_with_another_needs_no_turn():
+    rectangle = Polygon2D.rectangle(width=0.02, length=0.04)
+
+    assert rectangle.turn_onto(rectangle) == pytest.approx(0.0)
+
+
+def test_a_turned_triangle_is_turned_back_onto_its_original():
+    triangle = Polygon2D.equilateral_triangle(side=0.037)
+    turned = triangle.turned(math.radians(30))
+
+    turn = turned.turn_onto(triangle)
+
+    assert turn % (2 * math.pi / 3) == pytest.approx(
+        math.radians(90), abs=Polygon2D.ALIGNMENT_ANGLE_STEP
+    )
+
+
+def test_a_smaller_polygon_is_lined_up_with_a_larger_one_of_the_same_shape():
+    small = Polygon2D.rectangle(width=0.02, length=0.04)
+    large_and_turned = Polygon2D.rectangle(width=0.042, length=0.022)
+
+    turn = small.turn_onto(large_and_turned)
+
+    assert turn % math.pi == pytest.approx(
+        math.pi / 2, abs=Polygon2D.ALIGNMENT_ANGLE_STEP
+    )

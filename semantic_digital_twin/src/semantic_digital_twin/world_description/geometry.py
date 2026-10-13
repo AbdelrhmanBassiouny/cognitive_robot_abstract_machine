@@ -84,6 +84,12 @@ class Hue:
     How many degrees take a hue once round the colour circle, back to where it started.
     """
 
+    DECIMAL_PLACES: ClassVar[int] = 9
+    """
+    How many decimal places of a degree a hue read off a color keeps, which drops the
+    rounding error that converting to red, green and blue and back leaves behind.
+    """
+
     def distance(self, degrees: npt.ArrayLike) -> npt.ArrayLike:
         """
         How far the given hues lie from this one, the short way round the colour circle.
@@ -280,7 +286,8 @@ class Color:
         ..note:: A color with no saturation has no hue to speak of and reads as red.
         """
         fraction_of_a_turn, _, _ = colorsys.rgb_to_hsv(*self.to_rgb())
-        return Hue(fraction_of_a_turn * Hue.FULL_TURN)
+        degrees = round(fraction_of_a_turn * Hue.FULL_TURN, Hue.DECIMAL_PLACES)
+        return Hue(degrees % Hue.FULL_TURN)
 
     @classmethod
     def PINK(cls) -> Self:
@@ -2048,6 +2055,12 @@ class Polygon2D:
     circle.
     """
 
+    ALIGNMENT_ANGLE_STEP: ClassVar[float] = math.radians(1.0)
+    """
+    How finely, in radians, :meth:`turn_onto` tries turns: a degree moves a corner of a
+    polygon a few centimetres across by under half a millimetre.
+    """
+
     CORNER_MATCH_TOLERANCE: ClassVar[float] = 1e-9
     """
     How far a corner may lie from another, in the polygon's own units, and still be
@@ -2174,6 +2187,53 @@ class Polygon2D:
         """
         cosine, sine = math.cos(angle), math.sin(angle)
         return Polygon2D(self.vertices @ np.array([[cosine, sine], [-sine, cosine]]))
+
+    def distance_to_boundary(self, points: np.ndarray) -> np.ndarray:
+        """
+        How far points lie from this polygon's nearest edge, inside or out.
+
+        :param points: The points, as ``(n, 2)`` ``(x, y)`` pairs.
+        :return: Each point's distance to the boundary.
+        """
+        starts = self.vertices
+        edges = np.roll(starts, -1, axis=0) - starts
+        offsets = np.asarray(points, dtype=float)[:, None, :] - starts[None, :, :]
+        along = np.clip(
+            np.einsum("pek,ek->pe", offsets, edges)
+            / np.einsum("ek,ek->e", edges, edges),
+            0.0,
+            1.0,
+        )
+        nearest = starts[None, :, :] + along[..., None] * edges[None, :, :]
+        return np.linalg.norm(
+            np.asarray(points, dtype=float)[:, None, :] - nearest, axis=-1
+        ).min(axis=1)
+
+    def turn_onto(self, other: Polygon2D) -> float:
+        """
+        The turn about its centroid, in radians, at which this polygon best follows
+        another's shape, the two compared at equal area.
+
+        :param other: The polygon to line this one up with.
+        :return: The turn, between zero and this polygon's
+            :meth:`rotational_symmetry_angle`.
+        """
+        own = self.centered()
+        target = other.centered()
+        target = Polygon2D(target.vertices * math.sqrt(own.area / target.area))
+        turns = np.arange(
+            0.0, own.rotational_symmetry_angle(), self.ALIGNMENT_ANGLE_STEP
+        )
+        mismatches = []
+        for turn in turns:
+            turned = own.turned(turn)
+            mismatches.append(
+                max(
+                    target.distance_to_boundary(turned.vertices).max(),
+                    turned.distance_to_boundary(target.vertices).max(),
+                )
+            )
+        return float(turns[int(np.argmin(mismatches))])
 
     def rotational_symmetry_angle(self) -> float:
         """

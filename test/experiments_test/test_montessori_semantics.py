@@ -19,7 +19,7 @@ from semantic_digital_twin.semantic_annotations.semantic_annotations import Draw
 from semantic_digital_twin.spatial_types.spatial_types import Point3
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.connections import FixedConnection
-from semantic_digital_twin.world_description.geometry import Box, Scale
+from semantic_digital_twin.world_description.geometry import Box, Polygon2D, Scale
 from semantic_digital_twin.world_description.shape_collection import ShapeCollection
 from semantic_digital_twin.world_description.world_entity import Body
 
@@ -79,6 +79,51 @@ def test_montessori_shape_computes_its_insertion_pose_relative_to_the_hole(world
     assert float(position.x) == pytest.approx(0.01)
     assert float(position.y) == pytest.approx(-0.02)
     assert float(position.z) == pytest.approx(0.03)
+
+
+def _rectangular_prism_and_hole(world, hole_scale: Scale):
+    """
+    A 20 by 40 millimetre rectangular prism and a rectangular hole of the given size.
+
+    :param world: The world to build them in.
+    :param hole_scale: The hole's size.
+    :return: The prism and the hole.
+    """
+    body = Body.from_shape_collection(
+        PrefixedName("prism"), ShapeCollection([Box(scale=Scale(0.02, 0.04, 0.03))])
+    )
+    with world.modify_world():
+        world.add_connection(FixedConnection(parent=world.root, child=body))
+        prism = RectangularPrismShape(name=PrefixedName("prism"), root=body)
+        hole = ShapeSortingHole.create_with_new_region_in_world(
+            name=PrefixedName("rectangular_hole"), world=world, scale=hole_scale
+        )
+        hole.shape_category = RectangularPrismShape
+    return prism, hole
+
+
+def test_a_piece_turned_against_its_hole_is_turned_onto_it_when_inserted(world):
+    prism, hole = _rectangular_prism_and_hole(world, Scale(0.042, 0.022, 0.001))
+
+    pose = prism.insertion_pose_relative_to_hole(
+        hole, horizontal_offset=Point3(0.0, 0.0, 0.0), hover_height=0.03
+    )
+
+    _, _, yaw = pose.rotation_matrix.rpy
+    assert float(yaw) % math.pi == pytest.approx(
+        math.pi / 2, abs=Polygon2D.ALIGNMENT_ANGLE_STEP
+    )
+
+
+def test_a_piece_lined_up_with_its_hole_is_inserted_unturned(world):
+    prism, hole = _rectangular_prism_and_hole(world, Scale(0.022, 0.042, 0.001))
+
+    pose = prism.insertion_pose_relative_to_hole(
+        hole, horizontal_offset=Point3(0.0, 0.0, 0.0), hover_height=0.03
+    )
+
+    _, _, yaw = pose.rotation_matrix.rpy
+    assert float(yaw) == pytest.approx(0.0, abs=Polygon2D.ALIGNMENT_ANGLE_STEP)
 
 
 def test_disk_shape_tips_onto_its_edge_to_pass_through_its_slot(world):

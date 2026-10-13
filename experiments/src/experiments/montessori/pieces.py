@@ -1,25 +1,23 @@
 """
-The loose Montessori pieces this lab's physical set actually contains.
+The loose Montessori pieces this lab's physical sets contain.
 
-Every measurement here was taken off the pieces themselves rather than derived from the
-board's own holes: a piece is cut smaller than the hole it drops through, so the hole's
-footprint is the wrong size to recognise a piece by or to build one from.
+Each set is a world of its own holding one body per piece, built from the measurements
+taken off the real pieces rather than derived from the board's own holes: a piece is cut
+smaller than the hole it drops through, so the hole's footprint is the wrong size to
+recognise a piece by or to build one from.
 
-Each piece is described by the outline it presents while resting on its own flat face,
-the colour it was measured to be, and how far it can be turned about its standing axis
-before it looks as it did. That last one is what makes a piece's orientation a *minimal*
-turn rather than an absolute one: a square is unchanged by a quarter turn, so there is
-no sense in reporting that it was turned by more.
+What a piece is recognised by -- the outline it presents resting on its own flat face,
+how tall it then stands and the colour it wears -- is read off its body rather than
+stored beside it.
 """
 
 from __future__ import annotations
 
-import math
 from dataclasses import dataclass
 from enum import Enum
 
 import numpy as np
-from typing_extensions import Optional, Tuple, Type
+from typing_extensions import Dict, Optional, Tuple, Type
 
 from experiments.montessori.semantics import (
     CubeShape,
@@ -28,115 +26,74 @@ from experiments.montessori.semantics import (
     RectangularPrismShape,
     TriangularPrismShape,
 )
-from semantic_digital_twin.world_description.geometry import Color, Hue, Polygon2D
+from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
+from semantic_digital_twin.world import World
+from semantic_digital_twin.world_description.connections import FixedConnection
+from semantic_digital_twin.world_description.geometry import (
+    Box,
+    Color,
+    Cylinder,
+    Hue,
+    Mesh,
+    Polygon2D,
+    Scale,
+    Shape,
+)
+from semantic_digital_twin.world_description.shape_collection import ShapeCollection
+from semantic_digital_twin.world_description.world_entity import Body
 
 # %% the colours they were measured to be
 
 
 class PieceHue(Hue, Enum):
     """
-    The hues the pieces in this set wear, measured off the rectified camera image.
+    The hues the pieces of this lab's sets wear, measured off the rectified camera
+    image.
     """
 
     CYAN = 172.0
     """
-    Hue of the pale blue pieces.
+    Hue of the full-size set's pale blue pieces.
     """
 
     YELLOW = 42.0
     """
-    Hue of the yellow pieces.
+    Hue of the full-size set's yellow pieces.
 
     The bare table has no colour to speak of, so nothing on it competes for this; the
     board's own lid does share it, but the lid is searched on its own plane and excluded
     from the loose pieces by its outline.
     """
 
-
-# %% one kind of piece
-
-
-@dataclass(frozen=True, eq=False)
-class KnownPiece:
+    SMALLER_SET_BLUE = 196.0
     """
-    One kind of loose piece this set contains, as measured off the piece itself.
+    Hue of the smaller set's blue pieces: a sky blue where the full-size set's is a pale
+    cyan.
     """
 
-    category: Type[MontessoriShape]
+    SMALLER_SET_YELLOW = 52.0
     """
-    The kind of piece it is, and so the hole it belongs in.
-    """
+    Hue of the smaller set's yellow pieces.
 
-    outline: Polygon2D
-    """
-    The outline it presents while resting on its own flat face, in metres about its own
-    centre, at zero turn.
+    Within :attr:`PieceSet.hue_tolerance` of the board's own wooden lid, so a piece of
+    this set on the lid is told from it by its outline alone.
     """
 
-    height: float
-    """
-    How far its top face stands above the surface it rests on, in metres.
-    """
 
-    hue: Hue
-    """
-    The colour it was measured to be.
-    """
-
-    rotation_period: Optional[float]
-    """
-    The smallest turn about its standing axis, in radians, that leaves it looking as it
-    did, or None when every turn does.
-
-    An orientation is only ever reported within half of this either way, since a larger
-    turn is indistinguishable from a smaller one.
-    """
-
-    @property
-    def color(self) -> Color:
-        """
-        The colour to draw this piece in.
-
-        Only :attr:`hue` was measured off the piece, so this is that hue at full
-        saturation and brightness -- the pure form of the colour it wears, rather than
-        the shade any one photograph of it happened to catch.
-        """
-        return Color.from_hsv(self.hue)
-
-    @property
-    def radius(self) -> float:
-        """
-        How far its outline reaches from its own centre, in metres.
-        """
-        return float(np.abs(self.outline.vertices).max())
-
-    def smallest_equivalent_turn(self, angle: float) -> float:
-        """
-        The smallest turn that leaves this piece looking the way the given one does.
-
-        :param angle: A turn about the world frame's z-axis, in radians.
-        :return: The same turn brought within half a :attr:`rotation_period` of zero, or
-            zero for a piece no turn changes.
-        """
-        if self.rotation_period is None:
-            return 0.0
-        half = self.rotation_period / 2
-        return (angle + half) % self.rotation_period - half
-
-
-# %% the set they make up
+# %% the sets they make up
 
 
 @dataclass(frozen=True)
 class PieceSet:
     """
-    The kinds of loose piece a physical set contains, and how closely a measured colour
-    must match one of theirs to be taken for it.
+    The loose pieces of one physical set, and how closely a measured colour must match
+    one of theirs to be taken for it.
     """
 
-    pieces: Tuple[KnownPiece, ...]
+    world: World
     """
-    Every kind of loose piece in the set.
+    The world holding one body per piece, each standing on its own flat face at its own
+    origin and annotated with the kind of piece it is.
     """
 
     hue_tolerance: float = 8.0
@@ -151,44 +108,142 @@ class PieceSet:
     """
 
     @classmethod
-    def this_lab(cls) -> PieceSet:
+    def full_size(cls) -> PieceSet:
         """
-        The pieces this lab's physical set contains, with every dimension in metres.
+        The set the captures of August 2026 hold.
 
-        The disk and the sphere are left out because this physical set has neither.
+        The disk and the sphere are left out because the lab's sets have neither.
         """
-        return cls(
-            pieces=(
-                KnownPiece(
-                    category=CubeShape,
-                    outline=Polygon2D.rectangle(width=0.03, length=0.03),
-                    height=0.03,
-                    hue=PieceHue.CYAN,
-                    rotation_period=math.pi / 2,
-                ),
-                KnownPiece(
-                    category=CylinderShape,
-                    outline=Polygon2D.circle(diameter=0.028),
-                    height=0.03,
-                    hue=PieceHue.CYAN,
-                    rotation_period=None,
-                ),
-                KnownPiece(
-                    category=RectangularPrismShape,
-                    outline=Polygon2D.rectangle(width=0.02, length=0.04),
-                    height=0.03,
-                    hue=PieceHue.YELLOW,
-                    rotation_period=math.pi,
-                ),
-                KnownPiece(
-                    category=TriangularPrismShape,
-                    outline=Polygon2D.equilateral_triangle(side=0.037),
-                    height=0.03,
-                    hue=PieceHue.YELLOW,
-                    rotation_period=2 * math.pi / 3,
-                ),
+        return cls.printed(scale=1.0, blue=PieceHue.CYAN, yellow=PieceHue.YELLOW)
+
+    @classmethod
+    def smaller(cls) -> PieceSet:
+        """
+        The set on the table since September 2026: the full-size set printed at four
+        fifths of its size, its cube measuring 24 millimetres where the full-size one
+        measures 30, in plastics of its own.
+        """
+        return cls.printed(
+            scale=0.8,
+            blue=PieceHue.SMALLER_SET_BLUE,
+            yellow=PieceHue.SMALLER_SET_YELLOW,
+        )
+
+    @classmethod
+    def printed(cls, scale: float, blue: Hue, yellow: Hue) -> PieceSet:
+        """
+        The full-size set's kinds of piece printed at a size and in two colours, with
+        every dimension measured off the full-size pieces, in metres.
+
+        :param scale: How large the pieces are against the full-size set's.
+        :param blue: The colour the cube and the cylinder are printed in.
+        :param yellow: The colour the two prisms are printed in.
+        """
+        triangular_prism = Mesh.from_trimesh(
+            mesh=Polygon2D.equilateral_triangle(side=0.037 * scale).extrude(
+                0.03 * scale
             )
         )
+        triangular_prism.color = Color.from_hsv(yellow)
+        return cls.of_shapes(
+            {
+                CubeShape: Box(
+                    scale=Scale(0.03 * scale, 0.03 * scale, 0.03 * scale),
+                    color=Color.from_hsv(blue),
+                ),
+                CylinderShape: Cylinder(
+                    width=0.028 * scale,
+                    height=0.03 * scale,
+                    color=Color.from_hsv(blue),
+                ),
+                RectangularPrismShape: Box(
+                    scale=Scale(0.02 * scale, 0.04 * scale, 0.03 * scale),
+                    color=Color.from_hsv(yellow),
+                ),
+                TriangularPrismShape: triangular_prism,
+            }
+        )
+
+    @classmethod
+    def of_shapes(cls, shapes: Dict[Type[MontessoriShape], Shape]) -> PieceSet:
+        """
+        A set holding one piece of each given kind, shaped and coloured as given.
+
+        :param shapes: The shape each kind of piece is, centred on its own origin with
+            its flat face down.
+        """
+        world = World()
+        root = Body(name=PrefixedName("piece_set"))
+        with world.modify_world():
+            world.add_body(root)
+            for kind, shape in shapes.items():
+                name = PrefixedName(kind.__name__)
+                body = Body.from_shape_collection(name, ShapeCollection([shape]))
+                world.add_connection(FixedConnection(parent=root, child=body))
+                world.add_semantic_annotation(kind(name=name, root=body))
+        return cls(world=world)
+
+    @property
+    def pieces(self) -> Tuple[MontessoriShape, ...]:
+        """
+        Every piece in the set.
+        """
+        return tuple(self.world.get_semantic_annotations_by_type(MontessoriShape))
+
+    def piece_for(self, category: Type[MontessoriShape]) -> Optional[MontessoriShape]:
+        """
+        The piece of a given kind, or None when this set has none of that kind.
+
+        :param category: The kind of piece to look up.
+        """
+        for piece in self.pieces:
+            if type(piece) is category:
+                return piece
+        return None
+
+    @staticmethod
+    def outline_of(piece: MontessoriShape) -> Polygon2D:
+        """
+        The outline a piece presents resting on its own flat face, about its own centre.
+
+        :param piece: A piece of a set.
+        """
+        return piece.root.collision.convex_footprint_in_frame(piece.root)
+
+    @staticmethod
+    def height_of(piece: MontessoriShape) -> float:
+        """
+        How far a piece's top face stands above the surface it rests on, in metres.
+
+        :param piece: A piece of a set.
+        """
+        return (
+            piece.root.collision.as_bounding_box_collection_in_frame(piece.root)
+            .bounding_box()
+            .height
+        )
+
+    @staticmethod
+    def color_of(piece: MontessoriShape) -> Color:
+        """
+        The colour a piece wears.
+
+        A piece is printed in a single plastic, so this is the colour of its one visual
+        shape.
+
+        :param piece: A piece of a set.
+        """
+        [shape] = piece.root.visual.shapes
+        return shape.color
+
+    @classmethod
+    def hue_of(cls, piece: MontessoriShape) -> Hue:
+        """
+        Where the colour a piece wears lies on the colour circle.
+
+        :param piece: A piece of a set.
+        """
+        return cls.color_of(piece).hue
 
     @property
     def hues(self) -> Tuple[Hue, ...]:
@@ -200,21 +255,13 @@ class PieceSet:
         surface under it.
         """
         return tuple(
-            sorted({piece.hue for piece in self.pieces}, key=lambda hue: hue.degrees)
+            sorted(
+                {self.hue_of(piece) for piece in self.pieces},
+                key=lambda hue: hue.degrees,
+            )
         )
 
-    def piece_for(self, category: Type[MontessoriShape]) -> Optional[KnownPiece]:
-        """
-        The piece of a given kind, or None when this set has none of that kind.
-
-        :param category: The kind of piece to look up.
-        """
-        for piece in self.pieces:
-            if piece.category is category:
-                return piece
-        return None
-
-    def could_be(self, piece: KnownPiece, hue: Optional[Hue]) -> bool:
+    def could_be(self, piece: MontessoriShape, hue: Optional[Hue]) -> bool:
         """
         Whether a piece's own colour is close enough to a measured one to be it.
 
@@ -223,7 +270,7 @@ class PieceSet:
         """
         if hue is None:
             return True
-        return bool(piece.hue.distance(hue.degrees) <= self.hue_tolerance)
+        return bool(self.hue_of(piece).distance(hue.degrees) <= self.hue_tolerance)
 
     def wears_a_piece_colour(self, degrees: np.ndarray) -> np.ndarray:
         """
