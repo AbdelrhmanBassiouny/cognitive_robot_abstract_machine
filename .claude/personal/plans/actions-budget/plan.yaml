@@ -44,8 +44,11 @@ items:
   branch: null
   track: operations
   depends_on: []
-  status: not_started
+  status: done
   notes: |-
+    Done 2026-10-13, verified against the workflow list: every listed workflow and the three dead ones
+    read disabled_manually. Build Documentation and update_docker were still active at that check
+    (both run on a push to the fork's main; update_docker also chains a CI run) - asked to disable them too.
     Settings -> Actions: re-enable, then on the Actions tab disable each of these workflows by hand
     before anything triggers them: Integration refresh, Integration probe, Integration checks,
     Examples and Demos, Build Documentation, the four "Publish ... to PyPI", update_docker, Stack
