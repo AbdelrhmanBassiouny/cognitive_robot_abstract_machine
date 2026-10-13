@@ -9,9 +9,8 @@ whatever observes the copy sees the goal progress.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Dict
 
-from typing_extensions import Self
+from typing_extensions import Any, Self
 
 from cramph.statechart import (
     LastObservationState,
@@ -58,7 +57,7 @@ class StatechartStateUpdate:
     """
 
     @classmethod
-    def from_json(cls, payload: Dict[str, Any], statechart: Statechart) -> Self:
+    def from_json(cls, payload: dict[str, Any], statechart: Statechart) -> Self:
         """
         :param payload: The feedback or result of a goal, as Giskard sent it.
         :param statechart: The client's copy of the statechart of the goal.

@@ -3,7 +3,6 @@ from dataclasses import dataclass, field
 
 import numpy as np
 import pytest
-from typing_extensions import Optional
 
 from cramph.composites import ChildChooserAccess
 from cramph.context import StatechartContext
@@ -90,22 +89,22 @@ class ClientFollowingTheStates(InputSynchronizer):
     Giskard does, from inside the control loop.
     """
 
-    statechart: Optional[Statechart] = None
+    statechart: Statechart | None = None
     """
     The client's copy of the statechart sent as the goal.
     """
 
-    action_server: Optional[GoalQueueMimic] = None
+    action_server: GoalQueueMimic | None = None
     """
     The action server whose feedback is read.
     """
 
-    child_choice_client: Optional[ChildChoiceClient] = None
+    child_choice_client: ChildChoiceClient | None = None
     """
     Decides the children to send, None for a goal without nodes choosing a child.
     """
 
-    server_chooser: Optional[ChildSentByClient] = None
+    server_chooser: ChildSentByClient | None = None
     """
     The server side the choices are sent to.
     """

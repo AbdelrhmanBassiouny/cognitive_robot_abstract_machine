@@ -4,7 +4,7 @@ import json
 from dataclasses import dataclass, field
 from threading import Thread
 from time import sleep
-from typing import Any, Dict, List
+from typing_extensions import Any
 
 import rclpy
 from json_msgs.action import JsonAction
@@ -13,6 +13,7 @@ from std_msgs.msg import String
 from cramph.composites import ChildChooserAccess
 from cramph.context import ContextExtension, StatechartContext
 from cramph.executor import Executor, ExecutorExtension
+from cramph.statechart import Statechart
 from giskardpy.middleware.ros2 import rospy
 from giskardpy.middleware.ros2.child_choices import (
     ChildChoiceClient,
@@ -136,6 +137,14 @@ class GiskardClientExecutor(Executor):
     def robot(self) -> AbstractRobot:
         return self.world.get_semantic_annotations_by_type(AbstractRobot)[0]
 
+    def compile(self, statechart: Statechart) -> None:
+        """
+        Does what :meth:`Executor.compile` does, then tells every extension that the
+        statechart is compiled.
+        """
+        super().compile(statechart)
+        self._notify_compiled()
+
     def execute_async(self) -> Future:
         """
         Sends the compiled statechart to Giskard without waiting for it to end, see
@@ -149,8 +158,8 @@ class GiskardClientExecutor(Executor):
     def execute(self) -> None:
         """
         Sends the compiled statechart to Giskard, keeps its states in step with the ones
-        Giskard reports while it runs, waits until it ended there and takes over its
-        final states.
+        Giskard reports while it runs, waits until it ended there, takes over its final
+        states and tells every extension that the run stopped.
 
         A goal that fails raises the exception that made Giskard abort it, for example
         :class:`WorldModelModifiedDuringMotionError` when another process modified the
@@ -158,18 +167,21 @@ class GiskardClientExecutor(Executor):
         """
         self.statechart.sanity_check()
         child_chooser_access = self.context.get_extension(ChildChooserAccess)
-        if child_chooser_access is None:
-            result = self._client.send_goal(
-                self._create_goal_message(),
-                feedback_callback=lambda feedback_message: self._follow_states(
-                    json.loads(feedback_message.feedback.feedback)
-                ),
-            )
-        else:
-            result = self._send_action_goal_choosing_children(child_chooser_access)
-        self._take_over_result(result)
+        try:
+            if child_chooser_access is None:
+                result = self._client.send_goal(
+                    self._create_goal_message(),
+                    feedback_callback=lambda feedback_message: self._follow_states(
+                        json.loads(feedback_message.feedback.feedback)
+                    ),
+                )
+            else:
+                result = self._send_action_goal_choosing_children(child_chooser_access)
+            self._take_over_result(result)
+        finally:
+            self.finish_run()
 
-    def _follow_states(self, feedback: Dict[str, Any]) -> None:
+    def _follow_states(self, feedback: dict[str, Any]) -> None:
         """
         Write the states Giskard reports in `feedback` into the compiled statechart.
 
@@ -269,14 +281,18 @@ class GiskardClientExecutor(Executor):
 
     async def get_result(self):
         """
-        Wait for the goal sent with :func:`execute_async` and sync its final states.
+        Wait for the goal sent with :func:`execute_async`, sync its final states and
+        tell every extension that the run stopped.
 
         A goal that fails raises the exception that made Giskard abort it, for example
         :class:`WorldModelModifiedDuringMotionError` when another process modified the
         world model while the motion was running.
         """
-        result = await self._client.get_result()
-        self._take_over_result(result)
+        try:
+            result = await self._client.get_result()
+            self._take_over_result(result)
+        finally:
+            self.finish_run()
 
     def close(self) -> None:
         """
@@ -295,12 +311,12 @@ class GiskardClientExecutorNode(GiskardClientExecutor):
     giskard_node_name: str = "giskard"
     avoid_name_conflict: bool = True
     ros_context: Context | None = field(kw_only=True, default=None)
-    cli_args: List[str] | None = field(kw_only=True, default=None)
+    cli_args: list[str] | None = field(kw_only=True, default=None)
     namespace: str | None = field(kw_only=True, default=None)
     use_global_arguments: bool = field(kw_only=True, default=True)
     enable_rosout: bool = field(kw_only=True, default=True)
     start_parameter_services: bool = field(kw_only=True, default=True)
-    parameter_overrides: List[Parameter] | None = field(kw_only=True, default=None)
+    parameter_overrides: list[Parameter] | None = field(kw_only=True, default=None)
     allow_undeclared_parameters: bool = field(kw_only=True, default=False)
     automatically_declare_parameters_from_overrides: bool = field(
         kw_only=True, default=False
