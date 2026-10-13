@@ -44,10 +44,12 @@ items:
     basstler = "."`, and `pyproject.toml` shipped as package data.'
 - id: basstler-notes-core-python
   title: 'Bash→Python 1: notes-core modules (config, git seam, writer, markers)'
-  branch: null
-  status: not started
+  branch: claude/basstler-notes-core-python
+  status: in progress
   track: conversion
   depends_on: []
+  pull_request_number: 505
+  session: https://claude.ai/code/session_01Xxsd3jwKjjEsHdyyfC8Azo
   notes: Pure addition to the package, no bash file changes (decision 12).
 - id: basstler-save-commands-python
   title: 'Bash→Python 2: the four notes writers become python -m subcommands'
