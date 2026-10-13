@@ -109,9 +109,33 @@ git worktree add -b __save-pr-progress-tmp "${SCRATCH_DIR}" FETCH_HEAD --quiet
 
 mkdir -p "${SCRATCH_DIR}/$(dirname "${PROGRESS_PATH}")"
 cp "${CONTENT_FILE}" "${SCRATCH_DIR}/${PROGRESS_PATH}"
-git -C "${SCRATCH_DIR}" add "${PROGRESS_PATH}"
 
-if git -C "${SCRATCH_DIR}" diff --cached --quiet -- "${PROGRESS_PATH}"; then
+# Progress notes no session will read again - a branch gone from the remote,
+# or one whose pull requests have all merged or closed - are deleted in the
+# same commit. Never fatal: without a credential or a branch listing the save
+# goes ahead unpruned, and the next save tries again.
+WORK_REMOTE="$(git config "branch.${CURRENT_BRANCH}.remote" || echo origin)"
+REMOTE_BRANCHES_FILE="${SCRATCH_DIR}.remote-branches"
+if [ -z "${GH_TOKEN:-}${GITHUB_TOKEN:-}" ]; then
+  echo "No GH_TOKEN or GITHUB_TOKEN, so finished pull requests' progress notes were not pruned." >&2
+elif ! WORK_REMOTE_URL="$(git remote get-url "${WORK_REMOTE}" 2>/dev/null)" \
+    || ! git ls-remote --heads "${WORK_REMOTE}" 2>/dev/null \
+      | sed 's#.*refs/heads/##' > "${REMOTE_BRANCHES_FILE}" \
+    || [ ! -s "${REMOTE_BRANCHES_FILE}" ]; then
+  echo "Could not list the branches of '${WORK_REMOTE}', so finished pull requests' progress notes were not pruned." >&2
+elif PRUNED_BRANCHES="$("${BASSTLER_PYTHON}" -m "${PROGRESS_NOTES_MODULE}" prune \
+    --directory "${SCRATCH_DIR}/${PR_PROGRESS_DIRECTORY}" \
+    --remote-url "${WORK_REMOTE_URL}" \
+    --remote-branches "${REMOTE_BRANCHES_FILE}" \
+    --keep "${CURRENT_BRANCH}")"; then
+  [ -n "${PRUNED_BRANCHES}" ] && printf 'Removed the progress notes of finished branches:\n%s\n' "${PRUNED_BRANCHES}"
+else
+  echo "Pruning finished pull requests' progress notes failed (above); saving without it." >&2
+fi
+rm -f "${REMOTE_BRANCHES_FILE}"
+git -C "${SCRATCH_DIR}" add --all -- "${PR_PROGRESS_DIRECTORY}"
+
+if git -C "${SCRATCH_DIR}" diff --cached --quiet -- "${PR_PROGRESS_DIRECTORY}"; then
   echo "No changes to save - '${PROGRESS_PATH}' on '${NOTES_BRANCH}' (remote '${ACTIVE_NOTES_REMOTE}') is already up to date."
   exit 0
 fi

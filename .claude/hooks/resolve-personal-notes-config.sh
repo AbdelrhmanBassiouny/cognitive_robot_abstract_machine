@@ -165,13 +165,14 @@ default_branch_name() {
 # Shared by session-start.sh and save-pr-progress.sh so both agree on exactly
 # the same key for exactly the same branch - there is no other place this
 # path is computed, so it can never drift between reading and writing it.
+PR_PROGRESS_DIRECTORY=".claude/personal/pr-progress"
 pr_progress_path() {
   local branch
   branch="$(git rev-parse --abbrev-ref HEAD 2>/dev/null)"
   case "${branch}" in
     HEAD|"$(default_branch_name)"|"${NOTES_BRANCH}"|"") return 1 ;;
   esac
-  printf '.claude/personal/pr-progress/%s.md\n' "${branch}"
+  printf '%s/%s.md\n' "${PR_PROGRESS_DIRECTORY}" "${branch}"
 }
 
 # PERSONAL_GIT_IDENTITY_PATH: where the human contributor's git identity is
@@ -340,6 +341,9 @@ PLAN_MANIFEST_TOOLS_MODULE="basstler.plan_manifest_tools"
 # plan_size_limits: prunes landed items and refuses a plan or progress
 # notes over their limits - the gate save-plan.sh and save-pr-progress.sh run.
 PLAN_SIZE_LIMITS_MODULE="basstler.plan_size_limits"
+# progress_notes: deletes the progress notes of branches whose pull requests
+# have all merged or closed, or that are gone from the remote.
+PROGRESS_NOTES_MODULE="basstler.progress_notes"
 # plan_updates_since_support: renders the plan-state delta
 # plan-updates-since.sh reports.
 PLAN_UPDATES_SINCE_SUPPORT_MODULE="basstler.plan_updates_since_support"

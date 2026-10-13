@@ -89,3 +89,27 @@ def test_progress_over_the_limit_is_refused_and_not_pushed(
         progress_repository.project_root.parent / "verify"
     )
     assert not (checkout / PersonalNotesPath.PULL_REQUEST_PROGRESS).exists()
+
+
+# %% pruning finished branches' notes
+
+
+def test_without_a_credential_the_save_goes_ahead_unpruned(
+    progress_repository: ScratchRepository,
+):
+    other_notes = PersonalNotesPath.PULL_REQUEST_PROGRESS / "merged-elsewhere.md"
+    progress_repository.update_notes_branch_file(other_notes, "- Done.\n")
+    progress_repository.write(
+        "CLAUDE.local.md",
+        "<!-- BEGIN-PR-PROGRESS -->\n- Next: a step.\n<!-- END-PR-PROGRESS -->\n",
+    )
+
+    result = progress_repository.run_hook_script(
+        SAVE_PR_PROGRESS, GH_TOKEN="", GITHUB_TOKEN=""
+    )
+
+    assert result.returncode == 0, result.stderr
+    checkout = progress_repository.clone_notes_branch(
+        progress_repository.project_root.parent / "verify"
+    )
+    assert (checkout / other_notes).exists()

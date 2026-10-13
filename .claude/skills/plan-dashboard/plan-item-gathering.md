@@ -32,7 +32,7 @@ git fetch "${NOTES_REMOTE}" "${NOTES_BRANCH}" --quiet
 
 Read only what this item needs. Copy `<plan-id>/plan.yaml` off `FETCH_HEAD`
 to a scratch file and print just this item with
-`python3 -m "${PLAN_MANIFEST_TOOLS_MODULE}" item <file> --id <item-id>` (or
+`"${BASSTLER_PYTHON}" -m "${PLAN_MANIFEST_TOOLS_MODULE}" item <file> --id <item-id>` (or
 `--branch <branch>`); do the same for each item it `depends_on` when the
 readiness check below leaves a question. Never read the whole manifest to
 find one item - every other item is another session's work and costs this

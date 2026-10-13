@@ -18,6 +18,7 @@ import urllib.request
 from abc import ABC, abstractmethod
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from enum import StrEnum
 from typing import Any
 
 from basstler.maintenance_board import PullRequestRecord
@@ -128,6 +129,22 @@ class GitHubRequestFailed(ExternalCallFailed):
 # %% the client that makes the calls
 
 
+class ListedPullRequestState(StrEnum):
+    """
+    The pull request states the list endpoint filters by.
+    """
+
+    OPEN = "open"
+    """
+    Pull requests still open.
+    """
+
+    ALL = "all"
+    """
+    Every pull request, open, closed or merged.
+    """
+
+
 @dataclass(frozen=True)
 class GitHubRepository(ForkPullRequests):
     """
@@ -168,12 +185,18 @@ class GitHubRepository(ForkPullRequests):
         raise GitHubCredentialUnavailableError(CREDENTIAL_VARIABLES)
 
     def open_pull_requests(self) -> list[PullRequestRecord]:
-        """:return: Every open pull request on the repository, oldest page first."""
+        return self.pull_requests(ListedPullRequestState.OPEN)
+
+    def pull_requests(self, state: ListedPullRequestState) -> list[PullRequestRecord]:
+        """
+        :param state: Which pull requests to list.
+        :return: Every pull request on the repository in *state*, oldest page first.
+        """
         collected: list[PullRequestRecord] = []
         page = 1
         while True:
             query = urllib.parse.urlencode(
-                {"state": "open", "per_page": self.page_size, "page": page}
+                {"state": state.value, "per_page": self.page_size, "page": page}
             )
             fetched = self._call("GET", f"/pulls?{query}")
             collected.extend(fetched)
