@@ -1,9 +1,5 @@
-Item: actions-budget / budget-manifest. Draft PR #503, base main. Head b66263166.
-Done: manifest (basstler/actions_budget.toml), reader (basstler/workflows.py), budget + violations
-(basstler/actions_budget.py), tests (test_actions_budget.py + dataset/actions-budget), workflow edits
-(timeouts, examples on ready_for_review/full-ci/dispatch, fork push guard), README section, PR description.
-basstler suite: 748 passed. actionlint: no new findings.
-Decisions: cancel-in-progress only for PR workflows on synchronize; reusable callers carry no timeout;
-fork guard on first jobs only; reader split from budget for convergence with #211's workflow_document.py.
+Item: actions-budget / budget-manifest. Draft PR #503 based on #501 (claude/brave-archimedes-nonocl).
+#501 had main merged in (9c44591b7, AGENTS.md conflict resolved); #503 rebased onto it (920cb7ac7).
+Tests (editable install, as CI): #501 750 pass, #503 790 pass. Retarget #503 to main once #501 lands.
 Open for the user: Examples not running on ready-opened PRs (upstream impact); timeout/runs-per-day estimates.
-Next: user review. Nothing else outstanding.
+Promotion link for #501 handed to the user (not recorded on #501). Next: user review.

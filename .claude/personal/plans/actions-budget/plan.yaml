@@ -53,6 +53,9 @@ items:
     allowed in the repository - including the ones that only exist on unlanded branches (integration-*,
     stack maintenance, tooling label, plan dashboards) - with its triggers, concurrency group,
     job timeout, jobs per trigger and expected runs per day.
+  blockers:
+  - 'Based on #501 (basstler src layout) at the user''s request; retargets to main once #501
+    lands.'
 - id: changed-library-matrix
   title: Pull request CI tests the libraries a change touches and their dependents
   branch: null
