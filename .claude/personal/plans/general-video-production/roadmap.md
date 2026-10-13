@@ -93,3 +93,11 @@ two questions, so Video became one base for scenes, the timeline and video files
 footage code must follow that rename. PixelBox now reuses SemDT's Bounds generic; making
 SemDT's own boxes Bounds of a spatial region is left for the user to decide.
 
+A follow-up the same day moved the pixel-byte conversion onto SemDT's Color (to_rgb_bytes),
+so cramcorder no longer has a colour class of its own. Two modelling questions went back to
+the user rather than into code: the user proposed Scene and Timeline as Role[Video]; the
+reply argues Timeline and VideoFile are rigid kinds of Video while Scene is the role a video
+plays inside a timeline. The user proposed quantities as Role[int]/Role[float]; the reply
+argues for Quantity[T], a generic over the magnitude, because a Role delegates attributes
+but not operators, compares by identity, and int's own arithmetic would drop the unit.
+
