@@ -100,3 +100,15 @@ items:
     within weeks of a split. Measured evidence that per-item discipline cannot catch this:
     during the session that created this plan, workflow-unification grew 51 manifest and 103
     roadmap lines while gaining zero items.'
+- id: strict-limits-and-item-slices
+  title: Typed per-field limits enforced on every save, and one item loaded per session
+  branch: claude/happy-wozniak-nizfnv
+  pull_request_number: 504
+  track: gate-and-skills
+  depends_on: []
+  status: in progress
+  session: https://claude.ai/code/session_01Xxsd3jwKjjEsHdyyfC8Azo
+  notes: 'Per-field limits (basstler/plan_size_limits.py), landed items pruned and finished
+    plans removed on save, progress notes capped, session start loads only the branch item.
+    Supersedes the approach of #207/#273/#279; the user decides whether those close. Personal-notes
+    data already migrated to the limits (prior state 37831be62).'
