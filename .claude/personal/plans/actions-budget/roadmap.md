@@ -56,3 +56,14 @@ switched off by hand in the Actions tab, and each is switched back on once its i
 item declares itself against it. `changed-library-matrix` and `usage-monitor` follow in parallel. The
 pipeline items are edits to the unlanded pull requests that introduce those workflows, folded in rather
 than given branches of their own.
+
+## Open judgment calls
+
+- **Probe search shape.** #211 chose a linear probe search, dispatched in parallel, over bisection on
+  purpose: a round then costs one run's wall clock, and bisection would assume a monotonicity that
+  linear search does not. This plan proposes trading that for fewer runs. The trade is the user's to
+  make on #211, not something to change quietly.
+- **Stack maintenance on candidates.** #280's own description records that `stack-maintenance.yml` had
+  run 158 times by 2026-10-05, every one a `pull_request` run on an integration candidate, because a
+  build carries the workflow and a candidate runs it from its merge ref. The manifest has to declare
+  which workflows a candidate may run, not only which triggers each workflow answers.
