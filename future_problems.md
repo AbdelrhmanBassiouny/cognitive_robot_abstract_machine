@@ -1,18 +1,12 @@
 # Future problems
 
 Problems set aside until the statechart refactoring of `plan-cramp-second-iter` is
-done. Every test listed here is marked `@pytest.mark.parked` (or `pytestmark =
-pytest.mark.parked` for a whole module) and skipped. Once a problem is solved, remove
-the marker from its tests and its entry from this file.
+done. No test is parked for any of them at the moment. A test that has to wait for one
+is marked `@pytest.mark.parked` (or `pytestmark = pytest.mark.parked` for a whole
+module) and skipped. Once a problem is solved, remove the marker from its tests and its
+entry from this file.
 
 ## Sending statecharts as JSON
-
-The JSON tests run again and are no longer parked. Every node class is sent through
-JSON by a `test_node_json_round_trips.py` per package (`test/cramph_test/test_statechart`,
-`test/giskardpy_test/test_motion_statechart`, `test/giskardpy_test/test_ros2_stuff`,
-`test/coraplex_test/test_plan`), built on `test/statechart_json_round_trip.py`.
-
-Open questions:
 
 - Whether an underspecified statement (a krrood `Match`) has to survive JSON at all.
   Today `UnderspecifiedNode.statement` is not serialized, and the node is sent as the
@@ -31,14 +25,13 @@ Open questions:
   no round-trip case.
 - The real-stretch cross-process demo,
   `test/experiments_test/real_stretch_demo_test/test_real_stretch_demo_process_boundary.py`:
-  `test_demonstration_runs_against_a_controller_in_another_process`, failed because
-  `MoveGripper` did not survive a round trip. `MoveGripper` does now; the demo itself
-  still has to be run where `robokudo_msgs` is installed.
+  `test_demonstration_runs_against_a_controller_in_another_process`, still has to be
+  run where `robokudo_msgs` and the meshes of `iai_apartment` are installed.
 
 ## Design questions set aside
 
-These park no tests; they are design changes the review of ichumuh#8 raised and that
-were deliberately left for later.
+Design changes the review of ichumuh#8 raised and that were deliberately left for
+later.
 
 ### A statechart that takes its context from its executor
 
@@ -87,10 +80,9 @@ would run on stale state until the compile happened.
 
 ### Robot-specific motions that were not ported to plan transformations
 
-The motion designators that `coraplex/alternative_motion_mappings` replaced per robot are
-gone, and so is that package. The drive goals of the Stretch and the Tiago and the
-Stretch's way of closing a container are plan transformations now
-(`coraplex/robot_plans/robot_specific_plan_transformations.py`). Three mappings were left out:
+Three of the per-robot mappings of the removed `coraplex/alternative_motion_mappings`
+have no plan transformation in
+`coraplex/robot_plans/robot_specific_plan_transformations.py`:
 
 - **HSRB, real robot: driving through Navigation 2.** The mapping replaced the drive goal
   with a `NavigateActionServerTask` on the action topic `/hsrb/move_base`, sending a
@@ -124,25 +116,7 @@ Stretch's way of closing a container are plan transformations now
 
 ## Problems the bowl and cup plan ran into
 
-These park no tests; `test/coraplex_test/test_bowl_and_cup.py` works around them.
-
-### An opened drawer slides shut while unrelated motions run
-
-After `OpenAction` pulled the kitchen's `sink_area_left_middle_drawer_main_joint` out
-to its limit of 0.48 m, the drawer stood at 0.31 m when the plan ended, in the run
-without collision avoidance. It moves while no running node refers to it: most of the
-way while `MoveTorsoAction` raises the torso (0.44 m to 0.32 m over about 400 ticks),
-and a few millimetres during each `ParkArmsAction`. With collision avoidance the same
-plan ended at 0.44 m. During the pick-ups it also moves towards the grippers, because
-their goals are expressed relative to the objects lying in the drawer, so the drawer
-joint is on the kinematic chain of the goal.
-
-The drawer is a degree of freedom of the environment that the controller is free to
-move. Why it gets a velocity from motions that do not involve it is not yet known. The
-test therefore asserts where the bowl and the cup end up, and not that the drawer stays
-open. Options: find out which constraint or solver tolerance moves it; or let the
-controller move a degree of freedom of the environment only while a node asks for it,
-as `Open` and `Close` do.
+`test/coraplex_test/test_bowl_and_cup.py` works around this one.
 
 ### `OpenAction` grasps a handle along the x-axis of its body
 

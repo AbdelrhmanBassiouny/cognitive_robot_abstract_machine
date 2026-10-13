@@ -1,9 +1,10 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import pytest
 
+from cramph.composites import Sequence
 from cramph.context import StatechartContext
 from cramph.data_types import LifeCycleValues
 from cramph.exceptions import (
@@ -18,8 +19,12 @@ from giskardpy.motion_statechart.context import MotionControlContext
 from giskardpy.motion_statechart.graph_node import EndMotion
 from giskardpy.motion_statechart.monitors.monitors import LocalMinimumReached
 from giskardpy.motion_statechart.tasks.cartesian_tasks import CartesianPosition
+from giskardpy.motion_statechart.tasks.joint_tasks import JointPositionList
+from semantic_digital_twin.datastructures.joint_state import JointState
 from semantic_digital_twin.spatial_types import Point3
 from semantic_digital_twin.world import World
+from semantic_digital_twin.world_description.connections import PrismaticConnection
+from semantic_digital_twin.world_description.degree_of_freedom import DegreeOfFreedom
 
 # %% context
 
@@ -117,3 +122,103 @@ def test_motion_nodes_and_nodes_of_other_modules_run_in_one_statechart(
     assert other_node.life_cycle_state == LifeCycleValues.RUNNING
     assert tick_counter.ticks == executor.tick_count
     assert executor.require_extension(MotionControl).qp_controller is not None
+
+
+# %% degrees of freedom no running node moves
+
+
+@dataclass
+class StateRecordedWhileNodeRuns(TickingExecutorExtension):
+    """
+    Records the state of a degree of freedom after every tick in which a node runs.
+
+    .. note:: List it after :class:`MotionControl`, so it records the state after the
+        commands of the tick were applied.
+    """
+
+    degree_of_freedom: DegreeOfFreedom
+    """
+    The degree of freedom whose state is recorded.
+    """
+
+    node: JointPositionList
+    """
+    The node during whose run the state is recorded.
+    """
+
+    positions: list[float] = field(default_factory=list)
+    """
+    The position after every tick in which :attr:`node` ran.
+    """
+
+    velocities: list[float] = field(default_factory=list)
+    """
+    The velocity after every tick in which :attr:`node` ran.
+    """
+
+    def after_tick(self, executor: StatechartExecutor) -> None:
+        if self.node.life_cycle_state != LifeCycleValues.RUNNING:
+            return
+        state = executor.context.world.state[self.degree_of_freedom.id]
+        self.positions.append(float(state.position))
+        self.velocities.append(float(state.velocity))
+
+
+def run_one_joint_goal_after_another(
+    world: World,
+    first: JointPositionList,
+    second: JointPositionList,
+    recorded: PrismaticConnection,
+    while_running: JointPositionList,
+) -> StateRecordedWhileNodeRuns:
+    """
+    :param world: The world the goals move.
+    :param first: The goal that runs first.
+    :param second: The goal that runs once `first` ended.
+    :param recorded: The connection whose state is recorded.
+    :param while_running: The goal during whose run the state is recorded.
+    :return: The state of `recorded` during the run of `while_running`.
+    """
+    recording = StateRecordedWhileNodeRuns(
+        degree_of_freedom=recorded.raw_dof, node=while_running
+    )
+    executor = StatechartExecutor(
+        context=StatechartContext(world=world),
+        extensions=[MotionControl(), recording],
+    )
+    statechart = Statechart(context=executor.context)
+    statechart.add_node(sequence := Sequence([first, second]))
+    statechart.add_node(EndMotion.when_true(sequence))
+    executor.compile(statechart)
+    executor.tick_until_end()
+    return recording
+
+
+def test_a_joint_at_its_limit_stays_put_until_its_node_runs(prismatic_bot2: World):
+    moved_first, waiting = prismatic_bot2.controlled_connections
+    lower_limit = waiting.raw_dof.limits.lower.position
+    waiting.position = lower_limit
+    first = JointPositionList(goal_state=JointState.from_mapping({moved_first: 0.8}))
+    second = JointPositionList(goal_state=JointState.from_mapping({waiting: 0.0}))
+
+    recording = run_one_joint_goal_after_another(
+        prismatic_bot2, first, second, recorded=waiting, while_running=first
+    )
+
+    assert recording.positions == [lower_limit] * len(recording.positions)
+
+
+def test_a_joint_is_at_rest_once_its_node_ended(prismatic_bot2: World):
+    moved_second, moved_first = prismatic_bot2.controlled_connections
+    upper_limit = moved_first.raw_dof.limits.upper.position
+    first = JointPositionList(
+        goal_state=JointState.from_mapping({moved_first: upper_limit})
+    )
+    second = JointPositionList(goal_state=JointState.from_mapping({moved_second: 0.8}))
+
+    recording = run_one_joint_goal_after_another(
+        prismatic_bot2, first, second, recorded=moved_first, while_running=second
+    )
+
+    # Stopping leaves nothing but the rounding error of the last integration step.
+    assert recording.velocities[-1] == pytest.approx(0.0, abs=1e-12)

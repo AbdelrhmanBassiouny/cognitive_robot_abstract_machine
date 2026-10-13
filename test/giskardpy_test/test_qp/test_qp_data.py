@@ -514,6 +514,51 @@ def test_apply_filters_keeps_dof_columns_without_slack_two_sided_inequality():
     assert filtered.quadratic_weights.shape[0] == 2
 
 
+# %% removing variables
+
+
+def test_without_variables_drops_the_constraints_left_without_coefficients():
+    """
+    The first equality only refers to the removed variable, so it goes with it; the
+    second equality and the inequality keep a coefficient, so they stay.
+    """
+    qp_data = QPDataExplicit(
+        quadratic_weights=np.array([1.0, 2.0, 3.0]),
+        linear_weights=np.array([0.1, 0.2, 0.3]),
+        box_lower_constraints=np.array([-1.0, -2.0, -3.0]),
+        box_upper_constraints=np.array([1.0, 2.0, 3.0]),
+        equality_matrix=sp.csc_matrix(np.array([[4.0, 0.0, 0.0], [5.0, 6.0, 0.0]])),
+        equality_bounds=np.array([0.4, 0.5]),
+        inequality_matrix=sp.csc_matrix(np.array([[7.0, 0.0, 8.0]])),
+        inequality_lower_bounds=np.array([-0.7]),
+        inequality_upper_bounds=np.array([0.7]),
+        num_equality_slack_variables=0,
+        num_inequality_slack_variables=0,
+    )
+
+    reduced = qp_data.without_variables(np.array([True, False, False]))
+
+    assert reduced.quadratic_weights.tolist() == [2.0, 3.0]
+    assert reduced.linear_weights.tolist() == [0.2, 0.3]
+    assert reduced.box_lower_constraints.tolist() == [-2.0, -3.0]
+    assert reduced.box_upper_constraints.tolist() == [2.0, 3.0]
+    assert reduced.dense_eq_matrix.tolist() == [[6.0, 0.0]]
+    assert reduced.equality_bounds.tolist() == [0.5]
+    assert reduced.dense_neq_matrix.tolist() == [[0.0, 8.0]]
+    assert reduced.inequality_lower_bounds.tolist() == [-0.7]
+    assert reduced.inequality_upper_bounds.tolist() == [0.7]
+
+
+def test_without_variables_keeps_matrices_without_constraints(simple_inequality_qp):
+    qp_data, _ = simple_inequality_qp
+
+    reduced = qp_data.without_variables(np.array([True, False]))
+
+    assert reduced.equality_matrix.shape[0] == 0
+    assert reduced.equality_bounds.tolist() == []
+    assert reduced.dense_neq_matrix.tolist() == [[1.0]]
+
+
 # %% Hessian
 
 
@@ -524,6 +569,8 @@ def test_hessian_is_the_sparse_diagonal_of_the_quadratic_weights(larger_qp):
 
     assert sp.isspmatrix_csc(hessian)
     np.testing.assert_array_equal(hessian.toarray(), np.diag(qp_data.quadratic_weights))
+
+
 # %% reporting a problem the solver could not solve
 
 

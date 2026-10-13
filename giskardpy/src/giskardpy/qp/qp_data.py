@@ -201,6 +201,53 @@ class QPDataExplicit(QPData):
             num_inequality_slack_variables=self.num_inequality_slack_variables,
         )
 
+    def without_variables(self, removed_variables: np.ndarray) -> QPDataExplicit:
+        """
+        :param removed_variables: Which variables to leave out, one flag per variable.
+        :return: This problem without the flagged variables and without the
+            constraints that have no coefficient left once they are gone.
+        """
+        kept_variables = ~removed_variables
+        kept_equalities = self._rows_keeping_coefficients(
+            self.equality_matrix, kept_variables
+        )
+        kept_inequalities = self._rows_keeping_coefficients(
+            self.inequality_matrix, kept_variables
+        )
+        return QPDataExplicit(
+            quadratic_weights=self.quadratic_weights[kept_variables],
+            linear_weights=self.linear_weights[kept_variables],
+            box_lower_constraints=self.box_lower_constraints[kept_variables],
+            box_upper_constraints=self.box_upper_constraints[kept_variables],
+            equality_matrix=self._filter_eq_matrix(
+                self.equality_matrix, kept_equalities, kept_variables
+            ),
+            equality_bounds=self.equality_bounds[kept_equalities],
+            inequality_matrix=self._filter_neq_matrix(
+                self.inequality_matrix, kept_inequalities, kept_variables
+            ),
+            inequality_lower_bounds=self.inequality_lower_bounds[kept_inequalities],
+            inequality_upper_bounds=self.inequality_upper_bounds[kept_inequalities],
+            num_equality_slack_variables=self.num_equality_slack_variables,
+            num_inequality_slack_variables=self.num_inequality_slack_variables,
+        )
+
+    @staticmethod
+    def _rows_keeping_coefficients(
+        matrix: sp.csc_matrix, kept_variables: np.ndarray
+    ) -> np.ndarray:
+        """
+        :param matrix: A constraint matrix.
+        :param kept_variables: Which columns of `matrix` are kept, one flag per column.
+        :return: Which rows do not lose all of their coefficients with the columns that
+            are not kept, one flag per row.
+        """
+        if matrix.shape[0] == 0:
+            return np.ones(0, dtype=bool)
+        had_coefficients = matrix.getnnz(axis=1) > 0
+        has_coefficients = matrix[:, kept_variables].getnnz(axis=1) > 0
+        return has_coefficients | ~had_coefficients
+
     def _filter_eq_matrix(
         self,
         eq_matrix: sp.csc_matrix,
