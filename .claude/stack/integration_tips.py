@@ -82,6 +82,10 @@ class TipStatus(StrEnum):
     tried to merge it. Reported apart from :attr:`BLOCKED` because nobody labelled it:
     what lets it back in is its checks going green, not a label coming off."""
 
+    OUT_OF_SCOPE = TipStatusSpecification("out-of-scope", integrated=False)
+    """The integration branch is scoped to work this branch is not, or the branch stands
+    on such work. Nothing is wrong with it; it is simply not what the branch carries."""
+
     ANOTHER_PLAN = TipStatusSpecification("another-plan", integrated=False)
     """This build was asked for particular plans and the branch belongs to a different
     one. Nothing is wrong with it; it is simply not what was asked for."""

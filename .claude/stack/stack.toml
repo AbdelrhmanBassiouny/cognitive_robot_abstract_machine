@@ -41,6 +41,18 @@ upstream_base = "main"
 # this default is the tooling suite CI's own `test_claude_dev_tooling` job runs.
 integration_test_command = "python3 -m pytest .claude/skills/plan-dashboard/tests .claude/hooks/tests .claude/stack/tests"
 
+# What the integration branch carries: the workflow's own tooling and the bug fixes in flight,
+# not the features beside them. A branch is in scope when its fork PR carries one of these
+# labels, or when its own commits change only paths under `tooling_paths` (with any
+# `shared_paths`, which settle neither way) - read from the files, so an unlabelled tooling
+# change is carried too. Leave the labels and `tooling_paths` both empty to carry everything.
+integration_scope_labels = ["tooling", "bug"]
+# Prefixes from the repository root; a trailing "/" keeps a directory from also matching a file
+# whose name merely starts with it. They name where the tooling lives on any branch in flight,
+# not only here: in-flight branches have moved it into `bastler/` and then `basstler/`.
+tooling_paths = [".claude/", ".github/", "bastler/", "basstler/", "test/bastler_test/", "test/basstler_test/"]
+shared_paths = [".gitignore", "pytest.ini", "scripts/", "AGENTS.md", "CLAUDE.md"]
+
 # When a branch that is already under review upstream may be pushed to. A restack moves such a
 # branch under whoever is reading it and starts its checks again, so it is moved only at night
 # where its reviewers are, and never twice inside the interval. A pass asked for by hand pushes

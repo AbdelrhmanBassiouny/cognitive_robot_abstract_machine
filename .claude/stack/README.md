@@ -95,7 +95,7 @@ You never hand-edit a ledger. The stack is read from **GitHub itself** plus git:
   `--non-interactive`, stops) when neither answers. Its `routine-prompt.md` is the template to
   register when you want the pass to run unattended.
 - **`integration.py`** - builds the branch you *work from* while the review queue lags: the
-  upstream base with every reviewed in-flight stack tip merged on top, regenerated from scratch
+  upstream base with every reviewed in-flight stack tip in scope merged on top, regenerated from scratch
   each time. It writes to no branch and pushes nothing.
   - `python .claude/stack/integration.py build` - assemble it, then run the suite on the result.
     `--restack` brings stale tips forward first, which pushes to other people's branches and is
@@ -212,10 +212,17 @@ The labels are the ones a maintenance pass writes, so run `build --restack` and 
 verdict decides what the build carries; a build reads the stack again afterwards, since the restack
 is what writes those labels.
 
-Everything left out is named in the report - as `blocked` or `unreviewed`, distinct from a tip the
-build tried to integrate and could not - so a build that integrated nine branches out of nineteen
-says which nine and why, rather than saying so only by omission. Leaving either out is the rule
-working, so it is not a failing build and does not change the exit status.
+The branch is also *scoped*: `stack.toml`'s `integration_scope_labels`, `tooling_paths` and
+`shared_paths` say what it carries, which is the workflow's own tooling and the bug fixes in
+flight. A branch is in scope when its fork PR carries one of the labels (`tooling`, `bug`), or when
+its own commits - not its parent's, and not an upstream base it merged in - change only tooling
+paths, so a tooling change nobody labelled is carried too. A feature, and anything stacked on one,
+is left out as `out-of-scope`. Empty labels and paths carry everything.
+
+Everything left out is named in the report - as `blocked`, `unreviewed` or `out-of-scope`, distinct
+from a tip the build tried to integrate and could not - so a build that integrated nine branches out
+of nineteen says which nine and why, rather than saying so only by omission. Leaving any of them out
+is the rule working, so it is not a failing build and does not change the exit status.
 
 Two branches can also merge perfectly and still not work together - one removing what another's
 test imports, one adding a dependency another's fixture does not provide. No per-branch check can

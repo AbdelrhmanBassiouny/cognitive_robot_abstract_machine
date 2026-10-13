@@ -1,7 +1,8 @@
 name: Integration refresh
 
 # Rebuilds the integration branch: bring every stale tip forward, assemble the upstream
-# base plus every reviewed, unblocked branch in flight, and move the branch onto the
+# base plus every reviewed, unblocked branch in flight that is in scope - tooling and bug
+# fixes, as .claude/stack/stack.toml says - and move the branch onto the
 # result once this repository's own checks have passed over it.
 #
 # What the rebuild is, step by step, is `integration.py refresh` - not this file. Every

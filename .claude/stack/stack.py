@@ -63,6 +63,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "shared"))
 
 from git_commands import GitCommandRunner
 from push_window import PushWindow
+from integration_scope import IntegrationScope
 
 # %% configuration
 
@@ -356,6 +357,14 @@ class Configuration:
     Defaulted rather than required, so a caller building a configuration by hand gets the
     committed window instead of having to restate it."""
 
+    integration_scope: IntegrationScope = field(
+        default_factory=IntegrationScope.everything
+    )
+    """Which branches in flight the integration branch carries.
+
+    Defaulted to every branch, so a caller building a configuration by hand scopes
+    nothing unless it says so."""
+
     @property
     def blocking_labels(self) -> tuple[str, ...]:
         """The labels that hold a branch out of a pass and out of promotion.
@@ -454,6 +463,7 @@ def load_configuration(
             ConfigurationKey.INTEGRATION_TEST_COMMAND, ""
         ),
         push_window=PushWindow.from_values(values),
+        integration_scope=IntegrationScope.from_values(values),
     )
 
 
@@ -812,6 +822,9 @@ class Branch:
     ci: str | None = None
     """What the checks on this branch's head amount to, as an
     ``integration_verdict.ChecksVerdict`` value, or None where nothing has read them."""
+
+    changed_paths: tuple[str, ...] = ()
+    """Every path this branch's own commits change, empty where nothing has read them."""
 
     session: str | None = None
     """URL of the Claude session working this PR, if any."""

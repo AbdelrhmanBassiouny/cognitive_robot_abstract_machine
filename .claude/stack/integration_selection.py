@@ -70,6 +70,9 @@ def select_for_build(stack: Stack, plans: PlanFilter | None = None) -> BuildSele
     restack rewrites every stale tip's head, so requiring green would empty the build
     whenever one ran.
 
+    A branch outside the configured :class:`~integration_scope.IntegrationScope` is held
+    out the same way, so the integration branch carries only the work it is scoped to.
+
     A build asked for particular plans holds a branch out the same way again, so one
     plan's branches can be judged on their own without a build of their own.
 
@@ -79,6 +82,7 @@ def select_for_build(stack: Stack, plans: PlanFilter | None = None) -> BuildSele
     :return: The integrated branches and the ones left out.
     """
     filtering = plans or PlanFilter.unfiltered()
+    scope = stack.configuration.integration_scope
     in_the_stack = {branch.name for branch in stack.branches}
     integrated: list[Branch] = []
     integrated_names: set[str] = set()
@@ -92,11 +96,13 @@ def select_for_build(stack: Stack, plans: PlanFilter | None = None) -> BuildSele
         )
         blocked = stack.is_blocked(branch)
         red = branch.ci == ChecksVerdict.FAILED
+        outside_the_scope = not scope.covers(branch)
         outside_the_plans = filtering.leaves_out(branch.name)
         carried = (
             branch.status.is_out_of_draft
             and not blocked
             and not red
+            and not outside_the_scope
             and outside_the_plans is None
             and stands_on_integrated_work
         )
@@ -110,6 +116,8 @@ def select_for_build(stack: Stack, plans: PlanFilter | None = None) -> BuildSele
             reason = (TipStatus.CHECKS_FAILED, branch.name)
         elif not branch.status.is_out_of_draft:
             reason = (TipStatus.UNREVIEWED, branch.name)
+        elif outside_the_scope:
+            reason = (TipStatus.OUT_OF_SCOPE, branch.name)
         elif outside_the_plans is not None:
             reason = (outside_the_plans, branch.name)
         else:

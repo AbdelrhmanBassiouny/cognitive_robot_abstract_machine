@@ -29,6 +29,7 @@ from maintenance_git_commands import (
 )
 from maintenance_github import GitHubRepository
 
+from integration_changed_paths import BranchChanges
 from integration_constants import ReportKey, PROVENANCE_FILENAME, RERERE_SETTINGS
 from integration_exit_codes import IntegrationExitCode
 from integration_tips import ResolutionAuthor, ResolutionProvenance
@@ -108,7 +109,8 @@ class IntegrationRun:
         Read rather than loaded from ``board.json``: a build is only as good as its idea
         of what is in flight, and a snapshot left behind by an earlier pass is worse
         than no snapshot at all. What is in flight is what the export carries, which is
-        every open pull request except a candidate.
+        every open pull request except a candidate. Each branch carries what its own
+        commits change, so every command that selects from it reads the same scope.
 
         :param fork: The fork to read the open pull requests from.
         :return: The derived stack.
@@ -118,11 +120,12 @@ class IntegrationRun:
         upstream = (
             f"{self.configuration.upstream_remote}/{self.configuration.upstream_base}"
         )
-        return build_stack(
+        stack = build_stack(
             self.configuration,
             list(export.pull_requests),
             lambda name: ancestry.is_ancestor(name, upstream),
         )
+        return BranchChanges(self.configuration, self.git).annotate(stack)
 
     def refresh_remotes(self) -> None:
         """
