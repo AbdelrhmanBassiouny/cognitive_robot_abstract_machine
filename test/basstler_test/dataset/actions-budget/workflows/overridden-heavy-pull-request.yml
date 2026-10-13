@@ -1,0 +1,18 @@
+name: Overridden heavy pull request
+
+on:
+  pull_request:
+
+concurrency:
+  group: overridden-heavy-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      matrix:
+        library: [first, second, third, fourth, fifth]
+    steps:
+      - run: echo tested

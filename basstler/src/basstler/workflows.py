@@ -7,6 +7,7 @@ under both; everything else is read under the key GitHub documents.
 
 from __future__ import annotations
 
+import math
 from collections.abc import Mapping
 from dataclasses import dataclass
 from enum import StrEnum
@@ -170,6 +171,31 @@ class WorkflowKey(StrEnum):
     A job's condition.
     """
 
+    USES = "uses"
+    """
+    The reusable workflow a job calls.
+    """
+
+    STRATEGY = "strategy"
+    """
+    A job's strategy, which holds its matrix.
+    """
+
+    MATRIX = "matrix"
+    """
+    A job's matrix: its axes, and the combinations included and excluded.
+    """
+
+    INCLUDE = "include"
+    """
+    The combinations a matrix adds.
+    """
+
+    EXCLUDE = "exclude"
+    """
+    The combinations a matrix removes.
+    """
+
 
 # %% what a workflow declares
 
@@ -196,7 +222,7 @@ class Trigger:
     """
 
     @property
-    def runs_on_every_push(self) -> bool:
+    def runs_on_every_pull_request_push(self) -> bool:
         """
         :return: Whether this is a pull-request trigger that runs on each push to the pull
             request, which is when a newer run makes an older one worthless.
@@ -205,6 +231,18 @@ class Trigger:
             return False
         activity_types = self.activity_types or ActivityType.pull_request_defaults
         return ActivityType.SYNCHRONIZE in activity_types
+
+    @property
+    def runs_on_every_push(self) -> bool:
+        """
+        :return: Whether the trigger runs on each push to a pull request, or on pushes to
+            any branch rather than to named ones.
+        """
+        if self.runs_on_every_pull_request_push:
+            return True
+        if self.event is not TriggerEvent.PUSH:
+            return False
+        return not self.branches or any("*" in branch for branch in self.branches)
 
     @classmethod
     def from_workflow(cls, event: str, filters: Any) -> Trigger:
@@ -288,6 +326,18 @@ class Job:
     The job's ``if`` condition, or empty when it has none.
     """
 
+    instances: int | None
+    """
+    How many times at most one run of the workflow runs the job, once per matrix
+    combination, or none when the matrix is computed at run time.
+    """
+
+    reusable_workflow: str | None
+    """
+    The reusable workflow the job calls, as the job names it, or none for a job that
+    takes a runner itself.
+    """
+
     @classmethod
     def from_workflow(cls, identifier: str, declared: Mapping[str, Any]) -> Job:
         """
@@ -296,13 +346,42 @@ class Job:
         :return: The job.
         """
         needs = declared.get(WorkflowKey.NEEDS, ())
+        strategy = declared.get(WorkflowKey.STRATEGY, {})
         return cls(
             identifier=identifier,
             runs_on_a_runner=WorkflowKey.RUNS_ON in declared,
             timeout_minutes=declared.get(WorkflowKey.TIMEOUT_MINUTES),
             needs=(needs,) if isinstance(needs, str) else tuple(needs),
             condition=str(declared.get(WorkflowKey.CONDITION, "")),
+            instances=cls.matrix_combinations(strategy.get(WorkflowKey.MATRIX)),
+            reusable_workflow=declared.get(WorkflowKey.USES),
         )
+
+    @staticmethod
+    def matrix_combinations(matrix: Any) -> int | None:
+        """
+        :param matrix: A job's ``strategy.matrix``, or none when it has no matrix.
+        :return: The most combinations it runs: the product of its axes, less the
+            excluded and plus the included ones, or the included ones alone when it has
+            no axes. None when the matrix, an axis or a combination list is an expression
+            evaluated at run time.
+        """
+        if matrix is None:
+            return 1
+        if not isinstance(matrix, Mapping):
+            return None
+        included = matrix.get(WorkflowKey.INCLUDE, [])
+        excluded = matrix.get(WorkflowKey.EXCLUDE, [])
+        axes = [
+            values
+            for key, values in matrix.items()
+            if key not in (WorkflowKey.INCLUDE, WorkflowKey.EXCLUDE)
+        ]
+        if not all(isinstance(values, list) for values in (*axes, included, excluded)):
+            return None
+        if not axes:
+            return max(len(included), 1)
+        return math.prod(len(values) for values in axes) - len(excluded) + len(included)
 
 
 @dataclass(frozen=True)
@@ -311,9 +390,9 @@ class Workflow:
     A workflow file, read into what the budget holds it to.
     """
 
-    file_name: str
+    path: Path
     """
-    The file's name, which is how the manifest refers to it.
+    The workflow file.
     """
 
     triggers: tuple[Trigger, ...]
@@ -346,7 +425,7 @@ class Workflow:
             triggers = {event: None for event in triggers}
         concurrency = declared.get(WorkflowKey.CONCURRENCY)
         return cls(
-            file_name=path.name,
+            path=path,
             triggers=tuple(
                 Trigger.from_workflow(event, filters)
                 for event, filters in triggers.items()
@@ -367,6 +446,59 @@ class Workflow:
         """
         directory = PackageLocation.REPOSITORY_ROOT / ProjectLocation.WORKFLOWS
         return tuple(cls.at(path) for path in sorted(directory.glob("*.yml")))
+
+    @classproperty
+    def local_reference_prefix(cls) -> str:
+        """
+        How a job names a reusable workflow of its own repository.
+        """
+        return f"./{ProjectLocation.WORKFLOWS.value.as_posix()}/"
+
+    @property
+    def file_name(self) -> str:
+        """
+        :return: The file's name, which is how the budget refers to the workflow.
+        """
+        return self.path.name
+
+    @property
+    def runs_on_every_push(self) -> bool:
+        """
+        :return: Whether any of its triggers runs it on every push.
+        """
+        return any(trigger.runs_on_every_push for trigger in self.triggers)
+
+    @property
+    def jobs_per_run(self) -> int | None:
+        """
+        :return: The most jobs one run takes runners for, counting every matrix
+            combination and the jobs of each reusable workflow called, or none when a
+            matrix is computed at run time or a called workflow lives in another
+            repository.
+        """
+        counts = tuple(self.runner_jobs_of(job) for job in self.jobs)
+        if None in counts:
+            return None
+        return sum(counts)
+
+    def runner_jobs_of(self, job: Job) -> int | None:
+        """
+        :param job: One of this workflow's jobs.
+        :return: The jobs it takes runners for, or none when that cannot be counted.
+        """
+        if job.instances is None:
+            return None
+        if job.reusable_workflow is None:
+            return job.instances
+        if not job.reusable_workflow.startswith(self.local_reference_prefix):
+            return None
+        called = Workflow.at(
+            self.path.parent
+            / job.reusable_workflow.removeprefix(self.local_reference_prefix)
+        ).jobs_per_run
+        if called is None:
+            return None
+        return job.instances * called
 
     @property
     def events(self) -> frozenset[TriggerEvent]:

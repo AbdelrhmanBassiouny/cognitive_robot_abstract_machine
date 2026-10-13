@@ -1,13 +1,12 @@
-name: Extra trigger
+name: Fork push allowed
 
 on:
-  workflow_dispatch:
   push:
     branches: [main]
 
 jobs:
-  work:
+  build:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - run: echo worked
+      - run: echo built

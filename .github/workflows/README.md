@@ -39,10 +39,18 @@ actionlint .github/workflows/*.yml
 
 ## The Actions budget
 
-Every workflow in this directory is declared in `basstler/actions_budget.toml`: the events it answers,
-its concurrency, a ceiling on any job's `timeout-minutes`, and the runs and jobs each trigger is
-expected to cost. `test/basstler_test/test_actions_budget.py` fails on a workflow that is not declared,
-answers a trigger other than the declared one, runs on a `schedule`, runs on every pull-request push
-without cancelling the superseded run, or has a job without `timeout-minutes`.
+`test/basstler_test/test_actions_budget.py` holds every workflow in this directory to rules basstler applies
+to any repository. A workflow fails it when it:
 
-Adding or changing a workflow therefore means changing its declaration in the same commit.
+- runs on a `schedule`;
+- runs on every pull-request push without a concurrency group that cancels the superseded run;
+- has a job that takes a runner without `timeout-minutes`, or above its ceiling;
+- answers `push` without its first jobs skipping a push to a fork;
+- answers `labeled` without its first jobs comparing `github.event.label.name`;
+- runs on every push (each pull-request push, or a push to any branch) with more jobs than its ceiling,
+  counting every matrix combination and every job of a reusable workflow it calls.
+
+The ceilings live in `.github/actions-budget.toml`: limits for every workflow, and a table per workflow
+whose own limits differ. A new workflow needs no entry until it needs a limit raised.
+`python -m basstler.actions_budget` writes a first version of the file from the workflows as they are;
+after that it is edited by hand.

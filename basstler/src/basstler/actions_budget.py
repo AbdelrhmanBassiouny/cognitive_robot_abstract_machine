@@ -1,371 +1,173 @@
 """
-The Actions budget: which workflows may run in this repository, on which events, and how
-much each is expected to cost.
+The Actions budget: the rules basstler holds every workflow of a repository to, within
+limits the repository sets.
 
-``actions_budget.toml`` beside this module is the one statement of it. Every workflow
-file is read into the same shape as its declaration, and every way a file can break the
-declaration is a violation of its own type, so a test over the workflow directory can
-hold each file to the manifest and say exactly what is wrong with one that drifts.
+The workflow files are the only statement of what each workflow does. The repository's
+budget file holds only what they cannot say: the limits every workflow is held to, and
+the workflows whose own limits differ. A workflow the file does not name is held to the
+defaults, so a new workflow needs no entry before it is checked.
 """
 
 from __future__ import annotations
 
+import argparse
+import dataclasses
 import tomllib
-from collections.abc import Mapping
-from dataclasses import dataclass
+from collections.abc import Iterable, Mapping
+from dataclasses import dataclass, field
 from enum import StrEnum
 from pathlib import Path
 from typing import Any
 
 from basstler.class_property import classproperty
 from basstler.exceptions import (
+    BudgetFileExists,
     BudgetViolation,
-    ConcurrencyDiffers,
     JobTimeoutOverCeiling,
     MissingForkGuard,
     MissingJobTimeout,
     MissingLabelGuard,
     MissingPullRequestCancellation,
-    ScheduleDeclaredError,
     ScheduledWorkflow,
-    TriggerDiffers,
-    UnansweredTrigger,
-    UndeclaredTrigger,
-    UndeclaredWorkflow,
+    TooManyJobsOnEveryPush,
+    UncountableJobs,
 )
-from basstler.locations import PackageLocation
-from basstler.workflows import (
-    ActivityType,
-    Concurrency,
-    Trigger,
-    TriggerEvent,
-    Workflow,
-)
+from basstler.locations import PackageLocation, ProjectLocation
+from basstler.render_common import create_template_environment
+from basstler.workflows import ActivityType, TriggerEvent, Workflow
 
 # %% vocabulary
 
 
-class ManifestKey(StrEnum):
+class BudgetKey(StrEnum):
     """
-    The keys of the budget manifest.
+    The keys of a budget file beyond the fields of :class:`WorkflowLimits`.
     """
 
     WORKFLOW = "workflow"
     """
-    The array of declared workflows.
-    """
-
-    FILE = "file"
-    """
-    A workflow's file name.
-    """
-
-    JOB_TIMEOUT_MINUTES = "job_timeout_minutes"
-    """
-    The most any job of the workflow may declare as its timeout.
-    """
-
-    SKIPS_PUSH_ON_FORK = "skips_push_on_fork"
-    """
-    Whether a push to a fork skips the workflow's first jobs.
-    """
-
-    CONCURRENCY = "concurrency"
-    """
-    The concurrency the workflow has to declare.
-    """
-
-    GROUP = "group"
-    """
-    The concurrency group.
-    """
-
-    CANCEL_IN_PROGRESS = "cancel_in_progress"
-    """
-    Whether a new run in the group cancels the one in progress.
-    """
-
-    TRIGGER = "trigger"
-    """
-    The array of a workflow's declared triggers.
-    """
-
-    EVENT = "event"
-    """
-    A trigger's event.
-    """
-
-    ACTIVITY_TYPES = "activity_types"
-    """
-    A trigger's activity types.
-    """
-
-    BRANCHES = "branches"
-    """
-    A trigger's branch filters.
-    """
-
-    REQUIRED_LABEL = "required_label"
-    """
-    The label a ``labeled`` trigger's first jobs have to be about.
-    """
-
-    JOBS_PER_RUN = "jobs_per_run"
-    """
-    The jobs one run started by the trigger runs.
-    """
-
-    RUNS_PER_DAY = "runs_per_day"
-    """
-    The runs the trigger is expected to start in a day.
+    The table of workflows whose limits differ from the defaults, by file name.
     """
 
 
-# %% what the manifest allows
+class BudgetTemplate(StrEnum):
+    """
+    The template a budget file is written from.
+    """
+
+    FILE = "actions-budget.toml.jinja"
+    """
+    The whole budget file.
+    """
+
+
+# %% the limits one workflow is held to
 
 
 @dataclass(frozen=True)
-class TriggerBudget:
+class WorkflowLimits:
     """
-    One trigger a workflow may answer to, and what it is expected to cost.
-    """
-
-    trigger: Trigger
-    """
-    The trigger, which the workflow has to answer to exactly as declared.
+    The limits one workflow is held to. A budget file's top level sets them for every
+    workflow, and its table per workflow file changes them for that workflow alone.
     """
 
-    jobs_per_run: int
+    job_timeout_minutes: int = 60
     """
-    The jobs one run started by this trigger runs, counting each matrix entry.
-    """
-
-    runs_per_day: float
-    """
-    The runs this trigger is expected to start in a day.
+    The most any job may declare as its ``timeout-minutes``.
     """
 
-    required_label: str | None = None
+    jobs_per_push_run: int = 4
     """
-    For a trigger answering ``labeled``, the label its first jobs have to be about.
-    """
-
-    @property
-    def label_condition(self) -> str | None:
-        """
-        :return: The condition that skips a first job when a label other than
-            :attr:`required_label` was added, or none when no label is required.
-        """
-        if self.required_label is None:
-            return None
-        return (
-            "github.event.action != 'labeled' || "
-            f"github.event.label.name == '{self.required_label}'"
-        )
-
-    @classmethod
-    def from_manifest(cls, declared: Mapping[str, Any]) -> TriggerBudget:
-        """
-        :param declared: One ``[[workflow.trigger]]`` table.
-        :return: The trigger's budget.
-        """
-        event = TriggerEvent(declared[ManifestKey.EVENT])
-        if event is TriggerEvent.SCHEDULE:
-            raise ScheduleDeclaredError()
-        return cls(
-            trigger=Trigger(
-                event=event,
-                activity_types=frozenset(
-                    ActivityType(activity_type)
-                    for activity_type in declared.get(ManifestKey.ACTIVITY_TYPES, ())
-                ),
-                branches=frozenset(declared.get(ManifestKey.BRANCHES, ())),
-            ),
-            jobs_per_run=declared[ManifestKey.JOBS_PER_RUN],
-            runs_per_day=declared[ManifestKey.RUNS_PER_DAY],
-            required_label=declared.get(ManifestKey.REQUIRED_LABEL),
-        )
-
-
-@dataclass(frozen=True)
-class WorkflowBudget:
-    """
-    Everything the manifest allows one workflow.
+    The most jobs a run may take runners for when the workflow runs on every push.
     """
 
-    file_name: str
+    skips_push_on_fork: bool = True
     """
-    The workflow's file name.
-    """
-
-    job_timeout_minutes: int
-    """
-    The most any job of the workflow may declare as its ``timeout-minutes``.
-    """
-
-    triggers: tuple[TriggerBudget, ...]
-    """
-    The triggers it may answer to.
-    """
-
-    concurrency: Concurrency | None = None
-    """
-    The concurrency it has to declare, or none.
-    """
-
-    skips_push_on_fork: bool = False
-    """
-    Whether a push to a fork has to skip its first jobs.
+    Whether a workflow answering ``push`` has to skip it on a fork, which only re-tests
+    code the upstream repository has already tested.
     """
 
     @classproperty
     def fork_push_condition(cls) -> str:
         """
-        The condition that skips a job on a push to a fork, which only re-tests code the
-        upstream repository has already tested. Read off the event, so no repository is
-        named.
+        The condition that skips a job on a push to a fork. Read off the event, so no
+        repository is named.
         """
         return "github.event_name != 'push' || !github.event.repository.fork"
 
-    @classmethod
-    def from_manifest(cls, declared: Mapping[str, Any]) -> WorkflowBudget:
+    @classproperty
+    def label_reference(cls) -> str:
         """
-        :param declared: One ``[[workflow]]`` table.
-        :return: The workflow's budget.
+        What a job answering ``labeled`` compares to run only for the labels it is about.
         """
-        concurrency = declared.get(ManifestKey.CONCURRENCY)
-        return cls(
-            file_name=declared[ManifestKey.FILE],
-            job_timeout_minutes=declared[ManifestKey.JOB_TIMEOUT_MINUTES],
-            triggers=tuple(
-                TriggerBudget.from_manifest(trigger)
-                for trigger in declared[ManifestKey.TRIGGER]
-            ),
-            concurrency=(
-                None
-                if concurrency is None
-                else Concurrency(
-                    group=concurrency[ManifestKey.GROUP],
-                    cancel_in_progress=concurrency[ManifestKey.CANCEL_IN_PROGRESS],
-                )
-            ),
-            skips_push_on_fork=declared.get(ManifestKey.SKIPS_PUSH_ON_FORK, False),
-        )
+        return "github.event.label.name"
 
-    @property
-    def events(self) -> frozenset[TriggerEvent]:
+    def differences_from(self, other: WorkflowLimits) -> dict[str, Any]:
         """
-        :return: The events the workflow may answer to.
+        :param other: The limits compared against.
+        :return: The limits whose value here differs from the other's, keyed by field
+            name.
         """
-        return frozenset(budget.trigger.event for budget in self.triggers)
+        own, others = dataclasses.asdict(self), dataclasses.asdict(other)
+        return {name: value for name, value in own.items() if others[name] != value}
 
-    def trigger(self, event: TriggerEvent) -> TriggerBudget:
+    def fitting(self, workflow: Workflow) -> WorkflowLimits:
         """
-        :param event: A declared event.
-        :return: Its budget.
+        :param workflow: A workflow.
+        :return: These limits, raised just as far as the workflow needs to keep to them
+            where a limit can be raised.
         """
-        return next(budget for budget in self.triggers if budget.trigger.event is event)
-
-    @property
-    def runs_per_day(self) -> float:
-        """
-        :return: The runs the workflow is expected to start in a day.
-        """
-        return sum(budget.runs_per_day for budget in self.triggers)
-
-    @property
-    def jobs_per_day(self) -> float:
-        """
-        :return: The jobs the workflow is expected to run in a day.
-        """
-        return sum(
-            budget.runs_per_day * budget.jobs_per_run for budget in self.triggers
+        timeouts = [job.timeout_minutes for job in workflow.jobs if job.timeout_minutes]
+        jobs = workflow.jobs_per_run if workflow.runs_on_every_push else None
+        return dataclasses.replace(
+            self,
+            job_timeout_minutes=max([self.job_timeout_minutes, *timeouts]),
+            jobs_per_push_run=max(self.jobs_per_push_run, jobs or 0),
+            skips_push_on_fork=self.skips_push_on_fork
+            and not self._unguarded_fork_pushes(workflow),
         )
 
     def violations_of(self, workflow: Workflow) -> tuple[BudgetViolation, ...]:
         """
-        :param workflow: The workflow this budget declares.
-        :return: Every way the workflow breaks it, in the order the rules are listed here.
+        :param workflow: A workflow held to these limits.
+        :return: Every way it breaks them, in the order the rules are listed here.
         """
         return (
             *self._schedule_violations(workflow),
-            *self._trigger_violations(workflow),
-            *self._concurrency_violations(workflow),
+            *self._cancellation_violations(workflow),
             *self._timeout_violations(workflow),
             *self._guard_violations(workflow),
+            *self._job_count_violations(workflow),
         )
 
     def _schedule_violations(self, workflow: Workflow) -> tuple[BudgetViolation, ...]:
         """
-        :param workflow: The workflow this budget declares.
+        :param workflow: A workflow held to these limits.
         :return: The schedule violation, if the workflow runs on one.
         """
         if TriggerEvent.SCHEDULE not in workflow.events:
             return ()
         return (ScheduledWorkflow(workflow=workflow.file_name),)
 
-    def _trigger_violations(self, workflow: Workflow) -> tuple[BudgetViolation, ...]:
-        """
-        :param workflow: The workflow this budget declares.
-        :return: Events answered but not declared, declared but not answered, or
-            answered with other filters.
-        """
-        answered = workflow.events - {TriggerEvent.SCHEDULE}
-        undeclared = tuple(
-            UndeclaredTrigger(workflow=workflow.file_name, event=trigger.event)
-            for trigger in workflow.triggers
-            if trigger.event in answered - self.events
-        )
-        unanswered = tuple(
-            UnansweredTrigger(workflow=workflow.file_name, event=budget.trigger.event)
-            for budget in self.triggers
-            if budget.trigger.event not in answered
-        )
-        different = tuple(
-            TriggerDiffers(
-                workflow=workflow.file_name,
-                declared=budget.trigger,
-                answered=workflow.trigger(budget.trigger.event),
-            )
-            for budget in self.triggers
-            if budget.trigger.event in answered
-            and workflow.trigger(budget.trigger.event) != budget.trigger
-        )
-        return (*undeclared, *unanswered, *different)
-
-    def _concurrency_violations(
+    def _cancellation_violations(
         self, workflow: Workflow
     ) -> tuple[BudgetViolation, ...]:
         """
-        :param workflow: The workflow this budget declares.
-        :return: A pull-request workflow that does not cancel superseded runs, and
-            concurrency other than declared.
+        :param workflow: A workflow held to these limits.
+        :return: The violation of a workflow that runs on every pull-request push
+            without cancelling the run for the commit before.
         """
-        cancels = workflow.concurrency is not None and (
-            workflow.concurrency.cancel_in_progress
-        )
-        uncancelled = (
-            (MissingPullRequestCancellation(workflow=workflow.file_name),)
-            if any(trigger.runs_on_every_push for trigger in workflow.triggers)
-            and not cancels
-            else ()
-        )
-        different = (
-            (
-                ConcurrencyDiffers(
-                    workflow=workflow.file_name,
-                    declared=self.concurrency,
-                    answered=workflow.concurrency,
-                ),
-            )
-            if workflow.concurrency != self.concurrency
-            else ()
-        )
-        return (*uncancelled, *different)
+        if not any(
+            trigger.runs_on_every_pull_request_push for trigger in workflow.triggers
+        ):
+            return ()
+        if workflow.concurrency is not None and workflow.concurrency.cancel_in_progress:
+            return ()
+        return (MissingPullRequestCancellation(workflow=workflow.file_name),)
 
     def _timeout_violations(self, workflow: Workflow) -> tuple[BudgetViolation, ...]:
         """
-        :param workflow: The workflow this budget declares.
+        :param workflow: A workflow held to these limits.
         :return: Runner jobs without a timeout, or with one above the ceiling.
         """
         runner_jobs = tuple(job for job in workflow.jobs if job.runs_on_a_runner)
@@ -387,90 +189,186 @@ class WorkflowBudget:
         )
         return (*missing, *over)
 
+    def _unguarded_fork_pushes(self, workflow: Workflow) -> tuple[str, ...]:
+        """
+        :param workflow: A workflow.
+        :return: The first jobs that run on a push to a fork, when the workflow answers
+            ``push``.
+        """
+        if TriggerEvent.PUSH not in workflow.events:
+            return ()
+        return tuple(
+            job.identifier
+            for job in workflow.first_jobs
+            if self.fork_push_condition not in job.condition
+        )
+
     def _guard_violations(self, workflow: Workflow) -> tuple[BudgetViolation, ...]:
         """
-        :param workflow: The workflow this budget declares.
-        :return: First jobs missing the fork or label condition the budget asks of
-            them.
+        :param workflow: A workflow held to these limits.
+        :return: First jobs missing the fork condition or a label check.
         """
-        unguarded_push = (
-            tuple(
-                MissingForkGuard(
-                    workflow=workflow.file_name,
-                    job=job.identifier,
-                    condition=self.fork_push_condition,
-                )
-                for job in workflow.first_jobs
-                if self.fork_push_condition not in job.condition
+        unguarded_push = tuple(
+            MissingForkGuard(
+                workflow=workflow.file_name,
+                job=job,
+                condition=self.fork_push_condition,
             )
-            if self.skips_push_on_fork
-            else ()
+            for job in (
+                self._unguarded_fork_pushes(workflow) if self.skips_push_on_fork else ()
+            )
+        )
+        answers_labels = any(
+            ActivityType.LABELED in trigger.activity_types
+            for trigger in workflow.triggers
         )
         unguarded_label = tuple(
-            MissingLabelGuard(
-                workflow=workflow.file_name,
-                job=job.identifier,
-                condition=budget.label_condition,
-            )
-            for budget in self.triggers
-            if budget.label_condition is not None
-            for job in workflow.first_jobs
-            if budget.label_condition not in job.condition
+            MissingLabelGuard(workflow=workflow.file_name, job=job.identifier)
+            for job in (workflow.first_jobs if answers_labels else ())
+            if self.label_reference not in job.condition
         )
         return (*unguarded_push, *unguarded_label)
+
+    def _job_count_violations(self, workflow: Workflow) -> tuple[BudgetViolation, ...]:
+        """
+        :param workflow: A workflow held to these limits.
+        :return: The violation of a workflow running on every push with more jobs than
+            allowed, or with jobs that cannot be counted.
+        """
+        if not workflow.runs_on_every_push:
+            return ()
+        jobs = workflow.jobs_per_run
+        if jobs is None:
+            return (UncountableJobs(workflow=workflow.file_name),)
+        if jobs <= self.jobs_per_push_run:
+            return ()
+        return (
+            TooManyJobsOnEveryPush(
+                workflow=workflow.file_name,
+                jobs=jobs,
+                ceiling=self.jobs_per_push_run,
+            ),
+        )
+
+
+# %% the budget file
 
 
 @dataclass(frozen=True)
 class ActionsBudget:
     """
-    The whole manifest: every workflow allowed in the repository.
-
-    It declares workflows that only unlanded branches carry too, with the triggers they
-    are meant to have, so such a branch fails the budget test once it merges this one.
+    A repository's budget: the limits every workflow is held to, and the workflows
+    whose own limits differ.
     """
 
-    workflows: tuple[WorkflowBudget, ...]
+    defaults: WorkflowLimits = field(default_factory=WorkflowLimits)
     """
-    Every declared workflow.
+    The limits of every workflow :attr:`overrides` does not name.
+    """
+
+    overrides: Mapping[str, WorkflowLimits] = field(default_factory=dict)
+    """
+    The limits of the workflows whose own differ from :attr:`defaults`, by file name.
     """
 
     @classmethod
     def from_file(cls, path: Path) -> ActionsBudget:
         """
-        :param path: A budget manifest.
-        :return: The budget it declares.
+        :param path: A budget file.
+        :return: The budget it sets.
         """
-        declared = tomllib.loads(path.read_text())
+        settings = tomllib.loads(path.read_text())
+        overrides = settings.pop(BudgetKey.WORKFLOW, {})
+        defaults = dataclasses.replace(WorkflowLimits(), **settings)
         return cls(
-            workflows=tuple(
-                WorkflowBudget.from_manifest(workflow)
-                for workflow in declared[ManifestKey.WORKFLOW]
-            )
+            defaults=defaults,
+            overrides={
+                file_name: dataclasses.replace(defaults, **limits)
+                for file_name, limits in overrides.items()
+            },
         )
 
     @classmethod
     def load(cls) -> ActionsBudget:
         """
-        :return: The repository's own budget.
+        :return: The repository's own budget, or basstler's defaults when the repository
+            has no budget file.
         """
-        return cls.from_file(PackageLocation.ACTIONS_BUDGET.value)
+        path = PackageLocation.REPOSITORY_ROOT / ProjectLocation.ACTIONS_BUDGET
+        if not path.exists():
+            return cls()
+        return cls.from_file(path)
 
-    def declaration_of(self, file_name: str) -> WorkflowBudget | None:
+    @classmethod
+    def baseline_for(
+        cls, workflows: Iterable[Workflow], defaults: WorkflowLimits
+    ) -> ActionsBudget:
+        """
+        :param workflows: The workflows the budget is for.
+        :param defaults: The limits every workflow is held to.
+        :return: A budget naming each workflow that needs a limit raised to keep to it,
+            with that limit raised just as far as it needs.
+        """
+        fitted = {
+            workflow.file_name: defaults.fitting(workflow) for workflow in workflows
+        }
+        return cls(
+            defaults=defaults,
+            overrides={
+                file_name: limits
+                for file_name, limits in fitted.items()
+                if limits != defaults
+            },
+        )
+
+    def limits_of(self, file_name: str) -> WorkflowLimits:
         """
         :param file_name: A workflow's file name.
-        :return: Its budget, or none when the manifest does not declare it.
+        :return: The limits it is held to.
         """
-        return next(
-            (budget for budget in self.workflows if budget.file_name == file_name),
-            None,
-        )
+        return self.overrides.get(file_name, self.defaults)
 
     def violations_of(self, workflow: Workflow) -> tuple[BudgetViolation, ...]:
         """
         :param workflow: Any workflow.
         :return: Every way it breaks this budget.
         """
-        declaration = self.declaration_of(workflow.file_name)
-        if declaration is None:
-            return (UndeclaredWorkflow(workflow=workflow.file_name),)
-        return declaration.violations_of(workflow)
+        return self.limits_of(workflow.file_name).violations_of(workflow)
+
+    def write(self, path: Path) -> None:
+        """
+        Write this budget as a new budget file.
+
+        :param path: Where the file goes; nothing may exist there yet.
+        """
+        if path.exists():
+            raise BudgetFileExists(path=path)
+        template = create_template_environment().get_template(BudgetTemplate.FILE.value)
+        path.write_text(
+            template.render(
+                defaults=dataclasses.asdict(self.defaults),
+                overrides={
+                    file_name: limits.differences_from(self.defaults)
+                    for file_name, limits in sorted(self.overrides.items())
+                },
+                workflow_key=BudgetKey.WORKFLOW,
+            )
+        )
+
+
+# %% writing the repository's budget
+
+
+def main() -> None:
+    """
+    Write the repository's budget file, raising basstler's default limits just as far as
+    each of its workflows needs today.
+    """
+    argparse.ArgumentParser(description=main.__doc__).parse_args()
+    ActionsBudget.baseline_for(
+        Workflow.every_workflow_in_the_repository(), WorkflowLimits()
+    ).write(PackageLocation.REPOSITORY_ROOT / ProjectLocation.ACTIONS_BUDGET)
+
+
+if __name__ == "__main__":
+    main()

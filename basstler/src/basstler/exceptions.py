@@ -1,17 +1,13 @@
 """
-The ways a workflow, or the budget manifest itself, can break the Actions budget.
+The ways a workflow can break the Actions budget, and the ways writing a budget file can
+fail.
 """
 
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
-
-from basstler.locations import PackageLocation
-
-if TYPE_CHECKING:
-    from basstler.workflows import Concurrency, Trigger, TriggerEvent
+from pathlib import Path
 
 # %% budget violations
 
@@ -47,16 +43,6 @@ class BudgetViolation(Exception, ABC):
 
 
 @dataclass
-class UndeclaredWorkflow(BudgetViolation):
-    """
-    The manifest does not declare the workflow at all.
-    """
-
-    def error_message(self) -> str:
-        return f"not declared in {PackageLocation.ACTIONS_BUDGET.value.name}"
-
-
-@dataclass
 class ScheduledWorkflow(BudgetViolation):
     """
     The workflow runs on a schedule, which nothing in this repository may.
@@ -64,56 +50,6 @@ class ScheduledWorkflow(BudgetViolation):
 
     def error_message(self) -> str:
         return "runs on a schedule; trigger it on the event it is waiting for instead"
-
-
-@dataclass
-class UndeclaredTrigger(BudgetViolation):
-    """
-    The workflow answers an event the manifest does not declare for it.
-    """
-
-    event: TriggerEvent
-    """
-    The undeclared event.
-    """
-
-    def error_message(self) -> str:
-        return f"answers {self.event}, which is not declared"
-
-
-@dataclass
-class UnansweredTrigger(BudgetViolation):
-    """
-    The manifest declares an event the workflow does not answer.
-    """
-
-    event: TriggerEvent
-    """
-    The declared event.
-    """
-
-    def error_message(self) -> str:
-        return f"is declared on {self.event}, which it does not answer"
-
-
-@dataclass
-class TriggerDiffers(BudgetViolation):
-    """
-    The workflow answers a declared event with other activity types or branches.
-    """
-
-    declared: Trigger
-    """
-    The trigger as the manifest declares it.
-    """
-
-    answered: Trigger
-    """
-    The trigger as the workflow answers it.
-    """
-
-    def error_message(self) -> str:
-        return f"answers {self.answered}, declared as {self.declared}"
 
 
 @dataclass
@@ -125,26 +61,6 @@ class MissingPullRequestCancellation(BudgetViolation):
 
     def error_message(self) -> str:
         return "runs on every pull-request push without cancel-in-progress concurrency"
-
-
-@dataclass
-class ConcurrencyDiffers(BudgetViolation):
-    """
-    The workflow's concurrency is not the declared one.
-    """
-
-    declared: Concurrency | None
-    """
-    The concurrency as the manifest declares it.
-    """
-
-    answered: Concurrency | None
-    """
-    The concurrency as the workflow declares it.
-    """
-
-    def error_message(self) -> str:
-        return f"has concurrency {self.answered}, declared as {self.declared}"
 
 
 @dataclass
@@ -166,7 +82,7 @@ class MissingJobTimeout(BudgetViolation):
 @dataclass
 class JobTimeoutOverCeiling(BudgetViolation):
     """
-    A job's ``timeout-minutes`` is above the workflow's declared ceiling.
+    A job's ``timeout-minutes`` is above the workflow's ceiling.
     """
 
     job: str
@@ -181,20 +97,20 @@ class JobTimeoutOverCeiling(BudgetViolation):
 
     ceiling_minutes: int
     """
-    The declared ceiling.
+    The workflow's ceiling.
     """
 
     def error_message(self) -> str:
         return (
             f"job {self.job} times out after {self.timeout_minutes} minutes, "
-            f"above the declared {self.ceiling_minutes}"
+            f"above the ceiling of {self.ceiling_minutes}"
         )
 
 
 @dataclass
 class MissingForkGuard(BudgetViolation):
     """
-    A first job of a workflow declared to skip pushes to a fork does not skip them.
+    A first job of a workflow answering ``push`` does not skip a push to a fork.
     """
 
     job: str
@@ -214,8 +130,8 @@ class MissingForkGuard(BudgetViolation):
 @dataclass
 class MissingLabelGuard(BudgetViolation):
     """
-    A first job of a workflow answering ``labeled`` runs for any label, not only the one
-    declared.
+    A first job of a workflow answering ``labeled`` runs for any label, without
+    comparing the one added.
     """
 
     job: str
@@ -223,28 +139,67 @@ class MissingLabelGuard(BudgetViolation):
     The job's key.
     """
 
-    condition: str
-    """
-    The condition the job has to carry.
-    """
-
     def error_message(self) -> str:
-        return f"job {self.job} runs for any label: if: {self.condition}"
-
-
-# %% manifest errors
+        return f"job {self.job} runs for any label; compare github.event.label.name"
 
 
 @dataclass
-class ScheduleDeclaredError(ValueError):
+class TooManyJobsOnEveryPush(BudgetViolation):
     """
-    The manifest declares a ``schedule`` trigger, which nothing in this repository may
-    answer.
+    A workflow running on every push takes runners for more jobs a run than its ceiling
+    allows.
+    """
+
+    jobs: int
+    """
+    The most jobs one run takes runners for.
+    """
+
+    ceiling: int
+    """
+    The workflow's ceiling.
+    """
+
+    def error_message(self) -> str:
+        return (
+            f"runs up to {self.jobs} jobs on every push, above the ceiling of "
+            f"{self.ceiling}; narrow its triggers or raise its jobs_per_push_run"
+        )
+
+
+@dataclass
+class UncountableJobs(BudgetViolation):
+    """
+    A workflow running on every push has jobs whose number is only known at run time, so
+    its ceiling cannot be checked.
+    """
+
+    def error_message(self) -> str:
+        return (
+            "runs on every push with a matrix computed at run time or a reusable "
+            "workflow from another repository, so its jobs cannot be counted"
+        )
+
+
+# %% budget file errors
+
+
+@dataclass
+class BudgetFileExists(FileExistsError):
+    """
+    A budget file is already where a new one would be written.
+
+    Once written, the file is reviewed by hand, so writing over it would bless whatever
+    the workflows do now.
+    """
+
+    path: Path
+    """
+    The existing file.
     """
 
     def __str__(self) -> str:
         """
-        :return: What is wrong with the manifest.
+        :return: What is in the way.
         """
-        manifest = PackageLocation.ACTIONS_BUDGET.value.name
-        return f"{manifest} declares a schedule; declare the event it waits for instead"
+        return f"{self.path} already exists; edit it instead of writing a new one"

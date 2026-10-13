@@ -1,7 +1,9 @@
-name: Missing trigger
+name: Bare concurrency
 
 on:
   workflow_dispatch:
+
+concurrency: file-group
 
 jobs:
   work:

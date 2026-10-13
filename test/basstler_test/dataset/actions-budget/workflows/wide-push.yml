@@ -1,0 +1,21 @@
+name: Wide push
+
+on:
+  push:
+    branches: ['**']
+
+jobs:
+  test:
+    if: github.event_name != 'push' || !github.event.repository.fork
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      matrix:
+        include:
+          - library: first
+          - library: second
+          - library: third
+          - library: fourth
+          - library: fifth
+    steps:
+      - run: echo tested

@@ -1,8 +1,7 @@
-name: Different activity types
+name: Dispatch only
 
 on:
-  pull_request:
-    types: [opened, ready_for_review]
+  workflow_dispatch:
 
 jobs:
   work:

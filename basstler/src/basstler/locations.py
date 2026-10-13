@@ -72,11 +72,6 @@ class PackageLocation(PathEnumeration):
     The exported snapshot of the fork's open pull requests - scratch state, never committed.
     """
 
-    ACTIONS_BUDGET = DIRECTORY / "actions_budget.toml"
-    """
-    The manifest of every workflow allowed in the repository and what each may cost.
-    """
-
     DEPENDENCY_DECLARATION = SOURCE_TREE / "pyproject.toml"
     """
     The package metadata, whose ``[project] dependencies`` this package installs.
@@ -185,6 +180,11 @@ class ProjectLocation(PathEnumeration):
     WORKFLOWS = Path(".github") / "workflows"
     """
     Where GitHub reads a repository's workflows from - the top level only.
+    """
+
+    ACTIONS_BUDGET = Path(".github") / "actions-budget.toml"
+    """
+    The repository's Actions budget: the limits basstler holds every workflow to.
     """
 
     PLAN_ITEM_MODE_DEFAULTS = PACKAGE / "plan-item-modes.toml"
