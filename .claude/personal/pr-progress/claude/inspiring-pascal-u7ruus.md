@@ -1,11 +1,9 @@
-Item: actions-budget / budget-manifest. Draft PR #503, base main.
-Plan (full version in the plan's roadmap.md, section "budget-manifest: settled plan"):
-1. Tests first: test/basstler_test/test_actions_budget.py + small workflow fixtures in the dataset.
-2. basstler/actions_budget.py (manifest + workflow dataclasses, violation types) and basstler/actions_budget.toml.
-3. Workflow edits: timeout-minutes everywhere on runner jobs; examples on ready_for_review/full-ci label/dispatch;
-   fork guard on push for ci, examples, docs, 4 publish workflows.
-4. Format docstrings, run basstler tests, update PR description, re-draft.
-Done: kickoff, branch, draft PR, manifest open/record.
-Next: step 1.
-Decisions: cancel-in-progress rule only for PR workflows running on synchronize; reusable callers carry no timeout;
-fork guard on root jobs only; runs/day + timeouts are first estimates for the user to adjust.
+Item: actions-budget / budget-manifest. Draft PR #503, base main. Head b66263166.
+Done: manifest (basstler/actions_budget.toml), reader (basstler/workflows.py), budget + violations
+(basstler/actions_budget.py), tests (test_actions_budget.py + dataset/actions-budget), workflow edits
+(timeouts, examples on ready_for_review/full-ci/dispatch, fork push guard), README section, PR description.
+basstler suite: 748 passed. actionlint: no new findings.
+Decisions: cancel-in-progress only for PR workflows on synchronize; reusable callers carry no timeout;
+fork guard on first jobs only; reader split from budget for convergence with #211's workflow_document.py.
+Open for the user: Examples not running on ready-opened PRs (upstream impact); timeout/runs-per-day estimates.
+Next: user review. Nothing else outstanding.
