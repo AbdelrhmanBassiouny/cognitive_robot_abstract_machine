@@ -1,0 +1,12 @@
+name: Different branches
+
+on:
+  push:
+    branches: [main, "release-*"]
+
+jobs:
+  work:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - run: echo worked

@@ -1,0 +1,13 @@
+name: Different concurrency
+
+on:
+  workflow_dispatch:
+
+concurrency: file-group
+
+jobs:
+  work:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - run: echo worked

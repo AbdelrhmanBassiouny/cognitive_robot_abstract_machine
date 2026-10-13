@@ -1,0 +1,10 @@
+# A manifest that declares a schedule, which no workflow in this repository may answer to.
+
+[[workflow]]
+file = "scheduled.yml"
+job_timeout_minutes = 10
+
+[[workflow.trigger]]
+event = "schedule"
+jobs_per_run = 1
+runs_per_day = 4

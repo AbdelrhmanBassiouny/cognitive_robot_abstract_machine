@@ -1,0 +1,165 @@
+# The budget the workflows beside this file are checked against: each workflow breaks
+# exactly the one rule its file name says, except conforming.yml, which breaks none.
+
+[[workflow]]
+file = "conforming.yml"
+job_timeout_minutes = 30
+skips_push_on_fork = true
+concurrency = { group = "conforming-${{ github.ref }}", cancel_in_progress = true }
+
+[[workflow.trigger]]
+event = "push"
+branches = ["main"]
+jobs_per_run = 2
+runs_per_day = 1
+
+[[workflow.trigger]]
+event = "pull_request"
+jobs_per_run = 2
+runs_per_day = 10
+
+[[workflow]]
+file = "reusable.yml"
+job_timeout_minutes = 30
+
+[[workflow.trigger]]
+event = "workflow_call"
+jobs_per_run = 1
+runs_per_day = 10
+
+[[workflow]]
+file = "scheduled.yml"
+job_timeout_minutes = 10
+
+[[workflow.trigger]]
+event = "workflow_dispatch"
+jobs_per_run = 1
+runs_per_day = 1
+
+[[workflow]]
+file = "extra-trigger.yml"
+job_timeout_minutes = 10
+
+[[workflow.trigger]]
+event = "workflow_dispatch"
+jobs_per_run = 1
+runs_per_day = 1
+
+[[workflow]]
+file = "missing-trigger.yml"
+job_timeout_minutes = 10
+
+[[workflow.trigger]]
+event = "workflow_dispatch"
+jobs_per_run = 1
+runs_per_day = 1
+
+[[workflow.trigger]]
+event = "push"
+branches = ["main"]
+jobs_per_run = 1
+runs_per_day = 1
+
+[[workflow]]
+file = "different-activity-types.yml"
+job_timeout_minutes = 10
+
+[[workflow.trigger]]
+event = "pull_request"
+activity_types = ["ready_for_review"]
+jobs_per_run = 1
+runs_per_day = 1
+
+[[workflow]]
+file = "different-branches.yml"
+job_timeout_minutes = 10
+
+[[workflow.trigger]]
+event = "push"
+branches = ["main"]
+jobs_per_run = 1
+runs_per_day = 1
+
+[[workflow]]
+file = "uncancelled-pull-request.yml"
+job_timeout_minutes = 10
+
+[[workflow.trigger]]
+event = "pull_request"
+jobs_per_run = 1
+runs_per_day = 1
+
+[[workflow]]
+file = "lifecycle-pull-request.yml"
+job_timeout_minutes = 10
+concurrency = { group = "lifecycle", cancel_in_progress = false }
+
+[[workflow.trigger]]
+event = "pull_request"
+activity_types = ["opened", "closed"]
+jobs_per_run = 1
+runs_per_day = 1
+
+[[workflow]]
+file = "different-concurrency.yml"
+job_timeout_minutes = 10
+concurrency = { group = "declared-group", cancel_in_progress = false }
+
+[[workflow.trigger]]
+event = "workflow_dispatch"
+jobs_per_run = 1
+runs_per_day = 1
+
+[[workflow]]
+file = "missing-timeout.yml"
+job_timeout_minutes = 10
+
+[[workflow.trigger]]
+event = "workflow_dispatch"
+jobs_per_run = 1
+runs_per_day = 1
+
+[[workflow]]
+file = "timeout-over-ceiling.yml"
+job_timeout_minutes = 10
+
+[[workflow.trigger]]
+event = "workflow_dispatch"
+jobs_per_run = 1
+runs_per_day = 1
+
+[[workflow]]
+file = "unguarded-push.yml"
+job_timeout_minutes = 10
+skips_push_on_fork = true
+
+[[workflow.trigger]]
+event = "push"
+branches = ["main"]
+jobs_per_run = 2
+runs_per_day = 1
+
+[[workflow]]
+file = "unguarded-label.yml"
+job_timeout_minutes = 10
+
+[[workflow.trigger]]
+event = "pull_request"
+activity_types = ["labeled"]
+required_label = "full-ci"
+jobs_per_run = 1
+runs_per_day = 1
+
+[[workflow]]
+file = "short-trigger-list.yml"
+job_timeout_minutes = 10
+
+[[workflow.trigger]]
+event = "workflow_dispatch"
+jobs_per_run = 1
+runs_per_day = 1
+
+[[workflow.trigger]]
+event = "workflow_call"
+jobs_per_run = 1
+runs_per_day = 1

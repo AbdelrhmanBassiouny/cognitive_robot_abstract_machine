@@ -1,0 +1,11 @@
+name: Missing trigger
+
+on:
+  workflow_dispatch:
+
+jobs:
+  work:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - run: echo worked

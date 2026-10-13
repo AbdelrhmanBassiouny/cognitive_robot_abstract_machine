@@ -36,3 +36,13 @@ actionlint .github/workflows/*.yml
 1. **Linting:** Run `actionlint` to ensure there are no syntax or logical errors in the YAML files.
 2. **Local Execution:** Use `act` to simulate the workflow execution and verify that scripts (like version checks) behave as expected in a containerized environment.
 
+
+## The Actions budget
+
+Every workflow in this directory is declared in `basstler/actions_budget.toml`: the events it answers,
+its concurrency, a ceiling on any job's `timeout-minutes`, and the runs and jobs each trigger is
+expected to cost. `test/basstler_test/test_actions_budget.py` fails on a workflow that is not declared,
+answers a trigger other than the declared one, runs on a `schedule`, runs on every pull-request push
+without cancelling the superseded run, or has a job without `timeout-minutes`.
+
+Adding or changing a workflow therefore means changing its declaration in the same commit.

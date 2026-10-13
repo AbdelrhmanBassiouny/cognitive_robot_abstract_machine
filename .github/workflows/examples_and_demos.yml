@@ -7,7 +7,11 @@ on:
   push:
     branches:
     - main
+  # A draft runs CI alone. The demos run once a pull request is ready for review, or on
+  # demand through the full-ci label or a dispatch.
   pull_request:
+    types: [ready_for_review, labeled]
+  workflow_dispatch:
   workflow_run:
     workflows: [ "update_docker" ]
     types: [ completed ]
@@ -15,7 +19,9 @@ on:
 
 jobs:
   to-lowercase:
+    if: ${{ (github.event_name != 'push' || !github.event.repository.fork) && (github.event.action != 'labeled' || github.event.label.name == 'full-ci') }}
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     outputs:
       repo_lowercase: ${{ steps.lowercase.outputs.repository }}
     steps:

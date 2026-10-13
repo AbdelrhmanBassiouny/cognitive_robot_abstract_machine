@@ -62,4 +62,5 @@ basstler = [
     "queries/*.graphql",
     "stack.toml",
     "plan-item-modes.toml",
+    "actions_budget.toml",
 ]

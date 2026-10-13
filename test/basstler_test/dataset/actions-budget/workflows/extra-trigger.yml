@@ -1,0 +1,13 @@
+name: Extra trigger
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+jobs:
+  work:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - run: echo worked

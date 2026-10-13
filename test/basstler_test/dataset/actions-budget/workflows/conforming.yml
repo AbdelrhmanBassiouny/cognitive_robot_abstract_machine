@@ -1,0 +1,21 @@
+name: Conforming
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: conforming-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  prepare:
+    if: github.event_name != 'push' || !github.event.repository.fork
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - run: echo prepared
+  test:
+    needs: [prepare]
+    uses: ./.github/workflows/reusable.yml

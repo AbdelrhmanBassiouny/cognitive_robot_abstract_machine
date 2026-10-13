@@ -1,0 +1,12 @@
+name: Unguarded label
+
+on:
+  pull_request:
+    types: [labeled]
+
+jobs:
+  work:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - run: echo worked
