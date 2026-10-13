@@ -61,7 +61,8 @@ items:
   depends_on: []
   status: in progress
   session: https://claude.ai/code/session_01Xxsd3jwKjjEsHdyyfC8Azo
-  notes: 'Per-field limits (basstler/plan_size_limits.py) checked on every save: landed items
-    pruned, finished plans removed, progress notes capped, and finished branches'' progress
-    notes deleted on each progress save. Session start loads only the branch item. Supersedes
-    #207/#273/#279; the user decides whether those close.'
+  notes: 'Stacked on #501 (base claude/brave-archimedes-nonocl); modules under basstler/src/basstler/,
+    hooks run them with BASSTLER_PYTHON. Per-field limits checked on every save: landed items
+    pruned, finished plans removed, progress notes capped, finished branches'' progress notes
+    deleted on each progress save. Session start loads only the branch item. Retarget to main
+    once #501 lands.'
