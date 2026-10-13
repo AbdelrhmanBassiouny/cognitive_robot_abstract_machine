@@ -156,6 +156,9 @@ class PlanExecutor(Executor, ABC):
     def default_context_extensions(self) -> list[ContextExtension]:
         return [StatementGrounding(), MotionToleranceConfig(), PlanRewriting()]
 
+    def default_executor_extensions(self) -> list[ExecutorExtension]:
+        return []
+
     def prepare(self, statechart: Statechart) -> None:
         """
         Add what the plan in `statechart` runs with, and rewrite it with the plan
@@ -388,14 +391,26 @@ class RealRobotPlanExecutor(PlanExecutor):
     runs.
     """
 
+    def compile(self, statechart: Statechart) -> None:
+        """
+        Does what :meth:`PlanExecutor.compile` does, then tells every extension that the
+        statechart is compiled.
+        """
+        super().compile(statechart)
+        self._notify_compiled()
+
     def _run(self) -> None:
         """
-        Send the statechart to Giskard and wait until it ended there.
+        Send the statechart to Giskard and wait until it ended there, then tell every
+        extension that the run stopped.
         """
         if self._giskard is None:
             self._giskard = GiskardClientExecutor(self.ros_node, context=self.context)
-        self._giskard.compile(self.statechart)
-        self._giskard.execute()
+        try:
+            self._giskard.compile(self.statechart)
+            self._giskard.execute()
+        finally:
+            self.finish_run()
 
     def close(self) -> None:
         if self._giskard is None:

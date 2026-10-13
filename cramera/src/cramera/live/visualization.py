@@ -15,7 +15,7 @@ from typing_extensions import Any, Callable, Optional
 
 from coraplex.plans.designator import DesignatorParameters
 from coraplex.visualization import PlanVisualization, VisualizationSession
-from cramph.executor import ExecutorExtension, StatechartExecutor
+from cramph.executor import Executor, ExecutorExtension
 from cramph.statechart import StateHistory, StateHistoryObserver, Statechart
 from semantic_digital_twin.callbacks.callback import (
     ModelChangeCallback,
@@ -102,7 +102,7 @@ class StatechartPublishing(ExecutorExtension, StateHistoryObserver):
     The statechart being published, whose history this observes.
     """
 
-    def after_compile(self, executor: StatechartExecutor) -> None:
+    def after_compile(self, executor: Executor) -> None:
         """
         Start publishing the statechart `executor` compiled, unless it already is.
         """
@@ -110,7 +110,7 @@ class StatechartPublishing(ExecutorExtension, StateHistoryObserver):
             return
         self.observe(executor.statechart)
 
-    def after_run(self, executor: StatechartExecutor) -> None:
+    def after_run(self, executor: Executor) -> None:
         """
         Publish the statechart as the run left it, see :meth:`finish`.
         """

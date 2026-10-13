@@ -1,6 +1,7 @@
 import json
 import threading
-from typing import List, Tuple, Union, Any
+from functools import partial
+from typing_extensions import Callable, List, Tuple, Union, Any
 
 from action_msgs.msg import GoalStatus
 from rcl_interfaces.srv._get_parameters import (
@@ -169,6 +170,7 @@ class MyActionClient:
         self._goal_result = None
         self._result_future = None
         self._current_goal_id = None
+        self._feedback_error = None
         self.result = None
         self.node_handle = node_handle
         self.action_name = action_name
@@ -181,9 +183,33 @@ class MyActionClient:
     def send_goal_async(self, goal, feedback_callback=None) -> Future:
         self._goal_counter += 1
         self._current_goal_id = self._goal_counter
+        self._feedback_error = None
+        if feedback_callback is not None:
+            feedback_callback = partial(self._receive_feedback, feedback_callback)
         future = self._client.send_goal_async(goal, feedback_callback=feedback_callback)
         future.add_done_callback(self.__goal_accepted_cb)
         return future
+
+    def _receive_feedback(
+        self, feedback_callback: Callable[[Any], None], feedback_message: Any
+    ) -> None:
+        """
+        Hand `feedback_message` to `feedback_callback`.
+
+        The first error the callback raises cancels the goal and is raised by
+        :meth:`get_result`; the feedback that follows it is dropped.
+
+        :param feedback_callback: The callback given with the goal.
+        :param feedback_message: One feedback of the goal sent last.
+        """
+        if self._feedback_error is not None:
+            return
+        try:
+            feedback_callback(feedback_message)
+        except Exception as error:
+            self._feedback_error = error
+            if self._goal_handle is not None:
+                self._goal_handle.cancel_goal_async()
 
     def send_goal(self, goal, feedback_callback=None):
         async def muh():
@@ -196,14 +222,25 @@ class MyActionClient:
         return get_event_loop().run_until_complete(muh())
 
     async def get_result(self):
+        """
+        Wait for the result of the goal sent last.
+
+        An aborted goal is returned like a succeeded one, so that the caller can take
+        over its final state before raising the error it carries, see
+        :meth:`create_abort_exception`.
+
+        :raises ExecutionCanceledException: If the goal was canceled.
+        :raises Exception: The error the feedback callback of the goal raised, see
+            :meth:`_receive_feedback`.
+        """
         goal_id = self._current_goal_id
         await wait_until_not_none(lambda: self.result)
         result = self.result
         self.result = None
+        if self._feedback_error is not None:
+            raise self._feedback_error
         match result.status:
-            case GoalStatus.STATUS_ABORTED:
-                raise self.create_abort_exception(result)
-            case GoalStatus.STATUS_SUCCEEDED:
+            case GoalStatus.STATUS_ABORTED | GoalStatus.STATUS_SUCCEEDED:
                 return result
             case GoalStatus.STATUS_CANCELED:
                 raise ExecutionCanceledException(self._client._action_name, goal_id)
@@ -211,7 +248,7 @@ class MyActionClient:
                 raise Exception(f"Unexpected status {result.status}")
 
     @staticmethod
-    def create_abort_exception(result: Any) -> Exception:
+    def create_abort_exception(result: Any, **kwargs: Any) -> Exception:
         """
         Rebuild the exception that made the server abort the goal.
 
@@ -221,13 +258,17 @@ class MyActionClient:
         An error that cannot be rebuilt, because the client does not know its class or
         cannot construct it, is reported as a plain abort; the original failure is worth
         less than a caller that keeps working.
+
+        :param result: The result of the aborted goal.
+        :param kwargs: Handed to the deserialization of the error.
+        :return: The rebuilt exception.
         """
         payload = json.loads(result.result.result)
         error = payload.get("error")
         if error is None:
             return ExecutionAbortedException()
         try:
-            return from_json(error)
+            return from_json(error, **kwargs)
         except (JSONSerializationError, TypeError):
             return ExecutionAbortedException()
 
@@ -252,6 +293,8 @@ class MyActionClient:
         self.node_handle.get_logger().info(
             f"{self.action_name} Goal #{goal_id} accepted"
         )
+        if self._feedback_error is not None:
+            goal_handle.cancel_goal_async()
 
         self._result_future = self._goal_handle.get_result_async()
         self._result_future.add_done_callback(lambda f: self.__goal_done_cb(f, goal_id))

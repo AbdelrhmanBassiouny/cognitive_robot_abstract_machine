@@ -15,9 +15,11 @@ from cramph.exceptions import (
     TickDurationUnknownError,
 )
 from cramph.executor import (
+    Executor,
     ExecutorExtension,
     SimulationPacer,
     StatechartExecutor,
+    TickingExecutorExtension,
 )
 from cramph.monitors import CountSimulationTimeSeconds, CountTicks
 from cramph.node import CancelStatechart, EndStatechart, NodeArtifacts
@@ -213,9 +215,10 @@ class StageRecord:
 
 
 @dataclass
-class ExtensionRecordingItsStages(ExecutorExtension):
+class ExtensionRecordingCompileAndRun(ExecutorExtension):
     """
-    An executor extension that appends every stage it is called at to a shared record.
+    An executor extension that appends every stage of an :class:`ExecutorExtension` it
+    is called at to a shared record.
     """
 
     records: List[StageRecord]
@@ -226,8 +229,26 @@ class ExtensionRecordingItsStages(ExecutorExtension):
     def extend_context(self, context: StatechartContext) -> None:
         self._record(ExecutorStage.EXTEND_CONTEXT)
 
-    def after_compile(self, executor: StatechartExecutor) -> None:
+    def after_compile(self, executor: Executor) -> None:
         self._record(ExecutorStage.AFTER_COMPILE)
+
+    def after_run(self, executor: Executor) -> None:
+        self._record(ExecutorStage.AFTER_RUN)
+
+    def _record(self, stage: ExecutorStage) -> None:
+        """
+        :param stage: The stage this extension was called at.
+        """
+        self.records.append(StageRecord(extension=self, stage=stage))
+
+
+@dataclass
+class ExtensionRecordingItsStages(
+    ExtensionRecordingCompileAndRun, TickingExecutorExtension
+):
+    """
+    An executor extension that also records every tick it is called around.
+    """
 
     def before_tick(self, executor: StatechartExecutor) -> None:
         self._record(ExecutorStage.BEFORE_TICK)
@@ -235,11 +256,26 @@ class ExtensionRecordingItsStages(ExecutorExtension):
     def after_tick(self, executor: StatechartExecutor) -> None:
         self._record(ExecutorStage.AFTER_TICK)
 
-    def after_run(self, executor: StatechartExecutor) -> None:
-        self._record(ExecutorStage.AFTER_RUN)
 
-    def _record(self, stage: ExecutorStage) -> None:
-        self.records.append(StageRecord(extension=self, stage=stage))
+@dataclass
+class ExecutorRunningWithoutTicks(Executor):
+    """
+    An executor that runs a statechart without ticking it, as one that hands the
+    statechart to another process does.
+    """
+
+    def default_context_extensions(self) -> list[ContextExtension]:
+        return []
+
+    def default_executor_extensions(self) -> list[ExecutorExtension]:
+        return []
+
+    def compile(self, statechart: Statechart) -> None:
+        super().compile(statechart)
+        self._notify_compiled()
+
+    def execute(self) -> None:
+        self.finish_run()
 
 
 @dataclass
@@ -325,6 +361,42 @@ def test_an_extension_is_called_at_every_stage_of_a_run(
         ExecutorStage.AFTER_TICK,
         ExecutorStage.BEFORE_TICK,
         ExecutorStage.AFTER_TICK,
+        ExecutorStage.AFTER_RUN,
+    ]
+
+
+def test_an_executor_that_does_not_tick_calls_the_stages_around_its_run(
+    statechart_context: StatechartContext,
+):
+    records: List[StageRecord] = []
+    executor = ExecutorRunningWithoutTicks(
+        context=statechart_context,
+        extensions=[ExtensionRecordingCompileAndRun(records)],
+    )
+
+    executor.compile(_statechart_ending_after_one_node(executor))
+    executor.execute()
+
+    assert [record.stage for record in records] == [
+        ExecutorStage.EXTEND_CONTEXT,
+        ExecutorStage.AFTER_COMPILE,
+        ExecutorStage.AFTER_RUN,
+    ]
+
+
+def test_only_ticking_extensions_are_called_around_a_tick(
+    statechart_context: StatechartContext,
+):
+    records: List[StageRecord] = []
+    not_ticking = ExtensionRecordingCompileAndRun(records)
+    executor = StatechartExecutor(context=statechart_context, extensions=[not_ticking])
+
+    executor.compile(_statechart_ending_after_one_node(executor))
+    executor.tick_until_end()
+
+    assert [record.stage for record in records] == [
+        ExecutorStage.EXTEND_CONTEXT,
+        ExecutorStage.AFTER_COMPILE,
         ExecutorStage.AFTER_RUN,
     ]
 

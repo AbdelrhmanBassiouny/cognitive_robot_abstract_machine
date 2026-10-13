@@ -154,19 +154,41 @@ class SteppedSimulationPacer(Pacer):
 @dataclass
 class ExecutorExtension:
     """
-    Adds behaviour to a :class:`StatechartExecutor` around compiling and ticking a
-    statechart.
+    Adds behaviour to an :class:`Executor` around creating it, compiling a statechart
+    and ending a run.
 
     Every stage does nothing unless an extension overrides it.
     """
 
     def extend_context(self, context: StatechartContext) -> None:
         """
-        Called once when the executor is created, before its pacer reads the tick
-        duration of `context`.
+        Called once when the executor is created, before a
+        :class:`StatechartExecutor` lets its pacer read the tick duration of `context`.
 
         :param context: The context handed to every node of the executed statecharts.
         """
+
+    def after_compile(self, executor: Executor) -> None:
+        """
+        Called once the statechart is compiled, before its first tick.
+
+        :param executor: The executor this extension belongs to.
+        """
+
+    def after_run(self, executor: Executor) -> None:
+        """
+        Called once a run stops, see :meth:`Executor.finish_run`.
+
+        :param executor: The executor this extension belongs to.
+        """
+
+
+@dataclass
+class TickingExecutorExtension(ExecutorExtension):
+    """
+    Adds behaviour to a :class:`StatechartExecutor` around every tick and every
+    recompile, besides the stages of :class:`ExecutorExtension`.
+    """
 
     def before_recompile(self, executor: StatechartExecutor) -> bool:
         """
@@ -178,13 +200,6 @@ class ExecutorExtension:
         :return: Whether what this extension drives is at rest; it is unless overridden.
         """
         return True
-
-    def after_compile(self, executor: StatechartExecutor) -> None:
-        """
-        Called once the statechart is compiled, before its first tick.
-
-        :param executor: The executor this extension belongs to.
-        """
 
     def after_recompile(self, executor: StatechartExecutor) -> None:
         """
@@ -210,14 +225,6 @@ class ExecutorExtension:
         :param executor: The executor this extension belongs to.
         """
 
-    def after_run(self, executor: StatechartExecutor) -> None:
-        """
-        Called once a run stops, see :meth:`StatechartExecutor.finish_run`, before the
-        nodes are cleaned up.
-
-        :param executor: The executor this extension belongs to.
-        """
-
 
 GenericExecutorExtension = TypeVar("GenericExecutorExtension", bound=ExecutorExtension)
 
@@ -237,6 +244,11 @@ class Executor(ABC):
     The context handed to every node of the statechart.
     """
 
+    extensions: List[ExecutorExtension] = field(default_factory=list, kw_only=True)
+    """
+    Add behaviour around compiling and running, called in the order they are listed.
+    """
+
     # %% init False
     statechart: Statechart | None = field(init=False, default=None)
     """
@@ -245,11 +257,21 @@ class Executor(ABC):
 
     def __post_init__(self):
         """
-        Adds the :meth:`default_context_extensions` to :attr:`context`, keeping any
-        extension of the same type that is already there.
+        Adds the :meth:`default_context_extensions` to :attr:`context` and the
+        :meth:`default_executor_extensions` to :attr:`extensions`, keeping any
+        extension of the same type that is already there, and lets every extension
+        extend :attr:`context`.
         """
         for default_extension in self.default_context_extensions():
             self.context.ensure_extension(default_extension)
+        for default_extension in self.default_executor_extensions():
+            if not any(
+                type(extension) is type(default_extension)
+                for extension in self.extensions
+            ):
+                self.extensions.append(default_extension)
+        for extension in self.extensions:
+            extension.extend_context(self.context)
 
     @abstractmethod
     def default_context_extensions(self) -> list[ContextExtension]:
@@ -257,6 +279,26 @@ class Executor(ABC):
         :return: The context extensions :attr:`context` holds unless one of the same
             type was supplied.
         """
+
+    @abstractmethod
+    def default_executor_extensions(self) -> list[ExecutorExtension]:
+        """
+        :return: The executor extensions appended to :attr:`extensions` unless one of
+            the same type was supplied.
+        """
+
+    def require_extension(
+        self, extension_type: Type[GenericExecutorExtension]
+    ) -> GenericExecutorExtension:
+        """
+        :param extension_type: The exact type of the requested extension.
+        :return: The first extension in :attr:`extensions` of `extension_type`.
+        :raises MissingExecutorExtensionError: If no extension is of `extension_type`.
+        """
+        for extension in self.extensions:
+            if type(extension) is extension_type:
+                return extension
+        raise MissingExecutorExtensionError(expected_extension=extension_type)
 
     def compile(self, statechart: Statechart) -> None:
         """
@@ -270,11 +312,25 @@ class Executor(ABC):
             raise StatechartOfDifferentContextError()
         self.statechart = statechart
 
+    def _notify_compiled(self) -> None:
+        """
+        Tell every extension that :attr:`statechart` is compiled.
+        """
+        for extension in self.extensions:
+            extension.after_compile(self)
+
     @abstractmethod
     def execute(self) -> None:
         """
         Runs the compiled statechart until it ended.
         """
+
+    def finish_run(self) -> None:
+        """
+        Tell every extension that the run stopped, however it stopped.
+        """
+        for extension in self.extensions:
+            extension.after_run(self)
 
 
 @dataclass
@@ -292,21 +348,8 @@ class StatechartExecutor(Executor, RecompileCallback):
     Paces the loop that ticks this executor.
     """
 
-    extensions: List[ExecutorExtension] = field(default_factory=list, kw_only=True)
-    """
-    Add behaviour around compiling and ticking, called in the order they are listed.
-    """
-
     def __post_init__(self):
         super().__post_init__()
-        for default_extension in self.default_executor_extensions():
-            if not any(
-                type(extension) is type(default_extension)
-                for extension in self.extensions
-            ):
-                self.extensions.append(default_extension)
-        for extension in self.extensions:
-            extension.extend_context(self.context)
         self.pacer.pace_ticks_of(self.context)
         self._create_tick_variable()
 
@@ -314,11 +357,19 @@ class StatechartExecutor(Executor, RecompileCallback):
         return []
 
     def default_executor_extensions(self) -> list[ExecutorExtension]:
-        """
-        :return: The executor extensions appended to :attr:`extensions` unless one of
-            the same type was supplied.
-        """
         return []
+
+    @property
+    def ticking_extensions(self) -> list[TickingExecutorExtension]:
+        """
+        :return: The extensions in :attr:`extensions` that act around every tick and
+            every recompile, in the order they are listed.
+        """
+        return [
+            extension
+            for extension in self.extensions
+            if isinstance(extension, TickingExecutorExtension)
+        ]
 
     def _create_tick_variable(self):
         """
@@ -326,19 +377,6 @@ class StatechartExecutor(Executor, RecompileCallback):
         """
         self.context.tick_variable = FloatVariable("tick_count")
         self.context.float_variable_data.register_expression(self.context.tick_variable)
-
-    def require_extension(
-        self, extension_type: Type[GenericExecutorExtension]
-    ) -> GenericExecutorExtension:
-        """
-        :param extension_type: The exact type of the requested extension.
-        :return: The first extension in :attr:`extensions` of `extension_type`.
-        :raises MissingExecutorExtensionError: If no extension is of `extension_type`.
-        """
-        for extension in self.extensions:
-            if type(extension) is extension_type:
-                return extension
-        raise MissingExecutorExtensionError(expected_extension=extension_type)
 
     @property
     def time(self) -> float:
@@ -371,8 +409,7 @@ class StatechartExecutor(Executor, RecompileCallback):
         self.tick_count = 0
         self.statechart.compile()
         self.statechart.add_recompile_callback(self)
-        for extension in self.extensions:
-            extension.after_compile(self)
+        self._notify_compiled()
         self.statechart.tick()
 
     def before_recompile(self) -> bool:
@@ -381,7 +418,9 @@ class StatechartExecutor(Executor, RecompileCallback):
 
         :return: Whether every extension is at rest.
         """
-        answers = [extension.before_recompile(self) for extension in self.extensions]
+        answers = [
+            extension.before_recompile(self) for extension in self.ticking_extensions
+        ]
         return all(answers)
 
     def after_recompile(self) -> None:
@@ -389,18 +428,19 @@ class StatechartExecutor(Executor, RecompileCallback):
         Let every extension compile again, so what it builds from the nodes covers
         every node of the statechart. The tick count is not restarted.
         """
-        for extension in self.extensions:
+        for extension in self.ticking_extensions:
             extension.after_recompile(self)
 
     def tick(self):
         """
         Advances the statechart by one tick.
         """
-        for extension in self.extensions:
+        ticking_extensions = self.ticking_extensions
+        for extension in ticking_extensions:
             extension.before_tick(self)
         self.tick_count += 1
         self.statechart.tick()
-        for extension in self.extensions:
+        for extension in ticking_extensions:
             extension.after_tick(self)
 
     def execute(self) -> None:
@@ -429,10 +469,9 @@ class StatechartExecutor(Executor, RecompileCallback):
 
     def finish_run(self) -> None:
         """
-        Tell every extension that the run stopped, then clean up the nodes and the
-        context, however the run stopped.
+        Does what :meth:`Executor.finish_run` does, then cleans up the nodes and the
+        context.
         """
-        for extension in self.extensions:
-            extension.after_run(self)
+        super().finish_run()
         self.statechart.cleanup_nodes()
         self.context.cleanup()

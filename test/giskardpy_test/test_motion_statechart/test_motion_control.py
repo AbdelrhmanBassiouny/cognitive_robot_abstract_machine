@@ -10,7 +10,7 @@ from cramph.exceptions import (
     ConflictingTickDurationError,
     NodesMissingContextExtensionsError,
 )
-from cramph.executor import ExecutorExtension, StatechartExecutor
+from cramph.executor import StatechartExecutor, TickingExecutorExtension
 from cramph.nodes_for_testing import ConstTrueNode
 from cramph.statechart import Statechart
 from giskardpy.motion_control import MotionControl
@@ -74,7 +74,7 @@ def test_a_node_reading_the_controller_configuration_needs_motion_control():
 
 
 @dataclass
-class ExtensionCountingTicks(ExecutorExtension):
+class ExtensionCountingTicks(TickingExecutorExtension):
     """
     An executor extension of another module, counting the ticks it was called after.
     """

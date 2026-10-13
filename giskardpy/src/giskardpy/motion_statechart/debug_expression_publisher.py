@@ -12,7 +12,7 @@ from semantic_digital_twin.adapters.ros.visualization.spatial_type_publisher imp
     SpatialTypePublisher,
 )
 from semantic_digital_twin.spatial_types.spatial_types import SpatialType, Vector3
-from cramph.executor import ExecutorExtension, StatechartExecutor
+from cramph.executor import StatechartExecutor, TickingExecutorExtension
 from semantic_digital_twin.world import World
 from giskardpy.motion_statechart.graph_node import DebugExpression
 
@@ -97,7 +97,7 @@ class DebugExpressionPublisher:
 
 
 @dataclass
-class DebugExpressionPublishing(ExecutorExtension):
+class DebugExpressionPublishing(TickingExecutorExtension):
     """
     Visualizes the debug expressions of every compiled statechart as RViz markers.
 
