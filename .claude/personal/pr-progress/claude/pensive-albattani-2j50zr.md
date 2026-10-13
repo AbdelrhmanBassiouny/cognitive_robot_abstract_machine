@@ -23,5 +23,9 @@ Replies posted after the user submitted their pending review (it had blocked the
 8 resolved (Pygments x3, cache directory, Language, bytes, EvenCuts, SoundLevel); 7 left open
 (tuples left, PixelBox/Bounds x2, units home, LICENSE, voices str, Video vs Film).
 
-Next: waiting on the reviewer (units in krrood?, AxisAlignedBox as
+Follow-up (24208b31c): PixelColor removed, SemDT Color.to_rgb_bytes added (to_hex uses it);
+Color thread resolved. Discussion replies left open: Scene as Role[Video] (Timeline/VideoFile
+stay kinds of Video), Quantity[T] generic magnitude instead of Role[int].
+
+Next: waiting on the reviewer (Scene as Role[Video]?, Quantity[T]?, units in krrood?, AxisAlignedBox as
 Bounds?, remaining tuples, names, Framing box, test literals, SemDT naming).
