@@ -98,7 +98,7 @@ class CameraSpec:
 
     root_T_optical: HomogeneousTransformationMatrix | None = None
     """
-    Optical pose relative to the camera root, with x right, y down, and z forward.
+    Fixed root-relative optical pose; when omitted, the viewing axis selects its convention.
     """
 
     camera_range: CameraRange = field(default_factory=CameraRange)

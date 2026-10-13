@@ -87,12 +87,10 @@ class SensorWorldProjector:
             raise InvalidCameraObservation(
                 reason="aliased camera pose has no separate reference frame"
             )
-        root_T_optical = (
-            HomogeneousTransformationMatrix(data=source_camera.root_T_optical)
-            if source_camera.root_T_optical is not None
-            else None
+        root_T_optical = HomogeneousTransformationMatrix(
+            data=source_camera.optical_attachment
         )
-        axis = source_camera.forward_facing_axis.to_np().reshape(-1)
+        axis = source_camera.viewing_direction.to_np().reshape(-1)
         camera = Camera(
             id=source_camera.id,
             name=deepcopy(source_camera.name),

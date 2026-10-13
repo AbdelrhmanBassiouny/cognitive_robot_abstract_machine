@@ -1,3 +1,6 @@
+from __future__ import annotations
+
+# %% Imports
 import numpy as np
 
 from robokudo.descriptors.worlds.pinhole_rgbd_camera import (
@@ -11,6 +14,9 @@ from semantic_digital_twin.datastructures.camera_model import (
 from semantic_digital_twin.datastructures.camera_resolution import CameraResolution
 from semantic_digital_twin.datastructures.field_of_view import FieldOfView
 from semantic_digital_twin.spatial_types import HomogeneousTransformationMatrix, Vector3
+from semantic_digital_twin.world import World
+from robokudo.world_descriptor import BaseWorldDescriptor
+from ..semantic_digital_twin_test.conftest import table_world
 
 # %% Standard configuration
 
@@ -87,3 +93,23 @@ def test_pinhole_rgbd_camera_spec_accepts_arbitrary_frame_name() -> None:
         pose=HomogeneousTransformationMatrix(), name=frame_name
     )
     assert camera_spec.name == frame_name
+
+
+# %% Root-relative optical convention
+
+
+def test_camera_spec_viewing_axis_selects_fixed_optical_convention(
+    table_world: World,
+) -> None:
+    """
+    A caller-selected viewing axis determines the built camera's optical direction.
+    """
+    descriptor = BaseWorldDescriptor(world=table_world)
+    spec = PinholeRGBDCameraSpec(
+        pose=HomogeneousTransformationMatrix(reference_frame=table_world.root),
+        forward_facing_axis=Vector3.X(),
+    )
+    camera = descriptor.build_camera(table_world.root, spec)
+    np.testing.assert_array_equal(
+        camera.viewing_direction.to_np(), spec.forward_facing_axis.to_np()
+    )

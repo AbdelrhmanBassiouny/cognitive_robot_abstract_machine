@@ -466,7 +466,7 @@ class HomogeneousTransformationMatrixCodec(ViewCodec):
 @dataclass
 class RecordedCameraObservation:
     """
-    Image calibration, optical attachment, and pose linked to a recorded camera.
+    Image calibration and optical pose linked to a recorded camera.
     """
 
     camera_id: str
@@ -488,16 +488,12 @@ class RecordedCameraObservation:
     """
     Frame acquisition time in nanoseconds since the Unix epoch.
     """
-    root_T_optical: HomogeneousTransformationMatrix | None = None
-    """
-    Sampled optical attachment for reconstructing the recorded physical-root pose.
-    """
 
 
 @dataclass
 class CameraObservationCodec(ViewCodec):
     """
-    Persist image observations and optical attachments linked to recorded cameras.
+    Persist optical image observations linked to recorded cameras.
     """
 
     @classproperty
@@ -514,7 +510,7 @@ class CameraObservationCodec(ViewCodec):
 
     def encode(self, value: CameraObservation) -> ViewPayload:
         """
-        Record the optical pose and attachment needed to reconstruct the physical root.
+        Record the optical pose and image calibration linked to the semantic camera.
 
         :param value: Camera observation to persist.
         :return: Serialized observation linked to its semantic camera.
@@ -524,7 +520,6 @@ class CameraObservationCodec(ViewCodec):
             effective_camera_model=value.effective_camera_model,
             world_T_camera=value.world_T_camera,
             timestamp_nanoseconds=value.timestamp_nanoseconds,
-            root_T_optical=value.root_T_optical,
         )
         return ViewPayload(
             serializer_id=self.serializer_id,
@@ -561,7 +556,6 @@ class CameraObservationCodec(ViewCodec):
             effective_camera_model=recorded.effective_camera_model,
             world_T_camera=recorded.world_T_camera,
             timestamp_nanoseconds=recorded.timestamp_nanoseconds,
-            root_T_optical=recorded.root_T_optical,
         )
 
 

@@ -54,6 +54,7 @@ from semantic_digital_twin.exceptions import (
 from semantic_digital_twin.input_synchronization import InputSynchronizer
 from semantic_digital_twin.robots.exceptions import (
     MissingDriveConnectionError,
+    CameraOpticalConventionUndefined,
 )
 from semantic_digital_twin.robots.input_source import (
     BasePoseSource,
@@ -574,10 +575,10 @@ class Camera(HasRootBody):
 
     forward_facing_axis: Vector3 = field(kw_only=True)
     """
-    Viewing direction expressed in the camera's root frame.
+    Root-frame viewing axis selecting the default optical convention.
 
-    This axis leaves rotation around the viewing direction unspecified.
-    :attr:`root_T_optical` additionally defines image right and down.
+    Positive unit z uses x-right, y-down optical axes. Positive unit x uses y-left, z-up body
+    axes. :attr:`root_T_optical` supplies the full orientation for other conventions.
     """
 
     camera_model: CameraModel = field(kw_only=True)
@@ -589,7 +590,9 @@ class Camera(HasRootBody):
         default=None, kw_only=True
     )
     """
-    Optical pose relative to the camera root, with x right, y down, and z forward.
+    Fixed optical pose relative to the camera root, with x right, y down, and z forward.
+
+    When omitted, :attr:`forward_facing_axis` selects a fixed root-relative convention.
     """
 
     camera_range: CameraRange = field(default_factory=CameraRange, kw_only=True)
@@ -608,12 +611,12 @@ class Camera(HasRootBody):
         """
         super().__post_init__()
         self.forward_facing_axis.reference_frame = self.root
-        if self.root_T_optical is not None:
-            self.root_T_optical.reference_frame = self.root
-            if self.root_T_optical.child_frame is None and np.array_equal(
-                self.root_T_optical.to_np(), np.eye(4)
-            ):
-                self.root_T_optical.child_frame = self.root
+        self.root_T_optical = self.optical_attachment
+        self.root_T_optical.reference_frame = self.root
+        if self.root_T_optical.child_frame is None and np.array_equal(
+            self.root_T_optical.to_np(), np.eye(4)
+        ):
+            self.root_T_optical.child_frame = self.root
 
     @property
     def field_of_view(self) -> FieldOfView:
@@ -630,18 +633,56 @@ class Camera(HasRootBody):
         return self.camera_model.resolution
 
     @property
+    def optical_attachment(self) -> HomogeneousTransformationMatrix:
+        """
+        Return the optical pose relative to the camera root, independent of world pose.
+
+        :return: Fixed root-relative optical attachment.
+        :raises CameraOpticalConventionUndefined: If the viewing axis requires an
+            explicit optical orientation.
+        """
+        if self.root_T_optical is not None:
+            return self.root_T_optical
+        if np.array_equal(self.forward_facing_axis.to_np(), Vector3.Z().to_np()):
+            return HomogeneousTransformationMatrix()
+        if np.array_equal(self.forward_facing_axis.to_np(), Vector3.X().to_np()):
+            return self.x_forward_R_optical
+        raise CameraOpticalConventionUndefined(
+            camera_name=self.name, viewing_axis=self.forward_facing_axis
+        )
+
+    @classproperty
+    def x_forward_R_optical(cls: type[Camera]) -> HomogeneousTransformationMatrix:
+        """
+        Express right-down-forward optical axes in an x-forward, y-left, z-up root.
+
+        :return: Optical rotation relative to body axes.
+        """
+        return HomogeneousTransformationMatrix(
+            data=RotationMatrix.from_vectors(
+                x=-Vector3.Y(), y=-Vector3.Z(), z=Vector3.X()
+            )
+        )
+
+    @property
+    def viewing_direction(self) -> Vector3:
+        """
+        Return the optical forward direction expressed in the camera root.
+
+        :return: Viewing direction following the fixed optical attachment.
+        """
+        root_V_forward = self.optical_attachment.rotation_matrix @ Vector3.Z()
+        root_V_forward.reference_frame = self.root
+        return root_V_forward
+
+    @property
     def world_T_optical(self) -> HomogeneousTransformationMatrix:
         """
-        Return the optical pose in world coordinates.
+        Return the optical pose from the world root pose and fixed optical attachment.
 
-        A defined optical attachment preserves the root's complete orientation.
-        Otherwise, image axes follow the viewing-direction convention.
-
-        :return: Optical pose with right-down-forward image axes.
+        :return: World-space optical pose preserving camera roll and image axes.
         """
-        if self.root_T_optical is None:
-            return self.root_T_forward_view @ self.optical_R_forward_view.inverse()
-        return self.root.global_transform @ self.root_T_optical
+        return self.root.global_transform @ self.optical_attachment
 
     @classproperty
     def optical_R_forward_view(cls: type[Camera]) -> HomogeneousTransformationMatrix:
@@ -655,15 +696,11 @@ class Camera(HasRootBody):
     @property
     def root_T_forward_view(self) -> HomogeneousTransformationMatrix:
         """
-        Return the camera pose with its x axis along the viewing direction.
+        Return the world-space x-forward pose with the optical image orientation.
+
+        :return: Forward-view pose preserving the fixed camera-relative image axes.
         """
-        root_T_camera = self.root.global_transform
-        root_V_forward = root_T_camera.rotation_matrix @ self.forward_facing_axis
-        return HomogeneousTransformationMatrix.from_point_rotation_matrix(
-            point=root_T_camera.position,
-            rotation_matrix=RotationMatrix.from_x_axis(root_V_forward),
-            reference_frame=root_T_camera.reference_frame,
-        )
+        return self.world_T_optical @ self.optical_R_forward_view
 
 
 TCamera = TypeVar("TCamera", bound=Camera)

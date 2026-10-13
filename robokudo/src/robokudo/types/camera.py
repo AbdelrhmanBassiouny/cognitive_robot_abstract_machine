@@ -20,8 +20,8 @@ class CameraObservation:
     Describe the camera state used to produce one perception frame.
 
     :attr:`world_T_camera` alone transforms optical-frame points into world coordinates.
-    :attr:`root_T_optical` additionally allows replay to recover the physical pose of
-    :attr:`camera.root`, which may differ from the optical frame.
+    The fixed optical attachment on :attr:`camera` also determines the physical-root
+    pose needed for replay.
 
     An annotator can access native and effective parameters from its CAS::
 
@@ -53,16 +53,6 @@ class CameraObservation:
     Acquisition time as nanoseconds since the Unix epoch.
     """
 
-    root_T_optical: HomogeneousTransformationMatrix | None = None
-    """
-    Sampled optical pose relative to the physical camera root.
-
-    Combined with :attr:`world_T_camera`, this recovers the physical root pose for
-    replay; it is not needed to transform optical-frame points into world coordinates.
-    The offset can change between frames when image axes follow the viewing-direction
-    convention, so the configured camera attachment alone may not describe the image.
-    """
-
     @property
     def resolution(self) -> CameraResolution:
         """
@@ -89,29 +79,15 @@ class CameraObservation:
         return self.world_T_camera
 
     @property
-    def optical_attachment(self) -> HomogeneousTransformationMatrix | None:
-        """
-        Return the sampled optical attachment, or the camera's configured attachment.
-
-        :return: Optical pose relative to the physical root, if available.
-        """
-        if self.root_T_optical is not None:
-            return self.root_T_optical
-        return self.camera.root_T_optical
-
-    @property
     def world_T_root(self) -> HomogeneousTransformationMatrix | None:
         """
-        Return the sampled physical-root pose from the optical pose and attachment.
+        Recover the physical-root pose using the camera's fixed optical attachment.
 
-        :return: Camera-root pose, or no pose when none was sampled.
+        :return: Sampled physical-root pose, or no pose when none was sampled.
         """
         if self.world_T_camera is None:
             return None
-        root_T_optical = self.optical_attachment
-        if root_T_optical is None:
-            return self.world_T_camera
-        return self.world_T_camera @ root_T_optical.inverse()
+        return self.world_T_camera @ self.camera.optical_attachment.inverse()
 
     @property
     def camera_T_world(self) -> HomogeneousTransformationMatrix:

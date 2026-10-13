@@ -38,14 +38,7 @@ class PinholeRGBDCameraSpec(CameraSpec):
 
     forward_facing_axis: Vector3 = field(default_factory=Vector3.Z)
     """
-    Viewing direction expressed in the camera root frame.
-    """
-
-    root_T_optical: HomogeneousTransformationMatrix = field(
-        default_factory=HomogeneousTransformationMatrix
-    )
-    """
-    Optical pose relative to the root, which uses optical axes by default.
+    Root-frame viewing axis selecting the fixed optical convention.
     """
 
     camera_model: PinholeCameraModel = field(

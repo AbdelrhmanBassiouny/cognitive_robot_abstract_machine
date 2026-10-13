@@ -103,5 +103,4 @@ class SemDTRayTracerCameraInterface(CameraInterface):
             effective_camera_model=camera_model,
             world_T_camera=world_T_camera,
             timestamp_nanoseconds=timestamp_ns,
-            root_T_optical=camera.root.global_transform.inverse() @ world_T_camera,
         )
