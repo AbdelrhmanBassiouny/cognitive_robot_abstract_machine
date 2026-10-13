@@ -13,7 +13,8 @@ from __future__ import annotations
 from enum import IntEnum, StrEnum
 from pathlib import Path
 
-from basstler.locations import PathEnumeration, ProjectLocation
+from basstler.locations import ProjectLocation
+from krrood_core.path_enumeration import PathEnumeration
 from basstler.setup_steps import PersonalNotesSetting
 
 
@@ -241,6 +242,12 @@ class ConfigurationVariable(StrEnum):
     INTERPRETER_CANDIDATES = "BASSTLER_INTERPRETER_CANDIDATES"
     """
     The supported interpreters looked for by name, separated by spaces.
+    """
+
+    WORKSPACE_DEPENDENCIES = "BASSTLER_WORKSPACE_DEPENDENCIES"
+    """
+    The packages of this repository the package depends on, installed from the clone
+    beside it, separated by spaces.
     """
 
     UV_DIRECTORY = "BASSTLER_UV_DIRECTORY"

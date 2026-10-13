@@ -48,7 +48,7 @@ jobs:
         run: |
           set -euo pipefail
           source .claude/hooks/resolve-personal-notes-config.sh
-          pip install --editable "./${BASSTLER_SOURCE_TREE}"
+          pip install "${BASSTLER_EDITABLE_INSTALL_ARGUMENTS[@]}"
 
       - name: Read upstream review threads
         env:

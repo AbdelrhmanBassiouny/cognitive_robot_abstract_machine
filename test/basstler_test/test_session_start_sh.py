@@ -36,7 +36,11 @@ from .constants import (
 from .executable_stubs import ExecutableStubDirectory, path_hiding_executables
 from .project_declaration import ProjectDeclaration
 from .scratch_repository import SCRATCH_IDENTITY, ScratchRepository
-from .script_runner import configuration_value
+from .script_runner import (
+    configuration_value,
+    editable_install_arguments,
+    installed_source_trees,
+)
 from .session_start_summary import (
     SummaryLine,
     SummaryMessage,
@@ -372,9 +376,17 @@ ENVIRONMENT_DIRECTORY = str(ProjectLocation.PACKAGE_ENVIRONMENT)
 The package's own environment, as the summary line names it.
 """
 
-SOURCE_TREE_ARGUMENT = f"./{ProjectLocation.PACKAGE_SOURCE_TREE}"
+SOURCE_TREE_ARGUMENTS = editable_install_arguments()
 """
-What the installer is handed: the source tree, installed editable.
+What the installer is handed: the workspace packages the package depends on, then the
+package's own source tree, each installed editable.
+"""
+
+INSTALLED_SOURCE_TREES = " ".join(
+    f"./{source_tree}" for source_tree in installed_source_trees()
+)
+"""
+The source trees a created environment is reported to have been installed from.
 """
 
 SUPPORTED_PYTHON = ProjectDeclaration.of_this_package().requires_python
@@ -425,8 +437,8 @@ def pip_installer_call(repository: ScratchRepository) -> str:
     :return: The one invocation ``pip`` is expected to receive, where there is no ``uv``.
     """
     return (
-        f"--python {environment_interpreter(repository)} install --editable "
-        f"{SOURCE_TREE_ARGUMENT}"
+        f"--python {environment_interpreter(repository)} install "
+        f"{SOURCE_TREE_ARGUMENTS}"
     )
 
 
@@ -437,8 +449,7 @@ def uv_installer_call(repository: ScratchRepository) -> str:
     """
     return (
         f"{PackageManager.PIP} install --python {environment_interpreter(repository)} "
-        f"--editable "
-        f"{SOURCE_TREE_ARGUMENT}"
+        f"{SOURCE_TREE_ARGUMENTS}"
     )
 
 
@@ -680,7 +691,7 @@ def test_creates_the_environment_with_uv_and_installs_the_package_into_it(
     assert summary_value(result.stdout, SummaryLine.DEPENDENCIES) == summary_message(
         SummaryMessage.DEPENDENCIES_ENVIRONMENT_CREATED,
         ENVIRONMENT_DIRECTORY,
-        SOURCE_TREE_ARGUMENT,
+        INSTALLED_SOURCE_TREES,
     )
     assert environment_log.read_text().splitlines() == [
         environment_call(session_start_repository),
@@ -714,7 +725,7 @@ def test_creates_the_environment_from_an_interpreter_found_by_name_without_uv(
     assert summary_value(result.stdout, SummaryLine.DEPENDENCIES) == summary_message(
         SummaryMessage.DEPENDENCIES_ENVIRONMENT_CREATED,
         ENVIRONMENT_DIRECTORY,
-        SOURCE_TREE_ARGUMENT,
+        INSTALLED_SOURCE_TREES,
     )
     version = subprocess.run(
         [
@@ -785,7 +796,7 @@ def test_installs_uv_when_no_supported_interpreter_is_on_the_path(
     assert summary_value(result.stdout, SummaryLine.DEPENDENCIES) == summary_message(
         SummaryMessage.DEPENDENCIES_ENVIRONMENT_CREATED,
         ENVIRONMENT_DIRECTORY,
-        SOURCE_TREE_ARGUMENT,
+        INSTALLED_SOURCE_TREES,
     )
     assert install_log.read_text().splitlines() == [
         f"install --target {installed_uv_directory(session_start_repository)} "
@@ -832,7 +843,7 @@ def test_reuses_the_uv_it_installed_before(
     assert summary_value(result.stdout, SummaryLine.DEPENDENCIES) == summary_message(
         SummaryMessage.DEPENDENCIES_ENVIRONMENT_CREATED,
         ENVIRONMENT_DIRECTORY,
-        SOURCE_TREE_ARGUMENT,
+        INSTALLED_SOURCE_TREES,
     )
     assert uv_log.read_text().splitlines() == [
         environment_call(session_start_repository),

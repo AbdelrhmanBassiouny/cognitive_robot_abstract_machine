@@ -37,6 +37,7 @@ jobs:
         include:
           - lib: giskardpy
           - lib: krrood
+          - lib: krrood_core
           - lib: semantic_digital_twin
           - lib: coraplex
           - lib: random_events
@@ -81,7 +82,7 @@ jobs:
           python-version: '3.12'
       - run: |
           source .claude/hooks/resolve-personal-notes-config.sh
-          pip install pytest --editable "./${BASSTLER_SOURCE_TREE}"
+          pip install pytest "${BASSTLER_EDITABLE_INSTALL_ARGUMENTS[@]}"
       # --confcutdir stops pytest walking up to the repository-root
       # test/conftest.py, which imports the robotics stack this job
       # deliberately does not install.

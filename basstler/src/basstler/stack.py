@@ -47,9 +47,18 @@ from pathlib import Path
 from typing import ClassVar
 from urllib.parse import quote
 
+from krrood_core.adapters.json_serializer import from_json
+
 from basstler.locations import PackageLocation, ProjectLocation
 from basstler.repository import Repository
-from basstler.standard_streams import StandardStreamHandler
+from krrood_core.standard_streams import StandardStreamHandler
+from basstler.exceptions import (
+    AmbiguousForkRemoteError,
+    BoardUnavailable,
+    ContradictoryLabelWriteError,
+    ForkRemoteNotFoundError,
+    PromotionLinkTooLongError,
+)
 
 logger = StandardStreamHandler.logger_for(__name__)
 """
@@ -68,39 +77,6 @@ class Remote:
 
     repository: Repository
     """The repository the remote points at."""
-
-
-@dataclass
-class ForkRemoteNotFoundError(LookupError):
-    """Raised when no remote points at a repository other than the upstream."""
-
-    upstream_repository: Repository
-    """The upstream every candidate turned out to be."""
-
-    def __str__(self) -> str:
-        """:return: What was searched for and why nothing qualified."""
-        return (
-            f"no remote points at a fork: every remote is {self.upstream_repository}. "
-            f"Add a remote for your fork, or set fork_repository in stack.toml."
-        )
-
-
-@dataclass
-class AmbiguousForkRemoteError(LookupError):
-    """Raised when several remotes could each be the fork."""
-
-    candidates: tuple[Remote, ...]
-    """The remotes that are not the upstream, in the order git reported them."""
-
-    def __str__(self) -> str:
-        """:return: The candidates and how to disambiguate them."""
-        listed = ", ".join(
-            f"{remote.name} -> {remote.repository}" for remote in self.candidates
-        )
-        return (
-            f"several remotes could be the fork ({listed}). "
-            f"Set fork_repository in stack.toml to say which."
-        )
 
 
 @dataclass(frozen=True)
@@ -473,10 +449,6 @@ class Stack:
         )
 
 
-class BoardUnavailable(RuntimeError):
-    """Raised when ``board.json`` is missing."""
-
-
 def load_board(path: Path = PackageLocation.BOARD.value) -> list[PullRequest]:
     """Parse ``board.json`` into the list of fork pull requests.
 
@@ -485,20 +457,8 @@ def load_board(path: Path = PackageLocation.BOARD.value) -> list[PullRequest]:
     :raises BoardUnavailable: If *path* does not exist.
     """
     if not path.exists():
-        raise BoardUnavailable(f"{path.name} not found")
-    data = json.loads(path.read_text())
-    return [
-        PullRequest(
-            number=pull_request["number"],
-            head=pull_request["head"],
-            base=pull_request["base"],
-            draft=bool(pull_request["draft"]),
-            labels=list(pull_request.get("labels", [])),
-            ci=pull_request.get("ci"),
-            session=pull_request.get("session"),
-        )
-        for pull_request in data["pull_requests"]
-    ]
+        raise BoardUnavailable(path=path)
+    return list(from_json(json.loads(path.read_text())).pull_requests)
 
 
 def derive_status(draft: bool, merged: bool, in_review: bool) -> BranchStatus:
@@ -559,21 +519,6 @@ def build_stack(
 # %% label writes
 
 
-@dataclass
-class ContradictoryLabelWriteError(ValueError):
-    """Raised when one write is asked both to carry a label and to drop it."""
-
-    labels: tuple[str, ...]
-    """The labels asked for in both directions."""
-
-    def __str__(self) -> str:
-        """:return: Which labels contradict, and why no outcome is safe."""
-        return (
-            f"cannot both add and remove {', '.join(self.labels)}: "
-            f"either outcome would be a guess at what was meant"
-        )
-
-
 @dataclass(frozen=True)
 class LabelWrite:
     """The complete label set a pull request has to be written back with.
@@ -610,25 +555,6 @@ class LabelWrite:
 
 
 # %% promotion links
-
-
-@dataclass
-class PromotionLinkTooLongError(ValueError):
-    """Raised when a link cannot fit even with its whole description dropped."""
-
-    branch: str
-    """The branch whose link was being built."""
-
-    length_without_a_description: int
-    """How long the URL already is before any description is added."""
-
-    def __str__(self) -> str:
-        """:return: Which link overflowed, and by how much before the body counts."""
-        return (
-            f"the compare link for {self.branch} is {self.length_without_a_description} "
-            f"characters before its description, over the "
-            f"{PromotionLink.URL_CHARACTER_LIMIT}-character limit: shorten the title"
-        )
 
 
 @dataclass(frozen=True)
@@ -675,7 +601,11 @@ class PromotionLink:
         if len(url_for(body)) <= cls.URL_CHARACTER_LIMIT:
             return cls(url_for(body), body_was_truncated=False)
         if len(url_for(cls.TRUNCATION_MARKER)) > cls.URL_CHARACTER_LIMIT:
-            raise PromotionLinkTooLongError(branch, len(url_for("")))
+            raise PromotionLinkTooLongError(
+                branch=branch,
+                length_without_a_description=len(url_for("")),
+                url_character_limit=cls.URL_CHARACTER_LIMIT,
+            )
         shortest, longest = 0, len(body)
         while shortest < longest:
             midpoint = (shortest + longest + 1) // 2

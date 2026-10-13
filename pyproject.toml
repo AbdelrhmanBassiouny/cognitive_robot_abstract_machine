@@ -18,6 +18,7 @@ dependencies = [
   "giskardpy",
   "semantic_digital_twin",
   "krrood",
+  "krrood_core",
   "random-events",
   "probabilistic_model",
   "robokudo",
@@ -87,6 +88,7 @@ members = [
   "giskardpy",
   "semantic_digital_twin",
   "krrood",
+  "krrood_core",
   "random_events",
   "probabilistic_model",
   "physics_simulators",
@@ -101,6 +103,7 @@ coraplex       = { workspace = true }
 giskardpy             = { workspace = true }
 semantic_digital_twin = { workspace = true }
 krrood                = { workspace = true }
+krrood_core           = { workspace = true }
 probabilistic_model   = { workspace = true }
 random_events         = { workspace = true }
 robokudo              = { workspace = true }

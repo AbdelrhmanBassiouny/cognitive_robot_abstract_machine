@@ -22,25 +22,11 @@ from typing import Any
 
 from basstler.maintenance_board import PullRequestRecord
 from basstler.maintenance_constants import CREDENTIAL_VARIABLES, GITHUB_API_ROOT
-from basstler.maintenance_errors import ExternalCallFailed
+from basstler.exceptions import (
+    GitHubCredentialUnavailableError,
+    GitHubRequestFailed,
+)
 from basstler.repository import Repository
-
-
-@dataclass
-class GitHubCredentialUnavailableError(RuntimeError):
-    """
-    Raised when no token is available to authenticate the API calls with.
-    """
-
-    variables: tuple[str, ...]
-    """The environment variables that were consulted."""
-
-    def __str__(self) -> str:
-        """:return: What was looked for, so the caller can supply it."""
-        return (
-            f"no GitHub token: set one of {', '.join(self.variables)}, or run this "
-            f"with a caller that has one"
-        )
 
 
 # %% what a pass reads and writes
@@ -101,28 +87,6 @@ class ForkPullRequests(PullRequestReader, PullRequestWriter, ABC):
     together wherever both are needed; the board export takes the reading half alone,
     which is what keeps an export from being able to write.
     """
-
-
-@dataclass
-class GitHubRequestFailed(ExternalCallFailed):
-    """
-    Raised when the API refuses a call this module depends on.
-    """
-
-    method: str = ""
-    """
-    The HTTP method used.
-    """
-
-    path: str = ""
-    """
-    The API path called, without the host.
-    """
-
-    @property
-    def call(self) -> str:
-        """:return: The request line, as issued."""
-        return f"{self.method} {self.path}"
 
 
 # %% the client that makes the calls

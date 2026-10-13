@@ -84,7 +84,7 @@ if ! MISSING_DEPENDENCIES="$(missing_dependencies)"; then
 fi
 if [ -n "${MISSING_DEPENDENCIES}" ]; then
   echo "The basstler package's requirements are not installed for ${BASSTLER_PYTHON}: ${MISSING_DEPENDENCIES}" >&2
-  echo "Start a new session, or run: pip --python ${BASSTLER_PYTHON} install --editable ./${BASSTLER_SOURCE_TREE}" >&2
+  echo "Start a new session, or run: pip --python ${BASSTLER_PYTHON} install ${BASSTLER_EDITABLE_INSTALL_ARGUMENTS[*]}" >&2
   exit 1
 fi
 

@@ -4,8 +4,11 @@ Tests for repository.py: reading a GitHub repository out of a reference or a rem
 
 import pytest
 
-from basstler.repository import MalformedRepositoryError, Repository
+from basstler.repository import Repository
 from basstler.setup_steps import Host
+from basstler.exceptions import (
+    MalformedRepositoryError,
+)
 
 REPOSITORY = Repository("an-owner", "a-repository")
 """

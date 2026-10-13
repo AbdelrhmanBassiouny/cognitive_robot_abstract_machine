@@ -11,14 +11,19 @@ from __future__ import annotations
 import dataclasses
 import json
 from collections.abc import Iterable, Mapping
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 from enum import Enum, StrEnum
 from pathlib import Path
 from typing import Any
 
+from krrood_core.adapters.json_serializer import to_json
+
 from basstler.locations import PackageLocation
 from basstler.maintenance_constants import SESSION_LINK_PATTERN
 from basstler.stack import PullRequest
+from basstler.exceptions import (
+    MissingPullRequestFieldError,
+)
 
 PullRequestRecord = Mapping[str, Any]
 """
@@ -173,39 +178,6 @@ class PullRequestField(PullRequestFieldSpecification, Enum):
         raise MissingPullRequestFieldError(self, number)
 
 
-@dataclass
-class MissingPullRequestFieldError(ValueError):
-    """
-    Raised when a fetched pull request omits a field the board is derived from.
-
-    A fetch that drops a field is not partially correct: absent and legitimately empty
-    are different facts, and defaulting one to the other is what makes bad board data
-    indistinguishable from good.
-    """
-
-    field_name: PullRequestField
-    """
-    The field that was absent.
-    """
-
-    pull_request_number: int | None
-    """
-    The pull request it was absent from, or ``None`` when the number itself is.
-    """
-
-    def __str__(self) -> str:
-        """:return: Which field is missing, and from where."""
-        subject = (
-            f"pull request {self.pull_request_number}"
-            if self.pull_request_number is not None
-            else "a fetched pull request"
-        )
-        return (
-            f"{subject} has no '{self.field_name}'; the board cannot be derived from a "
-            f"fetch that omits it"
-        )
-
-
 def get_session_link_in(body: str | None) -> str | None:
     """
     Read the session link out of a pull request description.
@@ -266,10 +238,7 @@ class BoardExport:
 
     def as_json(self) -> str:
         """:return: The export, in the document :func:`stack.load_board` parses."""
-        return json.dumps(
-            {"pull_requests": [asdict(entry) for entry in self.pull_requests]},
-            indent=2,
-        )
+        return json.dumps(to_json(self), indent=2)
 
     def write(self, path: Path = PackageLocation.BOARD.value) -> Path:
         """

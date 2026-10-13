@@ -1,18 +1,23 @@
 """
-Tests for standard_streams.py: the package's logging, which is also what its commands
-print through.
+Tests for standard_streams.py: a tool's logging, which is also what its commands print
+through.
 """
 
 import logging
 from enum import StrEnum
 
-import basstler
-import basstler.standard_streams
-from basstler.standard_streams import StandardStreamHandler
+from krrood_core.standard_streams import StandardStreamHandler
 
-MODULE_NAME = basstler.standard_streams.__name__
+from .dataset.command_line_tool import commands
+
+MODULE_NAME = commands.__name__
 """
-A module inside the package, whose logger the package's handler writes for.
+A module inside a tool's package, whose logger the package's handler writes for.
+"""
+
+PACKAGE_NAME = MODULE_NAME.partition(".")[0]
+"""
+The tool's top-level package, whose logger the handler is attached to.
 """
 
 NOTHING_WRITTEN = ""
@@ -78,7 +83,7 @@ def test_asking_for_loggers_twice_attaches_one_handler():
     """
     StandardStreamHandler.logger_for(MODULE_NAME)
     StandardStreamHandler.logger_for(MODULE_NAME)
-    package_handlers = logging.getLogger(basstler.__name__).handlers
+    package_handlers = logging.getLogger(PACKAGE_NAME).handlers
     assert (
         len(
             [

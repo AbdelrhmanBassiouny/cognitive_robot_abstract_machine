@@ -6,22 +6,9 @@ references and git remote URLs the tooling is handed.
 from __future__ import annotations
 
 from dataclasses import dataclass
-
-
-@dataclass
-class MalformedRepositoryError(ValueError):
-    """
-    Raised when a repository reference is not in ``owner/name`` form.
-    """
-
-    text: str
-    """
-    The value that could not be parsed.
-    """
-
-    def __str__(self) -> str:
-        """:return: What was expected and what arrived instead."""
-        return f"expected a repository as 'owner/name', got {self.text!r}"
+from basstler.exceptions import (
+    MalformedRepositoryError,
+)
 
 
 @dataclass(frozen=True)

@@ -471,13 +471,13 @@ create_and_install_basstler_environment() {
   resolve_basstler_python
   if ! install_basstler_into_environment; then
     SUMMARY_DEPENDENCIES="$(dependencies_line_install_failed \
-      "./${BASSTLER_SOURCE_TREE}" "${BASSTLER_ENVIRONMENT_DIRECTORY}" \
+      "${BASSTLER_INSTALLED_SOURCE_TREES}" "${BASSTLER_ENVIRONMENT_DIRECTORY}" \
       "$(printf '%s' "${BASSTLER_INSTALL_OUTPUT}" | tail -1)" \
       "${BASSTLER_INSTALL_COMMAND[*]}")"
     return
   fi
   SUMMARY_DEPENDENCIES="$(dependencies_line_environment_created \
-    "${BASSTLER_ENVIRONMENT_DIRECTORY}" "./${BASSTLER_SOURCE_TREE}")"
+    "${BASSTLER_ENVIRONMENT_DIRECTORY}" "${BASSTLER_INSTALLED_SOURCE_TREES}")"
 }
 
 ensure_basstler_environment

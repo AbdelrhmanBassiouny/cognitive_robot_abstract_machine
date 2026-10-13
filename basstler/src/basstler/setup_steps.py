@@ -28,7 +28,7 @@ from pathlib import Path
 
 from basstler.locations import PackageLocation, ProjectLocation
 from basstler.repository import Repository
-from basstler.standard_streams import StandardStreamHandler
+from krrood_core.standard_streams import StandardStreamHandler
 
 logger = StandardStreamHandler.logger_for(__name__)
 """

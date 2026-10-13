@@ -1,5 +1,5 @@
 """
-The package's logging, which is also how its commands print what they output.
+Logging for a command-line tool, which is also how its commands print what they output.
 
 A record at information level is a command's output and goes to standard output; a
 warning or an error goes to standard error. Either is written as its bare message,
@@ -68,7 +68,8 @@ class StandardStreamHandler(logging.Handler):
     @classmethod
     def logger_for(cls, module_name: str) -> logging.Logger:
         """
-        A module's logger, under a package logger that writes through this handler.
+        A module's logger, under the logger of its top-level package, which writes
+        through this handler.
 
         The package logger is configured on the first request and left as it is on every
         later one.
@@ -76,9 +77,10 @@ class StandardStreamHandler(logging.Handler):
         :param module_name: The ``__name__`` of a module inside the package.
         :return: That module's logger.
         """
-        package_logger = logging.getLogger(__package__)
+        import_name = cls.import_name(module_name)
+        package_logger = logging.getLogger(import_name.partition(".")[0])
         if not any(isinstance(handler, cls) for handler in package_logger.handlers):
             package_logger.addHandler(cls())
             package_logger.setLevel(logging.INFO)
             package_logger.propagate = False
-        return logging.getLogger(cls.import_name(module_name))
+        return logging.getLogger(import_name)

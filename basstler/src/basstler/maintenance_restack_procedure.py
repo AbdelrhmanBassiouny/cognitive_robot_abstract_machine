@@ -26,6 +26,9 @@ from basstler.maintenance_restack_steps import (
     WithholdBranchStillConflicting,
 )
 from basstler.stack import CommitMoveChecks, IntegrationStrategy, Stack, restack_plan
+from basstler.exceptions import (
+    RestackConcludedNothingError,
+)
 
 if TYPE_CHECKING:
     from types import TracebackType
@@ -49,22 +52,6 @@ order is a decision about what a pass does, not bookkeeping. Stating it here kee
 where it is read, rather than making it a consequence of where the classes happen to be
 defined.
 """
-
-
-@dataclass
-class RestackConcludedNothingError(RuntimeError):
-    """
-    Raised when no step concluded a branch, which the last step always must.
-    """
-
-    branch: str
-    """
-    The branch left without an outcome.
-    """
-
-    def __str__(self) -> str:
-        """:return: Which branch was left unconcluded."""
-        return f"no restack step concluded '{self.branch}'"
 
 
 # %% where the branch switching happens

@@ -20,7 +20,7 @@ from pathlib import Path
 
 from basstler.locations import PackageLocation, ProjectLocation
 
-from .constants import EnvironmentVariable
+from .constants import ConfigurationVariable, EnvironmentVariable
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -163,3 +163,24 @@ def configuration_value(variable_name: str) -> str:
         text=True,
         check=True,
     ).stdout
+
+
+def installed_source_trees() -> list[str]:
+    """
+    :return: Every source tree an install of the package is made from, the workspace
+        packages it depends on first, as the shell configuration lists them.
+    """
+    return [
+        *configuration_value(ConfigurationVariable.WORKSPACE_DEPENDENCIES).split(),
+        str(ProjectLocation.PACKAGE_SOURCE_TREE),
+    ]
+
+
+def editable_install_arguments() -> str:
+    """
+    :return: The installer arguments installing each of :func:`installed_source_trees`
+        editable, as a command line spells them.
+    """
+    return " ".join(
+        f"--editable ./{source_tree}" for source_tree in installed_source_trees()
+    )

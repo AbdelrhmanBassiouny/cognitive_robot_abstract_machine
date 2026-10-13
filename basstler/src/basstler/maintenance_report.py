@@ -19,7 +19,7 @@ from basstler.maintenance_fast_forward import FastForwardOutcome, FastForwardRep
 from basstler.maintenance_promotion import Promotion
 from basstler.maintenance_restack_steps import BranchOutcome, RestackOutcome
 from basstler.stack import Reparent, Stack, landed_branches, promotion_order, reparents
-from basstler.standard_streams import StandardStreamHandler
+from krrood_core.standard_streams import StandardStreamHandler
 
 logger = StandardStreamHandler.logger_for(__name__)
 """

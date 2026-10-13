@@ -8,11 +8,9 @@ import sys
 
 import pytest
 
-from basstler.refresh_dashboard_support import (
+from basstler.refresh_dashboard_support import count_corrected, main, merge_summaries
+from basstler.exceptions import (
     SummaryKeyCollisionError,
-    count_corrected,
-    main,
-    merge_summaries,
 )
 
 # %% count_corrected
