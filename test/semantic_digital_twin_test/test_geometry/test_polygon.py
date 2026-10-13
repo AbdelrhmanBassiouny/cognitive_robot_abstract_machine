@@ -103,3 +103,45 @@ def test_extruding_gives_a_watertight_solid_of_the_enclosed_area_times_thickness
     assert solid.is_watertight
     assert solid.volume == pytest.approx(triangle.area * 0.01)
     assert solid.bounds[:, 2] == pytest.approx([-0.005, 0.005])
+
+
+# %% how far a polygon turns before it looks the same
+
+
+def test_a_square_looks_the_same_after_a_quarter_turn():
+    square = Polygon2D.rectangle(width=0.03, length=0.03)
+
+    assert square.rotational_symmetry_angle() == pytest.approx(math.pi / 2)
+
+
+def test_a_rectangle_looks_the_same_only_after_a_half_turn():
+    rectangle = Polygon2D.rectangle(width=0.02, length=0.04)
+
+    assert rectangle.rotational_symmetry_angle() == pytest.approx(math.pi)
+
+
+def test_an_equilateral_triangle_looks_the_same_after_a_third_of_a_turn():
+    triangle = Polygon2D.equilateral_triangle(side=0.037)
+
+    assert triangle.rotational_symmetry_angle() == pytest.approx(2 * math.pi / 3)
+
+
+def test_a_circle_looks_the_same_after_turning_from_one_corner_to_the_next():
+    circle = Polygon2D.circle(diameter=0.028)
+
+    assert circle.rotational_symmetry_angle() == pytest.approx(
+        2 * math.pi / Polygon2D.CIRCLE_CORNER_COUNT
+    )
+
+
+def test_a_polygon_without_symmetry_looks_the_same_only_after_a_full_turn():
+    triangle = Polygon2D(np.array([(0.0, 0.0), (2.0, 0.0), (0.0, 1.0)]))
+
+    assert triangle.rotational_symmetry_angle() == pytest.approx(2 * math.pi)
+
+
+def test_a_polygon_turns_about_its_own_centroid_wherever_it_lies():
+    square = Polygon2D.rectangle(width=0.03, length=0.03)
+    moved = Polygon2D(square.vertices + np.array([5.0, -3.0]))
+
+    assert moved.rotational_symmetry_angle() == square.rotational_symmetry_angle()

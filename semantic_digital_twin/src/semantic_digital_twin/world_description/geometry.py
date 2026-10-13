@@ -2048,6 +2048,12 @@ class Polygon2D:
     circle.
     """
 
+    CORNER_MATCH_TOLERANCE: ClassVar[float] = 1e-9
+    """
+    How far a corner may lie from another, in the polygon's own units, and still be
+    taken for the same corner when the polygon is compared with itself turned.
+    """
+
     def __post_init__(self):
         self.vertices = np.asarray(self.vertices, dtype=float)
         if len(self.vertices) > 1 and np.allclose(self.vertices[0], self.vertices[-1]):
@@ -2168,6 +2174,26 @@ class Polygon2D:
         """
         cosine, sine = math.cos(angle), math.sin(angle)
         return Polygon2D(self.vertices @ np.array([[cosine, sine], [-sine, cosine]]))
+
+    def rotational_symmetry_angle(self) -> float:
+        """
+        The smallest turn about the centroid, in radians, after which this polygon
+        covers exactly the area it did.
+
+        A polygon without rotational symmetry returns a full turn.
+        """
+        centered = self.centered()
+        corner_count = len(centered.vertices)
+        for order in range(corner_count, 1, -1):
+            if corner_count % order:
+                continue
+            turned = centered.turned(math.tau / order).vertices
+            apart = np.linalg.norm(
+                turned[:, None, :] - centered.vertices[None, :, :], axis=-1
+            )
+            if (apart.min(axis=1) <= self.CORNER_MATCH_TOLERANCE).all():
+                return math.tau / order
+        return math.tau
 
     def points_along(self, spacing: float) -> np.ndarray:
         """
