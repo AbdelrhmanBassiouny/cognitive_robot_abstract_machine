@@ -48,10 +48,10 @@ session by `session-start.sh`. Never merge this file into `main`.
 
 - Store only what the next session needs to act; read only what this one needs. Landed
   work, history and settled rationale live in git and on the PRs.
-- The limits in `basstler/plan_size_limits.py` are enforced by `save-plan.sh` and
+- The limits in `basstler/src/basstler/plan_size_limits.py` are enforced by `save-plan.sh` and
   `save-pr-progress.sh`. Condense to fit; never raise a limit or bypass the gate without
   asking me.
-- Read one item with `python3 -m basstler.plan_manifest_tools item <file> --id <item-id>`,
+- Read one item with `basstler/.venv/bin/python -m basstler.plan_manifest_tools item <file> --id <item-id>`,
   never the whole manifest; request only the fields you need (`minimal_output`/`fields`,
   diffs rather than whole files).
 
