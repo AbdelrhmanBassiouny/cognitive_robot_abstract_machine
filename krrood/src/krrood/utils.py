@@ -33,6 +33,11 @@ from typing_extensions import (
     _SpecialForm,
 )
 
+from krrood_core.class_lookup import (
+    get_full_class_name,
+    recursive_subclasses,
+    resolve_class_from_full_name,
+)
 from krrood import logger
 from krrood.exceptions import (
     NoModuleSourceProvided,
@@ -43,26 +48,6 @@ from krrood.exceptions import (
 )
 
 T = TypeVar("T")
-
-
-def recursive_subclasses(cls: Type[T]) -> List[Type[T]]:
-    """
-    :param cls: The class.
-    :return: A list of the classes subclasses without the class itself.
-    """
-    return cls.__subclasses__() + [
-        g for s in cls.__subclasses__() for g in recursive_subclasses(s)
-    ]
-
-
-def get_full_class_name(cls):
-    """
-    Return the full name of a class, including the module name.
-
-    :param cls: The class.
-    :return: The full name of the class
-    """
-    return cls.__module__ + "." + cls.__name__
 
 
 def module_and_class_name(type_: Union[Type, _SpecialForm]) -> str:
@@ -81,20 +66,6 @@ def get_module_of_type(type_: Union[Type, _SpecialForm]) -> str:
     if type_ is types.NoneType:
         return "types"
     return type_.__module__
-
-
-def resolve_class_from_full_name(fully_qualified_class_name: str) -> Type:
-    """
-    Import and return the class named by a fully qualified name of the form
-    ``"module.submodule.ClassName"``, as written by :func:`get_full_class_name` or
-    :func:`module_and_class_name`.
-
-    :param fully_qualified_class_name: The fully qualified class name.
-    :return: The resolved class.
-    """
-    module_name, class_name = fully_qualified_class_name.rsplit(".", 1)
-    module = importlib.import_module(module_name)
-    return getattr(module, class_name)
 
 
 def get_default_value(dataclass_type, field_name):

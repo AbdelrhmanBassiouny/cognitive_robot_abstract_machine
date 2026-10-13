@@ -37,6 +37,7 @@ jobs:
         include:
           - lib: giskardpy
           - lib: krrood
+          - lib: krrood_core
           - lib: semantic_digital_twin
           - lib: coraplex
           - lib: random_events

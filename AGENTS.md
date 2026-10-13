@@ -73,9 +73,10 @@
 - Guard type-only imports with `TYPE_CHECKING`
 
 ### krrood Isolation
-- `krrood`, including its tests under `test/krrood_test`, never imports another workspace package - in particular not `coraplex`, `semantic_digital_twin`, `giskardpy`, `physics_simulators`, `robokudo` or `experiments`. The only exceptions are `random_events` and `probabilistic_model`, which `krrood`'s source already depends on
+- `krrood`, including its tests under `test/krrood_test`, never imports another workspace package - in particular not `coraplex`, `semantic_digital_twin`, `giskardpy`, `physics_simulators`, `robokudo` or `experiments`. The only exceptions are `krrood_core`, `random_events` and `probabilistic_model`, which `krrood`'s source already depends on
 - When a `krrood` test needs behaviour another package triggers, mimic the relevant classes and patterns in `test/krrood_test/dataset` and test against the mimics. Keep the test in `krrood` and do not depend on another package to reproduce the scenario
-- Those mimic classes import only `krrood`, `random_events` and `probabilistic_model`
+- Those mimic classes import only `krrood`, `krrood_core`, `random_events` and `probabilistic_model`
+- `krrood_core` holds the general patterns `krrood` is built on and never imports another workspace package, `krrood` included. Its dependencies stay pure-Python packages, so that a tool can install it in seconds; `test/krrood_core_test` checks that importing it loads nothing it does not declare
 
 ## Design Principles
 - Use strictly object-oriented design and always apply the SOLID principles:
@@ -97,7 +98,7 @@
 
 ### Errors
 - Never use try-except; a program in an illegal state raises an appropriate exception
-- Create meaningful custom exceptions as dataclasses subclassing `krrood.exceptions.DataclassException`, implementing its `error_message` and `suggest_correction`
+- Create meaningful custom exceptions as dataclasses subclassing `krrood_core.exceptions.DataclassException`, implementing its `error_message` and `suggest_correction`
 - Put each exception in the `exceptions.py` closest to the code that raises it:
   - An exception raised only within one subpackage goes in that subpackage's `exceptions.py`; create the file if the subpackage has none
   - An exception raised across several subpackages goes in the `exceptions.py` of their nearest common package
@@ -107,7 +108,7 @@
 - Never use global variables, module-level constants or `ClassVar`. Instead:
   - A fixed set of related values is a module-level enum
   - A default a caller may want to change is a parameter of the method that uses it if only that method does, otherwise a dataclass field with that default. For example, a `Heater` takes `target_temperature: float = 20.0` as a field instead of declaring `DEFAULT_TARGET_TEMPERATURE: ClassVar[float] = 20.0`
-  - A constant that belongs to a class is a `classproperty` (use the one `krrood` provides)
+  - A constant that belongs to a class is a `classproperty` (use `krrood_core.class_property.classproperty`)
   - `ClassVar` is allowed only for state that explicitly has to be shared and mutable across every instance of a class. This almost never applies
 
 ### Structured Data
@@ -115,7 +116,7 @@
 - A string that names a fixed thing - a payload key, a state, a label, a filename, an environment variable, a command flag, a status - is a `StrEnum` member. A value spelled in two places has no single source to rename, and nothing fails when the two drift apart
 - When the values are more than text - paths, numbers - give the enum values of that type, mixing the type in (`IntEnum`, `StrEnum`). `Path` needs more, because pathlib builds every derived path through the enum's own member lookup: a path enum derives from `basstler.locations.PathEnumeration` (or repeats its `with_segments` and `__hash__` overrides), and its members' `name` is the path's last component, so read the member name as `_name_`
 - A magic number becomes an enum member, a field default or a `classproperty`; a bare literal that carries meaning is unreadable where it is used and unsearchable everywhere else
-- JSON that our own classes round-trip goes through `krrood.adapters.json_serializer`: use `DataclassJSONSerializer` wherever it can (de)serialize the class; where a class needs more, subclass `SubclassJSONSerializer` and build on `DataclassJSONSerializer.to_json`/`from_json`. Never hand-write field-by-field `to_json`/`from_json`
+- JSON that our own classes round-trip goes through `krrood_core.adapters.json_serializer`: use `DataclassJSONSerializer` wherever it can (de)serialize the class; where a class needs more, subclass `SubclassJSONSerializer` and build on `DataclassJSONSerializer.to_json`/`from_json`. Never hand-write field-by-field `to_json`/`from_json`
 - Data whose shape someone else controls - an API response, a configuration file - is mirrored in dataclasses and parsed by a `from_json` classmethod, so the field names and the access path into the payload are written once
 - A tuple whose positions carry meaning becomes a dataclass, or an enum when the positions are a fixed set of alternatives rather than fields
 - A long literal document - a query, a template, a schema - lives in a file of its own type and is read in, never embedded as a string

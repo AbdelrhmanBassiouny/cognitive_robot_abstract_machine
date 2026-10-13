@@ -10,6 +10,7 @@ project-excludes = ["**/*venv/**/*"]
 name = "krrood"
 dynamic = ["version"]
 dependencies = [
+    "krrood_core",
     "rdflib",
     "jinja2",
     "inflect",

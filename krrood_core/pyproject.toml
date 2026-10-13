@@ -1,0 +1,40 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "krrood_core"
+dynamic = ["version"]
+description = "The general Python patterns krrood is built on - dataclass exceptions, JSON serialization of classes, class properties and path enumerations - with no heavy dependencies."
+readme = "README.md"
+requires-python = ">=3.12"
+license = "LGPL-3.0-only"
+authors = [
+    {name = "Abdelrhman Bassiouny", email = "abassiou@uni-bremen.de"},
+    {name = "Tom Schierenbeck", email = "tom_sch@uni-bremen.de"}
+]
+keywords = ["dataclasses", "json", "serialization", "exceptions", "python"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+# Kept to pure-Python packages on purpose: anything that installs this package should
+# pay seconds, not the full krrood stack.
+dependencies = [
+    "typing-extensions>=4.12.2",
+    "sortedcontainers",
+]
+
+[project.urls]
+"Source" = "https://github.com/cram2/cognitive_robot_abstract_machine"
+"Bug Tracker" = "https://github.com/cram2/cognitive_robot_abstract_machine/issues"
+
+[tool.setuptools.dynamic]
+version = {attr = "krrood_core._version.__version__"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["krrood_core*"]
