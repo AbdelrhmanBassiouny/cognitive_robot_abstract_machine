@@ -8,7 +8,7 @@ from typing_extensions import List
 from cramph.node import EndedByOwner
 from cramph.context import StatechartContext
 from cramph.data_types import LifeCycleValues, ObservationStateValues
-from cramph.executor import ExecutorExtension, StatechartExecutor
+from cramph.executor import StatechartExecutor, TickingExecutorExtension
 from cramph.node import EndStatechart, NodeArtifacts, StatechartNode
 from cramph.statechart import Statechart
 from cramph.world_modification_nodes import MoveBranch
@@ -147,7 +147,7 @@ class NodeObservingABodyPastAPosition(EndedByOwner, StatechartNode):
 
 
 @dataclass
-class ExtensionRecordingCompiles(ExecutorExtension):
+class ExtensionRecordingCompiles(TickingExecutorExtension):
     """
     An executor extension that records in which order it was told about compiling.
     """

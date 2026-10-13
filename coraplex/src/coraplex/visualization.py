@@ -26,7 +26,7 @@ from semantic_digital_twin.adapters.rerun import RerunAdapter, RerunMode
 if TYPE_CHECKING:
     from rclpy.node import Node
 
-    from cramph.executor import ExecutorExtension, StatechartExecutor
+    from cramph.executor import Executor, ExecutorExtension
     from semantic_digital_twin.world import World
 
 try:
@@ -240,7 +240,7 @@ class WorldVisualization(ABC):
         """
         self._cleanup.close()
 
-    def attach_plan(self, executor: StatechartExecutor) -> None:
+    def attach_plan(self, executor: Executor) -> None:
         """
         Observe the statecharts `executor` runs, if this renderer shows plans.
 
@@ -434,7 +434,7 @@ class ObservedExecutor:
     An executor whose statecharts an extension added to it observes.
     """
 
-    executor: StatechartExecutor
+    executor: Executor
     """
     The executor whose statecharts are observed.
     """
@@ -492,7 +492,7 @@ class PluginVisualization(WorldVisualization):
         cleanup.callback(self._remove_extensions)
         self.provider.start()
 
-    def attach_plan(self, executor: StatechartExecutor) -> None:
+    def attach_plan(self, executor: Executor) -> None:
         """
         Observe the statecharts of an executor through the running optional provider.
 

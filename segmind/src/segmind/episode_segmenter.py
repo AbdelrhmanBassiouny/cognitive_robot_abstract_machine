@@ -6,7 +6,7 @@ from dataclasses import field, dataclass
 from pathlib import Path
 from typing import Optional, List
 from cramph.context import StatechartContext
-from cramph.executor import ExecutorExtension, StatechartExecutor
+from cramph.executor import StatechartExecutor, TickingExecutorExtension
 from semantic_digital_twin.adapters.package_resolver import FileUriResolver
 from semantic_digital_twin.adapters.urdf import URDFParser
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 
 
 @dataclass
-class EpisodeSegmentation(ExecutorExtension):
+class EpisodeSegmentation(TickingExecutorExtension):
     """
     Segments an episode into events by running detector nodes against a shared
     :class:`~segmind.detectors.base.SegmindContext` while an episode player steps the

@@ -6,7 +6,7 @@ import numpy as np
 
 from cramph.context import StatechartContext
 from cramph.data_types import LifeCycleValues
-from cramph.executor import ExecutorExtension, StatechartExecutor
+from cramph.executor import StatechartExecutor, TickingExecutorExtension
 from giskardpy.motion_statechart.context import MotionControlContext
 from giskardpy.motion_statechart.exceptions import WorldStateArrayReplacedError
 from giskardpy.motion_statechart.graph_node import (
@@ -29,7 +29,7 @@ from semantic_digital_twin.world_description.world_state_trajectory_plotter impo
 
 
 @dataclass
-class MotionControl(ExecutorExtension):
+class MotionControl(TickingExecutorExtension):
     """
     Turns the constraints of the motion statechart nodes into commands and applies them
     to the world after every tick.
@@ -221,7 +221,7 @@ class MotionControl(ExecutorExtension):
 
 
 @dataclass
-class WorldStateTrajectoryRecording(ExecutorExtension):
+class WorldStateTrajectoryRecording(TickingExecutorExtension):
     """
     Records the world state every tick left behind.
 
@@ -261,7 +261,7 @@ class WorldStateTrajectoryRecording(ExecutorExtension):
 
 
 @dataclass
-class DebugExpressionRecording(ExecutorExtension):
+class DebugExpressionRecording(TickingExecutorExtension):
     """
     Records the value of every debug expression of the statechart after every tick.
 

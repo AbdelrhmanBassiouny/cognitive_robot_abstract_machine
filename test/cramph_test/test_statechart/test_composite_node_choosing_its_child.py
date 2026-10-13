@@ -12,7 +12,7 @@ from cramph.composites import (
     RepeatUntil,
 )
 from cramph.data_types import LifeCycleValues, ObservationStateValues
-from cramph.executor import ExecutorExtension, StatechartExecutor
+from cramph.executor import StatechartExecutor, TickingExecutorExtension
 from cramph.monitors import CountNodeResets, CountTicks
 from cramph.node import EndStatechart, StatechartNode
 from cramph.nodes_for_testing import (
@@ -63,7 +63,7 @@ class ChooserAnsweringInTurn(ChildChooser):
 
 
 @dataclass
-class ExtensionCountingCompiles(ExecutorExtension):
+class ExtensionCountingCompiles(TickingExecutorExtension):
     """
     An executor extension that counts how often it was told the statechart compiled.
     """
@@ -299,7 +299,7 @@ def test_the_node_observes_what_its_latest_child_observed(
 
 
 @dataclass
-class ExtensionHoldingStill(ExecutorExtension):
+class ExtensionHoldingStill(TickingExecutorExtension):
     """
     An executor extension that notes when it was told to hold still.
     """

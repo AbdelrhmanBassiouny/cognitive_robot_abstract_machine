@@ -196,14 +196,21 @@ class MyActionClient:
         return get_event_loop().run_until_complete(muh())
 
     async def get_result(self):
+        """
+        Wait for the result of the goal sent last.
+
+        An aborted goal is returned like a succeeded one, so that the caller can take
+        over its final state before raising the error it carries, see
+        :meth:`create_abort_exception`.
+
+        :raises ExecutionCanceledException: If the goal was canceled.
+        """
         goal_id = self._current_goal_id
         await wait_until_not_none(lambda: self.result)
         result = self.result
         self.result = None
         match result.status:
-            case GoalStatus.STATUS_ABORTED:
-                raise self.create_abort_exception(result)
-            case GoalStatus.STATUS_SUCCEEDED:
+            case GoalStatus.STATUS_ABORTED | GoalStatus.STATUS_SUCCEEDED:
                 return result
             case GoalStatus.STATUS_CANCELED:
                 raise ExecutionCanceledException(self._client._action_name, goal_id)
@@ -211,7 +218,7 @@ class MyActionClient:
                 raise Exception(f"Unexpected status {result.status}")
 
     @staticmethod
-    def create_abort_exception(result: Any) -> Exception:
+    def create_abort_exception(result: Any, **kwargs: Any) -> Exception:
         """
         Rebuild the exception that made the server abort the goal.
 
@@ -221,13 +228,17 @@ class MyActionClient:
         An error that cannot be rebuilt, because the client does not know its class or
         cannot construct it, is reported as a plain abort; the original failure is worth
         less than a caller that keeps working.
+
+        :param result: The result of the aborted goal.
+        :param kwargs: Handed to the deserialization of the error.
+        :return: The rebuilt exception.
         """
         payload = json.loads(result.result.result)
         error = payload.get("error")
         if error is None:
             return ExecutionAbortedException()
         try:
-            return from_json(error)
+            return from_json(error, **kwargs)
         except (JSONSerializationError, TypeError):
             return ExecutionAbortedException()
 

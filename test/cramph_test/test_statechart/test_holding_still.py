@@ -17,7 +17,11 @@ from cramph.composites import (
 )
 from cramph.context import StatechartContext
 from cramph.data_types import ObservationStateValues
-from cramph.executor import ExecutorExtension, StatechartExecutor
+from cramph.executor import (
+    ExecutorExtension,
+    StatechartExecutor,
+    TickingExecutorExtension,
+)
 from cramph.node import StatechartNode
 from cramph.nodes_for_testing import NodeSucceedingOnObservingTrue
 from cramph.statechart import Statechart
@@ -26,7 +30,7 @@ from cramph.statechart import Statechart
 
 
 @dataclass
-class ExtensionComingToRest(ExecutorExtension):
+class ExtensionComingToRest(TickingExecutorExtension):
     """
     An executor extension that reports rest only after it was asked to hold still a few
     times, the way a decelerating robot does.
@@ -79,7 +83,7 @@ class ChooserNotingTheTick(ChildChooser):
 
 
 @dataclass
-class ExtensionRecordingCompiles(ExecutorExtension):
+class ExtensionRecordingCompiles(TickingExecutorExtension):
     """
     An executor extension that records in which order it was told about compiling.
     """
