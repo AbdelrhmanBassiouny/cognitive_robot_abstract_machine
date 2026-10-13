@@ -13,6 +13,7 @@ from packaging.requirements import Requirement
 import krrood_core.class_property
 import krrood_core.exceptions
 import krrood_core.path_enumeration
+import krrood_core.standard_streams
 
 PACKAGE_DIRECTORY = Path(__file__).parents[2] / "krrood_core"
 """
@@ -56,6 +57,7 @@ def test_importing_every_module_loads_only_the_declared_dependencies():
         krrood_core.exceptions,
         krrood_core.path_enumeration,
         krrood_core.class_property,
+        krrood_core.standard_streams,
     ],
     ids=lambda m: m.__name__,
 )
