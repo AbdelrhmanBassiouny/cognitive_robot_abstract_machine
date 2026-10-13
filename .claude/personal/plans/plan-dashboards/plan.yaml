@@ -50,15 +50,14 @@ items:
   branch: claude/hidden-deferred-plan-items-6weef1
   pull_request_number: 157
   status: in progress
-  session: https://claude.ai/code/session_015Fy3XzLVV5i2amFd9Mkh5Q
+  session: https://claude.ai/code/session_01KzZzsqTc7Ub6ceYP9wDyAN
   track: legibility
   blockers:
     - >-
-      Changes requested on cram2/cognitive_robot_abstract_machine#725 by sunava (2026-10-12), one
-      unresolved thread at basstler/templates/dashboard.html:705: clicking a hidden (deferred)
-      item's sidebar link, e.g. a deferred item with a merged PR listed under "Fix the manifest",
-      does nothing because its card stays hidden. The link should reveal the card. tomsch420
-      approved.
+      Under upstream review as cram2/cognitive_robot_abstract_machine#725 (tomsch420 approved;
+      sunava requested changes). sunava's thread at basstler/templates/dashboard.html:705 (sidebar
+      links to hidden items did nothing) is fixed in 16d8f77b8; it is waiting for a reply and
+      resolution upstream, then sunava's re-review.
   depends_on: []
   notes: >
     A deferred item is intentionally paused or superseded, so it is the same kind of noise on a
@@ -69,6 +68,9 @@ items:
 
     2026-10-13: upstream review read via /upstream-reviews. One open thread (sunava): sidebar links
     to hidden items must reveal the card. Not yet fixed on the branch.
+
+    2026-10-13: 16d8f77b8 fixes sunava's thread. A sidebar link to a card hidden by its status now
+    ticks that status's checkbox, so the card shows. 730 basstler tests pass.
 - id: dashboard-refresh-button
   title: Refresh button in the dashboard masthead, copying the command that rebuilds the page
   branch: claude/rdr-dashboard-refresh-button-tpuvo9
