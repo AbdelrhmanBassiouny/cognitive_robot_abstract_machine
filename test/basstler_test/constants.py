@@ -13,7 +13,8 @@ from __future__ import annotations
 from enum import IntEnum, StrEnum
 from pathlib import Path
 
-from basstler.locations import PathEnumeration, ProjectLocation
+from basstler.locations import ProjectLocation
+from krrood_core.path_enumeration import PathEnumeration
 from basstler.setup_steps import PersonalNotesSetting
 
 

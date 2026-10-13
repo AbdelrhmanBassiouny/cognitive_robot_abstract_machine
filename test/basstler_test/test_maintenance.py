@@ -37,7 +37,7 @@ from basstler.stack import (
 
 import basstler.maintenance
 import basstler.maintenance_restack_procedure
-from basstler.class_property import classproperty
+from krrood_core.class_property import classproperty
 from basstler.locations import PackageLocation
 from basstler.maintenance_board import (
     BoardExport,

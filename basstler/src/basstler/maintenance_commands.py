@@ -12,7 +12,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from pathlib import Path
 
-from basstler.class_property import classproperty
+from krrood_core.class_property import classproperty
 from basstler.locations import PackageLocation
 from basstler.maintenance_board import BoardExport
 from basstler.maintenance_fast_forward import fast_forward
@@ -80,7 +80,7 @@ class MaintenanceCommand(ABC):
 
     The name and the description belong to the class rather than to an instance - the
     parser reads them to build the command line before anything is constructed - so they
-    are abstract :class:`class_property.classproperty` members. A subclass supplying
+    are abstract :class:`~krrood_core.class_property.classproperty` members. A subclass supplying
     neither stays abstract, and :data:`COMMANDS` builds every subclass, so a command
     that cannot say what it is called is refused as this module is imported.
     """
