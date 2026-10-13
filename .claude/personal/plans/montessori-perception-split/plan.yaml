@@ -47,10 +47,10 @@ items:
     world_description/geometry.py (main plus Polygon2D, Hue and Color.from_hsv/Color.hue),
     and the tests test_montessori_semantics.py, test_montessori_hole_geometry.py, test_montessori_pieces.py,
     test_polygon.py, test_hue.py and test_footprint.py, plus SemDT''s shape_collection.py
-    and exceptions.py - 14 files. Off main. Cut from #202 at 3b1beec32: KnownPiece is replaced
-    by PieceSet worlds of bodies (full_size, smaller). One review thread (pieces.py:203) stays
-    open for the developer: its EQL side, matching an observation against the instances, is
-    not done.'
+    and exceptions.py - 14 files. Off main. Cut from #202 at 136ea6888: KnownPiece is replaced
+    by PieceSet worlds of bodies, and hole_for finds a hole by fit alone. One review thread
+    (pieces.py:203) stays open for the developer: whether to track EQL matching of an
+    observation against the PieceSet instances as its own item (#265 has none).'
 - id: simulated-world-on-main
   title: Land the simulated Montessori world
   branch: null
