@@ -13,23 +13,11 @@ from pathlib import Path
 import pytest
 
 from basstler.repository import Repository
-from basstler.upstream_reviews import (
+from basstler.upstream_reviews import GitHubCommandLineClient, JSONModel, PullRequestJSONKey, PullRequestReviewSnapshot, QueryVariable, ReportText, ReviewState, ReviewThread, ThreadMarker, UnresolvedThreadReport, UpstreamReviewReader, main, resolve_upstream_repository
+from basstler.exceptions import (
     GitHubCommandFailed,
-    GitHubCommandLineClient,
     GraphQLErrorsReturned,
-    JSONModel,
-    PullRequestJSONKey,
-    PullRequestReviewSnapshot,
-    QueryVariable,
-    ReportText,
-    ReviewState,
-    ReviewThread,
-    ThreadMarker,
-    UnresolvedThreadReport,
     UpstreamPullRequestNotFound,
-    UpstreamReviewReader,
-    main,
-    resolve_upstream_repository,
 )
 
 from .upstream_reviews_replay import (

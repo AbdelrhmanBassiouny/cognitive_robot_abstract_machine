@@ -53,6 +53,11 @@ from basstler.render_common import (
     sanitize_http_url,
 )
 from basstler.standard_streams import StandardStreamHandler
+from basstler.exceptions import (
+    MalformedPullRequestDataError,
+    MissingMergeTimestampError,
+    PlanValidationError,
+)
 
 logger = StandardStreamHandler.logger_for(__name__)
 """
@@ -301,19 +306,6 @@ class DependencyCycle(ValidationProblem):
         return f"depends_on cycle: {' -> '.join(self.cycle_identifiers)}"
 
 
-class PlanValidationError(Exception):
-    """Raised when a plan.yaml fails schema validation - see plan-schema.md."""
-
-    def __init__(self, problems: list[ValidationProblem]) -> None:
-        self.problems = problems
-        """Every problem found - collected rather than stopping at the first
-        one, the same way a linter reports every violation in one pass
-        instead of one-error-at-a-time: a broken manifest is itself
-        something the user needs the full picture of, not a single
-        symptom they have to rediscover the rest of by trial and error."""
-        super().__init__("; ".join(problem.error_message() for problem in problems))
-
-
 def _find_dependency_cycle(
     item_identifiers: list[str], depends_on_by_identifier: dict[str, list[str]]
 ) -> list[str] | None:
@@ -427,12 +419,6 @@ def validate_plan(plan: dict[str, Any]) -> None:
         raise PlanValidationError(problems)
 
 
-class MissingMergeTimestampError(ValueError):
-    """Raised when a closed pull request's ``pr_data.json`` entry omits the
-    ``merged_at`` key altogether, which leaves no way to tell a merged pull
-    request from one closed unmerged."""
-
-
 @dataclass
 class PullRequestRecord:
     """The live GitHub state of one pull request, as gathered by the skill."""
@@ -485,9 +471,7 @@ class PullRequestRecord:
         """
         state = PullRequestState(data["state"])
         if state is PullRequestState.CLOSED and "merged_at" not in data:
-            raise MissingMergeTimestampError(
-                "a closed pull request entry must carry merged_at (null included)"
-            )
+            raise MissingMergeTimestampError()
         merged_at = data.get("merged_at")
         return cls(
             state=state,
@@ -506,12 +490,6 @@ class PullRequestRecord:
             self.merged_at is not None
             or PullRequestLabel.MERGED in self.identified_labels
         )
-
-
-class MalformedPullRequestDataError(ValueError):
-    """Raised when one entry of ``pr_data.json`` cannot be parsed into a
-    :class:`PullRequestRecord` - a missing or invalid ``state`` field, or an
-    unparsable ``merged_at`` timestamp."""
 
 
 PullRequestsByRepository = dict[str, dict[str, PullRequestRecord]]
@@ -1422,7 +1400,9 @@ def load_pull_requests_by_repository(
                 )
             except (KeyError, ValueError) as error:
                 raise MalformedPullRequestDataError(
-                    f"{repository}#{pull_request_number}: {error}"
+                    repository=repository,
+                    pull_request_number=pull_request_number,
+                    detail=str(error),
                 ) from error
     return pull_requests_by_repository
 

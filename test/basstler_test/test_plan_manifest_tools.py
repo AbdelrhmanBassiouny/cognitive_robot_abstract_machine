@@ -8,11 +8,9 @@ from pathlib import Path
 
 import pytest
 
-from basstler.plan_manifest_tools import (
+from basstler.plan_manifest_tools import main, read_manifest_id, regenerate_branch_index
+from basstler.exceptions import (
     YamlBooleanCoercionError,
-    main,
-    read_manifest_id,
-    regenerate_branch_index,
 )
 
 

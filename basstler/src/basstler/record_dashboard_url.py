@@ -37,11 +37,16 @@ import argparse
 import json
 import re
 import sys
-from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 from basstler.standard_streams import StandardStreamHandler
+from basstler.exceptions import (
+    ArtifactNotPublishedError,
+    DashboardUrlError,
+    MalformedArtifactUrlError,
+    UnlistedArtifactUrlError,
+)
 
 logger = StandardStreamHandler.logger_for(__name__)
 """
@@ -55,130 +60,6 @@ ARTIFACT_URL_PATTERN = re.compile(
 """
 The shape of a published Artifact URL, used to reject anything else on sight.
 """
-
-# %% refusals
-
-
-@dataclass
-class DashboardUrlError(Exception, ABC):
-    """
-    Base class for every refusal to record a dashboard URL.
-
-    Subclasses implement :meth:`error_message` and :meth:`suggest_correction`; both are
-    evaluated at construction and composed into the exception message, with a non-empty
-    correction rendered as a trailing ``Suggestion:`` line. Mirrors krrood's
-    ``DataclassException`` idiom rather than importing it, since this module must stay
-    importable with nothing but the standard library.
-    """
-
-    def __post_init__(self) -> None:
-        """
-        Compose the exception message from the subclass's two descriptions.
-        """
-        if getattr(type(self), "__abstractmethods__", None):
-            raise TypeError(
-                f"Can't instantiate abstract class {type(self).__name__} without an "
-                f"implementation of "
-                f"{', '.join(sorted(type(self).__abstractmethods__))}."
-            )
-        message = self.error_message()
-        correction = self.suggest_correction()
-        if correction:
-            message = f"{message}\nSuggestion: {correction}"
-        super().__init__(message)
-
-    def __str__(self) -> str:
-        """
-        Render the composed message rather than a repr of the dataclass fields.
-        """
-        return Exception.__str__(self)
-
-    @abstractmethod
-    def error_message(self) -> str:
-        """
-        :return: A human-readable description of what went wrong.
-        """
-
-    @abstractmethod
-    def suggest_correction(self) -> str:
-        """
-        :return: Advice on how to fix the error, or an empty string if there is none.
-        """
-
-
-@dataclass
-class MalformedArtifactUrlError(DashboardUrlError):
-    """
-    Raised when a supplied URL is not shaped like a published Artifact URL.
-    """
-
-    supplied_url: str
-    """
-    The URL the caller passed.
-    """
-
-    def error_message(self) -> str:
-        return f"{self.supplied_url!r} is not a published Artifact URL."
-
-    def suggest_correction(self) -> str:
-        return (
-            "Pass a URL of the form https://claude.ai/code/artifact/<uuid>, copied from "
-            "the Artifact tool's listing."
-        )
-
-
-@dataclass
-class ArtifactNotPublishedError(DashboardUrlError):
-    """
-    Raised when no artifact in the listing carries the expected title.
-    """
-
-    expected_title: str
-    """
-    The title the dashboard was expected to be published under.
-    """
-
-    def error_message(self) -> str:
-        return f"No artifact in the listing is titled {self.expected_title!r}."
-
-    def suggest_correction(self) -> str:
-        return (
-            "Publish the dashboard before recording its URL, and check the title "
-            "matches the plan's own title exactly."
-        )
-
-
-@dataclass
-class UnlistedArtifactUrlError(DashboardUrlError):
-    """
-    Raised when a supplied URL is not among the artifacts carrying the expected title -
-    either invented, or belonging to some other plan.
-    """
-
-    supplied_url: str
-    """
-    The URL the caller chose.
-    """
-
-    expected_title: str
-    """
-    The title whose artifacts were the only permitted choices.
-    """
-
-    candidate_urls: list[str]
-    """
-    Every artifact URL carrying that title.
-    """
-
-    def error_message(self) -> str:
-        return (
-            f"{self.supplied_url} is not among the artifacts titled "
-            f"{self.expected_title!r}."
-        )
-
-    def suggest_correction(self) -> str:
-        return f"Choose one of: {', '.join(self.candidate_urls)}."
-
 
 # %% the artifact listing
 

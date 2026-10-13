@@ -15,13 +15,11 @@ from .constants import DatasetLocation
 from .project_declaration import ProjectDeclaration
 from .script_runner import PythonModuleRunner
 from basstler import dependencies
-from basstler.dependencies import (
-    Dependency,
-    DependencyDeclaration,
-    PyprojectKey,
+from basstler.dependencies import Dependency, DependencyDeclaration, PyprojectKey
+from basstler.locations import PackageLocation
+from basstler.exceptions import (
     UnreadableDependencyDeclarationError,
 )
-from basstler.locations import PackageLocation
 
 # %% the declaration
 

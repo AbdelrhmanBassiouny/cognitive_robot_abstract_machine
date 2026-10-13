@@ -39,12 +39,7 @@ import basstler.maintenance
 import basstler.maintenance_restack_procedure
 from krrood_core.class_property import classproperty
 from basstler.locations import PackageLocation
-from basstler.maintenance_board import (
-    BoardExport,
-    MissingPullRequestFieldError,
-    PullRequestField,
-    get_session_link_in,
-)
+from basstler.maintenance_board import BoardExport, PullRequestField, get_session_link_in
 from basstler.maintenance_commands import (
     COMMANDS,
     BoardCommand,
@@ -59,12 +54,7 @@ from basstler.maintenance_fast_forward import (
     FastForwardReport,
     fast_forward,
 )
-from basstler.maintenance_git_commands import (
-    BranchAncestry,
-    GitCommandFailed,
-    GitCommandRunner,
-    ProposedPush,
-)
+from basstler.maintenance_git_commands import BranchAncestry, GitCommandRunner, ProposedPush
 from basstler.maintenance_github import ForkPullRequests
 from basstler.maintenance_promotion import (
     clear_spent_promotion_labels,
@@ -82,6 +72,10 @@ from basstler.maintenance_restack_steps import (
     BranchOutcome,
     RestackOutcome,
     RestackStep,
+)
+from basstler.exceptions import (
+    GitCommandFailed,
+    MissingPullRequestFieldError,
 )
 
 from .scratch_repository import initialize_bare_repository, install_package_into

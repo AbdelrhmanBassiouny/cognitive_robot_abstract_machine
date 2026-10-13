@@ -39,24 +39,21 @@ import yaml
 
 from basstler.build_dashboard import (
     Plan,
-    PlanValidationError,
     PullRequestsByRepository,
     classify_live_state,
     load_pull_requests_by_repository,
     validate_plan,
 )
 from basstler.standard_streams import StandardStreamHandler
+from basstler.exceptions import (
+    PlanValidationError,
+    UnknownItemError,
+)
 
 logger = StandardStreamHandler.logger_for(__name__)
 """
 This module's logger, which is also what its command prints through.
 """
-
-
-class UnknownItemError(ValueError):
-    """
-    Raised when the requested item id doesn't exist in the plan.
-    """
 
 
 def dependency_readiness(
@@ -79,7 +76,7 @@ def dependency_readiness(
     items_by_identifier = {item.identifier: item for item in plan.items}
     item = items_by_identifier.get(item_identifier)
     if item is None:
-        raise UnknownItemError(f"no item {item_identifier!r} in plan {plan.id!r}")
+        raise UnknownItemError(plan_identifier=plan.id, item_identifier=item_identifier)
 
     results: list[dict[str, Any]] = []
     for dependency_identifier in item.depends_on:

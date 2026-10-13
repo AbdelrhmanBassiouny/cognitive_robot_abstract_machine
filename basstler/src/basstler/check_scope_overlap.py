@@ -42,6 +42,10 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Any
 from basstler.standard_streams import StandardStreamHandler
+from basstler.exceptions import (
+    MalformedCandidateError,
+    UnknownBranchError,
+)
 
 logger = StandardStreamHandler.logger_for(__name__)
 """
@@ -91,44 +95,6 @@ class ReportKey(StrEnum):
     """
     Every path a candidate changes, for comparing by purpose.
     """
-
-
-@dataclass
-class UnknownBranchError(ValueError):
-    """
-    Raised when a requested base or candidate branch doesn't resolve in the repository.
-    """
-
-    git_command: str
-    """
-    The git command that failed.
-    """
-    result_stderr: str
-    """
-    The git error message.
-    """
-
-    def __str__(self) -> str:
-        return f"git {self.git_command} failed: {self.result_stderr}"
-
-
-@dataclass
-class MalformedCandidateError(ValueError):
-    """
-    Raised when a ``--candidate`` argument isn't in ``<label>=<branch>`` form.
-    """
-
-    expected_candidate: str
-    """
-    The expected format.
-    """
-    wrong_candidate: str
-    """
-    The argument that failed to parse.
-    """
-
-    def __str__(self) -> str:
-        return f"expected {self.expected_candidate!r}, got {self.wrong_candidate!r}"
 
 
 # %% inputs and results

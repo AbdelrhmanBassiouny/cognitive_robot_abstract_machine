@@ -22,7 +22,7 @@ import pytest
 
 from basstler.locations import ClaudeCodeVariable, PackageLocation, ProjectLocation
 
-from basstler import _version
+from basstler import _version, dependencies
 from basstler.dependencies import Dependency
 from basstler.package_layout import (
     PackageModule,
@@ -186,6 +186,17 @@ def test_a_caller_imports_the_clones_own_workspace_dependencies_with_no_install(
         / "__init__.py"
         for dependency in workspace_dependencies()
     ]
+
+
+def test_the_dependency_check_runs_with_nothing_installed():
+    """
+    A session start asks what is missing before anything is installed, so the module
+    answering, and everything it imports, needs no installed package.
+    """
+    result = run_as_a_caller("-S", "-m", dependencies.__name__)
+
+    assert result.stderr == ""
+    assert result.returncode == dependencies.ExitCode.SUCCESS
 
 
 def test_the_package_version_is_the_repository_version():

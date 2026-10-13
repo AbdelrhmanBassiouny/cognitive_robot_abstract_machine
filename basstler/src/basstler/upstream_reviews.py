@@ -31,6 +31,12 @@ from basstler.locations import PackageLocation
 from basstler.maintenance_constants import GitHubClient
 from basstler.repository import Repository
 from basstler.standard_streams import StandardStreamHandler
+from basstler.exceptions import (
+    GitHubCommandFailed,
+    GraphQLErrorsReturned,
+    UpstreamPullRequestNotFound,
+    UpstreamReviewError,
+)
 
 logger = StandardStreamHandler.logger_for(__name__)
 """
@@ -200,95 +206,6 @@ class ThreadMarker(StrEnum):
 
     RESOLVED = "resolved"
     OUTDATED = "outdated"
-
-
-# %% errors
-
-
-@dataclass
-class UpstreamReviewError(Exception, ABC):
-    """
-    Base class for every failure this script raises.
-    """
-
-    def __post_init__(self) -> None:
-        Exception.__init__(self, self.describe())
-
-    @abstractmethod
-    def describe(self) -> str:
-        """:return: The message a caller should see."""
-
-
-@dataclass
-class GitHubCommandFailed(UpstreamReviewError):
-    """
-    Raised when the ``gh`` invocation itself exits non-zero.
-    """
-
-    executable: str
-    """
-    The command that was run.
-    """
-
-    exit_code: int
-    """
-    The status it exited with.
-    """
-
-    error_output: str
-    """
-    Whatever it wrote to standard error.
-    """
-
-    def describe(self) -> str:
-        """:return: The message a caller should see."""
-        return f"{self.executable} exited {self.exit_code}: {self.error_output}"
-
-
-@dataclass
-class GraphQLErrorsReturned(UpstreamReviewError):
-    """
-    Raised when GitHub answers with an ``errors`` array instead of data.
-    """
-
-    messages: list[str]
-    """
-    Every message GitHub reported.
-    """
-
-    def describe(self) -> str:
-        """:return: The message a caller should see."""
-        return "; ".join(self.messages)
-
-
-@dataclass
-class UpstreamPullRequestNotFound(UpstreamReviewError):
-    """
-    Raised when a branch has no pull request open on the upstream.
-    """
-
-    branch: str
-    """
-    The fork branch that was looked up.
-    """
-
-    upstream: Repository
-    """
-    The repository that was searched.
-    """
-
-    fork_owner: str
-    """
-    The owner whose head branches were being claimed.
-    """
-
-    def describe(self) -> str:
-        """:return: The message a caller should see."""
-        return (
-            f"no pull request on {self.upstream} has head "
-            f"'{self.fork_owner}:{self.branch}' - the branch has most likely not "
-            "been promoted upstream yet"
-        )
 
 
 # %% models mirroring the data

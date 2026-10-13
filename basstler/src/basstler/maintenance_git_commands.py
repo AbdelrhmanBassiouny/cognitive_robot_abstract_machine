@@ -12,27 +12,12 @@ import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
-from basstler.maintenance_errors import ExternalCallFailed
+from basstler.exceptions import (
+    GitCommandFailed,
+)
 from basstler.stack import Configuration, IntegrationStrategy, resolve_ref
 
 # %% running git
-
-
-@dataclass
-class GitCommandFailed(ExternalCallFailed):
-    """
-    Raised when a git command this module depends on the result of fails.
-    """
-
-    arguments: tuple[str, ...] = ()
-    """
-    The git subcommand and its arguments, as invoked.
-    """
-
-    @property
-    def call(self) -> str:
-        """:return: The git command line, as invoked."""
-        return f"git {' '.join(self.arguments)}"
 
 
 @dataclass(frozen=True)

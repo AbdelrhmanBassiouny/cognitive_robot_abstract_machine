@@ -18,8 +18,9 @@ Usage:
 Prints one requirement specifier per missing requirement, and nothing at all when the
 environment already has them all.
 
-..note:: Imports nothing outside the standard library. It runs before any install, so a
-    dependency of its own would be the one thing it could never report.
+..note:: Imports nothing outside the standard library and :mod:`krrood_core`'s
+    standard-library modules, which the clone's own source provides. It runs before any
+    install, so a dependency of its own would be the one thing it could never report.
 """
 
 from __future__ import annotations
@@ -36,6 +37,9 @@ from typing import Any
 
 from basstler.locations import PackageLocation
 from basstler.standard_streams import StandardStreamHandler
+from basstler.exceptions import (
+    UnreadableDependencyDeclarationError,
+)
 
 logger = StandardStreamHandler.logger_for(__name__)
 """
@@ -62,29 +66,6 @@ class PyprojectKey(StrEnum):
     """
     The field of that table listing the requirement specifiers.
     """
-
-
-@dataclass
-class UnreadableDependencyDeclarationError(Exception):
-    """
-    Raised when the declaration cannot be read, so nothing can be said about what is
-    missing.
-
-    Distinct from *nothing is missing*, which is what a caller would otherwise conclude
-    from an empty answer and act on by installing nothing.
-    """
-
-    declaration: Path
-    """
-    The file that was to be read.
-    """
-
-    def __str__(self) -> str:
-        """:return: What to tell a reader who asked what is missing and cannot be told."""
-        return (
-            f"{self.declaration} does not exist, so this package's dependencies cannot "
-            f"be read"
-        )
 
 
 @dataclass(frozen=True)

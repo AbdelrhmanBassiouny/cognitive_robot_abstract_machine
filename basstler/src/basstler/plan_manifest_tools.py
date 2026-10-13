@@ -23,22 +23,14 @@ from pathlib import Path
 
 import yaml
 from basstler.standard_streams import StandardStreamHandler
+from basstler.exceptions import (
+    YamlBooleanCoercionError,
+)
 
 logger = StandardStreamHandler.logger_for(__name__)
 """
 This module's logger, which is also what its command prints through.
 """
-
-
-class YamlBooleanCoercionError(ValueError):
-    """
-    Raised when a plan.yaml field that must be a string was parsed as a ``bool``
-    instead. PyYAML's YAML 1.1 resolver treats bare tokens like.
-
-    ``no``/``yes``/``on``/``off`` as booleans, silently discarding the
-    original text - quoting the value in plan.yaml (e.g. ``id: "no"``)
-    avoids this.
-    """
 
 
 def _require_string_field(value: object, field_name: str, manifest_path: object) -> str:
@@ -54,10 +46,7 @@ def _require_string_field(value: object, field_name: str, manifest_path: object)
     """
     if isinstance(value, bool):
         raise YamlBooleanCoercionError(
-            f"{manifest_path}: field {field_name!r} was parsed as the boolean "
-            f"{value!r} instead of a string - quote its value in plan.yaml "
-            f'(e.g. {field_name}: "no") to avoid PyYAML\'s YAML 1.1 bare-token '
-            "coercion."
+            manifest_path=manifest_path, field_name=field_name, value=value
         )
     return str(value)
 

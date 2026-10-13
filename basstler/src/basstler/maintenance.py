@@ -32,22 +32,21 @@ import argparse
 import sys
 from pathlib import Path
 
-from basstler.maintenance_board import MissingPullRequestFieldError
 from basstler.maintenance_commands import COMMANDS, MaintenancePass
-from basstler.maintenance_git_commands import GitCommandFailed, GitCommandRunner
-from basstler.maintenance_github import (
-    GitHubCredentialUnavailableError,
-    GitHubRequestFailed,
-)
+from basstler.maintenance_git_commands import GitCommandRunner
 from basstler.maintenance_report import MaintenanceExitCode
-from basstler.stack import (
+from basstler.exceptions import (
     AmbiguousForkRemoteError,
     BoardUnavailable,
     ContradictoryLabelWriteError,
     ForkRemoteNotFoundError,
+    GitCommandFailed,
+    GitHubCredentialUnavailableError,
+    GitHubRequestFailed,
+    MissingPullRequestFieldError,
     PromotionLinkTooLongError,
-    load_configuration,
 )
+from basstler.stack import load_configuration
 from basstler.standard_streams import StandardStreamHandler
 
 logger = StandardStreamHandler.logger_for(__name__)

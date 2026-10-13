@@ -17,17 +17,14 @@ import json
 import sys
 from typing import Any
 from basstler.standard_streams import StandardStreamHandler
+from basstler.exceptions import (
+    SummaryKeyCollisionError,
+)
 
 logger = StandardStreamHandler.logger_for(__name__)
 """
 This module's logger, which is also what its command prints through.
 """
-
-
-class SummaryKeyCollisionError(ValueError):
-    """Raised when sync_manifest_status.py's and build_dashboard.py's printed
-    summaries share a key - merge_summaries can no longer assume a plain
-    dict merge is safe once that holds."""
 
 
 def count_corrected(sync_summary_json: str) -> int:
@@ -55,9 +52,7 @@ def merge_summaries(sync_summary_json: str, build_summary_json: str) -> dict[str
     build_summary = json.loads(build_summary_json)
     shared_keys = sync_summary.keys() & build_summary.keys()
     if shared_keys:
-        raise SummaryKeyCollisionError(
-            f"sync and build summaries share key(s): {', '.join(sorted(shared_keys))}"
-        )
+        raise SummaryKeyCollisionError(shared_keys=tuple(sorted(shared_keys)))
     return {**sync_summary, **build_summary}
 
 

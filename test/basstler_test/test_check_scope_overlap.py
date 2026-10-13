@@ -14,14 +14,12 @@ from pathlib import Path
 import pytest
 
 import basstler.check_scope_overlap
-from basstler.check_scope_overlap import (
-    Candidate,
-    ReportKey,
-    UnknownBranchError,
-    build_scope_report,
-)
+from basstler.check_scope_overlap import Candidate, ReportKey, build_scope_report
 
 from basstler.locations import PackageLocation, ProjectLocation
+from basstler.exceptions import (
+    UnknownBranchError,
+)
 
 from .scratch_repository import ScratchRepository
 

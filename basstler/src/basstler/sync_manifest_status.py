@@ -50,15 +50,12 @@ from typing import Any
 
 import yaml
 
-from basstler.build_dashboard import (
-    ItemStatus,
-    LiveState,
-    PlanValidationError,
-    classify_live_state,
-    load_pull_requests_by_repository,
-    validate_plan,
-)
+from basstler.build_dashboard import ItemStatus, LiveState, classify_live_state, load_pull_requests_by_repository, validate_plan
 from basstler.standard_streams import StandardStreamHandler
+from basstler.exceptions import (
+    MissingStatusLineError,
+    PlanValidationError,
+)
 
 logger = StandardStreamHandler.logger_for(__name__)
 """
@@ -67,12 +64,6 @@ This module's logger, which is also what its command prints through.
 
 _ITEM_START_PATTERN = re.compile(r"^\s*- id:")
 _STATUS_LINE_PATTERN = re.compile(r"^(\s*status:\s*)(\S.*?)\s*$")
-
-
-class MissingStatusLineError(ValueError):
-    """Raised when an item slated for correction has no ``status:`` line in
-    its manifest block - the manifest text and the parsed data have gone out
-    of sync."""
 
 
 @dataclass
@@ -163,9 +154,7 @@ def apply_status_corrections(
             None,
         )
         if status_line_index is None:
-            raise MissingStatusLineError(
-                f"item {item_identifier!r} has no status: line to correct"
-            )
+            raise MissingStatusLineError(item_identifier=item_identifier)
         line_index = start + status_line_index
         match = _STATUS_LINE_PATTERN.match(lines[line_index])
         corrections.append(

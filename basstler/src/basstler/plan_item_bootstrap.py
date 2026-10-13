@@ -61,11 +61,10 @@ import sys
 import tempfile
 import urllib.error
 import urllib.request
-from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from enum import Enum, IntEnum, StrEnum
+from enum import Enum, StrEnum
 from pathlib import Path
-from typing import Any, ClassVar, Protocol
+from typing import Any, Protocol
 
 import yaml
 
@@ -74,6 +73,16 @@ from basstler.locations import ClaudeCodeVariable, ProjectLocation
 from basstler.maintenance_constants import GITHUB_API_ROOT
 from basstler.plan_model import ItemStatus
 from basstler.standard_streams import StandardStreamHandler
+from basstler.exceptions import (
+    BootstrapError,
+    BranchAlreadyPublishedError,
+    IncompleteNewItemError,
+    NotesBranchUnavailableError,
+    PullRequestDetailsMissingError,
+    PullRequestRefusedError,
+    UnknownItemError,
+    UnknownPlanError,
+)
 
 logger = StandardStreamHandler.logger_for(__name__)
 """
@@ -336,258 +345,6 @@ BLOCK_VALUE_PATTERN = re.compile(
 Matches a key whose value may run over the following lines, derived from
 :data:`BLOCK_STYLED_KEYS` rather than listing those keys a second time.
 """
-
-
-# %% failures
-
-
-@dataclass
-class BootstrapError(Exception, ABC):
-    """
-    Base for every refusal this tool reports, each carrying its own exit status.
-
-    Subclasses hold the context that explains the refusal as typed fields and compose it
-    into the message at construction, so no call site formats one. Mirrors ``krrood``'s
-    ``DataclassException`` idiom rather than importing it, which is the boundary decision
-    12 records for this tooling.
-    """
-
-    exit_code: ClassVar[PlanItemBootstrapExitCode] = PlanItemBootstrapExitCode.SUCCESS
-    """
-    The process status this refusal exits with.
-    """
-
-    def __post_init__(self) -> None:
-        """
-        Compose the message from the subclass's own description and advice.
-        """
-        correction = self.suggest_correction()
-        message = self.error_message()
-        super().__init__(f"{message}\n{correction}" if correction else message)
-
-    def __str__(self) -> str:
-        """
-        The composed message, rather than a repr of the dataclass fields.
-        """
-        return Exception.__str__(self)
-
-    @abstractmethod
-    def error_message(self) -> str:
-        """
-        :return: What went wrong.
-        """
-
-    @abstractmethod
-    def suggest_correction(self) -> str:
-        """
-        :return: What to do about it, or an empty string when there is nothing to add.
-        """
-
-
-@dataclass
-class UnknownPlanError(BootstrapError):
-    """
-    Raised when the named plan has no manifest on the personal-notes branch.
-    """
-
-    exit_code: ClassVar[PlanItemBootstrapExitCode] = (
-        PlanItemBootstrapExitCode.UNKNOWN_PLAN
-    )
-
-    plan_identifier: str
-    """
-    The plan that could not be found.
-    """
-
-    manifest_path: str
-    """
-    Where its manifest was looked for.
-    """
-
-    def error_message(self) -> str:
-        return (
-            f"no plan {self.plan_identifier!r} on the personal-notes branch "
-            f"({self.manifest_path} is not there)"
-        )
-
-    def suggest_correction(self) -> str:
-        return "Run /plan-create to bootstrap it, or check the plan id for a typo."
-
-
-@dataclass
-class UnknownItemError(BootstrapError):
-    """
-    Raised when the named item is absent from an otherwise resolvable plan.
-    """
-
-    exit_code: ClassVar[PlanItemBootstrapExitCode] = (
-        PlanItemBootstrapExitCode.UNKNOWN_ITEM
-    )
-
-    plan_identifier: str
-    """
-    The plan that was searched.
-    """
-
-    item_identifier: str
-    """
-    The item that is not in it.
-    """
-
-    def error_message(self) -> str:
-        return f"no item {self.item_identifier!r} in plan {self.plan_identifier!r}"
-
-    def suggest_correction(self) -> str:
-        return (
-            "Record the item first - /add-plan-item decides where new work belongs, and "
-            "this tool's record operation writes the entry."
-        )
-
-
-@dataclass
-class IncompleteNewItemError(BootstrapError):
-    """
-    Raised when an item that does not exist yet is recorded without the fields needed to
-    write its entry.
-    """
-
-    exit_code: ClassVar[PlanItemBootstrapExitCode] = (
-        PlanItemBootstrapExitCode.INCOMPLETE_NEW_ITEM
-    )
-
-    item_identifier: str
-    """
-    The item that would have been created.
-    """
-
-    missing_keys: tuple[ManifestKey, ...]
-    """
-    The keys a new entry cannot omit that were not supplied.
-    """
-
-    def error_message(self) -> str:
-        missing = ", ".join(manifest_key.key for manifest_key in self.missing_keys)
-        return (
-            f"item {self.item_identifier!r} is not in the plan yet, so recording it "
-            f"needs {missing}"
-        )
-
-    def suggest_correction(self) -> str:
-        return "Pass " + " and ".join(
-            f"--{manifest_key.key.replace('_', '-')}"
-            for manifest_key in self.missing_keys
-        )
-
-
-@dataclass
-class BranchAlreadyPublishedError(BootstrapError):
-    """
-    Raised when the branch to open already exists on the remote, which means work is
-    underway and overwriting it would discard someone's commits.
-    """
-
-    exit_code: ClassVar[PlanItemBootstrapExitCode] = (
-        PlanItemBootstrapExitCode.BRANCH_ALREADY_PUBLISHED
-    )
-
-    branch: str
-    """
-    The branch that is already published.
-    """
-
-    remote: str
-    """
-    The remote carrying it.
-    """
-
-    def error_message(self) -> str:
-        return (
-            f"branch {self.branch!r} already exists on {self.remote!r} - it is already "
-            "being worked, and republishing it would discard those commits"
-        )
-
-    def suggest_correction(self) -> str:
-        return (
-            "Pass --pull-request-number if its pull request already exists, or choose a "
-            "branch name that is not taken."
-        )
-
-
-@dataclass
-class PullRequestDetailsMissingError(BootstrapError):
-    """
-    Raised when opening the work must create a pull request but was given nothing to
-    create it from.
-    """
-
-    exit_code: ClassVar[PlanItemBootstrapExitCode] = (
-        PlanItemBootstrapExitCode.PULL_REQUEST_DETAILS_MISSING
-    )
-
-    item_identifier: str
-    """
-    The item whose work was being opened.
-    """
-
-    def error_message(self) -> str:
-        return (
-            f"opening {self.item_identifier!r} has to create a pull request, but was "
-            "given neither a title nor a body to create one from"
-        )
-
-    def suggest_correction(self) -> str:
-        return (
-            "Pass --pull-request-number for one you already created - which keeps your "
-            "identity on it - or --pull-request-title and --pull-request-body."
-        )
-
-
-@dataclass
-class PullRequestRefusedError(BootstrapError):
-    """
-    Raised when the remote declines to create the pull request.
-    """
-
-    exit_code: ClassVar[PlanItemBootstrapExitCode] = (
-        PlanItemBootstrapExitCode.PULL_REQUEST_REFUSED
-    )
-
-    detail: str
-    """
-    What the remote said.
-    """
-
-    def error_message(self) -> str:
-        return f"the remote refused to create the pull request: {self.detail}"
-
-    def suggest_correction(self) -> str:
-        return (
-            "The branch is published, so create the pull request yourself and re-run "
-            "with --pull-request-number."
-        )
-
-
-@dataclass
-class NotesBranchUnavailableError(BootstrapError):
-    """
-    Raised when the personal-notes branch cannot be fetched, so there is no plan data to
-    read or write.
-    """
-
-    exit_code: ClassVar[PlanItemBootstrapExitCode] = (
-        PlanItemBootstrapExitCode.UNKNOWN_PLAN
-    )
-
-    detail: str
-    """
-    Why the fetch failed.
-    """
-
-    def error_message(self) -> str:
-        return f"could not fetch the personal-notes branch: {self.detail}"
-
-    def suggest_correction(self) -> str:
-        return f"Run {ProjectLocation.PERSONAL_NOTES_BRANCH_CREATION_SCRIPT} first."
 
 
 # %% the plan on the personal-notes branch

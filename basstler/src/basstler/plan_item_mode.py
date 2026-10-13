@@ -58,14 +58,20 @@ import tomllib
 from abc import ABC, abstractmethod
 from collections.abc import Sequence
 from dataclasses import dataclass
-from enum import IntEnum, StrEnum
+from enum import StrEnum
 from pathlib import Path
-from typing import Any, ClassVar
+from typing import Any
 
 from basstler.exit_codes import PlanItemModeExitCode
 from basstler.plan_item_execution import ExecutionMode
 from basstler.locations import ClaudeCodeVariable, ProjectLocation
 from basstler.standard_streams import StandardStreamHandler
+from basstler.exceptions import (
+    MalformedModeSettingsError,
+    ModeError,
+    SettingsWriteRefusedError,
+    UnknownModeError,
+)
 
 logger = StandardStreamHandler.logger_for(__name__)
 """
@@ -204,130 +210,6 @@ class SettingsFile:
             return tomllib.loads(self.path.read_text())
         except tomllib.TOMLDecodeError as error:
             raise MalformedModeSettingsError(file=self, detail=str(error)) from None
-
-
-# %% failures
-
-
-@dataclass
-class ModeError(Exception, ABC):
-    """
-    Base for every refusal this tool reports, each carrying its own exit status.
-
-    Subclasses hold the context that explains the refusal as typed fields and compose it
-    into the message at construction, so no call site formats one. Mirrors the
-    ``plan_item_bootstrap.py`` idiom beside it.
-
-    Where one of these translates a library exception - ``ValueError`` from an enum,
-    ``TOMLDecodeError`` from a parse - the refusal is raised ``from None``: everything the
-    original said is already folded into these fields, so chaining it would print a second
-    traceback saying the same thing in the library's words instead of ours.
-    """
-
-    exit_code: ClassVar[PlanItemModeExitCode] = PlanItemModeExitCode.SUCCESS
-    """
-    The process status this refusal exits with.
-    """
-
-    def __post_init__(self) -> None:
-        """
-        Compose the message from the subclass's own description and advice.
-        """
-        correction = self.suggest_correction()
-        message = self.error_message()
-        super().__init__(f"{message}\n{correction}" if correction else message)
-
-    def __str__(self) -> str:
-        """
-        The composed message, rather than a repr of the dataclass fields.
-        """
-        return Exception.__str__(self)
-
-    @abstractmethod
-    def error_message(self) -> str:
-        """
-        :return: What went wrong.
-        """
-
-    @abstractmethod
-    def suggest_correction(self) -> str:
-        """
-        :return: What to do about it, or an empty string when there is nothing to add.
-        """
-
-
-@dataclass
-class UnknownModeError(ModeError):
-    """
-    Raised when a mode is named that :class:`ExecutionMode` does not define.
-    """
-
-    exit_code: ClassVar[PlanItemModeExitCode] = PlanItemModeExitCode.UNKNOWN_MODE
-
-    setting: ModeSetting
-    """
-    The setting whose value names no mode.
-    """
-
-    def error_message(self) -> str:
-        return f"{self.setting.key}: {self.setting.value!r} is not an execution mode."
-
-    def suggest_correction(self) -> str:
-        return f"Use one of: {', '.join(ExecutionMode)}."
-
-
-@dataclass
-class MalformedModeSettingsError(ModeError):
-    """
-    Raised when a settings file exists but cannot be read as the modes it should hold.
-    """
-
-    exit_code: ClassVar[PlanItemModeExitCode] = (
-        PlanItemModeExitCode.MALFORMED_MODE_SETTINGS
-    )
-
-    file: SettingsFile
-    """
-    The settings file that could not be read.
-    """
-
-    detail: str
-    """
-    What was wrong with it.
-    """
-
-    def error_message(self) -> str:
-        return f"{self.file.origin} could not be read: {self.detail}"
-
-    def suggest_correction(self) -> str:
-        return (
-            "Fix the file, or delete it to fall back to "
-            f"{ProjectLocation.PLAN_ITEM_MODE_DEFAULTS}'s defaults."
-        )
-
-
-@dataclass
-class SettingsWriteRefusedError(ModeError):
-    """
-    Raised when the personal settings file could not be pushed to the notes branch.
-    """
-
-    exit_code: ClassVar[PlanItemModeExitCode] = (
-        PlanItemModeExitCode.SETTINGS_WRITE_REFUSED
-    )
-
-    detail: str
-    """
-    What the notes writer reported.
-    """
-
-    def error_message(self) -> str:
-        return (
-            f"{ProjectLocation.PERSONAL_PLAN_ITEM_MODES} was not written: {self.detail}"
-        )
-
-    def suggest_correction(self) -> str:
-        return "Check the personal-notes branch is set up: run /setup-personal-notes."
 
 
 # %% reading the settings
@@ -489,10 +371,6 @@ class Report(ABC):
     Declared rather than left to a convention each report is trusted to have followed,
     since ``main`` prints and exits through this pair without knowing which operation
     produced it.
-
-    ``to_json`` is the name and signature
-    :class:`krrood.adapters.json_serializer.SubclassJSONSerializer` gives the same
-    operation, so a report can inherit it wherever that dependency becomes available.
     """
 
     @property
