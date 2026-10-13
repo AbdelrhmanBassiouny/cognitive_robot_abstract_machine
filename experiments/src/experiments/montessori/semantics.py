@@ -150,8 +150,7 @@ class DiskShape(MontessoriShape):
 @dataclass(eq=False)
 class SphereShape(MontessoriShape):
     """
-    A loose sphere-shaped Montessori piece; the board has no hole shaped to accept it
-    (see :meth:`ShapeSortingBoard.hole_for`).
+    A loose sphere-shaped Montessori piece.
     """
 
 
@@ -228,19 +227,11 @@ class ShapeSortingBoard(HasCaseAsRootBody, HasDrawers, HasApertures):
 
     def hole_for(self, montessori_shape: MontessoriShape) -> ShapeSortingHole:
         """
-        Find this board's :class:`ShapeSortingHole` that ``montessori_shape`` actually
-        fits through (see :meth:`MontessoriShape.fits_through`).
+        Find the smallest :class:`ShapeSortingHole` of this board that
+        ``montessori_shape`` fits through (see :meth:`MontessoriShape.fits_through`).
 
-        More than one hole can be cut for the same class. A hole whose name matches
-        ``montessori_shape``'s own name (stripped of its ``"_shape"`` suffix, the
-        naming convention :meth:`~experiments.montessori.world.MontessoriWorld._build_shapes`
-        pairs a shape and its hole with) is preferred, since a shape small enough for
-        one hole of its class is often small enough for another. Falls back to the
-        smallest fitting hole (for shapes with no such name pairing, e.g. in tests) when
-        no name matches.
-
-        :raises NoMatchingHoleError: If this board has no hole ``montessori_shape``
-            fits through.
+        :raises NoMatchingHoleError: If this board has no hole ``montessori_shape`` fits
+            through.
         """
         fitting_holes = [
             hole
@@ -250,8 +241,4 @@ class ShapeSortingBoard(HasCaseAsRootBody, HasDrawers, HasApertures):
         ]
         if not fitting_holes:
             raise NoMatchingHoleError(montessori_shape, self)
-        shape_key = montessori_shape.name.name.removesuffix("_shape")
-        for hole in fitting_holes:
-            if hole.name.name == shape_key:
-                return hole
         return min(fitting_holes, key=lambda hole: hole.cross_section_size)

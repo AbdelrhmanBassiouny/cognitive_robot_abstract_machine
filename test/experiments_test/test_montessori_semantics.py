@@ -234,6 +234,33 @@ def test_hole_for_returns_the_smallest_hole_a_shape_actually_fits_through(world)
     assert board.hole_for(large_shape) is large_hole
 
 
+def test_hole_for_ignores_a_hole_sharing_the_shapes_name(world):
+    with world.modify_world():
+        board = ShapeSortingBoard.create_with_new_body_in_world(
+            name="board", world=world, scale=Scale(0.3, 0.3, 0.1)
+        )
+        small_hole = ShapeSortingHole.create_with_new_region_in_world(
+            name="small_circular_hole",
+            world=world,
+            scale=Scale(0.032, 0.032, 0.001),
+        )
+        small_hole.shape_category = CylinderShape
+        named_hole = ShapeSortingHole.create_with_new_region_in_world(
+            name="circular_hole",
+            world=world,
+            scale=Scale(0.04, 0.04, 0.001),
+        )
+        named_hole.shape_category = CylinderShape
+        board.add(small_hole)
+        board.add(named_hole)
+
+        shape = _shape_with_cross_section(
+            world, "circular_hole_shape", CylinderShape, 0.0272
+        )
+
+    assert board.hole_for(shape) is small_hole
+
+
 def test_hole_for_raises_when_the_board_has_no_hole_of_the_shapes_category(world):
     with world.modify_world():
         board = ShapeSortingBoard.create_with_new_body_in_world(
