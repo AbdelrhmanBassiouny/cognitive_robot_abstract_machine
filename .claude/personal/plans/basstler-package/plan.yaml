@@ -42,6 +42,27 @@ items:
     missing. Asked for on cram2#659 (`scripts/sync_version.py:26`, LucaKro: "why is basstler
     not a proper package like the others?"). What goes away: `FLAT_LAYOUT_PACKAGES`, `package-dir
     basstler = "."`, and `pyproject.toml` shipped as package data.'
+- id: krrood-core-package
+  title: Move krrood's general patterns into a light krrood_core package
+  branch: claude/krrood-core-package
+  status: in progress
+  track: extraction
+  depends_on: []
+  pull_request_number: 506
+  session: https://claude.ai/code/session_01FWkFPeHmYEXAemAcshyJAx
+  notes: 'krrood_core holds DataclassException, the JSON serializer core, classproperty, PathEnumeration
+    and the standard-stream logging, with pure-Python dependencies only; krrood re-exports them.
+    Open: PyPI project and trusted publisher for krrood-core; release it before krrood.'
+- id: basstler-krrood-core-dependency
+  title: Make basstler depend on krrood_core and use its patterns
+  branch: claude/magical-albattani-9fbkd5
+  status: in progress
+  track: extraction
+  depends_on: [basstler-src-layout, krrood-core-package]
+  pull_request_number: 508
+  session: https://claude.ai/code/session_01FWkFPeHmYEXAemAcshyJAx
+  notes: 'Stacked on #501 with #506 merged in. Exceptions in basstler/exceptions.py as DataclassExceptions,
+    board.json through the serializer, krrood_core installed editable from the clone.'
 - id: basstler-notes-core-python
   title: 'Bash→Python 1: notes-core modules (config, git seam, writer, markers)'
   branch: claude/basstler-notes-core-python
