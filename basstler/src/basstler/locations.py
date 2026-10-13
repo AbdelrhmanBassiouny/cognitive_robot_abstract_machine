@@ -182,7 +182,7 @@ class ProjectLocation(PathEnumeration):
     Where GitHub reads a repository's workflows from - the top level only.
     """
 
-    ACTIONS_BUDGET = Path(".github") / "actions-budget.toml"
+    ACTIONS_BUDGET = Path(".github") / "actions_budget.py"
     """
     The repository's Actions budget: the limits basstler holds every workflow to.
     """

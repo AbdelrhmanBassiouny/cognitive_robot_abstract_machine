@@ -181,6 +181,16 @@ class UncountableJobs(BudgetViolation):
         )
 
 
+@dataclass
+class OverrideWithoutWorkflow(BudgetViolation):
+    """
+    The budget sets limits for a workflow file the repository does not have.
+    """
+
+    def error_message(self) -> str:
+        return "has limits in the budget but no workflow file; remove its override"
+
+
 # %% budget file errors
 
 
@@ -203,3 +213,26 @@ class BudgetFileExists(FileExistsError):
         :return: What is in the way.
         """
         return f"{self.path} already exists; edit it instead of writing a new one"
+
+
+@dataclass
+class MissingBudgetFunction(LookupError):
+    """
+    A budget file does not define the function that returns its budget.
+    """
+
+    path: Path
+    """
+    The budget file.
+    """
+
+    function: str
+    """
+    The name of the function it has to define.
+    """
+
+    def __str__(self) -> str:
+        """
+        :return: What is missing where.
+        """
+        return f"{self.path} defines no {self.function}() returning its ActionsBudget"

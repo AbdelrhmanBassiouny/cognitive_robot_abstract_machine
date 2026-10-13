@@ -3,16 +3,17 @@ The Actions budget: the rules basstler holds every workflow of a repository to, 
 limits the repository sets.
 
 The workflow files are the only statement of what each workflow does. The repository's
-budget file holds only what they cannot say: the limits every workflow is held to, and
-the workflows whose own limits differ. A workflow the file does not name is held to the
-defaults, so a new workflow needs no entry before it is checked.
+budget file, a Python module defining :attr:`BudgetDefinition.FUNCTION`, holds only what they cannot
+say: the limits every workflow is held to, and the workflows whose own limits differ. A
+workflow the budget does not name is held to the defaults, so a new workflow needs no
+entry before it is checked.
 """
 
 from __future__ import annotations
 
 import argparse
 import dataclasses
-import tomllib
+import runpy
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 from enum import StrEnum
@@ -24,10 +25,12 @@ from basstler.exceptions import (
     BudgetFileExists,
     BudgetViolation,
     JobTimeoutOverCeiling,
+    MissingBudgetFunction,
     MissingForkGuard,
     MissingJobTimeout,
     MissingLabelGuard,
     MissingPullRequestCancellation,
+    OverrideWithoutWorkflow,
     ScheduledWorkflow,
     TooManyJobsOnEveryPush,
     UncountableJobs,
@@ -39,14 +42,14 @@ from basstler.workflows import ActivityType, TriggerEvent, Workflow
 # %% vocabulary
 
 
-class BudgetKey(StrEnum):
+class BudgetDefinition(StrEnum):
     """
-    The keys of a budget file beyond the fields of :class:`WorkflowLimits`.
+    The names a budget file defines.
     """
 
-    WORKFLOW = "workflow"
+    FUNCTION = "actions_budget"
     """
-    The table of workflows whose limits differ from the defaults, by file name.
+    The function returning the repository's :class:`ActionsBudget`.
     """
 
 
@@ -55,7 +58,7 @@ class BudgetTemplate(StrEnum):
     The template a budget file is written from.
     """
 
-    FILE = "actions-budget.toml.jinja"
+    FILE = "actions_budget.py.jinja"
     """
     The whole budget file.
     """
@@ -67,8 +70,7 @@ class BudgetTemplate(StrEnum):
 @dataclass(frozen=True)
 class WorkflowLimits:
     """
-    The limits one workflow is held to. A budget file's top level sets them for every
-    workflow, and its table per workflow file changes them for that workflow alone.
+    The limits one workflow is held to.
     """
 
     job_timeout_minutes: int = 60
@@ -269,24 +271,21 @@ class ActionsBudget:
     overrides: Mapping[str, WorkflowLimits] = field(default_factory=dict)
     """
     The limits of the workflows whose own differ from :attr:`defaults`, by file name.
+
+    .. note:: Each is the workflow's whole set of limits: a limit it leaves out is
+        :class:`WorkflowLimits`' own default, not the one in :attr:`defaults`.
     """
 
     @classmethod
     def from_file(cls, path: Path) -> ActionsBudget:
         """
         :param path: A budget file.
-        :return: The budget it sets.
+        :return: The budget its :attr:`BudgetDefinition.FUNCTION` returns.
         """
-        settings = tomllib.loads(path.read_text())
-        overrides = settings.pop(BudgetKey.WORKFLOW, {})
-        defaults = dataclasses.replace(WorkflowLimits(), **settings)
-        return cls(
-            defaults=defaults,
-            overrides={
-                file_name: dataclasses.replace(defaults, **limits)
-                for file_name, limits in overrides.items()
-            },
-        )
+        definitions = runpy.run_path(str(path))
+        if BudgetDefinition.FUNCTION not in definitions:
+            raise MissingBudgetFunction(path=path, function=BudgetDefinition.FUNCTION)
+        return definitions[BudgetDefinition.FUNCTION]()
 
     @classmethod
     def load(cls) -> ActionsBudget:
@@ -335,6 +334,20 @@ class ActionsBudget:
         """
         return self.limits_of(workflow.file_name).violations_of(workflow)
 
+    def overrides_without_workflow(
+        self, workflows: Iterable[Workflow]
+    ) -> tuple[OverrideWithoutWorkflow, ...]:
+        """
+        :param workflows: Every workflow of the repository.
+        :return: The overrides naming a workflow file that is not among them.
+        """
+        file_names = {workflow.file_name for workflow in workflows}
+        return tuple(
+            OverrideWithoutWorkflow(workflow=file_name)
+            for file_name in self.overrides
+            if file_name not in file_names
+        )
+
     def write(self, path: Path) -> None:
         """
         Write this budget as a new budget file.
@@ -344,14 +357,15 @@ class ActionsBudget:
         if path.exists():
             raise BudgetFileExists(path=path)
         template = create_template_environment().get_template(BudgetTemplate.FILE.value)
+        basstler_defaults = WorkflowLimits()
         path.write_text(
             template.render(
-                defaults=dataclasses.asdict(self.defaults),
+                function=BudgetDefinition.FUNCTION,
+                defaults=self.defaults.differences_from(basstler_defaults),
                 overrides={
-                    file_name: limits.differences_from(self.defaults)
+                    file_name: limits.differences_from(basstler_defaults)
                     for file_name, limits in sorted(self.overrides.items())
                 },
-                workflow_key=BudgetKey.WORKFLOW,
             )
         )
 

@@ -12,14 +12,16 @@ from pathlib import Path
 
 import pytest
 
-from basstler.actions_budget import ActionsBudget, WorkflowLimits
+from basstler.actions_budget import ActionsBudget, BudgetDefinition, WorkflowLimits
 from basstler.exceptions import (
     BudgetFileExists,
+    MissingBudgetFunction,
     JobTimeoutOverCeiling,
     MissingForkGuard,
     MissingJobTimeout,
     MissingLabelGuard,
     MissingPullRequestCancellation,
+    OverrideWithoutWorkflow,
     ScheduledWorkflow,
     TooManyJobsOnEveryPush,
     UncountableJobs,
@@ -36,7 +38,7 @@ def budget() -> ActionsBudget:
     """
     :return: The dataset's budget.
     """
-    return ActionsBudget.from_file(DatasetLocation.ACTIONS_BUDGET / "budget.toml")
+    return ActionsBudget.from_file(DatasetLocation.ACTIONS_BUDGET / "budget.py")
 
 
 def dataset_workflow(file_name: str) -> Workflow:
@@ -243,8 +245,31 @@ def test_a_workflow_the_file_does_not_name_gets_the_defaults(budget: ActionsBudg
     assert budget.limits_of("conforming.yml") == budget.defaults
 
 
+def test_a_budget_file_without_the_budget_function_is_reported():
+    path = DatasetLocation.ACTIONS_BUDGET / "without-budget-function.py"
+
+    with pytest.raises(MissingBudgetFunction) as raised:
+        ActionsBudget.from_file(path)
+
+    assert raised.value == MissingBudgetFunction(
+        path=path, function=BudgetDefinition.FUNCTION
+    )
+
+
+def test_an_override_naming_no_workflow_is_reported(budget: ActionsBudget):
+    """
+    The dataset's budget names one workflow file the dataset does not have.
+    """
+    workflow_files = {workflow.file_name for workflow in every_dataset_workflow()}
+    (missing,) = set(budget.overrides) - workflow_files
+
+    assert budget.overrides_without_workflow(every_dataset_workflow()) == (
+        OverrideWithoutWorkflow(workflow=missing),
+    )
+
+
 def test_a_written_budget_reads_back_equal(budget: ActionsBudget, tmp_path: Path):
-    path = tmp_path / "budget.toml"
+    path = tmp_path / "budget.py"
 
     budget.write(path)
 
@@ -258,7 +283,7 @@ def test_writing_never_replaces_an_existing_budget(
     The file is reviewed by hand once written, so replacing it would bless whatever the
     workflows do at that moment.
     """
-    path = tmp_path / "budget.toml"
+    path = tmp_path / "budget.py"
     budget.write(path)
 
     with pytest.raises(BudgetFileExists):
@@ -306,6 +331,15 @@ def test_every_repository_workflow_keeps_to_the_repository_budget(workflow: Work
     merges the branch carrying this test.
     """
     assert ActionsBudget.load().violations_of(workflow) == ()
+
+
+def test_every_repository_override_names_a_workflow():
+    assert (
+        ActionsBudget.load().overrides_without_workflow(
+            Workflow.every_workflow_in_the_repository()
+        )
+        == ()
+    )
 
 
 def test_the_repository_has_workflows_to_check():

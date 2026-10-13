@@ -1,0 +1,26 @@
+"""
+The Actions budget basstler holds every workflow in ``.github/workflows`` to. Edit this
+file by hand from here on.
+"""
+
+from __future__ import annotations
+
+from basstler.actions_budget import ActionsBudget, WorkflowLimits
+
+# %% the budget
+
+
+def {{ function }}() -> ActionsBudget:
+    """
+    :return: This repository's Actions budget.
+    """
+    return ActionsBudget(
+{% if defaults %}
+        defaults=WorkflowLimits({% for name, value in defaults.items() %}{{ name }}={{ value }}{% if not loop.last %}, {% endif %}{% endfor %}),
+{% endif %}
+        overrides={
+{% for file_name, limits in overrides.items() %}
+            {{ file_name | tojson }}: WorkflowLimits({% for name, value in limits.items() %}{{ name }}={{ value }}{% if not loop.last %}, {% endif %}{% endfor %}),
+{% endfor %}
+        },
+    )

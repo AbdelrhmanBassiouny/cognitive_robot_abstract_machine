@@ -50,7 +50,8 @@ to any repository. A workflow fails it when it:
 - runs on every push (each pull-request push, or a push to any branch) with more jobs than its ceiling,
   counting every matrix combination and every job of a reusable workflow it calls.
 
-The ceilings live in `.github/actions-budget.toml`: limits for every workflow, and a table per workflow
-whose own limits differ. A new workflow needs no entry until it needs a limit raised.
+The ceilings live in `.github/actions_budget.py`, whose `actions_budget()` returns an `ActionsBudget`:
+limits for every workflow, and the limits of each workflow whose own differ. A new workflow needs no entry
+until it needs a limit raised, and an entry naming a workflow file that does not exist fails the test.
 `python -m basstler.actions_budget` writes a first version of the file from the workflows as they are;
 after that it is edited by hand.
