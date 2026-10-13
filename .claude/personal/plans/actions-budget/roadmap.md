@@ -67,3 +67,46 @@ than given branches of their own.
   run 158 times by 2026-10-05, every one a `pull_request` run on an integration candidate, because a
   build carries the workflow and a candidate runs it from its merge ref. The manifest has to declare
   which workflows a candidate may run, not only which triggers each workflow answers.
+
+## budget-manifest: settled plan (2026-10-13, kickoff in auto mode)
+
+Branch `claude/inspiring-pascal-u7ruus` off `main`, draft pull request #503.
+
+**What lands**
+
+- `basstler/actions_budget.toml`: one `[[workflow]]` table per workflow file allowed in the repository,
+  including the ones only unlanded branches carry (`integration-refresh`, `integration-checks`,
+  `integration-probe` from #211, `stack-maintenance` from #280, `tooling-label` from #284,
+  `plan-dashboards` from #218), declared with the triggers they are *meant* to have once their own items
+  conform. Each workflow names its concurrency group and whether it cancels, a job timeout ceiling, and
+  one entry per trigger with its activity types, jobs per run and expected runs per day.
+- `basstler/actions_budget.py`: reads the manifest into dataclasses, reads a workflow file into the same
+  shape, and states every way a workflow can break the manifest as a violation of its own type.
+- `test/basstler_test/test_actions_budget.py`: unit tests over small workflow files in the test dataset,
+  plus the repository test that runs every `.github/workflows/*.yml` on the branch against the manifest.
+- Workflow changes on `main`: `timeout-minutes` on every job that runs on a runner; Examples and Demos on
+  `ready_for_review`, a `full-ci` label or dispatch for pull requests; CI, Examples, docs and the four
+  publish workflows skip a `push` on a fork (`github.event.repository.fork`, so no repository is named);
+  update_docker and Upstream reviews unchanged apart from timeouts.
+
+**Decisions taken while settling it**
+
+- *Cancel-in-progress applies to pull-request workflows that run on `synchronize`*, explicitly or through
+  GitHub's default activity types. A workflow answering only lifecycle events (`opened`, `closed`,
+  `ready_for_review`) has no superseded commit to cancel, and both `integration-refresh` and
+  `stack-maintenance` deliberately serialize with `cancel-in-progress: false` so two passes never race.
+  The literal reading would have made the `integration-pipeline-event-only` item unable to conform.
+- *Jobs that call a reusable workflow carry no `timeout-minutes`*: GitHub rejects the key on a `uses:`
+  job. The called workflow's own jobs carry it, and each reusable workflow is declared in the manifest
+  under `workflow_call`.
+- *Fork guard on root jobs only*: jobs that `need` a skipped job are skipped with it, so the condition
+  goes on every job without `needs`.
+- Workflows under `.github/workflows/<subdirectory>/` are not read by GitHub and are out of the check.
+- The runs-per-day and timeout numbers are first estimates from the audit in this roadmap, recorded in
+  the pull request for the user to adjust; the monitor item is what will measure them.
+
+**Overlap**: #501 (basstler src layout) also edits `ci.yml` and `upstream-reviews.yml` and moves every
+basstler module. Whoever lands second moves `actions_budget.py`/`.toml` and re-applies the one-line edits.
+
+**Left open**: the roadmap's "Stack maintenance on candidates" call (which workflows an integration
+candidate may run) is not settled here; the manifest declares triggers per workflow only.
