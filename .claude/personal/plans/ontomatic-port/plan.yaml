@@ -10,35 +10,28 @@ default_repository: AbdelrhmanBassiouny/cognitive_robot_abstract_machine
 tracking_issue: 507
 waves:
 - id: port
-  branch: port
   name: Port to upstream
   description: Parity with the paper on current main, cleaned up per AGENTS.md.
 - id: robustness
-  branch: robustness
   name: Close the OWL 2 RL gaps
   description: The supplement's unsupported and partial rules, and the paper's limitations.
 - id: beyond-rl
-  branch: beyond-rl
   name: Beyond OWL 2 RL, natively in Python
   description: Profile detection, EL classification, witnesses, open-world query answers.
 tracks:
 - id: paper-eql-ormatic
-  branch: paper-eql-ormatic
   name: Paper EQL/ORMatic work
   wave: port
   description: Split aamas27-unification-revision (15 commits) into per-root-cause PRs off main.
 - id: ontomatic-core
-  branch: ontomatic-core
   name: Ontomatic port
   wave: port
   description: Descriptors, terminology, compiler, loader, check, verification, experiments.
 - id: rl-gaps
-  branch: rl-gaps
   name: OWL 2 RL gaps
   wave: robustness
   description: Independent PRs, each proven by a failing test first.
 - id: dl-extensions
-  branch: dl-extensions
   name: OWL 2 DL extensions
   wave: beyond-rl
   description: Sound always, complete where a tractable procedure exists, explicit otherwise.
