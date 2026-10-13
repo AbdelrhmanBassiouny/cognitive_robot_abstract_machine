@@ -62,6 +62,8 @@ from enum import IntEnum, StrEnum
 from pathlib import Path
 from typing import Any, ClassVar
 
+from basstler.exit_codes import PlanItemModeExitCode
+from basstler.plan_item_execution import ExecutionMode
 from basstler.locations import ClaudeCodeVariable, ProjectLocation
 from basstler.standard_streams import StandardStreamHandler
 
@@ -71,27 +73,6 @@ This module's logger, which is also what its command prints through.
 """
 
 # %% vocabulary
-
-
-class ExecutionMode(StrEnum):
-    """
-    How a plan-item skill proceeds once it has gathered the item's context.
-    """
-
-    ASK = "ask"
-    """
-    Put the choice between the other two to the user.
-    """
-
-    AUTO = "auto"
-    """
-    Plan implicitly and implement without waiting for approval.
-    """
-
-    PLAN = "plan"
-    """
-    Present the plan and stop until the user approves it.
-    """
 
 
 class ModeSource(StrEnum):
@@ -157,51 +138,6 @@ class CommandLineOption(StrEnum):
     """
     The mode ``set`` pins.
     """
-
-
-class ExitCode(IntEnum):
-    """
-    The process statuses this tool exits with.
-
-    A distinct status per refusal lets a caller act on *which* failure happened without
-    parsing stderr. The named refusals start at 3 because the two below them are already
-    spoken for: 2 is the usage error ``argparse`` exits with, and 1 is what Python exits
-    with on an uncaught exception, so leaving it free keeps a crash from reading as a
-    refusal this tool chose to make.
-    """
-
-    SUCCESS = 0
-    """
-    The operation ran and printed its report.
-    """
-
-    USAGE = 2
-    """
-    No such subcommand, or the wrong arguments. Exited with by ``argparse`` itself, and
-    named here so the value is reserved rather than merely unused.
-    """
-
-    UNKNOWN_MODE = 3
-    """
-    A mode was named that :class:`ExecutionMode` does not define.
-    """
-
-    MALFORMED_MODE_SETTINGS = 4
-    """
-    A settings file exists but cannot be read as the modes it is supposed to hold.
-    """
-
-    SETTINGS_WRITE_REFUSED = 5
-    """
-    The personal settings file could not be pushed to the notes branch.
-    """
-
-    @property
-    def name_for_a_caller(self) -> str:
-        """
-        The status as the lowercase name a report and a message both use.
-        """
-        return self.name.lower()
 
 
 # %% settings
@@ -288,7 +224,7 @@ class ModeError(Exception, ABC):
     traceback saying the same thing in the library's words instead of ours.
     """
 
-    exit_code: ClassVar[ExitCode] = ExitCode.SUCCESS
+    exit_code: ClassVar[PlanItemModeExitCode] = PlanItemModeExitCode.SUCCESS
     """
     The process status this refusal exits with.
     """
@@ -326,7 +262,7 @@ class UnknownModeError(ModeError):
     Raised when a mode is named that :class:`ExecutionMode` does not define.
     """
 
-    exit_code: ClassVar[ExitCode] = ExitCode.UNKNOWN_MODE
+    exit_code: ClassVar[PlanItemModeExitCode] = PlanItemModeExitCode.UNKNOWN_MODE
 
     setting: ModeSetting
     """
@@ -346,7 +282,9 @@ class MalformedModeSettingsError(ModeError):
     Raised when a settings file exists but cannot be read as the modes it should hold.
     """
 
-    exit_code: ClassVar[ExitCode] = ExitCode.MALFORMED_MODE_SETTINGS
+    exit_code: ClassVar[PlanItemModeExitCode] = (
+        PlanItemModeExitCode.MALFORMED_MODE_SETTINGS
+    )
 
     file: SettingsFile
     """
@@ -374,7 +312,9 @@ class SettingsWriteRefusedError(ModeError):
     Raised when the personal settings file could not be pushed to the notes branch.
     """
 
-    exit_code: ClassVar[ExitCode] = ExitCode.SETTINGS_WRITE_REFUSED
+    exit_code: ClassVar[PlanItemModeExitCode] = (
+        PlanItemModeExitCode.SETTINGS_WRITE_REFUSED
+    )
 
     detail: str
     """
@@ -557,7 +497,7 @@ class Report(ABC):
 
     @property
     @abstractmethod
-    def exit_code(self) -> ExitCode:
+    def exit_code(self) -> PlanItemModeExitCode:
         """
         :return: The process status this report exits with.
         """
@@ -593,7 +533,7 @@ class ModeResolution(Report):
     What decided it.
     """
 
-    exit_code: ExitCode = ExitCode.SUCCESS
+    exit_code: PlanItemModeExitCode = PlanItemModeExitCode.SUCCESS
     """
     The process status this resolution exits with.
     """
@@ -671,7 +611,7 @@ class SettingsWriteReport(Report):
     The mode they were pinned to.
     """
 
-    exit_code: ExitCode = ExitCode.SUCCESS
+    exit_code: PlanItemModeExitCode = PlanItemModeExitCode.SUCCESS
     """
     The process status this write exits with.
     """

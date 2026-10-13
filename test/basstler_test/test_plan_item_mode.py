@@ -19,8 +19,6 @@ import pytest
 import basstler.plan_item_mode
 from basstler.plan_item_mode import (
     CommandLineOption,
-    ExecutionMode,
-    ExitCode,
     MalformedModeSettingsError,
     ModeSetting,
     ModeSource,
@@ -29,6 +27,8 @@ from basstler.plan_item_mode import (
     UnknownModeError,
 )
 
+from basstler.exit_codes import PlanItemModeExitCode
+from basstler.plan_item_execution import ExecutionMode
 from basstler.locations import PackageLocation, ProjectLocation
 
 from .scratch_repository import ScratchRepository
@@ -101,7 +101,7 @@ def resolve(
     finished = run_mode(
         repository, Subcommand.RESOLVE, CommandLineOption.SKILL, skill, *arguments
     )
-    assert finished.returncode == ExitCode.SUCCESS, finished.stderr
+    assert finished.returncode == PlanItemModeExitCode.SUCCESS, finished.stderr
     return json.loads(finished.stdout)
 
 
@@ -235,9 +235,9 @@ def test_a_mode_the_enum_does_not_name_is_refused_in_the_personal_file(
         CommandLineOption.SKILL,
         PlanItemSkill.KICKOFF,
     )
-    assert finished.returncode == ExitCode.UNKNOWN_MODE
+    assert finished.returncode == PlanItemModeExitCode.UNKNOWN_MODE
     assert finished.stdout == ""
-    assert ExitCode.UNKNOWN_MODE.name_for_a_caller in finished.stderr
+    assert PlanItemModeExitCode.UNKNOWN_MODE.name_for_a_caller in finished.stderr
 
 
 def test_a_mode_the_enum_does_not_name_is_refused_on_the_command_line(
@@ -254,7 +254,7 @@ def test_a_mode_the_enum_does_not_name_is_refused_on_the_command_line(
         CommandLineOption.REQUESTED,
         "go",
     )
-    assert finished.returncode == ExitCode.UNKNOWN_MODE
+    assert finished.returncode == PlanItemModeExitCode.UNKNOWN_MODE
     assert finished.stdout == ""
 
 
@@ -274,7 +274,7 @@ def test_a_personal_settings_file_that_will_not_parse_is_refused(
         CommandLineOption.SKILL,
         PlanItemSkill.KICKOFF,
     )
-    assert finished.returncode == ExitCode.MALFORMED_MODE_SETTINGS
+    assert finished.returncode == PlanItemModeExitCode.MALFORMED_MODE_SETTINGS
     assert finished.stdout == ""
 
 
@@ -288,15 +288,15 @@ def test_a_usage_error_exits_with_the_status_the_enum_reserves_for_it(
         mode_repository, Subcommand.RESOLVE, CommandLineOption.SKILL, "bogus"
     )
 
-    assert finished.returncode == ExitCode.USAGE
+    assert finished.returncode == PlanItemModeExitCode.USAGE
     assert finished.stdout == ""
 
 
 def test_each_refusal_carries_its_own_exit_code():
     codes = {
-        UnknownModeError: ExitCode.UNKNOWN_MODE,
-        MalformedModeSettingsError: ExitCode.MALFORMED_MODE_SETTINGS,
-        basstler.plan_item_mode.SettingsWriteRefusedError: ExitCode.SETTINGS_WRITE_REFUSED,
+        UnknownModeError: PlanItemModeExitCode.UNKNOWN_MODE,
+        MalformedModeSettingsError: PlanItemModeExitCode.MALFORMED_MODE_SETTINGS,
+        basstler.plan_item_mode.SettingsWriteRefusedError: PlanItemModeExitCode.SETTINGS_WRITE_REFUSED,
     }
     assert {error: error.exit_code for error in codes} == codes
 
@@ -343,7 +343,7 @@ def test_setting_one_mode_preserves_the_other(
         CommandLineOption.MODE,
         ExecutionMode.ASK,
     )
-    assert finished.returncode == ExitCode.SUCCESS, finished.stderr
+    assert finished.returncode == PlanItemModeExitCode.SUCCESS, finished.stderr
 
     assert published_settings(mode_repository, tmp_path) == {
         PlanItemSkill.KICKOFF.setting_key: ExecutionMode.PLAN,
@@ -366,7 +366,7 @@ def test_setting_a_mode_with_no_personal_file_yet_seeds_it_from_the_defaults(
         CommandLineOption.MODE,
         ExecutionMode.ASK,
     )
-    assert finished.returncode == ExitCode.SUCCESS, finished.stderr
+    assert finished.returncode == PlanItemModeExitCode.SUCCESS, finished.stderr
 
     assert published_settings(mode_repository, tmp_path) == {
         PlanItemSkill.KICKOFF.setting_key: ExecutionMode.ASK,
@@ -409,7 +409,7 @@ def test_one_run_can_set_every_skill_at_once(
         CommandLineOption.MODE,
         ExecutionMode.PLAN,
     )
-    assert finished.returncode == ExitCode.SUCCESS, finished.stderr
+    assert finished.returncode == PlanItemModeExitCode.SUCCESS, finished.stderr
 
     assert published_settings(mode_repository, tmp_path) == {
         skill.setting_key: ExecutionMode.PLAN for skill in PlanItemSkill

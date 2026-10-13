@@ -24,11 +24,11 @@ import pytest
 import yaml
 
 import basstler.plan_item_bootstrap
+from basstler.exit_codes import PlanItemBootstrapExitCode
 from basstler.locations import ProjectLocation
 from basstler.plan_item_bootstrap import (
     BLOCK_STYLED_KEYS,
     CreatedPullRequest,
-    ExitCode,
     HookScript,
     ItemRecordRequest,
     ItemStatus,
@@ -269,7 +269,7 @@ def test_recording_an_existing_item_sets_its_status(
         project_root=bootstrap_repository.project_root,
     )
 
-    assert result.exit_code is ExitCode.SUCCESS
+    assert result.exit_code is PlanItemBootstrapExitCode.SUCCESS
     published = published_plan(bootstrap_repository)
     assert (
         manifest_line(ManifestKey.STATUS, ItemStatus.IN_PROGRESS.value)
@@ -379,7 +379,7 @@ def test_opening_writes_the_branch_pull_request_and_session_onto_the_item(
         pull_request_opener=opener,
     )
 
-    assert result.exit_code is ExitCode.SUCCESS
+    assert result.exit_code is PlanItemBootstrapExitCode.SUCCESS
     assert result.pull_request_number == 143
     manifest = published_plan(bootstrap_repository)[PlanDocument.MANIFEST]
     for written_key, value in (
@@ -682,22 +682,22 @@ def test_only_the_keys_whose_values_run_over_lines_are_block_styled():
 
 
 def test_every_exit_code_names_itself_from_its_own_member():
-    for exit_code in ExitCode:
+    for exit_code in PlanItemBootstrapExitCode:
         assert exit_code.name_for_a_caller == exit_code.name.lower()
 
 
 def test_each_refusal_carries_its_own_exit_code():
     codes = {
-        UnknownPlanError: ExitCode.UNKNOWN_PLAN,
-        UnknownItemError: ExitCode.UNKNOWN_ITEM,
-        basstler.plan_item_bootstrap.IncompleteNewItemError: ExitCode.INCOMPLETE_NEW_ITEM,
+        UnknownPlanError: PlanItemBootstrapExitCode.UNKNOWN_PLAN,
+        UnknownItemError: PlanItemBootstrapExitCode.UNKNOWN_ITEM,
+        basstler.plan_item_bootstrap.IncompleteNewItemError: PlanItemBootstrapExitCode.INCOMPLETE_NEW_ITEM,
         basstler.plan_item_bootstrap.BranchAlreadyPublishedError: (
-            ExitCode.BRANCH_ALREADY_PUBLISHED
+            PlanItemBootstrapExitCode.BRANCH_ALREADY_PUBLISHED
         ),
         basstler.plan_item_bootstrap.PullRequestDetailsMissingError: (
-            ExitCode.PULL_REQUEST_DETAILS_MISSING
+            PlanItemBootstrapExitCode.PULL_REQUEST_DETAILS_MISSING
         ),
-        basstler.plan_item_bootstrap.PullRequestRefusedError: ExitCode.PULL_REQUEST_REFUSED,
+        basstler.plan_item_bootstrap.PullRequestRefusedError: PlanItemBootstrapExitCode.PULL_REQUEST_REFUSED,
     }
     assert {error: error.exit_code for error in codes} == codes
 
@@ -759,7 +759,7 @@ def test_the_record_subcommand_reports_status_and_exit_code_first(
     assert result.returncode == 0, result.stderr
     report = json.loads(result.stdout)
     assert list(report)[:2] == ["status", "exit_code"]
-    assert report["status"] == ExitCode.SUCCESS.name_for_a_caller
+    assert report["status"] == PlanItemBootstrapExitCode.SUCCESS.name_for_a_caller
     assert report["exit_code"] == 0
 
 
@@ -772,8 +772,8 @@ def test_the_command_line_names_the_status_it_failed_with(
         bootstrap_repository, *record_arguments(section, plan="no-such-plan")
     )
 
-    assert result.returncode == ExitCode.UNKNOWN_PLAN
-    assert ExitCode.UNKNOWN_PLAN.name_for_a_caller in result.stderr
+    assert result.returncode == PlanItemBootstrapExitCode.UNKNOWN_PLAN
+    assert PlanItemBootstrapExitCode.UNKNOWN_PLAN.name_for_a_caller in result.stderr
 
 
 def test_the_dashboard_republish_is_handed_back_rather_than_attempted(
