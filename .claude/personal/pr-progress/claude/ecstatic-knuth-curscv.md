@@ -98,9 +98,31 @@ Done:
   - Asked the developer for the second set's measurements (size per piece, hue), whether both sets are on the
     table at once, and whether the disk/sphere (no ground truth) leave the simulated world.
 
-Next: the Montessori rewrite once the second set's numbers arrive. Set 1 can start now:
-- the lab pieces as SemDT bodies annotated with MontessoriShape, built in pieces.py from ground truth;
-- PieceMatcher reading footprint/symmetry/hue from them;
-- world.py and the renderer using them;
-- KnownPiece removed.
-Then re-cut layer 2. CI on #202's d4abc697d..83019e34d and #488's 13b021da8 is not polled.
+- 2026-10-13, round 3. The developer asked what Shapely adds. Answered: exact non-convex footprints and
+  polygon overlap/IoU; nothing the Montessori pipeline needs now, so not added. Their answers:
+  - the second set exists in #265 (claude/icra-experiments-simulation-pipeline-w4ep7n): SMALLER_PIECES =
+    full-size x0.8 with hues 98/26 OpenCV (196/52 degrees), on the table since September 2026;
+  - the two sets are never on the table together;
+  - the disk and sphere keep their simulated sizes as ground truth.
+  - Found:
+    - the board has two cylinder holes (32 and 40 mm), while each set has one cylinder (28 mm full-size);
+    - the ground-truth triangle (37 x 32 bounding box) is turned against its hole (36 x 42).
+    So the simulated piece geometry was NOT switched to ground truth yet. Asked the developer.
+  - d85a50a2b, committed on the wt202 worktree and NOT pushed:
+    - PieceSet is a world of one body per piece (full_size, smaller; printed(scale, blue, yellow); of_shapes);
+    - outline_of/height_of/color_of/hue_of are read off the bodies;
+    - PieceMatcher fits a PieceOutline (distinct_turn = symmetry, or None when half of it moves the
+      outline by less than step);
+    - Color.hue rounds to Hue.DECIMAL_PLACES; Polygon2D.distance_to_boundary added;
+    - the renderer holds a piece_set; KnownPiece is gone.
+    - 217 passed, 1 skipped, 1 FAILED:
+      test_a_piece_is_found_where_it_stands_and_not_where_it_was_looked_for[TriangularPrismShape].
+      The fit lands at y=0.199 against 0.2 with abs=step (0.0010000000000000009 > 0.001). Cause: the triangle
+      body is a SemDT Mesh exported to OBJ, which rounds vertices to about 1e-11. The coarse search then lands
+      in a better optimum (agreement 0.909 against 0.900), exactly one grid step off. The test draws the
+      corners on half pixels. Not modified (AGENTS.md); asked the developer.
+
+Next: the developer's call on the triangle test, then push d85a50a2b and re-cut layer 2 (pieces.py, geometry.py,
+test_montessori_pieces.py, test_hue.py, test_polygon.py). Then world.py's ground-truth pieces once the
+cylinder-hole and triangle-orientation questions are answered. CI on #202's d4abc697d..83019e34d and #488's
+13b021da8 is not polled.
