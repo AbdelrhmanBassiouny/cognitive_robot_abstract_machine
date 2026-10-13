@@ -47,8 +47,10 @@ items:
   status: done
   notes: |-
     Done 2026-10-13, verified against the workflow list: every listed workflow and the three dead ones
-    read disabled_manually. Build Documentation and update_docker were still active at that check
-    (both run on a push to the fork's main; update_docker also chains a CI run) - asked to disable them too.
+    read disabled_manually. update_docker stays on: CI runs in the fork's own ghcr image, which only it
+    rebuilds, and it fires only when a .github/docker/ file changes (4 times on main in a month). Build
+    Documentation: recommended off on the fork (about seven jobs per upstream sync, and its Pages deploy shares
+    the site #218 plans for the dashboards); the manifest allows it on the fork by dispatch only.
     Settings -> Actions: re-enable, then on the Actions tab disable each of these workflows by hand
     before anything triggers them: Integration refresh, Integration probe, Integration checks,
     Examples and Demos, Build Documentation, the four "Publish ... to PyPI", update_docker, Stack
@@ -73,8 +75,9 @@ items:
     that test once it merges `main`, which is the enforcement.
 
     Trigger changes in the same PR: Examples and Demos only on `ready_for_review`, a `full-ci` label or
-    dispatch; every `push: main` job (CI, Examples, docs, the publish workflows, update_docker) only when
-    the repository is the upstream one; `timeout-minutes` on every job.
+    dispatch; CI, Examples, docs and the publish workflows on `push: main` only when the repository is the
+    upstream one (docs stays dispatchable on the fork); update_docker unchanged, since the fork's CI image
+    depends on it and it only fires on a Docker file change; `timeout-minutes` on every job.
 - id: changed-library-matrix
   title: Pull request CI tests the libraries a change touches and their dependents
   branch: null
