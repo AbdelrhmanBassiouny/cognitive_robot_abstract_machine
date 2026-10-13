@@ -81,3 +81,15 @@ with dataclasses, Protocols with abstract dataclasses, ClassVars with fields, en
 classproperty, and moved sound levels to dBFS. Pygments for code colouring is recommended
 on the thread and waits for the user's approval of the new dependency.
 
+## Third review round (2026-10-13)
+
+The user approved Pygments; it was already in the workspace through krrood, so the switch
+added no new package. The user asked for units to be modelled across the repository: this
+round adds DataSize, a generic Rate and BitRate inside cramcorder, and asks whether they move
+to krrood as the shared home (pint, already a coraplex dependency, was weighed and not
+chosen, because its quantities are not dataclasses that can bind a generic). The question
+"what is the difference between a Video and a Film" showed four classes answering the same
+two questions, so Video became one base for scenes, the timeline and video files; #429's
+footage code must follow that rename. PixelBox now reuses SemDT's Bounds generic; making
+SemDT's own boxes Bounds of a spatial region is left for the user to decide.
+
