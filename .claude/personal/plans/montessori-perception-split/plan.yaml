@@ -41,9 +41,10 @@ items:
   depends_on: []
   status: blocked
   blockers:
-  - 'The developer decided (2026-10-12) that #488 waits until KnownPiece is replaced by EQL
-    partial descriptions of the domain model, per the open review thread on pieces.py:203.
-    The design is still being settled with the developer.'
+  - '#488 waits until KnownPiece is replaced (review thread on pieces.py:203). The agreed
+    replacement (lab sets as SemDT bodies, simulated pieces from them, insertion turned onto
+    the hole) is committed locally on #202 (d85a50a2b, d96eee108) but unpushed: one matcher
+    test fails at its tolerance boundary and awaits the developer''s call.'
   pull_request_number: 488
   session: https://claude.ai/code/session_01T25zXQPBeES9MrL6i2dE1K
   notes: 'montessori/semantics.py, montessori/exceptions.py, montessori/hole_geometry.py with
