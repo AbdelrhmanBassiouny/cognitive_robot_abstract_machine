@@ -131,3 +131,10 @@ the basstler src layout) rather than `main`; the new modules moved to `basstler/
 retargets to `main` once #501 lands. #501 was `dirty` against `main` at the time. In this sandbox #501's own
 head fails 23 basstler tests (bootstrap, session-start, save-plan, check-setup); #503 adds 40 passing and
 no new failures.
+
+## budget-manifest: #501 brought up to main (2026-10-13)
+
+`main` merged into #501 as `9c44591b7` (one conflict, `AGENTS.md`: main's rewrite kept, #501's path-enum
+rule re-applied to it); #503 rebased onto it as `920cb7ac7`. Correction to the section above: the 23 failures
+were this sandbox, not #501 - the session had uninstalled basstler, which #501 expects to be installed
+editable. With `pip install pytest --editable ./basstler`, as CI does, #501 passes 750 and #503 790.
