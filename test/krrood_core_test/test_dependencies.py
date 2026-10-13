@@ -5,10 +5,13 @@ import subprocess
 import sys
 import tomllib
 from pathlib import Path
+from types import ModuleType
 
+import pytest
 from packaging.requirements import Requirement
 
 import krrood_core.exceptions
+import krrood_core.path_enumeration
 
 PACKAGE_DIRECTORY = Path(__file__).parents[2] / "krrood_core"
 """
@@ -46,9 +49,16 @@ def test_importing_every_module_loads_only_the_declared_dependencies():
     assert undeclared == set()
 
 
-def test_the_exceptions_need_only_the_standard_library():
+@pytest.mark.parametrize(
+    "module",
+    [krrood_core.exceptions, krrood_core.path_enumeration],
+    ids=lambda m: m.__name__,
+)
+def test_the_modules_a_tool_reads_before_installing_need_only_the_standard_library(
+    module: ModuleType,
+):
     """
-    A tool that checks what it has to install raises these before anything is installed,
+    A tool that checks what it has to install uses these before anything is installed,
     with the package's source on its import path and nothing else.
     """
     probe = subprocess.run(
@@ -56,7 +66,7 @@ def test_the_exceptions_need_only_the_standard_library():
             sys.executable,
             "-I",
             PROBES_DIRECTORY / "standard_library_only.py",
-            krrood_core.exceptions.__name__,
+            module.__name__,
         ],
         capture_output=True,
         text=True,
