@@ -49,10 +49,12 @@ items:
   status: in progress
   session: https://claude.ai/code/session_01RiyB21wDi8SaFucjBG6K3Y
   pull_request_number: 503
-  notes: One pull request off `main`. `basstler/actions_budget.toml` names every workflow
-    allowed in the repository - including the ones that only exist on unlanded branches (integration-*,
-    stack maintenance, tooling label, plan dashboards) - with its triggers, concurrency group,
-    job timeout, jobs per trigger and expected runs per day.
+  notes: 'Reworked after review: no per-workflow manifest. basstler checks every workflow
+    file against generic rules (no schedule, cancel on every pull-request push, job timeouts,
+    fork-push skip, label check, and at most jobs_per_push_run jobs on every push). The repository''s
+    `.github/actions-budget.toml` holds only limits plus per-workflow overrides (ci.yml 16 jobs,
+    update_docker 120 min / fork pushes); `python -m basstler.actions_budget` writes its first
+    version.' 
   blockers:
   - 'Based on #501 (basstler src layout) at the user''s request; retargets to main once #501
     lands.'
@@ -66,7 +68,9 @@ items:
   notes: 'A first job in ci.yml maps the changed paths to libraries, adds every library that
     depends on them (read from each package''s own declared dependencies, not a second hand-kept
     list), and feeds that set to the matrix. Draft pull requests run that set; `ready_for_review`,
-    a `full-ci` label and dispatch run everything. A change only under `.claude/`, `basstler/`
+    a `full-ci` label and dispatch run everything. The budget reports a run-time matrix as
+    `UncountableJobs`: keep CI''s job count readable, then drop ci.yml''s jobs_per_push_run
+    override. A change only under `.claude/`, `basstler/`
     or docs runs the tooling job alone. #284 already reads a pull request''s tooling label
     off its changed files - reuse its classifier if it has landed first rather than writing
     a second one.'
@@ -78,7 +82,7 @@ items:
   - budget-manifest
   status: not started
   notes: 'A basstler module counts the last 24 hours of runs and jobs per workflow from the
-    Actions API and compares them with the manifest''s budgets. Three surfaces, none on a
+    Actions API and compares them with daily ceilings it adds to `.github/actions-budget.toml`. Three surfaces, none on a
     timer: the session-start summary prints a warning line at 80% and an over-budget line
     at 100%; the first job of ci.yml writes the same comparison as a `::warning::` annotation
     and step summary, and past the hard limit skips the heavy matrix unless the pull request
