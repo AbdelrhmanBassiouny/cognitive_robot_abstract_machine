@@ -11,71 +11,52 @@ from dataclasses import dataclass
 
 from typing_extensions import Tuple
 
-# %% one colour
+from semantic_digital_twin.world_description.geometry import Color
+
+# %% writing a colour into an image
 
 
 @dataclass(frozen=True)
-class DetectionColor:
+class BgrPixel:
     """
-    A colour, held apart from the order any one drawing library wants its parts in.
-    """
-
-    red: float
-    """
-    How much red, from zero to one.
+    A pixel of an 8-bit image as OpenCV draws one: blue first, then green, then red,
+    each a whole number of steps.
     """
 
-    green: float
+    full_intensity: int = 255
     """
-    How much green, from zero to one.
-    """
-
-    blue: float
-    """
-    How much blue, from zero to one.
+    The step a part of the colour reaches when it is at its strongest.
     """
 
-    def to_rgba(self, alpha: float = 1.0) -> Tuple[float, float, float, float]:
+    def value_of(self, color: Color) -> Tuple[int, int, int]:
         """
-        :param alpha: How opaque to make it, from zero to one.
-        :return: The colour as rviz takes it, red first and each part from zero to one.
-        """
-        return self.red, self.green, self.blue, alpha
-
-    def to_bgr(self) -> Tuple[int, int, int]:
-        """
-        :return: The colour as OpenCV takes it, blue first and each part a whole number
-            from zero to 255.
+        :param color: The colour to write into the pixel.
+        :return: The pixel's blue, green and red parts.
         """
         return tuple(
-            round(part * FULL_INTENSITY) for part in (self.blue, self.green, self.red)
+            round(part * self.full_intensity) for part in (color.B, color.G, color.R)
         )
 
-
-FULL_INTENSITY = 255
-"""
-Value a colour's part reaches when it is at its strongest.
-"""
 
 # %% what each kind is drawn in
 
 
-PIECE_COLOR = DetectionColor(0.1, 0.9, 0.3)
+PIECE_COLOR = Color(0.1, 0.9, 0.3)
 """
 Colour a loose piece is drawn in.
 """
 
-HOLE_COLOR = DetectionColor(1.0, 0.6, 0.0)
+HOLE_COLOR = Color(1.0, 0.6, 0.0)
 """
 Colour a hole in the board is drawn in.
 """
 
-BOARD_COLOR = DetectionColor(0.3, 0.5, 1.0)
+BOARD_COLOR = Color(0.3, 0.5, 1.0)
 """
 Colour the board itself is drawn in.
 """
 
-LABEL_COLOR = DetectionColor(1.0, 1.0, 1.0)
+LABEL_COLOR = Color(1.0, 1.0, 1.0)
 """
 Colour a detection's name is written in.
 """

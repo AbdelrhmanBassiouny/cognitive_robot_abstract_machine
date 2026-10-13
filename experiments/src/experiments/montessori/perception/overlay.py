@@ -10,7 +10,7 @@ the two differ only in where a point on a horizontal plane lands, which is what 
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import cv2
 import numpy as np
@@ -21,13 +21,14 @@ from experiments.montessori.perception.colors import (
     HOLE_COLOR,
     LABEL_COLOR,
     PIECE_COLOR,
-    DetectionColor,
+    BgrPixel,
 )
 from experiments.montessori.perception.detections import (
     MontessoriDetection,
     MontessoriScene,
 )
 from experiments.montessori.perception.orthophoto import Orthophoto, OrthophotoProjector
+from semantic_digital_twin.world_description.geometry import Color
 
 # %% where a detection falls in an image
 
@@ -169,6 +170,11 @@ class DetectionOverlay:
     How far above its box a name is written, in pixels.
     """
 
+    pixel: BgrPixel = field(default_factory=BgrPixel)
+    """
+    How a colour is written into the image's pixels.
+    """
+
     def draw(self, view: DetectionView, scene: MontessoriScene) -> np.ndarray:
         """
         Draw everything one look at the scene found.
@@ -191,7 +197,7 @@ class DetectionOverlay:
         image: np.ndarray,
         view: DetectionView,
         detection: MontessoriDetection,
-        color: DetectionColor,
+        color: Color,
     ) -> None:
         """
         Draw one detection's box, centre and name.
@@ -217,7 +223,7 @@ class DetectionOverlay:
             image,
             (left, top),
             (left + width, top + height),
-            color.to_bgr(),
+            self.pixel.value_of(color),
             self.line_width,
         )
         [center] = view.to_pixels(
@@ -228,7 +234,7 @@ class DetectionOverlay:
             image,
             (round(center[0]), round(center[1])),
             self.center_radius,
-            color.to_bgr(),
+            self.pixel.value_of(color),
             cv2.FILLED,
         )
         cv2.putText(
@@ -237,7 +243,7 @@ class DetectionOverlay:
             (left, top - self.label_offset),
             cv2.FONT_HERSHEY_SIMPLEX,
             self.label_height,
-            LABEL_COLOR.to_bgr(),
+            self.pixel.value_of(LABEL_COLOR),
             self.line_width,
             cv2.LINE_AA,
         )

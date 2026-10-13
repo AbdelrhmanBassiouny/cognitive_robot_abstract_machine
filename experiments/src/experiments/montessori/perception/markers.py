@@ -15,7 +15,6 @@ from enum import StrEnum
 from geometry_msgs.msg import Point
 from rclpy.node import Node
 from rclpy.publisher import Publisher
-from std_msgs.msg import ColorRGBA
 from typing_extensions import List
 from visualization_msgs.msg import Marker, MarkerArray
 
@@ -24,12 +23,15 @@ from experiments.montessori.perception.colors import (
     HOLE_COLOR,
     LABEL_COLOR,
     PIECE_COLOR,
-    DetectionColor,
 )
 from experiments.montessori.perception.detections import (
     MontessoriDetection,
     MontessoriScene,
 )
+from semantic_digital_twin.adapters.ros.semdt_to_ros2_converters import (
+    ColorToRos2Converter,
+)
+from semantic_digital_twin.world_description.geometry import Color
 from semantic_digital_twin.world_description.world_entity import (
     KinematicStructureEntity,
 )
@@ -120,7 +122,7 @@ class DetectionMarkerPublisher:
         detection: MontessoriDetection,
         namespace: MarkerNamespace,
         identifier: int,
-        color: DetectionColor,
+        color: Color,
     ) -> Marker:
         """
         Draw one detection's measured outline as a closed line strip.
@@ -133,8 +135,7 @@ class DetectionMarkerPublisher:
         """
         marker = self._new_marker(namespace, identifier, Marker.LINE_STRIP)
         marker.scale.x = _OUTLINE_WIDTH
-        red, green, blue, alpha = color.to_rgba()
-        marker.color = ColorRGBA(r=red, g=green, b=blue, a=alpha)
+        marker.color = ColorToRos2Converter.convert(color)
         height = float(detection.pose.position.to_np()[2])
         points = [Point(x=float(x), y=float(y), z=height) for x, y in detection.outline]
         marker.points = points + points[:1]
@@ -153,8 +154,7 @@ class DetectionMarkerPublisher:
             MarkerNamespace.PIECES, 1000 + identifier, Marker.TEXT_VIEW_FACING
         )
         marker.scale.z = 0.02
-        red, green, blue, alpha = LABEL_COLOR.to_rgba()
-        marker.color = ColorRGBA(r=red, g=green, b=blue, a=alpha)
+        marker.color = ColorToRos2Converter.convert(LABEL_COLOR)
         position = detection.pose.position.to_np()
         marker.pose.position = Point(
             x=float(position[0]), y=float(position[1]), z=float(position[2]) + 0.05

@@ -16,7 +16,7 @@ from experiments.montessori.perception.camera import CameraIntrinsics, RgbdFrame
 from experiments.montessori.perception.colors import (
     HOLE_COLOR,
     PIECE_COLOR,
-    DetectionColor,
+    BgrPixel,
 )
 from experiments.montessori.perception.detections import MontessoriScene
 from experiments.montessori.perception.exceptions import WorkspaceOutOfView
@@ -33,6 +33,7 @@ from experiments.montessori.perception.overlay import (
 from experiments.montessori.perception.pipeline import MontessoriPerceptionPipeline
 from experiments.montessori.pieces import KnownPiece
 from experiments.montessori.semantics import CubeShape
+from semantic_digital_twin.world_description.geometry import Color
 
 from .dataset import montessori_scene_fixtures
 from .dataset.montessori_scene_renderer import (
@@ -190,12 +191,18 @@ def test_each_kind_of_detection_is_drawn_in_its_own_colour(
     drawn = DetectionOverlay().draw(CameraView(frame), scene)
 
     for color in (PIECE_COLOR, HOLE_COLOR):
-        assert (drawn == np.array(color.to_bgr(), dtype=np.uint8)).all(axis=2).any()
+        assert (
+            (drawn == np.array(BgrPixel().value_of(color), dtype=np.uint8))
+            .all(axis=2)
+            .any()
+        )
 
 
-def _extent_drawn_in(
-    image: np.ndarray, color: DetectionColor
-) -> Tuple[int, int, int, int]:
+def test_a_colour_is_written_into_a_pixel_blue_first_in_whole_steps():
+    assert BgrPixel().value_of(Color(1.0, 0.5, 0.0)) == (0, 128, 255)
+
+
+def _extent_drawn_in(image: np.ndarray, color: Color) -> Tuple[int, int, int, int]:
     """
     The bounding box of everything one colour was drawn in.
 
@@ -203,7 +210,7 @@ def _extent_drawn_in(
     :param color: The colour to look for.
     :return: Its leftmost, topmost, rightmost and bottommost pixel.
     """
-    marked = (image == np.array(color.to_bgr(), dtype=np.uint8)).all(axis=2)
+    marked = (image == np.array(BgrPixel().value_of(color), dtype=np.uint8)).all(axis=2)
     rows, columns = np.nonzero(marked)
     return columns.min(), rows.min(), columns.max(), rows.max()
 
@@ -341,4 +348,8 @@ def test_the_rectified_view_draws_on_the_rectified_image(
     drawn = DetectionOverlay().draw(RectifiedView(frame, orthophoto), scene)
 
     assert drawn.shape == orthophoto.image.shape
-    assert (drawn == np.array(PIECE_COLOR.to_bgr(), dtype=np.uint8)).all(axis=2).any()
+    assert (
+        (drawn == np.array(BgrPixel().value_of(PIECE_COLOR), dtype=np.uint8))
+        .all(axis=2)
+        .any()
+    )
