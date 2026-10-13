@@ -47,7 +47,7 @@ from basstler.exceptions import (
     PromotionLinkTooLongError,
 )
 from basstler.stack import load_configuration
-from basstler.standard_streams import StandardStreamHandler
+from krrood_core.standard_streams import StandardStreamHandler
 
 logger = StandardStreamHandler.logger_for(__name__)
 """

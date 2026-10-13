@@ -65,7 +65,7 @@ from typing import Any
 from basstler.exit_codes import PlanItemModeExitCode
 from basstler.plan_item_execution import ExecutionMode
 from basstler.locations import ClaudeCodeVariable, ProjectLocation
-from basstler.standard_streams import StandardStreamHandler
+from krrood_core.standard_streams import StandardStreamHandler
 from basstler.exceptions import (
     MalformedModeSettingsError,
     ModeError,

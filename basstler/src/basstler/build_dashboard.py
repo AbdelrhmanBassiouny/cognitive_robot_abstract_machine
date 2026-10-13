@@ -52,7 +52,7 @@ from basstler.render_common import (
     render_markdown_to_html,
     sanitize_http_url,
 )
-from basstler.standard_streams import StandardStreamHandler
+from krrood_core.standard_streams import StandardStreamHandler
 from basstler.exceptions import (
     MalformedPullRequestDataError,
     MissingMergeTimestampError,

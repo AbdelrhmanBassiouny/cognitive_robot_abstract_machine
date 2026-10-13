@@ -22,7 +22,7 @@ import sys
 from pathlib import Path
 
 import yaml
-from basstler.standard_streams import StandardStreamHandler
+from krrood_core.standard_streams import StandardStreamHandler
 from basstler.exceptions import (
     YamlBooleanCoercionError,
 )

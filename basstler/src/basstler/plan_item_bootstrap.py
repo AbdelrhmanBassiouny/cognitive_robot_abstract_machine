@@ -72,7 +72,7 @@ from basstler.exit_codes import PlanItemBootstrapExitCode
 from basstler.locations import ClaudeCodeVariable, ProjectLocation
 from basstler.maintenance_constants import GITHUB_API_ROOT
 from basstler.plan_model import ItemStatus
-from basstler.standard_streams import StandardStreamHandler
+from krrood_core.standard_streams import StandardStreamHandler
 from basstler.exceptions import (
     BootstrapError,
     BranchAlreadyPublishedError,

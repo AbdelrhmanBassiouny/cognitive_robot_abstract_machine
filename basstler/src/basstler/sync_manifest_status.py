@@ -50,8 +50,14 @@ from typing import Any
 
 import yaml
 
-from basstler.build_dashboard import ItemStatus, LiveState, classify_live_state, load_pull_requests_by_repository, validate_plan
-from basstler.standard_streams import StandardStreamHandler
+from basstler.build_dashboard import (
+    ItemStatus,
+    LiveState,
+    classify_live_state,
+    load_pull_requests_by_repository,
+    validate_plan,
+)
+from krrood_core.standard_streams import StandardStreamHandler
 from basstler.exceptions import (
     MissingStatusLineError,
     PlanValidationError,

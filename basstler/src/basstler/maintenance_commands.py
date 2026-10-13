@@ -31,7 +31,7 @@ from basstler.maintenance_report import (
 )
 from basstler.maintenance_restack_procedure import restack
 from basstler.stack import Configuration, Stack, load_stack
-from basstler.standard_streams import StandardStreamHandler
+from krrood_core.standard_streams import StandardStreamHandler
 
 logger = StandardStreamHandler.logger_for(__name__)
 """

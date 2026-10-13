@@ -44,7 +44,7 @@ from basstler.build_dashboard import (
     load_pull_requests_by_repository,
     validate_plan,
 )
-from basstler.standard_streams import StandardStreamHandler
+from krrood_core.standard_streams import StandardStreamHandler
 from basstler.exceptions import (
     PlanValidationError,
     UnknownItemError,

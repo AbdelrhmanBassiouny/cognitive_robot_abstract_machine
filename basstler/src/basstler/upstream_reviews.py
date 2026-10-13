@@ -30,7 +30,7 @@ import tomllib
 from basstler.locations import PackageLocation
 from basstler.maintenance_constants import GitHubClient
 from basstler.repository import Repository
-from basstler.standard_streams import StandardStreamHandler
+from krrood_core.standard_streams import StandardStreamHandler
 from basstler.exceptions import (
     GitHubCommandFailed,
     GraphQLErrorsReturned,

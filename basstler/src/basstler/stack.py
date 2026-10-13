@@ -51,7 +51,7 @@ from krrood_core.adapters.json_serializer import from_json
 
 from basstler.locations import PackageLocation, ProjectLocation
 from basstler.repository import Repository
-from basstler.standard_streams import StandardStreamHandler
+from krrood_core.standard_streams import StandardStreamHandler
 from basstler.exceptions import (
     AmbiguousForkRemoteError,
     BoardUnavailable,

@@ -36,7 +36,7 @@ from pathlib import Path
 from typing import Any
 
 from basstler.locations import PackageLocation
-from basstler.standard_streams import StandardStreamHandler
+from krrood_core.standard_streams import StandardStreamHandler
 from basstler.exceptions import (
     UnreadableDependencyDeclarationError,
 )
