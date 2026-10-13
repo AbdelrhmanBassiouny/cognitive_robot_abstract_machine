@@ -219,6 +219,24 @@ items:
   notes: 'Added 2026-09-05 at the developer''s direction on #259, folding the two threads
     he asked to keep together (r3940349876 and r3940351882): "since we have a 3d model of
     the world, we can use this information to maybe even calibrate the camera ...'
+- id: observation-matched-against-the-piece-set
+  title: Recognise a piece by matching what was seen against the piece set's instances, in EQL
+  branch: null
+  pull_request_number: null
+  track: method-selection
+  depends_on:
+  - a-look-is-described-by-a-match
+  - detector-parameters-from-knowledge
+  status: not started
+  blockers:
+  - Needs `montessori-perception-split`'s `shape-vocabulary-on-main` (#488, PieceSet as worlds
+    of bodies) - a cross-plan dependency `depends_on` cannot express.
+  notes: 'Added 2026-10-13 at the developer''s direction, from the KnownPiece thread on #488
+    (r4250836397). A seen blob becomes a partial EQL description (outline from above, measured
+    hue, height) resolved against the PieceSet instances with tolerance predicates (hue,
+    height, outline fit), replacing PieceMatcher''s Python hue filter and outline fit and
+    detector_choice.py''s exact colour equality. #265 is an integration branch, so the parts
+    it needs are taken from #222/#275, not from #265.'
 - id: demo-asks-by-query
   title: The demo's perception runs because a query was evaluated
   branch: tracy_icra
