@@ -350,8 +350,6 @@ class UpdateTemporaryCollisionRules(EndedByOwner, MotionStatechartNode):
 
     def build_artifacts(self, context: StatechartContext) -> MotionNodeArtifacts:
         artifacts = MotionNodeArtifacts()
-        # The world may have changed since the rules in force were applied to it.
-        context.world.collision_manager.update_collision_matrix()
         artifacts.observation = sm.Scalar.const_true()
         return artifacts
 

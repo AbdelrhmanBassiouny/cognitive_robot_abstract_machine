@@ -222,8 +222,7 @@ class LifeCyclePredicateDefinition:
         return if_eq_cases(
             a=life_cycle,
             b_result_cases=[
-                (int(state), Scalar(float(self.truth_value(state))))
-                for state in sorted(LifeCycleValues)
+                (int(state), Scalar.const_true()) for state in sorted(self.true_states)
             ],
             else_result=Scalar.const_false(),
         )

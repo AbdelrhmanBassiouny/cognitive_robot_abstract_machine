@@ -2589,12 +2589,25 @@ def if_else(
     else:
         return else_result
     """
-    condition = to_sx(condition)
-    if_result_sx = to_sx(if_result)
-    else_result_sx = to_sx(else_result)
-    return_type = _create_return_type(if_result)
-    return return_type.from_casadi_sx(
-        ca.if_else(condition, if_result_sx, else_result_sx)
+    return _create_return_type(if_result).from_casadi_sx(
+        _if_else_sx(to_sx(condition), to_sx(if_result), to_sx(else_result))
+    )
+
+
+def _if_else_sx(condition: ca.SX, if_result: ca.SX, else_result: ca.SX) -> ca.SX:
+    """
+    :param condition: The condition selecting between the results.
+    :param if_result: The result while `condition` is not 0.
+    :param else_result: The result while `condition` is 0.
+    :return: The same expression as ``ca.if_else``, without the cost of resolving its
+        overloads.
+    """
+    return ca.SX.binary(
+        ca.OP_ADD,
+        ca.SX.binary(ca.OP_IF_ELSE_ZERO, condition, if_result),
+        ca.SX.binary(
+            ca.OP_IF_ELSE_ZERO, ca.SX.unary(ca.OP_NOT, condition), else_result
+        ),
     )
 
 
@@ -2738,24 +2751,21 @@ def if_eq_cases(
     else_result: GenericSymbolicType,
 ) -> GenericSymbolicType:
     """
-    If a == b_result_cases[0][0]:
+    Selects the result of the case whose value equals `a`.
 
-    return b_result_cases[0][1]
-    elif a == b_result_cases[1][0]:
-        return b_result_cases[1][1]
-    ...
-    else:
-        return else_result
+    .. note:: If several cases equal `a`, the last of them is selected.
+
+    :param a: The value compared against every case.
+    :param b_result_cases: The (value, result) pairs.
+    :param else_result: The result while no case equals `a`.
+    :return: The expression selecting between the results.
     """
     a_sx = to_sx(a)
-    result_sx_list = []
-    ind = to_sx(-1)
-    for i, (b, b_result) in enumerate(b_result_cases):
-        b_sx = to_sx(b)
-        ind = ca.if_else(ca.SX.binary(ca.OP_EQ, a_sx, b_sx), i, ind)
-        result_sx_list.append(to_sx(b_result))
-
-    result_sx = ca.conditional(ind, result_sx_list, to_sx(else_result))
+    result_sx = to_sx(else_result)
+    for b, b_result in b_result_cases:
+        result_sx = _if_else_sx(
+            ca.SX.binary(ca.OP_EQ, a_sx, to_sx(b)), to_sx(b_result), result_sx
+        )
     return _create_return_type(else_result).from_casadi_sx(result_sx)
 
 
@@ -2776,14 +2786,9 @@ def if_cases(
     .. warning:: Any guard that is not 0 selects its case, the trinary Unknown included.
         Use :func:`trinary_if_cases` for guards in trinary logic.
     """
-    result_sx_list = []
-    ind = to_sx(len(cases))
-    for i in reversed(range(len(cases))):
-        case = to_sx(cases[i][0])
-        ind = ca.if_else(case, i, ind)
-        result_sx_list.insert(0, to_sx(cases[i][1]))
-
-    result_sx = ca.conditional(ind, result_sx_list, to_sx(else_result))
+    result_sx = to_sx(else_result)
+    for guard, result in reversed(cases):
+        result_sx = _if_else_sx(to_sx(guard), to_sx(result), result_sx)
     return _create_return_type(else_result).from_casadi_sx(result_sx)
 
 
@@ -2823,14 +2828,11 @@ def if_less_eq_cases(
         return else_result
     """
     a_sx = to_sx(a)
-    result_sx_list = []
-    ind = to_sx(len(b_result_cases))
-    for i in reversed(range(len(b_result_cases))):
-        b_sx = to_sx(b_result_cases[i][0])
-        ind = ca.if_else(ca.SX.binary(ca.OP_LE, a_sx, b_sx), i, ind)
-        result_sx_list.insert(0, to_sx(b_result_cases[i][1]))
-
-    result_sx = ca.conditional(ind, result_sx_list, to_sx(else_result))
+    result_sx = to_sx(else_result)
+    for b, b_result in reversed(b_result_cases):
+        result_sx = _if_else_sx(
+            ca.SX.binary(ca.OP_LE, a_sx, to_sx(b)), to_sx(b_result), result_sx
+        )
     return _create_return_type(else_result).from_casadi_sx(result_sx)
 
 

@@ -578,7 +578,7 @@ class LifeCyclePredicateVariable(DerivedConditionVariable):
         """
         :return: The truth table of this predicate over the life cycle state of its node.
         """
-        return self.predicate.expression(self.statechart_node.life_cycle_variable)
+        return self.statechart_node.life_cycle_predicate_expression(self.predicate)
 
 
 @dataclass(repr=False, eq=False, init=False)
@@ -841,6 +841,12 @@ class StatechartNode(SubclassJSONSerializer, metaclass=ABCMeta):
     """
     The predicate variables handed out so far, so each one is created only once.
     """
+    _life_cycle_predicate_expression_cache: Dict[LifeCyclePredicate, Scalar] = field(
+        init=False, default_factory=dict, repr=False
+    )
+    """
+    The expressions handed out by :meth:`life_cycle_predicate_expression` so far.
+    """
     _observation_predicate_variables: Dict[
         ObservationPredicate, ObservationPredicateVariable
     ] = field(init=False, default_factory=dict, repr=False)
@@ -887,6 +893,7 @@ class StatechartNode(SubclassJSONSerializer, metaclass=ABCMeta):
         statechart.
         """
         name = f"{self.name}#{self._node_id}"
+        self._life_cycle_predicate_expression_cache = {}
         self._observation_variable = ObservationVariable(
             name=str(PrefixedName("observation", name)),
             statechart_node=self,
@@ -1248,7 +1255,7 @@ class StatechartNode(SubclassJSONSerializer, metaclass=ABCMeta):
         """
         if self.parent_node is None:
             return sm.Scalar.const_false()
-        return predicate.expression(self.parent_node.life_cycle_variable)
+        return self.parent_node.life_cycle_predicate_expression(predicate)
 
     def _is_top_level_or_parent_running(self) -> sm.Scalar:
         """
@@ -1256,8 +1263,8 @@ class StatechartNode(SubclassJSONSerializer, metaclass=ABCMeta):
         """
         if self.parent_node is None:
             return sm.Scalar.const_true()
-        return LifeCyclePredicate.IS_RUNNING.expression(
-            self.parent_node.life_cycle_variable
+        return self.parent_node.life_cycle_predicate_expression(
+            LifeCyclePredicate.IS_RUNNING
         )
 
     def get_condition(self, transition_kind: TransitionKind) -> Scalar:
@@ -1673,6 +1680,17 @@ class StatechartNode(SubclassJSONSerializer, metaclass=ABCMeta):
         if inherent_condition.is_constant_false():
             return written_condition
         return sm.logic_or(written_condition, inherent_condition)
+
+    def life_cycle_predicate_expression(self, predicate: LifeCyclePredicate) -> Scalar:
+        """
+        :param predicate: The test to read.
+        :return: The truth table of `predicate` over :attr:`life_cycle_variable`.
+        """
+        if predicate not in self._life_cycle_predicate_expression_cache:
+            self._life_cycle_predicate_expression_cache[predicate] = (
+                predicate.expression(self.life_cycle_variable)
+            )
+        return self._life_cycle_predicate_expression_cache[predicate]
 
     def _life_cycle_predicate(
         self, predicate: LifeCyclePredicate
