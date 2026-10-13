@@ -215,7 +215,7 @@ items:
 - id: basstler-src-layout
   title: 'Move basstler to the src layout, importable through an editable install'
   branch: claude/brave-archimedes-nonocl
-  status: in progress
+  status: in_progress
   track: extraction
   depends_on:
   - basstler-package
