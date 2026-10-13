@@ -50,7 +50,10 @@ items:
   depends_on: []
   pull_request_number: 505
   session: https://claude.ai/code/session_01Xxsd3jwKjjEsHdyyfC8Azo
-  notes: Pure addition to the package, no bash file changes (decision 12).
+  notes: 'Pure addition, no bash changes: PersonalNotesLocation, PersonalNotesBranch.fetch (upstream
+    fallback), NotesBranchWriter (detached scratch worktree, PUSHED/UNCHANGED, None removes),
+    NotesMarker.section_in, in basstler/src/basstler/. Stacked on #501; step 2 is the first
+    caller.'
 - id: basstler-save-commands-python
   title: 'Bash→Python 2: the four notes writers become python -m subcommands'
   branch: null
