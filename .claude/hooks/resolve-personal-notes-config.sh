@@ -304,10 +304,29 @@ DASHBOARD_URL_CACHE_PATH="${PLANS_DIR}/_generated/dashboard-urls.yaml"
 # itself sits under its src directory, as every package in this repository does.
 BASSTLER_SOURCE_TREE="basstler"
 BASSTLER_PACKAGE_DIRECTORY="${BASSTLER_SOURCE_TREE}/src/basstler"
-# Exported so every module a caller runs is this clone's own source - a
-# worktree's or a scratch clone's included - whichever interpreter runs it, and
-# whatever a site-packages install of basstler elsewhere would resolve to.
-export PYTHONPATH="${PROJECT_ROOT}/${BASSTLER_SOURCE_TREE}/src${PYTHONPATH:+:${PYTHONPATH}}"
+# BASSTLER_WORKSPACE_DEPENDENCIES: the packages of this repository that the
+# package's pyproject.toml declares, space separated, each a source tree at the
+# repository root. Installed from the clone beside the package, since the
+# clone's copy is the one the package is written against - a test holds this
+# equal to the declaration.
+BASSTLER_WORKSPACE_DEPENDENCIES="krrood_core"
+# BASSTLER_INSTALLED_SOURCE_TREES: every source tree an install of the package
+# is made from, dependencies first, as the installer is handed them.
+BASSTLER_INSTALLED_SOURCE_TREES=""
+# BASSTLER_EDITABLE_INSTALL_ARGUMENTS: the installer arguments installing each
+# of those trees editable, for `pip install` and `uv pip install` alike.
+BASSTLER_EDITABLE_INSTALL_ARGUMENTS=()
+for source_tree in ${BASSTLER_WORKSPACE_DEPENDENCIES} ${BASSTLER_SOURCE_TREE}; do
+  BASSTLER_INSTALLED_SOURCE_TREES="${BASSTLER_INSTALLED_SOURCE_TREES:+${BASSTLER_INSTALLED_SOURCE_TREES} }./${source_tree}"
+  BASSTLER_EDITABLE_INSTALL_ARGUMENTS+=(--editable "./${source_tree}")
+  # Exported so every module a caller runs, and everything it imports from
+  # this repository, is this clone's own source - a worktree's or a scratch
+  # clone's included - whichever interpreter runs it, and whatever a
+  # site-packages install elsewhere would resolve to.
+  PYTHONPATH="${PROJECT_ROOT}/${source_tree}/src${PYTHONPATH:+:${PYTHONPATH}}"
+done
+unset source_tree
+export PYTHONPATH
 # build_dashboard: renders one plan's dashboard HTML from its manifest
 # and live GitHub data - see the module's own docstring.
 BUILD_DASHBOARD_MODULE="basstler.build_dashboard"
@@ -653,7 +672,8 @@ install_uv() {
 }
 
 # install_basstler_into_environment: installs the package editable into its
-# environment, which brings every declared dependency with it, leaving the
+# environment, beside the workspace packages it depends on, which brings every
+# other declared dependency with it, leaving the
 # installer's own output (both streams) in BASSTLER_INSTALL_OUTPUT and the
 # command it ran in the array BASSTLER_INSTALL_COMMAND, for a caller to report, and
 # returning the installer's exit status.
@@ -666,10 +686,10 @@ install_basstler_into_environment() {
   local uv
   if uv="$(available_uv)"; then
     BASSTLER_INSTALL_COMMAND=("${uv}" pip install --python
-      "${BASSTLER_ENVIRONMENT_INTERPRETER}" --editable "./${BASSTLER_SOURCE_TREE}")
+      "${BASSTLER_ENVIRONMENT_INTERPRETER}" "${BASSTLER_EDITABLE_INSTALL_ARGUMENTS[@]}")
   else
     BASSTLER_INSTALL_COMMAND=(pip --python "${BASSTLER_ENVIRONMENT_INTERPRETER}"
-      install --editable "./${BASSTLER_SOURCE_TREE}")
+      install "${BASSTLER_EDITABLE_INSTALL_ARGUMENTS[@]}")
   fi
   BASSTLER_INSTALL_OUTPUT="$("${BASSTLER_INSTALL_COMMAND[@]}" 2>&1)"
 }

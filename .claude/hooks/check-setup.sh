@@ -191,7 +191,7 @@ elif [ -z "${MISSING_DEPENDENCIES}" ]; then
   report dashboard_dependencies ok "every requirement ${BASSTLER_PYPROJECT_FILE} declares is installed for ${BASSTLER_PYTHON}"
 else
   report dashboard_dependencies needs-setup \
-    "not installed for ${BASSTLER_PYTHON}:${MISSING_DEPENDENCIES// / } - a session start installs them, or run: pip --python ${BASSTLER_PYTHON} install --editable ./${BASSTLER_SOURCE_TREE}"
+    "not installed for ${BASSTLER_PYTHON}:${MISSING_DEPENDENCIES// / } - a session start installs them, or run: pip --python ${BASSTLER_PYTHON} install ${BASSTLER_EDITABLE_INSTALL_ARGUMENTS[*]}"
 fi
 
 # %% the result of it all working

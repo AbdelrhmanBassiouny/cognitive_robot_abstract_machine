@@ -14,6 +14,7 @@ from basstler.locations import ProjectLocation
 from .constants import DatasetLocation, PersonalNotesPath
 from .project_declaration import ProjectDeclaration
 from .scratch_repository import ScratchRepository
+from .script_runner import editable_install_arguments
 
 PLAN_MANIFEST = (DatasetLocation.DIRECTORY / "plan.yaml").read_text()
 PLAN_ROADMAP = (DatasetLocation.DIRECTORY / "roadmap.md").read_text()
@@ -99,9 +100,7 @@ def test_refuses_when_a_declared_dependency_is_not_installed(
 
     assert result.returncode == 1
     assert UNINSTALLABLE_REQUIREMENT in result.stderr
-    assert (
-        f"install --editable ./{ProjectLocation.PACKAGE_SOURCE_TREE}" in result.stderr
-    )
+    assert f"install {editable_install_arguments()}" in result.stderr
 
 
 def test_refuses_when_the_declaration_cannot_be_read(

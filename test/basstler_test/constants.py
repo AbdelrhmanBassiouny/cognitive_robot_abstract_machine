@@ -243,6 +243,12 @@ class ConfigurationVariable(StrEnum):
     The supported interpreters looked for by name, separated by spaces.
     """
 
+    WORKSPACE_DEPENDENCIES = "BASSTLER_WORKSPACE_DEPENDENCIES"
+    """
+    The packages of this repository the package depends on, installed from the clone
+    beside it, separated by spaces.
+    """
+
     UV_DIRECTORY = "BASSTLER_UV_DIRECTORY"
     """
     Where a session start installs ``uv`` when it finds neither ``uv`` nor a supported

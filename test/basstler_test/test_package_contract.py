@@ -23,6 +23,7 @@ import pytest
 from basstler.locations import ClaudeCodeVariable, PackageLocation, ProjectLocation
 
 from basstler import _version
+from basstler.dependencies import Dependency
 from basstler.package_layout import (
     PackageModule,
     command_line_entry_points,
@@ -107,7 +108,8 @@ One ``NAME="basstler.module"`` assignment in the shell configuration.
 """
 
 DEPENDENCY_INSTALL = re.compile(
-    r"(pip install|uv pip install|uv sync)[^\n]*" r"(BASSTLER_SOURCE_TREE|basstler)"
+    r"(pip install|uv pip install|uv sync)[^\n]*"
+    r"(BASSTLER_EDITABLE_INSTALL_ARGUMENTS|BASSTLER_SOURCE_TREE|basstler)"
 )
 """
 A step that installs this package, and with it the dependencies its metadata declares,
@@ -131,6 +133,14 @@ def names_of(module: PackageModule) -> frozenset[str]:
     }
 
 
+def workspace_dependencies() -> list[str]:
+    """
+    :return: The packages of this repository the shell installs beside the package, in
+        the order it installs them.
+    """
+    return configuration_value(ConfigurationVariable.WORKSPACE_DEPENDENCIES).split()
+
+
 def installs_the_dependencies(caller_source: str) -> bool:
     """
     :param caller_source: A caller's own file.
@@ -151,6 +161,31 @@ def test_a_caller_imports_the_clones_own_source_with_no_install():
 
     assert result.returncode == 0, result.stderr
     assert Path(result.stdout.strip()) == PackageLocation.DIRECTORY / "__init__.py"
+
+
+def test_a_caller_imports_the_clones_own_workspace_dependencies_with_no_install():
+    """
+    The packages of this repository the package depends on are imported from this clone
+    too, so a caller runs before any install, and on the clone's own copy after one.
+    """
+    imported_files = [
+        Path(
+            run_as_a_caller(
+                "-S", "-c", f"import {dependency}; print({dependency}.__file__)"
+            ).stdout.strip()
+        )
+        for dependency in workspace_dependencies()
+    ]
+
+    assert workspace_dependencies() != []
+    assert imported_files == [
+        PackageLocation.REPOSITORY_ROOT.value
+        / dependency
+        / "src"
+        / dependency
+        / "__init__.py"
+        for dependency in workspace_dependencies()
+    ]
 
 
 def test_the_package_version_is_the_repository_version():
@@ -283,6 +318,24 @@ def test_the_shell_creates_the_environment_the_package_names():
     assert configuration_value(ConfigurationVariable.ENVIRONMENT_DIRECTORY) == str(
         ProjectLocation.PACKAGE_ENVIRONMENT
     )
+
+
+def test_the_shell_installs_the_workspace_packages_the_package_depends_on():
+    """
+    Every dependency that is a package of this repository is installed from the clone,
+    because the clone's copy is the one the package is written against.
+    """
+    declared = {
+        Dependency(specifier).distribution_name
+        for specifier in ProjectDeclaration.of_this_package().dependencies
+    }
+    workspace_packages = {
+        directory.name
+        for directory in PackageLocation.REPOSITORY_ROOT.value.iterdir()
+        if (directory / PackageLocation.DEPENDENCY_DECLARATION.value.name).is_file()
+    }
+
+    assert set(workspace_dependencies()) == declared & workspace_packages
 
 
 def test_the_shell_asks_for_the_interpreters_the_package_supports():
