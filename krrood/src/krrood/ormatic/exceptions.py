@@ -7,32 +7,13 @@ from typing_extensions import Type, Any, List, TYPE_CHECKING
 from sqlalchemy.orm import RelationshipProperty
 
 from krrood.exceptions import DataclassException
+from krrood_core.exceptions import NoGenericError
 
 if TYPE_CHECKING:
     from krrood.ormatic.data_access_objects.alternative_mappings import FunctionMapping
     from krrood.ormatic.data_access_objects.conversion_order import (
         ConversionOrderConstraint,
     )
-
-
-@dataclass
-class NoGenericError(DataclassException, TypeError):
-    """
-    Exception raised when the original class for a DataAccessObject subclass cannot be
-    determined.
-
-    This exception is typically raised when a DataAccessObject subclass has not been
-    parameterized properly, which prevents identifying the original class associated
-    with it.
-    """
-
-    clazz: Type
-
-    def error_message(self) -> str:
-        return f"Cannot determine original class for {self.clazz}."
-
-    def suggest_correction(self) -> str:
-        return "did you forget to parameterise the DataAccessObject subclass?"
 
 
 @dataclass
