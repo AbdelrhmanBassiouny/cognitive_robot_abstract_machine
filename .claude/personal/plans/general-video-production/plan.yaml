@@ -62,11 +62,14 @@ items:
   status: not started
   depends_on:
   - video-core
-  notes: '#429 imports cramcorder and must follow its API changes listed on #471 (Video base, Scene as Role[Video] with Transition, FootagePlayback, krrood.units).
-    #429 is based on real-experiments-tracy-icra-2026, so the package must reach that branch
-    first (merge main into it once video-core lands). The ICRA branch keeps sources, perception,
-    twin, grasp, rules, attribution, perturbations, long_term, script, icra_video, the framework.typ
-    changes, backend inks, TABLE_FRAMING and the icra_2027 limits.'
+  notes: >
+    #429 imports crollywood (renamed from cramcorder) and must follow its API changes listed on #471
+    (the latest: the renames of ee1e7bdad, SubmissionLimits in crollywood.submission with
+    video.check_within, and a ResultsTable subclass of TabularDataSlide in an experiments video
+    module). #429 is based on real-experiments-tracy-icra-2026, so the package must reach that
+    branch first (merge main into it once video-core lands). The ICRA branch keeps sources,
+    perception, twin, grasp, rules, attribution, perturbations, long_term, script, icra_video, the
+    framework.typ changes, backend inks, TABLE_FRAMING and the icra_2027 limits.
 - id: figure-stages-general
   title: Typst-figure close-ups (magnify, pointer, answering) made general
   branch: claude/general-figure-scenes
