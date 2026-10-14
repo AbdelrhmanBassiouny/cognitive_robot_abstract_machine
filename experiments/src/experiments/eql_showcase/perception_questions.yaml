@@ -1,0 +1,44 @@
+# The questions the perception showcase offers about what the camera saw.
+#
+# Every look at the Montessori scene is committed into a digital twin -- the table, the
+# board's lid, each hole and each piece found -- and asked about with the twin's own
+# predicates, through the same query language as everything the robot knows.
+# The pieces are annotated with their kind (CubeShape, CylinderShape, ...), all of them a
+# MontessoriShape.
+
+- scope: current_state
+  text: What does the camera see?
+  code: |
+    piece = variable(MontessoriShape, world.semantic_annotations)
+    an(entity(piece.root))
+
+- scope: current_state
+  text: Which pieces did it find on the table?
+  code: |
+    piece = variable(MontessoriShape, world.semantic_annotations)
+    table = variable(Table, world.semantic_annotations)
+    an(entity(piece.root).where(SupportedBy(piece.root, table.root)))
+
+- scope: current_state
+  text: Which pieces did it find on the board?
+  code: |
+    piece = variable(MontessoriShape, world.semantic_annotations)
+    board = variable(Body, world.bodies)
+    an(entity(piece.root).where(board.name.name == 'board', SupportedBy(piece.root, board)))
+
+- scope: current_state
+  text: Which holes did it find in the board?
+  code: |
+    an(entity(variable(Region, world.regions)))
+
+- scope: current_state
+  text: Is any piece standing in a hole?
+  code: |
+    piece = variable(MontessoriShape, world.semantic_annotations)
+    hole = variable(Region, world.regions)
+    an(entity(piece.root).where(InsideRegion(piece.root, hole)))
+
+- scope: current_state
+  text: Which cubes did it see?
+  code: |
+    an(entity(variable(CubeShape, world.semantic_annotations).root))
