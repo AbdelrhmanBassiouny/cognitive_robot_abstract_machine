@@ -1204,6 +1204,47 @@ class StatechartNode(SubclassJSONSerializer, metaclass=ABCMeta):
             ),
         )
 
+    def create_life_cycle_forced_by_parent(self) -> sm.Scalar:
+        """
+        :return: The life cycle state this node reaches in a pass through the
+            transitions its parent forces on it alone, the same as
+            :meth:`create_lifecycle_transitions` reaches while no transition triggered
+            by this node's own conditions may happen. The parent is read through its
+            :attr:`life_cycle_variable`.
+        """
+        return sm.if_cases(
+            cases=[
+                (
+                    self._parent_is(LifeCyclePredicate.IS_NOT_STARTED),
+                    sm.Scalar(LifeCycleValues.NOT_STARTED),
+                ),
+                (
+                    sm.logic_and(
+                        self._parent_is(LifeCyclePredicate.IS_TERMINATED),
+                        sm.logic_or(
+                            self.life_cycle_predicate_expression(
+                                LifeCyclePredicate.IS_RUNNING
+                            ),
+                            self.life_cycle_predicate_expression(
+                                LifeCyclePredicate.IS_PAUSED
+                            ),
+                        ),
+                    ),
+                    sm.Scalar(LifeCycleValues.INTERRUPTED),
+                ),
+                (
+                    sm.logic_and(
+                        self._parent_is(LifeCyclePredicate.IS_PAUSED),
+                        self.life_cycle_predicate_expression(
+                            LifeCyclePredicate.IS_RUNNING
+                        ),
+                    ),
+                    sm.Scalar(LifeCycleValues.PAUSED),
+                ),
+            ],
+            else_result=self.life_cycle_variable,
+        )
+
     def _create_end_cases(
         self, own_transitions_allowed: sm.Scalar
     ) -> List[Tuple[sm.Scalar, sm.Scalar]]:

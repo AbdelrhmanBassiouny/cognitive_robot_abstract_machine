@@ -603,21 +603,16 @@ class CompiledTick:
             )
             for index, node in enumerate(self._nodes)
         ]
-        with_own_transitions, forced_only = self._create_next_life_cycles()
+        next_life_cycles, forced_life_cycles = self._create_next_life_cycles()
         life_cycles = self._read_this_pass_observations(
-            sm.Vector(with_own_transitions + forced_only),
+            sm.Vector(next_life_cycles + forced_life_cycles),
             observations=observations,
             last_observations=last_observations,
         )
         next_life_cycles = list(life_cycles)[: len(self._nodes)]
         forced_life_cycles = list(life_cycles)[len(self._nodes) :]
         own_transitions_taken = [
-            sm.if_eq(
-                next_life_cycle,
-                forced_life_cycle,
-                if_result=own_transition_taken,
-                else_result=sm.Scalar.const_true(),
-            )
+            sm.logic_or(own_transition_taken, next_life_cycle != forced_life_cycle)
             for next_life_cycle, forced_life_cycle, own_transition_taken in zip(
                 next_life_cycles,
                 forced_life_cycles,
@@ -641,27 +636,30 @@ class CompiledTick:
                 node._observation_expression
             ),
         )
-        return sm.if_else(
-            condition=sm.logic_or(
-                node.life_cycle_predicate_expression(LifeCyclePredicate.IS_RUNNING),
-                node.life_cycle_predicate_expression(LifeCyclePredicate.IS_PAUSED),
-            ),
-            if_result=sm.if_eq_cases(
-                a=self._life_cycle_at_cycle_start.variables[index],
-                b_result_cases=[
-                    (int(LifeCycleValues.RUNNING), observed),
-                    (int(LifeCycleValues.PAUSED), node.observation_variable),
-                ],
-                else_result=sm.Scalar.const_trinary_unknown(),
-            ),
-            else_result=sm.if_eq_cases(
-                a=self._life_cycle_at_cycle_start.variables[index],
-                b_result_cases=[
-                    (int(LifeCycleValues.RUNNING), node.last_observation),
-                    (int(LifeCycleValues.PAUSED), node.last_observation),
-                ],
-                else_result=sm.Scalar.const_trinary_unknown(),
-            ),
+        life_cycle_at_cycle_start = self._life_cycle_at_cycle_start.variables[index]
+        ran_at_cycle_start = LifeCyclePredicate.IS_RUNNING.expression(
+            life_cycle_at_cycle_start
+        )
+        paused_at_cycle_start = LifeCyclePredicate.IS_PAUSED.expression(
+            life_cycle_at_cycle_start
+        )
+        still_running_or_paused = sm.logic_or(
+            node.life_cycle_predicate_expression(LifeCyclePredicate.IS_RUNNING),
+            node.life_cycle_predicate_expression(LifeCyclePredicate.IS_PAUSED),
+        )
+        return sm.if_cases(
+            cases=[
+                (sm.logic_and(ran_at_cycle_start, still_running_or_paused), observed),
+                (
+                    sm.logic_and(paused_at_cycle_start, still_running_or_paused),
+                    node.observation_variable,
+                ),
+                (
+                    sm.logic_or(ran_at_cycle_start, paused_at_cycle_start),
+                    node.last_observation,
+                ),
+            ],
+            else_result=sm.Scalar.const_trinary_unknown(),
         )
 
     def _create_next_life_cycles(
@@ -672,32 +670,32 @@ class CompiledTick:
         parent reaches in the same pass, so a node never starts under a parent that stops
         running in that pass.
 
-        :return: The life cycle state of every node, and the one it would reach without
-            any transition triggered by its own conditions, both in node order.
+        :return: The life cycle state of every node, and the one its parent alone
+            forces it into, see
+            :meth:`~cramph.node.StatechartNode.create_life_cycle_forced_by_parent`, both
+            in node order.
         """
-        with_own_transitions: List[Optional[sm.Scalar]] = [None] * len(self._nodes)
-        forced_only: List[Optional[sm.Scalar]] = [None] * len(self._nodes)
+        next_life_cycles: List[Optional[sm.Scalar]] = [None] * len(self._nodes)
+        forced_life_cycles: List[Optional[sm.Scalar]] = [None] * len(self._nodes)
         for node in sorted(self._nodes, key=lambda node: node.depth):
-            with_own_transitions[node.index] = self._create_next_life_cycle(
-                node,
-                own_transitions_allowed=sm.logic_not(
-                    self._own_transition_taken.variables[node.index]
-                ),
+            life_cycles = sm.Vector(
+                [
+                    self._create_next_life_cycle(
+                        node,
+                        own_transitions_allowed=sm.logic_not(
+                            self._own_transition_taken.variables[node.index]
+                        ),
+                    ),
+                    node.create_life_cycle_forced_by_parent(),
+                ]
             )
-            forced_only[node.index] = self._create_next_life_cycle(
-                node, own_transitions_allowed=sm.Scalar.const_false()
-            )
-            if node.parent_node is None:
-                continue
-            parent_variable = [node.parent_node.life_cycle_variable]
-            parent_next_life_cycle = [with_own_transitions[node.parent_node_index]]
-            with_own_transitions[node.index] = with_own_transitions[
-                node.index
-            ].substitute(parent_variable, parent_next_life_cycle)
-            forced_only[node.index] = forced_only[node.index].substitute(
-                parent_variable, parent_next_life_cycle
-            )
-        return with_own_transitions, forced_only
+            if node.parent_node is not None:
+                life_cycles = life_cycles.substitute(
+                    [node.parent_node.life_cycle_variable],
+                    [next_life_cycles[node.parent_node_index]],
+                )
+            next_life_cycles[node.index], forced_life_cycles[node.index] = life_cycles
+        return next_life_cycles, forced_life_cycles
 
     @staticmethod
     def _create_next_life_cycle(

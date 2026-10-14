@@ -1,6 +1,9 @@
 import json
 
 import pytest
+from typing_extensions import Iterator
+
+from cramph.executor import RealTimePacer
 
 from experiments.control_loop_experiments.benchmark import (
     ControlLoopBenchmarkResult,
@@ -9,6 +12,7 @@ from experiments.control_loop_experiments.benchmark import (
     PhaseBreakdownResult,
 )
 from experiments.control_loop_experiments.scenarios import (
+    BenchmarkRobot,
     CartesianGoalScenario,
     DeeplyNestedCascadeScenario,
     LongSequenceScenario,
@@ -249,6 +253,35 @@ class TestPhaseAccounting:
         )
 
         assert accounted == pytest.approx(control_cycle.inclusive_total, rel=1e-9)
+
+
+@pytest.fixture()
+def benchmark_robot(init_rospy) -> Iterator[BenchmarkRobot]:
+    robot = BenchmarkRobot(
+        plotter_mode=PlotterMode.PLAIN,
+        target_frequency=ScenarioRunner.target_frequency,
+    )
+    yield robot
+    robot.close()
+
+
+class TestControlLoopPacing:
+    """
+    The control loop is measured at the pace a robot is commanded at, so cycles share
+    the machine with everything else running in between as they do on a robot.
+    """
+
+    def test_the_control_loop_is_paced_in_real_time(
+        self, benchmark_robot: BenchmarkRobot
+    ):
+        assert isinstance(benchmark_robot.giskard.executor.pacer, RealTimePacer)
+
+    def test_the_control_loop_is_paced_at_one_cycle_per_control_time_step(
+        self, benchmark_robot: BenchmarkRobot
+    ):
+        pacer = benchmark_robot.giskard.executor.pacer
+
+        assert pacer.cycle_duration == pytest.approx(benchmark_robot.control_delta_time)
 
 
 @pytest.mark.slow

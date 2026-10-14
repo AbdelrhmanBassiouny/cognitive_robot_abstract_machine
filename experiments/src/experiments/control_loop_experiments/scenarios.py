@@ -28,6 +28,7 @@ from giskardpy.motion_statechart.goals.collision_avoidance import (
     UpdateTemporaryCollisionRules,
 )
 from cramph.composites import Parallel, Sequence
+from cramph.executor import Pacer, RealTimePacer
 from cramph.monitors import CheckTickCount
 from cramph.node import StatechartNode
 from giskardpy.motion_statechart.context import MotionControlContext
@@ -98,10 +99,24 @@ class PlotterMode(StrEnum):
 
 
 @dataclass
+class RealTimeStandaloneServerConfig(GiskardServerConfig):
+    """
+    Simulates the motion in place, at the pace a robot is commanded at.
+    """
+
+    def create_pacer(self) -> Pacer:
+        """
+        Unlike :meth:`GiskardServerConfig.create_pacer`, holds a simulated motion to
+        real time as well.
+        """
+        return RealTimePacer()
+
+
+@dataclass
 class BenchmarkRobot(GiskardTester):
     """
-    A PR2 that runs its motions in place, so the control loop is measured without a
-    simulator or hardware in between.
+    A PR2 that runs its motions in place at the pace of a real robot, so the control
+    loop is measured without a simulator or hardware in between.
     """
 
     plotter_mode: PlotterMode = PlotterMode.DEBUG
@@ -109,7 +124,7 @@ class BenchmarkRobot(GiskardTester):
     Whether the post goal plotters record the motion, which costs time in every cycle.
     """
 
-    target_frequency: float = 20.0
+    target_frequency: float = field(kw_only=True)
     """
     Frequency the controller is discretized for, in hertz.
     """
@@ -198,7 +213,7 @@ class BenchmarkRobot(GiskardTester):
                 )
             ),
             robot_interface_config=PR2StandaloneInterface(),
-            server_config=GiskardServerConfig(
+            server_config=RealTimeStandaloneServerConfig(
                 execution_mode=ExecutionMode.STANDALONE,
                 debug_mode=records_trajectory,
                 plot_trajectory=records_trajectory,
@@ -689,7 +704,7 @@ class ScenarioRunner:
     Whether the post goal plotters record the motion while it is measured.
     """
 
-    target_frequency: float = 20.0
+    target_frequency: float = 100.0
     """
     Frequency the controller is discretized for, in hertz.
     """
