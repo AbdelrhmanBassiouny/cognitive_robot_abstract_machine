@@ -602,6 +602,9 @@ Panels.define('robot-scene', function (root, bus) {
         if (m.robot) robotModel = entry;
         worldRoot.add(obj);
         refreshFrameAxes();          // every link of the model is a frame
+        // a demo at rest publishes no new state, so the next poll re-applies the newest
+        // one to place this model at its live base and joints
+        lastSeq = -1;
         needsRender = true;
       });
     });
