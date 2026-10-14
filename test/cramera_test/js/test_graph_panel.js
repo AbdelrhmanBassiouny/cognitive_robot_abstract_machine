@@ -276,6 +276,80 @@ test('step rows and motion details expose descriptions as plain tooltip text', a
 });
 
 
+test('clicking a step name shows its concept in the ontology', async function () {
+  const concept = {
+    ok: true, edges: [], breadcrumb: 'Transport',
+    nodes: [{ id: 'actions.Transport', label: 'Transport' }],
+    details: { 'actions.Transport': { label: 'Transport', lines: [] } },
+  };
+  const panel = loadPanel({
+    '/api/knowledge': { ok: true, nodes: [], edges: [], details: {} },
+    '/api/knowledge/view?name=plan': {
+      ok: true, edges: [],
+      nodes: [{ id: 'action', kind: 'ActionNode', label: 'Transport', group: 'action' }],
+      details: { action: { label: 'Transport', lines: [] } },
+    },
+    '/api/knowledge/concept?name=Transport': concept,
+  });
+  const root = makeRoot();
+  const stepTree = root.control('#graph-steps').querySelector('.steps-tree');
+  const name = {
+    dataset: { id: 'action' },
+    addEventListener(event, handler) { if (event === 'click') this.click = handler; },
+  };
+  stepTree.querySelectorAll = function (selector) {
+    return selector === '.st-name.concept' ? [name] : [];
+  };
+  const instance = panel.factory(root, makeBus());
+  try {
+    await flush();
+    root.buttons.find(function (button) { return button.dataset.view === 'plan'; }).click();
+    await flush();
+
+    name.click({ stopPropagation() {} });
+    await flush();
+
+    assert.deepStrictEqual(panel.lastBuild().nodes, concept.nodes);
+  } finally {
+    instance.destroy();
+  }
+});
+
+
+test('every candidate an open step tried is a numbered step with why it was rejected', async function () {
+  const reason = 'MotionMadeNoProgress: stopped approaching a goal';
+  const panel = loadPanel({
+    '/api/knowledge': { ok: true, nodes: [], edges: [], details: {} },
+    '/api/knowledge/view?name=plan': { ok: true, nodes: [], edges: [], details: {}, live: 'plan' },
+    'http://bridge/plan': {
+      signature: 's1',
+      nodes: [
+        { id: 'open', kind: 'UnderspecifiedNode', label: 'PickUpAction', status: 'RUNNING' },
+        { id: 'tried', parent: 'open', kind: 'CandidateTrial', label: 'PickUpAction',
+          candidate: 1, status: 'FAILED', description: reason },
+      ],
+    },
+  });
+  const root = makeRoot();
+  const bus = makeBus();
+  const instance = panel.factory(root, bus);
+  try {
+    await flush();
+    root.buttons.find(function (button) { return button.dataset.view === 'plan'; }).click();
+    await flush();
+    bus.emit('live:changed', { on: true, url: 'http://bridge' });
+    await flush();
+
+    const html = root.control('#graph-steps').querySelector('.steps-tree').innerHTML;
+    assert.ok(html.includes('data-id="tried"'));
+    assert.ok(html.includes('candidate 1'));
+    assert.ok(html.includes(reason));
+  } finally {
+    instance.destroy();
+  }
+});
+
+
 // %% live statechart colour groups
 test('statechart nodes are grouped by the kind of node giskardpy compiled', async function () {
   const panel = loadPanel({

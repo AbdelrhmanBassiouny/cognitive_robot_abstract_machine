@@ -22,6 +22,7 @@ from typing_extensions import (
     TYPE_CHECKING,
 )
 from coraplex.plans.plan_node import DesignatorNode
+from coraplex.plans.underspecified import CandidateOutcome, UnderspecifiedNode
 from giskardpy.motion_statechart.data_types import LifeCycleValues
 from krrood.entity_query_language.evaluable import Evaluable
 from krrood.entity_query_language.factories import inference
@@ -174,6 +175,12 @@ class PlanNodeEntry:
     target: Optional[str] = None
     """
     Published object the node's designator refers to, if any.
+    """
+
+    candidate: Optional[int] = None
+    """
+    Which candidate of the open step above it this was, counting from one, if the entry
+    is a candidate an underspecified step tried.
     """
 
     def to_payload(self) -> Dict[str, Any]:
@@ -1374,11 +1381,7 @@ class Bridge:
             parent=parent_id,
             kind=type(node).__name__,
             group=PlanNodeGroup.of_plan_node_kind(type(node).__name__),
-            label=(
-                type(designator).__name__
-                if designator is not None
-                else type(node).__name__
-            ),
+            label=self._plan_node_label(node, designator),
             status=node.status,
             derived=False,
         )
@@ -1386,8 +1389,67 @@ class Bridge:
         nodes.append(entry)
         order.append(node_id)
 
+        if isinstance(node, UnderspecifiedNode):
+            self._serialize_candidate_trials(node, node_id, nodes, order)
         for child in node.children:
             self._serialize_plan_node(child, node_id, nodes, order)
+
+    @staticmethod
+    def _plan_node_label(node: PlanNode, designator: Designator | None) -> str:
+        """
+        The class a plan node stands for: its designator's, the action an
+        underspecified step leaves open, else the node's own.
+
+        :param node: The plan node to label.
+        :param designator: The node's designator, or None.
+        """
+        if designator is not None:
+            return type(designator).__name__
+        if isinstance(node, UnderspecifiedNode):
+            return node.designator_type.__name__
+        return type(node).__name__
+
+    def _serialize_candidate_trials(
+        self,
+        node: UnderspecifiedNode,
+        node_id: str,
+        nodes: List[PlanNodeEntry],
+        order: List[str],
+    ) -> None:
+        """
+        Serialize every candidate an underspecified step tried, in the order it tried
+        them, as a finished entry under the step: succeeded if accepted, failed if its
+        trial rejected it.
+
+        :param node: The underspecified step.
+        :param node_id: Id of the step's entry.
+        :param nodes: Output list every serialized entry is appended to.
+        :param order: Output list every serialized id is appended to.
+        """
+        for index, trial in enumerate(node.candidate_trials):
+            candidate_id = "%s_candidate_%d" % (node_id, index + 1)
+            entry = PlanNodeEntry(
+                id=candidate_id,
+                parent=node_id,
+                kind=type(trial).__name__,
+                group=PlanNodeGroup.of_plan_node_kind(type(trial).__name__),
+                label=type(trial.action).__name__,
+                status=(
+                    LifeCycleValues.SUCCEEDED
+                    if trial.outcome is CandidateOutcome.ACCEPTED
+                    else LifeCycleValues.FAILED
+                ),
+                derived=False,
+                candidate=index + 1,
+            )
+            self._add_designator_metadata(entry, trial.action)
+            if trial.failure is not None:
+                entry.description = "%s: %s" % (
+                    type(trial.failure).__name__,
+                    str(trial.failure).splitlines()[0],
+                )
+            nodes.append(entry)
+            order.append(candidate_id)
 
     def _add_designator_metadata(
         self, entry: PlanNodeEntry, designator: Designator | None

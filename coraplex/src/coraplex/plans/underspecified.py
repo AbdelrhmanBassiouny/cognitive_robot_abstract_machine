@@ -489,15 +489,15 @@ class UnderspecifiedNode(ExecutionBoundaryNode):
         while action is not None:
             failure = self.trial.failure_of(action)
             if failure is None:
-                self._record_trial(action, CandidateOutcome.ACCEPTED)
+                self.record_trial(action, CandidateOutcome.ACCEPTED)
                 self._attach(action)
                 self.current_candidate_sequence.notify()
                 return True
-            self._record_trial(action, CandidateOutcome.REJECTED_IN_TRIAL, failure)
+            self.record_trial(action, CandidateOutcome.REJECTED_IN_TRIAL, failure)
             action = self._pull_next_action()
         return False
 
-    def _record_trial(
+    def record_trial(
         self,
         action: ActionDescription,
         outcome: CandidateOutcome,
