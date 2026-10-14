@@ -34,6 +34,7 @@ if TYPE_CHECKING:
         VerbalizationFragment,
     )
 
+from krrood.entity_query_language.evaluation_context import get_evaluation_context
 from krrood.entity_query_language.utils import T, merge_args_and_kwargs
 from krrood.entity_query_language.core.variable import (
     Variable,
@@ -305,9 +306,14 @@ class Predicate(SymbolicCallable, ABC):
 
     def __bool__(self):
         """
-        Bool casting a predicate evaluates it.
+        Bool casting a predicate evaluates it, once per evaluation of a query.
         """
-        return bool(self.__call__())
+        evaluation_context = get_evaluation_context()
+        if evaluation_context is None:
+            return bool(self.__call__())
+        return not evaluation_context.procedure_results.is_false(
+            self, lambda: not self.__call__()
+        )
 
 
 @dataclass(eq=False)

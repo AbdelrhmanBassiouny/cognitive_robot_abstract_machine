@@ -195,7 +195,7 @@ def _workload_aggregation() -> int:
 def _workload_inference() -> int:
     """Generative inference query that creates a new instance (exercises ``InferenceRecorder``)."""
     SymbolGraph().clear()
-    make_gadget = inference(Gadget)
+    make_gadget = inference(Gadget, reuse_inferred_objects=False)
     query = entity(make_gadget(name="Inferred", weight=5, category="tool"))
     return len(list(query.evaluate()))
 

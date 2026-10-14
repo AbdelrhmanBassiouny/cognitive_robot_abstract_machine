@@ -24,6 +24,10 @@ When EQL infers a new object via an `inference(...)` rule, it automatically atta
 `explain_inference` returns `None` for instances that were not produced by an inference variable
 (e.g. plain instances constructed directly).
 
+An inference variable returns the same object every time it infers it from the same arguments
+(see [Identity of Inferred Objects](writing_rule_trees.md#identity-of-inferred-objects)). Such an
+object carries the explanation of the most recent evaluation that inferred it.
+
 ---
 
 ## Data Model
