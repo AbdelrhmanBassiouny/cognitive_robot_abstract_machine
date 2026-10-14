@@ -86,8 +86,9 @@ items:
   status: not started
   depends_on:
   - video-core
-  notes: 'Stacked on #472. An AnimatedScene in cramcorder.animation (its own optional extra,
-    since Manim needs cairo and pango) turns a Manim scene into a timeline Scene: the storyboard
-    hands it each line''s spoken length (replacing timing.json), one beat per Line (the beats-used
-    check becomes an exception), no sound or captions of its own, rendered to PNG frames or
-    a lossless clip and read back so the picture is compressed once.'
+  notes: >
+    Stacked on #472. An AnimatedScene in crollywood.animation (its own optional extra, since Manim
+    needs cairo and pango) turns a Manim scene into a TimelineScene's video: the storyboard hands it
+    each NarratedLine's spoken length (replacing timing.json), one beat per line (the beats-used
+    check becomes an exception), no sound or captions of its own, rendered to PNG frames or a
+    lossless clip and read back so the picture is compressed once.
