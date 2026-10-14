@@ -1,10 +1,8 @@
 ## Plan
 - #504: typed size limits enforced on save; finished branches' progress notes pruned; session start loads one item.
 ## Done
-- Tooling, tests (797 pass), skill docs; notes data migrated (prior state 37831be62); personal notes condensed to 4.5 KB.
-- #207/#273/#279 closed as superseded; their items removed from plan-size-limits.
-- Rebased onto #501 (src layout, BASSTLER_PYTHON); base is claude/brave-archimedes-nonocl.
+- Tooling, tests (798 pass), skill docs; notes data migrated (prior state 37831be62); #207/#273/#279 closed.
+- Review round 1 (c32c12512): 17 of 19 threads fixed and resolved.
 ## Next
-- #277 needs retargeting to Measure.ITEM_COUNT (recorded as its blocker).
-- Republish the other plans' dashboards when the user wants the cost spent; most cached URLs are dead.
-- Retarget #504 to main once #501 lands.
+- Open for the user: test-side definitions of hook-only names (markers, save-plan flags, hook filenames) in constants.py - threads on test_plan_size_limits.py:76 and test_session_start_sh.py:325/327.
+- #277 needs retargeting to Measure.ITEM_COUNT; retarget #504 to main once #501 lands.
