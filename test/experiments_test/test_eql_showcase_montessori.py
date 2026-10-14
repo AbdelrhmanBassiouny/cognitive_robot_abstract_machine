@@ -121,3 +121,33 @@ def test_inserting_a_piece_resolves_the_open_grasp_arm_and_hole(
         release.position.to_np()[:2],
         atol=PLACEMENT_TOLERANCE,
     )
+
+
+@pytest.fixture
+def unsorted() -> MontessoriSorting:
+    """
+    What builds sorting plans for a fresh look, whose pieces lie where the camera saw
+    them.
+    """
+    look = PerceptionShowcase(bridge=None)
+    look.commit(DEFAULT_CAPTURE)
+    [robot] = look.twin.world.get_semantic_annotations_by_type(Tracy)
+    return MontessoriSorting(twin=look.twin, robot=robot)
+
+
+def test_taking_a_piece_out_puts_it_back_where_the_camera_saw_it(
+    unsorted: MontessoriSorting,
+):
+    [piece, *_] = unsorted.pieces()
+    home = unsorted.homes[piece].position.to_np()[:2]
+    context = Context(unsorted.twin.world, unsorted.robot, sampling_seed=SAMPLING_SEED)
+    plan = sequential(
+        [unsorted.insert(piece.kind), unsorted.take_out(piece.kind)], context=context
+    ).plan
+
+    with kinematically_simulated_robot:
+        plan.perform()
+
+    assert np.allclose(
+        piece.root.global_pose.position.to_np()[:2], home, atol=PLACEMENT_TOLERANCE
+    )

@@ -139,7 +139,7 @@ class MontessoriSorting:
     def take_out(self, kind: Type) -> PlanNode:
         """
         Take the first seen piece of a kind back to where the camera saw it, leaving
-        open which arm and which grasp.
+        open which arm and which grasp; placing it is resolved only once it is held.
 
         :param kind: The kind of piece to take out.
         """
@@ -148,7 +148,10 @@ class MontessoriSorting:
             [
                 ParkArmsAction(self.robot.all_arms),
                 self._pick_up(piece),
-                PlaceAction(object_designator=piece, target_location=self.homes[piece]),
+                a(PlaceAction)(
+                    object_designator=piece,
+                    target_location=variable(Pose, domain=[self.homes[piece]]),
+                ),
                 ParkArmsAction(self.robot.all_arms),
             ]
         )
