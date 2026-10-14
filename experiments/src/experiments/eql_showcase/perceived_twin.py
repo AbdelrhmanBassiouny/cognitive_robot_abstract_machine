@@ -31,7 +31,10 @@ from semantic_digital_twin.semantic_annotations.semantic_annotations import Tabl
 from semantic_digital_twin.adapters.urdf import URDFParser
 from semantic_digital_twin.spatial_types import HomogeneousTransformationMatrix
 from semantic_digital_twin.world import World
-from semantic_digital_twin.world_description.connections import FixedConnection
+from semantic_digital_twin.world_description.connections import (
+    Connection6DoF,
+    FixedConnection,
+)
 from semantic_digital_twin.world_description.geometry import Box, Color, Scale
 from semantic_digital_twin.world_description.shape_collection import ShapeCollection
 from semantic_digital_twin.world_description.world_entity import (
@@ -304,15 +307,27 @@ class PerceivedTwin:
         :param index: Its position among the pieces of the look, to tell pieces of the
             same kind apart.
         """
-        body = self._place_body(
-            f"{self.kind_of(piece.category)} {index + 1}",
-            Box(
-                scale=Scale(
-                    piece.footprint.width, piece.footprint.length, piece.height
-                ),
-                color=self.colors.get(piece.category, UNKNOWN_PIECE_COLOR),
+        body = Body.from_shape_collection(
+            self._name(f"{self.kind_of(piece.category)} {index + 1}"),
+            ShapeCollection(
+                [
+                    Box(
+                        scale=Scale(
+                            piece.footprint.width, piece.footprint.length, piece.height
+                        ),
+                        color=self.colors.get(piece.category, UNKNOWN_PIECE_COLOR),
+                    )
+                ]
             ),
-            self._resting_on(piece, piece.surface_height + piece.height / 2),
+        )
+        self.world.add_kinematic_structure_entity(body)
+        # a piece is free to be picked up, so it hangs on its own six degrees of freedom
+        connection = Connection6DoF.create_with_dofs(
+            world=self.world, parent=self.root, child=body
+        )
+        self.world.add_connection(connection)
+        connection.origin = self._resting_on(
+            piece, piece.surface_height + piece.height / 2
         )
         self.committed.append(body)
         self.world.add_semantic_annotation(piece.category(name=body.name, root=body))
@@ -387,15 +402,19 @@ class PerceivedTwin:
         self, detection: MontessoriDetection, height: float
     ) -> HomogeneousTransformationMatrix:
         """
-        Where a detection stands, turned the way its footprint lies: a footprint's
-        length runs across its yaw, its width along it.
+        Where a detection stands in the map frame, turned the way its footprint lies: a
+        footprint's length runs across its yaw, its width along it.
 
         :param detection: The detection to place.
         :param height: Height of its centre, in metres.
         """
         x, y = detection.pose.position.to_np()[:2]
         return HomogeneousTransformationMatrix.from_xyz_rpy(
-            x=float(x), y=float(y), z=height, yaw=detection.footprint.yaw
+            x=float(x),
+            y=float(y),
+            z=height,
+            yaw=detection.footprint.yaw,
+            reference_frame=self.root,
         )
 
     @staticmethod

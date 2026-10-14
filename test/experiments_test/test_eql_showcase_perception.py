@@ -17,6 +17,7 @@ from experiments.eql_showcase.perception_demo import (
 from experiments.montessori.perception.detections import MontessoriScene
 from experiments.montessori.perception.pipeline import MontessoriPerceptionPipeline
 from experiments.montessori.semantics import MontessoriShape
+from semantic_digital_twin.world_description.connections import Connection6DoF
 
 from .dataset import montessori_scene_fixtures
 from .dataset.montessori_capture_truths import CAPTURE_TRUTHS
@@ -86,6 +87,17 @@ def test_a_new_look_replaces_the_previous_one(
         twin.root.name,
         twin.table.name,
     ]
+
+
+def test_every_piece_seen_is_free_to_be_moved(
+    twin: PerceivedTwin, scene: MontessoriScene
+):
+    twin.commit(scene)
+
+    assert all(
+        isinstance(piece.root.parent_connection, Connection6DoF)
+        for piece in seen_pieces(twin)
+    )
 
 
 def test_a_piece_seen_on_the_table_rests_on_it(
