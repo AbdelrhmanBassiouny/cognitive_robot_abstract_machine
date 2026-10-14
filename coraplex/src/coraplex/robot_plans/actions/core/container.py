@@ -18,6 +18,7 @@ from krrood.entity_query_language.factories import (
 from krrood.entity_query_language.query.match import Match
 from cramph.context import StatechartContext
 from coraplex.config.action_conf import ActionConfig
+from coraplex.querying.grasp_closeness import GraspsClosestToTheRobot
 from coraplex.querying.predicates import GripperIsFree
 from cramph.composites import Sequence
 from cramph.node import StatechartNode
@@ -56,10 +57,14 @@ class MovesHandle(Action, HasGraspChoice, ABC):
         :param handle: The handle of the container.
         :param arm: The arm that takes hold of the handle.
         :return: This action on `handle`, with the grasp left open among the grasps
-            the handle offers.
+            the handle offers, the closest to where the robot stands when it is grounded
+            first.
         """
         return a(cls)(
-            grasp=variable(GraspCandidate, domain=handle.grasp_candidates()), arm=arm
+            grasp=variable(
+                GraspCandidate, domain=GraspsClosestToTheRobot(handle, arm._robot)
+            ),
+            arm=arm,
         )
 
 

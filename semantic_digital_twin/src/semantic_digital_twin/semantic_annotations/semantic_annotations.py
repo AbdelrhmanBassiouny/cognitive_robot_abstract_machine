@@ -153,8 +153,8 @@ class Handle(HasGraspCandidates):
 
     def grasp_candidates(self) -> List[GraspCandidate]:
         """
-        The grasps at the handle's origin that close around its bar, one approaching
-        from each of the four sides around it.
+        The grasps at the centre of the handle's bar that close around it, one
+        approaching from each of the four sides around it.
 
         The bar runs along the longest extent of the root's collision geometry.
 
@@ -163,12 +163,10 @@ class Handle(HasGraspCandidates):
         """
         if not self.root.has_collision():
             raise NoGraspGeometry(self)
-        scale = (
-            self.root.collision.as_bounding_box_collection_in_frame(self.root)
-            .bounding_box()
-            .scale
-        )
-        extents = [scale.x, scale.y, scale.z]
+        bar = self.root.collision.as_bounding_box_collection_in_frame(
+            self.root
+        ).bounding_box()
+        extents = [bar.scale.x, bar.scale.y, bar.scale.z]
         directions = [
             (Vector3.X(), Vector3.NEGATIVE_X()),
             (Vector3.Y(), Vector3.NEGATIVE_Y()),
@@ -180,6 +178,7 @@ class Handle(HasGraspCandidates):
             GraspCandidate(
                 self,
                 Pose(
+                    position=bar.center,
                     orientation=RotationMatrix.from_vectors(
                         x=approach, y=bar_direction.cross(approach)
                     ).quaternion,

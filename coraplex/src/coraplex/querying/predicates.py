@@ -1,9 +1,9 @@
 from dataclasses import dataclass
 
 import numpy as np
-from numpy.typing import NDArray
-from typing_extensions import List, Callable, Tuple
+from typing_extensions import List, Callable
 
+from coraplex.querying.grasp_closeness import GraspCloseness
 from krrood.entity_query_language.predicate import Predicate, RenderedFields
 from krrood.entity_query_language.verbalization.fragments.base import (
     VerbalizationFragment,
@@ -161,9 +161,9 @@ class IsAmongTheClosestGraspsTo(Predicate):
     """
     Whether a grasp is among the grasps closest to where the robot stands.
 
-    Grasps are ranked by their horizontal distance from the standing pose, then by the
-    angle between their approach direction and the direction from the standing pose to
-    them, then by their order in :attr:`grasps`. Left open, :attr:`standing_position` is
+    Grasps are ranked by their
+    :class:`~coraplex.querying.grasp_closeness.GraspCloseness` to the standing pose,
+    then by their order in :attr:`grasps`. Left open, :attr:`standing_position` is
     grounded to the standing poses that suit a fixed grasp.
     """
 
@@ -203,46 +203,19 @@ class IsAmongTheClosestGraspsTo(Predicate):
             len(self.grasps),
         )
         ranked = [*self.grasps[:position], self.grasp, *self.grasps[position + 1 :]]
-        closeness = self._closeness(self.grasp, world_T_object, world_P_standing)
+        closeness = GraspCloseness.of(self.grasp, world_T_object, world_P_standing)
         # Grasps exactly as close as this one rank by the order they are listed in, so
         # no more of them count as the closest than were asked for.
         ranked_ahead = sum(
             1
             for index, other_closeness in enumerate(
-                self._closeness(grasp, world_T_object, world_P_standing)
+                GraspCloseness.of(grasp, world_T_object, world_P_standing)
                 for grasp in ranked
             )
             if other_closeness < closeness
             or (other_closeness == closeness and index < position)
         )
         return ranked_ahead < self.number_of_grasps
-
-    @staticmethod
-    def _closeness(
-        grasp: GraspCandidate,
-        world_T_object: NDArray[np.float64],
-        world_P_standing: NDArray[np.float64],
-    ) -> Tuple[float, float]:
-        """
-        Computes a tuple of the horizontal distance from the standing pose to `grasp`,
-        and the angle between the direction `grasp` is approached along and the
-        direction from the standing pose to it.
-
-        :param grasp: A grasp on the object.
-        :param world_T_object: The object's root frame in the world frame.
-        :param world_P_standing: Where the robot stands, as a homogeneous point in the
-            world frame.
-        :return: the tuple of the horizontal distance and the angle.
-        """
-        world_T_grasp = world_T_object @ grasp.grasp_pose.to_np()
-        world_V_standing_to_grasp = world_T_grasp[:, 3] - world_P_standing
-        horizontal_distance = np.linalg.norm(world_V_standing_to_grasp[:2])
-        distance = np.linalg.norm(world_V_standing_to_grasp)
-        if distance == 0:
-            # Standing exactly at the grasp leaves no direction to approach it from.
-            return float(horizontal_distance), 0.0
-        cosine = world_T_grasp[:, 0] @ world_V_standing_to_grasp / distance
-        return float(horizontal_distance), float(np.arccos(np.clip(cosine, -1.0, 1.0)))
 
     @classmethod
     def _verbalization_fragment_(cls, fields: RenderedFields) -> VerbalizationFragment:

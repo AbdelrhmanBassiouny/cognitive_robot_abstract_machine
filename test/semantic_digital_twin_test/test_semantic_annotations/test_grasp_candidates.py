@@ -248,9 +248,12 @@ def test_cutlery_without_a_shape_offers_no_grasp():
 # %% handle grasp poses
 
 
-def _handle_with_bar_along(bar_axis: int) -> Handle:
+def _handle_with_bar_along(
+    bar_axis: int, bar_center: tuple[float, float, float] = (0.0, 0.0, 0.0)
+) -> Handle:
     """
     :param bar_axis: The axis of its own frame the handle's bar runs along.
+    :param bar_center: Where the bar's centre lies in the handle's own frame.
     :return: A handle whose collision box is long along that axis.
     """
     extents = [0.03, 0.03, 0.02]
@@ -258,7 +261,12 @@ def _handle_with_bar_along(bar_axis: int) -> Handle:
     body = Body(
         name=PrefixedName(f"handle_along_{bar_axis}", prefix="grasp_candidates"),
         collision=ShapeCollection(
-            [Box(origin=HomogeneousTransformationMatrix(), scale=Scale(*extents))]
+            [
+                Box(
+                    origin=HomogeneousTransformationMatrix.from_xyz_rpy(*bar_center),
+                    scale=Scale(*extents),
+                )
+            ]
         ),
     )
     annotation = Handle(root=body)
@@ -294,10 +302,16 @@ def test_a_handle_is_approached_from_every_side_across_its_bar(bar_axis):
         assert float(np.dot(closing, bar_direction)) == pytest.approx(0, abs=1e-9)
 
 
-def test_a_handle_is_grasped_at_its_origin():
-    for grasp in _handle_with_bar_along(1).grasp_candidates():
+def test_a_handle_is_grasped_at_the_centre_of_its_bar():
+    """
+    A handle's frame may sit at its mount rather than on the bar, so the grasps are
+    placed where the bar is.
+    """
+    bar_center = (0.04, 0.0, -0.01)
+
+    for grasp in _handle_with_bar_along(1, bar_center).grasp_candidates():
         np.testing.assert_allclose(
-            grasp.grasp_pose.to_np()[:3, 3], np.zeros(3), atol=1e-9
+            grasp.grasp_pose.to_np()[:3, 3], bar_center, atol=1e-9
         )
 
 

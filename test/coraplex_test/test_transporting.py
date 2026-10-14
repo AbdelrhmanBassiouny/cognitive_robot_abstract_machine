@@ -823,10 +823,39 @@ def test_an_opening_of_a_handle_is_grounded_by_every_grasp_the_handle_offers(
         )
     )
 
-    assert [opening.grasp.grasp_pose.to_np().tolist() for opening in openings] == [
-        grasp.grasp_pose.to_np().tolist() for grasp in handle.grasp_candidates()
-    ]
+    assert sorted(_grasp_signature(opening.grasp) for opening in openings) == sorted(
+        _grasp_signature(grasp) for grasp in handle.grasp_candidates()
+    )
     assert all(opening.arm is robot.left_arm for opening in openings)
+
+
+@pytest.mark.parametrize("facing_grasp_index", [0, 1], ids=["first", "second"])
+def test_an_opening_of_a_handle_first_tries_the_grasp_facing_the_robot(
+    pr2_apartment_context, facing_grasp_index
+):
+    """
+    Which side of a handle faces out of the furniture differs between models, so of the
+    grasps approached horizontally, the one approached straight from where the robot
+    stands is tried first, wherever the robot moved before the opening is grounded.
+    """
+    world, robot, extensions = pr2_apartment_context
+    handle = Handle(root=world.get_body_by_name(DRAWER_HANDLE))
+    opening = OpenAction.from_handle(handle, robot.left_arm)
+    horizontally_approached = [
+        grasp
+        for grasp in handle.grasp_candidates()
+        if world.transform(grasp.grasp_pose, world.root).to_np()[2, 0]
+        == pytest.approx(0, abs=1e-9)
+    ]
+    facing_grasp = horizontally_approached[facing_grasp_index]
+    standing = _standing_in_front_of(facing_grasp, world)
+    robot.root.parent_connection.origin = HomogeneousTransformationMatrix.from_xyz_rpy(
+        standing.x, standing.y, 0.0, reference_frame=world.root
+    )
+
+    first_opening = next(iter(EntityQueryLanguageGenerativeBackend().evaluate(opening)))
+
+    assert _grasp_signature(first_opening.grasp) == _grasp_signature(facing_grasp)
 
 
 # %% a move-and-act step acts from where it moved to
