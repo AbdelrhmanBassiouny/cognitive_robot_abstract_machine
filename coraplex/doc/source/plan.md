@@ -38,14 +38,14 @@ Each top-level node of a plan is a tree with a composite at the top and actions 
 flowchart TD
     Root["Composite<br/>(e.g., Sequence, Parallel, TryInOrder, TryAll)"]
     Root --> Action["Actions<br/>(expand into the motions they are made of)"]
-    Root --> Underspecified["UnderspecifiedNode<br/>(grounds an a(...) statement while the plan runs)"]
+    Root --> Underspecified["a(...) statement<br/>(grounded while the plan runs)"]
     Root --> More["More composites<br/>(to structure the subtree)"]
 ```
 
 - Composites define the order and concurrency of their children, and how a failing child affects them.
 - Actions expand into the motions they are made of once they join a statechart.
-- An `UnderspecifiedNode` holds an `a(...)` statement, which is grounded into a concrete action against the world as
-  the steps before it left it, each candidate being tried on a copy of the world first.
+- An `a(...)` statement handed to a composite runs as a `StatementNode`, which grounds it into a concrete action
+  against the world as the steps before it left it, each candidate being tried on a copy of the world first.
 
 ## Why the statechart matters to CoraPlex
 
@@ -55,7 +55,7 @@ flowchart TD
   attempt lets a `TryInOrder` move on to the next alternative, without the plan polling for any of it.
 - **Plans and motions share one control loop.** Actions expand into giskard goals in the same statechart, so the
   controller sees every motion the plan currently runs and the plan sees every motion's progress.
-- **A plan can grow while it runs.** An `UnderspecifiedNode` grounds its statement only once it is reached, against
+- **A plan can grow while it runs.** A `StatementNode` grounds its statement only once it is reached, against
   the world as the steps before it left it, and the chosen action joins the running statechart.
 - **The statechart is the record of what happened.** Every node keeps its life cycle and observation history, which is
   what visualizations, recordings and the ORM read.

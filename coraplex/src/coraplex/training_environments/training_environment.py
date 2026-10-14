@@ -26,9 +26,9 @@ from coraplex.plans.failures import (
 )
 from coraplex.plans.context_extensions import RobotAccess, StatementGrounding
 from coraplex.plans.executors import SimulatedPlanExecutor
-from coraplex.plans.underspecified import UnderspecifiedNode
 from coraplex.robot_plans.actions.base import Action
 from coraplex.robot_plans.actions.core.misc import MoveToReach
+from cramph.composites import StatementNode
 from cramph.node import StatechartNode
 from cramph.statechart import Statechart
 from random_events.interval import closed
@@ -59,7 +59,7 @@ class TrainingEpisode:
     executing it.
     """
 
-    action: UnderspecifiedNode
+    action: StatementNode
     """
     The underspecified action whose grounded variants the episode tries.
     """
@@ -153,8 +153,8 @@ class TrainingEnvironment(ABC):
             pass
         self.executed_plans.append(episode.action)
 
-        self.tried_actions.extend(episode.action.chosen_actions)
-        number_of_executed_variants = len(episode.action.chosen_actions)
+        self.tried_actions.extend(episode.action.grounded_nodes)
+        number_of_executed_variants = len(episode.action.grounded_nodes)
 
         if self.visualize:
             pub.stop()
@@ -242,7 +242,7 @@ class MoveToReachTrainingEnvironment(TrainingEnvironment):
         )
 
         return TrainingEpisode(
-            action=UnderspecifiedNode(statement=move_to_reach), executor=executor
+            action=StatementNode(statement=move_to_reach), executor=executor
         )
 
     def setup_backend(self, underspecified_action: Match) -> ProbabilisticBackend:

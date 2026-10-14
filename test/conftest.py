@@ -597,9 +597,7 @@ def _hsr_world_setup():
 
 @pytest.fixture(scope="function")
 def hsr_world_copy(_hsr_world_setup):
-    result = deepcopy(_hsr_world_setup)
-    HSRB.from_world(result)
-    return result
+    return deepcopy(_hsr_world_setup)
 
 
 @pytest.fixture(scope="session")
@@ -631,6 +629,11 @@ def daisy_world():
     world_with_daisy = daisy_parser.parse()
     DAiSy.from_world(world_with_daisy)
     return world_with_daisy
+
+
+@pytest.fixture(scope="function")
+def daisy_world_copy(daisy_world):
+    return deepcopy(daisy_world)
 
 
 @pytest.fixture(scope="session")

@@ -2,12 +2,9 @@ from __future__ import annotations
 
 import sys
 from dataclasses import dataclass, Field, fields
-from functools import cached_property
 
 from typing_extensions import Any, Dict, List, TypeVar, get_type_hints
 
-from krrood.entity_query_language.core.variable import Variable
-from krrood.entity_query_language.factories import variable
 from krrood.ormatic.utils import classproperty
 from krrood.patterns.field_metadata import ParameterMetadata
 
@@ -56,28 +53,6 @@ class DesignatorParameters:
         :return: Every parameter of this designator, by the name it was given under.
         """
         return {f.name: getattr(self, f.name) for f in self.fields}
-
-    @cached_property
-    def bound_variables(self) -> Dict[T, Variable[T] | T]:
-        """
-        :return: A variable per parameter of this designator, bound to the value it was
-            given.
-        """
-        return self._create_variables()
-
-    def _create_variables(self) -> Dict[str, Variable[T] | T]:
-        """
-        Creates krrood variables for all parameter of this designator.
-
-        :return: A dict with parameters as keys and variables as values.
-        """
-        return {
-            f.name: variable(
-                type(getattr(self, f.name)),
-                ([getattr(self, f.name)]),
-            )
-            for f in self.fields
-        }
 
     @classmethod
     def get_type_hints(cls) -> Dict[str, Any]:

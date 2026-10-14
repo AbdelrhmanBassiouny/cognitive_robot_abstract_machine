@@ -316,10 +316,16 @@ def _manipulation_cases() -> list[NodeRoundTripCase]:
         NodeRoundTripCase(PickUpAction, lambda world: [_pick_up(world)]),
         NodeRoundTripCase(PlaceAction, lambda world: [_pick_up(world), _place(world)]),
         NodeRoundTripCase(
-            OpenAction, lambda world: [OpenAction(_handle(world), _arm(world))]
+            OpenAction,
+            lambda world: [
+                OpenAction(_handle(world).grasp_candidates()[0], _arm(world))
+            ],
         ),
         NodeRoundTripCase(
-            CloseAction, lambda world: [CloseAction(_handle(world), _arm(world))]
+            CloseAction,
+            lambda world: [
+                CloseAction(_handle(world).grasp_candidates()[0], _arm(world))
+            ],
         ),
         NodeRoundTripCase(
             MoveAndPickUpAction, lambda world: [_move_and_pick_up(world)]
@@ -334,7 +340,9 @@ def _manipulation_cases() -> list[NodeRoundTripCase]:
                 MoveAndOpenAction(
                     navigate=_navigate(world),
                     face_and_look_at=_face_and_look_at(world),
-                    open_container=OpenAction(_handle(world), _arm(world)),
+                    open_container=OpenAction(
+                        _handle(world).grasp_candidates()[0], _arm(world)
+                    ),
                 )
             ],
         ),

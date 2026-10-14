@@ -211,12 +211,16 @@ class AbstractMatchExpression(MatchAssignedValue, Generic[T], ABC):
     @property
     def _matches_with_variables_(self) -> Iterator[AttributeMatch]:
         """
-        :return: All attribute matches where the assigned variable is a variable.
-        These matches are typically the leaves of a match expression.
+        :return: All attribute matches where the assigned variable is a variable, or
+            where the pattern assigns an expression derived from one, such as its
+            attribute or its flattened values. These matches are typically the leaves of
+            a match expression.
         """
         self.resolve()
         for expression in self._descendants_:
-            if isinstance(expression.assigned_variable, Variable):
+            if isinstance(expression.assigned_variable, Variable) or isinstance(
+                expression.assigned_value, CanBehaveLikeAVariable
+            ):
                 yield expression
 
 

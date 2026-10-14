@@ -5,10 +5,6 @@ from copy import deepcopy
 from dataclasses import dataclass, field
 
 from typing_extensions import (
-    Any,
-    Dict,
-    Iterator,
-    List,
     Optional,
     TYPE_CHECKING,
     Tuple,
@@ -16,7 +12,7 @@ from typing_extensions import (
 )
 
 from coraplex.datastructures.enums import ActionTrialVisualization
-from coraplex.exceptions import NotAnUnderspecifiedNode
+from coraplex.exceptions import NotAStatementNode
 from coraplex.plans.context_extensions import StatementGrounding
 from coraplex.plans.designator import DesignatorParameters
 from coraplex.plans.plan_transformation import PlanRewriting
@@ -26,24 +22,19 @@ from cramph.composites import (
     ChildChooser,
     CompositeNodeChoosingItsChild,
     Sequence,
+    StatementNode,
 )
-from cramph.context import ContextExtension, StatechartContext
+from cramph.context import StatechartContext
 from cramph.exceptions import ExecutionFailure
 from cramph.node import StatechartNode
 from cramph.statechart import Statechart
 from giskardpy.motion_statechart.monitors.progress_monitors import Stalled
-from krrood.adapters.json_serializer import JSONField
-from krrood.entity_query_language.query.match import Match
-from krrood.ormatic.utils import classproperty
-from krrood.patterns.field_metadata import JSONMetadata
-from krrood.utils import get_full_class_name
 
 if TYPE_CHECKING:
     from coraplex.plans.executors import PlanExecutor
     from semantic_digital_twin.world import World
 
 logger = logging.getLogger(__name__)
-
 
 # %% attempting a grounded action
 
@@ -65,183 +56,6 @@ class AttemptRewritingItsTask(Attempt):
         if rewriting is not None:
             rewriting.rewrite(self.task)
         self._add_children_to_statechart(self.failure_monitors)
-
-
-# %% the node running an underspecified action
-
-
-@dataclass(eq=False, repr=False)
-class UnderspecifiedNode(CompositeNodeChoosingItsChild):
-    """
-    Runs an action described by an underspecified `a(...)` / `an(...)` statement.
-
-    The statement is grounded only when this node starts, against the world the nodes
-    before it left behind, and the grounded actions are tried until one succeeds. The
-    node fails once the statement yields no further action. If you want to limit the
-    number of attempts, add a limit clause to the statement.
-    """
-
-    statement: Match = field(
-        kw_only=True, metadata=JSONMetadata(serialize=False).as_dict()
-    )
-    """
-    The underspecified statement the actions are grounded from.
-
-    Not serialized: a process ticking the statechart elsewhere receives the chosen
-    actions rather than grounding them itself.
-    """
-
-    _proposals: Optional[Iterator[DesignatorParameters]] = field(
-        default=None, init=False, repr=False
-    )
-    """
-    The grounded actions of the statement, open from the first pull until they are
-    exhausted or released by :meth:`stop_grounding`.
-    """
-
-    _candidates_pulled: int = field(default=0, init=False, repr=False)
-    """
-    How many actions the current run through the statement has grounded.
-    """
-
-    @classproperty
-    def required_context_extensions(cls) -> tuple[type[ContextExtension], ...]:
-        return super().required_context_extensions + (StatementGrounding,)
-
-    @property
-    def grounding(self) -> StatementGrounding:
-        """
-        :return: How the statement is grounded, as the context of the statechart says.
-        """
-        return self.context.require_extension(StatementGrounding)
-
-    @property
-    def candidate_limit(self) -> int:
-        """
-        :return: How many actions are grounded: the statement's own limit, or the
-            context's if it has none.
-        """
-        return self.statement._limit_ or self.grounding.candidates_to_try
-
-    @property
-    def reached_candidate_limit(self) -> bool:
-        """
-        :return: Whether the last run through the statement stopped because it grounded
-            :attr:`candidate_limit` actions.
-        """
-        return self._candidates_pulled == self.candidate_limit
-
-    def ground_next_child(self, trial: ActionTrial) -> Optional[StatechartNode]:
-        """
-        Grounds the statement into the next action that succeeds its trial, against the
-        world as it is now.
-
-        An action that fails its trial is discarded without ever touching the real
-        world, so a bad parameterization cannot poison a later attempt. The statement is
-        left suspended in between, so the next call resumes where this one stopped.
-
-        :param trial: The trial every grounded action is tried in first.
-        :return: The node running that action, given up on once it stops approaching its
-            goal, or None once the statement ran out of actions that succeed their
-            trial.
-        """
-        proposal = self._pull_next_proposal()
-        while proposal is not None:
-            if trial.succeeds(proposal):
-                return self._attempt_of(proposal)
-            proposal = self._pull_next_proposal()
-        self.stop_grounding()
-        return None
-
-    def stop_grounding(self) -> None:
-        """
-        Releases the statement's grounded actions once no further child will be asked
-        for.
-
-        A suspended generator keeps every value its frame holds alive, so closing it
-        frees whatever the statement only holds to ground actions with. The next
-        :meth:`ground_next_child` grounds the statement anew.
-        """
-        if self._proposals is None:
-            return
-        self._proposals.close()
-        self._proposals = None
-
-    def cleanup(self, context: StatechartContext) -> None:
-        self.stop_grounding()
-
-    def _pull_next_proposal(self) -> Optional[DesignatorParameters]:
-        """
-        :return: The next grounded action, or None once the statement is exhausted or
-            :attr:`candidate_limit` actions were grounded.
-        """
-        if self._proposals is None:
-            self._candidates_pulled = 0
-            self._proposals = self.grounding.query_backend.evaluate(self.statement)
-        if self.reached_candidate_limit:
-            self.stop_grounding()
-            return None
-        proposal = next(self._proposals, None)
-        if proposal is None:
-            self._proposals = None
-            return None
-        self._candidates_pulled += 1
-        return proposal
-
-    @staticmethod
-    def _attempt_of(proposal: DesignatorParameters) -> StatechartNode:
-        """
-        :return: `proposal`, in a sequence of its own for the nodes a plan
-            transformation puts beside it, given up on once it stops approaching its
-            goal, so this node can try the next action instead.
-        """
-        steps = Sequence(name=f"{proposal.name}/steps", nodes=[proposal])
-        return AttemptRewritingItsTask(
-            name=f"{proposal.name}/attempt",
-            task=steps,
-            failure_monitors=[Stalled(monitored_node=steps)],
-        )
-
-    @property
-    def chosen_actions(self) -> List[StatechartNode]:
-        """
-        :return: The grounded action every child chosen so far runs, in the order they
-            were chosen, each found below whatever runs it.
-        """
-        return [
-            next(
-                node
-                for node in [child, *child.descendants]
-                if isinstance(node, self.statement._type_)
-            )
-            for child in self.children
-        ]
-
-    def adopt_chosen_child(self, child: StatechartNode) -> None:
-        """
-        Run `child` next, rewritten by the plan transformations of the statechart, if it
-        carries any.
-        """
-        super().adopt_chosen_child(child)
-        rewriting = self.statechart.context.get_extension(PlanRewriting)
-        if rewriting is not None:
-            rewriting.rewrite(child)
-
-    def to_json(self, **kwargs) -> Dict[str, Any]:
-        """
-        :return: The JSON representation of the node choosing its child that this is, so
-            a process ticking the statechart elsewhere needs nothing of coraplex.
-        """
-        return {
-            **super().to_json(**kwargs),
-            JSONField.TYPE: get_full_class_name(CompositeNodeChoosingItsChild),
-        }
-
-    def __repr__(self):
-        return f"{self.statement._type_.__name__}"
-
-
-# %% trying a grounded action out before it is executed for real
 
 
 @dataclass
@@ -465,8 +279,12 @@ class ActionTrial:
 @dataclass
 class UnderspecifiedChildChooser(ChildChooser):
     """
-    Grounds the statement of every :class:`UnderspecifiedNode` of a statechart into the
-    action it runs next.
+    Grounds the statement of every :class:`~cramph.composites.StatementNode` of a
+    statechart into the action it runs next.
+
+    A grounded action is tried out first, so one that fails its trial is discarded
+    without ever touching the real world, and a bad parameterization cannot poison a
+    later attempt.
     """
 
     executor: PlanExecutor
@@ -494,11 +312,39 @@ class UnderspecifiedChildChooser(ChildChooser):
         self, node: CompositeNodeChoosingItsChild, context: StatechartContext
     ) -> Optional[StatechartNode]:
         """
-        :raises NotAnUnderspecifiedNode: If `node` carries no statement to ground.
+        :return: The node running the next grounded action that succeeds its trial,
+            given up on once it stops approaching its goal, or None once the statement
+            ran out of actions that succeed their trial.
+        :raises NotAStatementNode: If `node` carries no statement to ground.
         """
-        if not isinstance(node, UnderspecifiedNode):
-            raise NotAnUnderspecifiedNode(node=node)
-        return node.ground_next_child(self.trial)
+        if not isinstance(node, StatementNode):
+            raise NotAStatementNode(node=node)
+        grounding = context.require_extension(StatementGrounding)
+        proposal = node.next_candidate(
+            grounding.query_backend, grounding.candidates_to_try
+        )
+        while proposal is not None:
+            if self.trial.succeeds(proposal):
+                return self._attempt_of(proposal)
+            proposal = node.next_candidate(
+                grounding.query_backend, grounding.candidates_to_try
+            )
+        node.stop_grounding()
+        return None
+
+    @staticmethod
+    def _attempt_of(proposal: DesignatorParameters) -> StatechartNode:
+        """
+        :return: `proposal`, in a sequence of its own for the nodes a plan
+            transformation puts beside it, given up on once it stops approaching its
+            goal, so its node can try the next action instead.
+        """
+        steps = Sequence(name=f"{proposal.name}/steps", nodes=[proposal])
+        return AttemptRewritingItsTask(
+            name=f"{proposal.name}/attempt",
+            task=steps,
+            failure_monitors=[Stalled(monitored_node=steps)],
+        )
 
     def cleanup(self) -> None:
         """

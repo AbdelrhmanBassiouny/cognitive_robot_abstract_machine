@@ -29,7 +29,6 @@ classifying annotator to that engine removes both without changing this demo.
 """
 
 from dataclasses import dataclass, field
-from datetime import timedelta
 
 import numpy as np
 from typing_extensions import List, Type
@@ -74,8 +73,7 @@ from semantic_digital_twin.semantic_annotations.semantic_annotations import Chee
 from semantic_digital_twin.spatial_types import HomogeneousTransformationMatrix
 from semantic_digital_twin.spatial_types.spatial_types import Pose
 from semantic_digital_twin.world import World
-from coraplex.plans.underspecified import UnderspecifiedNode
-from cramph.composites import Sequence
+from cramph.composites import Sequence, StatementNode
 
 CEREAL_NAME = "cheeze_it.obj"
 """
@@ -111,8 +109,6 @@ class StretchApartmentDemonstration(RobotDemonstration):
     """
 
     ros_node_name: str = "stretch_demo_node"
-
-    simulation_time_limit: timedelta | None = timedelta(minutes=10)
 
     def build_simulated_world(self) -> World:
         """
@@ -193,7 +189,7 @@ class StretchApartmentDemonstration(RobotDemonstration):
                     )
                 ),
                 LookAtAction(Pose.from_xyz_rpy(reference_frame=shelf_layer_body)),
-                UnderspecifiedNode(
+                StatementNode(
                     statement=a(NavigateAction)(
                         target_location=Pose.from_xyz_rpy(
                             0.8, 0.6, 0, yaw=-np.pi / 2, reference_frame=world.root
@@ -234,7 +230,7 @@ class StretchApartmentDemonstration(RobotDemonstration):
                     )
                 ),
                 LookAtAction(Pose.from_xyz_rpy(reference_frame=shelf_layer_body)),
-                UnderspecifiedNode(
+                StatementNode(
                     statement=a(NavigateAction)(
                         target_location=Pose.from_xyz_rpy(
                             0.8, 0, 0, yaw=np.pi, reference_frame=bedside_table_body
@@ -248,7 +244,7 @@ class StretchApartmentDemonstration(RobotDemonstration):
                     trust_detected_orientation=False,
                     accept_first_if_multiple=True,
                 ),
-                UnderspecifiedNode(
+                StatementNode(
                     statement=a(PickUpAction)(
                         grasp=cereal.grasp_candidates()[0],
                         arm=arm,
@@ -260,7 +256,7 @@ class StretchApartmentDemonstration(RobotDemonstration):
                         0.8, 0.6, 0, yaw=-np.pi / 2, reference_frame=world.root
                     )
                 ),
-                UnderspecifiedNode(
+                StatementNode(
                     statement=a(PlaceAction)(
                         object_designator=cereal,
                         target_location=CEREAL_SHELF_LAYER_T_CEREAL.pose,

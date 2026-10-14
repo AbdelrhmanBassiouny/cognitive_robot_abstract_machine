@@ -63,7 +63,8 @@ class MotionMadeNoProgress(PlanFailure):
 @dataclass
 class MotionExceededSimulationTimeLimit(PlanFailure):
     """
-    Raised when a simulated motion ran for longer than any motion is allowed to.
+    Raised when a simulated plan ran for longer than the actions it started are allowed
+    to take together.
 
     The chart's stall monitor ends a motion that stopped approaching its goal, but one
     that keeps creeping towards it, or that is held and so never counts as stalled,
@@ -72,20 +73,20 @@ class MotionExceededSimulationTimeLimit(PlanFailure):
 
     time_limit: timedelta
     """
-    The simulated time the motion was allowed.
+    The simulated time the plan was allowed.
     """
 
     def error_message(self) -> str:
         return (
-            f"The motion did not end within {self.time_limit.total_seconds()} s of "
+            f"The plan did not end within {self.time_limit.total_seconds()} s of "
             f"simulated time."
         )
 
     def suggest_correction(self) -> str:
         return (
-            "Check that every goal of the motion can be reached and that nothing holds "
-            "the chart, or raise SimulatedPlanExecutor.simulation_time_limit for a motion "
-            "that is meant to take this long."
+            "Check that every goal of the plan can be reached and that nothing holds "
+            "the chart, or raise SimulatedPlanExecutor.simulation_time_per_action for "
+            "actions that are meant to take this long."
         )
 
 

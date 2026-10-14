@@ -174,7 +174,7 @@ action open, and the plan tries the candidates in turn when it gets to that acti
 of them.
 
 ```python
-from coraplex.plans.underspecified import UnderspecifiedNode
+from cramph.composites import StatementNode
 from krrood.entity_query_language.factories import a, variable
 
 navigate = a(NavigateAction)(
@@ -188,7 +188,7 @@ navigate = a(NavigateAction)(
     )
 )
 
-run(UnderspecifiedNode(statement=navigate))
+run(StatementNode(statement=navigate))
 
 pr2_view.root.parent_connection.origin = origin_pose.homogeneous_matrix
 ```

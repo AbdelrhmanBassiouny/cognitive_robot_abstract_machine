@@ -74,7 +74,6 @@ The grounded designator is carried out. If it fails (e.g., object moved, pose bl
 
   - Express a task at the highest level of “do this,” such as grasping or opening something.
   - Internally, they can combine several giskard goals, actions, locations, and sub‑steps.
-  - They check basic conditions before and after, to ensure the task makes sense and succeeds.
 
 - Location designators ({class}`~coraplex.locations.base.Location`)
 
