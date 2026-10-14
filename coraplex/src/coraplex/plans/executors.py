@@ -26,6 +26,7 @@ from coraplex.plans.failures import (
 )
 from coraplex.plans.plan_transformation import PlanRewriting
 from coraplex.plans.underspecified import UnderspecifiedChildChooser
+from coraplex.robot_plans.actions.base import Action
 from cramph.composites import ChildChooserAccess, StatementNode
 from cramph.context import ContextExtension, StatechartContext
 from cramph.data_types import LifeCycleValues
@@ -322,10 +323,26 @@ class SimulatedPlanExecutor(PlanExecutor, StatechartExecutor):
     is added with its default controller unless one is given.
     """
 
-    simulation_time_limit: timedelta = field(default=timedelta(minutes=2), kw_only=True)
+    simulation_time_per_action: timedelta = field(
+        default=timedelta(seconds=60), kw_only=True
+    )
     """
-    The simulated time after which a plan is given up on, however it is progressing.
+    The simulated time every started action adds to :attr:`simulation_time_limit`.
     """
+
+    @property
+    def simulation_time_limit(self) -> timedelta:
+        """
+        :return: The simulated time after which the plan is given up on, however it is
+            progressing: :attr:`simulation_time_per_action` for every action started so
+            far, and at least once.
+        """
+        started_actions = sum(
+            1
+            for action in self.statechart.get_nodes_by_type(Action)
+            if action.life_cycle_state != LifeCycleValues.NOT_STARTED
+        )
+        return self.simulation_time_per_action * max(1, started_actions)
 
     def default_executor_extensions(self) -> list[ExecutorExtension]:
         return [RosNodeAccess(self.ros_node), MotionControl()]
@@ -335,20 +352,17 @@ class SimulatedPlanExecutor(PlanExecutor, StatechartExecutor):
         Tick the statechart until it or the plan ended, waiting for :attr:`pacer` after
         every tick.
 
-        The statechart's own stall monitor decides when a plan is hopeless, so a plan
-        that keeps converging is never cut off for taking many ticks.
+        The statechart's own stall monitor decides when a plan is hopeless;
+        :attr:`simulation_time_limit` only cuts off a plan that keeps creeping without
+        starting new actions.
 
         :raises NoProgressError: When the plan stops approaching its goal.
         :raises MotionExceededSimulationTimeLimit: When the plan runs for longer than
             :attr:`simulation_time_limit`.
         """
-        maximum_ticks = (
-            self.simulation_time_limit.total_seconds()
-            / self.context.require_tick_duration()
-        )
         try:
             while not self._is_over():
-                if self.tick_count >= maximum_ticks:
+                if timedelta(seconds=self.time) >= self.simulation_time_limit:
                     raise MotionExceededSimulationTimeLimit(self.simulation_time_limit)
                 self.tick()
                 self.pacer.sleep()
