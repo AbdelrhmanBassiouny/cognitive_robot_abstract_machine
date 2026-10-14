@@ -889,3 +889,38 @@ for (const fromPalette of [true, false]) {
     }
   });
 }
+
+
+test('the candidates an open step tried are nested under that step', async function () {
+  const panel = loadPanel({
+    '/api/knowledge': { ok: true, nodes: [], edges: [], details: {} },
+    '/api/knowledge/view?name=plan': { ok: true, nodes: [], edges: [], details: {}, live: 'plan' },
+    'http://bridge/plan': {
+      signature: 's1',
+      nodes: [
+        { id: 'plan', kind: 'SequentialNode', label: 'SequentialNode', status: 'RUNNING' },
+        { id: 'open', parent: 'plan', kind: 'UnderspecifiedNode', label: 'PickUpAction', status: 'RUNNING' },
+        { id: 'tried', parent: 'open', kind: 'CandidateTrial', label: 'PickUpAction',
+          candidate: 1, status: 'SUCCEEDED' },
+      ],
+    },
+  });
+  const root = makeRoot();
+  const bus = makeBus();
+  const instance = panel.factory(root, bus);
+  try {
+    await flush();
+    root.buttons.find(function (button) { return button.dataset.view === 'plan'; }).click();
+    await flush();
+    bus.emit('live:changed', { on: true, url: 'http://bridge' });
+    await flush();
+
+    const html = root.control('#graph-steps').querySelector('.steps-tree').innerHTML;
+    const openRow = html.indexOf('data-id="open"');
+    const nested = html.indexOf('<div class="st-kids"', openRow);
+    assert.ok(openRow >= 0);
+    assert.ok(nested > openRow && html.indexOf('data-id="tried"', nested) > nested);
+  } finally {
+    instance.destroy();
+  }
+});

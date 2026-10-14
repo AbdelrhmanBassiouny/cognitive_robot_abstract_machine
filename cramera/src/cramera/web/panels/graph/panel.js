@@ -117,10 +117,10 @@ Panels.define('graph', function (root, bus) {
   let stepsMode = true;   // Plan tab opens in the readable Steps view; the toggle switches to the graph
   const stepsEl = root.querySelector('#graph-steps');
   const stepsToggle = root.querySelector('#graph-steps-toggle');
-  const STEP_KINDS = { ActionNode: 'action', AttachNode: 'attach', DetachNode: 'attach', CandidateTrial: 'candidate' };
+  const STEP_KINDS = { ActionNode: 'action', AttachNode: 'attach', DetachNode: 'attach', UnderspecifiedNode: 'open', CandidateTrial: 'candidate' };
   // conditions are internal checks that never execute — hidden from this view entirely
   const DETAIL_KINDS = { MotionNode: 'motion', MonitorNode: 'monitor' };
-  const STRUCT_KINDS = { SequentialNode: 1, ParallelNode: 1, UnderspecifiedNode: 1 };
+  const STRUCT_KINDS = { SequentialNode: 1, ParallelNode: 1 };
   function stepWords(x) { return String(x || '').replace(/([a-z0-9])([A-Z])/g, '$1 $2').trim().toLowerCase().replace(/^./, function (c) { return c.toUpperCase(); }); }
   function stepLabel(n) {
     if (n.kind === 'ConditionNode') return 'condition check';
@@ -209,6 +209,7 @@ Panels.define('graph', function (root, bus) {
         '<span class="st-tw">' + (hk ? (collapsed ? '▸' : '▾') : '') + '</span>' +
         '<span class="st-num">' + number + '</span>' +
         '<span class="st-name concept" data-id="' + n.id + '" title="show in the ontology">' + stepLabel(n) + '</span>' +
+        (n.kind === 'UnderspecifiedNode' ? '<span class="st-open">left open</span>' : '') +
         (n.kind === 'CandidateTrial' && n.status === 'FAILED' && n.description ? '<span class="st-why">' + escapeText(n.description) + '</span>' : '') +
         '<span class="st-meta">' + (details.length ? '<span class="st-dc">' + details.length + ' detail' + (details.length > 1 ? 's' : '') + '</span>' : '') + stepPill(n.status) + '</span>' +
         '</div>');
