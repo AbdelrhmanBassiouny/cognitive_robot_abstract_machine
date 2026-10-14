@@ -10,6 +10,7 @@ from giskardpy.motion_statechart.graph_node import (
     EndMotion,
 )
 from giskardpy.motion_statechart.monitors.joint_monitors import JointPositionReached
+from giskardpy.motion_statechart.monitors.overwrite_state_monitors import SetOdometry
 from giskardpy.motion_statechart.monitors.progress_monitors import StillProgressing
 from cramph.statechart import (
     Statechart,
@@ -26,7 +27,11 @@ from giskardpy.motion_statechart.tasks.feature_functions import (
     HeightGoal,
     ReachPoint,
 )
-from giskardpy.motion_statechart.tasks.pointing import Pointing, PointingCone
+from giskardpy.motion_statechart.tasks.pointing import (
+    Pointing,
+    PointingBeside,
+    PointingCone,
+)
 from semantic_digital_twin.specifications.connections import (
     RevoluteConnectionSpecification,
     ScrewConnectionSpecification,
@@ -651,6 +656,62 @@ def test_pointing_lowers_the_torso_when_the_head_cannot_tilt_far_enough(
     kin_sim.tick_until_end()
 
     assert torso.position < torso.dof.limits.upper.position - 0.05
+
+
+def test_pointing_beside_a_goal_takes_sideways_from_where_the_viewpoint_stands_at_start(
+    pr2_world_state_reset: World,
+):
+    """
+    Sideways is across the line of sight from the viewpoint as it stands when the task
+    starts, so a base moved by an earlier step of the chart changes the point aimed at.
+    """
+    world = pr2_world_state_reset
+    base = world.get_kinematic_structure_entity_by_name("base_link")
+    head = world.get_kinematic_structure_entity_by_name("head_tilt_link")
+    goal_point = Point3(2, 0, 1, reference_frame=world.root)
+
+    kin_sim = StatechartExecutor(
+        context=StatechartContext(world=world),
+        extensions=[MotionControl()],
+    )
+    msc = Statechart(context=kin_sim.context)
+    pointing = PointingBeside(
+        root_link=base,
+        tip_link=head,
+        goal_point=goal_point,
+        pointing_axis=Vector3.X(reference_frame=head),
+        viewpoint=base,
+        sideways_offset=0.5,
+    )
+    msc.add_node(
+        sequence := Sequence(
+            [
+                SetOdometry(
+                    base_pose=HomogeneousTransformationMatrix.from_xyz_rpy(
+                        0, -2, 0, reference_frame=world.root
+                    )
+                ),
+                pointing,
+            ]
+        )
+    )
+    end = EndMotion()
+    end.start_condition = sequence.observes_true
+    msc.add_node(end)
+    kin_sim.compile(statechart=msc)
+
+    kin_sim.tick_until_end()
+
+    world_P_goal = goal_point.to_np()[:3]
+    line_of_sight = world_P_goal - base.global_pose.to_np()[:3, 3]
+    left = np.array([-line_of_sight[1], line_of_sight[0], 0.0])
+    world_P_aim = world_P_goal + pointing.sideways_offset * left / np.linalg.norm(left)
+    head_pose = head.global_pose.to_np()
+    head_to_aim = world_P_aim - head_pose[:3, 3]
+    angle = np.arccos(
+        np.dot(head_pose[:3, 0], head_to_aim) / np.linalg.norm(head_to_aim)
+    )
+    assert angle <= pointing.threshold
 
 
 def test_pointing_cone(pr2_world_state_reset: World):

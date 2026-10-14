@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from typing_extensions import Optional, Type
+from typing_extensions import Type
 
 from coraplex.plans.context_extensions import ExecutionMode
 from cramph.context import ContextExtension
@@ -17,6 +17,7 @@ from coraplex.perception import PerceptionQuery, PerceptionTask
 from cramph.composites import Sequence
 from cramph.node import StatechartNode
 from coraplex.robot_plans.actions.base import Action
+from coraplex.robot_plans.actions.core.exceptions import DetectionTargetMissing
 from coraplex.robot_plans.actions.core.navigation import NavigateAction
 from coraplex.robot_plans.actions.core.robot_body import MoveManipulatorAction
 from coraplex.robot_plans.mixins import HasApproachesGraspPoses, MovesToolCenterPoint
@@ -32,10 +33,7 @@ from semantic_digital_twin.spatial_types.spatial_types import (
 )
 from semantic_digital_twin.robots.robot_parts import EndEffector
 from semantic_digital_twin.world_description.geometry import VolumetricBoundingBox
-from semantic_digital_twin.world_description.world_entity import (
-    Region,
-    SemanticAnnotation,
-)
+from semantic_digital_twin.world_description.world_entity import SemanticAnnotation
 from semantic_digital_twin.semantic_annotations.semantic_annotations import (
     SemanticEnvironmentAnnotation,
 )
@@ -44,8 +42,7 @@ from semantic_digital_twin.semantic_annotations.semantic_annotations import (
 @dataclass(eq=False, repr=False)
 class DetectAction(Action):
     """
-    Detects an object that fits the object description and returns an object
-    designator_description describing the object.
+    Detects an object and writes the pose it is seen at into the world.
 
     The action fails if no such object is seen.
     """
@@ -55,7 +52,7 @@ class DetectAction(Action):
     The technique that should be used for detection.
     """
 
-    state: Optional[DetectionState] = None
+    state: DetectionState | None = None
     """
     The state of the detection, e.g Start Stop for continues perception.
     """
@@ -69,15 +66,10 @@ class DetectAction(Action):
         ormatic cannot map ``Optional[Type]`` and would otherwise drop this column.
     """
 
-    region: Optional[Region] = None
-    """
-    The region in which the object should be detected.
-    """
-
     detection_box: VolumetricBoundingBox | None = None
     """
-    The box in which the object should be detected, used instead of :attr:`region` when
-    given.
+    The box in which the object should be detected, None for the box around the robot's
+    base that :attr:`default_detection_distance` spans.
     """
 
     trust_detected_orientation: bool = True
@@ -103,6 +95,14 @@ class DetectAction(Action):
     ) -> tuple[type[ContextExtension], ...]:
         return super().context_extensions_required_to_expand + (ExecutionMode,)
 
+    @classproperty
+    def default_detection_distance(cls) -> float:
+        """
+        :return: How far from the robot's base, horizontally in every direction and
+            upwards, an object is detected when no :attr:`detection_box` is given.
+        """
+        return 3.0
+
     def create_action_body(self) -> StatechartNode:
         return Sequence(
             [
@@ -124,41 +124,36 @@ class DetectAction(Action):
         Build the perception query from this action's parameters.
 
         :return: The perception query that the detection motion answers.
+        :raises DetectionTargetMissing: If neither an object type nor a box is given.
         """
-        if not self.object_sem_annotation and not self.region:
-            raise AttributeError(
-                "Either a Semantic Annotation or a Region must be provided."
-            )
-        object_sem_annotation = (
-            self.object_sem_annotation or SemanticEnvironmentAnnotation
-        )
+        if not self.object_sem_annotation and self.detection_box is None:
+            raise DetectionTargetMissing(self)
         return PerceptionQuery(
-            object_sem_annotation,
-            self._query_box(),
+            self.object_sem_annotation or SemanticEnvironmentAnnotation,
+            (
+                self._box_around_robot()
+                if self.detection_box is None
+                else self.detection_box
+            ),
             self.robot,
             self.world,
             trust_detected_orientation=self.trust_detected_orientation,
         )
 
-    def _query_box(self) -> VolumetricBoundingBox:
+    def _box_around_robot(self) -> VolumetricBoundingBox:
         """
-        :return: The box in which the object should be detected: :attr:`detection_box`,
-            else the box around :attr:`region`, else a box in front of the robot.
+        :return: The box reaching :attr:`default_detection_distance` from the robot's
+            base horizontally in every direction and upwards from it.
         """
-        if self.detection_box is not None:
-            return self.detection_box
-        if self.region is not None:
-            return self.region.area.as_bounding_box_collection_in_frame(
-                self.robot.root
-            ).bounding_box
+        distance = self.default_detection_distance
         return VolumetricBoundingBox(
             origin=HomogeneousTransformationMatrix(reference_frame=self.robot.root),
-            min_x=-1,
-            min_y=-1,
+            min_x=-distance,
+            min_y=-distance,
             min_z=0,
-            max_x=3,
-            max_y=3,
-            max_z=3,
+            max_x=distance,
+            max_y=distance,
+            max_z=distance,
         )
 
 

@@ -44,7 +44,7 @@ from giskardpy.motion_statechart.tasks.cartesian_tasks import (
     CartesianPosition,
     HoldPose,
 )
-from giskardpy.motion_statechart.tasks.pointing import Pointing
+from giskardpy.motion_statechart.tasks.pointing import Pointing, PointingBeside
 from giskardpy.motion_statechart.monitors.overwrite_state_monitors import SetOdometry
 from krrood.patterns.field_metadata import ParameterMetadata
 from giskardpy.motion_statechart.tasks.joint_tasks import (
@@ -393,6 +393,22 @@ def test_look_at_points_the_default_camera(simple_pr2_context):
 
     [pointing] = _nodes_of_type(action, Pointing)
     assert pointing.tip_link == robot.get_default_camera().root
+
+
+def test_looking_beside_a_target_takes_sideways_from_the_robots_base(
+    simple_pr2_context,
+):
+    """
+    Left and right of a target are as seen from where the robot stands.
+    """
+    _, robot, extensions = simple_pr2_context
+    action = LookAtAction(Pose(), sideways_offset=0.5)
+
+    _expanded(action, extensions)
+
+    [pointing] = _nodes_of_type(action, PointingBeside)
+    assert pointing.viewpoint == robot.root
+    assert pointing.sideways_offset == action.sideways_offset
 
 
 def test_following_a_path_runs_one_goal_per_waypoint(simple_pr2_context):

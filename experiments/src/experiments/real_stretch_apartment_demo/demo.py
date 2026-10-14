@@ -24,7 +24,8 @@ RealSense but does not recognize it, so it reports poses without class labels an
 detection is labelled with what the plan asked for. Two consequences: a second object on the
 same shelf layer aborts the run with
 :class:`~coraplex.exceptions.UnidentifiedDetections` rather than risking the wrong grasp,
-and an empty scene aborts with :class:`~coraplex.exceptions.NothingDetected`. Adding a
+and an empty scene fails the detection, which ends the run with
+:class:`~coraplex.exceptions.MotionDidNotFinish`. Adding a
 classifying annotator to that engine removes both without changing this demo.
 """
 

@@ -37,7 +37,6 @@ from typing_extensions import Any, Dict, Optional, Self, Type, List, TYPE_CHECKI
 from coraplex.datastructures.enums import PerceptionSource
 from coraplex.exceptions import (
     AmbiguousDetection,
-    NothingDetected,
     PerceivedObjectNotInWorld,
     PerceptionSourceUnavailable,
     UnidentifiedDetections,
@@ -258,7 +257,7 @@ class PerceptionInterface(ABC):
     """
 
     @abstractmethod
-    def look_for(self, query: PerceptionQuery) -> List[Detection]:
+    def look_for(self, query: PerceptionQuery) -> list[Detection]:
         """
         Report every object this source sees for a perception query.
 
@@ -268,7 +267,7 @@ class PerceptionInterface(ABC):
 
     def detect(
         self, query: PerceptionQuery, accept_first_if_multiple: bool = False
-    ) -> Detection:
+    ) -> Detection | None:
         """
         Answer a perception query with the one object it asked about.
 
@@ -277,37 +276,13 @@ class PerceptionInterface(ABC):
             taking the first one. When False, several candidates raise
             :class:`~coraplex.exceptions.UnidentifiedDetections` instead of being chosen
             between.
-        :return: The object this source saw.
-        :raises NothingDetected: If the source saw nothing.
+        :return: The object this source saw, None when it saw nothing.
         :raises UnidentifiedDetections: If several candidates were seen and none of them
             may be picked.
         """
-        return self.narrow_to_single_detection(
-            self.look_for(query), query, accept_first_if_multiple
-        )
-
-    @staticmethod
-    def narrow_to_single_detection(
-        detections: List[Detection],
-        query: PerceptionQuery,
-        accept_first_if_multiple: bool,
-    ) -> Detection:
-        """
-        Reduce what a source saw to the one detection a query is answered with.
-
-        :param detections: What the source reported for the query.
-        :param query: The query that was answered.
-        :param accept_first_if_multiple: Whether several candidates may be resolved by
-            taking the first one. When False, several candidates raise
-            :class:`~coraplex.exceptions.UnidentifiedDetections` instead of being chosen
-            between.
-        :return: The single detection the query is answered with.
-        :raises NothingDetected: If the source saw nothing.
-        :raises UnidentifiedDetections: If several candidates were seen and none of them
-            may be picked.
-        """
+        detections = self.look_for(query)
         if not detections:
-            raise NothingDetected(query.semantic_annotation)
+            return None
         if len(detections) > 1 and not accept_first_if_multiple:
             raise UnidentifiedDetections(query.semantic_annotation, len(detections))
         return detections[0]
@@ -338,7 +313,7 @@ class WorldPerception(PerceptionInterface):
     already holds.
     """
 
-    def look_for(self, query: PerceptionQuery) -> List[Detection]:
+    def look_for(self, query: PerceptionQuery) -> list[Detection]:
         annotation_by_body = {}
         for annotation in query.world.get_semantic_annotations_by_type(
             query.semantic_annotation
@@ -375,7 +350,7 @@ class RoboKudoPerception(PerceptionInterface):
     How long to wait for the action server before giving up.
     """
 
-    def look_for(self, query: PerceptionQuery) -> List[Detection]:
+    def look_for(self, query: PerceptionQuery) -> list[Detection]:
         # RoboKudo's messages only exist where its pipeline is installed, so they are
         # imported here rather than at module level: reading the world in simulation must
         # not depend on them.
@@ -530,12 +505,11 @@ class PerceptionTask(EndedByOwner, FailsOnObservingFalse, StatechartNode):
 
         :return: True once the object was seen, False when the source saw nothing.
         """
-        detections = self.perception_source.look_for(self.query)
-        if not detections:
-            return ObservationStateValues.FALSE
-        detection = self.perception_source.narrow_to_single_detection(
-            detections, self.query, self.accept_first_if_multiple
+        detection = self.perception_source.detect(
+            self.query, self.accept_first_if_multiple
         )
+        if detection is None:
+            return ObservationStateValues.FALSE
         detection.apply_to(
             self.query.world, trust_orientation=self.query.trust_detected_orientation
         )

@@ -30,7 +30,6 @@ from coraplex.datastructures.enums import (
 from coraplex.exceptions import (
     AmbiguousDetection,
     MotionDidNotFinish,
-    NothingDetected,
     PerceivedObjectNotInWorld,
     PerceptionSourceUnavailable,
     UnidentifiedDetections,
@@ -43,6 +42,7 @@ from coraplex.perception import (
     RoboKudoPerception,
     WorldPerception,
 )
+from coraplex.robot_plans.actions.core.exceptions import DetectionTargetMissing
 from coraplex.robot_plans.actions.core.misc import DetectAction
 from coraplex.robot_plans.actions.core.pick_up import PickUpAction
 from coraplex.perception import PerceptionTask
@@ -362,8 +362,22 @@ def test_world_perception_reports_nothing_outside_the_queried_region(
     world, view, extensions = pr2_apartment_context
     query = PerceptionQuery(Milk, empty_region, view, world)
 
-    with pytest.raises(NothingDetected):
-        WorldPerception().detect(query)
+    assert WorldPerception().detect(query) is None
+
+
+@dataclass
+class PerceptionReportingCandidates(PerceptionInterface):
+    """
+    A source that sees the same candidates whatever it is asked.
+    """
+
+    candidates: list[Detection]
+    """
+    What the source reports for every query.
+    """
+
+    def look_for(self, query: PerceptionQuery) -> list[Detection]:
+        return self.candidates
 
 
 def test_ambiguity_is_reported_with_the_number_of_candidates(
@@ -381,8 +395,8 @@ def test_ambiguity_is_reported_with_the_number_of_candidates(
     ]
 
     with pytest.raises(UnidentifiedDetections) as raised:
-        PerceptionInterface.narrow_to_single_detection(
-            candidates, query, accept_first_if_multiple=False
+        PerceptionReportingCandidates(candidates).detect(
+            query, accept_first_if_multiple=False
         )
 
     assert raised.value.candidate_count == len(candidates)
@@ -404,8 +418,8 @@ def test_accepting_the_first_candidate_answers_with_one_detection(
     ]
 
     assert (
-        PerceptionInterface.narrow_to_single_detection(
-            candidates, query, accept_first_if_multiple=True
+        PerceptionReportingCandidates(candidates).detect(
+            query, accept_first_if_multiple=True
         )
         is first
     )
@@ -646,19 +660,18 @@ def test_untyped_detection_is_identified_from_the_query(
     )
 
 
-def test_pipeline_reporting_nothing_is_an_error(
+def test_pipeline_reporting_nothing_answers_without_a_detection(
     pr2_apartment_context, whole_scene_region, rclpy_node, query_server_reporting
 ):
     """
-    Finding nothing must not pass as "saw nothing worth moving": the plan would then
-    grasp at the pose the object was spawned with, believing it was confirmed.
+    An empty report is answered as "saw nothing", which the detection's task turns into
+    a failure.
     """
     world, view, extensions = pr2_apartment_context
     query_server_reporting([])
     query = PerceptionQuery(Milk, whole_scene_region, view, world)
 
-    with pytest.raises(NothingDetected):
-        RoboKudoPerception(ros_node=rclpy_node).detect(query)
+    assert RoboKudoPerception(ros_node=rclpy_node).detect(query) is None
 
 
 def test_several_untyped_candidates_are_not_guessed_between(
@@ -845,7 +858,7 @@ class UnanswerablePerception(PerceptionInterface):
     What answering the query raises.
     """
 
-    def look_for(self, query: PerceptionQuery) -> List[Detection]:
+    def look_for(self, query: PerceptionQuery) -> list[Detection]:
         raise self.failure
 
 
@@ -1066,13 +1079,47 @@ def test_a_detection_looks_only_inside_the_box_it_is_given(
     milk the robot sees otherwise is not found outside it.
     """
     world, view, extensions = pr2_apartment_context
+    detection = DetectAction(
+        DetectionTechnique.TYPES,
+        object_sem_annotation=Milk,
+        detection_box=empty_region,
+    )
 
     with pytest.raises(MotionDidNotFinish):
-        run_plan(
-            DetectAction(
-                DetectionTechnique.TYPES,
-                object_sem_annotation=Milk,
-                detection_box=empty_region,
-            ),
+        run_plan(detection, extensions)
+
+    assert detection.life_cycle_state == LifeCycleValues.FAILED
+
+
+def test_a_detection_without_a_box_looks_as_far_to_every_side_of_the_robot(
+    pr2_apartment_context,
+):
+    """
+    A camera may face any way from the base, so what it sees beside or behind the robot
+    is not cut off by the box a detection looks in by default.
+    """
+    world, view, extensions = pr2_apartment_context
+    [task] = [
+        node
+        for node in motion_nodes_of(
+            DetectAction(DetectionTechnique.TYPES, object_sem_annotation=Milk),
             extensions,
         )
+        if isinstance(node, PerceptionTask)
+    ]
+    distance = DetectAction.default_detection_distance / 2
+
+    for x, y in [(distance, 0), (-distance, 0), (0, distance), (0, -distance)]:
+        assert task.query.region.contains(
+            Point3(x, y, distance, reference_frame=view.root)
+        )
+
+
+def test_a_detection_needs_an_object_type_or_a_box(pr2_apartment_context):
+    """
+    Without either, nothing says what the detection is looking for.
+    """
+    world, view, extensions = pr2_apartment_context
+
+    with pytest.raises(DetectionTargetMissing):
+        motion_nodes_of(DetectAction(DetectionTechnique.TYPES), extensions)

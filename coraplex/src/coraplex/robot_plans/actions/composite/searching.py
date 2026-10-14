@@ -40,16 +40,17 @@ class SearchAction(Action):
 
     sideways_look_offsets: tuple[float, ...] = (0.0, -0.5, 0.5)
     """
-    Distances along the y-axis of :attr:`target_location` that are looked at, in order.
+    How far to the left of :attr:`target_location` the robot looks, as seen from where
+    it stands, in the order the looks are tried; negative offsets look to the right.
     """
 
-    detection_half_extent: float = 0.5
+    detection_margin: float = 0.5
     """
-    Half the edge length of the cube around each looked-at point in which the object is
-    detected.
+    How far beyond the points looked at an object may lie and still be detected.
     """
 
     def create_action_body(self) -> StatechartNode:
+        detection_box = self._detection_box()
         return Sequence(
             [
                 a(NavigateAction)(
@@ -64,40 +65,43 @@ class SearchAction(Action):
                 ),
                 TryInOrder(
                     [
-                        self._look_and_detect(sideways_offset)
+                        Sequence(
+                            [
+                                LookAtAction(
+                                    self.target_location,
+                                    sideways_offset=sideways_offset,
+                                ),
+                                DetectAction(
+                                    DetectionTechnique.TYPES,
+                                    object_sem_annotation=self.object_semantic_annotation,
+                                    detection_box=detection_box,
+                                ),
+                            ]
+                        )
                         for sideways_offset in self.sideways_look_offsets
                     ]
                 ),
             ]
         )
 
-    def _look_and_detect(self, sideways_offset: float) -> StatechartNode:
+    def _detection_box(self) -> VolumetricBoundingBox:
         """
-        :param sideways_offset: Distance along the y-axis of :attr:`target_location`.
-        :return: A node looking at :attr:`target_location` moved sideways and detecting
-            the object around the point looked at.
+        :return: The cube around :attr:`target_location` that holds every point looked
+            at, widened by :attr:`detection_margin`.
         """
-        reference_T_target = self.target_location.homogeneous_matrix
-        target_T_look = HomogeneousTransformationMatrix.from_xyz_rpy(y=sideways_offset)
-        look_target = (reference_T_target @ target_T_look).pose
-        x, y, z = look_target.position.to_np().flatten()[:3]
-        return Sequence(
-            [
-                LookAtAction(look_target),
-                DetectAction(
-                    DetectionTechnique.TYPES,
-                    object_sem_annotation=self.object_semantic_annotation,
-                    detection_box=VolumetricBoundingBox(
-                        origin=HomogeneousTransformationMatrix(
-                            reference_frame=look_target.reference_frame
-                        ),
-                        min_x=x - self.detection_half_extent,
-                        min_y=y - self.detection_half_extent,
-                        min_z=z - self.detection_half_extent,
-                        max_x=x + self.detection_half_extent,
-                        max_y=y + self.detection_half_extent,
-                        max_z=z + self.detection_half_extent,
-                    ),
-                ),
-            ]
+        half_extent = (
+            max(abs(offset) for offset in self.sideways_look_offsets)
+            + self.detection_margin
+        )
+        x, y, z = self.target_location.position.to_np().flatten()[:3]
+        return VolumetricBoundingBox(
+            origin=HomogeneousTransformationMatrix(
+                reference_frame=self.target_location.reference_frame
+            ),
+            min_x=x - half_extent,
+            min_y=y - half_extent,
+            min_z=z - half_extent,
+            max_x=x + half_extent,
+            max_y=y + half_extent,
+            max_z=z + half_extent,
         )

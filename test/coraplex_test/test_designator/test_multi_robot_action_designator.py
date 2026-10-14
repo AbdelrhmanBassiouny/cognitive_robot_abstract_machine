@@ -16,6 +16,7 @@ from coraplex.plans.plan_transformation import PlanRewriting
 from cramph.statechart import Statechart
 from cramph.composites import Parallel, Sequence, TryAll, TryInOrder
 from cramph.threaded_nodes import FunctionCall
+from cramph.data_types import LifeCycleValues
 from coraplex.robot_plans.plan_transformations import OpenDrawerBeforeMoveAndPickUp
 from coraplex.robot_plans.actions.composite.searching import SearchAction
 from coraplex.robot_plans.actions.composite.transporting import TransportAction
@@ -1018,8 +1019,8 @@ def test_elevator_navigation(multiple_robot_apartment_context, rclpy_node):
 
 def test_search_action(multiple_robot_apartment_context):
     """
-    The search ends with the robot standing where it can see the object, and with the
-    object's annotation carrying what was seen.
+    Searching where the object stands ends with the robot standing where it can see the
+    object, having detected it on the first look.
     """
     world, robot, extensions = multiple_robot_apartment_context
     milk_body = world.get_body_by_name("milk.stl")
@@ -1028,18 +1029,12 @@ def test_search_action(multiple_robot_apartment_context):
     milk_body.parent_connection.origin = HomogeneousTransformationMatrix.from_xyz_rpy(
         6, -2, 1.2, reference_frame=world.root
     )
-    spawned_position = milk_body.global_pose.position.to_np().flatten()[:3]
+    search = SearchAction(milk_body.global_pose, object_semantic_annotation=Milk)
 
-    run_plan(
-        SearchAction(milk_body.global_pose, object_semantic_annotation=Milk),
-        extensions,
-    )
+    run_plan(search, extensions)
 
     assert milk_body in get_visible_bodies(robot.get_default_camera())
-    # A perfect simulated sensor reports where the object already is, so detecting it
-    # confirms where it stands rather than moving it.
-    np.testing.assert_allclose(
-        milk_body.global_pose.position.to_np().flatten()[:3],
-        spawned_position,
-        atol=1e-9,
+    first_detection = next(
+        node for node in search.descendants if isinstance(node, DetectAction)
     )
+    assert first_detection.life_cycle_state == LifeCycleValues.SUCCEEDED
