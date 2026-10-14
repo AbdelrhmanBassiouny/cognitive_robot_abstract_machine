@@ -74,7 +74,7 @@ items:
   title: Typst-figure close-ups (magnify, pointer, answering) made general
   branch: claude/general-figure-scenes
   track: figure-scenes
-  status: not started
+  status: not_started
   depends_on:
   - icra-video-on-core
   notes: stages.py and figure.py behind a figure abstraction, so other experiments grow close-ups
