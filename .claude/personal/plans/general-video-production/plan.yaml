@@ -37,7 +37,7 @@ items:
   branch: claude/pensive-albattani-2j50zr
   pull_request_number: 472
   track: video-package
-  status: in progress
+  status: in_progress
   session: https://claude.ai/code/session_01HQ4cooKAuKSVwcZpKfsCUc
   blockers:
     - >-
