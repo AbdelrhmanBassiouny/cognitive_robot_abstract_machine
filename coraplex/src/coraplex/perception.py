@@ -8,7 +8,7 @@ import numpy as np
 
 from krrood.ormatic.utils import classproperty
 from cramph.node import EndedByOwner, FailsOnObservingFalse
-from cramph.context import StatechartContext
+from cramph.context import ContextExtension, StatechartContext
 from cramph.data_types import ObservationStateValues
 from cramph.node import StatechartNode
 from giskardpy.motion_statechart.ros_context import RosContextExtension

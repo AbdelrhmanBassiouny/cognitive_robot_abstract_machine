@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 
 from typing_extensions import Type
 
+from krrood.ormatic.utils import classproperty
 from coraplex.datastructures.enums import (
     DetectionState,
     DetectionTechnique,
