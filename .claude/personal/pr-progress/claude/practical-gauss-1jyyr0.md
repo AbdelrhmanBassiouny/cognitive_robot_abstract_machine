@@ -1,8 +1,10 @@
 Plan
-- Discussion session: prepare a cramera demo for the supervisor (2026-10-15). No PR planned.
+- Discussion: show the user's krrood/EQL, ICRA and AAMAS work *through* cramera to the
+  supervisor (2026-10-15). No PR planned yet.
 Done
-- Surveyed: upstream main carries cramera core (sunava #667/#674); your autocomplete,
-  readback, voice, replay, completion files are on main nearly unchanged. Fork stack
-  #169-#168 + #176/#177/#180 still draft, last touched Aug-Sep.
+- Mapped hooks on main's cramera: register_query_source, QueryScope
+  (CURRENT_STATE/DETECTED_EVENTS/EPISODIC_MEMORY), pluggable QueryEvaluation, native
+  verbalization labels. AAMAS = aamas27-unification-revision (EQL->SQL, correlated
+  quantifiers). ICRA = #265 + knowledge-directed perception PRs.
 Next
-- User picks demo path (main + existing demo vs. fork stack Montessori run) and narrative.
+- User picks the demo storyline; then build one demo script on main's cramera.
