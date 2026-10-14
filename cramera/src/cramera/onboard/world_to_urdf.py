@@ -183,8 +183,8 @@ class UrdfDocument:
         Connections *within* the subset are kept, so a drawer stays prismatic and keeps
         following its recorded positions. A body whose parent lies outside the subset
         has no joint to inherit and is fixed to :attr:`SYNTHESIZED_ROOT_LINK` at the
-        pose it holds in the world, or relative to ``identity_root`` when one is given,
-        which is also what leaves the document with a single root.
+        pose it holds in the world, which is also what leaves the document with a single
+        root.
 
         :param bodies: The bodies to serialize, in the order they should appear.
         :param name: Output model name, used for ``<output_directory>/<name>.urdf``.
@@ -216,12 +216,6 @@ class UrdfDocument:
                 and cls.supports(connection)
             ):
                 document.add_joint(connection)
-            elif identity_root is not None:
-                document.graft_onto_root(
-                    body,
-                    pose=identity_root.global_transform.inverse()
-                    @ body.global_transform,
-                )
             else:
                 document.graft_onto_root(body)
         return document.write(name, bodies)
