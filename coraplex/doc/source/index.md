@@ -22,7 +22,6 @@
 - Motion building blocks: ready-to-use motion designators (e.g., TCP and gripper control) compose into higher-level actions like pick-up and transport.
 - World model integration: operate over bodies, links, transforms, and semantic annotations; reason about objects and places, not only coordinates.
 - Simulation-first workflow: run end-to-end plans in simulation for rapid iteration, with optional visualization.
-- Clear validation points: action and motion steps can declare pre/post conditions to verify success (e.g., object grasped).
 - Data-driven improvement: stored execution traces support benchmarking, failure analysis, and experiment tracking.
 - Modular and extensible: define custom designators, actions, and plan patterns while leveraging the common orchestration and logging.
 - Tested examples and demos: runnable scenarios (e.g., PR2 pick-and-place) illustrate typical workflows and best practices.

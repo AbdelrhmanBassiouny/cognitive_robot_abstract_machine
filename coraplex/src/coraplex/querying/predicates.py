@@ -1,7 +1,6 @@
 from dataclasses import dataclass
 
-import numpy as np
-from typing_extensions import List, Callable
+from typing_extensions import Callable, List
 
 from coraplex.querying.grasp_closeness import GraspCloseness
 from krrood.entity_query_language.predicate import Predicate, RenderedFields
@@ -9,18 +8,13 @@ from krrood.entity_query_language.verbalization.fragments.base import (
     VerbalizationFragment,
 )
 from krrood.entity_query_language.verbalization.vocabulary.parts_of_speech import (
-    Adjective,
-    clause,
-    Copula,
     Noun,
     predicate_clause,
 )
 from semantic_digital_twin.grasping.grasp_candidates import GraspCandidate
 from semantic_digital_twin.robots.robot_parts import EndEffector
 from semantic_digital_twin.spatial_types.spatial_types import Pose
-from semantic_digital_twin.world_description.world_entity import (
-    Body,
-)
+from semantic_digital_twin.world_description.world_entity import Body
 
 
 @dataclass
@@ -57,38 +51,6 @@ class GripperOccupancy:
 
 
 @dataclass
-class GripperIsFree(GripperOccupancy, Predicate):
-    """
-    Checks if the gripper is holding something.
-
-    Checks this by looking at the kinematic structure of the end_effector.
-    """
-
-    def __call__(self) -> bool:
-        return self.check_manipulator_occupancy(lambda bodies: len(bodies) == 0)
-
-    @classmethod
-    def _verbalization_fragment_(cls, fields):
-        return clause(Noun(fields["end_effector"]), Copula(), Adjective("free"))
-
-
-@dataclass
-class GripperIsNotFree(GripperOccupancy, Predicate):
-    """
-    Checks if the gripper is free at the moment, so it can be used to grab something.
-
-    This is checked by looking at the kinematic structure.
-    """
-
-    def __call__(self) -> bool:
-        return self.check_manipulator_occupancy(lambda bodies: len(bodies) != 0)
-
-    @classmethod
-    def _verbalization_fragment_(cls, fields):
-        return clause(Noun(fields["end_effector"]), Copula(), Adjective("occupied"))
-
-
-@dataclass
 class GripperHolds(GripperOccupancy, Predicate):
     """
     Checks if the gripper holds a particular body.
@@ -112,48 +74,6 @@ class GripperHolds(GripperOccupancy, Predicate):
         :return: The clause *"<end effector> holds <body>"*.
         """
         return predicate_clause(cls, Noun(fields["end_effector"]), Noun(fields["body"]))
-
-
-@dataclass(eq=False)
-class ToolFrameIsAtGrasp(Predicate):
-    """
-    Whether an end effector's tool frame stands where a grasp is, within a tolerance.
-
-    The tool frame reaches a grasp at the grasp's own position, which for a grasp on a
-    rim or a handle lies away from the object's origin.
-    """
-
-    end_effector: EndEffector
-    """
-    The end effector whose tool frame is asked about.
-    """
-
-    grasp: GraspCandidate
-    """
-    The grasp the tool frame is to stand at.
-    """
-
-    tolerance: float = 0.03
-    """
-    How far, in meters along each axis, the tool frame may stand from the grasp.
-    """
-
-    def __call__(self) -> bool:
-        world_T_grasp = self.grasp.world_T_grasp.to_np()
-        world_T_tool = self.end_effector.tool_frame.global_transform.to_np()
-        return bool(
-            np.allclose(world_T_tool[:3, 3], world_T_grasp[:3, 3], atol=self.tolerance)
-        )
-
-    @classmethod
-    def _verbalization_fragment_(cls, fields: RenderedFields) -> VerbalizationFragment:
-        """
-        :param fields: The rendered fragment for each field.
-        :return: The clause *"<end effector>'s tool frame is at <grasp>"*.
-        """
-        return predicate_clause(
-            cls, Noun(fields["end_effector"]), Noun(fields["grasp"])
-        )
 
 
 @dataclass(eq=False)

@@ -4,11 +4,7 @@ from dataclasses import dataclass, field
 
 from typing_extensions import Any, Dict, List, Tuple
 
-from krrood.entity_query_language.core.variable import Variable
 from krrood.entity_query_language.factories import (
-    or_,
-    not_,
-    and_,
     variable_from,
     ConditionType,
 )
@@ -32,7 +28,6 @@ from semantic_digital_twin.grasping.grasp_candidates import (
     GraspCandidate,
     HasGraspCandidates,
 )
-from semantic_digital_twin.reasoning.predicates import allclose
 from semantic_digital_twin.reasoning.robot_predicates import is_body_gripped
 from semantic_digital_twin.robots.robot_parts import Arm
 from semantic_digital_twin.spatial_types.spatial_types import Pose
@@ -162,53 +157,6 @@ class PlaceAction(
             :meth:`_holding_arm_and_grasp` finds it.
         """
         return self._holding_arm_and_grasp()[1]
-
-    @staticmethod
-    def pre_condition(
-        variables: Dict[str, Variable],
-        context: StatechartContext,
-        kwargs: Dict[str, Any],
-    ) -> ConditionType:
-        """
-        An arm of the robot needs to hold the object, whether the object hangs off its
-        gripper or merely lies between the fingers.
-
-        A thin or rim grasp leaves too little of the object between the fingers for the
-        ray test alone to see it, so a gripper the object hangs off counts too.
-        """
-        object_body = kwargs["object_designator"].root
-        return or_(
-            *[
-                GripperHolds(arm.end_effector, object_body)
-                for arm in context.require_extension(RobotAccess).robot.all_arms
-            ],
-            *PlaceAction._grips_of_every_arm(
-                context, kwargs, kwargs["grasp_detection_threshold"]
-            ),
-        )
-
-    @staticmethod
-    def post_condition(
-        variables: Dict[str, Variable],
-        context: StatechartContext,
-        kwargs: Dict[str, Any],
-    ) -> ConditionType:
-        """
-        No arm may hold the object any more and it needs to be at the target location.
-        """
-        return and_(
-            *[
-                not_(grip)
-                for grip in PlaceAction._grips_of_every_arm(
-                    context, kwargs, kwargs["grasp_release_threshold"]
-                )
-            ],
-            allclose(
-                variable_from(kwargs["object_designator"].root).global_pose,
-                kwargs["target_location"],
-                atol=0.03,
-            ),
-        )
 
     @staticmethod
     def _grips_of_every_arm(

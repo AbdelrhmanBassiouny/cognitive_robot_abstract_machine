@@ -5,8 +5,6 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 
 from typing_extensions import (
-    Any,
-    Dict,
     Optional,
 )
 
@@ -17,8 +15,6 @@ from krrood.ormatic.utils import classproperty
 from cramph.node import SucceedsOnObservingTrue, FailsOnObservingFalse
 from cramph.context import ContextExtension, StatechartContext
 from cramph.node import CompositeNode, NodeArtifacts, StatechartNode
-from krrood.entity_query_language.core.base_expressions import SymbolicExpression
-from krrood.entity_query_language.core.variable import Variable
 from krrood.symbolic_math.symbolic_math import Scalar, trinary_if_cases
 from semantic_digital_twin.robots.robot_parts import AbstractRobot
 from semantic_digital_twin.world_description.world_entity import (
@@ -142,19 +138,3 @@ class Action(
                 else_result=Scalar.const_trinary_unknown(),
             )
         )
-
-    @staticmethod
-    def pre_condition(
-        variables: Dict[str, Variable],
-        context: StatechartContext,
-        kwargs: Dict[str, Any],
-    ) -> SymbolicExpression:
-        return True
-
-    @staticmethod
-    def post_condition(
-        variables: Dict[str, Variable],
-        context: StatechartContext,
-        kwargs: Dict[str, Any],
-    ) -> SymbolicExpression:
-        return True

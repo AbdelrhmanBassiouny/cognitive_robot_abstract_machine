@@ -18,7 +18,6 @@ parts:
     - file: abstract_robot.md
     - file: motion_execution.md
     - file: locations.rst
-    - file: conditions.md
     - file: notebooks.md
   - caption: Adding a new Robot
     chapters:
