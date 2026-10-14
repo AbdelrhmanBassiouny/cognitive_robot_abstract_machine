@@ -21,6 +21,7 @@ from semantic_digital_twin.semantic_annotations.semantic_annotations import (
     Apple,
     Cabinet,
     Door,
+    Floor,
     Handle,
     Microwave,
 )
@@ -54,6 +55,15 @@ def test_kitchen_appliance_resolver_resolves_compound_class_name():
 def test_kitchen_appliance_resolver_resolves_enum_category():
     resolver = RoboCasaKitchenApplianceResolver()
     assert resolver.resolve(RoboCasaKitchenApplianceCategory.CABINET) is Cabinet
+
+
+def test_kitchen_appliance_resolver_resolves_floor():
+    """
+    The floor of a kitchen is what a robot drives on, so it resolves to a floor rather
+    than to a description in words.
+    """
+    resolver = RoboCasaKitchenApplianceResolver()
+    assert resolver.resolve(RoboCasaKitchenApplianceCategory.FLOOR) is Floor
 
 
 def test_object_resolver_resolves_known_category():

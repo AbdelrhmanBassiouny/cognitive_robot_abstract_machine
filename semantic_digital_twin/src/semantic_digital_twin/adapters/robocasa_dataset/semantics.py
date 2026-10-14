@@ -20,6 +20,7 @@ from semantic_digital_twin.semantic_annotations.semantic_annotations import (
     Cup,
     Dishwasher,
     Drawer,
+    Floor,
     Fridge,
     Hood,
     Kettle,
@@ -88,6 +89,7 @@ class RoboCasaKitchenApplianceCategory(StrEnum):
     STOVE = "stove"
     TOASTER = "toaster"
     COFFEE_MACHINE = "coffee_machine"
+    FLOOR = "floor"
 
 
 class RoboCasaObjectCategory(StrEnum):
@@ -207,6 +209,7 @@ class RoboCasaKitchenApplianceResolver(RoboCasaCategoryResolver):
         RoboCasaKitchenApplianceCategory.STOVE: Cooktop,
         RoboCasaKitchenApplianceCategory.TOASTER: Toaster,
         RoboCasaKitchenApplianceCategory.COFFEE_MACHINE: CoffeeMachine,
+        RoboCasaKitchenApplianceCategory.FLOOR: Floor,
     }
 
 

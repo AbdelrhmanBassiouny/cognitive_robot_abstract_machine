@@ -16,7 +16,10 @@ from semantic_digital_twin.adapters.robocasa_dataset.semantics import (
 from semantic_digital_twin.semantic_annotations.natural_language import (
     NaturalLanguageWithTypeDescription,
 )
-from semantic_digital_twin.semantic_annotations.semantic_annotations import Dishwasher
+from semantic_digital_twin.semantic_annotations.semantic_annotations import (
+    Dishwasher,
+    Floor,
+)
 
 
 @pytest.fixture(scope="session")
@@ -38,6 +41,22 @@ def test_load_kitchen(robocasa_loader):
     )
     assert len(world.bodies) > 0
     assert len(world.semantic_annotations) > 0
+
+
+def test_load_kitchen_annotates_its_floors(robocasa_loader):
+    """
+    The floor slab of the kitchen and the backing beneath it are annotated as floors, so
+    a robot can stand on them.
+    """
+    from robocasa.models.scenes.scene_registry import LayoutType, StyleType
+
+    world = robocasa_loader.load_kitchen(
+        layout_id=next(iter(LayoutType)), style_id=next(iter(StyleType))
+    )
+
+    assert {
+        floor.root.name.name for floor in world.get_semantic_annotations_by_type(Floor)
+    } == {"floor_room_main", "floor_backing_room_main"}
 
 
 def test_load_kitchen_appliance(robocasa_loader):
