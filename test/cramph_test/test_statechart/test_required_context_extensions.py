@@ -75,6 +75,42 @@ class CompositeRequiringAnExtension(SucceedsOnObservingTrue, CompositeNode):
         self.expanded = True
 
 
+@dataclass
+class ExtensionACompositeReadsWhileExpanding(ContextExtension):
+    """
+    A context extension a composite node reads only to create its children.
+    """
+
+
+@dataclass(eq=False, repr=False)
+class CompositeReadingAnExtensionWhileExpanding(SucceedsOnObservingTrue, CompositeNode):
+    """
+    A composite node that declares a context extension it reads only while it expands,
+    remembers whether it expanded, and then runs one child.
+    """
+
+    expanded: bool = field(default=False, init=False)
+    """
+    Whether :meth:`expand` ran.
+    """
+
+    @classproperty
+    def context_extensions_required_to_expand(
+        cls,
+    ) -> tuple[type[ContextExtension], ...]:
+        return super().context_extensions_required_to_expand + (
+            ExtensionACompositeReadsWhileExpanding,
+        )
+
+    def expand(self, context: StatechartContext) -> None:
+        self.expanded = True
+        self._add_child_to_statechart(
+            NodeSucceedingOnObservingTrue(
+                name="child", observation=ObservationStateValues.TRUE
+            )
+        )
+
+
 # %% declaring
 
 
@@ -87,6 +123,10 @@ def test_a_node_requires_what_its_base_class_requires():
         ExtensionANodeRequires,
         ExtensionASpecializedNodeRequires,
     )
+
+
+def test_a_composite_node_requires_no_extension_to_expand_unless_it_declares_one():
+    assert CompositeRequiringAnExtension.context_extensions_required_to_expand == ()
 
 
 # %% checking at compile
@@ -185,3 +225,36 @@ def test_a_composite_node_is_checked_before_it_expands(
         ExtensionANodeRequires: [composite]
     }
     assert not composite.expanded
+
+
+def test_a_composite_node_is_checked_for_what_it_reads_while_expanding(
+    statechart_context: StatechartContext,
+):
+    statechart = Statechart(context=statechart_context)
+    composite = CompositeReadingAnExtensionWhileExpanding(name="composite")
+
+    with pytest.raises(NodesMissingContextExtensionsError) as raised:
+        statechart.add_node(composite)
+
+    assert raised.value.nodes_by_missing_extension == {
+        ExtensionACompositeReadsWhileExpanding: [composite]
+    }
+    assert not composite.expanded
+
+
+def test_a_composite_node_expanded_elsewhere_compiles_without_what_it_read_to_expand(
+    statechart_context: StatechartContext,
+):
+    context_it_expands_in = StatechartContext(world=statechart_context.world)
+    context_it_expands_in.add_extension(ExtensionACompositeReadsWhileExpanding())
+    expanded_elsewhere = Statechart(context=context_it_expands_in)
+    expanded_elsewhere.add_node(
+        CompositeReadingAnExtensionWhileExpanding(name="composite")
+    )
+
+    received = Statechart.from_json(
+        expanded_elsewhere.to_json(), context=statechart_context
+    )
+    received.compile()
+
+    assert received.is_compiled

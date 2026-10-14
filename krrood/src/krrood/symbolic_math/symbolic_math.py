@@ -268,15 +268,15 @@ class CompiledFunction:
     Whether to return a sparse matrix or a dense numpy matrix.
     """
 
-    _layout: _Layout = field(init=False)
+    _layout: _Layout = field(init=False, repr=False)
     """
     The layout strategy to use for the compiled function.
     """
 
-    _compiled_casadi_function: ca.Function = field(init=False)
+    _compiled_casadi_function: ca.Function = field(init=False, repr=False)
 
-    _function_buffer: ca.FunctionBuffer = field(init=False)
-    _function_evaluator: partial = field(init=False)
+    _function_buffer: ca.FunctionBuffer = field(init=False, repr=False)
+    _function_evaluator: partial = field(init=False, repr=False)
     """
     Helpers to avoid new memory allocation during function evaluation.
     """

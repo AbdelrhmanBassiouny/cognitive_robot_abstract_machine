@@ -50,6 +50,7 @@ from coraplex.robot_plans.actions.core.robot_body import ParkArmsAction
 from coraplex.robot_plans.actions.core.navigation import NavigateAction
 from cramph.composites import Sequence
 from cramph.statechart import Statechart
+from semantic_digital_twin.spatial_types.spatial_types import Pose
 
 navigate = NavigateAction(Pose.from_xyz_quaternion(1, 1, 0, reference_frame=world.root))
 park = ParkArmsAction(pr2.all_arms)
@@ -60,6 +61,12 @@ statechart.add_node(plan)
 ```
 
 This creates a plan with a `Sequence` at the top level of the statechart and the two actions as its children.
+
+You can open an interactive, real-time visualization of the statechart the plan runs in using its `visualize` method.
+
+```python
+statechart.visualize()
+```
 
 ## Plan Execution
 `compile` prepares the statechart, adding what the plan runs with, and compiles it; `execute` runs it until every
@@ -96,10 +103,4 @@ print(plan.life_cycle_state)
 print(plan.children[0].life_cycle_state)
 print(plan.start_time)
 print(plan.end_time)
-```
-
-You can open an interactive visualization of the statechart the plan ran in using its `visualize` method.
-
-```python
-statechart.visualize()
 ```

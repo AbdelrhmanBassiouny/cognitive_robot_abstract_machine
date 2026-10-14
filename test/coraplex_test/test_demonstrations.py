@@ -7,11 +7,14 @@ context. None of it needs a controller.
 """
 
 import logging
+import threading
 from contextlib import contextmanager
 from dataclasses import dataclass, field
+from datetime import timedelta
 
 import pytest
 import rclpy
+from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
 from typing_extensions import Iterator, List
 
 from coraplex.demonstrations import RobotDemonstration, RobotDemonstrationRosSession
@@ -23,6 +26,7 @@ from ..plan_running import robot_extensions
 from cramph.context import ContextExtension, StatechartContext
 from coraplex.plans.context_extensions import ExecutionMode
 from coraplex.plans.executors import SimulatedPlanExecutor
+from coraplex.plans.failures import MotionExceededSimulationTimeLimit
 from cramph.statechart import Statechart
 
 
@@ -209,6 +213,21 @@ def test_run_returns_the_world_it_acted_on(cylinder_bot_world):
     assert demonstration.run() is cylinder_bot_world
 
 
+def test_a_simulated_plan_is_given_up_on_at_the_time_limit_of_its_demonstration(
+    cylinder_bot_world,
+):
+    demonstration = RecordingDemonstration(
+        world=cylinder_bot_world,
+        used_robot=MinimalRobot,
+        simulation_time_limit=timedelta(0),
+    )
+
+    with pytest.raises(MotionExceededSimulationTimeLimit) as error:
+        demonstration.run()
+
+    assert error.value.time_limit == demonstration.simulation_time_limit
+
+
 # %% event segmentation
 
 
@@ -316,3 +335,41 @@ def test_session_leaves_a_context_somebody_else_started(rclpy_node):
 
     session.stop()
     assert rclpy.ok()
+
+
+# %% callbacks of the session's node
+
+
+def test_a_callback_of_another_group_runs_while_one_is_busy(rclpy_node):
+    """
+    A client announces itself to its controller from a callback group of its own, which
+    has to be served while the node is busy choosing what the plan does next.
+    """
+    session = RobotDemonstrationRosSession.start("busy_callback_probe")
+    busy_callback_started = threading.Event()
+    other_callback_ran_meanwhile = threading.Event()
+    busy_callback_outcomes: List[bool] = []
+
+    def stay_busy_until_the_other_callback_ran() -> None:
+        busy_callback_started.set()
+        busy_callback_outcomes.append(other_callback_ran_meanwhile.wait(timeout=2.0))
+
+    def run_while_the_other_callback_is_busy() -> None:
+        if busy_callback_started.is_set() and not busy_callback_outcomes:
+            other_callback_ran_meanwhile.set()
+
+    session.node.create_timer(
+        0.01,
+        stay_busy_until_the_other_callback_ran,
+        callback_group=MutuallyExclusiveCallbackGroup(),
+    )
+    session.node.create_timer(
+        0.01,
+        run_while_the_other_callback_is_busy,
+        callback_group=MutuallyExclusiveCallbackGroup(),
+    )
+    busy_callback_started.wait(timeout=5.0)
+    other_callback_ran_meanwhile.wait(timeout=5.0)
+    session.stop()
+
+    assert busy_callback_outcomes[0]

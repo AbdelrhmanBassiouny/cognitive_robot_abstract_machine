@@ -120,6 +120,46 @@ def test_a_compiled_statechart_keeps_its_nodes(
         statechart.remove_node(node)
 
 
+def test_a_node_no_compile_covered_yet_leaves_a_compiled_statechart(
+    statechart_executor: StatechartExecutor,
+):
+    statechart = Statechart(context=statechart_executor.context)
+    statechart.add_node(compiled := ConstTrueNode())
+    statechart_executor.compile(statechart)
+
+    with statechart.modify():
+        statechart.add_nodes([removed := ConstTrueNode(), kept := ConstTrueNode()])
+        statechart.remove_node(removed)
+
+    assert statechart.nodes == [compiled, kept]
+    assert [node.index for node in statechart.nodes] == [0, 1]
+    assert statechart.latest_compile_covers(kept)
+
+
+def test_a_compiled_statechart_runs_after_a_joining_node_was_removed_again(
+    statechart_executor: StatechartExecutor,
+):
+    statechart = Statechart(context=statechart_executor.context)
+    statechart.add_node(ConstTrueNode())
+    statechart_executor.compile(statechart)
+    statechart_executor.tick()
+
+    with statechart.modify():
+        statechart.add_node(removed := ConstTrueNode())
+        statechart.add_node(
+            sequence := Sequence(
+                nodes=[
+                    Attempt(task=ConstTrueNode(), failure_monitors=[ConstFalseNode()])
+                ]
+            )
+        )
+        statechart.add_node(EndStatechart.when_true(sequence))
+        statechart.remove_node(removed)
+    statechart_executor.tick_until_end()
+
+    assert sequence.life_cycle_state == LifeCycleValues.SUCCEEDED
+
+
 def test_a_statechart_runs_after_a_node_was_removed(
     statechart_executor: StatechartExecutor,
 ):

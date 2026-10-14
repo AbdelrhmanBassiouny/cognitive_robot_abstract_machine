@@ -29,7 +29,7 @@ from krrood.rustworkx_utils.graph_visualizer_base import (
     GraphVisualizerBase,
 )
 from krrood.symbolic_math.symbolic_math import VariableParameters
-from cramph.context import StatechartContext
+from cramph.context import ContextExtension, StatechartContext
 from cramph.data_types import (
     StatechartJSONKey,
     TransitionKind,
@@ -935,11 +935,16 @@ class StateHistoryItem:
 
     def __repr__(self) -> str:
         """
-        :return: Every node's name mapped to its observation state and life cycle state name.
+        :return: The name of every node this snapshot records, mapped to its
+            observation state and life cycle state name.
         """
         merged = {
-            node.name: f"{self.observation_state[node].name} | {life_cycle.name}"
-            for node, life_cycle in self.life_cycle_state.items()
+            node.name: (
+                f"{self.observation_state[node].name} | "
+                f"{self.life_cycle_state[node].name}"
+            )
+            for node in self.life_cycle_state.keys()
+            if self.records(node)
         }
         return str(merged)
 
@@ -1587,14 +1592,18 @@ class Statechart(SubclassJSONSerializer):
 
         :param node: The composite node that just joined this statechart.
         :raises NodesMissingContextExtensionsError: If :attr:`context` lacks an
-            extension `node` requires.
+            extension `node` requires, to expand or afterwards.
         """
         for prerequisite in node.prerequisite_nodes:
             if isinstance(prerequisite, CompositeNode) and (
                 prerequisite._statechart is not self
             ):
                 raise PrerequisiteNotExpandedError(node=node, prerequisite=prerequisite)
-        self._check_required_context_extensions([node])
+        self._check_context_holds(
+            [node],
+            lambda expanding_node: expanding_node.required_context_extensions
+            + expanding_node.context_extensions_required_to_expand,
+        )
         node.expand(self.context)
 
     def _register_node(self, node: StatechartNode) -> None:
@@ -1626,15 +1635,15 @@ class Statechart(SubclassJSONSerializer):
         The nodes that stay keep their order and are numbered anew without gaps.
 
         :param node: The node to remove.
-        :raises StatechartAlreadyCompiledError: If this statechart is compiled.
         :raises NotInStatechartError: If `node` does not belong to this statechart.
+        :raises StatechartAlreadyCompiledError: If the latest compile covers `node`.
         :raises RemovedNodeStillReferencedError: If a node that stays refers to a
             removed node through a condition or as a prerequisite.
         """
-        if self.is_compiled:
-            raise StatechartAlreadyCompiledError()
         if node._statechart is not self:
             raise NotInStatechartError(name=node.name)
+        if self.is_compiled and self.latest_compile_covers(node):
+            raise StatechartAlreadyCompiledError()
         removed_nodes = [node, *node.descendants]
         kept_nodes = [kept for kept in self._nodes if kept not in removed_nodes]
         self._check_not_referenced(removed_nodes, kept_nodes)
@@ -1642,6 +1651,9 @@ class Statechart(SubclassJSONSerializer):
         if parent_node is not None and node in parent_node.nodes:
             parent_node.nodes.remove(node)
         self._renumber(kept_nodes)
+        self._nodes_to_rebuild = [
+            rebuilt for rebuilt in self._nodes_to_rebuild if rebuilt in kept_nodes
+        ]
         for removed_node in removed_nodes:
             removed_node._statechart = None
             removed_node.index = None
@@ -1671,7 +1683,7 @@ class Statechart(SubclassJSONSerializer):
         """
         Keeps only `kept_nodes`, numbering them anew in their current order.
 
-        Only valid before compilation, while the graph has no edges yet.
+        The graph loses its edges, which the next compile adds again.
 
         :param kept_nodes: The nodes that stay, in index order.
         """
@@ -1885,7 +1897,9 @@ class Statechart(SubclassJSONSerializer):
         """
         goals = [node for node in nodes if isinstance(node, CompositeNode)]
         self._check_children_of_goals(goals)
-        self._check_required_context_extensions(nodes)
+        self._check_context_holds(
+            nodes, lambda compiled_node: compiled_node.required_context_extensions
+        )
         if self._world_structure_changed():
             nodes_to_build = self.nodes
         else:
@@ -1971,15 +1985,22 @@ class Statechart(SubclassJSONSerializer):
         for goal in goals:
             goal.check_children()
 
-    def _check_required_context_extensions(self, nodes: List[StatechartNode]) -> None:
+    def _check_context_holds(
+        self,
+        nodes: list[StatechartNode],
+        required_extensions_of: Callable[
+            [StatechartNode], tuple[type[ContextExtension], ...]
+        ],
+    ) -> None:
         """
+        :param nodes: The nodes to check.
+        :param required_extensions_of: Gives the extension types a node requires.
         :raises NodesMissingContextExtensionsError: If :attr:`context` lacks an
-            extension a node in `nodes` requires, see
-            :attr:`~cramph.node.StatechartNode.required_context_extensions`.
+            extension a node in `nodes` requires.
         """
         nodes_by_missing_extension = {}
         for node in nodes:
-            for extension_type in node.required_context_extensions:
+            for extension_type in required_extensions_of(node):
                 if self.context.get_extension(extension_type) is None:
                     nodes_by_missing_extension.setdefault(extension_type, []).append(
                         node

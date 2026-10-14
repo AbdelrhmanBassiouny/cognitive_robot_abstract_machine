@@ -40,6 +40,7 @@ dependencies = [
     "polytope",
     "semantic_digital_twin",
     "trimesh",
+    "cramph",
     "giskardpy",
     "krrood",
 ]
@@ -58,6 +59,7 @@ version = {attr = "coraplex._version.__version__"}
 
 [dependency-groups]
 workspace = [
+    "cramph",
     "giskardpy",
     "krrood",
     "probabilistic_model",

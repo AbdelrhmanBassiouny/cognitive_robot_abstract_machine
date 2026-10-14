@@ -1365,8 +1365,9 @@ class StatechartNode(SubclassJSONSerializer, metaclass=ABCMeta):
     @classproperty
     def required_context_extensions(cls) -> tuple[type[ContextExtension], ...]:
         """
-        :return: The types of the context extensions a node of this class reads; a
-            statechart compiles such a node only in a context that holds them all.
+        :return: The types of the context extensions a node of this class reads once
+            it is in a statechart; a statechart compiles such a node only in a context
+            that holds them all.
         """
         return ()
 
@@ -1473,6 +1474,12 @@ class StatechartNode(SubclassJSONSerializer, metaclass=ABCMeta):
 
     def __hash__(self):
         return hash(self.name)
+
+    def __eq__(self, other: object) -> bool:
+        """
+        :return: Whether `other` is this very node, whatever parameters the two share.
+        """
+        return self is other
 
     @property
     def life_cycle_state(self) -> LifeCycleValues:
@@ -2084,6 +2091,17 @@ class CompositeNode(StatechartNode):
         :return: The nodes this one runs, which is what :attr:`nodes` holds.
         """
         return list(self.nodes)
+
+    @classproperty
+    def context_extensions_required_to_expand(
+        cls,
+    ) -> tuple[type[ContextExtension], ...]:
+        """
+        :return: The types of the context extensions a node of this class reads only
+            while it expands; a statechart expands such a node only in a context that
+            holds them all, and compiles it without them once it is expanded.
+        """
+        return ()
 
     def create_structure_copy(self) -> CompositeNode:
         return StructureCopyCompositeNode(name=self.name)

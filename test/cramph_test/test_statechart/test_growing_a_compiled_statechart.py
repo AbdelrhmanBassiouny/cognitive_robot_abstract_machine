@@ -169,6 +169,18 @@ def test_the_history_of_an_added_node_starts_when_it_joined(
     assert second.start_time is not None
 
 
+def test_a_history_item_reads_the_same_once_a_node_joined(
+    statechart_executor: StatechartExecutor,
+):
+    _compile_and_run_one_node(statechart_executor)
+    recorded_before_joining = statechart_executor.statechart.history.history[-1]
+    representation_before_joining = repr(recorded_before_joining)
+
+    statechart_executor.statechart.add_node(_node_arriving_at_once("second"))
+
+    assert repr(recorded_before_joining) == representation_before_joining
+
+
 def test_an_added_composite_node_runs_its_children(
     statechart_executor: StatechartExecutor,
 ):

@@ -16,6 +16,7 @@ containments of the place setting, and reports them once the plan is done.
 import os
 from contextlib import AbstractContextManager
 from dataclasses import dataclass, field
+from datetime import timedelta
 from enum import StrEnum
 
 from typing_extensions import List, Optional, Tuple, Type
@@ -218,6 +219,8 @@ class BulletWorldDemonstration(RobotDemonstration):
     """
 
     ros_node_name: str = "bullet_world_demo_node"
+
+    simulation_time_limit: timedelta | None = timedelta(minutes=10)
 
     robot_start: HomogeneousTransformationMatrix = field(
         default_factory=lambda: HomogeneousTransformationMatrix.from_xyz_rpy(

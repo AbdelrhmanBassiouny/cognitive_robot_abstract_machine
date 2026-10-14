@@ -91,8 +91,10 @@ class DetectAction(Action):
     """
 
     @classproperty
-    def required_context_extensions(cls) -> tuple[type[ContextExtension], ...]:
-        return super().required_context_extensions + (ExecutionMode,)
+    def context_extensions_required_to_expand(
+        cls,
+    ) -> tuple[type[ContextExtension], ...]:
+        return super().context_extensions_required_to_expand + (ExecutionMode,)
 
     def create_action_body(self) -> StatechartNode:
         return Sequence(

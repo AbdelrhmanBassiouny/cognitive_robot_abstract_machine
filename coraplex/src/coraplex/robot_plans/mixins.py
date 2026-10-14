@@ -301,8 +301,10 @@ class MovesToolCenterPoint(Action, ABC):
     """
 
     @classproperty
-    def required_context_extensions(cls) -> tuple[type[ContextExtension], ...]:
-        return super().required_context_extensions + (MotionToleranceConfig,)
+    def context_extensions_required_to_expand(
+        cls,
+    ) -> tuple[type[ContextExtension], ...]:
+        return super().context_extensions_required_to_expand + (MotionToleranceConfig,)
 
     def resolved_position_threshold(self) -> float:
         """

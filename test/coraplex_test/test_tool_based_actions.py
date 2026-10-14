@@ -34,6 +34,7 @@ from semantic_digital_twin.world_description.shape_collection import ShapeCollec
 from semantic_digital_twin.world_description.world_entity import Body
 
 from coraplex.plans.plan_transformation import PlanRewriting
+from cramph.composites import Parallel
 from coraplex.robot_plans.robot_specific_plan_transformations import (
     KeepTheTorsoUprightWhileUsingATool,
 )
@@ -77,13 +78,13 @@ def tool_action_world(pr2_apartment_context):
 
 def _tool_path_goals(action, extensions):
     """
-    :return: The steps the action expanded into that follow its tool path, one per tool
-        motion.
+    :return: The goals the action expanded into that follow its tool path, one per tool
+        motion: its body where that is such a goal, and the steps of its body otherwise.
     """
     expand(action, extensions)
-    return [
-        step for step in action.children[0].nodes if _trajectory_of(step) is not None
-    ]
+    body = action.action_body
+    candidates = [body] if isinstance(body, Parallel) else body.nodes
+    return [goal for goal in candidates if _trajectory_of(goal) is not None]
 
 
 def _trajectory_of(goal):

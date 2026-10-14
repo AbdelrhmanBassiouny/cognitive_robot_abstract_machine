@@ -248,8 +248,7 @@ class ParkArmsBeforeNavigating(InsertionTransformation[NavigateAction]):
         return True
 
     def anchor(self, plan_node: NavigateAction) -> StatechartNode:
-        [drive] = plan_node.children[0].nodes
-        return drive
+        return plan_node
 
     def nodes_to_insert(self, plan_node: NavigateAction) -> List[StatechartNode]:
         return [ParkArmsAction(plan_node.robot.all_arms)]
@@ -259,7 +258,9 @@ class ParkArmsBeforeNavigating(InsertionTransformation[NavigateAction]):
 plan_transformations = [ParkArmsBeforeNavigating()]
 
 navigate = expand(
-    NavigateAction(Pose.from_xyz_rpy(1.5, 2.4, 0.0, reference_frame=world.root))
+    Sequence(
+        [NavigateAction(Pose.from_xyz_rpy(1.5, 2.4, 0.0, reference_frame=world.root))]
+    )
 )
 
 show(navigate)
@@ -268,7 +269,9 @@ show(navigate)
 The parking is part of the plan like any other action, so it is performed with it:
 
 ```python
-navigate = NavigateAction(Pose.from_xyz_rpy(1.5, 2.4, 0.0, reference_frame=world.root))
+navigate = Sequence(
+    [NavigateAction(Pose.from_xyz_rpy(1.5, 2.4, 0.0, reference_frame=world.root))]
+)
 
 executor, statechart = statechart_for(navigate)
 executor.compile(statechart)
@@ -299,7 +302,9 @@ class ParkArmsAfterNavigating(ParkArmsBeforeNavigating):
 plan_transformations = [ParkArmsAfterNavigating()]
 
 navigate = expand(
-    NavigateAction(Pose.from_xyz_rpy(1.5, 2.4, 0.0, reference_frame=world.root))
+    Sequence(
+        [NavigateAction(Pose.from_xyz_rpy(1.5, 2.4, 0.0, reference_frame=world.root))]
+    )
 )
 
 show(navigate)
@@ -334,7 +339,7 @@ class ParkArmsBeforeLongDrives(ParkArmsBeforeNavigating):
 ```python
 plan_transformations = [ParkArmsBeforeLongDrives()]
 
-navigate = expand(NavigateAction(pr2.root.global_pose))
+navigate = expand(Sequence([NavigateAction(pr2.root.global_pose)]))
 
 show(navigate)
 ```
