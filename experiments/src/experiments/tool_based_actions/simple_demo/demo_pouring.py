@@ -29,6 +29,7 @@ from coraplex.robot_plans.actions.core.robot_body import (
 )
 from coraplex.testing import attach_tool, setup_world, selected_visualizations
 from coraplex.plans.context_extensions import RobotAccess
+from coraplex.demonstrations import RobotDemonstrationRosSession
 from coraplex.plans.executors import SimulatedPlanExecutor
 from cramph.statechart import Statechart
 from cramph.composites import Sequence
@@ -76,15 +77,17 @@ def main() -> None:
         ]
     )
 
-    executor = SimulatedPlanExecutor(
-        world,
-        context_extensions=[RobotAccess(pr2)],
-        extensions=selected_visualizations(),
-    )
-    statechart = Statechart(context=executor.context)
-    statechart.add_node(plan)
-    executor.compile(statechart)
-    executor.execute()
+    with RobotDemonstrationRosSession.start("pouring_demo") as ros_session:
+        executor = SimulatedPlanExecutor(
+            world,
+            context_extensions=[RobotAccess(pr2)],
+            ros_node=ros_session.node,
+            extensions=selected_visualizations(),
+        )
+        statechart = Statechart(context=executor.context)
+        statechart.add_node(plan)
+        executor.compile(statechart)
+        executor.execute()
 
 
 if __name__ == "__main__":

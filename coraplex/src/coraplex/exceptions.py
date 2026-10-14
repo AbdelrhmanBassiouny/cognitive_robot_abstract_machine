@@ -76,6 +76,20 @@ class VisualizationBackendUnavailable(DataclassException):
         return "Install the selected visualization provider or select another backend."
 
 
+@dataclass
+class ExecutorWithoutRosNode(DataclassException):
+    """
+    An RViz visualization is added to an executor that gives its statecharts no ROS node
+    to publish through.
+    """
+
+    def error_message(self) -> str:
+        return "The executor showing its world in RViz has no ROS node."
+
+    def suggest_correction(self) -> str:
+        return "Give the executor a ROS node, for example through its ros_node field."
+
+
 # %% plan execution
 @dataclass
 class PlanNotCompiled(DataclassException):

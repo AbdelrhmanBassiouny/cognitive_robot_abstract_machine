@@ -9,6 +9,7 @@ the world and its meshes are read from its share directory.
 from __future__ import annotations
 
 import numpy as np
+from rclpy.node import Node
 
 from giskardpy.motion_statechart.tasks.joint_tasks import (
     JointPositionList,
@@ -18,6 +19,7 @@ from coraplex.robot_plans.actions.core.navigation import NavigateAction
 from coraplex.robot_plans.actions.core.pick_up import PickUpAction
 from coraplex.robot_plans.actions.core.placing import PlaceAction
 from coraplex.robot_plans.actions.core.robot_body import ParkArmsAction
+from coraplex.demonstrations import RobotDemonstrationRosSession
 from coraplex.testing import selected_visualizations
 from semantic_digital_twin.specifications.kinematic_structure_entities import (
     BodySpecification,
@@ -207,15 +209,21 @@ def lowest_collision_point_of(robot: UnitreeG1, world: World) -> float:
 
 
 def run(
-    source: Pose, destination: Pose, turn: float, world: World, robot: UnitreeG1
+    source: Pose,
+    destination: Pose,
+    turn: float,
+    world: World,
+    robot: UnitreeG1,
+    ros_node: Node,
 ) -> None:
     """
     Carry the parcel from `source` to `destination` with `robot` in `world`, simulated,
-    see :func:`build_statechart`.
+    see :func:`build_statechart`, showing it through `ros_node`.
     """
     executor = SimulatedPlanExecutor(
         world,
         context_extensions=[RobotAccess(robot)],
+        ros_node=ros_node,
         extensions=selected_visualizations(),
     )
     executor.compile(build_statechart(executor.context, source, destination, turn))
@@ -229,10 +237,11 @@ robot = world.get_semantic_annotations_by_type(UnitreeG1)[0]
 # sink into it or hover above it.
 assert abs(lowest_collision_point_of(robot, world)) < 1e-3
 
-for _ in range(10):
-    run(PICK_POSE, PLACE_POSE, -1.57, world, robot)
-    run(PLACE_POSE, PICK_POSE, 1.57, world, robot)
-run(PICK_POSE, PLACE_POSE, -1.57, world, robot)
+with RobotDemonstrationRosSession.start("warehouse_demo") as ros_session:
+    for _ in range(10):
+        run(PICK_POSE, PLACE_POSE, -1.57, world, robot, ros_session.node)
+        run(PLACE_POSE, PICK_POSE, 1.57, world, robot, ros_session.node)
+    run(PICK_POSE, PLACE_POSE, -1.57, world, robot, ros_session.node)
 
 parcel_position = world.get_body_by_name("parcel").global_pose
 print(f"parcel delivered to {np.round(parcel_position.position, 3)}")

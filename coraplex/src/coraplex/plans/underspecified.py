@@ -162,8 +162,8 @@ class ActionTrial:
         :param world: The copy a candidate is tried in.
         :return: An executor running a candidate in `world`, configured like
             :attr:`executor`, the robot and everything else its context extensions refer
-            to rebound to `world`, and showing `world` in RViz while the executor is
-            debugging.
+            to rebound to `world`, and showing `world` in RViz through the executor's
+            ROS node while it is debugging.
         """
         return self.trial_executor_type(
             world,
@@ -172,6 +172,7 @@ class ActionTrial:
                 for extension in self.executor.context_extensions
             ],
             collision_avoidance=self.executor.collision_avoidance,
+            ros_node=self.executor.ros_node if self.executor.debug else None,
             extensions=self._trial_visualizations(),
         )
 
@@ -184,7 +185,6 @@ class ActionTrial:
             return []
         return [
             RvizVisualization(
-                ros_node=self.executor.ros_node,
                 collision_visualization=True,
                 frame_prefix=ActionTrialVisualization.FRAME_PREFIX,
                 marker_topic=ActionTrialVisualization.MARKER_TOPIC,

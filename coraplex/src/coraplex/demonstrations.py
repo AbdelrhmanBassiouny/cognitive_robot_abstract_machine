@@ -275,9 +275,7 @@ class RobotDemonstration(ABC):
         """
         visualization = (
             WorldVisualization.from_environment(
-                self.default_visualization_backend,
-                ros_node=self.ros_node,
-                collision_visualization=True,
+                self.default_visualization_backend, collision_visualization=True
             )
             if self.executor_type.simulated
             else None

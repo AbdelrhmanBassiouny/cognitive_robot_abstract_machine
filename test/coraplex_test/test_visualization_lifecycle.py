@@ -7,7 +7,6 @@ from __future__ import annotations
 from unittest.mock import Mock
 
 import pytest
-import rclpy
 from rclpy.node import Node
 from typing_extensions import Type
 
@@ -19,39 +18,30 @@ from .test_optional_visualization import (
     VisualizationRecordingItsRuns,
     an_ending_statechart,
     an_executor,
+    an_executor_with_a_ros_node,
 )
 
 
 # %% partial acquisition
-def test_failed_publisher_creation_releases_owned_ros(
-    monkeypatch: pytest.MonkeyPatch,
+def test_failed_publisher_creation_leaves_the_node_usable(
+    monkeypatch: pytest.MonkeyPatch, rclpy_node: Node
 ) -> None:
     monkeypatch.setattr(
-        visualization_module, "VizMarkerPublisher", Mock(side_effect=RuntimeError)
+        visualization_module, "VizMarkerPublisher", Mock(side_effect=RuntimeError())
     )
-    selected = RvizVisualization()
-    assert not rclpy.ok()
+    visualization = RvizVisualization()
+    executor = an_executor_with_a_ros_node(visualization, World(), rclpy_node)
     with pytest.raises(RuntimeError):
-        selected.start(World())
-    assert not rclpy.ok()
-    assert selected.ros_node is None
-    assert not selected.is_rendering
-
-
-def test_failed_node_creation_releases_owned_context(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setattr(rclpy, "create_node", Mock(side_effect=RuntimeError))
-    selected = RvizVisualization()
-    assert not rclpy.ok()
-    with pytest.raises(RuntimeError):
-        selected.start(World())
-    assert not rclpy.ok()
+        executor.compile(an_ending_statechart(executor.context))
+    assert rclpy_node.context.ok()
+    assert not visualization.is_rendering
 
 
 @pytest.mark.parametrize("failure_type", [RuntimeError, KeyboardInterrupt])
-def test_collision_setup_failure_closes_publisher_and_owned_ros(
-    monkeypatch: pytest.MonkeyPatch, failure_type: Type[BaseException]
+def test_collision_setup_failure_stops_the_publisher(
+    monkeypatch: pytest.MonkeyPatch,
+    rclpy_node: Node,
+    failure_type: Type[BaseException],
 ) -> None:
     failure = failure_type()
     publisher = Mock()
@@ -59,49 +49,31 @@ def test_collision_setup_failure_closes_publisher_and_owned_ros(
     monkeypatch.setattr(
         visualization_module, "VizMarkerPublisher", Mock(return_value=publisher)
     )
-    selected = RvizVisualization(collision_visualization=True)
-    assert not rclpy.ok()
+    visualization = RvizVisualization(collision_visualization=True)
+    executor = an_executor_with_a_ros_node(visualization, World(), rclpy_node)
     with pytest.raises(failure_type) as caught:
-        selected.start(World())
+        executor.compile(an_ending_statechart(executor.context))
     assert caught.value is failure
     publisher.stop.assert_called_once_with()
-    assert selected.ros_node is None
-    assert not selected.is_rendering
-    assert not rclpy.ok()
-
-
-def test_failed_publisher_start_preserves_borrowed_node(
-    monkeypatch: pytest.MonkeyPatch,
-    rclpy_node: Node,
-) -> None:
-    monkeypatch.setattr(
-        visualization_module, "VizMarkerPublisher", Mock(side_effect=RuntimeError())
-    )
-    selected = RvizVisualization(ros_node=rclpy_node)
-    with pytest.raises(RuntimeError):
-        selected.start(World())
-    assert selected.ros_node is rclpy_node
-    assert rclpy_node.context.ok()
-    assert not selected.is_rendering
+    assert not visualization.is_rendering
 
 
 # %% cleanup failures and reuse
-def test_publisher_stop_failure_still_releases_owned_ros(
-    monkeypatch: pytest.MonkeyPatch,
+def test_publisher_stop_failure_still_ends_the_visualization(
+    monkeypatch: pytest.MonkeyPatch, rclpy_node: Node
 ) -> None:
     publisher = Mock()
     publisher.stop.side_effect = RuntimeError()
     monkeypatch.setattr(
         visualization_module, "VizMarkerPublisher", Mock(return_value=publisher)
     )
-    selected = RvizVisualization()
-    selected.start(World())
+    visualization = RvizVisualization()
+    executor = an_executor_with_a_ros_node(visualization, World(), rclpy_node)
+    executor.compile(an_ending_statechart(executor.context))
     with pytest.raises(RuntimeError):
-        selected.stop()
-    assert selected.ros_node is None
-    assert not selected.is_rendering
-    assert not rclpy.ok()
-    selected.stop()
+        visualization.stop()
+    assert not visualization.is_rendering
+    visualization.stop()
     publisher.stop.assert_called_once_with()
 
 

@@ -22,6 +22,7 @@ from coraplex.datastructures.enums import (
     VisualizationOption,
 )
 from coraplex.exceptions import (
+    ExecutorWithoutRosNode,
     UnknownVisualizationOption,
     VisualizationBackendUnavailable,
 )
@@ -36,6 +37,8 @@ from cramph.executor import StatechartExecutor
 from cramph.node import EndStatechart
 from cramph.nodes_for_testing import ConstTrueNode
 from cramph.statechart import Statechart
+from giskardpy.motion_statechart.ros_context import RosNodeAccess
+from rclpy.node import Node
 from semantic_digital_twin.adapters.rerun import RerunMode
 from semantic_digital_twin.robots.minimal_robot import MinimalRobot
 from semantic_digital_twin.world import World
@@ -310,13 +313,10 @@ def test_default_rerun_selection_reads_its_configuration(
     assert selected.target == str(target)
 
 
-def test_rviz_selection_receives_the_ros_settings(monkeypatch, rclpy_node) -> None:
+def test_rviz_selection_receives_the_collision_setting(monkeypatch) -> None:
     monkeypatch.setenv(VisualizationOption.BACKEND, VisualizationBackend.RVIZ)
-    selected = WorldVisualization.from_environment(
-        ros_node=rclpy_node, collision_visualization=True
-    )
+    selected = WorldVisualization.from_environment(collision_visualization=True)
     assert isinstance(selected, RvizVisualization)
-    assert selected.ros_node is rclpy_node
     assert selected.collision_visualization
 
 
@@ -336,17 +336,37 @@ def test_testing_helper_defaults_to_rviz_with_ros(monkeypatch) -> None:
 
 
 # %% native renderers
-def test_rviz_stops_publishers_without_destroying_borrowed_node(
+def an_executor_with_a_ros_node(
+    visualization: WorldVisualization, world: World, ros_node: Node
+) -> StatechartExecutor:
+    """
+    :param visualization: The visualization added to the executor.
+    :param world: The world the executor runs in.
+    :param ros_node: The ROS node the executor gives its statecharts.
+    :return: An executor running in `world` with `ros_node`, showing its world through
+        `visualization`.
+    """
+    return StatechartExecutor(
+        context=StatechartContext(world=world),
+        extensions=[RosNodeAccess(ros_node), visualization],
+    )
+
+
+def test_rviz_publishes_through_the_node_of_its_executor(
     cylinder_bot_world, rclpy_node
 ) -> None:
-    """
-    The adapter releases its publishers while leaving the host ROS node usable.
-    """
-    selected = RvizVisualization(ros_node=rclpy_node, collision_visualization=True)
-    selected.start(cylinder_bot_world)
-    publisher = selected.publisher
+    visualization = RvizVisualization(collision_visualization=True)
+    executor = an_executor_with_a_ros_node(
+        visualization, cylinder_bot_world, rclpy_node
+    )
+
+    executor.compile(an_ending_statechart(executor.context))
+    publisher = visualization.publisher
+    assert publisher.node is rclpy_node
     assert publisher._collision_publisher is not None
-    selected.stop()
+
+    executor.execute()
+    assert not visualization.is_rendering
     assert rclpy_node.context.ok()
     assert (
         publisher
@@ -354,17 +374,24 @@ def test_rviz_stops_publishers_without_destroying_borrowed_node(
     )
 
 
-def test_rviz_releases_a_context_it_owns(cylinder_bot_world) -> None:
+def test_rviz_needs_an_executor_with_a_ros_node() -> None:
+    executor = StatechartExecutor(
+        context=StatechartContext(world=World()),
+        extensions=[RosNodeAccess(None), RvizVisualization()],
+    )
+    with pytest.raises(ExecutorWithoutRosNode):
+        executor.compile(an_ending_statechart(executor.context))
+
+
+def test_unavailable_ros_is_reported_without_starting(monkeypatch, rclpy_node) -> None:
     """
-    A standalone RViz adapter cleans its own ROS resources on stop.
+    An explicit RViz selection requires its optional ROS publisher.
     """
-    assert not rclpy.ok()
-    selected = RvizVisualization()
-    selected.start(cylinder_bot_world)
-    assert rclpy.ok()
-    selected.stop()
-    assert not rclpy.ok()
-    assert selected.ros_node is None
+    monkeypatch.setattr(visualization_module, "VizMarkerPublisher", None)
+    executor = an_executor_with_a_ros_node(RvizVisualization(), World(), rclpy_node)
+    with pytest.raises(VisualizationBackendUnavailable) as caught:
+        executor.compile(an_ending_statechart(executor.context))
+    assert caught.value.backend is VisualizationBackend.RVIZ
 
 
 def test_rerun_save_uses_existing_native_recording(
@@ -379,16 +406,6 @@ def test_rerun_save_uses_existing_native_recording(
     selected.stop()
     assert recording.stat().st_size > 0
     assert not selected.is_rendering
-
-
-def test_unavailable_ros_is_reported_without_starting(monkeypatch) -> None:
-    """
-    An explicit RViz selection requires its optional ROS publisher.
-    """
-    monkeypatch.setattr(visualization_module, "VizMarkerPublisher", None)
-    with pytest.raises(VisualizationBackendUnavailable) as caught:
-        RvizVisualization().start(World())
-    assert caught.value.backend is VisualizationBackend.RVIZ
 
 
 # %% demonstrations and action trials
@@ -444,7 +461,7 @@ def test_a_debugging_action_trial_is_shown_apart_from_the_world_it_copies(
         for extension in trial_executor.extensions
         if isinstance(extension, RvizVisualization)
     ]
-    assert shown.ros_node is rclpy_node
+    assert trial_executor.ros_node is rclpy_node
     assert shown.frame_prefix == ActionTrialVisualization.FRAME_PREFIX
     assert shown.marker_topic == ActionTrialVisualization.MARKER_TOPIC
     assert shown.marker_alpha == trials.copy_marker_alpha
