@@ -22,7 +22,7 @@ from typing_extensions import List, Type
 
 from coraplex.datastructures.enums import VisualizationBackend
 from coraplex.plans.executors import PlanExecutor, SimulatedPlanExecutor
-from coraplex.visualization import VisualizationSession, WorldVisualization
+from coraplex.visualization import WorldVisualization
 from cramph.context import ContextExtension, StatechartContext
 from cramph.statechart import Statechart
 from semantic_digital_twin.adapters.ros.world_fetcher import fetch_world_from_service
@@ -190,10 +190,9 @@ class RobotDemonstration(ABC):
     """
 
     default_visualization_backend: VisualizationBackend = VisualizationBackend.RVIZ
-    """Renderer used unless explicitly selected through the environment."""
-
-    visualization: WorldVisualization | None = field(init=False, default=None)
-    """The visualization owned by this simulated demonstration."""
+    """
+    The renderer a simulated run is shown with, unless the environment selects one.
+    """
 
     ros_session: RobotDemonstrationRosSession | None = field(init=False, default=None)
     """
@@ -261,17 +260,8 @@ class RobotDemonstration(ABC):
         this demonstration's own description otherwise.
         """
         self.ros_session = RobotDemonstrationRosSession.start(self.ros_node_name)
-        VisualizationSession.register(self.stop_visualization)
-
         if self.executor_type.simulated:
-            world = self.build_simulated_world()
-            self.visualization = WorldVisualization.from_environment(
-                world,
-                default_backend=self.default_visualization_backend,
-                ros_node=self.ros_node,
-                collision_visualization=True,
-            ).start()
-            return world
+            return self.build_simulated_world()
         world = self.ros_session.fetch_world()
         WorldSynchronizer(_world=world, node=self.ros_session.node)
         return world
@@ -280,14 +270,25 @@ class RobotDemonstration(ABC):
         """
         :param world: The world the plan is performed in.
         :return: An executor of :attr:`executor_type`, set up the way this demonstration
-            performs its plan.
+            performs its plan, which shows a simulated run with the visualization
+            selected through the environment.
         """
+        visualization = (
+            WorldVisualization.from_environment(
+                self.default_visualization_backend,
+                ros_node=self.ros_node,
+                collision_visualization=True,
+            )
+            if self.executor_type.simulated
+            else None
+        )
         executor = self.executor_type(
             world,
             context_extensions=self.build_context_extensions(world),
             ros_node=self.ros_node,
             collision_avoidance=self.collision_avoidance,
             debug=self.debug,
+            extensions=[] if visualization is None else [visualization],
         )
         if self.simulation_time_per_action is not None and isinstance(
             executor, SimulatedPlanExecutor
@@ -308,8 +309,6 @@ class RobotDemonstration(ABC):
             for _ in range(self.repetitions):
                 executor = self.create_executor(world)
                 statechart = self.build_statechart(executor.context)
-                if self.visualization is not None:
-                    self.visualization.attach_plan(executor)
                 event_segmentation = (
                     self.segment_events(world)
                     if self.event_segmentation
@@ -325,27 +324,13 @@ class RobotDemonstration(ABC):
 
     def tear_down(self) -> None:
         """
-        Release owned ROS resources after execution.
+        Release the ROS session if this demonstration started the ROS context.
 
-        An explicitly selected browser viewer remains available for inspection until
-        :meth:`stop_visualization`. A borrowed ROS session is left to its owner.
+        A session running inside a context somebody else owns is left alone: that owner
+        decides when its nodes go away, and destroying this one early can drop world
+        modifications that have not reached the controller yet.
         """
-        if self.visualization is not None:
-            self.visualization.finish_execution()
-            if not self.visualization.is_rendering:
-                self.visualization = None
-            elif VisualizationSession.is_active():
-                return
         if self.ros_session is None or not self.ros_session.owns_context:
             return
         self.ros_session.stop()
         self.ros_session = None
-
-    def stop_visualization(self) -> None:
-        """Close the retained viewer and executor, preserving a borrowed ROS context."""
-        if self.visualization is not None:
-            self.visualization.stop()
-            self.visualization = None
-        if self.ros_session is not None:
-            self.ros_session.stop()
-            self.ros_session = None

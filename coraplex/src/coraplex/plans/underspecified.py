@@ -7,7 +7,6 @@ from dataclasses import dataclass, field
 from typing_extensions import (
     Optional,
     TYPE_CHECKING,
-    Tuple,
     Type,
 )
 
@@ -25,6 +24,7 @@ from cramph.composites import (
     StatementNode,
 )
 from cramph.context import StatechartContext
+from cramph.executor import ExecutorExtension
 from cramph.exceptions import ExecutionFailure
 from cramph.node import StatechartNode
 from cramph.statechart import Statechart
@@ -94,12 +94,12 @@ class ActionTrial:
     world it copies where the two overlap.
     """
 
-    _copied_world: Optional[World] = field(default=None, init=False, repr=False)
+    _copied_world: World | None = field(default=None, init=False, repr=False)
     """
     The copy candidates are tried against.
     """
 
-    _source_versions: Optional[Tuple[int, int]] = field(
+    _source_versions: tuple[int, int] | None = field(
         default=None, init=False, repr=False
     )
     """
@@ -110,13 +110,6 @@ class ActionTrial:
     _replayed_modification_blocks: int = field(default=0, init=False, repr=False)
     """
     How many of the modification blocks of the executor's world the copy already holds.
-    """
-
-    _visualization: Optional[RvizVisualization] = field(
-        default=None, init=False, repr=False
-    )
-    """
-    The RViz publishing of the current copy, while the executor is debugging.
     """
 
     @property
@@ -169,7 +162,8 @@ class ActionTrial:
         :param world: The copy a candidate is tried in.
         :return: An executor running a candidate in `world`, configured like
             :attr:`executor`, the robot and everything else its context extensions refer
-            to rebound to `world`.
+            to rebound to `world`, and showing `world` in RViz while the executor is
+            debugging.
         """
         return self.trial_executor_type(
             world,
@@ -178,7 +172,25 @@ class ActionTrial:
                 for extension in self.executor.context_extensions
             ],
             collision_avoidance=self.executor.collision_avoidance,
+            extensions=self._trial_visualizations(),
         )
+
+    def _trial_visualizations(self) -> list[ExecutorExtension]:
+        """
+        :return: The RViz visualization of the copy, under its own frame prefix and
+            marker topic, while the executor is debugging; empty otherwise.
+        """
+        if not self.executor.debug:
+            return []
+        return [
+            RvizVisualization(
+                ros_node=self.executor.ros_node,
+                collision_visualization=True,
+                frame_prefix=ActionTrialVisualization.FRAME_PREFIX,
+                marker_topic=ActionTrialVisualization.MARKER_TOPIC,
+                marker_alpha=self.copy_marker_alpha,
+            )
+        ]
 
     @classmethod
     def _on_the_copy(
@@ -220,22 +232,12 @@ class ActionTrial:
 
     def _take_copy(self) -> None:
         """
-        Copy the executor's world and, while the executor is debugging, start publishing
-        the copy.
+        Copy the executor's world.
         """
         self._copied_world = deepcopy(self.world)
         self._replayed_modification_blocks = len(
             self.world.get_world_model_manager().model_modification_blocks
         )
-        if self.executor.debug:
-            self._visualization = RvizVisualization(
-                self._copied_world,
-                ros_node=self.executor.ros_node,
-                collision_visualization=True,
-                frame_prefix=ActionTrialVisualization.FRAME_PREFIX,
-                marker_topic=ActionTrialVisualization.MARKER_TOPIC,
-                marker_alpha=self.copy_marker_alpha,
-            ).start()
 
     def _catch_up(self) -> None:
         """
@@ -259,18 +261,8 @@ class ActionTrial:
         """
         Release the copy, so the next trial takes a fresh one.
         """
-        self._stop_visualization()
         self._copied_world = None
         self._source_versions = None
-
-    def _stop_visualization(self) -> None:
-        """
-        Stop publishing the current copy, if it is being published.
-        """
-        if self._visualization is None:
-            return
-        self._visualization.stop()
-        self._visualization = None
 
 
 # %% grounding underspecified actions while the statechart runs

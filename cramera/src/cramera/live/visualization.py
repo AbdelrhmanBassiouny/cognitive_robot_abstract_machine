@@ -8,20 +8,19 @@ publish execution progress.
 from __future__ import annotations
 
 import atexit
+from contextlib import ExitStack
 from dataclasses import dataclass, field
 from functools import partial
 
-from typing_extensions import Any, Callable, Optional
+from typing_extensions import TYPE_CHECKING, Any, Callable, Optional
 
 from coraplex.plans.designator import DesignatorParameters
-from coraplex.visualization import PlanVisualization, VisualizationSession
-from cramph.executor import Executor, ExecutorExtension
+from coraplex.visualization import WorldVisualization
 from cramph.statechart import StateHistory, StateHistoryObserver, Statechart
 from semantic_digital_twin.callbacks.callback import (
     ModelChangeCallback,
     StateChangeCallback,
 )
-from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.geometry import MeshFileStorage
 
 from cramera.live.bridge import Bridge
@@ -30,6 +29,10 @@ from cramera.live.recording import Recording
 from cramera.live.recording_bundle import finalize_recording
 from cramera.live.ros_markers import RosMarkerListener
 from cramera.logging_setup import get_logger
+
+if TYPE_CHECKING:
+    from cramph.executor import Executor
+    from semantic_digital_twin.world import World
 
 logger = get_logger(__name__)
 
@@ -86,10 +89,9 @@ class WorldModelSync(ModelChangeCallback):
 
 
 @dataclass
-class StatechartPublishing(ExecutorExtension, StateHistoryObserver):
+class StatechartPublishing(StateHistoryObserver):
     """
-    Publish the progress of the statecharts an executor runs, and of the plan each of
-    them runs.
+    Publish the progress of a statechart, and of the plan it runs.
     """
 
     bridge: Bridge = field(kw_only=True)
@@ -97,24 +99,10 @@ class StatechartPublishing(ExecutorExtension, StateHistoryObserver):
     The bridge the execution is published to.
     """
 
-    _statechart: Optional[Statechart] = field(default=None, init=False, repr=False)
+    _statechart: Statechart | None = field(default=None, init=False, repr=False)
     """
     The statechart being published, whose history this observes.
     """
-
-    def after_compile(self, executor: Executor) -> None:
-        """
-        Start publishing the statechart `executor` compiled, unless it already is.
-        """
-        if executor.statechart is self._statechart:
-            return
-        self.observe(executor.statechart)
-
-    def after_run(self, executor: Executor) -> None:
-        """
-        Publish the statechart as the run left it, see :meth:`finish`.
-        """
-        self.finish()
 
     def finish(self) -> None:
         """
@@ -190,14 +178,10 @@ def _finalize_recording_at_exit(
 
 
 @dataclass
-class LiveVisualization(PlanVisualization):
+class LiveVisualization(WorldVisualization):
     """
-    Serves a world to the cramera browser viewer while a demo runs.
-    """
-
-    world: World
-    """
-    The world served to the viewer.
+    Serves the world and the statechart of an executor to the cramera browser viewer
+    while the executor runs it.
     """
 
     port: int = DEFAULT_PORT
@@ -210,24 +194,29 @@ class LiveVisualization(PlanVisualization):
     The bridge translating between the world and the viewer.
     """
 
-    state_sync: Optional[WorldStateSync] = field(init=False, default=None)
+    publishing: StatechartPublishing = field(init=False)
+    """
+    Publishes the progress of the statechart the executor runs.
+    """
+
+    state_sync: WorldStateSync | None = field(init=False, default=None)
     """
     The callback publishing state changes, while started.
     """
 
-    model_sync: Optional[WorldModelSync] = field(init=False, default=None)
+    model_sync: WorldModelSync | None = field(init=False, default=None)
     """
     The callback refreshing the catalogs on model changes, while started.
     """
 
-    marker_listener: Optional[RosMarkerListener] = field(init=False, default=None)
+    marker_listener: RosMarkerListener | None = field(init=False, default=None)
     """
     The ROS marker subscription feeding the debug overlay, when ROS is available.
     """
 
-    _recording: Optional[Recording] = field(init=False, default=None)
+    _recording: Recording | None = field(init=False, default=None)
     """
-    The capture owned by this visualization session.
+    The capture owned by this visualization while it runs.
     """
 
     _query_attachment: int | None = field(init=False, default=None, repr=False)
@@ -235,92 +224,126 @@ class LiveVisualization(PlanVisualization):
     Automatic queries owned by this visualization's world attachment.
     """
 
-    _exit_callback: Optional[Callable[[], None]] = field(init=False, default=None)
+    _exit_callback: Callable[[], None] | None = field(init=False, default=None)
     """
-    The registered finalizer for this session's capture.
-    """
-
-    _publishings: list[StatechartPublishing] = field(
-        default_factory=list, init=False, repr=False
-    )
-    """
-    The executor extensions whose history subscriptions belong to this session.
+    The registered finalizer for the capture of the current run.
     """
 
-    def start(self) -> LiveVisualization:
+    def __post_init__(self):
+        self.publishing = StatechartPublishing(bridge=self.bridge)
+
+    @property
+    def is_rendering(self) -> bool:
+        return self.state_sync is not None
+
+    def _start(self, world: World, cleanup: ExitStack) -> None:
         """
-        Start serving the world and its default live queries to the viewer.
-
-        :return: This visualization.
+        Serve `world`, its default live queries and a new recording to the viewer,
+        finalizing an earlier recording of :attr:`bridge` first.
         """
-        if self.state_sync is not None:
-            return self
         if self.bridge.recording is not None:
             finalize_recording(self.bridge, self.bridge.recording)
-        try:
-            self._query_attachment = self.bridge.attach(self.world)
-            self._recording = Recording()
-            self.bridge.recording = self._recording
-            self._recording.start()
-            MeshFileStorage()
-            self._exit_callback = partial(
-                _finalize_recording_at_exit, self.bridge, self._recording
-            )
-            atexit.register(self._exit_callback)
-            self.bridge.snapshot()
-            self.state_sync = WorldStateSync(_world=self.world, bridge=self.bridge)
-            self.model_sync = WorldModelSync(_world=self.world, bridge=self.bridge)
-            self.marker_listener = RosMarkerListener.start_if_available(self.bridge)
-            self.bridge.marker_listener = self.marker_listener
-            if self.bridge.live_server is None:
-                self.bridge.live_server = serve(self.bridge, self.port)
-        except BaseException:
-            self.stop()
-            raise
-        VisualizationSession.register(self.stop)
-        return self
-
-    def executor_extension(self) -> StatechartPublishing:
-        """
-        The extension that publishes the statecharts an executor runs to the viewer,
-        each plan's trees as soon as it is compiled.
-
-        :return: The extension to add to the executor.
-        """
-        publishing = StatechartPublishing(bridge=self.bridge)
-        self._publishings.append(publishing)
-        return publishing
+        self._query_attachment = self.bridge.attach(world)
+        cleanup.callback(self._release_world_queries)
+        self._recording = Recording()
+        self.bridge.recording = self._recording
+        self._recording.start()
+        cleanup.callback(self._finalize_recording)
+        MeshFileStorage()
+        self._exit_callback = partial(
+            _finalize_recording_at_exit, self.bridge, self._recording
+        )
+        atexit.register(self._exit_callback)
+        cleanup.callback(self._unregister_exit_callback)
+        self.bridge.snapshot()
+        self.state_sync = WorldStateSync(_world=world, bridge=self.bridge)
+        cleanup.callback(self._stop_state_sync)
+        self.model_sync = WorldModelSync(_world=world, bridge=self.bridge)
+        cleanup.callback(self._stop_model_sync)
+        self.marker_listener = RosMarkerListener.start_if_available(self.bridge)
+        self.bridge.marker_listener = self.marker_listener
+        cleanup.callback(self._stop_marker_listener)
+        cleanup.callback(self._shut_down_server)
+        if self.bridge.live_server is None:
+            self.bridge.live_server = serve(self.bridge, self.port)
 
     def stop(self) -> None:
         """
-        Finalize the recording and release this session's callbacks, server and queries.
+        Differs from :meth:`~coraplex.visualization.WorldVisualization.stop` in also
+        unsubscribing from the history of the published statechart, finalizing the
+        recording and closing the server of :attr:`bridge`.
         """
-        for publishing in self._publishings:
-            publishing.stop()
-        self._publishings.clear()
-        if self._exit_callback is not None:
-            atexit.unregister(self._exit_callback)
-            self._exit_callback = None
-        if self.state_sync is not None:
-            self.state_sync.stop()
-            self.state_sync = None
-        if self.model_sync is not None:
-            self.model_sync.stop()
-            self.model_sync = None
+        self.publishing.stop()
+        super().stop()
+
+    def after_compile(self, executor: Executor) -> None:
+        """
+        Differs from :meth:`~coraplex.visualization.WorldVisualization.after_compile` in
+        also publishing the statechart `executor` compiled.
+        """
+        super().after_compile(executor)
+        self.publishing.observe(executor.statechart)
+
+    def after_run(self, executor: Executor) -> None:
+        """
+        Differs from :meth:`~coraplex.visualization.WorldVisualization.after_run` in
+        first publishing the statechart as the run left it.
+        """
+        self.publishing.finish()
+        super().after_run(executor)
+
+    def _release_world_queries(self) -> None:
+        """
+        Remove the automatic queries of the world attachment.
+        """
+        self.bridge.release_world_queries(self._query_attachment)
+        self._query_attachment = None
+
+    def _finalize_recording(self) -> None:
+        """
+        Write the capture of the run to disk.
+        """
+        finalize_recording(self.bridge, self._recording)
+        self._recording = None
+        self.bridge.recording = None
+
+    def _unregister_exit_callback(self) -> None:
+        """
+        Withdraw the finalizer of the capture, which :meth:`_finalize_recording` takes
+        over.
+        """
+        atexit.unregister(self._exit_callback)
+        self._exit_callback = None
+
+    def _stop_state_sync(self) -> None:
+        """
+        Stop publishing state changes.
+        """
+        self.state_sync.stop()
+        self.state_sync = None
+
+    def _stop_model_sync(self) -> None:
+        """
+        Stop refreshing the catalogs on model changes.
+        """
+        self.model_sync.stop()
+        self.model_sync = None
+
+    def _stop_marker_listener(self) -> None:
+        """
+        Stop feeding ROS markers to the debug overlay, if they were.
+        """
         if self.marker_listener is not None:
             self.marker_listener.stop()
-            self.marker_listener = None
-            self.bridge.marker_listener = None
-        if self.bridge.live_server is not None:
-            self.bridge.live_server.shutdown()
-            self.bridge.live_server.server_close()
-            self.bridge.live_server = None
-        try:
-            if self._recording is not None:
-                finalize_recording(self.bridge, self._recording)
-                self._recording = None
-                self.bridge.recording = None
-        finally:
-            if self._query_attachment is not None:
-                self.bridge.release_world_queries(self._query_attachment)
-                self._query_attachment = None
+        self.marker_listener = None
+        self.bridge.marker_listener = None
+
+    def _shut_down_server(self) -> None:
+        """
+        Close the HTTP endpoints of :attr:`bridge`, if they are open.
+        """
+        if self.bridge.live_server is None:
+            return
+        self.bridge.live_server.shutdown()
+        self.bridge.live_server.server_close()
+        self.bridge.live_server = None

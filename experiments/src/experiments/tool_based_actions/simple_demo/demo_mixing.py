@@ -26,7 +26,7 @@ from coraplex.robot_plans.actions.core.robot_body import (
     ParkArmsAction,
     SetGripperAction,
 )
-from coraplex.testing import attach_tool, setup_world, start_visualization
+from coraplex.testing import attach_tool, setup_world, selected_visualizations
 from coraplex.plans.context_extensions import RobotAccess
 from coraplex.plans.executors import SimulatedPlanExecutor
 from cramph.statechart import Statechart
@@ -47,8 +47,6 @@ def main() -> None:
                 *TARGET_POSITION_XYZ, reference_frame=world.root
             ),
         )
-    start_visualization(world)
-
     pr2 = PR2.from_world(world)
 
     whisk_body = attach_tool(world, pr2.right_arm, parse_object("whisk.stl"), MIX_MOUNT)
@@ -70,7 +68,11 @@ def main() -> None:
         ]
     )
 
-    executor = SimulatedPlanExecutor(world, context_extensions=[RobotAccess(pr2)])
+    executor = SimulatedPlanExecutor(
+        world,
+        context_extensions=[RobotAccess(pr2)],
+        extensions=selected_visualizations(),
+    )
     statechart = Statechart(context=executor.context)
     statechart.add_node(plan)
     executor.compile(statechart)

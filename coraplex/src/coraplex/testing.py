@@ -33,6 +33,7 @@ from semantic_digital_twin.world_description.world_entity import Body
 
 from coraplex.datastructures.enums import VisualizationBackend
 from coraplex.visualization import WorldVisualization
+from cramph.executor import ExecutorExtension
 
 logger = logging.getLogger(__name__)
 
@@ -49,19 +50,18 @@ except ImportError:
     )
 
 
-def start_visualization(world: World) -> WorldVisualization:
+def selected_visualizations() -> list[ExecutorExtension]:
     """
-    Start the selected renderer, defaulting to native RViz when available.
-
-    :param world: The world to visualize.
-    :return: The renderer owner, accepting optional plan observers.
+    :return: The visualization selected through the environment, defaulting to RViz
+        when ROS is available, as executor extensions; empty when headless.
     """
     default_backend = (
         VisualizationBackend.RVIZ
         if VizMarkerPublisher is not None
         else VisualizationBackend.NONE
     )
-    return WorldVisualization.from_environment(world, default_backend).start()
+    visualization = WorldVisualization.from_environment(default_backend)
+    return [] if visualization is None else [visualization]
 
 
 def attach_tool(world: World, arm: Arm, tool_world: World, mount: dict) -> Body:

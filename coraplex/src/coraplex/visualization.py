@@ -1,32 +1,29 @@
 """
-Optional world visualization selected without changing a robot plan.
+Optional world visualization, added to the executor that runs a statechart.
 """
 
 from __future__ import annotations
 
 import os
 from abc import ABC, abstractmethod
-from collections.abc import Callable
 from contextlib import ExitStack
-from contextvars import ContextVar, Token
 from dataclasses import dataclass, field
-from functools import partial
 from importlib.metadata import entry_points
-from types import TracebackType
 
-from typing_extensions import TYPE_CHECKING, ClassVar, Optional, Self
+from typing_extensions import TYPE_CHECKING, Self
 
 from coraplex.datastructures.enums import VisualizationBackend, VisualizationOption
 from coraplex.exceptions import (
     UnknownVisualizationOption,
     VisualizationBackendUnavailable,
 )
+from cramph.executor import ExecutorExtension
 from semantic_digital_twin.adapters.rerun import RerunAdapter, RerunMode
 
 if TYPE_CHECKING:
     from rclpy.node import Node
 
-    from cramph.executor import Executor, ExecutorExtension
+    from cramph.executor import Executor
     from semantic_digital_twin.world import World
 
 try:
@@ -45,145 +42,38 @@ except ImportError:
     VizMarkerPublisher = None
 
 
-# %% provider contract
+# %% visualizing the world of an executor
 @dataclass
-class PlanVisualization(ABC):
+class WorldVisualization(ExecutorExtension, ABC):
     """
-    A visualization provider observing a world and its executed plans.
-    """
-
-    world: World
-    """
-    The world presented by this provider.
-    """
-
-    @abstractmethod
-    def start(self) -> Self:
-        """
-        Start serving this world and return the provider.
-        """
-
-    @abstractmethod
-    def stop(self) -> None:
-        """
-        Stop serving and release resources owned by this provider.
-        """
-
-    @abstractmethod
-    def executor_extension(self) -> ExecutorExtension:
-        """
-        Create an observer of the statecharts one executor runs.
-
-        :return: An extension the visualization owner adds to the executor.
-        """
-
-
-# %% visualization owner
-@dataclass
-class VisualizationSession:
-    """
-    Close visualizations acquired in a context when execution leaves that context.
-    """
-
-    _current: ClassVar[ContextVar[VisualizationSession | None]] = ContextVar(
-        "visualization_session", default=None
-    )
-    """
-    The cleanup scope active in the current execution context.
-    """
-
-    _cleanup: ExitStack = field(default_factory=ExitStack, init=False)
-    """
-    Resource cleanup callbacks in reverse acquisition order.
-    """
-
-    _token: Token[VisualizationSession | None] = field(init=False)
-    """
-    The previous scope restored when this context exits.
-    """
-
-    def __enter__(self) -> Self:
-        """
-        Make this session the owner of subsequently started visualizations.
-        """
-        self._token = self._current.set(self)
-        return self
-
-    def __exit__(
-        self,
-        exception_type: type[BaseException] | None,
-        exception: BaseException | None,
-        traceback: TracebackType | None,
-    ) -> None:
-        """
-        Close acquired resources and restore the enclosing session.
-
-        :param exception_type: The exception type raised inside the scope, if any.
-        :param exception: The original exception propagated after cleanup.
-        :param traceback: The traceback associated with that exception.
-        """
-        try:
-            self._cleanup.close()
-        finally:
-            self._current.reset(self._token)
-
-    @classmethod
-    def is_active(cls) -> bool:
-        """
-        Return whether the current context owns visualization cleanup.
-        """
-        return cls._current.get() is not None
-
-    @classmethod
-    def register(cls, cleanup: Callable[[], None]) -> None:
-        """
-        Register cleanup in the active session, if one exists.
-
-        :param cleanup: Release an acquired resource without requiring its caller to
-            retain it.
-        """
-        current = cls._current.get()
-        if current is not None:
-            current._cleanup.callback(cleanup)
-
-
-@dataclass
-class WorldVisualization(ABC):
-    """
-    Own a selected renderer and the execution observers attached to it.
-    """
-
-    world: World
-    """
-    The observed world.
-    """
-
-    backend: ClassVar[VisualizationBackend]
-    """
-    The explicitly selected renderer.
+    Shows the world of the executor it is added to while that executor runs a
+    statechart: from the moment the statechart is compiled until the run stops.
     """
 
     _cleanup: ExitStack = field(default_factory=ExitStack, init=False, repr=False)
     """
-    Resource cleanup callbacks in reverse acquisition order.
+    Releases what the running visualization acquired, in reverse acquisition order.
     """
 
     @classmethod
     def from_environment(
         cls,
-        world: World,
         default_backend: VisualizationBackend = VisualizationBackend.NONE,
         *,
         ros_node: Node | None = None,
         collision_visualization: bool = False,
-    ) -> WorldVisualization:
+    ) -> WorldVisualization | None:
         """
-        Read optional renderer settings while preserving the supplied default.
+        Select the visualization named by :attr:`VisualizationOption.BACKEND`.
 
-        :param world: The world to visualize.
-        :param default_backend: Renderer used without an explicit setting.
-        :param ros_node: An existing ROS node available for RViz publishing.
-        :param collision_visualization: Whether to publish RViz collision results.
+        :param default_backend: The renderer used unless the environment selects one.
+        :param ros_node: An existing ROS node an RViz visualization publishes through.
+        :param collision_visualization: Whether RViz also shows collision results.
+        :return: The selected visualization, or ``None`` for
+            :attr:`VisualizationBackend.NONE`.
+        :raises UnknownVisualizationOption: If the environment names no renderer.
+        :raises VisualizationBackendUnavailable: If no installed visualization provides
+            the selected renderer.
         """
         backend = (
             os.environ.get(VisualizationOption.BACKEND, default_backend.value)
@@ -192,97 +82,103 @@ class WorldVisualization(ABC):
         )
         if backend not in {member.value for member in VisualizationBackend}:
             raise UnknownVisualizationOption(VisualizationOption.BACKEND, backend)
-        constructors = {
-            VisualizationBackend.NONE: partial(HeadlessVisualization, world),
-            VisualizationBackend.RVIZ: partial(
-                RvizVisualization,
-                world,
-                ros_node=ros_node,
-                collision_visualization=collision_visualization,
-            ),
-            VisualizationBackend.RERUN: partial(RerunVisualization, world),
-            VisualizationBackend.CRAMERA: partial(PluginVisualization, world),
-        }
-        visualization = constructors[VisualizationBackend(backend)]()
-        visualization._configure_from_environment()
-        return visualization
+        match VisualizationBackend(backend):
+            case VisualizationBackend.NONE:
+                return None
+            case VisualizationBackend.RVIZ:
+                return RvizVisualization(
+                    ros_node=ros_node, collision_visualization=collision_visualization
+                )
+            case VisualizationBackend.RERUN:
+                return RerunVisualization.from_rerun_options()
+            case VisualizationBackend.CRAMERA:
+                return cls._installed(VisualizationBackend.CRAMERA)
 
-    def _configure_from_environment(self) -> None:
-        pass
+    @classmethod
+    def _installed(cls, backend: VisualizationBackend) -> WorldVisualization:
+        """
+        :param backend: The renderer an installed visualization provides.
+        :return: A new instance of the visualization installed for `backend`.
+        :raises VisualizationBackendUnavailable: If no single visualization class is
+            installed for `backend`.
+        """
+        providers = entry_points(group=VisualizationOption.PROVIDER_GROUP, name=backend)
+        if len(providers) != 1:
+            raise VisualizationBackendUnavailable(backend)
+        provider_type = next(iter(providers)).load()
+        if not isinstance(provider_type, type) or not issubclass(
+            provider_type, WorldVisualization
+        ):
+            raise VisualizationBackendUnavailable(backend)
+        return provider_type()
 
     @property
     @abstractmethod
     def is_rendering(self) -> bool:
-        """:return: Whether this owner has a started renderer."""
+        """
+        Whether this visualization is started and not yet stopped.
+        """
 
     @abstractmethod
-    def _start(self, cleanup: ExitStack) -> None:
-        pass
-
-    def start(self) -> Self:
+    def _start(self, world: World, cleanup: ExitStack) -> None:
         """
-        Start the selected renderer once.
+        Acquire what showing `world` needs, registering its release on `cleanup` as soon
+        as each part is acquired.
 
-        :return: This visualization owner.
+        :param world: The world to show.
+        :param cleanup: Releases the acquired parts, also if a later part fails.
+        """
+
+    def start(self, world: World) -> Self:
+        """
+        Start showing `world`, unless this visualization already shows a world.
+
+        A failing start releases what it acquired before it failed.
+
+        :param world: The world to show.
+        :return: This visualization.
         """
         if self.is_rendering:
             return self
         with ExitStack() as cleanup:
-            self._start(cleanup)
+            self._start(world, cleanup)
             self._cleanup = cleanup.pop_all()
-        if self.is_rendering:
-            VisualizationSession.register(self.stop)
         return self
 
     def stop(self) -> None:
         """
-        Remove owned observers and renderers, retaining borrowed ROS resources.
+        Release what this visualization acquired, keeping borrowed resources.
         """
         self._cleanup.close()
 
-    def attach_plan(self, executor: Executor) -> None:
+    def after_compile(self, executor: Executor) -> None:
         """
-        Observe the statecharts `executor` runs, if this renderer shows plans.
-
-        :param executor: The executor whose statecharts are observed.
+        Start showing the world of `executor`.
         """
+        self.start(executor.context.world)
 
-    def finish_execution(self) -> None:
+    def after_run(self, executor: Executor) -> None:
+        """
+        Stop showing the world of `executor`.
+        """
         self.stop()
-
-
-# %% headless execution
-@dataclass
-class HeadlessVisualization(WorldVisualization):
-    backend: ClassVar[VisualizationBackend] = VisualizationBackend.NONE
-    """
-    Headless execution without a renderer.
-    """
-
-    @property
-    def is_rendering(self) -> bool:
-        return False
-
-    def _start(self, cleanup: ExitStack) -> None:
-        pass
 
 
 # %% native RViz publishing
 @dataclass
 class RvizVisualization(WorldVisualization):
-    backend: ClassVar[VisualizationBackend] = VisualizationBackend.RVIZ
     """
-    Native ROS marker publishing.
+    Publishes the world as ROS markers for RViz.
     """
 
     ros_node: Node | None = field(default=None, kw_only=True)
     """
-    A borrowed ROS node, or a node created for an RViz renderer.
+    A borrowed ROS node, or a node created while this visualization runs.
     """
 
     collision_visualization: bool = field(default=False, kw_only=True)
     """
-    Whether the RViz renderer also publishes native collision results.
+    Whether collision results are published as well.
     """
 
     frame_prefix: str = field(default="", kw_only=True)
@@ -293,12 +189,12 @@ class RvizVisualization(WorldVisualization):
     Empty publishes the frames under their own names.
     """
 
-    marker_topic: Optional[str] = field(default=None, kw_only=True)
+    marker_topic: str | None = field(default=None, kw_only=True)
     """
     The topic the markers are published on, or ``None`` for the marker publisher's own.
     """
 
-    marker_alpha: Optional[float] = field(default=None, kw_only=True)
+    marker_alpha: float | None = field(default=None, kw_only=True)
     """
     The opacity the markers are drawn with, in [0.0, 1.0], or ``None`` for the marker
     publisher's own.
@@ -306,19 +202,21 @@ class RvizVisualization(WorldVisualization):
 
     publisher: VizMarkerPublisher | None = field(default=None, init=False)
     """
-    The owned RViz marker publisher.
+    The marker publisher, while this visualization runs.
     """
 
     @property
     def is_rendering(self) -> bool:
         return self.publisher is not None
 
-    def _start(self, cleanup: ExitStack) -> None:
+    def _start(self, world: World, cleanup: ExitStack) -> None:
         """
-        Start native marker publishing, borrowing an existing ROS node if supplied.
+        Start publishing markers, borrowing :attr:`ros_node` if it is given.
+
+        :raises VisualizationBackendUnavailable: If ROS is not installed.
         """
         if VizMarkerPublisher is None:
-            raise VisualizationBackendUnavailable(self.backend)
+            raise VisualizationBackendUnavailable(VisualizationBackend.RVIZ)
         if self.ros_node is None:
             if not rclpy.ok():
                 rclpy.init()
@@ -326,7 +224,7 @@ class RvizVisualization(WorldVisualization):
             self.ros_node = rclpy.create_node("coraplex_visualization")
             cleanup.callback(self._destroy_node, self.ros_node)
         self.publisher = VizMarkerPublisher(
-            _world=self.world,
+            _world=world,
             node=self.ros_node,
             topic_name=self.marker_topic or VizMarkerPublisher.topic_name,
             alpha=(
@@ -334,39 +232,55 @@ class RvizVisualization(WorldVisualization):
                 if self.marker_alpha is None
                 else self.marker_alpha
             ),
-            tf_publisher=self._prefixed_tf_publisher(cleanup),
+            tf_publisher=self._prefixed_tf_publisher(world, cleanup),
         )
         cleanup.callback(self._stop_publisher, self.publisher)
         if self.collision_visualization:
             self.publisher.with_collision_visualization()
 
-    def _prefixed_tf_publisher(self, cleanup: ExitStack) -> Optional[TFPublisher]:
+    def _prefixed_tf_publisher(
+        self, world: World, cleanup: ExitStack
+    ) -> TFPublisher | None:
         """
-        :return: A tf publisher of the world under :attr:`frame_prefix`, stopped with
-            this renderer, or ``None`` to let the marker publisher find or start the
-            world's own.
+        :param world: The world whose frames are published.
+        :param cleanup: Stops the tf publisher with this visualization.
+        :return: A tf publisher of `world` under :attr:`frame_prefix`, or ``None`` to
+            let the marker publisher find or start the world's own.
         """
         if not self.frame_prefix:
             return None
         tf_publisher = TFPublisher(
             node=self.ros_node,
-            _world=self.world,
+            _world=world,
             frame_names=TfFrameNames(prefix=self.frame_prefix),
         )
         cleanup.callback(tf_publisher.stop)
         return tf_publisher
 
     def _shutdown_context(self) -> None:
+        """
+        Shut down the ROS context this visualization initialized.
+        """
         if rclpy.ok():
             rclpy.shutdown()
 
     def _destroy_node(self, node: Node) -> None:
+        """
+        Destroy the ROS node this visualization created.
+
+        :param node: The created node.
+        """
         try:
             node.destroy_node()
         finally:
             self.ros_node = None
 
     def _stop_publisher(self, publisher: VizMarkerPublisher) -> None:
+        """
+        Stop publishing markers.
+
+        :param publisher: The running marker publisher.
+        """
         try:
             publisher.stop()
         finally:
@@ -376,14 +290,13 @@ class RvizVisualization(WorldVisualization):
 # %% native Rerun recording
 @dataclass
 class RerunVisualization(WorldVisualization):
-    backend: ClassVar[VisualizationBackend] = VisualizationBackend.RERUN
     """
-    Native Rerun recording.
+    Records the world with the native Rerun adapter.
     """
 
     mode: RerunMode = field(default=RerunMode.SPAWN, kw_only=True)
     """
-    Where the native Rerun adapter sends its recording.
+    Where the recording is sent.
     """
 
     target: str | None = field(default=None, kw_only=True)
@@ -393,10 +306,17 @@ class RerunVisualization(WorldVisualization):
 
     adapter: RerunAdapter | None = field(default=None, init=False)
     """
-    The owned native Rerun adapter.
+    The Rerun adapter, while this visualization runs.
     """
 
-    def _configure_from_environment(self) -> None:
+    @classmethod
+    def from_rerun_options(cls) -> RerunVisualization:
+        """
+        :return: A Rerun visualization configured by
+            :attr:`VisualizationOption.RERUN_MODE` and
+            :attr:`VisualizationOption.RERUN_TARGET`.
+        :raises UnknownVisualizationOption: If the environment names no Rerun mode.
+        """
         mode = (
             os.environ.get(VisualizationOption.RERUN_MODE, RerunMode.SPAWN.value)
             .strip()
@@ -404,16 +324,18 @@ class RerunVisualization(WorldVisualization):
         )
         if mode not in {member.value for member in RerunMode}:
             raise UnknownVisualizationOption(VisualizationOption.RERUN_MODE, mode)
-        self.mode = RerunMode(mode)
-        self.target = os.environ.get(VisualizationOption.RERUN_TARGET)
+        return cls(
+            mode=RerunMode(mode),
+            target=os.environ.get(VisualizationOption.RERUN_TARGET),
+        )
 
     @property
     def is_rendering(self) -> bool:
         return self.adapter is not None
 
-    def _start(self, cleanup: ExitStack) -> None:
+    def _start(self, world: World, cleanup: ExitStack) -> None:
         self.adapter = RerunAdapter(
-            _world=self.world,
+            _world=world,
             mode=self.mode,
             target=self.target,
             state_history=True,
@@ -421,103 +343,12 @@ class RerunVisualization(WorldVisualization):
         cleanup.callback(self._stop_adapter, self.adapter)
 
     def _stop_adapter(self, adapter: RerunAdapter) -> None:
+        """
+        Stop recording.
+
+        :param adapter: The running Rerun adapter.
+        """
         try:
             adapter.stop()
         finally:
             self.adapter = None
-
-
-# %% installed plan visualization
-@dataclass
-class ObservedExecutor:
-    """
-    An executor whose statecharts an extension added to it observes.
-    """
-
-    executor: Executor
-    """
-    The executor whose statecharts are observed.
-    """
-
-    observer: ExecutorExtension
-    """
-    The extension added to :attr:`executor` to observe its statecharts.
-    """
-
-    def detach(self) -> None:
-        """
-        Remove :attr:`observer` from the executor.
-        """
-        self.executor.extensions[:] = [
-            added for added in self.executor.extensions if added is not self.observer
-        ]
-
-
-@dataclass
-class PluginVisualization(WorldVisualization):
-    backend: ClassVar[VisualizationBackend] = VisualizationBackend.CRAMERA
-    """
-    The installed browser visualization.
-    """
-
-    provider: PlanVisualization | None = field(default=None, init=False)
-    """
-    The optional installed browser visualization provider.
-    """
-
-    _observed_executors: list[ObservedExecutor] = field(
-        default_factory=list, init=False
-    )
-    """
-    The executors this visualization added an observer to.
-    """
-
-    @property
-    def is_rendering(self) -> bool:
-        return self.provider is not None
-
-    def _start(self, cleanup: ExitStack) -> None:
-        providers = entry_points(
-            group=VisualizationOption.PROVIDER_GROUP, name=self.backend.value
-        )
-        if len(providers) != 1:
-            raise VisualizationBackendUnavailable(self.backend)
-        provider_type = next(iter(providers)).load()
-        if not isinstance(provider_type, type) or not issubclass(
-            provider_type, PlanVisualization
-        ):
-            raise VisualizationBackendUnavailable(self.backend)
-        self.provider = provider_type(world=self.world)
-        cleanup.callback(self._stop_provider, self.provider)
-        cleanup.callback(self._remove_extensions)
-        self.provider.start()
-
-    def attach_plan(self, executor: Executor) -> None:
-        """
-        Observe the statecharts of an executor through the running optional provider.
-
-        :param executor: The executor whose statecharts are observed.
-        """
-        if self.provider is None:
-            return
-        if any(observed.executor is executor for observed in self._observed_executors):
-            return
-        observer = self.provider.executor_extension()
-        executor.extensions.append(observer)
-        self._observed_executors.append(
-            ObservedExecutor(executor=executor, observer=observer)
-        )
-
-    def _remove_extensions(self) -> None:
-        for observed in self._observed_executors:
-            observed.detach()
-        self._observed_executors.clear()
-
-    def _stop_provider(self, provider: PlanVisualization) -> None:
-        try:
-            provider.stop()
-        finally:
-            self.provider = None
-
-    def finish_execution(self) -> None:
-        pass

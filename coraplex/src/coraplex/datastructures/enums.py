@@ -94,7 +94,8 @@ class VisualizationOption(StrEnum):
 
     PROVIDER_GROUP = "coraplex.visualizations"
     """
-    Installed entry points implementing PlanVisualization.
+    Installed entry points naming a
+    :class:`~coraplex.visualization.WorldVisualization` subclass.
     """
 
 

@@ -6,42 +6,60 @@ from __future__ import annotations
 
 import os
 import runpy
-import signal
 import sys
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 from semantic_digital_twin.world import World
-from typing_extensions import Any, Dict, List
+from typing_extensions import Any, Dict, List, Self
 
+from coraplex.datastructures.enums import VisualizationBackend, VisualizationOption
 from cramera.live import runner, visualization
+
+# %% serving a world
 
 
 @dataclass
-class StartedVisualization:
+class VisualizationRecordingItsStart:
     """
-    A visualization recorder standing in for ``LiveVisualization``.
+    A visualization recording the world it was started on.
     """
 
-    world: World
     port: int
-    started: bool = False
+    """
+    The port it was asked to serve on.
+    """
 
-    def start(self):
-        self.started = True
+    started_world: World | None = None
+    """
+    The world it was started on, if it was.
+    """
+
+    def start(self, world: World) -> Self:
+        """
+        Record `world` as started.
+
+        :param world: The world to serve.
+        :return: This visualization.
+        """
+        self.started_world = world
         return self
 
 
 class TestStart:
     def test_start_serves_the_given_world(self, monkeypatch):
-        monkeypatch.setattr(visualization, "LiveVisualization", StartedVisualization)
+        monkeypatch.setattr(
+            visualization, "LiveVisualization", VisualizationRecordingItsStart
+        )
         world = World()
 
         result = runner.start(world, port=1234)
 
-        assert isinstance(result, StartedVisualization)
-        assert result.world is world
+        assert isinstance(result, VisualizationRecordingItsStart)
+        assert result.started_world is world
         assert result.port == 1234
-        assert result.started is True
+
+
+# %% running a demo
 
 
 class TestMain:
@@ -50,10 +68,8 @@ class TestMain:
         # main() preselects the backend by writing the real environment, and monkeypatch
         # records an undo only for a variable that was there: setting it first, then
         # deleting it, leaves the test with none and still restores that afterwards
-        monkeypatch.setenv(
-            runner.VISUALIZATION_BACKEND_VARIABLE, "restored-on-teardown"
-        )
-        monkeypatch.delenv(runner.VISUALIZATION_BACKEND_VARIABLE)
+        monkeypatch.setenv(VisualizationOption.BACKEND, "restored-on-teardown")
+        monkeypatch.delenv(VisualizationOption.BACKEND)
         monkeypatch.setattr(sys, "argv", ["cramera-live", "/demos/demo.py"])
         monkeypatch.setattr(
             runpy,
@@ -62,11 +78,10 @@ class TestMain:
                 {"path": path, "run_name": run_name}
             ),
         )
-        monkeypatch.setattr(signal, "pause", lambda: None)
 
         runner.main()
 
-        assert os.environ[runner.VISUALIZATION_BACKEND_VARIABLE] == "cramera"
+        assert os.environ[VisualizationOption.BACKEND] == VisualizationBackend.CRAMERA
         assert run_calls == [{"path": "/demos/demo.py", "run_name": "__main__"}]
         assert "/demos" in sys.path
 
@@ -75,11 +90,10 @@ class TestMain:
         ``CORAPLEX_VISUALIZATION=rerun cramera-live demo.py`` is a deliberate override
         and must survive.
         """
-        monkeypatch.setenv(runner.VISUALIZATION_BACKEND_VARIABLE, "rerun")
+        monkeypatch.setenv(VisualizationOption.BACKEND, VisualizationBackend.RERUN)
         monkeypatch.setattr(sys, "argv", ["cramera-live", "/demos/demo.py"])
         monkeypatch.setattr(runpy, "run_path", lambda path, run_name: None)
-        monkeypatch.setattr(signal, "pause", lambda: None)
 
         runner.main()
 
-        assert os.environ[runner.VISUALIZATION_BACKEND_VARIABLE] == "rerun"
+        assert os.environ[VisualizationOption.BACKEND] == VisualizationBackend.RERUN

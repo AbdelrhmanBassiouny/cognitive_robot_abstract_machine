@@ -452,7 +452,7 @@ def visualization(
     monkeypatch.setattr(
         visualization_module, "serve", lambda passed_bridge, port: ServerRecorder()
     )
-    live = LiveVisualization(world=world)
+    live = LiveVisualization()
     yield live
     live.stop()
 
@@ -463,73 +463,80 @@ class TestWorldQueryLifetime:
     """
 
     def test_stop_releases_default_queries(
-        self, visualization: LiveVisualization
+        self, world: World, visualization: LiveVisualization
     ) -> None:
         """
         Stopping the owning visualization removes its automatic query source.
 
+        :param world: The world the visualization is started on.
         :param visualization: The visualization acquiring the default queries.
         """
-        visualization.start()
+        visualization.start(world)
         visualization.stop()
 
         assert visualization.bridge.status()[ResponseField.QUERY] is False
         with pytest.raises(NoQuerySourceRegistered):
             visualization.bridge.query_presets()
 
-    def test_restart_restores_queries(self, visualization: LiveVisualization) -> None:
+    def test_restart_restores_queries(
+        self, world: World, visualization: LiveVisualization
+    ) -> None:
         """
         Restarting a stopped visualization restores automatic query availability.
 
+        :param world: The world the visualization is started on.
         :param visualization: The visualization stopped and started again.
         """
-        visualization.start()
+        visualization.start(world)
         visualization.stop()
-        visualization.start()
+        visualization.start(world)
 
         assert visualization.bridge.status()[ResponseField.QUERY] is True
 
     def test_stop_preserves_explicit_source(
-        self, visualization: LiveVisualization
+        self, world: World, visualization: LiveVisualization
     ) -> None:
         """
         Stopping a visualization leaves an explicitly registered source available.
 
+        :param world: The world the visualization is started on.
         :param visualization: The visualization whose bridge receives a custom source.
         """
         source = CurrentStateOnlySource()
         visualization.bridge.register_query_source(
             source.knowledge(), source.title(), source.presets()
         )
-        visualization.start()
+        visualization.start(world)
         visualization.stop()
 
         assert visualization.bridge.query_title() == source.title()
 
     def test_stop_preserves_a_newer_world_attachment(
-        self, visualization: LiveVisualization
+        self, world: World, visualization: LiveVisualization
     ) -> None:
         """
         Cleanup of an older attachment does not remove a newer attachment's queries.
 
+        :param world: The world the visualization is started on.
         :param visualization: The visualization whose bridge is reattached after
             startup.
         """
-        visualization.start()
-        visualization.bridge.attach(visualization.world)
+        visualization.start(world)
+        visualization.bridge.attach(world)
         visualization.stop()
 
         assert visualization.bridge.status()[ResponseField.QUERY] is True
 
     def test_model_updates_do_not_change_query_ownership(
-        self, visualization: LiveVisualization
+        self, world: World, visualization: LiveVisualization
     ) -> None:
         """
         Model updates leave cleanup ownership with the original attachment.
 
+        :param world: The world the visualization is started on.
         :param visualization: The session whose model revision advances before stopping.
         """
-        visualization.start()
+        visualization.start(world)
         visualization.bridge.observe_model_change()
 
         visualization.stop()
@@ -537,11 +544,15 @@ class TestWorldQueryLifetime:
         assert visualization.bridge.status()[ResponseField.QUERY] is False
 
     def test_failed_start_releases_default_queries(
-        self, visualization: LiveVisualization, monkeypatch: pytest.MonkeyPatch
+        self,
+        world: World,
+        visualization: LiveVisualization,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         """
         Failure to start the server releases automatic queries acquired earlier.
 
+        :param world: The world the visualization is started on.
         :param visualization: The visualization whose server startup fails.
         :param monkeypatch: Replaces server startup with a failing implementation.
         """
@@ -559,21 +570,25 @@ class TestWorldQueryLifetime:
         monkeypatch.setattr(visualization_module, "serve", fail_start)
 
         with pytest.raises(OSError):
-            visualization.start()
+            visualization.start(world)
 
         assert visualization.bridge.status()[ResponseField.QUERY] is False
 
     def test_failed_finalization_still_releases_default_queries(
-        self, visualization: LiveVisualization, monkeypatch: pytest.MonkeyPatch
+        self,
+        world: World,
+        visualization: LiveVisualization,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         """
         Recording finalization errors cannot retain the automatic query source.
 
+        :param world: The world the visualization is started on.
         :param visualization: The visualization whose recording cannot be finalized.
         :param monkeypatch: Replaces recording finalization with a failing
             implementation.
         """
-        visualization.start()
+        visualization.start(world)
 
         def fail_finalize(bridge: Bridge, recording: Any) -> None:
             """

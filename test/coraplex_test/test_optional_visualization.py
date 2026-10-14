@@ -1,7 +1,11 @@
 """
-Visualization is opt-in and preserves native demonstration ownership.
+Visualization is opt-in and shows the world of the executor it is added to while that
+executor runs a statechart.
 """
 
+from __future__ import annotations
+
+from contextlib import ExitStack
 from dataclasses import dataclass, field
 from importlib.metadata import EntryPoint, EntryPoints
 from pathlib import Path
@@ -10,159 +14,258 @@ from unittest.mock import Mock
 import pytest
 import rclpy
 
+import coraplex.testing as testing_module
 import coraplex.visualization as visualization_module
-from coraplex.datastructures.enums import VisualizationBackend, VisualizationOption
+from coraplex.datastructures.enums import (
+    ActionTrialVisualization,
+    VisualizationBackend,
+    VisualizationOption,
+)
 from coraplex.exceptions import (
     UnknownVisualizationOption,
     VisualizationBackendUnavailable,
 )
-from coraplex.plans.executors import RealRobotPlanExecutor
-from cramph.context import StatechartContext
-from cramph.executor import ExecutorExtension, StatechartExecutor
+from coraplex.plans.executors import RealRobotPlanExecutor, SimulatedPlanExecutor
 from coraplex.visualization import (
-    PlanVisualization,
-    WorldVisualization,
-    HeadlessVisualization,
-    RvizVisualization,
     RerunVisualization,
-    PluginVisualization,
+    RvizVisualization,
+    WorldVisualization,
 )
-from semantic_digital_twin.robots.minimal_robot import MinimalRobot
+from cramph.context import StatechartContext
+from cramph.executor import StatechartExecutor
+from cramph.node import EndStatechart
+from cramph.nodes_for_testing import ConstTrueNode
+from cramph.statechart import Statechart
 from semantic_digital_twin.adapters.rerun import RerunMode
-import coraplex.testing as testing_module
+from semantic_digital_twin.robots.minimal_robot import MinimalRobot
 from semantic_digital_twin.world import World
 
+from ..plan_running import robot_extensions
 from .test_demonstrations import RecordingDemonstration
 
 
-# %% optional provider
+# %% a visualization recording its runs
 @dataclass
-class ObservedScene(PlanVisualization):
+class VisualizationRecordingItsRuns(WorldVisualization):
     """
-    An installed provider recording how a host manages its lifetime.
-    """
-
-    started: bool = False
-    """
-    Whether the host started the scene.
+    A visualization recording which worlds it was started on and how often it stopped.
     """
 
-    stopped: bool = False
+    started_worlds: list[World] = field(default_factory=list)
     """
-    Whether the host stopped the scene.
-    """
-
-    extensions: list[ExecutorExtension] = field(default_factory=list)
-    """
-    The executor extensions this scene created, one per executor attached to it.
+    The world of every start, in order.
     """
 
-    def start(self):
+    stops: int = 0
+    """
+    How often a started run was stopped.
+    """
+
+    running: bool = False
+    """
+    Whether a run is started and not yet stopped.
+    """
+
+    @property
+    def is_rendering(self) -> bool:
+        return self.running
+
+    def _start(self, world: World, cleanup: ExitStack) -> None:
+        self.started_worlds.append(world)
+        self.running = True
+        cleanup.callback(self._record_stop)
+
+    def _record_stop(self) -> None:
         """
-        Begin serving this scene.
+        Count a stop of the started run.
         """
-        self.started = True
-        return self
-
-    def stop(self) -> None:
-        """
-        Release this scene.
-        """
-        self.stopped = True
-
-    def executor_extension(self) -> ExecutorExtension:
-        """
-        Create an observer for the statecharts of one executor.
-        """
-        extension = ExecutorExtension()
-        self.extensions.append(extension)
-        return extension
+        self.stops += 1
+        self.running = False
 
 
-def an_executor() -> StatechartExecutor:
+def an_ending_statechart(context: StatechartContext) -> Statechart:
     """
-    :return: An executor whose statecharts a visualization can observe, with no
-        extension of its own.
+    :param context: The context the statechart is built in.
+    :return: A statechart that ends once its only step succeeded.
     """
-    return StatechartExecutor(context=StatechartContext(world=World()))
+    statechart = Statechart(context=context)
+    step = ConstTrueNode(name="step")
+    statechart.add_node(step)
+    statechart.add_node(EndStatechart.when_true(step))
+    return statechart
+
+
+def an_executor(
+    visualization: WorldVisualization, world: World | None = None
+) -> StatechartExecutor:
+    """
+    :param visualization: The visualization added to the executor.
+    :param world: The world the executor runs in, a new one unless given.
+    :return: An executor showing its world through `visualization`.
+    """
+    return StatechartExecutor(
+        context=StatechartContext(world=World() if world is None else world),
+        extensions=[visualization],
+    )
 
 
 @pytest.fixture
-def installed_scene(monkeypatch):
+def installed_visualization(monkeypatch):
     """
-    Expose a provider through the installed-plugin discovery boundary.
+    Expose :class:`VisualizationRecordingItsRuns` through the installed-plugin discovery
+    boundary.
     """
     entry = Mock()
-    entry.load.return_value = ObservedScene
+    entry.load.return_value = VisualizationRecordingItsRuns
     discover = Mock(return_value=[entry])
     monkeypatch.setattr(visualization_module, "entry_points", discover)
     return discover
 
 
-# %% selection and ownership
+# %% one run per executor
+def test_a_visualization_shows_the_world_of_its_executor_while_it_runs() -> None:
+    visualization = VisualizationRecordingItsRuns()
+    world = World()
+    executor = an_executor(visualization, world)
+
+    executor.compile(an_ending_statechart(executor.context))
+    assert visualization.started_worlds == [world]
+    assert visualization.is_rendering
+
+    executor.execute()
+    assert visualization.stops == 1
+    assert not visualization.is_rendering
+
+
+def test_a_visualization_is_not_started_before_its_executor_compiles() -> None:
+    visualization = VisualizationRecordingItsRuns()
+
+    an_executor(visualization)
+
+    assert visualization.started_worlds == []
+
+
+def test_a_recompile_does_not_restart_the_visualization() -> None:
+    visualization = VisualizationRecordingItsRuns()
+    executor = an_executor(visualization)
+    statechart = an_ending_statechart(executor.context)
+    executor.compile(statechart)
+
+    executor.after_recompile()
+
+    assert len(visualization.started_worlds) == 1
+    executor.execute()
+
+
+def test_one_visualization_shows_each_run_of_sequential_executors() -> None:
+    visualization = VisualizationRecordingItsRuns()
+    worlds = [World(), World()]
+
+    for world in worlds:
+        executor = an_executor(visualization, world)
+        executor.compile(an_ending_statechart(executor.context))
+        executor.execute()
+
+    assert visualization.started_worlds == worlds
+    assert visualization.stops == len(worlds)
+
+
+def test_a_plan_run_on_the_real_robot_is_shown_once_compiled() -> None:
+    visualization = VisualizationRecordingItsRuns()
+    world = World()
+    executor = RealRobotPlanExecutor(world, extensions=[visualization])
+    statechart = Statechart(context=executor.context)
+    statechart.add_node(ConstTrueNode(name="step"))
+
+    executor.compile(statechart)
+
+    assert visualization.started_worlds == [world]
+    visualization.stop()
+
+
+def test_starting_twice_keeps_the_running_visualization() -> None:
+    visualization = VisualizationRecordingItsRuns()
+    world = World()
+
+    visualization.start(world)
+    visualization.start(World())
+
+    assert visualization.started_worlds == [world]
+    visualization.stop()
+    visualization.stop()
+    assert visualization.stops == 1
+
+
+# %% selection from the environment
 def test_no_backend_selection_keeps_requested_default(monkeypatch) -> None:
     """
     Installing Cramera must not change an existing caller's renderer.
     """
     monkeypatch.delenv(VisualizationOption.BACKEND, raising=False)
-    selected = WorldVisualization.from_environment(World(), VisualizationBackend.RVIZ)
-    assert selected.backend is VisualizationBackend.RVIZ
+    selected = WorldVisualization.from_environment(VisualizationBackend.RVIZ)
+    assert isinstance(selected, RvizVisualization)
+
+
+def test_the_none_backend_selects_no_visualization(monkeypatch) -> None:
+    monkeypatch.setenv(VisualizationOption.BACKEND, VisualizationBackend.NONE)
+    assert WorldVisualization.from_environment(VisualizationBackend.RVIZ) is None
 
 
 def test_explicit_backend_selection_uses_installed_provider(
-    monkeypatch, installed_scene
+    monkeypatch, installed_visualization
 ) -> None:
-    """
-    An explicitly selected plugin observes the same world and native plan.
-    """
-    monkeypatch.setenv(VisualizationOption.BACKEND, VisualizationBackend.CRAMERA.value)
-    world = World()
-    selected = WorldVisualization.from_environment(world).start()
-    executor = an_executor()
-    selected.attach_plan(executor)
-    provider = selected.provider
+    monkeypatch.setenv(VisualizationOption.BACKEND, VisualizationBackend.CRAMERA)
 
-    installed_scene.assert_called_once_with(
+    selected = WorldVisualization.from_environment()
+
+    installed_visualization.assert_called_once_with(
         group=VisualizationOption.PROVIDER_GROUP,
         name=VisualizationBackend.CRAMERA.value,
     )
-    assert provider.world is world
-    assert provider.started
-    assert len(provider.extensions) == 1
-    assert executor.extensions == provider.extensions
-    selected.stop()
-    assert provider.stopped
-    assert executor.extensions == []
-    assert not selected.is_rendering
-
-
-def test_a_provider_observes_a_plan_run_on_the_real_robot(
-    monkeypatch, installed_scene
-) -> None:
-    """
-    A plan sent to the robot's controller is observed like one that ticks here.
-    """
-    monkeypatch.setenv(VisualizationOption.BACKEND, VisualizationBackend.CRAMERA.value)
-    selected = WorldVisualization.from_environment(World()).start()
-    executor = RealRobotPlanExecutor(World())
-
-    selected.attach_plan(executor)
-
-    assert [
-        any(added is extension for added in executor.extensions)
-        for extension in selected.provider.extensions
-    ] == [True]
-    selected.stop()
+    assert isinstance(selected, VisualizationRecordingItsRuns)
 
 
 def test_missing_provider_has_actionable_native_error(monkeypatch) -> None:
-    """
-    Selecting an uninstalled optional provider fails before starting resources.
-    """
+    monkeypatch.setenv(VisualizationOption.BACKEND, VisualizationBackend.CRAMERA)
     monkeypatch.setattr(visualization_module, "entry_points", Mock(return_value=[]))
     with pytest.raises(VisualizationBackendUnavailable) as caught:
-        PluginVisualization(World()).start()
+        WorldVisualization.from_environment()
     assert caught.value.backend is VisualizationBackend.CRAMERA
+
+
+@pytest.mark.parametrize("loaded", [World, None])
+def test_an_entry_point_must_load_a_visualization_class(
+    monkeypatch, installed_visualization, loaded
+) -> None:
+    monkeypatch.setenv(VisualizationOption.BACKEND, VisualizationBackend.CRAMERA)
+    installed_visualization.return_value[0].load.return_value = loaded
+    with pytest.raises(VisualizationBackendUnavailable) as caught:
+        WorldVisualization.from_environment()
+    assert caught.value.backend is VisualizationBackend.CRAMERA
+
+
+def test_native_entry_point_collection_loads_selected_provider(monkeypatch) -> None:
+    """
+    The installed metadata collection supports provider lookup on Python 3.12.
+    """
+    monkeypatch.setenv(VisualizationOption.BACKEND, VisualizationBackend.CRAMERA)
+    providers = EntryPoints(
+        [
+            EntryPoint(
+                name=VisualizationBackend.CRAMERA.value,
+                value="test:VisualizationRecordingItsRuns",
+                group=VisualizationOption.PROVIDER_GROUP,
+            )
+        ]
+    )
+    monkeypatch.setattr(
+        visualization_module, "entry_points", Mock(return_value=providers)
+    )
+    monkeypatch.setattr(
+        EntryPoint, "load", Mock(return_value=VisualizationRecordingItsRuns)
+    )
+    selected = WorldVisualization.from_environment()
+    assert isinstance(selected, VisualizationRecordingItsRuns)
 
 
 def test_unknown_environment_selection_is_rejected(monkeypatch) -> None:
@@ -170,34 +273,77 @@ def test_unknown_environment_selection_is_rejected(monkeypatch) -> None:
     Misspelled backend configuration is not silently ignored.
     """
     monkeypatch.setenv(VisualizationOption.BACKEND, "missing-backend")
-    with pytest.raises(UnknownVisualizationOption):
-        WorldVisualization.from_environment(World())
+    with pytest.raises(UnknownVisualizationOption) as caught:
+        WorldVisualization.from_environment()
+    assert caught.value.variable is VisualizationOption.BACKEND
 
 
-def test_none_backend_leaves_world_callbacks_unchanged() -> None:
+def test_unknown_rerun_mode_is_reported(monkeypatch) -> None:
+    monkeypatch.setenv(VisualizationOption.BACKEND, VisualizationBackend.RERUN)
+    monkeypatch.setenv(VisualizationOption.RERUN_MODE, "missing-mode")
+    with pytest.raises(UnknownVisualizationOption) as caught:
+        WorldVisualization.from_environment()
+    assert caught.value.variable is VisualizationOption.RERUN_MODE
+
+
+@pytest.mark.parametrize(
+    "backend", [VisualizationBackend.NONE, VisualizationBackend.RVIZ]
+)
+def test_backend_selection_ignores_rerun_settings(
+    monkeypatch: pytest.MonkeyPatch, backend: VisualizationBackend
+) -> None:
+    monkeypatch.setenv(VisualizationOption.BACKEND, backend)
+    monkeypatch.setenv(VisualizationOption.RERUN_MODE, "missing-mode")
+    WorldVisualization.from_environment()
+
+
+def test_default_rerun_selection_reads_its_configuration(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    target = tmp_path / "world.rrd"
+    monkeypatch.delenv(VisualizationOption.BACKEND, raising=False)
+    monkeypatch.setenv(VisualizationOption.RERUN_MODE, RerunMode.SAVE.value)
+    monkeypatch.setenv(VisualizationOption.RERUN_TARGET, str(target))
+    selected = WorldVisualization.from_environment(VisualizationBackend.RERUN)
+    assert isinstance(selected, RerunVisualization)
+    assert selected.mode is RerunMode.SAVE
+    assert selected.target == str(target)
+
+
+def test_rviz_selection_receives_the_ros_settings(monkeypatch, rclpy_node) -> None:
+    monkeypatch.setenv(VisualizationOption.BACKEND, VisualizationBackend.RVIZ)
+    selected = WorldVisualization.from_environment(
+        ros_node=rclpy_node, collision_visualization=True
+    )
+    assert isinstance(selected, RvizVisualization)
+    assert selected.ros_node is rclpy_node
+    assert selected.collision_visualization
+
+
+def test_testing_helper_stays_headless_without_ros(monkeypatch) -> None:
     """
-    Headless use creates neither a provider nor a callback.
+    Installing an optional renderer does not enable it for headless tests.
     """
-    world = World()
-    callbacks = list(world.state.state_change_callbacks)
-    selected = HeadlessVisualization(world).start()
-    selected.attach_plan(an_executor())
-    assert world.state.state_change_callbacks == callbacks
-    assert not selected.is_rendering
-    selected.stop()
+    monkeypatch.delenv(VisualizationOption.BACKEND, raising=False)
+    monkeypatch.setattr(testing_module, "VizMarkerPublisher", None)
+    assert testing_module.selected_visualizations() == []
 
 
+def test_testing_helper_defaults_to_rviz_with_ros(monkeypatch) -> None:
+    monkeypatch.delenv(VisualizationOption.BACKEND, raising=False)
+    [selected] = testing_module.selected_visualizations()
+    assert isinstance(selected, RvizVisualization)
+
+
+# %% native renderers
 def test_rviz_stops_publishers_without_destroying_borrowed_node(
     cylinder_bot_world, rclpy_node
 ) -> None:
     """
     The adapter releases its publishers while leaving the host ROS node usable.
     """
-    selected = RvizVisualization(
-        cylinder_bot_world,
-        ros_node=rclpy_node,
-        collision_visualization=True,
-    ).start()
+    selected = RvizVisualization(ros_node=rclpy_node, collision_visualization=True)
+    selected.start(cylinder_bot_world)
     publisher = selected.publisher
     assert publisher._collision_publisher is not None
     selected.stop()
@@ -208,58 +354,13 @@ def test_rviz_stops_publishers_without_destroying_borrowed_node(
     )
 
 
-def test_demonstration_keeps_all_repetitions_and_explicit_viewer(
-    monkeypatch, cylinder_bot_world, installed_scene
-) -> None:
-    """
-    Each repeated native plan is attached and the explicitly selected viewer stays
-    inspectable.
-    """
-    monkeypatch.setenv(VisualizationOption.BACKEND, VisualizationBackend.CRAMERA.value)
-    demonstration = RecordingDemonstration(
-        world=cylinder_bot_world, used_robot=MinimalRobot, repetitions=2
-    )
-    try:
-        demonstration.run()
-        selected = demonstration.visualization
-        assert len(selected.provider.extensions) == demonstration.repetitions
-        assert selected.is_rendering
-    finally:
-        demonstration.stop_visualization()
-    assert demonstration.ros_session is None
-    assert not rclpy.ok()
-
-
-# %% cleanup and native alternatives
-def test_starting_provider_twice_registers_only_once(installed_scene) -> None:
-    """
-    Starting the same visualization twice retains its single provider.
-    """
-    selected = PluginVisualization(World())
-    selected.start()
-    provider = selected.provider
-    selected.start()
-    assert selected.provider is provider
-    assert installed_scene.call_count == 1
-    selected.stop()
-    selected.stop()
-
-
-def test_non_visualization_entry_point_is_rejected(installed_scene) -> None:
-    """
-    An unrelated entry point cannot be used as a visualization provider.
-    """
-    installed_scene.return_value[0].load.return_value = World
-    with pytest.raises(VisualizationBackendUnavailable):
-        PluginVisualization(World()).start()
-
-
 def test_rviz_releases_a_context_it_owns(cylinder_bot_world) -> None:
     """
     A standalone RViz adapter cleans its own ROS resources on stop.
     """
     assert not rclpy.ok()
-    selected = RvizVisualization(cylinder_bot_world).start()
+    selected = RvizVisualization()
+    selected.start(cylinder_bot_world)
     assert rclpy.ok()
     selected.stop()
     assert not rclpy.ok()
@@ -267,16 +368,14 @@ def test_rviz_releases_a_context_it_owns(cylinder_bot_world) -> None:
 
 
 def test_rerun_save_uses_existing_native_recording(
-    monkeypatch, cylinder_bot_world, tmp_path
+    cylinder_bot_world, tmp_path
 ) -> None:
     """
-    The optional host delegates recording to the unchanged native Rerun adapter.
+    Recording is delegated to the unchanged native Rerun adapter.
     """
     recording = tmp_path / "world.rrd"
-    monkeypatch.setenv(VisualizationOption.BACKEND, VisualizationBackend.RERUN.value)
-    monkeypatch.setenv(VisualizationOption.RERUN_MODE, RerunMode.SAVE.value)
-    monkeypatch.setenv(VisualizationOption.RERUN_TARGET, str(recording))
-    selected = WorldVisualization.from_environment(cylinder_bot_world).start()
+    selected = RerunVisualization(mode=RerunMode.SAVE, target=str(recording))
+    selected.start(cylinder_bot_world)
     selected.stop()
     assert recording.stat().st_size > 0
     assert not selected.is_rendering
@@ -288,259 +387,65 @@ def test_unavailable_ros_is_reported_without_starting(monkeypatch) -> None:
     """
     monkeypatch.setattr(visualization_module, "VizMarkerPublisher", None)
     with pytest.raises(VisualizationBackendUnavailable) as caught:
-        RvizVisualization(World()).start()
-    assert VisualizationBackend.RVIZ.value in caught.value.error_message()
-    assert caught.value.suggest_correction()
+        RvizVisualization().start(World())
+    assert caught.value.backend is VisualizationBackend.RVIZ
 
 
-def test_unknown_rerun_mode_is_reported(monkeypatch) -> None:
-    """
-    Unsupported Rerun output modes produce a named configuration failure.
-    """
-    monkeypatch.setenv(VisualizationOption.BACKEND, VisualizationBackend.RERUN)
-    monkeypatch.setenv(VisualizationOption.RERUN_MODE, "missing-mode")
-    with pytest.raises(UnknownVisualizationOption) as caught:
-        WorldVisualization.from_environment(World())
-    assert caught.value.variable is VisualizationOption.RERUN_MODE
-    assert str(VisualizationOption.RERUN_MODE) in caught.value.error_message()
-    assert caught.value.suggest_correction()
-
-
-def test_testing_helper_stays_headless_without_ros(monkeypatch) -> None:
-    """
-    Installing an optional renderer does not enable it for headless tests.
-    """
-    monkeypatch.delenv(VisualizationOption.BACKEND, raising=False)
-    monkeypatch.setattr(testing_module, "VizMarkerPublisher", None)
-    selected = testing_module.start_visualization(World())
-    assert selected.backend is VisualizationBackend.NONE
-    assert not selected.is_rendering
-
-
-def test_failed_visualization_start_releases_demonstration_session(
-    monkeypatch, cylinder_bot_world
+# %% demonstrations and action trials
+def test_every_demonstration_repetition_is_shown_and_released(
+    monkeypatch, cylinder_bot_world, installed_visualization
 ) -> None:
-    """
-    An unavailable explicitly selected provider must not leak the demo ROS session.
-    """
-    monkeypatch.setenv(VisualizationOption.BACKEND, VisualizationBackend.CRAMERA.value)
-    monkeypatch.setattr(visualization_module, "entry_points", Mock(return_value=[]))
+    monkeypatch.setenv(VisualizationOption.BACKEND, VisualizationBackend.CRAMERA)
+    shown: list[VisualizationRecordingItsRuns] = []
+    create_executor = RecordingDemonstration.create_executor
+
+    def recording_executor(demonstration, world):
+        executor = create_executor(demonstration, world)
+        shown.extend(
+            extension
+            for extension in executor.extensions
+            if isinstance(extension, VisualizationRecordingItsRuns)
+        )
+        return executor
+
+    monkeypatch.setattr(RecordingDemonstration, "create_executor", recording_executor)
     demonstration = RecordingDemonstration(
-        world=cylinder_bot_world, used_robot=MinimalRobot
+        world=cylinder_bot_world, used_robot=MinimalRobot, repetitions=2
     )
-    try:
-        with pytest.raises(VisualizationBackendUnavailable):
-            demonstration.run()
-        assert demonstration.ros_session is None
-        assert not rclpy.ok()
-    finally:
-        demonstration.stop_visualization()
 
+    demonstration.run()
 
-# %% scope ownership and repeated observation
-def test_native_entry_point_collection_loads_selected_provider(monkeypatch) -> None:
-    """
-    The installed metadata collection supports provider lookup on Python 3.12.
-    """
-    providers = EntryPoints(
-        [
-            EntryPoint(
-                name=VisualizationBackend.CRAMERA.value,
-                value="test:ObservedScene",
-                group=VisualizationOption.PROVIDER_GROUP,
-            )
-        ]
-    )
-    monkeypatch.setattr(
-        visualization_module, "entry_points", Mock(return_value=providers)
-    )
-    monkeypatch.setattr(EntryPoint, "load", Mock(return_value=ObservedScene))
-    selected = PluginVisualization(World()).start()
-    assert isinstance(selected.provider, ObservedScene)
-    selected.stop()
-
-
-def test_attaching_same_executor_twice_observes_it_once(installed_scene) -> None:
-    """
-    An executor is observed by one subscription, however often it is attached.
-    """
-    selected = PluginVisualization(World()).start()
-    executor = an_executor()
-    try:
-        selected.attach_plan(executor)
-        selected.attach_plan(executor)
-        assert len(selected.provider.extensions) == 1
-        assert executor.extensions == selected.provider.extensions
-    finally:
-        selected.stop()
-
-
-def test_stop_accepts_a_callback_already_removed_by_caller(installed_scene) -> None:
-    """
-    Removing a subscription externally must not prevent provider cleanup.
-    """
-    selected = PluginVisualization(World()).start()
-    provider = selected.provider
-    executor = an_executor()
-    selected.attach_plan(executor)
-    executor.extensions.clear()
-    selected.stop()
-    assert provider.stopped
-    assert not selected.is_rendering
-
-
-def test_scope_closes_temporary_visualizations(installed_scene) -> None:
-    """
-    A temporary viewer remains reachable for cleanup through its active scope.
-    """
-    with visualization_module.VisualizationSession():
-        provider = PluginVisualization(World()).start().provider
-        assert not provider.stopped
-    assert provider.stopped
-
-
-@pytest.mark.parametrize("error", [RuntimeError("aborted"), KeyboardInterrupt()])
-def test_scope_closes_resources_and_propagates_abort(installed_scene, error) -> None:
-    """
-    Failed scripts and keyboard interrupts close their viewers before propagating.
-    """
-    with pytest.raises(type(error)) as caught:
-        with visualization_module.VisualizationSession():
-            provider = PluginVisualization(World()).start().provider
-            raise error
-    assert caught.value is error
-    assert provider.stopped
-
-
-def test_nested_scope_restores_outer_owner(installed_scene) -> None:
-    """
-    Leaving an inner scope keeps outer resources open and restores registration.
-    """
-    with visualization_module.VisualizationSession():
-        outer = PluginVisualization(World()).start().provider
-        with visualization_module.VisualizationSession():
-            inner = PluginVisualization(World()).start().provider
-        restored = PluginVisualization(World()).start().provider
-        assert inner.stopped
-        assert not outer.stopped
-        assert not restored.stopped
-    assert outer.stopped
-    assert restored.stopped
-
-
-def test_scope_releases_retained_demonstration_session(
-    monkeypatch, cylinder_bot_world, installed_scene
-) -> None:
-    """
-    A completed browser demo releases its retained native ROS thread on scope exit.
-    """
-    monkeypatch.setenv(VisualizationOption.BACKEND, VisualizationBackend.CRAMERA.value)
-    demonstration = RecordingDemonstration(
-        world=cylinder_bot_world, used_robot=MinimalRobot
-    )
-    with visualization_module.VisualizationSession():
-        demonstration.run()
-        session = demonstration.ros_session
-        provider = demonstration.visualization.provider
-        assert session.spin_thread.is_alive()
-    assert provider.stopped
-    assert not session.spin_thread.is_alive()
+    assert [visualization.started_worlds for visualization in shown] == [
+        [cylinder_bot_world]
+    ] * demonstration.repetitions
+    assert [visualization.stops for visualization in shown] == [
+        1
+    ] * demonstration.repetitions
     assert demonstration.ros_session is None
     assert not rclpy.ok()
 
 
-def test_scope_finishes_other_cleanup_when_one_callback_fails() -> None:
-    """
-    An individual failing cleanup must not strand earlier acquired resources.
-    """
-    earlier = Mock()
-    failing = Mock(side_effect=RuntimeError("cleanup failed"))
-    with pytest.raises(RuntimeError):
-        with visualization_module.VisualizationSession():
-            visualization_module.VisualizationSession.register(earlier)
-            visualization_module.VisualizationSession.register(failing)
-    earlier.assert_called_once_with()
-    failing.assert_called_once_with()
-    outside = Mock()
-    visualization_module.VisualizationSession.register(outside)
-    outside.assert_not_called()
-
-
-def test_explicit_stop_releases_demo_thread_but_keeps_borrowed_ros_context(
-    monkeypatch, cylinder_bot_world, installed_scene, rclpy_node
+def test_a_debugging_action_trial_is_shown_apart_from_the_world_it_copies(
+    cylinder_bot_world, rclpy_node
 ) -> None:
-    """
-    The demo owns its executor even when it borrows an initialized ROS context.
-    """
-    monkeypatch.setenv(VisualizationOption.BACKEND, VisualizationBackend.CRAMERA.value)
-    demonstration = RecordingDemonstration(
-        world=cylinder_bot_world, used_robot=MinimalRobot
+    robot = cylinder_bot_world.get_semantic_annotations_by_type(MinimalRobot)[0]
+    executor = SimulatedPlanExecutor(
+        cylinder_bot_world,
+        context_extensions=robot_extensions(robot),
+        ros_node=rclpy_node,
+        debug=True,
     )
-    demonstration.run()
-    session = demonstration.ros_session
-    try:
-        demonstration.stop_visualization()
-        assert not session.spin_thread.is_alive()
-        assert demonstration.ros_session is None
-        assert rclpy_node.context.ok()
-    finally:
-        if session.spin_thread.is_alive():
-            session.stop()
+    trials = executor.child_chooser.trial
 
+    trial_executor = trials._trial_executor(trials._copy())
 
-def test_unscoped_browser_demo_releases_owned_ros_session(
-    monkeypatch, cylinder_bot_world, installed_scene
-) -> None:
-    """
-    An inspectable browser scene does not retain an unowned executor lifetime.
-    """
-    monkeypatch.setenv(VisualizationOption.BACKEND, VisualizationBackend.CRAMERA.value)
-    demonstration = RecordingDemonstration(
-        world=cylinder_bot_world, used_robot=MinimalRobot
-    )
-    demonstration.acquire_world()
-    session = demonstration.ros_session
-    provider = demonstration.visualization.provider
-    try:
-        demonstration.tear_down()
-        assert not session.spin_thread.is_alive()
-        assert demonstration.ros_session is None
-        assert not rclpy.ok()
-        assert not provider.stopped
-    finally:
-        demonstration.stop_visualization()
-
-
-# %% backend configuration isolation
-@pytest.mark.parametrize(
-    "backend",
-    [
-        VisualizationBackend.NONE,
-        VisualizationBackend.RVIZ,
-        VisualizationBackend.CRAMERA,
-    ],
-)
-def test_backend_selection_ignores_rerun_settings(
-    monkeypatch: pytest.MonkeyPatch,
-    backend: VisualizationBackend,
-) -> None:
-    monkeypatch.setenv(VisualizationOption.BACKEND, backend)
-    monkeypatch.setenv(VisualizationOption.RERUN_MODE, "missing-mode")
-    world = World()
-    selected = WorldVisualization.from_environment(world)
-    assert selected.backend is backend
-    assert selected.world is world
-
-
-def test_default_rerun_selection_reads_its_configuration(
-    monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
-) -> None:
-    target = tmp_path / "world.rrd"
-    monkeypatch.delenv(VisualizationOption.BACKEND, raising=False)
-    monkeypatch.setenv(VisualizationOption.RERUN_MODE, RerunMode.SAVE.value)
-    monkeypatch.setenv(VisualizationOption.RERUN_TARGET, str(target))
-    selected = WorldVisualization.from_environment(World(), VisualizationBackend.RERUN)
-    assert isinstance(selected, RerunVisualization)
-    assert selected.mode is RerunMode.SAVE
-    assert selected.target == str(target)
+    [shown] = [
+        extension
+        for extension in trial_executor.extensions
+        if isinstance(extension, RvizVisualization)
+    ]
+    assert shown.ros_node is rclpy_node
+    assert shown.frame_prefix == ActionTrialVisualization.FRAME_PREFIX
+    assert shown.marker_topic == ActionTrialVisualization.MARKER_TOPIC
+    assert shown.marker_alpha == trials.copy_marker_alpha
+    trials.discard()

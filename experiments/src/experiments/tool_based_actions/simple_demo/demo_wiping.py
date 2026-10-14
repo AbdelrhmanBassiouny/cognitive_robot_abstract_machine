@@ -20,7 +20,7 @@ from coraplex.robot_plans.actions.core.robot_body import (
     ParkArmsAction,
     SetGripperAction,
 )
-from coraplex.testing import setup_world, start_visualization
+from coraplex.testing import setup_world, selected_visualizations
 from coraplex.plans.context_extensions import RobotAccess
 from coraplex.plans.executors import SimulatedPlanExecutor
 from cramph.statechart import Statechart
@@ -32,8 +32,6 @@ def main() -> None:
     Build the demo world and run the plan on the simulated robot.
     """
     world = setup_world()
-    start_visualization(world)
-
     pr2 = PR2.from_world(world)
 
     sponge_body = attach_sponge(world, pr2.right_arm)
@@ -60,7 +58,11 @@ def main() -> None:
         ]
     )
 
-    executor = SimulatedPlanExecutor(world, context_extensions=[RobotAccess(pr2)])
+    executor = SimulatedPlanExecutor(
+        world,
+        context_extensions=[RobotAccess(pr2)],
+        extensions=selected_visualizations(),
+    )
     statechart = Statechart(context=executor.context)
     statechart.add_node(plan)
     executor.compile(statechart)

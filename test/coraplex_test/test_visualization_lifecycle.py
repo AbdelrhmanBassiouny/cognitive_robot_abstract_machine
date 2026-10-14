@@ -1,83 +1,54 @@
+"""
+A visualization releases whatever it acquired, however its start or stop fails.
+"""
+
 from __future__ import annotations
 
-from dataclasses import dataclass
 from unittest.mock import Mock
 
 import pytest
 import rclpy
 from rclpy.node import Node
-from typing_extensions import Self, Type
+from typing_extensions import Type
 
 import coraplex.visualization as visualization_module
-from coraplex.datastructures.enums import VisualizationBackend, VisualizationOption
-from coraplex.exceptions import VisualizationBackendUnavailable
-from coraplex.visualization import WorldVisualization
+from coraplex.visualization import RvizVisualization
 from semantic_digital_twin.world import World
 
-from .test_optional_visualization import ObservedScene, an_executor, installed_scene
+from .test_optional_visualization import (
+    VisualizationRecordingItsRuns,
+    an_ending_statechart,
+    an_executor,
+)
 
 
 # %% partial acquisition
-@dataclass
-class FailsDuringStart(ObservedScene):
-    def start(self) -> Self:
-        self.started = True
-        raise RuntimeError()
-
-
 def test_failed_publisher_creation_releases_owned_ros(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setenv(VisualizationOption.BACKEND, VisualizationBackend.RVIZ)
     monkeypatch.setattr(
         visualization_module, "VizMarkerPublisher", Mock(side_effect=RuntimeError)
     )
-    selected = WorldVisualization.from_environment(World())
+    selected = RvizVisualization()
     assert not rclpy.ok()
-    try:
-        with pytest.raises(RuntimeError):
-            selected.start()
-        assert not rclpy.ok()
-        assert selected.ros_node is None
-        assert not selected.is_rendering
-    finally:
-        selected.stop()
+    with pytest.raises(RuntimeError):
+        selected.start(World())
+    assert not rclpy.ok()
+    assert selected.ros_node is None
+    assert not selected.is_rendering
 
 
 def test_failed_node_creation_releases_owned_context(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setenv(VisualizationOption.BACKEND, VisualizationBackend.RVIZ)
     monkeypatch.setattr(rclpy, "create_node", Mock(side_effect=RuntimeError))
-    selected = WorldVisualization.from_environment(World())
+    selected = RvizVisualization()
     assert not rclpy.ok()
-    try:
-        with pytest.raises(RuntimeError):
-            selected.start()
-        assert not rclpy.ok()
-    finally:
-        selected.stop()
-
-
-def test_failed_plugin_start_stops_partially_started_provider(
-    monkeypatch: pytest.MonkeyPatch,
-    installed_scene: Mock,
-) -> None:
-    monkeypatch.setenv(VisualizationOption.BACKEND, VisualizationBackend.CRAMERA)
-    scene = FailsDuringStart(World())
-    installed_scene.return_value[0].load.return_value = FailsDuringStart
-    monkeypatch.setattr(
-        FailsDuringStart, "__new__", staticmethod(lambda cls, **arguments: scene)
-    )
-    selected = WorldVisualization.from_environment(scene.world)
     with pytest.raises(RuntimeError):
-        selected.start()
-    assert scene.started
-    assert scene.stopped
-    assert not selected.is_rendering
+        selected.start(World())
+    assert not rclpy.ok()
 
 
-# %% cleanup failures and reuse
 @pytest.mark.parametrize("failure_type", [RuntimeError, KeyboardInterrupt])
 def test_collision_setup_failure_closes_publisher_and_owned_ros(
     monkeypatch: pytest.MonkeyPatch, failure_type: Type[BaseException]
@@ -88,35 +59,15 @@ def test_collision_setup_failure_closes_publisher_and_owned_ros(
     monkeypatch.setattr(
         visualization_module, "VizMarkerPublisher", Mock(return_value=publisher)
     )
-    selected = visualization_module.RvizVisualization(
-        World(), collision_visualization=True
-    )
+    selected = RvizVisualization(collision_visualization=True)
     assert not rclpy.ok()
     with pytest.raises(failure_type) as caught:
-        selected.start()
+        selected.start(World())
     assert caught.value is failure
     publisher.stop.assert_called_once_with()
     assert selected.ros_node is None
     assert not selected.is_rendering
     assert not rclpy.ok()
-
-
-def test_publisher_stop_failure_still_releases_owned_ros(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    publisher = Mock()
-    publisher.stop.side_effect = RuntimeError()
-    monkeypatch.setattr(
-        visualization_module, "VizMarkerPublisher", Mock(return_value=publisher)
-    )
-    selected = visualization_module.RvizVisualization(World()).start()
-    with pytest.raises(RuntimeError):
-        selected.stop()
-    assert selected.ros_node is None
-    assert not selected.is_rendering
-    assert not rclpy.ok()
-    selected.stop()
-    publisher.stop.assert_called_once_with()
 
 
 def test_failed_publisher_start_preserves_borrowed_node(
@@ -126,49 +77,42 @@ def test_failed_publisher_start_preserves_borrowed_node(
     monkeypatch.setattr(
         visualization_module, "VizMarkerPublisher", Mock(side_effect=RuntimeError())
     )
-    selected = visualization_module.RvizVisualization(World(), ros_node=rclpy_node)
+    selected = RvizVisualization(ros_node=rclpy_node)
     with pytest.raises(RuntimeError):
-        selected.start()
+        selected.start(World())
     assert selected.ros_node is rclpy_node
     assert rclpy_node.context.ok()
     assert not selected.is_rendering
 
 
-def test_plugin_stop_failure_detaches_observers_and_allows_restart(
+# %% cleanup failures and reuse
+def test_publisher_stop_failure_still_releases_owned_ros(
     monkeypatch: pytest.MonkeyPatch,
-    installed_scene: Mock,
 ) -> None:
-    selected = visualization_module.PluginVisualization(World()).start()
-    provider = selected.provider
-    failure = Mock(side_effect=RuntimeError())
-    monkeypatch.setattr(provider, "stop", failure)
-    executor = an_executor()
-    selected.attach_plan(executor)
+    publisher = Mock()
+    publisher.stop.side_effect = RuntimeError()
+    monkeypatch.setattr(
+        visualization_module, "VizMarkerPublisher", Mock(return_value=publisher)
+    )
+    selected = RvizVisualization()
+    selected.start(World())
     with pytest.raises(RuntimeError):
         selected.stop()
-    assert executor.extensions == []
+    assert selected.ros_node is None
     assert not selected.is_rendering
-    selected.start()
-    try:
-        assert selected.provider is not provider
-        selected.attach_plan(executor)
-        assert executor.extensions == selected.provider.extensions
-    finally:
-        selected.stop()
-    failure.assert_called_once_with()
-    assert executor.extensions == []
+    assert not rclpy.ok()
+    selected.stop()
+    publisher.stop.assert_called_once_with()
 
 
-def test_plugin_entry_point_must_load_a_provider_class(installed_scene: Mock) -> None:
-    installed_scene.return_value[0].load.return_value = None
-    with pytest.raises(VisualizationBackendUnavailable) as caught:
-        visualization_module.PluginVisualization(World()).start()
-    assert caught.value.backend is VisualizationBackend.CRAMERA
+def test_a_failed_run_still_stops_the_visualization() -> None:
+    visualization = VisualizationRecordingItsRuns()
+    executor = an_executor(visualization)
+    statechart = an_ending_statechart(executor.context)
+    executor.compile(statechart)
 
+    with pytest.raises(TimeoutError):
+        executor.tick_until_end(timeout=0)
 
-def test_stopped_plugin_does_not_attach_observers(installed_scene: Mock) -> None:
-    selected = visualization_module.PluginVisualization(World())
-    executor = an_executor()
-    selected.attach_plan(executor)
-    assert executor.extensions == []
-    installed_scene.assert_not_called()
+    assert visualization.stops == 1
+    assert not visualization.is_rendering

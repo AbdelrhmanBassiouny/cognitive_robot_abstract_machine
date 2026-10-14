@@ -18,7 +18,7 @@ from coraplex.robot_plans.actions.core.navigation import NavigateAction
 from coraplex.robot_plans.actions.core.pick_up import PickUpAction
 from coraplex.robot_plans.actions.core.placing import PlaceAction
 from coraplex.robot_plans.actions.core.robot_body import ParkArmsAction
-from coraplex.testing import start_visualization
+from coraplex.testing import selected_visualizations
 from semantic_digital_twin.specifications.kinematic_structure_entities import (
     BodySpecification,
 )
@@ -213,7 +213,11 @@ def run(
     Carry the parcel from `source` to `destination` with `robot` in `world`, simulated,
     see :func:`build_statechart`.
     """
-    executor = SimulatedPlanExecutor(world, context_extensions=[RobotAccess(robot)])
+    executor = SimulatedPlanExecutor(
+        world,
+        context_extensions=[RobotAccess(robot)],
+        extensions=selected_visualizations(),
+    )
     executor.compile(build_statechart(executor.context, source, destination, turn))
     executor.execute()
 
@@ -224,8 +228,6 @@ robot = world.get_semantic_annotations_by_type(UnitreeG1)[0]
 # Keeps PELVIS_HEIGHT_ABOVE_FLOOR honest: the robot has to stand on the floor rather than
 # sink into it or hover above it.
 assert abs(lowest_collision_point_of(robot, world)) < 1e-3
-
-start_visualization(world)
 
 for _ in range(10):
     run(PICK_POSE, PLACE_POSE, -1.57, world, robot)
