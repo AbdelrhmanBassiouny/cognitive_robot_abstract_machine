@@ -37,7 +37,7 @@ items:
   pull_request_number: 509
   session: https://claude.ai/code/session_01FWkFPeHmYEXAemAcshyJAx
   notes: 'Bug PR, base main: removed the unused RWXNode import from class_diagram.py. Adds the
-    fresh-interpreter probe (test/krrood_test/dataset/loaded_top_level_packages.py) later items reuse.'
+    fresh-interpreter test pattern (python -X importtime) later items reuse.'
 - id: matplotlib-optional
   title: matplotlib is imported only when drawing
   branch: null
@@ -46,7 +46,7 @@ items:
   depends_on: [symbol-graph-without-matplotlib]
   notes: 'User-approved option 1: graph_visualizer.py and RDR import matplotlib inside the drawing
     methods after check_dependencies() raises a custom exception naming the extra. Adds the AGENTS.md
-    exception for optional-extra imports. Stacked on #509 for its probe; test that importing EQL factories
+    exception for optional-extra imports. Stacked on #509 for its test pattern; test that importing EQL factories
     and ORMatic loads no matplotlib.'
 - id: type-hint-resolver-skips-missing-modules
   title: Type-hint resolution skips modules that are not installed
@@ -64,7 +64,7 @@ items:
   track: guards
   depends_on: [symbol-graph-without-matplotlib]
   notes: 'Core subpackages declared once. A test walks every core module (pkgutil), imports each in a
-    fresh interpreter (#509 probe) and fails on any package outside stdlib and core''s declared
+    fresh interpreter (#509 -X importtime pattern) and fails on any package outside stdlib and core''s declared
     dependencies (importlib.metadata, transitive). import-linter (user-approved dev dependency) forbids
     core importing `all` modules; option-1 method-local imports listed as exceptions. Both start with a
     list of today''s offenders that items 4-6 shrink and nothing may grow.'
