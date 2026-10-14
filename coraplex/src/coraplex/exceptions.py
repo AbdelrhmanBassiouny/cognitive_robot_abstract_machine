@@ -6,7 +6,6 @@ from typing_extensions import TYPE_CHECKING, List, Type
 
 from krrood.exceptions import DataclassException
 from coraplex.datastructures.enums import (
-    ExecutionType,
     VisualizationBackend,
     VisualizationOption,
 )
@@ -335,32 +334,6 @@ class ObjectIsNotHeld(DataclassException):
 
     def suggest_correction(self) -> str:
         return "place the object after a pick-up of it."
-
-
-@dataclass
-class FingerWidthNeedsPhysics(DataclassException):
-    """
-    Raised when fingers are sent to a width where nothing pushes back on them.
-    """
-
-    execution_type: ExecutionType
-    """
-    The execution type the plan was performed under.
-    """
-
-    def error_message(self) -> str:
-        return (
-            f"closing the fingers to a width has no effect under "
-            f"{self.execution_type}"
-        )
-
-    def suggest_correction(self) -> str:
-        return (
-            "Perform the plan with a PhysicallySimulatedPlanExecutor or on the real "
-            "robot, where the fingers meet the object. Where the world is only moved "
-            "kinematically, a held object hangs off the tool frame and a gripper state "
-            "of its own is enough: use SetGripperAction instead."
-        )
 
 
 @dataclass

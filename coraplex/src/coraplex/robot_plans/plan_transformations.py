@@ -8,6 +8,7 @@ from typing_extensions import TYPE_CHECKING, Generic, List, Optional
 from coraplex.datastructures.enums import (
     DetectionTechnique,
     InsertionPosition,
+    PerceptionSource,
 )
 from coraplex.exceptions import (
     GraspHasNoClosingGoal,
@@ -16,6 +17,7 @@ from coraplex.exceptions import (
 from coraplex.locations.locations import ReachabilityLocation
 from coraplex.querying.grasp_closeness import ClosestGrasps
 from coraplex.plans.plan_transformation import (
+    ConfigurationTransformation,
     InsertionTransformation,
     MatchedType,
     PlanTransformation,
@@ -28,6 +30,7 @@ from coraplex.robot_plans.actions.composite.transporting import (
 )
 from coraplex.robot_plans.actions.core.misc import DetectAction
 from coraplex.robot_plans.actions.core.navigation import (
+    DrivesBase,
     LookAtAction,
     NavigateAction,
 )
@@ -40,6 +43,7 @@ from coraplex.robot_plans.actions.core.robot_body import (
     MoveFingersToWidthAction,
     ParkArmsAction,
 )
+from coraplex.robot_plans.mixins import ReattachesBodies
 from cramph.composites import CramLanguageNode, StatementNode
 from cramph.node import StatechartNode
 from giskardpy.motion_statechart.goals.gripper import MoveGripper
@@ -64,7 +68,6 @@ from semantic_digital_twin.semantic_annotations.mixins import HasRootBody
 from semantic_digital_twin.semantic_annotations.semantic_annotations import Drawer
 from semantic_digital_twin.spatial_types.spatial_types import Pose
 from coraplex.plans.context_extensions import (
-    ExecutionMode,
     RobotAccess,
     StatementGrounding,
 )
@@ -439,10 +442,7 @@ class CloseFingersToObjectWidth(PlanTransformation[GraspingAction]):
 
     def is_applicable(self, plan_node: GraspingAction) -> bool:
         return (
-            plan_node.context.require_extension(
-                ExecutionMode
-            ).execution_type.objects_push_back
-            and isinstance(plan_node.arm.end_effector, HasTwoFingers)
+            isinstance(plan_node.arm.end_effector, HasTwoFingers)
             and plan_node.grasp.graspable.root.has_collision()
         )
 
@@ -476,3 +476,55 @@ class CloseFingersToObjectWidth(PlanTransformation[GraspingAction]):
             ):
                 return step
         raise GraspHasNoClosingGoal(plan_node)
+
+
+# %% putting the base at a pose where nothing has to drive it there
+
+
+@dataclass
+class WriteTheOdometryInsteadOfDriving(ConfigurationTransformation[DrivesBase]):
+    """
+    Puts the base at the poses it drives to by writing the odometry, where the world is
+    moved kinematically and so has no drive to follow a commanded pose.
+    """
+
+    def is_applicable(self, plan_node: DrivesBase) -> bool:
+        return True
+
+    def apply(self, plan_node: DrivesBase) -> None:
+        plan_node.writes_odometry = True
+
+
+# %% detecting with the real robot's perception
+
+
+@dataclass
+class DetectWithRoboKudo(ConfigurationTransformation[DetectAction]):
+    """
+    Answers a detection with RoboKudo instead of the world model, where the world model
+    does not know what is in front of the robot.
+    """
+
+    def is_applicable(self, plan_node: DetectAction) -> bool:
+        return True
+
+    def apply(self, plan_node: DetectAction) -> None:
+        plan_node.perception_source = PerceptionSource.ROBOKUDO
+
+
+# %% letting contact carry a body
+
+
+@dataclass
+class LetContactCarryTheBodies(ConfigurationTransformation[ReattachesBodies]):
+    """
+    Leaves the world model alone where an action would move a body under a new parent,
+    where a running physics moves the world: contact carries the body there, and putting
+    a picked object under the gripper would hold it whether or not the grasp did.
+    """
+
+    def is_applicable(self, plan_node: ReattachesBodies) -> bool:
+        return True
+
+    def apply(self, plan_node: ReattachesBodies) -> None:
+        plan_node.reattaches_in_world_model = False

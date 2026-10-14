@@ -17,9 +17,8 @@ from coraplex.robot_plans.actions.core.navigation import (
 )
 from coraplex.robot_plans.actions.core.robot_body import MoveTorsoAction
 from coraplex.robot_plans.robot_specific_plan_transformations import (
-    DriveSimulatedTiagoWithItsDifferentialDrive,
+    DriveTiagoWithItsDifferentialDrive,
     DriveStretchWithItsDifferentialDrive,
-    KeepStretchInFrontOfTheContainerItCloses,
 )
 from cramph.composites import Parallel, Sequence, StatementNode
 from cramph.context import ContextExtension
@@ -85,11 +84,12 @@ def rewriting_with(
 
 def every_base_transformation() -> List[PlanTransformation]:
     """
-    :return: The transformations that change how a robot drives its base.
+    :return: The transformations a plan may be given that change how a robot drives its
+        base.
     """
     return [
         DriveStretchWithItsDifferentialDrive(),
-        DriveSimulatedTiagoWithItsDifferentialDrive(),
+        DriveTiagoWithItsDifferentialDrive(),
     ]
 
 
@@ -271,10 +271,16 @@ def test_stretch_drives_every_leg_of_a_path_with_its_differential_drive(
     np.testing.assert_allclose(legs[-1].goal_pose.to_np(), target.to_np())
 
 
-def test_a_simulated_tiago_drives_with_its_differential_drive(tiago_context):
+@pytest.mark.parametrize("build_executor", [simulated_executor, robot_executor])
+def test_a_tiago_given_its_differential_drive_drives_with_it(
+    tiago_context, build_executor
+):
+    """
+    A real Tiago cannot be put at a pose, so the drive is not tied to simulation.
+    """
     world, robot, extensions = tiago_context
-    executor = simulated_executor(
-        rewriting_with(extensions, DriveSimulatedTiagoWithItsDifferentialDrive())
+    executor = build_executor(
+        rewriting_with(extensions, DriveTiagoWithItsDifferentialDrive())
     )
 
     action = prepared(navigation_to(world), executor)
@@ -282,16 +288,14 @@ def test_a_simulated_tiago_drives_with_its_differential_drive(tiago_context):
     assert_drives_differentially_to(action.action_body, action, robot)
 
 
-def test_the_real_tiago_keeps_its_drive_goal(tiago_context):
+def test_a_simulated_tiago_not_given_its_differential_drive_writes_the_odometry(
+    tiago_context,
+):
     world, robot, extensions = tiago_context
-    executor = robot_executor(rewriting_with(extensions, *every_base_transformation()))
 
-    action = prepared(navigation_to(world), executor)
+    action = prepared(navigation_to(world), simulated_executor(extensions))
 
-    goal = action.action_body
-    assert type(goal) is CartesianPose
-    assert goal.root_link is world.root
-    assert goal.tip_link is robot.root
+    assert type(action.action_body) is SetOdometry
 
 
 @pytest.mark.parametrize(
@@ -410,11 +414,9 @@ def test_a_simulated_stretch_stays_in_front_of_the_container_it_closes(
     stretch_apartment_context,
 ):
     world, robot, extensions = stretch_apartment_context
-    unchanged = prepared(close_action(world, robot), simulated_executor(extensions))
+    unchanged = prepared(close_action(world, robot), robot_executor(extensions))
     default_close = closing_step_of(unchanged)
-    executor = simulated_executor(
-        rewriting_with(extensions, KeepStretchInFrontOfTheContainerItCloses())
-    )
+    executor = simulated_executor(extensions)
 
     action = prepared(close_action(world, robot), executor)
 
@@ -442,9 +444,7 @@ def test_a_simulated_stretch_stays_in_front_of_the_container_it_closes(
 
 def test_the_real_stretch_closes_a_container_unchanged(stretch_apartment_context):
     world, robot, extensions = stretch_apartment_context
-    executor = robot_executor(
-        rewriting_with(extensions, KeepStretchInFrontOfTheContainerItCloses())
-    )
+    executor = robot_executor(extensions)
 
     action = prepared(close_action(world, robot), executor)
 
@@ -453,9 +453,7 @@ def test_the_real_stretch_closes_a_container_unchanged(stretch_apartment_context
 
 def test_a_robot_of_another_type_closes_a_container_unchanged(pr2_apartment_context):
     world, robot, extensions = pr2_apartment_context
-    executor = simulated_executor(
-        rewriting_with(extensions, KeepStretchInFrontOfTheContainerItCloses())
-    )
+    executor = simulated_executor(extensions)
 
     action = prepared(close_action(world, robot), executor)
 

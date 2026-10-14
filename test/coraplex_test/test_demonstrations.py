@@ -17,7 +17,6 @@ import rclpy
 from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
 from typing_extensions import Iterator, List
 
-from coraplex.datastructures.enums import ExecutionType
 from coraplex.demonstrations import RobotDemonstration, RobotDemonstrationRosSession
 from semantic_digital_twin.robots.minimal_robot import MinimalRobot
 from semantic_digital_twin.world import World
@@ -25,8 +24,7 @@ from cramph.threaded_nodes import FunctionCall
 
 from ..plan_running import robot_extensions
 from cramph.context import ContextExtension, StatechartContext
-from coraplex.plans.context_extensions import ExecutionMode
-from coraplex.plans.executors import SimulatedPlanExecutor
+from coraplex.plans.executors import PlanExecutor, SimulatedPlanExecutor
 from coraplex.plans.failures import MotionExceededSimulationTimeLimit
 from cramph.statechart import Statechart
 
@@ -68,14 +66,9 @@ class RecordingDemonstration(RobotDemonstration):
     How often the ROS session was released.
     """
 
-    observed_execution_type: ExecutionType | None = field(default=None)
+    observed_executor: PlanExecutor | None = field(default=None)
     """
-    What carried out the motions of the plan while it ran.
-    """
-
-    observed_collision_avoidance: bool | None = field(default=None)
-    """
-    Collision avoidance setting in force while the plan ran.
+    The executor the plan was run with.
     """
 
     observed_log_level: int | None = field(default=None)
@@ -124,11 +117,16 @@ class RecordingDemonstration(RobotDemonstration):
         """
         if self.fail_the_plan:
             raise PlanDeliberatelyFailed()
-        execution_mode = context.require_extension(ExecutionMode)
-        self.observed_execution_type = execution_mode.execution_type
-        self.observed_collision_avoidance = execution_mode.collision_avoidance
         self.observed_segmenting_events = self.segmenting_events
         self.observed_log_level = logging.getLogger("coraplex").level
+
+    def create_executor(self, world: World) -> PlanExecutor:
+        """
+        Differs from :meth:`RobotDemonstration.create_executor` in also recording the
+        executor in :attr:`observed_executor`.
+        """
+        self.observed_executor = super().create_executor(world)
+        return self.observed_executor
 
     def tear_down(self) -> None:
         self.tear_down_calls += 1
@@ -202,8 +200,8 @@ def test_plan_runs_in_the_demonstrations_execution_environment(cylinder_bot_worl
 
     demonstration.run()
 
-    assert demonstration.observed_execution_type is SimulatedPlanExecutor.execution_type
-    assert demonstration.observed_collision_avoidance is True
+    assert type(demonstration.observed_executor) is SimulatedPlanExecutor
+    assert demonstration.observed_executor.collision_avoidance is True
 
 
 def test_run_returns_the_world_it_acted_on(cylinder_bot_world):

@@ -5,10 +5,6 @@ from dataclasses import dataclass, field
 
 from typing_extensions import Optional
 
-from coraplex.datastructures.enums import ExecutionType
-from coraplex.plans.context_extensions import ExecutionMode
-from krrood.ormatic.utils import classproperty
-from cramph.context import ContextExtension
 from coraplex.exceptions import NoFloorBelowRobot, NotOnASingleLevelException
 from cramph.node import StatechartNode
 from coraplex.robot_plans.actions.base import Action
@@ -67,19 +63,19 @@ class DrivesBase(Action, ABC):
     to move sideways.
     """
 
-    @classproperty
-    def context_extensions_required_to_expand(
-        cls,
-    ) -> tuple[type[ContextExtension], ...]:
-        return super().context_extensions_required_to_expand + (ExecutionMode,)
+    writes_odometry: bool = field(default=False, init=False)
+    """
+    Whether the base is put at a pose by writing the odometry, instead of being driven
+    there.
+    """
 
     def _drive_to(self, target: Pose) -> MotionStatechartNode:
         """
         :param target: Where the base should end up.
-        :return: The node that puts the base there. A differential drive gets a goal of
-            its own; otherwise a kinematically simulated run writes the odometry
-            directly, because there is no drive to follow the pose, and any other
-            commands the pose and lets the controller drive there.
+        :return: The node that puts the base there: a goal of its own for a
+            differential drive, otherwise the odometry written directly where the base
+            :attr:`writes_odometry`, and otherwise the commanded pose the controller
+            drives to.
         """
         if self.drives_differentially:
             return DifferentialDriveBaseGoal(
@@ -87,10 +83,7 @@ class DrivesBase(Action, ABC):
                 goal_pose=target,
                 threshold=self.base_pose_threshold,
             )
-        if (
-            self.context.require_extension(ExecutionMode).execution_type
-            is ExecutionType.KINEMATICALLY_SIMULATED
-        ):
+        if self.writes_odometry:
             return SetOdometry(
                 base_pose=target.homogeneous_matrix,
                 odom_connection=self.robot.root.parent_connection,

@@ -10,23 +10,18 @@ import pytest
 
 from cramph.exceptions import EmptyStatechartError
 
-from coraplex.datastructures.enums import ExecutionType
 from coraplex.exceptions import (
     MotionDidNotFinish,
     PlanNotCompiled,
 )
-from coraplex.plans.context_extensions import ExecutionMode
-from coraplex.plans.executors import (
-    PhysicallySimulatedPlanExecutor,
-    RealRobotPlanExecutor,
-    SimulatedPlanExecutor,
-)
+from coraplex.plans.plan_transformation import PlanRewriting
 from coraplex.plans.failures import (
     MotionExceededSimulationTimeLimit,
     MotionMadeNoProgress,
     MotionViolatedCollisionAvoidance,
 )
 from coraplex.robot_plans.actions.core.pick_up import ReachAction
+from coraplex.robot_plans.plan_transformations import DetectBeforeGrasp
 from coraplex.robot_plans.actions.core.robot_body import (
     MoveTorsoAction,
     ParkArmsAction,
@@ -162,20 +157,6 @@ def test_a_statechart_of_another_context_is_refused(pr2_apartment_context):
 
     with pytest.raises(StatechartOfDifferentContextError):
         simulated_executor(extensions).compile(statechart)
-
-
-@pytest.mark.parametrize(
-    "executor_type, drives_a_simulated_robot",
-    [
-        (SimulatedPlanExecutor, True),
-        (PhysicallySimulatedPlanExecutor, True),
-        (RealRobotPlanExecutor, False),
-    ],
-)
-def test_an_executor_says_whether_it_drives_a_simulated_robot(
-    executor_type, drives_a_simulated_robot
-):
-    assert executor_type.simulated is drives_a_simulated_robot
 
 
 # %% how long a plan may take
@@ -352,55 +333,45 @@ def test_a_physically_simulated_plan_is_given_the_same_time_limit(
         executor.execute()
 
 
-# %% what carries out the motions of a plan
+# %% adapting a plan to its executor
 
 
-@pytest.mark.parametrize(
-    "executor_type, execution_type",
-    [
-        (SimulatedPlanExecutor, ExecutionType.KINEMATICALLY_SIMULATED),
-        (PhysicallySimulatedPlanExecutor, ExecutionType.PHYSICALLY_SIMULATED),
-        (RealRobotPlanExecutor, ExecutionType.REAL),
-    ],
-)
-def test_an_executor_says_what_carries_out_its_plans(executor_type, execution_type):
-    assert executor_type.execution_type is execution_type
+def test_a_plan_is_adapted_after_the_transformations_it_was_given(
+    pr2_apartment_context,
+):
+    """
+    The executor's own transformations adapt an action before the plan's transformations
+    are offered it.
+    """
+    world, robot_view, extensions = pr2_apartment_context
+    detecting = DetectBeforeGrasp()
+    executor = physically_simulated_executor(
+        [*extensions, PlanRewriting(transformations=[detecting])]
+    )
+
+    rewriting = executor.context.require_extension(PlanRewriting)
+
+    assert rewriting.transformations == [*executor.plan_adaptations, detecting]
 
 
-def test_an_executor_tells_its_plans_what_carries_them_out(pr2_apartment_context):
+def test_a_plan_given_no_transformations_is_still_adapted(pr2_apartment_context):
     world, robot_view, extensions = pr2_apartment_context
     executor = physically_simulated_executor(extensions)
 
-    execution_mode = executor.context.require_extension(ExecutionMode)
+    rewriting = executor.context.require_extension(PlanRewriting)
 
-    assert (
-        execution_mode.execution_type is PhysicallySimulatedPlanExecutor.execution_type
-    )
+    assert rewriting.transformations == executor.plan_adaptations
 
 
-def test_objects_push_back_where_the_robot_is_real_or_physically_simulated():
+def test_the_rewriting_a_plan_was_given_is_left_as_it_was(pr2_apartment_context):
     """
-    Whether contact decides what is held is what tells the two simulated types apart,
-    and a plan that depends on contact has to be able to ask.
+    The same context extensions may configure executors of different kinds, so one
+    executor's adaptations must not reach another through them.
     """
-    pushing_back = {
-        execution_type
-        for execution_type in ExecutionType
-        if execution_type.objects_push_back
-    }
+    world, robot_view, extensions = pr2_apartment_context
+    detecting = DetectBeforeGrasp()
+    given = PlanRewriting(transformations=[detecting])
 
-    assert pushing_back == {ExecutionType.REAL, ExecutionType.PHYSICALLY_SIMULATED}
+    physically_simulated_executor([*extensions, given])
 
-
-def test_only_a_physically_simulated_world_follows_physics():
-    """
-    The real robot's world is a belief that has to be told what the gripper holds; only
-    a world synchronised from a running physics is moved by contact.
-    """
-    following_physics = {
-        execution_type
-        for execution_type in ExecutionType
-        if execution_type.world_follows_physics
-    }
-
-    assert following_physics == {ExecutionType.PHYSICALLY_SIMULATED}
+    assert given.transformations == [detecting]

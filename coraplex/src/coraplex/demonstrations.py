@@ -263,7 +263,7 @@ class RobotDemonstration(ABC):
         self.ros_session = RobotDemonstrationRosSession.start(self.ros_node_name)
         VisualizationSession.register(self.stop_visualization)
 
-        if self.executor_type.simulated:
+        if issubclass(self.executor_type, SimulatedPlanExecutor):
             world = self.build_simulated_world()
             self.visualization = WorldVisualization.from_environment(
                 world,

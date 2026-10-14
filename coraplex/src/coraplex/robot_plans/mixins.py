@@ -3,7 +3,7 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
-from coraplex.plans.context_extensions import ExecutionMode, MotionToleranceConfig
+from coraplex.plans.context_extensions import MotionToleranceConfig
 from coraplex.robot_plans.actions.base import Action
 from cramph.context import ContextExtension
 from cramph.node import StatechartNode
@@ -435,11 +435,11 @@ class ReattachesBodies(Action, ABC):
     it picks up or a robot it carries along.
     """
 
-    @classproperty
-    def context_extensions_required_to_expand(
-        cls,
-    ) -> tuple[type[ContextExtension], ...]:
-        return super().context_extensions_required_to_expand + (ExecutionMode,)
+    reattaches_in_world_model: bool = field(default=True, init=False)
+    """
+    Whether the world model is told that a body moved under its new parent, rather than
+    contact carrying it there.
+    """
 
     def reattach(
         self, body: KinematicStructureEntity, new_parent: KinematicStructureEntity
@@ -447,13 +447,10 @@ class ReattachesBodies(Action, ABC):
         """
         :param body: The root of the branch to move.
         :param new_parent: The body the branch is moved under.
-        :return: The node moving `body` under `new_parent`, none where the world follows
-            a running physics: contact carries the body there, and putting a picked
-            object under the gripper would hold it whether or not the grasp did.
+        :return: The node moving `body` under `new_parent`, none unless this action
+            :attr:`reattaches_in_world_model`.
         """
-        if self.context.require_extension(
-            ExecutionMode
-        ).execution_type.world_follows_physics:
+        if not self.reattaches_in_world_model:
             return []
         return [MoveBranch(body=body, new_parent=new_parent)]
 

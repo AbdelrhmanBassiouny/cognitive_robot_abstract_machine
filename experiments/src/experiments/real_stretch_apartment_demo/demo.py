@@ -55,7 +55,6 @@ from coraplex.robot_plans.actions.core.robot_body import (
 from coraplex.robot_plans.plan_transformations import DetectBeforeGrasp
 from coraplex.robot_plans.robot_specific_plan_transformations import (
     DriveStretchWithItsDifferentialDrive,
-    KeepStretchInFrontOfTheContainerItCloses,
 )
 from krrood.entity_query_language.factories import a
 from semantic_digital_twin.specifications.connections import Connection6DoFSpecification
@@ -161,7 +160,6 @@ class StretchApartmentDemonstration(RobotDemonstration):
                 transformations=[
                     DetectBeforeGrasp(),
                     DriveStretchWithItsDifferentialDrive(),
-                    KeepStretchInFrontOfTheContainerItCloses(),
                 ]
             ),
         ]

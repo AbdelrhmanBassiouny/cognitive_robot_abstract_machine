@@ -4,7 +4,6 @@ from dataclasses import dataclass, field
 
 from typing_extensions import Optional
 
-from coraplex.datastructures.enums import ExecutionType
 from cramph.context import ContextExtension
 from krrood.entity_query_language.backends import (
     EntityQueryLanguageGenerativeBackend,
@@ -96,24 +95,4 @@ class MotionToleranceConfig(ContextExtension):
         residual orientation error, so reusing the (much tighter) position tolerance
         as the rotation tolerance can leave the task perpetually unfinished, stalling
         the rest of the plan behind it.
-    """
-
-
-# %% what the executor tells the plan
-
-
-@dataclass
-class ExecutionMode(ContextExtension):
-    """
-    How the executor running a statechart executes it, added by that executor.
-    """
-
-    execution_type: ExecutionType
-    """
-    What carries out the motions of the plan.
-    """
-
-    collision_avoidance: bool = False
-    """
-    Whether the robot avoids colliding with its surroundings and with itself.
     """

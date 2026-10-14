@@ -46,6 +46,7 @@ from coraplex.robot_plans.actions.core.misc import DetectAction
 from coraplex.robot_plans.actions.core.pick_up import PickUpAction
 from coraplex.perception import PerceptionTask
 from .conftest import motion_nodes_in_physics_of, motion_nodes_of
+from ..plan_running import robot_executor, statechart_of
 from giskardpy.motion_control import MotionControl
 from cramph.context import StatechartContext
 from cramph.data_types import ObservationStateValues
@@ -952,6 +953,21 @@ def test_detect_action_reads_the_world_model_when_the_robot_is_physically_simula
         if isinstance(node, PerceptionTask)
     ]
     assert task.answered_by is PerceptionSource.WORLD_MODEL
+
+
+def test_detect_action_asks_robokudo_on_the_real_robot(pr2_apartment_context):
+    """
+    Only the real robot does not know what is in front of it, so only it asks its
+    perception pipeline.
+    """
+    world, view, extensions = pr2_apartment_context
+    plan = DetectAction(DetectionTechnique.TYPES, object_sem_annotation=Milk)
+    executor = robot_executor(extensions)
+
+    executor.prepare(statechart_of(executor, plan))
+
+    [task] = [node for node in plan.descendants if isinstance(node, PerceptionTask)]
+    assert task.answered_by is PerceptionSource.ROBOKUDO
 
 
 def test_perception_task_survives_a_chart_round_trip(

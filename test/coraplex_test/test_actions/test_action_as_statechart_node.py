@@ -11,7 +11,6 @@ from coraplex.plans.executors import PlanExecutor
 from coraplex.robot_plans.actions.base import Action
 from coraplex.datastructures.trajectory import PoseTrajectory
 from coraplex.robot_plans.actions.core.navigation import LookAtAction, NavigateAction
-from coraplex.exceptions import FingerWidthNeedsPhysics
 from coraplex.robot_plans.actions.core.robot_body import (
     FollowToolCenterPointPathAction,
     MoveFingersToWidthAction,
@@ -568,27 +567,3 @@ def test_a_squeeze_sends_the_fingers_past_the_width(simple_pr2_context):
     apart = touching.action_body.goal_point.to_np()[:3].ravel()
     pressed = pressing.action_body.goal_point.to_np()[:3].ravel()
     assert np.linalg.norm(pressed) == pytest.approx(np.linalg.norm(apart) - 2 * squeeze)
-
-
-def test_fingers_are_sent_to_a_width_on_the_real_robot(simple_pr2_context):
-    _, robot, extensions = simple_pr2_context
-    action = MoveFingersToWidthAction(gripper=robot.left_arm.end_effector, width=0.04)
-
-    _expanded(action, extensions, robot_executor(extensions))
-
-    assert isinstance(action.action_body, CartesianPosition)
-
-
-def test_fingers_are_not_sent_to_a_width_where_nothing_pushes_back(
-    simple_pr2_context,
-):
-    """
-    Closing to an object's own width only means something where the object resists; in a
-    world moved kinematically a held body hangs off the tool frame however the fingers
-    stand.
-    """
-    _, robot, extensions = simple_pr2_context
-    action = MoveFingersToWidthAction(gripper=robot.left_arm.end_effector, width=0.04)
-
-    with pytest.raises(FingerWidthNeedsPhysics):
-        _expanded(action, extensions)

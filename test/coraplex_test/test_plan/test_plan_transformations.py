@@ -85,7 +85,12 @@ from semantic_digital_twin.world_description.connections import FixedConnection
 from semantic_digital_twin.world_description.world_entity import Body
 from ..conftest import left_or_only_arm, physically_simulated_executor
 from ..test_transporting import pick_and_place_of_the_milk
-from ...plan_running import context_of, simulated_executor, statechart_of
+from ...plan_running import (
+    context_of,
+    robot_executor,
+    simulated_executor,
+    statechart_of,
+)
 from ...sampling import SAMPLING_SEED
 
 # %% expanding a plan without running it
@@ -1383,8 +1388,11 @@ def grasp_of(milk: Milk) -> GraspCandidate:
     return GraspCandidate.from_body_origin(milk)
 
 
+@pytest.mark.parametrize(
+    "executor_for", [physically_simulated_executor, robot_executor]
+)
 def test_a_grasp_closes_to_the_objects_width_where_objects_push_back(
-    pr2_apartment_context,
+    pr2_apartment_context, executor_for
 ):
     world, view, extensions = pr2_apartment_context
     milk = world.get_semantic_annotations_by_type(Milk)[0]
@@ -1392,8 +1400,7 @@ def test_a_grasp_closes_to_the_objects_width_where_objects_push_back(
     plan = rewritten(
         GraspingAction(grasp_of(milk), left_or_only_arm(view)),
         extensions,
-        [CloseFingersToObjectWidth()],
-        physically_simulated_executor,
+        executor_for=executor_for,
     )
 
     assert shutting_goals_of(plan) == []
@@ -1412,11 +1419,7 @@ def test_a_grasp_still_shuts_the_gripper_where_nothing_pushes_back(
     world, view, extensions = pr2_apartment_context
     milk = world.get_semantic_annotations_by_type(Milk)[0]
 
-    plan = rewritten(
-        GraspingAction(grasp_of(milk), left_or_only_arm(view)),
-        extensions,
-        [CloseFingersToObjectWidth()],
-    )
+    plan = rewritten(GraspingAction(grasp_of(milk), left_or_only_arm(view)), extensions)
 
     assert width_actions_of(plan) == []
     assert len(shutting_goals_of(plan)) == 1
@@ -1430,8 +1433,10 @@ def test_the_squeeze_is_handed_on_to_the_fingers(pr2_apartment_context):
     plan = rewritten(
         GraspingAction(grasp_of(milk), left_or_only_arm(view)),
         extensions,
-        [CloseFingersToObjectWidth(squeeze=squeeze)],
-        physically_simulated_executor,
+        executor_for=lambda extensions: physically_simulated_executor(
+            extensions,
+            plan_adaptations=[CloseFingersToObjectWidth(squeeze=squeeze)],
+        ),
     )
 
     assert [action.squeeze for action in width_actions_of(plan)] == [squeeze]
@@ -1454,8 +1459,7 @@ def test_an_object_without_collision_is_still_held_by_shutting_the_gripper(
     plan = rewritten(
         GraspingAction(grasp_of(shapeless), left_or_only_arm(view)),
         extensions,
-        [CloseFingersToObjectWidth()],
-        physically_simulated_executor,
+        executor_for=physically_simulated_executor,
     )
 
     assert width_actions_of(plan) == []

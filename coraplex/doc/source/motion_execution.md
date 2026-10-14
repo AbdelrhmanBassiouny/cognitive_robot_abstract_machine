@@ -48,9 +48,8 @@ executor.execute()
 A plan for the real robot is built and run the same way in a
 `RealRobotPlanExecutor(world, context_extensions=[RobotAccess(robot)], ros_node=node)`.
 Code that is told how to execute at run time takes the executor type, as
-{attr}`~coraplex.demonstrations.RobotDemonstration.executor_type` does. The nodes of a plan read what carries out
-their motions, an {class}`~coraplex.datastructures.enums.ExecutionType`, from the
-{class}`~coraplex.plans.context_extensions.ExecutionMode` the executor puts into the context.
+{attr}`~coraplex.demonstrations.RobotDemonstration.executor_type` does. A plan does not ask what executes it: each
+executor adapts it with its own {attr}`~coraplex.plans.executors.PlanExecutor.plan_adaptations`, see below.
 
 A plan can also be performed against a physically simulated world, which has to be started with
 {meth}`~semantic_digital_twin.adapters.multi_sim.MujocoSim.start_stepped_simulation` already:
@@ -103,21 +102,37 @@ executor = SimulatedPlanExecutor(
 - {meth}`~coraplex.plans.executors.PlanExecutor.prepare` builds the chart without compiling or running it, for
   inspecting a plan as it would run.
 
+## Adapting a plan to its executor
+
+Every executor offers each node of a plan to its
+{attr}`~coraplex.plans.executors.PlanExecutor.plan_adaptations` before the transformations of the plan's own
+{class}`~coraplex.plans.plan_transformation.PlanRewriting`:
+
+- {class}`~coraplex.plans.executors.SimulatedPlanExecutor` puts the base at its goal by writing the odometry
+  ({class}`~coraplex.robot_plans.plan_transformations.WriteTheOdometryInsteadOfDriving`) and keeps a Stretch in front
+  of the container it closes.
+- {class}`~coraplex.plans.executors.PhysicallySimulatedPlanExecutor` closes a grasp to the object's width
+  ({class}`~coraplex.robot_plans.plan_transformations.CloseFingersToObjectWidth`) and lets contact carry a picked
+  object ({class}`~coraplex.robot_plans.plan_transformations.LetContactCarryTheBodies`).
+- {class}`~coraplex.plans.executors.RealRobotPlanExecutor` closes a grasp to the object's width and detects with
+  RoboKudo ({class}`~coraplex.robot_plans.plan_transformations.DetectWithRoboKudo`).
+
+An executor is given other adaptations as `plan_adaptations=[...]`.
+
 ## Robot-Specific Motions
 
 Some robots need a different implementation of a motion. Such a robot gets a
 {class}`~coraplex.plans.plan_transformation.PlanTransformation` that replaces the goal an action builds once the
-action is expanded, and that applies only to its robot type, and where needed only to simulated or only to real
-execution:
+action is expanded, and that applies only to its robot type:
 
 - {class}`~coraplex.robot_plans.robot_specific_plan_transformations.DriveStretchWithItsDifferentialDrive` and
-  {class}`~coraplex.robot_plans.robot_specific_plan_transformations.DriveSimulatedTiagoWithItsDifferentialDrive` drive the base with a
+  {class}`~coraplex.robot_plans.robot_specific_plan_transformations.DriveTiagoWithItsDifferentialDrive` drive the base with a
   {class}`~giskardpy.motion_statechart.goals.cartesian_goals.DifferentialDriveBaseGoal`, which arrives within the
   {attr}`~coraplex.robot_plans.actions.core.navigation.DrivesBase.base_pose_threshold` of the action.
-- {class}`~coraplex.robot_plans.robot_specific_plan_transformations.KeepStretchInFrontOfTheContainerItCloses` keeps a simulated
-  Stretch in front of the container it closes.
+- {class}`~coraplex.robot_plans.robot_specific_plan_transformations.KeepStretchInFrontOfTheContainerItCloses` keeps a
+  kinematically simulated Stretch in front of the container it closes.
 
-A transformation takes effect only for a plan whose executor was given it:
+Apart from an executor's own adaptations, a transformation takes effect only for a plan whose executor was given it:
 
 ```python
 executor = RealRobotPlanExecutor(
@@ -131,7 +146,9 @@ executor = RealRobotPlanExecutor(
 
 A transformation replaces the goal an action runs with
 {meth}`~coraplex.robot_plans.actions.base.Action.replace_action_body`, or with
-{meth}`~cramph.composites.CramLanguageNode.replace` for a step of a plan language node.
+{meth}`~cramph.composites.CramLanguageNode.replace` for a step of a plan language node. A
+{class}`~coraplex.plans.plan_transformation.ConfigurationTransformation` instead changes an action's settings right
+before it expands, so nothing it expanded into has to be replaced.
 
 ## Key takeaways
 

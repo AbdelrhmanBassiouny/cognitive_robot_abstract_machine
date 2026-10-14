@@ -10,8 +10,6 @@ from semantic_digital_twin.robots.robot_parts import Arm, EndEffector
 from semantic_digital_twin.spatial_types.spatial_types import Pose
 
 from coraplex.datastructures.trajectory import PoseTrajectory
-from coraplex.exceptions import FingerWidthNeedsPhysics
-from coraplex.plans.context_extensions import ExecutionMode
 from coraplex.robot_plans.actions.base import Action
 from coraplex.robot_plans.mixins import (
     HasMaxJointVelocity,
@@ -19,7 +17,6 @@ from coraplex.robot_plans.mixins import (
     MovesToolCenterPoint,
 )
 from cramph.composites import Parallel, Sequence
-from cramph.context import ContextExtension
 from cramph.node import StatechartNode
 from giskardpy.motion_statechart.binding_policy import GoalBindingPolicy
 from giskardpy.motion_statechart.goals.collision_avoidance import (
@@ -29,7 +26,6 @@ from giskardpy.motion_statechart.tasks.cartesian_tasks import (
     CartesianPose,
     CartesianPosition,
 )
-from krrood.ormatic.utils import classproperty
 from giskardpy.motion_statechart.tasks.joint_tasks import (
     JointPositionList,
     JointVelocityLimit,
@@ -90,7 +86,7 @@ class MoveFingersToWidthAction(Action):
     as the goal and finds the joint positions that realise it.
 
     .. note:: This only means anything where something pushes back, see
-        :attr:`~coraplex.datastructures.enums.ExecutionType.objects_push_back`.
+        :class:`~coraplex.robot_plans.plan_transformations.CloseFingersToObjectWidth`.
     """
 
     gripper: HasTwoFingers
@@ -117,20 +113,7 @@ class MoveFingersToWidthAction(Action):
     count as done: well under a squeeze, so the squeeze is not lost to the tolerance.
     """
 
-    @classproperty
-    def context_extensions_required_to_expand(
-        cls,
-    ) -> tuple[type[ContextExtension], ...]:
-        return super().context_extensions_required_to_expand + (ExecutionMode,)
-
     def create_action_body(self) -> StatechartNode:
-        """
-        :raises FingerWidthNeedsPhysics: If nothing pushes back on the fingers where the
-            plan is performed.
-        """
-        execution_type = self.context.require_extension(ExecutionMode).execution_type
-        if not execution_type.objects_push_back:
-            raise FingerWidthNeedsPhysics(execution_type)
         fingertips = self.gripper.fingertips
         return CartesianPosition(
             root_link=fingertips.finger,

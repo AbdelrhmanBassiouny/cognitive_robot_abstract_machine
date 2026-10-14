@@ -79,6 +79,22 @@ class PlanTransformation(Generic[MatchedType], SubClassSafeGeneric, ABC):
         """
 
 
+# %% configuring a node before it expands
+
+
+@dataclass
+class ConfigurationTransformation(
+    PlanTransformation[MatchedType], Generic[MatchedType], SubClassSafeGeneric, ABC
+):
+    """
+    Rewrites a plan by changing the settings of a node before it expands, so that what
+    it expands into already reflects them.
+
+    Offered every node right before it expands, see :meth:`PlanRewriting.configure`, and
+    never after.
+    """
+
+
 # %% inserting
 
 
@@ -148,10 +164,12 @@ class PlanRewriting(ContextExtension):
     """
     Offers the nodes of a plan to the transformations that may rewrite it.
 
-    A node is offered once it and everything below it has been expanded, in the order
-    the plan runs its nodes, and the nodes a transformation inserts are offered in turn.
-    Carried in the context of the statechart running the plan, so that a part of the
-    plan that joins it later can be rewritten too.
+    A node is offered to the :class:`ConfigurationTransformation` instances right before
+    it expands, see :meth:`configure`, and to the other transformations once it and
+    everything below it has been expanded, in the order the plan runs its nodes; the
+    nodes a transformation inserts are offered in turn. Carried in the context of the
+    statechart running the plan, so that a part of the plan that joins it later can be
+    rewritten too.
     """
 
     transformations: List[PlanTransformation] = field(default_factory=list)
@@ -171,6 +189,29 @@ class PlanRewriting(ContextExtension):
             since the nodes offered so far belong to the statechart this one rewrites.
         """
         return PlanRewriting(transformations=list(self.transformations))
+
+    def preceded_by(self, transformations: List[PlanTransformation]) -> PlanRewriting:
+        """
+        :param transformations: The transformations to offer every node to first.
+        :return: A new rewriting by `transformations` and then this one's, which has
+            offered nothing yet.
+        """
+        return PlanRewriting(transformations=[*transformations, *self.transformations])
+
+    def configure(self, node: StatechartNode) -> None:
+        """
+        Applies every :class:`ConfigurationTransformation` that matches and applies to
+        `node`, which has not expanded yet.
+
+        :param node: The node about to expand.
+        """
+        for transformation in self.transformations:
+            if (
+                isinstance(transformation, ConfigurationTransformation)
+                and transformation.matches_node(node)
+                and transformation.is_applicable(node)
+            ):
+                transformation.apply(node)
 
     def rewrite(self, root: StatechartNode) -> None:
         """
@@ -208,7 +249,9 @@ class PlanRewriting(ContextExtension):
         transformations = [
             transformation
             for transformation in self.transformations
-            if transformation.matches_node(node) and transformation.is_applicable(node)
+            if not isinstance(transformation, ConfigurationTransformation)
+            and transformation.matches_node(node)
+            and transformation.is_applicable(node)
         ]
         if len(transformations) > 1:
             logger.warning(

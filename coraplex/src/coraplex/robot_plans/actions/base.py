@@ -12,6 +12,7 @@ from typing_extensions import (
 from coraplex.exceptions import ActionNotExpanded
 from coraplex.plans.context_extensions import RobotAccess, StatementGrounding
 from coraplex.plans.designator import DesignatorParameters
+from coraplex.plans.plan_transformation import PlanRewriting
 from krrood.ormatic.utils import classproperty
 from cramph.node import SucceedsOnObservingTrue, FailsOnObservingFalse
 from cramph.context import ContextExtension, StatechartContext
@@ -120,8 +121,13 @@ class Action(
 
     def expand(self, context: StatechartContext) -> None:
         """
-        Puts the node this action creates below it.
+        Puts the node this action creates below it, once the
+        :class:`~coraplex.plans.plan_transformation.PlanRewriting` of `context`, if any,
+        configured this action.
         """
+        rewriting = context.get_extension(PlanRewriting)
+        if rewriting is not None:
+            rewriting.configure(self)
         self._run_as_action_body(self.create_action_body())
 
     def replace_action_body(self, node: StatechartNode) -> None:

@@ -1,16 +1,12 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from typing_extensions import Optional, Type
 
-from coraplex.plans.context_extensions import ExecutionMode
-from cramph.context import ContextExtension
-from krrood.ormatic.utils import classproperty
 from coraplex.datastructures.enums import (
     DetectionState,
     DetectionTechnique,
-    ExecutionType,
     PerceptionSource,
 )
 from coraplex.perception import PerceptionQuery, PerceptionTask
@@ -91,23 +87,19 @@ class DetectAction(Action):
     :class:`~coraplex.exceptions.UnidentifiedDetections` instead of being chosen between.
     """
 
-    @classproperty
-    def context_extensions_required_to_expand(
-        cls,
-    ) -> tuple[type[ContextExtension], ...]:
-        return super().context_extensions_required_to_expand + (ExecutionMode,)
+    perception_source: PerceptionSource = field(
+        default=PerceptionSource.WORLD_MODEL, init=False
+    )
+    """
+    What answers the detection.
+    """
 
     def create_action_body(self) -> StatechartNode:
         return Sequence(
             [
                 PerceptionTask(
                     query=self._build_query(),
-                    answered_by=(
-                        PerceptionSource.ROBOKUDO
-                        if self.context.require_extension(ExecutionMode).execution_type
-                        is ExecutionType.REAL
-                        else PerceptionSource.WORLD_MODEL
-                    ),
+                    answered_by=self.perception_source,
                     accept_first_if_multiple=self.accept_first_if_multiple,
                 )
             ]

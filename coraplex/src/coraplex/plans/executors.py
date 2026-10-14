@@ -8,14 +8,11 @@ from datetime import timedelta
 from rclpy.node import Node
 from typing_extensions import TYPE_CHECKING, List, Optional
 
-from coraplex.datastructures.enums import ExecutionType
-
 from coraplex.exceptions import (
     MotionDidNotFinish,
     PlanNotCompiled,
 )
 from coraplex.plans.context_extensions import (
-    ExecutionMode,
     MotionToleranceConfig,
     StatementGrounding,
 )
@@ -26,9 +23,18 @@ from coraplex.plans.failures import (
     MotionMadeNoProgress,
     MotionViolatedCollisionAvoidance,
 )
-from coraplex.plans.plan_transformation import PlanRewriting
+from coraplex.plans.plan_transformation import PlanRewriting, PlanTransformation
 from coraplex.plans.underspecified import UnderspecifiedChildChooser
 from coraplex.robot_plans.actions.base import Action
+from coraplex.robot_plans.plan_transformations import (
+    CloseFingersToObjectWidth,
+    DetectWithRoboKudo,
+    LetContactCarryTheBodies,
+    WriteTheOdometryInsteadOfDriving,
+)
+from coraplex.robot_plans.robot_specific_plan_transformations import (
+    KeepStretchInFrontOfTheContainerItCloses,
+)
 from cramph.composites import ChildChooserAccess, StatementNode
 from cramph.context import ContextExtension, StatechartContext
 from cramph.data_types import LifeCycleValues
@@ -55,7 +61,6 @@ from giskardpy.motion_statechart.monitors.progress_monitors import StillProgress
 from giskardpy.middleware.ros2.python_interface import GiskardClientExecutor
 from giskardpy.motion_statechart.ros_context import RosNodeAccess
 from giskardpy.qp.qp_controller_config import QPControllerConfig
-from krrood.ormatic.utils import classproperty
 from krrood.symbolic_math.symbolic_math import logic_or
 from semantic_digital_twin.world import World
 
@@ -134,19 +139,14 @@ class PlanExecutor(Executor, ABC):
     The top-level nodes of the plan compiled last.
     """
 
-    @classproperty
-    def simulated(cls) -> bool:
-        """
-        :return: Whether this executor runs plans against a simulated robot.
-        """
-        return issubclass(cls, SimulatedPlanExecutor)
-
-    @classproperty
-    @abstractmethod
-    def execution_type(cls) -> ExecutionType:
-        """
-        :return: What carries out the motions of the plans this executor runs.
-        """
+    plan_adaptations: List[PlanTransformation] = field(
+        default_factory=list, kw_only=True
+    )
+    """
+    The plan transformations adapting every plan to how this executor runs it, offered
+    every node before the transformations of the plan's own
+    :class:`~coraplex.plans.plan_transformation.PlanRewriting`.
+    """
 
     def __post_init__(self):
         if self.debug and self.ros_node is None:
@@ -156,13 +156,9 @@ class PlanExecutor(Executor, ABC):
         )
         self.context = StatechartContext(world=self.world)
         for extension in self.context_extensions:
+            if isinstance(extension, PlanRewriting):
+                extension = extension.preceded_by(self.plan_adaptations)
             self.context.add_extension(extension)
-        self.context.add_extension(
-            ExecutionMode(
-                execution_type=self.execution_type,
-                collision_avoidance=self.collision_avoidance,
-            )
-        )
         self.child_chooser = UnderspecifiedChildChooser(
             executor=self, trial_executor_type=SimulatedPlanExecutor
         )
@@ -170,7 +166,11 @@ class PlanExecutor(Executor, ABC):
         super().__post_init__()
 
     def default_context_extensions(self) -> list[ContextExtension]:
-        return [StatementGrounding(), MotionToleranceConfig(), PlanRewriting()]
+        return [
+            StatementGrounding(),
+            MotionToleranceConfig(),
+            PlanRewriting(transformations=list(self.plan_adaptations)),
+        ]
 
     def default_executor_extensions(self) -> list[ExecutorExtension]:
         return []
@@ -356,13 +356,17 @@ class SimulatedPlanExecutor(PlanExecutor, StatechartExecutor):
     once. Counted again whenever nodes join the statechart.
     """
 
+    plan_adaptations: List[PlanTransformation] = field(
+        default_factory=lambda: [
+            WriteTheOdometryInsteadOfDriving(),
+            KeepStretchInFrontOfTheContainerItCloses(),
+        ],
+        kw_only=True,
+    )
+
     def __post_init__(self):
         super().__post_init__()
         self.simulation_time_limit = self.simulation_time_per_action
-
-    @classproperty
-    def execution_type(cls) -> ExecutionType:
-        return ExecutionType.KINEMATICALLY_SIMULATED
 
     def default_executor_extensions(self) -> list[ExecutorExtension]:
         return [RosNodeAccess(self.ros_node), MotionControl()]
@@ -451,13 +455,17 @@ class PhysicallySimulatedPlanExecutor(SimulatedPlanExecutor):
     Steps :attr:`simulation` one control period after every tick.
     """
 
+    plan_adaptations: List[PlanTransformation] = field(
+        default_factory=lambda: [
+            CloseFingersToObjectWidth(),
+            LetContactCarryTheBodies(),
+        ],
+        kw_only=True,
+    )
+
     def __post_init__(self):
         self.pacer = SteppedSimulationPacer(self.simulation)
         super().__post_init__()
-
-    @classproperty
-    def execution_type(cls) -> ExecutionType:
-        return ExecutionType.PHYSICALLY_SIMULATED
 
     def default_executor_extensions(self) -> list[ExecutorExtension]:
         return [
@@ -485,9 +493,10 @@ class RealRobotPlanExecutor(PlanExecutor):
     runs.
     """
 
-    @classproperty
-    def execution_type(cls) -> ExecutionType:
-        return ExecutionType.REAL
+    plan_adaptations: List[PlanTransformation] = field(
+        default_factory=lambda: [CloseFingersToObjectWidth(), DetectWithRoboKudo()],
+        kw_only=True,
+    )
 
     def compile(self, statechart: Statechart) -> None:
         """
