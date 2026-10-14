@@ -472,6 +472,43 @@ def test_apply_filters_keeps_dof_columns_without_slack():
     assert filtered.quadratic_weights.shape[0] == 2
 
 
+def test_apply_filters_drops_slack_variables_without_weight_and_their_constraints():
+    """
+    Two degrees of freedom, one equality slack and two inequality slacks; the equality
+    slack and the second inequality slack have no weight, so they go together with the
+    constraint each of them relaxes.
+    """
+    qp_data = QPDataExplicit(
+        quadratic_weights=np.array([1.0, 1.0, 0.0, 2.0, 0.0]),
+        linear_weights=np.array([0.1, 0.2, 0.3, 0.4, 0.5]),
+        box_lower_constraints=np.array([-1.0, -2.0, -3.0, -4.0, -5.0]),
+        box_upper_constraints=np.array([1.0, 2.0, 3.0, 4.0, 5.0]),
+        equality_matrix=sp.csc_matrix(
+            np.array([[1.0, 1.0, 0.0, 0.0, 0.0], [0.0, 1.0, -1.0, 0.0, 0.0]])
+        ),
+        equality_bounds=np.array([0.6, 0.7]),
+        inequality_matrix=sp.csc_matrix(
+            np.array([[1.0, 0.0, 0.0, -1.0, 0.0], [0.0, 1.0, 0.0, 0.0, -1.0]])
+        ),
+        inequality_lower_bounds=np.array([-0.8, -0.9]),
+        inequality_upper_bounds=np.array([0.8, 0.9]),
+        num_equality_slack_variables=1,
+        num_inequality_slack_variables=2,
+    )
+
+    filtered = qp_data.apply_filters()
+
+    assert filtered.quadratic_weights.tolist() == [1.0, 1.0, 2.0]
+    assert filtered.linear_weights.tolist() == [0.1, 0.2, 0.4]
+    assert filtered.box_lower_constraints.tolist() == [-1.0, -2.0, -4.0]
+    assert filtered.box_upper_constraints.tolist() == [1.0, 2.0, 4.0]
+    assert filtered.dense_eq_matrix.tolist() == [[1.0, 1.0, 0.0]]
+    assert filtered.equality_bounds.tolist() == [0.6]
+    assert filtered.dense_neq_matrix.tolist() == [[1.0, 0.0, -1.0]]
+    assert filtered.inequality_lower_bounds.tolist() == [-0.8]
+    assert filtered.inequality_upper_bounds.tolist() == [0.8]
+
+
 def test_apply_filters_two_sided_inequality_with_box_and_inequality_rows():
     """
     QPDataTwoSidedInequality.apply_filters must correctly filter a combined box +

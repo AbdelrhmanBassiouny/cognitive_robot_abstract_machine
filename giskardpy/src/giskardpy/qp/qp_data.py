@@ -170,12 +170,10 @@ class QPDataExplicit(QPData):
         bA_part = slack_part[self.num_equality_slack_variables :]
 
         bE_filter = np.ones(self.equality_matrix.shape[0], dtype=bool)
-        bE_filter.fill(True)
         if len(bE_part) > 0:
             bE_filter[-len(bE_part) :] = bE_part
 
         bA_filter = np.ones(self.inequality_matrix.shape[0], dtype=bool)
-        bA_filter.fill(True)
         if len(bA_part) > 0:
             bA_filter[-len(bA_part) :] = bA_part
 
@@ -188,11 +186,11 @@ class QPDataExplicit(QPData):
             box_upper_constraints=self.box_upper_constraints[
                 zero_quadratic_weight_filter
             ],
-            equality_matrix=self._filter_eq_matrix(
+            equality_matrix=self._submatrix(
                 self.equality_matrix, bE_filter, zero_quadratic_weight_filter
             ),
             equality_bounds=self.equality_bounds[bE_filter],
-            inequality_matrix=self._filter_neq_matrix(
+            inequality_matrix=self._submatrix(
                 self.inequality_matrix, bA_filter, zero_quadratic_weight_filter
             ),
             inequality_lower_bounds=self.inequality_lower_bounds[bA_filter],
@@ -332,34 +330,6 @@ class QPDataExplicit(QPData):
         :return: The column of every stored entry of `matrix`, in storage order.
         """
         return np.repeat(np.arange(matrix.shape[1]), np.diff(matrix.indptr))
-
-    def _filter_eq_matrix(
-        self,
-        eq_matrix: sp.csc_matrix,
-        bE_filter: np.ndarray,
-        zero_quadratic_weight_filter: np.ndarray,
-    ) -> sp.csc_matrix:
-        """
-        Filters the equality matrix by removing specified rows and columns associated
-        with inactive motion statechart nodes.
-        """
-        if len(eq_matrix.shape) > 1 and eq_matrix.shape[0] * eq_matrix.shape[1] > 0:
-            return eq_matrix[bE_filter, :][:, zero_quadratic_weight_filter]
-        return eq_matrix
-
-    def _filter_neq_matrix(
-        self,
-        neq_matrix: sp.csc_matrix,
-        bA_filter: np.ndarray,
-        zero_quadratic_weight_filter: np.ndarray,
-    ) -> sp.csc_matrix:
-        """
-        Filters the inequality matrix by removing specified rows and columns associated
-        with inactive motion statechart nodes.
-        """
-        if len(neq_matrix.shape) > 1 and neq_matrix.shape[0] * neq_matrix.shape[1] > 0:
-            return neq_matrix[:, zero_quadratic_weight_filter][bA_filter, :]
-        return neq_matrix
 
     def pretty_print_problem(self):
         """
