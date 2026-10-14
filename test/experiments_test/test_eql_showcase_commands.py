@@ -12,6 +12,7 @@ from coraplex.execution_environment import kinematically_simulated_robot
 from coraplex.plans.plan import Plan
 from coraplex.plans.underspecified import CandidateOutcome
 from coraplex.robot_plans.actions.core.robot_body import MoveTorsoAction, ParkArmsAction
+from cramera.live.bridge import Bridge
 from experiments.eql_showcase.commands import (
     APPROACH_DIRECTIONS,
     PUT_BACK,
@@ -20,6 +21,7 @@ from experiments.eql_showcase.commands import (
     ResolutionSteps,
     RobotCommander,
 )
+from experiments.eql_showcase.showcase import EqlShowcase
 from krrood.entity_query_language.factories import a, variable_from
 from semantic_digital_twin.datastructures.definitions import TorsoState
 from semantic_digital_twin.robots.pr2 import PR2
@@ -27,6 +29,11 @@ from semantic_digital_twin.semantic_annotations.semantic_annotations import Milk
 from semantic_digital_twin.spatial_types.spatial_types import Pose
 
 from ..conftest import SAMPLING_SEED
+
+WHAT_HAVE_I_ASKED = "What have I asked you to do?"
+"""
+The showcase's question listing the commands given so far.
+"""
 
 
 @pytest.fixture
@@ -113,3 +120,26 @@ def test_a_grasp_is_described_by_the_side_it_approaches_from(axis_and_sign):
     grasp_pose = Pose.from_xyz_rpy(0, 0, 0, **rotations[axis_and_sign])
 
     assert CandidateChoice.approach_of(grasp_pose) == APPROACH_DIRECTIONS[axis_and_sign]
+
+
+# %% the commands offered to the viewer
+
+
+def test_the_commands_given_can_be_asked_about(pr2_apartment_world, commander):
+    showcase = EqlShowcase(pr2_apartment_world, commander=commander)
+    bridge = Bridge()
+    showcase.register_with(bridge)
+    command = commander.do(ParkArmsAction(commander.context.robot.all_arms), "park")
+
+    question = next(
+        preset for preset in showcase.presets() if preset.text == WHAT_HAVE_I_ASKED
+    )
+    answer = bridge.run_query(question.code, question.scope)
+
+    assert [row["__entity__"] for row in answer.rows] == [command.name]
+
+
+def test_commands_are_offered_only_while_the_robot_takes_them(pr2_apartment_world):
+    showcase = EqlShowcase(pr2_apartment_world)
+
+    assert WHAT_HAVE_I_ASKED not in [preset.text for preset in showcase.presets()]

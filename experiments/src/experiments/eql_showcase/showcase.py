@@ -242,11 +242,23 @@ class EqlShowcase:
         segments them.
         """
         current_state = QueryableKnowledge.of_world(self.world)
-        current_state.domains.append(
-            QueryDomain(
-                ShowcaseVariable.ACTION, PerformedAction, self.performed_actions
-            )
+        current_state.domains.extend(
+            [
+                QueryDomain(
+                    ShowcaseVariable.ACTION, PerformedAction, self.performed_actions
+                ),
+                QueryDomain(
+                    ShowcaseVariable.STEP, ResolutionStep, self.resolution_steps
+                ),
+            ]
         )
+        if self.commander is not None:
+            current_state.domains.append(
+                QueryDomain(
+                    ShowcaseVariable.COMMAND, RobotCommand, self.commander.commands
+                )
+            )
+            current_state.extra_names[ShowcaseVariable.ROBOT] = self.commander
         knowledge = [current_state]
         if self.database is not None:
             knowledge.append(
