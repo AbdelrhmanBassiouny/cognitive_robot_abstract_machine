@@ -218,7 +218,7 @@ class QPController:
         :param qp_data: The problem of this control cycle, without the constraints of
             nodes that are not running.
         :return: Which degrees of freedom are stopped without the solver, one flag per
-            active degree of freedom. None for a problem that is not a
+            active degree of freedom. None is stopped for a problem that is not a
             :class:`~giskardpy.qp.qp_data.QPDataExplicit`.
         """
         number_of_degrees_of_freedom = len(self.active_degrees_of_freedom)
@@ -228,16 +228,10 @@ class QPController:
         number_of_system_dynamics_rows = (
             number_of_variables - self._number_of_velocity_variables
         )
-        unconstrained = np.ones(number_of_variables, dtype=bool)
-        for constraint_matrix in (
-            qp_data.equality_matrix[number_of_system_dynamics_rows:, :],
-            qp_data.inequality_matrix,
-        ):
-            # A matrix without rows does not necessarily have a column per variable.
-            if constraint_matrix.shape[0] == 0:
-                continue
-            coefficients = abs(constraint_matrix[:, :number_of_variables]).sum(axis=0)
-            unconstrained &= np.asarray(coefficients).ravel() == 0
+        unconstrained = qp_data.variables_without_coefficients(
+            number_of_variables=number_of_variables,
+            number_of_ignored_equalities=number_of_system_dynamics_rows,
+        )
         stopping_solution = self._stopping_solution(qp_data)
         within_limits = (
             qp_data.box_lower_constraints[:number_of_variables] <= stopping_solution

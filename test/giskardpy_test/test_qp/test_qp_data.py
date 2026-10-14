@@ -559,6 +559,109 @@ def test_without_variables_keeps_matrices_without_constraints(simple_inequality_
     assert reduced.dense_neq_matrix.tolist() == [[1.0]]
 
 
+# %% variables no constraint refers to
+
+
+def qp_with_constraint_matrices(
+    equality_matrix: sp.csc_matrix, inequality_matrix: sp.csc_matrix
+) -> QPDataExplicit:
+    """
+    :param equality_matrix: The equality matrix of the problem.
+    :param inequality_matrix: The inequality matrix of the problem.
+    :return: A problem over three variables with the given constraint matrices.
+    """
+    return QPDataExplicit(
+        quadratic_weights=np.ones(3),
+        linear_weights=np.zeros(3),
+        box_lower_constraints=-np.ones(3),
+        box_upper_constraints=np.ones(3),
+        equality_matrix=equality_matrix,
+        equality_bounds=np.zeros(equality_matrix.shape[0]),
+        inequality_matrix=inequality_matrix,
+        inequality_lower_bounds=-np.ones(inequality_matrix.shape[0]),
+        inequality_upper_bounds=np.ones(inequality_matrix.shape[0]),
+        num_equality_slack_variables=0,
+        num_inequality_slack_variables=0,
+    )
+
+
+def test_coefficients_in_ignored_equalities_do_not_count():
+    """
+    The first equality is ignored, so only the second one refers to a variable.
+    """
+    qp_data = qp_with_constraint_matrices(
+        equality_matrix=sp.csc_matrix(np.array([[1.0, 2.0, 0.0], [0.0, 3.0, 0.0]])),
+        inequality_matrix=sp.csc_matrix((0, 3)),
+    )
+
+    without_coefficients = qp_data.variables_without_coefficients(
+        number_of_variables=3, number_of_ignored_equalities=1
+    )
+
+    assert without_coefficients.tolist() == [True, False, True]
+
+
+def test_inequalities_refer_to_variables():
+    qp_data = qp_with_constraint_matrices(
+        equality_matrix=sp.csc_matrix((0, 3)),
+        inequality_matrix=sp.csc_matrix(np.array([[0.0, 0.0, 4.0]])),
+    )
+
+    without_coefficients = qp_data.variables_without_coefficients(
+        number_of_variables=3, number_of_ignored_equalities=0
+    )
+
+    assert without_coefficients.tolist() == [True, True, False]
+
+
+def test_stored_zeros_are_no_coefficients():
+    """
+    The matrix stores an entry for the first variable whose value is zero.
+    """
+    inequality_matrix = sp.csc_matrix(
+        (np.array([0.0, 5.0]), np.array([0, 0]), np.array([0, 1, 2, 2])),
+        shape=(1, 3),
+    )
+    qp_data = qp_with_constraint_matrices(
+        equality_matrix=sp.csc_matrix((0, 3)), inequality_matrix=inequality_matrix
+    )
+
+    without_coefficients = qp_data.variables_without_coefficients(
+        number_of_variables=3, number_of_ignored_equalities=0
+    )
+
+    assert without_coefficients.tolist() == [True, False, True]
+
+
+def test_only_the_leading_variables_are_checked():
+    qp_data = qp_with_constraint_matrices(
+        equality_matrix=sp.csc_matrix(np.array([[0.0, 0.0, 6.0]])),
+        inequality_matrix=sp.csc_matrix((0, 3)),
+    )
+
+    without_coefficients = qp_data.variables_without_coefficients(
+        number_of_variables=2, number_of_ignored_equalities=0
+    )
+
+    assert without_coefficients.tolist() == [True, True]
+
+
+def test_a_matrix_without_rows_refers_to_no_variable():
+    """
+    A matrix without rows does not necessarily have a column per variable.
+    """
+    qp_data = qp_with_constraint_matrices(
+        equality_matrix=sp.csc_matrix(np.array([[0.0, 7.0, 0.0]])),
+        inequality_matrix=sp.csc_matrix((0, 1)),
+    )
+
+    without_coefficients = qp_data.variables_without_coefficients(
+        number_of_variables=3, number_of_ignored_equalities=0
+    )
+
+    assert without_coefficients.tolist() == [True, False, True]
+
+
 # %% Hessian
 
 

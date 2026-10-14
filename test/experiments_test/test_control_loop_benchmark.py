@@ -10,6 +10,7 @@ from experiments.control_loop_experiments.benchmark import (
 )
 from experiments.control_loop_experiments.scenarios import (
     CartesianGoalScenario,
+    DeeplyNestedCascadeScenario,
     LongSequenceScenario,
     PlotterMode,
     ScenarioRunner,
@@ -268,3 +269,28 @@ class TestControlCycleBudget:
         self, long_sequence_profile: CallTreeProfile
     ):
         assert long_sequence_profile.control_cycles >= 100
+
+
+# %% outcomes climbing deep nesting within one tick
+
+
+@pytest.fixture()
+def deeply_nested_cascade_profile(init_rospy) -> CallTreeProfile:
+    return ScenarioRunner(plotter_mode=PlotterMode.PLAIN).run(
+        DeeplyNestedCascadeScenario()
+    )
+
+
+@pytest.mark.slow
+class TestDeeplyNestedCascade:
+    """
+    A tick in which an outcome climbs deep nesting settles in many passes, and even that
+    tick has to finish before the robot is commanded too late.
+    """
+
+    def test_slowest_cycle_stays_within_the_control_budget(
+        self, deeply_nested_cascade_profile: CallTreeProfile
+    ):
+        assert deeply_nested_cascade_profile.control_cycle.inclusive_maximum < (
+            deeply_nested_cascade_profile.control_dt
+        )

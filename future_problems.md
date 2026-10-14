@@ -13,20 +13,9 @@ entry from this file.
   `CompositeNodeChoosingItsChild` it is, so the receiving process asks the sender for
   each child instead of grounding the statement itself. Tests covering that, and a
   statement inside a sent statechart, are still to be written.
-- A coraplex `Action` is sent as itself and declares the context extensions it
-  requires (`RobotAccess` and, per action, `ExecutionMode` or `MotionToleranceConfig`).
-  It reads them only while expanding, which happens in the sending process, but a
-  statechart checks them whenever a node joins or compiles, so a receiving process
-  whose context lacks them rejects the action with
-  `NodesMissingContextExtensionsError`. Either the receiver's context gets them, or
-  requirements needed to expand are told apart from those needed to build and tick.
 - `FunctionCall` and `ThreadedPredicateMonitor` hold a Python callable and cannot be
   sent; writing a statechart holding one raises `ClassNotSerializableError`. They have
   no round-trip case.
-- The real-stretch cross-process demo,
-  `test/experiments_test/real_stretch_demo_test/test_real_stretch_demo_process_boundary.py`:
-  `test_demonstration_runs_against_a_controller_in_another_process`, still has to be
-  run where `robokudo_msgs` and the meshes of `iai_apartment` are installed.
 
 ## Design questions set aside
 
