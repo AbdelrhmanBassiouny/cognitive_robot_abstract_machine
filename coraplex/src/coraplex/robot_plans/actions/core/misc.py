@@ -47,7 +47,7 @@ class DetectAction(Action):
     Detects an object that fits the object description and returns an object
     designator_description describing the object.
 
-    If no object is found, an PerceptionObjectNotFound error is raised.
+    The action fails if no such object is seen.
     """
 
     technique: DetectionTechnique
@@ -72,6 +72,12 @@ class DetectAction(Action):
     region: Optional[Region] = None
     """
     The region in which the object should be detected.
+    """
+
+    detection_box: VolumetricBoundingBox | None = None
+    """
+    The box in which the object should be detected, used instead of :attr:`region` when
+    given.
     """
 
     trust_detected_orientation: bool = True
@@ -123,30 +129,36 @@ class DetectAction(Action):
             raise AttributeError(
                 "Either a Semantic Annotation or a Region must be provided."
             )
-        region_bb = (
-            self.region.area.as_bounding_box_collection_in_frame(
-                self.robot.root
-            ).bounding_box
-            if self.region
-            else VolumetricBoundingBox(
-                origin=HomogeneousTransformationMatrix(reference_frame=self.robot.root),
-                min_x=-1,
-                min_y=-1,
-                min_z=0,
-                max_x=3,
-                max_y=3,
-                max_z=3,
-            )
-        )
         object_sem_annotation = (
             self.object_sem_annotation or SemanticEnvironmentAnnotation
         )
         return PerceptionQuery(
             object_sem_annotation,
-            region_bb,
+            self._query_box(),
             self.robot,
             self.world,
             trust_detected_orientation=self.trust_detected_orientation,
+        )
+
+    def _query_box(self) -> VolumetricBoundingBox:
+        """
+        :return: The box in which the object should be detected: :attr:`detection_box`,
+            else the box around :attr:`region`, else a box in front of the robot.
+        """
+        if self.detection_box is not None:
+            return self.detection_box
+        if self.region is not None:
+            return self.region.area.as_bounding_box_collection_in_frame(
+                self.robot.root
+            ).bounding_box
+        return VolumetricBoundingBox(
+            origin=HomogeneousTransformationMatrix(reference_frame=self.robot.root),
+            min_x=-1,
+            min_y=-1,
+            min_z=0,
+            max_x=3,
+            max_y=3,
+            max_z=3,
         )
 
 

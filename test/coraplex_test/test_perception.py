@@ -29,6 +29,7 @@ from coraplex.datastructures.enums import (
 )
 from coraplex.exceptions import (
     AmbiguousDetection,
+    MotionDidNotFinish,
     NothingDetected,
     PerceivedObjectNotInWorld,
     PerceptionSourceUnavailable,
@@ -46,9 +47,11 @@ from coraplex.robot_plans.actions.core.misc import DetectAction
 from coraplex.robot_plans.actions.core.pick_up import PickUpAction
 from coraplex.perception import PerceptionTask
 from .conftest import motion_nodes_in_physics_of, motion_nodes_of
+from ..plan_running import run_plan
+from cramph.composites import TryInOrder
 from giskardpy.motion_control import MotionControl
 from cramph.context import StatechartContext
-from cramph.data_types import ObservationStateValues
+from cramph.data_types import LifeCycleValues, ObservationStateValues
 from cramph.exceptions import NodesMissingContextExtensionsError
 from giskardpy.motion_statechart.graph_node import EndMotion, MotionStatechartNode
 from cramph.statechart import Statechart
@@ -65,7 +68,6 @@ from semantic_digital_twin.semantic_annotations.semantic_annotations import Bowl
 from semantic_digital_twin.spatial_types import HomogeneousTransformationMatrix, Point3
 from semantic_digital_twin.spatial_types.spatial_types import Pose
 from semantic_digital_twin.world import World
-from semantic_digital_twin.world_description.geometry import VolumetricBoundingBox
 
 PERCEIVED_MILK_POSITION = (2.6, 2.2, 1.05)
 """
@@ -352,21 +354,12 @@ def test_world_perception_follows_the_robots_head(
 
 
 def test_world_perception_reports_nothing_outside_the_queried_region(
-    pr2_apartment_context,
+    pr2_apartment_context, empty_region
 ):
     """
     The region is part of the question, so a body outside it is not an answer.
     """
     world, view, extensions = pr2_apartment_context
-    empty_region = VolumetricBoundingBox(
-        origin=HomogeneousTransformationMatrix(reference_frame=world.root),
-        min_x=-10,
-        min_y=-10,
-        min_z=-10,
-        max_x=-9,
-        max_y=-9,
-        max_z=-9,
-    )
     query = PerceptionQuery(Milk, empty_region, view, world)
 
     with pytest.raises(NothingDetected):
@@ -818,6 +811,26 @@ def test_perception_task_moves_the_detected_body(
     )
 
 
+def test_a_source_that_sees_nothing_leaves_the_task_observing_false(
+    pr2_apartment_context, empty_region, rclpy_node
+):
+    """
+    Seeing nothing is an answer the plan can act on, so it has to reach the chart as a
+    failed observation rather than as a raise that unwinds it.
+    """
+    world, view, extensions = pr2_apartment_context
+    milk_body = world.get_body_by_name("milk.stl")
+    spawned_pose = milk_body.global_pose.to_np()
+    query = PerceptionQuery(Milk, empty_region, view, world)
+    task = PerceptionTask(query=query, answered_by=PerceptionSource.WORLD_MODEL)
+    build_context = build_perception_task(task, world, rclpy_node)
+
+    task.on_start(build_context)
+
+    assert task.on_tick(build_context) == ObservationStateValues.FALSE
+    np.testing.assert_allclose(milk_body.global_pose.to_np(), spawned_pose, atol=1e-9)
+
+
 @dataclass
 class UnanswerablePerception(PerceptionInterface):
     """
@@ -832,9 +845,7 @@ class UnanswerablePerception(PerceptionInterface):
     What answering the query raises.
     """
 
-    def detect(
-        self, query: PerceptionQuery, accept_first_if_multiple: bool = False
-    ) -> Detection:
+    def look_for(self, query: PerceptionQuery) -> List[Detection]:
         raise self.failure
 
 
@@ -1019,3 +1030,49 @@ def test_detection_in_a_chart_corrects_a_reach_planned_before_it(
         PERCEIVED_MILK_POSITION,
         atol=1e-9,
     )
+
+
+# %% a failed detection inside a plan
+
+
+def test_a_detection_that_sees_nothing_lets_the_next_alternative_run(
+    pr2_apartment_context,
+):
+    """
+    What a search is built on: a look that found nothing has to leave the plan able to
+    run the next alternative, so the object is still found by the one that does see it.
+    """
+    world, view, extensions = pr2_apartment_context
+    plan = TryInOrder(
+        [
+            not_seen := DetectAction(
+                DetectionTechnique.TYPES, object_sem_annotation=Bowl
+            ),
+            seen := DetectAction(DetectionTechnique.TYPES, object_sem_annotation=Milk),
+        ]
+    )
+
+    run_plan(plan, extensions)
+
+    assert not_seen.life_cycle_state == LifeCycleValues.FAILED
+    assert seen.life_cycle_state == LifeCycleValues.SUCCEEDED
+
+
+def test_a_detection_looks_only_inside_the_box_it_is_given(
+    pr2_apartment_context, empty_region
+):
+    """
+    A box handed to the detection replaces the robot's default view of the scene, so the
+    milk the robot sees otherwise is not found outside it.
+    """
+    world, view, extensions = pr2_apartment_context
+
+    with pytest.raises(MotionDidNotFinish):
+        run_plan(
+            DetectAction(
+                DetectionTechnique.TYPES,
+                object_sem_annotation=Milk,
+                detection_box=empty_region,
+            ),
+            extensions,
+        )

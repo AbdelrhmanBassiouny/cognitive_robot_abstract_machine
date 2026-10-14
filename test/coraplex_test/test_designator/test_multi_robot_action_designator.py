@@ -17,6 +17,7 @@ from cramph.statechart import Statechart
 from cramph.composites import Parallel, Sequence, TryAll, TryInOrder
 from cramph.threaded_nodes import FunctionCall
 from coraplex.robot_plans.plan_transformations import OpenDrawerBeforeMoveAndPickUp
+from coraplex.robot_plans.actions.composite.searching import SearchAction
 from coraplex.robot_plans.actions.composite.transporting import TransportAction
 from coraplex.robot_plans.actions.core.container import OpenAction, CloseAction
 from coraplex.robot_plans.actions.core.misc import DetectAction, MoveToReach
@@ -48,6 +49,7 @@ from semantic_digital_twin.datastructures.definitions import (
     GripperState,
     StaticJointState,
 )
+from semantic_digital_twin.reasoning.robot_predicates import get_visible_bodies
 from semantic_digital_twin.robots.robot_part_mixins import HasMobileBase
 from semantic_digital_twin.robots.robot_parts import AbstractRobot, EndEffector
 from ..conftest import grasp_point_of, left_or_only_arm, right_or_only_arm
@@ -1008,4 +1010,36 @@ def test_elevator_navigation(multiple_robot_apartment_context, rclpy_node):
     assert operator.robot_boarded
     assert robot.root.global_transform.position.to_np().flatten()[:3] == pytest.approx(
         expected_position, abs=0.01
+    )
+
+
+# %% searching for an object
+
+
+def test_search_action(multiple_robot_apartment_context):
+    """
+    The search ends with the robot standing where it can see the object, and with the
+    object's annotation carrying what was seen.
+    """
+    world, robot, extensions = multiple_robot_apartment_context
+    milk_body = world.get_body_by_name("milk.stl")
+    # East of the multi-storey building the fixture merges in, where every robot has the
+    # clearance to stand somewhere the milk is visible from.
+    milk_body.parent_connection.origin = HomogeneousTransformationMatrix.from_xyz_rpy(
+        6, -2, 1.2, reference_frame=world.root
+    )
+    spawned_position = milk_body.global_pose.position.to_np().flatten()[:3]
+
+    run_plan(
+        SearchAction(milk_body.global_pose, object_semantic_annotation=Milk),
+        extensions,
+    )
+
+    assert milk_body in get_visible_bodies(robot.get_default_camera())
+    # A perfect simulated sensor reports where the object already is, so detecting it
+    # confirms where it stands rather than moving it.
+    np.testing.assert_allclose(
+        milk_body.global_pose.position.to_np().flatten()[:3],
+        spawned_position,
+        atol=1e-9,
     )
