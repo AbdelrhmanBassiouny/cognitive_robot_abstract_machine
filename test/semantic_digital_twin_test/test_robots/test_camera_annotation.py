@@ -147,6 +147,20 @@ def test_camera_predicates_use_projection_model_resolution(
 # %% Default robot cameras
 
 
+def test_default_pr2_kinect_uses_rgb_optical_frame(
+    pr2_world_state_reset: World,
+) -> None:
+    """
+    The default Kinect observes from its RGB sensor rather than the stereo camera.
+    """
+    camera = pr2_world_state_reset.get_semantic_annotations_by_type(PR2KinectV1)[0]
+    rgb_optical_frame = pr2_world_state_reset.get_body_by_name(
+        "head_mount_kinect_rgb_optical_frame"
+    )
+
+    assert camera.root is rgb_optical_frame
+
+
 @pytest.mark.parametrize(
     "camera_type",
     [StretchCameraColor, StretchCameraDepth, StretchCameraInfra1, StretchCameraInfra2],

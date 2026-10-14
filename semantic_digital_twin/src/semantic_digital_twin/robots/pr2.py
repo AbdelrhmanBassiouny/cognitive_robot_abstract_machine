@@ -105,7 +105,7 @@ class PR2Joint(StrEnum):
 @dataclass(eq=False)
 class PR2KinectV1(RobotCamera):
     """
-    Camera attached to its robot model's optical frame.
+    Kinect V1 camera attached to its RGB optical frame.
     """
 
     def setup_hardware_interfaces(self) -> None:
@@ -119,14 +119,14 @@ class PR2KinectV1(RobotCamera):
         cls, robot_root: KinematicStructureEntity
     ) -> Self:
         """
-        Attach the camera to the optical frame below the supplied robot root.
+        Attach the camera to the Kinect RGB optical frame below the robot root.
 
         :param robot_root: Root of the robot branch containing the optical frame.
         :return: Camera configured for the model's optical frame.
         """
         return cls(
             root=robot_root._world.get_body_in_branch_by_name(
-                robot_root, "wide_stereo_optical_frame"
+                robot_root, "head_mount_kinect_rgb_optical_frame"
             ),
             forward_facing_axis=Vector3.Z(),
             root_T_optical=HomogeneousTransformationMatrix(),
