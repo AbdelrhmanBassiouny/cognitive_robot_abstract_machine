@@ -24,7 +24,11 @@ from experiments.montessori.pieces import PieceSet
 from experiments.montessori.semantics import MontessoriShape
 from krrood.entity_query_language.utils import camel_case_to_words
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
+from semantic_digital_twin.robots.robot_parts import MountingTable
+from semantic_digital_twin.robots.tracy import Tracy
 from semantic_digital_twin.semantic_annotations.semantic_annotations import Table
+from semantic_digital_twin.specifications.robots import RobotSpecification
+from semantic_digital_twin.specifications.worlds import WorldSpecification
 from semantic_digital_twin.spatial_types import HomogeneousTransformationMatrix
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.connections import FixedConnection
@@ -106,29 +110,24 @@ class PerceivedTwin:
     on.
     """
 
-    region: WorkspaceRegion
-    """
-    The stretch of table the camera looks over.
-    """
-
-    table_height: float
-    """
-    Height of the table top, in metres.
-    """
-
-    world: World = field(default_factory=World)
+    world: World
     """
     The world the look is committed into.
     """
 
-    root: Body = field(init=False)
+    root: KinematicStructureEntity
     """
     The frame every look is placed in, which the camera's poses are measured in.
     """
 
-    table: Body = field(init=False)
+    table: Body
     """
     The table the scene is set up on.
+    """
+
+    table_height: float
+    """
+    Height of the table top in the frame looks are placed in, in metres.
     """
 
     committed: List[KinematicStructureEntity] = field(init=False, default_factory=list)
@@ -141,24 +140,62 @@ class PerceivedTwin:
     The colour each kind of piece is drawn in.
     """
 
-    def __post_init__(self) -> None:
-        width = self.region.maximum_x - self.region.minimum_x
-        depth = self.region.maximum_y - self.region.minimum_y
-        with self.world.modify_world():
-            self.root = Body(name=self._name("map"))
-            self.world.add_kinematic_structure_entity(self.root)
-            self.table = self._place_body(
-                "table",
-                Box(scale=Scale(width, depth, TABLE_THICKNESS), color=TABLE_COLOR),
-                HomogeneousTransformationMatrix.from_xyz_rpy(
-                    x=self.region.minimum_x + width / 2,
-                    y=self.region.minimum_y + depth / 2,
-                    z=self.table_height - TABLE_THICKNESS / 2,
+    @classmethod
+    def beside_tracy(cls) -> PerceivedTwin:
+        """
+        A twin of Tracy, whose own table the camera looks at.
+
+        Tracy's description places its table top in the frame the camera's poses are
+        measured in, so what is seen lands on it as it lay on the real table.
+        """
+        world = WorldSpecification.from_urdf(
+            Tracy.get_ros_file_path(),
+            robots=[RobotSpecification(semantic_annotation_type=Tracy)],
+        ).to_domain_object()
+        [table] = world.get_semantic_annotations_by_type(MountingTable)
+        return cls(
+            world=world,
+            root=world.root,
+            table=table.root,
+            table_height=float(table.root.global_pose.position.to_np()[2]),
+        )
+
+    @classmethod
+    def on_bare_table(
+        cls, region: WorkspaceRegion, table_height: float
+    ) -> PerceivedTwin:
+        """
+        A twin of nothing but the stretch of table the camera looks over.
+
+        :param region: The stretch of table the camera looks over.
+        :param table_height: Height of the table top, in metres.
+        """
+        world = World()
+        width = region.maximum_x - region.minimum_x
+        depth = region.maximum_y - region.minimum_y
+        with world.modify_world():
+            root = Body(name=cls._name("map"))
+            world.add_kinematic_structure_entity(root)
+            table = Body.from_shape_collection(
+                cls._name("table"),
+                ShapeCollection(
+                    [Box(scale=Scale(width, depth, TABLE_THICKNESS), color=TABLE_COLOR)]
                 ),
             )
-            self.world.add_semantic_annotation(
-                Table(name=self.table.name, root=self.table)
+            world.add_kinematic_structure_entity(table)
+            world.add_connection(
+                FixedConnection(
+                    parent=root,
+                    child=table,
+                    parent_T_connection_expression=HomogeneousTransformationMatrix.from_xyz_rpy(
+                        x=region.minimum_x + width / 2,
+                        y=region.minimum_y + depth / 2,
+                        z=table_height - TABLE_THICKNESS / 2,
+                    ),
+                )
             )
+            world.add_semantic_annotation(Table(name=table.name, root=table))
+        return cls(world=world, root=root, table=table, table_height=table_height)
 
     # %% committing a look
 

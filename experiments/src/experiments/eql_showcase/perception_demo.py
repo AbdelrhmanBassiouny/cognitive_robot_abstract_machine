@@ -84,9 +84,7 @@ class PerceptionShowcase:
     The bridge serving the viewer.
     """
 
-    twin: PerceivedTwin = field(
-        default_factory=lambda: PerceivedTwin(TRACY_WORKSPACE, TRACY_TABLE_HEIGHT)
-    )
+    twin: PerceivedTwin = field(default_factory=PerceivedTwin.beside_tracy)
     """
     The twin each look is committed into.
     """
@@ -144,7 +142,7 @@ def main(capture_name: Optional[str] = None) -> None:
 
     :param capture_name: The capture to look at, or None to cycle through them all.
     """
-    twin = PerceivedTwin(TRACY_WORKSPACE, TRACY_TABLE_HEIGHT)
+    twin = PerceivedTwin.beside_tracy()
     showcase = PerceptionShowcase(bridge=start(twin.world).bridge, twin=twin)
     if capture_name is not None:
         showcase.look_at(capture_name)

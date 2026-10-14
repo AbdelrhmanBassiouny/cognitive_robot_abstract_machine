@@ -11,6 +11,10 @@ showcase only listens in, and offers the world, the detected events and the robo
 actions to the EQL panel with questions about each. Every finished run is kept in an
 SQLite database in the viewer's data directory, and questions about past runs are
 answered there, in SQL translated from the same query language.
+
+Once the table is laid the robot takes commands from the panel, such as putting the milk
+back, which leave open how to grasp and where to stand; the robot can be paused and
+resumed meanwhile, and asked how it resolved what was left open.
 """
 
 from __future__ import annotations
@@ -22,9 +26,10 @@ from pathlib import Path
 from types import ModuleType
 
 import coraplex
-from typing_extensions import Optional, Type
+from typing_extensions import Dict, List, Optional, Type
 
 from coraplex.datastructures.dataclasses import Context
+from coraplex.execution_environment import ExecutionEnvironment
 from coraplex.demonstrations import RobotDemonstration
 from coraplex.plans.plan import Plan
 from coraplex.plans.plan_node import PlanNode
@@ -33,8 +38,12 @@ from cramera.live.visualization import LiveVisualization
 from cramera.paths import data_directory
 from segmind.event_segmentation import Segmind
 from semantic_digital_twin.robots.pr2 import PR2
+from semantic_digital_twin.semantic_annotations.mixins import HasRootBody
+from semantic_digital_twin.semantic_annotations.semantic_annotations import Bowl, Milk
+from semantic_digital_twin.spatial_types.spatial_types import Pose
 from semantic_digital_twin.world import World
 
+from experiments.eql_showcase.commands import RobotCommander
 from experiments.eql_showcase.episodic_memory import RunDatabase
 from experiments.eql_showcase.showcase import EqlShowcase
 
@@ -83,9 +92,25 @@ class ShowcasedDemonstration(RobotDemonstration):
     The database finished runs are kept in and asked about, or None to keep no runs.
     """
 
+    returnable_objects: List[Type[HasRootBody]] = field(default_factory=list)
+    """
+    The kinds of object the robot can be told to put back where they started.
+    """
+
+    takes_commands: bool = False
+    """
+    Whether the robot goes on taking commands from the viewer once the demonstration's
+    own plan is done.
+    """
+
     showcase: Optional[EqlShowcase] = field(init=False, default=None)
     """
     The showcase offering this run's knowledge, once its world exists.
+    """
+
+    homes: Dict[Type[HasRootBody], Pose] = field(init=False, default_factory=dict)
+    """
+    Where each returnable object stood before the plan began.
     """
 
     def acquire_world(self) -> World:
@@ -97,7 +122,46 @@ class ShowcasedDemonstration(RobotDemonstration):
     def run(self) -> World:
         world = super().run()
         self.showcase.remember_run(self.run_label)
+        if self.takes_commands:
+            self.serve_commands(world)
         return world
+
+    def serve_commands(self, world: World) -> None:
+        """
+        Let the viewer command the robot, for as long as the process runs.
+
+        :param world: The world the demonstration acted in.
+        """
+        commander = RobotCommander(
+            context=self.build_context(world),
+            execution_environment=lambda: ExecutionEnvironment(
+                execution_type=self.execution_type,
+                collision_avoidance=self.collision_avoidance,
+            ),
+            observe_plan=self._observe_command_plan,
+            homes=self.homes,
+        )
+        self.showcase.commander = commander
+        self._offer_showcase()
+        commander.serve_forever()
+
+    def _observe_command_plan(self, plan: Plan) -> None:
+        """
+        Show a plan a command became in the viewer, and offer its actions to questions.
+
+        :param plan: The plan about to be performed.
+        """
+        self.showcase.observe_plan(plan)
+        if self.visualization is not None:
+            self.visualization.attach_plan(plan)
+
+    def build_context(self, world: World) -> Context:
+        if not self.homes:
+            self.homes = {
+                kind: world.get_semantic_annotations_by_type(kind)[0].root.global_pose
+                for kind in self.returnable_objects
+            }
+        return super().build_context(world)
 
     def build_plan(self, context: Context) -> Plan | PlanNode:
         built = super().build_plan(context)
@@ -152,17 +216,21 @@ def showcased_place_setting() -> Type[RobotDemonstration]:
     return ShowcasedPlaceSetting
 
 
-def main(collision_avoidance: bool = True) -> None:
+def main(collision_avoidance: bool = True, takes_commands: bool = True) -> None:
     """
-    Run the place setting with the EQL showcase.
+    Run the place setting with the EQL showcase, then let the viewer command the robot.
 
     :param collision_avoidance: Whether every motion state chart avoids collisions.
+    :param takes_commands: Whether the robot takes commands from the viewer once the
+        place setting is laid.
     """
     showcased_place_setting()(
         used_robot=PR2,
         collision_avoidance=collision_avoidance,
         run_label=PLACE_SETTING_LABEL,
         run_database=RunDatabase(data_directory() / RUN_DATABASE_FILE),
+        returnable_objects=[Milk, Bowl],
+        takes_commands=takes_commands,
     ).run()
 
 

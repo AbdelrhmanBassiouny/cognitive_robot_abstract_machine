@@ -42,7 +42,7 @@ def twin(pipeline: MontessoriPerceptionPipeline) -> PerceivedTwin:
     """
     An empty twin over the stretch of table the pipeline looks at.
     """
-    return PerceivedTwin(pipeline.region, pipeline.table_height)
+    return PerceivedTwin.on_bare_table(pipeline.region, pipeline.table_height)
 
 
 def seen_pieces(twin: PerceivedTwin) -> list[MontessoriShape]:

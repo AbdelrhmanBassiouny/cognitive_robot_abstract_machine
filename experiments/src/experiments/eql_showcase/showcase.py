@@ -21,6 +21,12 @@ from cramera.live.detections import DetectedEvents
 from segmind.event_logger import EventLogger
 from semantic_digital_twin.world import World
 
+from experiments.eql_showcase.commands import (
+    ResolutionStep,
+    ResolutionSteps,
+    RobotCommand,
+    RobotCommander,
+)
 from experiments.eql_showcase.episodic_memory import RunDatabase, SqlEvaluation
 from experiments.eql_showcase.performed_actions import (
     PerformedAction,
@@ -49,6 +55,7 @@ class QuestionField(StrEnum):
     SCOPE = "scope"
     TEXT = "text"
     CODE = "code"
+    COMMANDS_THE_ROBOT = "commands_the_robot"
 
 
 class ShowcaseVariable(StrEnum):
@@ -58,6 +65,9 @@ class ShowcaseVariable(StrEnum):
 
     ACTION = "action"
     RUN = "run"
+    STEP = "step"
+    COMMAND = "command"
+    ROBOT = "robot"
 
 
 @dataclass(frozen=True)
@@ -81,6 +91,12 @@ class ShowcaseQuestion:
     The EQL query answering the question.
     """
 
+    commands_the_robot: bool = False
+    """
+    Whether this is a command to the robot rather than a question, offered only while
+    the robot can take commands.
+    """
+
     @classmethod
     def from_json(cls, data: Dict[str, str]) -> ShowcaseQuestion:
         """
@@ -92,6 +108,7 @@ class ShowcaseQuestion:
             scope=QueryScope(data[QuestionField.SCOPE]),
             text=data[QuestionField.TEXT],
             code=data[QuestionField.CODE].strip(),
+            commands_the_robot=bool(data.get(QuestionField.COMMANDS_THE_ROBOT, False)),
         )
 
     def preset(self) -> Preset:
@@ -122,14 +139,20 @@ class ShowcaseQuestions:
         entries = yaml.safe_load(path.read_text())
         return cls(tuple(ShowcaseQuestion.from_json(entry) for entry in entries))
 
-    def presets(self, scopes: List[QueryScope]) -> List[Preset]:
+    def presets(
+        self, scopes: List[QueryScope], robot_takes_commands: bool = False
+    ) -> List[Preset]:
         """
         The buttons for the questions about the given bodies of knowledge.
 
         :param scopes: The bodies of knowledge the questions may be asked of.
+        :param robot_takes_commands: Whether commands to the robot are offered too.
         """
         return [
-            question.preset() for question in self.questions if question.scope in scopes
+            question.preset()
+            for question in self.questions
+            if question.scope in scopes
+            and (robot_takes_commands or not question.commands_the_robot)
         ]
 
 
@@ -170,6 +193,18 @@ class EqlShowcase:
     """
     The ready-made questions offered as buttons.
     """
+
+    commander: Optional[RobotCommander] = None
+    """
+    What carries out the commands given from the viewer, once the robot can take them.
+    """
+
+    @property
+    def resolution_steps(self) -> ResolutionSteps:
+        """
+        Every candidate considered for the open parts of the plans performed so far.
+        """
+        return ResolutionSteps(self.performed_actions.plans)
 
     def observe_plan(self, plan: Plan) -> None:
         """
@@ -234,7 +269,7 @@ class EqlShowcase:
         detected events' own.
         """
         offered = [item.scope for item in self.knowledge()]
-        presets = self.questions.presets(offered)
+        presets = self.questions.presets(offered, self.commander is not None)
         if self.detected_events is not None:
             presets.extend(self.detected_events.presets())
         return presets
