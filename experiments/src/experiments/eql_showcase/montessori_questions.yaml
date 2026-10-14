@@ -1,0 +1,129 @@
+# The questions and commands the Montessori showcase offers while Tracy sorts the pieces
+# its camera saw.
+#
+#   current_state    - Tracy's twin as it is now: what the camera saw (`MontessoriShape`,
+#                      `SeenPiece`, the holes as `Region`s), what Tracy did (`action`),
+#                      every candidate it considered for what the plan left open
+#                      (`step`), and the commands given (`command`, through `robot`);
+#                      `montessori` builds sorting plans for a command
+#   detected_events  - what segmind saw happen to the pieces (`event`)
+#   episodic_memory  - every run already finished, answered in SQL (`run`, `action`)
+#
+# A question marked `commands_the_robot` is offered only while Tracy takes commands; one
+# also marked `acts` tells Tracy to do something, so it is only ever run when picked.
+
+- scope: current_state
+  text: What does the camera see?
+  code: |
+    piece = variable(MontessoriShape, world.semantic_annotations)
+    an(entity(piece.root))
+
+- scope: current_state
+  text: Which holes did it see?
+  code: |
+    an(entity(variable(Region, world.regions)))
+
+- scope: current_state
+  text: Which pieces are on the board now?
+  code: |
+    piece = variable(MontessoriShape, world.semantic_annotations)
+    board = variable(Body, world.bodies)
+    an(entity(piece.root).where(board.name.name == 'board', SupportedBy(piece.root, board)))
+
+- scope: current_state
+  text: Which pieces are still on the table?
+  code: |
+    piece = variable(MontessoriShape, world.semantic_annotations)
+    table = variable(Table, world.semantic_annotations)
+    an(entity(piece.root).where(SupportedBy(piece.root, table.root)))
+
+- scope: current_state
+  text: Take the cylinder back out
+  commands_the_robot: true
+  acts: true
+  code: |
+    robot.do(montessori.take_out(CylinderShape), 'take the cylinder out')
+
+- scope: current_state
+  text: Insert the cylinder again
+  commands_the_robot: true
+  acts: true
+  code: |
+    robot.do(montessori.insert(CylinderShape), 'insert the cylinder')
+
+- scope: current_state
+  text: Take the triangular prism back out
+  commands_the_robot: true
+  acts: true
+  code: |
+    robot.do(montessori.take_out(TriangularPrismShape), 'take the triangular prism out')
+
+- scope: current_state
+  text: Pause
+  commands_the_robot: true
+  acts: true
+  code: |
+    robot.pause()
+
+- scope: current_state
+  text: Resume
+  commands_the_robot: true
+  acts: true
+  code: |
+    robot.resume()
+
+- scope: current_state
+  text: What have I asked you to do?
+  commands_the_robot: true
+  code: |
+    an(entity(command))
+
+- scope: current_state
+  text: What did you do?
+  code: |
+    an(entity(action).where(action.part_of == None))
+
+- scope: current_state
+  text: How did you resolve what the plan left open?
+  code: |
+    an(entity(step))
+
+- scope: current_state
+  text: How did you decide how to grasp each piece?
+  code: |
+    an(entity(step).where(step.open_part == 'PickUpAction'))
+
+- scope: current_state
+  text: Which hole did you choose for each piece?
+  code: |
+    an(entity(step).where(step.open_part == 'PlaceAction'))
+
+- scope: current_state
+  text: Which candidates did you reject, and why?
+  code: |
+    an(entity(step).where(step.outcome == 'rejected in trial'))
+
+- scope: detected_events
+  text: When was each piece picked up?
+  code: |
+    an(entity(event).where(event.event_type == 'PickUpEvent'))
+
+- scope: detected_events
+  text: When was each piece placed?
+  code: |
+    an(entity(event).where(event.event_type == 'PlacingEvent'))
+
+- scope: episodic_memory
+  text: Which runs do you remember?
+  code: |
+    an(entity(run))
+
+- scope: episodic_memory
+  text: In which runs did you pick up a cylinder?
+  code: |
+    an(entity(run).where(exists(step := flat_variable(run.actions), step.acted_on == 'seen/cylinder 1')))
+
+- scope: episodic_memory
+  text: What were your slowest pick ups ever?
+  code: |
+    an(entity(action).where(action.action_type == 'PickUpAction')).ordered_by(action.seconds, descending=True).limit(5)

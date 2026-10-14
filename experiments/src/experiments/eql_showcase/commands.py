@@ -21,6 +21,7 @@ import numpy as np
 from typing_extensions import Callable, ContextManager, Dict, List, Optional, Type
 
 from coraplex.datastructures.dataclasses import Context
+from krrood.entity_query_language.utils import camel_case_to_words
 from coraplex.execution_environment import ExecutionEnvironment
 from coraplex.plans.factories import execute_single
 from coraplex.plans.failures import PlanFailure
@@ -29,6 +30,7 @@ from coraplex.plans.underspecified import CandidateTrial, UnderspecifiedNode
 from coraplex.robot_plans.actions.base import ActionDescription
 from coraplex.robot_plans.actions.composite.transporting import TransportAction
 from semantic_digital_twin.grasping.grasp_candidates import GraspCandidate
+from semantic_digital_twin.robots.robot_parts import AbstractRobotPart, Arm
 from semantic_digital_twin.semantic_annotations.mixins import HasRootBody
 from semantic_digital_twin.spatial_types.spatial_types import Pose
 from semantic_digital_twin.world import World
@@ -224,10 +226,19 @@ class CandidateChoice:
 
     def grasped_body(self):
         """
-        The body the candidate grasps, or None for one that grasps nothing.
+        The body the candidate is about: what it grasps, else the first object it names
+        that is not a part of the robot, or None for one about no object.
         """
         grasps = [value for value in self.values() if isinstance(value, GraspCandidate)]
-        return grasps[0].graspable.root if grasps else None
+        if grasps:
+            return grasps[0].graspable.root
+        named = [
+            value.root
+            for value in self.values()
+            if isinstance(value, HasRootBody)
+            and not isinstance(value, AbstractRobotPart)
+        ]
+        return named[0] if named else None
 
     def describe(self) -> str:
         """
@@ -237,6 +248,8 @@ class CandidateChoice:
         for value in self.values():
             if isinstance(value, GraspCandidate):
                 parts.append(f"grasp {self.approach_of(value.grasp_pose)}")
+            elif isinstance(value, Arm):
+                parts.append(f"with the {camel_case_to_words(type(value).__name__)}")
             elif isinstance(value, Pose):
                 x, y = value.position.to_np()[:2]
                 parts.append(f"at ({x:.2f}, {y:.2f})")

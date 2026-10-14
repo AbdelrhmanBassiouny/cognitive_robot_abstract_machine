@@ -10,8 +10,9 @@
 #                      ORMatic translates the very same language into a query the
 #                      database runs, and the panel shows that SQL under the answer
 #
-# A question marked `commands_the_robot` tells the robot to do something rather than
-# asking, and is offered only while the robot takes commands.
+# A question marked `commands_the_robot` is offered only while the robot takes commands;
+# one also marked `acts` tells the robot to do something, so it is only ever run when
+# picked, never to read it back in English.
 #
 # The text is the button's label; the panel reads the query itself back in English
 # underneath it, through EQL's own verbalization.
@@ -52,24 +53,28 @@
 - scope: current_state
   text: Put the milk back where it was
   commands_the_robot: true
+  acts: true
   code: |
     robot.put_back(Milk)
 
 - scope: current_state
   text: Put the bowl back where it was
   commands_the_robot: true
+  acts: true
   code: |
     robot.put_back(Bowl)
 
 - scope: current_state
   text: Pause
   commands_the_robot: true
+  acts: true
   code: |
     robot.pause()
 
 - scope: current_state
   text: Resume
   commands_the_robot: true
+  acts: true
   code: |
     robot.resume()
 

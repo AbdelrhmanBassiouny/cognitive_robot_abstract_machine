@@ -24,11 +24,11 @@ from experiments.montessori.pieces import PieceSet
 from experiments.montessori.semantics import MontessoriShape
 from krrood.entity_query_language.utils import camel_case_to_words
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
+from semantic_digital_twin.grasping.grasp_candidates import HasGraspCandidates
 from semantic_digital_twin.robots.robot_parts import MountingTable
 from semantic_digital_twin.robots.tracy import Tracy
 from semantic_digital_twin.semantic_annotations.semantic_annotations import Table
-from semantic_digital_twin.specifications.robots import RobotSpecification
-from semantic_digital_twin.specifications.worlds import WorldSpecification
+from semantic_digital_twin.adapters.urdf import URDFParser
 from semantic_digital_twin.spatial_types import HomogeneousTransformationMatrix
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.connections import FixedConnection
@@ -88,6 +88,46 @@ UNKNOWN_PIECE_COLOR = Color(0.6, 0.6, 0.6)
 The colour of a kind of piece the full-size set has no measured colour for.
 """
 
+# %% a seen piece the robot can take hold of
+
+
+@dataclass(eq=False)
+class SeenPiece(HasGraspCandidates):
+    """
+    A piece the camera saw, as something the robot can grasp.
+
+    It names the same body as the annotation of the piece's kind, which says what the
+    piece is; this one says how to take hold of it.
+    """
+
+    kind: Type[MontessoriShape] = field(kw_only=True)
+    """
+    The kind of piece it was recognised as.
+    """
+
+
+@dataclass(frozen=True)
+class SeenHole:
+    """
+    A hole the camera saw in the board's lid, and the kind of piece it is cut for.
+    """
+
+    region: Region
+    """
+    The region of the twin the hole is.
+    """
+
+    kind: Type[MontessoriShape]
+    """
+    The kind of piece the hole was recognised as cut for.
+    """
+
+    lid_height: float
+    """
+    Height of the lid the hole is cut into, in metres.
+    """
+
+
 # %% the colour a piece is drawn in
 
 
@@ -130,6 +170,11 @@ class PerceivedTwin:
     Height of the table top in the frame looks are placed in, in metres.
     """
 
+    holes: List[SeenHole] = field(init=False, default_factory=list)
+    """
+    The holes the current look saw.
+    """
+
     committed: List[KinematicStructureEntity] = field(init=False, default_factory=list)
     """
     What the current look committed, removed again when the next look is committed.
@@ -148,10 +193,8 @@ class PerceivedTwin:
         Tracy's description places its table top in the frame the camera's poses are
         measured in, so what is seen lands on it as it lay on the real table.
         """
-        world = WorldSpecification.from_urdf(
-            Tracy.get_ros_file_path(),
-            robots=[RobotSpecification(semantic_annotation_type=Tracy)],
-        ).to_domain_object()
+        world = URDFParser.from_file(file_path=Tracy.get_ros_file_path()).parse()
+        Tracy.from_world(world)
         [table] = world.get_semantic_annotations_by_type(MountingTable)
         return cls(
             world=world,
@@ -251,6 +294,7 @@ class PerceivedTwin:
                 ),
             )
             self.committed.append(region)
+            self.holes.append(SeenHole(region, hole.category, board.lid_height))
 
     def _commit_piece(self, piece: MontessoriShapeDetection, index: int) -> None:
         """
@@ -272,6 +316,9 @@ class PerceivedTwin:
         )
         self.committed.append(body)
         self.world.add_semantic_annotation(piece.category(name=body.name, root=body))
+        self.world.add_semantic_annotation(
+            SeenPiece(name=body.name, root=body, kind=piece.category)
+        )
 
     # %% placing entities
 
@@ -315,6 +362,7 @@ class PerceivedTwin:
         for annotation in list(self.world.semantic_annotations):
             if self._annotates_one_of(annotation, committed):
                 self.world.remove_semantic_annotation(annotation)
+        self.holes.clear()
         for entity in self.committed:
             self.world.remove_connection(entity.parent_connection)
             self.world.remove_kinematic_structure_entity(entity)
@@ -330,7 +378,10 @@ class PerceivedTwin:
         :param annotation: The annotation to check.
         :param entities: The entities committed by the previous look.
         """
-        return isinstance(annotation, MontessoriShape) and annotation.root in entities
+        return (
+            isinstance(annotation, (MontessoriShape, SeenPiece))
+            and annotation.root in entities
+        )
 
     def _resting_on(
         self, detection: MontessoriDetection, height: float

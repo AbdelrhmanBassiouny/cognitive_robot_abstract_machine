@@ -26,7 +26,7 @@ from pathlib import Path
 from types import ModuleType
 
 import coraplex
-from typing_extensions import Dict, List, Optional, Type
+from typing_extensions import Any, Dict, List, Optional, Type
 
 from coraplex.datastructures.dataclasses import Context
 from coraplex.execution_environment import ExecutionEnvironment
@@ -45,7 +45,7 @@ from semantic_digital_twin.world import World
 
 from experiments.eql_showcase.commands import RobotCommander
 from experiments.eql_showcase.episodic_memory import RunDatabase
-from experiments.eql_showcase.showcase import EqlShowcase
+from experiments.eql_showcase.showcase import EqlShowcase, ShowcaseQuestions
 
 RUN_DATABASE_FILE = "eql_showcase_runs.sqlite"
 """
@@ -103,6 +103,16 @@ class ShowcasedDemonstration(RobotDemonstration):
     own plan is done.
     """
 
+    questions: ShowcaseQuestions = field(default_factory=ShowcaseQuestions.from_file)
+    """
+    The ready-made questions the showcase offers about this demonstration.
+    """
+
+    extra_names: Dict[str, Any] = field(default_factory=dict)
+    """
+    Further names the showcase's questions and commands may use.
+    """
+
     showcase: Optional[EqlShowcase] = field(init=False, default=None)
     """
     The showcase offering this run's knowledge, once its world exists.
@@ -115,7 +125,12 @@ class ShowcasedDemonstration(RobotDemonstration):
 
     def acquire_world(self) -> World:
         world = super().acquire_world()
-        self.showcase = EqlShowcase(world, database=self.run_database)
+        self.showcase = EqlShowcase(
+            world,
+            database=self.run_database,
+            questions=self.questions,
+            extra_names=self.extra_names,
+        )
         self._offer_showcase()
         return world
 

@@ -143,3 +143,14 @@ def test_commands_are_offered_only_while_the_robot_takes_them(pr2_apartment_worl
     showcase = EqlShowcase(pr2_apartment_world)
 
     assert WHAT_HAVE_I_ASKED not in [preset.text for preset in showcase.presets()]
+
+
+def test_offering_the_commands_gives_none_of_them(pr2_apartment_world, commander):
+    commander.remember_homes([Milk])
+    showcase = EqlShowcase(pr2_apartment_world, commander=commander)
+    bridge = Bridge()
+    showcase.register_with(bridge)
+
+    bridge.query_presets()
+
+    assert commander.commands == []

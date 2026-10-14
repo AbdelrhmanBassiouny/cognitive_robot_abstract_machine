@@ -27,6 +27,7 @@ from krrood.entity_query_language.verbalization.verbalizer import (  # noqa: E40
     EQLVerbalizer,
 )
 
+from cramera.knowledge.presets import CommandPreset  # noqa: E402
 from cramera.knowledge.query_domain import QueryDomain  # noqa: E402
 from cramera.knowledge.query_runner import EqlQueryRunner  # noqa: E402
 from cramera.knowledge.query_verbalization import (  # noqa: E402
@@ -338,6 +339,17 @@ class TestWordingFromCode:
         runner.verbalize("an(entity(record))")
 
         assert runner.run_source("an(entity(record))").ok
+
+    def test_a_preset_that_makes_the_robot_act_is_not_built_to_word_it(self):
+        orders: list[str] = []
+        runner = make_runner()
+        runner.extra_names["orders"] = orders
+        preset = CommandPreset(text="Act", code="orders.append('act')")
+
+        worded = preset.worded(runner)
+
+        assert orders == []
+        assert worded == preset
 
 
 # %% verbalizing what cannot be verbalized

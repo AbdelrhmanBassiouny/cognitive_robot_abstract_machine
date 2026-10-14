@@ -10,10 +10,10 @@ from enum import StrEnum
 from pathlib import Path
 
 import yaml
-from typing_extensions import Dict, List, Optional, Tuple
+from typing_extensions import Any, Dict, List, Optional, Tuple
 
 from coraplex.plans.plan import Plan
-from cramera.knowledge.presets import Preset
+from cramera.knowledge.presets import CommandPreset, Preset
 from cramera.knowledge.query_domain import QueryDomain
 from cramera.knowledge.queryable_knowledge import QueryableKnowledge, QueryScope
 from cramera.live.bridge import Bridge
@@ -56,6 +56,7 @@ class QuestionField(StrEnum):
     TEXT = "text"
     CODE = "code"
     COMMANDS_THE_ROBOT = "commands_the_robot"
+    ACTS = "acts"
 
 
 class ShowcaseVariable(StrEnum):
@@ -97,6 +98,12 @@ class ShowcaseQuestion:
     the robot can take commands.
     """
 
+    acts: bool = False
+    """
+    Whether asking it makes the robot do something, so it is never run just to read it
+    back in English.
+    """
+
     @classmethod
     def from_json(cls, data: Dict[str, str]) -> ShowcaseQuestion:
         """
@@ -109,13 +116,15 @@ class ShowcaseQuestion:
             text=data[QuestionField.TEXT],
             code=data[QuestionField.CODE].strip(),
             commands_the_robot=bool(data.get(QuestionField.COMMANDS_THE_ROBOT, False)),
+            acts=bool(data.get(QuestionField.ACTS, False)),
         )
 
     def preset(self) -> Preset:
         """
         The question as a button of the EQL panel.
         """
-        return Preset(text=self.text, code=self.code, scope=self.scope)
+        kind = CommandPreset if self.acts else Preset
+        return kind(text=self.text, code=self.code, scope=self.scope)
 
 
 @dataclass(frozen=True)
@@ -199,6 +208,12 @@ class EqlShowcase:
     What carries out the commands given from the viewer, once the robot can take them.
     """
 
+    extra_names: Dict[str, Any] = field(default_factory=dict)
+    """
+    Further names a question about the current state may use, such as what builds a
+    demonstration's plans.
+    """
+
     @property
     def resolution_steps(self) -> ResolutionSteps:
         """
@@ -259,6 +274,7 @@ class EqlShowcase:
                 )
             )
             current_state.extra_names[ShowcaseVariable.ROBOT] = self.commander
+        current_state.extra_names.update(self.extra_names)
         knowledge = [current_state]
         if self.database is not None:
             knowledge.append(

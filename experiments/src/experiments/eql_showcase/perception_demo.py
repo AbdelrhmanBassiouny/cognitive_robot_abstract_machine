@@ -17,12 +17,11 @@ from __future__ import annotations
 import time
 from dataclasses import dataclass, field
 
-from typing_extensions import List, Optional
+from typing_extensions import Dict, List, Optional
 
 from cramera.knowledge.queryable_knowledge import QueryableKnowledge, QueryScope
 from cramera.live.bridge import Bridge
 from cramera.live.runner import start
-from experiments.montessori import semantics
 from experiments.montessori.perception.captures import (
     CAPTURE_DIRECTORY,
     CapturePart,
@@ -32,7 +31,7 @@ from experiments.montessori.perception.node import TRACY_WORKSPACE
 from experiments.montessori.perception.pipeline import MontessoriPerceptionPipeline
 from experiments.montessori.semantics import MontessoriShape
 from experiments.montessori.world import BOARD_SCALE
-from experiments.eql_showcase.perceived_twin import PerceivedTwin
+from experiments.eql_showcase.perceived_twin import PerceivedTwin, SeenPiece
 from experiments.eql_showcase.showcase import QUESTIONS_FILE, ShowcaseQuestions
 
 PERCEPTION_QUESTIONS_FILE = QUESTIONS_FILE.with_name("perception_questions.yaml")
@@ -79,9 +78,9 @@ class PerceptionShowcase:
     the twin to the viewer's EQL panel.
     """
 
-    bridge: Bridge
+    bridge: Optional[Bridge]
     """
-    The bridge serving the viewer.
+    The bridge serving the viewer, or None for a look no viewer is shown.
     """
 
     twin: PerceivedTwin = field(default_factory=PerceivedTwin.beside_tracy)
@@ -107,14 +106,22 @@ class PerceptionShowcase:
     The ready-made questions about what the camera saw.
     """
 
+    def commit(self, capture_name: str) -> None:
+        """
+        Look at one capture and commit what was seen into the twin.
+
+        :param capture_name: The capture to look at.
+        """
+        capture = SceneCapture.load(capture_name)
+        self.twin.commit(self.pipeline.detect(capture.to_frame()))
+
     def look_at(self, capture_name: str) -> None:
         """
         Look at one capture, commit what was seen and offer it to the viewer.
 
         :param capture_name: The capture to look at.
         """
-        capture = SceneCapture.load(capture_name)
-        self.twin.commit(self.pipeline.detect(capture.to_frame()))
+        self.commit(capture_name)
         self.bridge.register_query_source(
             [self.knowledge()],
             LOOK_TITLE.format(capture_name.replace("_", " ")),
@@ -126,14 +133,16 @@ class PerceptionShowcase:
         The twin as it is now, with every kind of Montessori piece in scope by name.
         """
         knowledge = QueryableKnowledge.of_world(self.twin.world)
-        knowledge.extra_names.update(
-            {
-                kind.__name__: kind
-                for kind in [MontessoriShape, *MontessoriShape.__subclasses__()]
-                if kind.__module__ == semantics.__name__
-            }
-        )
+        knowledge.extra_names.update(self.piece_kinds())
         return knowledge
+
+    @staticmethod
+    def piece_kinds() -> Dict[str, type]:
+        """
+        Every kind of Montessori piece, and the piece the robot can grasp, by name.
+        """
+        kinds = [MontessoriShape, *MontessoriShape.__subclasses__(), SeenPiece]
+        return {kind.__name__: kind for kind in kinds}
 
 
 def main(capture_name: Optional[str] = None) -> None:
