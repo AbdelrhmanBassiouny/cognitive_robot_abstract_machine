@@ -59,7 +59,7 @@ items:
   branch: claude/the-icra-video-shows-the-plan-being-answered
   pull_request_number: 429
   track: icra-video
-  status: not started
+  status: not_started
   depends_on:
   - video-core
   notes: >
