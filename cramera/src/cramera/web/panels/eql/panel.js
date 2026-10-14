@@ -355,7 +355,7 @@ Panels.define('eql', function (root, bus) {
     if (res.verbalization) {
       showQuestion({ text: code, code: code, verbalization: res.verbalization });
     }
-    let html = '<div class="goal">&gt;&gt;&gt; ' + esc(code) + '</div>';
+    let html = '<div class="goal">&gt;&gt;&gt; ' + esc(code) + '</div>' + translationBlock(res.translation);
     if (!res.ok) {
       showAnswer(html + '<div class="qerr">' + esc(res.error || 'query failed') + '</div>');
       bus.emit('entity:highlight', { ids: [] });
@@ -371,6 +371,14 @@ Panels.define('eql', function (root, bus) {
     showAnswer(html);
     wireReplayButtons();
     bus.emit('entity:highlight', { ids: res.highlight || [] });
+  }
+
+  // the statement another query language answered the query by, such as the SQL a
+  // database ran for it, shown under the query it was translated from
+  function translationBlock(translation) {
+    if (!translation) return '';
+    return '<div class="query-translation"><div class="query-translation-language">answered in ' +
+      esc(translation.language) + '</div><pre>' + esc(translation.statement) + '</pre></div>';
   }
 
   // %% replaying an answered moment

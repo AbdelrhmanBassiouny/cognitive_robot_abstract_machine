@@ -308,6 +308,33 @@ test('a failed query is reported in the answer area, not swallowed', async funct
   assert.ok(answer.indexOf('NameError: shape') >= 0, answer);
 });
 
+// %% an answer worked out in another query language
+const TRANSLATED_ANSWER = Object.assign({}, ANSWER, {
+  translation: { language: 'SQL', statement: 'SELECT * FROM "RobotDAO" WHERE name = \'tracy\'' },
+});
+
+test('an answer worked out in another language shows the statement it ran', async function () {
+  const panel = mountPanel({ '/api/eql': TRANSLATED_ANSWER });
+  await flush(); await flush();
+
+  presetButtons(panel.root.part('#presets'))[0].click();
+  await flush(); await flush();
+
+  const answer = panel.root.part('#answer').innerHTML;
+  assert.ok(answer.indexOf(TRANSLATED_ANSWER.translation.language) >= 0, answer);
+  assert.ok(answer.indexOf(TRANSLATED_ANSWER.translation.statement) >= 0, answer);
+});
+
+test('an answer worked out in memory shows no translated statement', async function () {
+  const panel = mountPanel();
+  await flush(); await flush();
+
+  presetButtons(panel.root.part('#presets'))[0].click();
+  await flush(); await flush();
+
+  assert.ok(panel.root.part('#answer').innerHTML.indexOf('query-translation') < 0);
+});
+
 // %% asking by voice — the full demo flow, with a scripted microphone
 const MATCHED = { ok: true, matched: true, similarity: 95.0, preset: WORDED_PRESET };
 const UNMATCHED = {
