@@ -4,7 +4,6 @@ from abc import ABC
 from dataclasses import dataclass
 from typing_extensions import TYPE_CHECKING, List, Type
 
-from krrood.entity_query_language.factories import ConditionType, get_false_statements
 from krrood.exceptions import DataclassException
 from coraplex.datastructures.enums import (
     VisualizationBackend,
@@ -14,7 +13,6 @@ from coraplex.plans.failures import PlanFailure
 
 if TYPE_CHECKING:
     from coraplex.plans.designator import DesignatorParameters
-    from coraplex.robot_plans.actions.base import Action
     from cramph.composites import CompositeNodeChoosingItsChild
     from cramph.node import StatechartNode
     from semantic_digital_twin.robots.robot_parts import AbstractRobot, Arm
@@ -93,7 +91,7 @@ class PlanNotCompiled(DataclassException):
 
 
 @dataclass
-class NotAnUnderspecifiedNode(DataclassException):
+class NotAStatementNode(DataclassException):
     """
     Raised when a node asks for a child to be grounded that carries no underspecified
     statement.
@@ -275,24 +273,6 @@ class MissingToolFrame(DataclassException):
 
     def suggest_correction(self) -> str:
         return "ensure the arm's end effector defines a tool frame."
-
-
-@dataclass
-class ConditionNotSatisfied(PlanFailure):
-
-    pre_condition: bool
-    action: Type[Action]
-    condition: ConditionType
-
-    def error_message(self) -> str:
-        prefix = "Pre" if self.pre_condition else "Post"
-        if isinstance(self.condition, bool):
-            return f"{prefix}-Condition for Action '{self.action.__name__}' is not satisfied"
-        false_statements = get_false_statements(self.condition)
-        return f"{prefix}-Condition for Action '{self.action.__name__}' is not satisfied, following statements could not be satisfied: {[s._name_ for s in false_statements]}"
-
-    def suggest_correction(self) -> str:
-        return ""
 
 
 @dataclass

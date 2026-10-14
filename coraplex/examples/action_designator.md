@@ -273,8 +273,8 @@ from coraplex.robot_plans.actions.core.container import OpenAction
 from cramph.composites import Sequence
 from semantic_digital_twin.semantic_annotations.semantic_annotations import Handle
 
-# Opening reaches for a handle, so it is named by the handle's annotation rather than by
-# its body. The apartment carries none, so we register one for the drawer we want.
+# Opening takes a handle by one of the grasps its annotation offers, and tries them until
+# one works. The apartment carries no annotation, so we register one for the drawer.
 with world.modify_world():
     world.add_semantic_annotation_recursively(
         handle := Handle(root=world.get_body_by_name("handle_cab10_t"))
@@ -286,7 +286,7 @@ run(Sequence([
     NavigateAction(Pose.from_xyz_quaternion(1.7074915981292725, 2.6873629093170166, 0.0,
                                             -0.0, 0.0, 0.5253598267689507, -0.850880163370435,
                                             reference_frame=world.root)),
-    OpenAction(handle, pr2.right_arm)]))
+    OpenAction.from_handle(handle, pr2.right_arm)]))
 ```
 
 ## Closing
@@ -307,5 +307,5 @@ run(Sequence([
     NavigateAction(Pose.from_xyz_quaternion(1.72, 2.65, 0.0,
                                             -0.0, 0.0, 0.5253598267689507, -0.850880163370435,
                                             reference_frame=world.root)),
-    CloseAction(handle, pr2.right_arm)]))
+    CloseAction.from_handle(handle, pr2.right_arm)]))
 ```

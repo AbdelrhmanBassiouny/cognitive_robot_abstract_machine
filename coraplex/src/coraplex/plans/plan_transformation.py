@@ -151,7 +151,7 @@ class PlanRewriting(ContextExtension):
     A node is offered once it and everything below it has been expanded, in the order
     the plan runs its nodes, and the nodes a transformation inserts are offered in turn.
     Carried in the context of the statechart running the plan, so that a part of the
-    plan that joins it later is rewritten too.
+    plan that joins it later can be rewritten too.
     """
 
     transformations: List[PlanTransformation] = field(default_factory=list)

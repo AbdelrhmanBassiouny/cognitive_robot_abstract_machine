@@ -3,17 +3,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import timedelta
 
-from typing_extensions import Optional, Dict, Any, List
+from typing_extensions import Optional, Any, List
 
-from krrood.entity_query_language.core.base_expressions import SymbolicExpression
-from krrood.entity_query_language.core.variable import Variable
-from krrood.entity_query_language.factories import variable_from
-from semantic_digital_twin.reasoning.predicates import allclose
 from semantic_digital_twin.robots.robot_parts import Arm, EndEffector
 from semantic_digital_twin.spatial_types.spatial_types import Pose
 
-from coraplex.plans.context_extensions import RobotAccess
-from cramph.context import StatechartContext
 from coraplex.datastructures.trajectory import PoseTrajectory
 from coraplex.robot_plans.actions.base import Action
 from coraplex.robot_plans.mixins import (
@@ -54,22 +48,6 @@ class MoveTorsoAction(Action):
     def create_action_body(self) -> StatechartNode:
         joint_state = self.robot.get_torso().get_joint_state_by_type(self.torso_state)
         return Sequence([JointPositionList(goal_state=joint_state)])
-
-    @staticmethod
-    def post_condition(
-        variables: Dict[str, Variable],
-        context: StatechartContext,
-        kwargs: Dict[str, Any],
-    ) -> SymbolicExpression | bool:
-        """
-        The target joint state for the torso needs to be achieved.
-        """
-        joint_state = (
-            context.require_extension(RobotAccess)
-            .robot.get_torso()
-            .get_joint_state_by_type(kwargs["torso_state"])
-        )
-        return variable_from(joint_state).is_achieved()
 
 
 @dataclass(eq=False, repr=False)
@@ -217,18 +195,4 @@ class MoveManipulatorAction(MovesToolCenterPoint):
                 goal,
                 UpdateTemporaryCollisionRules.for_end_effector(self.end_effector),
             ]
-        )
-
-    @staticmethod
-    def post_condition(
-        variables: Dict[str, Variable],
-        context: StatechartContext,
-        kwargs: Dict[str, Any],
-    ) -> SymbolicExpression:
-        end_effector = variables["end_effector"]
-        target_pose = variables["target_pose"]
-        return allclose(
-            end_effector.tool_frame.global_pose.to_np(),
-            target_pose.to_np(),
-            atol=0.1,
         )

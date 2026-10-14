@@ -219,13 +219,13 @@ def test_a_simulated_plan_is_given_up_on_at_the_time_limit_of_its_demonstration(
     demonstration = RecordingDemonstration(
         world=cylinder_bot_world,
         used_robot=MinimalRobot,
-        simulation_time_limit=timedelta(0),
+        simulation_time_per_action=timedelta(0),
     )
 
     with pytest.raises(MotionExceededSimulationTimeLimit) as error:
         demonstration.run()
 
-    assert error.value.time_limit == demonstration.simulation_time_limit
+    assert error.value.time_limit == demonstration.simulation_time_per_action
 
 
 # %% event segmentation

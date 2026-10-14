@@ -3,11 +3,11 @@ from __future__ import annotations
 from abc import ABC
 from dataclasses import dataclass, field
 
-from typing_extensions import Any, Dict, Optional
+from typing_extensions import Optional
 
-from coraplex.plans.context_extensions import ExecutionMode, RobotAccess
+from coraplex.plans.context_extensions import ExecutionMode
 from krrood.ormatic.utils import classproperty
-from cramph.context import ContextExtension, StatechartContext
+from cramph.context import ContextExtension
 from coraplex.exceptions import NoFloorBelowRobot, NotOnASingleLevelException
 from cramph.node import StatechartNode
 from cramph.world_modification_nodes import MoveBranch
@@ -24,11 +24,8 @@ from giskardpy.motion_statechart.tasks.cartesian_tasks import (
     CartesianPosition,
 )
 from giskardpy.motion_statechart.tasks.pointing import Pointing
-from krrood.entity_query_language.core.variable import Variable
-from krrood.entity_query_language.factories import variable_from, and_, ConditionType
 from semantic_digital_twin.exceptions import MissingMovableJointError
-from semantic_digital_twin.reasoning.predicates import allclose, InsideOf
-from semantic_digital_twin.reasoning.robot_predicates import is_pose_free_for_robot
+from semantic_digital_twin.reasoning.predicates import InsideOf
 from semantic_digital_twin.robots.robot_parts import Camera
 from semantic_digital_twin.semantic_annotations.semantic_annotations import (
     Level,
@@ -115,46 +112,6 @@ class NavigateAction(DrivesBase):
 
     def create_action_body(self) -> StatechartNode:
         return self._drive_to(self.robot.mobile_base.pose_facing(self.target_location))
-
-    @staticmethod
-    def pre_condition(
-        variables: Dict[str, Variable],
-        context: StatechartContext,
-        kwargs: Dict[str, Any],
-    ) -> ConditionType:
-        """
-        The robot needs to have a drive and the target location needs to be free from
-        obstacles.
-        """
-        drive_variable = variable_from(
-            context.require_extension(RobotAccess).robot.drive is not None
-        )
-        return and_(
-            is_pose_free_for_robot(
-                context.require_extension(RobotAccess).robot,
-                variables["target_location"],
-            ),
-            drive_variable,
-        )
-
-    @staticmethod
-    def post_condition(
-        variables: Dict[str, Variable],
-        context: StatechartContext,
-        kwargs: Dict[str, Any],
-    ) -> ConditionType:
-        """
-        The robot needs to be within 3 cm of where the heading puts its base.
-        """
-        return allclose(
-            variable_from(
-                context.require_extension(RobotAccess).robot.root
-            ).global_pose,
-            context.require_extension(RobotAccess).robot.mobile_base.pose_facing(
-                kwargs["target_location"]
-            ),
-            atol=0.03,
-        )
 
 
 @dataclass(eq=False, repr=False)

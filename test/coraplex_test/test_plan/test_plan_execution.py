@@ -28,6 +28,7 @@ from coraplex.robot_plans.actions.core.robot_body import (
     MoveTorsoAction,
     ParkArmsAction,
 )
+from cramph.composites import Sequence
 from cramph.exceptions import StatechartOfDifferentContextError
 from cramph.data_types import LifeCycleValues, ObservationStateValues
 from cramph.executor import Pacer, StatechartExecutor
@@ -41,7 +42,7 @@ from semantic_digital_twin.grasping.grasp_candidates import GraspCandidate
 from semantic_digital_twin.robots.pr2 import PR2Joint
 from semantic_digital_twin.semantic_annotations.semantic_annotations import Milk
 from semantic_digital_twin.spatial_types import HomogeneousTransformationMatrix
-from ...plan_running import simulated_executor, statechart_of
+from ...plan_running import run_plan, simulated_executor, statechart_of
 
 # %% counting the waits between ticks
 
@@ -216,7 +217,7 @@ def test_a_plan_that_outlasts_the_simulation_time_limit_is_given_up_on(
     A simulated plan is given up on once it exceeds the simulation time limit.
     """
     world, robot_view, extensions = pr2_apartment_context
-    executor = simulated_executor(extensions, simulation_time_limit=timedelta(0))
+    executor = simulated_executor(extensions, simulation_time_per_action=timedelta(0))
 
     with pytest.raises(MotionExceededSimulationTimeLimit):
         executor.compile(statechart_of(executor, MoveTorsoAction(TorsoState.HIGH)))
@@ -228,7 +229,7 @@ def test_a_plan_is_given_up_on_at_the_simulation_time_limit_of_its_own_executor(
 ):
     world, robot_view, extensions = pr2_apartment_context
     executor = simulated_executor(
-        extensions, simulation_time_limit=timedelta(milliseconds=100)
+        extensions, simulation_time_per_action=timedelta(milliseconds=100)
     )
 
     with pytest.raises(MotionExceededSimulationTimeLimit) as error:
@@ -236,6 +237,34 @@ def test_a_plan_is_given_up_on_at_the_simulation_time_limit_of_its_own_executor(
         executor.execute()
 
     assert error.value.time_limit == executor.simulation_time_limit
+
+
+def test_a_plan_may_take_longer_the_more_actions_it_holds(pr2_apartment_context):
+    """
+    Each torso stroke fits the time one action is given, both strokes together only the
+    time two actions are given.
+    """
+    world, robot_view, extensions = pr2_apartment_context
+    plan = Sequence([MoveTorsoAction(TorsoState.HIGH), MoveTorsoAction(TorsoState.LOW)])
+
+    run_plan(plan, extensions, simulation_time_per_action=timedelta(seconds=25))
+
+    assert plan.life_cycle_state == LifeCycleValues.SUCCEEDED
+
+
+def test_the_simulation_time_limit_grows_when_an_action_joins(pr2_apartment_context):
+    """
+    An action joining the running plan adds its time before it starts.
+    """
+    world, robot_view, extensions = pr2_apartment_context
+    executor = simulated_executor(extensions)
+    statechart = statechart_of(executor, MoveTorsoAction(TorsoState.HIGH))
+    executor.compile(statechart)
+
+    with statechart.modify():
+        statechart.add_node(MoveTorsoAction(TorsoState.LOW))
+
+    assert executor.simulation_time_limit == 2 * executor.simulation_time_per_action
 
 
 def test_a_simulated_plan_waits_for_its_pacer_after_every_tick(

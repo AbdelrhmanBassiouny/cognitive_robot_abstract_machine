@@ -16,7 +16,7 @@ from coraplex.plans.plan_transformation import (
     PlanTransformation,
     logger as transformation_logger,
 )
-from coraplex.plans.underspecified import UnderspecifiedNode
+from coraplex.plans.underspecified import AttemptRewritingItsTask
 from coraplex.robot_plans.actions.base import Action
 from coraplex.robot_plans.actions.composite.facing import FaceAndLookAtAction
 from coraplex.robot_plans.actions.composite.transporting import (
@@ -40,7 +40,12 @@ from coraplex.robot_plans.plan_transformations import (
     ParkArmsAroundPickAndPlaceSteps,
     ParkArmsBeforeFirstAction,
 )
-from cramph.composites import Attempt, ChildChooser, CramLanguageNode, Sequence
+from cramph.composites import (
+    ChildChooser,
+    CramLanguageNode,
+    Sequence,
+    StatementNode,
+)
 from cramph.context import ContextExtension
 from cramph.context import StatechartContext
 from cramph.exceptions import NotRunByLanguageNodeError
@@ -67,7 +72,6 @@ from semantic_digital_twin.world import World
 from ..test_transporting import pick_and_place_of_the_milk
 from ...plan_running import context_of, simulated_executor, statechart_of
 from ...sampling import SAMPLING_SEED
-
 
 # %% expanding a plan without running it
 
@@ -704,7 +708,9 @@ def handle_opened_by(opening: Match) -> Handle:
     :param opening: The step that opens a drawer.
     :return: The handle it opens the drawer by.
     """
-    return opening._kwargs_["open_container"]._kwargs_["handle"]
+    grasps = opening._kwargs_["open_container"]._kwargs_["grasp"]._domain_.domain
+    [handle] = {grasp.graspable for grasp in grasps}
+    return handle
 
 
 def arm_opening_with(opening: Match) -> Arm:
@@ -719,7 +725,7 @@ def is_grounding(step: StatechartNode, action_type: type) -> bool:
     """
     :return: Whether `step` grounds an action of `action_type` when it runs.
     """
-    return isinstance(step, UnderspecifiedNode) and step.statement._type_ is action_type
+    return isinstance(step, StatementNode) and step.statement._type_ is action_type
 
 
 def test_the_drawer_is_only_opened_for_an_object_that_lies_in_one(
@@ -961,7 +967,7 @@ class ChoosesTheGivenChild(ChildChooser):
     """
 
     def choose_child(
-        self, node: UnderspecifiedNode, context: StatechartContext
+        self, node: StatementNode, context: StatechartContext
     ) -> Optional[StatechartNode]:
         child, self.child = self.child, None
         return child
@@ -984,7 +990,7 @@ def test_the_opening_joins_the_sequence_a_grounded_pick_up_runs_in(
     plan_transformations.append(OpenDrawerBeforePickUp())
 
     described = pick_up_action(spoon, view.right_arm)
-    underspecified = UnderspecifiedNode(
+    underspecified = StatementNode(
         statement=a(PickUpAction)(grasp=described.grasp, arm=described.arm)
     )
     plan = rewritten(Sequence([underspecified]), extensions, plan_transformations)
@@ -993,7 +999,9 @@ def test_the_opening_joins_the_sequence_a_grounded_pick_up_runs_in(
 
     underspecified.choose_child_with(
         ChoosesTheGivenChild(
-            child=Attempt(task=candidate_steps, failure_monitors=[ConstFalseNode()])
+            child=AttemptRewritingItsTask(
+                task=candidate_steps, failure_monitors=[ConstFalseNode()]
+            )
         ),
         plan.statechart.context,
     )
@@ -1020,7 +1028,7 @@ def test_the_first_action_of_a_plan_is_preceded_by_parking(pr2_apartment_context
     assert kinds_of_the_steps_of(plan) == [ParkArmsAction, MoveTorsoAction]
 
 
-def underspecified_move_and_pick_up_in(plan: StatechartNode) -> UnderspecifiedNode:
+def underspecified_move_and_pick_up_in(plan: StatechartNode) -> StatementNode:
     """
     :param plan: A node whose descendants hold one move-and-pick-up left to be grounded.
     :return: That move-and-pick-up's node.
@@ -1058,7 +1066,7 @@ def test_the_drawer_is_opened_once_in_front_of_a_move_and_pick_up_still_to_be_gr
         spoon, view.right_arm, context_of(extensions), seed=SAMPLING_SEED
     )
     plan = rewritten(
-        Sequence([UnderspecifiedNode(statement=move_and_pick_up)]),
+        Sequence([StatementNode(statement=move_and_pick_up)]),
         extensions,
         plan_transformations,
     )
@@ -1127,7 +1135,7 @@ def test_a_move_and_pick_up_whose_grasps_are_on_several_objects_is_opened_per_ca
         ),
     )
     plan = rewritten(
-        Sequence([UnderspecifiedNode(statement=move_and_pick_up)]),
+        Sequence([StatementNode(statement=move_and_pick_up)]),
         extensions,
         plan_transformations,
     )
@@ -1182,7 +1190,7 @@ def step_types_of(action: Action) -> List[type]:
         of the action a step grounds when it is still to be grounded.
     """
     return [
-        (step.statement._type_ if isinstance(step, UnderspecifiedNode) else type(step))
+        (step.statement._type_ if isinstance(step, StatementNode) else type(step))
         for step in steps_of(action)
     ]
 

@@ -9,7 +9,7 @@ entry from this file.
 ## Sending statecharts as JSON
 
 - Whether an underspecified statement (a krrood `Match`) has to survive JSON at all.
-  Today `UnderspecifiedNode.statement` is not serialized, and the node is sent as the
+  Today `StatementNode.statement` is not serialized, and the node is sent as the
   `CompositeNodeChoosingItsChild` it is, so the receiving process asks the sender for
   each child instead of grounding the statement itself. Tests covering that, and a
   statement inside a sent statechart, are still to be written.
@@ -41,22 +41,9 @@ expands the moment it joins a statechart (`Statechart.add_node`), and expanding 
 the context, so the context would have to be known before the executor is, or
 expansion would have to move to compile time. That is a cramph change of its own.
 
-### Underspecified statements as steps of a plan language node
+### Steps of the composite actions typed as statements
 
-A composite action whose step may be an `a(...)` statement wraps the statement in an
-`UnderspecifiedNode` itself (`ActionOfSteps._as_node`). The plan language nodes
-could accept a krrood `Match` among their children directly. Two ways to get there:
-
-- cramph defines a node carrying a krrood `Match` (cramph may import krrood), which
-  every `CramLanguageNode` wraps a `Match` child in when it adopts it, and coraplex's
-  `UnderspecifiedNode` becomes, or extends, that node. The statement then lives in
-  cramph although only coraplex grounds it.
-- cramph defines a context extension that converts a child a language node cannot run
-  into one it can, which coraplex registers for `Match`. Nothing about statements
-  enters cramph, but a language node then needs its context to adopt its children,
-  which it only has once it joined a statechart.
-
-Separately, the steps of the composite actions are typed as the action they hold
+The steps of the composite actions are typed as the action they hold
 (`pick_up: MoveAndPickUpAction`) although they may hold a `Match`. Typing them
 `MoveAndPickUpAction | Match` makes ORMatic leave the field out of the data access
 object, so a stored transport loses its steps; ORMatic needs to map such a union first.
@@ -65,7 +52,7 @@ object, so a stored transport loses its steps; ORMatic needs to map such a union
 
 `ActionTrial.succeeds` runs a candidate in a `Sequence` of its own, so that the nodes a
 plan transformation puts beside it are tried with it, the way the candidate runs for
-real inside the `Attempt` of its `UnderspecifiedNode`. Simon would rather not wrap the
+real inside the `Attempt` of its `StatementNode`. Simon would rather not wrap the
 candidate; doing without it needs plan transformations that can insert beside a node
 no language node runs.
 
@@ -113,23 +100,3 @@ have no plan transformation in
   Options: check whether `MoveGripper(tolerate_stall=True, stall_minimum_time=...)`
   already covers what the Stretch needs; otherwise a transformation over `MoveGripper`
   that replaces it wherever it runs.
-
-## Problems the bowl and cup plan ran into
-
-`test/coraplex_test/test_bowl_and_cup.py` works around this one.
-
-### `OpenAction` grasps a handle along the x-axis of its body
-
-`OpenAction` and `CloseAction` take hold of a handle with
-`GraspCandidate.from_body_origin(handle)`: at the origin of the handle's body,
-approaching along its x-axis and closing the fingers along its y-axis. The handle links
-of `kitchen-small.urdf` and `kitchen.urdf` have their x-axis pointing out of the
-furniture and their y-axis along the bar, so the gripper is sent to the handle from
-inside the furniture and the motion stalls. The handles of the apartment happen to
-point the way the grasp expects.
-
-The test adds a frame at the handle's origin that points into the furniture and across
-the bar (`add_handle_frame`) and annotates that frame as the `Handle`. Options:
-`OpenAction` and `CloseAction` take the grasp from `Handle.grasp_candidates`, and
-`Handle` derives it from its geometry and the body it opens; or the annotations of the
-kitchen carry the grasp frame of each handle.

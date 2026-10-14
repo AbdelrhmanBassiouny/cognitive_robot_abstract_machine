@@ -26,8 +26,7 @@ from semantic_digital_twin.orm.model import (
 from semantic_digital_twin.robots.pr2 import PR2Joint
 from semantic_digital_twin.semantic_annotations.semantic_annotations import Milk
 
-from coraplex.plans.underspecified import UnderspecifiedNode
-from cramph.composites import Sequence
+from cramph.composites import Sequence, StatementNode
 from ...plan_running import run_plan, with_grounding
 
 
@@ -79,12 +78,12 @@ def test_algebra_sequential_plan(apartment_world_pr2_copy_with_context):
 
     # resolved_navigate = next(pm_backend.evaluate(navigate_action))
     plan = Sequence(
-        [MoveTorsoAction(TorsoState.LOW), UnderspecifiedNode(statement=navigate_action)]
+        [MoveTorsoAction(TorsoState.LOW), StatementNode(statement=navigate_action)]
     )
 
     run_plan(plan, extensions)
 
-    assert isinstance(plan.nodes[1].chosen_actions[-1], NavigateAction)
+    assert isinstance(plan.nodes[1].grounded_nodes[-1], NavigateAction)
     assert len(plan.nodes[1].children) == 1
 
 
@@ -117,7 +116,7 @@ def test_parameterization_of_pick_up(apartment_world_pr2_copy_with_context):
         query_backend=ProbabilisticBackend(model_registry=FullyFactorizedRegistry()),
     )
 
-    plan = UnderspecifiedNode(statement=pick_up_description)
+    plan = StatementNode(statement=pick_up_description)
 
     try:
         run_plan(plan, extensions)

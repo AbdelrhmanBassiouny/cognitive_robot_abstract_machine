@@ -5,9 +5,14 @@ from dataclasses import dataclass, field
 from itertools import combinations
 from typing import List
 
-from typing_extensions import Optional
+from typing_extensions import Any, Generator, Optional
 
+from krrood.adapters.json_serializer import JSONField
+from krrood.entity_query_language.backends import QueryBackend
+from krrood.entity_query_language.query.match import Match
 from krrood.ormatic.utils import classproperty
+from krrood.patterns.field_metadata import JSONMetadata
+from krrood.utils import get_full_class_name
 from cramph.node import EndedByOwner, SucceedsOnObservingTrue, FailsOnObservingFalse
 from cramph.context import ContextExtension, StatechartContext
 from cramph.data_types import (
@@ -214,12 +219,29 @@ class CramLanguageNode(CompositeNode, ABC):  # ControlStructureNode?
     Its children can be changed after it joined a statechart, up to the moment the
     statechart is compiled: :meth:`insert_before`, :meth:`insert_after` and
     :meth:`replace` rewire the conditions of the current children accordingly.
+
+    Wherever it is handed a node, it also takes an underspecified `a(...)` statement,
+    which it runs through a :class:`StatementNode`.
     """
 
     nodes: List[StatechartNode] = field(default_factory=list, init=True)
     """
     The nodes this goal runs, in order.
     """
+
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        self.nodes = [self._as_node(node) for node in self.nodes]
+
+    @staticmethod
+    def _as_node(node: StatechartNode | Match) -> StatechartNode:
+        """
+        :param node: A node this goal was handed, or a statement of one.
+        :return: `node` itself, or a :class:`StatementNode` running the statement.
+        """
+        if isinstance(node, Match):
+            return StatementNode(statement=node)
+        return node
 
     def add_node(self, node: StatechartNode) -> None:
         """
@@ -229,6 +251,7 @@ class CramLanguageNode(CompositeNode, ABC):  # ControlStructureNode?
 
         :param node: The node to run as a child of this goal.
         """
+        node = self._as_node(node)
         if self._runs(node):
             return
         self._add_node_sanity_check(node)
@@ -269,6 +292,7 @@ class CramLanguageNode(CompositeNode, ABC):  # ControlStructureNode?
         :raises NodeAlreadyAChildError: If this goal already runs `node`.
         """
         position = self._position_of(reference)
+        node = self._as_node(node)
         self._check_does_not_run(node)
         if not self.belongs_to_statechart():
             self.nodes[position] = node
@@ -349,6 +373,7 @@ class CramLanguageNode(CompositeNode, ABC):  # ControlStructureNode?
         """
         Runs `node` at `position` among the children.
         """
+        node = self._as_node(node)
         self._check_does_not_run(node)
         if not self.belongs_to_statechart():
             self.nodes.insert(position, node)
@@ -1156,3 +1181,128 @@ class CompositeNodeChoosingItsChild(SucceedsOnObservingTrue, CompositeNode):
                 observation=Scalar(float(ObservationStateValues.UNKNOWN))
             )
         return NodeArtifacts(observation=Scalar(latest_child.last_observation))
+
+
+# %% running a child grounded from a statement
+
+
+@dataclass(eq=False, repr=False)
+class StatementNode(CompositeNodeChoosingItsChild):
+    """
+    Runs a node described by an underspecified `a(...)` / `an(...)` statement.
+
+    The statement is grounded only when this node starts, against the world the nodes
+    before it left behind; the chooser of the context decides which of its candidates
+    run. A plan language node handed a statement runs it through such a node.
+    """
+
+    statement: Match = field(
+        kw_only=True, metadata=JSONMetadata(serialize=False).as_dict()
+    )
+    """
+    The underspecified statement the children are grounded from.
+
+    Not serialized: a process ticking the statechart elsewhere receives the chosen
+    children rather than grounding them itself.
+    """
+
+    candidate_limit: int | None = field(default=None, init=False, repr=False)
+    """
+    How many candidates the current run through the statement yields at most, None
+    before the first run.
+    """
+
+    _candidates: Generator[Any, None, None] | None = field(
+        default=None, init=False, repr=False
+    )
+    """
+    The candidates of the statement, open from the first pull until they are exhausted
+    or released by :meth:`stop_grounding`.
+    """
+
+    _candidates_pulled: int = field(default=0, init=False, repr=False)
+    """
+    How many candidates the current run through the statement has yielded.
+    """
+
+    @property
+    def reached_candidate_limit(self) -> bool:
+        """
+        :return: Whether the last run through the statement stopped because it yielded
+            :attr:`candidate_limit` candidates.
+        """
+        return self._candidates_pulled == self.candidate_limit
+
+    def next_candidate(
+        self, query_backend: QueryBackend, default_candidate_limit: int
+    ) -> Any | None:
+        """
+        Grounds the statement into its next candidate, against the world as it is now.
+
+        The statement is left suspended in between, so the next call resumes where this
+        one stopped.
+
+        :param query_backend: The backend answering the statement.
+        :param default_candidate_limit: How many candidates a run through a statement
+            without a limit of its own yields.
+        :return: The next candidate, or None once the statement is exhausted or
+            :attr:`candidate_limit` candidates were yielded.
+        """
+        if self._candidates is None:
+            self._candidates_pulled = 0
+            self.candidate_limit = self.statement._limit_ or default_candidate_limit
+            self._candidates = query_backend.evaluate(self.statement)
+        if self.reached_candidate_limit:
+            self.stop_grounding()
+            return None
+        candidate = next(self._candidates, None)
+        if candidate is None:
+            self._candidates = None
+            return None
+        self._candidates_pulled += 1
+        return candidate
+
+    def stop_grounding(self) -> None:
+        """
+        Releases the candidates of the statement once no further child will be asked
+        for.
+
+        A suspended generator keeps every value its frame holds alive, so closing it
+        frees whatever the statement only holds to ground candidates with. The next
+        :meth:`next_candidate` grounds the statement anew.
+        """
+        if self._candidates is None:
+            return
+        self._candidates.close()
+        self._candidates = None
+
+    def cleanup(self, context: StatechartContext) -> None:
+        self.stop_grounding()
+
+    @property
+    def grounded_nodes(self) -> list[StatechartNode]:
+        """
+        :return: The node of the statement's type every child chosen so far runs, in
+            the order they were chosen, each found below whatever runs it.
+        """
+        return [
+            next(
+                node
+                for node in [child, *child.descendants]
+                if isinstance(node, self.statement._type_)
+            )
+            for child in self.children
+        ]
+
+    def to_json(self, **kwargs) -> dict[str, Any]:
+        """
+        :return: The JSON representation of the node choosing its child that this is,
+            since the statement is not sent.
+        """
+        return {
+            **super().to_json(**kwargs),
+            JSONField.TYPE: get_full_class_name(CompositeNodeChoosingItsChild),
+        }
+
+    def __repr__(self) -> str:
+        return f"{self.statement._type_.__name__}"

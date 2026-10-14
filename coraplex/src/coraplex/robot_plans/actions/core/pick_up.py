@@ -3,21 +3,8 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 
-from typing_extensions import Any, Dict
 
-from krrood.entity_query_language.core.variable import Variable
-from krrood.entity_query_language.factories import (
-    or_,
-    variable_from,
-    ConditionType,
-)
-from cramph.context import StatechartContext
 from coraplex.datastructures.enums import MovementType
-from coraplex.querying.predicates import (
-    GripperHolds,
-    GripperIsFree,
-    ToolFrameIsAtGrasp,
-)
 from cramph.composites import Parallel, Sequence
 from cramph.node import StatechartNode
 from cramph.world_modification_nodes import MoveBranch
@@ -31,7 +18,6 @@ from coraplex.robot_plans.mixins import (
 )
 from semantic_digital_twin.datastructures.definitions import GripperState
 from semantic_digital_twin.grasping.grasp_candidates import GraspCandidate
-from semantic_digital_twin.reasoning.robot_predicates import is_body_gripped
 from semantic_digital_twin.robots.robot_parts import Arm
 
 logger = logging.getLogger(__name__)
@@ -119,25 +105,6 @@ class ReachAction(
         )
         return Sequence(children)
 
-    @staticmethod
-    def post_condition(
-        variables: Dict[str, Variable],
-        context: StatechartContext,
-        kwargs: Dict[str, Any],
-    ) -> ConditionType:
-        """
-        The end effector needs to be close to the target pose.
-        """
-        end_effector = kwargs["arm"].end_effector
-        return or_(
-            is_body_gripped(
-                variable_from(kwargs["grasp"].graspable.root),
-                end_effector,
-                threshold=kwargs["grasp_detection_threshold"],
-            ),
-            ToolFrameIsAtGrasp(end_effector, kwargs["grasp"]),
-        )
-
 
 @dataclass(eq=False, repr=False)
 class PickUpAction(
@@ -211,33 +178,6 @@ class PickUpAction(
             ]
         )
 
-    @staticmethod
-    def pre_condition(
-        variables: Dict, context: StatechartContext, kwargs: Dict[str, Any]
-    ) -> ConditionType:
-        """
-        The gripper needs to be free.
-        """
-        return GripperIsFree(variables["arm"].end_effector)
-
-    @staticmethod
-    def post_condition(
-        variables: Dict, context: StatechartContext, kwargs: Dict[str, Any]
-    ) -> ConditionType:
-        """
-        The object itself needs to be in the gripper, not merely something.
-        """
-        end_effector = variables["arm"].end_effector
-        object_body = kwargs["grasp"].graspable.root
-        return or_(
-            GripperHolds(end_effector, object_body),
-            is_body_gripped(
-                variable_from(object_body),
-                end_effector,
-                threshold=kwargs["grasp_detection_threshold"],
-            ),
-        )
-
 
 @dataclass(eq=False, repr=False)
 class GraspingAction(
@@ -298,32 +238,4 @@ class GraspingAction(
                     ]
                 ),
             ]
-        )
-
-    @staticmethod
-    def pre_condition(
-        variables: Dict[str, Any], context: StatechartContext, kwargs: Dict[str, Any]
-    ) -> ConditionType:
-        """
-        The gripper needs to be free.
-        """
-        return GripperIsFree(variables["arm"].end_effector)
-
-    @staticmethod
-    def post_condition(
-        variables: Dict[str, Any], context: StatechartContext, kwargs: Dict[str, Any]
-    ) -> ConditionType:
-        """
-        The object needs to be between the gripper's fingers, or the gripper at the
-        grasp when a thin handle or rim leaves too little between them for the rays to
-        see.
-        """
-        end_effector = variables["arm"].end_effector
-        return or_(
-            is_body_gripped(
-                variable_from(kwargs["grasp"].graspable.root),
-                end_effector,
-                threshold=kwargs["grasp_detection_threshold"],
-            ),
-            ToolFrameIsAtGrasp(end_effector, kwargs["grasp"]),
         )

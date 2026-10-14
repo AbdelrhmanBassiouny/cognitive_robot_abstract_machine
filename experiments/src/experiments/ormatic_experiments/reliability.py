@@ -24,7 +24,6 @@ from cramph.context import ContextExtension
 from cramph.statechart import Statechart
 from coraplex.orm.ormatic_interface import Base  # type: ignore
 from coraplex.plans.executors import SimulatedPlanExecutor
-from coraplex.plans.underspecified import UnderspecifiedNode
 from coraplex.robot_plans.actions.core.navigation import NavigateAction
 from experiments.experiment_definitions import (
     ExperimentResult,
@@ -48,7 +47,7 @@ from semantic_digital_twin.world_description.connections import (
     OmniDrive,
 )
 from semantic_digital_twin.world_description.world_entity import Body
-from cramph.composites import Sequence
+from cramph.composites import Sequence, StatementNode
 from cramph.orm.ormatic_interface import SequenceDAO  # type: ignore
 
 _REPO_ROOT = pathlib.Path(__file__).parents[4]
@@ -117,7 +116,7 @@ def create_plan(world: World, n_actions: int) -> Sequence:
     """
     return Sequence(
         [
-            UnderspecifiedNode(statement=_random_navigate_action(world))
+            StatementNode(statement=_random_navigate_action(world))
             for _ in range(n_actions)
         ]
     )

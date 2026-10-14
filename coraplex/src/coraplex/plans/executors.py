@@ -25,11 +25,9 @@ from coraplex.plans.failures import (
     MotionViolatedCollisionAvoidance,
 )
 from coraplex.plans.plan_transformation import PlanRewriting
-from coraplex.plans.underspecified import (
-    UnderspecifiedChildChooser,
-    UnderspecifiedNode,
-)
-from cramph.composites import ChildChooserAccess
+from coraplex.plans.underspecified import UnderspecifiedChildChooser
+from coraplex.robot_plans.actions.base import Action
+from cramph.composites import ChildChooserAccess, StatementNode
 from cramph.context import ContextExtension, StatechartContext
 from cramph.data_types import LifeCycleValues
 from cramph.exceptions import EmptyStatechartError
@@ -200,10 +198,10 @@ class PlanExecutor(Executor, ABC):
         """
         Cancel the statechart once a plan node stops approaching its goal.
 
-        Only the motions a plan node holds when it is compiled are watched; an action an
-        underspecified node chooses later is watched by its own stall monitor. A plan
-        node holding no motion yet is not watched at all, since it would read as stalled
-        from its first tick.
+        Only the motions a plan node holds when it is compiled are watched; an action a
+        statement node chooses later is watched by its own stall monitor. A plan node
+        holding no motion yet is not watched at all, since it would read as stalled from
+        its first tick.
 
         :param statechart: The statechart the plan was added to, which expanded it.
         """
@@ -279,9 +277,9 @@ class PlanExecutor(Executor, ABC):
 
     def _raise_if_plan_failed(self) -> None:
         """
-        :raises CandidateLimitReached: If an underspecified node tried as many actions
+        :raises CandidateLimitReached: If a statement node tried as many actions
             as it may, which is why the plan failed.
-        :raises EmptyUnderspecified: If an underspecified node ran out of actions to
+        :raises EmptyUnderspecified: If a statement node ran out of actions to
             try, which is why the plan failed.
         :raises MotionDidNotFinish: If the plan failed for any other reason.
         """
@@ -302,12 +300,12 @@ class PlanExecutor(Executor, ABC):
 
     def _raise_if_out_of_candidates(self) -> None:
         """
-        :raises CandidateLimitReached: If an underspecified node tried as many actions
+        :raises CandidateLimitReached: If a statement node tried as many actions
             as it may.
-        :raises EmptyUnderspecified: If an underspecified node ran out of actions to
+        :raises EmptyUnderspecified: If a statement node ran out of actions to
             try.
         """
-        for node in self.statechart.get_nodes_by_type(UnderspecifiedNode):
+        for node in self.statechart.get_nodes_by_type(StatementNode):
             if not node.ran_out_of_children:
                 continue
             if node.reached_candidate_limit:
@@ -325,33 +323,67 @@ class SimulatedPlanExecutor(PlanExecutor, StatechartExecutor):
     is added with its default controller unless one is given.
     """
 
-    simulation_time_limit: timedelta = field(default=timedelta(minutes=2), kw_only=True)
+    simulation_time_per_action: timedelta = field(
+        default=timedelta(seconds=40), kw_only=True
+    )
     """
-    The simulated time after which a plan is given up on, however it is progressing.
+    The simulated time every action of the plan adds to :attr:`simulation_time_limit`.
     """
+
+    simulation_time_limit: timedelta = field(init=False)
+    """
+    The simulated time after which the plan is given up on, however it is progressing:
+
+    :attr:`simulation_time_per_action` for every action in the statechart, and at least
+    once. Counted again whenever nodes join the statechart.
+    """
+
+    def __post_init__(self):
+        super().__post_init__()
+        self.simulation_time_limit = self.simulation_time_per_action
 
     def default_executor_extensions(self) -> list[ExecutorExtension]:
         return [RosNodeAccess(self.ros_node), MotionControl()]
+
+    def compile(self, statechart: Statechart) -> None:
+        """
+        Differs from :meth:`PlanExecutor.compile` in also counting
+        :attr:`simulation_time_limit`.
+        """
+        super().compile(statechart)
+        self._count_simulation_time_limit()
+
+    def after_recompile(self) -> None:
+        """
+        Differs from :meth:`~cramph.executor.StatechartExecutor.after_recompile` in also
+        counting :attr:`simulation_time_limit` again, since nodes joined.
+        """
+        super().after_recompile()
+        self._count_simulation_time_limit()
+
+    def _count_simulation_time_limit(self) -> None:
+        """
+        Set :attr:`simulation_time_limit` from the actions the statechart holds now.
+        """
+        actions = len(self.statechart.get_nodes_by_type(Action))
+        self.simulation_time_limit = self.simulation_time_per_action * max(1, actions)
 
     def _run(self) -> None:
         """
         Tick the statechart until it or the plan ended, waiting for :attr:`pacer` after
         every tick.
 
-        The statechart's own stall monitor decides when a plan is hopeless, so a plan
-        that keeps converging is never cut off for taking many ticks.
+        The statechart's own stall monitor decides when a plan is hopeless;
+        :attr:`simulation_time_limit` only cuts off a plan that keeps creeping for
+        longer than the actions it holds are given.
 
         :raises NoProgressError: When the plan stops approaching its goal.
         :raises MotionExceededSimulationTimeLimit: When the plan runs for longer than
             :attr:`simulation_time_limit`.
         """
-        maximum_ticks = (
-            self.simulation_time_limit.total_seconds()
-            / self.context.require_tick_duration()
-        )
         try:
             while not self._is_over():
-                if self.tick_count >= maximum_ticks:
+                if timedelta(seconds=self.time) >= self.simulation_time_limit:
                     raise MotionExceededSimulationTimeLimit(self.simulation_time_limit)
                 self.tick()
                 self.pacer.sleep()
