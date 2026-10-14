@@ -1,0 +1,232 @@
+"""
+The EQL showcase: a robot demonstration's world, its detected events and its own
+actions, offered to the cramera viewer's EQL panel with ready-made questions.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from enum import StrEnum
+from pathlib import Path
+
+import yaml
+from typing_extensions import Dict, List, Optional, Tuple
+
+from coraplex.plans.plan import Plan
+from cramera.knowledge.presets import Preset
+from cramera.knowledge.query_domain import QueryDomain
+from cramera.knowledge.queryable_knowledge import QueryableKnowledge, QueryScope
+from cramera.live.bridge import Bridge
+from cramera.live.detections import DetectedEvents
+from segmind.event_logger import EventLogger
+from semantic_digital_twin.world import World
+
+from experiments.eql_showcase.performed_actions import (
+    PerformedAction,
+    PerformedActions,
+)
+
+QUESTIONS_FILE = Path(__file__).with_name("questions.yaml")
+"""
+The file the showcase's ready-made questions are read from.
+"""
+
+SHOWCASE_TITLE = "EQL showcase"
+"""
+The name the viewer shows for the showcase's questions.
+"""
+
+# %% the ready-made questions
+
+
+class QuestionField(StrEnum):
+    """
+    Key one question is written under in the questions file.
+    """
+
+    SCOPE = "scope"
+    TEXT = "text"
+    CODE = "code"
+
+
+class ShowcaseVariable(StrEnum):
+    """
+    Name a showcase question binds one of its ready-made variables to.
+    """
+
+    ACTION = "action"
+
+
+@dataclass(frozen=True)
+class ShowcaseQuestion:
+    """
+    One question the showcase offers, and the query that answers it.
+    """
+
+    scope: QueryScope
+    """
+    The body of knowledge the question is asked of.
+    """
+
+    text: str
+    """
+    The question as its button reads.
+    """
+
+    code: str
+    """
+    The EQL query answering the question.
+    """
+
+    @classmethod
+    def from_json(cls, data: Dict[str, str]) -> ShowcaseQuestion:
+        """
+        One question as the questions file writes it.
+
+        :param data: The question's entry in the questions file.
+        """
+        return cls(
+            scope=QueryScope(data[QuestionField.SCOPE]),
+            text=data[QuestionField.TEXT],
+            code=data[QuestionField.CODE].strip(),
+        )
+
+    def preset(self) -> Preset:
+        """
+        The question as a button of the EQL panel.
+        """
+        return Preset(text=self.text, code=self.code, scope=self.scope)
+
+
+@dataclass(frozen=True)
+class ShowcaseQuestions:
+    """
+    The questions the showcase offers, in the order they are listed.
+    """
+
+    questions: Tuple[ShowcaseQuestion, ...]
+    """
+    Every question, in the order the questions file lists them.
+    """
+
+    @classmethod
+    def from_file(cls, path: Path = QUESTIONS_FILE) -> ShowcaseQuestions:
+        """
+        The questions a questions file lists.
+
+        :param path: The questions file to read.
+        """
+        entries = yaml.safe_load(path.read_text())
+        return cls(tuple(ShowcaseQuestion.from_json(entry) for entry in entries))
+
+    def presets(self, scopes: List[QueryScope]) -> List[Preset]:
+        """
+        The buttons for the questions about the given bodies of knowledge.
+
+        :param scopes: The bodies of knowledge the questions may be asked of.
+        """
+        return [
+            question.preset() for question in self.questions if question.scope in scopes
+        ]
+
+
+# %% the showcase
+
+
+@dataclass
+class EqlShowcase:
+    """
+    A running demonstration's knowledge, offered to the viewer's EQL panel.
+
+    The world is asked about as it is now; the detected events once the demonstration
+    segments what happens; the robot's own actions as soon as it performs a plan.
+    """
+
+    world: World
+    """
+    The world the demonstration acts in.
+    """
+
+    performed_actions: PerformedActions = field(default_factory=PerformedActions)
+    """
+    The actions of every plan the demonstration has performed.
+    """
+
+    detected_events: Optional[DetectedEvents] = None
+    """
+    What the demonstration's detectors saw, once it segments events.
+    """
+
+    questions: ShowcaseQuestions = field(default_factory=ShowcaseQuestions.from_file)
+    """
+    The ready-made questions offered as buttons.
+    """
+
+    def observe_plan(self, plan: Plan) -> None:
+        """
+        Remember a plan the demonstration performs, so questions about what the robot
+        did range over its actions.
+
+        :param plan: The plan about to be performed.
+        """
+        self.performed_actions.plans.append(plan)
+
+    def observe_events(self, event_logger: EventLogger) -> None:
+        """
+        Offer what the demonstration's detectors log to questions about detected events.
+
+        :param event_logger: The logger the detectors write their events to.
+        """
+        self.detected_events = DetectedEvents(event_logger)
+
+    def knowledge(self) -> List[QueryableKnowledge]:
+        """
+        Every body of knowledge the showcase offers, the detected events only once the
+        demonstration segments them.
+        """
+        knowledge = [
+            QueryableKnowledge.of_world(self.world),
+            QueryableKnowledge(
+                scope=QueryScope.EPISODIC_MEMORY,
+                domains=[
+                    QueryDomain(
+                        ShowcaseVariable.ACTION,
+                        PerformedAction,
+                        self.performed_actions,
+                    )
+                ],
+            ),
+        ]
+        if self.detected_events is not None:
+            knowledge.extend(self.detected_events.knowledge())
+        return knowledge
+
+    def presets(self) -> List[Preset]:
+        """
+        The buttons for every question the offered knowledge can answer, followed by the
+        detected events' own.
+        """
+        offered = [item.scope for item in self.knowledge()]
+        presets = self.questions.presets(offered)
+        if self.detected_events is not None:
+            presets.extend(self.detected_events.presets())
+        return presets
+
+    def unlisted_presets(self) -> List[Preset]:
+        """
+        The questions recognized when asked, but not shown as buttons.
+        """
+        if self.detected_events is None:
+            return []
+        return self.detected_events.unlisted_presets()
+
+    def register_with(self, bridge: Bridge) -> None:
+        """
+        Offer the showcase's knowledge and questions to the viewer, replacing whatever
+        was offered before.
+
+        :param bridge: The bridge serving the viewer.
+        """
+        bridge.register_query_source(
+            self.knowledge(), SHOWCASE_TITLE, self.presets(), self.unlisted_presets()
+        )
