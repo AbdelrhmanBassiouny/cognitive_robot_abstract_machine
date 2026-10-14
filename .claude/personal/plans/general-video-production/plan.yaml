@@ -41,19 +41,19 @@ items:
   session: https://claude.ai/code/session_01HQ4cooKAuKSVwcZpKfsCUc
   blockers:
     - >-
-      Upstream cram2#742 (promoted from this branch): tomsch420 requested changes on 2026-10-13 with
-      20 unresolved threads, mostly naming (Fade, Scene, Timeline, Slide, Still, Sound, Speech,
-      Voice, Muxer, Span, Face, Line), the package name (crollywood), numpy typing, SubmissionLimits
-      living in encoding, and a general tabular slide. The fork PR lacked the in-review label, so
-      the manifest read as waiting on the fork reviewer.
+      Upstream cram2#742: changes requested by tomsch420 (2026-10-13), answered in ee1e7bdad;
+      re-review pending. Still open there: how a timeline scene is modelled ("a part or a view of
+      the Timeline").
   depends_on: []
   notes: >
-    Draft #472: the workspace package cramcorder (narrated, subtitled videos from any experiment),
-    in review. Scene is the Role[Video] a video plays in a timeline; units live in krrood.units
-    (Quantity[T]). Waiting on the reviewer for the remaining open threads.
+    #472, promoted upstream as cram2#742 and labelled in-review: the workspace package crollywood
+    (renamed from cramcorder at the upstream reviewer's request), narrated, subtitled videos of
+    anything. TimelineScene is the Role[Video] a video plays in a VideoTimeline; units live in
+    krrood.units (Quantity[T]).
 
-    Promoted upstream as cram2#742 and under review there; the fork PR's own 12 open threads still
-    await the user's call.
+    Upstream round 1 answered in ee1e7bdad (renames, SoundChannel, crollywood.submission, StrEnums,
+    NDArray). Waiting on tomsch420 to re-review upstream, and on the user for the fork's 12 open
+    threads.
 - id: icra-video-on-core
   title: '#429 rebuilt on the general package, keeping only the ICRA scenes'
   branch: claude/the-icra-video-shows-the-plan-being-answered
