@@ -9,7 +9,6 @@ from typing_extensions import List
 from coraplex.exceptions import ActionNotExpanded
 from coraplex.plans.executors import PlanExecutor
 from coraplex.plans.plan_transformation import PlanRewriting, PlanTransformation
-from coraplex.plans.underspecified import UnderspecifiedNode
 from coraplex.robot_plans.actions.core.container import CloseAction
 from coraplex.robot_plans.actions.core.navigation import (
     DrivesBase,
@@ -22,7 +21,7 @@ from coraplex.robot_plans.robot_specific_plan_transformations import (
     DriveStretchWithItsDifferentialDrive,
     KeepStretchInFrontOfTheContainerItCloses,
 )
-from cramph.composites import Parallel, Sequence
+from cramph.composites import Parallel, Sequence, StatementNode
 from cramph.context import ContextExtension
 from cramph.exceptions import StatechartAlreadyCompiledError
 from cramph.node import StatechartNode
@@ -346,7 +345,7 @@ def test_a_simulated_stretch_drives_differentially_to_a_pose_chosen_while_runnin
     executor = simulated_executor(
         rewriting_with(extensions, DriveStretchWithItsDifferentialDrive())
     )
-    navigation = UnderspecifiedNode(
+    navigation = StatementNode(
         statement=a(NavigateAction)(
             target_location=variable_from([navigation_to(world).target_location])
         )
@@ -355,7 +354,7 @@ def test_a_simulated_stretch_drives_differentially_to_a_pose_chosen_while_runnin
 
     executor.execute()
 
-    [action] = navigation.chosen_actions
+    [action] = navigation.grounded_nodes
     assert_drives_differentially_to(action.action_body, action, robot)
 
 
@@ -370,7 +369,7 @@ def test_a_drive_chosen_while_running_is_watched_for_stalling_as_it_is_driven(
     executor = simulated_executor(
         rewriting_with(extensions, DriveStretchWithItsDifferentialDrive())
     )
-    navigation = UnderspecifiedNode(
+    navigation = StatementNode(
         statement=a(NavigateAction)(
             target_location=variable_from([navigation_to(world).target_location])
         )
@@ -381,7 +380,7 @@ def test_a_drive_chosen_while_running_is_watched_for_stalling_as_it_is_driven(
 
     [attempt] = navigation.children
     [stalled] = attempt.failure_monitors
-    [action] = navigation.chosen_actions
+    [action] = navigation.grounded_nodes
     assert stalled.monitored_tasks == [
         node for node in action.descendants if isinstance(node, ConvergingTask)
     ]

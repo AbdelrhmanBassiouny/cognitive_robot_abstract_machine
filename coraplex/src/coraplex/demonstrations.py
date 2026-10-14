@@ -183,10 +183,10 @@ class RobotDemonstration(ABC):
     one carrying an object away and back again.
     """
 
-    simulation_time_limit: timedelta | None = None
+    simulation_time_per_action: timedelta | None = None
     """
-    The simulated time after which a simulated run gives up on the plan; ``None`` keeps
-    the limit of the executor.
+    The simulated time every action a simulated run starts adds to the time it may take;
+    ``None`` keeps the budget of the executor.
     """
 
     default_visualization_backend: VisualizationBackend = VisualizationBackend.RVIZ
@@ -289,10 +289,10 @@ class RobotDemonstration(ABC):
             collision_avoidance=self.collision_avoidance,
             debug=self.debug,
         )
-        if self.simulation_time_limit is not None and isinstance(
+        if self.simulation_time_per_action is not None and isinstance(
             executor, SimulatedPlanExecutor
         ):
-            executor.simulation_time_limit = self.simulation_time_limit
+            executor.simulation_time_per_action = self.simulation_time_per_action
         return executor
 
     def run(self) -> World:
