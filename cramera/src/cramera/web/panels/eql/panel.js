@@ -192,7 +192,21 @@ Panels.define('eql', function (root, bus) {
   });
 
   // %% presets
+  // a running demo offers more as it goes - commands once the robot takes them - so
+  // after each of its answers the presets are asked for again, and redrawn if they changed
+  let shownPresetTexts = '';
+  function refreshLivePresets(requestedSource) {
+    fetch(requestedSource.presetsUrl).then(ResponseUtil.parseJson).then(function (payload) {
+      if (requestedSource !== source || !payload.ok) return;
+      const presets = payload.presets || [];
+      if (presetTexts(presets) !== shownPresetTexts) buildPresets(presets, payload.scopes);
+    }).catch(function () {});
+  }
+  function presetTexts(presets) {
+    return JSON.stringify(presets.map(function (p) { return p.text; }));
+  }
   function buildPresets(presets, scopes) {
+    shownPresetTexts = presetTexts(presets);
     presetsEl.innerHTML = '';
     PresetGroups.of(presets, scopes).forEach(function (group) {
       const row = document.createElement('div');
@@ -341,6 +355,7 @@ Panels.define('eql', function (root, bus) {
       const response = await ResponseUtil.parseJson(r);
       if (requestedSource !== source) return;
       render(code, response);
+      if (requestedSource.live) refreshLivePresets(requestedSource);
     } catch (err) {
       if (requestedSource !== source) return;
       render(code, { ok: false, error: errorText(err) });

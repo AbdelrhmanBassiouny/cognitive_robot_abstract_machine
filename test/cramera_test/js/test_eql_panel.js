@@ -701,3 +701,21 @@ test('a selected query scope does not leak into the replacement source', async f
   const request = panel.requests.filter(request => request.url === '/api/eql').at(-1);
   assert.strictEqual(JSON.parse(request.options.body).scope, null);
 });
+
+test('a live answer brings in the presets the demo has come to offer since', async function () {
+  const command = Object.assign({}, UNWORDED_PRESET, {text: 'take the cup back out'});
+  const offered = {ok: true, title: 'running demo', presets: [UNWORDED_PRESET]};
+  const panel = mountPanel({'http://bridge/presets': offered, 'http://bridge/eql': ANSWER});
+  await flush();
+  attach(panel, true);
+  await flush();
+
+  offered.presets = [UNWORDED_PRESET, command];
+  runTyped(panel, UNWORDED_PRESET.code);
+  await flush();
+  await flush();
+
+  assert.ok(presetButtons(panel.root.part('#presets')).some(function (button) {
+    return button.textContent.includes(command.text);
+  }));
+});
