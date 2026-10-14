@@ -299,6 +299,7 @@ class MoveToolCenterPointMotion(
         accompanying_nodes: list[MotionStatechartNode] = list(
             self._velocity_limit_nodes(root, tip)
         )
+        accompanying_nodes.extend(self.keep_base_still())
         if self.allow_gripper_collision:
             accompanying_nodes.extend(
                 self._only_allow_gripper_collision_rules(self.arm.end_effector)
@@ -360,7 +361,11 @@ class MoveTCPWaypointsMotion(BaseMotion, HasTcpGoalThresholds):
             )
             for pose in self.waypoints
         ]
-        return Sequence(nodes=nodes)
+        waypoints = Sequence(nodes=nodes)
+        hold_base = self.keep_base_still()
+        if not hold_base:
+            return waypoints
+        return Parallel([waypoints, *hold_base])
 
 
 @dataclass
@@ -466,6 +471,7 @@ class MoveTCPWaypointsAlignedMotion(BaseMotion, HasTcpGoalThresholds):
             if self.allow_gripper_collision
             else []
         )
+        motion_statechart_nodes.extend(self.keep_base_still())
         motion_statechart_nodes.append(Parallel(tasks))
         return Parallel(motion_statechart_nodes)
 
@@ -509,4 +515,7 @@ class MoveManipulatorMotion(BaseMotion, HasTcpGoalThresholds):
             binding_policy=GoalBindingPolicy.Bind_on_start,
             name=self.__class__.__name__,
         )
-        return task
+        hold_base = self.keep_base_still()
+        if not hold_base:
+            return task
+        return Parallel([task, *hold_base])

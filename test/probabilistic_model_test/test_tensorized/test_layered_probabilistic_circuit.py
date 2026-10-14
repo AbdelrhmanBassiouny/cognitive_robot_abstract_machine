@@ -134,6 +134,22 @@ class SymbolWithLargeHash(Enum):
         return self.value
 
 
+class SymbolWithHashBeyondFloatPrecision(Enum):
+    """
+    Domain elements whose hashes need more significant bits than the mantissa of a float
+    holds, so that storing such a hash as a float does not give it back.
+
+    Their hashes still differ as floats, so the positions of the elements stay
+    unambiguous.
+    """
+
+    FIRST = 2**62 + 1
+    SECOND = 2**62 + 1025
+
+    def __hash__(self) -> int:
+        return self.value
+
+
 class UnconvertibleUniformDistribution(UniformDistribution):
     """
     A distribution type that no converter handles: converters dispatch on the exact type
@@ -1311,6 +1327,53 @@ class SymbolicEncodingTestCase(unittest.TestCase):
         self.assertEqual(
             dict(layer.node_distribution(0, variable).probabilities),
             dict(distribution.probabilities),
+        )
+
+    def test_a_distribution_over_elements_whose_hashes_exceed_float_precision_keeps_its_probabilities(
+        self,
+    ):
+        variable = Symbolic(
+            name="beyond_float_precision",
+            domain=Set.from_iterable(SymbolWithHashBeyondFloatPrecision),
+        )
+        distribution = SymbolicDistribution(
+            variable=variable,
+            probabilities=MissingDict(
+                float,
+                {
+                    hash(SymbolWithHashBeyondFloatPrecision.FIRST): 0.25,
+                    hash(SymbolWithHashBeyondFloatPrecision.SECOND): 0.75,
+                },
+            ),
+        )
+        layer = SymbolicLayer.from_distributions(0, [distribution])
+        self.assertEqual(
+            dict(layer.node_distribution(0, variable).probabilities),
+            dict(distribution.probabilities),
+        )
+
+    def test_the_support_of_a_symbolic_circuit_agrees_with_rustworkx(self):
+        variable = Symbolic(
+            name="beyond_float_precision",
+            domain=Set.from_iterable(SymbolWithHashBeyondFloatPrecision),
+        )
+        circuit = RxCircuit()
+        leaf(
+            SymbolicDistribution(
+                variable=variable,
+                probabilities=MissingDict(
+                    float,
+                    {
+                        hash(SymbolWithHashBeyondFloatPrecision.FIRST): 0.25,
+                        hash(SymbolWithHashBeyondFloatPrecision.SECOND): 0.75,
+                    },
+                ),
+            ),
+            circuit,
+        )
+        self.assertEqual(
+            RustworkxCircuitToLayeredCircuitConverter.convert(circuit).support,
+            circuit.support,
         )
 
     def test_symbolic_layer_stores_positions_in_the_domain(self):

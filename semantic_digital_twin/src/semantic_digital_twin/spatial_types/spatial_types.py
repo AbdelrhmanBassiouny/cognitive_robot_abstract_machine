@@ -597,7 +597,9 @@ class HomogeneousTransformationMatrix(
         """
         :return: The translation this transformation is composed of.
         """
-        return Point3.from_iterable(self[:4, 3:], reference_frame=self.reference_frame)
+        result = Point3.from_casadi_sx(self.casadi_sx[:4, 3])
+        result.reference_frame = self.reference_frame
+        return result
 
     @property
     def quaternion(self) -> Quaternion:
@@ -991,29 +993,30 @@ class RotationMatrix(sm.SymbolicMathType, SpatialType, SubclassJSONSerializer):
         roll = 0 if roll is None else roll
         pitch = 0 if pitch is None else pitch
         yaw = 0 if yaw is None else yaw
-        roll = sm.to_sx(roll)
-        pitch = sm.to_sx(pitch)
-        yaw = sm.to_sx(yaw)
-
+        # Every sine and cosine is built once, and through ca.SX.unary, because casadi's
+        # overloaded functions spend most of their time choosing the overload.
+        sin_roll, cos_roll, sin_pitch, cos_pitch, sin_yaw, cos_yaw = (
+            sm.Scalar.from_casadi_sx(ca.SX.unary(operation, sm.to_sx(angle)))
+            for angle in (roll, pitch, yaw)
+            for operation in (ca.OP_SIN, ca.OP_COS)
+        )
+        rotation = [
+            [
+                cos_yaw * cos_pitch,
+                (cos_yaw * sin_pitch * sin_roll) - (sin_yaw * cos_roll),
+                (sin_yaw * sin_roll) + (cos_yaw * sin_pitch * cos_roll),
+            ],
+            [
+                sin_yaw * cos_pitch,
+                (cos_yaw * cos_roll) + (sin_yaw * sin_pitch * sin_roll),
+                (sin_yaw * sin_pitch * cos_roll) - (cos_yaw * sin_roll),
+            ],
+            [-sin_pitch, cos_pitch * sin_roll, cos_pitch * cos_roll],
+        ]
         s = ca.SX.eye(4)
-
-        s[0, 0] = ca.cos(yaw) * ca.cos(pitch)
-        s[0, 1] = (ca.cos(yaw) * ca.sin(pitch) * ca.sin(roll)) - (
-            ca.sin(yaw) * ca.cos(roll)
-        )
-        s[0, 2] = (ca.sin(yaw) * ca.sin(roll)) + (
-            ca.cos(yaw) * ca.sin(pitch) * ca.cos(roll)
-        )
-        s[1, 0] = ca.sin(yaw) * ca.cos(pitch)
-        s[1, 1] = (ca.cos(yaw) * ca.cos(roll)) + (
-            ca.sin(yaw) * ca.sin(pitch) * ca.sin(roll)
-        )
-        s[1, 2] = (ca.sin(yaw) * ca.sin(pitch) * ca.cos(roll)) - (
-            ca.cos(yaw) * ca.sin(roll)
-        )
-        s[2, 0] = -ca.sin(pitch)
-        s[2, 1] = ca.cos(pitch) * ca.sin(roll)
-        s[2, 2] = ca.cos(pitch) * ca.cos(roll)
+        for row_index, row in enumerate(rotation):
+            for column_index, entry in enumerate(row):
+                s[row_index, column_index] = entry.casadi_sx
         result = cls(reference_frame=reference_frame)
         result.casadi_sx = s
         return result
@@ -1172,8 +1175,8 @@ class Point3(Point):
         """
         if isinstance(data, SpatialType) and reference_frame is None:
             reference_frame = data.reference_frame
-        result = cls(reference_frame=reference_frame)
-        result.casadi_sx = copy(sm.to_sx(data))
+        result = cls.from_casadi_sx(copy(sm.to_sx(data)))
+        result.reference_frame = reference_frame
         return result
 
     @classmethod
@@ -1230,7 +1233,9 @@ class Point3(Point):
 
     def __add__(self, other: Vector3) -> Point3:
         if isinstance(other, Vector3):
-            result = Point3.from_iterable(self.casadi_sx.__add__(other.casadi_sx))
+            result = Point3.from_casadi_sx(
+                ca.SX.binary(ca.OP_ADD, self.casadi_sx, other.casadi_sx)
+            )
         else:
             return NotImplemented
         result.reference_frame = self.reference_frame
@@ -1244,16 +1249,20 @@ class Point3(Point):
 
     def __sub__(self, other):
         if isinstance(other, Point3):
-            result = Vector3.from_iterable(self.casadi_sx.__sub__(other.casadi_sx))
+            result = Vector3.from_casadi_sx(
+                ca.SX.binary(ca.OP_SUB, self.casadi_sx, other.casadi_sx)
+            )
         elif isinstance(other, Vector3):
-            result = Point3.from_iterable(self.casadi_sx.__sub__(other.casadi_sx))
+            result = Point3.from_casadi_sx(
+                ca.SX.binary(ca.OP_SUB, self.casadi_sx, other.casadi_sx)
+            )
         else:
             return NotImplemented
         result.reference_frame = self.reference_frame
         return result
 
     def __neg__(self) -> Point3:
-        result = Point3.from_iterable(self.casadi_sx.__neg__())
+        result = Point3.from_casadi_sx(ca.SX.unary(ca.OP_NEG, self.casadi_sx))
         result.reference_frame = self.reference_frame
         return result
 
@@ -1556,10 +1565,9 @@ class Vector3(sm.SymbolicMathType, SpatialType, SubclassJSONSerializer):
             visualisation_frame = data.visualisation_frame
         else:
             visualisation_frame = None
-        result = cls(
-            reference_frame=reference_frame, visualisation_frame=visualisation_frame
-        )
-        result.casadi_sx = copy(sm.to_sx(data))
+        result = cls.from_casadi_sx(copy(sm.to_sx(data)))
+        result.reference_frame = reference_frame
+        result.visualisation_frame = visualisation_frame
         return result
 
     @classmethod
@@ -1656,7 +1664,9 @@ class Vector3(sm.SymbolicMathType, SpatialType, SubclassJSONSerializer):
 
     def __add__(self, other: Vector3) -> Vector3:
         if isinstance(other, Vector3):
-            result = Vector3.from_iterable(self.casadi_sx.__add__(other.casadi_sx))
+            result = Vector3.from_casadi_sx(
+                ca.SX.binary(ca.OP_ADD, self.casadi_sx, other.casadi_sx)
+            )
         else:
             return NotImplemented
         result.reference_frame = self.reference_frame
@@ -1664,7 +1674,9 @@ class Vector3(sm.SymbolicMathType, SpatialType, SubclassJSONSerializer):
 
     def __sub__(self, other: Vector3) -> Vector3:
         if isinstance(other, Vector3):
-            result = Vector3.from_iterable(self.casadi_sx.__sub__(other.casadi_sx))
+            result = Vector3.from_casadi_sx(
+                ca.SX.binary(ca.OP_SUB, self.casadi_sx, other.casadi_sx)
+            )
         else:
             return NotImplemented
         result.reference_frame = self.reference_frame
@@ -1672,7 +1684,9 @@ class Vector3(sm.SymbolicMathType, SpatialType, SubclassJSONSerializer):
 
     def __mul__(self, other: sm.ScalarData) -> Vector3:
         if isinstance(other, sm.ScalarData):
-            result = Vector3.from_iterable(self.casadi_sx.__mul__(sm.to_sx(other)))
+            result = Vector3.from_casadi_sx(
+                ca.SX.binary(ca.OP_MUL, self.casadi_sx, sm.to_sx(other))
+            )
         else:
             return NotImplemented
         result.reference_frame = self.reference_frame
@@ -1680,7 +1694,9 @@ class Vector3(sm.SymbolicMathType, SpatialType, SubclassJSONSerializer):
 
     def __rmul__(self, other: float) -> Vector3:
         if isinstance(other, (int, float)):
-            result = Vector3.from_iterable(self.casadi_sx.__mul__(other))
+            result = Vector3.from_casadi_sx(
+                ca.SX.binary(ca.OP_MUL, self.casadi_sx, sm.to_sx(other))
+            )
         else:
             return NotImplemented
         result.reference_frame = self.reference_frame
@@ -1688,7 +1704,9 @@ class Vector3(sm.SymbolicMathType, SpatialType, SubclassJSONSerializer):
 
     def __truediv__(self, other: sm.ScalarData) -> Vector3:
         if isinstance(other, sm.ScalarData):
-            result = Vector3.from_iterable(self.casadi_sx.__truediv__(sm.to_sx(other)))
+            result = Vector3.from_casadi_sx(
+                ca.SX.binary(ca.OP_DIV, self.casadi_sx, sm.to_sx(other))
+            )
         else:
             return NotImplemented
         result.reference_frame = self.reference_frame
@@ -1717,13 +1735,15 @@ class Vector3(sm.SymbolicMathType, SpatialType, SubclassJSONSerializer):
         )
 
     def __neg__(self) -> Vector3:
-        result = Vector3.from_iterable(self.casadi_sx.__neg__())
+        result = Vector3.from_casadi_sx(ca.SX.unary(ca.OP_NEG, self.casadi_sx))
         result.reference_frame = self.reference_frame
         return result
 
     def dot(self, other: Vector3) -> sm.Scalar:
         if isinstance(other, Vector3):
-            return sm.Scalar(ca.mtimes(sm.to_sx(self[:3]).T, sm.to_sx(other[:3])))
+            return sm.Scalar.from_casadi_sx(
+                ca.mtimes(self.casadi_sx[:3].T, other.casadi_sx[:3])
+            )
         raise UnsupportedOperationError("dot", self, other)
 
     def __matmul__(self, other: Vector3) -> sm.Scalar:
@@ -1736,7 +1756,7 @@ class Vector3(sm.SymbolicMathType, SpatialType, SubclassJSONSerializer):
         return result
 
     def norm(self) -> sm.Scalar:
-        return sm.Scalar(ca.norm_2(sm.to_sx(self[:3])))
+        return sm.Scalar.from_casadi_sx(ca.norm_2(self.casadi_sx[:3]))
 
     def scale(self, a: sm.ScalarData, unsafe: bool = False):
         if unsafe:
@@ -2478,7 +2498,9 @@ class Pose(sm.SymbolicMathType, SpatialType, SubclassJSONSerializer):
 
     @property
     def position(self) -> Point3:
-        return Point3.from_iterable(self[:4, 3:], reference_frame=self.reference_frame)
+        result = Point3.from_casadi_sx(self.casadi_sx[:4, 3])
+        result.reference_frame = self.reference_frame
+        return result
 
     @property
     def orientation(self) -> Quaternion:

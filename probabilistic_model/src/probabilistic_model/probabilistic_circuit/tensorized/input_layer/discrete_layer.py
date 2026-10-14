@@ -371,12 +371,13 @@ class SymbolicLayer(DiscreteLayer):
         }
 
     def node_distribution(self, index: int, variable: Variable) -> SymbolicDistribution:
+        domain_elements = variable.domain.simple_sets
         return SymbolicDistribution(
             variable=variable,
             probabilities=MissingDict(
                 float,
                 {
-                    int(self.domain_hashes[state]): probability
+                    hash(domain_elements[state]): probability
                     for state, probability in self.probabilities_of_node(index).items()
                 },
             ),
