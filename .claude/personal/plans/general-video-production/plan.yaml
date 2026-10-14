@@ -83,7 +83,7 @@ items:
   title: Animated explainer scenes drawn with Manim, narrated and timed by the package
   branch: claude/video-manim-scenes
   track: explainer-animation
-  status: not started
+  status: not_started
   depends_on:
   - video-core
   notes: >
