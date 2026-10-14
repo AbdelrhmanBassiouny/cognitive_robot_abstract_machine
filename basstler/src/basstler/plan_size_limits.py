@@ -174,8 +174,8 @@ class DocumentLocation:
         return f"{self.part} {self.subject!r}"
 
 
-@dataclass(frozen=True)
-class Violation(ABC):
+@dataclass
+class Violation(Exception, ABC):
     """
     Anything that makes a document refused.
     """
@@ -187,7 +187,7 @@ class Violation(ABC):
         """
 
 
-@dataclass(frozen=True)
+@dataclass
 class SizeViolation(Violation):
     """
     One measure a document holds more of than its limit allows.
@@ -215,7 +215,7 @@ class SizeViolation(Violation):
         )
 
 
-@dataclass(frozen=True)
+@dataclass
 class RoadmapFormatViolation(Violation):
     """
     A roadmap line that is neither the title, an entry, nor an entry's continuation.
@@ -557,6 +557,42 @@ class SizeLimitCommand(StrEnum):
     """
 
 
+class SizeLimitArgument(StrEnum):
+    """
+    The names this module's command line parses its subcommand and arguments under.
+    """
+
+    SUBCOMMAND = "subcommand"
+    """
+    The subcommand to run, a :class:`SizeLimitCommand`.
+    """
+
+    MANIFEST_PATH = "manifest_path"
+    """
+    The manifest :attr:`SizeLimitCommand.STAGE` reads.
+    """
+
+    ROADMAP_PATH = "roadmap_path"
+    """
+    The roadmap :attr:`SizeLimitCommand.STAGE` reads.
+    """
+
+    PROGRESS_PATH = "progress_path"
+    """
+    The progress notes :attr:`SizeLimitCommand.CHECK_PROGRESS` checks.
+    """
+
+    MANIFEST_DESTINATION = "manifest_destination"
+    """
+    The value of :attr:`SizeLimitOption.MANIFEST_DESTINATION`.
+    """
+
+    ROADMAP_DESTINATION = "roadmap_destination"
+    """
+    The value of :attr:`SizeLimitOption.ROADMAP_DESTINATION`.
+    """
+
+
 class SizeLimitOption(StrEnum):
     """
     The options this module's command line takes.
@@ -580,19 +616,31 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
-    subcommands = parser.add_subparsers(dest="subcommand", required=True)
+    subcommands = parser.add_subparsers(
+        dest=SizeLimitArgument.SUBCOMMAND, required=True
+    )
     stage = subcommands.add_parser(
         SizeLimitCommand.STAGE,
         help="Write a plan without its landed items, or delete it once all have landed",
     )
-    stage.add_argument("manifest_path", type=Path)
-    stage.add_argument("roadmap_path", type=Path)
-    stage.add_argument(SizeLimitOption.MANIFEST_DESTINATION, required=True, type=Path)
-    stage.add_argument(SizeLimitOption.ROADMAP_DESTINATION, required=True, type=Path)
+    stage.add_argument(SizeLimitArgument.MANIFEST_PATH, type=Path)
+    stage.add_argument(SizeLimitArgument.ROADMAP_PATH, type=Path)
+    stage.add_argument(
+        SizeLimitOption.MANIFEST_DESTINATION,
+        dest=SizeLimitArgument.MANIFEST_DESTINATION,
+        required=True,
+        type=Path,
+    )
+    stage.add_argument(
+        SizeLimitOption.ROADMAP_DESTINATION,
+        dest=SizeLimitArgument.ROADMAP_DESTINATION,
+        required=True,
+        type=Path,
+    )
     check_progress = subcommands.add_parser(
         SizeLimitCommand.CHECK_PROGRESS, help="Refuse progress notes over their limit"
     )
-    check_progress.add_argument("progress_path", type=Path)
+    check_progress.add_argument(SizeLimitArgument.PROGRESS_PATH, type=Path)
     return parser
 
 
@@ -602,16 +650,20 @@ def main() -> int:
     document over its limits exits with status 1 and names every violation on standard
     error.
     """
-    arguments = build_parser().parse_args()
+    arguments = vars(build_parser().parse_args())
     try:
-        if arguments.subcommand == SizeLimitCommand.STAGE:
-            source = PlanFiles(arguments.manifest_path, arguments.roadmap_path)
+        if arguments[SizeLimitArgument.SUBCOMMAND] == SizeLimitCommand.STAGE:
+            source = PlanFiles(
+                arguments[SizeLimitArgument.MANIFEST_PATH],
+                arguments[SizeLimitArgument.ROADMAP_PATH],
+            )
             destination = PlanFiles(
-                arguments.manifest_destination, arguments.roadmap_destination
+                arguments[SizeLimitArgument.MANIFEST_DESTINATION],
+                arguments[SizeLimitArgument.ROADMAP_DESTINATION],
             )
             logger.info(source.stage(destination))
         else:
-            ProgressNotes.from_file(arguments.progress_path).check()
+            ProgressNotes.from_file(arguments[SizeLimitArgument.PROGRESS_PATH]).check()
     except DocumentOverLimitError as error:
         logger.error(error)
         return 1

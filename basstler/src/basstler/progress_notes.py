@@ -309,6 +309,32 @@ class ProgressNotesOption(StrEnum):
     """
 
 
+class ProgressNotesArgument(StrEnum):
+    """
+    The names this module's command line parses its subcommand and arguments under.
+    """
+
+    SUBCOMMAND = "subcommand"
+    """
+    The subcommand to run, a :class:`ProgressNotesCommand`.
+    """
+
+    DIRECTORY = "directory"
+    """
+    The value of :attr:`ProgressNotesOption.DIRECTORY`.
+    """
+
+    REMOTE = "remote"
+    """
+    The value of :attr:`ProgressNotesOption.REMOTE`.
+    """
+
+    KEEP = "keep"
+    """
+    The value of :attr:`ProgressNotesOption.KEEP`.
+    """
+
+
 def main() -> int:
     """
     Prune a progress-notes directory and report which branches' notes were removed,
@@ -317,21 +343,32 @@ def main() -> int:
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
-    subcommands = parser.add_subparsers(dest="subcommand", required=True)
+    subcommands = parser.add_subparsers(
+        dest=ProgressNotesArgument.SUBCOMMAND, required=True
+    )
     prune = subcommands.add_parser(
         ProgressNotesCommand.PRUNE,
         help="Delete the progress notes of finished pull requests",
     )
-    prune.add_argument(ProgressNotesOption.DIRECTORY, required=True, type=Path)
-    prune.add_argument(ProgressNotesOption.REMOTE, required=True)
-    prune.add_argument(ProgressNotesOption.KEEP, required=True)
-    arguments = parser.parse_args()
+    prune.add_argument(
+        ProgressNotesOption.DIRECTORY,
+        dest=ProgressNotesArgument.DIRECTORY,
+        required=True,
+        type=Path,
+    )
+    prune.add_argument(
+        ProgressNotesOption.REMOTE, dest=ProgressNotesArgument.REMOTE, required=True
+    )
+    prune.add_argument(
+        ProgressNotesOption.KEEP, dest=ProgressNotesArgument.KEEP, required=True
+    )
+    arguments = vars(parser.parse_args())
 
     outcome = ProgressNotesPruning(
-        directory=ProgressNotesDirectory(arguments.directory),
+        directory=ProgressNotesDirectory(arguments[ProgressNotesArgument.DIRECTORY]),
         git=GitCommandRunner(Path.cwd()),
-        remote=arguments.remote,
-        kept_branch=arguments.keep,
+        remote=arguments[ProgressNotesArgument.REMOTE],
+        kept_branch=arguments[ProgressNotesArgument.KEEP],
     ).run()
     if isinstance(outcome, PruningSkipped):
         logger.warning(f"Finished branches' progress notes were not pruned: {outcome}.")

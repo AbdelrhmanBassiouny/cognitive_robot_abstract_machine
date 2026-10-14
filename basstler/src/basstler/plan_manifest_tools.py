@@ -219,6 +219,53 @@ class ManifestToolOption(StrEnum):
     """
 
 
+class ManifestToolArgument(StrEnum):
+    """
+    The names this module's command line parses its subcommand and arguments under.
+    """
+
+    SUBCOMMAND = "subcommand"
+    """
+    The subcommand to run, a :class:`ManifestToolCommand`.
+    """
+
+    MANIFEST_PATH = "manifest_path"
+    """
+    The manifest :attr:`ManifestToolCommand.READ_ID` and :attr:`ManifestToolCommand.ITEM`
+    read.
+    """
+
+    SCRATCH_DIRECTORY = "scratch_directory"
+    """
+    The value of :attr:`ManifestToolOption.SCRATCH_DIRECTORY`.
+    """
+
+    PLANS_DIRECTORY = "plans_directory"
+    """
+    The value of :attr:`ManifestToolOption.PLANS_DIRECTORY`.
+    """
+
+    MANIFEST_FILENAME = "manifest_filename"
+    """
+    The value of :attr:`ManifestToolOption.MANIFEST_FILENAME`.
+    """
+
+    OUTPUT = "output"
+    """
+    The value of :attr:`ManifestToolOption.OUTPUT`.
+    """
+
+    ITEM_IDENTIFIER = "item_identifier"
+    """
+    The value of :attr:`ManifestToolOption.ITEM_IDENTIFIER`.
+    """
+
+    BRANCH = "branch"
+    """
+    The value of :attr:`ManifestToolOption.BRANCH`.
+    """
+
+
 def main() -> int:
     """
     Parse arguments and dispatch to the requested subcommand.
@@ -226,24 +273,38 @@ def main() -> int:
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
-    subcommands = parser.add_subparsers(dest="subcommand", required=True)
+    subcommands = parser.add_subparsers(
+        dest=ManifestToolArgument.SUBCOMMAND, required=True
+    )
 
     read_id_parser = subcommands.add_parser(
         ManifestToolCommand.READ_ID, help="Print a manifest's id field"
     )
-    read_id_parser.add_argument("manifest_path", type=Path)
+    read_id_parser.add_argument(ManifestToolArgument.MANIFEST_PATH, type=Path)
 
     regenerate_parser = subcommands.add_parser(
         ManifestToolCommand.REGENERATE_BRANCH_INDEX,
         help="Rebuild the branch->plan-id index",
     )
     regenerate_parser.add_argument(
-        ManifestToolOption.SCRATCH_DIRECTORY, required=True, type=Path
+        ManifestToolOption.SCRATCH_DIRECTORY,
+        dest=ManifestToolArgument.SCRATCH_DIRECTORY,
+        required=True,
+        type=Path,
     )
-    regenerate_parser.add_argument(ManifestToolOption.PLANS_DIRECTORY, required=True)
-    regenerate_parser.add_argument(ManifestToolOption.MANIFEST_FILENAME, required=True)
+    regenerate_parser.add_argument(
+        ManifestToolOption.PLANS_DIRECTORY,
+        dest=ManifestToolArgument.PLANS_DIRECTORY,
+        required=True,
+    )
+    regenerate_parser.add_argument(
+        ManifestToolOption.MANIFEST_FILENAME,
+        dest=ManifestToolArgument.MANIFEST_FILENAME,
+        required=True,
+    )
     regenerate_parser.add_argument(
         ManifestToolOption.OUTPUT,
+        dest=ManifestToolArgument.OUTPUT,
         required=True,
         type=Path,
         help="Path to write the index to",
@@ -252,28 +313,34 @@ def main() -> int:
     item_parser = subcommands.add_parser(
         ManifestToolCommand.ITEM, help="Print the plan's header and one item's entry"
     )
-    item_parser.add_argument("manifest_path", type=Path)
+    item_parser.add_argument(ManifestToolArgument.MANIFEST_PATH, type=Path)
     item_selector = item_parser.add_mutually_exclusive_group(required=True)
     item_selector.add_argument(
-        ManifestToolOption.ITEM_IDENTIFIER, dest="item_identifier"
+        ManifestToolOption.ITEM_IDENTIFIER, dest=ManifestToolArgument.ITEM_IDENTIFIER
     )
-    item_selector.add_argument(ManifestToolOption.BRANCH)
+    item_selector.add_argument(
+        ManifestToolOption.BRANCH, dest=ManifestToolArgument.BRANCH
+    )
 
-    arguments = parser.parse_args()
+    arguments = vars(parser.parse_args())
+    subcommand = arguments[ManifestToolArgument.SUBCOMMAND]
 
-    if arguments.subcommand == ManifestToolCommand.READ_ID:
-        logger.info(read_manifest_id(arguments.manifest_path))
-    elif arguments.subcommand == ManifestToolCommand.REGENERATE_BRANCH_INDEX:
+    if subcommand == ManifestToolCommand.READ_ID:
+        logger.info(read_manifest_id(arguments[ManifestToolArgument.MANIFEST_PATH]))
+    elif subcommand == ManifestToolCommand.REGENERATE_BRANCH_INDEX:
         index_content = regenerate_branch_index(
-            arguments.scratch_dir, arguments.plans_dir, arguments.manifest_filename
+            arguments[ManifestToolArgument.SCRATCH_DIRECTORY],
+            arguments[ManifestToolArgument.PLANS_DIRECTORY],
+            arguments[ManifestToolArgument.MANIFEST_FILENAME],
         )
-        arguments.output.write_text(index_content)
-    elif arguments.subcommand == ManifestToolCommand.ITEM:
-        manifest = PlanManifest.from_file(arguments.manifest_path)
+        arguments[ManifestToolArgument.OUTPUT].write_text(index_content)
+    elif subcommand == ManifestToolCommand.ITEM:
+        manifest = PlanManifest.from_file(arguments[ManifestToolArgument.MANIFEST_PATH])
+        branch = arguments[ManifestToolArgument.BRANCH]
         item = (
-            manifest.item_on_branch(arguments.branch)
-            if arguments.branch is not None
-            else manifest.item_named(arguments.item_identifier)
+            manifest.item_on_branch(branch)
+            if branch is not None
+            else manifest.item_named(arguments[ManifestToolArgument.ITEM_IDENTIFIER])
         )
         logger.info(item_summary(manifest, item).rstrip("\n"))
 
