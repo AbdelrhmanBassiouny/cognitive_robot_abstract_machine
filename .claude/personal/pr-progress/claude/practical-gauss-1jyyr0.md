@@ -1,8 +1,9 @@
 Plan
 - Draft PR #511: EQL showcase in cramera for supervisor demo (2026-10-15).
 Done
-- Place-setting showcase (world, events, this run, past runs in SQL via AAMAS merge).
-- Perception showcase: lab captures committed into a twin (montessori_perception_on_main merged).
-- Video gallery artifact https://claude.ai/artifact/K9DNK2KLKUw88LqNYJru8u
+- Place-setting + perception showcases; SQL episodic memory; video gallery artifact.
+- Tracy Montessori underspecified sorting (montessori_demo.py): commands, pause/resume,
+  resolution questions; plan step click -> ontology concept view; live candidate rows.
 Next
-- User dry-run on own machine; merge commits drop once AAMAS and #202 land.
+- Record Tracy video (scen/12), republish gallery, update PR body; user dry-run.
+- test_a_showcased_demonstration_offers_the_plan_it_performed fails only after full cramera suite (order pollution).
