@@ -50,9 +50,8 @@ items:
   depends_on: []
   pull_request_number: 506
   session: https://claude.ai/code/session_01FWkFPeHmYEXAemAcshyJAx
-  notes: 'Abandoned: the user and Tom chose extras over a separate package. Superseded by plan krrood-light-core
-    (tracking #510), which keeps everything in krrood with a light core and a krrood[all] extra. Close #506 when
-    krrood-core-and-all-extras lands.'
+  notes: 'Closed unmerged: the user and Tom chose extras over a separate package. Superseded by plan
+    krrood-light-core (tracking #510): krrood keeps a light core and a krrood[all] extra.'
 - id: basstler-krrood-core-dependency
   title: Make basstler depend on krrood_core and use its patterns
   branch: claude/magical-albattani-9fbkd5
