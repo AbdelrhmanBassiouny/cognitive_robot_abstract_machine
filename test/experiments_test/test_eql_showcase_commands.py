@@ -9,7 +9,9 @@ import pytest
 
 from coraplex.datastructures.dataclasses import Context
 from coraplex.execution_environment import kinematically_simulated_robot
+from coraplex.plans.factories import sequential
 from coraplex.plans.plan import Plan
+from coraplex.plans.plan_node import ActionNode
 from coraplex.plans.underspecified import CandidateOutcome
 from coraplex.robot_plans.actions.core.robot_body import MoveTorsoAction, ParkArmsAction
 from cramera.live.bridge import Bridge
@@ -85,6 +87,27 @@ def test_a_command_carried_out_is_done(commander: RobotCommander):
     commander.carry_out(command, ParkArmsAction(commander.context.robot.all_arms))
 
     assert command.state is CommandState.DONE
+
+
+def test_a_command_given_as_a_plan_carries_out_every_step_of_it(
+    commander: RobotCommander,
+):
+    plans: list[Plan] = []
+    commander.observe_plan = plans.append
+    steps = [
+        MoveTorsoAction(TorsoState.HIGH),
+        ParkArmsAction(commander.context.robot.all_arms),
+    ]
+    command = commander.do(sequential(steps), "raise the torso and park")
+
+    commander.carry_out(command, sequential(steps))
+
+    [plan] = plans
+    assert [
+        node.designator
+        for node in plan.plan_graph.nodes()
+        if isinstance(node, ActionNode)
+    ] == steps
 
 
 # %% how what was left open got resolved

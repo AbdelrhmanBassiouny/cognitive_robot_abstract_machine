@@ -23,7 +23,7 @@ from typing_extensions import Callable, ContextManager, Dict, List, Optional, Ty
 from coraplex.datastructures.dataclasses import Context
 from krrood.entity_query_language.utils import camel_case_to_words
 from coraplex.execution_environment import ExecutionEnvironment
-from coraplex.plans.factories import execute_single
+from coraplex.plans.factories import sequential
 from coraplex.plans.failures import PlanFailure
 from coraplex.plans.plan import Plan
 from coraplex.plans.underspecified import CandidateTrial, UnderspecifiedNode
@@ -418,7 +418,7 @@ class RobotCommander:
         :param command: The command to carry out.
         :param action: What it asks the robot to do.
         """
-        plan = execute_single(action_like=action, context=self.context).plan
+        plan = sequential([action], context=self.context).plan
         self.observe_plan(plan)
         command.state = CommandState.RUNNING
         # a command the robot gives up on is reported on, not allowed to end the
