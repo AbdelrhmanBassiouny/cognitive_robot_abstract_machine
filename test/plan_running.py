@@ -62,7 +62,7 @@ def simulated_executor(
     :return: An executor simulating plans in the world of the robot in `extensions`.
     """
     return SimulatedPlanExecutor(
-        world_of(extensions), context_extensions=extensions, pacer=SimulationPacer(), **options
+        world_of(extensions), context_extensions=extensions, **options
     )
 
 
