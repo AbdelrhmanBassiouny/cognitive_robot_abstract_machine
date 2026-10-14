@@ -398,25 +398,6 @@ class AmbiguousDetection(PerceptionExceptionWithSemanticAnnotation):
 
 
 @dataclass
-class NothingDetected(PerceptionExceptionWithSemanticAnnotation):
-    """
-    Raised when a perception source answers a query without reporting any object.
-
-    Treated as a failure rather than an empty answer: a plan that carried on would act on
-    the pose the object was spawned with while believing perception had confirmed it.
-    """
-
-    def error_message(self) -> str:
-        return f"The perception source reported no {self.semantic_annotation.__name__}."
-
-    def suggest_correction(self) -> str:
-        return (
-            "check that the object is in view and that the pipeline's crop and plane "
-            "parameters cover it."
-        )
-
-
-@dataclass
 class UnidentifiedDetections(PerceptionExceptionWithSemanticAnnotation):
     """
     Raised when a perception source reports several candidates it cannot tell apart.

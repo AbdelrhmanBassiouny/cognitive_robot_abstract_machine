@@ -20,7 +20,7 @@ from giskardpy.motion_statechart.tasks.cartesian_tasks import (
     CartesianPose,
     CartesianPosition,
 )
-from giskardpy.motion_statechart.tasks.pointing import Pointing
+from giskardpy.motion_statechart.tasks.pointing import Pointing, PointingBeside
 from semantic_digital_twin.exceptions import MissingMovableJointError
 from semantic_digital_twin.reasoning.predicates import InsideOf
 from semantic_digital_twin.robots.robot_parts import Camera
@@ -127,13 +127,21 @@ class LookAtAction(Action):
     Camera that should be looking at the target.
     """
 
+    sideways_offset: float = 0.0
+    """
+    How far to the left of the target the robot looks instead, as seen from where its
+    base stands when the look starts; a negative offset looks to the right.
+    """
+
     def create_action_body(self) -> StatechartNode:
         camera = self.camera or self.robot.get_default_camera()
-        pointing = Pointing(
+        pointing = PointingBeside(
             root_link=self.robot.get_torso().root,
             tip_link=camera.root,
             goal_point=self.target.position,
             pointing_axis=camera.forward_facing_axis,
+            viewpoint=self.robot.root,
+            sideways_offset=self.sideways_offset,
         )
         hold_base = self.keep_base_still()
         if not hold_base:

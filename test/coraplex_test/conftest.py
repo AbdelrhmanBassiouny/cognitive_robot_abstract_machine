@@ -176,6 +176,25 @@ def whole_scene_region(pr2_apartment_context) -> VolumetricBoundingBox:
     )
 
 
+@pytest.fixture
+def empty_region(pr2_apartment_context) -> VolumetricBoundingBox:
+    """
+    A region well clear of everything in the apartment fixture.
+
+    Lets a perception test say "look where nothing is" without restating the extents.
+    """
+    world, _, _ = pr2_apartment_context
+    return VolumetricBoundingBox(
+        origin=HomogeneousTransformationMatrix(reference_frame=world.root),
+        min_x=-10,
+        min_y=-10,
+        min_z=-10,
+        max_x=-9,
+        max_y=-9,
+        max_z=-9,
+    )
+
+
 # %% building the giskard goals a test plan is made of
 
 

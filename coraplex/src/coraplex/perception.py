@@ -7,7 +7,7 @@ from datetime import timedelta
 import numpy as np
 
 from krrood.ormatic.utils import classproperty
-from cramph.node import EndedByOwner
+from cramph.node import EndedByOwner, FailsOnObservingFalse
 from cramph.context import StatechartContext
 from cramph.data_types import ObservationStateValues
 from cramph.node import StatechartNode
@@ -37,7 +37,6 @@ from typing_extensions import Any, Dict, Optional, Self, Type, List, TYPE_CHECKI
 from coraplex.datastructures.enums import PerceptionSource
 from coraplex.exceptions import (
     AmbiguousDetection,
-    NothingDetected,
     PerceivedObjectNotInWorld,
     PerceptionSourceUnavailable,
     UnidentifiedDetections,
@@ -258,45 +257,32 @@ class PerceptionInterface(ABC):
     """
 
     @abstractmethod
+    def look_for(self, query: PerceptionQuery) -> list[Detection]:
+        """
+        Report every object this source sees for a perception query.
+
+        :param query: What to look for and where.
+        :return: One detection per object seen, empty when the source saw nothing.
+        """
+
     def detect(
         self, query: PerceptionQuery, accept_first_if_multiple: bool = False
-    ) -> Detection:
+    ) -> Detection | None:
         """
-        Answer a perception query.
+        Answer a perception query with the one object it asked about.
 
         :param query: What to look for and where.
         :param accept_first_if_multiple: Whether several candidates may be resolved by
             taking the first one. When False, several candidates raise
             :class:`~coraplex.exceptions.UnidentifiedDetections` instead of being chosen
             between.
-        :return: The object this source saw.
-        :raises NothingDetected: If the source saw nothing.
+        :return: The object this source saw, None when it saw nothing.
         :raises UnidentifiedDetections: If several candidates were seen and none of them
             may be picked.
         """
-
-    @staticmethod
-    def narrow_to_single_detection(
-        detections: List[Detection],
-        query: PerceptionQuery,
-        accept_first_if_multiple: bool,
-    ) -> Detection:
-        """
-        Reduce what a source saw to the one detection a query is answered with.
-
-        :param detections: What the source reported for the query.
-        :param query: The query that was answered.
-        :param accept_first_if_multiple: Whether several candidates may be resolved by
-            taking the first one. When False, several candidates raise
-            :class:`~coraplex.exceptions.UnidentifiedDetections` instead of being chosen
-            between.
-        :return: The single detection the query is answered with.
-        :raises NothingDetected: If the source saw nothing.
-        :raises UnidentifiedDetections: If several candidates were seen and none of them
-            may be picked.
-        """
+        detections = self.look_for(query)
         if not detections:
-            raise NothingDetected(query.semantic_annotation)
+            return None
         if len(detections) > 1 and not accept_first_if_multiple:
             raise UnidentifiedDetections(query.semantic_annotation, len(detections))
         return detections[0]
@@ -327,26 +313,20 @@ class WorldPerception(PerceptionInterface):
     already holds.
     """
 
-    def detect(
-        self, query: PerceptionQuery, accept_first_if_multiple: bool = False
-    ) -> Detection:
+    def look_for(self, query: PerceptionQuery) -> list[Detection]:
         annotation_by_body = {}
         for annotation in query.world.get_semantic_annotations_by_type(
             query.semantic_annotation
         ):
             annotation_by_body.setdefault(annotation.root, type(annotation))
 
-        detections = [
+        return [
             Detection(
                 semantic_annotation=annotation_by_body[body], pose=body.global_pose
             )
             for body in query.from_world()
             if body in annotation_by_body
         ]
-
-        return self.narrow_to_single_detection(
-            detections, query, accept_first_if_multiple
-        )
 
 
 @dataclass
@@ -370,9 +350,7 @@ class RoboKudoPerception(PerceptionInterface):
     How long to wait for the action server before giving up.
     """
 
-    def detect(
-        self, query: PerceptionQuery, accept_first_if_multiple: bool = False
-    ) -> Detection:
+    def look_for(self, query: PerceptionQuery) -> list[Detection]:
         # RoboKudo's messages only exist where its pipeline is installed, so they are
         # imported here rather than at module level: reading the world in simulation must
         # not depend on them.
@@ -387,15 +365,11 @@ class RoboKudoPerception(PerceptionInterface):
             obj=ObjectDesignator(type=query.semantic_annotation.__name__.lower())
         )
         result = client.send_goal(goal).result
-        detections = [
+        return [
             self._to_detection(designator, query)
             for designator in result.res
             if designator.pose and self._can_be_requested_object(designator, query)
         ]
-
-        return self.narrow_to_single_detection(
-            detections, query, accept_first_if_multiple
-        )
 
     @staticmethod
     def _can_be_requested_object(
@@ -456,7 +430,7 @@ class RoboKudoPerception(PerceptionInterface):
 
 
 @dataclass(eq=False, repr=False)
-class PerceptionTask(EndedByOwner, StatechartNode):
+class PerceptionTask(EndedByOwner, FailsOnObservingFalse, StatechartNode):
     """
     Statechart node that answers a perception query and writes what it saw into the
     world.
@@ -464,7 +438,9 @@ class PerceptionTask(EndedByOwner, StatechartNode):
     The node moves nothing, so it adds no motion constraints and its owner decides when
     it succeeded, like a task of a motion. The query is answered on the node's first tick,
     so the whole detection takes one tick however long the source needs to reply, and the
-    node then observes ``TRUE`` so the surrounding sequence continues.
+    node then observes ``TRUE`` so the surrounding sequence continues. A source that saw
+    nothing makes it observe ``FALSE``, which fails it, so a surrounding
+    :class:`~cramph.composites.TryInOrder` can go and look somewhere else.
 
     ..warning:: That tick blocks until the source replies, which on the real robot holds
         up the control loop for as long as the pipeline takes to answer.
@@ -489,9 +465,11 @@ class PerceptionTask(EndedByOwner, StatechartNode):
     The source answering the query, resolved during :meth:`set_up`.
     """
 
-    _detections_applied: bool = field(init=False, default=False, repr=False)
+    _observation: ObservationStateValues | None = field(
+        init=False, default=None, repr=False
+    )
     """
-    Whether the query has already been answered and written into the world.
+    The observation this node keeps once the query has been answered, None before that.
     """
 
     accept_first_if_multiple: bool = False
@@ -514,16 +492,25 @@ class PerceptionTask(EndedByOwner, StatechartNode):
         )
 
     def on_start(self, context: StatechartContext) -> None:
-        self._detections_applied = False
+        self._observation = None
 
-    def on_tick(self, context: StatechartContext) -> Optional[ObservationStateValues]:
-        if self._detections_applied:
-            return ObservationStateValues.TRUE
+    def on_tick(self, context: StatechartContext) -> ObservationStateValues | None:
+        if self._observation is None:
+            self._observation = self._answer_query()
+        return self._observation
+
+    def _answer_query(self) -> ObservationStateValues:
+        """
+        Answer the query and write what was seen into the world.
+
+        :return: True once the object was seen, False when the source saw nothing.
+        """
         detection = self.perception_source.detect(
             self.query, self.accept_first_if_multiple
         )
+        if detection is None:
+            return ObservationStateValues.FALSE
         detection.apply_to(
             self.query.world, trust_orientation=self.query.trust_detected_orientation
         )
-        self._detections_applied = True
         return ObservationStateValues.TRUE
