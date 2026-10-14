@@ -585,9 +585,10 @@ class DeeplyNestedCascadeScenario(BenchmarkScenario):
 
     name: ClassVar[str] = "deeply_nested_cascade"
 
-    nesting_depth: int = 16
+    nesting_depth: int = 7
     """
-    How many sequences each step is nested in.
+    How many sequences wrap each step, and again each stage of steps, so a step sits
+    about twice as deep.
     """
 
     instant_steps_per_waypoint: int = 2

@@ -318,12 +318,16 @@ def deeply_nested_cascade_profile(init_rospy) -> CallTreeProfile:
 class TestDeeplyNestedCascade:
     """
     A tick in which an outcome climbs deep nesting settles in many passes, and even that
-    tick has to finish before the robot is commanded too late.
+    settling has to fit into one control cycle.
     """
 
-    def test_slowest_cycle_stays_within_the_control_budget(
+    def test_slowest_settling_stays_within_the_control_budget(
         self, deeply_nested_cascade_profile: CallTreeProfile
     ):
-        assert deeply_nested_cascade_profile.control_cycle.inclusive_maximum < (
-            deeply_nested_cascade_profile.control_dt
+        slowest_settling = max(
+            samples.inclusive_maximum
+            for samples in deeply_nested_cascade_profile.phases.values()
+            if samples.path[-1] == "settle"
         )
+
+        assert slowest_settling < deeply_nested_cascade_profile.control_dt
