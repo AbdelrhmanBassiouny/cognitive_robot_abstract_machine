@@ -8,7 +8,10 @@ sends the nodes it chose instead.
 
 from __future__ import annotations
 
+from dataclasses import dataclass, replace
+
 import pytest
+from typing_extensions import Callable, List
 
 from coraplex import perception
 from coraplex.datastructures.enums import DetectionTechnique
@@ -51,8 +54,10 @@ from coraplex.robot_plans.actions.core.robot_body import (
     MoveTorsoAction,
     ParkArmsAction,
     SetGripperAction,
+    MoveFingersToWidthAction,
 )
-from cramph.context import StatechartContext
+from coraplex.plans.executors import PlanExecutor
+from cramph.context import ContextExtension, StatechartContext
 from cramph.executor import StatechartExecutor
 from cramph.node import StatechartNode
 from semantic_digital_twin.datastructures.definitions import GripperState, TorsoState
@@ -87,6 +92,7 @@ from semantic_digital_twin.world_description.world_entity import Body
 
 from ..test_designator.test_multi_robot_action_designator import _handle_annotation
 from ..test_tool_based_actions import _add_box_body, _attach_box_to_gripper
+from ..conftest import physically_simulated_executor
 from ...plan_running import robot_extensions, simulated_executor
 from ...statechart_json_round_trip import (
     NodeRoundTripCase,
@@ -94,6 +100,22 @@ from ...statechart_json_round_trip import (
     WorldFixture,
     concrete_node_types,
 )
+
+# %% the executor a case is performed by
+
+
+@dataclass
+class ActionRoundTripCase(NodeRoundTripCase):
+    """
+    The nodes that send one action or perception node class through JSON, sent from and
+    received by executors of the kind that performs it.
+    """
+
+    executor_for: Callable[[List[ContextExtension]], PlanExecutor] = simulated_executor
+    """
+    Builds an executor performing the nodes, from the context extensions of their plan.
+    """
+
 
 # %% what the nodes of the cases refer to
 
@@ -217,21 +239,28 @@ def _elevator_navigation(world: World) -> list[StatechartNode]:
     return [ElevatorNavigation(elevator, ground_floor)]
 
 
-def _robot_body_cases() -> list[NodeRoundTripCase]:
+def _robot_body_cases() -> list[ActionRoundTripCase]:
     return [
-        NodeRoundTripCase(
+        ActionRoundTripCase(
             MoveTorsoAction, lambda world: [MoveTorsoAction(TorsoState.HIGH)]
         ),
-        NodeRoundTripCase(
+        ActionRoundTripCase(
             SetGripperAction,
             lambda world: [
                 SetGripperAction(_arm(world).end_effector, GripperState.OPEN)
             ],
         ),
-        NodeRoundTripCase(
+        ActionRoundTripCase(
+            MoveFingersToWidthAction,
+            lambda world: [
+                MoveFingersToWidthAction(_arm(world).end_effector, width=0.04)
+            ],
+            executor_for=physically_simulated_executor,
+        ),
+        ActionRoundTripCase(
             ParkArmsAction, lambda world: [ParkArmsAction(_robot(world).all_arms)]
         ),
-        NodeRoundTripCase(
+        ActionRoundTripCase(
             FollowToolCenterPointPathAction,
             lambda world: [
                 FollowToolCenterPointPathAction(
@@ -240,7 +269,7 @@ def _robot_body_cases() -> list[NodeRoundTripCase]:
                 )
             ],
         ),
-        NodeRoundTripCase(
+        ActionRoundTripCase(
             MoveManipulatorAction,
             lambda world: [
                 MoveManipulatorAction(
@@ -250,7 +279,7 @@ def _robot_body_cases() -> list[NodeRoundTripCase]:
                 )
             ],
         ),
-        NodeRoundTripCase(
+        ActionRoundTripCase(
             MoveToReach,
             lambda world: [
                 MoveToReach(
@@ -264,20 +293,20 @@ def _robot_body_cases() -> list[NodeRoundTripCase]:
     ]
 
 
-def _navigation_and_perception_cases() -> list[NodeRoundTripCase]:
+def _navigation_and_perception_cases() -> list[ActionRoundTripCase]:
     return [
-        NodeRoundTripCase(NavigateAction, lambda world: [_navigate(world)]),
-        NodeRoundTripCase(
+        ActionRoundTripCase(NavigateAction, lambda world: [_navigate(world)]),
+        ActionRoundTripCase(
             PathPlanningNavigateAction,
             lambda world: [PathPlanningNavigateAction(_pose(world))],
         ),
-        NodeRoundTripCase(LookAtAction, lambda world: [LookAtAction(_pose(world))]),
-        NodeRoundTripCase(FaceAtAction, lambda world: [FaceAtAction(_pose(world))]),
-        NodeRoundTripCase(
+        ActionRoundTripCase(LookAtAction, lambda world: [LookAtAction(_pose(world))]),
+        ActionRoundTripCase(FaceAtAction, lambda world: [FaceAtAction(_pose(world))]),
+        ActionRoundTripCase(
             FaceAndLookAtAction, lambda world: [_face_and_look_at(world)]
         ),
-        NodeRoundTripCase(ElevatorNavigation, _elevator_navigation),
-        NodeRoundTripCase(
+        ActionRoundTripCase(ElevatorNavigation, _elevator_navigation),
+        ActionRoundTripCase(
             DetectAction,
             lambda world: [
                 DetectAction(
@@ -285,7 +314,7 @@ def _navigation_and_perception_cases() -> list[NodeRoundTripCase]:
                 )
             ],
         ),
-        NodeRoundTripCase(
+        ActionRoundTripCase(
             PerceptionTask,
             lambda world: [
                 PerceptionTask(
@@ -299,42 +328,44 @@ def _navigation_and_perception_cases() -> list[NodeRoundTripCase]:
     ]
 
 
-def _manipulation_cases() -> list[NodeRoundTripCase]:
+def _manipulation_cases() -> list[ActionRoundTripCase]:
     return [
-        NodeRoundTripCase(
+        ActionRoundTripCase(
             ReachAction,
             lambda world: [
                 ReachAction(grasp=_milk(world).grasp_candidates()[0], arm=_arm(world))
             ],
         ),
-        NodeRoundTripCase(
+        ActionRoundTripCase(
             GraspingAction,
             lambda world: [
                 GraspingAction(_milk(world).grasp_candidates()[0], _arm(world))
             ],
         ),
-        NodeRoundTripCase(PickUpAction, lambda world: [_pick_up(world)]),
-        NodeRoundTripCase(PlaceAction, lambda world: [_pick_up(world), _place(world)]),
-        NodeRoundTripCase(
+        ActionRoundTripCase(PickUpAction, lambda world: [_pick_up(world)]),
+        ActionRoundTripCase(
+            PlaceAction, lambda world: [_pick_up(world), _place(world)]
+        ),
+        ActionRoundTripCase(
             OpenAction,
             lambda world: [
                 OpenAction(_handle(world).grasp_candidates()[0], _arm(world))
             ],
         ),
-        NodeRoundTripCase(
+        ActionRoundTripCase(
             CloseAction,
             lambda world: [
                 CloseAction(_handle(world).grasp_candidates()[0], _arm(world))
             ],
         ),
-        NodeRoundTripCase(
+        ActionRoundTripCase(
             MoveAndPickUpAction, lambda world: [_move_and_pick_up(world)]
         ),
-        NodeRoundTripCase(
+        ActionRoundTripCase(
             MoveAndPlaceAction,
             lambda world: [_pick_up(world), _move_and_place(world)],
         ),
-        NodeRoundTripCase(
+        ActionRoundTripCase(
             MoveAndOpenAction,
             lambda world: [
                 MoveAndOpenAction(
@@ -346,13 +377,13 @@ def _manipulation_cases() -> list[NodeRoundTripCase]:
                 )
             ],
         ),
-        NodeRoundTripCase(
+        ActionRoundTripCase(
             PickAndPlaceAction,
             lambda world: [
                 PickAndPlaceAction(pick_up=_pick_up(world), place=_place(world))
             ],
         ),
-        NodeRoundTripCase(
+        ActionRoundTripCase(
             TransportAction,
             lambda world: [
                 TransportAction(
@@ -363,9 +394,9 @@ def _manipulation_cases() -> list[NodeRoundTripCase]:
     ]
 
 
-def _tool_cases() -> list[NodeRoundTripCase]:
+def _tool_cases() -> list[ActionRoundTripCase]:
     return [
-        NodeRoundTripCase(
+        ActionRoundTripCase(
             MixingAction,
             lambda world: [
                 MixingAction(
@@ -375,7 +406,7 @@ def _tool_cases() -> list[NodeRoundTripCase]:
                 )
             ],
         ),
-        NodeRoundTripCase(
+        ActionRoundTripCase(
             CuttingAction,
             lambda world: [
                 CuttingAction(
@@ -385,7 +416,7 @@ def _tool_cases() -> list[NodeRoundTripCase]:
                 )
             ],
         ),
-        NodeRoundTripCase(
+        ActionRoundTripCase(
             WipingAction,
             lambda world: [
                 WipingAction(
@@ -395,7 +426,7 @@ def _tool_cases() -> list[NodeRoundTripCase]:
                 )
             ],
         ),
-        NodeRoundTripCase(
+        ActionRoundTripCase(
             PouringAction,
             lambda world: [
                 PouringAction(
@@ -408,15 +439,13 @@ def _tool_cases() -> list[NodeRoundTripCase]:
     ]
 
 
-def _cases() -> list[NodeRoundTripCase]:
+def _cases() -> list[ActionRoundTripCase]:
     """
     :return: One case per action and perception node class, each in the apartment of
         the PR2.
     """
     return [
-        NodeRoundTripCase(
-            case.node_type, case.build_nodes, WorldFixture.PR2_APARTMENT_CONTEXT
-        )
+        replace(case, world_fixture=WorldFixture.PR2_APARTMENT_CONTEXT)
         for case in (
             *_robot_body_cases(),
             *_navigation_and_perception_cases(),
@@ -430,12 +459,12 @@ def _cases() -> list[NodeRoundTripCase]:
 
 
 @pytest.fixture(params=_cases(), ids=lambda case: case.node_type.__name__)
-def case(request: pytest.FixtureRequest) -> NodeRoundTripCase:
+def case(request: pytest.FixtureRequest) -> ActionRoundTripCase:
     return request.param
 
 
 @pytest.fixture()
-def cases() -> list[NodeRoundTripCase]:
+def cases() -> list[ActionRoundTripCase]:
     return _cases()
 
 
@@ -451,22 +480,22 @@ def node_types_needing_a_case() -> set[type[StatechartNode]]:
 
 @pytest.fixture()
 def sending_context(
-    case: NodeRoundTripCase, request: pytest.FixtureRequest
+    case: ActionRoundTripCase, request: pytest.FixtureRequest
 ) -> StatechartContext:
     world, robot, extensions = request.getfixturevalue(case.world_fixture)
-    return simulated_executor(extensions).context
+    return case.executor_for(extensions).context
 
 
 @pytest.fixture()
 def receiving_executor(
-    case: NodeRoundTripCase, request: pytest.FixtureRequest
+    case: ActionRoundTripCase, request: pytest.FixtureRequest
 ) -> StatechartExecutor:
     """
-    :return: An executor simulating plans of the robot of `case`, with context
-        extensions of its own.
+    :return: An executor performing plans of the robot of `case` the way `case` is
+        performed, with context extensions of its own.
     """
     world, robot, extensions = request.getfixturevalue(case.world_fixture)
-    return simulated_executor(robot_extensions(robot))
+    return case.executor_for(robot_extensions(robot))
 
 
 # %% round trips

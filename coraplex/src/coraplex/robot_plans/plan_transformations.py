@@ -10,6 +10,7 @@ from coraplex.datastructures.enums import (
     InsertionPosition,
 )
 from coraplex.exceptions import (
+    GraspHasNoClosingGoal,
     ReachHasNoFinalApproach,
 )
 from coraplex.locations.locations import ReachabilityLocation
@@ -30,10 +31,18 @@ from coraplex.robot_plans.actions.core.navigation import (
     LookAtAction,
     NavigateAction,
 )
-from coraplex.robot_plans.actions.core.pick_up import PickUpAction, ReachAction
-from coraplex.robot_plans.actions.core.robot_body import ParkArmsAction
-from cramph.composites import StatementNode
+from coraplex.robot_plans.actions.core.pick_up import (
+    GraspingAction,
+    PickUpAction,
+    ReachAction,
+)
+from coraplex.robot_plans.actions.core.robot_body import (
+    MoveFingersToWidthAction,
+    ParkArmsAction,
+)
+from cramph.composites import CramLanguageNode, StatementNode
 from cramph.node import StatechartNode
+from giskardpy.motion_statechart.goals.gripper import MoveGripper
 from giskardpy.motion_statechart.tasks.cartesian_tasks import (
     CartesianPose,
     CartesianPosition,
@@ -48,11 +57,14 @@ from semantic_digital_twin.grasping.grasp_candidates import (
     GraspCandidate,
     HasGraspCandidates,
 )
+from semantic_digital_twin.datastructures.definitions import GripperState
+from semantic_digital_twin.robots.robot_part_mixins import HasTwoFingers
 from semantic_digital_twin.robots.robot_parts import Arm
 from semantic_digital_twin.semantic_annotations.mixins import HasRootBody
 from semantic_digital_twin.semantic_annotations.semantic_annotations import Drawer
 from semantic_digital_twin.spatial_types.spatial_types import Pose
 from coraplex.plans.context_extensions import (
+    ExecutionMode,
     RobotAccess,
     StatementGrounding,
 )
@@ -403,3 +415,64 @@ class ParkArmsBeforeFirstAction(InsertionTransformation[Action]):
             ),
             None,
         )
+
+
+# %% holding an object at its own width
+
+
+@dataclass
+class CloseFingersToObjectWidth(PlanTransformation[GraspingAction]):
+    """
+    Closes a grasp onto the width of the object it takes hold of, instead of shutting
+    the gripper onto it, where the object pushes back.
+
+    Shutting the gripper all the way onto an object that is not centred between the
+    fingers wedges it sideways instead of holding it, so a robot whose grasp holds by
+    contact alone meets the object at its own width, measured on the object.
+    """
+
+    squeeze: float = 0.0
+    """
+    How far past the object's width each finger is sent, in metres, so the fingers press
+    into it rather than merely touching it.
+    """
+
+    def is_applicable(self, plan_node: GraspingAction) -> bool:
+        return (
+            plan_node.context.require_extension(
+                ExecutionMode
+            ).execution_type.objects_push_back
+            and isinstance(plan_node.arm.end_effector, HasTwoFingers)
+            and plan_node.grasp.graspable.root.has_collision()
+        )
+
+    def apply(self, plan_node: GraspingAction) -> None:
+        closing_step = self.closing_step(plan_node)
+        CramLanguageNode.running(closing_step).replace(
+            closing_step,
+            plan_node.closing_step(
+                MoveFingersToWidthAction(
+                    gripper=plan_node.arm.end_effector,
+                    width=plan_node.grasp.width_along_closing_axis,
+                    squeeze=self.squeeze,
+                )
+            ),
+        )
+
+    @staticmethod
+    def closing_step(plan_node: GraspingAction) -> StatechartNode:
+        """
+        :param plan_node: The grasp.
+        :raises GraspHasNoClosingGoal: If no goal shutting the gripper lies below the
+            grasp, which it has none of before it is expanded.
+        :return: The step of the grasp that shuts its gripper.
+        """
+        body = plan_node.action_body
+        steps = [] if body is None else body.nodes
+        for step in reversed(steps):
+            if any(
+                isinstance(node, MoveGripper) and node.state is GripperState.CLOSE
+                for node in [step, *step.descendants]
+            ):
+                return step
+        raise GraspHasNoClosingGoal(plan_node)

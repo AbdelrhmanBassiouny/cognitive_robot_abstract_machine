@@ -1,6 +1,9 @@
 import numpy as np
 import pytest
 from rustworkx import NoEdgeBetweenNodes
+from typing_extensions import List
+
+from cramph.context import ContextExtension
 
 from giskardpy.utils.utils_for_tests import compare_axis_angle, compare_orientations
 from coraplex.datastructures.trajectory import PoseTrajectory
@@ -18,9 +21,11 @@ from coraplex.robot_plans.actions.core.robot_body import (
     SetGripperAction,
     FollowToolCenterPointPathAction,
 )
+from coraplex.plans.executors import PhysicallySimulatedPlanExecutor
 from coraplex.testing import _make_sine_scan_poses
 from krrood.entity_query_language.factories import an, entity, variable
 
+from semantic_digital_twin.adapters.multi_sim import MujocoSim
 from semantic_digital_twin.datastructures.definitions import (
     GripperState,
     StaticJointState,
@@ -41,9 +46,10 @@ from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.world_entity import Body
 
 from ...conftest import SAMPLING_SEED
-from ..conftest import left_or_only_arm, right_or_only_arm
+from ...pytest_environment import runs_in_continuous_integration
+from ..conftest import grasp_point_of, left_or_only_arm, right_or_only_arm
 from ..world_snapshot import WorldSnapshot
-from ...plan_running import run_plan, robot_extensions
+from ...plan_running import run_plan, robot_extensions, statechart_of, world_of
 
 
 @pytest.fixture(
@@ -185,12 +191,11 @@ def test_reach_action_multi(stationary_block_context):
 
     run_plan(plan, extensions)
     end_effector_pose = left_arm.end_effector.tool_frame.global_transform
-    end_effector_position = end_effector_pose.position.to_np()
     end_effector_orientation = end_effector_pose.quaternion.to_np()
 
     target_orientation = left_arm.end_effector.tool_frame_goal(grasp_pose).quaternion
 
-    assert end_effector_position[:3] == pytest.approx(position[:3], abs=0.01)
+    assert grasp_point_of(left_arm) == pytest.approx(position[:3], abs=0.01)
     compare_orientations(
         end_effector_orientation, target_orientation.to_np(), decimal=2
     )
@@ -230,10 +235,10 @@ def test_grasping(stationary_block_context):
     )
     plan = Sequence([ParkArmsAction(robot_view.all_arms), description])
     run_plan(plan, extensions)
-    # The grasp sits at the box's own origin, so that is where the tool frame ends up.
+    # The grasp sits at the box's own origin, so that is where the fingers end up.
     assert np.allclose(
-        box_body.global_pose.position.to_np(),
-        left_arm.end_effector.tool_frame.global_pose.position.to_np(),
+        box_body.global_pose.position.to_np().flatten()[:3],
+        grasp_point_of(left_arm),
         atol=0.01,
     )
 
@@ -340,3 +345,96 @@ def test_move_tcp_follows_sine_waypoints(stationary_block_context, anchor_positi
 
     assert np.allclose(tip_pose.position, expected.position, atol=0.01)
     assert np.allclose(tip_pose.quaternion, expected.quaternion, atol=0.01)
+
+
+# %% picking and placing in physics
+
+
+@pytest.fixture
+def physically_simulated_block_context(stationary_block_context):
+    """
+    The block world with its physics running, so a plan performed in it is carried out
+    by the robot's own servos.
+    """
+    world, view, extensions = stationary_block_context
+    if not isinstance(view, Tracy):
+        pytest.skip("only Tracy is set up with the servos a physical simulation needs")
+    simulation = MujocoSim(world=world, headless=True)
+    simulation.start_stepped_simulation()
+    yield world, view, extensions, simulation
+    simulation.stop_simulation()
+
+
+def perform_in_physics(
+    plan: Sequence, extensions: List[ContextExtension], simulation: MujocoSim
+) -> None:
+    """
+    :param plan: The plan to perform.
+    :param extensions: The context extensions of the plan.
+    :param simulation: The running physics to perform it in.
+    """
+    executor = PhysicallySimulatedPlanExecutor(
+        world_of(extensions),
+        context_extensions=extensions,
+        simulation=simulation,
+    )
+    executor.compile(statechart_of(executor, plan))
+    executor.execute()
+
+
+@pytest.mark.skipif(
+    not runs_in_continuous_integration(), reason="MuJoCo tests only run in CI"
+)
+def test_a_pick_in_physics_leaves_the_box_to_the_grip(
+    physically_simulated_block_context,
+):
+    """
+    Nothing puts the box under the gripper in the model, so whether it comes along at
+    all is up to the pads holding it.
+    """
+    world, view, extensions, simulation = physically_simulated_block_context
+    arm = left_or_only_arm(view)
+    box = world.get_body_by_name("box1")
+    stood_on = box.parent_connection.parent
+    plan = Sequence(
+        [
+            ParkArmsAction(view.all_arms),
+            PickUpAction(graspable_annotation(world, box).grasp_candidates()[0], arm),
+        ]
+    )
+
+    perform_in_physics(plan, extensions, simulation)
+
+    assert box.parent_connection.parent is stood_on
+    with pytest.raises(NoEdgeBetweenNodes):
+        world.get_connection(arm.end_effector.tool_frame, box)
+
+
+@pytest.mark.skipif(
+    not runs_in_continuous_integration(), reason="MuJoCo tests only run in CI"
+)
+def test_a_place_in_physics_leaves_the_box_to_the_release(
+    physically_simulated_block_context, place_position
+):
+    """
+    Nothing puts the box back under the world in the model either, so where it ends up
+    is where the pads opening leaves it.
+    """
+    world, view, extensions, simulation = physically_simulated_block_context
+    arm = left_or_only_arm(view)
+    box = world.get_body_by_name("box1")
+    stood_on = box.parent_connection.parent
+    plan = Sequence(
+        [
+            ParkArmsAction(view.all_arms),
+            PickUpAction(graspable_annotation(world, box).grasp_candidates()[0], arm),
+            PlaceAction(
+                graspable_annotation(world, box),
+                Pose(place_position, reference_frame=world.root),
+            ),
+        ]
+    )
+
+    perform_in_physics(plan, extensions, simulation)
+
+    assert box.parent_connection.parent is stood_on

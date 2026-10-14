@@ -5,6 +5,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 
 from typing_extensions import (
+    List,
     Optional,
 )
 
@@ -15,7 +16,10 @@ from krrood.ormatic.utils import classproperty
 from cramph.node import SucceedsOnObservingTrue, FailsOnObservingFalse
 from cramph.context import ContextExtension, StatechartContext
 from cramph.node import CompositeNode, NodeArtifacts, StatechartNode
+from giskardpy.motion_statechart.graph_node import MotionStatechartNode
+from giskardpy.motion_statechart.tasks.cartesian_tasks import HoldPose
 from krrood.symbolic_math.symbolic_math import Scalar, trinary_if_cases
+from semantic_digital_twin.robots.robot_part_mixins import HasMobileBase
 from semantic_digital_twin.robots.robot_parts import AbstractRobot
 from semantic_digital_twin.world_description.world_entity import (
     KinematicStructureEntity,
@@ -94,6 +98,25 @@ class Action(
             to, which its Cartesian goals are expressed in.
         """
         return self.context.require_extension(RobotAccess).controlled_root
+
+    def keep_base_still(self) -> List[MotionStatechartNode]:
+        """
+        :return: The task holding the robot's base where it stands, empty when the robot
+            has no mobile base or may move its whole body.
+
+        A goal relative to the robot is bound when it starts, so a base that moves
+        afterwards, which collision avoidance does to buy clearance, carries the goal
+        away from its target.
+        """
+        robot = self.robot
+        if (
+            not isinstance(robot, HasMobileBase)
+            or robot.mobile_base.full_body_controlled
+        ):
+            return []
+        return [
+            HoldPose(name="hold base", root_link=self.world.root, tip_link=robot.root)
+        ]
 
     def expand(self, context: StatechartContext) -> None:
         """

@@ -11,6 +11,7 @@ from typing_extensions import List
 
 from semantic_digital_twin.exceptions import (
     MissingReferenceFrameError,
+    ObjectHasNoWidthWithoutCollision,
     ReferenceFrameMismatchError,
 )
 from semantic_digital_twin.semantic_annotations.mixins import HasRootBody
@@ -63,6 +64,36 @@ class GraspCandidate:
         :return: A grasp at that object's origin.
         """
         return cls(graspable, Pose(reference_frame=graspable.root))
+
+    @property
+    def width_along_closing_axis(self) -> float:
+        """
+        How wide the object stands along the axis the fingers close along, in metres.
+
+        Read as the width of the object's bounding box seen along that axis, which is
+        the object's own width wherever the grasp lies square to the box.
+
+        :raises ObjectHasNoWidthWithoutCollision: If the object carries no collision
+            geometry.
+        """
+        body = self.graspable.root
+        if not body.has_collision():
+            raise ObjectHasNoWidthWithoutCollision(body.name)
+        bounding_box = body.collision.as_bounding_box_collection_in_frame(
+            body
+        ).bounding_box()
+        extents = np.array(
+            [
+                interval.upper - interval.lower
+                for interval in (
+                    bounding_box.x_interval,
+                    bounding_box.y_interval,
+                    bounding_box.z_interval,
+                )
+            ]
+        )
+        closing_direction = self.grasp_pose.to_np()[:3, 1]
+        return float(np.abs(closing_direction) @ extents)
 
     @property
     def world_T_grasp(self) -> Pose:

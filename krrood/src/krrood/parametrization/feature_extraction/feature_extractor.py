@@ -298,7 +298,7 @@ class FeatureExtractor:
             if not getattr(current_instance, relationship.key):
                 continue
             aggregation_instance = aggregation_cls(
-                instance=current_instance, field_name=relationship.key
+                role_taker=current_instance, field_name=relationship.key
             )
             for feature in aggregation_instance.symbolic_aggregation_features():
                 result[relationship.key].append(feature)
@@ -316,7 +316,9 @@ class FeatureExtractor:
         result = []
         aggregation_cls = get_aggregation_class(type(instance))
         aggregation_instance = (
-            aggregation_cls(instance=instance) if aggregation_cls is not None else None
+            aggregation_cls(role_taker=instance)
+            if aggregation_cls is not None
+            else None
         )
         for feature in self.features:
             if feature in aggregation_features:

@@ -14,9 +14,9 @@ from coraplex.exceptions import ObjectIsNotHeld
 from coraplex.querying.predicates import GripperHolds
 from cramph.node import StatechartNode
 from cramph.composites import Parallel, Sequence
-from cramph.world_modification_nodes import MoveBranch
 from coraplex.robot_plans.actions.core.pick_up import PickUpAction
 from coraplex.robot_plans.mixins import (
+    ReattachesBodies,
     HasApproachesGraspPoses,
     HasGraspDetectionThreshold,
     MovesGripper,
@@ -36,6 +36,7 @@ from semantic_digital_twin.spatial_types.spatial_types import Pose
 @dataclass(eq=False, repr=False)
 class PlaceAction(
     MovesToolCenterPoint,
+    ReattachesBodies,
     HasApproachesGraspPoses,
     PlaceTuningParameters,
     HasGraspDetectionThreshold,
@@ -113,9 +114,7 @@ class PlaceAction(
         return Sequence(
             name=f"{self.name}/retract",
             nodes=[
-                MoveBranch(
-                    body=self.object_designator.root, new_parent=self.world.root
-                ),
+                *self.reattach(self.object_designator.root, self.world.root),
                 # The gripper starts out around the object it has just let go of.
                 self.tool_center_point_goal(
                     retract_pose,

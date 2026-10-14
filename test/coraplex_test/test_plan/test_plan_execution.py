@@ -10,11 +10,14 @@ import pytest
 
 from cramph.exceptions import EmptyStatechartError
 
+from coraplex.datastructures.enums import ExecutionType
 from coraplex.exceptions import (
     MotionDidNotFinish,
     PlanNotCompiled,
 )
+from coraplex.plans.context_extensions import ExecutionMode
 from coraplex.plans.executors import (
+    PhysicallySimulatedPlanExecutor,
     RealRobotPlanExecutor,
     SimulatedPlanExecutor,
 )
@@ -34,6 +37,7 @@ from cramph.data_types import LifeCycleValues, ObservationStateValues
 from cramph.executor import Pacer, StatechartExecutor
 from cramph.node import CancelStatechart
 from cramph.nodes_for_testing import NodeFailingOnObservingFalse
+from giskardpy.motion_control import MotionControl
 from giskardpy.motion_statechart.exceptions import CollisionViolatedError
 from giskardpy.motion_statechart.graph_node import EndMotion
 from giskardpy.motion_statechart.monitors.progress_monitors import StillProgressing
@@ -42,6 +46,7 @@ from semantic_digital_twin.grasping.grasp_candidates import GraspCandidate
 from semantic_digital_twin.robots.pr2 import PR2Joint
 from semantic_digital_twin.semantic_annotations.semantic_annotations import Milk
 from semantic_digital_twin.spatial_types import HomogeneousTransformationMatrix
+from ..conftest import physically_simulated_executor
 from ...plan_running import run_plan, simulated_executor, statechart_of
 
 # %% counting the waits between ticks
@@ -161,7 +166,11 @@ def test_a_statechart_of_another_context_is_refused(pr2_apartment_context):
 
 @pytest.mark.parametrize(
     "executor_type, drives_a_simulated_robot",
-    [(SimulatedPlanExecutor, True), (RealRobotPlanExecutor, False)],
+    [
+        (SimulatedPlanExecutor, True),
+        (PhysicallySimulatedPlanExecutor, True),
+        (RealRobotPlanExecutor, False),
+    ],
 )
 def test_an_executor_says_whether_it_drives_a_simulated_robot(
     executor_type, drives_a_simulated_robot
@@ -301,3 +310,97 @@ def test_a_plan_that_violates_collision_avoidance_fails_as_a_plan_failure(
         executor.execute()
 
     assert failure.value.violation is violation
+
+
+# %% performing a plan in a physically simulated world
+
+
+def test_a_physically_simulated_plan_steps_the_physics_one_control_period_per_tick(
+    pr2_apartment_context,
+):
+    """
+    The servos take every command as their set point, so the physics has to advance by
+    exactly the time the controller planned the command for before the next tick reads
+    the world back.
+    """
+    world, robot_view, extensions = pr2_apartment_context
+    executor = physically_simulated_executor(extensions)
+
+    executor.compile(statechart_of(executor, MoveTorsoAction(TorsoState.HIGH)))
+    executor.execute()
+
+    control_time_step = executor.require_extension(
+        MotionControl
+    ).qp_controller_config.control_time_step
+    assert executor.pacer.simulation.steps == [control_time_step] * executor.tick_count
+
+
+def test_a_physically_simulated_plan_is_given_the_same_time_limit(
+    pr2_apartment_context,
+):
+    """
+    Both simulated executors tick the same loop, so a plan performed in physics is given
+    up on by the same limit as one projected kinematically.
+    """
+    world, robot_view, extensions = pr2_apartment_context
+    executor = physically_simulated_executor(
+        extensions, simulation_time_per_action=timedelta(0)
+    )
+
+    with pytest.raises(MotionExceededSimulationTimeLimit):
+        executor.compile(statechart_of(executor, MoveTorsoAction(TorsoState.HIGH)))
+        executor.execute()
+
+
+# %% what carries out the motions of a plan
+
+
+@pytest.mark.parametrize(
+    "executor_type, execution_type",
+    [
+        (SimulatedPlanExecutor, ExecutionType.KINEMATICALLY_SIMULATED),
+        (PhysicallySimulatedPlanExecutor, ExecutionType.PHYSICALLY_SIMULATED),
+        (RealRobotPlanExecutor, ExecutionType.REAL),
+    ],
+)
+def test_an_executor_says_what_carries_out_its_plans(executor_type, execution_type):
+    assert executor_type.execution_type is execution_type
+
+
+def test_an_executor_tells_its_plans_what_carries_them_out(pr2_apartment_context):
+    world, robot_view, extensions = pr2_apartment_context
+    executor = physically_simulated_executor(extensions)
+
+    execution_mode = executor.context.require_extension(ExecutionMode)
+
+    assert (
+        execution_mode.execution_type is PhysicallySimulatedPlanExecutor.execution_type
+    )
+
+
+def test_objects_push_back_where_the_robot_is_real_or_physically_simulated():
+    """
+    Whether contact decides what is held is what tells the two simulated types apart,
+    and a plan that depends on contact has to be able to ask.
+    """
+    pushing_back = {
+        execution_type
+        for execution_type in ExecutionType
+        if execution_type.objects_push_back
+    }
+
+    assert pushing_back == {ExecutionType.REAL, ExecutionType.PHYSICALLY_SIMULATED}
+
+
+def test_only_a_physically_simulated_world_follows_physics():
+    """
+    The real robot's world is a belief that has to be told what the gripper holds; only
+    a world synchronised from a running physics is moved by contact.
+    """
+    following_physics = {
+        execution_type
+        for execution_type in ExecutionType
+        if execution_type.world_follows_physics
+    }
+
+    assert following_physics == {ExecutionType.PHYSICALLY_SIMULATED}

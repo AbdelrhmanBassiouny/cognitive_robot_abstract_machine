@@ -31,6 +31,7 @@ from semantic_digital_twin.world_description.geometry import Cylinder
 from semantic_digital_twin.world_description.shape_collection import ShapeCollection
 from semantic_digital_twin.world_description.world_entity import Body
 
+from ..conftest import grasp_point_of
 from ...plan_running import robot_extensions, run_plan
 
 # %% a robot with a cup in reach of each arm
@@ -159,13 +160,14 @@ def test_a_gripper_closes_at_its_grasp_although_the_other_arm_is_moving(
 ):
     run_plan(Parallel(cup_for_each_arm.pick_ups), cup_for_each_arm.context_extensions)
 
+    world = cup_for_each_arm.world
     for pick_up in cup_for_each_arm.pick_ups:
-        tool_frame_T_grasp = cup_for_each_arm.world.transform(
-            pick_up.grasp.grasp_pose, pick_up.arm.end_effector.tool_frame
-        )
+        # A goal puts the point the fingers meet at on the grasp, not the tool frame.
         np.testing.assert_allclose(
-            tool_frame_T_grasp.position.to_np()[:3],
-            np.zeros(3),
+            grasp_point_of(pick_up.arm),
+            world.transform(pick_up.grasp.grasp_pose, world.root)
+            .position.to_np()
+            .flatten()[:3],
             atol=MotionToleranceConfig().default_tcp_position_threshold,
         )
 

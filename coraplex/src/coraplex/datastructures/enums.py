@@ -12,7 +12,7 @@ class ReachFraction(float, Enum):
     How far the robot stands off what it reaches for, as a fraction of the arm's length.
     """
 
-    GRASPING = 0.5
+    GRASPING = 0.6
     """
     Reaching something that stays where it is.
     """
@@ -40,6 +40,50 @@ class PerceptionSource(Enum):
     """
     A RoboKudo pipeline, for the real robot.
     """
+
+
+class ExecutionType(Enum):
+    """
+    What carries out the motions of a plan, which decides both how a motion is performed
+    and how a query about the world may be answered.
+    """
+
+    REAL = auto()
+    """
+    Performed by the robot itself, by handing the statechart to Giskard.
+    """
+
+    KINEMATICALLY_SIMULATED = auto()
+    """
+    Performed against a world the robot is moved through kinematically, where reaching
+    a goal may be answered by writing the pose it was reached at into the world.
+
+    Nothing pushes back: a joint arrives wherever it was commanded and an object is held
+    by being attached to the gripper.
+    """
+
+    PHYSICALLY_SIMULATED = auto()
+    """
+    Performed against a physically simulated world, where the robot's joints are driven
+    to a goal by its servos and an object is held by friction alone.
+    """
+
+    @property
+    def objects_push_back(self) -> bool:
+        """
+        Whether a body the robot touches resists it, so that contact rather than the
+        world model decides what is held.
+        """
+        return self in (ExecutionType.REAL, ExecutionType.PHYSICALLY_SIMULATED)
+
+    @property
+    def world_follows_physics(self) -> bool:
+        """
+        Whether the world is moved by a running physics, so a body goes wherever contact
+        takes it and putting it under another body in the world model would hold it
+        there whether or not anything does.
+        """
+        return self is ExecutionType.PHYSICALLY_SIMULATED
 
 
 class VisualizationBackend(StrEnum):

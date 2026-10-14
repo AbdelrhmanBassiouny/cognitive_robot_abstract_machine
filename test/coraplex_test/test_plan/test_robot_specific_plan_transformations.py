@@ -402,7 +402,7 @@ def closing_step_of(action: CloseAction) -> StatechartNode:
     :return: The step of an expanded close action between grasping the handle and
         letting go of it.
     """
-    grasp, closing_step, release = action.action_body.nodes
+    grasp, closing_step, release, back_off = action.action_body.nodes
     return closing_step
 
 

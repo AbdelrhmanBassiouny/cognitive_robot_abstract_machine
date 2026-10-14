@@ -45,7 +45,7 @@ from coraplex.perception import (
 from coraplex.robot_plans.actions.core.misc import DetectAction
 from coraplex.robot_plans.actions.core.pick_up import PickUpAction
 from coraplex.perception import PerceptionTask
-from .conftest import motion_nodes_of
+from .conftest import motion_nodes_in_physics_of, motion_nodes_of
 from giskardpy.motion_control import MotionControl
 from cramph.context import StatechartContext
 from cramph.data_types import ObservationStateValues
@@ -447,16 +447,21 @@ def test_detection_corrects_a_grasp_planned_before_it(pr2_apartment_context):
         if isinstance(node, CartesianPose)
     ]
 
+    tool_P_grasp = (
+        view.right_arm.end_effector.tool_P_grasp_when_closed.to_np().flatten()[:3]
+    )
+
     def distances_to(position) -> list[float]:
-        return [
-            float(
-                np.linalg.norm(
-                    world.transform(target, world.root).position.to_np().flatten()[:3]
-                    - np.array(position)
-                )
-            )
-            for target in targets
-        ]
+        """
+        How far each motion puts the point the fingers meet at from a position: that is
+        the point a goal is aimed at, not the tool frame.
+        """
+        distances = []
+        for target in targets:
+            root_T_tool = world.transform(target, world.root).to_np()
+            fingers = root_T_tool[:3, :3] @ tool_P_grasp + root_T_tool[:3, 3]
+            distances.append(float(np.linalg.norm(fingers - np.array(position))))
+        return distances
 
     # Planned against the wrong prior, one motion sits exactly on the believed object.
     assert min(distances_to(wrong_prior)) < 1e-9
@@ -929,6 +934,24 @@ def test_detect_action_reads_the_world_model_when_the_robot_is_simulated(
     ]
     assert [type(task) for task in tasks] == [PerceptionTask]
     assert tasks[0].answered_by is PerceptionSource.WORLD_MODEL
+
+
+def test_detect_action_reads_the_world_model_when_the_robot_is_physically_simulated(
+    pr2_apartment_context,
+):
+    """
+    A physically simulated world is still a simulated one: what is in it is known
+    exactly, so there is no perception pipeline to ask.
+    """
+    world, view, extensions = pr2_apartment_context
+    plan = DetectAction(DetectionTechnique.TYPES, object_sem_annotation=Milk)
+
+    [task] = [
+        node
+        for node in motion_nodes_in_physics_of(plan, extensions)
+        if isinstance(node, PerceptionTask)
+    ]
+    assert task.answered_by is PerceptionSource.WORLD_MODEL
 
 
 def test_perception_task_survives_a_chart_round_trip(

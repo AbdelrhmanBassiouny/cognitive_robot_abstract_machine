@@ -10,6 +10,7 @@ from giskardpy.motion_statechart.graph_node import (
     EndMotion,
 )
 from giskardpy.motion_statechart.monitors.joint_monitors import JointPositionReached
+from giskardpy.motion_statechart.monitors.progress_monitors import StillProgressing
 from cramph.statechart import (
     Statechart,
 )
@@ -598,6 +599,58 @@ def test_pointing(pr2_world_state_reset: World):
 
     kin_sim.compile(statechart=msc)
     kin_sim.tick_until_end()
+
+
+def test_pointing_lowers_the_torso_when_the_head_cannot_tilt_far_enough(
+    pr2_world_state_reset: World,
+):
+    """
+    A point on the floor close in front of a PR2 whose torso is fully raised lies
+    further below the head than its tilt joint reaches, and lowering the torso brings it
+    within reach.
+
+    The torso only moves the head, never turns it, so pointing has to count where the
+    head is, not just which way it faces, for the torso to help.
+    """
+    world = pr2_world_state_reset
+    base = world.get_kinematic_structure_entity_by_name("base_link")
+    head = world.get_kinematic_structure_entity_by_name("head_tilt_link")
+    torso = world.get_connection_by_name("torso_lift_joint")
+    head_tilt = world.get_connection_by_name("head_tilt_joint")
+    torso.position = torso.dof.limits.upper.position
+    world.notify_state_change()
+
+    # Steeper below the raised head than the tilt joint reaches, but not once the torso
+    # is lowered.
+    world_P_head = head.global_pose.to_np()[:3, 3]
+    steepest_tilt_at_full_height = head_tilt.dof.limits.upper.position + 0.03
+    distance = world_P_head[2] / np.tan(steepest_tilt_at_full_height)
+    goal_point = Point3(
+        world_P_head[0] + distance, world_P_head[1], 0.0, reference_frame=world.root
+    )
+
+    kin_sim = StatechartExecutor(
+        context=StatechartContext(world=world),
+        extensions=[MotionControl()],
+    )
+    msc = Statechart(context=kin_sim.context)
+    pointing = Pointing(
+        root_link=base,
+        tip_link=head,
+        goal_point=goal_point,
+        pointing_axis=Vector3.X(reference_frame=head),
+    )
+    msc.add_node(pointing)
+    msc.add_node(still_progressing := StillProgressing(monitored_node=pointing))
+    msc.add_node(still_progressing.cancel_motion())
+    end = EndMotion()
+    end.start_condition = pointing.observes_true
+    msc.add_node(end)
+
+    kin_sim.compile(statechart=msc)
+    kin_sim.tick_until_end()
+
+    assert torso.position < torso.dof.limits.upper.position - 0.05
 
 
 def test_pointing_cone(pr2_world_state_reset: World):
