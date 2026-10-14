@@ -16,6 +16,7 @@ from coraplex.plans.plan_transformation import (
     PlanTransformation,
     logger as transformation_logger,
 )
+from coraplex.plans.underspecified import AttemptRewritingItsTask
 from coraplex.robot_plans.actions.base import Action
 from coraplex.robot_plans.actions.composite.facing import FaceAndLookAtAction
 from coraplex.robot_plans.actions.composite.transporting import (
@@ -40,7 +41,6 @@ from coraplex.robot_plans.plan_transformations import (
     ParkArmsBeforeFirstAction,
 )
 from cramph.composites import (
-    Attempt,
     ChildChooser,
     CramLanguageNode,
     Sequence,
@@ -999,7 +999,9 @@ def test_the_opening_joins_the_sequence_a_grounded_pick_up_runs_in(
 
     underspecified.choose_child_with(
         ChoosesTheGivenChild(
-            child=Attempt(task=candidate_steps, failure_monitors=[ConstFalseNode()])
+            child=AttemptRewritingItsTask(
+                task=candidate_steps, failure_monitors=[ConstFalseNode()]
+            )
         ),
         plan.statechart.context,
     )

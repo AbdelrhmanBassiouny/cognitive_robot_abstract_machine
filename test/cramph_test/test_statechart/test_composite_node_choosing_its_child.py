@@ -2,13 +2,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from typing_extensions import List, Optional, Tuple
+from typing_extensions import List, Optional
 
 from cramph.composites import (
     Attempt,
     ChildChooser,
     ChildChooserAccess,
-    ChosenChildObserver,
     CompositeNodeChoosingItsChild,
     RepeatUntil,
 )
@@ -61,25 +60,6 @@ class ChooserAnsweringInTurn(ChildChooser):
         if not self.children:
             return None
         return self.children.pop(0)
-
-
-@dataclass
-class ExtensionRecordingChosenChildren(ChosenChildObserver):
-    """
-    Records every child a node choosing its child adopted.
-    """
-
-    chosen: List[Tuple[CompositeNodeChoosingItsChild, StatechartNode]] = field(
-        default_factory=list
-    )
-    """
-    Every node and the child it adopted, in the order they were adopted.
-    """
-
-    def observe_chosen_child(
-        self, node: CompositeNodeChoosingItsChild, child: StatechartNode
-    ) -> None:
-        self.chosen.append((node, child))
 
 
 @dataclass
@@ -202,21 +182,6 @@ def test_the_node_succeeds_with_the_child_it_chose(
     assert choosing_node.children == [child]
     assert child.life_cycle_state == LifeCycleValues.SUCCEEDED
     assert choosing_node.life_cycle_state == LifeCycleValues.SUCCEEDED
-
-
-def test_the_observers_of_the_context_are_told_about_every_chosen_child(
-    statechart_executor: StatechartExecutor,
-):
-    failing = _failing_child("failing")
-    succeeding = _succeeding_child("succeeding")
-    observer = ExtensionRecordingChosenChildren()
-    statechart_executor.context.add_extension(observer)
-
-    choosing_node = _run_choosing_node(
-        statechart_executor, ChooserAnsweringInTurn([failing, succeeding])
-    )
-
-    assert observer.chosen == [(choosing_node, failing), (choosing_node, succeeding)]
 
 
 def test_a_failed_child_makes_the_node_choose_again(

@@ -1024,23 +1024,6 @@ class ChildChooserAccess(ContextExtension):
         self.chooser.cleanup()
 
 
-@dataclass
-class ChosenChildObserver(ContextExtension, ABC):
-    """
-    A context extension told about every child a
-    :class:`CompositeNodeChoosingItsChild` of its statechart adopted.
-    """
-
-    @abstractmethod
-    def observe_chosen_child(
-        self, node: CompositeNodeChoosingItsChild, child: StatechartNode
-    ) -> None:
-        """
-        :param node: The node that adopted `child`.
-        :param child: The child `node` runs next, which belongs to its statechart now.
-        """
-
-
 @dataclass(eq=False, repr=False)
 class CompositeNodeChoosingItsChild(SucceedsOnObservingTrue, CompositeNode):
     """
@@ -1156,15 +1139,11 @@ class CompositeNodeChoosingItsChild(SucceedsOnObservingTrue, CompositeNode):
 
     def adopt_chosen_child(self, child: StatechartNode) -> None:
         """
-        Run `child` next, succeeding once it succeeds, and tell every
-        :class:`ChosenChildObserver` of the context about it.
+        Run `child` next, succeeding once it succeeds.
         """
         self._add_child_to_statechart(child)
         self.success_condition = logic_or(self.success_condition, child.is_succeeded)
         self.statechart.request_rebuild(self)
-        for extension in self.context.extensions.values():
-            if isinstance(extension, ChosenChildObserver):
-                extension.observe_chosen_child(self, child)
 
     def give_up(self) -> None:
         """
