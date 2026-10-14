@@ -615,7 +615,7 @@ class PR2(AbstractRobot, HasMobileBase[PR2MobileBase]):
                     ),
                 ),
                 AvoidExternalCollisions(
-                    buffer_zone_distance=0.2,
+                    buffer_zone_distance=0.15,
                     violated_distance=0.05,
                     robot=self,
                     body_subset={

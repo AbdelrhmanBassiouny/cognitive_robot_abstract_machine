@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+import numpy as np
 import pytest
 from typing_extensions import List, Optional, Type
 
@@ -10,8 +11,10 @@ from coraplex.plans.executors import PlanExecutor
 from coraplex.robot_plans.actions.base import Action
 from coraplex.datastructures.trajectory import PoseTrajectory
 from coraplex.robot_plans.actions.core.navigation import LookAtAction, NavigateAction
+from coraplex.exceptions import FingerWidthNeedsPhysics
 from coraplex.robot_plans.actions.core.robot_body import (
     FollowToolCenterPointPathAction,
+    MoveFingersToWidthAction,
     MoveManipulatorAction,
     MoveTorsoAction,
     ParkArmsAction,
@@ -35,7 +38,12 @@ from giskardpy.motion_statechart.goals.collision_avoidance import (
     UpdateTemporaryCollisionRules,
 )
 from giskardpy.motion_statechart.goals.gripper import MoveGripper
-from giskardpy.motion_statechart.tasks.cartesian_tasks import CartesianPose
+from giskardpy.motion_statechart.data_types import DefaultWeights
+from giskardpy.motion_statechart.tasks.cartesian_tasks import (
+    CartesianPose,
+    CartesianPosition,
+    HoldPose,
+)
 from giskardpy.motion_statechart.tasks.pointing import Pointing
 from giskardpy.motion_statechart.monitors.overwrite_state_monitors import SetOdometry
 from krrood.patterns.field_metadata import ParameterMetadata
@@ -45,6 +53,7 @@ from giskardpy.motion_statechart.tasks.joint_tasks import (
 )
 from semantic_digital_twin.datastructures.definitions import GripperState, TorsoState
 from semantic_digital_twin.spatial_types.spatial_types import Pose
+from ..conftest import physically_simulated_executor
 from ...plan_running import robot_executor, simulated_executor, statechart_of
 from cramph.context import ContextExtension, StatechartContext
 
@@ -444,3 +453,142 @@ def test_navigating_writes_the_odometry_when_simulated(simple_pr2_context):
 
     assert len(_nodes_of_type(action, SetOdometry)) == 1
     assert _nodes_of_type(action, CartesianPose) == []
+
+
+def test_navigating_drives_the_base_when_physically_simulated(simple_pr2_context):
+    """
+    A robot whose wheels have to carry it cannot be put at a pose by saying so, which is
+    why performing in physics is told apart from performing kinematically.
+    """
+    _, robot, extensions = simple_pr2_context
+    action = NavigateAction(Pose())
+
+    _expanded(action, extensions, physically_simulated_executor(extensions))
+
+    assert _nodes_of_type(action, SetOdometry) == []
+    [drive] = _nodes_of_type(action, CartesianPose)
+    assert drive.tip_link == robot.root
+
+
+# %% a robot that does not move its whole body stands still while it moves an arm
+
+
+@pytest.fixture
+def full_body_controlled_pr2(simple_pr2_context):
+    """
+    The PR2 context with the PR2 allowed to move its whole body, restored afterwards:
+    the world snapshot does not cover this setting.
+    """
+    world, robot, extensions = simple_pr2_context
+    with world.modify_world():
+        robot.mobile_base.full_body_controlled = True
+    yield world, robot, extensions
+    with world.modify_world():
+        robot.mobile_base.full_body_controlled = False
+
+
+def arm_and_look_actions(robot) -> List[Action]:
+    """
+    :return: One of every action that moves an arm or the head while the base is meant
+        to stand.
+    """
+    end_effector = robot.left_arm.end_effector
+    return [
+        MoveManipulatorAction(Pose(), end_effector, False),
+        FollowToolCenterPointPathAction(PoseTrajectory([Pose()]), robot.left_arm),
+        LookAtAction(Pose()),
+    ]
+
+
+def test_moving_an_arm_or_looking_holds_the_base_of_a_robot_that_stands_still(
+    simple_pr2_context,
+):
+    """
+    A goal relative to the robot is bound when it starts, so a base that collision
+    avoidance pushes afterwards carries the goal away from its target.
+    """
+    world, robot, extensions = simple_pr2_context
+    assert not robot.mobile_base.full_body_controlled
+
+    for action in arm_and_look_actions(robot):
+        _expanded(action, extensions)
+
+        [hold_base] = _nodes_of_type(action, HoldPose)
+        assert hold_base.root_link == world.root
+        assert hold_base.tip_link == robot.root
+        assert hold_base.weight == DefaultWeights.WEIGHT_ABOVE_COLLISION_AVOIDANCE
+
+
+def test_moving_an_arm_or_looking_leaves_a_full_body_controlled_base_free(
+    full_body_controlled_pr2,
+):
+    """
+    A robot that may move its whole body drives while it reaches, so its base is not
+    held.
+    """
+    world, robot, extensions = full_body_controlled_pr2
+
+    for action in arm_and_look_actions(robot):
+        _expanded(action, extensions)
+
+        assert _nodes_of_type(action, HoldPose) == []
+
+
+# %% sending the fingers to a width
+
+
+def test_fingers_sent_to_a_width_aim_one_fingertip_at_the_other(simple_pr2_context):
+    """
+    The distance between the fingertips is what Giskard is given, so it finds the joint
+    positions that realise it rather than being told them.
+    """
+    _, robot, extensions = simple_pr2_context
+    gripper = robot.left_arm.end_effector
+    action = MoveFingersToWidthAction(gripper=gripper, width=0.04)
+
+    _expanded(action, extensions, physically_simulated_executor(extensions))
+
+    goal = action.action_body
+    assert isinstance(goal, CartesianPosition)
+    assert goal.root_link is gripper.finger.tip
+    assert goal.tip_link is gripper.thumb.tip
+
+
+def test_a_squeeze_sends_the_fingers_past_the_width(simple_pr2_context):
+    _, robot, extensions = simple_pr2_context
+    gripper = robot.left_arm.end_effector
+    width = 0.04
+    squeeze = 0.001
+    touching = MoveFingersToWidthAction(gripper=gripper, width=width)
+    pressing = MoveFingersToWidthAction(gripper=gripper, width=width, squeeze=squeeze)
+
+    _expanded(touching, extensions, physically_simulated_executor(extensions))
+    _expanded(pressing, extensions, physically_simulated_executor(extensions))
+
+    apart = touching.action_body.goal_point.to_np()[:3].ravel()
+    pressed = pressing.action_body.goal_point.to_np()[:3].ravel()
+    assert np.linalg.norm(pressed) == pytest.approx(np.linalg.norm(apart) - 2 * squeeze)
+
+
+def test_fingers_are_sent_to_a_width_on_the_real_robot(simple_pr2_context):
+    _, robot, extensions = simple_pr2_context
+    action = MoveFingersToWidthAction(gripper=robot.left_arm.end_effector, width=0.04)
+
+    _expanded(action, extensions, robot_executor(extensions))
+
+    assert isinstance(action.action_body, CartesianPosition)
+
+
+def test_fingers_are_not_sent_to_a_width_where_nothing_pushes_back(
+    simple_pr2_context,
+):
+    """
+    Closing to an object's own width only means something where the object resists; in a
+    world moved kinematically a held body hangs off the tool frame however the fingers
+    stand.
+    """
+    _, robot, extensions = simple_pr2_context
+    action = MoveFingersToWidthAction(gripper=robot.left_arm.end_effector, width=0.04)
+
+    with pytest.raises(FingerWidthNeedsPhysics):
+        _expanded(action, extensions)

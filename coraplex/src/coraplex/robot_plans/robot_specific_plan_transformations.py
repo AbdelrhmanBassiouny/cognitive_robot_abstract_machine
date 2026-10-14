@@ -10,7 +10,7 @@ from dataclasses import dataclass
 
 from typing_extensions import List
 
-from coraplex.datastructures.enums import InsertionPosition
+from coraplex.datastructures.enums import ExecutionType, InsertionPosition
 from coraplex.exceptions import ClosingGoalNotFound, ToolPathNotFound
 from coraplex.plans.context_extensions import ExecutionMode
 from coraplex.plans.plan_transformation import (
@@ -108,13 +108,15 @@ class DriveStretchWithItsDifferentialDrive(DriveWithTheDifferentialDrive):
 @dataclass
 class DriveSimulatedTiagoWithItsDifferentialDrive(DriveWithTheDifferentialDrive):
     """
-    Moves the base of a simulated Tiago with a goal for its differential drive.
+    Moves the base of a kinematically simulated Tiago with a goal for its differential
+    drive.
     """
 
     def is_applicable(self, plan_node: DrivesBase) -> bool:
         return (
             isinstance(plan_node.robot, Tiago)
-            and plan_node.context.require_extension(ExecutionMode).simulated
+            and plan_node.context.require_extension(ExecutionMode).execution_type
+            is ExecutionType.KINEMATICALLY_SIMULATED
         )
 
 
@@ -124,14 +126,16 @@ class DriveSimulatedTiagoWithItsDifferentialDrive(DriveWithTheDifferentialDrive)
 @dataclass
 class KeepStretchInFrontOfTheContainerItCloses(PlanTransformation[CloseAction]):
     """
-    Keeps a simulated Stretch standing in front of the container it closes and holding
-    on to the handle, so that it closes the container by pushing its arm forward.
+    Keeps a kinematically simulated Stretch standing in front of the container it closes
+    and holding on to the handle, so that it closes the container by pushing its arm
+    forward.
     """
 
     def is_applicable(self, plan_node: CloseAction) -> bool:
         return (
             isinstance(plan_node.robot, Stretch)
-            and plan_node.context.require_extension(ExecutionMode).simulated
+            and plan_node.context.require_extension(ExecutionMode).execution_type
+            is ExecutionType.KINEMATICALLY_SIMULATED
         )
 
     @staticmethod

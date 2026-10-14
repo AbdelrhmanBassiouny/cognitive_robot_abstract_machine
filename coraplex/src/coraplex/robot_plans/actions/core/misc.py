@@ -10,6 +10,7 @@ from krrood.ormatic.utils import classproperty
 from coraplex.datastructures.enums import (
     DetectionState,
     DetectionTechnique,
+    ExecutionType,
     PerceptionSource,
 )
 from coraplex.perception import PerceptionQuery, PerceptionTask
@@ -102,9 +103,10 @@ class DetectAction(Action):
                 PerceptionTask(
                     query=self._build_query(),
                     answered_by=(
-                        PerceptionSource.WORLD_MODEL
-                        if self.context.require_extension(ExecutionMode).simulated
-                        else PerceptionSource.ROBOKUDO
+                        PerceptionSource.ROBOKUDO
+                        if self.context.require_extension(ExecutionMode).execution_type
+                        is ExecutionType.REAL
+                        else PerceptionSource.WORLD_MODEL
                     ),
                     accept_first_if_multiple=self.accept_first_if_multiple,
                 )
@@ -181,7 +183,7 @@ class MoveToReach(MovesToolCenterPoint, HasApproachesGraspPoses):
             [
                 NavigateAction(self.standing_pose),
                 MoveManipulatorAction(
-                    self.end_effector.tool_frame_goal(self.reference_T_grasp),
+                    self.end_effector.tool_frame_goal_for_grasp(self.reference_T_grasp),
                     self.end_effector,
                     allow_gripper_collision=False,
                     position_threshold=self.position_threshold,

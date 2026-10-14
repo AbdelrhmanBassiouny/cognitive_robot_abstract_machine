@@ -16,11 +16,11 @@ from coraplex.plans.executors import (
     SimulatedPlanExecutor,
 )
 from cramph.context import ContextExtension, StatechartContext
+from cramph.executor import SimulationPacer
 from cramph.node import StatechartNode
 from cramph.statechart import Statechart
 from semantic_digital_twin.robots.robot_parts import AbstractRobot
 from semantic_digital_twin.world import World
-
 from .sampling import SAMPLING_SEED
 
 
@@ -62,7 +62,7 @@ def simulated_executor(
     :return: An executor simulating plans in the world of the robot in `extensions`.
     """
     return SimulatedPlanExecutor(
-        world_of(extensions), context_extensions=extensions, **options
+        world_of(extensions), context_extensions=extensions, pacer=SimulationPacer(), **options
     )
 
 

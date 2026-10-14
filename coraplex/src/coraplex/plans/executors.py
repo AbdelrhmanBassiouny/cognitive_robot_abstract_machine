@@ -6,7 +6,9 @@ from dataclasses import dataclass, field
 from datetime import timedelta
 
 from rclpy.node import Node
-from typing_extensions import List, Optional
+from typing_extensions import TYPE_CHECKING, List, Optional
+
+from coraplex.datastructures.enums import ExecutionType
 
 from coraplex.exceptions import (
     MotionDidNotFinish,
@@ -31,7 +33,12 @@ from cramph.composites import ChildChooserAccess, StatementNode
 from cramph.context import ContextExtension, StatechartContext
 from cramph.data_types import LifeCycleValues
 from cramph.exceptions import EmptyStatechartError
-from cramph.executor import Executor, ExecutorExtension, StatechartExecutor
+from cramph.executor import (
+    Executor,
+    ExecutorExtension,
+    StatechartExecutor,
+    SteppedSimulationPacer,
+)
 from cramph.node import StatechartNode, TerminalNode
 from cramph.statechart import Statechart
 from giskardpy.motion_control import MotionControl
@@ -47,9 +54,13 @@ from giskardpy.motion_statechart.graph_node import ConvergingTask, EndMotion
 from giskardpy.motion_statechart.monitors.progress_monitors import StillProgressing
 from giskardpy.middleware.ros2.python_interface import GiskardClientExecutor
 from giskardpy.motion_statechart.ros_context import RosNodeAccess
+from giskardpy.qp.qp_controller_config import QPControllerConfig
 from krrood.ormatic.utils import classproperty
 from krrood.symbolic_math.symbolic_math import logic_or
 from semantic_digital_twin.world import World
+
+if TYPE_CHECKING:
+    from semantic_digital_twin.adapters.multi_sim import MujocoSim
 
 logger = logging.getLogger(__name__)
 
@@ -130,6 +141,13 @@ class PlanExecutor(Executor, ABC):
         """
         return issubclass(cls, SimulatedPlanExecutor)
 
+    @classproperty
+    @abstractmethod
+    def execution_type(cls) -> ExecutionType:
+        """
+        :return: What carries out the motions of the plans this executor runs.
+        """
+
     def __post_init__(self):
         if self.debug and self.ros_node is None:
             raise ValueError("Debug mode requires a ROS node")
@@ -141,7 +159,7 @@ class PlanExecutor(Executor, ABC):
             self.context.add_extension(extension)
         self.context.add_extension(
             ExecutionMode(
-                simulated=self.simulated,
+                execution_type=self.execution_type,
                 collision_avoidance=self.collision_avoidance,
             )
         )
@@ -342,6 +360,10 @@ class SimulatedPlanExecutor(PlanExecutor, StatechartExecutor):
         super().__post_init__()
         self.simulation_time_limit = self.simulation_time_per_action
 
+    @classproperty
+    def execution_type(cls) -> ExecutionType:
+        return ExecutionType.KINEMATICALLY_SIMULATED
+
     def default_executor_extensions(self) -> list[ExecutorExtension]:
         return [RosNodeAccess(self.ros_node), MotionControl()]
 
@@ -371,7 +393,7 @@ class SimulatedPlanExecutor(PlanExecutor, StatechartExecutor):
     def _run(self) -> None:
         """
         Tick the statechart until it or the plan ended, waiting for :attr:`pacer` after
-        every tick.
+        every tick and, once it ended, until the world caught up with the last command.
 
         The statechart's own stall monitor decides when a plan is hopeless;
         :attr:`simulation_time_limit` only cuts off a plan that keeps creeping for
@@ -387,6 +409,7 @@ class SimulatedPlanExecutor(PlanExecutor, StatechartExecutor):
                     raise MotionExceededSimulationTimeLimit(self.simulation_time_limit)
                 self.tick()
                 self.pacer.sleep()
+            self.pacer.wait_for_standstill()
         finally:
             MotionControl.set_velocity_acceleration_jerk_to_zero(self.world)
             self.finish_run()
@@ -407,6 +430,45 @@ class SimulatedPlanExecutor(PlanExecutor, StatechartExecutor):
 
 
 @dataclass
+class PhysicallySimulatedPlanExecutor(SimulatedPlanExecutor):
+    """
+    Ticks the plan's statechart against a physically simulated world, whose servos take
+    every command as their set point while the physics advances one control period
+    between two ticks.
+
+    An object is held by friction alone, so a grasp that misses drops it.
+    """
+
+    simulation: MujocoSim = field(kw_only=True)
+    """
+    The physically simulated world the plan is performed in; it has to be started with
+    :meth:`~semantic_digital_twin.adapters.multi_sim.MujocoSim.start_stepped_simulation`
+    already.
+    """
+
+    pacer: SteppedSimulationPacer = field(init=False)
+    """
+    Steps :attr:`simulation` one control period after every tick.
+    """
+
+    def __post_init__(self):
+        self.pacer = SteppedSimulationPacer(self.simulation)
+        super().__post_init__()
+
+    @classproperty
+    def execution_type(cls) -> ExecutionType:
+        return ExecutionType.PHYSICALLY_SIMULATED
+
+    def default_executor_extensions(self) -> list[ExecutorExtension]:
+        return [
+            RosNodeAccess(self.ros_node),
+            MotionControl(
+                qp_controller_config=QPControllerConfig.create_with_physical_simulation_defaults()
+            ),
+        ]
+
+
+@dataclass
 class RealRobotPlanExecutor(PlanExecutor):
     """
     Sends the plan's statechart to Giskard, grounding every underspecified action
@@ -422,6 +484,10 @@ class RealRobotPlanExecutor(PlanExecutor):
     The connection to Giskard every plan is sent through, None until the first plan
     runs.
     """
+
+    @classproperty
+    def execution_type(cls) -> ExecutionType:
+        return ExecutionType.REAL
 
     def compile(self, statechart: Statechart) -> None:
         """

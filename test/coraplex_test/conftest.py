@@ -8,13 +8,17 @@ from ..orm_interface_build import regenerate_orm_interfaces
 regenerate_orm_interfaces()
 
 
+from dataclasses import dataclass, field
+from datetime import timedelta
 from functools import partial
 
+import numpy as np
 import pytest
 
 from typing_extensions import List, Optional
 
 from coraplex.plans.context_extensions import RobotAccess
+from coraplex.plans.executors import PhysicallySimulatedPlanExecutor
 from cramph.context import ContextExtension
 from cramph.node import StatechartNode
 from cramph.statechart import Statechart
@@ -50,7 +54,7 @@ from semantic_digital_twin.world_description.geometry import VolumetricBoundingB
 from .world_snapshot import WorldSnapshot
 from semantic_digital_twin.robots.robot_parts import AbstractRobot, Arm
 
-from ..plan_running import expand, robot_extensions
+from ..plan_running import expand, robot_extensions, statechart_of, world_of
 
 # %% the arm a test runs with on any robot
 
@@ -67,6 +71,24 @@ def right_or_only_arm(robot: AbstractRobot) -> Arm:
     :return: The right arm of a robot that names one, otherwise its first arm.
     """
     return robot.get_right_arm_if_specified() or robot.all_arms[0]
+
+
+# %% where a gripper grasps, which is what a goal is aimed at
+
+
+def grasp_point_of(arm: Arm) -> np.ndarray:
+    """
+    :param arm: The arm whose gripper to read.
+    :return: Where its fingers meet, in world coordinates. A goal puts this point on
+        its target, not the tool frame, so this is what a reached goal is read at.
+    """
+    end_effector = arm.end_effector
+    world = end_effector._world
+    return (
+        world.transform(end_effector.tool_P_grasp_when_closed, world.root)
+        .to_np()
+        .flatten()[:3]
+    )
 
 
 @pytest.fixture(scope="session")
@@ -198,3 +220,59 @@ def motion_nodes_of(
     """
     root = expand(plan, extensions)
     return [root, *root.descendants]
+
+
+# %% a physically simulated world without the physics
+
+
+@dataclass
+class SimulationThatCountsItsSteps:
+    """
+    Stands in for a started simulation, counting the physics steps asked of it.
+    """
+
+    steps: List[timedelta] = field(default_factory=list)
+    """
+    Every period the physics was asked to advance by.
+    """
+
+    world: World = field(default_factory=World)
+    """
+    The world it simulates, without a servo, so nothing is waited for to settle.
+    """
+
+    def step_simulation(self, duration: timedelta) -> None:
+        """
+        :param duration: Simulated time to advance.
+        """
+        self.steps.append(duration)
+
+
+def physically_simulated_executor(
+    extensions: List[ContextExtension], **options
+) -> PhysicallySimulatedPlanExecutor:
+    """
+    :param extensions: The context extensions of a plan, holding a
+        :class:`~coraplex.plans.context_extensions.RobotAccess`.
+    :param options: Further arguments of the executor.
+    :return: An executor performing plans in physics, against a simulation that only
+        counts its steps while the controller moves the world.
+    """
+    return PhysicallySimulatedPlanExecutor(
+        world_of(extensions),
+        context_extensions=extensions,
+        simulation=SimulationThatCountsItsSteps(),
+        **options,
+    )
+
+
+def motion_nodes_in_physics_of(
+    plan: StatechartNode, extensions: List[ContextExtension]
+) -> List[StatechartNode]:
+    """
+    :param plan: The plan whose motions to read.
+    :param extensions: The context extensions the plan is expanded with.
+    :return: Every node the plan's steps expand into when it is performed in physics.
+    """
+    statechart_of(physically_simulated_executor(extensions), plan)
+    return [plan, *plan.descendants]

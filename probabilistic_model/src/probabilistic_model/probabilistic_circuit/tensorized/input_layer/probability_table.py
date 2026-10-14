@@ -197,6 +197,14 @@ class ProbabilityTable(ABC, Generic[StoredLogProbabilities]):
         """
         raise NotImplementedError
 
+    @abstractmethod
+    def has_equal_probabilities(self, other: Self) -> bool:
+        """
+        :param other: A table of the same type and shape.
+        :return: Whether both tables hold the same probabilities.
+        """
+        raise NotImplementedError
+
     # %% sampling
 
     def cumulative_distribution_of_entries(
@@ -342,6 +350,9 @@ class DenseProbabilityTable(ProbabilityTable[NodeStateValues]):
     def copy(self) -> Self:
         return self.__class__(self.log_probabilities.copy())
 
+    def has_equal_probabilities(self, other: Self) -> bool:
+        return np.array_equal(self.log_probabilities, other.log_probabilities)
+
 
 @dataclass(eq=False)
 class SparseProbabilityTable(ProbabilityTable[csr_array]):
@@ -485,3 +496,6 @@ class SparseProbabilityTable(ProbabilityTable[csr_array]):
 
     def copy(self) -> Self:
         return self.__class__(self.log_probabilities.copy())
+
+    def has_equal_probabilities(self, other: Self) -> bool:
+        return (self.log_probabilities != other.log_probabilities).nnz == 0

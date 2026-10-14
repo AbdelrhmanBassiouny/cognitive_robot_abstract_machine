@@ -1,0 +1,110 @@
+from enum import StrEnum
+
+import numpy as np
+import pytest
+
+from coraplex.robot_plans.actions.core.container import CloseAction, OpenAction
+from cramph.node import StatechartNode
+from giskardpy.motion_statechart.goals.gripper import MoveGripper
+from giskardpy.motion_statechart.tasks.cartesian_tasks import CartesianPose
+from semantic_digital_twin.datastructures.definitions import GripperState
+from semantic_digital_twin.grasping.grasp_candidates import GraspCandidate
+from semantic_digital_twin.semantic_annotations.semantic_annotations import Handle
+from semantic_digital_twin.spatial_types.spatial_types import Pose
+from .conftest import left_or_only_arm
+from ..plan_running import simulated_executor, statechart_of
+
+# %% fixtures
+
+
+class ApartmentBody(StrEnum):
+    """
+    The apartment's own bodies the tests act on.
+    """
+
+    DRAWER_HANDLE = "handle_cab10_m"
+    """
+    The handle of the apartment's middle cabinet drawer.
+    """
+
+
+@pytest.fixture
+def pr2_at_drawer(pr2_apartment_context):
+    """
+    A PR2 in the apartment, with the drawer handle it works on annotated as such.
+    """
+    world, robot, extensions = pr2_apartment_context
+    body = world.get_body_by_name(ApartmentBody.DRAWER_HANDLE)
+    annotated = [
+        handle
+        for handle in world.get_semantic_annotations_by_type(Handle)
+        if handle.root is body
+    ]
+    if not annotated:
+        with world.modify_world():
+            world.add_semantic_annotation_recursively(handle := Handle(root=body))
+        annotated = [handle]
+    return world, robot, extensions, annotated[0]
+
+
+def goals_of(step: StatechartNode) -> list[StatechartNode]:
+    """
+    :param step: A step of an expanded action.
+    :return: The step and every node below it.
+    """
+    return [step, *step.descendants]
+
+
+# %% backing off the handle
+
+
+@pytest.mark.parametrize("action_type", [OpenAction, CloseAction])
+def test_gripper_backs_off_the_handle_after_letting_go(pr2_at_drawer, action_type):
+    """
+    The gripper still straddles the handle once it opens, so the action ends by
+    clearing it along the direction it approached from.
+    """
+    world, robot, extensions, handle = pr2_at_drawer
+    arm = left_or_only_arm(robot)
+    grasp = GraspCandidate.from_body_origin(handle)
+    action = action_type(grasp, arm)
+    statechart_of(simulated_executor(extensions), action)
+
+    *_, letting_go, back_off = action.action_body.nodes
+
+    assert [
+        node.state for node in goals_of(letting_go) if isinstance(node, MoveGripper)
+    ] == [GripperState.OPEN]
+    [back_off_goal] = [
+        node for node in goals_of(back_off) if isinstance(node, CartesianPose)
+    ]
+    np.testing.assert_allclose(
+        back_off_goal.goal_pose.to_np(),
+        action.back_off_pose(grasp.grasp_pose, arm.end_effector).to_np(),
+        atol=1e-9,
+    )
+
+
+def test_back_off_pose_clears_the_grasp_by_the_release_clearance(pr2_at_drawer):
+    """
+    The gripper backs straight out along the way it came in, by the clearance it is
+    given and no further.
+    """
+    world, robot, extensions, handle = pr2_at_drawer
+    end_effector = left_or_only_arm(robot).end_effector
+    action = OpenAction(
+        GraspCandidate.from_body_origin(handle), left_or_only_arm(robot)
+    )
+    grasp_pose = Pose(reference_frame=handle.root)
+
+    tool_goal = end_effector.tool_frame_goal_for_grasp(grasp_pose)
+    back_off = action.back_off_pose(grasp_pose, end_effector)
+
+    np.testing.assert_allclose(
+        back_off.to_np()[:3, :3], tool_goal.to_np()[:3, :3], atol=1e-9
+    )
+    np.testing.assert_allclose(
+        back_off.to_np()[:3, 3] - tool_goal.to_np()[:3, 3],
+        -action.release_clearance * np.asarray(grasp_pose.to_np()[:3, 0]),
+        atol=1e-9,
+    )

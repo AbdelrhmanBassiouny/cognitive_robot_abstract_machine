@@ -82,6 +82,7 @@ from giskardpy.motion_statechart.tasks.cartesian_tasks import (
     CartesianPositionVelocityLimit,
     CartesianRotationVelocityLimit,
     CartesianVelocityLimit,
+    HoldPose,
 )
 from giskardpy.motion_statechart.tasks.feature_functions import (
     AlignPerpendicular,
@@ -242,6 +243,11 @@ def _cartesian_cases() -> list[NodeRoundTripCase]:
                     root_link=_root(world), tip_link=_tip(world), goal_pose=_pose(world)
                 )
             ],
+            WorldFixture.PR2_WORLD,
+        ),
+        NodeRoundTripCase(
+            HoldPose,
+            lambda world: [HoldPose(root_link=_root(world), tip_link=_tip(world))],
             WorldFixture.PR2_WORLD,
         ),
         NodeRoundTripCase(

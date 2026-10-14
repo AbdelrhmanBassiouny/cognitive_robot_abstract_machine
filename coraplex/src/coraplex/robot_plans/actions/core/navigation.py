@@ -5,13 +5,14 @@ from dataclasses import dataclass, field
 
 from typing_extensions import Optional
 
+from coraplex.datastructures.enums import ExecutionType
 from coraplex.plans.context_extensions import ExecutionMode
 from krrood.ormatic.utils import classproperty
 from cramph.context import ContextExtension
 from coraplex.exceptions import NoFloorBelowRobot, NotOnASingleLevelException
 from cramph.node import StatechartNode
-from cramph.world_modification_nodes import MoveBranch
 from coraplex.robot_plans.actions.base import Action
+from coraplex.robot_plans.mixins import ReattachesBodies
 from cramph.composites import Parallel, PausedUntilTrue, Sequence
 from giskardpy.motion_statechart.goals.cartesian_goals import DifferentialDriveBaseGoal
 from giskardpy.motion_statechart.graph_node import MotionStatechartNode
@@ -76,9 +77,9 @@ class DrivesBase(Action, ABC):
         """
         :param target: Where the base should end up.
         :return: The node that puts the base there. A differential drive gets a goal of
-            its own; otherwise a simulated run writes the odometry directly, because
-            there is no drive to follow the pose, and a real one commands the pose and
-            lets the controller drive there.
+            its own; otherwise a kinematically simulated run writes the odometry
+            directly, because there is no drive to follow the pose, and any other
+            commands the pose and lets the controller drive there.
         """
         if self.drives_differentially:
             return DifferentialDriveBaseGoal(
@@ -86,7 +87,10 @@ class DrivesBase(Action, ABC):
                 goal_pose=target,
                 threshold=self.base_pose_threshold,
             )
-        if self.context.require_extension(ExecutionMode).simulated:
+        if (
+            self.context.require_extension(ExecutionMode).execution_type
+            is ExecutionType.KINEMATICALLY_SIMULATED
+        ):
             return SetOdometry(
                 base_pose=target.homogeneous_matrix,
                 odom_connection=self.robot.root.parent_connection,
@@ -132,12 +136,16 @@ class LookAtAction(Action):
 
     def create_action_body(self) -> StatechartNode:
         camera = self.camera or self.robot.get_default_camera()
-        return Pointing(
+        pointing = Pointing(
             root_link=self.robot.get_torso().root,
             tip_link=camera.root,
             goal_point=self.target.position,
             pointing_axis=camera.forward_facing_axis,
         )
+        hold_base = self.keep_base_still()
+        if not hold_base:
+            return pointing
+        return Parallel([pointing, *hold_base])
 
 
 @dataclass(eq=False, repr=False)
@@ -307,7 +315,7 @@ class PathPlanningNavigateAction(DrivesBase):
 
 
 @dataclass(eq=False, repr=False)
-class ElevatorNavigation(Action):
+class ElevatorNavigation(ReattachesBodies):
     """
     Navigates a robot to another level of a building using an elevator, the robot drives
     in the elevator and waits there until the doors open again and the elevator is at
@@ -348,12 +356,12 @@ class ElevatorNavigation(Action):
                         )
                     ),
                 ),
-                MoveBranch(body=self.robot.root, new_parent=self.elevator.root),
+                *self.reattach(self.robot.root, self.elevator.root),
                 PausedUntilTrue(
                     monitor=self._elevator_open_at_floor(self.target_floor),
                     monitored_node=NavigateAction(self._pose_infront_of_elevator),
                 ),
-                MoveBranch(body=self.robot.root, new_parent=self.world.root),
+                *self.reattach(self.robot.root, self.world.root),
             ]
         )
 

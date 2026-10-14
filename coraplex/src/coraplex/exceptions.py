@@ -6,6 +6,7 @@ from typing_extensions import TYPE_CHECKING, List, Type
 
 from krrood.exceptions import DataclassException
 from coraplex.datastructures.enums import (
+    ExecutionType,
     VisualizationBackend,
     VisualizationOption,
 )
@@ -198,6 +199,25 @@ class ReachHasNoFinalApproach(DataclassException):
 
 
 @dataclass
+class GraspHasNoClosingGoal(DataclassException):
+    """
+    Raised when the goal a grasp closes its gripper with is asked for, but no goal that
+    shuts the gripper lies below the grasp's node.
+    """
+
+    plan_node: StatechartNode
+    """
+    The node of the grasp.
+    """
+
+    def error_message(self) -> str:
+        return f"{self.plan_node} has no goal closing the gripper below it."
+
+    def suggest_correction(self) -> str:
+        return "ask for the closing goal only once the grasp has been expanded"
+
+
+@dataclass
 class ToolPathNotFound(DataclassException):
     """
     Raised when the goal moving a tool along its path is asked for, but no such goal
@@ -315,6 +335,32 @@ class ObjectIsNotHeld(DataclassException):
 
     def suggest_correction(self) -> str:
         return "place the object after a pick-up of it."
+
+
+@dataclass
+class FingerWidthNeedsPhysics(DataclassException):
+    """
+    Raised when fingers are sent to a width where nothing pushes back on them.
+    """
+
+    execution_type: ExecutionType
+    """
+    The execution type the plan was performed under.
+    """
+
+    def error_message(self) -> str:
+        return (
+            f"closing the fingers to a width has no effect under "
+            f"{self.execution_type}"
+        )
+
+    def suggest_correction(self) -> str:
+        return (
+            "Perform the plan with a PhysicallySimulatedPlanExecutor or on the real "
+            "robot, where the fingers meet the object. Where the world is only moved "
+            "kinematically, a held object hangs off the tool frame and a gripper state "
+            "of its own is enough: use SetGripperAction instead."
+        )
 
 
 @dataclass

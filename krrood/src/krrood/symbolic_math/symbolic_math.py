@@ -554,6 +554,7 @@ class SymbolicMathType(ABC):
     @classmethod
     def from_casadi_sx(cls, casadi_sx: ca.SX) -> Self:
         result = cls.__new__(cls)
+        # result = cls() is equivalent but slightly slower. if anything is sus with symbolic math, try if this fixes it
         result.casadi_sx = casadi_sx
         result.pinned_free_variables = []
         return result
@@ -1178,9 +1179,6 @@ class Scalar(SerializableSymbolicMathType):
             return not ca.is_equal(ca.simplify(left), ca.simplify(right), 5)
         raise HasFreeVariablesError(self.free_variables())
 
-    # The operators below call ca.SX.unary and ca.SX.binary directly: casadi's
-    # overloaded functions and operators spend about ten times as long choosing the
-    # overload as building the expression.
     def __neg__(self) -> Scalar:
         return Scalar.from_casadi_sx(ca.SX.unary(ca.OP_NEG, self.casadi_sx))
 

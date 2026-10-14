@@ -48,8 +48,24 @@ executor.execute()
 A plan for the real robot is built and run the same way in a
 `RealRobotPlanExecutor(world, context_extensions=[RobotAccess(robot)], ros_node=node)`.
 Code that is told how to execute at run time takes the executor type, as
-{attr}`~coraplex.demonstrations.RobotDemonstration.executor_type` does. The nodes of a plan read whether the robot is
-simulated from the {class}`~coraplex.plans.context_extensions.ExecutionMode` the executor puts into the context.
+{attr}`~coraplex.demonstrations.RobotDemonstration.executor_type` does. The nodes of a plan read what carries out
+their motions, an {class}`~coraplex.datastructures.enums.ExecutionType`, from the
+{class}`~coraplex.plans.context_extensions.ExecutionMode` the executor puts into the context.
+
+A plan can also be performed against a physically simulated world, which has to be started with
+{meth}`~semantic_digital_twin.adapters.multi_sim.MujocoSim.start_stepped_simulation` already:
+
+```python
+from coraplex.plans.executors import PhysicallySimulatedPlanExecutor
+
+executor = PhysicallySimulatedPlanExecutor(
+    world, context_extensions=[RobotAccess(robot)], simulation=simulation
+)
+```
+
+Kinematically, a joint arrives wherever it was commanded and a picked object is attached to the gripper. Physically, the
+commands are set points for the simulation's servos, an object is held by friction alone, and a base cannot be put at a
+pose by writing it into the world.
 
 Both executors build on cramph's {class}`~cramph.executor.Executor`. The simulated one is a
 {class}`~cramph.executor.StatechartExecutor` that ticks the chart itself, and its
@@ -80,6 +96,8 @@ executor = SimulatedPlanExecutor(
   every plan node succeeded. A plan that stops approaching its goal gives up and raises
   {class}`~coraplex.plans.failures.MotionMadeNoProgress`, naming the tasks that stalled; one that keeps converging is
   never cut off for taking many ticks, only once it exceeds the simulated time limit.
+- {class}`~coraplex.plans.executors.PhysicallySimulatedPlanExecutor`: as the simulated one, but the physics advances one
+  control period after every tick, and the robot is given time to come to a standstill once the plan ended.
 - {class}`~coraplex.plans.executors.RealRobotPlanExecutor`: the chart is sent to giskard via the `GiskardClientExecutor`, which
   grounds underspecified actions while giskard runs it.
 - {meth}`~coraplex.plans.executors.PlanExecutor.prepare` builds the chart without compiling or running it, for
@@ -119,4 +137,5 @@ A transformation replaces the goal an action runs with
 
 - Actions build giskard goals directly; plans never execute them one at a time.
 - A {class}`~coraplex.plans.executors.PlanExecutor` compiles the statechart holding a plan and executes it.
-- The executor's type chooses simulated or real execution; collision avoidance is one of its settings.
+- The executor's type chooses kinematically simulated, physically simulated or real execution; collision avoidance is
+  one of its settings.
