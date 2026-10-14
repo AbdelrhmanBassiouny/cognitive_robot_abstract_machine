@@ -475,6 +475,7 @@ class GiskardExecutable(Executable):
                 executor.compile(self.motion_state_chart)
                 ticks = 0
                 while not executor.motion_statechart.is_end_motion():
+                    self.context.execution_gate.wait_while_paused()
                     if ticks >= maximum_ticks:
                         raise MotionExceededSimulationTimeLimit(time_limit)
                     executor.tick()

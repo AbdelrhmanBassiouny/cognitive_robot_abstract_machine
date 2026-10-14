@@ -10,6 +10,7 @@ from typing_extensions import (
     Type,
 )
 
+from coraplex.execution_gate import ExecutionGate
 from coraplex.plans.plan_entity import PlanEntity
 from krrood.entity_query_language.backends import (
     QueryBackend,
@@ -119,6 +120,13 @@ class Context(PlanEntity):
     Should debug information be printed or visualized.
     """
 
+    _execution_gate: ExecutionGate = field(
+        default_factory=ExecutionGate, init=False, repr=False
+    )
+    """
+    Lets the robot of this context be paused between two control ticks.
+    """
+
     sampling_seed: Optional[int] = field(default=None, kw_only=True)
     """
     Seed for the locations of this plan that have none of their own, so a run can be
@@ -141,6 +149,13 @@ class Context(PlanEntity):
 
     def __post_init__(self):
         self.debug = self._debug
+
+    @property
+    def execution_gate(self) -> ExecutionGate:
+        """
+        :return: What pauses and resumes the robot of this context.
+        """
+        return self._execution_gate
 
     @property
     def debug(self):

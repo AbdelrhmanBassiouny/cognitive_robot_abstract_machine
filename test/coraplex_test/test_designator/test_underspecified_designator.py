@@ -27,7 +27,11 @@ from coraplex.plans.failures import (
 from coraplex.plans.plan_node import ExecutionBoundaryNode, PlanNode
 from coraplex.plans.plan import Plan
 from coraplex.plans.plan_callbacks import PlanCallback
-from coraplex.plans.underspecified import ActionTrial, UnderspecifiedNode
+from coraplex.plans.underspecified import (
+    ActionTrial,
+    CandidateOutcome,
+    UnderspecifiedNode,
+)
 from coraplex.robot_plans.actions.base import ActionDescription
 from coraplex.robot_plans.actions.core.navigation import NavigateAction
 from coraplex.robot_plans.actions.core.pick_up import PickUpAction
@@ -359,6 +363,45 @@ def test_rejected_candidates_are_tried_against_one_copy(
     assert trials[0].world is not world
     assert trials[1].world is trials[0].world
     assert trials[2].world is trials[0].world
+
+
+def test_every_candidate_tried_is_recorded_with_its_trial_outcome(
+    apartment_world_pr2_copy_with_context,
+):
+    """
+    How an underspecified action was resolved can be read back afterwards: every
+    candidate the backend offered, in order, and whether its trial rejected it or it was
+    accepted.
+    """
+    world, robot, context = apartment_world_pr2_copy_with_context
+    dof = world.degrees_of_freedom[0]
+    probe_key = register_probe()
+
+    action = a(RecordingAction)(
+        probe_key=probe_key,
+        dof_id=dof.id,
+        fail_on_attempt_number=variable_from([1, 2, None]),
+    )
+    plan = execute_single(action_like=action, context=context).plan
+    with kinematically_simulated_robot:
+        plan.perform()
+
+    [node] = [
+        node for node in plan.plan_graph.nodes() if isinstance(node, UnderspecifiedNode)
+    ]
+    assert [
+        (trial.action.fail_on_attempt_number, trial.outcome)
+        for trial in node.candidate_trials
+    ] == [
+        (1, CandidateOutcome.REJECTED_IN_TRIAL),
+        (2, CandidateOutcome.REJECTED_IN_TRIAL),
+        (None, CandidateOutcome.ACCEPTED),
+    ]
+    assert [trial.failure is not None for trial in node.candidate_trials] == [
+        True,
+        True,
+        False,
+    ]
 
 
 def test_real_failure_keeps_state_and_next_trial_reflects_it(

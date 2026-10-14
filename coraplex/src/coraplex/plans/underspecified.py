@@ -2,7 +2,9 @@ from __future__ import annotations
 
 from copy import deepcopy
 from dataclasses import dataclass, field, fields, replace
-from typing import Optional, Tuple, Type, TYPE_CHECKING, Iterator
+from datetime import datetime
+from enum import StrEnum
+from typing import Optional, Tuple, Type, TYPE_CHECKING, Iterator, List
 
 from coraplex.datastructures.enums import ActionTrialVisualization, ExecutionType
 from coraplex.execution_environment import ExecutionEnvironment
@@ -87,6 +89,13 @@ class ActionTrial:
 
     def succeeds(self, action: ActionDescription) -> bool:
         """
+        :param action: The grounded action to try out.
+        :return: True if `action` runs to completion against the copy without failing.
+        """
+        return self.failure_of(action) is None
+
+    def failure_of(self, action: ActionDescription) -> Optional[PlanFailure]:
+        """
         Run `action` against the copy and restore the copy afterwards.
 
         The action is copied onto the copy first (see :meth:`_on_the_copy`): reading
@@ -104,7 +113,7 @@ class ActionTrial:
         rather than failing on a candidate that has no siblings.
 
         :param action: The grounded action to try out.
-        :return: True if `action` runs to completion without failing.
+        :return: Why `action` failed against the copy, or None if it ran to completion.
         """
         context = self._copy()
         world = context.world
@@ -124,9 +133,9 @@ class ActionTrial:
         ):
             try:
                 candidate_sequence.perform()
-                return True
-            except PlanFailure:
-                return False
+                return None
+            except PlanFailure as failure:
+                return failure
             finally:
                 if plan.action_trial is not None:
                     plan.action_trial.discard()
@@ -234,6 +243,57 @@ class ActionTrial:
 # %% resolving an underspecified action to a candidate that works
 
 
+# %% how an underspecified action was resolved
+
+
+class CandidateOutcome(StrEnum):
+    """
+    What became of one candidate an underspecified action was resolved through.
+    """
+
+    REJECTED_IN_TRIAL = "rejected in trial"
+    """
+    The candidate failed when tried against a copy of the world, and was never
+    executed for real.
+    """
+
+    ACCEPTED = "accepted"
+    """
+    The candidate survived its trial and was attached to the plan to be executed.
+    """
+
+
+@dataclass(frozen=True)
+class CandidateTrial:
+    """
+    One candidate the query backend offered for an underspecified action, and what
+    became of it.
+    """
+
+    action: ActionDescription
+    """
+    The grounded action the backend offered.
+    """
+
+    outcome: CandidateOutcome
+    """
+    Whether its trial rejected it or it was accepted.
+    """
+
+    tried_at: datetime
+    """
+    When its trial ended.
+    """
+
+    failure: Optional[PlanFailure] = None
+    """
+    Why its trial rejected it, or None for an accepted candidate.
+    """
+
+
+# %% the node
+
+
 @dataclass(eq=False, repr=False)
 class UnderspecifiedNode(ExecutionBoundaryNode):
     """
@@ -285,11 +345,26 @@ class UnderspecifiedNode(ExecutionBoundaryNode):
     produced.
     """
 
+    _candidate_trials: List[CandidateTrial] = field(
+        default_factory=list, init=False, repr=False
+    )
+    """
+    Every candidate tried so far, in the order the backend offered them.
+    """
+
     _transformations_applied: bool = field(default=False, init=False, repr=False)
     """
     Whether the plan transformations matching this node have rewritten the plan around
     it already, so that expanding the plan again does not apply them a second time.
     """
+
+    @property
+    def candidate_trials(self) -> Tuple[CandidateTrial, ...]:
+        """
+        :return: How this node was resolved: every candidate the backend offered so far,
+            in order, with what became of it.
+        """
+        return tuple(self._candidate_trials)
 
     @property
     def designator_type(self) -> Type:
@@ -412,12 +487,37 @@ class UnderspecifiedNode(ExecutionBoundaryNode):
         """
         action = self._pull_next_action()
         while action is not None:
-            if self.trial.succeeds(action):
+            failure = self.trial.failure_of(action)
+            if failure is None:
+                self._record_trial(action, CandidateOutcome.ACCEPTED)
                 self._attach(action)
                 self.current_candidate_sequence.notify()
                 return True
+            self._record_trial(action, CandidateOutcome.REJECTED_IN_TRIAL, failure)
             action = self._pull_next_action()
         return False
+
+    def _record_trial(
+        self,
+        action: ActionDescription,
+        outcome: CandidateOutcome,
+        failure: Optional[PlanFailure] = None,
+    ) -> None:
+        """
+        Remember what became of one candidate.
+
+        :param action: The candidate that was tried.
+        :param outcome: What its trial decided.
+        :param failure: Why its trial rejected it, if it did.
+        """
+        self._candidate_trials.append(
+            CandidateTrial(
+                action=action,
+                outcome=outcome,
+                tried_at=datetime.now(),
+                failure=failure,
+            )
+        )
 
     def parse(self) -> Executable:
         # Defer resolution to execution: the returned executable grounds the action
