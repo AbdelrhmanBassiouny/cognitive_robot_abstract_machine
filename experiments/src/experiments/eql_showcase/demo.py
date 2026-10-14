@@ -8,7 +8,9 @@ Run it through the viewer's demo wrapper, then open ``http://localhost:8711``::
 The place setting is coraplex's bullet world demonstration, unchanged: the PR2 carries
 the milk, a bowl and a spoon onto the table while segmind segments what it sees. The
 showcase only listens in, and offers the world, the detected events and the robot's own
-actions to the EQL panel with questions about each.
+actions to the EQL panel with questions about each. Every finished run is kept in an
+SQLite database in the viewer's data directory, and questions about past runs are
+answered there, in SQL translated from the same query language.
 """
 
 from __future__ import annotations
@@ -28,11 +30,23 @@ from coraplex.plans.plan import Plan
 from coraplex.plans.plan_node import PlanNode
 from coraplex.visualization import PluginVisualization
 from cramera.live.visualization import LiveVisualization
+from cramera.paths import data_directory
 from segmind.event_segmentation import Segmind
 from semantic_digital_twin.robots.pr2 import PR2
 from semantic_digital_twin.world import World
 
+from experiments.eql_showcase.episodic_memory import RunDatabase
 from experiments.eql_showcase.showcase import EqlShowcase
+
+RUN_DATABASE_FILE = "eql_showcase_runs.sqlite"
+"""
+The file, in the viewer's data directory, the showcase keeps its finished runs in.
+"""
+
+PLACE_SETTING_LABEL = "place setting"
+"""
+What a run of the place setting demonstration is called among the finished runs.
+"""
 
 PLACE_SETTING_DEMO = (
     Path(coraplex.__file__).parents[2]
@@ -59,6 +73,16 @@ class ShowcasedDemonstration(RobotDemonstration):
     does; it only hands what the demonstration builds to the showcase.
     """
 
+    run_label: str = "demonstration"
+    """
+    What a run of this demonstration is called among the finished runs.
+    """
+
+    run_database: Optional[RunDatabase] = None
+    """
+    The database finished runs are kept in and asked about, or None to keep no runs.
+    """
+
     showcase: Optional[EqlShowcase] = field(init=False, default=None)
     """
     The showcase offering this run's knowledge, once its world exists.
@@ -66,8 +90,13 @@ class ShowcasedDemonstration(RobotDemonstration):
 
     def acquire_world(self) -> World:
         world = super().acquire_world()
-        self.showcase = EqlShowcase(world)
+        self.showcase = EqlShowcase(world, database=self.run_database)
         self._offer_showcase()
+        return world
+
+    def run(self) -> World:
+        world = super().run()
+        self.showcase.remember_run(self.run_label)
         return world
 
     def build_plan(self, context: Context) -> Plan | PlanNode:
@@ -130,7 +159,10 @@ def main(collision_avoidance: bool = True) -> None:
     :param collision_avoidance: Whether every motion state chart avoids collisions.
     """
     showcased_place_setting()(
-        used_robot=PR2, collision_avoidance=collision_avoidance
+        used_robot=PR2,
+        collision_avoidance=collision_avoidance,
+        run_label=PLACE_SETTING_LABEL,
+        run_database=RunDatabase(data_directory() / RUN_DATABASE_FILE),
     ).run()
 
 

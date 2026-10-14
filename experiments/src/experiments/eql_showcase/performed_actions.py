@@ -166,6 +166,55 @@ class PerformedAction:
         )
 
 
+# %% one finished run
+
+
+@dataclass
+class RecordedRun:
+    """
+    One run a demonstration finished: when it began and every action the robot carried
+    out in it.
+    """
+
+    demonstration: str
+    """
+    The name of the demonstration that ran.
+    """
+
+    started: datetime
+    """
+    When the run's first action began.
+    """
+
+    actions: List[PerformedAction] = field(default_factory=list)
+    """
+    Every action the robot carried out in the run, in the order they began.
+    """
+
+    @property
+    def name(self) -> str:
+        """
+        The run's label, e.g. ``"place setting at 15:27:09"``.
+        """
+        return f"{self.demonstration} at {self.started:%H:%M:%S}"
+
+    @classmethod
+    def of_actions(
+        cls, demonstration: str, actions: List[PerformedAction]
+    ) -> RecordedRun:
+        """
+        The run that carried out the given actions.
+
+        :param demonstration: The name of the demonstration that ran.
+        :param actions: The run's actions, in the order they began.
+        """
+        return cls(
+            demonstration=demonstration,
+            started=actions[0].timestamp,
+            actions=actions,
+        )
+
+
 # %% every performed action of a demonstration
 
 

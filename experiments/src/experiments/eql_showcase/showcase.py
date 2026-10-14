@@ -21,9 +21,11 @@ from cramera.live.detections import DetectedEvents
 from segmind.event_logger import EventLogger
 from semantic_digital_twin.world import World
 
+from experiments.eql_showcase.episodic_memory import RunDatabase, SqlEvaluation
 from experiments.eql_showcase.performed_actions import (
     PerformedAction,
     PerformedActions,
+    RecordedRun,
 )
 
 QUESTIONS_FILE = Path(__file__).with_name("questions.yaml")
@@ -55,6 +57,7 @@ class ShowcaseVariable(StrEnum):
     """
 
     ACTION = "action"
+    RUN = "run"
 
 
 @dataclass(frozen=True)
@@ -138,13 +141,19 @@ class EqlShowcase:
     """
     A running demonstration's knowledge, offered to the viewer's EQL panel.
 
-    The world is asked about as it is now; the detected events once the demonstration
-    segments what happens; the robot's own actions as soon as it performs a plan.
+    The world and the robot's actions in the run in progress are asked about as they are
+    now; the detected events once the demonstration segments what happens; the runs
+    already finished, in SQL, once the showcase keeps a database of them.
     """
 
     world: World
     """
     The world the demonstration acts in.
+    """
+
+    database: Optional[RunDatabase] = None
+    """
+    The database the finished runs are kept in, or None to keep no runs.
     """
 
     performed_actions: PerformedActions = field(default_factory=PerformedActions)
@@ -179,24 +188,42 @@ class EqlShowcase:
         """
         self.detected_events = DetectedEvents(event_logger)
 
+    def remember_run(self, demonstration: str) -> None:
+        """
+        Keep the run in progress among the finished runs, if the showcase keeps any and
+        the robot did anything in it.
+
+        :param demonstration: The name of the demonstration that ran.
+        """
+        actions = list(self.performed_actions)
+        if self.database is None or not actions:
+            return
+        self.database.remember(RecordedRun.of_actions(demonstration, actions))
+
     def knowledge(self) -> List[QueryableKnowledge]:
         """
-        Every body of knowledge the showcase offers, the detected events only once the
-        demonstration segments them.
+        Every body of knowledge the showcase offers: the finished runs only while it
+        keeps a database of them, the detected events only once the demonstration
+        segments them.
         """
-        knowledge = [
-            QueryableKnowledge.of_world(self.world),
-            QueryableKnowledge(
-                scope=QueryScope.EPISODIC_MEMORY,
-                domains=[
-                    QueryDomain(
-                        ShowcaseVariable.ACTION,
-                        PerformedAction,
-                        self.performed_actions,
-                    )
-                ],
-            ),
-        ]
+        current_state = QueryableKnowledge.of_world(self.world)
+        current_state.domains.append(
+            QueryDomain(
+                ShowcaseVariable.ACTION, PerformedAction, self.performed_actions
+            )
+        )
+        knowledge = [current_state]
+        if self.database is not None:
+            knowledge.append(
+                QueryableKnowledge(
+                    scope=QueryScope.EPISODIC_MEMORY,
+                    domains=[
+                        QueryDomain(ShowcaseVariable.RUN, RecordedRun),
+                        QueryDomain(ShowcaseVariable.ACTION, PerformedAction),
+                    ],
+                    evaluation=SqlEvaluation(self.database),
+                )
+            )
         if self.detected_events is not None:
             knowledge.extend(self.detected_events.knowledge())
         return knowledge

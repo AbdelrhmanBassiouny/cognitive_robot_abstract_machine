@@ -1,9 +1,12 @@
 # The ready-made questions the EQL showcase offers in the viewer's EQL panel.
 #
 # Each question is asked of one body of knowledge (its scope):
-#   current_state    - the world as it is now, named through the workspace's own classes
-#   detected_events  - what segmind saw happen while the robot worked
-#   episodic_memory  - what the robot did, one record per action it carried out
+#   current_state    - the world as it is now, named through the workspace's own classes,
+#                      and what the robot did in the run in progress (`action`)
+#   detected_events  - what segmind saw happen while the robot worked (`event`)
+#   episodic_memory  - every run already finished (`run`, `action`), answered in SQL:
+#                      ORMatic translates the very same language into a query the
+#                      database runs, and the panel shows that SQL under the answer
 #
 # The text is the button's label; the panel reads the query itself back in English
 # underneath it, through EQL's own verbalization.
@@ -56,27 +59,60 @@
   code: |
     an(entity(event).where(event.tracked_object == 'Milk')).ordered_by(event.timestamp)
 
-- scope: episodic_memory
+- scope: current_state
   text: What did you do?
   code: |
     an(entity(action).where(action.part_of == None))
 
-- scope: episodic_memory
+- scope: current_state
   text: Which objects did you pick up?
   code: |
     an(entity(action).where(action.action_type == 'PickUpAction'))
 
-- scope: episodic_memory
+- scope: current_state
   text: What took you the longest?
   code: |
     an(entity(action)).ordered_by(action.seconds, descending=True).limit(1)
 
-- scope: episodic_memory
+- scope: current_state
   text: How much time went into each kind of action?
   code: |
     set_of(kind := action.action_type, eql.count(action), eql.sum(action.seconds)).grouped_by(kind)
 
-- scope: episodic_memory
+- scope: current_state
   text: What did you do with the milk?
   code: |
     an(entity(action).where(action.acted_on == 'Milk'))
+
+- scope: episodic_memory
+  text: Which runs do you remember?
+  code: |
+    an(entity(run))
+
+- scope: episodic_memory
+  text: In which runs did you handle the milk?
+  code: |
+    an(entity(run).where(exists(step := flat_variable(run.actions), step.acted_on == 'Milk')))
+
+- scope: episodic_memory
+  text: In which runs did you handle both the milk and the bowl?
+  code: |
+    milk_step = flat_variable(run.actions)
+    bowl_step = flat_variable(run.actions)
+    an(entity(run).where(exists(milk_step, milk_step.acted_on == 'Milk'), exists(bowl_step, bowl_step.acted_on == 'Bowl')))
+
+- scope: episodic_memory
+  text: In which runs did no pick up take longer than 20 seconds?
+  code: |
+    pick_up = flat_variable(run.actions)
+    an(entity(run).where(not_(exists(pick_up, and_(pick_up.action_type == 'PickUpAction', pick_up.seconds > 20)))))
+
+- scope: episodic_memory
+  text: What were your slowest pick ups ever?
+  code: |
+    an(entity(action).where(action.action_type == 'PickUpAction')).ordered_by(action.seconds, descending=True).limit(5)
+
+- scope: episodic_memory
+  text: How often have you done each kind of action, over all runs?
+  code: |
+    set_of(kind := action.action_type, eql.count(action), eql.sum(action.seconds)).grouped_by(kind)

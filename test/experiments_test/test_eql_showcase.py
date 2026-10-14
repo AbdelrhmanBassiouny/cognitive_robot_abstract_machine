@@ -7,6 +7,7 @@ over.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime, timedelta
 
 import pytest
 
@@ -15,17 +16,26 @@ from coraplex.datastructures.enums import VisualizationBackend
 from coraplex.demonstrations import RobotDemonstration
 from coraplex.execution_environment import kinematically_simulated_robot
 from coraplex.plans.factories import sequential
-from coraplex.robot_plans.actions.core.pick_up import ReachAction
+from coraplex.robot_plans.actions.core.pick_up import PickUpAction, ReachAction
 from coraplex.plans.plan import Plan
 from coraplex.plans.plan_node import ActionNode
 from coraplex.robot_plans.actions.core.robot_body import MoveTorsoAction, ParkArmsAction
+from cramera.knowledge.presets import Preset
 from cramera.live.bridge import Bridge
 from cramera.knowledge.queryable_knowledge import QueryScope
 from experiments.eql_showcase.performed_actions import (
     ActedOnObject,
+    PerformedAction,
     PerformedActions,
+    RecordedRun,
 )
-from experiments.eql_showcase.demo import ShowcasedDemonstration
+from experiments.orm.ormatic_interface import RecordedRunDAO
+from experiments.eql_showcase.demo import (
+    PLACE_SETTING_LABEL,
+    RUN_DATABASE_FILE,
+    ShowcasedDemonstration,
+)
+from experiments.eql_showcase.episodic_memory import SQL_LANGUAGE, RunDatabase
 from experiments.eql_showcase.showcase import EqlShowcase, ShowcaseQuestions
 from segmind.event_logger import EventLogger
 from semantic_digital_twin.datastructures.definitions import TorsoState
@@ -33,14 +43,35 @@ from semantic_digital_twin.grasping.grasp_candidates import GraspCandidate
 from semantic_digital_twin.robots.pr2 import PR2
 from semantic_digital_twin.semantic_annotations.semantic_annotations import Milk
 from semantic_digital_twin.world import World
+from typing_extensions import List
 
 from ..conftest import SAMPLING_SEED
+
+WHAT_DID_YOU_DO = "What did you do?"
+"""
+The showcase's question about the run in progress's own steps.
+"""
+
+RUNS_WITH_THE_MILK = "In which runs did you handle the milk?"
+"""
+The showcase's question about which finished runs acted on the milk.
+"""
 
 # %% the questions file
 
 
-def test_every_question_is_asked_of_a_scope_the_showcase_offers(pr2_apartment_world):
-    showcase = EqlShowcase(pr2_apartment_world)
+@pytest.fixture
+def run_database(tmp_path) -> RunDatabase:
+    """
+    An empty database of finished runs, in a file of its own.
+    """
+    return RunDatabase(tmp_path / RUN_DATABASE_FILE)
+
+
+def test_every_question_is_asked_of_a_scope_the_showcase_offers(
+    pr2_apartment_world, run_database
+):
+    showcase = EqlShowcase(pr2_apartment_world, database=run_database)
     showcase.observe_events(EventLogger())
 
     assert {question.scope for question in showcase.questions.questions} == {
@@ -60,6 +91,16 @@ def test_questions_are_offered_only_for_the_given_scopes():
     ]
 
 
+def question_about(showcase: EqlShowcase, text: str) -> Preset:
+    """
+    The preset the showcase offers for one of its questions.
+
+    :param showcase: The showcase offering the question.
+    :param text: The question, as its button reads.
+    """
+    return next(preset for preset in showcase.presets() if preset.text == text)
+
+
 # %% the knowledge offered to the viewer
 
 
@@ -69,11 +110,21 @@ def test_detected_events_are_offered_once_events_are_segmented(pr2_apartment_wor
 
     showcase.observe_events(EventLogger())
 
-    assert before == [QueryScope.CURRENT_STATE, QueryScope.EPISODIC_MEMORY]
+    assert before == [QueryScope.CURRENT_STATE]
+    assert [item.scope for item in showcase.knowledge()] == [
+        QueryScope.CURRENT_STATE,
+        QueryScope.DETECTED_EVENTS,
+    ]
+
+
+def test_finished_runs_are_offered_only_while_a_database_keeps_them(
+    pr2_apartment_world, run_database
+):
+    showcase = EqlShowcase(pr2_apartment_world, database=run_database)
+
     assert [item.scope for item in showcase.knowledge()] == [
         QueryScope.CURRENT_STATE,
         QueryScope.EPISODIC_MEMORY,
-        QueryScope.DETECTED_EVENTS,
     ]
 
 
@@ -88,9 +139,9 @@ def test_no_question_about_events_is_offered_before_events_are_segmented(
 
 
 def test_registering_offers_the_showcases_questions_to_the_viewer(
-    pr2_apartment_world,
+    pr2_apartment_world, run_database
 ):
-    showcase = EqlShowcase(pr2_apartment_world)
+    showcase = EqlShowcase(pr2_apartment_world, database=run_database)
     showcase.observe_events(EventLogger())
     bridge = Bridge()
 
@@ -102,8 +153,8 @@ def test_registering_offers_the_showcases_questions_to_the_viewer(
     ]
 
 
-def test_every_offered_question_is_answered(pr2_apartment_world):
-    showcase = EqlShowcase(pr2_apartment_world)
+def test_every_offered_question_is_answered(pr2_apartment_world, run_database):
+    showcase = EqlShowcase(pr2_apartment_world, database=run_database)
     showcase.observe_events(EventLogger())
     bridge = Bridge()
     showcase.register_with(bridge)
@@ -182,13 +233,97 @@ def test_a_question_about_the_past_sees_a_plan_performed_after_registering(
     showcase.register_with(bridge)
 
     showcase.observe_plan(performed_body_motions)
-    [what_did_you_do, *_] = showcase.questions.presets([QueryScope.EPISODIC_MEMORY])
+    what_did_you_do = question_about(showcase, WHAT_DID_YOU_DO)
     answer = bridge.run_query(what_did_you_do.code, what_did_you_do.scope)
 
     assert [row["action_type"] for row in answer.rows] == [
         ParkArmsAction.__name__,
         MoveTorsoAction.__name__,
     ]
+
+
+# %% the finished runs, asked about in SQL
+
+
+def recorded_run(started: datetime, objects: List[str]) -> RecordedRun:
+    """
+    A finished run that picked up the given objects one after another.
+
+    :param started: When the run's first pick up began.
+    :param objects: The names of the objects picked up, in order.
+    """
+    return RecordedRun.of_actions(
+        PLACE_SETTING_LABEL,
+        [
+            PerformedAction(
+                name=f"{name} {PickUpAction.__name__}",
+                action_type=PickUpAction.__name__,
+                timestamp=started + timedelta(minutes=index),
+                seconds=10.0,
+                acted_on=name,
+            )
+            for index, name in enumerate(objects)
+        ],
+    )
+
+
+def test_a_question_about_finished_runs_ranges_over_each_runs_own_actions(
+    pr2_apartment_world, run_database
+):
+    with_milk = recorded_run(datetime(2026, 10, 14, 15), ["Milk", "Bowl"])
+    without_milk = recorded_run(datetime(2026, 10, 14, 16), ["Bowl"])
+    run_database.remember(with_milk)
+    run_database.remember(without_milk)
+    showcase = EqlShowcase(pr2_apartment_world, database=run_database)
+    bridge = Bridge()
+    showcase.register_with(bridge)
+
+    question = question_about(showcase, RUNS_WITH_THE_MILK)
+    answer = bridge.run_query(question.code, question.scope)
+
+    assert [row["__entity__"] for row in answer.rows] == [with_milk.name]
+
+
+def test_a_question_about_finished_runs_shows_the_sql_it_was_answered_by(
+    pr2_apartment_world, run_database
+):
+    showcase = EqlShowcase(pr2_apartment_world, database=run_database)
+    bridge = Bridge()
+    showcase.register_with(bridge)
+
+    question = question_about(showcase, RUNS_WITH_THE_MILK)
+    answer = bridge.run_query(question.code, question.scope)
+
+    assert answer.translation.language == SQL_LANGUAGE
+    assert RecordedRunDAO.__tablename__ in answer.translation.statement
+
+
+def test_a_finished_run_is_remembered_with_the_actions_it_performed(
+    pr2_apartment_world, run_database, performed_body_motions
+):
+    showcase = EqlShowcase(pr2_apartment_world, database=run_database)
+    showcase.observe_plan(performed_body_motions)
+
+    showcase.remember_run(PLACE_SETTING_LABEL)
+
+    with run_database.session() as session:
+        [stored] = [dao.from_dao() for dao in session.query(RecordedRunDAO).all()]
+    assert stored.demonstration == PLACE_SETTING_LABEL
+    assert [action.action_type for action in stored.actions] == [
+        ParkArmsAction.__name__,
+        MoveTorsoAction.__name__,
+    ]
+
+
+def test_a_run_in_which_the_robot_did_nothing_is_not_remembered(
+    pr2_apartment_world, run_database
+):
+    showcase = EqlShowcase(pr2_apartment_world, database=run_database)
+
+    showcase.remember_run(PLACE_SETTING_LABEL)
+
+    with run_database.session() as session:
+        assert session.query(RecordedRunDAO).count() == 0
 
 
 # %% the object an action is about
