@@ -1,0 +1,94 @@
+schema_version: 1
+id: krrood-light-core
+title: 'krrood light core: heavy dependencies move behind krrood[all]'
+description: A plain `pip install krrood` installs a light, Windows-installable core (patterns,
+  exceptions, JSON serializer, class diagrams, symbol graph, EQL); verbalization realization,
+  random_events/probabilistic_model, casadi, numpy/scipy serialization, ORMatic, RDR, ontomatic
+  and matplotlib move behind `krrood[all]`. Replaces the separate krrood_core package (#506).
+default_repository: AbdelrhmanBassiouny/cognitive_robot_abstract_machine
+tracking_issue: 510
+waves:
+- id: decoupling
+  name: Core stops importing heavy modules
+  description: Each item cuts one import edge from core into a heavy dependency, with a fresh-interpreter test.
+- id: extras
+  name: The extras exist
+  description: pyproject split, workspace packages switched, core-only CI job.
+tracks:
+- id: optional-imports
+  name: Optional imports and their mechanism
+  wave: decoupling
+- id: core-boundaries
+  name: Core module boundaries
+  wave: decoupling
+- id: packaging
+  name: Packaging and CI
+  wave: extras
+items:
+- id: symbol-graph-without-matplotlib
+  title: Importing the symbol graph loads no optional dependency
+  branch: claude/symbol-graph-without-matplotlib
+  status: in progress
+  track: optional-imports
+  depends_on: []
+  pull_request_number: 509
+  session: https://claude.ai/code/session_01FWkFPeHmYEXAemAcshyJAx
+  notes: 'Bug PR, base main: removed the unused RWXNode import from class_diagram.py. Adds the
+    fresh-interpreter probe (test/krrood_test/dataset/loaded_top_level_packages.py) later items reuse.'
+- id: matplotlib-optional
+  title: matplotlib is imported only when drawing
+  branch: null
+  status: not started
+  track: optional-imports
+  depends_on: [symbol-graph-without-matplotlib]
+  notes: 'User-approved option 1: graph_visualizer.py and RDR import matplotlib inside the drawing
+    methods after check_dependencies() raises a custom exception naming the extra. Adds the AGENTS.md
+    exception for optional-extra imports. Stacked on #509 for its probe; test that importing EQL factories
+    and ORMatic loads no matplotlib.'
+- id: type-hint-resolver-skips-missing-modules
+  title: Type-hint resolution skips modules that are not installed
+  branch: null
+  status: not started
+  track: optional-imports
+  depends_on: []
+  notes: 'class_diagrams.utils / krrood.utils.get_scope_from_imports import every module a source file
+    names, TYPE_CHECKING blocks included, so a core module naming an `all` module fails on a core install.
+    User-chosen fix: check importlib.util.find_spec and skip missing modules (no try/except).'
+- id: serializer-without-heavy-dependencies
+  title: JSON serializer and symbol graph import no sqlalchemy, numpy, scipy or casadi
+  branch: null
+  status: not started
+  track: core-boundaries
+  depends_on: [type-hint-resolver-skips-missing-modules]
+  notes: 'HasGeneric moves from ormatic.data_access_objects.base into patterns; numpy/scipy array support
+    moves to its own serializer module; symbol_graph.helpers stops importing symbolic_math (casadi) at
+    import. Reuse #506 for what it extracted.'
+- id: eql-probabilistic-split
+  title: Core EQL imports no random_events or probabilistic_model
+  branch: null
+  status: not started
+  track: core-boundaries
+  depends_on: [type-hint-resolver-skips-missing-modules]
+  notes: 'Split operators/causal.py: Cause/Confounder/CausesEffect stay core, the random_events dataclasses
+    move out; probabilistic_queries.py and backends.py are `all`. number_like_field (user-approved cleanest):
+    plain check, int/float subclass and not bool/Enum, matching random_events today. aggregators interval
+    stays method-local.'
+- id: verbalization-realization-split
+  title: Verbalization vocabulary stays core, realization moves to all
+  branch: null
+  status: not started
+  track: core-boundaries
+  depends_on: [type-hint-resolver-skips-missing-modules]
+  notes: 'Proposed, awaiting user OK: _verbalization_fragment_ stays abstract and unchanged. The vocabulary
+    (clause, Noun, Verb, fragments) is declarative; only morphology (inflect ~1.7 s, lemminflect, typeguard)
+    and the pipeline (jinja2, IPython) move to `all`. Needs navigation_path and parts_of_speech to stop
+    calling morphology while building a clause (cardinal, verb_lemma become fragments realized later).'
+- id: krrood-core-and-all-extras
+  title: pyproject core and all extras, workspace packages switched, core-only CI job
+  branch: null
+  status: not started
+  track: packaging
+  depends_on: [matplotlib-optional, serializer-without-heavy-dependencies, eql-probabilistic-split, verbalization-realization-split]
+  notes: 'Breaking for outside users: pip has no default extras. Every workspace package that lists krrood
+    switches to krrood[all]. A CI job installs only core krrood and imports the core modules. Close #506;
+    basstler (#508, basstler-package plan) then depends on plain krrood.'
