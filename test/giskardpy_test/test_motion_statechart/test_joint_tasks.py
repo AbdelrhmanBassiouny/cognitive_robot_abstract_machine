@@ -1,4 +1,5 @@
 import numpy as np
+import pytest
 
 from cramph.data_types import LifeCycleValues, ObservationStateValues
 from cramph.composites import Parallel, Sequence
@@ -23,6 +24,7 @@ from krrood.symbolic_math.symbolic_math import (
     shortest_angular_distance,
     logic_and,
 )
+from semantic_digital_twin.datastructures.definitions import StaticJointState
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.spatial_types import (
     HomogeneousTransformationMatrix,
@@ -40,6 +42,7 @@ from semantic_digital_twin.world_description.degree_of_freedom import (
 from semantic_digital_twin.world_description.world_entity import (
     Body,
 )
+from semantic_digital_twin.robots.daisy import DAiSy
 from semantic_digital_twin.robots.pr2 import PR2Joint
 from giskardpy.motion_control import MotionControl
 from cramph.context import StatechartContext
@@ -334,3 +337,29 @@ def test_joint_sequence(pr2_world_state_reset):
 
     kin_sim.compile(statechart=msc)
     kin_sim.tick_until_end()
+
+
+# %% static joint states
+
+
+@pytest.mark.parametrize("arm_index", [0, 1], ids=["left", "right"])
+def test_daisy_arm_reaches_its_park_state(
+    daisy_world_copy: World, default_daisy_pose: dict[str, float], arm_index: int
+):
+    JointState.from_str_dict(default_daisy_pose, daisy_world_copy).apply_to(
+        daisy_world_copy
+    )
+    robot = daisy_world_copy.get_semantic_annotations_by_type(DAiSy)[0]
+    park_state = robot.arms[arm_index].get_joint_state_by_type(StaticJointState.PARK)
+    kin_sim = StatechartExecutor(
+        context=StatechartContext(world=daisy_world_copy),
+        extensions=[MotionControl()],
+    )
+    msc = Statechart(context=kin_sim.context)
+    msc.add_node(joint_goal := JointPositionList(goal_state=park_state))
+    msc.add_node(EndMotion.when_true(joint_goal))
+
+    kin_sim.compile(statechart=msc)
+    kin_sim.tick_until_end()
+
+    assert park_state.is_achieved()

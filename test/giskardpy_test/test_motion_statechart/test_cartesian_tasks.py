@@ -15,6 +15,7 @@ from giskardpy.motion_statechart.goals.cartesian_goals import (
 from cramph.composites import Sequence, Parallel
 from giskardpy.motion_statechart.graph_node import EndMotion, MotionStatechartNode
 from cramph.node import CancelStatechart
+from giskardpy.motion_statechart.monitors.monitors import LocalMinimumReached
 from giskardpy.motion_statechart.monitors.overwrite_state_monitors import (
     SetSeedConfiguration,
 )
@@ -648,6 +649,258 @@ class TestCartesianTasks:
 
         assert np.allclose(
             executor.context.world.compute_forward_kinematics(root, tip),
+            expected,
+            atol=cart_goal.translation_threshold,
+        )
+
+    def test_unreachable_goal_ends_in_a_local_minimum(
+        self, pr2_world_state_reset: World
+    ):
+        """
+        A base pose below the floor cannot be reached, so the motion settles in a local
+        minimum instead of reaching it.
+        """
+        base_footprint = pr2_world_state_reset.get_kinematic_structure_entity_by_name(
+            "base_footprint"
+        )
+        executor = StatechartExecutor(
+            context=StatechartContext(world=pr2_world_state_reset),
+            extensions=[MotionControl()],
+        )
+        motion_statechart = Statechart(context=executor.context)
+        motion_statechart.add_nodes(
+            [
+                cart_goal := CartesianPose(
+                    root_link=pr2_world_state_reset.root,
+                    tip_link=base_footprint,
+                    goal_pose=Pose.from_xyz_rpy(
+                        z=-1, reference_frame=pr2_world_state_reset.root
+                    ),
+                ),
+                local_min := LocalMinimumReached(),
+            ]
+        )
+        motion_statechart.add_node(EndMotion.when_true(local_min))
+
+        executor.compile(statechart=motion_statechart)
+        executor.tick_until_end()
+
+        assert local_min.observation_state == ObservationStateValues.TRUE
+        assert cart_goal.observation_state == ObservationStateValues.FALSE
+
+    def test_cart_goal_orientation_singularity(
+        self, pr2_world_state_reset: World, default_pr2_pose: dict[str, float]
+    ):
+        """
+        Goals that keep the orientation of both grippers are reached, although an
+        orientation error of zero is a singularity of the rotation error.
+        """
+        JointState.from_str_dict(default_pr2_pose, pr2_world_state_reset).apply_to(
+            pr2_world_state_reset
+        )
+        base_link = pr2_world_state_reset.get_kinematic_structure_entity_by_name(
+            "base_link"
+        )
+        right_tip = pr2_world_state_reset.get_kinematic_structure_entity_by_name(
+            "r_gripper_tool_frame"
+        )
+        left_tip = pr2_world_state_reset.get_kinematic_structure_entity_by_name(
+            "l_gripper_tool_frame"
+        )
+        executor = StatechartExecutor(
+            context=StatechartContext(world=pr2_world_state_reset),
+            extensions=[MotionControl()],
+        )
+        motion_statechart = Statechart(context=executor.context)
+        motion_statechart.add_node(
+            both_grippers := Parallel(
+                [
+                    CartesianPose(
+                        root_link=base_link,
+                        tip_link=right_tip,
+                        goal_pose=Pose.from_xyz_quaternion(
+                            pos_x=-0.1, reference_frame=right_tip
+                        ),
+                    ),
+                    CartesianPose(
+                        root_link=base_link,
+                        tip_link=left_tip,
+                        goal_pose=Pose.from_xyz_quaternion(
+                            pos_x=-0.05, reference_frame=left_tip
+                        ),
+                    ),
+                ]
+            )
+        )
+        motion_statechart.add_node(EndMotion.when_true(both_grippers))
+
+        executor.compile(statechart=motion_statechart)
+        executor.tick_until_end()
+
+        assert both_grippers.observation_state == ObservationStateValues.TRUE
+
+    def test_cart_goal_left_right_chain(
+        self, pr2_world_state_reset: World, default_pr2_pose: dict[str, float]
+    ):
+        """
+        A goal for one gripper relative to the other moves both arms.
+        """
+        JointState.from_str_dict(default_pr2_pose, pr2_world_state_reset).apply_to(
+            pr2_world_state_reset
+        )
+        left_tip = pr2_world_state_reset.get_kinematic_structure_entity_by_name(
+            "l_gripper_tool_frame"
+        )
+        right_tip = pr2_world_state_reset.get_kinematic_structure_entity_by_name(
+            "r_gripper_tool_frame"
+        )
+        goal_pose = HomogeneousTransformationMatrix.from_point_rotation_matrix(
+            point=Point3(0.2, 0.0, reference_frame=left_tip),
+            rotation_matrix=RotationMatrix(
+                [[-1, 0, 0, 0], [0, -1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1.0]],
+                reference_frame=left_tip,
+            ),
+            reference_frame=left_tip,
+        )
+        executor = StatechartExecutor(
+            context=StatechartContext(world=pr2_world_state_reset),
+            extensions=[MotionControl()],
+        )
+        motion_statechart = Statechart(context=executor.context)
+        motion_statechart.add_node(
+            cart_goal := CartesianPose(
+                root_link=left_tip, tip_link=right_tip, goal_pose=goal_pose
+            )
+        )
+        motion_statechart.add_node(EndMotion.when_true(cart_goal))
+
+        executor.compile(statechart=motion_statechart)
+        executor.tick_until_end()
+
+        assert np.allclose(
+            pr2_world_state_reset.compute_forward_kinematics(left_tip, right_tip),
+            goal_pose,
+            atol=cart_goal.translation_threshold,
+        )
+
+    def test_root_link_not_equal_chain_root(self, pr2_world_state_reset: World):
+        """
+        A goal whose root link is in the middle of the kinematic chain moves only the
+        joints below it.
+        """
+        torso_lift_link = pr2_world_state_reset.get_kinematic_structure_entity_by_name(
+            "torso_lift_link"
+        )
+        right_tip = pr2_world_state_reset.get_kinematic_structure_entity_by_name(
+            "r_gripper_tool_frame"
+        )
+        base_footprint = pr2_world_state_reset.get_kinematic_structure_entity_by_name(
+            "base_footprint"
+        )
+        goal_pose = Pose.from_xyz_rpy(
+            x=0.8, y=-0.5, z=1.0, reference_frame=base_footprint
+        )
+        expected = pr2_world_state_reset.transform(goal_pose, torso_lift_link)
+        executor = StatechartExecutor(
+            context=StatechartContext(world=pr2_world_state_reset),
+            extensions=[MotionControl()],
+        )
+        motion_statechart = Statechart(context=executor.context)
+        motion_statechart.add_node(
+            cart_goal := CartesianPose(
+                root_link=torso_lift_link, tip_link=right_tip, goal_pose=goal_pose
+            )
+        )
+        motion_statechart.add_node(EndMotion.when_true(cart_goal))
+
+        executor.compile(statechart=motion_statechart)
+        executor.tick_until_end()
+
+        assert np.allclose(
+            pr2_world_state_reset.compute_forward_kinematics(
+                torso_lift_link, right_tip
+            ),
+            expected,
+            atol=cart_goal.translation_threshold,
+        )
+
+    @pytest.mark.parametrize(
+        "goal_x, goal_y, goal_yaw",
+        [
+            (1.0, 0.0, 0.0),
+            (0.0, 1.0, 0.0),
+            (1.0, 1.0, 0.0),
+            (0.0, 0.0, np.pi / 3),
+            (1.0, 0.0, np.pi / 3),
+        ],
+        ids=["forward", "left", "diagonal", "rotate", "forward_and_rotate"],
+    )
+    def test_omni_drive_base_reaches_its_goal(
+        self, hsr_world_copy: World, goal_x: float, goal_y: float, goal_yaw: float
+    ):
+        """
+        An omnidirectional base drives sideways, diagonally and turning to its goal.
+        """
+        base_footprint = hsr_world_copy.get_kinematic_structure_entity_by_name(
+            "base_footprint"
+        )
+        goal_pose = Pose.from_xyz_rpy(
+            x=goal_x, y=goal_y, yaw=goal_yaw, reference_frame=hsr_world_copy.root
+        )
+        executor = StatechartExecutor(
+            context=StatechartContext(world=hsr_world_copy),
+            extensions=[MotionControl()],
+        )
+        motion_statechart = Statechart(context=executor.context)
+        motion_statechart.add_node(
+            cart_goal := CartesianPose(
+                root_link=hsr_world_copy.root,
+                tip_link=base_footprint,
+                goal_pose=goal_pose,
+            )
+        )
+        motion_statechart.add_node(EndMotion.when_true(cart_goal))
+
+        executor.compile(statechart=motion_statechart)
+        executor.tick_until_end()
+
+        assert np.allclose(
+            hsr_world_copy.compute_forward_kinematics(
+                hsr_world_copy.root, base_footprint
+            ),
+            goal_pose,
+            atol=cart_goal.translation_threshold,
+        )
+
+    def test_daisy_finger_tip_reaches_its_goal(
+        self, daisy_world_copy: World, default_daisy_pose: dict[str, float]
+    ):
+        JointState.from_str_dict(default_daisy_pose, daisy_world_copy).apply_to(
+            daisy_world_copy
+        )
+        base = daisy_world_copy.get_kinematic_structure_entity_by_name("left_base_link")
+        finger_tip = daisy_world_copy.get_kinematic_structure_entity_by_name(
+            "left_gripper_left_finger_tip_link"
+        )
+        goal_pose = Pose.from_xyz_axis_angle(z=0.2, reference_frame=finger_tip)
+        expected = daisy_world_copy.transform(goal_pose, base)
+        executor = StatechartExecutor(
+            context=StatechartContext(world=daisy_world_copy),
+            extensions=[MotionControl()],
+        )
+        motion_statechart = Statechart(context=executor.context)
+        motion_statechart.add_node(
+            cart_goal := CartesianPose(
+                root_link=base, tip_link=finger_tip, goal_pose=goal_pose
+            )
+        )
+        motion_statechart.add_node(EndMotion.when_true(cart_goal))
+
+        executor.compile(statechart=motion_statechart)
+        executor.tick_until_end()
+
+        assert np.allclose(
+            daisy_world_copy.compute_forward_kinematics(base, finger_tip),
             expected,
             atol=cart_goal.translation_threshold,
         )
