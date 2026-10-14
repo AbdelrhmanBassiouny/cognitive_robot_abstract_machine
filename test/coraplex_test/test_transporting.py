@@ -29,7 +29,7 @@ from coraplex.robot_plans.actions.composite.transporting import (
 )
 from coraplex.robot_plans.actions.core.container import OpenAction
 from coraplex.robot_plans.actions.core.pick_up import PickUpAction
-from coraplex.querying.predicates import IsAmongTheClosestGraspsTo
+from coraplex.querying.grasp_closeness import ClosestGrasps, GraspCloseness
 from coraplex.robot_plans.actions.core.placing import PlaceAction
 from coraplex.robot_plans.actions.core.robot_body import MoveTorsoAction
 from semantic_digital_twin.semantic_annotations.semantic_annotations import (
@@ -289,8 +289,7 @@ def test_move_and_pick_up_approaches_with_the_clearances_it_was_given(
 
 STANDING_DISTANCE = 1.0
 """
-How far from the milk, against the world's x-axis, the robot stands, so that the milk
-lies straight ahead along that axis.
+How far back from a grasp, along the direction it is approached along, the robot stands.
 """
 
 CLOSER_BY = 0.05
@@ -308,17 +307,6 @@ NON_DEFAULT_NUMBER_OF_GRASPS = 2
 A number of closest grasps other than the default, so that the number is seen to be
 passed on.
 """
-
-
-def _standing_behind_the_milk(world: World) -> Pose:
-    """
-    :return: A standing pose from which the milk lies straight ahead along the world's
-        x-axis.
-    """
-    milk_pose = world.get_semantic_annotations_by_type(Milk)[0].root.global_pose
-    return Pose.from_xyz_rpy(
-        milk_pose.x - STANDING_DISTANCE, milk_pose.y, 0.0, reference_frame=world.root
-    )
 
 
 def _standing_in_front_of(grasp: GraspCandidate, world: World) -> Pose:
@@ -393,15 +381,11 @@ def _assert_each_standing_pose_keeps_the_closest_grasps(
         pick_ups_by_standing_pose.setdefault(
             tuple(np.round(standing_position.to_np(), 6).ravel()), []
         ).append(pick_up)
-    grasps = graspable.grasp_candidates()
     for pick_ups_from_one_pose in pick_ups_by_standing_pose.values():
         standing_position = pick_ups_from_one_pose[0].navigate.target_location
         closest = {
             _grasp_signature(grasp)
-            for grasp in grasps
-            if IsAmongTheClosestGraspsTo(
-                grasp, standing_position, grasps, number_of_grasps
-            )()
+            for grasp in ClosestGrasps(graspable, standing_position, number_of_grasps)()
         }
         kept = [
             _grasp_signature(pick_up.pick_up.grasp)
@@ -411,26 +395,66 @@ def _assert_each_standing_pose_keeps_the_closest_grasps(
         assert set(kept) == closest
 
 
+def _assert_each_standing_pose_tries_its_grasps_closest_first(
+    steps: List[MoveAndPickUpAction | MoveAndOpenAction],
+    grasp_of: Callable[[MoveAndPickUpAction | MoveAndOpenAction], GraspCandidate],
+    graspable: HasGraspCandidates,
+) -> None:
+    """
+    Assert that the grasps `steps` take from each of their standing poses come in the
+    order of their :class:`GraspCloseness` to that pose.
+
+    :param grasp_of: The grasp a step takes.
+    """
+    world = graspable.root._world
+    world_T_object = graspable.root.global_transform.to_np()
+    for _, steps_from_one_pose in itertools.groupby(
+        steps, key=lambda step: id(step.navigate.target_location)
+    ):
+        steps_from_one_pose = list(steps_from_one_pose)
+        standing_position = steps_from_one_pose[0].navigate.target_location
+        world_P_standing = world.transform(standing_position, world.root).to_np()[:, 3]
+        closeness = [
+            GraspCloseness.of(grasp_of(step), world_T_object, world_P_standing)
+            for step in steps_from_one_pose
+        ]
+        assert closeness == sorted(closeness)
+
+
+def _closeness(grasp: GraspCandidate, standing_position: Pose) -> GraspCloseness:
+    """
+    :return: How close `grasp` is to `standing_position`.
+    """
+    world = grasp.graspable.root._world
+    return GraspCloseness.of(
+        grasp,
+        grasp.graspable.root.global_transform.to_np(),
+        world.transform(standing_position, world.root).to_np()[:, 3],
+    )
+
+
 def test_a_grasp_approached_straight_from_the_standing_position_is_the_closest(
     pr2_apartment_context,
 ):
     world, robot, extensions = pr2_apartment_context
     grasps = world.get_semantic_annotations_by_type(Milk)[0].grasp_candidates()
+    standing_position = _standing_in_front_of(grasps[0], world)
 
-    assert IsAmongTheClosestGraspsTo(
-        grasps[0], _standing_in_front_of(grasps[0], world), grasps, number_of_grasps=1
-    )()
+    assert _closeness(grasps[0], standing_position) == min(
+        _closeness(grasp, standing_position) for grasp in grasps
+    )
 
 
-def test_a_grasp_approached_from_the_far_side_is_not_among_the_closest(
+def test_a_grasp_approached_from_the_far_side_is_farther_than_one_approached_head_on(
     pr2_apartment_context,
 ):
     world, robot, extensions = pr2_apartment_context
-    grasps = world.get_semantic_annotations_by_type(Milk)[0].grasp_candidates()
+    grasp = world.get_semantic_annotations_by_type(Milk)[0].grasp_candidates()[0]
+    standing_position = _standing_in_front_of(grasp, world)
 
-    assert not IsAmongTheClosestGraspsTo(
-        _turned_around(grasps[0]), _standing_in_front_of(grasps[0], world), grasps
-    )()
+    assert _closeness(_turned_around(grasp), standing_position) > _closeness(
+        grasp, standing_position
+    )
 
 
 def test_a_nearer_grasp_is_the_closest_however_it_is_approached(pr2_apartment_context):
@@ -440,59 +464,25 @@ def test_a_nearer_grasp_is_the_closest_however_it_is_approached(pr2_apartment_co
     """
     world, robot, extensions = pr2_apartment_context
     grasps = world.get_semantic_annotations_by_type(Milk)[0].grasp_candidates()
+    standing_position = _standing_in_front_of(grasps[0], world)
 
-    assert IsAmongTheClosestGraspsTo(
-        _turned_around(grasps[0], nearer_by=CLOSER_BY),
-        _standing_in_front_of(grasps[0], world),
-        grasps,
-        number_of_grasps=1,
-    )()
+    assert _closeness(
+        _turned_around(grasps[0], nearer_by=CLOSER_BY), standing_position
+    ) < min(_closeness(grasp, standing_position) for grasp in grasps)
 
 
-def test_grasps_tied_for_the_closest_are_still_only_as_many_as_asked_for(
+def test_a_grasp_at_the_standing_position_itself_is_as_close_as_can_be(
     pr2_apartment_context,
 ):
     """
-    Grasps can be exactly as close as one another, for example mirror images of each
-    other seen from a standing pose on the object's axis, and no more of them count as
-    the closest than were asked for.
+    A grasp right where the robot stands has no direction it is approached from.
     """
     world, robot, extensions = pr2_apartment_context
     grasp = world.get_semantic_annotations_by_type(Milk)[0].grasp_candidates()[0]
-    tied = [grasp, _raised(grasp, 0.0)]
-    standing_position = _standing_in_front_of(grasp, world)
 
-    closest = [
-        candidate
-        for candidate in tied
-        if IsAmongTheClosestGraspsTo(
-            candidate, standing_position, tied, number_of_grasps=1
-        )()
-    ]
-
-    assert closest == [grasp]
-
-
-def test_grasps_at_the_standing_position_itself_still_rank(pr2_apartment_context):
-    """
-    A grasp right where the robot stands has no direction it is approached from, and
-    grasps tied there still count no more of themselves as the closest than were asked
-    for.
-    """
-    world, robot, extensions = pr2_apartment_context
-    grasp = world.get_semantic_annotations_by_type(Milk)[0].grasp_candidates()[0]
-    tied = [grasp, _raised(grasp, 0.0)]
-    standing_position = world.transform(grasp.grasp_pose, world.root)
-
-    closest = [
-        candidate
-        for candidate in tied
-        if IsAmongTheClosestGraspsTo(
-            candidate, standing_position, tied, number_of_grasps=1
-        )()
-    ]
-
-    assert closest == [grasp]
+    assert _closeness(
+        grasp, world.transform(grasp.grasp_pose, world.root)
+    ) == GraspCloseness(horizontal_distance=0.0, approach_angle=0.0)
 
 
 def test_a_grasp_higher_up_is_as_close_as_one_below_it(pr2_apartment_context):
@@ -501,15 +491,12 @@ def test_a_grasp_higher_up_is_as_close_as_one_below_it(pr2_apartment_context):
     higher up, the direction they are approached along decides.
     """
     world, robot, extensions = pr2_apartment_context
-    grasps = world.get_semantic_annotations_by_type(Milk)[0].grasp_candidates()
-    raised_head_on = _raised(grasps[0], RAISED_BY)
+    grasp = world.get_semantic_annotations_by_type(Milk)[0].grasp_candidates()[0]
+    standing_position = _standing_in_front_of(grasp, world)
 
-    assert IsAmongTheClosestGraspsTo(
-        raised_head_on,
-        _standing_in_front_of(grasps[0], world),
-        [_turned_around(grasps[0]), raised_head_on],
-        number_of_grasps=1,
-    )()
+    assert _closeness(_raised(grasp, RAISED_BY), standing_position) < _closeness(
+        _turned_around(grasp), standing_position
+    )
 
 
 def test_a_pick_up_of_a_graspable_tries_each_standing_pose_with_its_closest_grasps(
@@ -524,13 +511,13 @@ def test_a_pick_up_of_a_graspable_tries_each_standing_pose_with_its_closest_gras
     pick_ups = list(
         itertools.islice(
             EntityQueryLanguageGenerativeBackend().evaluate(step),
-            2 * IsAmongTheClosestGraspsTo.number_of_grasps,
+            2 * ClosestGrasps.number_of_grasps,
         )
     )
 
     assert len({id(pick_up.navigate.target_location) for pick_up in pick_ups}) == 2
     _assert_each_standing_pose_keeps_the_closest_grasps(
-        pick_ups, milk, IsAmongTheClosestGraspsTo.number_of_grasps
+        pick_ups, milk, ClosestGrasps.number_of_grasps
     )
 
 
@@ -560,6 +547,27 @@ def test_a_pick_up_of_a_graspable_tries_as_many_closest_grasps_as_asked_for(
     )
 
 
+def test_a_pick_up_of_a_graspable_tries_the_grasps_from_each_standing_pose_closest_first(
+    pr2_apartment_context,
+):
+    world, robot, extensions = pr2_apartment_context
+    milk = world.get_semantic_annotations_by_type(Milk)[0]
+    step = MoveAndPickUpAction.from_graspable_by_closest_grasps(
+        milk, robot.right_arm, context_of(extensions), seed=SAMPLING_SEED
+    )
+
+    pick_ups = list(
+        itertools.islice(
+            EntityQueryLanguageGenerativeBackend().evaluate(step),
+            2 * ClosestGrasps.number_of_grasps,
+        )
+    )
+
+    _assert_each_standing_pose_tries_its_grasps_closest_first(
+        pick_ups, lambda pick_up: pick_up.pick_up.grasp, milk
+    )
+
+
 def test_a_transport_of_a_graspable_picks_it_up_by_the_closest_grasps(
     pr2_apartment_context,
 ):
@@ -576,12 +584,12 @@ def test_a_transport_of_a_graspable_picks_it_up_by_the_closest_grasps(
     pick_ups = list(
         itertools.islice(
             EntityQueryLanguageGenerativeBackend().evaluate(transport.pick_up),
-            IsAmongTheClosestGraspsTo.number_of_grasps,
+            ClosestGrasps.number_of_grasps,
         )
     )
 
     _assert_each_standing_pose_keeps_the_closest_grasps(
-        pick_ups, milk, IsAmongTheClosestGraspsTo.number_of_grasps
+        pick_ups, milk, ClosestGrasps.number_of_grasps
     )
 
 
@@ -605,43 +613,6 @@ def test_a_transport_of_a_graspable_tries_as_many_closest_grasps_as_asked_for(
             NON_DEFAULT_NUMBER_OF_GRASPS,
         )
     )
-
-    _assert_each_standing_pose_keeps_the_closest_grasps(
-        pick_ups, milk, NON_DEFAULT_NUMBER_OF_GRASPS
-    )
-
-
-def test_the_closest_grasps_can_be_required_of_a_pick_up_from_a_fixed_standing_pose(
-    pr2_apartment_context,
-):
-    """
-    The condition applies to a pick-up whatever its caller left open, so a fixed
-    standing pose is tried with only the grasps closest to it.
-    """
-    world, robot, extensions = pr2_apartment_context
-    milk = world.get_semantic_annotations_by_type(Milk)[0]
-    grasps = milk.grasp_candidates()
-    object_pose = Pose(reference_frame=milk.root)
-    step = a(MoveAndPickUpAction)(
-        navigate=NavigateAction(_standing_behind_the_milk(world)),
-        face_and_look_at=FaceAndLookAtAction(
-            FaceAtAction(object_pose), LookAtAction(object_pose)
-        ),
-        pick_up=a(PickUpAction)(
-            grasp=variable(GraspCandidate, domain=grasps),
-            arm=robot.right_arm,
-        ),
-    )
-    step.where(
-        IsAmongTheClosestGraspsTo(
-            step.pick_up.grasp,
-            step.navigate.target_location,
-            grasps,
-            number_of_grasps=NON_DEFAULT_NUMBER_OF_GRASPS,
-        )
-    )
-
-    pick_ups = list(EntityQueryLanguageGenerativeBackend().evaluate(step))
 
     _assert_each_standing_pose_keeps_the_closest_grasps(
         pick_ups, milk, NON_DEFAULT_NUMBER_OF_GRASPS
@@ -856,6 +827,32 @@ def test_an_opening_of_a_handle_first_tries_the_grasp_facing_the_robot(
     first_opening = next(iter(EntityQueryLanguageGenerativeBackend().evaluate(opening)))
 
     assert _grasp_signature(first_opening.grasp) == _grasp_signature(facing_grasp)
+
+
+def test_a_move_and_open_tries_the_grasps_from_each_standing_pose_closest_first(
+    pr2_apartment_context,
+):
+    """
+    Which side of a handle faces out of the furniture differs between models, so each
+    standing pose tries the grasp facing it first.
+    """
+    world, robot, extensions = pr2_apartment_context
+    handle = Handle(root=world.get_body_by_name(DRAWER_HANDLE))
+    step = MoveAndOpenAction.from_handle_by_closest_grasps(
+        handle, robot.left_arm, context_of(extensions), seed=SAMPLING_SEED
+    )
+
+    openings = list(
+        itertools.islice(
+            EntityQueryLanguageGenerativeBackend().evaluate(step),
+            2 * ClosestGrasps.number_of_grasps,
+        )
+    )
+
+    assert len({id(opening.navigate.target_location) for opening in openings}) == 2
+    _assert_each_standing_pose_tries_its_grasps_closest_first(
+        openings, lambda opening: opening.open_container.grasp, handle
+    )
 
 
 # %% a move-and-act step acts from where it moved to

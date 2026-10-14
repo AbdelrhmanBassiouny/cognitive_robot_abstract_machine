@@ -31,6 +31,7 @@ from krrood.entity_query_language.factories import (
     entity,
     a,
     an,
+    flat_variable,
     variable_from,
 )
 from krrood.ormatic.data_access_objects.helper import to_dao
@@ -44,6 +45,7 @@ from ..dataset.example_classes import (
     KRROODPose,
     KRROODPosition,
     KRROODPositions,
+    KRROODPositionsSubclassWithAnotherKRROODPosition,
     KRROODOrientation,
     Atom,
     Element,
@@ -396,3 +398,50 @@ def test_enumerating_backend_keeps_instances_whose_factory_renames_a_stated_valu
         (3, RECTANGLE_SIDES[0][1]),
         (4, RECTANGLE_SIDES[0][1]),
     }
+
+
+# %% a pattern keyword bound to an expression derived from a variable
+
+
+UPRIGHT = KRROODOrientation(0.0, 0.0, 0.0, 1.0)
+"""
+The orientation every generated pose takes, so that only its position varies.
+"""
+
+
+def test_generative_backend_grounds_a_keyword_bound_to_a_flattening_of_a_variable():
+    """
+    A keyword bound to the flattened values of a variable's attribute takes each of
+    those values in turn, for each value of the variable, in their order.
+    """
+    holders = [
+        KRROODPositions([KRROODPosition(1, 0, 0), KRROODPosition(2, 0, 0)], []),
+        KRROODPositions([KRROODPosition(3, 0, 0)], []),
+    ]
+    holder = variable_from(holders)
+    query = a(KRROODPose)(position=flat_variable(holder.positions), orientation=UPRIGHT)
+
+    poses = list(query.evaluate(backend=EntityQueryLanguageGenerativeBackend()))
+
+    assert [pose.position for pose in poses] == [
+        position for each_holder in holders for position in each_holder.positions
+    ]
+
+
+def test_generative_backend_grounds_a_keyword_bound_to_an_attribute_of_a_variable():
+    holders = [
+        KRROODPositionsSubclassWithAnotherKRROODPosition(
+            [], [], KRROODPosition(1, 0, 0)
+        ),
+        KRROODPositionsSubclassWithAnotherKRROODPosition(
+            [], [], KRROODPosition(2, 0, 0)
+        ),
+    ]
+    holder = variable_from(holders)
+    query = a(KRROODPose)(position=holder.positions2, orientation=UPRIGHT)
+
+    poses = list(query.evaluate(backend=EntityQueryLanguageGenerativeBackend()))
+
+    assert [pose.position for pose in poses] == [
+        each_holder.positions2 for each_holder in holders
+    ]

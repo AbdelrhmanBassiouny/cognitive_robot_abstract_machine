@@ -54,6 +54,7 @@ from cramph.nodes_for_testing import ConstFalseNode
 from giskardpy.motion_statechart.goals.gripper import MoveGripper
 from giskardpy.motion_statechart.tasks.cartesian_tasks import CartesianPose
 from giskardpy.motion_statechart.tasks.joint_tasks import JointPositionList
+from krrood.entity_query_language.backends import EntityQueryLanguageGenerativeBackend
 from krrood.entity_query_language.factories import a, variable
 from krrood.entity_query_language.query.match import Match
 from krrood.exceptions import UnboundGenericParameter
@@ -706,11 +707,12 @@ def pick_up_action(annotation, arm: Arm) -> PickUpAction:
 def handle_opened_by(opening: Match) -> Handle:
     """
     :param opening: The step that opens a drawer.
-    :return: The handle it opens the drawer by.
+    :return: The handle its first candidate opens the drawer by.
     """
-    grasps = opening._kwargs_["open_container"]._kwargs_["grasp"]._domain_.domain
-    [handle] = {grasp.graspable for grasp in grasps}
-    return handle
+    first_candidate = next(
+        iter(EntityQueryLanguageGenerativeBackend().evaluate(opening))
+    )
+    return first_candidate.open_container.grasp.graspable
 
 
 def arm_opening_with(opening: Match) -> Arm:

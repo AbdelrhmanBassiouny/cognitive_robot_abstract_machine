@@ -4,7 +4,7 @@ from dataclasses import dataclass
 
 from typing_extensions import Optional, Self
 
-from krrood.entity_query_language.factories import a, variable
+from krrood.entity_query_language.factories import a, flat_variable, variable
 from coraplex.datastructures.enums import ReachFraction
 from coraplex.locations.locations import ReachabilityLocation
 from cramph.composites import Sequence
@@ -19,7 +19,7 @@ from coraplex.robot_plans.actions.core.navigation import (
     LookAtAction,
     NavigateAction,
 )
-from coraplex.querying.predicates import IsAmongTheClosestGraspsTo
+from coraplex.querying.grasp_closeness import ClosestGrasps
 from coraplex.robot_plans.actions.core.pick_up import PickUpAction
 from coraplex.robot_plans.actions.core.placing import PlaceAction
 from coraplex.robot_plans.actions.core.robot_body import ParkArmsAction
@@ -59,7 +59,7 @@ class TransportAction(Action):
         target_location: Pose,
         arm: Arm,
         context: StatechartContext,
-        number_of_grasps: int = IsAmongTheClosestGraspsTo.number_of_grasps,
+        number_of_grasps: int = ClosestGrasps.number_of_grasps,
         seed: Optional[int] = None,
     ) -> Self:
         """
@@ -264,15 +264,12 @@ class MoveAndPickUpAction(Action):
         graspable: HasGraspCandidates,
         arm: Arm,
         context: StatechartContext,
-        number_of_grasps: int = IsAmongTheClosestGraspsTo.number_of_grasps,
+        number_of_grasps: int = ClosestGrasps.number_of_grasps,
         seed: Optional[int] = None,
     ) -> Match:
         """
         A pick-up of `graspable`, standing wherever it can be reached from and taking it
-        by the grasps closest to the robot there.
-
-        The closeness is a ``where`` condition on the returned match,
-        :class:`~coraplex.querying.predicates.IsAmongTheClosestGraspsTo`.
+        by the grasps closest to the robot there, the closest first.
 
         :param graspable: The object to pick up.
         :param arm: The arm to pick up with.
@@ -283,32 +280,25 @@ class MoveAndPickUpAction(Action):
         :param seed: Seed for sampling the standing poses; ``None`` samples afresh.
         :return: The pick-up, with the standing pose and the grasp left open.
         """
-        grasps = graspable.grasp_candidates()
         object_pose = Pose(reference_frame=graspable.root)
-        step = a(cls)(
-            navigate=a(NavigateAction)(
-                target_location=variable(
-                    Pose,
-                    domain=ReachabilityLocation(
-                        target_pose=object_pose, arm=arm, context=context, seed=seed
-                    ),
-                )
+        standing_position = variable(
+            Pose,
+            domain=ReachabilityLocation(
+                target_pose=object_pose, arm=arm, context=context, seed=seed
             ),
+        )
+        return a(cls)(
+            navigate=a(NavigateAction)(target_location=standing_position),
             face_and_look_at=a(FaceAndLookAtAction)(
                 face_at=a(FaceAtAction)(target=object_pose),
                 look_at=a(LookAtAction)(target=object_pose),
             ),
             pick_up=a(PickUpAction)(
-                grasp=variable(GraspCandidate, domain=grasps), arm=arm
+                grasp=flat_variable(
+                    ClosestGrasps(graspable, standing_position, number_of_grasps)
+                ),
+                arm=arm,
             ),
-        )
-        return step.where(
-            IsAmongTheClosestGraspsTo(
-                step.pick_up.grasp,
-                step.navigate.target_location,
-                grasps,
-                number_of_grasps,
-            )
         )
 
     def create_action_body(self) -> StatechartNode:
@@ -369,15 +359,13 @@ class MoveAndOpenAction(Action):
         handle: Handle,
         arm: Arm,
         context: StatechartContext,
-        number_of_grasps: int = IsAmongTheClosestGraspsTo.number_of_grasps,
+        number_of_grasps: int = ClosestGrasps.number_of_grasps,
         seed: Optional[int] = None,
     ) -> Match:
         """
         An opening of the container `handle` belongs to, standing wherever the handle
-        can be worked from and taking it by the grasps that face the robot there.
-
-        The closeness is a ``where`` condition on the returned match,
-        :class:`~coraplex.querying.predicates.IsAmongTheClosestGraspsTo`.
+        can be worked from and taking it by the grasps closest to the robot there, the
+        closest first.
 
         :param handle: The handle of the container to open.
         :param arm: The arm to open with.
@@ -388,36 +376,29 @@ class MoveAndOpenAction(Action):
         :param seed: Seed for sampling the standing poses; ``None`` samples afresh.
         :return: The opening, with the standing pose and the grasp left open.
         """
-        grasps = handle.grasp_candidates()
         handle_pose = Pose(reference_frame=handle.root)
-        step = a(cls)(
-            navigate=a(NavigateAction)(
-                target_location=variable(
-                    Pose,
-                    domain=ReachabilityLocation(
-                        target_pose=handle_pose,
-                        arm=arm,
-                        reach_fraction=ReachFraction.ACCESSING,
-                        context=context,
-                        seed=seed,
-                    ),
-                )
+        standing_position = variable(
+            Pose,
+            domain=ReachabilityLocation(
+                target_pose=handle_pose,
+                arm=arm,
+                reach_fraction=ReachFraction.ACCESSING,
+                context=context,
+                seed=seed,
             ),
+        )
+        return a(cls)(
+            navigate=a(NavigateAction)(target_location=standing_position),
             face_and_look_at=a(FaceAndLookAtAction)(
                 face_at=a(FaceAtAction)(target=handle_pose),
                 look_at=a(LookAtAction)(target=handle_pose),
             ),
             open_container=a(OpenAction)(
-                grasp=variable(GraspCandidate, domain=grasps), arm=arm
+                grasp=flat_variable(
+                    ClosestGrasps(handle, standing_position, number_of_grasps)
+                ),
+                arm=arm,
             ),
-        )
-        return step.where(
-            IsAmongTheClosestGraspsTo(
-                step.open_container.grasp,
-                step.navigate.target_location,
-                grasps,
-                number_of_grasps,
-            )
         )
 
     def create_action_body(self) -> StatechartNode:

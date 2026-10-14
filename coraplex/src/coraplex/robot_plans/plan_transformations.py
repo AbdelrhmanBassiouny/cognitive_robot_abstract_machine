@@ -13,6 +13,7 @@ from coraplex.exceptions import (
     ReachHasNoFinalApproach,
 )
 from coraplex.locations.locations import ReachabilityLocation
+from coraplex.querying.grasp_closeness import ClosestGrasps
 from coraplex.plans.plan_transformation import (
     InsertionTransformation,
     MatchedType,
@@ -37,7 +38,8 @@ from giskardpy.motion_statechart.tasks.cartesian_tasks import (
     CartesianPose,
     CartesianPosition,
 )
-from krrood.entity_query_language.core.variable import Variable
+from krrood.entity_query_language.core.mapped_variable import FlatVariable
+from krrood.entity_query_language.core.variable import InstantiatedVariable, Variable
 from krrood.entity_query_language.factories import a, variable
 from krrood.entity_query_language.query.match import Match
 from krrood.patterns.subclass_safe_generic import SubClassSafeGeneric
@@ -318,9 +320,15 @@ class OpenDrawerBeforeMoveAndPickUp(DrawerOpening[MoveAndPickUpAction]):
         arm = move_and_pick_up.pick_up.arm.apply_mapping_on_external_root(
             move_and_pick_up
         )
-        grasps = grasp._domain_ if isinstance(grasp, Variable) else [grasp]
         if not isinstance(arm, Arm):
             return None
+        if (
+            isinstance(grasp, FlatVariable)
+            and isinstance(grasp._child_, InstantiatedVariable)
+            and grasp._child_._type_ is ClosestGrasps
+        ):
+            return PickUpTarget(graspable=grasp._child_._kwargs_["graspable"], arm=arm)
+        grasps = grasp._domain_ if isinstance(grasp, Variable) else [grasp]
         if not all(isinstance(candidate, GraspCandidate) for candidate in grasps):
             return None
         graspables = {candidate.graspable for candidate in grasps}
