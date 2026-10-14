@@ -22,11 +22,12 @@ from pathlib import Path
 import pytest
 
 from basstler.locations import ProjectLocation
+from basstler.plan_item_bootstrap import PlanDocument
 from basstler.plan_manifest_tools import item_summary
-from basstler.plan_model import ManifestField, PlanManifest
-from basstler.plan_size_limits import read_manifest, write_manifest
+from basstler.plan_model import ItemStatus, ManifestField, PlanManifest
 
 from .constants import (
+    ClaudeLocalSection,
     ConfigurationVariable,
     DatasetLocation,
     EnvironmentVariable,
@@ -37,6 +38,7 @@ from .constants import (
     StubVariable,
 )
 from .executable_stubs import ExecutableStubDirectory, path_hiding_executables
+from .plan_dataset import LandedItemsPlan
 from .project_declaration import ProjectDeclaration
 from .scratch_repository import SCRATCH_IDENTITY, ScratchRepository
 from .script_runner import configuration_value
@@ -59,8 +61,6 @@ PLAN_IDENTIFIER = "test-plan"
 
 
 MANIFEST_PATH = ProjectLocation.PLANS / PLAN_IDENTIFIER / "plan.yaml"
-
-CLAUDE_LOCAL_MD = "CLAUDE.local.md"
 
 
 def branch_index(plan_identifier_by_branch: Mapping[str, str]) -> str:
@@ -159,7 +159,9 @@ def test_reports_nothing_when_no_notes_branch_exists(
 
     assert result.returncode == 0, result.stderr
     assert result.stdout == ""
-    assert not (session_start_repository.project_root / CLAUDE_LOCAL_MD).exists()
+    assert not (
+        session_start_repository.project_root / PersonalNotesPath.CLAUDE_LOCAL
+    ).exists()
 
 
 # %% the plan line
@@ -260,42 +262,37 @@ def test_reports_a_tracked_branch_whose_manifest_is_missing(
 # %% the item a tracked branch loads
 
 
-PLAN_WITH_LANDED_ITEMS = DatasetLocation.DIRECTORY / "plan-with-landed-items.yaml"
-"""
-A plan of three items, one of which this suite moves onto the work branch.
-"""
-
-ROADMAP_OF_STANDING_RULES = DatasetLocation.DIRECTORY / "roadmap-of-standing-rules.md"
-"""
-A roadmap of standing rules.
-"""
-
-
-def manifest_with_work_branch_item(tmp_path: Path) -> PlanManifest:
+@pytest.fixture
+def tracked_plan() -> LandedItemsPlan:
     """
-    :return: The three-item plan, with its ``open`` item worked on the work branch.
+    The three-item plan, with its open item moved onto the work branch.
     """
-    manifest = read_manifest(PLAN_WITH_LANDED_ITEMS)
+    plan = LandedItemsPlan.read()
+    open_item = plan.item_with_status(ItemStatus.IN_PROGRESS)
     items = [
         (
             {**item.content, ManifestField.BRANCH.value: str(ScratchBranch.WORK)}
-            if item.identifier == "open"
+            if item == open_item
             else item.content
         )
-        for item in manifest.items
+        for item in plan.manifest.items
     ]
-    moved = PlanManifest({**manifest.content, ManifestField.ITEMS.value: items})
-    write_manifest(moved, tmp_path / "moved-plan.yaml")
-    return moved
+    return LandedItemsPlan(
+        PlanManifest({**plan.manifest.content, ManifestField.ITEMS.value: items})
+    )
 
 
 def run_on_tracked_branch(
-    repository: ScratchRepository, manifest: PlanManifest, manifest_text: str
+    repository: ScratchRepository, manifest: PlanManifest, scratch_directory: Path
 ) -> str:
     """
     Publish *manifest* as the plan tracking the work branch, run session-start.sh, and
     return the CLAUDE.local.md it wrote.
+
+    :param scratch_directory: Where the manifest is written before it is published.
     """
+    manifest_path = scratch_directory / PlanDocument.MANIFEST
+    manifest.write(manifest_path)
     plan_directory = ProjectLocation.PLANS / manifest.identifier
     result = publish_and_run(
         repository,
@@ -303,44 +300,40 @@ def run_on_tracked_branch(
             PersonalNotesPath.BRANCH_INDEX: branch_index(
                 {ScratchBranch.WORK: manifest.identifier}
             ),
-            plan_directory / "plan.yaml": manifest_text,
-            plan_directory / "roadmap.md": ROADMAP_OF_STANDING_RULES.read_text(),
+            plan_directory / PlanDocument.MANIFEST: manifest_path.read_text(),
+            plan_directory
+            / PlanDocument.ROADMAP: DatasetLocation.ROADMAP_OF_STANDING_RULES.read_text(),
         },
     )
     assert result.returncode == 0, result.stderr
-    return (repository.project_root / CLAUDE_LOCAL_MD).read_text()
+    return (repository.project_root / PersonalNotesPath.CLAUDE_LOCAL).read_text()
 
 
 def test_a_tracked_branch_loads_only_its_own_item(
-    session_start_repository: ScratchRepository, tmp_path: Path
+    session_start_repository: ScratchRepository,
+    tracked_plan: LandedItemsPlan,
+    tmp_path: Path,
 ):
-    manifest = manifest_with_work_branch_item(tmp_path)
     claude_local = run_on_tracked_branch(
-        session_start_repository,
-        manifest,
-        (tmp_path / "moved-plan.yaml").read_text(),
+        session_start_repository, tracked_plan.manifest, tmp_path
     )
-
-    item_block = claude_local.split(
-        f"<!-- BEGIN-PLAN-ITEM: {manifest.identifier} -->\n"
-    )[1]
-    item_block = item_block.split("<!-- END-PLAN-ITEM -->")[0]
-    assert item_block == item_summary(
+    manifest = tracked_plan.manifest
+    assert ClaudeLocalSection.PLAN_ITEM.within(claude_local) == item_summary(
         manifest, manifest.item_on_branch(ScratchBranch.WORK)
     )
-    assert "id: queued" not in claude_local
+    queued_item = tracked_plan.item_with_status(ItemStatus.NOT_STARTED)
+    assert queued_item.identifier not in claude_local
 
 
 def test_a_tracked_branch_loads_the_plan_s_standing_rules(
-    session_start_repository: ScratchRepository, tmp_path: Path
+    session_start_repository: ScratchRepository,
+    tracked_plan: LandedItemsPlan,
+    tmp_path: Path,
 ):
-    manifest = manifest_with_work_branch_item(tmp_path)
     claude_local = run_on_tracked_branch(
-        session_start_repository,
-        manifest,
-        (tmp_path / "moved-plan.yaml").read_text(),
+        session_start_repository, tracked_plan.manifest, tmp_path
     )
-    assert ROADMAP_OF_STANDING_RULES.read_text() in claude_local
+    assert DatasetLocation.ROADMAP_OF_STANDING_RULES.read_text() in claude_local
 
 
 # %% branches no plan item can ever track
@@ -445,7 +438,9 @@ def test_a_failing_setup_check_does_not_fail_the_hook(
     result = publish_and_run(session_start_repository)
 
     assert result.returncode == 0, result.stderr
-    assert (session_start_repository.project_root / CLAUDE_LOCAL_MD).exists()
+    assert (
+        session_start_repository.project_root / PersonalNotesPath.CLAUDE_LOCAL
+    ).exists()
 
 
 # %% the dependencies line
@@ -677,7 +672,9 @@ def test_reports_a_failed_install_and_finishes_the_run(
             "",
         ).split(" - ")[0]
     )
-    assert (session_start_repository.project_root / CLAUDE_LOCAL_MD).exists()
+    assert (
+        session_start_repository.project_root / PersonalNotesPath.CLAUDE_LOCAL
+    ).exists()
     assert summary_value(result.stdout, SummaryLine.PERSONAL_NOTES) != ""
 
 
@@ -723,7 +720,9 @@ def test_reports_a_missing_installer_without_failing(
     assert UNINSTALLABLE_REQUIREMENT in summary_value(
         result.stdout, SummaryLine.DEPENDENCIES
     )
-    assert (session_start_repository.project_root / CLAUDE_LOCAL_MD).exists()
+    assert (
+        session_start_repository.project_root / PersonalNotesPath.CLAUDE_LOCAL
+    ).exists()
 
 
 # %% creating the package's environment
@@ -961,7 +960,9 @@ def test_reports_uv_it_could_not_install_and_finishes_the_run(
         ).split(" - ")[0]
     )
     assert not environment_interpreter(session_start_repository).exists()
-    assert (session_start_repository.project_root / CLAUDE_LOCAL_MD).exists()
+    assert (
+        session_start_repository.project_root / PersonalNotesPath.CLAUDE_LOCAL
+    ).exists()
 
 
 def test_reports_an_environment_it_could_not_create_and_finishes_the_run(
@@ -992,7 +993,9 @@ def test_reports_an_environment_it_could_not_create_and_finishes_the_run(
         ).split(" - ")[0]
     )
     assert not environment_interpreter(session_start_repository).exists()
-    assert (session_start_repository.project_root / CLAUDE_LOCAL_MD).exists()
+    assert (
+        session_start_repository.project_root / PersonalNotesPath.CLAUDE_LOCAL
+    ).exists()
 
 
 # %% every message renders

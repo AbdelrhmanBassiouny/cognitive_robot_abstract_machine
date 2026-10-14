@@ -6,7 +6,7 @@ decided about this item?* — so the procedure lives here once instead of
 being restated in each skill.
 
 Each skill runs everything below, then adds only what its own situation
-needs: `plan-item-kickoff` reads landed siblings for the pattern to follow;
+needs: `plan-item-kickoff` reads the merged pull requests that set the pattern to follow;
 `plan-item-resolve` reads the item's pull request state and the tracking
 issue's discussion. Neither should re-derive anything on this page.
 
@@ -38,6 +38,12 @@ readiness check below leaves a question. Never read the whole manifest to
 find one item - every other item is another session's work and costs this
 one context. Read `${PLAN_SCHEMA_DOCUMENT}` only if a field's meaning is
 unclear.
+
+Given a pull request number instead of the two ids, find the item from the
+pull request's branch: read its head branch with
+`${GITHUB_PULL_REQUEST_READ_TOOL}` (`method: "get"`), take the plan id from
+`plan_id_for_branch <branch>` (it reads the fetch above), and print the item
+with `--branch <branch>`. If no plan tracks that branch, say so and stop.
 
 If the plan id or item id doesn't resolve, stop and list what's actually
 available — every plan id under `plans/*/plan.yaml`, or every item id in

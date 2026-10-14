@@ -22,12 +22,10 @@ from basstler.progress_notes import (
 )
 from basstler.repository import Repository
 
-from .constants import DatasetLocation
+from .constants import DatasetLocation, ProgressBranch
 from .scratch_repository import ScratchRepository, initialize_bare_repository
 
-PULL_REQUESTS = json.loads(
-    (DatasetLocation.DIRECTORY / "pull-requests-by-branch.json").read_text()
-)
+PULL_REQUESTS = json.loads(DatasetLocation.PULL_REQUESTS_BY_BRANCH.read_text())
 """
 Pull requests of ``owner/repo``: one branch open, one merged, one reopened after a
 closed attempt, and two from elsewhere.
@@ -61,54 +59,63 @@ def progress_directory(tmp_path: Path, *branches: str) -> ProgressNotesDirectory
 
 
 def test_a_branch_with_any_open_pull_request_is_open():
-    assert branch_pull_requests().open_branches == {"open-work", "reopened-work"}
+    assert branch_pull_requests().open_branches == {
+        ProgressBranch.OPEN,
+        ProgressBranch.REOPENED,
+    }
 
 
 def test_a_branch_whose_pull_requests_all_closed_is_finished():
-    assert branch_pull_requests().finished_branches == {"merged-work"}
+    assert branch_pull_requests().finished_branches == {ProgressBranch.MERGED}
 
 
 # %% pruning
 
 
 def test_the_notes_of_a_finished_branch_are_removed(tmp_path):
-    directory = progress_directory(tmp_path, "merged-work", "open-work")
+    directory = progress_directory(tmp_path, ProgressBranch.MERGED, ProgressBranch.OPEN)
     removed = directory.remove_finished(
-        branch_pull_requests(), frozenset({"merged-work", "open-work"}), "other"
+        branch_pull_requests(),
+        frozenset({ProgressBranch.MERGED, ProgressBranch.OPEN}),
+        "other",
     )
-    assert removed == ["merged-work"]
-    assert directory.branches() == ["open-work"]
+    assert removed == [ProgressBranch.MERGED]
+    assert directory.branches() == [ProgressBranch.OPEN]
 
 
 def test_the_notes_of_a_branch_gone_from_the_remote_are_removed(tmp_path):
-    directory = progress_directory(tmp_path, "claude/deleted-work", "open-work")
-    removed = directory.remove_finished(
-        branch_pull_requests(), frozenset({"open-work"}), "other"
+    directory = progress_directory(
+        tmp_path, ProgressBranch.DELETED, ProgressBranch.OPEN
     )
-    assert removed == ["claude/deleted-work"]
+    removed = directory.remove_finished(
+        branch_pull_requests(), frozenset({ProgressBranch.OPEN}), "other"
+    )
+    assert removed == [ProgressBranch.DELETED]
 
 
 def test_the_notes_of_a_branch_with_no_pull_request_yet_stay(tmp_path):
-    directory = progress_directory(tmp_path, "unopened-work")
+    directory = progress_directory(tmp_path, ProgressBranch.UNOPENED)
     removed = directory.remove_finished(
-        branch_pull_requests(), frozenset({"unopened-work"}), "other"
+        branch_pull_requests(), frozenset({ProgressBranch.UNOPENED}), "other"
     )
     assert removed == []
 
 
 def test_the_branch_being_saved_keeps_its_notes(tmp_path):
-    directory = progress_directory(tmp_path, "merged-work")
+    directory = progress_directory(tmp_path, ProgressBranch.MERGED)
     removed = directory.remove_finished(
-        branch_pull_requests(), frozenset({"merged-work"}), "merged-work"
+        branch_pull_requests(),
+        frozenset({ProgressBranch.MERGED}),
+        ProgressBranch.MERGED,
     )
     assert removed == []
 
 
 def test_an_empty_remote_branch_list_prunes_nothing(tmp_path):
-    directory = progress_directory(tmp_path, "open-work")
+    directory = progress_directory(tmp_path, ProgressBranch.OPEN)
     with pytest.raises(EmptyRemoteBranchListError):
         directory.remove_finished(branch_pull_requests(), frozenset(), "other")
-    assert directory.branches() == ["open-work"]
+    assert directory.branches() == [ProgressBranch.OPEN]
 
 
 # %% pruning against the remote
@@ -117,16 +124,18 @@ def test_an_empty_remote_branch_list_prunes_nothing(tmp_path):
 @pytest.fixture
 def checkout_with_remote(scratch_repository: ScratchRepository) -> ScratchRepository:
     """
-    A checkout whose ``origin`` names ``owner/repo`` and holds the branches ``open-
-    work``, ``merged-work`` and ``reopened-work``.
+    A checkout whose ``origin`` names :data:`REPOSITORY` and holds the open, merged and
+    reopened branches.
     """
     remote = initialize_bare_repository(
-        scratch_repository.project_root.parent / "owner" / "repo.git"
+        scratch_repository.project_root.parent
+        / REPOSITORY.owner
+        / f"{REPOSITORY.name}.git"
     )
     scratch_repository.write("README.md", "scratch repo\n")
     scratch_repository.commit_everything("initial commit")
     scratch_repository.run_git("remote", "add", "origin", remote.as_uri())
-    for branch in ("open-work", "merged-work", "reopened-work"):
+    for branch in (ProgressBranch.OPEN, ProgressBranch.MERGED, ProgressBranch.REOPENED):
         scratch_repository.run_git("push", "--quiet", "origin", f"HEAD:{branch}")
     return scratch_repository
 
@@ -135,14 +144,14 @@ def pruning(
     checkout: ScratchRepository, directory: ProgressNotesDirectory
 ) -> ProgressNotesPruning:
     """
-    :return: A prune of *directory* against *checkout*'s ``origin``, keeping
-        ``open-work``.
+    :return: A prune of *directory* against *checkout*'s ``origin``, keeping the open
+        branch.
     """
     return ProgressNotesPruning(
         directory=directory,
         git=GitCommandRunner(checkout.project_root),
         remote="origin",
-        kept_branch="open-work",
+        kept_branch=ProgressBranch.OPEN,
     )
 
 
@@ -158,10 +167,10 @@ def test_pruning_without_a_credential_removes_nothing(
     checkout_with_remote, tmp_path, monkeypatch
 ):
     without_credentials(monkeypatch)
-    directory = progress_directory(tmp_path / "notes", "merged-work")
+    directory = progress_directory(tmp_path / "notes", ProgressBranch.MERGED)
     outcome = pruning(checkout_with_remote, directory).run()
     assert outcome == PruningSkipped.NO_CREDENTIAL
-    assert directory.branches() == ["merged-work"]
+    assert directory.branches() == [ProgressBranch.MERGED]
 
 
 def test_pruning_against_an_unreadable_remote_removes_nothing(
@@ -169,10 +178,10 @@ def test_pruning_against_an_unreadable_remote_removes_nothing(
 ):
     monkeypatch.setenv(CREDENTIAL_VARIABLES[0], "token")
     checkout_with_remote.run_git("remote", "set-url", "origin", str(tmp_path / "gone"))
-    directory = progress_directory(tmp_path / "notes", "merged-work")
+    directory = progress_directory(tmp_path / "notes", ProgressBranch.MERGED)
     outcome = pruning(checkout_with_remote, directory).run()
     assert outcome == PruningSkipped.REMOTE_UNREADABLE
-    assert directory.branches() == ["merged-work"]
+    assert directory.branches() == [ProgressBranch.MERGED]
 
 
 def test_pruning_removes_the_finished_and_deleted_branches_notes(
@@ -184,8 +193,14 @@ def test_pruning_removes_the_finished_and_deleted_branches_notes(
         GitHubRepository, "pull_requests", lambda self, state: PULL_REQUESTS
     )
     directory = progress_directory(
-        tmp_path / "notes", "open-work", "merged-work", "reopened-work", "deleted-work"
+        tmp_path / "notes",
+        ProgressBranch.OPEN,
+        ProgressBranch.MERGED,
+        ProgressBranch.REOPENED,
+        ProgressBranch.DELETED,
     )
     outcome = pruning(checkout_with_remote, directory).run()
-    assert outcome == ["deleted-work", "merged-work"]
-    assert directory.branches() == ["open-work", "reopened-work"]
+    assert outcome == sorted([ProgressBranch.DELETED, ProgressBranch.MERGED])
+    assert directory.branches() == sorted(
+        [ProgressBranch.OPEN, ProgressBranch.REOPENED]
+    )

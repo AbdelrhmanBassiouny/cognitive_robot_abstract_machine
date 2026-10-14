@@ -10,15 +10,19 @@ import subprocess
 import pytest
 
 from basstler.locations import ProjectLocation
+from basstler.maintenance_constants import CREDENTIAL_VARIABLES
+from basstler.plan_item_bootstrap import HookScript
 from basstler.plan_size_limits import Measure
+from basstler.progress_notes import ProgressNotesFile
 
-from .constants import PersonalNotesPath, ScratchBranch
+from .constants import (
+    ClaudeLocalSection,
+    HookFile,
+    PersonalNotesPath,
+    ProgressBranch,
+    ScratchBranch,
+)
 from .scratch_repository import ScratchRepository
-
-SAVE_PR_PROGRESS = "save-pr-progress.sh"
-"""
-The hook under test.
-"""
 
 
 @pytest.fixture
@@ -31,7 +35,7 @@ def progress_repository(scratch_repository: ScratchRepository) -> ScratchReposit
     :return: The same repository, ready to run save-pr-progress.sh against.
     """
     scratch_repository.install_hook_scripts(
-        "resolve-personal-notes-config.sh", SAVE_PR_PROGRESS
+        HookScript.CONFIGURATION, HookFile.SAVE_PULL_REQUEST_PROGRESS
     )
     scratch_repository.install_package()
     scratch_repository.write("README.md", "scratch repo\n")
@@ -44,20 +48,23 @@ def progress_repository(scratch_repository: ScratchRepository) -> ScratchReposit
 
 
 def save_progress(
-    repository: ScratchRepository, progress: str
+    repository: ScratchRepository, progress: str, **environment: str
 ) -> subprocess.CompletedProcess[str]:
     """
     Write *progress* between CLAUDE.local.md's progress markers, then run the hook.
 
     :param repository: A fixture-built scratch repository.
     :param progress: The progress notes to save.
+    :param environment: Variables to set for the hook.
     :return: The finished hook.
     """
     repository.write(
-        "CLAUDE.local.md",
-        f"<!-- BEGIN-PR-PROGRESS -->\n{progress}<!-- END-PR-PROGRESS -->\n",
+        PersonalNotesPath.CLAUDE_LOCAL,
+        ClaudeLocalSection.PULL_REQUEST_PROGRESS.around(progress),
     )
-    return repository.run_hook_script(SAVE_PR_PROGRESS)
+    return repository.run_hook_script(
+        HookFile.SAVE_PULL_REQUEST_PROGRESS, **environment
+    )
 
 
 def saved_progress(repository: ScratchRepository) -> str:
@@ -66,7 +73,9 @@ def saved_progress(repository: ScratchRepository) -> str:
     """
     checkout = repository.clone_notes_branch(repository.project_root.parent / "verify")
     return (
-        checkout / PersonalNotesPath.PULL_REQUEST_PROGRESS / f"{ScratchBranch.WORK}.md"
+        checkout
+        / PersonalNotesPath.PULL_REQUEST_PROGRESS
+        / f"{ScratchBranch.WORK}{ProgressNotesFile.SUFFIX}"
     ).read_text()
 
 
@@ -97,15 +106,16 @@ def test_progress_over_the_limit_is_refused_and_not_pushed(
 def test_without_a_credential_the_save_goes_ahead_unpruned(
     progress_repository: ScratchRepository,
 ):
-    other_notes = PersonalNotesPath.PULL_REQUEST_PROGRESS / "merged-elsewhere.md"
-    progress_repository.update_notes_branch_file(other_notes, "- Done.\n")
-    progress_repository.write(
-        "CLAUDE.local.md",
-        "<!-- BEGIN-PR-PROGRESS -->\n- Next: a step.\n<!-- END-PR-PROGRESS -->\n",
+    other_notes = (
+        PersonalNotesPath.PULL_REQUEST_PROGRESS
+        / f"{ProgressBranch.MERGED}{ProgressNotesFile.SUFFIX}"
     )
+    progress_repository.update_notes_branch_file(other_notes, "- Done.\n")
 
-    result = progress_repository.run_hook_script(
-        SAVE_PR_PROGRESS, GH_TOKEN="", GITHUB_TOKEN=""
+    result = save_progress(
+        progress_repository,
+        "- Next: a step.\n",
+        **{variable: "" for variable in CREDENTIAL_VARIABLES},
     )
 
     assert result.returncode == 0, result.stderr

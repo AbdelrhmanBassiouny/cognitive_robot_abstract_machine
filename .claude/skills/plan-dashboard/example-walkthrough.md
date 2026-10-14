@@ -185,7 +185,8 @@ prepended so the pasted session starts on that model.
   button copies `/plan-item-kickoff notification-retry-overhaul
   retry-metrics-dashboard`. The [`plan-item-kickoff`](../plan-item-kickoff/SKILL.md)
   skill gathers the item's context (manifest entry, roadmap history, its
-  dependency's live state, patterns from already-landed sibling items) and
+  dependency's live state, patterns from the merged pull requests that last
+  changed the files it will touch) and
   proposes a concrete implementation plan via plan mode — it never writes
   code itself.
 - **Resolve a stalled item** — `retry-load-testing`'s "Resolve" button copies

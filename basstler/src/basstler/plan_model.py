@@ -10,7 +10,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import StrEnum
+from pathlib import Path
 from typing import Any
+
+import yaml
 
 
 class ItemStatus(StrEnum):
@@ -214,6 +217,24 @@ class PlanManifest:
     """
     The manifest as parsed, every key kept so that writing it back loses nothing.
     """
+
+    @classmethod
+    def from_file(cls, path: Path) -> PlanManifest:
+        """
+        :param path: A ``plan.yaml`` file.
+        :return: The manifest it holds.
+        """
+        return cls(yaml.safe_load(path.read_text()) or {})
+
+    def write(self, path: Path) -> None:
+        """
+        Write the manifest in block style, keeping its keys in their order.
+
+        :param path: Where to write it.
+        """
+        path.write_text(
+            yaml.safe_dump(self.content, sort_keys=False, allow_unicode=True, width=88)
+        )
 
     @property
     def identifier(self) -> str:

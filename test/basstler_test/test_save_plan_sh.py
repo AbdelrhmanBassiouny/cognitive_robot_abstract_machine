@@ -11,9 +11,10 @@ from pathlib import Path
 import pytest
 
 from basstler.locations import ProjectLocation
-from basstler.plan_size_limits import read_manifest
+from basstler.plan_item_bootstrap import PlanDocument
+from basstler.plan_model import PlanManifest
 
-from .constants import DatasetLocation, PersonalNotesPath
+from .constants import DatasetLocation, PersonalNotesPath, SavePlanOption
 from .project_declaration import ProjectDeclaration
 from .scratch_repository import ScratchRepository
 
@@ -194,27 +195,6 @@ def test_missing_marker_pair_fails_with_a_clear_message(
 # %% the size gate
 
 
-PLAN_WITH_LANDED_ITEMS = DatasetLocation.DIRECTORY / "plan-with-landed-items.yaml"
-"""
-A plan whose first item has landed.
-"""
-
-PLAN_ALL_LANDED = DatasetLocation.DIRECTORY / "plan-all-landed.yaml"
-"""
-A plan every item of which has landed.
-"""
-
-ROADMAP_OF_STANDING_RULES = DatasetLocation.DIRECTORY / "roadmap-of-standing-rules.md"
-"""
-A roadmap in the shape the limits accept.
-"""
-
-ROADMAP_WITH_DATED_SECTION = DatasetLocation.DIRECTORY / "roadmap-with-dated-section.md"
-"""
-A roadmap a session appended a dated section to.
-"""
-
-
 def save_from_files(
     repository: ScratchRepository, manifest: Path, roadmap: Path
 ) -> subprocess.CompletedProcess[str]:
@@ -223,13 +203,13 @@ def save_from_files(
 
     :return: The finished hook.
     """
-    plan_identifier = read_manifest(manifest).identifier
+    plan_identifier = PlanManifest.from_file(manifest).identifier
     return run_save_plan(
         repository,
         plan_identifier,
-        "--manifest",
+        SavePlanOption.MANIFEST,
         str(manifest),
-        "--roadmap",
+        SavePlanOption.ROADMAP,
         str(roadmap),
     )
 
@@ -244,12 +224,15 @@ def saved_plan_directory(repository: ScratchRepository, plan_identifier: str) ->
 
 def test_a_save_drops_the_landed_items(save_plan_repository: ScratchRepository):
     result = save_from_files(
-        save_plan_repository, PLAN_WITH_LANDED_ITEMS, ROADMAP_OF_STANDING_RULES
+        save_plan_repository,
+        DatasetLocation.PLAN_WITH_LANDED_ITEMS,
+        DatasetLocation.ROADMAP_OF_STANDING_RULES,
     )
     assert result.returncode == 0, result.stderr
-    manifest = read_manifest(PLAN_WITH_LANDED_ITEMS)
-    saved = read_manifest(
-        saved_plan_directory(save_plan_repository, manifest.identifier) / "plan.yaml"
+    manifest = PlanManifest.from_file(DatasetLocation.PLAN_WITH_LANDED_ITEMS)
+    saved = PlanManifest.from_file(
+        saved_plan_directory(save_plan_repository, manifest.identifier)
+        / PlanDocument.MANIFEST
     )
     assert saved == manifest.without_landed_items()
 
@@ -257,17 +240,21 @@ def test_a_save_drops_the_landed_items(save_plan_repository: ScratchRepository):
 def test_a_plan_with_every_item_landed_is_removed(
     save_plan_repository: ScratchRepository,
 ):
-    plan_identifier = read_manifest(PLAN_ALL_LANDED).identifier
+    plan_identifier = PlanManifest.from_file(DatasetLocation.PLAN_ALL_LANDED).identifier
     plan_directory = ProjectLocation.PLANS / plan_identifier
     save_plan_repository.update_notes_branch_file(
-        plan_directory / "plan.yaml", PLAN_ALL_LANDED.read_text()
+        plan_directory / PlanDocument.MANIFEST,
+        DatasetLocation.PLAN_ALL_LANDED.read_text(),
     )
     save_plan_repository.update_notes_branch_file(
-        plan_directory / "roadmap.md", ROADMAP_OF_STANDING_RULES.read_text()
+        plan_directory / PlanDocument.ROADMAP,
+        DatasetLocation.ROADMAP_OF_STANDING_RULES.read_text(),
     )
 
     result = save_from_files(
-        save_plan_repository, PLAN_ALL_LANDED, ROADMAP_OF_STANDING_RULES
+        save_plan_repository,
+        DatasetLocation.PLAN_ALL_LANDED,
+        DatasetLocation.ROADMAP_OF_STANDING_RULES,
     )
 
     assert result.returncode == 0, result.stderr
@@ -278,9 +265,12 @@ def test_a_roadmap_with_a_dated_section_is_refused(
     save_plan_repository: ScratchRepository,
 ):
     result = save_from_files(
-        save_plan_repository, PLAN_WITH_LANDED_ITEMS, ROADMAP_WITH_DATED_SECTION
+        save_plan_repository,
+        DatasetLocation.PLAN_WITH_LANDED_ITEMS,
+        DatasetLocation.ROADMAP_WITH_DATED_SECTION,
     )
     assert result.returncode == 1
     assert not saved_plan_directory(
-        save_plan_repository, read_manifest(PLAN_WITH_LANDED_ITEMS).identifier
+        save_plan_repository,
+        PlanManifest.from_file(DatasetLocation.PLAN_WITH_LANDED_ITEMS).identifier,
     ).exists()

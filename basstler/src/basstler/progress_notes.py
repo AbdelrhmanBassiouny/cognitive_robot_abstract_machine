@@ -277,6 +277,38 @@ class ProgressNotesPruning:
 # %% command line
 
 
+class ProgressNotesCommand(StrEnum):
+    """
+    The subcommands this module's command line runs.
+    """
+
+    PRUNE = "prune"
+    """
+    Delete the progress notes of finished pull requests.
+    """
+
+
+class ProgressNotesOption(StrEnum):
+    """
+    The options this module's command line takes.
+    """
+
+    DIRECTORY = "--directory"
+    """
+    The progress-notes directory to prune.
+    """
+
+    REMOTE = "--remote"
+    """
+    The remote the branches and pull requests belong to.
+    """
+
+    KEEP = "--keep"
+    """
+    The branch whose notes are being saved, and so are never removed.
+    """
+
+
 def main() -> int:
     """
     Prune a progress-notes directory and report which branches' notes were removed,
@@ -287,11 +319,12 @@ def main() -> int:
     )
     subcommands = parser.add_subparsers(dest="subcommand", required=True)
     prune = subcommands.add_parser(
-        "prune", help="Delete the progress notes of finished pull requests"
+        ProgressNotesCommand.PRUNE,
+        help="Delete the progress notes of finished pull requests",
     )
-    prune.add_argument("--directory", required=True, type=Path)
-    prune.add_argument("--remote", required=True)
-    prune.add_argument("--keep", required=True)
+    prune.add_argument(ProgressNotesOption.DIRECTORY, required=True, type=Path)
+    prune.add_argument(ProgressNotesOption.REMOTE, required=True)
+    prune.add_argument(ProgressNotesOption.KEEP, required=True)
     arguments = parser.parse_args()
 
     outcome = ProgressNotesPruning(

@@ -20,6 +20,7 @@ import argparse
 import glob
 import os
 import sys
+from enum import StrEnum
 from pathlib import Path
 
 import yaml
@@ -126,6 +127,17 @@ def regenerate_branch_index(
     return "\n".join(lines) + ("\n" if lines else "")
 
 
+class ItemSummaryKey(StrEnum):
+    """
+    The keys an item summary adds to the plan fields it copies.
+    """
+
+    ITEM = "item"
+    """
+    The item's own entry.
+    """
+
+
 def item_summary(manifest: PlanManifest, item: PlanItem) -> str:
     """
     The part of a plan one item's session needs: the plan's id, title and tracking
@@ -143,8 +155,68 @@ def item_summary(manifest: PlanManifest, item: PlanItem) -> str:
             ManifestField.TRACKING_ISSUE,
         )
     }
-    summary["item"] = item.content
+    summary[ItemSummaryKey.ITEM.value] = item.content
     return yaml.safe_dump(summary, sort_keys=False, allow_unicode=True, width=88)
+
+
+# %% command line
+
+
+class ManifestToolCommand(StrEnum):
+    """
+    The subcommands this module's command line runs.
+    """
+
+    READ_ID = "read-id"
+    """
+    Print a manifest's id field.
+    """
+
+    REGENERATE_BRANCH_INDEX = "regenerate-branch-index"
+    """
+    Rebuild the branch to plan-id index.
+    """
+
+    ITEM = "item"
+    """
+    Print the plan's header and one item's entry.
+    """
+
+
+class ManifestToolOption(StrEnum):
+    """
+    The options this module's command line takes.
+    """
+
+    SCRATCH_DIRECTORY = "--scratch-dir"
+    """
+    The checkout of the personal-notes branch the index is built from.
+    """
+
+    PLANS_DIRECTORY = "--plans-dir"
+    """
+    The plans directory, relative to the scratch directory.
+    """
+
+    MANIFEST_FILENAME = "--manifest-filename"
+    """
+    The filename every plan's manifest has.
+    """
+
+    OUTPUT = "--output"
+    """
+    Where the regenerated index is written.
+    """
+
+    ITEM_IDENTIFIER = "--id"
+    """
+    The id of the item to print.
+    """
+
+    BRANCH = "--branch"
+    """
+    The branch whose item to print.
+    """
 
 
 def main() -> int:
@@ -157,39 +229,47 @@ def main() -> int:
     subcommands = parser.add_subparsers(dest="subcommand", required=True)
 
     read_id_parser = subcommands.add_parser(
-        "read-id", help="Print a manifest's id field"
+        ManifestToolCommand.READ_ID, help="Print a manifest's id field"
     )
     read_id_parser.add_argument("manifest_path", type=Path)
 
     regenerate_parser = subcommands.add_parser(
-        "regenerate-branch-index", help="Rebuild the branch->plan-id index"
+        ManifestToolCommand.REGENERATE_BRANCH_INDEX,
+        help="Rebuild the branch->plan-id index",
     )
-    regenerate_parser.add_argument("--scratch-dir", required=True, type=Path)
-    regenerate_parser.add_argument("--plans-dir", required=True)
-    regenerate_parser.add_argument("--manifest-filename", required=True)
     regenerate_parser.add_argument(
-        "--output", required=True, type=Path, help="Path to write the index to"
+        ManifestToolOption.SCRATCH_DIRECTORY, required=True, type=Path
+    )
+    regenerate_parser.add_argument(ManifestToolOption.PLANS_DIRECTORY, required=True)
+    regenerate_parser.add_argument(ManifestToolOption.MANIFEST_FILENAME, required=True)
+    regenerate_parser.add_argument(
+        ManifestToolOption.OUTPUT,
+        required=True,
+        type=Path,
+        help="Path to write the index to",
     )
 
     item_parser = subcommands.add_parser(
-        "item", help="Print the plan's header and one item's entry"
+        ManifestToolCommand.ITEM, help="Print the plan's header and one item's entry"
     )
     item_parser.add_argument("manifest_path", type=Path)
     item_selector = item_parser.add_mutually_exclusive_group(required=True)
-    item_selector.add_argument("--id", dest="item_identifier")
-    item_selector.add_argument("--branch")
+    item_selector.add_argument(
+        ManifestToolOption.ITEM_IDENTIFIER, dest="item_identifier"
+    )
+    item_selector.add_argument(ManifestToolOption.BRANCH)
 
     arguments = parser.parse_args()
 
-    if arguments.subcommand == "read-id":
+    if arguments.subcommand == ManifestToolCommand.READ_ID:
         logger.info(read_manifest_id(arguments.manifest_path))
-    elif arguments.subcommand == "regenerate-branch-index":
+    elif arguments.subcommand == ManifestToolCommand.REGENERATE_BRANCH_INDEX:
         index_content = regenerate_branch_index(
             arguments.scratch_dir, arguments.plans_dir, arguments.manifest_filename
         )
         arguments.output.write_text(index_content)
-    elif arguments.subcommand == "item":
-        manifest = PlanManifest(yaml.safe_load(arguments.manifest_path.read_text()))
+    elif arguments.subcommand == ManifestToolCommand.ITEM:
+        manifest = PlanManifest.from_file(arguments.manifest_path)
         item = (
             manifest.item_on_branch(arguments.branch)
             if arguments.branch is not None

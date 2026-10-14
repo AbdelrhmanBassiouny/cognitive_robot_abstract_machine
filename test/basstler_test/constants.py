@@ -10,6 +10,7 @@ paths only the shell hooks name, and the names a scratch repository is built wit
 
 from __future__ import annotations
 
+import re
 from enum import IntEnum, StrEnum
 from pathlib import Path
 
@@ -52,6 +53,33 @@ class DatasetLocation(PathEnumeration):
     PARTLY_INSTALLED_PROJECT = DIRECTORY / "partly-installed-project" / "pyproject.toml"
     """
     A project declaring one dependency that is installed, then one that cannot be.
+    """
+
+    PLAN_WITH_LANDED_ITEMS = DIRECTORY / "plan-with-landed-items.yaml"
+    """
+    A plan with a tracking issue and three items: one landed, one in progress that
+    depends on it, and one not started that depends on both.
+    """
+
+    PLAN_ALL_LANDED = DIRECTORY / "plan-all-landed.yaml"
+    """
+    A plan every item of which has landed.
+    """
+
+    ROADMAP_OF_STANDING_RULES = DIRECTORY / "roadmap-of-standing-rules.md"
+    """
+    A roadmap in the shape the limits accept, whose last entry wraps onto a second line.
+    """
+
+    ROADMAP_WITH_DATED_SECTION = DIRECTORY / "roadmap-with-dated-section.md"
+    """
+    A roadmap a session appended a dated section to.
+    """
+
+    PULL_REQUESTS_BY_BRANCH = DIRECTORY / "pull-requests-by-branch.json"
+    """
+    A recorded pull request listing, one pull request for each
+    :class:`ProgressBranch` that has one.
     """
 
     SET_UP_CLONE = DIRECTORY / "set-up-clone"
@@ -157,6 +185,11 @@ class PersonalNotesPath(PathEnumeration):
     """
     The files the shell hooks read from the personal-notes branch or write into a clone,
     relative to the project root, that the package itself does not name.
+    """
+
+    CLAUDE_LOCAL = Path("CLAUDE.local.md")
+    """
+    The private instructions the session-start hook writes into the clone.
     """
 
     GIT_IDENTITY = ProjectLocation.PERSONAL_NOTES / "git-identity"
@@ -332,4 +365,108 @@ class FileMode(IntEnum):
     EXECUTABLE = 0o755
     """
     Readable and runnable by everyone, writable by its owner.
+    """
+
+
+class ClaudeLocalSection(StrEnum):
+    """
+    The marked sections the shell hooks write into, and read back out of,
+    :attr:`PersonalNotesPath.CLAUDE_LOCAL`.
+    """
+
+    PULL_REQUEST_PROGRESS = "PR-PROGRESS"
+    """
+    The current branch's pull request progress notes.
+    """
+
+    PLAN_ITEM = "PLAN-ITEM"
+    """
+    The plan item the current branch is tracked by.
+    """
+
+    PLAN_MANIFEST = "PLAN-MANIFEST"
+    """
+    A plan's manifest, as edited for :file:`save-plan.sh`.
+    """
+
+    PLAN_ROADMAP = "PLAN-ROADMAP"
+    """
+    A plan's roadmap, as edited for :file:`save-plan.sh`.
+    """
+
+    def around(self, content: str, label: str | None = None) -> str:
+        """
+        :param content: The section's content, ending in a newline.
+        :param label: What the opening marker names after its colon, if anything.
+        :return: *content* between this section's markers.
+        """
+        opening = self if label is None else f"{self}: {label}"
+        return f"<!-- BEGIN-{opening} -->\n{content}<!-- END-{self} -->\n"
+
+    def within(self, text: str) -> str:
+        """
+        :param text: A document holding this section once.
+        :return: The section's content, without its markers.
+        """
+        pattern = rf"<!-- BEGIN-{self}(?:: [^>]*)? -->\n(.*?)<!-- END-{self} -->"
+        return re.search(pattern, text, re.DOTALL).group(1)
+
+
+class HookFile(StrEnum):
+    """
+    The hook scripts a suite runs that the package does not name.
+    """
+
+    SAVE_PULL_REQUEST_PROGRESS = "save-pr-progress.sh"
+    """
+    Saves the current branch's progress notes to the personal-notes branch.
+    """
+
+
+class SavePlanOption(StrEnum):
+    """
+    The options :file:`save-plan.sh` takes, which only the hook defines.
+    """
+
+    MANIFEST = "--manifest"
+    """
+    A file to read the manifest from, in place of CLAUDE.local.md's section.
+    """
+
+    ROADMAP = "--roadmap"
+    """
+    A file to read the roadmap from, in place of CLAUDE.local.md's section.
+    """
+
+
+class ProgressBranch(StrEnum):
+    """
+    The branches progress notes are kept for in the pruning suites, each standing for
+    one state its pull request can be in. The ones with a pull request are those
+    :attr:`DatasetLocation.PULL_REQUESTS_BY_BRANCH` records.
+    """
+
+    OPEN = "open-work"
+    """
+    Its pull request is open.
+    """
+
+    REOPENED = "reopened-work"
+    """
+    One pull request of it was closed, and a later one is open.
+    """
+
+    MERGED = "merged-work"
+    """
+    Its pull request merged.
+    """
+
+    DELETED = "claude/deleted-work"
+    """
+    Its pull request merged and the branch was deleted.
+    """
+
+    UNOPENED = "unopened-work"
+    """
+    It has no pull request yet.
     """

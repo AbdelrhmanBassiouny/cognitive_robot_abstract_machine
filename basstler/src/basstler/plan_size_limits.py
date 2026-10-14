@@ -19,11 +19,10 @@ import argparse
 import re
 import shutil
 import sys
+from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from enum import Enum, StrEnum
 from pathlib import Path
-
-import yaml
 
 from basstler.plan_model import PlanManifest
 from basstler.standard_streams import StandardStreamHandler
@@ -36,7 +35,24 @@ This module's logger, which is also what its command prints through.
 # %% the limits
 
 
-class Measure(Enum):
+@dataclass(frozen=True)
+class SizeLimit:
+    """
+    The most of one quantity a document may hold.
+    """
+
+    description: str
+    """
+    What is counted, as a phrase following the count.
+    """
+
+    maximum: int
+    """
+    The most a document may hold.
+    """
+
+
+class Measure(SizeLimit, Enum):
     """
     One quantity a document is measured by, with the most of it a document may hold.
     """
@@ -81,22 +97,98 @@ class Measure(Enum):
     A pull request's plan, what is done and what is next.
     """
 
-    def __init__(self, description: str, maximum: int) -> None:
-        self.description = description
+    def violations(
+        self, location: DocumentLocation, measured: int
+    ) -> list[SizeViolation]:
         """
-        What is counted, as a phrase following the count.
+        :param location: Where the quantity was counted.
+        :param measured: How much was counted.
+        :return: The violation, when *measured* is over the limit; otherwise nothing.
         """
-        self.maximum = maximum
-        """
-        The most a document may hold.
-        """
+        if measured <= self.maximum:
+            return []
+        return [SizeViolation(measure=self, location=location, measured=measured)]
 
 
 # %% violations
 
 
+class DocumentPart(StrEnum):
+    """
+    A part of a document a quantity is counted in.
+    """
+
+    PLAN = "plan"
+    """
+    The plan as a whole.
+    """
+
+    PLAN_DESCRIPTION = "plan description"
+    """
+    The plan's description.
+    """
+
+    ITEM = "item"
+    """
+    One of the plan's items.
+    """
+
+    ROADMAP = "roadmap"
+    """
+    The roadmap as a whole.
+    """
+
+    ROADMAP_ENTRY = "roadmap entry"
+    """
+    One of the roadmap's entries.
+    """
+
+    PROGRESS_NOTES = "progress notes"
+    """
+    A pull request's progress notes.
+    """
+
+
 @dataclass(frozen=True)
-class SizeViolation:
+class DocumentLocation:
+    """
+    Where in a document a quantity was counted.
+    """
+
+    part: DocumentPart
+    """
+    The part of the document.
+    """
+
+    subject: str | int | None = None
+    """
+    Which one of several such parts: an item's id or an entry's number.
+    """
+
+    def __str__(self) -> str:
+        """
+        :return: The part, followed by the subject when there is one.
+        """
+        if self.subject is None:
+            return self.part
+        return f"{self.part} {self.subject!r}"
+
+
+@dataclass(frozen=True)
+class Violation(ABC):
+    """
+    Anything that makes a document refused.
+    """
+
+    @abstractmethod
+    def __str__(self) -> str:
+        """
+        :return: What is wrong and where, as one line.
+        """
+
+
+@dataclass(frozen=True)
+class SizeViolation(Violation):
     """
     One measure a document holds more of than its limit allows.
     """
@@ -106,7 +198,7 @@ class SizeViolation:
     What was counted.
     """
 
-    location: str
+    location: DocumentLocation
     """
     Where in the document it was counted.
     """
@@ -117,9 +209,6 @@ class SizeViolation:
     """
 
     def __str__(self) -> str:
-        """
-        :return: Where, how much, and the limit.
-        """
         return (
             f"{self.location}: {self.measured} {self.measure.description}, "
             f"over the limit of {self.measure.maximum}"
@@ -127,7 +216,7 @@ class SizeViolation:
 
 
 @dataclass(frozen=True)
-class RoadmapFormatViolation:
+class RoadmapFormatViolation(Violation):
     """
     A roadmap line that is neither the title, an entry, nor an entry's continuation.
     """
@@ -143,36 +232,30 @@ class RoadmapFormatViolation:
     """
 
     def __str__(self) -> str:
-        """
-        :return: The line and what a roadmap may hold instead.
-        """
         return (
             f"roadmap line {self.line_number} is not a '- ' entry or its indented "
             f"continuation: {self.line[:80]!r}"
         )
 
 
-Violation = SizeViolation | RoadmapFormatViolation
-"""
-Anything that makes a document refused.
-"""
-
-
-def measured_violation(
-    measure: Measure, location: str, measured: int
-) -> list[SizeViolation]:
+@dataclass(frozen=True)
+class DocumentSummary:
     """
-    :param measure: What was counted.
-    :param location: Where it was counted.
-    :param measured: How much was counted.
-    :return: The violation, when *measured* is over the limit; otherwise nothing.
+    How a refusal names a document, and what it tells the author to keep.
     """
-    if measured <= measure.maximum:
-        return []
-    return [SizeViolation(measure=measure, location=location, measured=measured)]
+
+    description: str
+    """
+    The document, as a phrase.
+    """
+
+    content_to_keep: str
+    """
+    What the document is for, which is all it should hold.
+    """
 
 
-class LimitedDocument(Enum):
+class LimitedDocument(DocumentSummary, Enum):
     """
     A document the limits are enforced on, with what to keep when it is refused.
     """
@@ -186,16 +269,6 @@ class LimitedDocument(Enum):
     """
     A pull request's progress notes.
     """
-
-    def __init__(self, description: str, content_to_keep: str) -> None:
-        self.description = description
-        """
-        The document, as a phrase.
-        """
-        self.content_to_keep = content_to_keep
-        """
-        What the document is for, which is all it should hold.
-        """
 
 
 @dataclass
@@ -231,43 +304,52 @@ class DocumentOverLimitError(Exception):
 # %% the documents
 
 
-def manifest_violations(manifest: PlanManifest) -> list[SizeViolation]:
+class MeasuredDocument(ABC):
     """
-    :param manifest: The manifest to measure.
-    :return: Every limit the manifest breaks.
+    A document held to the limits.
     """
-    violations = measured_violation(
-        Measure.ITEM_COUNT, "plan", len(manifest.items)
-    ) + measured_violation(
-        Measure.DESCRIPTION_LENGTH, "plan description", len(manifest.description)
-    )
-    for item in manifest.items:
-        location = f"item {item.identifier!r}"
-        violations += measured_violation(Measure.NOTE_LENGTH, location, len(item.notes))
-        violations += measured_violation(
-            Measure.BLOCKER_COUNT, location, len(item.blockers)
-        )
-        for blocker in item.blockers:
-            violations += measured_violation(
-                Measure.BLOCKER_LENGTH, location, len(blocker)
-            )
-    return violations
+
+    @property
+    @abstractmethod
+    def limited_document(self) -> LimitedDocument:
+        """
+        :return: Which document this is, as a refusal names it.
+        """
+
+    @abstractmethod
+    def violations(self) -> list[Violation]:
+        """
+        :return: Every limit the document breaks.
+        """
+
+    def check(self) -> None:
+        """
+        :raises DocumentOverLimitError: If the document breaks a limit.
+        """
+        violations = self.violations()
+        if violations:
+            raise DocumentOverLimitError(self.limited_document, violations)
 
 
-ROADMAP_TITLE = re.compile(r"^# \S")
-"""
-The roadmap's one heading, its first line.
-"""
+class RoadmapLine(StrEnum):
+    """
+    The shapes a roadmap line may take, as the pattern each one matches.
+    """
 
-ROADMAP_ENTRY = re.compile(r"^- \S")
-"""
-The first line of an entry.
-"""
+    TITLE = r"^# \S"
+    """
+    The roadmap's one heading, its first line.
+    """
 
-ROADMAP_CONTINUATION = re.compile(r"^  \S")
-"""
-A further line of the entry above it.
-"""
+    ENTRY = r"^- \S"
+    """
+    The first line of an entry.
+    """
+
+    CONTINUATION = r"^  \S"
+    """
+    A further line of the entry above it.
+    """
 
 
 @dataclass(frozen=True)
@@ -298,11 +380,11 @@ class Roadmap:
         for line_number, line in enumerate(text.splitlines(), start=1):
             if not line.strip():
                 continue
-            if line_number == 1 and ROADMAP_TITLE.match(line):
+            if line_number == 1 and re.match(RoadmapLine.TITLE, line):
                 continue
-            if ROADMAP_ENTRY.match(line):
+            if re.match(RoadmapLine.ENTRY, line):
                 entries.append(line[2:].strip())
-            elif ROADMAP_CONTINUATION.match(line) and entries:
+            elif re.match(RoadmapLine.CONTINUATION, line) and entries:
                 entries[-1] = f"{entries[-1]} {line.strip()}"
             else:
                 format_violations.append(RoadmapFormatViolation(line_number, line))
@@ -313,47 +395,90 @@ class Roadmap:
         :return: Every limit the roadmap breaks.
         """
         violations: list[Violation] = list(self.format_violations)
-        violations += measured_violation(
-            Measure.ROADMAP_ENTRY_COUNT, "roadmap", len(self.entries)
+        violations += Measure.ROADMAP_ENTRY_COUNT.violations(
+            DocumentLocation(DocumentPart.ROADMAP), len(self.entries)
         )
         for number, entry in enumerate(self.entries, start=1):
-            violations += measured_violation(
-                Measure.ROADMAP_ENTRY_LENGTH, f"roadmap entry {number}", len(entry)
+            violations += Measure.ROADMAP_ENTRY_LENGTH.violations(
+                DocumentLocation(DocumentPart.ROADMAP_ENTRY, number), len(entry)
             )
         return violations
 
 
-def progress_violations(text: str) -> list[SizeViolation]:
+@dataclass(frozen=True)
+class Plan(MeasuredDocument):
     """
-    :param text: A pull request's progress notes.
-    :return: Every limit the notes break.
+    A plan's manifest and roadmap, measured together.
     """
-    return measured_violation(
-        Measure.PROGRESS_LENGTH, "progress notes", len(text.strip())
-    )
 
-
-# %% reading and writing files
-
-
-def read_manifest(path: Path) -> PlanManifest:
+    manifest: PlanManifest
     """
-    :param path: A ``plan.yaml`` file.
-    :return: The manifest it holds.
+    The plan's items and their state.
     """
-    return PlanManifest(yaml.safe_load(path.read_text()) or {})
+
+    roadmap: Roadmap
+    """
+    The plan's standing rules.
+    """
+
+    @property
+    def limited_document(self) -> LimitedDocument:
+        return LimitedDocument.PLAN
+
+    def manifest_violations(self) -> list[Violation]:
+        """
+        :return: Every limit the manifest breaks.
+        """
+        manifest = self.manifest
+        violations: list[Violation] = []
+        violations += Measure.ITEM_COUNT.violations(
+            DocumentLocation(DocumentPart.PLAN), len(manifest.items)
+        )
+        violations += Measure.DESCRIPTION_LENGTH.violations(
+            DocumentLocation(DocumentPart.PLAN_DESCRIPTION), len(manifest.description)
+        )
+        for item in manifest.items:
+            location = DocumentLocation(DocumentPart.ITEM, item.identifier)
+            violations += Measure.NOTE_LENGTH.violations(location, len(item.notes))
+            violations += Measure.BLOCKER_COUNT.violations(location, len(item.blockers))
+            for blocker in item.blockers:
+                violations += Measure.BLOCKER_LENGTH.violations(location, len(blocker))
+        return violations
+
+    def violations(self) -> list[Violation]:
+        return self.manifest_violations() + self.roadmap.violations()
 
 
-def write_manifest(manifest: PlanManifest, path: Path) -> None:
+@dataclass(frozen=True)
+class ProgressNotes(MeasuredDocument):
     """
-    Write a manifest in block style, keeping its keys in their order.
+    A pull request's progress notes.
+    """
 
-    :param manifest: The manifest to write.
-    :param path: Where to write it.
+    text: str
     """
-    path.write_text(
-        yaml.safe_dump(manifest.content, sort_keys=False, allow_unicode=True, width=88)
-    )
+    The notes as written.
+    """
+
+    @classmethod
+    def from_file(cls, path: Path) -> ProgressNotes:
+        """
+        :param path: A file holding a pull request's progress notes.
+        :return: The notes it holds.
+        """
+        return cls(path.read_text())
+
+    @property
+    def limited_document(self) -> LimitedDocument:
+        return LimitedDocument.PROGRESS_NOTES
+
+    def violations(self) -> list[Violation]:
+        return Measure.PROGRESS_LENGTH.violations(
+            DocumentLocation(DocumentPart.PROGRESS_NOTES), len(self.text.strip())
+        )
+
+
+# %% staging a plan
 
 
 class StagedPlan(StrEnum):
@@ -398,35 +523,54 @@ class PlanFiles:
         :raises DocumentOverLimitError: If the pruned plan breaks a limit.
         :return: Which of the two happened.
         """
-        original = read_manifest(self.manifest)
+        original = PlanManifest.from_file(self.manifest)
         manifest = original.without_landed_items()
         if not manifest.items:
             shutil.rmtree(destination.manifest.parent, ignore_errors=True)
             return StagedPlan.REMOVED
-        violations: list[Violation] = list(manifest_violations(manifest))
-        violations += Roadmap.from_text(self.roadmap.read_text()).violations()
-        if violations:
-            raise DocumentOverLimitError(LimitedDocument.PLAN, violations)
+        Plan(manifest, Roadmap.from_text(self.roadmap.read_text())).check()
         destination.manifest.parent.mkdir(parents=True, exist_ok=True)
         if original.landed_identifiers:
-            write_manifest(manifest, destination.manifest)
+            manifest.write(destination.manifest)
         else:
             shutil.copyfile(self.manifest, destination.manifest)
         shutil.copyfile(self.roadmap, destination.roadmap)
         return StagedPlan.SAVED
 
 
-def check_progress_file(path: Path) -> None:
-    """
-    :param path: A pull request's progress notes.
-    :raises DocumentOverLimitError: If they break a limit.
-    """
-    violations = progress_violations(path.read_text())
-    if violations:
-        raise DocumentOverLimitError(LimitedDocument.PROGRESS_NOTES, list(violations))
-
-
 # %% command line
+
+
+class SizeLimitCommand(StrEnum):
+    """
+    The subcommands this module's command line runs.
+    """
+
+    STAGE = "stage"
+    """
+    Write a plan without its landed items, or delete it once all have landed.
+    """
+
+    CHECK_PROGRESS = "check-progress"
+    """
+    Refuse progress notes over their limit.
+    """
+
+
+class SizeLimitOption(StrEnum):
+    """
+    The options this module's command line takes.
+    """
+
+    MANIFEST_DESTINATION = "--manifest-destination"
+    """
+    Where :attr:`SizeLimitCommand.STAGE` writes the manifest.
+    """
+
+    ROADMAP_DESTINATION = "--roadmap-destination"
+    """
+    Where :attr:`SizeLimitCommand.STAGE` writes the roadmap.
+    """
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -438,15 +582,15 @@ def build_parser() -> argparse.ArgumentParser:
     )
     subcommands = parser.add_subparsers(dest="subcommand", required=True)
     stage = subcommands.add_parser(
-        "stage",
+        SizeLimitCommand.STAGE,
         help="Write a plan without its landed items, or delete it once all have landed",
     )
     stage.add_argument("manifest_path", type=Path)
     stage.add_argument("roadmap_path", type=Path)
-    stage.add_argument("--manifest-destination", required=True, type=Path)
-    stage.add_argument("--roadmap-destination", required=True, type=Path)
+    stage.add_argument(SizeLimitOption.MANIFEST_DESTINATION, required=True, type=Path)
+    stage.add_argument(SizeLimitOption.ROADMAP_DESTINATION, required=True, type=Path)
     check_progress = subcommands.add_parser(
-        "check-progress", help="Refuse progress notes over their limit"
+        SizeLimitCommand.CHECK_PROGRESS, help="Refuse progress notes over their limit"
     )
     check_progress.add_argument("progress_path", type=Path)
     return parser
@@ -460,14 +604,14 @@ def main() -> int:
     """
     arguments = build_parser().parse_args()
     try:
-        if arguments.subcommand == "stage":
+        if arguments.subcommand == SizeLimitCommand.STAGE:
             source = PlanFiles(arguments.manifest_path, arguments.roadmap_path)
             destination = PlanFiles(
                 arguments.manifest_destination, arguments.roadmap_destination
             )
             logger.info(source.stage(destination))
         else:
-            check_progress_file(arguments.progress_path)
+            ProgressNotes.from_file(arguments.progress_path).check()
     except DocumentOverLimitError as error:
         logger.error(error)
         return 1

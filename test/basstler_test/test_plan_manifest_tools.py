@@ -9,22 +9,21 @@ from pathlib import Path
 import pytest
 import yaml
 
+from basstler.plan_item_bootstrap import PlanDocument
 from basstler.plan_manifest_tools import (
+    ItemSummaryKey,
+    ManifestToolCommand,
+    ManifestToolOption,
     YamlBooleanCoercionError,
     item_summary,
     main,
     read_manifest_id,
     regenerate_branch_index,
 )
-from basstler.plan_model import ManifestField, ItemNotTrackedError
-from basstler.plan_size_limits import read_manifest
+from basstler.plan_model import ItemNotTrackedError, ItemStatus, ManifestField
 
 from .constants import DatasetLocation
-
-PLAN_WITH_LANDED_ITEMS = DatasetLocation.DIRECTORY / "plan-with-landed-items.yaml"
-"""
-A plan with a tracking issue and three items.
-"""
+from .plan_dataset import LandedItemsPlan
 
 
 def write_manifest(directory: Path, plan_id: str, name: str = "plan.yaml") -> Path:
@@ -135,7 +134,9 @@ def test_raises_when_a_branch_is_coerced_to_a_boolean(tmp_path):
 def test_main_dispatches_read_id(tmp_path, monkeypatch, capsys):
     manifest_path = write_manifest(tmp_path, "rdr-refactor")
     monkeypatch.setattr(
-        sys, "argv", ["plan_manifest_tools.py", "read-id", str(manifest_path)]
+        sys,
+        "argv",
+        ["plan_manifest_tools.py", ManifestToolCommand.READ_ID, str(manifest_path)],
     )
     exit_code = main()
     assert exit_code == 0
@@ -151,14 +152,14 @@ def test_main_dispatches_regenerate_branch_index(tmp_path, monkeypatch):
         "argv",
         [
             "plan_manifest_tools.py",
-            "regenerate-branch-index",
-            "--scratch-dir",
+            ManifestToolCommand.REGENERATE_BRANCH_INDEX,
+            ManifestToolOption.SCRATCH_DIRECTORY,
             str(tmp_path),
-            "--plans-dir",
+            ManifestToolOption.PLANS_DIRECTORY,
             "plans",
-            "--manifest-filename",
-            "plan.yaml",
-            "--output",
+            ManifestToolOption.MANIFEST_FILENAME,
+            PlanDocument.MANIFEST,
+            ManifestToolOption.OUTPUT,
             str(output_path),
         ],
     )
@@ -171,62 +172,60 @@ def test_main_dispatches_regenerate_branch_index(tmp_path, monkeypatch):
 
 
 def test_item_summary_holds_the_one_item_and_the_plan_header():
-    manifest = read_manifest(PLAN_WITH_LANDED_ITEMS)
-    summary = yaml.safe_load(item_summary(manifest, manifest.item_named("open")))
+    plan = LandedItemsPlan.read()
+    item = plan.item_with_status(ItemStatus.IN_PROGRESS)
+    summary = yaml.safe_load(item_summary(plan.manifest, item))
     assert summary == {
-        ManifestField.IDENTIFIER.value: manifest.identifier,
-        ManifestField.TITLE.value: manifest.content[ManifestField.TITLE],
-        ManifestField.TRACKING_ISSUE.value: manifest.content[
+        ManifestField.IDENTIFIER.value: plan.manifest.identifier,
+        ManifestField.TITLE.value: plan.manifest.content[ManifestField.TITLE],
+        ManifestField.TRACKING_ISSUE.value: plan.manifest.content[
             ManifestField.TRACKING_ISSUE
         ],
-        "item": manifest.item_named("open").content,
+        ItemSummaryKey.ITEM.value: item.content,
     }
 
 
 def test_an_item_the_plan_does_not_track_is_refused():
     with pytest.raises(ItemNotTrackedError):
-        read_manifest(PLAN_WITH_LANDED_ITEMS).item_named("missing")
+        LandedItemsPlan.read().manifest.item_named("missing")
 
 
 def test_a_branch_no_item_is_worked_on_is_refused():
     with pytest.raises(ItemNotTrackedError):
-        read_manifest(PLAN_WITH_LANDED_ITEMS).item_on_branch("missing")
+        LandedItemsPlan.read().manifest.item_on_branch("missing")
 
 
 def test_main_dispatches_item_by_id(monkeypatch, capsys):
+    plan = LandedItemsPlan.read()
+    item = plan.item_with_status(ItemStatus.NOT_STARTED)
     monkeypatch.setattr(
         sys,
         "argv",
         [
             "plan_manifest_tools.py",
-            "item",
-            str(PLAN_WITH_LANDED_ITEMS),
-            "--id",
-            "queued",
+            ManifestToolCommand.ITEM,
+            str(DatasetLocation.PLAN_WITH_LANDED_ITEMS),
+            ManifestToolOption.ITEM_IDENTIFIER,
+            item.identifier,
         ],
     )
     assert main() == 0
-    manifest = read_manifest(PLAN_WITH_LANDED_ITEMS)
-    assert capsys.readouterr().out == item_summary(
-        manifest, manifest.item_named("queued")
-    )
+    assert capsys.readouterr().out == item_summary(plan.manifest, item)
 
 
 def test_main_dispatches_item_by_branch(monkeypatch, capsys):
-    manifest = read_manifest(PLAN_WITH_LANDED_ITEMS)
-    branch = manifest.item_named("open").content[ManifestField.BRANCH]
+    plan = LandedItemsPlan.read()
+    item = plan.item_with_status(ItemStatus.IN_PROGRESS)
     monkeypatch.setattr(
         sys,
         "argv",
         [
             "plan_manifest_tools.py",
-            "item",
-            str(PLAN_WITH_LANDED_ITEMS),
-            "--branch",
-            branch,
+            ManifestToolCommand.ITEM,
+            str(DatasetLocation.PLAN_WITH_LANDED_ITEMS),
+            ManifestToolOption.BRANCH,
+            item.content[ManifestField.BRANCH],
         ],
     )
     assert main() == 0
-    assert capsys.readouterr().out == item_summary(
-        manifest, manifest.item_named("open")
-    )
+    assert capsys.readouterr().out == item_summary(plan.manifest, item)
