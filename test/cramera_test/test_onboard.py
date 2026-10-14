@@ -176,6 +176,53 @@ class TestSerializeUnclaimedBodies:
             float(value) for value in graft[0].find("origin").attrib["xyz"].split()
         ] == pytest.approx(list(table_position))
 
+    def test_a_body_grafted_beside_a_root_at_the_origin_keeps_its_place_relative_to_it(
+        self, tmp_path
+    ):
+        """
+        A robot's model is drawn at the robot's base, so a body hanging off that model's
+        root has to be placed relative to the base rather than at its world pose.
+        """
+        world = World()
+        floor = Body(name=PrefixedName("floor"))
+        base = Body(name=PrefixedName("base"))
+        board = Body(
+            name=PrefixedName("board"),
+            visual=ShapeCollection(shapes=[Box(scale=Scale(0.3, 0.3, 0.05))]),
+        )
+        with world.modify_world():
+            for body in (floor, base, board):
+                world.add_kinematic_structure_entity(body)
+            for child, x, z in ((base, 0.0, 0.88), (board, 0.8, 0.92)):
+                world.add_connection(
+                    FixedConnection(
+                        parent=floor,
+                        child=child,
+                        parent_T_connection_expression=HomogeneousTransformationMatrix.from_xyz_rpy(
+                            x=x, z=z
+                        ),
+                    )
+                )
+
+        report = UrdfDocument.of_bodies(
+            bodies=[base, board],
+            name="robot",
+            output_directory=str(tmp_path / "bundle"),
+            mesh_subdirectory="robot",
+            identity_root=base,
+        )
+
+        urdf = ElementTree.fromstring(Path(report.urdf).read_text())
+        [graft] = [
+            joint
+            for joint in urdf.findall("joint")
+            if joint.find("child").attrib["link"] == "board"
+        ]
+        base_T_board = world.compute_forward_kinematics(base, board).to_np()[:3, 3]
+        assert [
+            float(value) for value in graft.find("origin").attrib["xyz"].split()
+        ] == pytest.approx(list(base_T_board))
+
     def test_the_written_urdf_parses_back_into_a_world(
         self, hand_built_world, tmp_path
     ):
