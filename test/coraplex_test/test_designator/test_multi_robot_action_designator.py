@@ -99,9 +99,6 @@ from ...plan_running import (
 )
 from cramph.context import ContextExtension
 
-# No alternative motion mappings: they are being redesigned on top of the giskard goals
-# that replaced the motion designators, so there are none to resolve for now.
-
 # %% standing a robot next to something
 
 
@@ -706,13 +703,6 @@ def test_facing(multiple_robot_apartment_context):
 def test_transport(multiple_robot_apartment_context, rclpy_node):
     world, robot, extensions = multiple_robot_apartment_context
 
-    if isinstance(robot, Stretch):
-        pytest.skip(
-            "Transporting with the Stretch needs its alternative motion mappings, "
-            "which are being redesigned on top of the giskard goals that replaced "
-            "the motion designators."
-        )
-
     description = TransportAction.from_graspable_by_closest_grasps(
         world.get_semantic_annotations_by_type(Milk)[0],
         Pose(
@@ -748,13 +738,6 @@ def test_move_to_reach(multiple_robot_apartment_context, rclpy_node):
 
 def test_transport_open_container(multiple_robot_apartment_context, rclpy_node):
     world, robot, extensions = multiple_robot_apartment_context
-
-    if isinstance(robot, Stretch):
-        pytest.skip(
-            "Transporting with the Stretch needs its alternative motion mappings, "
-            "which are being redesigned on top of the giskard goals that replaced "
-            "the motion designators."
-        )
 
     if isinstance(robot, HSRB):
         return

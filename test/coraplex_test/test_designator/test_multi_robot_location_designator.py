@@ -33,9 +33,6 @@ from ...conftest import SAMPLING_SEED
 from ...plan_running import context_of, robot_extensions, run_plan
 from cramph.context import ContextExtension
 
-# No alternative motion mappings: they are being redesigned on top of the giskard goals
-# that replaced the motion designators, so there are none to resolve for now.
-
 
 @pytest.fixture(
     scope="module",
