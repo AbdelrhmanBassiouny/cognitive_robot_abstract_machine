@@ -271,7 +271,6 @@ class BenchmarkRobot(GiskardTester):
             environment.
         :param pose: Where the environment is placed in the world.
         """
-        self.default_env_name = name
         self.add_urdf_to_world(name=name, urdf=load_xacro(package_path), pose=pose)
 
 
