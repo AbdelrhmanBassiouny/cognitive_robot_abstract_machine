@@ -5,7 +5,8 @@ Plan
 
 Done
 - Fix + test (failed before, passes after); 1679 krrood tests pass.
+- Review: probe module replaced by `python -X importtime` inside the test (1975b4c337); thread answered and resolved.
 
 Next
-- Await CI/review. The open question to the user: EQL match/query_graph still load matplotlib eagerly via RWXNode -> GraphVisualizer.
+- Await CI/review. EQL match/query_graph matplotlib is plan item matplotlib-optional (#510).
 
