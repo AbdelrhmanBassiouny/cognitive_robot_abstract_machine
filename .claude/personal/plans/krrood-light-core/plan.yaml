@@ -79,7 +79,7 @@ items:
   status: not started
   track: core-boundaries
   depends_on: [type-hint-resolver-skips-missing-modules]
-  notes: 'Proposed, awaiting user OK: _verbalization_fragment_ stays abstract and unchanged. The vocabulary
+  notes: 'User-approved: _verbalization_fragment_ stays abstract and unchanged. The vocabulary
     (clause, Noun, Verb, fragments) is declarative; only morphology (inflect ~1.7 s, lemminflect, typeguard)
     and the pipeline (jinja2, IPython) move to `all`. Needs navigation_path and parts_of_speech to stop
     calling morphology while building a clause (cardinal, verb_lemma become fragments realized later).'
@@ -90,5 +90,5 @@ items:
   track: packaging
   depends_on: [matplotlib-optional, serializer-without-heavy-dependencies, eql-probabilistic-split, verbalization-realization-split]
   notes: 'Breaking for outside users: pip has no default extras. Every workspace package that lists krrood
-    switches to krrood[all]. A CI job installs only core krrood and imports the core modules. Close #506;
-    basstler (#508, basstler-package plan) then depends on plain krrood.'
+    switches to krrood[all]. A CI job installs only core krrood and imports the core modules. basstler
+    (#508, basstler-package plan) then depends on plain krrood.'
