@@ -239,7 +239,7 @@ def test_a_plan_is_given_up_on_at_the_simulation_time_limit_of_its_own_executor(
     assert error.value.time_limit == executor.simulation_time_limit
 
 
-def test_a_plan_may_take_longer_the_more_actions_it_starts(pr2_apartment_context):
+def test_a_plan_may_take_longer_the_more_actions_it_holds(pr2_apartment_context):
     """
     Each torso stroke fits the time one action is given, both strokes together only the
     time two actions are given.
@@ -250,6 +250,21 @@ def test_a_plan_may_take_longer_the_more_actions_it_starts(pr2_apartment_context
     run_plan(plan, extensions, simulation_time_per_action=timedelta(seconds=25))
 
     assert plan.life_cycle_state == LifeCycleValues.SUCCEEDED
+
+
+def test_the_simulation_time_limit_grows_when_an_action_joins(pr2_apartment_context):
+    """
+    An action joining the running plan adds its time before it starts.
+    """
+    world, robot_view, extensions = pr2_apartment_context
+    executor = simulated_executor(extensions)
+    statechart = statechart_of(executor, MoveTorsoAction(TorsoState.HIGH))
+    executor.compile(statechart)
+
+    with statechart.modify():
+        statechart.add_node(MoveTorsoAction(TorsoState.LOW))
+
+    assert executor.simulation_time_limit == 2 * executor.simulation_time_per_action
 
 
 def test_a_simulated_plan_waits_for_its_pacer_after_every_tick(

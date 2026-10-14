@@ -324,28 +324,49 @@ class SimulatedPlanExecutor(PlanExecutor, StatechartExecutor):
     """
 
     simulation_time_per_action: timedelta = field(
-        default=timedelta(seconds=60), kw_only=True
+        default=timedelta(seconds=40), kw_only=True
     )
     """
-    The simulated time every started action adds to :attr:`simulation_time_limit`.
+    The simulated time every action of the plan adds to :attr:`simulation_time_limit`.
     """
 
-    @property
-    def simulation_time_limit(self) -> timedelta:
-        """
-        :return: The simulated time after which the plan is given up on, however it is
-            progressing: :attr:`simulation_time_per_action` for every action started so
-            far, and at least once.
-        """
-        started_actions = sum(
-            1
-            for action in self.statechart.get_nodes_by_type(Action)
-            if action.life_cycle_state != LifeCycleValues.NOT_STARTED
-        )
-        return self.simulation_time_per_action * max(1, started_actions)
+    simulation_time_limit: timedelta = field(init=False)
+    """
+    The simulated time after which the plan is given up on, however it is progressing:
+
+    :attr:`simulation_time_per_action` for every action in the statechart, and at least
+    once. Counted again whenever nodes join the statechart.
+    """
+
+    def __post_init__(self):
+        super().__post_init__()
+        self.simulation_time_limit = self.simulation_time_per_action
 
     def default_executor_extensions(self) -> list[ExecutorExtension]:
         return [RosNodeAccess(self.ros_node), MotionControl()]
+
+    def compile(self, statechart: Statechart) -> None:
+        """
+        Differs from :meth:`PlanExecutor.compile` in also counting
+        :attr:`simulation_time_limit`.
+        """
+        super().compile(statechart)
+        self._count_simulation_time_limit()
+
+    def after_recompile(self) -> None:
+        """
+        Differs from :meth:`~cramph.executor.StatechartExecutor.after_recompile` in also
+        counting :attr:`simulation_time_limit` again, since nodes joined.
+        """
+        super().after_recompile()
+        self._count_simulation_time_limit()
+
+    def _count_simulation_time_limit(self) -> None:
+        """
+        Set :attr:`simulation_time_limit` from the actions the statechart holds now.
+        """
+        actions = len(self.statechart.get_nodes_by_type(Action))
+        self.simulation_time_limit = self.simulation_time_per_action * max(1, actions)
 
     def _run(self) -> None:
         """
@@ -353,8 +374,8 @@ class SimulatedPlanExecutor(PlanExecutor, StatechartExecutor):
         every tick.
 
         The statechart's own stall monitor decides when a plan is hopeless;
-        :attr:`simulation_time_limit` only cuts off a plan that keeps creeping without
-        starting new actions.
+        :attr:`simulation_time_limit` only cuts off a plan that keeps creeping for
+        longer than the actions it holds are given.
 
         :raises NoProgressError: When the plan stops approaching its goal.
         :raises MotionExceededSimulationTimeLimit: When the plan runs for longer than
