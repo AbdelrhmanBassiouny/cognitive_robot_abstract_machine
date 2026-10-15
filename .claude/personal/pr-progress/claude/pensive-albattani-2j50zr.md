@@ -1,14 +1,15 @@
 ## #512 box bounds (claude/ecstatic-hopper-7j7iaz, off main)
 
 Plan:
-- BoundsInterface (krrood Interface) declares lower/upper; Bounds stores them; AxisAlignedBox computes them.
+- krrood.bounds: BoundsInterface (Interface) declares lower/upper, Bounds stores them; AxisAlignedBox computes them.
 
 Done:
-- d13d9ebae: BoundsInterface, krrood Interface + InterfaceInstantiationError, SubClassSafeGeneric property fix.
+- e9f82ae3f: Bounds/BoundsInterface in krrood; SubClassSafeGeneric skips annotations declared by an Interface.
 
 Next:
-- CI on #512 (ORM build and PR2-fixture tests could not run locally).
-- Thread w6-_ updated, left open for the user (both classes kept).
+- CI on #512 (ORM build: Bounds now outside the scanned packages; PR2-fixture tests).
+- Thread w6-_ left open for the user (both classes kept).
+- When #512 lands, #472's PixelBox imports Bounds from krrood.bounds.
 
 ## #472 video-core (plan general-video-production / video-core)
 
