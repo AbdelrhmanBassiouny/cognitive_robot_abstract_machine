@@ -10,9 +10,9 @@ from experiments.control_loop_experiments.benchmark import (
 )
 from experiments.control_loop_experiments.scenarios import (
     CartesianGoalScenario,
+    ControlLoopMeasurement,
     LongSequenceScenario,
     PlotterMode,
-    ScenarioRunner,
 )
 from experiments.experiment_definitions import MeanAndStandardDeviation, Unit
 from experiments.control_loop_experiments.control_loop_profiler import (
@@ -224,12 +224,16 @@ class TestPhaseBreakdown:
 
 @pytest.fixture()
 def cartesian_goal_profile(init_rospy) -> CallTreeProfile:
-    return ScenarioRunner(plotter_mode=PlotterMode.PLAIN).run(CartesianGoalScenario())
+    return ControlLoopMeasurement().measure(
+        CartesianGoalScenario(plotter_mode=PlotterMode.PLAIN)
+    )
 
 
 @pytest.fixture()
 def long_sequence_profile(init_rospy) -> CallTreeProfile:
-    return ScenarioRunner(plotter_mode=PlotterMode.PLAIN).run(LongSequenceScenario())
+    return ControlLoopMeasurement().measure(
+        LongSequenceScenario(plotter_mode=PlotterMode.PLAIN)
+    )
 
 
 @pytest.mark.slow
