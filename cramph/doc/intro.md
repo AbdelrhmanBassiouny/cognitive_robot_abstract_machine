@@ -9,9 +9,11 @@ provides
 - transition conditions that start, pause, end and reset nodes,
 - compilation of a statechart into a tick that advances all nodes together,
 - composite nodes such as `Sequence`, `Parallel`, `TryInOrder`, `TryAll` and `RepeatUntil`,
+  and nodes that choose their child only once they run,
 - generic monitors such as `CountTicks`, `CountSeconds` and `Print`,
-- an executor that ticks a statechart, paced in real time, in simulation time or as fast as
-  possible,
+- statecharts that take new nodes while they run,
+- an executor that ticks a statechart, paced in real time, in simulation time, in lockstep
+  with a physics simulation or as fast as possible,
 - JSON serialization and plotting of statecharts and their execution history.
 
 cramph knows nothing about motion control.
