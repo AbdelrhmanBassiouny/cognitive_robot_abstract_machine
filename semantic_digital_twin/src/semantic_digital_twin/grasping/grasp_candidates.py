@@ -16,7 +16,11 @@ from semantic_digital_twin.exceptions import (
 )
 from semantic_digital_twin.semantic_annotations.mixins import HasRootBody
 from semantic_digital_twin.spatial_types import Point3, Vector3
-from semantic_digital_twin.spatial_types.spatial_types import Pose, RotationMatrix
+from semantic_digital_twin.spatial_types.spatial_types import (
+    HomogeneousTransformationMatrix,
+    Pose,
+    RotationMatrix,
+)
 
 # %% grasp candidates
 
@@ -132,14 +136,21 @@ class HasGraspCandidates(HasRootBody):
         The grasps this annotation offers, in no particular order.
 
         The default grasps the object at its own origin, from evenly spaced directions
-        around its z-axis. Annotations whose geometry admits a better grip override
-        this.
+        around the world's vertical axis, whichever way the object's own axes point.
+        Annotations whose geometry admits a better grip override this.
         """
+        world = self.root._world
+        root_R_world = world.transform(
+            HomogeneousTransformationMatrix(reference_frame=world.root), self.root
+        ).to_np()[:3, :3]
         return [
             GraspCandidate(
                 self,
                 Pose(
-                    orientation=RotationMatrix.from_rpy(yaw=yaw).quaternion,
+                    orientation=RotationMatrix(
+                        data=root_R_world
+                        @ RotationMatrix.from_rpy(yaw=yaw).to_np()[:3, :3]
+                    ).quaternion,
                     reference_frame=self.root,
                 ),
             )

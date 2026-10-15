@@ -1,3 +1,4 @@
+import mujoco
 import pytest
 
 from semantic_digital_twin.adapters.robocasa_dataset.mujoco_compat import (
@@ -86,3 +87,19 @@ def test_an_object_let_go_of_at_the_placement_pose_falls_into_the_sink(episode):
 
 def test_the_pr2_puts_the_object_into_the_sink(episode):
     assert episode.perform().succeeded
+
+
+# %% performing the task in physics
+
+
+def test_the_physical_simulation_resolves_friction_for_holding_objects(episode):
+    """
+    An object held by friction slips out of fingers whose contacts resolve friction in
+    pyramids at MuJoCo's default impedance ratio.
+    """
+    simulation = episode.start_physical_simulation(impedance_ratio=7.0)
+    options = simulation.simulator._mj_model.opt
+    simulation.stop_simulation()
+
+    assert options.cone == mujoco.mjtCone.mjCONE_ELLIPTIC
+    assert options.impratio == pytest.approx(7.0)

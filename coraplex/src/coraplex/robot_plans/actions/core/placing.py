@@ -120,8 +120,9 @@ class PlaceAction(
         """
         The arm that holds :attr:`object_designator`, and the grasp it holds it by.
 
-        Read off the gripper while it holds the object; while the plan is still being
-        built, taken from the latest pick-up before this place.
+        Read off the gripper while it holds the object, whether the object hangs off its
+        tool frame or its fingers grip it by contact alone; while the plan is still
+        being built, taken from the latest pick-up before this place.
 
         :return: The arm and its grasp on the object.
         :raises ObjectIsNotHeld: If no arm holds the object and no pick-up precedes this
@@ -133,6 +134,12 @@ class PlaceAction(
             if GripperHolds(end_effector, object_body)():
                 return arm, GraspCandidate(
                     self.object_designator, end_effector.held_body_T_grasp
+                )
+            if is_body_gripped(
+                object_body, end_effector, threshold=self.grasp_detection_threshold
+            ):
+                return arm, GraspCandidate(
+                    self.object_designator, end_effector.body_T_grasp(object_body)
                 )
         previous_pick = self.plan_node.get_previous_node_by_designator_type(
             PickUpAction

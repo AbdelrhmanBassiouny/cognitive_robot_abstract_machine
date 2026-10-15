@@ -417,7 +417,10 @@ class GiskardExecutable(Executable):
         :raises MotionExceededSimulationTimeLimit: When the motion runs for longer than
             :attr:`simulation_time_limit`.
         """
-        if GiskardExecutable.execution_type == ExecutionType.KINEMATICALLY_SIMULATED:
+        if (
+            GiskardExecutable.execution_type != ExecutionType.PHYSICALLY_SIMULATED
+            or GiskardExecutable.simulation is None
+        ):
             qp_controller_config = (
                 QPControllerConfig.create_with_fast_simulation_defaults()
             )

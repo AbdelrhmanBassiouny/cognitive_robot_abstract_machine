@@ -60,6 +60,7 @@ from semantic_digital_twin.adapters.multi_sim import (
     MujocoSim,
     MujocoActuator,
     MujocoBuilder,
+    ContactDimensionality,
     MujocoGeom,
     MujocoLight,
     MujocoSynchronizer,
@@ -559,6 +560,44 @@ def test_builder_writes_a_geoms_contact_bitmasks(tmp_path):
     ]
     assert geom.contype == 2
     assert geom.conaffinity == 4
+
+
+def test_a_geoms_contact_dimensionality_survives_a_round_trip(tmp_path):
+    """
+    MuJoCo resolves torsional friction only in contacts of at least four dimensions, so
+    a shape declaring it has to reach the built geom and come back from it when the
+    model is parsed again.
+    """
+    world = World()
+    with world.modify_world():
+        root = Body(name=PrefixedName("root"))
+        world.add_body(root)
+        box_shape = Box(scale=Scale(1, 1, 1))
+        box_shape.add_simulator_property(
+            MujocoGeom(
+                contact_dimensionality=ContactDimensionality.SLIDING_AND_TORSIONAL
+            )
+        )
+        link = Body(name=PrefixedName("link"), collision=ShapeCollection([box_shape]))
+        world.add_kinematic_structure_entity(link)
+        world.add_connection(FixedConnection(parent=root, child=link))
+
+    builder = MujocoBuilder()
+    builder.build_world(world=world, file_path=str(tmp_path / "scene.xml"))
+    parsed_world = MJCFParser(str(tmp_path / "scene.xml")).parse()
+
+    [geom] = [
+        geom
+        for body in builder.spec.bodies
+        for geom in body.geoms
+        if body.name == "link"
+    ]
+    [parsed_shape] = parsed_world.get_body_by_name("link").collision.shapes
+    assert geom.condim == ContactDimensionality.SLIDING_AND_TORSIONAL
+    assert (
+        parsed_shape.get_simulator_property_of_type(MujocoGeom).contact_dimensionality
+        == ContactDimensionality.SLIDING_AND_TORSIONAL
+    )
 
 
 def test_contact_declarations_and_gravity_compensation_survive_a_round_trip(tmp_path):

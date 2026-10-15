@@ -407,6 +407,13 @@ class AbstractRobotPart(HasRootBody, HasRobotParts, ABC):
         kinematically.
         """
 
+    def _setup_contact_surfaces(self) -> None:
+        """
+        Declare how the surfaces of this part's bodies behave in contact in a physical
+        simulation. Does nothing by default: such a part's surfaces behave as the
+        simulator's defaults have them.
+        """
+
     def _declare_servo(
         self, connection: ActiveConnection1DOF, servo: JointServo
     ) -> None:
@@ -769,6 +776,19 @@ class EndEffector(AbstractRobotPart, ABC):
         body = self.held_body
         if body is None:
             raise NothingHeld(self)
+        return self.body_T_grasp_at(body, tool_P_point)
+
+    def body_T_grasp_at(self, body: Body, tool_P_point: Point3) -> Pose:
+        """
+        The grasp this gripper has on a body, read off the transform between the tool
+        frame and that body, with the grasp sitting at a given point of the gripper
+        rather than at the tool frame.
+
+        :param body: The body the grasp is on, whether it hangs off the tool frame or
+            is held between the fingers by contact alone.
+        :param tool_P_point: The point the grasp sits at, read in the tool frame.
+        :return: The grasp frame, in ``body``'s frame.
+        """
         body_T_tool = self._world.transform(self.tool_frame.global_transform, body)
         return HomogeneousTransformationMatrix.from_point_rotation_matrix(
             point=body_T_tool @ tool_P_point,
@@ -1143,6 +1163,7 @@ class AbstractRobot(Agent, HasRobotParts, ABC):
                 robot_part.setup_hardware_interfaces()
                 robot_part.add_joint_states(robot_part.setup_joint_states())
                 robot_part._setup_servos()
+                robot_part._setup_contact_surfaces()
             self._setup_collision_rules()
             self._setup_velocity_limits()
             return self

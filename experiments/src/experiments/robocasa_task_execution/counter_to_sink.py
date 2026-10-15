@@ -8,10 +8,15 @@ are left open; coraplex grounds them by trying candidates against a copy of the 
 The PR2 lets go of the object above the sink, and RoboCasa's physics lets it fall in.
 Whether the task succeeded is decided by RoboCasa's own check.
 
+The episode is performed either kinematically or in MuJoCo physics, where the PR2's
+servos and drive move it and its fingers hold the object by friction alone.
+
 Run with (the ``experiments`` package must be importable)::
 
     python -m experiments.robocasa_task_execution.counter_to_sink
     python -m experiments.robocasa_task_execution.counter_to_sink --layout LAYOUT005
+    python -m experiments.robocasa_task_execution.counter_to_sink --physics
+    python -m experiments.robocasa_task_execution.counter_to_sink --no-collision-avoidance
 
 .. note::
     The kitchen assets must be downloaded once via
@@ -24,7 +29,10 @@ from __future__ import annotations
 import argparse
 import logging
 from dataclasses import dataclass
+from datetime import timedelta
 from enum import StrEnum
+
+import mujoco
 
 import numpy as np
 from typing_extensions import TYPE_CHECKING, Self
@@ -39,11 +47,16 @@ with robocasa_version_assertions_relaxed():
 
 from coraplex.datastructures.dataclasses import Context
 from coraplex.datastructures.enums import ExecutionType
-from coraplex.execution_environment import ExecutionEnvironment
+from coraplex.execution_environment import (
+    ExecutionEnvironment,
+    PhysicallySimulatedRobot,
+)
+from coraplex.plans.plan_node import PlanNode
 from coraplex.plans.factories import sequential
 from experiments.robocasa_task_execution.exceptions import NoClearStandingPose
 from coraplex.robot_plans.actions.composite.transporting import TransportAction
 from coraplex.robot_plans.actions.core.robot_body import MoveTorsoAction
+from semantic_digital_twin.adapters.multi_sim import MujocoSim
 from semantic_digital_twin.adapters.robocasa_dataset.loader import (
     RoboCasaDatasetLoader,
     RoboCasaTask,
@@ -57,6 +70,7 @@ from semantic_digital_twin.datastructures.definitions import (
     TorsoState,
 )
 from semantic_digital_twin.grasping.grasp_candidates import HasGraspCandidates
+from semantic_digital_twin.reasoning.robot_predicates import is_body_gripped
 from semantic_digital_twin.robots.pr2 import PR2
 from semantic_digital_twin.semantic_annotations.semantic_annotations import Floor
 from semantic_digital_twin.spatial_types.spatial_types import (
@@ -236,14 +250,20 @@ class CounterToSinkEpisode:
     @property
     def target_object_released(self) -> bool:
         """
-        Whether the target object no longer moves with the robot.
+        Whether the target object no longer moves with the robot: it neither hangs off
+        the robot nor lies gripped between the fingers of one of its grippers.
         """
-        return (
-            self.target_object.root
-            not in self.task.world.get_kinematic_structure_entities_of_branch(
+        body = self.target_object.root
+        hangs_off_the_robot = (
+            body
+            in self.task.world.get_kinematic_structure_entities_of_branch(
                 self.robot.root
             )
         )
+        gripped = any(
+            is_body_gripped(body, arm.end_effector) for arm in self.robot.all_arms
+        )
+        return not hangs_off_the_robot and not gripped
 
     def placement_pose(self, drop_height: float = 0.1) -> Pose:
         """
@@ -275,29 +295,95 @@ class CounterToSinkEpisode:
             reference_frame=world.root,
         )
 
+    def transport_plan(self, sampling_seed: int) -> PlanNode:
+        """
+        :param sampling_seed: The seed the standing poses are sampled with.
+        :return: The plan carrying the target object from the counter into the sink,
+            standing wherever and grasping however a trial finds to work.
+        """
+        context = Context(self.task.world, self.robot, sampling_seed=sampling_seed)
+        transport = TransportAction.from_graspable_by_closest_grasps(
+            self.target_object, self.placement_pose(), self.robot.right_arm, context
+        )
+        return sequential([MoveTorsoAction(TorsoState.HIGH), transport], context)
+
     def perform(
         self, sampling_seed: int = 42, collision_avoidance: bool = True
     ) -> CounterToSinkOutcome:
         """
-        Have the PR2 carry the target object from the counter into the sink, standing
-        wherever and grasping however a trial finds to work.
+        Have the PR2 carry the target object into the sink kinematically, and let
+        RoboCasa's physics drop it in.
 
         :param sampling_seed: The seed the standing poses are sampled with.
         :param collision_avoidance: Whether the PR2 avoids colliding with the kitchen
             and with itself while moving.
         :return: How the episode ended.
         """
-        context = Context(self.task.world, self.robot, sampling_seed=sampling_seed)
-        transport = TransportAction.from_graspable_by_closest_grasps(
-            self.target_object, self.placement_pose(), self.robot.right_arm, context
-        )
-        plan = sequential([MoveTorsoAction(TorsoState.HIGH), transport], context)
+        plan = self.transport_plan(sampling_seed)
         with ExecutionEnvironment(
             ExecutionType.KINEMATICALLY_SIMULATED,
             collision_avoidance=collision_avoidance,
         ):
             plan.perform()
         self.let_the_target_object_fall()
+        return self.outcome()
+
+    def start_physical_simulation(
+        self,
+        step_size: timedelta = timedelta(milliseconds=2),
+        impedance_ratio: float = 10.0,
+    ) -> MujocoSim:
+        """
+        Start simulating the episode's world in MuJoCo, stepped by whatever performs in
+        it.
+
+        Friction is resolved in elliptic cones, and the impedance ratio raised above
+        MuJoCo's default of one, as MuJoCo's documentation recommends where objects are
+        held by friction.
+
+        :param step_size: How much simulated time one physics step advances.
+        :param impedance_ratio: How much harder the contacts resist sliding than
+            pressing in; MuJoCo's ``impratio``.
+        :return: The started simulation; stop it when done.
+        """
+        simulation = MujocoSim(
+            world=self.task.world,
+            headless=True,
+            step_size=step_size.total_seconds(),
+            integrator=mujoco.mjtIntegrator.mjINT_IMPLICITFAST,
+            cone=mujoco.mjtCone.mjCONE_ELLIPTIC,
+            impratio=impedance_ratio,
+        )
+        simulation.start_stepped_simulation()
+        return simulation
+
+    def perform_in_physics(
+        self,
+        simulation: MujocoSim,
+        sampling_seed: int = 42,
+        collision_avoidance: bool = True,
+        settling_time: timedelta = timedelta(seconds=2),
+    ) -> CounterToSinkOutcome:
+        """
+        Have the PR2 carry the target object into the sink in a physical simulation,
+        where its fingers hold the object by friction alone and the object falls into
+        the sink once they let go.
+
+        :param simulation: The started simulation of the episode's world, see
+            :meth:`start_physical_simulation`.
+        :param sampling_seed: The seed the standing poses are sampled with.
+        :param collision_avoidance: Whether the PR2 avoids colliding with the kitchen
+            and with itself while moving.
+        :param settling_time: How long the physics runs on after the plan, for the
+            object to come to rest.
+        :return: How the episode ended.
+        """
+        plan = self.transport_plan(sampling_seed)
+        with PhysicallySimulatedRobot(
+            simulation=simulation, collision_avoidance=collision_avoidance
+        ):
+            plan.perform()
+        simulation.step_simulation(settling_time)
         return self.outcome()
 
     def let_the_target_object_fall(self, settling_time: float = 2.0) -> None:
@@ -369,7 +455,8 @@ class CounterToSinkEpisode:
 
 def _parse_arguments() -> argparse.Namespace:
     """
-    Parse the command-line arguments selecting the kitchen.
+    Parse the command-line arguments selecting the kitchen and how the episode is
+    performed.
 
     :return: The parsed arguments.
     """
@@ -386,6 +473,17 @@ def _parse_arguments() -> argparse.Namespace:
         choices=[style.name for style in StyleType],
         help="RoboCasa visual style of the kitchen.",
     )
+    parser.add_argument(
+        "--physics",
+        action="store_true",
+        help="Perform the episode in MuJoCo physics instead of kinematically.",
+    )
+    parser.add_argument(
+        "--collision-avoidance",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Whether the PR2 avoids colliding with the kitchen and with itself.",
+    )
     return parser.parse_args()
 
 
@@ -400,7 +498,15 @@ def main() -> None:
         LayoutType[arguments.layout], StyleType[arguments.style]
     )
     logger.info("Task: %s", episode.task.instruction)
-    outcome = episode.perform()
+    if not arguments.physics:
+        outcome = episode.perform(collision_avoidance=arguments.collision_avoidance)
+        logger.info("Outcome: %s, succeeded: %s", outcome, outcome.succeeded)
+        return
+    simulation = episode.start_physical_simulation()
+    outcome = episode.perform_in_physics(
+        simulation, collision_avoidance=arguments.collision_avoidance
+    )
+    simulation.stop_simulation()
     logger.info("Outcome: %s, succeeded: %s", outcome, outcome.succeeded)
 
 

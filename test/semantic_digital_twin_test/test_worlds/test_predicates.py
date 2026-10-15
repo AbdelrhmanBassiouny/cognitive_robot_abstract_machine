@@ -91,7 +91,8 @@ def _supported_by_default(field_name: str) -> float:
 
 RESTING_CONTACT_TOLERANCE = _supported_by_default("contact_tolerance")
 """
-How far above a surface a body may stand and still rest on it, as the predicate defaults it.
+How far above a surface a body may stand and still rest on it, as the predicate defaults
+it.
 """
 
 CONTAINER_WALL_HEIGHT = 0.5
@@ -512,6 +513,51 @@ def test_is_body_in_gripper(pr2_world_copy):
     assert is_body_in_gripper(test_box, left_gripper) == 0
 
 
+def test_most_rays_between_the_fingers_hit_a_body_standing_across_the_gap(
+    pr2_world_copy,
+):
+    """
+    A ray from one fingertip to the other crosses a body standing across the gap between
+    them, unless it runs between two points of the curved tips that face away from each
+    other.
+    """
+    pr2 = pr2_world_copy.get_semantic_annotations_by_type(PR2)[0]
+    gripper = pr2.left_arm.end_effector
+    finger = gripper.finger.tip.collision.center_of_mass_in_world().to_np()[:3]
+    thumb = gripper.thumb.tip.collision.center_of_mass_in_world().to_np()[:3]
+    closing_axis = (thumb - finger) / np.linalg.norm(thumb - finger)
+    across = np.cross(closing_axis, [0.0, 0.0, 1.0])
+    across /= np.linalg.norm(across)
+    root_T_box = np.eye(4)
+    root_T_box[:3, :3] = np.column_stack(
+        [closing_axis, across, np.cross(closing_axis, across)]
+    )
+    root_T_box[:3, 3] = (finger + thumb) / 2
+    box = Body(name=PrefixedName("box_between_the_fingers"))
+    box.collision = ShapeCollection(
+        [
+            Box(
+                scale=Scale(np.linalg.norm(thumb - finger) / 2, 0.2, 0.2),
+                origin=HomogeneousTransformationMatrix.from_xyz_rpy(
+                    reference_frame=box
+                ),
+            )
+        ]
+    )
+    with pr2_world_copy.modify_world():
+        pr2_world_copy.add_connection(
+            FixedConnection(
+                parent=pr2_world_copy.root,
+                child=box,
+                parent_T_connection_expression=HomogeneousTransformationMatrix(
+                    root_T_box, reference_frame=pr2_world_copy.root
+                ),
+            )
+        )
+
+    assert is_body_in_gripper(box, gripper) > 0.5
+
+
 def test_reachable(pr2_world_state_reset, rclpy_node):
     pr2 = pr2_world_state_reset.get_semantic_annotations_by_type(PR2)[0]
 
@@ -850,9 +896,10 @@ def test_a_body_hovering_beyond_the_contact_tolerance_is_not_supported(two_block
 
 def test_a_body_inside_another_s_bounding_box_but_not_touching_it_is_not_supported():
     """
-    A body rests on what it touches. A large or hollow shape, such as a wall, has a
-    bounding box enclosing a great deal of empty space, and a body standing in that
-    space is held up by nothing.
+    A body rests on what it touches.
+
+    A large or hollow shape, such as a wall, has a bounding box enclosing a great deal
+    of empty space, and a body standing in that space is held up by nothing.
     """
     world = World()
     ball = Body(name=PrefixedName("ball"))
@@ -1090,7 +1137,8 @@ def test_a_body_on_a_slope_steeper_than_the_steepest_allowed_is_not_supported():
 
 def test_a_body_standing_upside_down_is_supported_by_what_it_stands_on():
     """
-    Up is the world's up: a body turned over rests on what is underneath it all the same.
+    Up is the world's up: a body turned over rests on what is underneath it all the
+    same.
     """
     world = World()
     table = _box_body("table", Scale(2.0, 2.0, 0.1))
@@ -1116,8 +1164,8 @@ def test_a_body_rests_on_a_surface_whichever_of_the_two_is_checked_first(
     crate_identifier: UUID, table_identifier: UUID
 ):
     """
-    A collision check lists the two bodies in an order of its own, which does not
-    change what rests on what.
+    A collision check lists the two bodies in an order of its own, which does not change
+    what rests on what.
     """
     world = World()
     table = _box_body("table", Scale(2.0, 2.0, 0.1), table_identifier)

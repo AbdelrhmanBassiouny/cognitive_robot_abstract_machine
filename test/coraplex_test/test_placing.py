@@ -48,6 +48,29 @@ def pr2_holding_milk(simple_pr2_context):
     return world, robot, milk
 
 
+@pytest.fixture
+def pr2_gripping_milk_by_contact(simple_pr2_context):
+    """
+    A PR2 whose left fingers grip the milk where :data:`HELD_AT` puts it, while the
+    milk stays attached to the world rather than to the tool frame, as a physically
+    simulated grip leaves it.
+    """
+    world, robot, _ = simple_pr2_context
+    milk_body = world.get_body_by_name("milk.stl")
+    milk = Milk(root=milk_body)
+    tool_frame = robot.left_arm.end_effector.tool_frame
+    with world.modify_world():
+        world.add_semantic_annotation(milk)
+    milk_body.parent_connection.origin = world.transform(
+        HomogeneousTransformationMatrix.from_xyz_rpy(
+            *HELD_AT, yaw=HELD_YAW, reference_frame=tool_frame
+        ),
+        milk_body.parent_connection.parent,
+    )
+    world.notify_state_change()
+    return world, robot, milk
+
+
 # %% releasing what is actually held
 
 
@@ -185,3 +208,42 @@ def test_place_takes_the_arm_its_pick_up_will_use(pr2_apartment_context):
     sequential([pick_up, place], context=context)
 
     assert _arms_moved_by(place) == {robot.right_arm}
+
+
+# %% releasing what the fingers grip by contact alone
+
+
+def test_place_takes_the_arm_whose_fingers_grip_the_object(
+    pr2_gripping_milk_by_contact,
+):
+    world, robot, milk = pr2_gripping_milk_by_contact
+    target = Pose.from_xyz_rpy(1.2, 0.4, 0.9, reference_frame=world.root)
+    place = PlaceAction(milk, target)
+    sequential([place], context=Context(world, robot, sampling_seed=SAMPLING_SEED))
+
+    assert _arms_moved_by(place) == {robot.left_arm}
+
+
+def test_a_place_puts_an_object_gripped_by_contact_on_the_target(
+    pr2_gripping_milk_by_contact,
+):
+    """
+    The grasp is read off where the fingers hold the object, so the release accounts
+    for it as it does for an object hanging off the tool frame.
+    """
+    world, robot, milk = pr2_gripping_milk_by_contact
+    target = Pose.from_xyz_rpy(1.2, 0.4, 0.9, yaw=np.pi / 4, reference_frame=world.root)
+    place = PlaceAction(milk, target)
+    sequential([place], context=Context(world, robot, sampling_seed=SAMPLING_SEED))
+
+    end_effector = robot.left_arm.end_effector
+    tool_goal = end_effector.tool_frame_goal_for_grasp(
+        place._grasp_on_the_held_object().moved_to(target)
+    )
+
+    tool_T_milk = world.transform(milk.root.global_transform, end_effector.tool_frame)
+    placed_milk = tool_goal.homogeneous_matrix @ tool_T_milk
+
+    np.testing.assert_allclose(
+        placed_milk.to_np(), target.homogeneous_matrix.to_np(), atol=1e-9
+    )

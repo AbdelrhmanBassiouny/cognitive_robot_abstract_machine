@@ -17,6 +17,10 @@ from coraplex.plans.plan import Plan
 from coraplex.plans.plan_node import ActionNode, ExecutionBoundaryNode
 from coraplex.visualization import RvizVisualization
 from krrood.entity_query_language.query.match import Match
+from semantic_digital_twin.grasping.grasp_candidates import HasGraspCandidates
+from semantic_digital_twin.reasoning.robot_predicates import (
+    fractions_of_rays_between_fingers_hitting_bodies,
+)
 
 if TYPE_CHECKING:
     from coraplex.datastructures.dataclasses import Context
@@ -72,6 +76,13 @@ class ActionTrial:
     How many of the modification blocks of `context.world` the copy already holds.
     """
 
+    grasp_detection_threshold: float = field(default=0.25, kw_only=True)
+    """
+    Minimum fraction of sampled rays between a gripper's fingers that must hit a body
+    for the gripper to hold it by contact (see
+    :class:`~coraplex.robot_plans.mixins.HasGraspDetectionThreshold`).
+    """
+
     copy_marker_alpha: float = field(default=0.9, kw_only=True)
     """
     The opacity the copy is drawn with while debugging, so it can be told apart from the
@@ -114,6 +125,9 @@ class ActionTrial:
         plan.add_node(candidate_sequence)
         candidate_sequence.add_child(candidate)
         version = world.get_world_model_manager().version
+        held_by_contact = (
+            GiskardExecutable.execution_type == ExecutionType.PHYSICALLY_SIMULATED
+        )
 
         with (
             world.reset_state_context(),
@@ -123,6 +137,8 @@ class ActionTrial:
             ),
         ):
             try:
+                if held_by_contact:
+                    self.hang_bodies_held_by_contact_off_their_grippers(context)
                 candidate_sequence.perform()
                 return True
             except PlanFailure:
@@ -133,6 +149,29 @@ class ActionTrial:
                 # Undo the model changes before leaving the reset context restores the
                 # state, which needs the degrees of freedom it was snapshotted with.
                 world.rollback_to_version(version)
+
+    def hang_bodies_held_by_contact_off_their_grippers(self, context: Context) -> None:
+        """
+        Hang every graspable body a gripper of the robot holds by contact alone off that
+        gripper's tool frame, the way a pick-up leaves it in a kinematically moved
+        world, so that it moves with the gripper in the trial as the grip moves it in
+        physics.
+
+        :param context: The context pointing at the copy the trial is tried in.
+        """
+        world = context.world
+        graspable_bodies = {
+            annotation.root
+            for annotation in world.get_semantic_annotations_by_type(HasGraspCandidates)
+        }
+        for arm in context.robot.all_arms:
+            end_effector = arm.end_effector
+            fractions = fractions_of_rays_between_fingers_hitting_bodies(end_effector)
+            for body in graspable_bodies & fractions.keys():
+                if fractions[body] <= self.grasp_detection_threshold:
+                    continue
+                with world.modify_world():
+                    world.move_branch(body, end_effector.tool_frame)
 
     @staticmethod
     def _on_the_copy(action: ActionDescription, world: World) -> ActionDescription:

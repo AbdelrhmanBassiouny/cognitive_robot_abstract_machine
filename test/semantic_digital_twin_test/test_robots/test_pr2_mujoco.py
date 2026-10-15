@@ -14,7 +14,11 @@ from scipy.spatial.transform import Rotation
 
 from ...pytest_environment import runs_in_continuous_integration
 
-from semantic_digital_twin.adapters.multi_sim import MujocoBuilder, MujocoSim
+from semantic_digital_twin.adapters.multi_sim import (
+    ContactDimensionality,
+    MujocoBuilder,
+    MujocoSim,
+)
 from semantic_digital_twin.datastructures.definitions import (
     GripperState,
     StaticJointState,
@@ -168,6 +172,35 @@ def test_a_drive_without_servos_keeps_the_base_where_it_is_built(pr2, tmp_path):
     builder.build_world(world=world, file_path=str(tmp_path / "scene.xml"))
 
     assert _drive_joints(builder, pr2) == []
+
+
+def test_the_fingertips_resist_turning_the_object_they_pinch(pr2, tmp_path):
+    """
+    A held object pivots about the axis the fingers pinch it along unless the contact
+    resolves torsional friction, which MuJoCo does only in contacts of at least four
+    dimensions.
+    """
+    builder = MujocoBuilder()
+    builder.build_world(world=pr2._world, file_path=str(tmp_path / "scene.xml"))
+    fingertips = {
+        fingertip.name.name
+        for arm in pr2.all_arms
+        for fingertip in (arm.end_effector.thumb.tip, arm.end_effector.finger.tip)
+    }
+    pad_friction = pr2.right_arm.end_effector.finger_pad_contact.friction
+
+    fingertip_geoms = [
+        geom
+        for body in builder.spec.bodies
+        if body.name in fingertips
+        for geom in body.geoms
+        if geom.contype or geom.conaffinity
+    ]
+
+    assert len({geom.parent.name for geom in fingertip_geoms}) == len(fingertips)
+    for geom in fingertip_geoms:
+        assert geom.condim == ContactDimensionality.SLIDING_AND_TORSIONAL
+        assert list(geom.friction) == pytest.approx(pad_friction.to_list())
 
 
 # %% the physics

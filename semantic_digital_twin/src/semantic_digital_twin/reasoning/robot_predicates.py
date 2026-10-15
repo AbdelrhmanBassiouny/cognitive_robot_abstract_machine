@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from copy import deepcopy
 from dataclasses import dataclass
-from typing import Optional, List
+from typing_extensions import Dict, List, Optional
 
 import numpy as np
 import trimesh.sample
@@ -155,6 +155,37 @@ def blocking(
     return robot_in_collision(robot.first(), [])
 
 
+def fractions_of_rays_between_fingers_hitting_bodies(
+    gripper: HasTwoFingers, sample_size: int = 100
+) -> Dict[Body, float]:
+    """
+    Cast rays from points on the finger's tip to points on the thumb's tip.
+
+    :param gripper: The gripper whose fingers the rays are cast between.
+    :param sample_size: The number of rays to cast.
+    :return: For every body the rays hit between their two points, the fingers included,
+        the fraction of rays that hit it.
+    """
+    thumb_mesh = gripper.thumb.tip.collision.combined_mesh.copy()
+    finger_mesh = gripper.finger.tip.collision.combined_mesh.copy()
+    thumb_mesh.apply_transform(gripper.thumb.tip.global_transform.to_np())
+    finger_mesh.apply_transform(gripper.finger.tip.global_transform.to_np())
+
+    finger_points = trimesh.sample.sample_surface(finger_mesh, sample_size)[0]
+    thumb_points = trimesh.sample.sample_surface(thumb_mesh, sample_size)[0]
+
+    hit_points, index_ray, bodies = gripper._world.ray_tracer.ray_test(
+        finger_points, thumb_points, multiple_hits=True
+    )
+    ray_lengths = np.linalg.norm(thumb_points - finger_points, axis=1)
+    distances = np.linalg.norm(hit_points - finger_points[index_ray], axis=1)
+    rays_by_body: Dict[Body, set] = {}
+    for ray, body, distance in zip(index_ray, bodies, distances):
+        if distance <= ray_lengths[ray]:
+            rays_by_body.setdefault(body, set()).add(ray)
+    return {body: len(rays) / sample_size for body, rays in rays_by_body.items()}
+
+
 @symbolic_function
 def bodies_in_gripper(gripper: HasTwoFingers, sample_size: int = 100) -> List[Body]:
     """
@@ -165,24 +196,10 @@ def bodies_in_gripper(gripper: HasTwoFingers, sample_size: int = 100) -> List[Bo
     :param gripper: The gripper for which the check should be done.
     :param sample_size: The number of rays to sample.
     """
-    # Retrieve meshes in local frames
-    thumb_mesh = gripper.thumb.tip.collision.combined_mesh.copy()
-    finger_mesh = gripper.finger.tip.collision.combined_mesh.copy()
-
-    # Transform copies of the meshes into the world frame
-    # body_mesh.apply_transform(body.global_transform.to_np())
-    thumb_mesh.apply_transform(gripper.thumb.tip.global_transform.to_np())
-    finger_mesh.apply_transform(gripper.finger.tip.global_transform.to_np())
-
-    # get random points from thumb mesh
-    finger_points = trimesh.sample.sample_surface(finger_mesh, sample_size)[0]
-    thumb_points = trimesh.sample.sample_surface(thumb_mesh, sample_size)[0]
-
-    rt = gripper._world.ray_tracer
-    rt.update_scene()
-
-    points, index_ray, bodies = rt.ray_test(finger_points, thumb_points)
-    return list(set(bodies) - set(gripper.finger.bodies) - set(gripper.thumb.bodies))
+    hit_bodies = fractions_of_rays_between_fingers_hitting_bodies(gripper, sample_size)
+    return list(
+        set(hit_bodies) - set(gripper.finger.bodies) - set(gripper.thumb.bodies)
+    )
 
 
 @symbolic_function
@@ -198,15 +215,16 @@ def is_body_in_gripper(
     :param body: The body for which the check should be done.
     :param gripper: The gripper for which the check should be done.
     :param sample_size: The number of rays to sample.
-    :return: The percentage of rays between the fingers that hit the body.
+    :return: The fraction of rays between the fingers that hit the body.
     """
-    bodies = bodies_in_gripper(gripper, sample_size)
-    return len([b for b in bodies if b == body]) / sample_size
+    return fractions_of_rays_between_fingers_hitting_bodies(gripper, sample_size).get(
+        body, 0.0
+    )
 
 
 @symbolic_function
 def is_body_gripped(
-    body: Body, gripper: EndEffector, threshold: float = 0.9, sample_size: int = 100
+    body: Body, gripper: EndEffector, threshold: float = 0.25, sample_size: int = 100
 ) -> bool:
     """
     Check if the body is held by the gripper with at least the given confidence.

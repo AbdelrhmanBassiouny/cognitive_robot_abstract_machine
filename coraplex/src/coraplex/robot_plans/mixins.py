@@ -54,7 +54,7 @@ class HasGraspDetectionThreshold:
     :class:`~coraplex.robot_plans.actions.core.placing.PlaceAction`.
     """
 
-    grasp_detection_threshold: float = field(default=0.9, kw_only=True)
+    grasp_detection_threshold: float = field(default=0.25, kw_only=True)
     """
     Minimum fraction of sampled rays between the gripper's fingers that must hit the
     target object for it to count as grasped/held (see

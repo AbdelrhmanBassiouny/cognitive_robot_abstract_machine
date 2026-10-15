@@ -10,6 +10,10 @@ from typing import Self, List
 from typing_extensions import Dict, Generic
 
 from krrood.ormatic.utils import classproperty
+from semantic_digital_twin.adapters.multi_sim import (
+    ContactDimensionality,
+    MujocoGeom,
+)
 from semantic_digital_twin.adapters.sensors.lidar import Lidar, LidarSource
 from semantic_digital_twin.collision_checking.collision_matrix import (
     MaxAvoidedCollisionsOverride,
@@ -54,6 +58,10 @@ from semantic_digital_twin.world_description.connection_properties import (
     DriveServos,
     JointServo,
     ServoGains,
+)
+from semantic_digital_twin.world_description.contact import (
+    ContactFriction,
+    ContactParameters,
 )
 from semantic_digital_twin.world_description.connections import (
     ActiveConnection,
@@ -334,6 +342,30 @@ class PR2Gripper(
             if connection.raw_dof is not thumb_degree_of_freedom:
                 continue
             self._declare_servo(connection, self.finger_drive.servo_for(connection))
+
+    @property
+    def finger_pad_contact(self) -> ContactParameters:
+        """
+        How the rubber pads of the fingertips grip: they resist the object sliding
+        between them and, over the patch they press into it with, turning about the axis
+        they pinch it along.
+        """
+        return ContactParameters(friction=ContactFriction(sliding=1.0, torsional=0.02))
+
+    def _setup_contact_surfaces(self) -> None:
+        """
+        Give the fingertips :attr:`finger_pad_contact`, in contacts that resolve its
+        torsional friction.
+        """
+        fingertips = [self.thumb.tip, self.finger.tip]
+        self.finger_pad_contact.apply_to(fingertips)
+        for fingertip in fingertips:
+            for shape in fingertip.collision:
+                shape.add_simulator_property(
+                    MujocoGeom(
+                        contact_dimensionality=ContactDimensionality.SLIDING_AND_TORSIONAL
+                    )
+                )
 
 
 @dataclass(eq=False)

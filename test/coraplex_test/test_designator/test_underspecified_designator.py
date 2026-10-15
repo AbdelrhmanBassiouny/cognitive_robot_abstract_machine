@@ -16,7 +16,10 @@ from coraplex.datastructures.enums import ActionTrialVisualization
 
 from semantic_digital_twin.semantic_annotations.semantic_annotations import Milk
 from coraplex.language import SequentialNode
-from coraplex.execution_environment import kinematically_simulated_robot
+from coraplex.execution_environment import (
+    PhysicallySimulatedRobot,
+    kinematically_simulated_robot,
+)
 from coraplex.plans.executables import Executable
 from coraplex.plans.factories import sequential, execute_single
 from coraplex.plans.failures import (
@@ -33,8 +36,12 @@ from coraplex.plans.underspecified import ActionTrial, UnderspecifiedNode
 from coraplex.robot_plans.actions.base import ActionDescription
 from coraplex.robot_plans.actions.core.navigation import NavigateAction
 from coraplex.robot_plans.actions.core.pick_up import PickUpAction
+from coraplex.robot_plans.actions.core.placing import PlaceAction
 from semantic_digital_twin.robots.robot_parts import Arm
-from semantic_digital_twin.spatial_types.spatial_types import Pose
+from semantic_digital_twin.spatial_types.spatial_types import (
+    HomogeneousTransformationMatrix,
+    Pose,
+)
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.connections import FixedConnection
@@ -802,3 +809,54 @@ def test_a_candidate_that_cannot_keep_its_clearance_is_discarded(
 
     assert plan.root.status == LifeCycleValues.SUCCEEDED
     assert plan.root.current_candidate.designator.fail_on_attempt_number is None
+
+
+# %% trying candidates while the robot is physically simulated
+
+
+@pytest.fixture
+def pr2_gripping_milk_by_contact(apartment_world_pr2_copy_with_context):
+    """
+    A PR2 whose left fingers grip the milk at the tool frame while the milk stays
+    attached to the world, as a physically simulated grip leaves it.
+    """
+    world, robot, context = apartment_world_pr2_copy_with_context
+    milk = world.get_semantic_annotations_by_type(Milk)[0]
+    milk_connection = milk.root.parent_connection
+    milk_connection.origin = world.transform(
+        HomogeneousTransformationMatrix(
+            reference_frame=robot.left_arm.end_effector.tool_frame
+        ),
+        milk_connection.parent,
+    )
+    world.notify_state_change()
+    return world, robot, context, milk
+
+
+def test_a_trial_places_what_a_physically_simulated_grip_holds(
+    pr2_gripping_milk_by_contact,
+):
+    """
+    Physics holds a picked object by contact alone, so the copy a trial is tried in has
+    the object between the fingers rather than hanging off the tool frame.
+    """
+    world, robot, context, milk = pr2_gripping_milk_by_contact
+
+    with PhysicallySimulatedRobot(simulation=None):
+        assert ActionTrial(context=context).succeeds(
+            PlaceAction(milk, milk.root.global_pose)
+        )
+
+
+def test_a_trial_hangs_what_a_grip_holds_by_contact_off_the_gripper(
+    pr2_gripping_milk_by_contact,
+):
+    """
+    A trial moves the robot kinematically, so an object physics holds by contact alone
+    has to hang off the gripper there to move with it.
+    """
+    world, robot, context, milk = pr2_gripping_milk_by_contact
+
+    ActionTrial(context=context).hang_bodies_held_by_contact_off_their_grippers(context)
+
+    assert milk.root.parent_connection.parent is robot.left_arm.end_effector.tool_frame

@@ -157,6 +157,39 @@ def test_default_grasp_candidates_approach_along_evenly_spaced_yaws(milk):
     )
 
 
+def test_default_grasps_of_an_object_lying_on_its_side_approach_and_close_level():
+    """
+    An object resting on a surface can only be reached and closed on from beside it, so
+    the default grasps turn about the vertical axis whichever way the object's own axes
+    point.
+    """
+    world = World()
+    with world.modify_world():
+        table = Body(name=PrefixedName("table", prefix="grasp_candidates"))
+        body = Body(
+            name=PrefixedName("milk_on_its_side", prefix="grasp_candidates"),
+            collision=ShapeCollection(
+                [Box(origin=HomogeneousTransformationMatrix(), scale=BOX_SCALE)]
+            ),
+        )
+        world.add_kinematic_structure_entity(table)
+        world.add_connection(
+            FixedConnection(
+                parent=table,
+                child=body,
+                parent_T_connection_expression=HomogeneousTransformationMatrix.from_xyz_rpy(
+                    roll=np.pi / 2, yaw=0.3, reference_frame=table
+                ),
+            )
+        )
+        milk = Milk(root=body)
+        world.add_semantic_annotation(milk)
+
+    for grasp in milk.grasp_candidates():
+        world_R_grasp = grasp.world_T_grasp.to_np()[:3, :3]
+        assert world_R_grasp[:, 2] == pytest.approx([0.0, 0.0, 1.0])
+
+
 # %% rim grasp poses
 
 
