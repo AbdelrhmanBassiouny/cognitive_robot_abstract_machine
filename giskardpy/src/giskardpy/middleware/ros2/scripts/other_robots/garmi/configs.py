@@ -4,11 +4,13 @@ from dataclasses import dataclass, field
 from enum import Enum
 
 from giskardpy.middleware.ros2.command_publishing import MultiDOFCommandFormat
-from giskardpy.middleware.ros2.robot_interface_config import RobotInterfaceConfig
+from giskardpy.middleware.ros2.robot_interface_config import (
+    ClosedLoopRobotInterfaceConfig,
+)
 from giskardpy.middleware.ros2.scripts.tools.interactive_marker import (
     RootTipPair,
 )
-from giskardpy.model.world_config import WorldWithOmniDriveRobot
+from giskardpy.model.world_config import WorldWithMobileRobot
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.robots.garmi import Garmi, GarmiJoint
 from semantic_digital_twin.world_description.connections import (
@@ -27,7 +29,7 @@ class GarmiInteractiveMarkerChain(Enum):
 
 
 @dataclass
-class WorldWithGarmiConfig(WorldWithOmniDriveRobot):
+class WorldWithGarmiConfig(WorldWithMobileRobot):
     """
     World configuration for the GARMI robot.
 
@@ -37,33 +39,14 @@ class WorldWithGarmiConfig(WorldWithOmniDriveRobot):
     odom_body_name: PrefixedName = field(
         default_factory=lambda: PrefixedName("odom_combined")
     )
-    urdf_view: Garmi = field(kw_only=True, default=Garmi)
+    robot_class: type[Garmi] = field(kw_only=True, default=Garmi, init=False)
+    """
+    The robot class that is applied to the parsed description.
+    """
 
 
 @dataclass
-class GarmiStandaloneInterface(RobotInterfaceConfig):
-    """
-    Simulates the mecanum wheels, lift, head, both FR3 arms, grippers and drive of GARMI
-    without talking to hardware.
-    """
-
-    def setup(self) -> None:
-        self.register_controlled_joints(
-            [
-                *GarmiJoint.wheels(),
-                *GarmiJoint.lift(),
-                *GarmiJoint.head(),
-                *GarmiJoint.left_arm(),
-                *GarmiJoint.right_arm(),
-                *GarmiJoint.left_fingers(),
-                *GarmiJoint.right_fingers(),
-                self.world.get_connections_by_type(OmniDrive)[0].name,
-            ]
-        )
-
-
-@dataclass
-class GarmiVelocityInterface(RobotInterfaceConfig):
+class GarmiVelocityInterface(ClosedLoopRobotInterfaceConfig):
     """
     Closed-loop velocity interface for the real GARMI robot.
 
