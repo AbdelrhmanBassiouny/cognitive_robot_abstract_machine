@@ -3,11 +3,12 @@
 #
 #   current_state    - Tracy's twin as it is now: what the camera saw (`MontessoriShape`,
 #                      `SeenPiece`, the holes as `Region`s), what Tracy did (`action`),
-#                      every candidate it considered for what the plan left open
-#                      (`step`), which backend answered each open part of a plan
+#                      every plan the backends resolved (`PlanResolution`s in
+#                      `backends.resolutions`) and each open part they answered
 #                      (`SlotAnswer`s in `backends.answered`, by `Faculty`), and the
-#                      commands given (`command`, through `robot`);
-#                      `montessori` builds sorting plans for a command
+#                      commands given (`command`, through `robot`); `resolve(...)`
+#                      resolves any statement or `SortPieceAction` plan through the
+#                      backends, and `montessori` resolves sorting plans for a command
 #   detected_events  - what segmind saw happen to the pieces (`event`)
 #   episodic_memory  - every run already finished, answered in SQL (`run`, `action`)
 #
@@ -40,25 +41,61 @@
     an(entity(piece.root).where(SupportedBy(piece.root, table.root)))
 
 - scope: current_state
-  text: Take the cylinder back out
-  commands_the_robot: true
+  text: "Resolve: which cylinder is there?"
   acts: true
   code: |
-    robot.do(montessori.take_out(CylinderShape), 'take the cylinder out')
+    resolve(a(SeenPiece)(kind=CylinderShape))
 
 - scope: current_state
-  text: Insert the cylinder again
-  commands_the_robot: true
+  text: "Resolve: does the triangular prism still rest on the table?"
   acts: true
   code: |
-    robot.do(montessori.insert(CylinderShape), 'insert the cylinder')
+    piece = a(SeenPiece)(kind=TriangularPrismShape)
+    piece.where(SupportedBy(piece.root, montessori.twin.table))
+    resolve(piece)
 
 - scope: current_state
-  text: Take the triangular prism back out
+  text: "Resolve: which side to take the triangular prism from?"
+  acts: true
+  code: |
+    resolve(a(SideGrasp)(side=..., piece=a(SeenPiece)(kind=TriangularPrismShape)))
+
+- scope: current_state
+  text: "Resolve: which arm is free?"
+  acts: true
+  code: |
+    arm = an(Arm)
+    arm.where(GripperIsFree(arm.end_effector))
+    resolve(arm)
+
+- scope: current_state
+  text: "Resolve: which hole does the triangular prism go into?"
+  acts: true
+  code: |
+    resolve(an(Insertion)(piece=a(SeenPiece)(kind=TriangularPrismShape), hole=...))
+
+- scope: current_state
+  text: "Resolve the plan: put the triangular prism into its hole"
+  acts: true
+  code: |
+    piece = a(SeenPiece)(kind=TriangularPrismShape)
+    piece.where(SupportedBy(piece.root, montessori.twin.table))
+    resolve(a(SortPieceAction)(piece=piece, side=..., arm=..., hole=...))
+
+- scope: current_state
+  text: "Resolve the plan: put the cylinder into its hole again"
+  acts: true
+  code: |
+    piece = a(SeenPiece)(kind=CylinderShape)
+    piece.where(SupportedBy(piece.root, montessori.twin.table))
+    resolve(a(SortPieceAction)(piece=piece, side=..., arm=..., hole=...))
+
+- scope: current_state
+  text: Put the triangular prism into its hole
   commands_the_robot: true
   acts: true
   code: |
-    robot.do(montessori.take_out(TriangularPrismShape), 'take the triangular prism out')
+    robot.do(montessori.insert(TriangularPrismShape), 'put the triangular prism into its hole')
 
 - scope: current_state
   text: Pause
@@ -116,24 +153,10 @@
     an(entity(action).where(action.part_of == None))
 
 - scope: current_state
-  text: How did you resolve what the plan left open?
+  text: Which plans did the backends resolve?
   code: |
-    an(entity(step))
-
-- scope: current_state
-  text: How did you decide how to grasp each piece?
-  code: |
-    an(entity(step).where(step.open_part == 'PickUpAction'))
-
-- scope: current_state
-  text: Which hole did you choose for each piece?
-  code: |
-    an(entity(step).where(step.open_part == 'PlaceAction'))
-
-- scope: current_state
-  text: Which candidates did you reject, and why?
-  code: |
-    an(entity(step).where(step.outcome == 'rejected in trial'))
+    resolution = variable(PlanResolution, backends.resolutions)
+    an(entity(resolution))
 
 - scope: detected_events
   text: When was each piece picked up?

@@ -1,6 +1,6 @@
 """
 Tests for Tracy sorting the Montessori pieces its camera saw into the holes cut for them,
-leaving the arm, the grasp and the hole open for the robot to resolve.
+the piece, side, arm and hole each resolved by a backend before the robot moves.
 """
 
 from __future__ import annotations
@@ -13,27 +13,26 @@ import pytest
 from coraplex.datastructures.dataclasses import Context
 from coraplex.execution_environment import kinematically_simulated_robot
 from coraplex.plans.factories import sequential
-from coraplex.plans.underspecified import CandidateOutcome, UnderspecifiedNode
-from coraplex.robot_plans.actions.core.pick_up import PickUpAction
-from coraplex.robot_plans.actions.core.placing import PlaceAction
+from experiments.eql_showcase.insertion import FallIntoHoleExecutable
 from experiments.eql_showcase.montessori_demo import (
     DEFAULT_CAPTURE,
-    RELEASE_CLEARANCE,
     MontessoriSorting,
+    SortPieceAction,
     TracyMontessoriDemonstration,
 )
-from experiments.eql_showcase.falling import FallIntoHolesExecutable
 from experiments.eql_showcase.open_slots import (
-    AnsweredWhenAsked,
     Faculty,
+    GraspSide,
     GraspSideModel,
     Insertion,
+    PlanResolution,
     SideGrasp,
 )
 from experiments.eql_showcase.perceived_twin import SeenPiece
 from experiments.montessori.world import _HOLE_FOOTPRINTS
 from krrood.entity_query_language.backends import EntityQueryLanguageGenerativeBackend
 from krrood.entity_query_language.factories import a, an, variable
+from semantic_digital_twin.datastructures.definitions import StaticJointState
 from semantic_digital_twin.reasoning.predicates import InsideRegion, SupportedBy
 from semantic_digital_twin.world_description.geometry import Mesh
 from experiments.eql_showcase.perception_demo import PerceptionShowcase
@@ -63,7 +62,7 @@ def sorting(looked: PerceptionShowcase) -> MontessoriSorting:
     What builds sorting plans for the pieces Tracy saw.
     """
     [robot] = looked.twin.world.get_semantic_annotations_by_type(Tracy)
-    return MontessoriSorting(twin=looked.twin, robot=robot)
+    return MontessoriSorting(twin=looked.twin, robot=robot, perception_view=looked.view)
 
 
 # %% which pieces go where
@@ -84,92 +83,160 @@ def test_only_pieces_with_a_hole_of_their_shape_are_sorted(
     assert sorting.pieces() == [piece for piece in seen if piece.kind in hole_kinds]
 
 
-def test_a_piece_is_released_just_above_the_lid_over_each_hole_of_its_shape(
-    sorting: MontessoriSorting,
-):
-    [piece, *_] = sorting.pieces()
-    [box] = piece.root.collision.shapes
-    holes = sorting.holes_for(piece)
-
-    poses = sorting.release_poses(piece)
-
-    assert [pose.position.to_np()[:3].tolist() for pose in poses] == [
-        [
-            *hole.region.global_pose.position.to_np()[:2].tolist(),
-            hole.lid_height + box.scale.z / 2 + RELEASE_CLEARANCE,
-        ]
-        for hole in holes
-    ]
-
-
-# %% resolving what the plan left open
-
-
-def test_inserting_a_piece_resolves_the_open_grasp_arm_and_hole(
-    sorting: MontessoriSorting,
-):
-    [piece, *_] = sorting.pieces()
-    context = Context(sorting.twin.world, sorting.robot, sampling_seed=SAMPLING_SEED)
-    plan = sequential([sorting.insert(piece.kind)], context=context).plan
-
-    with kinematically_simulated_robot:
-        plan.perform()
-
-    resolved = {
-        node.designator_type: node.candidate_trials[-1]
-        for node in plan.plan_graph.nodes()
-        if isinstance(node, UnderspecifiedNode)
-    }
-    [release] = [
-        pose
-        for pose in sorting.release_poses(piece)
-        if np.allclose(
-            pose.position.to_np(),
-            resolved[PlaceAction].action.target_location.position.to_np(),
-        )
-    ]
-    assert set(resolved) == {PickUpAction, PlaceAction}
-    assert all(
-        trial.outcome is CandidateOutcome.ACCEPTED for trial in resolved.values()
-    )
-    assert np.allclose(
-        piece.root.global_pose.position.to_np()[:2],
-        release.position.to_np()[:2],
-        atol=PLACEMENT_TOLERANCE,
-    )
+def holes_for(sorting: MontessoriSorting, piece: SeenPiece) -> list:
+    """
+    The holes seen that are cut for a piece's kind.
+    """
+    return [hole for hole in sorting.twin.holes if hole.kind is piece.kind]
 
 
 @pytest.fixture
 def unsorted() -> MontessoriSorting:
     """
-    What builds sorting plans for a fresh look, whose pieces lie where the camera saw
-    them.
+    What resolves sorting plans for a fresh look, whose pieces lie where the camera saw
+    them, with Tracy's arms parked as the demonstration starts them.
     """
-    look = PerceptionShowcase(bridge=None)
-    look.commit(DEFAULT_CAPTURE)
-    [robot] = look.twin.world.get_semantic_annotations_by_type(Tracy)
-    return MontessoriSorting(twin=look.twin, robot=robot)
+    demonstration = TracyMontessoriDemonstration(takes_commands=False)
+    world = demonstration.build_simulated_world()
+    [robot] = world.get_semantic_annotations_by_type(Tracy)
+    return MontessoriSorting(
+        twin=demonstration.look.twin,
+        robot=robot,
+        perception_view=demonstration.look.view,
+    )
 
 
-def test_taking_a_piece_out_puts_it_back_where_the_camera_saw_it(
+def test_a_piece_is_released_with_its_bottom_just_over_the_lid_above_its_hole(
     unsorted: MontessoriSorting,
 ):
     [piece, *_] = unsorted.pieces()
-    home = unsorted.homes[piece].position.to_np()[:2]
+    [box] = piece.root.collision.shapes
+    action = unsorted.insert(piece.kind)
+
+    released = action.release_pose().position.to_np()[:3]
+
+    assert np.allclose(
+        released,
+        [
+            *action.hole.region.global_pose.position.to_np()[:2],
+            action.hole.lid_height + box.scale.z / 2 + action.release_clearance,
+        ],
+    )
+
+
+# %% resolving before the robot moves
+
+
+def test_a_sorting_plan_is_resolved_part_by_part_before_the_robot_moves(
+    unsorted: MontessoriSorting,
+):
+    [piece, *_] = unsorted.pieces()
+    resting = piece.root.global_pose.position.to_np()
+
+    action = unsorted.insert(piece.kind)
+
+    [resolution] = unsorted.answerer.resolutions
+    assert [part.faculty for part in resolution.parts] == [
+        Faculty.PERCEPTION,
+        Faculty.WORKING_MEMORY,
+        Faculty.PROBABILISTIC,
+        Faculty.WORKING_MEMORY,
+        Faculty.RULES,
+    ]
+    assert resolution.done and resolution.plan is action
+    assert np.allclose(piece.root.global_pose.position.to_np(), resting)
+
+
+def test_a_resolved_sorting_puts_the_piece_into_its_hole(
+    unsorted: MontessoriSorting,
+):
+    [piece, *_] = unsorted.pieces()
+    action = unsorted.insert(piece.kind)
     context = Context(unsorted.twin.world, unsorted.robot, sampling_seed=SAMPLING_SEED)
-    plan = sequential(
-        [unsorted.insert(piece.kind), unsorted.take_out(piece.kind)], context=context
-    ).plan
+    plan = sequential([action], context=context).plan
 
     with kinematically_simulated_robot:
         plan.perform()
 
-    assert np.allclose(
-        piece.root.global_pose.position.to_np()[:2], home, atol=PLACEMENT_TOLERANCE
+    assert action.piece is piece
+    assert InsideRegion(piece.root, action.hole.region)()
+
+
+def test_a_sorting_whose_piece_no_longer_rests_on_the_table_is_left_unresolved(
+    unsorted: MontessoriSorting,
+):
+    [piece, *_] = unsorted.pieces()
+    [hole, *_] = holes_for(unsorted, piece)
+    piece.root.parent_connection.origin = (
+        SortPieceAction(
+            piece=piece, side=..., arm=unsorted.robot.all_arms[0], hole=hole
+        )
+        .release_pose()
+        .homogeneous_matrix
     )
+
+    action = unsorted.insert(piece.kind)
+
+    [resolution] = unsorted.answerer.resolutions
+    assert action is None
+    assert not resolution.executable
+    assert resolution.parts[-1].answers == []
+
+
+def test_any_statement_is_resolved_its_nested_statements_first(
+    unsorted: MontessoriSorting,
+):
+    [piece, *_] = unsorted.pieces()
+
+    answers = unsorted.resolve(
+        an(Insertion)(piece=a(SeenPiece)(kind=piece.kind), hole=...)
+    )
+
+    [resolution] = unsorted.answerer.resolutions
+    assert [answer.hole for answer in answers] == holes_for(unsorted, piece)
+    assert [part.faculty for part in resolution.parts] == [
+        Faculty.PERCEPTION,
+        Faculty.RULES,
+    ]
+
+
+def test_a_sorting_plan_stated_in_a_query_is_resolved_to_one_the_robot_can_do(
+    unsorted: MontessoriSorting,
+):
+    [piece, *_] = unsorted.pieces()
+
+    [action] = unsorted.resolve(unsorted.statement_to_sort(piece.kind))
+
+    assert isinstance(action, SortPieceAction)
+    assert action.piece is piece
+    assert unsorted.answerer.resolutions[-1].executable
+
+
+def test_the_hand_comes_down_onto_a_piece_from_above(sorting: MontessoriSorting):
+    [piece, *_] = sorting.pieces()
+
+    grasp = SideGrasp(side=GraspSide.FRONT).candidate_on(piece)
+
+    approach = grasp.grasp_pose.homogeneous_matrix.to_np()[:3, 0]
+    assert np.allclose(approach, [0.0, 0.0, -1.0], atol=1e-6)
 
 
 # %% who answers what the plan left open
+
+
+@dataclass
+class AnsweredLater:
+    """
+    Values produced only once a query iterates over them.
+    """
+
+    answers: object
+    """
+    Produces the values.
+    """
+
+    def __iter__(self):
+        yield from self.answers()
 
 
 @dataclass
@@ -186,8 +253,15 @@ class AnswerAskedForLater:
 
 STEP = "sort a piece"
 """
-The step every statement of these tests is asked in.
+What the resolution every statement of these tests is asked in is called.
 """
+
+
+def resolution_of(sorting: MontessoriSorting) -> PlanResolution:
+    """
+    A resolution to ask the statements of a test in.
+    """
+    return sorting.answerer.begin(STEP, [], [])
 
 
 def test_which_pieces_there_are_is_answered_by_what_the_camera_saw(
@@ -196,7 +270,7 @@ def test_which_pieces_there_are_is_answered_by_what_the_camera_saw(
     [piece, *_] = sorting.pieces()
 
     answers = sorting.answerer.answer(
-        STEP, "which piece", a(SeenPiece)(kind=piece.kind)
+        resolution_of(sorting), "piece", "which piece", a(SeenPiece)(kind=piece.kind)
     )
 
     assert answers == [seen for seen in sorting.pieces() if seen.kind is piece.kind]
@@ -210,7 +284,9 @@ def test_whether_a_piece_rests_on_the_table_is_read_off_the_twin(
     resting = a(SeenPiece)(kind=piece.kind).from_([piece])
     resting.where(SupportedBy(resting.root, unsorted.twin.table))
 
-    answers = unsorted.answerer.answer(STEP, "does it rest on the table", resting)
+    answers = unsorted.answerer.answer(
+        resolution_of(unsorted), "piece-where", "does it rest on the table", resting
+    )
 
     assert answers == [piece]
     assert unsorted.answerer.answered[-1].faculty is Faculty.WORKING_MEMORY
@@ -222,10 +298,13 @@ def test_the_hole_a_piece_goes_into_is_concluded_by_the_rules(
     [piece, *_] = sorting.pieces()
 
     answers = sorting.answerer.answer(
-        STEP, "which hole", an(Insertion)(piece=piece, hole=...)
+        resolution_of(sorting),
+        "hole",
+        "which hole",
+        an(Insertion)(piece=piece, hole=...),
     )
 
-    assert [insertion.hole for insertion in answers] == sorting.holes_for(piece)
+    assert [insertion.hole for insertion in answers] == holes_for(sorting, piece)
     assert sorting.answerer.answered[-1].faculty is Faculty.RULES
 
 
@@ -233,8 +312,8 @@ def test_the_rules_conclude_a_hole_while_another_query_is_being_answered(
     sorting: MontessoriSorting,
 ):
     """
-    A plan's open part is answered while the plan's own query generates its
-    candidates, so the rules are evaluated inside that query's evaluation.
+    A statement can be resolved while a query of the viewer's is being evaluated, so
+    the rules are evaluated inside that query's evaluation.
     """
     [piece, *_] = sorting.pieces()
     rules = sorting.answerer.backend_for(an(Insertion)(piece=piece, hole=...))
@@ -243,7 +322,7 @@ def test_the_rules_conclude_a_hole_while_another_query_is_being_answered(
         a(AnswerAskedForLater)(
             answer=variable(
                 type,
-                domain=AnsweredWhenAsked(lambda: iter([rules.concluded_kind(piece)])),
+                domain=AnsweredLater(lambda: iter([rules.concluded_kind(piece)])),
             )
         )
     )
@@ -258,7 +337,10 @@ def test_the_side_a_piece_is_taken_from_is_sampled_most_likely_first(
     weights = GraspSideModel(piece=piece).weights()
 
     answers = sorting.answerer.answer(
-        STEP, "which side", a(SideGrasp)(side=..., piece=piece)
+        resolution_of(sorting),
+        "side",
+        "which side",
+        a(SideGrasp)(side=..., piece=piece),
     )
 
     likelihoods = [weights[answer.side] for answer in answers]
@@ -295,15 +377,21 @@ def test_a_seen_hole_lies_where_the_board_has_a_hole_of_its_kind(
         )
 
 
-def test_a_piece_released_over_a_hole_falls_into_it(unsorted: MontessoriSorting):
+def test_a_piece_let_go_over_its_hole_falls_into_it(unsorted: MontessoriSorting):
     [piece, *_] = unsorted.pieces()
-    [hole, *_] = unsorted.holes_for(piece)
-    connection = piece.root.parent_connection
-    connection.origin = unsorted.release_pose(piece, hole).homogeneous_matrix
+    [hole, *_] = holes_for(unsorted, piece)
+    piece.root.parent_connection.origin = (
+        SortPieceAction(
+            piece=piece, side=..., arm=unsorted.robot.all_arms[0], hole=hole
+        )
+        .release_pose()
+        .homogeneous_matrix
+    )
 
-    FallIntoHolesExecutable(
+    FallIntoHoleExecutable(
         context=Context(unsorted.twin.world, unsorted.robot),
-        twin=unsorted.twin,
+        piece=piece,
+        hole=hole,
         seconds=0,
     ).execute()
 
@@ -324,6 +412,48 @@ def test_a_command_keeps_the_answers_of_the_sorting_before_it():
 def test_an_answer_is_shown_by_what_it_asks_and_where(sorting: MontessoriSorting):
     [piece, *_] = sorting.pieces()
 
-    sorting.answerer.answer(STEP, "which piece", a(SeenPiece)(kind=piece.kind))
+    sorting.answerer.answer(
+        resolution_of(sorting), "piece", "which piece", a(SeenPiece)(kind=piece.kind)
+    )
 
     assert sorting.answerer.answered[-1].name == f"which piece · {STEP}"
+
+
+def test_perception_shows_the_pieces_it_found_on_the_camera_view(
+    sorting: MontessoriSorting,
+):
+    [piece, *_] = sorting.pieces()
+
+    sorting.answerer.answer(
+        resolution_of(sorting), "piece", "which piece", a(SeenPiece)(kind=piece.kind)
+    )
+
+    drawn = sorting.answerer.answered[-1].reasoning.to_payload()
+    assert drawn["foundView"].startswith("data:image/jpeg;base64,")
+    assert [shown["name"] for shown in drawn["pieces"] if shown["selected"]] == [
+        seen.name.name for seen in sorting.pieces() if seen.kind is piece.kind
+    ]
+
+
+def test_an_answer_lights_up_the_bodies_it_is_about(sorting: MontessoriSorting):
+    [piece, *_] = sorting.pieces()
+
+    sorting.answerer.answer(
+        resolution_of(sorting), "piece", "which piece", a(SeenPiece)(kind=piece.kind)
+    )
+
+    assert sorting.answerer.answered[-1].to_payload()["highlight"] == [
+        str(seen.root.name) for seen in sorting.pieces() if seen.kind is piece.kind
+    ]
+
+
+def test_tracy_starts_with_its_arms_parked():
+    demonstration = TracyMontessoriDemonstration(takes_commands=False)
+
+    world = demonstration.build_simulated_world()
+
+    [robot] = world.get_semantic_annotations_by_type(Tracy)
+    assert all(
+        arm.get_joint_state_by_type(StaticJointState.PARK).is_achieved()
+        for arm in robot.all_arms
+    )

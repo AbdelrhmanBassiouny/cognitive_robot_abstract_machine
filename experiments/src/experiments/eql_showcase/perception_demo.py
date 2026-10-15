@@ -28,6 +28,7 @@ from experiments.montessori.perception.captures import (
     SceneCapture,
 )
 from experiments.montessori.perception.node import TRACY_WORKSPACE
+from experiments.montessori.perception.overlay import RectifiedView
 from experiments.montessori.perception.pipeline import MontessoriPerceptionPipeline
 from experiments.montessori.semantics import MontessoriShape
 from experiments.montessori.world import BOARD_SCALE
@@ -106,14 +107,20 @@ class PerceptionShowcase:
     The ready-made questions about what the camera saw.
     """
 
+    view: Optional[RectifiedView] = field(init=False, default=None)
+    """
+    The camera's top-down view of the table in the last look, or None before the first.
+    """
+
     def commit(self, capture_name: str) -> None:
         """
         Look at one capture and commit what was seen into the twin.
 
         :param capture_name: The capture to look at.
         """
-        capture = SceneCapture.load(capture_name)
-        self.twin.commit(self.pipeline.detect(capture.to_frame()))
+        frame = SceneCapture.load(capture_name).to_frame()
+        self.twin.commit(self.pipeline.detect(frame))
+        self.view = RectifiedView(frame, self.pipeline.rectify_table(frame))
 
     def look_at(self, capture_name: str) -> None:
         """

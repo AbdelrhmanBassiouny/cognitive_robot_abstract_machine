@@ -195,6 +195,11 @@ class PerceivedTwin:
     What the current look saw each piece as.
     """
 
+    board: Body | None = field(init=False, default=None)
+    """
+    The board the current look found, or None if it found none.
+    """
+
     colors: Dict[Type[MontessoriShape], Color] = field(default_factory=piece_colors)
     """
     The colour each kind of piece is drawn in.
@@ -288,6 +293,7 @@ class PerceivedTwin:
         body = _board_body(self._name("board"), shape, _HOLE_FOOTPRINTS)
         self._attach(body, board_pose)
         self.committed.append(body)
+        self.board = body
         for index, hole in enumerate(board.holes):
             footprint = self._model_hole_for(board, hole)
             outline = footprint.boundary.bounding_box
@@ -429,6 +435,7 @@ class PerceivedTwin:
                 self.world.remove_semantic_annotation(annotation)
         self.holes.clear()
         self.sightings.clear()
+        self.board = None
         for entity in self.committed:
             self.world.remove_connection(entity.parent_connection)
             self.world.remove_kinematic_structure_entity(entity)
