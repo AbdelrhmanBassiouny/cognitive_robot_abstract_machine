@@ -147,7 +147,7 @@ class VideoFile(Video):
 
 
 @dataclass(frozen=True)
-class FfmpegProgram:
+class FfmpegEncoderProgram:
     """
     The ffmpeg program that encodes and joins the streams of a video.
     """
@@ -183,7 +183,7 @@ class H264Encoder:
     How long the encoder may take to make the file small.
     """
 
-    ffmpeg: FfmpegProgram = field(default_factory=FfmpegProgram)
+    ffmpeg: FfmpegEncoderProgram = field(default_factory=FfmpegEncoderProgram)
     """
     The program that encodes.
     """

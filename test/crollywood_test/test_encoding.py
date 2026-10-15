@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-from crollywood.encoding import FfmpegProgram, H264Encoder, VideoFile
+from crollywood.encoding import FfmpegEncoderProgram, H264Encoder, VideoFile
 from crollywood.exceptions import NothingToRead
 from crollywood.frame import Frame, Resolution
 from crollywood.slides import SingleFrameSlide
@@ -107,7 +107,7 @@ def test_a_file_without_frames_has_nothing_to_read(tmp_path: Path) -> None:
 
 
 def test_the_program_runs_quietly_with_the_arguments_given_after_its_own() -> None:
-    program = FfmpegProgram(Path("ffmpeg"))
+    program = FfmpegEncoderProgram(Path("ffmpeg"))
     arguments = ["-i", "in.mkv", "out.mp4"]
     command = program.command(arguments)
     assert command[0] == str(program.path)

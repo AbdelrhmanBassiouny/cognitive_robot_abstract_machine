@@ -11,7 +11,7 @@ from datetime import timedelta
 from enum import StrEnum
 from pathlib import Path
 
-from crollywood.encoding import FfmpegProgram, VideoFile
+from crollywood.encoding import FfmpegEncoderProgram, VideoFile
 from krrood.units import BitRate, DataSize
 
 # %% the tracks of the mp4
@@ -113,7 +113,7 @@ class MediaMultiplexer:
     Joins a silent video, its narration and its subtitles into one mp4.
     """
 
-    ffmpeg: FfmpegProgram = field(default_factory=FfmpegProgram)
+    ffmpeg: FfmpegEncoderProgram = field(default_factory=FfmpegEncoderProgram)
     """
     The program that joins the streams.
     """
