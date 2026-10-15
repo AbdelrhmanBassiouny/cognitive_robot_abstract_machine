@@ -307,7 +307,7 @@ class HasApproachesGraspPoses:
             ``None`` keeps only :attr:`approach_clearance`.
         :return: The tool frame goals around the grasp.
         """
-        tool_goal = end_effector.tool_frame_goal(reference_T_grasp)
+        tool_goal = end_effector.tool_frame_goal_for_grasp(reference_T_grasp)
         return GraspPoseSequence(
             pre_grasp=self.pre_grasp_pose(
                 reference_T_grasp, end_effector, self._approach_distance(grasp)
@@ -321,7 +321,8 @@ class HasApproachesGraspPoses:
         reference_T_grasp: Pose, end_effector: EndEffector, distance: float
     ) -> Pose:
         """
-        The tool frame goal back along the direction the gripper approaches a grasp from.
+        The goal back along the direction the gripper approaches a grasp from, aimed at
+        the point the fingers meet as the grasp itself is.
 
         :param reference_T_grasp: The grasp frame, whose x-axis is the approach.
         :param end_effector: The end effector that reaches it.
@@ -329,7 +330,7 @@ class HasApproachesGraspPoses:
         :return: The tool frame goal, in ``reference_T_grasp``'s frame.
         """
         grasp_T_pre_grasp = HomogeneousTransformationMatrix.from_xyz_rpy(x=-distance)
-        return end_effector.tool_frame_goal(
+        return end_effector.tool_frame_goal_for_grasp(
             (reference_T_grasp.homogeneous_matrix @ grasp_T_pre_grasp).pose
         )
 

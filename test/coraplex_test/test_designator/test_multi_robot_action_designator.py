@@ -55,7 +55,7 @@ from semantic_digital_twin.robots.robot_part_mixins import HasMobileBase
 from semantic_digital_twin.robots.robot_parts import AbstractRobot, EndEffector
 from typing_extensions import Generator, Iterable, Tuple
 
-from ..conftest import left_or_only_arm, right_or_only_arm
+from ..conftest import grasp_point_of, left_or_only_arm, right_or_only_arm
 from ..world_snapshot import WorldSnapshot
 from semantic_digital_twin.grasping.grasp_candidates import GraspCandidate
 from semantic_digital_twin.robots.garmi import Garmi
@@ -413,12 +413,11 @@ def test_reach_action_multi(multiple_robot_apartment_context):
         plan.perform()
 
     end_effector_pose = left_arm.end_effector.tool_frame.global_transform
-    end_effector_position = end_effector_pose.position.to_np()
     end_effector_orientation = end_effector_pose.quaternion.to_np()
 
     target_orientation = left_arm.end_effector.tool_frame_goal(grasp_pose).quaternion
 
-    assert end_effector_position[:3] == pytest.approx([1, -2, 0.8], abs=0.01)
+    assert grasp_point_of(left_arm) == pytest.approx([1, -2, 0.8], abs=0.01)
     compare_orientations(
         end_effector_orientation, target_orientation.to_np(), decimal=2
     )
@@ -513,10 +512,10 @@ def test_grasping(multiple_robot_apartment_context):
     with kinematically_simulated_robot:
         plan.perform()
 
-    # The grasp is the milk's own origin, so that is where the tool frame ends up.
+    # The grasp is the milk's own origin, so that is where the fingers end up.
     assert np.allclose(
-        milk_body.global_pose.position.to_np(),
-        left_arm.end_effector.tool_frame.global_pose.position.to_np(),
+        milk_body.global_pose.position.to_np().flatten()[:3],
+        grasp_point_of(left_arm),
         atol=0.01,
     )
 
@@ -558,8 +557,8 @@ def test_pick_up_multi(multiple_robot_apartment_context, rclpy_node):
     )
 
     assert np.allclose(
-        world.get_body_by_name("milk.stl").global_pose.position.to_np(),
-        left_arm.end_effector.tool_frame.global_pose.position.to_np(),
+        world.get_body_by_name("milk.stl").global_pose.position.to_np().flatten()[:3],
+        grasp_point_of(left_arm),
         atol=0.01,
     )
 

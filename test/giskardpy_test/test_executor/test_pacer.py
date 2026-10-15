@@ -1,8 +1,13 @@
+from __future__ import annotations
+
+from dataclasses import dataclass
+from datetime import timedelta
 from time import perf_counter
 
 import numpy as np
 
 import pytest
+from typing_extensions import Dict, List
 
 from giskardpy.data_types.exceptions import NonPositiveRealTimeFactorError
 from giskardpy.executor import (
@@ -26,7 +31,9 @@ from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.connections import Connection6DoF
 from semantic_digital_twin.world_description.geometry import Box, Scale
 from semantic_digital_twin.world_description.shape_collection import ShapeCollection
-from semantic_digital_twin.world_description.world_entity import Body
+from semantic_digital_twin.world_description.connection_properties import ServoGains
+from semantic_digital_twin.world_description.degree_of_freedom import DegreeOfFreedom
+from semantic_digital_twin.world_description.world_entity import Body, PositionServo
 
 from ...pytest_environment import runs_in_continuous_integration
 
@@ -143,3 +150,167 @@ def test_stepped_simulation_pacer_advances_the_physics_one_cycle_per_sleep():
 
     fallen = 0.5 * 9.81 * (cycles / frequency) ** 2
     assert height == pytest.approx(1.0 - fallen, abs=0.01)
+
+
+# %% waiting for the robot to come to a standstill
+
+
+@dataclass
+class JointThatStopsAfterAWhile:
+    """
+    A joint that travels a fixed distance per step for a while and then stays put, the
+    way a servo settles or is held up by something it has run into.
+    """
+
+    steps_still_moving: int
+    """
+    How many more steps the joint travels before it stays put.
+    """
+
+    travel_per_step: float = 0.05
+    """
+    How far it travels per step while it is still moving.
+    """
+
+    position: float = 0.0
+    """
+    Where it stands now.
+    """
+
+    def step(self) -> None:
+        """
+        Let one step of physics pass.
+        """
+        if self.steps_still_moving == 0:
+            return
+        self.position += self.travel_per_step
+        self.steps_still_moving -= 1
+
+
+@dataclass
+class JointValuesRead:
+    """
+    What a simulator answers a bulk read of joint values with.
+    """
+
+    result: Dict[str, float]
+    """
+    The position read per joint name.
+    """
+
+
+@dataclass
+class SimulationOfSettlingJoints:
+    """
+    Stands in for a stepped simulation, reporting joints that come to a standstill
+    without any physics being computed.
+    """
+
+    joints: Dict[str, JointThatStopsAfterAWhile]
+    """
+    The joints it reports, by name.
+    """
+
+    steps: int = 0
+    """
+    How many steps of physics it has been asked for.
+    """
+
+    @property
+    def world(self) -> World:
+        """
+        :return: A world whose servos drive exactly the joints reported.
+        """
+        world = World()
+        for joint_name in self.joints:
+            servo = PositionServo(
+                name=PrefixedName(f"{joint_name}_servo"),
+                gains=ServoGains(stiffness=1.0, damping=1.0, torque_limit=1.0),
+            )
+            servo.add_dof(DegreeOfFreedom(name=PrefixedName(joint_name)))
+            world.actuators.append(servo)
+        return world
+
+    @property
+    def simulator(self) -> SimulationOfSettlingJoints:
+        """
+        :return: Itself, since it answers the reads a simulator would.
+        """
+        return self
+
+    def step_simulation(self, duration: timedelta) -> None:
+        """
+        :param duration: Ignored; every call is one step of this stand-in.
+        """
+        self.steps += 1
+        for joint in self.joints.values():
+            joint.step()
+
+    def get_joints_values(self, joint_names: List[str]) -> JointValuesRead:
+        """
+        :param joint_names: The joints to read.
+        :return: Where each of them stands.
+        """
+        return JointValuesRead(
+            result={
+                joint_name: self.joints[joint_name].position
+                for joint_name in joint_names
+            }
+        )
+
+
+def settling_pacer(
+    simulation: SimulationOfSettlingJoints, frequency: float = 50, seconds: float = 10
+) -> SteppedSimulationPacer:
+    """
+    :param simulation: The simulation to step.
+    :param frequency: The rate the loop runs at.
+    :param seconds: The simulated time the robot is given to come to a standstill.
+    :return: A pacer driving that simulation.
+    """
+    pacer = SteppedSimulationPacer(
+        simulation, standstill_time_limit=timedelta(seconds=seconds)
+    )
+    pacer.target_frequency = frequency
+    return pacer
+
+
+def test_waiting_ends_once_the_slowest_joint_has_stopped_moving():
+    """
+    The physics is stepped while anything is still travelling, and one step further,
+    which is the step that shows nothing moved.
+    """
+    simulation = SimulationOfSettlingJoints(
+        joints={
+            "quick_joint": JointThatStopsAfterAWhile(steps_still_moving=2),
+            "slow_joint": JointThatStopsAfterAWhile(steps_still_moving=6),
+        }
+    )
+
+    settling_pacer(simulation).wait_for_standstill()
+
+    assert simulation.steps == 7
+    assert simulation.joints["slow_joint"].position == pytest.approx(0.3)
+
+
+def test_a_robot_that_never_stops_moving_is_waited_for_only_so_long(caplog):
+    simulation = SimulationOfSettlingJoints(
+        joints={"restless_joint": JointThatStopsAfterAWhile(steps_still_moving=1000)}
+    )
+
+    settling_pacer(simulation, frequency=50, seconds=0.1).wait_for_standstill()
+
+    assert simulation.steps == 5
+    assert "still moving" in caplog.text
+
+
+def test_a_simulation_without_servos_is_not_stepped_at_all():
+    """
+    A joint written straight into the world is already where it was put, so there is
+    nothing to wait for.
+    """
+    simulation = SimulationOfSettlingJoints(joints={})
+
+    settling_pacer(simulation).wait_for_standstill()
+
+    assert simulation.steps == 0

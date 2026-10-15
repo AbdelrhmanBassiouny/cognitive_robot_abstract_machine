@@ -536,7 +536,31 @@ class Layer(SubclassJSONSerializer, ABC):
         Scale the parameters of this layer alone in-place.
         """
 
+    # %% structure
+
     @abstractmethod
+    def nodes_with_child_in(self, nodes_of_layers: Dict[int, NodeMask]) -> NodeMask:
+        """
+        :param nodes_of_layers: Nodes of the layers below this layer, by the id of the
+            layer. Every child layer must be a key.
+        :return: The nodes of this layer that have one of these nodes as a child.
+        """
+        raise NotImplementedError
+
+    def products_over(self, variables: VariableIndices) -> NodeMask:
+        """
+        :param variables: Indices of variables.
+        :return: The product nodes of this layer that model all of the variables.
+        """
+        return np.zeros(self.number_of_nodes, dtype=bool)
+
+    def mixture_components(self) -> List[Tuple[Layer, int]]:
+        """
+        :return: The child layer and node of every component this layer mixes, if it
+            is a single sum node, otherwise nothing.
+        """
+        return []
+
     def __deepcopy__(self, memo=None) -> Layer:
         raise NotImplementedError
 
@@ -684,6 +708,18 @@ class InnerLayer(Layer, ABC):
         """
         return iter(self.inner_layer_edges)
 
+    def nodes_with_child_in(self, nodes_of_layers: Dict[int, NodeMask]) -> NodeMask:
+        edges = self.inner_layer_edges
+        child_in = np.zeros(len(edges.nodes), dtype=bool)
+        for child_layer_index, child_layer in enumerate(self.child_layers):
+            into_child_layer = edges.child_layer_indices == child_layer_index
+            child_in[into_child_layer] = nodes_of_layers[id(child_layer)][
+                edges.child_nodes[into_child_layer]
+            ]
+        result = np.zeros(self.number_of_nodes, dtype=bool)
+        result[edges.nodes[child_in]] = True
+        return result
+
 
 @dataclass(eq=False, repr=False)
 class LeafLayer(Layer, ABC):
@@ -704,6 +740,9 @@ class LeafLayer(Layer, ABC):
         cls, copies: list[Self], stacked_child_layers: list[StackedLayer]
     ) -> StackedLayer:
         return StackedLayer.of_leaf_layer_copies(copies)
+
+    def nodes_with_child_in(self, nodes_of_layers: Dict[int, NodeMask]) -> NodeMask:
+        return np.zeros(self.number_of_nodes, dtype=bool)
 
     @classmethod
     @abstractmethod

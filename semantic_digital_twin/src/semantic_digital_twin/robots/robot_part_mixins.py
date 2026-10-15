@@ -24,6 +24,10 @@ from krrood.patterns.subclass_safe_generic import (
     SubClassSafeGeneric,
 )
 from krrood.utils import get_existing_field_by_name, get_generic_type_parameters
+from semantic_digital_twin.datastructures.definitions import (
+    GripperState,
+    JointStateType,
+)
 from semantic_digital_twin.datastructures.lidar_reading import LidarReading
 from semantic_digital_twin.reasoning.predicates import LeftOf, RightOf
 from semantic_digital_twin.spatial_types.spatial_types import Point3, Pose, Vector3
@@ -178,12 +182,16 @@ class Fingertips:
     @property
     def tool_P_grasp(self) -> Point3:
         """
-        Where the tips meet, in :attr:`tool_frame`.
+        Where the tips meet as the gripper stands, in :attr:`tool_frame`.
 
         A gripper's tool frame need not sit there, and aiming the tool frame itself at
         an object then closes the fingers beside it rather than on it. Each tip's own
         collision bounding box centre stands in for where that finger is, since a tip's
         link origin may sit at an edge of its mesh rather than at its centre.
+
+        Read it inside a
+        :meth:`~semantic_digital_twin.world.World.reset_state_context` to read it for a
+        state the gripper is not standing in.
         """
         thumb, finger = (self._bounding_box(tip).center for tip in self.both)
         return thumb.midpoint(finger)
@@ -349,24 +357,79 @@ class HasTwoFingers(
             closing_axis=self.closing_axis,
         )
 
+    @cached_property
+    def travel_when_closing(self) -> float:
+        """
+        How much further along :attr:`EndEffector.approach_axis` the fingers meet when
+        closed than when open, in metres. Zero for fingers that only slide.
+
+        A constant of the gripper's description, read once and kept. The gripper is put
+        through its own open and closed states to read it, inside a
+        :meth:`~semantic_digital_twin.world.World.reset_state_context` that stands the
+        world back up afterwards.
+        """
+        fingertips = self.fingertips
+        with self._world.reset_state_context():
+            open_P_grasp, closed_P_grasp = (
+                self._meeting_point_in_state(fingertips, state_type)
+                for state_type in (GripperState.OPEN, GripperState.CLOSE)
+            )
+        travelled = closed_P_grasp - open_P_grasp
+        return float(travelled.dot(self.approach_axis))
+
+    def _meeting_point_in_state(
+        self, fingertips: Fingertips, state_type: JointStateType
+    ) -> Point3:
+        """
+        :param fingertips: The tips to read.
+        :param state_type: The state to stand the gripper in.
+        :return: Where the tips meet with the gripper standing in that state.
+
+        ..warning:: This leaves the gripper standing in that state. Call it inside a
+            :meth:`~semantic_digital_twin.world.World.reset_state_context`.
+        """
+        self.get_joint_state_by_type(state_type).apply_to(self._world)
+        return fingertips.tool_P_grasp
+
+    @cached_property
+    def tool_P_grasp_when_closed(self) -> Point3:
+        """
+        Where the fingers meet once closed, in :attr:`tool_frame`.
+
+        Jaws on a linkage carry the meeting point :attr:`travel_when_closing` further
+        out as they close, so where the fingers meet depends on how far the gripper
+        happens to stand open. A grasp planned while open and a release planned while
+        holding would then be aimed at two different points, and an object placed after
+        being picked up would land beside its target by that difference. This is the
+        point an object is held at, which is the one both have to be aimed at.
+
+        A constant of the gripper's description, read once and kept. The same point as
+        :attr:`Fingertips.tool_P_grasp` for fingers that only slide.
+        """
+        with self._world.reset_state_context():
+            return self._meeting_point_in_state(self.fingertips, GripperState.CLOSE)
+
+    # %% reaching and reading back a grasp
+
     def tool_frame_goal_for_grasp(self, grasp_pose: Pose) -> Pose:
         """
-        Express a grasp frame as the goal that puts
-        :attr:`~semantic_digital_twin.robots.robot_part_mixins.Fingertips.tool_P_grasp` on it,
-        where
-        :meth:`~semantic_digital_twin.robots.robot_parts.EndEffector.tool_frame_goal`
-        puts the tool frame there.
+        Express a grasp frame as the goal that puts :attr:`tool_P_grasp_when_closed` on
+        it.
 
         :param grasp_pose: The grasp frame to meet.
         :return: The pose the tool frame has to reach, in ``grasp_pose``'s frame.
         """
-        oriented = self.tool_frame_goal(grasp_pose)
-        return Pose(
-            position=grasp_pose.position
-            - oriented.rotation_matrix @ self.fingertips.tool_P_grasp.vector3,
-            orientation=oriented.quaternion,
-            reference_frame=grasp_pose.reference_frame,
-        )
+        return self.tool_frame_goal_for_point(self.tool_P_grasp_when_closed, grasp_pose)
+
+    @property
+    def held_body_T_grasp(self) -> Pose:
+        """
+        The grasp this gripper has on the body it holds, read at the point it holds an
+        object, which is the point :meth:`tool_frame_goal_for_grasp` aims at.
+
+        :return: The grasp frame, in the held body's frame.
+        """
+        return self.held_body_T_grasp_at(self.tool_P_grasp_when_closed)
 
 
 @dataclass(eq=False)

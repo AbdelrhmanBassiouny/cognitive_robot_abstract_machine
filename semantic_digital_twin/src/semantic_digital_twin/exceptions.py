@@ -2418,3 +2418,22 @@ class SimulationAlreadyRunningError(UsageError):
 
     def suggest_correction(self) -> str:
         return "Stop the simulation before starting it again."
+
+
+@dataclass
+class ObjectHasNoWidthWithoutCollision(UsageError):
+    """
+    Raised when the width of an object is asked for, while the object carries no
+    collision geometry to measure.
+    """
+
+    object_name: PrefixedName
+    """
+    Name of the body whose width was asked for.
+    """
+
+    def error_message(self) -> str:
+        return f"{self.object_name} has no collision geometry to measure a width on."
+
+    def suggest_correction(self) -> str:
+        return "Give the body collision geometry, or state the width yourself."

@@ -85,7 +85,7 @@ class ReachAction(
 
     grasp: GraspCandidate
     """
-    The grasp the tool frame should reach, which also names the object it is on.
+    The grasp the fingers should close on, which also names the object it is on.
     """
 
     reverse_reach_order: bool = False

@@ -98,7 +98,7 @@ def test_back_off_pose_clears_the_grasp_by_the_release_clearance(pr2_at_drawer):
 
     end_effector = left_or_only_arm(robot).end_effector
     grasp_pose = Pose(reference_frame=handle.root)
-    tool_goal = end_effector.tool_frame_goal(grasp_pose)
+    tool_goal = end_effector.tool_frame_goal_for_grasp(grasp_pose)
     back_off = action.back_off_pose(grasp_pose, end_effector)
 
     np.testing.assert_allclose(

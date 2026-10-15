@@ -24,6 +24,7 @@ numerically integrating the joint density.
 
 from __future__ import annotations
 
+import math
 import unittest
 from enum import Enum, IntEnum
 from unittest import mock
@@ -47,6 +48,7 @@ from probabilistic_model.adapters.rustworkx_tensorized.tensorized_to_rustworkx i
     LayeredCircuitToRustworkxCircuitConverter,
 )
 from probabilistic_model.distributions.distributions import (
+    DiracDeltaDistribution,
     IntegerDistribution,
     SymbolicDistribution,
 )
@@ -1601,6 +1603,48 @@ class LayerTestCase(unittest.TestCase):
             layer.cumulative_distribution_of_nodes(points)[:, 0],
             distribution.cumulative_distribution_function(points),
         )
+
+
+class SupportOfPointMassesTestCase(unittest.TestCase):
+    """
+    A circuit of Dirac deltas at locations an interval cannot hold exactly must still
+    give its own support, and every region of it, the probability the same circuit of
+    units gives.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        generator = np.random.default_rng(0)
+        cls.rx_circuit = RxCircuit()
+        root = SumUnit(probabilistic_circuit=cls.rx_circuit)
+        for _ in range(20):
+            product = ProductUnit(probabilistic_circuit=cls.rx_circuit)
+            for variable in (x, y):
+                product.add_subcircuit(
+                    leaf(
+                        DiracDeltaDistribution(
+                            variable=variable,
+                            location=float(generator.uniform(0, 5)),
+                        ),
+                        cls.rx_circuit,
+                    )
+                )
+            root.add_subcircuit(product, math.log(1 / 20))
+        cls.layered = RustworkxCircuitToLayeredCircuitConverter.convert(cls.rx_circuit)
+
+    def test_the_support_has_probability_one(self):
+        self.assertAlmostEqual(
+            self.layered.probability(self.layered.support), 1.0, places=9
+        )
+
+    def test_every_region_of_the_support_agrees_with_rustworkx(self):
+        for simple_set in self.rx_circuit.support.simple_sets:
+            with self.subTest(str(simple_set)):
+                self.assertAlmostEqual(
+                    self.layered.probability(simple_set.as_composite_set()),
+                    self.rx_circuit.probability(simple_set.as_composite_set()),
+                    places=9,
+                )
 
 
 if __name__ == "__main__":

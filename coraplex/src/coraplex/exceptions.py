@@ -191,6 +191,25 @@ class ReachHasNoFinalApproach(DataclassException):
 
 
 @dataclass
+class GraspHasNoClosingMotion(DataclassException):
+    """
+    Raised when the motion a grasp closes with is asked for, but no gripper motion that
+    shuts the gripper lies below the grasp's node.
+    """
+
+    plan_node: PlanNode
+    """
+    The node of the grasp.
+    """
+
+    def error_message(self) -> str:
+        return f"{self.plan_node} has no motion closing the gripper below it."
+
+    def suggest_correction(self) -> str:
+        return "ask for the closing motion only once the grasp has been expanded"
+
+
+@dataclass
 class MissingWaypoints(DataclassException):
     """
     Raised when a waypoint motion or tool action produced no waypoints to follow.

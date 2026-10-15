@@ -210,6 +210,24 @@ class ProductLayer(InnerLayer):
         occurrences = factors_of_node.T @ scope_of_child_layer
         return occurrences.max(axis=1, initial=0) <= 1
 
+    def products_over(self, variables: VariableIndices) -> NodeMask:
+        edges = self.inner_layer_edges
+        result = np.ones(self.number_of_nodes, dtype=bool)
+        for variable in variables:
+            child_layer_models_variable = np.array(
+                [
+                    variable in child_layer.variables
+                    for child_layer in self.child_layers
+                ],
+                dtype=bool,
+            )
+            models_variable = np.zeros(self.number_of_nodes, dtype=bool)
+            models_variable[
+                edges.nodes[child_layer_models_variable[edges.child_layer_indices]]
+            ] = True
+            result &= models_variable
+        return result
+
     # %% queries
 
     @functools.cached_property
