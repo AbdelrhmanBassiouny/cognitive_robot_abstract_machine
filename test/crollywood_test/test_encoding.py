@@ -1,6 +1,6 @@
 """
 Tests for :mod:`crollywood.encoding`: frames written out as an H.264 video that fits a
-venue's limits, and the file that came out checked against those limits.
+size budget, and the file that came out read back.
 """
 
 from __future__ import annotations
@@ -11,10 +11,9 @@ from pathlib import Path
 import pytest
 
 from crollywood.encoding import H264Encoder, VideoFile
-from crollywood.exceptions import NothingToRead, VideoOutsideTheLimits
+from crollywood.exceptions import NothingToRead
 from crollywood.frame import Frame, Resolution
 from crollywood.slides import SingleFrameSlide
-from crollywood.submission import SubmissionLimits
 from crollywood.timeline import TimelineScene, VideoTimeline
 from krrood.units import DataSize
 
@@ -65,20 +64,6 @@ def encoded(tmp_path_factory: pytest.TempPathFactory) -> VideoFile:
     return H264Encoder(size_budget=SIZE_BUDGET).encode(timeline, path)
 
 
-def limits(**changes: object) -> SubmissionLimits:
-    """
-    :param changes: The limits to change from ones that the encoded file satisfies.
-    :return: Limits for the encoded file.
-    """
-    satisfied = dict(
-        longest=timedelta(seconds=3),
-        largest=SIZE_BUDGET.scaled(2),
-        lowest=FRAME_SIZE.height,
-        slowest=FRAMES_PER_SECOND,
-    )
-    return SubmissionLimits(**{**satisfied, **changes})
-
-
 # %% what comes out
 
 
@@ -117,27 +102,3 @@ def test_a_moment_past_the_end_of_the_file_shows_its_last_frame(
 def test_a_file_without_frames_has_nothing_to_read(tmp_path: Path) -> None:
     with pytest.raises(NothingToRead):
         VideoFile(tmp_path / "missing.mp4").frame_at(timedelta(0))
-
-
-# %% the limits
-
-
-def test_the_limits_accept_a_file_inside_them(encoded: VideoFile) -> None:
-    encoded.check_within(limits())
-
-
-@pytest.mark.parametrize(
-    "broken_limit",
-    [
-        dict(longest=timedelta(seconds=1)),
-        dict(largest=DataSize.of_bytes(10)),
-        dict(lowest=720),
-        dict(slowest=30),
-    ],
-    ids=["longest", "largest", "lowest", "slowest"],
-)
-def test_each_limit_refuses_a_file_outside_it(
-    encoded: VideoFile, broken_limit: dict
-) -> None:
-    with pytest.raises(VideoOutsideTheLimits):
-        encoded.check_within(limits(**broken_limit))

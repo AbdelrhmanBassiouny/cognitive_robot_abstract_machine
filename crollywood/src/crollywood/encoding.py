@@ -2,8 +2,7 @@
 Frames written out as one H.264 video no larger than a size budget.
 
 The encoder is told the size the file may not exceed and picks the bit rate from that and
-the length, in two passes; the file that comes out can be checked against a venue's
-limits before it is handed on.
+the length, in two passes; the file that comes out can be read back frame by frame.
 """
 
 from __future__ import annotations
@@ -18,21 +17,12 @@ from tempfile import TemporaryDirectory
 import cv2
 import imageio_ffmpeg
 import numpy as np
-from typing_extensions import TYPE_CHECKING
 
-from crollywood.exceptions import (
-    EncodingFailed,
-    NothingToRead,
-    VideoOutsideTheLimits,
-)
+from crollywood.exceptions import EncodingFailed, NothingToRead
 from crollywood.frame import Frame, Resolution
 from crollywood.timeline import VideoTimeline
 from krrood.units import BitRate, DataSize
 from crollywood.video import Video
-
-if TYPE_CHECKING:
-    from crollywood.submission import SubmissionLimits
-
 
 # %% the encoder's names
 
@@ -150,31 +140,6 @@ class VideoFile(Video):
         if not read:
             raise NothingToRead(path=self.path, moment=moment)
         return Frame(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
-
-    def check_within(self, limits: SubmissionLimits) -> None:
-        """
-        :param limits: What a venue accepts the video as.
-        :raises VideoOutsideTheLimits: If the video breaks any of the limits.
-        """
-        broken = []
-        if self.duration > limits.longest:
-            broken.append(
-                f"plays {self.duration.total_seconds():.1f} s, over "
-                f"{limits.longest.total_seconds():.0f} s"
-            )
-        if self.size > limits.largest:
-            broken.append(f"takes {self.size.bytes} bytes, over {limits.largest.bytes}")
-        if self.resolution.height < limits.lowest:
-            broken.append(
-                f"is {self.resolution.height} rows tall, under {limits.lowest}"
-            )
-        if self.frames_per_second < limits.slowest:
-            broken.append(
-                f"plays {self.frames_per_second:.1f} frames a second, under "
-                f"{limits.slowest}"
-            )
-        if broken:
-            raise VideoOutsideTheLimits(video=self, broken=broken)
 
 
 # %% the encoder

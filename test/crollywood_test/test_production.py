@@ -1,12 +1,13 @@
 """
 Tests for :mod:`crollywood.production`: a minimal storyboard made into a narrated mp4,
-with its subtitles burned in or as a track, checked against a venue's limits.
+with its subtitles burned in or as a track, encoded to the size it is allowed.
 """
 
 from __future__ import annotations
 
 
 import subprocess
+from dataclasses import dataclass, field
 from datetime import timedelta
 from enum import StrEnum
 from pathlib import Path
@@ -17,7 +18,6 @@ import pytest
 
 from crollywood.captions import BoxedCaption, Subtitled
 from crollywood.encoding import EncoderPreset, VideoFile
-from crollywood.exceptions import VideoOutsideTheLimits
 from crollywood.frame import Frame, Resolution
 from crollywood.narration import NarratedLine, NarratedScene, Storyboard
 from crollywood.overlays import ProgressBar
@@ -29,7 +29,6 @@ from crollywood.slides import (
     TextCard,
 )
 from crollywood.speech import SoundLevel
-from crollywood.submission import SubmissionLimits
 from crollywood.theme import VideoTheme
 from crollywood.timeline import Transition
 from krrood.units import DataSize
@@ -88,7 +87,6 @@ def minimal_storyboard() -> Storyboard:
 
 def production(
     subtitling: Subtitling = Subtitling.BURNED_IN,
-    limits: SubmissionLimits | None = None,
 ) -> VideoProduction:
     """
     The minimal storyboard made quickly by the test voice.
@@ -99,7 +97,6 @@ def production(
         frames_per_second=FRAMES_PER_SECOND,
         dissolve=DISSOLVE,
         subtitling=subtitling,
-        limits=limits,
         preset=EncoderPreset.FAST,
     )
 
@@ -182,7 +179,7 @@ def test_the_subtitles_are_burned_into_the_band_while_a_line_is_said(
     assert said.pixels[band].min() < DARK
 
 
-def test_the_video_is_encoded_to_the_budget_where_no_venue_limits_it(
+def test_the_video_is_encoded_to_its_picture_bit_rate(
     burned_in: VideoFile,
 ) -> None:
     allowed = production().picture_bit_rate.over(burned_in.duration)
@@ -215,31 +212,31 @@ def test_soft_subtitles_go_in_as_a_track_and_a_subrip_file_beside_it(
     assert "This video was made by a test." in subrip.read_text()
 
 
-# %% a venue's limits
+# %% a size the production is allowed
 
 
-def test_a_video_longer_than_the_venue_allows_is_refused(tmp_path: Path) -> None:
-    too_short = SubmissionLimits(
-        longest=SLIDE_HOLD,
-        largest=DataSize.of_bytes(10_000_000),
-        lowest=RESOLUTION.height,
-        slowest=FRAMES_PER_SECOND,
+@dataclass
+class FixedSizeProduction(VideoProduction):
+    """
+    A production allowed one size, however long the video plays.
+    """
+
+    largest: DataSize = field(kw_only=True)
+    """
+    The most the file may take.
+    """
+
+    def size_allowed_for(self, duration: timedelta) -> DataSize:
+        return self.largest
+
+
+def test_a_production_that_allows_another_size_budgets_its_picture_from_it() -> None:
+    made = FixedSizeProduction(
+        minimal_storyboard(), voice=VOICE, largest=DataSize.of_bytes(150_000)
     )
-    with pytest.raises(VideoOutsideTheLimits):
-        production(limits=too_short).written_to(tmp_path / "minimal.mp4")
-
-
-def test_a_video_inside_the_venues_limits_is_encoded_to_its_budget(
-    tmp_path: Path,
-) -> None:
-    limits = SubmissionLimits(
-        longest=timedelta(seconds=60),
-        largest=DataSize.of_bytes(2_000_000),
-        lowest=RESOLUTION.height,
-        slowest=FRAMES_PER_SECOND,
-    )
-    video = production(limits=limits).written_to(tmp_path / "minimal.mp4")
-    assert video.size <= limits.size_budget_for(video.duration)
+    duration = made.narrated_timeline().duration
+    sound = made.multiplexer.size_of_sound(duration)
+    assert made.picture_budget_for(duration) == made.largest - sound
 
 
 # %% what is drawn over the scenes

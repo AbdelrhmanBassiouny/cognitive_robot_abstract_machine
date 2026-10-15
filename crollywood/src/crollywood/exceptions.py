@@ -13,41 +13,8 @@ from krrood.exceptions import DataclassException
 from typing_extensions import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from crollywood.encoding import VideoFile
     from crollywood.frame import Resolution
     from crollywood.narration import NarratedLine
-
-
-@dataclass
-class VideoOutsideTheLimits(DataclassException):
-    """
-    Raised when a video breaks a limit a venue states for a submission.
-    """
-
-    video: VideoFile
-    """
-    The video checked.
-    """
-
-    broken: list[str]
-    """
-    What it breaks, one line each.
-    """
-
-    def error_message(self) -> str:
-        """
-        :return: What went wrong.
-        """
-        return f"{self.video.path} cannot be submitted: " + "; ".join(self.broken)
-
-    def suggest_correction(self) -> str:
-        """
-        :return: How to put it right.
-        """
-        return (
-            "Shorten the script, lower the size budget or raise the frame rate or "
-            "resolution the timeline is rendered at."
-        )
 
 
 @dataclass

@@ -1,8 +1,7 @@
 """
 A storyboard turned into a finished mp4: the slides grown to hold their lines, the
-narration said and placed, the picture encoded to a size budget, the narration and the
-subtitles joined to it, and the file checked against a venue's limits where one is
-given.
+narration said and placed, the picture encoded to the size the file is allowed, and the
+narration and the subtitles joined to it.
 """
 
 from __future__ import annotations
@@ -18,7 +17,6 @@ from crollywood.encoding import EncoderPreset, H264Encoder, VideoFile
 from crollywood.multiplexer import MediaMultiplexer
 from crollywood.narration import NarratedTimeline, Storyboard
 from crollywood.speech import KokoroTextToSpeech, TextToSpeech
-from crollywood.submission import SubmissionLimits
 from crollywood.timeline import Overlay, VideoTimeline
 from krrood.units import BitRate, DataSize
 
@@ -84,12 +82,6 @@ class VideoProduction:
     :class:`~crollywood.overlays.ProgressBar`.
     """
 
-    limits: SubmissionLimits | None = None
-    """
-    What a venue accepts the video as, if the video is made for one: the picture is
-    then encoded to the venue's size limit and the file checked against every limit.
-    """
-
     preset: EncoderPreset = EncoderPreset.SLOW
     """
     How long the encoder may take to make the file small.
@@ -99,8 +91,8 @@ class VideoProduction:
         default_factory=lambda: BitRate(DataSize(2_000_000))
     )
     """
-    How much data one second of picture may take where no venue limits the file: what
-    keeps slides and footage at 720 rows sharp.
+    How much data one second of picture may take: what keeps slides and footage at 720
+    rows sharp.
     """
 
     multiplexer: MediaMultiplexer = field(default_factory=MediaMultiplexer)
@@ -140,17 +132,22 @@ class VideoProduction:
             return narrated.role_taker
         return Subtitled.over(narrated, style=self.captions)
 
+    def size_allowed_for(self, duration: timedelta) -> DataSize:
+        """
+        :param duration: How long the video plays.
+        :return: The most the whole file may take: the picture bit rate over that long.
+        """
+        return self.picture_bit_rate.over(duration)
+
     def picture_budget_for(self, duration: timedelta) -> DataSize:
         """
         :param duration: How long the video plays.
-        :return: What the picture may take, leaving room for the sound.
+        :return: What the picture may take: the size the file is allowed, leaving room
+            for the sound.
         """
-        allowed = (
-            self.picture_bit_rate.over(duration)
-            if self.limits is None
-            else self.limits.size_budget_for(duration)
+        return self.size_allowed_for(duration) - self.multiplexer.size_of_sound(
+            duration
         )
-        return allowed - self.multiplexer.size_of_sound(duration)
 
     def written_to(self, path: Path) -> VideoFile:
         """
@@ -159,7 +156,6 @@ class VideoProduction:
         :param path: Where the mp4 goes; the SubRip file of soft subtitles goes beside
             it.
         :return: The file written.
-        :raises VideoOutsideTheLimits: If the limits are given and the file breaks one.
         """
         narrated = self.narrated_timeline()
         duration = narrated.duration
@@ -182,8 +178,6 @@ class VideoProduction:
         video = self.multiplexer.joined(silent, soundtrack, path, subtitles=subtitles)
         silent.path.unlink()
         soundtrack.unlink()
-        if self.limits is not None:
-            video.check_within(self.limits)
         logger.info(
             "%s: %.1f s, %d bytes",
             video.path,

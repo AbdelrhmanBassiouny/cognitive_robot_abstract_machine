@@ -8,7 +8,7 @@ authors = [
     { name = "Abdelrhman Bassiouny", email = "abassiou@uni-bremen.de" },
     { name = "Naren Vasantakumaar", email = "naren.vasant@gmail.com" },
 ]
-description = "Narrated, subtitled videos: scenes on a timeline, a narrator, subtitles and H.264 encoding to a venue's limits."
+description = "Narrated, subtitled videos: scenes on a timeline, a narrator, subtitles and H.264 encoding to a size budget."
 readme = "README.md"
 requires-python = ">=3.12,<3.13"
 classifiers = [

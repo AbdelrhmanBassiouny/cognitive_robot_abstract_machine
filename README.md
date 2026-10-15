@@ -112,7 +112,7 @@ from the activated environment, then run an existing demo with
 
 [crollywood](crollywood/README.md) makes narrated, subtitled mp4 videos from scenes you
 write, of experiments, demonstrations or anything else: slides, recorded footage and
-your own scenes on a timeline, encoded to a venue's limits.
+your own scenes on a timeline, encoded to a size budget.
 
 ## To run tests
 

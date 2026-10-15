@@ -12,8 +12,7 @@ with it. `VideoProduction` then:
 - burns the subtitles into the picture, or adds them as a track the viewer can switch
   off,
 - encodes the picture as H.264 to a byte budget,
-- joins the narration to it as AAC,
-- and checks the file against a venue's limits when you give it some.
+- and joins the narration to it as AAC.
 
 ## A minimal video
 
@@ -137,12 +136,10 @@ voice's own speed, for one the viewer needs time to follow. To time steps of a s
 to the narration, measure the lines with `NarratedLine.start_times`. `Narration.report()` prints when each line
 starts and how much silence follows it.
 
-## Size and limits
+## Size
 
 Sizes are `krrood.units.DataSize` and bit rates `krrood.units.BitRate` (`DataSize.of_bytes(40_000)`,
-`BitRate(DataSize(64_000))` for 64 kilobits a second). With no limits given, the picture
-is encoded at `VideoProduction.picture_bit_rate`. For a venue with limits, pass
-`submission.SubmissionLimits(longest=..., largest=..., lowest=..., slowest=...)`: the picture is
-then encoded to that venue's size budget, and the finished file is checked against
-every limit (`exceptions.VideoOutsideTheLimits`). `preset=EncoderPreset.FAST` encodes a quick
-draft.
+`BitRate(DataSize(64_000))` for 64 kilobits a second). The file may take
+`VideoProduction.picture_bit_rate` over its length; for a video that must fit another
+size, such as a venue's, subclass `VideoProduction` and override `size_allowed_for`.
+`preset=EncoderPreset.FAST` encodes a quick draft.
