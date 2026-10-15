@@ -224,7 +224,7 @@ def run(
         world,
         context_extensions=[RobotAccess(robot)],
         ros_node=ros_node,
-        extensions=selected_visualizations(),
+        extensions=selected_visualizations(ros_node),
     )
     executor.compile(build_statechart(executor.context, source, destination, turn))
     executor.execute()

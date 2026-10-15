@@ -103,6 +103,17 @@ def finalized_recordings(monkeypatch) -> list[Recording]:
     return finalized
 
 
+def an_ending_statechart(world: World) -> Statechart:
+    """
+    :param world: The world the statechart runs in.
+    :return: A statechart that ends once its only step succeeded.
+    """
+    statechart = Statechart(context=StatechartContext(world=world))
+    statechart.add_node(step := ConstTrueNode(name="step"))
+    statechart.add_node(EndStatechart.when_true(step))
+    return statechart
+
+
 # %% world synchronization
 
 
@@ -388,13 +399,10 @@ class TestLiveVisualization:
     ):
         bridge = Bridge()
         live = LiveVisualization(bridge=bridge)
-        statechart = Statechart(context=StatechartContext(world=world))
-        statechart.add_node(step := ConstTrueNode(name="step"))
-        statechart.add_node(EndStatechart.when_true(step))
+        statechart = an_ending_statechart(world)
         executor = StatechartExecutor(context=statechart.context, extensions=[live])
 
         executor.compile(statechart)
-        recording = bridge.recording
 
         assert bridge.world is world
         assert statechart.history.observers == [live.publishing]
@@ -403,6 +411,89 @@ class TestLiveVisualization:
         executor.execute()
 
         assert statechart.history.observers == []
+        live.stop()
+
+    def test_the_viewer_keeps_showing_a_run_once_it_ended(
+        self, world, finalized_recordings
+    ):
+        """
+        What the run left stays inspectable in the viewer until the visualization is
+        stopped.
+        """
+        bridge = Bridge()
+        live = LiveVisualization(bridge=bridge)
+        statechart = an_ending_statechart(world)
+        executor = StatechartExecutor(context=statechart.context, extensions=[live])
+        executor.compile(statechart)
+        server = bridge.live_server
+
+        executor.execute()
+
+        assert live.is_rendering
+        assert bridge.live_server is server
+        assert finalized_recordings == []
+        live.stop()
+
+    def test_stopping_after_a_run_finalizes_its_recording(
+        self, world, finalized_recordings
+    ):
+        bridge = Bridge()
+        live = LiveVisualization(bridge=bridge)
+        statechart = an_ending_statechart(world)
+        executor = StatechartExecutor(context=statechart.context, extensions=[live])
+        executor.compile(statechart)
+        recording = bridge.recording
+        executor.execute()
+
+        live.stop()
+
         assert finalized_recordings == [recording]
         assert bridge.live_server is None
         assert not live.is_rendering
+
+    def test_later_runs_in_the_same_world_continue_the_recording(
+        self, world, finalized_recordings
+    ):
+        bridge = Bridge()
+        live = LiveVisualization(bridge=bridge)
+        first = an_ending_statechart(world)
+        executor = StatechartExecutor(context=first.context, extensions=[live])
+        executor.compile(first)
+        server = bridge.live_server
+        recording = bridge.recording
+        executor.execute()
+        second = an_ending_statechart(world)
+        executor = StatechartExecutor(context=second.context, extensions=[live])
+
+        executor.compile(second)
+
+        assert bridge.live_server is server
+        assert bridge.recording is recording
+        assert second.history.observers == [live.publishing]
+        executor.execute()
+        live.stop()
+
+    def test_a_run_in_another_world_is_served_by_the_same_server(
+        self, world, finalized_recordings
+    ):
+        bridge = Bridge()
+        live = LiveVisualization(bridge=bridge)
+        first = an_ending_statechart(world)
+        executor = StatechartExecutor(context=first.context, extensions=[live])
+        executor.compile(first)
+        server = bridge.live_server
+        recording = bridge.recording
+        first_state_sync = live.state_sync
+        executor.execute()
+        other_world = World()
+        second = an_ending_statechart(other_world)
+        executor = StatechartExecutor(context=second.context, extensions=[live])
+
+        executor.compile(second)
+
+        assert bridge.world is other_world
+        assert first_state_sync not in world.state.state_change_callbacks
+        assert bridge.live_server is server
+        assert bridge.recording is recording
+        executor.execute()
+        live.stop()

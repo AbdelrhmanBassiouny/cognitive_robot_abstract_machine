@@ -82,7 +82,7 @@ def main() -> None:
             world,
             context_extensions=[RobotAccess(pr2)],
             ros_node=ros_session.node,
-            extensions=selected_visualizations(),
+            extensions=selected_visualizations(ros_session.node),
         )
         statechart = Statechart(context=executor.context)
         statechart.add_node(plan)

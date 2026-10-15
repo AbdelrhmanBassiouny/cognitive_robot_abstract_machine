@@ -7,6 +7,7 @@ from __future__ import annotations
 import logging
 import os
 import runpy
+import signal
 import sys
 from pathlib import Path
 
@@ -46,7 +47,8 @@ def main() -> None:
     Selects the cramera backend through ``CORAPLEX_VISUALIZATION`` and runs the demo
     unchanged: the visualizations the demo selects through the environment pick the
     backend up. The demo's directory is put on ``sys.path`` so it can import its local
-    helper modules, exactly as if it were started directly.
+    helper modules, exactly as if it were started directly. After the demo finishes the
+    viewer stays up for inspection until Ctrl-C.
     """
     logging.basicConfig(level=logging.INFO, force=True)
     if len(sys.argv) < 2:
@@ -56,6 +58,9 @@ def main() -> None:
     sys.path.insert(0, str(demo.parent))
     logger.info("running demo: %s", demo)
     runpy.run_path(str(demo), run_name="__main__")
+    logger.info("demo finished — viewer stays up for inspection (Ctrl-C to quit)")
+    signal.pthread_sigmask(signal.SIG_BLOCK, {signal.SIGINT})
+    signal.sigwait({signal.SIGINT})
 
 
 if __name__ == "__main__":

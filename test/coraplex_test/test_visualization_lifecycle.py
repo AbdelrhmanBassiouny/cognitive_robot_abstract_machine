@@ -12,13 +12,11 @@ from typing_extensions import Type
 
 import coraplex.visualization as visualization_module
 from coraplex.visualization import RvizVisualization
-from semantic_digital_twin.world import World
 
 from .test_optional_visualization import (
     VisualizationRecordingItsRuns,
     an_ending_statechart,
     an_executor,
-    an_executor_with_a_ros_node,
 )
 
 
@@ -29,8 +27,8 @@ def test_failed_publisher_creation_leaves_the_node_usable(
     monkeypatch.setattr(
         visualization_module, "VizMarkerPublisher", Mock(side_effect=RuntimeError())
     )
-    visualization = RvizVisualization()
-    executor = an_executor_with_a_ros_node(visualization, World(), rclpy_node)
+    visualization = RvizVisualization(ros_node=rclpy_node)
+    executor = an_executor(visualization)
     with pytest.raises(RuntimeError):
         executor.compile(an_ending_statechart(executor.context))
     assert rclpy_node.context.ok()
@@ -49,8 +47,8 @@ def test_collision_setup_failure_stops_the_publisher(
     monkeypatch.setattr(
         visualization_module, "VizMarkerPublisher", Mock(return_value=publisher)
     )
-    visualization = RvizVisualization(collision_visualization=True)
-    executor = an_executor_with_a_ros_node(visualization, World(), rclpy_node)
+    visualization = RvizVisualization(ros_node=rclpy_node, collision_visualization=True)
+    executor = an_executor(visualization)
     with pytest.raises(failure_type) as caught:
         executor.compile(an_ending_statechart(executor.context))
     assert caught.value is failure
@@ -67,8 +65,8 @@ def test_publisher_stop_failure_still_ends_the_visualization(
     monkeypatch.setattr(
         visualization_module, "VizMarkerPublisher", Mock(return_value=publisher)
     )
-    visualization = RvizVisualization()
-    executor = an_executor_with_a_ros_node(visualization, World(), rclpy_node)
+    visualization = RvizVisualization(ros_node=rclpy_node)
+    executor = an_executor(visualization)
     executor.compile(an_ending_statechart(executor.context))
     with pytest.raises(RuntimeError):
         visualization.stop()

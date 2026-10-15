@@ -22,7 +22,8 @@ def test_motion_recording_retains_completed_chart(
     pr2_apartment_context, monkeypatch
 ) -> None:
     """
-    A real torso motion records its final chart and releases its observer.
+    A real torso motion records its final chart, which the recording holds once the
+    visualization is stopped, and releases its observer.
     """
     world, robot, extensions = pr2_apartment_context
     finalized: list[Recording] = []
@@ -46,6 +47,7 @@ def test_motion_recording_retains_completed_chart(
 
     executor.compile(statechart_of(executor, plan))
     executor.execute()
+    live.stop()
 
     [recording] = finalized
     frames = recording.stop()

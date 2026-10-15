@@ -14,12 +14,11 @@ from typing_extensions import TYPE_CHECKING, Self
 
 from coraplex.datastructures.enums import VisualizationBackend, VisualizationOption
 from coraplex.exceptions import (
-    ExecutorWithoutRosNode,
+    RvizVisualizationWithoutRosNode,
     UnknownVisualizationOption,
     VisualizationBackendUnavailable,
 )
 from cramph.executor import ExecutorExtension
-from giskardpy.motion_statechart.ros_context import RosContextExtension
 from semantic_digital_twin.adapters.rerun import RerunAdapter, RerunMode
 
 if TYPE_CHECKING:
@@ -60,18 +59,21 @@ class WorldVisualization(ExecutorExtension, ABC):
         cls,
         default_backend: VisualizationBackend = VisualizationBackend.NONE,
         *,
+        ros_node: Node | None = None,
         collision_visualization: bool = False,
     ) -> WorldVisualization | None:
         """
         Select the visualization named by :attr:`VisualizationOption.BACKEND`.
 
         :param default_backend: The renderer used unless the environment selects one.
+        :param ros_node: The ROS node RViz publishes through.
         :param collision_visualization: Whether RViz also shows collision results.
         :return: The selected visualization, or ``None`` for
             :attr:`VisualizationBackend.NONE`.
         :raises UnknownVisualizationOption: If the environment names no renderer.
         :raises VisualizationBackendUnavailable: If no installed visualization provides
             the selected renderer.
+        :raises RvizVisualizationWithoutRosNode: If RViz is selected without `ros_node`.
         """
         backend = (
             os.environ.get(VisualizationOption.BACKEND, default_backend.value)
@@ -84,8 +86,10 @@ class WorldVisualization(ExecutorExtension, ABC):
             case VisualizationBackend.NONE:
                 return None
             case VisualizationBackend.RVIZ:
+                if ros_node is None:
+                    raise RvizVisualizationWithoutRosNode()
                 return RvizVisualization(
-                    collision_visualization=collision_visualization
+                    ros_node=ros_node, collision_visualization=collision_visualization
                 )
             case VisualizationBackend.RERUN:
                 return RerunVisualization.from_rerun_options()
@@ -166,8 +170,12 @@ class WorldVisualization(ExecutorExtension, ABC):
 @dataclass
 class RvizVisualization(WorldVisualization):
     """
-    Publishes the world as ROS markers for RViz, through the ROS node of the executor it
-    is added to.
+    Publishes the world as ROS markers for RViz.
+    """
+
+    ros_node: Node = field(kw_only=True)
+    """
+    The ROS node the markers are published through, which stays with its owner.
     """
 
     collision_visualization: bool = field(default=False, kw_only=True)
@@ -194,11 +202,6 @@ class RvizVisualization(WorldVisualization):
     publisher's own.
     """
 
-    ros_node: Node | None = field(default=None, init=False)
-    """
-    The ROS node of the executor, while this visualization runs.
-    """
-
     publisher: VizMarkerPublisher | None = field(default=None, init=False)
     """
     The marker publisher, while this visualization runs.
@@ -208,29 +211,14 @@ class RvizVisualization(WorldVisualization):
     def is_rendering(self) -> bool:
         return self.publisher is not None
 
-    def after_compile(self, executor: Executor) -> None:
-        """
-        Differs from :meth:`WorldVisualization.after_compile` in publishing through the
-        ROS node `executor` gives its statecharts.
-
-        :raises MissingContextExtensionError: If `executor` gives its statecharts no ROS
-            context.
-        """
-        self.ros_node = executor.context.require_extension(RosContextExtension).ros_node
-        super().after_compile(executor)
-
     def _start(self, world: World, cleanup: ExitStack) -> None:
         """
         Start publishing markers through :attr:`ros_node`.
 
         :raises VisualizationBackendUnavailable: If ROS is not installed.
-        :raises ExecutorWithoutRosNode: If the executor has no ROS node.
         """
-        cleanup.callback(self._release_node)
         if VizMarkerPublisher is None:
             raise VisualizationBackendUnavailable(VisualizationBackend.RVIZ)
-        if self.ros_node is None:
-            raise ExecutorWithoutRosNode()
         tf_publisher = self._prefixed_tf_publisher(world, cleanup)
         self.publisher = VizMarkerPublisher(
             _world=world,
@@ -265,12 +253,6 @@ class RvizVisualization(WorldVisualization):
         )
         cleanup.callback(tf_publisher.stop)
         return tf_publisher
-
-    def _release_node(self) -> None:
-        """
-        Forget the node of the executor, which stays with its owner.
-        """
-        self.ros_node = None
 
     def _stop_publisher(self, publisher: VizMarkerPublisher) -> None:
         """

@@ -181,7 +181,9 @@ def _finalize_recording_at_exit(
 class LiveVisualization(WorldVisualization):
     """
     Serves the world and the statechart of an executor to the cramera browser viewer
-    while the executor runs it.
+    while the executor runs it, and keeps what a run left inspectable until stopped.
+
+    Every run of a later executor continues the same recording on the same server.
     """
 
     port: int = DEFAULT_PORT
@@ -226,10 +228,22 @@ class LiveVisualization(WorldVisualization):
 
     _exit_callback: Callable[[], None] | None = field(init=False, default=None)
     """
-    The registered finalizer for the capture of the current run.
+    The registered finalizer for the capture, in case the process exits before
+    :meth:`stop`.
     """
 
-    def __post_init__(self):
+    _session_cleanup: ExitStack = field(
+        default_factory=ExitStack, init=False, repr=False
+    )
+    """
+    Releases the server and the recording, which outlive a run, in reverse acquisition
+    order.
+    """
+
+    def __post_init__(self) -> None:
+        """
+        Publish the statecharts through :attr:`bridge`.
+        """
         self.publishing = StatechartPublishing(bridge=self.bridge)
 
     @property
@@ -238,23 +252,31 @@ class LiveVisualization(WorldVisualization):
 
     def _start(self, world: World, cleanup: ExitStack) -> None:
         """
-        Serve `world`, its default live queries and a new recording to the viewer,
-        finalizing an earlier recording of :attr:`bridge` first.
+        Serve `world` and its default live queries to the viewer, starting the server
+        and a new recording unless they already run, and finalizing an earlier recording
+        of :attr:`bridge` first.
+
+        A failing start also releases the server and the recording it started.
         """
-        if self.bridge.recording is not None:
-            finalize_recording(self.bridge, self.bridge.recording)
+        with ExitStack() as session:
+            if self._recording is None:
+                self._start_recording(session)
+            self._show(world, cleanup)
+            if self.bridge.live_server is None:
+                self.bridge.live_server = serve(self.bridge, self.port)
+                session.callback(self._shut_down_server)
+            self._session_cleanup.push(session.pop_all())
+
+    def _show(self, world: World, cleanup: ExitStack) -> None:
+        """
+        Publish `world` and its default live queries through :attr:`bridge`.
+
+        :param world: The world to show.
+        :param cleanup: Releases what showing `world` acquired.
+        """
         self._query_attachment = self.bridge.attach(world)
         cleanup.callback(self._release_world_queries)
-        self._recording = Recording()
-        self.bridge.recording = self._recording
-        self._recording.start()
-        cleanup.callback(self._finalize_recording)
         MeshFileStorage()
-        self._exit_callback = partial(
-            _finalize_recording_at_exit, self.bridge, self._recording
-        )
-        atexit.register(self._exit_callback)
-        cleanup.callback(self._unregister_exit_callback)
         self.bridge.snapshot()
         self.state_sync = WorldStateSync(_world=world, bridge=self.bridge)
         cleanup.callback(self._stop_state_sync)
@@ -263,9 +285,24 @@ class LiveVisualization(WorldVisualization):
         self.marker_listener = RosMarkerListener.start_if_available(self.bridge)
         self.bridge.marker_listener = self.marker_listener
         cleanup.callback(self._stop_marker_listener)
-        cleanup.callback(self._shut_down_server)
-        if self.bridge.live_server is None:
-            self.bridge.live_server = serve(self.bridge, self.port)
+
+    def _start_recording(self, session: ExitStack) -> None:
+        """
+        Start a new recording of :attr:`bridge`, finalizing an earlier one first.
+
+        :param session: Finalizes the recording.
+        """
+        if self.bridge.recording is not None:
+            finalize_recording(self.bridge, self.bridge.recording)
+        self._recording = Recording()
+        self.bridge.recording = self._recording
+        self._recording.start()
+        session.callback(self._finalize_recording)
+        self._exit_callback = partial(
+            _finalize_recording_at_exit, self.bridge, self._recording
+        )
+        atexit.register(self._exit_callback)
+        session.callback(self._unregister_exit_callback)
 
     def stop(self) -> None:
         """
@@ -275,22 +312,26 @@ class LiveVisualization(WorldVisualization):
         """
         self.publishing.stop()
         super().stop()
+        self._session_cleanup.close()
 
     def after_compile(self, executor: Executor) -> None:
         """
         Differs from :meth:`~coraplex.visualization.WorldVisualization.after_compile` in
-        also publishing the statechart `executor` compiled.
+        switching to the world of `executor` if another one is shown, and in also
+        publishing the statechart `executor` compiled.
         """
+        if self.is_rendering and self.bridge.world is not executor.context.world:
+            self._cleanup.close()
         super().after_compile(executor)
         self.publishing.observe(executor.statechart)
 
     def after_run(self, executor: Executor) -> None:
         """
         Differs from :meth:`~coraplex.visualization.WorldVisualization.after_run` in
-        first publishing the statechart as the run left it.
+        publishing the statechart as the run left it and keeping the world, the server
+        and the recording until :meth:`stop`.
         """
         self.publishing.finish()
-        super().after_run(executor)
 
     def _release_world_queries(self) -> None:
         """

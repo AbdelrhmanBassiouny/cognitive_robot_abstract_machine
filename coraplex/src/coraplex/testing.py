@@ -34,6 +34,10 @@ from semantic_digital_twin.world_description.world_entity import Body
 from coraplex.datastructures.enums import VisualizationBackend
 from coraplex.visualization import WorldVisualization
 from cramph.executor import ExecutorExtension
+from typing_extensions import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from rclpy.node import Node
 
 logger = logging.getLogger(__name__)
 
@@ -50,17 +54,21 @@ except ImportError:
     )
 
 
-def selected_visualizations() -> list[ExecutorExtension]:
+def selected_visualizations(ros_node: Node | None) -> list[ExecutorExtension]:
     """
+    :param ros_node: The ROS node RViz publishes through.
     :return: The visualization selected through the environment, defaulting to RViz
-        when ROS is available, as executor extensions; empty when headless.
+        when ROS is available and `ros_node` is given, as executor extensions; empty
+        when headless.
     """
     default_backend = (
         VisualizationBackend.RVIZ
-        if VizMarkerPublisher is not None
+        if VizMarkerPublisher is not None and ros_node is not None
         else VisualizationBackend.NONE
     )
-    visualization = WorldVisualization.from_environment(default_backend)
+    visualization = WorldVisualization.from_environment(
+        default_backend, ros_node=ros_node
+    )
     return [] if visualization is None else [visualization]
 
 
