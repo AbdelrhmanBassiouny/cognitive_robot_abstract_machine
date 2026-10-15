@@ -37,7 +37,11 @@ from cramera.knowledge.query_domain import QueryDomain
 from cramera.knowledge.replay import ReplayWindow
 from cramera.knowledge.query_verbalization import QueryVerbalization
 from cramera.knowledge.query_vocabulary import QueryVocabulary
-from cramera.knowledge.queryable_knowledge import InMemoryEvaluation, QueryEvaluation
+from cramera.knowledge.queryable_knowledge import (
+    InMemoryEvaluation,
+    QueryEvaluation,
+    QueryTranslation,
+)
 from cramera.knowledge.workspace_classes import (
     WorkspaceClassIndex,
     WorkspaceClassNamespace,
@@ -120,6 +124,12 @@ class RenderResult(CrameraPayload):
     The query read back as English, or None when there was no expression to word.
     """
 
+    translation: Optional[QueryTranslation] = None
+    """
+    The statement in another query language the query was answered by, or None for a
+    query worked out in EQL itself.
+    """
+
     def to_payload(self) -> Dict[str, Any]:
         """
         The JSON-serializable shape the frontend's EQL panel expects.
@@ -139,6 +149,9 @@ class RenderResult(CrameraPayload):
                 self.verbalization.to_payload()
                 if self.verbalization is not None
                 else None
+            ),
+            "translation": (
+                self.translation.to_payload() if self.translation is not None else None
             ),
         }
 
@@ -480,10 +493,15 @@ class EqlQueryRunner:
 
         :param expression: The constructed query to evaluate.
         :param limit: Maximum number of result rows to return.
-        :return: Answer rows, highlights, replay windows and available query wording.
+        :return: Answer rows, highlights, replay windows, available query wording and
+            the statement another query language answered it by, if any.
         """
         verbalization = QueryVerbalization.of_expression(expression)
-        return self._render(self.evaluation.evaluate(expression), limit, verbalization)
+        result = self._render(
+            self.evaluation.evaluate(expression), limit, verbalization
+        )
+        result.translation = self.evaluation.translate(expression)
+        return result
 
     def run_source(self, code: str, limit: int = DEFAULT_ROW_LIMIT) -> RenderResult:
         """

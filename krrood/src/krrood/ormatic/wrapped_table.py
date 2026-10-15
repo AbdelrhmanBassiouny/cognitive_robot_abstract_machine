@@ -748,10 +748,31 @@ class WrappedTable(TableLike):
         # relationships have to be post updated since since it won't work in the case of subclasses with another ref otherwise
         # they also stay lazy: eager selectin would cascade through many-to-one
         # cycles at query time; from_dao resolves them via the identity map instead
-        rel_constructor = f"relationship('{target_wrapped_table.tablename}', uselist=False, foreign_keys=[{fk_name}], post_update=True)"
+        rel_constructor = f"relationship('{target_wrapped_table.tablename}', uselist=False, foreign_keys=[{fk_name}], {self.remote_side_argument(target_wrapped_table)}post_update=True)"
         self.relationships.append(
             ColumnConstructor(rel_name, rel_type, rel_constructor)
         )
+
+    def remote_side_argument(self, target_wrapped_table: TableLike) -> str:
+        """
+        :param target_wrapped_table: The table that a many-to-one relationship of this table
+            references.
+        :return: The ``remote_side`` argument that marks the target's primary key as the
+            referenced side when the target is this table or one it inherits from, else an
+            empty string.
+
+        ..note:: Without it, SQLAlchemy reads a reference between rows of one table as
+            one-to-many, so two objects that reference one object of their own class are
+            stored as that object referencing one of them.
+        """
+        ancestor = self
+        while ancestor is not None:
+            if ancestor is target_wrapped_table:
+                return f"remote_side='{target_wrapped_table.full_primary_key_name}', "
+            ancestor = (
+                ancestor.parent_table if isinstance(ancestor, WrappedTable) else None
+            )
+        return ""
 
     def create_many_to_many_relationship(self, wrapped_field: WrappedField):
         """

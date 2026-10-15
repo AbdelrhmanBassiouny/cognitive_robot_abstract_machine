@@ -20,6 +20,8 @@ Beyond simple queries, EQL supports an inference engine for building **Rule Tree
 A Rule Tree is built using three main components:
 1.  **`deduced_variable(Type)`**: A special variable for objects that will be deduced by the rule.
 2.  **`inference(Type)(**kwargs)`**: A special variable constructor for objects that will be "materialized" by the rule.
+    For each binding of the keyword arguments there is one such object, which every evaluation returns (see
+    [Identity of Inferred Objects](#identity-of-inferred-objects)).
 2.  **`add(target, value)`**: A conclusion clause that assigns a value to a symbolic variable.
 3.  **ConclusionSelectors**: Logical branches that control rule evaluation flow and choose which conclusions are applied.
 Examples: `refinement()`,`alternative()`, and `next_rule()`.
@@ -150,9 +152,51 @@ print(f"Inferred {len(results)} views from {len(connections)} connections.")
 print("\n".join([str(v) for v in results]))
 ```
 
+## Identity of Inferred Objects
+
+An inference variable `inference(H)(k1=t1, ..., kn=tn)` denotes one object per class `H` and per binding of its
+keyword arguments, like the function term `f_H(t1, ..., tn)` of a logic program. The first answer that binds the
+arguments to given values constructs the object; every later answer with the same class and the same values returns
+that same object instead of constructing a duplicate. This holds across evaluations of the same rule and across
+different rules that infer the same class from the same arguments, so evaluating a rule twice gives the same result
+as evaluating it once.
+
+- **Literal arguments** (numbers, strings, bytes, `None` and enumeration members) are compared by value and type:
+  `name="Alice"` in two rules refers to one object, while `flag=True` and `flag=1` refer to two.
+- **Every other argument** is compared by identity, whether it is hashable or not. Two equal but distinct objects, or
+  two equal but distinct lists, give two inferred objects; passing the same list object gives one.
+- **Roles** follow the same rule: the role taker is one of the keyword arguments, so a rule that infers a role for a
+  person returns the same role object on every evaluation, and the person has that role once.
+- **Rule trees** keep their meaning: a `refinement` that replaces a conclusion infers an object of the refinement's
+  class, which is a different class and therefore a different object from the conclusion it replaces. Conclusions of
+  branches that are not selected are never evaluated, so they construct nothing.
+- **Predicates, symbolic functions and plain functions** passed to `inference` compute a value rather than construct
+  an object, so they are evaluated on every answer as before.
+
+The inferred objects are kept in the
+{py:class}`~krrood.entity_query_language.core.inferred_object_registry.InferredObjectRegistry` singleton. It refers to
+them weakly, so an inferred object that nothing else references is forgotten and constructed anew when next inferred.
+Call `InferredObjectRegistry.clear()` to forget all inferred objects, for example between tests.
+
+To construct a new object for every answer of every evaluation instead, pass `reuse_inferred_objects=False`:
+`inference(H, reuse_inferred_objects=False)(...)`.
+
+```{code-cell} ipython3
+from krrood.entity_query_language.core.inferred_object_registry import InferredObjectRegistry
+
+first_evaluation = query.tolist()
+second_evaluation = query.tolist()
+print(all(first is second for first, second in zip(first_evaluation, second_evaluation)))
+
+InferredObjectRegistry.clear()
+after_clear = query.tolist()
+print(any(first is new for first, new in zip(first_evaluation, after_clear)))
+```
+
 ## API Reference
 - {py:func}`~krrood.entity_query_language.factories.deduced_variable`
 - {py:func}`~krrood.entity_query_language.factories.inference`
 - {py:func}`~krrood.entity_query_language.factories.add`
 - {py:func}`~krrood.entity_query_language.factories.refinement`
 - {py:func}`~krrood.entity_query_language.factories.alternative`
+- {py:class}`~krrood.entity_query_language.core.inferred_object_registry.InferredObjectRegistry`

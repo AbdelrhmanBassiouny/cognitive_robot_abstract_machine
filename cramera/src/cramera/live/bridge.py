@@ -22,6 +22,7 @@ from typing_extensions import (
     TYPE_CHECKING,
 )
 from coraplex.plans.plan_node import DesignatorNode
+from coraplex.plans.underspecified import CandidateOutcome, UnderspecifiedNode
 from giskardpy.motion_statechart.data_types import LifeCycleValues
 from krrood.entity_query_language.evaluable import Evaluable
 from krrood.entity_query_language.factories import inference
@@ -176,6 +177,12 @@ class PlanNodeEntry:
     Published object the node's designator refers to, if any.
     """
 
+    candidate: Optional[int] = None
+    """
+    Which candidate of the open step above it this was, counting from one, if the entry
+    is a candidate an underspecified step tried.
+    """
+
     def to_payload(self) -> Dict[str, Any]:
         """Serialize the node with its native lifecycle name.
 
@@ -184,6 +191,16 @@ class PlanNodeEntry:
         payload = asdict(self)
         payload[PlanTreeField.STATUS] = self.status.name
         return payload
+
+
+class PartBodies(StrEnum):
+    """The fields of a resolved part naming bodies of the world, by their names."""
+
+    HIGHLIGHT = "highlight"
+    """The bodies the part is about, lit up while it is shown."""
+
+    FRAME = "frame"
+    """The bodies the scene is framed on while the part is shown."""
 
 
 class PlanTreeField(StrEnum):
@@ -420,6 +437,12 @@ class Bridge:
     plan_state: PlanSnapshot = field(default_factory=PlanSnapshot)
     """
     The newest plan-tree snapshot (see :meth:`snapshot_plan`).
+    """
+
+    slot_answers: Dict[str, Any] = field(default_factory=dict)
+    """
+    How the parts the running plan left open were answered, and by which backend, as
+    the demo last published it (see :meth:`publish_slot_answers`).
     """
 
     chart_state: ChartSnapshot = field(default_factory=ChartSnapshot)
@@ -892,11 +915,12 @@ class Bridge:
                     continue
                 connection = body.parent_connection
                 entries.append(
-                    "%s<-%s:%s"
+                    "%s<-%s:%s%s"
                     % (
                         name,
                         str(connection.parent.name) if connection else "",
                         type(connection).__name__ if connection else "root",
+                        self._drawing_of(body),
                     )
                 )
         except Exception as error:
@@ -906,6 +930,26 @@ class Bridge:
             return
         digest = hashlib.sha1("|".join(sorted(entries)).encode()).hexdigest()[:16]
         self._bundle_signature = "world-%s-robot-%s" % (digest, robot_name)
+
+    @staticmethod
+    def _drawing_of(body: Body) -> str:
+        """
+        :param body: A body the live bundle serializes.
+        :return: How the body is drawn: the kind and size of each of its visual shapes,
+            and the file a mesh is read from.
+        """
+        return "".join(
+            "[%s %s %s]"
+            % (
+                type(shape).__name__,
+                ",".join(
+                    "%.4f" % extent
+                    for extent in shape.local_frame_bounding_box.dimensions
+                ),
+                shape.filename if isinstance(shape, Mesh) else "",
+            )
+            for shape in body.visual.shapes
+        )
 
     def status(self) -> Dict[str, Any]:
         """
@@ -1374,11 +1418,7 @@ class Bridge:
             parent=parent_id,
             kind=type(node).__name__,
             group=PlanNodeGroup.of_plan_node_kind(type(node).__name__),
-            label=(
-                type(designator).__name__
-                if designator is not None
-                else type(node).__name__
-            ),
+            label=self._plan_node_label(node, designator),
             status=node.status,
             derived=False,
         )
@@ -1386,8 +1426,67 @@ class Bridge:
         nodes.append(entry)
         order.append(node_id)
 
+        if isinstance(node, UnderspecifiedNode):
+            self._serialize_candidate_trials(node, node_id, nodes, order)
         for child in node.children:
             self._serialize_plan_node(child, node_id, nodes, order)
+
+    @staticmethod
+    def _plan_node_label(node: PlanNode, designator: Designator | None) -> str:
+        """
+        The class a plan node stands for: its designator's, the action an
+        underspecified step leaves open, else the node's own.
+
+        :param node: The plan node to label.
+        :param designator: The node's designator, or None.
+        """
+        if designator is not None:
+            return type(designator).__name__
+        if isinstance(node, UnderspecifiedNode):
+            return node.designator_type.__name__
+        return type(node).__name__
+
+    def _serialize_candidate_trials(
+        self,
+        node: UnderspecifiedNode,
+        node_id: str,
+        nodes: List[PlanNodeEntry],
+        order: List[str],
+    ) -> None:
+        """
+        Serialize every candidate an underspecified step tried, in the order it tried
+        them, as a finished entry under the step: succeeded if accepted, failed if its
+        trial rejected it.
+
+        :param node: The underspecified step.
+        :param node_id: Id of the step's entry.
+        :param nodes: Output list every serialized entry is appended to.
+        :param order: Output list every serialized id is appended to.
+        """
+        for index, trial in enumerate(node.candidate_trials):
+            candidate_id = "%s_candidate_%d" % (node_id, index + 1)
+            entry = PlanNodeEntry(
+                id=candidate_id,
+                parent=node_id,
+                kind=type(trial).__name__,
+                group=PlanNodeGroup.of_plan_node_kind(type(trial).__name__),
+                label=type(trial.action).__name__,
+                status=(
+                    LifeCycleValues.SUCCEEDED
+                    if trial.outcome is CandidateOutcome.ACCEPTED
+                    else LifeCycleValues.FAILED
+                ),
+                derived=False,
+                candidate=index + 1,
+            )
+            self._add_designator_metadata(entry, trial.action)
+            if trial.failure is not None:
+                entry.description = "%s: %s" % (
+                    type(trial.failure).__name__,
+                    str(trial.failure).splitlines()[0],
+                )
+            nodes.append(entry)
+            order.append(candidate_id)
 
     def _add_designator_metadata(
         self, entry: PlanNodeEntry, designator: Designator | None
@@ -1441,6 +1540,28 @@ class Bridge:
                 and entry.group is PlanNodeGroup.ACTION
             ]
         return running[-1].label if running else None
+
+    def publish_slot_answers(self, answers: Dict[str, Any]) -> None:
+        """
+        Publish how the parts the plans left open were resolved, the body names each
+        answer lights up and frames turned into the identifiers the viewer knows them
+        by.
+
+        :param answers: The backends there are and every resolution so far, as JSON.
+        """
+        for resolution in answers.get("resolutions", []):
+            for part in resolution["parts"]:
+                for names in (PartBodies.HIGHLIGHT, PartBodies.FRAME):
+                    part[names] = self._resolve_highlights(part.get(names, []))
+        with self._lock:
+            self.slot_answers = answers
+
+    def get_slot_answers(self) -> Dict[str, Any]:
+        """
+        The newest published slot answers (safe to call from HTTP threads).
+        """
+        with self._lock:
+            return self.slot_answers
 
     def get_plan(self) -> Dict[str, Any]:
         """

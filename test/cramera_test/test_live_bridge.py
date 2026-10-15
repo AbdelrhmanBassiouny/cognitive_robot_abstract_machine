@@ -533,6 +533,20 @@ class TestBundleSignature:
 
         assert bridge.bundle_signature() != before
 
+    def test_a_body_drawn_differently_changes_the_signature(self):
+        """
+        A demo restarted with a body drawn differently -- a board cut with holes where a
+        block stood before -- must not be shown from the bundle built for the old one.
+        """
+        block = Bridge()
+        block.attach(world_with(shaped_body("montessori", "board")))
+        board = shaped_body("montessori", "board")
+        board.visual = ShapeCollection(shapes=[Box(scale=Scale(0.1, 0.2, 0.1))])
+        reshaped = Bridge()
+        reshaped.attach(world_with(board))
+
+        assert reshaped.bundle_signature() != block.bundle_signature()
+
     def test_reparenting_an_overlay_object_keeps_the_signature(self):
         """
         A demo re-parents a grasped object on every pick and place; the object is

@@ -25,6 +25,7 @@
     [/cooktop|hotplate|ceran|stove/, { color: 0x0a0b0d, roughness: 0.18, metalness: 0.15, texture: null }],
     [/island_countertop|countertop|worktop/, { color: 0xffffff, roughness: 0.55, metalness: 0.02, texture: 'counter' }],
     [/coffee_table|table_area|bedside_table|table_top|dining|nightstand/, { color: 0xffffff, roughness: 0.5, metalness: 0.02, texture: 'table' }],
+    [/(^|\/)board$/, { color: 0xc08a55, roughness: 0.62, metalness: 0.0, texture: null }],
     [/bookshelf/, { color: 0x6b4226, roughness: 0.65, metalness: 0.0, texture: null }],
     [/sofa|couch|armchair/, { color: 0xa85c48, roughness: 0.88, metalness: 0.0, texture: null }],
     [/chair_/, { color: 0x8a5a3b, roughness: 0.6, metalness: 0.0, texture: null }],

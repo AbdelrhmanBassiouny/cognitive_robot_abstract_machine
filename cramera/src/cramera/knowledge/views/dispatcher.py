@@ -43,8 +43,8 @@ class UnknownViewPayload(GraphPanelPayload):
 @dataclass
 class GraphPanelViews:
     """
-    The two ways the graph panel asks for a view: by tab name, or by drilling into a
-    node that was double-clicked.
+    The ways the graph panel asks for a view: by tab name, by drilling into a node that
+    was double-clicked, or by naming a concept a plan uses.
 
     Holding the knowledge base here is what keeps the individual views free of it: they
     are handed the episode they describe instead of reaching for the process-wide one.
@@ -129,3 +129,18 @@ class GraphPanelViews:
         if python_class:
             return SubgraphViewPayload.for_class(self.knowledge_base, python_class)
         return None
+
+    def for_concept(self, name: str) -> Optional[GraphPanelPayload]:
+        """
+        The ontology neighbourhood of the class a plan names, or None if no scanned
+        class has that name.
+
+        :param name: The class's name, e.g. ``"PickUpAction"``.
+        """
+        python_class = next(
+            (entry for entry in self.knowledge_base.classes if entry.name == name),
+            None,
+        )
+        if python_class is None:
+            return None
+        return SubgraphViewPayload.for_concept(self.knowledge_base, python_class)

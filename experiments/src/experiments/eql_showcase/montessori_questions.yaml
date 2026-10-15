@@ -1,0 +1,184 @@
+# The questions and commands the Montessori showcase offers while Tracy sorts the pieces
+# its camera saw.
+#
+#   current_state    - Tracy's twin as it is now: what the camera saw (`MontessoriShape`,
+#                      `SeenPiece`, the holes as `Region`s), what Tracy did (`action`),
+#                      every plan the backends resolved (`PlanResolution`s in
+#                      `backends.resolutions`) and each open part they answered
+#                      (`SlotAnswer`s in `backends.answered`, by `Faculty`), and the
+#                      commands given (`command`, through `robot`); `resolve(...)`
+#                      resolves any statement or `SortPieceAction` plan through the
+#                      backends, and `montessori` resolves sorting plans for a command
+#   detected_events  - what segmind saw happen to the pieces (`event`)
+#   episodic_memory  - every run already finished, answered in SQL (`run`, `action`)
+#
+# A question marked `commands_the_robot` is offered only while Tracy takes commands; one
+# also marked `acts` tells Tracy to do something, so it is only ever run when picked.
+
+- scope: current_state
+  text: What does the camera see?
+  code: |
+    piece = variable(MontessoriShape, world.semantic_annotations)
+    an(entity(piece.root))
+
+- scope: current_state
+  text: Which holes did it see?
+  code: |
+    an(entity(variable(Region, world.regions)))
+
+- scope: current_state
+  text: Which pieces are in a hole now?
+  code: |
+    piece = variable(MontessoriShape, world.semantic_annotations)
+    hole = variable(Region, world.regions)
+    an(entity(piece.root).where(InsideRegion(piece.root, hole)))
+
+- scope: current_state
+  text: Which pieces are still on the table?
+  code: |
+    piece = variable(MontessoriShape, world.semantic_annotations)
+    table = variable(Table, world.semantic_annotations)
+    an(entity(piece.root).where(SupportedBy(piece.root, table.root)))
+
+- scope: current_state
+  text: "Resolve: which cylinder is there?"
+  acts: true
+  code: |
+    resolve(a(SeenPiece)(kind=CylinderShape))
+
+- scope: current_state
+  text: "Resolve: does the triangular prism still rest on the table?"
+  acts: true
+  code: |
+    piece = a(SeenPiece)(kind=TriangularPrismShape)
+    piece.where(SupportedBy(piece.root, montessori.twin.table))
+    resolve(piece)
+
+- scope: current_state
+  text: "Resolve: which side to take the triangular prism from?"
+  acts: true
+  code: |
+    resolve(a(SideGrasp)(side=..., piece=a(SeenPiece)(kind=TriangularPrismShape)))
+
+- scope: current_state
+  text: "Resolve: which arm is free?"
+  acts: true
+  code: |
+    arm = an(Arm)
+    arm.where(GripperIsFree(arm.end_effector))
+    resolve(arm)
+
+- scope: current_state
+  text: "Resolve: which hole does the triangular prism go into?"
+  acts: true
+  code: |
+    resolve(an(Insertion)(piece=a(SeenPiece)(kind=TriangularPrismShape), hole=...))
+
+- scope: current_state
+  text: "Resolve the plan: put the triangular prism into its hole"
+  acts: true
+  code: |
+    piece = a(SeenPiece)(kind=TriangularPrismShape)
+    piece.where(SupportedBy(piece.root, montessori.twin.table))
+    resolve(a(SortPieceAction)(piece=piece, side=..., arm=..., hole=...))
+
+- scope: current_state
+  text: "Resolve the plan: put the cylinder into its hole again"
+  acts: true
+  code: |
+    piece = a(SeenPiece)(kind=CylinderShape)
+    piece.where(SupportedBy(piece.root, montessori.twin.table))
+    resolve(a(SortPieceAction)(piece=piece, side=..., arm=..., hole=...))
+
+- scope: current_state
+  text: Put the triangular prism into its hole
+  commands_the_robot: true
+  acts: true
+  code: |
+    robot.do(montessori.insert(TriangularPrismShape), 'put the triangular prism into its hole')
+
+- scope: current_state
+  text: Pause
+  commands_the_robot: true
+  acts: true
+  code: |
+    robot.pause()
+
+- scope: current_state
+  text: Resume
+  commands_the_robot: true
+  acts: true
+  code: |
+    robot.resume()
+
+- scope: current_state
+  text: What have I asked you to do?
+  commands_the_robot: true
+  code: |
+    an(entity(command))
+
+- scope: current_state
+  text: Which backend answered each open part?
+  code: |
+    answer = variable(SlotAnswer, backends.answered)
+    an(entity(answer))
+
+- scope: current_state
+  text: What did perception answer?
+  code: |
+    answer = variable(SlotAnswer, backends.answered)
+    an(entity(answer).where(answer.faculty == Faculty.PERCEPTION))
+
+- scope: current_state
+  text: What did working memory check in the twin?
+  code: |
+    answer = variable(SlotAnswer, backends.answered)
+    an(entity(answer).where(answer.faculty == Faculty.WORKING_MEMORY))
+
+- scope: current_state
+  text: Which rules chose the holes?
+  code: |
+    answer = variable(SlotAnswer, backends.answered)
+    an(entity(answer).where(answer.faculty == Faculty.RULES))
+
+- scope: current_state
+  text: How was each grasp side sampled?
+  code: |
+    answer = variable(SlotAnswer, backends.answered)
+    an(entity(answer).where(answer.faculty == Faculty.PROBABILISTIC))
+
+- scope: current_state
+  text: What did you do?
+  code: |
+    an(entity(action).where(action.part_of == None))
+
+- scope: current_state
+  text: Which plans did the backends resolve?
+  code: |
+    resolution = variable(PlanResolution, backends.resolutions)
+    an(entity(resolution))
+
+- scope: detected_events
+  text: When was each piece picked up?
+  code: |
+    an(entity(event).where(event.event_type == 'PickUpEvent'))
+
+- scope: detected_events
+  text: When was each piece placed?
+  code: |
+    an(entity(event).where(event.event_type == 'PlacingEvent'))
+
+- scope: episodic_memory
+  text: Which runs do you remember?
+  code: |
+    an(entity(run))
+
+- scope: episodic_memory
+  text: In which runs did you pick up a cylinder?
+  code: |
+    an(entity(run).where(exists(step := flat_variable(run.actions), step.acted_on == 'seen/cylinder 1')))
+
+- scope: episodic_memory
+  text: What were your slowest pick ups ever?
+  code: |
+    an(entity(action).where(action.action_type == 'PickUpAction')).ordered_by(action.seconds, descending=True).limit(5)

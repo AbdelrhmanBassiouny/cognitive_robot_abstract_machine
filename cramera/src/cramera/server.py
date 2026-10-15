@@ -10,6 +10,7 @@ Serves three things from one port (default 8711):
       GET  /api/knowledge              the knowledge-graph overview payload
       GET  /api/knowledge/view?name=   one graph tab (knowledge/kinematics/plan/chart)
       GET  /api/knowledge/expand?node= drill-down subgraph for one node
+      GET  /api/knowledge/concept?name= ontology neighbourhood of a class a plan names
       POST /api/eql             run an EQL query string
       GET  /api/recording/status       {state: finalized|idle} of the on-disk
                                         __recording__ bundle (see
@@ -262,6 +263,9 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         if route == "/api/knowledge/expand":
             node = (self._query_parameters().get("node") or [""])[0]
             return self._guarded(lambda: self._expanded_node(node, scene))
+        if route == "/api/knowledge/concept":
+            name = (self._query_parameters().get("name") or [""])[0]
+            return self._guarded(lambda: self._concept_neighbourhood(name, scene))
         if route == "/api/eql/vocabulary":
             return self._guarded(
                 lambda: EqlSession.of_scene(scene).runner().vocabulary().to_payload()
@@ -290,6 +294,18 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         """
         payload = GraphPanelViews.of_scene(scene).for_node(node)
         return payload if payload else {"ok": False, "error": "not drillable"}
+
+    @staticmethod
+    def _concept_neighbourhood(name: str, scene: Optional[str]) -> Any:
+        """
+        The ontology neighbourhood of a named class, or an "unknown concept" error.
+
+        :param name: The class's name.
+        :param scene: Name of the scene the class is looked up in, or None for the
+            active one.
+        """
+        payload = GraphPanelViews.of_scene(scene).for_concept(name)
+        return payload if payload else {"ok": False, "error": "unknown concept"}
 
     def do_POST(self) -> None:
         """

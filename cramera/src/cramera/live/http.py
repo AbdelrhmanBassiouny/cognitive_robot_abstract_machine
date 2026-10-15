@@ -15,6 +15,11 @@ HTTP endpoints of the live bridge (default port 8765).
                       it, or {scene: null} when nothing is tracked yet; the viewer
                       loads the named scene exactly like any other
     GET /plan    {signature, nodes: [{id, parent, kind, label, status, derived}]}
+    GET /slot_answers  {backends: [{faculty, name}], presentation: {...},
+                        resolutions: [{id, title, executable, underspecified,
+                        resolved, parts: [{slot, slotId, statement, faculty, backend,
+                        answers, evidence, reasoning, highlight, milliseconds}]}]}
+                        how the plans' open parts were resolved before execution
     GET /chart   {signature, title,
                   nodes: [{id, parent, name, class_name, life_cycle, observation}],
                   edges: [{from, to, kind}]}
@@ -151,6 +156,8 @@ class BridgeRequestHandler(BaseHTTPRequestHandler):
         """
         if self.path.startswith("/state"):
             return self._send_json(self.bridge.get_state())
+        if self.path.startswith("/slot_answers"):
+            return self._send_json(self.bridge.get_slot_answers())
         if self.path.startswith("/plan"):
             return self._send_json(self.bridge.get_plan())
         if self.path.startswith("/chart"):

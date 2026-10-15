@@ -38,6 +38,13 @@ class ExecutionEnvironment:
     motion state chart created within this environment.
     """
 
+    real_time_factor: Optional[float] = field(default=None, kw_only=True)
+    """
+    How much faster than the clock a kinematically simulated motion runs, ``1.0`` being
+    as fast as the motion would take on the robot; None runs it as fast as the hardware
+    allows.
+    """
+
     previous_type: ExecutionType = field(init=False, default=None)
     """
     Type of the execution environment before setting it, used for nested environments.
@@ -49,6 +56,11 @@ class ExecutionEnvironment:
     environments.
     """
 
+    previous_real_time_factor: Optional[float] = field(init=False, default=None)
+    """
+    Real time factor before entering this environment, used for nested environments.
+    """
+
     def __enter__(self):
         """
         Entering function for 'with' scope, saves the previously set
@@ -58,8 +70,10 @@ class ExecutionEnvironment:
         """
         self.previous_type = GiskardExecutable.execution_type
         self.previous_collision_avoidance = GiskardExecutable.collision_avoidance
+        self.previous_real_time_factor = GiskardExecutable.real_time_factor
         GiskardExecutable.execution_type = self.execution_type
         GiskardExecutable.collision_avoidance = self.collision_avoidance
+        GiskardExecutable.real_time_factor = self.real_time_factor
 
     def __exit__(self, _type, value, traceback):
         """
@@ -70,6 +84,7 @@ class ExecutionEnvironment:
         """
         GiskardExecutable.execution_type = self.previous_type
         GiskardExecutable.collision_avoidance = self.previous_collision_avoidance
+        GiskardExecutable.real_time_factor = self.previous_real_time_factor
 
     def __call__(self, collision_avoidance: bool = False):
         """

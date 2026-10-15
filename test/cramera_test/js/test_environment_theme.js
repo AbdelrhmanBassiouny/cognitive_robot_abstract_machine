@@ -74,3 +74,10 @@ test('every rule yields a complete look descriptor', function () {
     }
   );
 });
+
+test('a shape-sorting board is drawn in wood, not the grey its mesh was exported in', function () {
+  const theme = load();
+  assert.deepStrictEqual(theme.lookOf('seen/board'), theme.lookOf('montessori/board'));
+  assert.notStrictEqual(theme.lookOf('seen/board'), null);
+  assert.strictEqual(theme.lookOf('seen/board').texture, null);
+});

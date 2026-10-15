@@ -16,7 +16,7 @@ from semantic_digital_twin.world import World
 
 from krrood.entity_query_language.evaluable import Evaluable
 from krrood.exceptions import DataclassException
-from typing_extensions import Any, Dict, List
+from typing_extensions import Any, Dict, List, Optional
 
 from cramera.knowledge.query_domain import QueryDomain
 
@@ -86,6 +86,30 @@ class UnknownQueryScope(DataclassException):
         return "Ask one of: %s." % ", ".join(scope.value for scope in QueryScope)
 
 
+@dataclass(frozen=True)
+class QueryTranslation:
+    """
+    The statement in another query language a query was answered by, such as the SQL a
+    database ran for it.
+    """
+
+    language: str
+    """
+    The name of the language the statement is written in, e.g. ``"SQL"``.
+    """
+
+    statement: str
+    """
+    The statement that was run.
+    """
+
+    def to_payload(self) -> Dict[str, str]:
+        """
+        The JSON shape the viewer shows the statement from.
+        """
+        return {"language": self.language, "statement": self.statement}
+
+
 class QueryEvaluation(ABC):
     """
     Where the answer to a query is worked out.
@@ -98,6 +122,15 @@ class QueryEvaluation(ABC):
 
         :param expression: The query to answer.
         """
+
+    def translate(self, expression: Evaluable) -> Optional[QueryTranslation]:
+        """
+        The statement in another query language this evaluation answers the query by, or
+        None for an evaluation that works it out in EQL itself.
+
+        :param expression: The query to translate.
+        """
+        return None
 
 
 @dataclass(frozen=True)

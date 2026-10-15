@@ -116,6 +116,15 @@ class TestReadOnlyEndpoints:
     def test_plan_reflects_a_fresh_bridge(self, server):
         assert get_json(server + "/plan")["nodes"] == []
 
+    def test_slot_answers_serves_what_the_demo_published(self, server, bridge):
+        published = {
+            "backends": [{"faculty": "rules", "name": "HoleRules"}],
+            "answers": [{"slot": "which hole", "faculty": "rules"}],
+        }
+        bridge.publish_slot_answers(published)
+
+        assert get_json(server + "/slot_answers") == published
+
     def test_chart_reflects_a_fresh_bridge(self, server):
         chart = get_json(server + "/chart")
         assert chart["nodes"] == []

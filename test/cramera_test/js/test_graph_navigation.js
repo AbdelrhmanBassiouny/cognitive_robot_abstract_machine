@@ -245,3 +245,19 @@ test('destroyed panels ignore pending bridge responses', async () => {
   await panel.flush();
   assert.deepEqual(panel.identities(), ['recorded']);
 });
+
+// %% a concept of the plan, shown in the ontology
+test('drilling into a plan step shows its concept in the knowledge tab', async context => {
+  const panel = new GraphNavigation();
+  context.after(() => panel.instance.destroy());
+  panel.responses['/api/knowledge/concept?name=recorded'] = {
+    ok: true, nodes: [{id: 'actions.Recorded', label: 'recorded'}], edges: [],
+    details: {'actions.Recorded': {label: 'recorded'}}, breadcrumb: 'recorded',
+  };
+  await panel.show('plan');
+  await panel.drill('recorded');
+  await panel.flush();
+  assert.deepEqual(panel.identities(), ['actions.Recorded']);
+  panel.element('#gnav-up').click();
+  assert.deepEqual(panel.identities(), ['knowledge']);
+});

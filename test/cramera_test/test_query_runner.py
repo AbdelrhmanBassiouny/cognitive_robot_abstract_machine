@@ -17,7 +17,10 @@ from typing_extensions import Any, List  # noqa: E402
 from cramera.body_geometry import pose_label  # noqa: E402
 from cramera.knowledge.query_domain import QueryDomain  # noqa: E402
 from cramera.knowledge.query_runner import EqlQueryRunner, RowRenderer  # noqa: E402
-from cramera.knowledge.queryable_knowledge import QueryEvaluation  # noqa: E402
+from cramera.knowledge.queryable_knowledge import (  # noqa: E402
+    QueryEvaluation,
+    QueryTranslation,
+)
 from cramera.knowledge.replay import ReplayWindow  # noqa: E402
 
 from .dataset.queryable_records import (  # noqa: E402
@@ -49,6 +52,25 @@ class AnswersElsewhere(QueryEvaluation):
     def evaluate(self, expression: Any) -> Any:
         self.asked.append(expression)
         return self.answer
+
+
+@dataclass
+class TranslatesElsewhere(AnswersElsewhere):
+    """
+    An evaluation that answers a query by translating it into another query language.
+    """
+
+    translation: QueryTranslation = field(
+        default_factory=lambda: QueryTranslation(
+            language="SQL", statement="SELECT * FROM records"
+        )
+    )
+    """
+    What it reports translating every query into.
+    """
+
+    def translate(self, expression: Any) -> QueryTranslation:
+        return self.translation
 
 
 def make_records() -> list:
@@ -222,6 +244,26 @@ class TestEvaluation:
         ).run_source("an(entity(record))")
 
         assert [isinstance(seen, Evaluable) for seen in evaluation.asked] == [True]
+
+    def test_an_answer_carries_the_translation_it_was_answered_by(self):
+        evaluation = TranslatesElsewhere(answer=[])
+        result = EqlQueryRunner(
+            domains=[QueryDomain("record", NamedRecord, make_records())],
+            evaluation=evaluation,
+        ).run_source("an(entity(record))")
+
+        assert result.translation == evaluation.translation
+        assert result.to_payload()["translation"] == (
+            evaluation.translation.to_payload()
+        )
+
+    def test_an_answer_worked_out_in_memory_carries_no_translation(self):
+        result = EqlQueryRunner(
+            domains=[QueryDomain("record", NamedRecord, make_records())]
+        ).run_source("an(entity(record))")
+
+        assert result.translation is None
+        assert result.to_payload()["translation"] is None
 
     def test_a_domain_of_no_particular_objects_still_gives_a_variable(self):
         """

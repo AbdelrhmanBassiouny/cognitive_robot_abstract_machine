@@ -163,6 +163,24 @@ class Preset:
         return [preset.worded(runner) for preset in presets]
 
 
+@dataclass
+class CommandPreset(Preset):
+    """
+    A ready-made command that makes the robot do something when it is run.
+
+    Its code is run only when it is picked, never to read it back as English, so
+    offering it gives no command.
+    """
+
+    def worded(self, runner: EqlQueryRunner) -> Preset:
+        """
+        This preset as it is, since building its code would give the command.
+
+        :param runner: The runner whose variables the preset's code ranges over.
+        """
+        return self
+
+
 @dataclass(frozen=True)
 class PresetsPerType:
     """

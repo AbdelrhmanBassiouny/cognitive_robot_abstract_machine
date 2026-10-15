@@ -105,6 +105,7 @@ class PlaceAction(
                 ReAttachNode(
                     body=self.object_designator.root, new_parent=self.world.root
                 ),
+                *self._after_release(),
                 MoveToolCenterPointMotion(
                     poses.pre_grasp,
                     arm,
@@ -115,6 +116,13 @@ class PlaceAction(
             ],
             self.context,
         )
+
+    def _after_release(self) -> List[PlanNode]:
+        """
+        :return: What happens to the object once the gripper has let go of it and before
+            the arm withdraws; nothing for a plain place.
+        """
+        return []
 
     def _holding_arm_and_grasp(self) -> Tuple[Arm, GraspCandidate]:
         """
