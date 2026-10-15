@@ -464,3 +464,21 @@ class WorldDescriptorBootstrapError(WorldDescriptorError, RuntimeError):
             "inspect the original chained exception for the underlying world model "
             "operation that failed."
         )
+
+
+@dataclass
+class ParentPipelineMissing(RoboKudoError, RuntimeError):
+    """
+    Raised when a behaviour that operates on its pipeline is not part of one.
+    """
+
+    behaviour_name: str
+    """
+    Name of the behaviour without a parent pipeline.
+    """
+
+    def error_message(self) -> str:
+        return f"{self.behaviour_name} is not part of a Pipeline."
+
+    def suggest_correction(self) -> str:
+        return "add the behaviour as a descendant of a Pipeline."

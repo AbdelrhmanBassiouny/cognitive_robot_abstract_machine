@@ -3,7 +3,7 @@ from dataclasses import dataclass, field
 
 import numpy as np
 import pytest
-from typing_extensions import Iterable, List, Optional
+from typing_extensions import Callable, Iterable, List, Optional
 
 from coraplex.datastructures.enums import InsertionPosition, ReachFraction
 from coraplex.exceptions import (
@@ -30,10 +30,20 @@ from coraplex.robot_plans.actions.core.navigation import (
     LookAtAction,
     NavigateAction,
 )
-from coraplex.robot_plans.actions.core.pick_up import PickUpAction, ReachAction
+from coraplex.plans.executors import PlanExecutor
+from coraplex.robot_plans.actions.core.pick_up import (
+    GraspingAction,
+    PickUpAction,
+    ReachAction,
+)
 from coraplex.robot_plans.actions.core.placing import PlaceAction
-from coraplex.robot_plans.actions.core.robot_body import MoveTorsoAction, ParkArmsAction
+from coraplex.robot_plans.actions.core.robot_body import (
+    MoveFingersToWidthAction,
+    MoveTorsoAction,
+    ParkArmsAction,
+)
 from coraplex.robot_plans.plan_transformations import (
+    CloseFingersToObjectWidth,
     DetectBeforeGrasp,
     OpenDrawerBeforeMoveAndPickUp,
     OpenDrawerBeforePickUp,
@@ -68,10 +78,19 @@ from semantic_digital_twin.semantic_annotations.semantic_annotations import (
     Milk,
     Spoon,
 )
+from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.spatial_types.spatial_types import Pose
 from semantic_digital_twin.world import World
+from semantic_digital_twin.world_description.connections import FixedConnection
+from semantic_digital_twin.world_description.world_entity import Body
+from ..conftest import left_or_only_arm, physically_simulated_executor
 from ..test_transporting import pick_and_place_of_the_milk
-from ...plan_running import context_of, simulated_executor, statechart_of
+from ...plan_running import (
+    context_of,
+    robot_executor,
+    simulated_executor,
+    statechart_of,
+)
 from ...sampling import SAMPLING_SEED
 
 # %% expanding a plan without running it
@@ -81,14 +100,17 @@ def rewritten(
     plan: StatechartNode,
     extensions: List[ContextExtension],
     plan_transformations: Iterable[PlanTransformation] = (),
+    executor_for: Callable[[List[ContextExtension]], PlanExecutor] = simulated_executor,
 ) -> StatechartNode:
     """
     Expand `plan` in the statechart that would run it, which also rewrites it with
     `plan_transformations`, without running it.
 
+    :param executor_for: Builds the executor that would run the plan from its context
+        extensions.
     :return: The plan, rewritten.
     """
-    executor = simulated_executor(
+    executor = executor_for(
         [*extensions, PlanRewriting(transformations=list(plan_transformations))]
     )
     executor.prepare(statechart_of(executor, plan))
@@ -1333,3 +1355,112 @@ def test_a_transformation_the_case_does_not_need_is_no_collision(
 
     assert warnings_of(caplog) == []
     assert kinds_of_the_steps_of(plan) == [MoveGripper, MoveTorsoAction]
+
+
+# %% holding an object at its own width
+
+
+def width_actions_of(plan: StatechartNode) -> List[MoveFingersToWidthAction]:
+    """
+    :return: The actions of `plan` that send the fingers to a width.
+    """
+    return [
+        node for node in plan.descendants if isinstance(node, MoveFingersToWidthAction)
+    ]
+
+
+def shutting_goals_of(plan: StatechartNode) -> List[MoveGripper]:
+    """
+    :return: The goals of `plan` that shut the gripper.
+    """
+    return [
+        node
+        for node in plan.descendants
+        if isinstance(node, MoveGripper) and node.state is GripperState.CLOSE
+    ]
+
+
+def grasp_of(milk: Milk) -> GraspCandidate:
+    """
+    :param milk: The object to grasp.
+    :return: A grasp at that object's own origin.
+    """
+    return GraspCandidate.from_body_origin(milk)
+
+
+@pytest.mark.parametrize(
+    "executor_for", [physically_simulated_executor, robot_executor]
+)
+def test_a_grasp_closes_to_the_objects_width_where_objects_push_back(
+    pr2_apartment_context, executor_for
+):
+    world, view, extensions = pr2_apartment_context
+    milk = world.get_semantic_annotations_by_type(Milk)[0]
+
+    plan = rewritten(
+        GraspingAction(grasp_of(milk), left_or_only_arm(view)),
+        extensions,
+        executor_for=executor_for,
+    )
+
+    assert shutting_goals_of(plan) == []
+    assert [action.width for action in width_actions_of(plan)] == [
+        grasp_of(milk).width_along_closing_axis
+    ]
+
+
+def test_a_grasp_still_shuts_the_gripper_where_nothing_pushes_back(
+    pr2_apartment_context,
+):
+    """
+    The width means nothing where the world is moved kinematically, so the grasp is left
+    exactly as it was built.
+    """
+    world, view, extensions = pr2_apartment_context
+    milk = world.get_semantic_annotations_by_type(Milk)[0]
+
+    plan = rewritten(GraspingAction(grasp_of(milk), left_or_only_arm(view)), extensions)
+
+    assert width_actions_of(plan) == []
+    assert len(shutting_goals_of(plan)) == 1
+
+
+def test_the_squeeze_is_handed_on_to_the_fingers(pr2_apartment_context):
+    world, view, extensions = pr2_apartment_context
+    milk = world.get_semantic_annotations_by_type(Milk)[0]
+    squeeze = 0.002
+
+    plan = rewritten(
+        GraspingAction(grasp_of(milk), left_or_only_arm(view)),
+        extensions,
+        executor_for=lambda extensions: physically_simulated_executor(
+            extensions,
+            plan_adaptations=[CloseFingersToObjectWidth(squeeze=squeeze)],
+        ),
+    )
+
+    assert [action.squeeze for action in width_actions_of(plan)] == [squeeze]
+
+
+def test_an_object_without_collision_is_still_held_by_shutting_the_gripper(
+    pr2_apartment_context,
+):
+    """
+    There is no width to measure on a body without geometry, so the grasp keeps the goal
+    it was built with instead of being rewritten with a guess.
+    """
+    world, view, extensions = pr2_apartment_context
+    with world.modify_world():
+        body = Body(name=PrefixedName("shapeless_milk"))
+        world.add_connection(FixedConnection(parent=world.root, child=body))
+        shapeless = Milk(root=body)
+        world.add_semantic_annotation(shapeless)
+
+    plan = rewritten(
+        GraspingAction(grasp_of(shapeless), left_or_only_arm(view)),
+        extensions,
+        executor_for=physically_simulated_executor,
+    )
+
+    assert width_actions_of(plan) == []
+    assert len(shutting_goals_of(plan)) == 1

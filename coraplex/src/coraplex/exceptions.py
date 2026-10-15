@@ -212,6 +212,25 @@ class ReachHasNoFinalApproach(DataclassException):
 
 
 @dataclass
+class GraspHasNoClosingGoal(DataclassException):
+    """
+    Raised when the goal a grasp closes its gripper with is asked for, but no goal that
+    shuts the gripper lies below the grasp's node.
+    """
+
+    plan_node: StatechartNode
+    """
+    The node of the grasp.
+    """
+
+    def error_message(self) -> str:
+        return f"{self.plan_node} has no goal closing the gripper below it."
+
+    def suggest_correction(self) -> str:
+        return "ask for the closing goal only once the grasp has been expanded"
+
+
+@dataclass
 class ToolPathNotFound(DataclassException):
     """
     Raised when the goal moving a tool along its path is asked for, but no such goal
@@ -390,25 +409,6 @@ class AmbiguousDetection(PerceptionExceptionWithSemanticAnnotation):
 
     def suggest_correction(self) -> str:
         return "narrow the query's semantic annotation so it names a single object."
-
-
-@dataclass
-class NothingDetected(PerceptionExceptionWithSemanticAnnotation):
-    """
-    Raised when a perception source answers a query without reporting any object.
-
-    Treated as a failure rather than an empty answer: a plan that carried on would act on
-    the pose the object was spawned with while believing perception had confirmed it.
-    """
-
-    def error_message(self) -> str:
-        return f"The perception source reported no {self.semantic_annotation.__name__}."
-
-    def suggest_correction(self) -> str:
-        return (
-            "check that the object is in view and that the pipeline's crop and plane "
-            "parameters cover it."
-        )
 
 
 @dataclass

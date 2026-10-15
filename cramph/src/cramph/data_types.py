@@ -5,7 +5,7 @@ from enum import IntEnum, Enum, StrEnum, auto
 from typing import Union, FrozenSet
 
 from cramph.exceptions import TransitionHasNoOutcomeError
-from krrood.symbolic_math.symbolic_math import Scalar, if_eq_cases
+from krrood.symbolic_math.symbolic_math import Scalar, logic_or
 from semantic_digital_twin.world_description.geometry import Color
 
 goal_parameter = Union[str, float, bool, dict, list, IntEnum, None]
@@ -219,12 +219,8 @@ class LifeCyclePredicateDefinition:
         :param life_cycle: The life cycle state to evaluate the predicate in.
         :return: True if the predicate holds in that state, false otherwise.
         """
-        return if_eq_cases(
-            a=life_cycle,
-            b_result_cases=[
-                (int(state), Scalar.const_true()) for state in sorted(self.true_states)
-            ],
-            else_result=Scalar.const_false(),
+        return logic_or(
+            *[Scalar(life_cycle) == float(state) for state in sorted(self.true_states)]
         )
 
 

@@ -2,7 +2,7 @@ from dataclasses import dataclass, field
 from uuid import UUID, uuid4
 
 import pytest
-from typing_extensions import Dict, Iterator, List, Optional
+from typing_extensions import Callable, Dict, Iterator, List, Optional
 
 from krrood.entity_query_language.backends import (
     EntityQueryLanguageGenerativeBackend,
@@ -17,8 +17,10 @@ from coraplex.datastructures.enums import ActionTrialVisualization
 from coraplex.plans.failures import (
     CandidateLimitReached,
     EmptyUnderspecified,
+    MotionViolatedCollisionAvoidance,
     PlanFailure,
 )
+from giskardpy.motion_statechart.exceptions import CollisionViolatedError
 from cramph.threaded_nodes import FunctionCall
 from cramph.statechart import StateHistory, StateHistoryObserver
 from coraplex.plans.underspecified import (
@@ -126,8 +128,15 @@ class RecordingAction(Action):
 
     fail_on_attempt_number: Optional[int] = field(kw_only=True, default=None)
     """
-    Raise a `PlanFailure` once the probe has recorded this many calls; never raise if
-    None.
+    Report :attr:`reported_failure` once the probe has recorded this many calls; never
+    fail if None.
+    """
+
+    reported_failure: Callable[[], PlanFailure] = field(
+        kw_only=True, default=PlanFailure
+    )
+    """
+    Builds the failure a failing attempt reports.
     """
 
     def create_action_body(self) -> StatechartNode:
@@ -151,7 +160,7 @@ class RecordingAction(Action):
         world.state[self.dof_id].position = len(probe.calls)
         world.notify_state_change()
         if len(probe.calls) == self.fail_on_attempt_number:
-            raise PlanFailure()
+            raise self.reported_failure()
 
 
 def test_underspecified_action(apartment_world_pr2_copy_with_context):
@@ -716,3 +725,41 @@ def test_a_trial_tries_an_action_that_already_belongs_to_a_plan(debugging_execut
 
     assert trial.succeeds(action)
     trial.discard()
+
+
+# %% a candidate whose motion could not keep its clearance
+
+
+def a_collision_that_could_not_be_avoided() -> MotionViolatedCollisionAvoidance:
+    """
+    :return: The failure a motion reports when it could not keep the clearance it was
+        given.
+    """
+    return MotionViolatedCollisionAvoidance(
+        CollisionViolatedError(violated_collisions=[], thresholds=[])
+    )
+
+
+def test_a_candidate_that_cannot_keep_its_clearance_is_discarded(
+    apartment_world_pr2_copy_with_context,
+):
+    """
+    A motion that could not keep its clearance says this candidate does not work here,
+    not that the plan cannot go on, so grounding moves on to the next candidate instead
+    of the failure escaping the trial.
+    """
+    world, robot, extensions = apartment_world_pr2_copy_with_context
+    dof = world.degrees_of_freedom[0]
+    probe_key = register_probe()
+
+    action = a(RecordingAction)(
+        probe_key=probe_key,
+        dof_id=dof.id,
+        fail_on_attempt_number=variable_from([1, None]),
+        reported_failure=variable_from([a_collision_that_could_not_be_avoided]),
+    )
+    plan = StatementNode(statement=action)
+    run_plan(plan, extensions)
+
+    assert plan.life_cycle_state == LifeCycleValues.SUCCEEDED
+    assert plan.grounded_nodes[-1].fail_on_attempt_number is None

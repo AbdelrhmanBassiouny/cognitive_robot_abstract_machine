@@ -4,8 +4,13 @@ Tests for how the states of a statechart are presented.
 
 import pytest
 
-from krrood.symbolic_math.symbolic_math import Scalar
-from cramph.data_types import LifeCycleValues, ObservationStateValues, TransitionKind
+from krrood.symbolic_math.symbolic_math import FloatVariable, Scalar
+from cramph.data_types import (
+    LifeCyclePredicate,
+    LifeCycleValues,
+    ObservationStateValues,
+    TransitionKind,
+)
 from cramph.exceptions import TransitionHasNoOutcomeError
 from semantic_digital_twin.world_description.geometry import Color
 
@@ -196,3 +201,20 @@ def test_transition_kind_of_covers_every_reachable_state_pair(
     classified as the transition kind whose own condition could have caused it.
     """
     assert TransitionKind.of(previous_state, new_state) is expected_kind
+
+
+# %% life cycle predicates read off an expression
+
+
+@pytest.mark.parametrize("predicate", list(LifeCyclePredicate))
+@pytest.mark.parametrize("life_cycle_state", list(LifeCycleValues))
+def test_a_life_cycle_predicate_expression_matches_its_truth_table(
+    predicate: LifeCyclePredicate, life_cycle_state: LifeCycleValues
+):
+    life_cycle = FloatVariable(name="life_cycle")
+
+    expression = predicate.expression(life_cycle).substitute(
+        [life_cycle], [Scalar(life_cycle_state)]
+    )
+
+    assert float(expression) == predicate.truth_value(life_cycle_state)

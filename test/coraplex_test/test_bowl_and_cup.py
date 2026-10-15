@@ -22,6 +22,10 @@ from coraplex.robot_plans.actions.core.robot_body import (
 )
 from cramph.composites import Parallel, Sequence
 from cramph.context import ContextExtension
+from giskardpy.motion_statechart.tasks.cartesian_tasks import HoldPose
+from semantic_digital_twin.adapters.ros.visualization.viz_marker import (
+    VizMarkerPublisher,
+)
 from semantic_digital_twin.datastructures.definitions import TorsoState
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.grasping.grasp_candidates import (
@@ -225,7 +229,7 @@ def transport_plan(kitchen: KitchenWithFilledDrawer) -> Sequence:
         x=0.3, y=0.89, reference_frame=world.root
     )
     facing_the_kitchen_island = Pose.from_xyz_rpy(
-        x=-0.3, y=1.85, yaw=np.pi, reference_frame=world.root
+        x=-0.25, y=1.85, yaw=np.pi, reference_frame=world.root
     )
     return Sequence(
         [
@@ -237,6 +241,9 @@ def transport_plan(kitchen: KitchenWithFilledDrawer) -> Sequence:
             NavigateAction(in_front_of_the_open_drawer),
             Parallel(
                 [
+                    HoldPose(
+                        root_link=kitchen.world.root, tip_link=robot.mobile_base.root
+                    ),
                     PickUpAction(grasp_from_above(kitchen.bowl), robot.left_arm),
                     PickUpAction(grasp_from_above(kitchen.cup), robot.right_arm),
                 ]
@@ -246,6 +253,9 @@ def transport_plan(kitchen: KitchenWithFilledDrawer) -> Sequence:
             MoveTorsoAction(TorsoState.HIGH),
             Parallel(
                 [
+                    HoldPose(
+                        root_link=kitchen.world.root, tip_link=robot.mobile_base.root
+                    ),
                     PlaceAction(kitchen.bowl, kitchen.world_T_bowl_goal),
                     PlaceAction(kitchen.cup, kitchen.world_T_cup_goal),
                 ]

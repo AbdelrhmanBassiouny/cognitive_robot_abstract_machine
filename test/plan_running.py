@@ -16,11 +16,11 @@ from coraplex.plans.executors import (
     SimulatedPlanExecutor,
 )
 from cramph.context import ContextExtension, StatechartContext
+from cramph.executor import SimulationPacer
 from cramph.node import StatechartNode
 from cramph.statechart import Statechart
 from semantic_digital_twin.robots.robot_parts import AbstractRobot
 from semantic_digital_twin.world import World
-
 from .sampling import SAMPLING_SEED
 
 

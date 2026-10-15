@@ -100,6 +100,11 @@ class DiracDeltaLayer(AbstractContinuousLayer):
             layers[0].tolerance,
         )
 
+    def has_equal_parameters(self, other: Self) -> bool:
+        return np.array_equal(self.location, other.location) and np.array_equal(
+            self.density_cap, other.density_cap
+        )
+
     def log_likelihood_of_nodes_from_column(
         self, values: SampleColumn
     ) -> SampleNodeValues:
@@ -134,19 +139,22 @@ class DiracDeltaLayer(AbstractContinuousLayer):
     def contains(self, assignment: Interval) -> NodeMask:
         """
         :param assignment: The assignment of the variable of this layer.
-        :return: Whether the assignment contains the location of every node.
+        :return: Whether the assignment reaches the mass of every node, up to
+            :attr:`tolerance`.
         """
+        lower_of_window = self.location - self.tolerance
+        upper_of_window = self.location + self.tolerance
         inside = np.zeros(self.number_of_nodes, dtype=bool)
-        for interval in assignment.simple_sets:
+        for simple_interval in assignment.simple_sets:
             left = (
-                interval.lower <= self.location
-                if interval.left == Bound.CLOSED
-                else interval.lower < self.location
+                simple_interval.lower <= upper_of_window
+                if simple_interval.left == Bound.CLOSED
+                else simple_interval.lower < upper_of_window
             )
             right = (
-                self.location <= interval.upper
-                if interval.right == Bound.CLOSED
-                else self.location < interval.upper
+                lower_of_window <= simple_interval.upper
+                if simple_interval.right == Bound.CLOSED
+                else lower_of_window < simple_interval.upper
             )
             inside |= left & right
         return inside
@@ -158,7 +166,7 @@ class DiracDeltaLayer(AbstractContinuousLayer):
         Truncating a Dirac delta either keeps it unchanged or makes it impossible, so
         the whole layer is truncated by testing which locations the assignment contains.
 
-        See :meth:`~probabilistic_model.probabilistic_circuit.tensorized.input_layer.base.InputLayer.log_truncated_of_assignment`
+        See :meth:`~probabilistic_model.probabilistic_circuit.tensorized.input_layer.base.UnivariateInputLayer.log_truncated_of_assignment`
         for the parameters and the result.
         """
         return LayerWithLogProbabilities(
@@ -172,8 +180,6 @@ class DiracDeltaLayer(AbstractContinuousLayer):
         variables: SortedSet,
         cache: Optional[QueryCache] = None,
     ) -> NodeValues:
-        # all of the mass sits on one point, so whether a bound is open or closed
-        # decides whether it is counted
         return self.contains(event[variables[self.variable]]).astype(float)
 
     def log_conditional_of_value(self, value: float) -> LayerWithLogProbabilities:

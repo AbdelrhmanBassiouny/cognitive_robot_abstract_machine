@@ -96,23 +96,3 @@ class MotionToleranceConfig(ContextExtension):
         as the rotation tolerance can leave the task perpetually unfinished, stalling
         the rest of the plan behind it.
     """
-
-
-# %% what the executor tells the plan
-
-
-@dataclass
-class ExecutionMode(ContextExtension):
-    """
-    How the executor running a statechart executes it, added by that executor.
-    """
-
-    simulated: bool
-    """
-    Whether the plan drives a simulated robot rather than the real one.
-    """
-
-    collision_avoidance: bool = False
-    """
-    Whether the robot avoids colliding with its surroundings and with itself.
-    """

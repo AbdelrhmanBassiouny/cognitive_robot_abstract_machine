@@ -28,6 +28,9 @@ from giskardpy.motion_statechart.goals.collision_avoidance import (
     UpdateTemporaryCollisionRules,
 )
 from cramph.composites import Parallel, Sequence
+from cramph.executor import Pacer, RealTimePacer
+from cramph.monitors import CheckTickCount
+from cramph.node import StatechartNode
 from giskardpy.motion_statechart.context import MotionControlContext
 from giskardpy.motion_statechart.graph_node import EndMotion
 from giskardpy.motion_statechart.monitors.monitors import LocalMinimumReached
@@ -96,10 +99,24 @@ class PlotterMode(StrEnum):
 
 
 @dataclass
+class RealTimeStandaloneServerConfig(GiskardServerConfig):
+    """
+    Simulates the motion in place, at the pace a robot is commanded at.
+    """
+
+    def create_pacer(self) -> Pacer:
+        """
+        Unlike :meth:`GiskardServerConfig.create_pacer`, holds a simulated motion to
+        real time as well.
+        """
+        return RealTimePacer()
+
+
+@dataclass
 class BenchmarkRobot(GiskardTester):
     """
-    A PR2 that runs its motions in place, so the control loop is measured without a
-    simulator or hardware in between.
+    A PR2 that runs its motions in place at the pace of a real robot, so the control
+    loop is measured without a simulator or hardware in between.
     """
 
     plotter_mode: PlotterMode = PlotterMode.DEBUG
@@ -107,7 +124,7 @@ class BenchmarkRobot(GiskardTester):
     Whether the post goal plotters record the motion, which costs time in every cycle.
     """
 
-    target_frequency: float = 20.0
+    target_frequency: float = field(kw_only=True)
     """
     Frequency the controller is discretized for, in hertz.
     """
@@ -196,7 +213,7 @@ class BenchmarkRobot(GiskardTester):
                 )
             ),
             robot_interface_config=PR2StandaloneInterface(),
-            server_config=GiskardServerConfig(
+            server_config=RealTimeStandaloneServerConfig(
                 execution_mode=ExecutionMode.STANDALONE,
                 debug_mode=records_trajectory,
                 plot_trajectory=records_trajectory,
@@ -555,6 +572,75 @@ class LongSequenceScenario(BenchmarkScenario):
         return motion_statechart
 
 
+@dataclass
+class DeeplyNestedCascadeScenario(BenchmarkScenario):
+    """
+    Reaches a chain of waypoints, each buried under many nested sequences behind steps
+    whose goal holds from the start.
+
+    Whenever a step ends, its outcome climbs through every nesting level and the next
+    step starts at the bottom of its own nesting within the same tick, so the statechart
+    settles such a tick in a number of passes that grows with :attr:`nesting_depth`.
+    """
+
+    name: ClassVar[str] = "deeply_nested_cascade"
+
+    nesting_depth: int = 7
+    """
+    How many sequences wrap each step, and again each stage of steps, so a step sits
+    about twice as deep.
+    """
+
+    instant_steps_per_waypoint: int = 2
+    """
+    How many steps whose goal holds from the start run before each waypoint, each at the
+    bottom of its own nesting.
+    """
+
+    waypoint_offsets: List[float] = field(
+        default_factory=lambda: [-0.1, 0.1, -0.1, 0.1]
+    )
+    """
+    How far along x each waypoint moves the gripper, relative to the one before.
+    """
+
+    def seed_joint_state(self, robot: BenchmarkRobot) -> Dict[str, float]:
+        return robot.default_joint_state
+
+    def build_motion_statechart(self, robot: BenchmarkRobot) -> Statechart:
+        tip = robot.get_kinematic_structure_entity("r_gripper_tool_frame")
+        stages = []
+        for offset in self.waypoint_offsets:
+            instant_steps = [
+                self._nested(CheckTickCount(threshold=-1))
+                for _ in range(self.instant_steps_per_waypoint)
+            ]
+            waypoint = CartesianPose(
+                root_link=robot.get_kinematic_structure_entity("base_footprint"),
+                tip_link=tip,
+                goal_pose=HomogeneousTransformationMatrix.from_xyz_quaternion(
+                    pos_x=offset, reference_frame=tip
+                ),
+            )
+            stages.append(
+                self._nested(Sequence(instant_steps + [self._nested(waypoint)]))
+            )
+        motion_statechart = Statechart(context=robot.api.context)
+        motion_statechart.add_node(sequence := Sequence(stages))
+        motion_statechart.add_node(EndMotion.when_true(sequence))
+        return motion_statechart
+
+    def _nested(self, step: StatechartNode) -> Sequence:
+        """
+        :param step: The node to bury.
+        :return: :attr:`nesting_depth` sequences, each holding only the next, with
+            `step` in the innermost one.
+        """
+        for _ in range(self.nesting_depth):
+            step = Sequence([step])
+        return step
+
+
 BENCHMARK_SCENARIOS: Dict[str, Type[BenchmarkScenario]] = {
     scenario.name: scenario
     for scenario in (
@@ -563,6 +649,7 @@ BENCHMARK_SCENARIOS: Dict[str, Type[BenchmarkScenario]] = {
         LongSequenceScenario,
         ApartmentDrivingScenario,
         KitchenPointingScenario,
+        DeeplyNestedCascadeScenario,
     )
 }
 """
@@ -618,7 +705,7 @@ class ScenarioRunner:
     Whether the post goal plotters record the motion while it is measured.
     """
 
-    target_frequency: float = 20.0
+    target_frequency: float = 100.0
     """
     Frequency the controller is discretized for, in hertz.
     """

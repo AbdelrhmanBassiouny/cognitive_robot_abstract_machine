@@ -78,6 +78,7 @@ from cramph.nodes_for_testing import (
 from krrood.symbolic_math.exceptions import CannotConvertToStringError
 from krrood.symbolic_math.symbolic_math import (
     FloatVariable,
+    Scalar,
     logic_and,
     logic_or,
     logic_not,
@@ -2335,6 +2336,67 @@ class TestLifeCycleTransitions:
 
         assert goal.life_cycle_state == LifeCycleValues.NOT_STARTED
         assert goal.child.life_cycle_state == LifeCycleValues.NOT_STARTED
+
+
+# %% transitions a parent forces on a node
+
+
+def _evaluate_in(
+    expression: Scalar, life_cycle_states: dict[StatechartNode, LifeCycleValues]
+) -> float:
+    """
+    :param expression: An expression reading the life cycle states of nodes.
+    :param life_cycle_states: The life cycle state of every node `expression` reads.
+    :return: The value of `expression` in those states.
+    """
+    return float(
+        expression.substitute(
+            [node.life_cycle_variable for node in life_cycle_states],
+            [Scalar(state) for state in life_cycle_states.values()],
+        )
+    )
+
+
+class TestLifeCycleForcedByParent:
+    """
+    The life cycle state a node is forced into by its parent alone is the one its
+    transitions reach once none triggered by its own conditions may happen.
+    """
+
+    @pytest.mark.parametrize("parent_life_cycle_state", list(LifeCycleValues))
+    @pytest.mark.parametrize("life_cycle_state", list(LifeCycleValues))
+    def test_a_child_reaches_its_transitions_without_its_own_ones(
+        self,
+        life_cycle_state: LifeCycleValues,
+        parent_life_cycle_state: LifeCycleValues,
+    ):
+        msc = Statechart(context=StatechartContext(world=World()))
+        msc.add_node(parent := Sequence([child := ConstTrueNode()]))
+        _compile_msc(msc)
+        states = {child: life_cycle_state, parent: parent_life_cycle_state}
+        transitions = dict(
+            child.create_lifecycle_transitions(Scalar.const_false()).as_cases()
+        )
+
+        forced = _evaluate_in(child.create_life_cycle_forced_by_parent(), states)
+
+        assert forced == _evaluate_in(transitions[life_cycle_state], states)
+
+    @pytest.mark.parametrize("life_cycle_state", list(LifeCycleValues))
+    def test_a_top_level_node_reaches_its_transitions_without_its_own_ones(
+        self, life_cycle_state: LifeCycleValues
+    ):
+        msc = Statechart(context=StatechartContext(world=World()))
+        msc.add_node(node := ConstTrueNode())
+        _compile_msc(msc)
+        states = {node: life_cycle_state}
+        transitions = dict(
+            node.create_lifecycle_transitions(Scalar.const_false()).as_cases()
+        )
+
+        forced = _evaluate_in(node.create_life_cycle_forced_by_parent(), states)
+
+        assert forced == _evaluate_in(transitions[life_cycle_state], states)
 
 
 # %% life cycle outcomes

@@ -12,8 +12,8 @@ from typing_extensions import List
 
 from coraplex.datastructures.enums import InsertionPosition
 from coraplex.exceptions import ClosingGoalNotFound, ToolPathNotFound
-from coraplex.plans.context_extensions import ExecutionMode
 from coraplex.plans.plan_transformation import (
+    ConfigurationTransformation,
     InsertionTransformation,
     PlanTransformation,
 )
@@ -82,7 +82,7 @@ class KeepTheTorsoUprightWhileUsingATool(InsertionTransformation[ToolMotionActio
 
 
 @dataclass
-class DriveWithTheDifferentialDrive(PlanTransformation[DrivesBase], ABC):
+class DriveWithTheDifferentialDrive(ConfigurationTransformation[DrivesBase], ABC):
     """
     Moves the base of a robot with a goal for its differential drive, which turns
     towards a pose, drives there and turns again, instead of a goal that asks the base
@@ -91,7 +91,6 @@ class DriveWithTheDifferentialDrive(PlanTransformation[DrivesBase], ABC):
 
     def apply(self, plan_node: DrivesBase) -> None:
         plan_node.drives_differentially = True
-        plan_node.replace_action_body(plan_node.create_action_body())
 
 
 @dataclass
@@ -106,16 +105,13 @@ class DriveStretchWithItsDifferentialDrive(DriveWithTheDifferentialDrive):
 
 
 @dataclass
-class DriveSimulatedTiagoWithItsDifferentialDrive(DriveWithTheDifferentialDrive):
+class DriveTiagoWithItsDifferentialDrive(DriveWithTheDifferentialDrive):
     """
-    Moves the base of a simulated Tiago with a goal for its differential drive.
+    Moves the base of a Tiago with a goal for its differential drive, simulated or not.
     """
 
     def is_applicable(self, plan_node: DrivesBase) -> bool:
-        return (
-            isinstance(plan_node.robot, Tiago)
-            and plan_node.context.require_extension(ExecutionMode).simulated
-        )
+        return isinstance(plan_node.robot, Tiago)
 
 
 # %% closing a container
@@ -124,15 +120,13 @@ class DriveSimulatedTiagoWithItsDifferentialDrive(DriveWithTheDifferentialDrive)
 @dataclass
 class KeepStretchInFrontOfTheContainerItCloses(PlanTransformation[CloseAction]):
     """
-    Keeps a simulated Stretch standing in front of the container it closes and holding
-    on to the handle, so that it closes the container by pushing its arm forward.
+    Keeps a kinematically simulated Stretch standing in front of the container it closes
+    and holding on to the handle, so that it closes the container by pushing its arm
+    forward.
     """
 
     def is_applicable(self, plan_node: CloseAction) -> bool:
-        return (
-            isinstance(plan_node.robot, Stretch)
-            and plan_node.context.require_extension(ExecutionMode).simulated
-        )
+        return isinstance(plan_node.robot, Stretch)
 
     @staticmethod
     def closing_goal(plan_node: CloseAction) -> Close:

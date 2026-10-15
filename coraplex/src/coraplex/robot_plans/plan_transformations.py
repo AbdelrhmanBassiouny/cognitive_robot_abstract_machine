@@ -8,13 +8,16 @@ from typing_extensions import TYPE_CHECKING, Generic, List, Optional
 from coraplex.datastructures.enums import (
     DetectionTechnique,
     InsertionPosition,
+    PerceptionSource,
 )
 from coraplex.exceptions import (
+    GraspHasNoClosingGoal,
     ReachHasNoFinalApproach,
 )
 from coraplex.locations.locations import ReachabilityLocation
 from coraplex.querying.grasp_closeness import ClosestGrasps
 from coraplex.plans.plan_transformation import (
+    ConfigurationTransformation,
     InsertionTransformation,
     MatchedType,
     PlanTransformation,
@@ -27,13 +30,23 @@ from coraplex.robot_plans.actions.composite.transporting import (
 )
 from coraplex.robot_plans.actions.core.misc import DetectAction
 from coraplex.robot_plans.actions.core.navigation import (
+    DrivesBase,
     LookAtAction,
     NavigateAction,
 )
-from coraplex.robot_plans.actions.core.pick_up import PickUpAction, ReachAction
-from coraplex.robot_plans.actions.core.robot_body import ParkArmsAction
-from cramph.composites import StatementNode
+from coraplex.robot_plans.actions.core.pick_up import (
+    GraspingAction,
+    PickUpAction,
+    ReachAction,
+)
+from coraplex.robot_plans.actions.core.robot_body import (
+    MoveFingersToWidthAction,
+    ParkArmsAction,
+)
+from coraplex.robot_plans.mixins import ReattachesBodies
+from cramph.composites import CramLanguageNode, StatementNode
 from cramph.node import StatechartNode
+from giskardpy.motion_statechart.goals.gripper import MoveGripper
 from giskardpy.motion_statechart.tasks.cartesian_tasks import (
     CartesianPose,
     CartesianPosition,
@@ -48,6 +61,8 @@ from semantic_digital_twin.grasping.grasp_candidates import (
     GraspCandidate,
     HasGraspCandidates,
 )
+from semantic_digital_twin.datastructures.definitions import GripperState
+from semantic_digital_twin.robots.robot_part_mixins import HasTwoFingers
 from semantic_digital_twin.robots.robot_parts import Arm
 from semantic_digital_twin.semantic_annotations.mixins import HasRootBody
 from semantic_digital_twin.semantic_annotations.semantic_annotations import Drawer
@@ -403,3 +418,113 @@ class ParkArmsBeforeFirstAction(InsertionTransformation[Action]):
             ),
             None,
         )
+
+
+# %% holding an object at its own width
+
+
+@dataclass
+class CloseFingersToObjectWidth(PlanTransformation[GraspingAction]):
+    """
+    Closes a grasp onto the width of the object it takes hold of, instead of shutting
+    the gripper onto it, where the object pushes back.
+
+    Shutting the gripper all the way onto an object that is not centred between the
+    fingers wedges it sideways instead of holding it, so a robot whose grasp holds by
+    contact alone meets the object at its own width, measured on the object.
+    """
+
+    squeeze: float = 0.0
+    """
+    How far past the object's width each finger is sent, in metres, so the fingers press
+    into it rather than merely touching it.
+    """
+
+    def is_applicable(self, plan_node: GraspingAction) -> bool:
+        return (
+            isinstance(plan_node.arm.end_effector, HasTwoFingers)
+            and plan_node.grasp.graspable.root.has_collision()
+        )
+
+    def apply(self, plan_node: GraspingAction) -> None:
+        closing_step = self.closing_step(plan_node)
+        CramLanguageNode.running(closing_step).replace(
+            closing_step,
+            plan_node.closing_step(
+                MoveFingersToWidthAction(
+                    gripper=plan_node.arm.end_effector,
+                    width=plan_node.grasp.width_along_closing_axis,
+                    squeeze=self.squeeze,
+                )
+            ),
+        )
+
+    @staticmethod
+    def closing_step(plan_node: GraspingAction) -> StatechartNode:
+        """
+        :param plan_node: The grasp.
+        :raises GraspHasNoClosingGoal: If no goal shutting the gripper lies below the
+            grasp, which it has none of before it is expanded.
+        :return: The step of the grasp that shuts its gripper.
+        """
+        body = plan_node.action_body
+        steps = [] if body is None else body.nodes
+        for step in reversed(steps):
+            if any(
+                isinstance(node, MoveGripper) and node.state is GripperState.CLOSE
+                for node in [step, *step.descendants]
+            ):
+                return step
+        raise GraspHasNoClosingGoal(plan_node)
+
+
+# %% putting the base at a pose where nothing has to drive it there
+
+
+@dataclass
+class WriteTheOdometryInsteadOfDriving(ConfigurationTransformation[DrivesBase]):
+    """
+    Puts the base at the poses it drives to by writing the odometry, where the world is
+    moved kinematically and so has no drive to follow a commanded pose.
+    """
+
+    def is_applicable(self, plan_node: DrivesBase) -> bool:
+        return True
+
+    def apply(self, plan_node: DrivesBase) -> None:
+        plan_node.writes_odometry = True
+
+
+# %% detecting with the real robot's perception
+
+
+@dataclass
+class DetectWithRoboKudo(ConfigurationTransformation[DetectAction]):
+    """
+    Answers a detection with RoboKudo instead of the world model, where the world model
+    does not know what is in front of the robot.
+    """
+
+    def is_applicable(self, plan_node: DetectAction) -> bool:
+        return True
+
+    def apply(self, plan_node: DetectAction) -> None:
+        plan_node.perception_source = PerceptionSource.ROBOKUDO
+
+
+# %% letting contact carry a body
+
+
+@dataclass
+class LetContactCarryTheBodies(ConfigurationTransformation[ReattachesBodies]):
+    """
+    Leaves the world model alone where an action would move a body under a new parent,
+    where a running physics moves the world: contact carries the body there, and putting
+    a picked object under the gripper would hold it whether or not the grasp did.
+    """
+
+    def is_applicable(self, plan_node: ReattachesBodies) -> bool:
+        return True
+
+    def apply(self, plan_node: ReattachesBodies) -> None:
+        plan_node.reattaches_in_world_model = False

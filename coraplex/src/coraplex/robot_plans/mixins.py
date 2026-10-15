@@ -6,6 +6,8 @@ import numpy as np
 from coraplex.plans.context_extensions import MotionToleranceConfig
 from coraplex.robot_plans.actions.base import Action
 from cramph.context import ContextExtension
+from cramph.node import StatechartNode
+from cramph.world_modification_nodes import MoveBranch
 from krrood.ormatic.utils import classproperty
 from cramph.composites import Parallel
 from giskardpy.motion_statechart.goals.collision_avoidance import (
@@ -346,7 +348,8 @@ class MovesToolCenterPoint(Action, ABC):
         :param max_angular_velocity: Cap on how fast it turns, in rad/s. Only meaningful
             when the orientation is commanded.
         :return: The goal moving the tool center point there, together with whatever
-            speed caps and collision allowances were asked for.
+            speed caps and collision allowances were asked for, and the task keeping the
+            base still, see :meth:`~coraplex.robot_plans.actions.base.Action.keep_base_still`.
         """
         end_effector = arm.end_effector
         root = self.controlled_root
@@ -358,6 +361,7 @@ class MovesToolCenterPoint(Action, ABC):
             accompanying.append(
                 UpdateTemporaryCollisionRules.for_end_effector(end_effector)
             )
+        accompanying.extend(self.keep_base_still())
         goal = self._reach_target(target, root, tip, movement_type)
         if not accompanying:
             return goal
@@ -424,6 +428,33 @@ class MovesToolCenterPoint(Action, ABC):
         return limits
 
 
+@dataclass(eq=False, repr=False)
+class ReattachesBodies(Action, ABC):
+    """
+    An action that moves a body under a new parent in the world model, such as an object
+    it picks up or a robot it carries along.
+    """
+
+    reattaches_in_world_model: bool = field(default=True, init=False)
+    """
+    Whether the world model is told that a body moved under its new parent, rather than
+    contact carrying it there.
+    """
+
+    def reattach(
+        self, body: KinematicStructureEntity, new_parent: KinematicStructureEntity
+    ) -> List[StatechartNode]:
+        """
+        :param body: The root of the branch to move.
+        :param new_parent: The body the branch is moved under.
+        :return: The node moving `body` under `new_parent`, none unless this action
+            :attr:`reattaches_in_world_model`.
+        """
+        if not self.reattaches_in_world_model:
+            return []
+        return [MoveBranch(body=body, new_parent=new_parent)]
+
+
 @dataclass
 class GraspPoseSequence:
     """
@@ -478,17 +509,31 @@ class HasApproachesGraspPoses:
             ``None`` keeps only :attr:`approach_clearance`.
         :return: The tool frame goals around the grasp.
         """
-        tool_goal = end_effector.tool_frame_goal(reference_T_grasp)
-        grasp_T_pre_grasp = HomogeneousTransformationMatrix.from_xyz_rpy(
-            x=-self._approach_distance(grasp)
-        )
-        pre_grasp_pose = end_effector.tool_frame_goal(
-            (reference_T_grasp.homogeneous_matrix @ grasp_T_pre_grasp).pose
-        )
+        tool_goal = end_effector.tool_frame_goal_for_grasp(reference_T_grasp)
         return GraspPoseSequence(
-            pre_grasp=pre_grasp_pose,
+            pre_grasp=self.pre_grasp_pose(
+                reference_T_grasp, end_effector, self._approach_distance(grasp)
+            ),
             grasp=tool_goal,
             retreat=self._retreat_pose(reference_T_grasp, tool_goal),
+        )
+
+    @staticmethod
+    def pre_grasp_pose(
+        reference_T_grasp: Pose, end_effector: EndEffector, distance: float
+    ) -> Pose:
+        """
+        The goal back along the direction the gripper approaches a grasp from, aimed at
+        the point the fingers meet as the grasp itself is.
+
+        :param reference_T_grasp: The grasp frame, whose x-axis is the approach.
+        :param end_effector: The end effector that reaches it.
+        :param distance: How far back along the approach direction, in meters.
+        :return: The tool frame goal, in ``reference_T_grasp``'s frame.
+        """
+        grasp_T_pre_grasp = HomogeneousTransformationMatrix.from_xyz_rpy(x=-distance)
+        return end_effector.tool_frame_goal_for_grasp(
+            (reference_T_grasp.homogeneous_matrix @ grasp_T_pre_grasp).pose
         )
 
     def _approach_distance(self, grasp: Optional[GraspCandidate]) -> float:

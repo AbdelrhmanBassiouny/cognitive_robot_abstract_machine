@@ -1,89 +1,107 @@
 from __future__ import annotations
 
-from copy import deepcopy
 from dataclasses import dataclass
-from datetime import timedelta
-
-from typing_extensions import Optional, Type, Any
 
 from coraplex.datastructures.enums import DetectionTechnique
-from coraplex.plans.failures import PerceptionObjectNotFound
+from coraplex.locations.locations import VisibilityLocation
+from coraplex.robot_plans.actions.base import Action
 from coraplex.robot_plans.actions.core.misc import DetectAction
-from coraplex.robot_plans.actions.core.navigation import NavigateAction, LookAtAction
+from coraplex.robot_plans.actions.core.navigation import LookAtAction, NavigateAction
+from cramph.composites import Sequence, TryInOrder
+from cramph.node import StatechartNode
+from krrood.entity_query_language.factories import a, variable
+from semantic_digital_twin.spatial_types import HomogeneousTransformationMatrix
 from semantic_digital_twin.spatial_types.spatial_types import Pose
+from semantic_digital_twin.world_description.geometry import VolumetricBoundingBox
 from semantic_digital_twin.world_description.world_entity import SemanticAnnotation
 
-# todo: this is deprecated-> needs update
+# %% searching for an object
 
-#
-# @dataclass
-# class SearchAction(ActionDescription):
-#     """
-#     Searches for a target object around the given location.
-#     """
-#
-#     target_location: Pose
-#     """
-#     Location around which to look for a target object.
-#     """
-#
-#     object_sem_annotation: Type[SemanticAnnotation]
-#     """
-#     Type of the object which is searched for.
-#     """
-#
-#     def execute(self) -> None:
-#
-#         # go to a location where the target location is visible
-#         self.add_subplan(
-#             execute_single(
-#                 NavigateAction(
-#                     next(
-#                         iter(CostmapLocation(target=self.target_location, visible=True))
-#                     )
-#                 )
-#             )
-#         ).perform()
-#
-#         # define searching cone
-#         target_base = self.world.transform(self.target_location, self.world.root)
-#
-#         target_base_left = deepcopy(target_base)
-#         target_base_left.y -= 0.5
-#
-#         target_base_right = deepcopy(target_base)
-#         target_base_right.y += 0.5
-#
-#         self.add_subplan(
-#             searching := try_in_order(
-#                 [
-#                     sequential(
-#                         [
-#                             LookAtAction(target),
-#                             DetectAction(
-#                                 DetectionTechnique.TYPES,
-#                                 object_sem_annotation=self.object_sem_annotation,
-#                             ),
-#                         ]
-#                     )
-#                     for target in [target_base, target_base_left, target_base_right]
-#                 ]
-#             )
-#         )
-#
-#         # get the found objects
-#         old_annotation_ids = {
-#             annotation.id for annotation in self.world.semantic_annotations
-#         }
-#         searching.perform()
-#         new_annotation_ids = {
-#             annotation.id for annotation in self.world.semantic_annotations
-#         } - old_annotation_ids
-#
-#         if not new_annotation_ids:
-#             raise PerceptionObjectNotFound(self)
-#
-#     def validate(
-#         self, result: Optional[Any] = None, max_wait_time: Optional[timedelta] = None
-#     ):
-#         pass
+
+@dataclass(eq=False, repr=False)
+class SearchAction(Action):
+    """
+    Searches for an object around a location.
+
+    The robot drives to a pose the location is visible from and looks at the location,
+    then to either side of it, until the object is detected. The action fails if the
+    object is seen from none of them.
+    """
+
+    target_location: Pose
+    """
+    Location around which to look for the object.
+    """
+
+    object_semantic_annotation: type[SemanticAnnotation]
+    """
+    Type of the object which is searched for.
+    """
+
+    sideways_look_offsets: tuple[float, ...] = (0.0, -0.5, 0.5)
+    """
+    How far to the left of :attr:`target_location` the robot looks, as seen from where
+    it stands, in the order the looks are tried; negative offsets look to the right.
+    """
+
+    detection_margin: float = 0.5
+    """
+    How far beyond the points looked at an object may lie and still be detected.
+    """
+
+    def create_action_body(self) -> StatechartNode:
+        detection_box = self._detection_box()
+        return Sequence(
+            [
+                a(NavigateAction)(
+                    target_location=variable(
+                        Pose,
+                        domain=VisibilityLocation(
+                            target_pose=self.target_location,
+                            context=self.context,
+                            seed=self.sampling_seed,
+                        ),
+                    )
+                ),
+                TryInOrder(
+                    [
+                        Sequence(
+                            [
+                                LookAtAction(
+                                    self.target_location,
+                                    sideways_offset=sideways_offset,
+                                ),
+                                DetectAction(
+                                    DetectionTechnique.TYPES,
+                                    object_sem_annotation=self.object_semantic_annotation,
+                                    detection_box=detection_box,
+                                ),
+                            ]
+                        )
+                        for sideways_offset in self.sideways_look_offsets
+                    ]
+                ),
+            ]
+        )
+
+    def _detection_box(self) -> VolumetricBoundingBox:
+        """
+        :return: The cube around :attr:`target_location` that holds every point looked
+            at, widened by :attr:`detection_margin`.
+        """
+        half_extent = (
+            max(abs(offset) for offset in self.sideways_look_offsets)
+            + self.detection_margin
+        )
+        x, y, z = self.target_location.position.to_np().flatten()[:3]
+        return VolumetricBoundingBox(
+            origin=HomogeneousTransformationMatrix(
+                reference_frame=self.target_location.reference_frame
+            ),
+            min_x=x - half_extent,
+            min_y=y - half_extent,
+            min_z=z - half_extent,
+            max_x=x + half_extent,
+            max_y=y + half_extent,
+            max_z=z + half_extent,
+        )

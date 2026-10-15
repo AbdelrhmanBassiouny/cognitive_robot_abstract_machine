@@ -194,6 +194,12 @@ class RobotDemonstration(ABC):
     The renderer a simulated run is shown with, unless the environment selects one.
     """
 
+    visualization: WorldVisualization | None = field(init=False, default=None)
+    """
+    Shows every simulated run of this demonstration, selected through the environment;
+    ``None`` for a real run or when the environment selects no renderer.
+    """
+
     ros_session: RobotDemonstrationRosSession | None = field(init=False, default=None)
     """
     Session held for the duration of a real run, and ``None`` in simulation.
@@ -260,7 +266,12 @@ class RobotDemonstration(ABC):
         this demonstration's own description otherwise.
         """
         self.ros_session = RobotDemonstrationRosSession.start(self.ros_node_name)
-        if self.executor_type.simulated:
+        if issubclass(self.executor_type, SimulatedPlanExecutor):
+            self.visualization = WorldVisualization.from_environment(
+                self.default_visualization_backend,
+                ros_node=self.ros_node,
+                collision_visualization=True,
+            )
             return self.build_simulated_world()
         world = self.ros_session.fetch_world()
         WorldSynchronizer(_world=world, node=self.ros_session.node)
@@ -270,23 +281,15 @@ class RobotDemonstration(ABC):
         """
         :param world: The world the plan is performed in.
         :return: An executor of :attr:`executor_type`, set up the way this demonstration
-            performs its plan, which shows a simulated run with the visualization
-            selected through the environment.
+            performs its plan, showing its runs with :attr:`visualization`.
         """
-        visualization = (
-            WorldVisualization.from_environment(
-                self.default_visualization_backend, collision_visualization=True
-            )
-            if self.executor_type.simulated
-            else None
-        )
         executor = self.executor_type(
             world,
             context_extensions=self.build_context_extensions(world),
             ros_node=self.ros_node,
             collision_avoidance=self.collision_avoidance,
             debug=self.debug,
-            extensions=[] if visualization is None else [visualization],
+            extensions=[] if self.visualization is None else [self.visualization],
         )
         if self.simulation_time_per_action is not None and isinstance(
             executor, SimulatedPlanExecutor
@@ -323,10 +326,6 @@ class RobotDemonstration(ABC):
     def tear_down(self) -> None:
         """
         Release the ROS session if this demonstration started the ROS context.
-
-        A session running inside a context somebody else owns is left alone: that owner
-        decides when its nodes go away, and destroying this one early can drop world
-        modifications that have not reached the controller yet.
         """
         if self.ros_session is None or not self.ros_session.owns_context:
             return

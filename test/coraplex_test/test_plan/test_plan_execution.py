@@ -14,16 +14,14 @@ from coraplex.exceptions import (
     MotionDidNotFinish,
     PlanNotCompiled,
 )
-from coraplex.plans.executors import (
-    RealRobotPlanExecutor,
-    SimulatedPlanExecutor,
-)
+from coraplex.plans.plan_transformation import PlanRewriting
 from coraplex.plans.failures import (
     MotionExceededSimulationTimeLimit,
     MotionMadeNoProgress,
     MotionViolatedCollisionAvoidance,
 )
 from coraplex.robot_plans.actions.core.pick_up import ReachAction
+from coraplex.robot_plans.plan_transformations import DetectBeforeGrasp
 from coraplex.robot_plans.actions.core.robot_body import (
     MoveTorsoAction,
     ParkArmsAction,
@@ -34,6 +32,7 @@ from cramph.data_types import LifeCycleValues, ObservationStateValues
 from cramph.executor import Pacer, StatechartExecutor
 from cramph.node import CancelStatechart
 from cramph.nodes_for_testing import NodeFailingOnObservingFalse
+from giskardpy.motion_control import MotionControl
 from giskardpy.motion_statechart.exceptions import CollisionViolatedError
 from giskardpy.motion_statechart.graph_node import EndMotion
 from giskardpy.motion_statechart.monitors.progress_monitors import StillProgressing
@@ -42,6 +41,7 @@ from semantic_digital_twin.grasping.grasp_candidates import GraspCandidate
 from semantic_digital_twin.robots.pr2 import PR2Joint
 from semantic_digital_twin.semantic_annotations.semantic_annotations import Milk
 from semantic_digital_twin.spatial_types import HomogeneousTransformationMatrix
+from ..conftest import physically_simulated_executor
 from ...plan_running import run_plan, simulated_executor, statechart_of
 
 # %% counting the waits between ticks
@@ -157,16 +157,6 @@ def test_a_statechart_of_another_context_is_refused(pr2_apartment_context):
 
     with pytest.raises(StatechartOfDifferentContextError):
         simulated_executor(extensions).compile(statechart)
-
-
-@pytest.mark.parametrize(
-    "executor_type, drives_a_simulated_robot",
-    [(SimulatedPlanExecutor, True), (RealRobotPlanExecutor, False)],
-)
-def test_an_executor_says_whether_it_drives_a_simulated_robot(
-    executor_type, drives_a_simulated_robot
-):
-    assert executor_type.simulated is drives_a_simulated_robot
 
 
 # %% how long a plan may take
@@ -301,3 +291,87 @@ def test_a_plan_that_violates_collision_avoidance_fails_as_a_plan_failure(
         executor.execute()
 
     assert failure.value.violation is violation
+
+
+# %% performing a plan in a physically simulated world
+
+
+def test_a_physically_simulated_plan_steps_the_physics_one_control_period_per_tick(
+    pr2_apartment_context,
+):
+    """
+    The servos take every command as their set point, so the physics has to advance by
+    exactly the time the controller planned the command for before the next tick reads
+    the world back.
+    """
+    world, robot_view, extensions = pr2_apartment_context
+    executor = physically_simulated_executor(extensions)
+
+    executor.compile(statechart_of(executor, MoveTorsoAction(TorsoState.HIGH)))
+    executor.execute()
+
+    control_time_step = executor.require_extension(
+        MotionControl
+    ).qp_controller_config.control_time_step
+    assert executor.pacer.simulation.steps == [control_time_step] * executor.tick_count
+
+
+def test_a_physically_simulated_plan_is_given_the_same_time_limit(
+    pr2_apartment_context,
+):
+    """
+    Both simulated executors tick the same loop, so a plan performed in physics is given
+    up on by the same limit as one projected kinematically.
+    """
+    world, robot_view, extensions = pr2_apartment_context
+    executor = physically_simulated_executor(
+        extensions, simulation_time_per_action=timedelta(0)
+    )
+
+    with pytest.raises(MotionExceededSimulationTimeLimit):
+        executor.compile(statechart_of(executor, MoveTorsoAction(TorsoState.HIGH)))
+        executor.execute()
+
+
+# %% adapting a plan to its executor
+
+
+def test_a_plan_is_adapted_after_the_transformations_it_was_given(
+    pr2_apartment_context,
+):
+    """
+    The executor's own transformations adapt an action before the plan's transformations
+    are offered it.
+    """
+    world, robot_view, extensions = pr2_apartment_context
+    detecting = DetectBeforeGrasp()
+    executor = physically_simulated_executor(
+        [*extensions, PlanRewriting(transformations=[detecting])]
+    )
+
+    rewriting = executor.context.require_extension(PlanRewriting)
+
+    assert rewriting.transformations == [*executor.plan_adaptations, detecting]
+
+
+def test_a_plan_given_no_transformations_is_still_adapted(pr2_apartment_context):
+    world, robot_view, extensions = pr2_apartment_context
+    executor = physically_simulated_executor(extensions)
+
+    rewriting = executor.context.require_extension(PlanRewriting)
+
+    assert rewriting.transformations == executor.plan_adaptations
+
+
+def test_the_rewriting_a_plan_was_given_is_left_as_it_was(pr2_apartment_context):
+    """
+    The same context extensions may configure executors of different kinds, so one
+    executor's adaptations must not reach another through them.
+    """
+    world, robot_view, extensions = pr2_apartment_context
+    detecting = DetectBeforeGrasp()
+    given = PlanRewriting(transformations=[detecting])
+
+    physically_simulated_executor([*extensions, given])
+
+    assert given.transformations == [detecting]

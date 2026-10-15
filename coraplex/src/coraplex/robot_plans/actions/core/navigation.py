@@ -5,13 +5,10 @@ from dataclasses import dataclass, field
 
 from typing_extensions import Optional
 
-from coraplex.plans.context_extensions import ExecutionMode
-from krrood.ormatic.utils import classproperty
-from cramph.context import ContextExtension
 from coraplex.exceptions import NoFloorBelowRobot, NotOnASingleLevelException
 from cramph.node import StatechartNode
-from cramph.world_modification_nodes import MoveBranch
 from coraplex.robot_plans.actions.base import Action
+from coraplex.robot_plans.mixins import ReattachesBodies
 from cramph.composites import Parallel, PausedUntilTrue, Sequence
 from giskardpy.motion_statechart.goals.cartesian_goals import DifferentialDriveBaseGoal
 from giskardpy.motion_statechart.graph_node import MotionStatechartNode
@@ -23,7 +20,7 @@ from giskardpy.motion_statechart.tasks.cartesian_tasks import (
     CartesianPose,
     CartesianPosition,
 )
-from giskardpy.motion_statechart.tasks.pointing import Pointing
+from giskardpy.motion_statechart.tasks.pointing import Pointing, PointingBeside
 from semantic_digital_twin.exceptions import MissingMovableJointError
 from semantic_digital_twin.reasoning.predicates import InsideOf
 from semantic_digital_twin.robots.robot_parts import Camera
@@ -66,19 +63,19 @@ class DrivesBase(Action, ABC):
     to move sideways.
     """
 
-    @classproperty
-    def context_extensions_required_to_expand(
-        cls,
-    ) -> tuple[type[ContextExtension], ...]:
-        return super().context_extensions_required_to_expand + (ExecutionMode,)
+    writes_odometry: bool = field(default=False, init=False)
+    """
+    Whether the base is put at a pose by writing the odometry, instead of being driven
+    there.
+    """
 
     def _drive_to(self, target: Pose) -> MotionStatechartNode:
         """
         :param target: Where the base should end up.
-        :return: The node that puts the base there. A differential drive gets a goal of
-            its own; otherwise a simulated run writes the odometry directly, because
-            there is no drive to follow the pose, and a real one commands the pose and
-            lets the controller drive there.
+        :return: The node that puts the base there: a goal of its own for a
+            differential drive, otherwise the odometry written directly where the base
+            :attr:`writes_odometry`, and otherwise the commanded pose the controller
+            drives to.
         """
         if self.drives_differentially:
             return DifferentialDriveBaseGoal(
@@ -86,7 +83,7 @@ class DrivesBase(Action, ABC):
                 goal_pose=target,
                 threshold=self.base_pose_threshold,
             )
-        if self.context.require_extension(ExecutionMode).simulated:
+        if self.writes_odometry:
             return SetOdometry(
                 base_pose=target.homogeneous_matrix,
                 odom_connection=self.robot.root.parent_connection,
@@ -130,14 +127,26 @@ class LookAtAction(Action):
     Camera that should be looking at the target.
     """
 
+    sideways_offset: float = 0.0
+    """
+    How far to the left of the target the robot looks instead, as seen from where its
+    base stands when the look starts; a negative offset looks to the right.
+    """
+
     def create_action_body(self) -> StatechartNode:
         camera = self.camera or self.robot.get_default_camera()
-        return Pointing(
+        pointing = PointingBeside(
             root_link=self.robot.get_torso().root,
             tip_link=camera.root,
             goal_point=self.target.position,
             pointing_axis=camera.forward_facing_axis,
+            viewpoint=self.robot.root,
+            sideways_offset=self.sideways_offset,
         )
+        hold_base = self.keep_base_still()
+        if not hold_base:
+            return pointing
+        return Parallel([pointing, *hold_base])
 
 
 @dataclass(eq=False, repr=False)
@@ -307,7 +316,7 @@ class PathPlanningNavigateAction(DrivesBase):
 
 
 @dataclass(eq=False, repr=False)
-class ElevatorNavigation(Action):
+class ElevatorNavigation(ReattachesBodies):
     """
     Navigates a robot to another level of a building using an elevator, the robot drives
     in the elevator and waits there until the doors open again and the elevator is at
@@ -348,12 +357,12 @@ class ElevatorNavigation(Action):
                         )
                     ),
                 ),
-                MoveBranch(body=self.robot.root, new_parent=self.elevator.root),
+                *self.reattach(self.robot.root, self.elevator.root),
                 PausedUntilTrue(
                     monitor=self._elevator_open_at_floor(self.target_floor),
                     monitored_node=NavigateAction(self._pose_infront_of_elevator),
                 ),
-                MoveBranch(body=self.robot.root, new_parent=self.world.root),
+                *self.reattach(self.robot.root, self.world.root),
             ]
         )
 

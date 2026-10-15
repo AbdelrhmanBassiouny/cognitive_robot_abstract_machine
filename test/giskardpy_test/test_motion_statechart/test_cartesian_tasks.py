@@ -22,8 +22,10 @@ from giskardpy.motion_statechart.monitors.overwrite_state_monitors import (
 from cramph.statechart import (
     Statechart,
 )
+from giskardpy.motion_statechart.monitors.progress_monitors import StillProgressing
 from giskardpy.motion_statechart.tasks.cartesian_tasks import (
     CartesianPose,
+    HoldPose,
     CartesianOrientation,
     CartesianPosition,
     CartesianPositionStraight,
@@ -74,6 +76,138 @@ from cramph.executor import StatechartExecutor
 from giskardpy.motion_control import WorldStateTrajectoryRecording
 from ..motion_control_context import create_context_with_motion_control
 
+# %% holding a pose
+
+
+class TestHoldPose:
+    """
+    Tests for holding a link where it is, rather than moving it to a goal.
+    """
+
+    @staticmethod
+    def executor_for(world: World) -> StatechartExecutor:
+        """
+        :return: An executor driving `world` with motion control.
+        """
+        return StatechartExecutor(
+            context=StatechartContext(world=world), extensions=[MotionControl()]
+        )
+
+    def test_a_held_link_stays_where_it_was(self, cylinder_bot_world: World):
+        """
+        A link is held against a task that pulls at it, so the constraints have to be
+        real ones rather than a preference the solver can trade away.
+        """
+        bot = cylinder_bot_world.get_kinematic_structure_entity_by_name("bot")
+        start = cylinder_bot_world.compute_forward_kinematics_np(
+            cylinder_bot_world.root, bot
+        ).copy()
+        executor = self.executor_for(cylinder_bot_world)
+        motion_statechart = Statechart(context=executor.context)
+        motion_statechart.add_nodes(
+            [
+                CartesianPosition(
+                    root_link=cylinder_bot_world.root,
+                    tip_link=bot,
+                    goal_point=Point3(1, 0, 0, reference_frame=cylinder_bot_world.root),
+                    weight=DefaultWeights.WEIGHT_BELOW_COLLISION_AVOIDANCE,
+                ),
+                HoldPose(
+                    root_link=cylinder_bot_world.root,
+                    tip_link=bot,
+                    weight=DefaultWeights.WEIGHT_ABOVE_COLLISION_AVOIDANCE,
+                ),
+            ]
+        )
+        motion_statechart.add_node(EndMotion())
+
+        executor.compile(statechart=motion_statechart)
+        for _ in range(100):
+            executor.tick()
+
+        reached = cylinder_bot_world.compute_forward_kinematics_np(
+            cylinder_bot_world.root, bot
+        )
+        assert np.linalg.norm(reached[:3, 3] - start[:3, 3]) < 1e-3
+
+    def test_a_held_pose_is_not_watched_for_progress(self, cylinder_bot_world: World):
+        """
+        Holding a link is an invariant, not a goal being approached, so a stall monitor
+        must not count it among the tasks whose progress decides whether a motion is
+        getting anywhere.
+        """
+        bot = cylinder_bot_world.get_kinematic_structure_entity_by_name("bot")
+        goal = CartesianPosition(
+            root_link=cylinder_bot_world.root,
+            tip_link=bot,
+            goal_point=Point3(1, 0, 0, reference_frame=cylinder_bot_world.root),
+        )
+        hold = HoldPose(root_link=cylinder_bot_world.root, tip_link=bot)
+        together = Parallel([goal, hold])
+        progressing = StillProgressing(monitored_node=together)
+        executor = self.executor_for(cylinder_bot_world)
+        motion_statechart = Statechart(context=executor.context)
+        motion_statechart.add_nodes([together, progressing])
+        motion_statechart.add_node(EndMotion())
+
+        executor.compile(statechart=motion_statechart)
+
+        assert progressing.monitored_tasks == [goal]
+
+    def test_a_held_pose_does_not_hold_up_the_motion_it_runs_alongside(
+        self, cylinder_bot_world: World
+    ):
+        """
+        A held pose has no goal to reach, so it must report itself satisfied: a motion
+        that ends once everything under it reached its goal would otherwise never end.
+        """
+        bot = cylinder_bot_world.get_kinematic_structure_entity_by_name("bot")
+        hold = HoldPose(root_link=cylinder_bot_world.root, tip_link=bot)
+        executor = self.executor_for(cylinder_bot_world)
+        motion_statechart = Statechart(context=executor.context)
+        motion_statechart.add_node(hold)
+        motion_statechart.add_node(EndMotion())
+
+        executor.compile(statechart=motion_statechart)
+        executor.tick()
+
+        assert hold.observation_state == ObservationStateValues.TRUE
+
+    def test_a_link_moved_away_from_its_held_pose_is_observed_as_not_held(
+        self, cylinder_bot_world: World
+    ):
+        """
+        A hold that a stronger task overrules no longer keeps its link in place, and has
+        to say so rather than report an invariant that does not hold.
+        """
+        bot = cylinder_bot_world.get_kinematic_structure_entity_by_name("bot")
+        hold = HoldPose(
+            root_link=cylinder_bot_world.root,
+            tip_link=bot,
+            weight=DefaultWeights.WEIGHT_BELOW_COLLISION_AVOIDANCE,
+        )
+        executor = self.executor_for(cylinder_bot_world)
+        motion_statechart = Statechart(context=executor.context)
+        motion_statechart.add_nodes(
+            [
+                CartesianPosition(
+                    root_link=cylinder_bot_world.root,
+                    tip_link=bot,
+                    goal_point=Point3(1, 0, 0, reference_frame=cylinder_bot_world.root),
+                    weight=DefaultWeights.WEIGHT_ABOVE_COLLISION_AVOIDANCE,
+                ),
+                hold,
+            ]
+        )
+        motion_statechart.add_node(EndMotion())
+
+        executor.compile(statechart=motion_statechart)
+        for _ in range(100):
+            executor.tick()
+
+        assert hold.observation_state == ObservationStateValues.FALSE
+
+
 # %% straight line paths
 
 STRAIGHT_LINE_TOLERANCE = 0.02
@@ -81,7 +215,8 @@ STRAIGHT_LINE_TOLERANCE = 0.02
 How far the tip may stray from the line it is supposed to travel along, in meters.
 
 Some deviation is unavoidable: the controller has to accelerate out of the pose the
-motion starts at, and it can only correct a lateral offset on the tick after it appeared.
+motion starts at, and it can only correct a lateral offset on the tick after it
+appeared.
 """
 
 
@@ -92,10 +227,14 @@ class StraightLine:
     """
 
     start: np.ndarray
-    """Position the motion starts at."""
+    """
+    Position the motion starts at.
+    """
 
     end: np.ndarray
-    """Position the motion ends at."""
+    """
+    Position the motion ends at.
+    """
 
     def distance_from(self, position: np.ndarray) -> float:
         """
@@ -310,8 +449,8 @@ class TestCartesianPositionTrajectory:
         self, cylinder_bot_world: World
     ):
         """
-        A trajectory bound on start must track its goal frame where that frame is when the
-        trajectory starts, even if a task built after the trajectory moved the frame
+        A trajectory bound on start must track its goal frame where that frame is when
+        the trajectory starts, even if a task built after the trajectory moved the frame
         first.
         """
         root = cylinder_bot_world.root
@@ -1723,8 +1862,8 @@ class TestVelocityTasks:
 
     def _compile_msc_and_run_until_end(self, world: World, goal_node, limit_node):
         """
-        Build the MSC (no extra nodes), compile into a StatechartExecutor, run until end and
-        return (control_cycles, executor)
+        Build the MSC (no extra nodes), compile into a StatechartExecutor, run until end
+        and return (control_cycles, executor)
         """
         executor = StatechartExecutor(
             context=StatechartContext(world=world), extensions=[MotionControl()]
@@ -1750,8 +1889,8 @@ class TestVelocityTasks:
         self, pr2_world_state_reset: World, goal_type: str, limit_cls: type
     ):
         """
-        Tests that velocity limit's observation variable can trigger a CancelStatechart when
-        the optimizer chooses to violate the limit.
+        Tests that velocity limit's observation variable can trigger a CancelStatechart
+        when the optimizer chooses to violate the limit.
         """
         tip = pr2_world_state_reset.get_kinematic_structure_entity_by_name(
             "base_footprint"

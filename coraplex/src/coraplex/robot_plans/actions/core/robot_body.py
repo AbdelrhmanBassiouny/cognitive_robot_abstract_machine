@@ -5,6 +5,7 @@ from datetime import timedelta
 
 from typing_extensions import Optional, Any, List
 
+from semantic_digital_twin.robots.robot_part_mixins import HasTwoFingers
 from semantic_digital_twin.robots.robot_parts import Arm, EndEffector
 from semantic_digital_twin.spatial_types.spatial_types import Pose
 
@@ -21,7 +22,10 @@ from giskardpy.motion_statechart.binding_policy import GoalBindingPolicy
 from giskardpy.motion_statechart.goals.collision_avoidance import (
     UpdateTemporaryCollisionRules,
 )
-from giskardpy.motion_statechart.tasks.cartesian_tasks import CartesianPose
+from giskardpy.motion_statechart.tasks.cartesian_tasks import (
+    CartesianPose,
+    CartesianPosition,
+)
 from giskardpy.motion_statechart.tasks.joint_tasks import (
     JointPositionList,
     JointVelocityLimit,
@@ -68,6 +72,58 @@ class SetGripperAction(Action, MovesGripper):
 
     def create_action_body(self) -> StatechartNode:
         return self.gripper_goal(self.motion, self.gripper)
+
+
+@dataclass(eq=False, repr=False)
+class MoveFingersToWidthAction(Action):
+    """
+    Closes a two-finger gripper until its fingertips stand a given distance apart,
+    rather than driving it to a gripper state of its own.
+
+    Closing a gripper all the way onto an object that is not centred between the
+    fingers wedges it sideways instead of holding it, so an object held by contact alone
+    is better met at its own width. Giskard is given the distance between the fingertips
+    as the goal and finds the joint positions that realise it.
+
+    .. note:: This only means anything where something pushes back, see
+        :class:`~coraplex.robot_plans.plan_transformations.CloseFingersToObjectWidth`.
+    """
+
+    gripper: HasTwoFingers
+    """
+    The gripper whose fingers close.
+    """
+
+    width: float
+    """
+    How far apart the fingertips' facing surfaces are to stand, in metres.
+    """
+
+    squeeze: float = 0.0
+    """
+    How far past that width each fingertip is sent, in metres, so the fingers press into
+    an object rather than merely touching it.
+
+    Keep it small, since it is commanded penetration into a body that does not yield.
+    """
+
+    threshold: float = 0.0005
+    """
+    How close, in metres, the fingertips have to come to the goal for the action to
+    count as done: well under a squeeze, so the squeeze is not lost to the tolerance.
+    """
+
+    def create_action_body(self) -> StatechartNode:
+        fingertips = self.gripper.fingertips
+        return CartesianPosition(
+            root_link=fingertips.finger,
+            tip_link=fingertips.thumb,
+            goal_point=fingertips.finger_P_thumb(
+                max(0.0, self.width - 2 * self.squeeze)
+            ),
+            name="MoveFingersToWidth",
+            threshold=self.threshold,
+        )
 
 
 @dataclass(eq=False, repr=False)
@@ -128,9 +184,13 @@ class FollowToolCenterPointPathAction(MovesToolCenterPoint):
     """
 
     def create_action_body(self) -> StatechartNode:
-        return Sequence(
+        waypoints = Sequence(
             [self._waypoint_goal(pose) for pose in self.target_locations.poses]
         )
+        hold_base = self.keep_base_still()
+        if not hold_base:
+            return waypoints
+        return Parallel([waypoints, *hold_base])
 
     def _waypoint_goal(self, target: Pose) -> CartesianPose:
         """
@@ -188,11 +248,11 @@ class MoveManipulatorAction(MovesToolCenterPoint):
             orientation_threshold=self.resolved_orientation_threshold(),
             binding_policy=GoalBindingPolicy.Bind_on_start,
         )
-        if not self.allow_gripper_collision:
+        accompanying = self.keep_base_still()
+        if self.allow_gripper_collision:
+            accompanying.append(
+                UpdateTemporaryCollisionRules.for_end_effector(self.end_effector)
+            )
+        if not accompanying:
             return goal
-        return Parallel(
-            [
-                goal,
-                UpdateTemporaryCollisionRules.for_end_effector(self.end_effector),
-            ]
-        )
+        return Parallel([goal, *accompanying])

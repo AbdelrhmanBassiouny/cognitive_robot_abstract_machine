@@ -82,6 +82,7 @@ from giskardpy.motion_statechart.tasks.cartesian_tasks import (
     CartesianPositionVelocityLimit,
     CartesianRotationVelocityLimit,
     CartesianVelocityLimit,
+    HoldPose,
 )
 from giskardpy.motion_statechart.tasks.feature_functions import (
     AlignPerpendicular,
@@ -95,7 +96,11 @@ from giskardpy.motion_statechart.tasks.joint_tasks import (
     JointPositionList,
     JointVelocityLimit,
 )
-from giskardpy.motion_statechart.tasks.pointing import Pointing, PointingCone
+from giskardpy.motion_statechart.tasks.pointing import (
+    Pointing,
+    PointingBeside,
+    PointingCone,
+)
 from giskardpy.motion_statechart.tasks.weight_scaling_goals import MaxManipulability
 from giskardpy.motion_statechart.tasks.wiggle_insert import WiggleInsert
 from giskardpy.qp.qp_controller_config import QPControllerConfig
@@ -245,6 +250,11 @@ def _cartesian_cases() -> list[NodeRoundTripCase]:
             WorldFixture.PR2_WORLD,
         ),
         NodeRoundTripCase(
+            HoldPose,
+            lambda world: [HoldPose(root_link=_root(world), tip_link=_tip(world))],
+            WorldFixture.PR2_WORLD,
+        ),
+        NodeRoundTripCase(
             CartesianPosition,
             lambda world: [
                 CartesianPosition(
@@ -338,6 +348,20 @@ def _cartesian_cases() -> list[NodeRoundTripCase]:
                     tip_link=_tip(world),
                     goal_point=_point(world),
                     pointing_axis=_tip_axis(world),
+                )
+            ],
+            WorldFixture.PR2_WORLD,
+        ),
+        NodeRoundTripCase(
+            PointingBeside,
+            lambda world: [
+                PointingBeside(
+                    root_link=_root(world),
+                    tip_link=_tip(world),
+                    goal_point=_point(world),
+                    pointing_axis=_tip_axis(world),
+                    viewpoint=_root(world),
+                    sideways_offset=0.5,
                 )
             ],
             WorldFixture.PR2_WORLD,
