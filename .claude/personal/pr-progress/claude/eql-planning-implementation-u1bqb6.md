@@ -1,6 +1,6 @@
 Plan
 - Domain-agnostic EQL planning in krrood (State overlay, ActionSchema, PlanningBackend); Montessori first robot domain, then RoboCasa via cramph Achieve node.
 Done
-- Brainstorm sent, revised against plans/PRs: prereqs are #495, nested-ContextVar bug (#511), state-aware predicate memo (aamas27 branch); #15 must retarget cramph.
+- Plan doc for comments: https://claude.ai/code/artifact/559b21dc-0e6c-41ce-9843-b06cb69fe62e (prereqs #495, nested ContextVar, state-aware memo; #15 vs cramph).
 Next
-- User answers: Nov-Dec paper load (AAMAS/ICRA), pausing tooling plans, Montessori domain, #15. Then /plan-create; re-cut branch from main.
+- Act on the doc's comments and its Decisions checklist; then /plan-create eql-planning; re-cut branch from main.
