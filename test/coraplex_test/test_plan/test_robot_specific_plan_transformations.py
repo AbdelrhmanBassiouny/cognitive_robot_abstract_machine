@@ -15,6 +15,7 @@ from coraplex.robot_plans.actions.core.navigation import (
     NavigateAction,
     PathPlanningNavigateAction,
 )
+from coraplex.robot_plans.actions.core.pick_up import PickUpAction, ReachAction
 from coraplex.robot_plans.actions.core.robot_body import MoveTorsoAction
 from coraplex.robot_plans.robot_specific_plan_transformations import (
     DriveTiagoWithItsDifferentialDrive,
@@ -24,15 +25,23 @@ from cramph.composites import Parallel, Sequence, StatementNode
 from cramph.context import ContextExtension
 from cramph.exceptions import StatechartAlreadyCompiledError
 from cramph.node import StatechartNode
-from giskardpy.motion_statechart.goals.cartesian_goals import DifferentialDriveBaseGoal
+from giskardpy.motion_statechart.goals.cartesian_goals import (
+    CartesianPoseStraight,
+    DifferentialDriveBaseGoal,
+)
 from giskardpy.motion_statechart.goals.open_close import Close
 from giskardpy.motion_statechart.graph_node import ConvergingTask
 from giskardpy.motion_statechart.monitors.overwrite_state_monitors import SetOdometry
 from giskardpy.motion_statechart.tasks.align_planes import AlignPlanes
-from giskardpy.motion_statechart.tasks.cartesian_tasks import CartesianPose
+from giskardpy.motion_statechart.tasks.cartesian_tasks import (
+    CartesianPose,
+    CartesianPosition,
+    CartesianPositionStraight,
+)
 from giskardpy.motion_statechart.tasks.joint_tasks import JointPositionList
 from krrood.entity_query_language.factories import a, variable_from
 from semantic_digital_twin.datastructures.definitions import TorsoState
+from semantic_digital_twin.grasping.grasp_candidates import GraspCandidate
 from semantic_digital_twin.robots.robot_parts import AbstractRobot
 from semantic_digital_twin.robots.tiago import Tiago
 from semantic_digital_twin.semantic_annotations.semantic_annotations import Handle
@@ -458,3 +467,113 @@ def test_a_robot_of_another_type_closes_a_container_unchanged(pr2_apartment_cont
     action = prepared(close_action(world, robot), executor)
 
     assert type(closing_step_of(action)) is Close
+
+
+# %% moving the tool center point in a straight line
+
+
+def handle_grasp(world: World) -> GraspCandidate:
+    """
+    :return: A grasp on a handle of the apartment.
+    """
+    return world.get_semantic_annotations_by_type(Handle)[0].grasp_candidates()[0]
+
+
+def reaching_goals_of(action: ReachAction) -> List[StatechartNode]:
+    """
+    :return: The goals of an expanded reach action bringing the tool center point to
+        the pre-grasp pose and to the grasp pose.
+    """
+    return [step.nodes[0] for step in action.action_body.nodes]
+
+
+def lifting_goal_of(action: PickUpAction) -> StatechartNode:
+    """
+    :return: The goal of an expanded pick up action lifting the grasped object.
+    """
+    grasp_attempt, lift = action.action_body.nodes
+    return lift.nodes[0]
+
+
+def test_a_simulated_stretch_reaches_in_a_straight_line(stretch_apartment_context):
+    world, robot, extensions = stretch_apartment_context
+    unchanged = prepared(
+        ReachAction(grasp=handle_grasp(world), arm=robot.all_arms[0]),
+        robot_executor(extensions),
+    )
+
+    action = prepared(
+        ReachAction(grasp=handle_grasp(world), arm=robot.all_arms[0]),
+        simulated_executor(extensions),
+    )
+
+    for goal, default_goal in zip(
+        reaching_goals_of(action), reaching_goals_of(unchanged), strict=True
+    ):
+        assert type(goal) is CartesianPoseStraight
+        assert goal.root_link is default_goal.root_link
+        assert goal.tip_link is default_goal.tip_link
+        np.testing.assert_allclose(
+            goal.goal_pose.to_np(), default_goal.goal_pose.to_np()
+        )
+        assert goal.translation_threshold == default_goal.translation_threshold
+        assert goal.orientation_threshold == default_goal.orientation_threshold
+        assert goal.binding_policy == default_goal.binding_policy
+
+
+def test_a_simulated_stretch_lifts_in_a_straight_line(stretch_apartment_context):
+    world, robot, extensions = stretch_apartment_context
+    unchanged = lifting_goal_of(
+        prepared(
+            PickUpAction(grasp=handle_grasp(world), arm=robot.all_arms[0]),
+            robot_executor(extensions),
+        )
+    )
+
+    goal = lifting_goal_of(
+        prepared(
+            PickUpAction(grasp=handle_grasp(world), arm=robot.all_arms[0]),
+            simulated_executor(extensions),
+        )
+    )
+
+    assert type(goal) is CartesianPositionStraight
+    assert goal.root_link is unchanged.root_link
+    assert goal.tip_link is unchanged.tip_link
+    np.testing.assert_allclose(goal.goal_point.to_np(), unchanged.goal_point.to_np())
+    assert goal.threshold == unchanged.threshold
+
+
+def test_the_real_stretch_reaches_unchanged(stretch_apartment_context):
+    world, robot, extensions = stretch_apartment_context
+
+    action = prepared(
+        ReachAction(grasp=handle_grasp(world), arm=robot.all_arms[0]),
+        robot_executor(extensions),
+    )
+
+    assert [type(goal) for goal in reaching_goals_of(action)] == [CartesianPose] * 2
+
+
+def test_a_robot_of_another_type_reaches_unchanged(pr2_apartment_context):
+    world, robot, extensions = pr2_apartment_context
+
+    action = prepared(
+        ReachAction(grasp=handle_grasp(world), arm=robot.all_arms[0]),
+        simulated_executor(extensions),
+    )
+
+    assert [type(goal) for goal in reaching_goals_of(action)] == [CartesianPose] * 2
+
+
+def test_a_robot_of_another_type_lifts_unchanged(pr2_apartment_context):
+    world, robot, extensions = pr2_apartment_context
+
+    goal = lifting_goal_of(
+        prepared(
+            PickUpAction(grasp=handle_grasp(world), arm=robot.all_arms[0]),
+            simulated_executor(extensions),
+        )
+    )
+
+    assert type(goal) is CartesianPosition

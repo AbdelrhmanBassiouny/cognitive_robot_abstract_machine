@@ -1578,6 +1578,38 @@ class TestCartesianTasks:
             cart_straight.goal_pose.to_np(), goal_pose.to_np(), atol=0.015
         )
 
+    def test_cartesian_pose_straight_holds_its_tasks_to_its_thresholds(
+        self, pr2_world_state_reset: World
+    ):
+        """
+        The position task must arrive within the translation threshold and the
+        orientation task within the orientation threshold of the goal.
+        """
+        tip = pr2_world_state_reset.get_kinematic_structure_entity_by_name(
+            "r_gripper_tool_frame"
+        )
+        root = pr2_world_state_reset.get_kinematic_structure_entity_by_name(
+            "odom_combined"
+        )
+        executor = StatechartExecutor(
+            context=StatechartContext(world=pr2_world_state_reset),
+            extensions=[MotionControl()],
+        )
+        motion_statechart = Statechart(context=executor.context)
+        goal = CartesianPoseStraight(
+            root_link=root,
+            tip_link=tip,
+            goal_pose=Pose.from_xyz_rpy(0.1, 0, 0, reference_frame=tip),
+            translation_threshold=0.03,
+            orientation_threshold=0.2,
+        )
+        motion_statechart.add_node(goal)
+        executor.compile(statechart=motion_statechart)
+
+        position_task, orientation_task = goal.parallel.nodes
+        assert position_task.threshold == goal.translation_threshold
+        assert orientation_task.threshold == goal.orientation_threshold
+
     def test_straight_path_while_the_orientation_changes(
         self, pr2_world_state_reset: World
     ):

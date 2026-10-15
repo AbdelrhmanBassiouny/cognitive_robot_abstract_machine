@@ -34,6 +34,7 @@ from coraplex.robot_plans.plan_transformations import (
 )
 from coraplex.robot_plans.robot_specific_plan_transformations import (
     KeepStretchInFrontOfTheContainerItCloses,
+    MoveStretchToolCenterPointInAStraightLine,
 )
 from cramph.composites import ChildChooserAccess, StatementNode
 from cramph.context import ContextExtension, StatechartContext
@@ -338,7 +339,9 @@ class SimulatedPlanExecutor(PlanExecutor, StatechartExecutor):
     """
     Ticks the plan's statechart in :attr:`world`, driving the robot's motions with the
     :class:`~giskardpy.motion_control.MotionControl` among its :attr:`extensions`, which
-    is added with its default controller unless one is given.
+    is added with the controller of
+    :meth:`~giskardpy.qp.qp_controller_config.QPControllerConfig.create_with_fast_simulation_defaults`
+    unless one is given.
     """
 
     simulation_time_per_action: timedelta = field(
@@ -359,6 +362,7 @@ class SimulatedPlanExecutor(PlanExecutor, StatechartExecutor):
     plan_adaptations: List[PlanTransformation] = field(
         default_factory=lambda: [
             WriteTheOdometryInsteadOfDriving(),
+            MoveStretchToolCenterPointInAStraightLine(),
             KeepStretchInFrontOfTheContainerItCloses(),
         ],
         kw_only=True,
@@ -369,7 +373,12 @@ class SimulatedPlanExecutor(PlanExecutor, StatechartExecutor):
         self.simulation_time_limit = self.simulation_time_per_action
 
     def default_executor_extensions(self) -> list[ExecutorExtension]:
-        return [RosNodeAccess(self.ros_node), MotionControl()]
+        return [
+            RosNodeAccess(self.ros_node),
+            MotionControl(
+                qp_controller_config=QPControllerConfig.create_with_fast_simulation_defaults()
+            ),
+        ]
 
     def compile(self, statechart: Statechart) -> None:
         """

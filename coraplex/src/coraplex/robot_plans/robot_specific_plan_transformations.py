@@ -20,6 +20,7 @@ from coraplex.plans.plan_transformation import (
 from coraplex.robot_plans.actions.composite.tool_based import ToolMotionAction
 from coraplex.robot_plans.actions.core.container import CloseAction
 from coraplex.robot_plans.actions.core.navigation import DrivesBase
+from coraplex.robot_plans.mixins import MovesToolCenterPoint
 from cramph.composites import CramLanguageNode, Parallel
 from cramph.node import StatechartNode
 from giskardpy.motion_statechart.data_types import DefaultWeights
@@ -112,6 +113,25 @@ class DriveTiagoWithItsDifferentialDrive(DriveWithTheDifferentialDrive):
 
     def is_applicable(self, plan_node: DrivesBase) -> bool:
         return isinstance(plan_node.robot, Tiago)
+
+
+# %% moving the tool center point in a straight line
+
+
+@dataclass
+class MoveStretchToolCenterPointInAStraightLine(
+    ConfigurationTransformation[MovesToolCenterPoint]
+):
+    """
+    Moves the tool center point of a Stretch to each of its targets along a straight
+    line.
+    """
+
+    def is_applicable(self, plan_node: MovesToolCenterPoint) -> bool:
+        return isinstance(plan_node.robot, Stretch)
+
+    def apply(self, plan_node: MovesToolCenterPoint) -> None:
+        plan_node.moves_tool_center_point_in_a_straight_line = True
 
 
 # %% closing a container

@@ -188,6 +188,18 @@ class CartesianPoseStraight(EndedByOwner, CompositeNode):
     The goal pose.
     """
 
+    translation_threshold: float = field(default=0.01, kw_only=True)
+    """
+    If the position error falls below this threshold (in meters), that half of the goal
+    is achieved.
+    """
+
+    orientation_threshold: float = field(default=0.01, kw_only=True)
+    """
+    If the orientation error falls below this threshold (in rad), that half of the goal
+    is achieved.
+    """
+
     weight: float = DefaultWeights.WEIGHT_ABOVE_COLLISION_AVOIDANCE
     """
     Task priority relative to other tasks.
@@ -219,6 +231,7 @@ class CartesianPoseStraight(EndedByOwner, CompositeNode):
                 root_link=self.root_link,
                 tip_link=self.tip_link,
                 goal_point=self.goal_pose.position,
+                threshold=self.translation_threshold,
                 weight=self.weight,
                 binding_policy=self.binding_policy,
             ),
@@ -227,6 +240,7 @@ class CartesianPoseStraight(EndedByOwner, CompositeNode):
                 root_link=self.root_link,
                 tip_link=self.tip_link,
                 goal_orientation=self.goal_pose.rotation_matrix,
+                threshold=self.orientation_threshold,
                 weight=self.weight,
                 binding_policy=self.binding_policy,
             ),
