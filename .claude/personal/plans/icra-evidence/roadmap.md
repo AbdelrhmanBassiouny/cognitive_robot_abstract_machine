@@ -1,3 +1,5 @@
+> **Closed 2026-10-15: the ICRA 2027 experiments were completed on the ICRA branches outside this plan. What remains is landing that code upstream one PR at a time.**
+
 # icra-evidence — standing rules
 
 - The evaluation frame is Bloom's taxonomy at three levels: Remembering (the store is queried and facts come back, against a vision-language model given the same episodes; Experiment D), Understanding (answering the question set; Experiment A) and Applying (the demo with parts of the representation removed; Experiment C).

@@ -54,7 +54,7 @@ items:
   pull_request_number: null
   track: experiment-a
   depends_on: []
-  status: not started
+  status: deferred
   notes: 'Added 2026-09-08 at the developer''s direction on #295''s review, where `ObjectsSeen`
     answers from the belief state directly. It should ask the perception system instead, and
     the query it puts is open-ended: give me every object you can detect. The backend answers
@@ -73,7 +73,7 @@ items:
   pull_request_number: null
   track: experiment-a
   depends_on: []
-  status: not started
+  status: deferred
   notes: Every scene and scripted scenario through the runner, every question through EQL
     and both VLM systems, five repetitions for variance, episodes in the database, the accuracy-per-bucket,
     latency, variance and footprint tables generated. The point is that the robot runs are
@@ -94,7 +94,7 @@ items:
   track: experiment-a
   depends_on:
   - experiment-a-in-simulation
-  status: not started
+  status: deferred
   notes: 15 to 20 random scenes, five partial, five near-ambiguous, the four temporal scenarios
     five times each, every query five times; lighting only if time remains. Robot state recorded
     with the camera in every take. Ground truth annotated the same day.
@@ -108,7 +108,7 @@ items:
   pull_request_number: null
   track: experiment-b
   depends_on: []
-  status: not started
+  status: deferred
   notes: 'H1 and H3. The mixed statements with the triangle believed in versus not, reporting
     per-predicate assignment, region size, detector calls and latency, extending the ratios
     #238 already measured on the six captures. Then about thirty injected events (offsets,
@@ -126,7 +126,7 @@ items:
   track: experiment-b
   depends_on:
   - experiment-b-in-simulation
-  status: not started
+  status: deferred
   notes: The same script on the live feed. The memo's cut order drops the injection half first
     and keeps the decomposition half; the simulation numbers stand in for whatever is cut,
     stated as such.
@@ -140,7 +140,7 @@ items:
   pull_request_number: null
   track: experiment-c
   depends_on: []
-  status: not started
+  status: deferred
   blockers:
   - 'Cross-plan: the failure-detection story (perception looks where the action promised and
     reports the difference) is knowledge-directed-perception''s expectations-from-events,
@@ -159,7 +159,7 @@ items:
   track: experiment-c
   depends_on:
   - experiment-c-in-simulation
-  status: not started
+  status: deferred
   notes: Twenty trials per condition, thirty only if the pipeline is stable; the perturbation
     conditions are never cut. Two days of robot time.
   blockers:
@@ -172,7 +172,7 @@ items:
   pull_request_number: null
   track: experiment-d
   depends_on: []
-  status: not started
+  status: deferred
   notes: 'Widened 2026-09-08 with the question set itself: every bucket has a long-term-memory
     spelling, and these four kinds are the ones that only long-term memory can answer at all.'
   blockers:
@@ -186,7 +186,7 @@ items:
   track: experiment-d
   depends_on:
   - cross-episode-question-set-and-ground-truth
-  status: not started
+  status: deferred
   notes: 'First a corpus worth asking about: the scenarios run under varied conditions and
     perturbations so the history holds repeats, failures resolved differently, and goals that
     changed between runs. Then every question through both systems, repeated for variance
@@ -208,7 +208,7 @@ items:
   - experiment-a-on-the-robot
   - experiment-b-on-the-robot
   - experiment-c-on-the-robot
-  status: not started
+  status: deferred
   notes: 'A repository a reader can run the simulation experiments from and compare against
     the robot episodes with: the Scenario definitions, the question set, the VLM prompts,
     the Condition and Perturbation definitions, the six captures plus every new one, and a
@@ -220,7 +220,7 @@ items:
   pull_request_number: null
   track: efficiency
   depends_on: []
-  status: not started
+  status: deferred
   notes: 'The claim the paper makes about vision-language models is about cost, not about
     accuracy alone, so the cost is measured rather than asserted. Per question and per system:
     wall-clock latency, processor time, peak resident memory, and the size of what had to
