@@ -36,6 +36,7 @@ from semantic_digital_twin.world_description.geometry import Color, Scale
 from coraplex.plans.context_extensions import RobotAccess
 from coraplex.plans.executors import SimulatedPlanExecutor
 from cramph.context import StatechartContext
+from cramph.executor import ExecutorExtension
 from cramph.statechart import Statechart
 from cramph.composites import Sequence
 
@@ -215,16 +216,17 @@ def run(
     world: World,
     robot: UnitreeG1,
     ros_node: Node,
+    visualizations: list[ExecutorExtension],
 ) -> None:
     """
     Carry the parcel from `source` to `destination` with `robot` in `world`, simulated,
-    see :func:`build_statechart`, showing it through `ros_node`.
+    see :func:`build_statechart`, showing it with `visualizations`.
     """
     executor = SimulatedPlanExecutor(
         world,
         context_extensions=[RobotAccess(robot)],
         ros_node=ros_node,
-        extensions=selected_visualizations(ros_node),
+        extensions=visualizations,
     )
     executor.compile(build_statechart(executor.context, source, destination, turn))
     executor.execute()
@@ -238,10 +240,13 @@ robot = world.get_semantic_annotations_by_type(UnitreeG1)[0]
 assert abs(lowest_collision_point_of(robot, world)) < 1e-3
 
 with RobotDemonstrationRosSession.start("warehouse_demo") as ros_session:
+    visualizations = selected_visualizations(ros_session.node)
     for _ in range(10):
-        run(PICK_POSE, PLACE_POSE, -1.57, world, robot, ros_session.node)
-        run(PLACE_POSE, PICK_POSE, 1.57, world, robot, ros_session.node)
-    run(PICK_POSE, PLACE_POSE, -1.57, world, robot, ros_session.node)
+        run(
+            PICK_POSE, PLACE_POSE, -1.57, world, robot, ros_session.node, visualizations
+        )
+        run(PLACE_POSE, PICK_POSE, 1.57, world, robot, ros_session.node, visualizations)
+    run(PICK_POSE, PLACE_POSE, -1.57, world, robot, ros_session.node, visualizations)
 
 parcel_position = world.get_body_by_name("parcel").global_pose
 print(f"parcel delivered to {np.round(parcel_position.position, 3)}")

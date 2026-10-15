@@ -60,6 +60,11 @@ def selected_visualizations(ros_node: Node | None) -> list[ExecutorExtension]:
     :return: The visualization selected through the environment, defaulting to RViz
         when ROS is available and `ros_node` is given, as executor extensions; empty
         when headless.
+
+    .. note::
+        Add the same visualizations to every executor of one demo. Each call returns a
+        new one, and a cramera visualization keeps its viewer's port until it is
+        stopped.
     """
     default_backend = (
         VisualizationBackend.RVIZ
