@@ -1,14 +1,14 @@
-## #512 AxisAlignedRegion (claude/ecstatic-hopper-7j7iaz, off main)
+## #512 box bounds (claude/ecstatic-hopper-7j7iaz, off main)
 
 Plan:
-- Unify SemDT boxes and Bounds as AxisAlignedRegion, asked on #472.
+- One Bounds concept: corner-only classes are Bounds; boxes in space have AxisAlignedBox.bounds.
 
 Done:
-- 8d2a8d1e1: region, CoordinateBounds.clip_segment, box corners, krrood property fix; draft #512.
+- ab898338c: AxisAlignedRegion and the krrood change dropped; bounds property, CoordinateBounds.clip_segment.
 
 Next:
 - CI on #512 (ORM build and PR2-fixture tests could not run locally).
-- Thread w6-_ (remove Bounds?): answered keep both (Bounds stores, region declares); awaits user.
+- Thread w6-_ answered (Bounds kept, region removed); left open for the user.
 
 ## #472 video-core (plan general-video-production / video-core)
 
@@ -26,7 +26,7 @@ Done:
 Next:
 - tomsch420 re-review on cram2#742; open there: timeline-scene modelling.
 - submission.py thread stays open until the limits land in experiments/video (#429; told on #429).
-- Bounds unification is draft #512 (AxisAlignedRegion); thread rwJTv open until #512 lands.
+- Bounds unification is draft #512 (AxisAlignedBox.bounds); thread rwJTv open until #512 lands.
 - Fork threads await the user: AxisAlignedBox as Bounds, tuples, presentation library,
   Framing box, InsetStill/FootageScene names, test literals, SemDT depth/width, cache
   constants, LICENSE, voices str, Video vs Film.
