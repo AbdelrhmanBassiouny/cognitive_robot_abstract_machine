@@ -610,29 +610,6 @@ monitored node ended without succeeding.
 `CancelledWhenTrue` takes an `exception`, which its `CancelStatechart` raises once the
 monitor's `last_observed_true` is True.
 
-### Choosing a child while running
-
-A `CompositeNodeChoosingItsChild` runs a child that is chosen only once it runs, against the
-world as the nodes before it left it. It asks the `ChildChooser` its context holds, through
-the `ChildChooserAccess` [context extension](#writing-a-node), for a child when it starts, and
-again whenever its latest child ended without succeeding.
-
-- It observes what its latest child observed last, and Unknown before it has a child.
-- It succeeds once a child succeeds, and fails once the chooser has no child left. Since that
-  can happen at any choice, it always counts as a node that can fail.
-- A chooser may answer that it has no choice yet; the node then asks again on the next tick.
-- A reset puts it back to choosing: the children it chose before never run again.
-
-Every chosen child joins the statechart after it was compiled, which compiles it again (see
-[Changing a statechart while it runs](#changing-a-statechart-while-it-runs)). Choosing waits
-until every recompile callback of the statechart is at rest, so a child is chosen against a
-world that holds still.
-
-A `StatementNode` is the node choosing its child that runs an underspecified `a(...)`
-statement: the statement is grounded only when the node starts, and the chooser decides
-which of its candidates run. The statement itself is not serialized; a process that ticks
-the statechart elsewhere receives the chosen children instead.
-
 ## Ending the statechart
 
 The statechart ends once an `EndStatechart` node is running and observes True, which it does
@@ -655,7 +632,9 @@ Both are usually created with factory methods that set their start condition:
 The `CancelStatechart` factories also take the `exception` to raise. `when_true` and
 `when_failed` default to one naming `node`; `when_all_true` and `when_any_true` require it.
 
-Once the statechart ended, however it ended, the executor calls every node's `cleanup`.
+Once `execute()` or `tick_until_end()` returns or raises, because the statechart ended, was
+cancelled or ran out of ticks, the executor calls every node's `cleanup`. Calling `tick()`
+by hand cleans up nothing.
 
 ## Writing a node
 
@@ -671,12 +650,14 @@ A node class inherits `EndedByOwner` or `SucceedsOnObservingTrue` (see
 
 Further hooks a node class may override:
 
-| Hook                          | Called                                                                 |
-|-------------------------------|------------------------------------------------------------------------|
-| `set_up(context)`             | once per context, before the node is first built; register the variables the node reads here |
-| `build(context)`              | when the statechart compiles the node, and again whenever the kinematic structure of the world changed; an override must return `super().build(context)` |
-| `on_start`, `on_pause`, `on_unpause`, `on_end`, `on_reset` | after the passes of the tick in which the transition happened |
-| `cleanup(context)`            | once the statechart ended                                              |
+- `set_up(context)` is called once per context, before the node is first built. Register the
+  variables the node reads here.
+- `build(context)` is called when the statechart compiles the node, and again whenever the
+  kinematic structure of the world changed. An override must return `super().build(context)`.
+- `on_start`, `on_pause`, `on_unpause`, `on_end` and `on_reset` are called after the passes of
+  the tick in which the transition happened.
+- `cleanup(context)` is called once the executor finished running the statechart (see
+  [Ending the statechart](#ending-the-statechart)).
 
 A composite node adds its children in `expand(context)`, which is called once when it joins a
 statechart, and may reject them in `check_children()`, which runs when the statechart is
@@ -701,7 +682,7 @@ cramph ships these nodes besides the templates:
 | `Pulse`                      | True for its first `length` ticks, then False                    |
 | `Print`                      | True every tick, printing `message`                              |
 | `ThreadedPredicateMonitor`   | Unknown until `predicate` returned in a thread of its own, then what it returned |
-| `FunctionCall`               | True once `function`, called in a thread of its own, returned, and False if it raised one of `failure_types`; it then succeeds or fails on its own |
+| `FunctionCall`               | True once `function` returned in a thread of its own, False if it raised one of `failure_types`, and ends on its own |
 | `MoveBranch`                 | True once it moved `body` under `new_parent`, after which every node is built again |
 
 ## Changing a statechart while it runs
@@ -720,6 +701,29 @@ tick settles, so expressions reading the structure follow it.
 Before compiling again or letting a node choose its child, both of which block the tick, the
 statechart asks its recompile callbacks whether what they drive is at rest. Until all are,
 the statechart keeps ticking and asks again on the next tick.
+
+## Choosing a child while running
+
+A `CompositeNodeChoosingItsChild` runs a child that is chosen only once it runs, against the
+world as the nodes before it left it. It asks the `ChildChooser` its context holds, through
+the `ChildChooserAccess` [context extension](#writing-a-node), for a child when it starts, and
+again whenever its latest child ended without succeeding.
+
+- It observes what its latest child observed last, and Unknown before it has a child.
+- It succeeds once a child succeeds, and fails once the chooser has no child left. Since that
+  can happen at any choice, it always counts as a node that can fail.
+- A chooser may answer that it has no choice yet; the node then asks again on the next tick.
+- A reset puts it back to choosing: the children it chose before never run again.
+
+Every chosen child joins the statechart after it was compiled, which compiles it again (see
+[Changing a statechart while it runs](#changing-a-statechart-while-it-runs)). Choosing waits
+until every recompile callback of the statechart is at rest, so a child is chosen against a
+world that holds still.
+
+A `StatementNode` is the node choosing its child that runs an underspecified `a(...)`
+statement: the statement is grounded only when the node starts, and the chooser decides
+which of its candidates run. The statement itself is not serialized; a process that ticks
+the statechart elsewhere receives the chosen children instead.
 
 ## Example
 
