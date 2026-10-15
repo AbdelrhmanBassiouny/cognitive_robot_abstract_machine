@@ -2,6 +2,7 @@ import logging
 import os
 from dataclasses import dataclass, field
 from datetime import timedelta
+from functools import cached_property
 
 import mujoco
 import numpy
@@ -308,10 +309,12 @@ class MJCFParser(WorldModelParser):
         Parse the inertial properties of a Mujoco body.
 
         :param mujoco_body: The Mujoco body to parse.
-        :return: The Inertial properties of the body, or None if not applicable.
+        :return: The inertial properties the body declares; for a body that declares
+            none, those MuJoCo derives from its geoms (see
+            :meth:`inertial_derived_from_geoms`).
         """
         if numpy.isclose(mujoco_body.mass, 0.0) or numpy.isnan(mujoco_body.ipos).any():
-            return None
+            return self.inertial_derived_from_geoms(mujoco_body)
 
         full_inertia = mujoco_body.fullinertia
         if not numpy.isnan(full_inertia).any():
@@ -346,6 +349,56 @@ class MJCFParser(WorldModelParser):
             center_of_mass=Point3.from_iterable(mujoco_body.ipos),
             inertia=inertia_tensor,
         )
+
+    def inertial_derived_from_geoms(
+        self, mujoco_body: mujoco.MjsBody
+    ) -> Optional[Inertial]:
+        """
+        :param mujoco_body: A Mujoco body that declares no inertial properties.
+        :return: The inertial properties MuJoCo derives from the body's geoms and their
+            densities; ``None`` if they weigh nothing.
+        """
+        compiled_body = self._compiled_model.body(self.spec.bodies.index(mujoco_body))
+        if compiled_body.mass[0] <= self._smallest_compiled_mass:
+            return None
+        principal_axes = PrincipalAxes.from_rotation_matrix(
+            RotationMatrix(
+                data=Rotation.from_quat(
+                    compiled_body.iquat, scalar_first=True
+                ).as_matrix()
+            )
+        )
+        return Inertial(
+            mass=float(compiled_body.mass[0]),
+            center_of_mass=Point3.from_iterable(compiled_body.ipos),
+            inertia=InertiaTensor.from_principal_moments_and_axes(
+                moments=PrincipalMoments.from_values(*compiled_body.inertia),
+                axes=principal_axes,
+            ),
+        )
+
+    @cached_property
+    def _compiled_model(self) -> mujoco.MjModel:
+        """
+        The model MuJoCo compiles from the scene, which holds the inertial properties it
+        derives for bodies that declare none.
+
+        MuJoCo refuses a moving body that weighs nothing, so masses and inertias are
+        raised to :attr:`_smallest_compiled_mass` while compiling. The copy keeps the
+        order of the bodies, so a body's index in the scene is its id in the model.
+        """
+        spec = self.spec.copy()
+        spec.compiler.boundmass = self._smallest_compiled_mass
+        spec.compiler.boundinertia = self._smallest_compiled_mass
+        return spec.compile()
+
+    @cached_property
+    def _smallest_compiled_mass(self) -> float:
+        """
+        A mass, and moment of inertia, negligible for any body that MuJoCo accepts for a
+        moving body.
+        """
+        return 1e3 * mujoco.mjMINVAL
 
     def parse_joints(self, mujoco_body: mujoco.MjsBody):
         """

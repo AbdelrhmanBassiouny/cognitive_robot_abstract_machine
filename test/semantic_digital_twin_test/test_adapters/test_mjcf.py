@@ -184,6 +184,14 @@ Scene whose single body carries one geom that takes part in contact and one that
 excluded from it.
 """
 
+BODY_WITHOUT_INERTIAL_SCENE = os.path.join(
+    DATASET_DIR, "body_without_inertial_scene.xml"
+)
+"""
+Scene whose single box body declares no inertial and gives its geom a density of its
+own.
+"""
+
 
 def test_visual_only_geom_is_not_a_collision_shape_by_default():
     world = MJCFParser.from_file(VISUAL_ONLY_GEOM_SCENE).parse()
@@ -372,3 +380,23 @@ def test_primitive_box_geom_resolves_its_material_texture(tmp_path):
     assert box_shape.texture.file_path == str(texture_file_path)
     assert box_shape.texture.repeat == pytest.approx([3.0, 3.0])
     assert box_shape.texture.uniform is True
+
+
+# %% inertial properties
+
+
+def test_a_body_without_an_inertial_weighs_what_its_geoms_weigh():
+    """
+    MuJoCo derives the mass of a body that declares no inertial from its geoms and their
+    own densities, so the parsed body weighs the same.
+    """
+    world = MJCFParser.from_file(BODY_WITHOUT_INERTIAL_SCENE).parse()
+
+    [box] = [
+        body
+        for body in world.kinematic_structure_entities
+        if body.name.name == "light_box"
+    ]
+    density, edge_length = 100.0, 0.1
+    assert box.inertial.mass == pytest.approx(density * edge_length**3)
+    assert box.inertial.center_of_mass.to_np()[:3] == pytest.approx([0.02, 0.0, 0.0])
