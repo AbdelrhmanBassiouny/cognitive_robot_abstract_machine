@@ -193,6 +193,16 @@ class PlanNodeEntry:
         return payload
 
 
+class PartBodies(StrEnum):
+    """The fields of a resolved part naming bodies of the world, by their names."""
+
+    HIGHLIGHT = "highlight"
+    """The bodies the part is about, lit up while it is shown."""
+
+    FRAME = "frame"
+    """The bodies the scene is framed on while the part is shown."""
+
+
 class PlanTreeField(StrEnum):
     """Fields describing the published plan hierarchy and node lifecycle."""
 
@@ -1533,10 +1543,16 @@ class Bridge:
 
     def publish_slot_answers(self, answers: Dict[str, Any]) -> None:
         """
-        Publish how the parts the running plan left open were answered.
+        Publish how the parts the plans left open were resolved, the body names each
+        answer lights up and frames turned into the identifiers the viewer knows them
+        by.
 
-        :param answers: The backends there are and every answer so far, as JSON.
+        :param answers: The backends there are and every resolution so far, as JSON.
         """
+        for resolution in answers.get("resolutions", []):
+            for part in resolution["parts"]:
+                for names in (PartBodies.HIGHLIGHT, PartBodies.FRAME):
+                    part[names] = self._resolve_highlights(part.get(names, []))
         with self._lock:
             self.slot_answers = answers
 

@@ -21,6 +21,7 @@
  *   listens  scene:step {step}           describe the running episode
  *   listens  entity:select {id, detail, relations}   node clicked in a graph
  *   listens  live:changed {on, url}      answer from the demo instead of the recording
+ *   listens  eql:run {code, text?}         run a query another panel asks for
  * ==========================================================================*/
 Panels.define('eql', function (root, bus) {
   const QUERY_HINT = 'Choose a preset below or type an EQL query.';
@@ -306,6 +307,14 @@ Panels.define('eql', function (root, bus) {
   // the default consumer: recognize the spoken question as one of the presets on
   // offer and run it as if its button had been clicked — or say it can't be answered
   bus.on('voice:transcript', function (p) { askSpokenQuestion(p.text); });
+
+  // another panel asks for a query to be run here, as if it had been typed
+  bus.on('eql:run', function (p) {
+    if (!p || !p.code) return;
+    input.value = p.code;
+    showQuestion({ text: p.text || p.code, code: p.code });
+    runQuery(p.code);
+  });
 
   async function askSpokenQuestion(text) {
     text = (text || '').trim(); if (!text) return;

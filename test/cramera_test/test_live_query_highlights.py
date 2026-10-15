@@ -99,3 +99,25 @@ def test_unknown_highlights_survive_without_duplicate_identifiers(
     names = ["unpublished/body", "another/body", "unpublished/body"]
 
     assert bridge._resolve_highlights(names) == sorted(set(names))
+
+
+# %% resolutions the demo publishes
+def test_a_resolved_part_lights_up_and_frames_the_published_keys() -> None:
+    """
+    A resolution names the bodies each part is about; the viewer knows them by their
+    published keys.
+    """
+    bridge = attached_bridge()
+    [key] = bridge.object_keys()
+    name = str(bridge.object_body(key).name)
+
+    bridge.publish_slot_answers(
+        {
+            "backends": [],
+            "resolutions": [{"parts": [{"highlight": [name], "frame": [name]}]}],
+        }
+    )
+
+    [part] = bridge.get_slot_answers()["resolutions"][0]["parts"]
+    assert part["highlight"] == [key]
+    assert part["frame"] == [key]

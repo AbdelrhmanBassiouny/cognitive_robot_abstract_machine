@@ -15,9 +15,11 @@ HTTP endpoints of the live bridge (default port 8765).
                       it, or {scene: null} when nothing is tracked yet; the viewer
                       loads the named scene exactly like any other
     GET /plan    {signature, nodes: [{id, parent, kind, label, status, derived}]}
-    GET /slot_answers  {backends: [{faculty, name}], answers: [{step, slot, statement,
-                        faculty, backend, answers, evidence, milliseconds, answeredAt}]}
-                        how the parts the running plan left open were answered
+    GET /slot_answers  {backends: [{faculty, name}], presentation: {...},
+                        resolutions: [{id, title, executable, underspecified,
+                        resolved, parts: [{slot, slotId, statement, faculty, backend,
+                        answers, evidence, reasoning, highlight, milliseconds}]}]}
+                        how the plans' open parts were resolved before execution
     GET /chart   {signature, title,
                   nodes: [{id, parent, name, class_name, life_cycle, observation}],
                   edges: [{from, to, kind}]}

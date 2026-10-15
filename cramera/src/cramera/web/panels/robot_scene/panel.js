@@ -13,6 +13,7 @@
  *   emits    scene:frame {index}      playback moved onto another recorded tick
  *   emits    live:changed {on, url}    live bridge attached / detached
  *   listens  entity:highlight {ids}    glow the matching 3D objects
+ *   listens  scene:focus {ids, milliseconds?}   glide the camera onto those objects
  *
  * window.RobotView stays exported for the console and split-resize.
  * ==========================================================================*/
@@ -905,6 +906,43 @@ Panels.define('robot-scene', function (root, bus) {
     needsRender = true;
     return true;
   }
+  // glide the camera, keeping its direction, until the given bodies fill the view
+  const GLIDE_MILLISECONDS = 1100;
+  // how far the camera stays from what it glides to, at least, in metres
+  const GLIDE_NEAREST = 0.32;
+  // how many times the bodies' extent the camera stays away from them
+  const GLIDE_SPAN = 2.6;
+  let glide = null;
+  function glideTo(names, milliseconds) {
+    const box = new THREE.Box3();
+    names.forEach(function (name) {
+      const body = scene3.getObjectByName(name) || objectMeshes[name];
+      if (body) box.expandByObject(body);
+    });
+    if (box.isEmpty()) return false;
+    const center = box.getCenter(new THREE.Vector3());
+    const size = box.getSize(new THREE.Vector3()).length();
+    const distance = Math.max(GLIDE_NEAREST, size * GLIDE_SPAN);
+    const from = camera.position.clone().sub(controls.target).normalize();
+    follow = false;
+    glide = {
+      start: performance.now(), milliseconds: milliseconds || GLIDE_MILLISECONDS,
+      target0: controls.target.clone(), target1: center,
+      camera0: camera.position.clone(), camera1: center.clone().addScaledVector(from, distance),
+    };
+    requestAnimationFrame(stepGlide);
+    return true;
+  }
+  function stepGlide(now) {
+    if (!glide) return;
+    const t = Math.min(1, (now - glide.start) / glide.milliseconds);
+    const eased = t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+    controls.target.lerpVectors(glide.target0, glide.target1, eased);
+    camera.position.lerpVectors(glide.camera0, glide.camera1, eased);
+    controls.update();
+    needsRender = true;
+    if (t < 1) requestAnimationFrame(stepGlide); else glide = null;
+  }
   function robotCenter(out) {
     if (!robotModel) return false;
     robotModel.obj.getWorldPosition(_base);
@@ -1683,6 +1721,7 @@ Panels.define('robot-scene', function (root, bus) {
 
   // %% bus: inbound
   bus.on('entity:highlight', function (p) { highlightObjects((p && p.ids) || []); });
+  bus.on('scene:focus', function (p) { if (p && p.ids) glideTo(p.ids, p.milliseconds); });
 
   // %% play button
   const playBtn = $('play-btn');
