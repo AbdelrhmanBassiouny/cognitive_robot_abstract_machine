@@ -24,19 +24,19 @@ class GoalBindingPolicy(Enum):
 @dataclass
 class ForwardKinematicsBinding:
     """
-    Binds the forward kinematics of the chain between root and tip to its current state.
-    This class is useful if you need to update a TransformationMatrix representing forward kinematics during execution
-    of a MotionStatechartNode.
-    It creates the TransformationMatrix root_T_tip, which is fixed to the current state.
-    Call bind() to update its state to its current state.
-    Typically used together with GoalBindingPolicy, where bind() is called depending on the chosen policy.
-    ..warning:: Must be created during build() of a MotionStatechartNode.
-    ..warning:: Ensure to keep a reference to this instance in the MotionStatechartNode.
+    Fixes the forward kinematics of the chain between root and tip to the state they
+    had when :meth:`bind` was last called, as :attr:`root_T_tip`.
+
+    Typically used together with :class:`GoalBindingPolicy`, which decides when
+    :meth:`bind` is called.
+
+    .. warning:: Create it in :meth:`~cramph.node.StatechartNode.set_up`, and keep a
+        reference to it in the node.
     """
 
     float_variable_data: FloatVariableData
     """
-    Reference to the FloatVariableData used for storing variables for the forward kinematics.
+    The data holding the values of the variables :attr:`root_T_tip` is expressed over.
     """
     name: PrefixedName
     """
@@ -48,31 +48,41 @@ class ForwardKinematicsBinding:
     tip: KinematicStructureEntity
     """Tip of the kinematic chain."""
 
-    _root_T_tip_expr: HomogeneousTransformationMatrix | None = field(
-        default=None, init=False
+    root_T_tip: HomogeneousTransformationMatrix | None = field(
+        default=None, kw_only=True
     )
-    """The TransformationMatrix root_T_tip, represented using auxiliary variables."""
+    """
+    The forward kinematics from :attr:`root` to :attr:`tip`, expressed over variables
+    that :meth:`bind` sets. New variables named after :attr:`name` unless an
+    expression over variables is given, such as one deserialized with the node holding
+    it.
+    """
 
     def __post_init__(self):
-        self._root_T_tip_expr = HomogeneousTransformationMatrix.create_with_variables(
-            str(self.name)
-        )
-        self._root_T_tip_expr.reference_frame = self.root
-        self._root_T_tip_expr.child_frame = self.tip
-        self._matrix_index = self.float_variable_data.register_expression(
-            self._root_T_tip_expr
-        )
+        if self.root_T_tip is None:
+            self.root_T_tip = HomogeneousTransformationMatrix.create_with_variables(
+                str(self.name)
+            )
+        self.root_T_tip.reference_frame = self.root
+        self.root_T_tip.child_frame = self.tip
+        self.float_variable_data.register_expression(self.root_T_tip)
 
-    @property
-    def root_T_tip(self):
-        return self._root_T_tip_expr
-
-    def bind(self, world: World):
+    def change_root(self, root: KinematicStructureEntity) -> None:
         """
-        Will update root_T_tip to the current state of the kinematic chain.
-        Call during on_start() etc. of a MotionStatechartNode.
+        Measure the chain from `root` from the next :meth:`bind` on, such as after the
+        branch holding :attr:`tip` was moved under another parent.
+
+        :param root: The new root of the chain.
+        """
+        self.root = root
+        self.root_T_tip.reference_frame = root
+
+    def bind(self, world: World) -> None:
+        """
+        Set :attr:`root_T_tip` to the current forward kinematics of the chain.
+
         :param world: The world used for computing the forward kinematics.
         """
         root_T_tip = world.compute_forward_kinematics_np(self.root, self.tip)
         root_T_tip_flat = root_T_tip[:3, :4].T.flatten()
-        self.float_variable_data.set_value(self._root_T_tip_expr, root_T_tip_flat)
+        self.float_variable_data.set_value(self.root_T_tip, root_T_tip_flat)

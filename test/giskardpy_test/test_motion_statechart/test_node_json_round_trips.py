@@ -85,6 +85,12 @@ from giskardpy.motion_statechart.tasks.cartesian_tasks import (
     DistanceAlongAxis,
     HoldPose,
 )
+from giskardpy.motion_statechart.tasks.drive_tasks import (
+    BaseHeading,
+    BaseOrientation,
+    BasePosition,
+    DrivenBaseTask,
+)
 from giskardpy.motion_statechart.tasks.feature_functions import (
     AlignPerpendicular,
     AngleGoal,
@@ -119,7 +125,10 @@ from semantic_digital_twin.spatial_types import (
 )
 from semantic_digital_twin.spatial_types.spatial_types import Pose
 from semantic_digital_twin.world import World
-from semantic_digital_twin.world_description.connections import ActiveConnection1DOF
+from semantic_digital_twin.world_description.connections import (
+    ActiveConnection1DOF,
+    DifferentialDrive,
+)
 from semantic_digital_twin.world_description.world_entity import Body
 
 from ..motion_control_context import create_context_with_motion_control
@@ -188,6 +197,20 @@ def _orientation(world: World) -> RotationMatrix:
 def _joint_goal(world: World) -> JointPositionList:
     return JointPositionList(
         goal_state=JointState.from_mapping({_connection(world): 0.5})
+    )
+
+
+def _driven_base_node(node_type: type[DrivenBaseTask], world: World) -> DrivenBaseTask:
+    """
+    :return: A node of `node_type` moving the base of the differential drive in `world`
+        to a pose given in the drive's parent.
+    """
+    return node_type(
+        base=world.get_connections_by_type(DifferentialDrive)[0].child,
+        goal_pose=_pose(world),
+        parent_T_goal_reference_frame=HomogeneousTransformationMatrix(
+            reference_frame=_root(world)
+        ),
     )
 
 
@@ -342,6 +365,20 @@ def _cartesian_cases() -> list[NodeRoundTripCase]:
             lambda world: [DifferentialDriveBaseGoal(goal_pose=_pose(world))],
             WorldFixture.CYLINDER_BOT_DIFF_WORLD,
         ),
+        *[
+            NodeRoundTripCase(
+                node_type,
+                lambda world, node_type=node_type: [
+                    _driven_base_node(node_type, world)
+                ],
+                WorldFixture.CYLINDER_BOT_DIFF_WORLD,
+            )
+            for node_type in [
+                BasePosition,
+                BaseOrientation,
+                BaseHeading,
+            ]
+        ],
         NodeRoundTripCase(
             AlignPlanes,
             lambda world: [

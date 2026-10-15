@@ -252,3 +252,50 @@ def test_an_expanded_differential_drive_goal_reaches_its_pose_after_a_json_round
         step.name for step in goal.sequence.nodes
     ]
     assert goal_copy.life_cycle_state == LifeCycleValues.SUCCEEDED
+
+
+def test_an_expanded_differential_drive_goal_binds_its_goal_frame_after_a_json_round_trip(
+    cylinder_bot_diff_world: World,
+):
+    """
+    The second leg is given relative to the base, so it ends where it should only if the
+    receiver binds the goal frame when the leg starts, after the first leg moved the
+    base.
+    """
+    bot = cylinder_bot_diff_world.get_body_by_name("bot")
+    msc = Statechart(context=_create_executor(cylinder_bot_diff_world).context)
+    msc.add_node(
+        first_leg := DifferentialDriveBaseGoal(
+            goal_pose=Pose.from_xyz_rpy(
+                x=1, reference_frame=cylinder_bot_diff_world.root
+            ),
+            threshold=0.05,
+        )
+    )
+    msc.add_node(
+        second_leg := DifferentialDriveBaseGoal(
+            goal_pose=Pose.from_xyz_rpy(x=0.5, reference_frame=bot), threshold=0.05
+        )
+    )
+    second_leg.start_condition = first_leg.observes_true
+    msc.add_node(EndMotion.when_true(second_leg))
+    new_json_data = json.loads(json.dumps(msc.to_json()))
+    msc.context.cleanup()
+
+    executor = _create_executor(cylinder_bot_diff_world)
+    tracker = WorldEntityWithIDKwargsTracker.from_world(cylinder_bot_diff_world)
+    msc_copy = Statechart.from_json(
+        new_json_data, context=executor.context, **tracker.create_kwargs()
+    )
+    second_leg_copy = msc_copy.get_node_by_index(second_leg.index)
+    executor.compile(statechart=msc_copy)
+    executor.tick_until_end(2000)
+
+    assert second_leg_copy.life_cycle_state == LifeCycleValues.SUCCEEDED
+    np.testing.assert_allclose(
+        cylinder_bot_diff_world.compute_forward_kinematics_np(
+            cylinder_bot_diff_world.root, bot
+        )[:3, 3],
+        [1.5, 0, 0],
+        atol=2 * second_leg.threshold,
+    )

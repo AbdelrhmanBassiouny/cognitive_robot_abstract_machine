@@ -35,6 +35,7 @@ from giskardpy.motion_statechart.tasks.cartesian_tasks import (
     CartesianPositionTrajectory,
     DistanceAlongAxis,
 )
+from giskardpy.motion_statechart.tasks.drive_tasks import DrivenBaseTask
 from giskardpy.motion_statechart.tasks.joint_tasks import JointPositionList, JointState
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.robots.robot_parts import EndEffector
@@ -50,7 +51,12 @@ from semantic_digital_twin.spatial_types.derivatives import Derivatives
 from semantic_digital_twin.spatial_types.spatial_types import Pose
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.connections import (
+    DifferentialDrive,
     FixedConnection,
+    PrismaticConnection,
+)
+from semantic_digital_twin.world_description.degree_of_freedom import (
+    DegreeOfFreedomLimits,
 )
 from semantic_digital_twin.world_description.geometry import (
     Box,
@@ -74,6 +80,7 @@ from semantic_digital_twin.robots.pr2 import PR2Joint
 from giskardpy.motion_control import MotionControl
 from cramph.context import StatechartContext
 from cramph.executor import StatechartExecutor
+from cramph.world_modification_nodes import MoveBranch
 from giskardpy.motion_control import WorldStateTrajectoryRecording
 from ..motion_control_context import create_context_with_motion_control
 
@@ -1804,15 +1811,11 @@ class TestDiffDriveBaseGoal:
             atol=1e-2,
         )
 
-    def test_custom_threshold_applies_to_both_translation_and_orientation(
-        self, cylinder_bot_diff_world
-    ):
+    def test_custom_threshold_applies_to_every_task(self, cylinder_bot_diff_world):
         """
         DifferentialDriveBaseGoal exposes a single ``threshold`` field for its callers,
-        so it must feed both of CartesianPose's translation_threshold and
-        orientation_threshold -- otherwise a caller raising ``threshold`` only relaxes
-        the position tolerance while the rotation tolerance silently stays at
-        CartesianPose's own hardcoded default.
+        so it must reach the position and the orientation tasks of every step --
+        otherwise a caller raising ``threshold`` relaxes only some of the tolerances.
         """
         goal_pose = Pose.from_xyz_rpy(
             x=1, y=1, yaw=np.pi / 4, reference_frame=cylinder_bot_diff_world.root
@@ -1829,9 +1832,8 @@ class TestDiffDriveBaseGoal:
 
         executor.compile(statechart=motion_statechart)
 
-        for step in goal.sequence.nodes[1:]:
-            assert step.translation_threshold == 0.3
-            assert step.orientation_threshold == 0.3
+        tasks = [node for node in goal.descendants if isinstance(node, DrivenBaseTask)]
+        assert {task.threshold for task in tasks} == {goal.threshold}
 
     def test_second_goal_drives_from_where_the_first_one_ended(
         self, cylinder_bot_diff_world
@@ -1875,6 +1877,111 @@ class TestDiffDriveBaseGoal:
                 cylinder_bot_diff_world.get_body_by_name("bot"),
             ),
             second_goal_pose,
+            atol=1e-2,
+        )
+
+    @pytest.mark.parametrize(
+        "binding_policy, expected_x",
+        [
+            (GoalBindingPolicy.Bind_on_start, 1.5),
+            (GoalBindingPolicy.Bind_at_build, 0.5),
+        ],
+    )
+    def test_a_goal_relative_to_a_moving_frame_is_bound_by_its_policy(
+        self, cylinder_bot_diff_world, binding_policy, expected_x
+    ):
+        """
+        The second leg is given relative to the base, which the first leg moves before
+        the second starts, so where the second leg ends depends on when its goal frame
+        is bound.
+        """
+        bot = cylinder_bot_diff_world.get_body_by_name("bot")
+        executor = StatechartExecutor(
+            context=StatechartContext(world=cylinder_bot_diff_world),
+            extensions=[MotionControl()],
+        )
+        motion_statechart = Statechart(context=executor.context)
+        motion_statechart.add_node(
+            first_leg := DifferentialDriveBaseGoal(
+                goal_pose=Pose.from_xyz_rpy(
+                    x=1, reference_frame=cylinder_bot_diff_world.root
+                )
+            )
+        )
+        motion_statechart.add_node(
+            second_leg := DifferentialDriveBaseGoal(
+                goal_pose=Pose.from_xyz_rpy(x=0.5, reference_frame=bot),
+                binding_policy=binding_policy,
+            )
+        )
+        second_leg.start_condition = first_leg.observes_true
+        motion_statechart.add_node(EndMotion.when_true(second_leg))
+
+        executor.compile(statechart=motion_statechart)
+        executor.tick_until_end()
+
+        assert np.allclose(
+            cylinder_bot_diff_world.compute_forward_kinematics_np(
+                cylinder_bot_diff_world.root, bot
+            ),
+            Pose.from_xyz_rpy(x=expected_x).to_np(),
+            atol=1e-2,
+        )
+
+    def test_a_base_moved_onto_a_lift_drives_relative_to_the_lift(
+        self, cylinder_bot_diff_world
+    ):
+        """
+        The base is moved onto the lift and the lift is raised while the statechart
+        runs, after the drive goal was built, so the goal only arrives if it drives
+        relative to the drive's parent as it is then, and leaves the lift where it is.
+        """
+        world = cylinder_bot_diff_world
+        base = world.get_connections_by_type(DifferentialDrive)[0].child
+        lift = Body(name=PrefixedName("lift"))
+        with world.modify_world():
+            lift_connection = PrismaticConnection.create_with_dofs(
+                world=world,
+                parent=world.root,
+                child=lift,
+                axis=Vector3.Z(),
+                dof_limits=DegreeOfFreedomLimits.from_position_range_and_speed(
+                    maximum_speed=1
+                ),
+            )
+            world.add_connection(lift_connection)
+        lift_connection.has_hardware_interface = True
+        lift_height = 1.0
+        executor = StatechartExecutor(
+            context=StatechartContext(world=world), extensions=[MotionControl()]
+        )
+        motion_statechart = Statechart(context=executor.context)
+        motion_statechart.add_node(
+            ride := Sequence(
+                nodes=[
+                    MoveBranch(body=base, new_parent=lift),
+                    raising := JointPositionList(
+                        goal_state=JointState.from_mapping(
+                            {lift_connection: lift_height}
+                        )
+                    ),
+                    DifferentialDriveBaseGoal(
+                        goal_pose=Pose.from_xyz_rpy(x=1, reference_frame=lift)
+                    ),
+                ]
+            )
+        )
+        motion_statechart.add_node(EndMotion.when_true(ride))
+
+        executor.compile(statechart=motion_statechart)
+        executor.tick_until_end()
+
+        assert lift_connection.position == pytest.approx(
+            lift_height, abs=raising.threshold
+        )
+        assert np.allclose(
+            world.compute_forward_kinematics_np(lift, base),
+            Pose.from_xyz_rpy(x=1).to_np(),
             atol=1e-2,
         )
 
