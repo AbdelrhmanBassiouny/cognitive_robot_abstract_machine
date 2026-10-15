@@ -354,7 +354,7 @@ class TracyMontessoriDemonstration(ShowcasedDemonstration):
     What looks at the capture and holds the twin it is committed into.
     """
 
-    sorting: MontessoriSorting = field(init=False)
+    sorting: MontessoriSorting | None = field(init=False, default=None)
     """
     What builds the sorting plans.
     """
@@ -372,8 +372,12 @@ class TracyMontessoriDemonstration(ShowcasedDemonstration):
 
     def build_context(self, world: World) -> Context:
         [robot] = world.get_semantic_annotations_by_type(Tracy)
-        self.sorting = MontessoriSorting(twin=self.look.twin, robot=robot)
-        self.sorting.answerer.on_answer = self._publish_slot_answers
+        # a command is built against a context of its own, but its open parts are
+        # answered by the same backends, and kept with the sorting's answers
+        if self.sorting is None:
+            self.sorting = MontessoriSorting(twin=self.look.twin, robot=robot)
+            self.sorting.answerer.on_answer = self._publish_slot_answers
+            self._publish_slot_answers(self.sorting.answerer)
         self.extra_names[SORTING_NAME] = self.sorting
         self.extra_names[ANSWERER_NAME] = self.sorting.answerer
         self.extra_names.update(

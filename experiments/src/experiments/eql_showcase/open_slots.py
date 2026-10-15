@@ -23,6 +23,7 @@ from enum import StrEnum
 import numpy as np
 from typing_extensions import Any, Callable, Dict, Iterable, Iterator, List, Type
 
+from cramera.knowledge.entity import NamedEntity
 from experiments.eql_showcase.exceptions import NoBackendAnswers
 from experiments.eql_showcase.perceived_twin import PerceivedTwin, SeenHole, SeenPiece
 from experiments.montessori.perception.detections import MontessoriShapeDetection
@@ -90,23 +91,25 @@ class Faculty(StrEnum):
     """
 
 
-@dataclass
-class SlotAnswer:
+@dataclass(eq=False)
+class SlotAnswer(NamedEntity):
     """
     One statement a plan left open, the backend that answered it and what it read.
+
+    Named after what the statement asks for and the step it was left open in.
     """
 
-    step: str
+    step: str = field(repr=False)
     """
     The plan step the statement was left open in, e.g. ``"pick up the cylinder"``.
     """
 
-    slot: str
+    slot: str = field(repr=False)
     """
     What the statement asks for, e.g. ``"which side to take it from"``.
     """
 
-    statement: str
+    statement: str = field(repr=False)
     """
     The statement, as English.
     """
@@ -116,7 +119,7 @@ class SlotAnswer:
     The kind of knowledge that answered it.
     """
 
-    backend: str
+    backend: str = field(repr=False)
     """
     The name of the backend that answered it.
     """
@@ -131,12 +134,12 @@ class SlotAnswer:
     What the backend read to answer it, one line each.
     """
 
-    seconds: float
+    seconds: float = field(repr=False)
     """
     How long answering took.
     """
 
-    answered_at: float
+    answered_at: float = field(repr=False)
     """
     When it was answered, as seconds since the epoch.
     """
@@ -580,6 +583,7 @@ class OpenSlotAnswerer:
         seconds = time.perf_counter() - started
         self.answered.append(
             SlotAnswer(
+                name=f"{slot} · {step}",
                 step=step,
                 slot=slot,
                 statement=verbalize_expression(statement, backend=backend),

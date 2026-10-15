@@ -8,7 +8,7 @@
  * time: the open part is stated, flies to the backend that answers it, and the
  * backend's lane shows what it answered and what it read to answer it.
  *
- * The panel stays hidden until a running demo has published an answer.
+ * The panel stays hidden until a running demo has published the backends it asks.
  *
  * Bus events:
  *   listens  live:changed {on, url}     poll the bridge while a demo is attached
@@ -151,6 +151,7 @@ Panels.define('backends', function (root, bus) {
   }
 
   function take(published) {
+    if (published && (published.backends || []).length) root.classList.remove('idle');
     const answers = (published && published.answers) || [];
     if (answers.length < played) played = 0;          // a new run started over
     answers.slice(played).forEach(function (answer) { queue.push(answer); });

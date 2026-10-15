@@ -891,6 +891,20 @@ Panels.define('robot-scene', function (root, bus) {
     controls.update();
     needsRender = true;
   }
+  // look at the body of a name from a distance, keeping the direction the camera looks
+  // from; following the robot stops, so the view stays on the body
+  function frameBody(name, distance) {
+    const body = scene3.getObjectByName(name) || objectMeshes[name];
+    if (!body) return false;
+    const center = new THREE.Box3().setFromObject(body).getCenter(new THREE.Vector3());
+    const from = camera.position.clone().sub(controls.target).normalize();
+    follow = false;
+    controls.target.copy(center);
+    camera.position.copy(center).addScaledVector(from, distance);
+    controls.update();
+    needsRender = true;
+    return true;
+  }
   function robotCenter(out) {
     if (!robotModel) return false;
     robotModel.obj.getWorldPosition(_base);
@@ -1616,6 +1630,7 @@ Panels.define('robot-scene', function (root, bus) {
     setAutoRotate: function (on) { controls.autoRotate = on; controls.autoRotateSpeed = 0.5; needsRender = true; },
     setFloorVisible: function (on) { ground.visible = on; needsRender = true; },
     setFollow: function (on) { follow = on; },
+    frame: frameBody,
     setPropsVisible: function (on) {
       for (const n in objectMeshes) objectMeshes[n].visible = on;
       marker.visible = on && !!PLACE0;

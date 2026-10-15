@@ -20,6 +20,7 @@ from experiments.eql_showcase.montessori_demo import (
     DEFAULT_CAPTURE,
     RELEASE_CLEARANCE,
     MontessoriSorting,
+    TracyMontessoriDemonstration,
 )
 from experiments.eql_showcase.falling import FallIntoHolesExecutable
 from experiments.eql_showcase.open_slots import (
@@ -307,3 +308,22 @@ def test_a_piece_released_over_a_hole_falls_into_it(unsorted: MontessoriSorting)
     ).execute()
 
     assert InsideRegion(piece.root, hole.region)()
+
+
+def test_a_command_keeps_the_answers_of_the_sorting_before_it():
+    demonstration = TracyMontessoriDemonstration(takes_commands=False)
+    world = demonstration.build_simulated_world()
+    demonstration.build_context(world)
+    sorting = demonstration.sorting
+
+    demonstration.build_context(world)
+
+    assert demonstration.sorting is sorting
+
+
+def test_an_answer_is_shown_by_what_it_asks_and_where(sorting: MontessoriSorting):
+    [piece, *_] = sorting.pieces()
+
+    sorting.answerer.answer(STEP, "which piece", a(SeenPiece)(kind=piece.kind))
+
+    assert sorting.answerer.answered[-1].name == f"which piece · {STEP}"

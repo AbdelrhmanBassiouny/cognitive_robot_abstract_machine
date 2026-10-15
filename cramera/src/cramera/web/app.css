@@ -723,7 +723,7 @@ body.graph-full-open{overflow:hidden}
 
 /* %% backends panel — who answers the open parts of the plan */
 .panel-backends{--bk0:#39d5c8;--bk1:#5b8cff;--bk2:#ffb648;--bk3:#b98cff;position:relative}
-.slot>.panel-backends{flex:0 0 350px;min-height:0}
+.slot>.panel-backends{flex:0 0 318px;min-height:0}
 .slot>.panel-backends.idle{display:none}
 .bk-head{padding:10px 16px}
 .bk-head h2{font-size:14px;letter-spacing:.01em}
