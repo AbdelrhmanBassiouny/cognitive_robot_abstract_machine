@@ -1316,20 +1316,49 @@ Panels.define('robot-scene', function (root, bus) {
     needsRender = true;
   }
 
+  // %% easing into each live state
+  // the bridge is polled about fifteen times a second; each new state is eased into
+  // over about one poll rather than jumped to, so a streamed motion reads as continuous
+  const LIVE_BLEND_MILLISECONDS = 75;
+  let liveBlend = null;          // {start, joints: [{joint, from, to}], poses: [{obj, from, to}]}
+  function poseOf(obj) {
+    return [obj.position.x, obj.position.y, obj.position.z,
+            obj.quaternion.x, obj.quaternion.y, obj.quaternion.z, obj.quaternion.w];
+  }
+  function jointValueOf(joint) {
+    return joint.jointValue && joint.jointValue.length ? Number(joint.jointValue[0]) || 0 : 0;
+  }
+  function stepLiveBlend(now) {
+    const t = Math.min(1, (now - liveBlend.start) / LIVE_BLEND_MILLISECONDS);
+    liveBlend.joints.forEach(function (b) { b.joint.setJointValue(b.from + (b.to - b.from) * t); });
+    liveBlend.poses.forEach(function (b) { setPose(b.obj, b.from, b.to, t); });
+    needsRender = true;
+    if (t >= 1) liveBlend = null;
+  }
+  function runLiveBlend() {
+    if (!liveBlend) return;
+    stepLiveBlend(performance.now());
+    requestAnimationFrame(runLiveBlend);
+  }
+  function easeToward(obj, pose, blend) {
+    blend.poses.push({ obj: obj, from: poseOf(obj), to: pose });
+  }
+
   function applyLive(st) {
     if (!st || !st.frames) return;
+    const blend = { start: performance.now(), joints: [], poses: [] };
     for (const k in st.frames) {
       const j = JointRouting.jointFor(models, k);
       if (!j) continue;
-      j.setJointValue(st.frames[k]);
+      blend.joints.push({ joint: j, from: jointValueOf(j), to: st.frames[k] });
     }
-    if (robotModel && st.base) setPose(robotModel.obj, st.base, st.base, 0);
+    if (robotModel && st.base) easeToward(robotModel.obj, st.base, blend);
     // every bundled model root the bridge streams: a second robot drives, a moved
     // environment model follows (the primary robot's entry re-applies st.base)
     const modelBases = st.modelBases || {};
     for (const prefix in modelBases) {
       models.forEach(function (m) {
-        if (m.prefix === prefix) setPose(m.obj, modelBases[prefix], modelBases[prefix], 0);
+        if (m.prefix === prefix) easeToward(m.obj, modelBases[prefix], blend);
       });
     }
     if (typeof st.markersVersion === 'number' && st.markersVersion !== lastMarkersVersion) {
@@ -1344,10 +1373,13 @@ Panels.define('robot-scene', function (root, bus) {
         // the running world HAS this object, so it belongs on screen, even if an
         // earlier catalog answer hid it.
         if (!g.visible) { g.visible = true; needsRender = true; }
-        setPose(g, liveStateKeys[key], liveStateKeys[key], 0);
+        easeToward(g, liveStateKeys[key], blend);
       } else unknown = true;                   // an object the demo spawned mid-run
     }
     if (unknown) syncLiveObjects();            // fetch the catalog & spawn the newcomers
+    const easing = liveBlend !== null;
+    liveBlend = blend;
+    if (!easing) requestAnimationFrame(runLiveBlend);
     if (follow && robotCenter(_target)) controls.target.lerp(_target, 0.08);
     needsRender = true;
   }
