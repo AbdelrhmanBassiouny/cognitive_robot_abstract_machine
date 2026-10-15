@@ -12,6 +12,7 @@ from cramph.context import StatechartContext
 from cramph.node import StatechartNode
 from coraplex.robot_plans.actions.base import Action
 from coraplex.robot_plans.mixins import HasApproachesGraspPoses
+from coraplex.robot_plans.actions.composite.carrying import CarryAction
 from coraplex.robot_plans.actions.composite.facing import FaceAndLookAtAction
 from coraplex.robot_plans.actions.core.container import OpenAction
 from coraplex.robot_plans.actions.core.navigation import (
@@ -150,7 +151,8 @@ class PickAndPlaceAction(Action):
 @dataclass(eq=False, repr=False)
 class MoveAndPlaceAction(Action):
     """
-    Navigates to where the robot stands, faces the target and places the object there.
+    Carries the object upright to where the robot stands, faces the target and places
+    the object there.
     """
 
     navigate: NavigateAction
@@ -197,7 +199,7 @@ class MoveAndPlaceAction(Action):
     def create_action_body(self) -> StatechartNode:
         return Sequence(
             [
-                self.navigate,
+                CarryAction(self.navigate),
                 self.face_and_look_at,
                 self.place,
             ]

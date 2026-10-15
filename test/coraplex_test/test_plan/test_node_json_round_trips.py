@@ -18,7 +18,13 @@ from coraplex.datastructures.enums import DetectionTechnique
 from coraplex.datastructures.trajectory import PoseTrajectory
 from coraplex.perception import PerceptionQuery, PerceptionSource, PerceptionTask
 from coraplex.robot_plans.actions import core
-from coraplex.robot_plans.actions.composite import facing, tool_based, transporting
+from coraplex.robot_plans.actions.composite import (
+    carrying,
+    facing,
+    tool_based,
+    transporting,
+)
+from coraplex.robot_plans.actions.composite.carrying import CarryAction
 from coraplex.robot_plans.actions.composite.facing import FaceAndLookAtAction
 from coraplex.robot_plans.actions.composite.tool_based import (
     CuttingAction,
@@ -296,6 +302,7 @@ def _robot_body_cases() -> list[ActionRoundTripCase]:
 def _navigation_and_perception_cases() -> list[ActionRoundTripCase]:
     return [
         ActionRoundTripCase(NavigateAction, lambda world: [_navigate(world)]),
+        ActionRoundTripCase(CarryAction, lambda world: [CarryAction(_navigate(world))]),
         ActionRoundTripCase(
             PathPlanningNavigateAction,
             lambda world: [PathPlanningNavigateAction(_pose(world))],
@@ -473,7 +480,14 @@ def node_types_needing_a_case() -> set[type[StatechartNode]]:
     return set().union(
         *(
             concrete_node_types(package)
-            for package in (core, facing, tool_based, transporting, perception)
+            for package in (
+                core,
+                carrying,
+                facing,
+                tool_based,
+                transporting,
+                perception,
+            )
         )
     )
 
