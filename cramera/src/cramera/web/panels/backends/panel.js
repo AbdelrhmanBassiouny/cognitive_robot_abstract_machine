@@ -22,11 +22,15 @@ Panels.define('backends', function (root, bus) {
     { faculty: 'rules', title: 'Rules · RDR', icon: '⋔', note: 'ripple-down rules about the board' },
     { faculty: 'probabilistic', title: 'Probabilistic', icon: '∿', note: 'a model of grasping, sampled' },
   ];
+  // ?pace=0.2 plays every animation five times slower, to film a demo that runs
+  // slower than the clock and is sped up afterwards
+  const PACE = Number(new URLSearchParams(window.location.search).get('pace')) || 1;
   const POLL_MILLISECONDS = 400;
   // how long one answer is shown before the next is played; a long queue plays faster
-  const PLAY_MILLISECONDS = 2200;
-  const FASTEST_PLAY_MILLISECONDS = 700;
-  const FLIGHT_MILLISECONDS = 650;
+  const PLAY_MILLISECONDS = 2200 / PACE;
+  const FASTEST_PLAY_MILLISECONDS = 700 / PACE;
+  const FLIGHT_MILLISECONDS = 650 / PACE;
+  root.style.setProperty('--bk-pace', String(1 / PACE));
   const TRAIL_LENGTH = 9;
 
   root.innerHTML =
@@ -94,14 +98,14 @@ Panels.define('backends', function (root, bus) {
     tokenEl.style.transform = 'translate(' + (from.left - stage.left + from.width / 2) + 'px,' +
       (from.top - stage.top + from.height / 2) + 'px) translate(-50%,-50%) scale(1)';
     void tokenEl.offsetWidth;
-    tokenEl.style.transition = 'transform ' + FLIGHT_MILLISECONDS + 'ms cubic-bezier(.5,0,.2,1), opacity 250ms ease ' + (FLIGHT_MILLISECONDS - 100) + 'ms';
+    tokenEl.style.transition = 'transform ' + FLIGHT_MILLISECONDS + 'ms cubic-bezier(.5,0,.2,1), opacity ' + 250 / PACE + 'ms ease ' + (FLIGHT_MILLISECONDS - 100 / PACE) + 'ms';
     tokenEl.style.transform = 'translate(' + (to.left - stage.left + to.width / 2) + 'px,' +
       (to.top - stage.top + 28) + 'px) translate(-50%,-50%) scale(.8)';
     tokenEl.style.opacity = '0';
     Object.keys(laneEls).forEach(function (faculty) {
       laneEls[faculty].el.classList.toggle('bk-active', faculty === answer.faculty);
     });
-    setTimeout(function () { answerInLane(lane, answer); }, FLIGHT_MILLISECONDS - 120);
+    setTimeout(function () { answerInLane(lane, answer); }, FLIGHT_MILLISECONDS - 120 / PACE);
     addToTrail(answer, lane);
   }
 
@@ -111,12 +115,12 @@ Panels.define('backends', function (root, bus) {
     lane.el.classList.remove('bk-pulse'); void lane.el.offsetWidth; lane.el.classList.add('bk-pulse');
     const answers = answer.answers.length
       ? answer.answers.map(function (a, i) {
-          return '<span class="bk-answer' + (i === 0 ? ' bk-first' : '') + '" style="animation-delay:' + (120 + i * 90) + 'ms">' + escape(a) + '</span>';
+          return '<span class="bk-answer' + (i === 0 ? ' bk-first' : '') + '" style="animation-delay:' + (120 + i * 90) / PACE + 'ms">' + escape(a) + '</span>';
         }).join('')
       : '<span class="bk-answer bk-none">nothing</span>';
     const evidence = answer.evidence.map(function (line, i) {
       const kind = /^▶|^✓/.test(line) ? ' bk-yes' : (/^✗/.test(line) ? ' bk-no' : '');
-      return '<div class="bk-evidence' + kind + '" style="animation-delay:' + (300 + i * 110) + 'ms">' + escape(line) + '</div>';
+      return '<div class="bk-evidence' + kind + '" style="animation-delay:' + (300 + i * 110) / PACE + 'ms">' + escape(line) + '</div>';
     }).join('');
     lane.body.innerHTML =
       '<div class="bk-card">' +
@@ -142,7 +146,7 @@ Panels.define('backends', function (root, bus) {
     playing = null;
     if (!queue.length) return;
     play(queue.shift());
-    const wait = Math.max(FASTEST_PLAY_MILLISECONDS, PLAY_MILLISECONDS - queue.length * 250);
+    const wait = Math.max(FASTEST_PLAY_MILLISECONDS, PLAY_MILLISECONDS - queue.length * 250 / PACE);
     playing = setTimeout(playNext, wait);
   }
 

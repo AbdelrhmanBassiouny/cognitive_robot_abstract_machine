@@ -106,10 +106,14 @@ Panels.define('robot-scene', function (root, bus) {
   const camera = new THREE.PerspectiveCamera(45, 1, 0.01, 200);
   camera.position.set(3, 2.4, 4);
 
-  const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+  // a browser without a graphics card renders every frame in software; ?render=light
+  // trades anti-aliasing, soft shadows and ambient occlusion for a fluid scene there
+  const LIGHT_RENDERING = new URLSearchParams(window.location.search).get('render') === 'light';
+  const LIGHT_SHADOW_MAP_SIZE = 1024;
+  const renderer = new THREE.WebGLRenderer({ antialias: !LIGHT_RENDERING, alpha: true });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.shadowMap.enabled = true;
-  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  renderer.shadowMap.type = LIGHT_RENDERING ? THREE.PCFShadowMap : THREE.PCFSoftShadowMap;
   renderer.outputEncoding = THREE.sRGBEncoding;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 0.95;
@@ -139,7 +143,7 @@ Panels.define('robot-scene', function (root, bus) {
   const key = new THREE.DirectionalLight(0xfff2df, 1.05);
   key.position.set(4, 7, 3);
   key.castShadow = true;
-  key.shadow.mapSize.set(4096, 4096);
+  key.shadow.mapSize.set(LIGHT_RENDERING ? LIGHT_SHADOW_MAP_SIZE : 4096, LIGHT_RENDERING ? LIGHT_SHADOW_MAP_SIZE : 4096);
   key.shadow.camera.near = 0.5; key.shadow.camera.far = 30;
   key.shadow.camera.left = -6; key.shadow.camera.right = 6;
   key.shadow.camera.top = 6; key.shadow.camera.bottom = -6;
@@ -1518,6 +1522,7 @@ Panels.define('robot-scene', function (root, bus) {
   // %% SSAO
   let composer = null, ssaoPass = null;
   (function setupSSAO() {
+    if (LIGHT_RENDERING) return;
     if (!(THREE.EffectComposer && THREE.RenderPass && window.BackgroundIgnoringSSAOPass && THREE.ShaderPass && THREE.CopyShader)) return;
     try {
       const w = container.clientWidth || 800, h = container.clientHeight || 600;
