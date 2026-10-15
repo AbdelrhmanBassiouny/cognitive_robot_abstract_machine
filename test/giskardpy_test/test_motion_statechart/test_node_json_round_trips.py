@@ -89,6 +89,7 @@ from giskardpy.motion_statechart.tasks.drive_tasks import (
     BaseHeading,
     BaseOrientation,
     BasePosition,
+    BaseTurnTowardsGoalPosition,
     DrivenBaseTask,
 )
 from giskardpy.motion_statechart.tasks.feature_functions import (
@@ -377,6 +378,7 @@ def _cartesian_cases() -> list[NodeRoundTripCase]:
                 BasePosition,
                 BaseOrientation,
                 BaseHeading,
+                BaseTurnTowardsGoalPosition,
             ]
         ],
         NodeRoundTripCase(

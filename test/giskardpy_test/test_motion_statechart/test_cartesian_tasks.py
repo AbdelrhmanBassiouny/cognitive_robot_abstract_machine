@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import numpy as np
 import pytest
@@ -14,7 +14,7 @@ from giskardpy.motion_statechart.goals.cartesian_goals import (
 )
 from cramph.composites import Sequence, Parallel
 from giskardpy.motion_statechart.graph_node import EndMotion, MotionStatechartNode
-from cramph.node import CancelStatechart
+from cramph.node import CancelStatechart, StatechartNode
 from giskardpy.motion_statechart.monitors.cartesian_monitors import PositionReached
 from giskardpy.motion_statechart.monitors.monitors import LocalMinimumReached
 from giskardpy.motion_statechart.monitors.overwrite_state_monitors import (
@@ -80,7 +80,7 @@ from test.giskardpy_test.test_motion_statechart.debug_expression_helpers import 
 from semantic_digital_twin.robots.pr2 import PR2Joint
 from giskardpy.motion_control import MotionControl
 from cramph.context import StatechartContext
-from cramph.executor import StatechartExecutor
+from cramph.executor import StatechartExecutor, TickingExecutorExtension
 from cramph.world_modification_nodes import MoveBranch
 from giskardpy.motion_control import WorldStateTrajectoryRecording
 from ..motion_control_context import create_context_with_motion_control
@@ -1759,6 +1759,39 @@ class TestCartesianTasks:
         assert distance_error <= goal.threshold
 
 
+# %% driving a differential drive
+
+
+@dataclass
+class PositionWhileRunning(TickingExecutorExtension):
+    """
+    Records where a body is after every tick in which a node is running.
+    """
+
+    body: Body = field(kw_only=True)
+    """
+    The body whose position is recorded.
+    """
+
+    node: StatechartNode | None = field(default=None, kw_only=True)
+    """
+    The node during whose run the position is recorded.
+    """
+
+    positions: list[np.ndarray] = field(default_factory=list, init=False)
+    """
+    The positions of :attr:`body` relative to the world root, one per tick.
+    """
+
+    def after_tick(self, executor: StatechartExecutor) -> None:
+        if self.node.life_cycle_state != LifeCycleValues.RUNNING:
+            return
+        world = executor.context.world
+        self.positions.append(
+            world.compute_forward_kinematics_np(world.root, self.body)[:3, 3]
+        )
+
+
 class TestDiffDriveBaseGoal:
     @pytest.mark.parametrize(
         "goal_pose",
@@ -2028,6 +2061,36 @@ class TestDiffDriveBaseGoal:
             world.compute_forward_kinematics_np(world.root, base),
             Pose.from_xyz_rpy(x=1).to_np(),
             atol=2 * drive.threshold,
+        )
+
+    def test_the_first_step_only_turns_the_base(self, cylinder_bot_diff_world):
+        """
+        The goal lies to the side of the base, so the base could face it sooner by also
+        driving in an arc; the first step must only turn it.
+        """
+        world = cylinder_bot_diff_world
+        base = world.get_connections_by_type(DifferentialDrive)[0].child
+        start = world.compute_forward_kinematics_np(world.root, base)[:3, 3]
+        recording = PositionWhileRunning(body=base)
+        executor = StatechartExecutor(
+            context=StatechartContext(world=world),
+            extensions=[MotionControl(), recording],
+        )
+        motion_statechart = Statechart(context=executor.context)
+        motion_statechart.add_node(
+            drive := DifferentialDriveBaseGoal(
+                goal_pose=Pose.from_xyz_rpy(y=1, reference_frame=world.root)
+            )
+        )
+        recording.node = drive.sequence.nodes[0]
+        motion_statechart.add_node(EndMotion.when_true(drive))
+
+        executor.compile(statechart=motion_statechart)
+        executor.tick_until_end()
+
+        assert recording.positions
+        np.testing.assert_allclose(
+            recording.positions, [start] * len(recording.positions), atol=1e-3
         )
 
 

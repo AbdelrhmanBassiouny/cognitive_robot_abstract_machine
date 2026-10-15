@@ -9,13 +9,16 @@ from dataclasses import dataclass, field
 
 import krrood.symbolic_math.symbolic_math as sm
 from cramph.context import StatechartContext
+from giskardpy.motion_statechart.binding_policy import ForwardKinematicsBinding
 from giskardpy.motion_statechart.graph_node import ConvergingTask, MotionNodeArtifacts
 from giskardpy.motion_statechart.tasks.cartesian_tasks import (
     CartesianOrientation,
     CartesianPosition,
 )
+from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.spatial_types import (
     HomogeneousTransformationMatrix,
+    Point3,
     RotationMatrix,
     Vector3,
 )
@@ -176,10 +179,67 @@ class BaseHeading(DrivenBaseRotation):
     def parent_R_goal(
         self, parent_T_base: HomogeneousTransformationMatrix
     ) -> RotationMatrix:
-        parent_V_base_to_goal = self.parent_T_goal.position - parent_T_base.position
+        parent_V_base_to_goal = self.parent_T_goal.position - self.parent_P_viewpoint(
+            parent_T_base
+        )
         parent_V_base_to_goal.scale(1)
         return RotationMatrix.from_vectors(
             x=parent_V_base_to_goal,
             z=Vector3.Z(reference_frame=self.drive_parent),
             reference_frame=self.drive_parent,
         )
+
+    def parent_P_viewpoint(
+        self, parent_T_base: HomogeneousTransformationMatrix
+    ) -> Point3:
+        """
+        :param parent_T_base: The pose of the base relative to the drive's parent.
+        :return: The point relative to the drive's parent the base faces the position of
+            :attr:`goal_pose` from.
+        """
+        return parent_T_base.position
+
+
+@dataclass(eq=False, repr=False)
+class BaseTurnTowardsGoalPosition(BaseHeading):
+    """
+    Turns the front of the base towards the position of :attr:`goal_pose`, as seen from
+    where the base stood when the task started, so that driving does not bring the base
+    closer to facing it.
+    """
+
+    _parent_T_start_binding: ForwardKinematicsBinding = field(init=False, repr=False)
+    """
+    Fixes the pose of the base relative to the drive's parent when the task starts.
+    """
+
+    def set_up(self, context: StatechartContext) -> None:
+        """
+        Bind the pose of the base, which the base faces the goal position from.
+        """
+        super().set_up(context)
+        self._parent_T_start_binding = ForwardKinematicsBinding(
+            name=PrefixedName("parent_T_start", str(self.name)),
+            root=self.drive_parent,
+            tip=self.base,
+            float_variable_data=context.float_variable_data,
+        )
+        self._parent_T_start_binding.bind(context.world)
+
+    def on_start(self, context: StatechartContext) -> None:
+        self._parent_T_start_binding.bind(context.world)
+
+    def build_artifacts(self, context: StatechartContext) -> MotionNodeArtifacts:
+        """
+        Differs from :meth:`DrivenBaseRotation.build_artifacts` in first expressing the
+        bound start pose relative to the drive's new parent, if the drive was moved
+        under another parent.
+        """
+        if self._parent_T_start_binding.root is not self.drive_parent:
+            self._parent_T_start_binding.change_root(self.drive_parent, context.world)
+        return super().build_artifacts(context)
+
+    def parent_P_viewpoint(
+        self, parent_T_base: HomogeneousTransformationMatrix
+    ) -> Point3:
+        return self._parent_T_start_binding.root_T_tip.position

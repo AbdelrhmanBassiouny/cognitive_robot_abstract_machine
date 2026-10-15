@@ -32,6 +32,7 @@ from giskardpy.motion_statechart.tasks.drive_tasks import (
     BaseHeading,
     BaseOrientation,
     BasePosition,
+    BaseTurnTowardsGoalPosition,
 )
 
 
@@ -43,14 +44,14 @@ class DifferentialDriveBaseGoal(
     Moves the robot to a goal pose using a differential drive, running these steps in
     one :class:`~cramph.composites.Sequence`:
 
-    1. Orient to goal position
-    2. Drive to goal position
+    1. Turn towards the goal position, without driving
+    2. Drive to goal position, steering towards it
     3. Orient to goal orientation
 
     Every step moves the base relative to the drive's parent, as it is whenever the
     steps are built, so the goal follows a base moved under another parent while the
-    statechart runs. The direction to the goal follows the base as it drives. Where the
-    goal lies is read from its reference frame as :attr:`binding_policy` says.
+    statechart runs. Where the goal lies is read from its reference frame as
+    :attr:`binding_policy` says.
     """
 
     diff_drive_connection: DifferentialDrive | None = field(kw_only=True, default=None)
@@ -157,7 +158,7 @@ class DifferentialDriveBaseGoal(
             threshold=self.threshold,
         )
         steps = [
-            BaseHeading(name=f"{self.name}/step1", **task_parameters),
+            BaseTurnTowardsGoalPosition(name=f"{self.name}/step1", **task_parameters),
             Parallel(
                 name=f"{self.name}/step2",
                 nodes=[
