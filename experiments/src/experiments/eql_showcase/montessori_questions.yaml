@@ -4,7 +4,9 @@
 #   current_state    - Tracy's twin as it is now: what the camera saw (`MontessoriShape`,
 #                      `SeenPiece`, the holes as `Region`s), what Tracy did (`action`),
 #                      every candidate it considered for what the plan left open
-#                      (`step`), and the commands given (`command`, through `robot`);
+#                      (`step`), which backend answered each open part of a plan
+#                      (`SlotAnswer`s in `backends.answered`, by `Faculty`), and the
+#                      commands given (`command`, through `robot`);
 #                      `montessori` builds sorting plans for a command
 #   detected_events  - what segmind saw happen to the pieces (`event`)
 #   episodic_memory  - every run already finished, answered in SQL (`run`, `action`)
@@ -24,11 +26,11 @@
     an(entity(variable(Region, world.regions)))
 
 - scope: current_state
-  text: Which pieces are on the board now?
+  text: Which pieces are in a hole now?
   code: |
     piece = variable(MontessoriShape, world.semantic_annotations)
-    board = variable(Body, world.bodies)
-    an(entity(piece.root).where(board.name.name == 'board', SupportedBy(piece.root, board)))
+    hole = variable(Region, world.regions)
+    an(entity(piece.root).where(InsideRegion(piece.root, hole)))
 
 - scope: current_state
   text: Which pieces are still on the table?
@@ -77,6 +79,36 @@
   commands_the_robot: true
   code: |
     an(entity(command))
+
+- scope: current_state
+  text: Which backend answered each open part?
+  code: |
+    answer = variable(SlotAnswer, backends.answered)
+    an(entity(answer))
+
+- scope: current_state
+  text: What did perception answer?
+  code: |
+    answer = variable(SlotAnswer, backends.answered)
+    an(entity(answer).where(answer.faculty == Faculty.PERCEPTION))
+
+- scope: current_state
+  text: What did working memory check in the twin?
+  code: |
+    answer = variable(SlotAnswer, backends.answered)
+    an(entity(answer).where(answer.faculty == Faculty.WORKING_MEMORY))
+
+- scope: current_state
+  text: Which rules chose the holes?
+  code: |
+    answer = variable(SlotAnswer, backends.answered)
+    an(entity(answer).where(answer.faculty == Faculty.RULES))
+
+- scope: current_state
+  text: How was each grasp side sampled?
+  code: |
+    answer = variable(SlotAnswer, backends.answered)
+    an(entity(answer).where(answer.faculty == Faculty.PROBABILISTIC))
 
 - scope: current_state
   text: What did you do?
