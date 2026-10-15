@@ -418,6 +418,22 @@ def test_a_physically_simulated_motion_is_given_the_same_time_limit(
             reach_action_executable.execute()
 
 
+def test_a_kinematic_motion_inside_a_physically_simulated_robot_leaves_the_physics_alone(
+    reach_action_executable,
+):
+    """
+    A candidate is tried out kinematically against a copy of the world while the plan is
+    performed in physics, and trying it out must not advance the physics.
+    """
+    simulation = SimulationThatCountsItsSteps()
+
+    with PhysicallySimulatedRobot(simulation=simulation):
+        with kinematically_simulated_robot:
+            reach_action_executable.execute()
+
+    assert simulation.steps == []
+
+
 def test_entering_a_physically_simulated_robot_hands_over_the_simulation():
     simulation = SimulationThatCountsItsSteps()
 

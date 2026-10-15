@@ -403,7 +403,7 @@ class GiskardExecutable(Executable):
         """
         Compiles the motion state chart and ticks it in the world of the context until
         it is done or gives up, stepping the physics one control period between two
-        ticks where a simulation is being performed in.
+        ticks where the robot is physically simulated.
 
         The chart's own stall monitor decides when a motion is hopeless, so a motion
         that keeps converging is never cut off for taking many ticks.
@@ -417,7 +417,7 @@ class GiskardExecutable(Executable):
         :raises MotionExceededSimulationTimeLimit: When the motion runs for longer than
             :attr:`simulation_time_limit`.
         """
-        if GiskardExecutable.simulation is None:
+        if GiskardExecutable.execution_type == ExecutionType.KINEMATICALLY_SIMULATED:
             qp_controller_config = (
                 QPControllerConfig.create_with_fast_simulation_defaults()
             )

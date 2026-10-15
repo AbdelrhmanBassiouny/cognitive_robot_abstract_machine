@@ -67,6 +67,7 @@ from semantic_digital_twin.world_description.connections import (
     OmniDrive,
     DifferentialDrive,
 )
+from semantic_digital_twin.world_description.degree_of_freedom import DegreeOfFreedom
 from semantic_digital_twin.world_description.geometry import (
     Box,
     Cylinder,
@@ -888,7 +889,7 @@ class MujocoActuator(UniqueSimulatorProperty):
         """
         The MuJoCo actuator realising a position servo: a PD law with the servo's
         gains, clamped to its torque limit and to the driven degree of freedom's own
-        position limits.
+        position limits, if it has any.
 
         :param servo: The servo to realise; it drives exactly one degree of freedom.
         :return: The actuator.
@@ -896,15 +897,19 @@ class MujocoActuator(UniqueSimulatorProperty):
         gains = servo.gains
         [degree_of_freedom] = servo.dofs
         limits = degree_of_freedom.limits
-        return cls(
+        actuator = cls(
             dynamics_type=mujoco.mjtDyn.mjDYN_NONE,
             gain_type=mujoco.mjtGain.mjGAIN_FIXED,
             gain_parameters=[gains.stiffness] + [0.0] * 9,
             bias_type=mujoco.mjtBias.mjBIAS_AFFINE,
             bias_parameters=[0.0, -gains.stiffness, -gains.damping] + [0.0] * 7,
-            control_range=[limits.lower.position, limits.upper.position],
             force_range=[-gains.torque_limit, gains.torque_limit],
         )
+        if limits.lower.position is None or limits.upper.position is None:
+            actuator.control_limited = mujoco.mjtLimited.mjLIMITED_FALSE
+            return actuator
+        actuator.control_range = [limits.lower.position, limits.upper.position]
+        return actuator
 
 
 @dataclass
@@ -1878,6 +1883,18 @@ class MujocoBuilder(MultiSimBuilder):
 
     spec: mujoco.MjSpec = field(default=mujoco.MjSpec())
 
+    minimum_mass: float = 1e-3
+    """
+    The mass, in kilograms, every body weighs at least, so that a frame without an
+    inertial or a shape can still move.
+    """
+
+    minimum_inertia: float = 1e-6
+    """
+    The moment of inertia, in kilogram square metres, every body has at least about each
+    of its principal axes.
+    """
+
     planar_thickness_epsilon: float = 1e-4
     """
     Below this thickness (in meters, measured along a mesh's own best-fit-plane
@@ -1897,6 +1914,12 @@ class MujocoBuilder(MultiSimBuilder):
         self.spec = mujoco.MjSpec()
         self.spec.modelname = "scene"
         self.spec.compiler.degree = 0
+        # Some descriptions, such as the PR2's, give links an inertia no rigid body can
+        # have, which MuJoCo refuses to compile unless it may correct them.
+        self.spec.compiler.balanceinertia = True
+        # A frame with neither an inertial nor a shape still needs some mass to move.
+        self.spec.compiler.boundmass = self.minimum_mass
+        self.spec.compiler.boundinertia = self.minimum_inertia
         self._thickened_mesh_paths = {}
 
     def _end_build(self, file_path: str):
@@ -1910,7 +1933,11 @@ class MujocoBuilder(MultiSimBuilder):
         tree = ET.parse(file_path)
         root = tree.getroot()
         for compiler_element in root.iter("compiler"):
-            compiler_element.set("inertiafromgeom", "true")
+            # A body's own inertial wins; its geoms only stand in for one it lacks.
+            compiler_element.set("inertiafromgeom", "auto")
+            compiler_element.set("balanceinertia", "true")
+            compiler_element.set("boundmass", str(self.minimum_mass))
+            compiler_element.set("boundinertia", str(self.minimum_inertia))
         for body_id, body_element in enumerate(root.findall(".//body")):
             body_spec = self.spec.bodies[body_id + 1]
             if numpy.isclose(body_spec.mass, 0.0):
@@ -1934,6 +1961,14 @@ class MujocoBuilder(MultiSimBuilder):
         qpos = []
         for body in self.world.bodies_topologically_sorted:
             parent_connection = body.parent_connection
+            if isinstance(parent_connection, OmniDrive) and self._is_servoed(
+                parent_connection
+            ):
+                qpos += [
+                    self.world.state[degree_of_freedom.id].position
+                    for degree_of_freedom in self._drive_joint_axes(parent_connection)
+                ]
+                continue
             if (
                 isinstance(parent_connection, self._ignore_connection_types)
                 or parent_connection is None
@@ -2047,6 +2082,48 @@ class MujocoBuilder(MultiSimBuilder):
 
         trimesh_mesh.export(stl_file_path)
 
+    def _asset_file_path_for(self, source_file_path: str, suffix: str) -> str:
+        """
+        The path in the asset folder that a file derived from a source mesh is written
+        to, distinct for every source file so that meshes sharing a file name never
+        overwrite or reuse each other's derived files.
+
+        :param source_file_path: The mesh the file is derived from.
+        :param suffix: The text replacing the source file's extension, such as
+            ``".stl"``.
+        :return: The path, whose directory exists.
+        """
+        source_without_extension, _ = os.path.splitext(
+            os.path.abspath(source_file_path)
+        )
+        asset_file_path = os.path.join(
+            self.asset_folder_path, source_without_extension.lstrip(os.sep) + suffix
+        )
+        os.makedirs(os.path.dirname(asset_file_path), exist_ok=True)
+        return asset_file_path
+
+    def _mesh_name_for(self, mesh_file_path: str, mesh_scale: list[float]) -> str:
+        """
+        The name of the mesh asset for a mesh file at a scale, adding the asset to the
+        spec if no geom used this file at this scale yet.
+
+        :param mesh_file_path: The mesh file MuJoCo loads.
+        :param mesh_scale: The scale along x, y and z.
+        :return: The name, unique to this file and scale.
+        """
+        for mesh in self.spec.meshes:
+            if mesh.file == mesh_file_path and numpy.allclose(mesh.scale, mesh_scale):
+                return mesh.name
+        mesh_name = os.path.splitext(os.path.basename(mesh_file_path))[0]
+        if not numpy.allclose(mesh_scale, [1.0, 1.0, 1.0]):
+            mesh_name += f"_{'_'.join(map(str, mesh_scale))}"
+        if mesh_name in [mesh.name for mesh in self.spec.meshes]:
+            mesh_name += f"_{len(self.spec.meshes)}"
+        mesh = self.spec.add_mesh(name=mesh_name)
+        mesh.file = mesh_file_path
+        mesh.scale = mesh_scale
+        return mesh_name
+
     def _thicken_if_near_planar(self, mesh_file_path: str) -> str:
         """
         MuJoCo cannot compute a convex hull for a mesh whose vertices are (near-)
@@ -2085,9 +2162,8 @@ class MujocoBuilder(MultiSimBuilder):
             self._thickened_mesh_paths[mesh_file_path] = mesh_file_path
             return mesh_file_path
 
-        base_name = os.path.splitext(os.path.basename(mesh_file_path))[0]
-        thickened_file_path = os.path.join(
-            self.asset_folder_path, base_name + "_thickened.stl"
+        thickened_file_path = self._asset_file_path_for(
+            mesh_file_path, suffix="_thickened.stl"
         )
         # Always (re)written rather than reused when already present on disk: two
         # different source meshes can share a basename (e.g. two objects each
@@ -2129,10 +2205,7 @@ class MujocoBuilder(MultiSimBuilder):
             )
         mesh_ext = os.path.splitext(mesh_file_path)[1].lower()
         if mesh_ext == ".dae":
-            # Build output .stl path
-            base_name = os.path.splitext(os.path.basename(mesh_file_path))[0]
-            stl_file_path = os.path.join(self.asset_folder_path, base_name + ".stl")
-
+            stl_file_path = self._asset_file_path_for(mesh_file_path, suffix=".stl")
             # create a .stl mesh from the original .dae mesh, as a replacement. If it not already exists.
             if not os.path.exists(stl_file_path):
                 self._create_stl_from_dae_mesh(
@@ -2142,15 +2215,8 @@ class MujocoBuilder(MultiSimBuilder):
 
         mesh_file_path = self._thicken_if_near_planar(mesh_file_path)
 
-        mesh_name = os.path.splitext(os.path.basename(mesh_file_path))[0]
         mesh_scale = [mesh_entity.scale.x, mesh_entity.scale.y, mesh_entity.scale.z]
-        if not numpy.allclose(mesh_scale, [1.0, 1.0, 1.0]):
-            mesh_name += f"_{'_'.join(map(str, mesh_scale))}"
-        if mesh_name not in [mesh.name for mesh in self.spec.meshes]:
-            mesh = self.spec.add_mesh(name=mesh_name)
-            mesh.file = mesh_file_path
-            mesh.scale = mesh_scale
-        geom_props["meshname"] = mesh_name
+        geom_props["meshname"] = self._mesh_name_for(mesh_file_path, mesh_scale)
         texture_file_path = geom_props.pop("texture_file_path", None)
         if isinstance(texture_file_path, str):
             geom_props["material"] = self._register_texture_material(
@@ -2216,6 +2282,9 @@ class MujocoBuilder(MultiSimBuilder):
         return material_name
 
     def _build_connection(self, connection: Connection):
+        if isinstance(connection, OmniDrive) and self._is_servoed(connection):
+            self._build_drive_joints(connection)
+            return
         if isinstance(connection, self._ignore_connection_types):
             return
         joint_props = MujocoJointConverter.convert(connection)
@@ -2254,11 +2323,71 @@ class MujocoBuilder(MultiSimBuilder):
                 action="add",
             )
 
+    def _is_servoed(self, drive: OmniDrive) -> bool:
+        """
+        :param drive: A drive in the world being built.
+        :return: Whether servos drive the x, y and yaw of the drive, which then moves its
+            base in the simulation instead of keeping it where it is built.
+        """
+        actuated = {
+            degree_of_freedom.id
+            for actuator in self.world.actuators
+            for degree_of_freedom in actuator.dofs
+        }
+        return {drive.x.id, drive.y.id, drive.yaw.id} <= actuated
+
+    @staticmethod
+    def _drive_joint_axes(
+        drive: OmniDrive,
+    ) -> Dict[DegreeOfFreedom, Tuple[mujoco.mjtJoint, numpy.ndarray]]:
+        """
+        :param drive: A servoed drive.
+        :return: The joint moving each of the drive's x, y and yaw, as its type and its
+            axis in the drive's ``odom`` frame, in the order the joints are built in.
+        """
+        return {
+            drive.x: (mujoco.mjtJoint.mjJNT_SLIDE, numpy.array([1.0, 0.0, 0.0])),
+            drive.y: (mujoco.mjtJoint.mjJNT_SLIDE, numpy.array([0.0, 1.0, 0.0])),
+            drive.yaw: (mujoco.mjtJoint.mjJNT_HINGE, numpy.array([0.0, 0.0, 1.0])),
+        }
+
+    def _build_drive_joints(self, drive: OmniDrive) -> None:
+        """
+        Build the joints a servoed drive moves its base with: a slide along x, a slide
+        along y and a hinge about z, all in the drive's ``odom`` frame and named as
+        :attr:`~semantic_digital_twin.world_description.connections.OmniDrive.single_axis_joint_names`
+        says.
+
+        :param drive: The servoed drive.
+        """
+        child_body_name = drive.child.name.name
+        child_body_spec = self._find_entity(
+            entity_type=mujoco.mjtObj.mjOBJ_BODY, entity_name=child_body_name
+        )
+        if child_body_spec is None:
+            raise MujocoEntityNotFoundError(
+                entity_name=child_body_name,
+                entity_type=mujoco.mjtObj.mjOBJ_BODY,
+            )
+        child_T_connection = inverse_frame(drive.connection_T_child_expression.to_np())
+        joint_names = drive.single_axis_joint_names
+        for degree_of_freedom, (joint_type, axis) in self._drive_joint_axes(
+            drive
+        ).items():
+            child_body_spec.add_joint(
+                name=joint_names[degree_of_freedom],
+                type=joint_type,
+                axis=(child_T_connection[:3, :3] @ axis).tolist(),
+                pos=child_T_connection[:3, 3].tolist(),
+            )
+
     def _build_actuator(self, actuator: Actuator):
         actuator_props = MujocoActuatorConverter.convert(actuator)
-        dof_names = actuator_props.pop("dof_names")
-        assert len(dof_names) == 1, "Actuator must be associated with exactly one DOF."
-        actuator_props.update(self._transmission_for_degree_of_freedom(dof_names[0]))
+        actuator_props.pop("dof_names")
+        [degree_of_freedom] = actuator.dofs
+        actuator_props.update(
+            self._transmission_for_degree_of_freedom(degree_of_freedom)
+        )
         actuator_name = actuator.name.name
         actuator_spec = self.spec.add_actuator(**actuator_props)
         if actuator_spec is None:
@@ -2268,22 +2397,32 @@ class MujocoBuilder(MultiSimBuilder):
                 action="add",
             )
 
-    def _transmission_for_degree_of_freedom(self, dof_name: str) -> Dict[str, Any]:
+    def _transmission_for_degree_of_freedom(
+        self, degree_of_freedom: DegreeOfFreedom
+    ) -> Dict[str, Any]:
         """
-        :param dof_name: The name of the degree of freedom an actuator drives.
+        :param degree_of_freedom: The degree of freedom an actuator drives.
         :return: The actuator's transmission properties: the joint moving that degree
-            of freedom, or the tendon of that name if no joint does.
+            of freedom, or the tendon of its name if no joint does.
         """
         connection = next(
             (
                 conn
                 for conn in self.world.connections
-                if dof_name in [dof.name.name for dof in conn.dofs]
+                if any(dof.id == degree_of_freedom.id for dof in conn.dofs)
             ),
             None,
         )
         if connection is None:
-            return {"target": dof_name, "trntype": mujoco.mjtTrn.mjTRN_TENDON}
+            return {
+                "target": degree_of_freedom.name.name,
+                "trntype": mujoco.mjtTrn.mjTRN_TENDON,
+            }
+        if isinstance(connection, OmniDrive):
+            return {
+                "target": connection.single_axis_joint_names[degree_of_freedom],
+                "trntype": mujoco.mjtTrn.mjTRN_JOINT,
+            }
         connection_name = connection.name.name
         joint_spec = self._find_entity(
             entity_type=mujoco.mjtObj.mjOBJ_JOINT, entity_name=connection_name
@@ -3282,27 +3421,22 @@ class MujocoSynchronizer(MultiSimSynchronizer):
                             state_index,
                         )
                     case ActiveConnection1DOF():
-                        actuator_name = actuator_name_by_dof_id.get(
-                            connection.raw_dof.id
+                        # An actuated joint is commanded by
+                        # :meth:`_command_actuators` instead.
+                        if connection.raw_dof.id in actuator_name_by_dof_id:
+                            continue
+                        self._write_1dof_to_qpos(
+                            connection,
+                            joint_backed.qpos_address,
+                            positions,
+                            previous_positions,
+                            state_index,
                         )
-                        if actuator_name is None:
-                            self._write_1dof_to_qpos(
-                                connection,
-                                joint_backed.qpos_address,
-                                positions,
-                                previous_positions,
-                                state_index,
-                            )
-                        else:
-                            self._command_actuator(
-                                connection,
-                                actuator_name,
-                                positions,
-                                previous_positions,
-                                state_index,
-                            )
                     case _:
                         self._warn_unsupported_connection("world→sim", connection)
+            self._command_actuators(
+                actuator_name_by_dof_id, positions, previous_positions, state_index
+            )
 
     def _actuator_names_by_degree_of_freedom(self) -> Dict[Any, str]:
         """
@@ -3315,33 +3449,33 @@ class MujocoSynchronizer(MultiSimSynchronizer):
             for degree_of_freedom in actuator.dofs
         }
 
-    def _command_actuator(
+    def _command_actuators(
         self,
-        connection: ActiveConnection1DOF,
-        actuator_name: str,
+        actuator_name_by_dof_id: Dict[Any, str],
         positions: numpy.ndarray,
         previous_positions: numpy.ndarray,
         state_index: Dict[Any, int],
     ) -> None:
         """
-        Hand the world's position for ``connection`` to its actuator as a set point,
-        instead of writing it into ``qpos``: the joint then reaches it through the
-        actuator's own dynamics, as fast and as hard as its gains allow, rather than
-        being teleported there. No-op if the value is unchanged.
+        Hand the world's position of every actuated degree of freedom whose position
+        changed to its actuator as a set point, instead of writing it into ``qpos``:
+        the joint then reaches it through the actuator's own dynamics, as fast and as
+        hard as its gains allow, rather than being teleported there.
 
-        :param connection: The actuated 1DoF connection whose value is commanded.
-        :param actuator_name: Name of the actuator driving it.
+        :param actuator_name_by_dof_id: The name of the actuator driving each actuated
+            degree of freedom, by the degree of freedom's id.
         :param positions: The current ``world.state`` positions.
         :param previous_positions: The positions as of the last notification,
             compared against ``positions`` to decide whether to command.
         :param state_index: Maps a DoF id to its column in those two arrays.
         """
-        column = state_index[connection.raw_dof.id]
-        if positions[column] == previous_positions[column]:
-            return
-        self.simulator.set_actuator_control(
-            actuator_name=actuator_name, value=float(positions[column])
-        )
+        for degree_of_freedom_id, actuator_name in actuator_name_by_dof_id.items():
+            column = state_index[degree_of_freedom_id]
+            if positions[column] == previous_positions[column]:
+                continue
+            self.simulator.set_actuator_control(
+                actuator_name=actuator_name, value=float(positions[column])
+            )
 
     def command_actuators_from_world_state(self) -> None:
         """
@@ -3408,13 +3542,25 @@ class MujocoSynchronizer(MultiSimSynchronizer):
 
     def _sim_to_world(self) -> None:
         """
-        Copy ``_mj_data.qpos`` back into ``world.state``.
+        Copy ``_mj_data.qpos`` back into ``world.state``, at most ``sync_rate_hz``
+        times per wall-clock second (see :meth:`read_simulation_into_world`).
 
         Called by :meth:`physics_simulators.base_simulator.BaseSimulator.step`
-        on the physics thread after every ``mj_step``. Throttled to
-        ``sync_rate_hz`` wall-clock Hz. The sibling state-change callback is
-        paused across the write so our own ``notify_state_change`` does not
-        echo back into :meth:`_on_state_change`.
+        on the physics thread after every ``mj_step``.
+        """
+        if self.sync_rate_hz <= 0:
+            return
+        now = time.time()
+        if now - self._last_sync_time < 1.0 / self.sync_rate_hz:
+            return
+        self._last_sync_time = now
+        self.read_simulation_into_world()
+
+    def read_simulation_into_world(self) -> None:
+        """
+        Copy ``_mj_data.qpos`` back into ``world.state`` and announce the new state.
+        The sibling state-change callback is paused across the write so our own
+        ``notify_state_change`` does not echo back into :meth:`_on_state_change`.
 
         The whole pull runs under ``World._world_lock``. ``WorldState`` takes
         that lock per accessor, so holding it only for the individual writes
@@ -3428,13 +3574,6 @@ class MujocoSynchronizer(MultiSimSynchronizer):
         simulator's ``_model_lock`` -- so acquiring it here preserves that
         order.
         """
-        if self.sync_rate_hz <= 0:
-            return
-        now = time.time()
-        if now - self._last_sync_time < 1.0 / self.sync_rate_hz:
-            return
-        self._last_sync_time = now
-
         with self._world._world_lock:
             self._state_callback.pause()
             try:
@@ -3680,8 +3819,8 @@ class MujocoSim(MultiSim):
         """
         Start the simulation without a physics thread: the physics advances only in
         :meth:`step_simulation`, so a controller can drive the world between steps, in
-        lockstep with the physics, and reads the world back after every step rather
-        than at the synchronizer's throttled rate.
+        lockstep with the physics, and reads the world back once at the end of every
+        step rather than at the synchronizer's throttled rate.
 
         Every servo is handed the position its joint currently holds in the world, so
         nothing rushes towards zero the moment the physics starts.
@@ -3690,14 +3829,15 @@ class MujocoSim(MultiSim):
         """
         if self.simulator.state == SimulatorState.RUNNING:
             raise SimulationAlreadyRunningError(self.world.root.name.name)
-        self.synchronizer.sync_rate_hz = MujocoSynchronizer.UNTHROTTLED_SYNC_RATE_HZ
+        self.synchronizer.sync_rate_hz = 0
         self.simulator.start(simulate_in_thread=False, render_in_thread=False)
         self.synchronizer.command_actuators_from_world_state()
 
     def step_simulation(self, duration: timedelta) -> None:
         """
         Advance the physics of a simulation started with
-        :meth:`start_stepped_simulation` and refresh the viewer.
+        :meth:`start_stepped_simulation`, read the world back from where the physics
+        left it and refresh the viewer.
 
         :param duration: How much simulated time to advance.
         :raises SimulationNotStartedError: If the simulation is not running.
@@ -3706,4 +3846,5 @@ class MujocoSim(MultiSim):
             raise SimulationNotStartedError(self.world.root.name.name)
         for _ in range(round(duration.total_seconds() / self.simulator.step_size)):
             self.simulator.step()
+        self.synchronizer.read_simulation_into_world()
         self.simulator.render()

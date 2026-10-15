@@ -94,3 +94,24 @@ class JointServo:
     """
     The joint's own inertia and friction, felt on top of the servo's torque.
     """
+
+
+@dataclass
+class DriveServos:
+    """
+    What a mobile base declares for its drive to be moved across the floor by position
+    servos in a physical simulation: one servo on each of the drive's x and y, and one
+    on its yaw.
+    """
+
+    translation_gains: ServoGains
+    """
+    How hard the servos on x and y pull the base towards its commanded position, in
+    newton per metre.
+    """
+
+    rotation_gains: ServoGains
+    """
+    How hard the servo on yaw turns the base towards its commanded heading, in newton
+    metre per radian.
+    """

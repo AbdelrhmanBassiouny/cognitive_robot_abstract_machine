@@ -5,6 +5,7 @@ coraplex plan.
 RoboCasa composes the kitchen, samples the object to move and says where its own robot
 starts. The PR2 is spawned there and given a transport whose standing poses and grasps
 are left open; coraplex grounds them by trying candidates against a copy of the world.
+The PR2 lets go of the object above the sink, and RoboCasa's physics lets it fall in.
 Whether the task succeeded is decided by RoboCasa's own check.
 
 Run with (the ``experiments`` package must be importable)::
@@ -58,7 +59,11 @@ from semantic_digital_twin.datastructures.definitions import (
 from semantic_digital_twin.grasping.grasp_candidates import HasGraspCandidates
 from semantic_digital_twin.robots.pr2 import PR2
 from semantic_digital_twin.semantic_annotations.semantic_annotations import Floor
-from semantic_digital_twin.spatial_types.spatial_types import Point3, Pose
+from semantic_digital_twin.spatial_types.spatial_types import (
+    HomogeneousTransformationMatrix,
+    Point3,
+    Pose,
+)
 from semantic_digital_twin.world_description.connections import OmniDrive
 
 if TYPE_CHECKING:
@@ -228,14 +233,26 @@ class CounterToSinkEpisode:
             if annotation.root is body
         )
 
-    def placement_pose(self, clearance: float = 0.01) -> Pose:
+    @property
+    def target_object_released(self) -> bool:
         """
-        :param clearance: How far above the bottom of the sink the target object is let
-            go of.
-        :return: Where the target object is put down: centred over the bottom of the
-            first basin of the sink, oriented as it stands now.
+        Whether the target object no longer moves with the robot.
         """
-        bottom_corner, x_corner, y_corner, _ = next(
+        return (
+            self.target_object.root
+            not in self.task.world.get_kinematic_structure_entities_of_branch(
+                self.robot.root
+            )
+        )
+
+    def placement_pose(self, drop_height: float = 0.1) -> Pose:
+        """
+        :param drop_height: How far above the rim of the sink the lowest point of the
+            target object is let go of.
+        :return: Where the target object is let go of: centred over the first basin of
+            the sink, oriented as it stands now.
+        """
+        _, x_corner, y_corner, rim_corner = next(
             iter(self.environment.sink.get_int_sites(relative=False).values())
         )
         basin_center = (x_corner + y_corner) / 2
@@ -252,14 +269,14 @@ class CounterToSinkEpisode:
             position=Point3(
                 basin_center[0],
                 basin_center[1],
-                bottom_corner[2] + height_above_lowest_point + clearance,
+                rim_corner[2] + height_above_lowest_point + drop_height,
             ),
             orientation=object_pose.quaternion,
             reference_frame=world.root,
         )
 
     def perform(
-        self, sampling_seed: int = 42, collision_avoidance: bool = False
+        self, sampling_seed: int = 42, collision_avoidance: bool = True
     ) -> CounterToSinkOutcome:
         """
         Have the PR2 carry the target object from the counter into the sink, standing
@@ -280,7 +297,51 @@ class CounterToSinkEpisode:
             collision_avoidance=collision_avoidance,
         ):
             plan.perform()
+        self.let_the_target_object_fall()
         return self.outcome()
+
+    def let_the_target_object_fall(self, settling_time: float = 2.0) -> None:
+        """
+        Let RoboCasa's physics move the released target object until it comes to rest,
+        and put it where it landed. An object the robot still holds stays where it is.
+
+        :param settling_time: How many seconds of simulated time the object falls for.
+        """
+        if not self.target_object_released:
+            return
+        joint = self.environment.objects[RoboCasaObjectName.TARGET].joints[0]
+        self.copy_target_object_pose_into_robocasa()
+        simulation = self.environment.sim
+        simulation.data.set_joint_qvel(joint, np.zeros(6))
+        for _ in range(round(settling_time / simulation.model.opt.timestep)):
+            simulation.step()
+        x, y, z, quaternion_w, quaternion_x, quaternion_y, quaternion_z = (
+            simulation.data.get_joint_qpos(joint)
+        )
+        self.target_object.root.parent_connection.origin = (
+            HomogeneousTransformationMatrix.from_xyz_quaternion(
+                x,
+                y,
+                z,
+                quaternion_x,
+                quaternion_y,
+                quaternion_z,
+                quaternion_w,
+                reference_frame=self.task.world.root,
+            )
+        )
+
+    def copy_target_object_pose_into_robocasa(self) -> None:
+        """
+        Put the target object in RoboCasa's simulation where it stands in the world.
+        """
+        world_T_object = self.target_object.root.global_pose
+        x, y, z, w = world_T_object.quaternion.to_np()
+        self.environment.sim.data.set_joint_qpos(
+            self.environment.objects[RoboCasaObjectName.TARGET].joints[0],
+            np.concatenate([world_T_object.to_np()[:3, 3], [w, x, y, z]]),
+        )
+        self.environment.sim.forward()
 
     def outcome(self) -> CounterToSinkOutcome:
         """
@@ -289,15 +350,7 @@ class CounterToSinkEpisode:
 
         :return: How the episode stands.
         """
-        body = self.target_object.root
-        target = self.environment.objects[RoboCasaObjectName.TARGET]
-        world_T_object = body.global_pose
-        x, y, z, w = world_T_object.quaternion.to_np()
-        self.environment.sim.data.set_joint_qpos(
-            target.joints[0],
-            np.concatenate([world_T_object.to_np()[:3, 3], [w, x, y, z]]),
-        )
-        self.environment.sim.forward()
+        self.copy_target_object_pose_into_robocasa()
         return CounterToSinkOutcome(
             object_in_sink=bool(
                 object_utils.obj_inside_of(
@@ -307,10 +360,7 @@ class CounterToSinkEpisode:
                     partial_check=True,
                 )
             ),
-            object_released=body
-            not in self.task.world.get_kinematic_structure_entities_of_branch(
-                self.robot.root
-            ),
+            object_released=self.target_object_released,
         )
 
 

@@ -23,6 +23,7 @@ from giskardpy.qp.exceptions import EmptyProblemException
 from giskardpy.qp.qp_controller import QPController
 from giskardpy.qp.qp_controller_config import QPControllerConfig
 from krrood.symbolic_math.symbolic_math import FloatVariable
+from semantic_digital_twin.world_description.connections import OmniDrive
 from semantic_digital_twin.world_description.world_entity import PositionServo
 from semantic_digital_twin.world_description.world_state_trajectory_plotter import (
     WorldStateTrajectoryPlotter,
@@ -177,12 +178,7 @@ class SteppedSimulationPacer(Pacer):
         joints have got there. A joint held up by something it has run into counts as
         stopped too.
         """
-        joint_names = [
-            dof.name.name
-            for actuator in self.simulation.world.actuators
-            if isinstance(actuator, PositionServo)
-            for dof in actuator.dofs
-        ]
+        joint_names = self._servoed_joint_names()
         if not joint_names:
             return
         simulator = self.simulation.simulator
@@ -204,6 +200,26 @@ class SteppedSimulationPacer(Pacer):
             "The robot was still moving after %s of simulated time.",
             self.standstill_time_limit,
         )
+
+    def _servoed_joint_names(self) -> list[str]:
+        """
+        :return: The name of the simulated joint each position servo moves: the joint
+            of the drive axis for a degree of freedom of an omnidirectional drive, and
+            the joint named after the degree of freedom otherwise.
+        """
+        world = self.simulation.world
+        drive_joint_names = {
+            degree_of_freedom.id: joint_name
+            for connection in world.connections
+            if isinstance(connection, OmniDrive)
+            for degree_of_freedom, joint_name in connection.single_axis_joint_names.items()
+        }
+        return [
+            drive_joint_names.get(degree_of_freedom.id, degree_of_freedom.name.name)
+            for actuator in world.actuators
+            if isinstance(actuator, PositionServo)
+            for degree_of_freedom in actuator.dofs
+        ]
 
 
 @dataclass

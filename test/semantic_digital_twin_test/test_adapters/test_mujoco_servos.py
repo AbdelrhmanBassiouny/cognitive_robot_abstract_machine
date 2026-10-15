@@ -164,6 +164,19 @@ def test_a_position_servo_becomes_a_servo_actuator_on_the_degree_of_freedoms_joi
     assert list(servo.forcerange) == [-2.0, 2.0]
 
 
+def test_the_servo_of_a_joint_without_position_limits_leaves_its_control_unclamped():
+    degree_of_freedom = DegreeOfFreedom(name=PrefixedName("continuous_hinge"))
+    servo = PositionServo(
+        name=PrefixedName("continuous_hinge_servo"),
+        gains=ServoGains(stiffness=100.0, damping=10.0, torque_limit=5.0),
+    )
+    servo.add_dof(degree_of_freedom)
+
+    actuator = MujocoActuator.create_servo(servo)
+
+    assert actuator.control_limited == mujoco.mjtLimited.mjLIMITED_FALSE
+
+
 def test_a_degree_of_freedom_without_a_servo_gets_no_actuator(tmp_path):
     pendulum = _pendulum_world()
 

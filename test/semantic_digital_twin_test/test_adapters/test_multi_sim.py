@@ -3,7 +3,7 @@ import os
 from datetime import timedelta
 import threading
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import mujoco
 import pytest
@@ -13,6 +13,7 @@ from PIL import Image
 from trimesh.visual.material import SimpleMaterial
 
 from semantic_digital_twin.adapters.mesh import STLParser
+from semantic_digital_twin.callbacks.callback import StateChangeCallback
 from semantic_digital_twin.adapters.urdf import URDFParser
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.exceptions import ParsingError, SimulationNotStartedError
@@ -42,6 +43,7 @@ from semantic_digital_twin.world_description.geometry import (
     Mesh,
     Texture,
 )
+from semantic_digital_twin.world_description.inertial_properties import Inertial
 from semantic_digital_twin.world_description.shape_collection import ShapeCollection
 from semantic_digital_twin.world_description.world_entity import (
     Body,
@@ -533,9 +535,11 @@ def test_builder_writes_a_geoms_contact_bitmasks(tmp_path):
         root = Body(name=PrefixedName("root"))
         world.add_body(root)
         box_shape = Box(scale=Scale(1, 1, 1))
-        box_shape.add_simulator_property(MujocoGeom(
-            contact_type=ContactCategories(2), contact_affinity=ContactCategories(4)
-        ))
+        box_shape.add_simulator_property(
+            MujocoGeom(
+                contact_type=ContactCategories(2), contact_affinity=ContactCategories(4)
+            )
+        )
         link = Body(
             name=PrefixedName("link"),
             visual=ShapeCollection([box_shape]),
@@ -587,6 +591,33 @@ def test_contact_declarations_and_gravity_compensation_survive_a_round_trip(tmp_
     assert parsed_shape.get_simulator_property_of_type(ContactParameters) == contact
 
 
+def test_a_simulated_body_weighs_what_its_inertial_says_not_what_its_shapes_would():
+    """
+    A body's mass comes from its inertial; its shapes only stand in for a body that has
+    none.
+    """
+    world = World()
+    with world.modify_world():
+        root = Body(name=PrefixedName("root"))
+        world.add_body(root)
+        link = Body(
+            name=PrefixedName("link"),
+            collision=ShapeCollection([Box(scale=Scale(1, 1, 1))]),
+            inertial=Inertial(mass=2.0),
+        )
+        world.add_kinematic_structure_entity(link)
+        world.add_connection(FixedConnection(parent=root, child=link))
+
+    simulation = MujocoSim(world=world, headless=True)
+    simulation.start_stepped_simulation()
+    try:
+        simulated_mass = simulation.simulator._mj_model.body("link").mass[0]
+    finally:
+        simulation.stop_simulation()
+
+    assert simulated_mass == pytest.approx(link.inertial.mass)
+
+
 def test_builder_keeps_a_visual_only_geom_contactless_despite_its_bitmasks(tmp_path):
     """
     A shape that is visual only never collides, whatever ``MujocoGeom`` bitmasks it
@@ -598,9 +629,11 @@ def test_builder_keeps_a_visual_only_geom_contactless_despite_its_bitmasks(tmp_p
         root = Body(name=PrefixedName("root"))
         world.add_body(root)
         box_shape = Box(scale=Scale(1, 1, 1))
-        box_shape.add_simulator_property(MujocoGeom(
-            contact_type=ContactCategories(2), contact_affinity=ContactCategories(4)
-        ))
+        box_shape.add_simulator_property(
+            MujocoGeom(
+                contact_type=ContactCategories(2), contact_affinity=ContactCategories(4)
+            )
+        )
         link = Body(name=PrefixedName("link"), visual=ShapeCollection([box_shape]))
         world.add_kinematic_structure_entity(link)
         world.add_connection(FixedConnection(parent=root, child=link))
@@ -1218,6 +1251,117 @@ def test_thicken_if_near_planar_regenerates_instead_of_reusing_a_stale_file(tmp_
     assert len(trimesh.load(thickened_path, force="mesh").vertices) == 8
 
 
+# %% meshes sharing a file name
+
+
+def _write_box_mesh(directory, file_name: str, edge_length: float) -> str:
+    """
+    Writes a cube mesh into its own directory.
+
+    :param directory: The directory to write the mesh into.
+    :param file_name: The mesh file's name; its extension picks the format.
+    :param edge_length: The length of the cube's edges, in metres.
+    :return: The path of the written mesh.
+    """
+    directory.mkdir(parents=True, exist_ok=True)
+    mesh_file = str(directory / file_name)
+    trimesh.creation.box(extents=(edge_length,) * 3).export(mesh_file)
+    return mesh_file
+
+
+def _world_with_meshes(visual_file: str, collision_file: str) -> World:
+    """
+    :return: A world with one body showing one mesh and colliding with another.
+    """
+    world = World()
+    with world.modify_world():
+        root = Body(name=PrefixedName("root"))
+        world.add_body(root)
+        body = Body(
+            name=PrefixedName("body"),
+            visual=ShapeCollection([Mesh(filename=visual_file, scale=Scale(1, 1, 1))]),
+            collision=ShapeCollection(
+                [Mesh(filename=collision_file, scale=Scale(1, 1, 1))]
+            ),
+        )
+        world.add_kinematic_structure_entity(body)
+        world.add_connection(FixedConnection(parent=root, child=body))
+    return world
+
+
+def _compiled_mesh_extents(builder: MujocoBuilder) -> list[list[float]]:
+    """
+    :return: The extents of the mesh file each geom of the built body compiles from, in
+        the order the geoms were added.
+    """
+    body = next(body for body in builder.spec.bodies if body.name == "body")
+    return [
+        list(trimesh.load(builder.spec.mesh(geom.meshname).file, force="mesh").extents)
+        for geom in body.geoms
+    ]
+
+
+def test_a_visual_and_a_collision_mesh_sharing_a_file_stem_each_compile_from_their_own_file(
+    tmp_path,
+):
+    world = _world_with_meshes(
+        visual_file=_write_box_mesh(tmp_path / "visual", "base.obj", edge_length=1.0),
+        collision_file=_write_box_mesh(
+            tmp_path / "collision", "base.stl", edge_length=0.1
+        ),
+    )
+
+    builder = MujocoBuilder()
+    builder.build_world(world=world, file_path=str(tmp_path / "scene.xml"))
+
+    assert _compiled_mesh_extents(builder) == [
+        pytest.approx([1.0] * 3),
+        pytest.approx([0.1] * 3),
+    ]
+
+
+def test_two_collada_meshes_sharing_a_file_name_each_compile_from_their_own_file(
+    tmp_path,
+):
+    world = _world_with_meshes(
+        visual_file=_write_box_mesh(tmp_path / "visual", "base.dae", edge_length=1.0),
+        collision_file=_write_box_mesh(
+            tmp_path / "collision", "base.dae", edge_length=0.1
+        ),
+    )
+
+    builder = MujocoBuilder()
+    builder.build_world(world=world, file_path=str(tmp_path / "scene.xml"))
+
+    assert _compiled_mesh_extents(builder) == [
+        pytest.approx([1.0] * 3),
+        pytest.approx([0.1] * 3),
+    ]
+
+
+def test_a_collada_mesh_converted_by_an_earlier_build_is_not_reused_for_another_file_of_the_same_name(
+    tmp_path,
+):
+    """
+    Two robots built into the same asset folder, one after the other, may both ship a
+    Collada mesh called ``base.dae``.
+    """
+    large_base = _write_box_mesh(tmp_path / "large", "base.dae", edge_length=1.0)
+    small_base = _write_box_mesh(tmp_path / "small", "base.dae", edge_length=0.1)
+    MujocoBuilder().build_world(
+        world=_world_with_meshes(visual_file=large_base, collision_file=large_base),
+        file_path=str(tmp_path / "first_scene.xml"),
+    )
+
+    builder = MujocoBuilder()
+    builder.build_world(
+        world=_world_with_meshes(visual_file=small_base, collision_file=small_base),
+        file_path=str(tmp_path / "second_scene.xml"),
+    )
+
+    assert _compiled_mesh_extents(builder) == [pytest.approx([0.1] * 3)] * 2
+
+
 @dataclass
 class BoxOnPlaneWorld:
     """
@@ -1618,3 +1762,53 @@ def test_a_stepped_simulation_advances_exactly_the_requested_time(falling_box_wo
 
     fallen = 0.5 * 9.81 * duration.total_seconds() ** 2
     assert height == pytest.approx(1.0 - fallen, abs=0.01)
+
+
+@dataclass(eq=False)
+class StateChangeCounter(StateChangeCallback):
+    """
+    Counts how often the world announces a new state.
+    """
+
+    notifications: int = field(default=0, kw_only=True)
+    """
+    How many state changes the world announced so far.
+    """
+
+    def on_state_change(self, **kwargs) -> None:
+        self.notifications += 1
+
+
+def test_a_stepped_simulation_announces_the_new_state_once_per_request(
+    falling_box_world,
+):
+    """
+    A controller reads the world only between two requests, so the physics steps in
+    between need not be announced one by one.
+    """
+    multi_sim = MujocoSim(world=falling_box_world, headless=headless)
+    multi_sim.start_stepped_simulation()
+    counter = StateChangeCounter(_world=falling_box_world)
+    try:
+        multi_sim.step_simulation(timedelta(milliseconds=100))
+    finally:
+        counter.stop()
+        stop_multisim_if_running(multi_sim)
+
+    assert counter.notifications == 1
+
+
+def test_a_stepped_simulation_leaves_the_world_where_the_physics_put_it(
+    falling_box_world,
+):
+    multi_sim = MujocoSim(world=falling_box_world, headless=headless)
+    box = falling_box_world.get_body_by_name("box")
+
+    multi_sim.start_stepped_simulation()
+    try:
+        multi_sim.step_simulation(timedelta(milliseconds=500))
+        simulated = multi_sim.simulator.get_body_position(body_name="box").result
+    finally:
+        stop_multisim_if_running(multi_sim)
+
+    assert list(box.global_pose.to_np()[:3, 3]) == pytest.approx(list(simulated))

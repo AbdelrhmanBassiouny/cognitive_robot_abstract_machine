@@ -24,6 +24,8 @@ from giskardpy.motion_statechart.motion_statechart import MotionStatechart
 from giskardpy.qp.qp_controller_config import QPControllerConfig
 from semantic_digital_twin.adapters.multi_sim import MujocoSim
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
+from semantic_digital_twin.robots.pr2 import PR2
+from semantic_digital_twin.specifications.robots import RobotSpecification
 from semantic_digital_twin.spatial_types.spatial_types import (
     HomogeneousTransformationMatrix,
 )
@@ -314,3 +316,32 @@ def test_a_simulation_without_servos_is_not_stepped_at_all():
     settling_pacer(simulation).wait_for_standstill()
 
     assert simulation.steps == 0
+
+
+@pytest.mark.skipif(
+    not runs_in_continuous_integration(), reason="MuJoCo tests only run in CI"
+)
+def test_waiting_covers_the_servos_moving_a_robots_base():
+    """
+    A base driven to a new pose is waited for like any other servoed joint, so the robot
+    stands where it was sent once the wait is over.
+    """
+    world = World()
+    with world.modify_world():
+        world.add_kinematic_structure_entity(Body(name=PrefixedName("floor")))
+    robot = RobotSpecification(PR2).spawn(world)
+    drive = robot.drive
+
+    simulation = MujocoSim(world=world, headless=True)
+    simulation.start_stepped_simulation()
+    try:
+        world.state[drive.x.id].position = 0.3
+        world.notify_state_change()
+        settling_pacer(simulation).wait_for_standstill()
+        reached = simulation.simulator.get_body_position(
+            body_name=robot.root.name.name
+        ).result[0]
+    finally:
+        simulation.stop_simulation()
+
+    assert reached == pytest.approx(0.3, abs=0.01)

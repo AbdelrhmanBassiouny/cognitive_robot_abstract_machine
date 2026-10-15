@@ -35,6 +35,21 @@ def test_the_pr2_starts_clear_of_the_kitchen(episode):
     assert not episode.robot.is_in_collision
 
 
+def test_the_pr2_drives_its_base_with_servos(episode):
+    """
+    A physical simulation moves the base of the PR2 only through the servos of its
+    drive.
+    """
+    drive = episode.robot.drive
+    driven = {
+        degree_of_freedom
+        for actuator in episode.task.world.actuators
+        for degree_of_freedom in actuator.dofs
+    }
+
+    assert {drive.x, drive.y, drive.yaw} <= driven
+
+
 # %% judging where the object is
 
 
@@ -44,10 +59,22 @@ def test_an_object_still_on_the_counter_is_not_in_the_sink(episode):
     )
 
 
-def test_an_object_put_down_at_the_placement_pose_is_in_the_sink(episode):
+def test_an_object_let_go_of_at_the_placement_pose_is_above_the_sink(episode):
     episode.target_object.root.parent_connection.origin = (
         episode.placement_pose().homogeneous_matrix
     )
+
+    assert episode.outcome() == CounterToSinkOutcome(
+        object_in_sink=False, object_released=True
+    )
+
+
+def test_an_object_let_go_of_at_the_placement_pose_falls_into_the_sink(episode):
+    episode.target_object.root.parent_connection.origin = (
+        episode.placement_pose().homogeneous_matrix
+    )
+
+    episode.let_the_target_object_fall()
 
     assert episode.outcome() == CounterToSinkOutcome(
         object_in_sink=True, object_released=True

@@ -957,6 +957,19 @@ class OmniDrive(WheeledDrive):
         return [self.x_velocity, self.y_velocity, self.yaw]
 
     @property
+    def single_axis_joint_names(self) -> dict[DegreeOfFreedom, str]:
+        """
+        The name of the joint moving each of x, y and yaw on its own, where the drive is
+        simulated as one joint per axis; named after the robot the drive moves and the
+        axis.
+        """
+        robot_name = self.name.prefix or self.name.name
+        return {
+            degree_of_freedom: f"{robot_name}_omni_drive_{degree_of_freedom.name.name}"
+            for degree_of_freedom in (self.x, self.y, self.yaw)
+        }
+
+    @property
     def passive_dofs(self) -> list[DegreeOfFreedom]:
         return [self.x, self.y, self.roll, self.pitch]
 

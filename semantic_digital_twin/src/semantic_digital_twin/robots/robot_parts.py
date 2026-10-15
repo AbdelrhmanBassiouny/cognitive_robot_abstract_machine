@@ -94,7 +94,11 @@ from semantic_digital_twin.world_description.geometry import (
     VolumetricBoundingBox,
     Scale,
 )
-from semantic_digital_twin.world_description.connection_properties import JointServo
+from semantic_digital_twin.world_description.connection_properties import (
+    DriveServos,
+    JointServo,
+    ServoGains,
+)
 from semantic_digital_twin.world_description.world_entity import (
     Body,
     GravityCompensation,
@@ -420,18 +424,32 @@ class AbstractRobotPart(HasRootBody, HasRobotParts, ABC):
         :param servo: What drives it.
         """
         connection.dynamics = servo.dynamics
-        if any(
-            connection.raw_dof in actuator.dofs for actuator in self._world.actuators
-        ):
-            return
-        actuator = PositionServo(
-            name=PrefixedName(
+        self._declare_position_servo(
+            connection.raw_dof,
+            servo.gains,
+            PrefixedName(
                 f"{connection.raw_dof.name.name}_servo",
                 prefix=connection.raw_dof.name.prefix,
             ),
-            gains=servo.gains,
         )
-        actuator.add_dof(connection.raw_dof)
+
+    def _declare_position_servo(
+        self, degree_of_freedom: DegreeOfFreedom, gains: ServoGains, name: PrefixedName
+    ) -> None:
+        """
+        Drive a degree of freedom with a position servo in a physical simulation, unless
+        a servo drives it already.
+
+        :param degree_of_freedom: The degree of freedom to drive.
+        :param gains: How hard the servo pulls it towards its commanded position.
+        :param name: The name of the servo.
+        """
+        if any(
+            degree_of_freedom in actuator.dofs for actuator in self._world.actuators
+        ):
+            return
+        actuator = PositionServo(name=name, gains=gains)
+        actuator.add_dof(degree_of_freedom)
         self._world.add_actuator(actuator)
 
     def _compensate_gravity(self) -> None:
@@ -877,6 +895,44 @@ class MobileBase(
         """
         The axis of this base that points where the robot faces.
         """
+
+    @property
+    def drive_servos(self) -> DriveServos | None:
+        """
+        The servos moving this base across the floor in a physical simulation, or
+        ``None`` if the base is moved kinematically there.
+        """
+        return None
+
+    def _setup_servos(self) -> None:
+        drive = self._robot.drive
+        if drive is None:
+            return
+        self.declare_drive_servos(drive)
+
+    def declare_drive_servos(self, drive: WheeledDrive) -> None:
+        """
+        Drive the x, y and yaw of the drive attaching this base to its ``odom`` with
+        the servos of :attr:`drive_servos`, if it has any.
+
+        :param drive: The drive attaching this base's robot to its ``odom``.
+        """
+        drive_servos = self.drive_servos
+        if drive_servos is None:
+            return
+        for degree_of_freedom, gains in (
+            (drive.x, drive_servos.translation_gains),
+            (drive.y, drive_servos.translation_gains),
+            (drive.yaw, drive_servos.rotation_gains),
+        ):
+            self._declare_position_servo(
+                degree_of_freedom,
+                gains,
+                PrefixedName(
+                    f"{drive.name.name}_{degree_of_freedom.name.name}_servo",
+                    prefix=degree_of_freedom.name.prefix,
+                ),
+            )
 
     @property
     def base_R_front(self) -> RotationMatrix:

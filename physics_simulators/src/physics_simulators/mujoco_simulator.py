@@ -112,8 +112,9 @@ class MujocoSimulator(BaseSimulator):
         root = ET.parse(file_path).getroot()
         self._name = root.attrib.get("model", self.name)
         self._mj_spec: mujoco.MjSpec = mujoco.MjSpec.from_file(filename=self._file_path)
+        # A body's own inertial wins; its geoms only stand in for one it lacks.
         self._mj_spec.compiler.inertiafromgeom = self.config.get(
-            "inertiafromgeom", mujoco.mjtInertiaFromGeom.mjINERTIAFROMGEOM_TRUE
+            "inertiafromgeom", mujoco.mjtInertiaFromGeom.mjINERTIAFROMGEOM_AUTO
         )
         self._mj_spec.option.integrator = self.config.get(
             "integrator", mujoco.mjtIntegrator.mjINT_RK4
