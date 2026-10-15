@@ -25,7 +25,7 @@ from cramera.live.visualization import StatechartPublishing
 @dataclass
 class MotionExecution:
     """
-    A plan and the statechart running it, observed by one visualization extension.
+    A plan and the statechart running it, observed by one statechart publishing.
     """
 
     plan: Sequence
@@ -50,12 +50,13 @@ class MotionExecution:
 
     publishing: StatechartPublishing
     """
-    The extension observing this plan's history.
+    The publishing observing this plan's history.
     """
 
     def compile(self) -> None:
         """
-        Tell the extension the statechart is about to run, as an executor does once it
+        Tell the publishing the statechart is about to run, as a
+        :class:`~cramera.live.visualization.LiveVisualization` does once its executor
         compiled it.
         """
         self.publishing.observe(self.chart)

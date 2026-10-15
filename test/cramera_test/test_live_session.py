@@ -44,17 +44,17 @@ class TestSessionOwnership:
     """
 
     def test_default_sessions_have_independent_bridges(self):
-        first = LiveVisualization(world=World())
-        second = LiveVisualization(world=World())
+        first = LiveVisualization()
+        second = LiveVisualization()
 
         assert first.bridge is not second.bridge
 
     def test_starting_twice_preserves_the_active_capture(self, session_dependencies):
-        session = LiveVisualization(world=World()).start()
+        session = LiveVisualization().start(World())
         recording = session.bridge.recording
         callback = session.state_sync
 
-        session.start()
+        session.start(World())
 
         assert session.bridge.recording is recording
         assert session.state_sync is callback
@@ -64,7 +64,8 @@ class TestSessionOwnership:
         self, session_dependencies
     ):
         server, finalize, _, unregister = session_dependencies
-        session = LiveVisualization(world=World()).start()
+        world = World()
+        session = LiveVisualization().start(world)
         recording = session.bridge.recording
         callback = session.state_sync
 
@@ -73,12 +74,12 @@ class TestSessionOwnership:
         finalize.assert_called_once_with(session.bridge, recording)
         server.shutdown.assert_called_once_with()
         server.server_close.assert_called_once_with()
-        assert callback not in session.world.state.state_change_callbacks
+        assert callback not in world.state.state_change_callbacks
         unregister.assert_called_once()
 
     def test_stopping_twice_finalizes_only_once(self, session_dependencies):
         _, finalize, _, _ = session_dependencies
-        session = LiveVisualization(world=World()).start()
+        session = LiveVisualization().start(World())
 
         session.stop()
         session.stop()
@@ -89,11 +90,12 @@ class TestSessionOwnership:
         self, session_dependencies
     ):
         _, finalize, _, _ = session_dependencies
-        session = LiveVisualization(world=World()).start()
+        world = World()
+        session = LiveVisualization().start(world)
         previous = session.bridge.recording
         session.stop()
 
-        session.start()
+        session.start(world)
 
         assert session.bridge.recording is not previous
         assert session.bridge.recording.state is RecordingState.RECORDING
@@ -101,7 +103,7 @@ class TestSessionOwnership:
 
     def test_exit_callback_retains_its_original_capture(self, session_dependencies):
         _, finalize, register, _ = session_dependencies
-        session = LiveVisualization(world=World()).start()
+        session = LiveVisualization().start(World())
         recording = session.bridge.recording
         exit_callback, *arguments = register.call_args.args
 
@@ -121,13 +123,14 @@ class TestSessionOwnership:
             Mock(return_value=listener),
         )
         visualization.serve.side_effect = OSError("address in use")
-        session = LiveVisualization(world=World())
-        previous_callbacks = list(session.world.state.state_change_callbacks)
+        world = World()
+        session = LiveVisualization()
+        previous_callbacks = list(world.state.state_change_callbacks)
 
         with pytest.raises(OSError):
-            session.start()
+            session.start(world)
 
-        assert session.world.state.state_change_callbacks == previous_callbacks
+        assert world.state.state_change_callbacks == previous_callbacks
         assert session.bridge.recording is None
         assert session.state_sync is None
         assert session.model_sync is None
@@ -135,6 +138,6 @@ class TestSessionOwnership:
         unregister.assert_called_once()
         visualization.serve.side_effect = None
 
-        session.start()
+        session.start(world)
 
         assert session.bridge.live_server is server

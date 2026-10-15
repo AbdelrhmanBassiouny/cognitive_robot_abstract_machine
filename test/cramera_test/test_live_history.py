@@ -107,15 +107,14 @@ class TestMotionHistoryPublication:
         assert motion_execution.bridge.chart_state == published
 
     def test_visualization_stop_removes_history_subscriptions(
-        self, world: World, motion_execution: MotionExecution
+        self, motion_execution: MotionExecution
     ) -> None:
         """
         Stopping a viewer also detaches histories of unfinished plans.
         """
-        visualization = LiveVisualization(world=world, bridge=motion_execution.bridge)
-        publishing = visualization.executor_extension()
-        publishing.observe(motion_execution.chart)
-        assert motion_execution.chart.history.observers == [publishing]
+        visualization = LiveVisualization(bridge=motion_execution.bridge)
+        visualization.publishing.observe(motion_execution.chart)
+        assert motion_execution.chart.history.observers == [visualization.publishing]
 
         visualization.stop()
         visualization.stop()
