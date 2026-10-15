@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from typing_extensions import TYPE_CHECKING
+
 from cramph.composites import Parallel
 from cramph.node import StatechartNode
 from coraplex.robot_plans.actions.base import Action
@@ -12,25 +14,8 @@ from giskardpy.motion_statechart.tasks.align_planes import AlignPlanes
 from semantic_digital_twin.robots.robot_parts import Arm
 from semantic_digital_twin.spatial_types.spatial_types import Vector3
 
-# %% which way a held object's upright axis points in its gripper
-
-
-@dataclass
-class HeldObjectAxis:
-    """
-    The z-axis of an object an arm holds, as seen from the gripper holding it.
-    """
-
-    arm: Arm
-    """
-    The arm whose gripper holds the object.
-    """
-
-    tool_V_object_z: Vector3
-    """
-    The object's z-axis, expressed in the tool frame of :attr:`arm`'s end effector.
-    """
-
+if TYPE_CHECKING:
+    from semantic_digital_twin.world_description.world_entity import Body
 
 # %% driving with held objects upright
 
@@ -61,39 +46,31 @@ class CarryAction(Action):
         keep_upright = [
             AlignPlanes(
                 root_link=self.world.root,
-                tip_link=axis.arm.end_effector.tool_frame,
-                tip_normal=axis.tool_V_object_z,
+                tip_link=held_body,
+                tip_normal=Vector3.Z(reference_frame=held_body),
                 goal_normal=Vector3.Z(reference_frame=self.world.root),
                 threshold=self.upright_threshold,
             )
-            for axis in self._held_object_axes()
+            for held_body in self._held_bodies()
         ]
         if not keep_upright:
             return self.navigate
         return Parallel([self.navigate, *keep_upright])
 
-    def _held_object_axes(self) -> list[HeldObjectAxis]:
+    def _held_bodies(self) -> list[Body]:
         """
-        :return: The z-axis of the object each arm holds, for every arm that holds one.
+        :return: The body each arm holds, for every arm that holds one.
         """
-        axes = []
+        held_bodies = []
         for arm in self.robot.all_arms:
             held_body = arm.end_effector.held_body
             if held_body is not None:
-                axes.append(
-                    HeldObjectAxis(
-                        arm,
-                        self.world.transform(
-                            Vector3.Z(reference_frame=held_body),
-                            arm.end_effector.tool_frame,
-                        ),
-                    )
-                )
+                held_bodies.append(held_body)
                 continue
             pick_up = self._earlier_pick_up_still_holding(arm)
             if pick_up is not None:
-                axes.append(HeldObjectAxis(arm, self._object_z_in_tool_frame(pick_up)))
-        return axes
+                held_bodies.append(pick_up.grasp.graspable.root)
+        return held_bodies
 
     def _earlier_pick_up_still_holding(self, arm: Arm) -> PickUpAction | None:
         """
@@ -110,16 +87,3 @@ class CarryAction(Action):
                     return None
                 return earlier
         return None
-
-    @staticmethod
-    def _object_z_in_tool_frame(pick_up: PickUpAction) -> Vector3:
-        """
-        :param pick_up: The pick-up that takes the object.
-        :return: The z-axis of the object `pick_up` takes, in the tool frame of its
-            arm's end effector once the gripper sits at the grasp.
-        """
-        tool_R_object = (
-            pick_up.arm.end_effector.tool_R_grasp
-            @ pick_up.grasp.grasp_pose.rotation_matrix.inverse()
-        )
-        return tool_R_object @ Vector3.Z()
