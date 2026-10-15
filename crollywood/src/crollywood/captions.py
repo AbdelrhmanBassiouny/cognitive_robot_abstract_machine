@@ -14,6 +14,7 @@ from typing_extensions import Sequence
 
 from crollywood.frame import Frame
 from crollywood.narration import NarratedTimeline
+from crollywood.shading import EvenShade, GradientShade, Shade
 from crollywood.subtitles import SubtitleCue, SubtitleRoom
 from crollywood.theme import VideoTheme
 from crollywood.timeline import VideoTimeline
@@ -26,6 +27,21 @@ from crollywood.typesetting import Anchor, TextSize, Typesetting
 class CaptionStyle(ABC):
     """
     How the rows of a subtitle are drawn into a frame.
+    """
+
+    shade: Shade
+    """
+    What the rows are read on wherever they are written over a picture.
+    """
+
+    theme: VideoTheme = field(default_factory=VideoTheme.neutral)
+    """
+    The colours the rows are written in.
+    """
+
+    row_pitch: int = 38
+    """
+    Pixels from one row to the next.
     """
 
     @abstractmethod
@@ -45,9 +61,9 @@ class BandCaption(CaptionStyle):
     shaded towards black wherever footage fills the frame.
     """
 
-    theme: VideoTheme = field(default_factory=VideoTheme.neutral)
+    shade: Shade = GradientShade(0.72)
     """
-    The page the band is told apart from footage by, and the colour written on it.
+    What the band over footage is shaded with.
     """
 
     top: int = 12
@@ -56,20 +72,10 @@ class BandCaption(CaptionStyle):
     one or two are written.
     """
 
-    row_pitch: int = 38
-    """
-    Pixels from one row to the next.
-    """
-
     page_likeness: int = 20
     """
     How far the band's mean colour may lie from the page's, per channel, for the band to
     be the page rather than footage.
-    """
-
-    shade: float = 0.72
-    """
-    How dark the band over footage is shaded at its bottom.
     """
 
     def captioned(self, frame: Frame, rows: Sequence[str]) -> Frame:
@@ -82,14 +88,14 @@ class BandCaption(CaptionStyle):
         band_top = resolution.stage_height
         on_page = self.is_page(Frame(frame.pixels[int(band_top) :]))
         if not on_page:
-            frame = frame.darkened(
+            frame = self.shade.over(
+                frame,
                 Frame.box(
                     0,
                     band_top - self.top * 2,
                     resolution.width,
                     resolution.height - band_top + self.top * 2,
                 ),
-                self.shade,
             )
         lettering = Typesetting(
             size=TextSize.BODY,
@@ -124,19 +130,9 @@ class BoxedCaption(CaptionStyle):
     picture, so they read on any scene alike.
     """
 
-    theme: VideoTheme = field(default_factory=VideoTheme.neutral)
+    shade: Shade = EvenShade(0.66, corner_radius=11)
     """
-    The colour the rows are written in.
-    """
-
-    row_pitch: int = 38
-    """
-    Pixels from one row to the next.
-    """
-
-    shade: float = 0.66
-    """
-    How dark the box behind the rows is shaded.
+    What the box behind the rows is shaded with.
     """
 
     padding: int = 25
@@ -147,11 +143,6 @@ class BoxedCaption(CaptionStyle):
     padding_above_and_below: int = 14
     """
     Pixels between the rows and the top and bottom of the box.
-    """
-
-    corner_radius: int = 11
-    """
-    Pixels the corners of the box are rounded by.
     """
 
     margin: int = 20
@@ -175,7 +166,7 @@ class BoxedCaption(CaptionStyle):
         )
         top = resolution.height - self.margin - height
         box = Frame.box((resolution.width - width) / 2, top, width, height)
-        frame = frame.shaded(box, self.shade, self.corner_radius)
+        frame = self.shade.over(frame, box)
         for number, row in enumerate(rows):
             frame = lettering.written(
                 frame,
@@ -208,7 +199,7 @@ class Subtitled(VideoTimeline):
     How much text one subtitle shows: the rows a cue is written on.
     """
 
-    style: CaptionStyle = field(default_factory=BandCaption)
+    captions: CaptionStyle = field(default_factory=BandCaption)
     """
     How a cue's rows are drawn.
     """
@@ -218,24 +209,22 @@ class Subtitled(VideoTimeline):
         cls,
         narrated: NarratedTimeline,
         room: SubtitleRoom | None = None,
-        style: CaptionStyle | None = None,
+        captions: CaptionStyle | None = None,
     ) -> Subtitled:
         """
         :param narrated: A timeline with what is said over it, its overlays kept.
         :param room: How much text one subtitle shows; the burned-in room if not given.
-        :param style: How a cue's rows are drawn; in the band if not given.
+        :param captions: How a cue's rows are drawn; in the band if not given.
         :return: The timeline with the narration's subtitles drawn into the picture.
         """
         fitting = room if room is not None else SubtitleRoom.burned_in()
         timeline = narrated.role_taker
         return cls(
             timeline.scenes,
-            timeline.frames_per_second,
-            timeline.dissolve,
-            timeline.overlays,
+            timeline.style,
             cues=narrated.narration.cues(fitting),
             room=fitting,
-            style=style if style is not None else BandCaption(),
+            captions=captions if captions is not None else BandCaption(),
         )
 
     def cue_at(self, moment: timedelta) -> SubtitleCue | None:
@@ -254,4 +243,4 @@ class Subtitled(VideoTimeline):
         cue = self.cue_at(moment)
         if cue is None:
             return frame
-        return self.style.captioned(frame, cue.rows(self.room))
+        return self.captions.captioned(frame, cue.rows(self.room))

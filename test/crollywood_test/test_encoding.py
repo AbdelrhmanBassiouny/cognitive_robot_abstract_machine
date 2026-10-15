@@ -10,11 +10,11 @@ from pathlib import Path
 
 import pytest
 
-from crollywood.encoding import H264Encoder, VideoFile
+from crollywood.encoding import FfmpegProgram, H264Encoder, VideoFile
 from crollywood.exceptions import NothingToRead
 from crollywood.frame import Frame, Resolution
 from crollywood.slides import SingleFrameSlide
-from crollywood.timeline import TimelineScene, VideoTimeline
+from crollywood.timeline import TimelineScene, TimelineStyle, VideoTimeline
 from krrood.units import DataSize
 
 FRAME_SIZE = Resolution(width=320, height=480)
@@ -57,11 +57,10 @@ def encoded(tmp_path_factory: pytest.TempPathFactory) -> VideoFile:
             )
             for frame in frames
         ],
-        frames_per_second=FRAMES_PER_SECOND,
-        dissolve=timedelta(0),
+        style=TimelineStyle(frames_per_second=FRAMES_PER_SECOND, dissolve=timedelta(0)),
     )
     path = tmp_path_factory.mktemp("encoded") / "square.mp4"
-    return H264Encoder(size_budget=SIZE_BUDGET).encode(timeline, path)
+    return H264Encoder().encode(timeline, path, SIZE_BUDGET)
 
 
 # %% what comes out
@@ -102,3 +101,14 @@ def test_a_moment_past_the_end_of_the_file_shows_its_last_frame(
 def test_a_file_without_frames_has_nothing_to_read(tmp_path: Path) -> None:
     with pytest.raises(NothingToRead):
         VideoFile(tmp_path / "missing.mp4").frame_at(timedelta(0))
+
+
+# %% the program the encoding is done by
+
+
+def test_the_program_runs_quietly_with_the_arguments_given_after_its_own() -> None:
+    program = FfmpegProgram(Path("ffmpeg"))
+    arguments = ["-i", "in.mkv", "out.mp4"]
+    command = program.command(arguments)
+    assert command[0] == str(program.path)
+    assert command[-len(arguments) :] == arguments

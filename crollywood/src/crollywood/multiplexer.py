@@ -11,9 +11,7 @@ from datetime import timedelta
 from enum import StrEnum
 from pathlib import Path
 
-import imageio_ffmpeg
-
-from crollywood.encoding import VideoFile
+from crollywood.encoding import FfmpegProgram, VideoFile
 from krrood.units import BitRate, DataSize
 
 # %% the tracks of the mp4
@@ -115,9 +113,9 @@ class MediaMultiplexer:
     Joins a silent video, its narration and its subtitles into one mp4.
     """
 
-    ffmpeg: Path = field(default_factory=lambda: Path(imageio_ffmpeg.get_ffmpeg_exe()))
+    ffmpeg: FfmpegProgram = field(default_factory=FfmpegProgram)
     """
-    The encoder binary.
+    The program that joins the streams.
     """
 
     audio_bit_rate: BitRate = field(default_factory=lambda: BitRate(DataSize(64_000)))
@@ -163,11 +161,11 @@ class MediaMultiplexer:
         ]
         if subtitles is not None:
             tracks.append(SubtitleTrack(subtitles))
-        command = [str(self.ffmpeg), "-y", "-loglevel", "error"]
+        arguments: list[str] = []
         for track in tracks:
-            command += ["-i", str(track.path)]
+            arguments += ["-i", str(track.path)]
         for input_index, track in enumerate(tracks):
-            command += track.options(input_index)
-        command += ["-movflags", "+faststart", str(path)]
-        subprocess.run(command, check=True)
+            arguments += track.options(input_index)
+        arguments += ["-movflags", "+faststart", str(path)]
+        subprocess.run(self.ffmpeg.command(arguments), check=True)
         return VideoFile(path=path)

@@ -21,7 +21,7 @@ from crollywood.exceptions import NarrationOverrun
 from crollywood.speech import SoundChannel, TextToSpeech
 from crollywood.subtitles import SubRipFile, SubtitleCue, SubtitleRoom
 from crollywood.slides import HeldSlide
-from crollywood.timeline import TimelineScene, VideoTimeline
+from crollywood.timeline import TimelineScene, TimelineStyle, VideoTimeline
 
 # %% a line and its speech
 
@@ -347,16 +347,16 @@ class Storyboard:
             )
             each.role_taker.held_for = max(each.role_taker.held_for, needed)
 
-    def narrated_by(self, voice: TextToSpeech, dissolve: timedelta) -> Narration:
+    def narrated_by(self, voice: TextToSpeech, style: TimelineStyle) -> Narration:
         """
         :param voice: What says the lines.
-        :param dissolve: How long the scenes dissolve into one another.
+        :param style: How the scenes are played.
         :return: The lines said and placed where their scenes start, as the timeline
             puts them.
         """
         spoken: list[SpokenLine] = []
         for each, start in zip(
-            self.scenes, VideoTimeline(list(self.scenes), dissolve=dissolve).starts()
+            self.scenes, VideoTimeline(list(self.scenes), style).starts()
         ):
             at = start + self.lead + each.delay
             for number, line in enumerate(each.lines):

@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pytest
 
-from crollywood.encoding import VideoFile
+from crollywood.encoding import FfmpegProgram, VideoFile
 from crollywood.multiplexer import (
     Language,
     MediaMultiplexer,
@@ -62,7 +62,7 @@ def test_the_sound_takes_the_narration_over_the_video_and_the_subtitle_allowance
     None
 ):
     multiplexer = MediaMultiplexer(
-        ffmpeg=Path("ffmpeg"),
+        ffmpeg=FfmpegProgram(Path("ffmpeg")),
         audio_bit_rate=BitRate(DataSize(8_000)),
         subtitle_allowance=DataSize(100),
     )
@@ -79,7 +79,7 @@ def test_the_subtitles_are_joined_only_when_given(
     monkeypatch.setattr(
         subprocess, "run", lambda command, check: commands.append(command)
     )
-    multiplexer = MediaMultiplexer(ffmpeg=Path("ffmpeg"))
+    multiplexer = MediaMultiplexer(ffmpeg=FfmpegProgram(Path("ffmpeg")))
     video, soundtrack, subtitles = (
         tmp_path / "video.mp4",
         tmp_path / "narration.wav",
@@ -90,3 +90,20 @@ def test_the_subtitles_are_joined_only_when_given(
     without, with_subtitles = commands
     assert str(subtitles) not in without
     assert str(subtitles) in with_subtitles
+
+
+def test_the_tracks_are_joined_by_the_multiplexer_program(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    commands = []
+    monkeypatch.setattr(
+        subprocess, "run", lambda command, check: commands.append(command)
+    )
+    multiplexer = MediaMultiplexer(ffmpeg=FfmpegProgram(Path("ffmpeg")))
+    multiplexer.joined(
+        VideoFile(tmp_path / "video.mp4"),
+        tmp_path / "narration.wav",
+        tmp_path / "joined.mp4",
+    )
+    (command,) = commands
+    assert command[0] == str(multiplexer.ffmpeg.path)

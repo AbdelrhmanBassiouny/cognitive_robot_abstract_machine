@@ -17,6 +17,7 @@ from tempfile import TemporaryDirectory
 import cv2
 import imageio_ffmpeg
 import numpy as np
+from typing_extensions import Sequence
 
 from crollywood.exceptions import EncodingFailed, NothingToRead
 from crollywood.frame import Frame, Resolution
@@ -142,21 +143,39 @@ class VideoFile(Video):
         return Frame(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
 
 
+# %% the encoder program
+
+
+@dataclass(frozen=True)
+class FfmpegProgram:
+    """
+    The ffmpeg program that encodes and joins the streams of a video.
+    """
+
+    path: Path = field(default_factory=lambda: Path(imageio_ffmpeg.get_ffmpeg_exe()))
+    """
+    Where the program is; by default the one :mod:`imageio_ffmpeg` ships.
+    """
+
+    def command(self, arguments: Sequence[str]) -> list[str]:
+        """
+        :param arguments: What the program is told to do.
+        :return: The command that runs the program with those arguments, overwriting
+            what it writes and reporting only errors.
+        """
+        return [str(self.path), "-y", "-loglevel", "error", *arguments]
+
+
 # %% the encoder
 
 
 @dataclass
 class H264Encoder:
     """
-    Writes a timeline out as an H.264 mp4 no larger than a size budget.
+    Writes a timeline out as an H.264 mp4 no larger than the size budget it is given.
 
     The frames are first kept losslessly, since two passes have to read them, and then
     encoded twice at the bit rate the budget and the length allow.
-    """
-
-    size_budget: DataSize
-    """
-    The most the file may take on disk.
     """
 
     preset: EncoderPreset = EncoderPreset.SLOW
@@ -164,9 +183,9 @@ class H264Encoder:
     How long the encoder may take to make the file small.
     """
 
-    ffmpeg: Path = field(default_factory=lambda: Path(imageio_ffmpeg.get_ffmpeg_exe()))
+    ffmpeg: FfmpegProgram = field(default_factory=FfmpegProgram)
     """
-    The encoder binary.
+    The program that encodes.
     """
 
     pixel_format: PixelFormat = PixelFormat.YUV420P
@@ -190,29 +209,32 @@ class H264Encoder:
     How long a stretch the encoder holds to the average bit rate over.
     """
 
-    def encode(self, timeline: VideoTimeline, path: Path) -> VideoFile:
+    def encode(
+        self, timeline: VideoTimeline, path: Path, size_budget: DataSize
+    ) -> VideoFile:
         """
         Write the timeline out.
 
         :param timeline: What to write.
         :param path: Where the mp4 goes.
+        :param size_budget: The most the file may take on disk.
         :return: The file written.
         """
         path.parent.mkdir(parents=True, exist_ok=True)
+        bit_rate = self.bit_rate_for(size_budget, timeline.duration)
         with TemporaryDirectory(prefix="video_master_") as scratch:
             master = Path(scratch) / "master.mkv"
             self._keep_losslessly(timeline, master)
-            self._two_passes(master, path, timeline.duration, Path(scratch) / "pass")
+            self._two_passes(master, path, bit_rate, Path(scratch) / "pass")
         return VideoFile(path=path)
 
-    def bit_rate_for(self, duration: timedelta) -> BitRate:
+    def bit_rate_for(self, size_budget: DataSize, duration: timedelta) -> BitRate:
         """
+        :param size_budget: The most the file may take on disk.
         :param duration: How long the video plays.
         :return: The bit rate that fills the budget over that time, less headroom.
         """
-        return BitRate.filling(self.size_budget, duration).scaled(
-            self.bit_rate_headroom
-        )
+        return BitRate.filling(size_budget, duration).scaled(self.bit_rate_headroom)
 
     def _keep_losslessly(self, timeline: VideoTimeline, master: Path) -> None:
         """
@@ -224,29 +246,27 @@ class H264Encoder:
         """
         first = next(iter(timeline.frames()))
         resolution = first.resolution
-        command = [
-            str(self.ffmpeg),
-            "-y",
-            "-loglevel",
-            "error",
-            "-f",
-            "rawvideo",
-            "-pix_fmt",
-            PixelFormat.RGB24,
-            "-s",
-            f"{resolution.width}x{resolution.height}",
-            "-r",
-            str(timeline.frames_per_second),
-            "-i",
-            "-",
-            "-c:v",
-            "libx264",
-            "-qp",
-            "0",
-            "-preset",
-            EncoderPreset.ULTRAFAST,
-            str(master),
-        ]
+        command = self.ffmpeg.command(
+            [
+                "-f",
+                "rawvideo",
+                "-pix_fmt",
+                PixelFormat.RGB24,
+                "-s",
+                f"{resolution.width}x{resolution.height}",
+                "-r",
+                str(timeline.style.frames_per_second),
+                "-i",
+                "-",
+                "-c:v",
+                "libx264",
+                "-qp",
+                "0",
+                "-preset",
+                EncoderPreset.ULTRAFAST,
+                str(master),
+            ]
+        )
         process = subprocess.Popen(command, stdin=subprocess.PIPE)
         for frame in timeline.frames():
             process.stdin.write(np.ascontiguousarray(frame.pixels).tobytes())
@@ -255,44 +275,40 @@ class H264Encoder:
             raise EncodingFailed(path=master)
 
     def _two_passes(
-        self, master: Path, path: Path, duration: timedelta, log_prefix: Path
+        self, master: Path, path: Path, bit_rate: BitRate, log_prefix: Path
     ) -> None:
         """
-        Encode the master twice at the budget's bit rate, the second pass reading the
-        first's log.
+        Encode the master twice at a bit rate, the second pass reading the first's log.
 
         :param master: The lossless file.
         :param path: Where the mp4 goes.
-        :param duration: How long the video plays.
+        :param bit_rate: The average bit rate the file is encoded at.
         :param log_prefix: Where the first pass keeps what the second reads.
         """
-        bit_rate = self.bit_rate_for(duration)
-        shared = [
-            str(self.ffmpeg),
-            "-y",
-            "-loglevel",
-            "error",
-            "-i",
-            str(master),
-            "-c:v",
-            "libx264",
-            "-preset",
-            self.preset,
-            "-profile:v",
-            "high",
-            "-pix_fmt",
-            self.pixel_format,
-            "-b:v",
-            str(bit_rate.per_second.magnitude),
-            "-maxrate",
-            str(bit_rate.scaled(self.peak_bit_rate_factor).per_second.magnitude),
-            "-bufsize",
-            str(bit_rate.over(self.rate_control_buffer).magnitude),
-            "-passlogfile",
-            str(log_prefix),
-            "-movflags",
-            "+faststart",
-        ]
+        shared = self.ffmpeg.command(
+            [
+                "-i",
+                str(master),
+                "-c:v",
+                "libx264",
+                "-preset",
+                self.preset,
+                "-profile:v",
+                "high",
+                "-pix_fmt",
+                self.pixel_format,
+                "-b:v",
+                str(bit_rate.per_second.magnitude),
+                "-maxrate",
+                str(bit_rate.scaled(self.peak_bit_rate_factor).per_second.magnitude),
+                "-bufsize",
+                str(bit_rate.over(self.rate_control_buffer).magnitude),
+                "-passlogfile",
+                str(log_prefix),
+                "-movflags",
+                "+faststart",
+            ]
+        )
         subprocess.run(
             shared + ["-pass", "1", "-an", "-f", "mp4", "/dev/null"], check=True
         )

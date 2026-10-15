@@ -164,3 +164,27 @@ class EncodingFailed(DataclassException):
         :return: How to put it right.
         """
         return "Run it without the error level silenced to read what it reports."
+
+
+@dataclass
+class DarknessOutOfRange(DataclassException):
+    """
+    Raised when a shade is asked to be darker than black or lighter than no shade.
+    """
+
+    darkness: float
+    """
+    The darkness asked for.
+    """
+
+    def error_message(self) -> str:
+        """
+        :return: What went wrong.
+        """
+        return f"a shade of darkness {self.darkness} lies outside zero to one"
+
+    def suggest_correction(self) -> str:
+        """
+        :return: How to put it right.
+        """
+        return "Give a darkness from zero, which leaves the picture, to one, black."

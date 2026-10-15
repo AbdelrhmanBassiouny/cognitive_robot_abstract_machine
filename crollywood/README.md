@@ -101,10 +101,14 @@ badges whatever the theme.
 Burned-in subtitles are drawn in the band every scene keeps clear
 (`captions.BandCaption`, given the video's theme), or in white on a shaded box over
 the bottom of the picture (`captions.BoxedCaption`); pass the style to
-`VideoProduction(captions=...)`.
+`VideoProduction(captions=...)`. What a caption is read on over a picture is a
+`shading.Shade`, given as `shade=`: an `EvenShade`, its corners rounded by
+`corner_radius`, or a `GradientShade` that deepens from its top edge.
 
-Anything drawn over the whole video rather than one scene is a `timeline.Overlay`,
-passed as `VideoProduction(overlays=[...])`. `overlays.ProgressBar(theme=...)` is a thin
+The frame rate, the dissolve between scenes and what is drawn over every frame are a
+`timeline.TimelineStyle`, passed as `VideoProduction(timeline_style=...)`. Anything
+drawn over the whole video rather than one scene is a `timeline.Overlay`, passed as
+`TimelineStyle(overlays=[...])`. `overlays.ProgressBar(theme=...)` is a thin
 bar along the top that fills in the accent colour as the video plays, across every
 scene.
 
@@ -142,4 +146,4 @@ Sizes are `krrood.units.DataSize` and bit rates `krrood.units.BitRate` (`DataSiz
 `BitRate(DataSize(64_000))` for 64 kilobits a second). The file may take
 `VideoProduction.picture_bit_rate` over its length; for a video that must fit another
 size, such as a venue's, subclass `VideoProduction` and override `size_allowed_for`.
-`preset=EncoderPreset.FAST` encodes a quick draft.
+`encoder=H264Encoder(preset=EncoderPreset.FAST)` encodes a quick draft.

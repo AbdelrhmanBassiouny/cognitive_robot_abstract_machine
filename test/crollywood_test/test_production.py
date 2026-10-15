@@ -17,7 +17,7 @@ import numpy as np
 import pytest
 
 from crollywood.captions import BoxedCaption, Subtitled
-from crollywood.encoding import EncoderPreset, VideoFile
+from crollywood.encoding import EncoderPreset, H264Encoder, VideoFile
 from crollywood.frame import Frame, Resolution
 from crollywood.narration import NarratedLine, NarratedScene, Storyboard
 from crollywood.overlays import ProgressBar
@@ -30,7 +30,7 @@ from crollywood.slides import (
 )
 from crollywood.speech import SoundLevel
 from crollywood.theme import VideoTheme
-from crollywood.timeline import Transition
+from crollywood.timeline import TimelineStyle, Transition
 from krrood.units import DataSize
 
 from .voices import EvenlyPacedTextToSpeech
@@ -94,10 +94,11 @@ def production(
     return VideoProduction(
         minimal_storyboard(),
         voice=VOICE,
-        frames_per_second=FRAMES_PER_SECOND,
-        dissolve=DISSOLVE,
+        timeline_style=TimelineStyle(
+            frames_per_second=FRAMES_PER_SECOND, dissolve=DISSOLVE
+        ),
         subtitling=subtitling,
-        preset=EncoderPreset.FAST,
+        encoder=H264Encoder(preset=EncoderPreset.FAST),
     )
 
 
@@ -247,14 +248,15 @@ def test_a_production_draws_its_overlays_and_its_captions_in_their_style() -> No
     made = VideoProduction(
         minimal_storyboard(),
         voice=VOICE,
-        frames_per_second=FRAMES_PER_SECOND,
-        overlays=[bar],
+        timeline_style=TimelineStyle(
+            frames_per_second=FRAMES_PER_SECOND, overlays=[bar]
+        ),
         captions=BoxedCaption(),
     )
     picture = made.picture_of(made.narrated_timeline())
     assert isinstance(picture, Subtitled)
-    assert isinstance(picture.style, BoxedCaption)
-    assert picture.overlays == [bar]
+    assert isinstance(picture.captions, BoxedCaption)
+    assert picture.style.overlays == [bar]
     top = picture.frame_at(timedelta(0)).pixels[: bar.thickness]
     assert (top == tuple(VideoTheme.neutral().panel.to_rgb_bytes())).all()
 
@@ -264,10 +266,16 @@ def test_soft_subtitles_leave_the_picture_its_overlays_and_no_captions() -> None
     made = VideoProduction(
         minimal_storyboard(),
         voice=VOICE,
-        frames_per_second=FRAMES_PER_SECOND,
+        timeline_style=TimelineStyle(
+            frames_per_second=FRAMES_PER_SECOND, overlays=[bar]
+        ),
         subtitling=Subtitling.SOFT,
-        overlays=[bar],
     )
     picture = made.picture_of(made.narrated_timeline())
     assert not isinstance(picture, Subtitled)
-    assert picture.overlays == [bar]
+    assert picture.style.overlays == [bar]
+
+
+def test_the_timeline_of_a_production_plays_in_the_production_timeline_style() -> None:
+    made = production()
+    assert made.narrated_timeline().role_taker.style is made.timeline_style

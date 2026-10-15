@@ -122,15 +122,10 @@ class Overlay(ABC):
 
 
 @dataclass
-class VideoTimeline(Video):
+class TimelineStyle:
     """
-    Scenes laid end to end, each dissolving or cutting into the next, read out as
-    frames.
-    """
-
-    scenes: list[TimelineScene]
-    """
-    The scenes, in the order they play.
+    How a timeline plays its scenes: the rate it reads them out at, how long each
+    dissolves into the next, and what is drawn over them all.
     """
 
     frames_per_second: int = 25
@@ -146,6 +141,24 @@ class VideoTimeline(Video):
     overlays: list[Overlay] = field(default_factory=list)
     """
     What is drawn over every frame, in order, after the scenes.
+    """
+
+
+@dataclass
+class VideoTimeline(Video):
+    """
+    Scenes laid end to end, each dissolving or cutting into the next, read out as
+    frames.
+    """
+
+    scenes: list[TimelineScene]
+    """
+    The scenes, in the order they play.
+    """
+
+    style: TimelineStyle = field(default_factory=TimelineStyle)
+    """
+    How the scenes are played.
     """
 
     @property
@@ -165,7 +178,7 @@ class VideoTimeline(Video):
         :return: How long the scene before dissolves into it: no time where it cuts in.
         """
         if index > 0 and self.scenes[index].transition is Transition.DISSOLVE:
-            return self.dissolve
+            return self.style.dissolve
         return timedelta(0)
 
     @property
@@ -173,7 +186,7 @@ class VideoTimeline(Video):
         """
         How many frames the video is read out as.
         """
-        return round(self.duration.total_seconds() * self.frames_per_second)
+        return round(self.duration.total_seconds() * self.style.frames_per_second)
 
     def starts(self) -> list[timedelta]:
         """
@@ -198,7 +211,7 @@ class VideoTimeline(Video):
         """
         frame = self.scenes_at(moment)
         runs_for = self.duration
-        for overlay in self.overlays:
+        for overlay in self.style.overlays:
             frame = overlay.drawn_over(frame, moment, runs_for)
         return frame
 
@@ -238,7 +251,9 @@ class VideoTimeline(Video):
         """
         size: Resolution | None = None
         for index in range(self.frame_count):
-            frame = self.frame_at(timedelta(seconds=index / self.frames_per_second))
+            frame = self.frame_at(
+                timedelta(seconds=index / self.style.frames_per_second)
+            )
             if size is None:
                 size = frame.resolution
             self._same_size(size.blank(), frame)

@@ -13,11 +13,11 @@ from enum import StrEnum
 from pathlib import Path
 
 from crollywood.captions import BandCaption, CaptionStyle, Subtitled
-from crollywood.encoding import EncoderPreset, H264Encoder, VideoFile
+from crollywood.encoding import H264Encoder, VideoFile
 from crollywood.multiplexer import MediaMultiplexer
 from crollywood.narration import NarratedTimeline, Storyboard
 from crollywood.speech import KokoroTextToSpeech, TextToSpeech
-from crollywood.timeline import Overlay, VideoTimeline
+from crollywood.timeline import TimelineStyle, VideoTimeline
 from krrood.units import BitRate, DataSize
 
 logger = logging.getLogger(__name__)
@@ -56,14 +56,10 @@ class VideoProduction:
     What says the narration.
     """
 
-    frames_per_second: int = 25
+    timeline_style: TimelineStyle = field(default_factory=TimelineStyle)
     """
-    The rate the video plays at.
-    """
-
-    dissolve: timedelta = timedelta(seconds=0.5)
-    """
-    How long each scene takes to dissolve into the next.
+    How the scenes are played: the frame rate, the dissolve between them and what is
+    drawn over every frame, such as a :class:`~crollywood.overlays.ProgressBar`.
     """
 
     subtitling: Subtitling = Subtitling.BURNED_IN
@@ -76,15 +72,9 @@ class VideoProduction:
     How burned-in subtitles are drawn.
     """
 
-    overlays: list[Overlay] = field(default_factory=list)
+    encoder: H264Encoder = field(default_factory=H264Encoder)
     """
-    What is drawn over every frame, whatever scene plays, such as a
-    :class:`~crollywood.overlays.ProgressBar`.
-    """
-
-    preset: EncoderPreset = EncoderPreset.SLOW
-    """
-    How long the encoder may take to make the file small.
+    What encodes the picture to the size it is allowed.
     """
 
     picture_bit_rate: BitRate = field(
@@ -109,15 +99,10 @@ class VideoProduction:
         :raises NarrationOverrun: If a line runs into the next or past the end.
         """
         self.storyboard.fitted_to(self.voice)
-        timeline = VideoTimeline(
-            self.storyboard.scenes,
-            frames_per_second=self.frames_per_second,
-            dissolve=self.dissolve,
-            overlays=self.overlays,
-        )
+        timeline = VideoTimeline(self.storyboard.scenes, self.timeline_style)
         narrated = NarratedTimeline(
             role_taker=timeline,
-            narration=self.storyboard.narrated_by(self.voice, dissolve=self.dissolve),
+            narration=self.storyboard.narrated_by(self.voice, self.timeline_style),
         )
         narrated.check()
         return narrated
@@ -130,7 +115,7 @@ class VideoProduction:
         """
         if self.subtitling is not Subtitling.BURNED_IN:
             return narrated.role_taker
-        return Subtitled.over(narrated, style=self.captions)
+        return Subtitled.over(narrated, captions=self.captions)
 
     def size_allowed_for(self, duration: timedelta) -> DataSize:
         """
@@ -165,10 +150,11 @@ class VideoProduction:
             len(narrated.scenes),
         )
         picture = self.picture_of(narrated)
-        encoder = H264Encoder(
-            size_budget=self.picture_budget_for(duration), preset=self.preset
+        silent = self.encoder.encode(
+            picture,
+            path.with_name(path.stem + "_silent.mp4"),
+            self.picture_budget_for(duration),
         )
-        silent = encoder.encode(picture, path.with_name(path.stem + "_silent.mp4"))
         soundtrack = narrated.soundtrack().written_to(path.with_suffix(".wav"))
         subtitles = (
             narrated.narration.written_to(path.with_suffix(".srt"))

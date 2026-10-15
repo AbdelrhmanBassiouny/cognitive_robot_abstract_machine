@@ -138,21 +138,6 @@ def test_blending_mixes_two_frames_by_the_weight() -> None:
     assert dark.blended(light, 0.5).pixels[0, 0, 0] == 50
 
 
-def test_darkening_a_band_fades_in_from_its_top_edge() -> None:
-    grey = 200
-    result = FRAME_SIZE.blank(grey).darkened(Frame.box(0, 50, 200, 50), 0.8)
-    assert (result.pixels[:50] == grey).all()
-    assert result.pixels[50, 0, 0] == grey
-    assert result.pixels[99, 0, 0] == pytest.approx(grey * 0.2, abs=1)
-
-
-def test_shading_a_box_darkens_inside_and_leaves_the_rest() -> None:
-    grey, shade = 200, 0.5
-    result = FRAME_SIZE.blank(grey).shaded(Frame.box(50, 20, 100, 60), shade, 5)
-    assert result.pixels[50, 100, 0] == pytest.approx(grey * (1 - shade), abs=1)
-    assert (result.pixels[:15] == grey).all()
-
-
 # %% shapes
 
 

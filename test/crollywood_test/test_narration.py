@@ -27,7 +27,7 @@ from crollywood.narration import (
 from crollywood.speech import SoundChannel
 from crollywood.subtitles import SubtitleCue, SubtitleRoom
 from crollywood.slides import HeldSlide, SingleFrameSlide
-from crollywood.timeline import TimelineScene, VideoTimeline
+from crollywood.timeline import TimelineScene, TimelineStyle, VideoTimeline
 from crollywood.video import Video
 
 from .voices import EvenlyPacedTextToSpeech
@@ -251,8 +251,9 @@ def test_the_lines_start_where_their_scenes_start_plus_the_lead() -> None:
             NarratedScene(role_taker=slide(3.0), lines=(NarratedLine("three"),)),
         ]
     )
-    narration = board.narrated_by(VOICE, dissolve)
-    starts = VideoTimeline(board.scenes, dissolve=dissolve).starts()
+    style = TimelineStyle(dissolve=dissolve)
+    narration = board.narrated_by(VOICE, style)
+    starts = VideoTimeline(board.scenes, style).starts()
     assert [line.starts for line in narration.lines] == [
         starts[0] + board.lead,
         starts[2] + board.lead,
@@ -274,7 +275,7 @@ def test_two_lines_on_one_scene_are_said_one_after_the_other_with_a_pause() -> N
     assert board.scenes[0].held_for == (
         board.lead + first + board.pause + second + board.tail
     )
-    narration = board.narrated_by(VOICE, dissolve=seconds(0.5))
+    narration = board.narrated_by(VOICE, TimelineStyle(dissolve=seconds(0.5)))
     assert [line.starts for line in narration.lines] == [
         board.lead,
         board.lead + first + board.pause,
@@ -300,7 +301,7 @@ def test_a_line_that_runs_on_leaves_its_slide_alone_and_a_delay_moves_its_start(
     board.fitted_to(VOICE)
     assert board.scenes[0].held_for == seconds(first_hold)
     assert board.scenes[1].held_for == (board.lead + delay + ONE_WORD_TIME + board.tail)
-    narration = board.narrated_by(VOICE, dissolve)
+    narration = board.narrated_by(VOICE, TimelineStyle(dissolve=dissolve))
     second_start = seconds(first_hold) - dissolve
     assert narration.lines[1].starts == second_start + board.lead + delay
     with pytest.raises(NarrationOverrun):
@@ -325,7 +326,10 @@ def test_a_later_line_waits_beyond_the_pause_for_what_it_speaks_of() -> None:
     assert board.scenes[0].held_for == (
         board.lead + 3 * word + 2 * board.pause + sum(waits, NO_TIME) + board.tail
     )
-    starts = [line.starts for line in board.narrated_by(voice, NO_TIME).lines]
+    starts = [
+        line.starts
+        for line in board.narrated_by(voice, TimelineStyle(dissolve=NO_TIME)).lines
+    ]
     second_start = board.lead + word + board.pause + waits[0]
     assert starts == [board.lead, second_start, second_start + word + board.pause]
 
@@ -342,7 +346,7 @@ def test_a_narrated_timeline_is_a_timeline_that_checks_its_narration_against_its
                 role_taker=SingleFrameSlide(SLIDE_SIZE.blank(0), held_for=seconds(10))
             )
         ],
-        frames_per_second=10,
+        style=TimelineStyle(frames_per_second=10),
     )
     fine = NarratedTimeline(
         role_taker=timeline, narration=Narration([spoken("a", 0, 4)])

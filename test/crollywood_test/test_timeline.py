@@ -12,7 +12,13 @@ import pytest
 from crollywood.exceptions import FramesOfDifferentSizes, MomentOutsideScene
 from crollywood.frame import Frame, Resolution
 from crollywood.slides import SingleFrameSlide
-from crollywood.timeline import FrameFade, TimelineScene, VideoTimeline, Transition
+from crollywood.timeline import (
+    FrameFade,
+    TimelineScene,
+    TimelineStyle,
+    Transition,
+    VideoTimeline,
+)
 
 from .marks import ProgressStamp, stamped_value
 
@@ -84,8 +90,7 @@ def test_the_timeline_lays_scenes_end_to_end_without_a_dissolve() -> None:
             TimelineScene(role_taker=SingleFrameSlide(flat(10), held_for=first_hold)),
             TimelineScene(role_taker=SingleFrameSlide(flat(20), held_for=second_hold)),
         ],
-        frames_per_second=4,
-        dissolve=NO_TIME,
+        style=TimelineStyle(frames_per_second=4, dissolve=NO_TIME),
     )
     frames = list(timeline.frames())
     assert timeline.duration == first_hold + second_hold
@@ -104,8 +109,7 @@ def test_a_dissolve_blends_the_end_of_one_scene_into_the_start_of_the_next() -> 
                 role_taker=SingleFrameSlide(flat(second_grey_level), held_for=hold)
             ),
         ],
-        frames_per_second=4,
-        dissolve=dissolve,
+        style=TimelineStyle(frames_per_second=4, dissolve=dissolve),
     )
     assert timeline.duration == 2 * hold - dissolve
     values = [first_grey(frame) for frame in timeline.frames()]
@@ -124,8 +128,7 @@ def test_the_timeline_rejects_scenes_of_different_sizes() -> None:
             TimelineScene(role_taker=SingleFrameSlide(flat(0), held_for=hold)),
             TimelineScene(role_taker=SingleFrameSlide(wider.blank(0), held_for=hold)),
         ],
-        frames_per_second=4,
-        dissolve=NO_TIME,
+        style=TimelineStyle(frames_per_second=4, dissolve=NO_TIME),
     )
     with pytest.raises(FramesOfDifferentSizes):
         list(timeline.frames())
@@ -138,14 +141,14 @@ def test_a_timeline_plays_as_one_scene_of_a_longer_timeline() -> None:
             TimelineScene(role_taker=SingleFrameSlide(flat(greys[0]), held_for=hold)),
             TimelineScene(role_taker=SingleFrameSlide(flat(greys[1]), held_for=hold)),
         ],
-        dissolve=NO_TIME,
+        style=TimelineStyle(dissolve=NO_TIME),
     )
     whole = VideoTimeline(
         [
             TimelineScene(role_taker=chapter),
             TimelineScene(role_taker=SingleFrameSlide(flat(greys[2]), held_for=hold)),
         ],
-        dissolve=NO_TIME,
+        style=TimelineStyle(dissolve=NO_TIME),
     )
     assert whole.duration == chapter.duration + hold
     assert [first_grey(whole.frame_at(seconds(t))) for t in (0.25, 0.75, 1.25)] == [
@@ -188,8 +191,7 @@ def test_a_scene_that_cuts_in_takes_no_dissolve_from_the_scene_before() -> None:
             ),
             TimelineScene(role_taker=SingleFrameSlide(flat(greys[2]), held_for=hold)),
         ],
-        frames_per_second=10,
-        dissolve=dissolve,
+        style=TimelineStyle(frames_per_second=10, dissolve=dissolve),
     )
     assert timeline.dissolve_into(0) == NO_TIME
     assert timeline.dissolve_into(1) == NO_TIME
@@ -212,9 +214,9 @@ def test_every_overlay_is_drawn_over_each_frame_at_that_moment_of_the_video() ->
             TimelineScene(role_taker=SingleFrameSlide(flat(grey), held_for=hold)),
             TimelineScene(role_taker=SingleFrameSlide(flat(grey), held_for=hold)),
         ],
-        frames_per_second=10,
-        dissolve=NO_TIME,
-        overlays=[ProgressStamp()],
+        style=TimelineStyle(
+            frames_per_second=10, dissolve=NO_TIME, overlays=[ProgressStamp()]
+        ),
     )
     for moment in (seconds(1), seconds(3)):
         frame = timeline.frame_at(moment)
@@ -226,6 +228,6 @@ def test_a_timeline_without_overlays_shows_its_scenes_alone() -> None:
     grey = 100
     timeline = VideoTimeline(
         [TimelineScene(role_taker=SingleFrameSlide(flat(grey), held_for=seconds(2)))],
-        frames_per_second=10,
+        style=TimelineStyle(frames_per_second=10),
     )
     assert (timeline.frame_at(seconds(1)).pixels == grey).all()

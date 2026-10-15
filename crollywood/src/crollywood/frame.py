@@ -16,7 +16,6 @@ from dataclasses import astuple, dataclass
 import cv2
 import numpy as np
 from numpy.typing import NDArray
-from PIL import Image, ImageDraw
 from semantic_digital_twin.spatial_types.spatial_types import (
     HomogeneousTransformationMatrix,
     Point2,
@@ -342,50 +341,6 @@ class Frame:
             + other.pixels.astype(np.float32) * weight
         )
         return Frame(np.clip(mixed + 0.5, 0, 255).astype(np.uint8))
-
-    def darkened(self, over: PlanarBoundingBox, by: float) -> Frame:
-        """
-        A band shaded towards black, fading in from its top edge to its full darkness a
-        third of the way down: what a caption is read on over footage.
-
-        :param over: The band.
-        :param by: How dark the band is at the bottom, from zero to one.
-        :return: A copy with the band shaded.
-        """
-        result = self.pixels.copy()
-        band = PixelBox.nearest(over).inside(self.resolution)
-        if band.is_empty:
-            return Frame(result)
-        rows = np.arange(band.height, dtype=np.float32)
-        weight = np.clip(rows / max(band.height / 3.0, 1.0), 0.0, 1.0) * by
-        shaded = result[band.top : band.bottom, band.left : band.right].astype(
-            np.float32
-        )
-        shaded *= 1.0 - weight[:, None, None]
-        result[band.top : band.bottom, band.left : band.right] = np.clip(
-            shaded + 0.5, 0, 255
-        ).astype(np.uint8)
-        return Frame(result)
-
-    def shaded(self, over: PlanarBoundingBox, by: float, corner_radius: int) -> Frame:
-        """
-        :param over: The box.
-        :param by: How dark it is, from zero to one.
-        :param corner_radius: Pixels its corners are rounded by.
-        :return: A copy with the box shaded evenly towards black, its corners rounded:
-            what a caption is read on over any picture.
-        """
-        height, width = self.pixels.shape[:2]
-        mask = Image.new("L", (width, height), 0)
-        box = PixelBox.nearest(over)
-        ImageDraw.Draw(mask).rounded_rectangle(
-            (box.left, box.top, box.right - 1, box.bottom - 1),
-            radius=corner_radius,
-            fill=255,
-        )
-        weight = np.asarray(mask, dtype=np.float32)[..., None] / 255.0 * by
-        darkened = self.pixels.astype(np.float32) * (1.0 - weight)
-        return Frame(np.clip(darkened + 0.5, 0, 255).astype(np.uint8))
 
     def framed(
         self, around: PlanarBoundingBox, color: Color, thickness: int = 3

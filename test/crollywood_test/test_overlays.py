@@ -14,7 +14,7 @@ from crollywood.frame import Frame, Resolution
 from crollywood.overlays import ProgressBar
 from crollywood.theme import VideoTheme
 from crollywood.slides import SingleFrameSlide
-from crollywood.timeline import TimelineScene, VideoTimeline
+from crollywood.timeline import TimelineScene, TimelineStyle, VideoTimeline
 
 FRAME_SIZE = Resolution(width=200, height=100)
 RUNS_FOR = timedelta(seconds=4)
@@ -45,9 +45,11 @@ def test_the_progress_bar_runs_on_across_the_scenes_of_a_timeline() -> None:
             TimelineScene(role_taker=SingleFrameSlide(page, held_for=hold)),
             TimelineScene(role_taker=SingleFrameSlide(page, held_for=hold)),
         ],
-        frames_per_second=10,
-        dissolve=timedelta(0),
-        overlays=[ProgressBar(theme=theme)],
+        style=TimelineStyle(
+            frames_per_second=10,
+            dissolve=timedelta(0),
+            overlays=[ProgressBar(theme=theme)],
+        ),
     )
     top_row = timeline.frame_at(moment).pixels[0]
     accent_columns = np.flatnonzero(

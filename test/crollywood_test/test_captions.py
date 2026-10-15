@@ -17,7 +17,7 @@ from crollywood.speech import SoundChannel
 from crollywood.subtitles import SubtitleCue, SubtitleRoom
 from crollywood.theme import VideoTheme
 from crollywood.slides import SingleFrameSlide
-from crollywood.timeline import TimelineScene, VideoTimeline
+from crollywood.timeline import TimelineScene, TimelineStyle, VideoTimeline
 
 from .marks import ProgressStamp, stamped_value
 
@@ -44,9 +44,7 @@ def timeline_of(
                 role_taker=SingleFrameSlide(resolution.blank(grey), held_for=HOLD)
             )
         ],
-        frames_per_second=10,
-        dissolve=NO_TIME,
-        **changes,
+        TimelineStyle(frames_per_second=10, dissolve=NO_TIME, **changes),
     )
 
 
@@ -95,12 +93,7 @@ def test_a_subtitled_timeline_draws_the_cue_of_the_moment_into_the_band_and_noth
     None
 ):
     timeline = timeline_of(SMALL)
-    subtitled = Subtitled(
-        timeline.scenes,
-        timeline.frames_per_second,
-        timeline.dissolve,
-        cues=[CAPTION],
-    )
+    subtitled = Subtitled(timeline.scenes, timeline.style, cues=[CAPTION])
     assert subtitled.duration == timeline.duration
     assert subtitled.frame_count == timeline.frame_count
     assert subtitled.cue_at(WHILE_CAPTIONED) is CAPTION
@@ -146,9 +139,9 @@ def test_burned_in_subtitles_show_a_whole_clause_on_two_rows_of_the_band() -> No
 
 def test_subtitles_are_written_over_a_timeline_that_keeps_its_overlays() -> None:
     narrated = narrated_saying("hello there", 1.0, 1.0, overlays=[ProgressStamp()])
-    subtitled = Subtitled.over(narrated, style=BoxedCaption())
-    assert subtitled.overlays == narrated.overlays
-    assert isinstance(subtitled.style, BoxedCaption)
+    subtitled = Subtitled.over(narrated, captions=BoxedCaption())
+    assert subtitled.style.overlays == narrated.style.overlays
+    assert isinstance(subtitled.captions, BoxedCaption)
     stamp = subtitled.frame_at(WHILE_CAPTIONED).pixels[0, 0]
     assert (stamp == stamped_value(WHILE_CAPTIONED, narrated.duration)).all()
 
@@ -160,8 +153,7 @@ def test_over_footage_the_caption_is_white_on_a_band_shaded_towards_black() -> N
     footage_grey = 120
     subtitled = Subtitled(
         timeline_of(SMALL, footage_grey).scenes,
-        frames_per_second=10,
-        dissolve=NO_TIME,
+        TimelineStyle(frames_per_second=10, dissolve=NO_TIME),
         cues=[CAPTION],
     )
     written = subtitled.frame_at(WHILE_CAPTIONED)
@@ -179,13 +171,12 @@ def test_a_boxed_caption_is_written_light_on_a_shaded_box_over_the_bottom_of_the
     style = BoxedCaption()
     subtitled = Subtitled(
         timeline_of(resolution).scenes,
-        frames_per_second=10,
-        dissolve=NO_TIME,
+        TimelineStyle(frames_per_second=10, dissolve=NO_TIME),
         cues=[CAPTION],
-        style=style,
+        captions=style,
     )
     written = subtitled.frame_at(WHILE_CAPTIONED)
-    shade = round(WHITE * (1.0 - style.shade))
+    shade = round(WHITE * (1.0 - style.shade.darkness))
     box_rows, box_columns = np.nonzero((written.pixels == shade).all(axis=2))
     box = written.pixels[
         box_rows.min() : box_rows.max() + 1, box_columns.min() : box_columns.max() + 1
@@ -207,10 +198,9 @@ def test_a_band_caption_on_the_page_of_its_theme_is_written_in_its_text_colour()
                 role_taker=SingleFrameSlide(theme.page_of(SMALL), held_for=HOLD)
             )
         ],
-        frames_per_second=10,
-        dissolve=NO_TIME,
+        TimelineStyle(frames_per_second=10, dissolve=NO_TIME),
         cues=[CAPTION],
-        style=BandCaption(theme=theme),
+        captions=BandCaption(theme=theme),
     )
     written = subtitled.frame_at(WHILE_CAPTIONED)
     band = written.pixels[band_rows(written)]

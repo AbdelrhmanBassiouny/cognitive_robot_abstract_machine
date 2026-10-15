@@ -13,6 +13,7 @@ from semantic_digital_twin.world_description.geometry import PlanarBoundingBox
 from crollywood.footage import FootageFrame, ViewOfTheRun
 from crollywood.frame import Frame, Resolution
 from crollywood.lettering import FontFace
+from crollywood.shading import EvenShade, Shade
 from crollywood.theme import VideoTheme
 from crollywood.timeline import FrameFade
 from crollywood.typesetting import Anchor, TextSize, Typesetting
@@ -169,9 +170,9 @@ class TitleOverFootage(Video):
     How long the title takes to fade out.
     """
 
-    shade: float = 0.55
+    shade: Shade = EvenShade(0.55)
     """
-    How far the footage is shaded under the title.
+    What the footage is shaded with under the title.
     """
 
     theme: VideoTheme = field(default_factory=VideoTheme.neutral)
@@ -224,7 +225,7 @@ class TitleOverFootage(Video):
         if weight <= 0.0:
             return frame
         resolution = frame.resolution
-        shaded = frame.shaded(resolution.whole, self.shade, corner_radius=0)
+        shaded = self.shade.over(frame, resolution.whole)
         heading = Typesetting(
             size=TextSize.CLAIM, face=FontFace.BOLD, color=self.theme.footage_text
         )
