@@ -11,6 +11,7 @@ from semantic_digital_twin.spatial_types.spatial_types import Pose
 
 from coraplex.datastructures.trajectory import PoseTrajectory
 from coraplex.robot_plans.actions.base import Action
+from coraplex.robot_plans.actions.core.exceptions import WidthBeyondGripperOpening
 from coraplex.robot_plans.mixins import (
     HasMaxJointVelocity,
     MovesGripper,
@@ -114,6 +115,12 @@ class MoveFingersToWidthAction(Action):
     """
 
     def create_action_body(self) -> StatechartNode:
+        """
+        :raises WidthBeyondGripperOpening: If :attr:`width` is wider than the gripper
+            opens.
+        """
+        if self.width > self.gripper.separation_when_open:
+            raise WidthBeyondGripperOpening(gripper=self.gripper, width=self.width)
         fingertips = self.gripper.fingertips
         return CartesianPosition(
             root_link=fingertips.finger,

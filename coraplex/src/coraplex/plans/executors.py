@@ -457,7 +457,9 @@ class PhysicallySimulatedPlanExecutor(SimulatedPlanExecutor):
 
     plan_adaptations: List[PlanTransformation] = field(
         default_factory=lambda: [
-            CloseFingersToObjectWidth(),
+            # A servo grips only with the position error it is left with, so fingers
+            # sent no further than the object's surface touch it without holding it.
+            CloseFingersToObjectWidth(squeeze=0.005),
             LetContactCarryTheBodies(),
         ],
         kw_only=True,

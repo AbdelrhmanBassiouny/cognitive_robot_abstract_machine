@@ -135,6 +135,18 @@ def graspable_annotation(world: World, body: Body) -> HasGraspCandidates:
     ).first()
 
 
+def top_down_grasp(world: World, body: Body) -> GraspCandidate:
+    """
+    :param world: The world holding the annotation naming ``body``.
+    :param body: The body to grasp.
+    :return: A grasp reaching down onto ``body``'s own origin.
+    """
+    return GraspCandidate(
+        graspable_annotation(world, body),
+        Pose.from_xyz_rpy(pitch=np.pi / 2, reference_frame=body),
+    )
+
+
 @pytest.fixture
 def stationary_block_context(robot_setup):
     """
@@ -227,11 +239,7 @@ def test_grasping(stationary_block_context):
 
     box_body = world.get_body_by_name("box1")
     description = GraspingAction(
-        GraspCandidate(
-            graspable_annotation(world, box_body),
-            Pose.from_xyz_rpy(pitch=np.pi / 2, reference_frame=box_body),
-        ),
-        left_or_only_arm(robot_view),
+        top_down_grasp(world, box_body), left_or_only_arm(robot_view)
     )
     plan = Sequence([ParkArmsAction(robot_view.all_arms), description])
     run_plan(plan, extensions)
@@ -353,15 +361,36 @@ def test_move_tcp_follows_sine_waypoints(stationary_block_context, anchor_positi
 @pytest.fixture
 def physically_simulated_block_context(stationary_block_context):
     """
-    The block world with its physics running, so a plan performed in it is carried out
-    by the robot's own servos.
+    The block world with a box narrow enough for the gripper standing on the table, and
+    its physics running, so a plan performed in it is carried out by the robot's own
+    servos.
     """
     world, view, extensions = stationary_block_context
     if not isinstance(view, Tracy):
         pytest.skip("only Tracy is set up with the servos a physical simulation needs")
+    # box1 and box2 are wider than the 85 mm Tracy's gripper opens.
+    edge = 0.06
+    narrow_box = Body(
+        name=PrefixedName("narrow_box"),
+        collision=ShapeCollection([Box(scale=Scale(edge, edge, edge))]),
+        visual=ShapeCollection([Box(scale=Scale(edge, edge, edge))]),
+    )
+    with world.modify_world():
+        world.add_connection(
+            Connection6DoF.create_with_dofs(
+                world=world,
+                parent=world.root,
+                child=narrow_box,
+                name=PrefixedName("narrow_box_connection"),
+                parent_T_connection_expression=HomogeneousTransformationMatrix.from_xyz_rpy(
+                    0.8, 0.3, view.table.top_z + edge / 2
+                ),
+            )
+        )
+        world.add_semantic_annotations([HasGraspCandidates(root=narrow_box)])
     simulation = MujocoSim(world=world, headless=True)
     simulation.start_stepped_simulation()
-    yield world, view, extensions, simulation
+    yield world, view, extensions, simulation, narrow_box
     simulation.stop_simulation()
 
 
@@ -392,22 +421,20 @@ def test_a_pick_in_physics_leaves_the_box_to_the_grip(
     Nothing puts the box under the gripper in the model, so whether it comes along at
     all is up to the pads holding it.
     """
-    world, view, extensions, simulation = physically_simulated_block_context
+    world, view, extensions, simulation, box = physically_simulated_block_context
     arm = left_or_only_arm(view)
-    box = world.get_body_by_name("box1")
     stood_on = box.parent_connection.parent
-    plan = Sequence(
-        [
-            ParkArmsAction(view.all_arms),
-            PickUpAction(graspable_annotation(world, box).grasp_candidates()[0], arm),
-        ]
-    )
+    resting_height = box.global_pose.position.to_np().flatten()[2]
+    pick = PickUpAction(top_down_grasp(world, box), arm)
+    plan = Sequence([ParkArmsAction(view.all_arms), pick])
 
     perform_in_physics(plan, extensions, simulation)
 
     assert box.parent_connection.parent is stood_on
     with pytest.raises(NoEdgeBetweenNodes):
         world.get_connection(arm.end_effector.tool_frame, box)
+    lifted_by = box.global_pose.position.to_np().flatten()[2] - resting_height
+    assert lifted_by == pytest.approx(pick.retreat_distance, abs=0.01)
 
 
 @pytest.mark.skipif(
@@ -420,17 +447,22 @@ def test_a_place_in_physics_leaves_the_box_to_the_release(
     Nothing puts the box back under the world in the model either, so where it ends up
     is where the pads opening leaves it.
     """
-    world, view, extensions, simulation = physically_simulated_block_context
+    world, view, extensions, simulation, box = physically_simulated_block_context
     arm = left_or_only_arm(view)
-    box = world.get_body_by_name("box1")
     stood_on = box.parent_connection.parent
+    resting_height = box.global_pose.position.to_np().flatten()[2]
+    target = Point3(
+        *place_position.to_np().flatten()[:2],
+        resting_height,
+        reference_frame=world.root,
+    )
     plan = Sequence(
         [
             ParkArmsAction(view.all_arms),
-            PickUpAction(graspable_annotation(world, box).grasp_candidates()[0], arm),
+            PickUpAction(top_down_grasp(world, box), arm),
             PlaceAction(
                 graspable_annotation(world, box),
-                Pose(place_position, reference_frame=world.root),
+                Pose(target, reference_frame=world.root),
             ),
         ]
     )
@@ -438,3 +470,8 @@ def test_a_place_in_physics_leaves_the_box_to_the_release(
     perform_in_physics(plan, extensions, simulation)
 
     assert box.parent_connection.parent is stood_on
+    assert np.allclose(
+        box.global_pose.position.to_np().flatten()[:3],
+        target.to_np().flatten()[:3],
+        atol=0.01,
+    )

@@ -486,3 +486,32 @@ def test_reading_the_travel_stands_the_world_back_up(tracy_world):
     gripper.travel_when_closing
 
     np.testing.assert_array_equal(tracy_world.state.positions, positions_before)
+
+
+# %% how wide a gripper opens
+
+
+def test_a_gripper_opens_as_wide_as_its_fingertips_stand_in_its_open_state(
+    pr2_gripper,
+):
+    world = pr2_gripper._world
+    pr2_gripper.get_joint_state_by_type(GripperState.CLOSE).apply_to(world)
+    positions_before = world.state.positions.copy()
+    with world.reset_state_context():
+        pr2_gripper.get_joint_state_by_type(GripperState.OPEN).apply_to(world)
+        expected = pr2_gripper.fingertips.separation
+
+    assert pr2_gripper.separation_when_open == pytest.approx(expected)
+    np.testing.assert_array_equal(world.state.positions, positions_before)
+
+
+def test_a_robotiq_2f_85_opens_as_wide_as_its_name_says(tracy_world):
+    """
+    The 2F-85 is named for the 85 mm its pads stand apart when open, so this is read on
+    the pads' surfaces rather than on the fingertip frames.
+    """
+    gripper = tracy_world.get_semantic_annotations_by_type(Tracy)[
+        0
+    ].left_arm.end_effector
+
+    assert gripper.separation_when_open == pytest.approx(0.085, abs=0.001)

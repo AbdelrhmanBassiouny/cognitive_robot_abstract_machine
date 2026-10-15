@@ -9,6 +9,7 @@ from typing_extensions import List, Optional, Type
 from coraplex.plans.context_extensions import RobotAccess
 from coraplex.plans.executors import PlanExecutor
 from coraplex.robot_plans.actions.base import Action
+from coraplex.robot_plans.actions.core.exceptions import WidthBeyondGripperOpening
 from coraplex.datastructures.trajectory import PoseTrajectory
 from coraplex.robot_plans.actions.core.navigation import LookAtAction, NavigateAction
 from coraplex.robot_plans.actions.core.robot_body import (
@@ -583,3 +584,26 @@ def test_a_squeeze_sends_the_fingers_past_the_width(simple_pr2_context):
     apart = touching.action_body.goal_point.to_np()[:3].ravel()
     pressed = pressing.action_body.goal_point.to_np()[:3].ravel()
     assert np.linalg.norm(pressed) == pytest.approx(np.linalg.norm(apart) - 2 * squeeze)
+
+
+def test_fingers_are_not_sent_wider_than_their_gripper_opens(simple_pr2_context):
+    _, robot, extensions = simple_pr2_context
+    gripper = robot.left_arm.end_effector
+    action = MoveFingersToWidthAction(
+        gripper=gripper, width=gripper.separation_when_open + 0.01
+    )
+
+    with pytest.raises(WidthBeyondGripperOpening):
+        _expanded(action, extensions, physically_simulated_executor(extensions))
+
+
+def test_fingers_may_be_sent_as_wide_as_their_gripper_opens(simple_pr2_context):
+    _, robot, extensions = simple_pr2_context
+    gripper = robot.left_arm.end_effector
+    action = MoveFingersToWidthAction(
+        gripper=gripper, width=gripper.separation_when_open
+    )
+
+    _expanded(action, extensions, physically_simulated_executor(extensions))
+
+    assert isinstance(action.action_body, CartesianPosition)

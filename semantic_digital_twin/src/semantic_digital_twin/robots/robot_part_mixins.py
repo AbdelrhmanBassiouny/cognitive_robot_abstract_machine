@@ -409,6 +409,18 @@ class HasTwoFingers(
         with self._world.reset_state_context():
             return self._meeting_point_in_state(self.fingertips, GripperState.CLOSE)
 
+    @cached_property
+    def separation_when_open(self) -> float:
+        """
+        How far apart the fingertips' facing surfaces stand with the gripper open, in
+        metres: the widest object it can close on.
+
+        A constant of the gripper's description, read once and kept.
+        """
+        with self._world.reset_state_context():
+            self.get_joint_state_by_type(GripperState.OPEN).apply_to(self._world)
+            return self.fingertips.separation
+
     # %% reaching and reading back a grasp
 
     def tool_frame_goal_for_grasp(self, grasp_pose: Pose) -> Pose:
