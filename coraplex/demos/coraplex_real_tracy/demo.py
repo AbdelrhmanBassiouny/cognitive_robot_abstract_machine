@@ -69,30 +69,29 @@ else:
     VizMarkerPublisher(_world=world, node=node)
 
 print("Setup World")
+tracy = world.get_semantic_annotations_by_type(Tracy)[0]
+# Narrower than the 85 mm Tracy's grippers open, so the fingers can close on a box.
+box_edge = 0.06
+box_scale = Scale(box_edge, box_edge, box_edge)
+table_top_z = tracy.table.top_z
 # Setup cubes
 with world.modify_world():
     box1 = Body(
         name=PrefixedName("Box1"),
-        collision=ShapeCollection(shapes=[Box(scale=Scale(0.1, 0.1, 0.1))]),
-        visual=ShapeCollection(
-            shapes=[Box(scale=Scale(0.1, 0.1, 0.1), color=Color(1, 0, 0))]
-        ),
+        collision=ShapeCollection(shapes=[Box(scale=box_scale)]),
+        visual=ShapeCollection(shapes=[Box(scale=box_scale, color=Color(1, 0, 0))]),
     )
 
     box2 = Body(
         name=PrefixedName("Box2"),
-        collision=ShapeCollection(shapes=[Box(scale=Scale(0.1, 0.1, 0.1))]),
-        visual=ShapeCollection(
-            shapes=[Box(scale=Scale(0.1, 0.1, 0.1), color=Color(0, 1, 0))]
-        ),
+        collision=ShapeCollection(shapes=[Box(scale=box_scale)]),
+        visual=ShapeCollection(shapes=[Box(scale=box_scale, color=Color(0, 1, 0))]),
     )
 
     box3 = Body(
         name=PrefixedName("Box3"),
-        collision=ShapeCollection(shapes=[Box(scale=Scale(0.1, 0.1, 0.1))]),
-        visual=ShapeCollection(
-            shapes=[Box(scale=Scale(0.1, 0.1, 0.1), color=Color(0, 0, 1))]
-        ),
+        collision=ShapeCollection(shapes=[Box(scale=box_scale)]),
+        visual=ShapeCollection(shapes=[Box(scale=box_scale, color=Color(0, 0, 1))]),
     )
 
     world.add_kinematic_structure_entity(box1)
@@ -111,7 +110,7 @@ with world.modify_world():
             child=box1,
             world=world,
             parent_T_connection_expression=HomogeneousTransformationMatrix.from_xyz_rpy(
-                0.8, 0.0, 0.92
+                0.8, 0.0, table_top_z + box_edge / 2
             ),
         )
     )
@@ -122,7 +121,7 @@ with world.modify_world():
             child=box2,
             world=world,
             parent_T_connection_expression=HomogeneousTransformationMatrix.from_xyz_rpy(
-                0.8, 0.25, 0.92
+                0.8, 0.25, table_top_z + box_edge / 2
             ),
         )
     )
@@ -133,13 +132,12 @@ with world.modify_world():
             child=box3,
             world=world,
             parent_T_connection_expression=HomogeneousTransformationMatrix.from_xyz_rpy(
-                0.8, -0.25, 0.92
+                0.8, -0.25, table_top_z + box_edge / 2
             ),
         )
     )
 
 # The executor needs the ROS node to reach the real robot
-tracy = world.get_semantic_annotations_by_type(Tracy)[0]
 executor_type: type[PlanExecutor] = (
     RealRobotPlanExecutor if drives_real_robot else SimulatedPlanExecutor
 )
@@ -160,7 +158,9 @@ plan = Sequence(
         ),
         PlaceAction(
             box2_annotation,
-            Pose.from_xyz_rpy(0.8, 0.0, 1.02, yaw=0, reference_frame=world.root),
+            Pose.from_xyz_rpy(
+                0.8, 0.0, table_top_z + 1.5 * box_edge, reference_frame=world.root
+            ),
         ),
         # Stack Box 3
         ParkArmsAction(tracy.all_arms),
@@ -175,7 +175,9 @@ plan = Sequence(
         ),
         PlaceAction(
             box3_annotation,
-            Pose.from_xyz_rpy(0.8, 0.0, 1.12, yaw=0, reference_frame=world.root),
+            Pose.from_xyz_rpy(
+                0.8, 0.0, table_top_z + 2.5 * box_edge, reference_frame=world.root
+            ),
         ),
     ]
 )
