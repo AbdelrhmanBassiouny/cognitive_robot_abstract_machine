@@ -20,6 +20,7 @@ from coraplex.plans.executables import GiskardExecutable
 from coraplex.plans.factories import code
 from coraplex.plans.plan_node import PlanNode
 from coraplex.demonstrations import RobotDemonstration, RobotDemonstrationRosSession
+from giskardpy.executor import NoPacing, Pacer, SimulationPacer
 from semantic_digital_twin.robots.minimal_robot import MinimalRobot
 from semantic_digital_twin.world import World
 
@@ -73,6 +74,11 @@ class RecordingDemonstration(RobotDemonstration):
     Collision avoidance setting in force while the plan ran.
     """
 
+    observed_pacer: Pacer | None = field(default=None)
+    """
+    What a kinematically simulated motion would have waited with while the plan ran.
+    """
+
     built_context: Context | None = field(default=None)
     """
     The context this demonstration built for its plan.
@@ -124,6 +130,7 @@ class RecordingDemonstration(RobotDemonstration):
             raise PlanDeliberatelyFailed()
         self.observed_execution_type = GiskardExecutable.execution_type
         self.observed_collision_avoidance = GiskardExecutable.collision_avoidance
+        self.observed_pacer = GiskardExecutable.kinematic_pacer()
         self.observed_segmenting_events = self.segmenting_events
 
     def tear_down(self) -> None:
@@ -205,6 +212,32 @@ def test_plan_runs_in_the_demonstrations_execution_environment(cylinder_bot_worl
     assert demonstration.observed_collision_avoidance is True
     assert GiskardExecutable.execution_type is previous_execution_type
     assert GiskardExecutable.collision_avoidance is False
+
+
+def test_a_demonstration_paced_against_the_clock_plays_its_motions_at_that_pace(
+    cylinder_bot_world,
+):
+    demonstration = RecordingDemonstration(
+        world=cylinder_bot_world, used_robot=MinimalRobot, real_time_factor=2.0
+    )
+
+    demonstration.run()
+
+    assert isinstance(demonstration.observed_pacer, SimulationPacer)
+    assert demonstration.observed_pacer.real_time_factor == 2.0
+    assert GiskardExecutable.real_time_factor is None
+
+
+def test_a_demonstration_paced_by_nothing_plays_its_motions_as_fast_as_it_can(
+    cylinder_bot_world,
+):
+    demonstration = RecordingDemonstration(
+        world=cylinder_bot_world, used_robot=MinimalRobot
+    )
+
+    demonstration.run()
+
+    assert isinstance(demonstration.observed_pacer, NoPacing)
 
 
 def test_run_returns_the_world_it_acted_on(cylinder_bot_world):

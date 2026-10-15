@@ -430,12 +430,17 @@ The name the sorting plans are built through in a command, e.g.
 """
 
 
-def main(capture_name: str = DEFAULT_CAPTURE, takes_commands: bool = True) -> None:
+def main(
+    capture_name: str = DEFAULT_CAPTURE,
+    takes_commands: bool = True,
+    real_time_factor: float = 1.0,
+) -> None:
     """
     Have Tracy sort what it saw in a capture, then let the viewer command it.
 
     :param capture_name: The capture the robot looks at.
     :param takes_commands: Whether the robot takes commands once the sorting is done.
+    :param real_time_factor: How much faster than the clock Tracy moves.
     """
     TracyMontessoriDemonstration(
         capture_name=capture_name,
@@ -444,6 +449,7 @@ def main(capture_name: str = DEFAULT_CAPTURE, takes_commands: bool = True) -> No
         questions=ShowcaseQuestions.from_file(MONTESSORI_QUESTIONS_FILE),
         takes_commands=takes_commands,
         collision_avoidance=False,
+        real_time_factor=real_time_factor,
     ).run()
 
 

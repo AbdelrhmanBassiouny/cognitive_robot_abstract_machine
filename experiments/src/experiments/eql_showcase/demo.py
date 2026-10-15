@@ -152,6 +152,7 @@ class ShowcasedDemonstration(RobotDemonstration):
             execution_environment=lambda: ExecutionEnvironment(
                 execution_type=self.execution_type,
                 collision_avoidance=self.collision_avoidance,
+                real_time_factor=self.real_time_factor,
             ),
             observe_plan=self._observe_command_plan,
             homes=self.homes,

@@ -13,7 +13,7 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
-from coraplex.plans.executables import Executable
+from coraplex.plans.executables import Executable, GiskardExecutable
 from coraplex.plans.plan_node import ExecutionBoundaryNode
 from semantic_digital_twin.spatial_types import HomogeneousTransformationMatrix
 from semantic_digital_twin.world_description.world_entity import Body
@@ -48,6 +48,14 @@ class FallIntoHolesExecutable(Executable):
     """
     How long a fall takes.
     """
+
+    @property
+    def real_time_factor(self) -> float:
+        """
+        :return: How much faster than the clock the fall plays, as fast as the motions
+            around it.
+        """
+        return GiskardExecutable.real_time_factor or 1.0
 
     def execute(self) -> None:
         for piece in self.twin.world.get_semantic_annotations_by_type(SeenPiece):
@@ -93,7 +101,7 @@ class FallIntoHolesExecutable(Executable):
             connection.origin = HomogeneousTransformationMatrix(
                 fallen, reference_frame=connection.parent
             )
-            time.sleep(self.seconds / self.steps)
+            time.sleep(self.seconds / self.steps / self.real_time_factor)
 
 
 @dataclass(eq=False, repr=False)
