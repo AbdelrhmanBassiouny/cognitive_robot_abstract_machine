@@ -1,0 +1,8 @@
+[
+  {"number": 4, "state": "open", "head": {"ref": "reopened-work", "repo": {"full_name": "owner/repo"}}},
+  {"number": 3, "state": "closed", "head": {"ref": "reopened-work", "repo": {"full_name": "owner/repo"}}},
+  {"number": 2, "state": "closed", "head": {"ref": "merged-work", "repo": {"full_name": "owner/repo"}}},
+  {"number": 1, "state": "open", "head": {"ref": "open-work", "repo": {"full_name": "owner/repo"}}},
+  {"number": 5, "state": "closed", "head": {"ref": "open-work", "repo": {"full_name": "someone/fork"}}},
+  {"number": 6, "state": "closed", "head": {"ref": "deleted-fork-work", "repo": null}}
+]

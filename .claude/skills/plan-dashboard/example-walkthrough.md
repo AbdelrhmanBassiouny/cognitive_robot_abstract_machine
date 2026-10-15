@@ -105,22 +105,20 @@ items:
 ```
 
 `plan.yaml` is the **thin, structured** half: waves/tracks/items, statuses,
-dependencies, PR numbers. Everything's own "why" — design decisions,
-history, standing conventions — belongs in `roadmap.md` instead:
+dependencies, PR numbers, and each item's scope in its `notes`. The plan's
+standing rules - the decisions every item must follow - go in `roadmap.md`,
+as a title and a short list of entries:
 
 ```markdown
-# Notification Retry Overhaul — Roadmap
+# Notification Retry Overhaul — standing rules
 
-## Why
-Notification delivery currently fails hard on the first transient error...
-
-## Decisions locked in
 - Retries use exponential backoff with jitter, not a fixed delay.
-- Every item in the `retry-logic` track stacks its branch directly on
-  `retry-backoff-strategy`'s branch once that pull request is open and
-  ready for review — no need to wait for it to merge first.
+- Every item in the retry-logic track stacks its branch directly on
+  retry-backoff-strategy's branch once that pull request is ready for review.
 ```
 
+History and finished work are kept in neither file; they live in git and on
+the pull requests.
 Neither file ever stores live GitHub state (open/draft/merged/CI) — that's
 always fetched fresh, every run, in the next step.
 
@@ -187,7 +185,8 @@ prepended so the pasted session starts on that model.
   button copies `/plan-item-kickoff notification-retry-overhaul
   retry-metrics-dashboard`. The [`plan-item-kickoff`](../plan-item-kickoff/SKILL.md)
   skill gathers the item's context (manifest entry, roadmap history, its
-  dependency's live state, patterns from already-landed sibling items) and
+  dependency's live state, patterns from the merged pull requests that last
+  changed the files it will touch) and
   proposes a concrete implementation plan via plan mode — it never writes
   code itself.
 - **Resolve a stalled item** — `retry-load-testing`'s "Resolve" button copies

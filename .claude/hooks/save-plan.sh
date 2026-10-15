@@ -1,8 +1,8 @@
 #!/bin/bash
 set -euo pipefail
 
-# Persists edits made to CLAUDE.local.md's plan-manifest/plan-roadmap
-# sections back onto the personal-notes branch, at
+# Persists a plan's edited manifest and roadmap onto the personal-notes
+# branch, at
 # .claude/personal/plans/<plan-id>/{plan.yaml,roadmap.md} - and regenerates
 # the generated branch->plan-id reverse index
 # (.claude/personal/plans/_generated/branch-index.tsv) in the same commit,
@@ -12,47 +12,32 @@ set -euo pipefail
 # full plan.yaml schema, and .claude/skills/plan-dashboard/SKILL.md for how
 # the manifest is consumed.
 #
-# This is the write half of the loop session-start.sh's own plan section
-# points a session at when it wants to update a plan it's already tracking:
-# edit CLAUDE.local.md between the BEGIN-PLAN-MANIFEST/END-PLAN-MANIFEST and
-# BEGIN-PLAN-ROADMAP/END-PLAN-ROADMAP markers, then run this script.
-#
-# Usage (from anywhere, after editing CLAUDE.local.md):
-#   "$CLAUDE_PROJECT_DIR/.claude/hooks/save-plan.sh" [<plan-id>]
-#
-# <plan-id> is optional if the current branch already appears in some
-# plan's items[] (session-start.sh's plan_id_for_branch lookup resolves it,
-# same as it did to populate CLAUDE.local.md in the first place) - pass it
-# explicitly when creating a brand-new plan (not yet in the generated
-# index, so there's nothing to auto-derive from), or when saving a plan
-# from a branch that isn't itself one of its tracked items (e.g. a session
-# coordinating the whole plan rather than working one item).
-#
-# Bootstrapping a brand-new plan - two equivalent ways:
+# Usage, after copying the plan's files off the personal-notes branch and
+# editing them:
 #   "$CLAUDE_PROJECT_DIR/.claude/hooks/save-plan.sh" <plan-id> \
 #     --manifest <path/to/plan.yaml> --roadmap <path/to/roadmap.md>
-# reads the manifest/roadmap directly from the given files instead of
-# extracting them from CLAUDE.local.md's markers - the plan id must still be
-# explicit, since a brand-new plan has no entry in the reverse index yet to
-# auto-derive it from. This is what .claude/skills/plan-create/SKILL.md
-# uses, since it already has the drafted content in hand and gains nothing
-# from round-tripping it through CLAUDE.local.md first. Doing it by hand is
-# still just as valid: add the BEGIN-PLAN-MANIFEST/END-PLAN-MANIFEST and
-# BEGIN-PLAN-ROADMAP/END-PLAN-ROADMAP marker pairs to CLAUDE.local.md
-# yourself (session-start.sh only ever scaffolds them for a branch the index
-# already resolves, which a brand-new plan by definition isn't in yet),
-# write your plan.yaml/roadmap.md content between them, then run this
-# script with the new plan's id and no --manifest/--roadmap flags.
+# The plan id is always explicit with these flags, since a brand-new plan has
+# no entry in the reverse index yet to derive it from.
+#
+# Without the flags, the manifest and roadmap are read from CLAUDE.local.md
+# between BEGIN-PLAN-MANIFEST/END-PLAN-MANIFEST and
+# BEGIN-PLAN-ROADMAP/END-PLAN-ROADMAP markers a session wrote there itself
+# (session-start.sh loads only the branch's own item, read-only, and writes
+# no such markers), and <plan-id> may be omitted when the current branch is
+# one of the plan's items.
+#
+# Before anything is pushed, landed items are dropped (with every depends_on
+# edge to them), a plan left with no items is removed, and a plan over the
+# limits in basstler/src/basstler/plan_size_limits.py is refused, naming
+# each violation.
 #
 # This script pushes data only. It never calls the Artifact tool (only a
 # live Claude session can), so it does not regenerate the dashboard itself -
 # it prints a reminder to run /plan-dashboard <plan-id> afterward.
 #
-# Requires the package's interpreter with its dependencies to parse/validate
-# manifests and regenerate the reverse index (unlike session-start.sh's read
-# path, which is grep/awk-only so it stays dependency-free on every session
-# start - this script only runs when a session is actively editing a plan,
-# after a session start has set that interpreter up).
+# Requires the package's interpreter with its dependencies to parse, prune and
+# check manifests and to regenerate the reverse index (a session start sets that
+# interpreter up).
 #
 # Resolves the remote/branch exactly like the other hook scripts (git
 # config > environment variable > the zero-config default, plus the
@@ -70,23 +55,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/resolve-personal-notes-config.sh"
 
-if ! command -v "${BASSTLER_PYTHON}" > /dev/null 2>&1; then
-  echo "${BASSTLER_PYTHON} is required to parse/validate plan manifests and regenerate the branch index." >&2
-  exit 1
-fi
-# Asked through the package's own declaration rather than by importing one
-# name here, so this script carries no Python of its own and no second opinion
-# about what the tooling needs. A session start installs these; a checkout
-# where that never ran reaches this message instead of a traceback.
-if ! MISSING_DEPENDENCIES="$(missing_dependencies)"; then
-  echo "Could not read what the basstler package requires from ${BASSTLER_PYPROJECT_FILE}." >&2
-  exit 1
-fi
-if [ -n "${MISSING_DEPENDENCIES}" ]; then
-  echo "The basstler package's requirements are not installed for ${BASSTLER_PYTHON}: ${MISSING_DEPENDENCIES}" >&2
-  echo "Start a new session, or run: pip --python ${BASSTLER_PYTHON} install --editable ./${BASSTLER_SOURCE_TREE}" >&2
-  exit 1
-fi
+require_basstler_python
 
 PLAN_ID=""
 MANIFEST_SOURCE_FILE=""
@@ -211,12 +180,15 @@ fi
 git branch -D "${SCRATCH_BRANCH}" > /dev/null 2>&1 || true
 git worktree add -b "${SCRATCH_BRANCH}" "${SCRATCH_DIR}" FETCH_HEAD --quiet
 
-PLAN_DIR="${SCRATCH_DIR}/$(plan_directory_path "${PLAN_ID}")"
+PLAN_DIRECTORY_PATH="$(plan_directory_path "${PLAN_ID}")"
 MANIFEST_PATH="$(plan_manifest_path "${PLAN_ID}")"
 ROADMAP_PATH="$(plan_roadmap_path "${PLAN_ID}")"
-mkdir -p "${PLAN_DIR}"
-cp "${MANIFEST_FILE}" "${SCRATCH_DIR}/${MANIFEST_PATH}"
-cp "${ROADMAP_FILE}" "${SCRATCH_DIR}/${ROADMAP_PATH}"
+# Prints "saved", or "removed" once every item has landed; exits 1 naming each
+# limit a plan breaks.
+STAGED_PLAN="$("${BASSTLER_PYTHON}" -m "${PLAN_SIZE_LIMITS_MODULE}" stage \
+  "${MANIFEST_FILE}" "${ROADMAP_FILE}" \
+  --manifest-destination "${SCRATCH_DIR}/${MANIFEST_PATH}" \
+  --roadmap-destination "${SCRATCH_DIR}/${ROADMAP_PATH}")" || exit 1
 
 mkdir -p "$(dirname "${SCRATCH_DIR}/${PLAN_BRANCH_INDEX_PATH}")"
 "${BASSTLER_PYTHON}" -m "${PLAN_MANIFEST_TOOLS_MODULE}" regenerate-branch-index \
@@ -225,9 +197,8 @@ mkdir -p "$(dirname "${SCRATCH_DIR}/${PLAN_BRANCH_INDEX_PATH}")"
   --manifest-filename "${PLAN_MANIFEST_FILENAME}" \
   --output "${SCRATCH_DIR}/${PLAN_BRANCH_INDEX_PATH}"
 
-git -C "${SCRATCH_DIR}" add \
-  "${MANIFEST_PATH}" \
-  "${ROADMAP_PATH}" \
+git -C "${SCRATCH_DIR}" add --all -- \
+  "${PLAN_DIRECTORY_PATH}" \
   "${PLAN_BRANCH_INDEX_PATH}"
 
 if git -C "${SCRATCH_DIR}" diff --cached --quiet; then
@@ -238,5 +209,9 @@ fi
 git -C "${SCRATCH_DIR}" commit --quiet -m "Update plan manifest for ${PLAN_ID}"
 git -C "${SCRATCH_DIR}" push "${ACTIVE_NOTES_REMOTE}" "HEAD:${NOTES_BRANCH}"
 
+if [ "${STAGED_PLAN}" = "removed" ]; then
+  echo "Every item of plan '${PLAN_ID}' has landed, so the plan was removed from '${NOTES_BRANCH}' on '${ACTIVE_NOTES_REMOTE}'."
+  exit 0
+fi
 echo "Saved plan '${PLAN_ID}' (plan.yaml, roadmap.md, and the branch index) back to '${NOTES_BRANCH}' on '${ACTIVE_NOTES_REMOTE}'."
 echo "Run /plan-dashboard ${PLAN_ID} to refresh its dashboard Artifact - this script only pushes data, it can't call the Artifact tool itself."

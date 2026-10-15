@@ -101,16 +101,16 @@ to read it.
 For a single piece of work rather than a whole plan, `/add-plan-item` runs that
 same decision on its own and is the lighter-weight way in.
 
-If migrating a source doc: preserve its detail rather than compressing it
-away. Structured facts (branch, PR, base, status, blockers) become
-`plan.yaml` items; everything else (design rationale, history, "why",
-standing conventions) becomes `roadmap.md`'s narrative — don't drop
-content just because it doesn't fit a YAML field. If the source doc has
-its own per-branch detail files (this repo's convention:
-`.claude/personal/pr-progress/<branch>.md`), you do not need to fold their
-full content into `roadmap.md` — that mechanism keeps working independently
-of the plan; link to it in spirit (mention it exists) rather than
-duplicating it.
+Write only what a future session needs to act, whether drafting fresh or
+migrating a source doc. Structured facts (branch, PR, status, blockers)
+become `plan.yaml` items, with each item's scope and binding decisions in its
+`notes`; the plan's standing rules become `roadmap.md`, a title and a short
+list of one-sentence entries. History, rationale already settled in code, and
+work that has landed are left out: they live in git and on the pull requests.
+`save-plan.sh` refuses a plan over the limits in `${PLAN_SIZE_LIMITS_MODULE}`
+(items per plan, characters per note and blocker, roadmap entries), so a
+source doc that does not fit is condensed now, or split into more than one
+plan, rather than migrated whole.
 
 ## 4. Cross-check every named branch/PR against live GitHub state
 

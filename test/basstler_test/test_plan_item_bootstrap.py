@@ -13,7 +13,6 @@ second, independently-drifting copy of the manifest's own vocabulary.
 
 from __future__ import annotations
 
-import hashlib
 import json
 import shutil
 import subprocess
@@ -40,10 +39,13 @@ from basstler.plan_item_bootstrap import (
     UnknownPlanError,
     ValueStyle,
     WorkOpenRequest,
+    append_roadmap_entry,
     apply_item_fields,
     open_work,
     record_item,
 )
+from basstler.plan_size_limits import Roadmap
+
 from .scratch_repository import ScratchRepository
 from .constants import DatasetLocation, ScratchBranch
 
@@ -205,26 +207,11 @@ def published_plan(repository: ScratchRepository) -> dict[PlanDocument, str]:
     }
 
 
-def roadmap_section(repository: ScratchRepository, content: str) -> Path:
-    """
-    Write a roadmap section to a scratch file, the way a caller hands one over.
-
-    The file is named after its content so that a test overriding the default section
-    cannot have its file overwritten by the default one being built alongside it.
-
-    :param repository: The scratch repository to write within.
-    :param content: The section's markdown.
-    :return: The path written to.
-    """
-    digest = hashlib.sha256(content.encode()).hexdigest()[:12]
-    return repository.write(f"sections/{digest}.md", content)
-
-
 def record_request(repository: ScratchRepository, **overrides: object):
     """
     Build a record request, overriding only what a test cares about.
 
-    :param repository: The scratch repository the roadmap section is written in.
+    :param repository: The scratch repository the request is recorded against.
     :param overrides: Fields to replace on the default request.
     :return: The request.
     """
@@ -232,7 +219,6 @@ def record_request(repository: ScratchRepository, **overrides: object):
         plan_identifier=PLAN_IDENTIFIER,
         item_identifier=EXISTING_ITEM,
         status=ItemStatus.IN_PROGRESS,
-        roadmap_section_path=roadmap_section(repository, "## A new section\n"),
     )
     defaults.update(overrides)
     return ItemRecordRequest(**defaults)
@@ -293,21 +279,29 @@ def test_recording_leaves_every_other_manifest_line_byte_identical(
     assert published_plan(bootstrap_repository)[PlanDocument.MANIFEST] == expected
 
 
-def test_recording_appends_the_roadmap_section_without_rewriting_the_roadmap(
+def test_recording_appends_the_roadmap_entry_without_rewriting_the_roadmap(
     bootstrap_repository: ScratchRepository,
 ):
-    section = "## An appended section\n\nIts body.\n"
+    entry = "A rule the item settled,\nwritten over two lines."
     record_item(
-        record_request(
-            bootstrap_repository,
-            roadmap_section_path=roadmap_section(bootstrap_repository, section),
-        ),
+        record_request(bootstrap_repository, roadmap_entry=entry),
         project_root=bootstrap_repository.project_root,
     )
 
     roadmap = published_plan(bootstrap_repository)[PlanDocument.ROADMAP]
-    assert roadmap.startswith(PLAN_ROADMAP)
-    assert roadmap.endswith(section)
+    assert roadmap == append_roadmap_entry(PLAN_ROADMAP, entry)
+    assert Roadmap.from_text(roadmap).entries[-1] == " ".join(entry.split())
+
+
+def test_recording_without_a_roadmap_entry_leaves_the_roadmap_untouched(
+    bootstrap_repository: ScratchRepository,
+):
+    record_item(
+        record_request(bootstrap_repository),
+        project_root=bootstrap_repository.project_root,
+    )
+
+    assert published_plan(bootstrap_repository)[PlanDocument.ROADMAP] == PLAN_ROADMAP
 
 
 def test_recording_a_new_item_appends_it_to_the_manifest(
@@ -728,11 +722,10 @@ def run_bootstrap(
     ).run(*arguments)
 
 
-def record_arguments(section: Path, plan: str = PLAN_IDENTIFIER) -> list[str]:
+def record_arguments(plan: str = PLAN_IDENTIFIER) -> list[str]:
     """
     The command line for recording the existing item.
 
-    :param section: The roadmap section to append.
     :param plan: The plan to record against.
     :return: The arguments.
     """
@@ -744,17 +737,14 @@ def record_arguments(section: Path, plan: str = PLAN_IDENTIFIER) -> list[str]:
         EXISTING_ITEM,
         "--status",
         ItemStatus.IN_PROGRESS.value,
-        "--roadmap-section",
-        str(section),
     ]
 
 
 def test_the_record_subcommand_reports_status_and_exit_code_first(
     bootstrap_repository: ScratchRepository,
 ):
-    section = roadmap_section(bootstrap_repository, "## From the command line\n")
 
-    result = run_bootstrap(bootstrap_repository, *record_arguments(section))
+    result = run_bootstrap(bootstrap_repository, *record_arguments())
 
     assert result.returncode == 0, result.stderr
     report = json.loads(result.stdout)
@@ -766,11 +756,8 @@ def test_the_record_subcommand_reports_status_and_exit_code_first(
 def test_the_command_line_names_the_status_it_failed_with(
     bootstrap_repository: ScratchRepository,
 ):
-    section = roadmap_section(bootstrap_repository, "## Section\n")
 
-    result = run_bootstrap(
-        bootstrap_repository, *record_arguments(section, plan="no-such-plan")
-    )
+    result = run_bootstrap(bootstrap_repository, *record_arguments(plan="no-such-plan"))
 
     assert result.returncode == ExitCode.UNKNOWN_PLAN
     assert ExitCode.UNKNOWN_PLAN.name_for_a_caller in result.stderr
@@ -779,9 +766,8 @@ def test_the_command_line_names_the_status_it_failed_with(
 def test_the_dashboard_republish_is_handed_back_rather_than_attempted(
     bootstrap_repository: ScratchRepository,
 ):
-    section = roadmap_section(bootstrap_repository, "## Section\n")
 
-    result = run_bootstrap(bootstrap_repository, *record_arguments(section))
+    result = run_bootstrap(bootstrap_repository, *record_arguments())
 
     report = json.loads(result.stdout)
     assert report["dashboard_command"] == f"/plan-dashboard {PLAN_IDENTIFIER}"

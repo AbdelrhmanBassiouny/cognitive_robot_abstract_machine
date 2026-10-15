@@ -42,6 +42,8 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/resolve-personal-notes-config.sh"
 
+require_basstler_python
+
 PROGRESS_PATH="$(pr_progress_path || true)"
 if [ -z "${PROGRESS_PATH}" ]; then
   echo "Not on a PR branch (or on the personal-notes branch itself) - nothing to save." >&2
@@ -79,6 +81,8 @@ trap cleanup EXIT
 awk '/^<!-- BEGIN-PR-PROGRESS -->$/{flag=1; next} /^<!-- END-PR-PROGRESS -->$/{flag=0} flag' \
   "${CLAUDE_LOCAL_MD}" > "${CONTENT_FILE}"
 
+"${BASSTLER_PYTHON}" -m "${PLAN_SIZE_LIMITS_MODULE}" check-progress "${CONTENT_FILE}" || exit 1
+
 git branch -D __save-pr-progress-tmp > /dev/null 2>&1 || true
 # FETCH_HEAD: see the note on FETCH_HEAD vs. "<remote>/<branch>" refs in
 # save-personal-notes.sh - a URL-form remote has no tracking ref, and
@@ -88,9 +92,18 @@ git worktree add -b __save-pr-progress-tmp "${SCRATCH_DIR}" FETCH_HEAD --quiet
 
 mkdir -p "${SCRATCH_DIR}/$(dirname "${PROGRESS_PATH}")"
 cp "${CONTENT_FILE}" "${SCRATCH_DIR}/${PROGRESS_PATH}"
-git -C "${SCRATCH_DIR}" add "${PROGRESS_PATH}"
 
-if git -C "${SCRATCH_DIR}" diff --cached --quiet -- "${PROGRESS_PATH}"; then
+# Progress notes no session will read again - a branch gone from the remote,
+# or one whose pull requests have all merged or closed - are deleted in the
+# same commit. Never fatal: the save goes ahead unpruned if this fails.
+"${BASSTLER_PYTHON}" -m "${PROGRESS_NOTES_MODULE}" prune \
+  --directory "${SCRATCH_DIR}/${PR_PROGRESS_DIRECTORY}" \
+  --remote "$(git config "branch.${CURRENT_BRANCH}.remote" || echo origin)" \
+  --keep "${CURRENT_BRANCH}" \
+  || echo "Pruning finished branches' progress notes failed (above); saving without it." >&2
+git -C "${SCRATCH_DIR}" add --all -- "${PR_PROGRESS_DIRECTORY}"
+
+if git -C "${SCRATCH_DIR}" diff --cached --quiet -- "${PR_PROGRESS_DIRECTORY}"; then
   echo "No changes to save - '${PROGRESS_PATH}' on '${NOTES_BRANCH}' (remote '${ACTIVE_NOTES_REMOTE}') is already up to date."
   exit 0
 fi

@@ -6,12 +6,15 @@ real remote - no network access or real personal-notes branch involved.
 """
 
 import subprocess
+from pathlib import Path
 
 import pytest
 
 from basstler.locations import ProjectLocation
+from basstler.plan_item_bootstrap import PlanDocument
+from basstler.plan_model import PlanManifest
 
-from .constants import DatasetLocation, PersonalNotesPath
+from .constants import DatasetLocation, PersonalNotesPath, SavePlanOption
 from .project_declaration import ProjectDeclaration
 from .scratch_repository import ScratchRepository
 
@@ -187,3 +190,87 @@ def test_missing_marker_pair_fails_with_a_clear_message(
     assert result.stderr.startswith(
         "CLAUDE.local.md has no plan-manifest/plan-roadmap section to extract.\n"
     )
+
+
+# %% the size gate
+
+
+def save_from_files(
+    repository: ScratchRepository, manifest: Path, roadmap: Path
+) -> subprocess.CompletedProcess[str]:
+    """
+    Run save-plan.sh on a manifest and roadmap read from files.
+
+    :return: The finished hook.
+    """
+    plan_identifier = PlanManifest.from_file(manifest).identifier
+    return run_save_plan(
+        repository,
+        plan_identifier,
+        SavePlanOption.MANIFEST,
+        str(manifest),
+        SavePlanOption.ROADMAP,
+        str(roadmap),
+    )
+
+
+def saved_plan_directory(repository: ScratchRepository, plan_identifier: str) -> Path:
+    """
+    :return: The plan's directory in a fresh clone of the notes branch.
+    """
+    checkout = repository.clone_notes_branch(repository.project_root.parent / "verify")
+    return checkout / ProjectLocation.PLANS / plan_identifier
+
+
+def test_a_save_drops_the_landed_items(save_plan_repository: ScratchRepository):
+    result = save_from_files(
+        save_plan_repository,
+        DatasetLocation.PLAN_WITH_LANDED_ITEMS,
+        DatasetLocation.ROADMAP_OF_STANDING_RULES,
+    )
+    assert result.returncode == 0, result.stderr
+    manifest = PlanManifest.from_file(DatasetLocation.PLAN_WITH_LANDED_ITEMS)
+    saved = PlanManifest.from_file(
+        saved_plan_directory(save_plan_repository, manifest.identifier)
+        / PlanDocument.MANIFEST
+    )
+    assert saved == manifest.without_landed_items()
+
+
+def test_a_plan_with_every_item_landed_is_removed(
+    save_plan_repository: ScratchRepository,
+):
+    plan_identifier = PlanManifest.from_file(DatasetLocation.PLAN_ALL_LANDED).identifier
+    plan_directory = ProjectLocation.PLANS / plan_identifier
+    save_plan_repository.update_notes_branch_file(
+        plan_directory / PlanDocument.MANIFEST,
+        DatasetLocation.PLAN_ALL_LANDED.read_text(),
+    )
+    save_plan_repository.update_notes_branch_file(
+        plan_directory / PlanDocument.ROADMAP,
+        DatasetLocation.ROADMAP_OF_STANDING_RULES.read_text(),
+    )
+
+    result = save_from_files(
+        save_plan_repository,
+        DatasetLocation.PLAN_ALL_LANDED,
+        DatasetLocation.ROADMAP_OF_STANDING_RULES,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert not saved_plan_directory(save_plan_repository, plan_identifier).exists()
+
+
+def test_a_roadmap_with_a_dated_section_is_refused(
+    save_plan_repository: ScratchRepository,
+):
+    result = save_from_files(
+        save_plan_repository,
+        DatasetLocation.PLAN_WITH_LANDED_ITEMS,
+        DatasetLocation.ROADMAP_WITH_DATED_SECTION,
+    )
+    assert result.returncode == 1
+    assert not saved_plan_directory(
+        save_plan_repository,
+        PlanManifest.from_file(DatasetLocation.PLAN_WITH_LANDED_ITEMS).identifier,
+    ).exists()
