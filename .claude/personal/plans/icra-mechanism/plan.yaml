@@ -48,7 +48,7 @@ items:
   pull_request_number: null
   track: backend-routing
   depends_on: []
-  status: not started
+  status: deferred
   notes: 'The mechanism the thesis sentence names. A planner splits a statement into its predicates,
     assigns each to the backend whose capability admits it under the current twin state, orders
     them twin first, then perception for what the twin cannot answer, then physics for derived
@@ -62,7 +62,7 @@ items:
   pull_request_number: null
   track: backend-routing
   depends_on: []
-  status: not started
+  status: deferred
   notes: 'A backend that spawns what perception reported into a copy of the world, steps MuJoCo,
     and evaluates the derived predicates there: Stable, contact and penetration, InsideOf,
     the directional relations and Reachable, all of which #229 already made predicates. It
@@ -77,7 +77,7 @@ items:
   pull_request_number: null
   track: failure
   depends_on: []
-  status: not started
+  status: deferred
   blockers:
   - 'Cross-plan: the violated-expectation input comes from knowledge-directed-perception''s
     expectations-from-events (not started there), which that plan owns. Typing from the plan''s
@@ -96,7 +96,7 @@ items:
   pull_request_number: null
   track: failure
   depends_on: []
-  status: not started
+  status: deferred
   notes: 'The memo''s conditions as Condition instances: full; no working memory; no hole-shape
     knowledge (the board''s holes unknown to the twin, which also needs the mesh scale 0.865
     #236 measured to be in the twin first, so the full condition is honest); no degree-of-freedom
@@ -114,7 +114,7 @@ items:
   pull_request_number: null
   track: failure
   depends_on: []
-  status: not started
+  status: deferred
   notes: 'Added 2026-09-05 at the developer''s ask on knowledge-directed-perception''s #257
     (r3940274577). The expectation process - an action''s declared effect armed as relations
     of the twin''s vocabulary, Segmind''s events moving the belief by what each declares,
@@ -134,7 +134,7 @@ items:
   depends_on:
   - failure-taxonomy-and-typing
   - query-routed-per-predicate
-  status: not started
+  status: deferred
   notes: 'H4. Before an insertion executes, the QueryPlan and its answer predict the type:
     several candidate holes answer the target description, so semantic; Reachable is false
     for the grasp or the release pose, so geometric; the physics backend disagrees with perception
@@ -148,7 +148,7 @@ items:
   pull_request_number: null
   track: baselines
   depends_on: []
-  status: not started
+  status: deferred
   notes: 'A fixed set of EQL queries over the twin whose answers are rendered through the
     verbalization framework on main, concatenated in a fixed order with rounded numbers, so
     the same state always produces the same text. The scene wordings #33 carries (support,
@@ -167,7 +167,7 @@ items:
   track: baselines
   depends_on:
   - working-memory-verbalised
-  status: not started
+  status: deferred
   notes: A harness that sends each question with the camera image, and again with the verbalised
     working memory prepended, parses the answer into the question's answer type and scores
     it against ground truth. The model sits behind an interface so the provider is one class;
@@ -186,7 +186,7 @@ items:
   track: baselines
   depends_on:
   - vlm-baseline-harness
-  status: not started
+  status: deferred
   notes: 'What makes Experiment D''s comparison fair, and the reason a loss there reads as
     reasoning rather than lookup: every episode a question may reach over goes into one context
     - sampled video frames, the run''s files, the question-and-answer transcript - so the
@@ -204,7 +204,7 @@ items:
   pull_request_number: null
   track: backend-routing
   depends_on: []
-  status: not started
+  status: deferred
   notes: The sharpest demonstration that the representation is what the architecture is built
     on rather than any one perception method. A vision-language backend and a visual-question-answering
     backend implement the same interface the detector stack implements, take the same RgbdFrame,
@@ -222,7 +222,7 @@ items:
   pull_request_number: null
   track: control
   depends_on: []
-  status: not started
+  status: deferred
   notes: 'The control half of the thesis, and it is a read rather than a rewrite: the motion
     statechart is already dataclasses over the same world model, so the questions are answerable
     from what it holds. What the paper asks of it - what is the constraint for inserting the
@@ -249,4 +249,4 @@ items:
     "to a meta level, maybe as predicates classes for each or as a generalization of a Hole
     and a Surface with Holes or without Holes detectors with capabilities".'
   depends_on: []
-  status: not started
+  status: deferred
