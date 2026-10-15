@@ -8,6 +8,7 @@ Done:
 
 Next:
 - CI on #512 (ORM build and PR2-fixture tests could not run locally).
+- Thread w6-_ (remove Bounds?): answered keep both (Bounds stores, region declares); awaits user.
 
 ## #472 video-core (plan general-video-production / video-core)
 
