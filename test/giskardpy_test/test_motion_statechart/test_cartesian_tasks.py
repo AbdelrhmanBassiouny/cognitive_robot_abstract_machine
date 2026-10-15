@@ -33,6 +33,7 @@ from giskardpy.motion_statechart.tasks.cartesian_tasks import (
     CartesianPositionVelocityLimit,
     CartesianRotationVelocityLimit,
     CartesianPositionTrajectory,
+    DistanceAlongAxis,
 )
 from giskardpy.motion_statechart.tasks.joint_tasks import JointPositionList, JointState
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
@@ -2184,3 +2185,44 @@ class TestDebugExpressions:
             "pose/orientation/goal",
             "pose/orientation/current",
         }
+
+
+# %% two links a distance apart along an axis
+
+
+class TestDistanceAlongAxis:
+
+    def test_points_on_two_links_end_the_distance_apart_along_the_axis(
+        self, prismatic_bot2: World
+    ):
+        reference = prismatic_bot2.get_body_by_name("robot")
+        tip = prismatic_bot2.get_body_by_name("robot2")
+        executor = StatechartExecutor(
+            context=StatechartContext(world=prismatic_bot2),
+            extensions=[MotionControl()],
+        )
+        motion_statechart = Statechart(context=executor.context)
+        motion_statechart.add_node(
+            goal := DistanceAlongAxis(
+                root_link=prismatic_bot2.root,
+                reference_point=Point3(reference_frame=reference),
+                tip_point=Point3(z=0.1, reference_frame=tip),
+                axis=Vector3.Z(reference_frame=prismatic_bot2.root),
+                distance=0.3,
+                threshold=0.001,
+            )
+        )
+        motion_statechart.add_node(EndMotion.when_true(goal))
+
+        executor.compile(statechart=motion_statechart)
+        executor.tick_until_end()
+
+        root_P_reference, root_P_tip = (
+            prismatic_bot2.transform(
+                target_frame=prismatic_bot2.root, spatial_object=point
+            ).to_np()
+            for point in (goal.reference_point, goal.tip_point)
+        )
+        assert root_P_tip[2] - root_P_reference[2] == pytest.approx(
+            goal.distance, abs=goal.threshold
+        )

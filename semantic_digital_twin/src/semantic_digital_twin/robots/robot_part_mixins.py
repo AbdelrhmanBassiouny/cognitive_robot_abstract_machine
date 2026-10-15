@@ -202,47 +202,47 @@ class Fingertips:
     def separation(self) -> float:
         """
         How far apart the tips' facing surfaces stand right now, in metres, measured
-        along :attr:`closing_axis`: the widest object the gripper could close on as it
+        along :attr:`closing_axis` from :attr:`finger_P_facing_point` to
+        :attr:`thumb_P_facing_point`: the widest object the gripper could close on as it
         stands.
 
         Negative where the surfaces already overlap, as a fully closed gripper's may.
         """
-        thumb_reach, finger_reach = (
-            self._reach_along_closing_axis(tip) for tip in self.both
+        tool_P_finger, tool_P_thumb = (
+            self._world.transform(target_frame=self.tool_frame, spatial_object=point)
+            for point in (self.finger_P_facing_point, self.thumb_P_facing_point)
         )
-        if thumb_reach[0] > finger_reach[0]:
-            return thumb_reach[0] - finger_reach[1]
-        return finger_reach[0] - thumb_reach[1]
+        return float((tool_P_thumb - tool_P_finger).dot(self.tool_V_finger_to_thumb))
 
     @property
-    def surface_depth(self) -> float:
+    def tool_V_finger_to_thumb(self) -> Vector3:
         """
-        How far a tip's facing surface lies inside its own frame, in metres, along
-        :attr:`closing_axis`: a goal stated between the tip frames stands this much
-        wider than the surfaces do on either side.
+        :attr:`closing_axis`, pointing from the finger's tip towards the thumb's, in
+        :attr:`tool_frame`.
         """
-        return (self._frame_distance - self.separation) / 2
-
-    def finger_P_thumb(self, separation: float) -> Point3:
-        """
-        Where the thumb's tip has to reach, in the other tip's frame, to leave the two a
-        given distance apart.
-
-        The surfaces stay parallel, so one tip frame moves purely along the other's
-        closing axis and the distance between them is a one-dimensional goal.
-
-        :param separation: How far apart the facing surfaces are to stand, in metres.
-        :return: The goal for the thumb's tip.
-        """
-        finger_V_thumb = (
-            self._world.compute_forward_kinematics(self.finger, self.tool_frame)
-            @ self.closing_axis
+        thumb, finger = (
+            self._closing_axis_coordinate(self._bounding_box(tip).center)
+            for tip in self.both
         )
-        if self._reach_along_closing_axis(self.thumb)[0] < (
-            self._reach_along_closing_axis(self.finger)[0]
-        ):
-            finger_V_thumb = -finger_V_thumb
-        return (finger_V_thumb * self._frame_distance_for(separation)).point3
+        if thumb < finger:
+            return -self.closing_axis
+        return self.closing_axis
+
+    @property
+    def thumb_P_facing_point(self) -> Point3:
+        """
+        The point of the thumb's tip that reaches furthest towards the finger's along
+        :attr:`closing_axis`, in the thumb tip's own frame.
+        """
+        return self._facing_point(self.thumb, -self.tool_V_finger_to_thumb)
+
+    @property
+    def finger_P_facing_point(self) -> Point3:
+        """
+        The point of the finger's tip that reaches furthest towards the thumb's along
+        :attr:`closing_axis`, in the finger tip's own frame.
+        """
+        return self._facing_point(self.finger, self.tool_V_finger_to_thumb)
 
     # %% reading the geometry
 
@@ -253,25 +253,28 @@ class Fingertips:
         """
         return self.thumb._world
 
-    @property
-    def _frame_distance(self) -> float:
+    def _facing_point(self, tip: Body, tool_V_towards_other_tip: Vector3) -> Point3:
         """
-        How far apart the tips' own frames stand right now, along :attr:`closing_axis`.
+        :param tip: One of the two tips.
+        :param tool_V_towards_other_tip: The direction towards the other tip, in
+            :attr:`tool_frame`.
+        :return: The corner of the tip's collision bounding box, taken in the tip's own
+            frame, that reaches furthest in that direction, in the tip's own frame.
         """
-        thumb, finger = (
-            self._closing_axis_coordinate(
-                self._world.compute_forward_kinematics(self.tool_frame, tip).position
+        box = tip.collision.as_bounding_box_collection_in_frame(tip).bounding_box()
+        tool_T_tip = self._world.compute_forward_kinematics(self.tool_frame, tip)
+        corners = (
+            Point3(*corner, reference_frame=tip)
+            for corner in product(
+                (box.min_x, box.max_x), (box.min_y, box.max_y), (box.min_z, box.max_z)
             )
-            for tip in self.both
         )
-        return abs(thumb - finger)
-
-    def _frame_distance_for(self, separation: float) -> float:
-        """
-        :param separation: How far apart the facing surfaces are to stand, in metres.
-        :return: The distance the tip frames have to stand apart to leave them there.
-        """
-        return separation + 2 * self.surface_depth
+        return max(
+            corners,
+            key=lambda tip_P_corner: float(
+                (tool_T_tip @ tip_P_corner).vector3.dot(tool_V_towards_other_tip)
+            ),
+        )
 
     def _bounding_box(self, tip: Body) -> BoundingBox:
         """
@@ -281,24 +284,6 @@ class Fingertips:
         return tip.collision.as_bounding_box_collection_in_frame(
             self.tool_frame
         ).bounding_box()
-
-    def _reach_along_closing_axis(self, tip: Body) -> Tuple[float, float]:
-        """
-        :param tip: One of the two tips.
-        :return: How far its bounding box reaches along :attr:`closing_axis`, as its
-            nearest and furthest coordinate on that axis.
-        """
-        box = self._bounding_box(tip)
-        corners = product(
-            (box.min_x, box.max_x), (box.min_y, box.max_y), (box.min_z, box.max_z)
-        )
-        coordinates = [
-            self._closing_axis_coordinate(
-                Point3(*corner, reference_frame=self.tool_frame)
-            )
-            for corner in corners
-        ]
-        return min(coordinates), max(coordinates)
 
     def _closing_axis_coordinate(self, tool_P_point: Point3) -> float:
         """
@@ -332,6 +317,14 @@ class HasTwoFingers(
                 actual_count=len(self.fingers),
             )
         super().validate()
+
+    @classproperty
+    def fingers_are_modelled_like_the_real_ones(cls) -> bool:
+        """
+        Whether the description's fingers match the real gripper's closely enough that a
+        width measured or reached on the model holds on the real gripper.
+        """
+        return True
 
     @property
     def finger(self) -> Union[TGenericLeftFinger, TGenericRightFinger]:

@@ -82,6 +82,7 @@ from giskardpy.motion_statechart.tasks.cartesian_tasks import (
     CartesianPositionVelocityLimit,
     CartesianRotationVelocityLimit,
     CartesianVelocityLimit,
+    DistanceAlongAxis,
     HoldPose,
 )
 from giskardpy.motion_statechart.tasks.feature_functions import (
@@ -261,6 +262,19 @@ def _cartesian_cases() -> list[NodeRoundTripCase]:
                     root_link=_root(world),
                     tip_link=_tip(world),
                     goal_point=_point(world),
+                )
+            ],
+            WorldFixture.PR2_WORLD,
+        ),
+        NodeRoundTripCase(
+            DistanceAlongAxis,
+            lambda world: [
+                DistanceAlongAxis(
+                    root_link=_root(world),
+                    reference_point=_point(world),
+                    tip_point=_tip_point(world),
+                    axis=_root_axis(world),
+                    distance=0.1,
                 )
             ],
             WorldFixture.PR2_WORLD,

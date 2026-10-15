@@ -1451,6 +1451,26 @@ def test_a_grasp_still_shuts_the_gripper_where_nothing_pushes_back(
     assert len(shutting_goals_of(plan)) == 1
 
 
+def test_a_gripper_whose_fingers_are_not_modelled_like_the_real_ones_still_shuts(
+    stretch_apartment_context,
+):
+    """
+    A Stretch's description does not match its real fingers closely enough to send them
+    to an object's width, so its grasp is left shutting the gripper.
+    """
+    world, view, extensions = stretch_apartment_context
+    milk = world.get_semantic_annotations_by_type(Milk)[0]
+
+    plan = rewritten(
+        GraspingAction(grasp_of(milk), left_or_only_arm(view)),
+        extensions,
+        executor_for=robot_executor,
+    )
+
+    assert width_actions_of(plan) == []
+    assert len(shutting_goals_of(plan)) == 1
+
+
 def test_the_squeeze_is_handed_on_to_the_fingers(pr2_apartment_context):
     world, view, extensions = pr2_apartment_context
     milk = world.get_semantic_annotations_by_type(Milk)[0]

@@ -41,7 +41,7 @@ from giskardpy.motion_statechart.goals.gripper import MoveGripper
 from giskardpy.motion_statechart.data_types import DefaultWeights
 from giskardpy.motion_statechart.tasks.cartesian_tasks import (
     CartesianPose,
-    CartesianPosition,
+    DistanceAlongAxis,
     HoldPose,
 )
 from giskardpy.motion_statechart.tasks.pointing import Pointing, PointingBeside
@@ -54,7 +54,12 @@ from giskardpy.motion_statechart.tasks.joint_tasks import (
 from semantic_digital_twin.datastructures.definitions import GripperState, TorsoState
 from semantic_digital_twin.spatial_types.spatial_types import Pose
 from ..conftest import physically_simulated_executor
-from ...plan_running import robot_executor, simulated_executor, statechart_of
+from ...plan_running import (
+    robot_executor,
+    run_plan,
+    simulated_executor,
+    statechart_of,
+)
 from cramph.context import ContextExtension, StatechartContext
 
 # %% a body handed in, so expansion is exercised without a robot
@@ -553,7 +558,9 @@ def test_moving_an_arm_or_looking_leaves_a_full_body_controlled_base_free(
 # %% sending the fingers to a width
 
 
-def test_fingers_sent_to_a_width_aim_one_fingertip_at_the_other(simple_pr2_context):
+def test_fingers_sent_to_a_width_are_given_the_distance_between_their_facing_points(
+    simple_pr2_context,
+):
     """
     The distance between the fingertips is what Giskard is given, so it finds the joint
     positions that realise it rather than being told them.
@@ -565,9 +572,10 @@ def test_fingers_sent_to_a_width_aim_one_fingertip_at_the_other(simple_pr2_conte
     _expanded(action, extensions, physically_simulated_executor(extensions))
 
     goal = action.action_body
-    assert isinstance(goal, CartesianPosition)
-    assert goal.root_link is gripper.finger.tip
-    assert goal.tip_link is gripper.thumb.tip
+    assert isinstance(goal, DistanceAlongAxis)
+    assert goal.reference_point.reference_frame is gripper.finger.tip
+    assert goal.tip_point.reference_frame is gripper.thumb.tip
+    assert goal.distance == action.width
 
 
 def test_a_squeeze_sends_the_fingers_past_the_width(simple_pr2_context):
@@ -581,9 +589,26 @@ def test_a_squeeze_sends_the_fingers_past_the_width(simple_pr2_context):
     _expanded(touching, extensions, physically_simulated_executor(extensions))
     _expanded(pressing, extensions, physically_simulated_executor(extensions))
 
-    apart = touching.action_body.goal_point.to_np()[:3].ravel()
-    pressed = pressing.action_body.goal_point.to_np()[:3].ravel()
-    assert np.linalg.norm(pressed) == pytest.approx(np.linalg.norm(apart) - 2 * squeeze)
+    assert pressing.action_body.distance == pytest.approx(
+        touching.action_body.distance - 2 * squeeze
+    )
+
+
+def test_hinged_fingers_sent_to_a_width_stand_that_far_apart(stretch_apartment_context):
+    """
+    A Stretch's fingers swing on hinges, so their tips stand a width apart without one
+    ever standing straight across from the other.
+    """
+    _, robot, extensions = stretch_apartment_context
+    (arm,) = robot.all_arms
+    gripper = arm.end_effector
+    action = MoveFingersToWidthAction(gripper=gripper, width=0.04)
+
+    run_plan(action, extensions)
+
+    assert gripper.fingertips.separation == pytest.approx(
+        action.width, abs=action.threshold
+    )
 
 
 def test_fingers_are_not_sent_wider_than_their_gripper_opens(simple_pr2_context):
@@ -606,4 +631,4 @@ def test_fingers_may_be_sent_as_wide_as_their_gripper_opens(simple_pr2_context):
 
     _expanded(action, extensions, physically_simulated_executor(extensions))
 
-    assert isinstance(action.action_body, CartesianPosition)
+    assert isinstance(action.action_body, DistanceAlongAxis)

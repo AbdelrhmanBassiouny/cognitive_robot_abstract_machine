@@ -441,7 +441,9 @@ class CloseFingersToObjectWidth(PlanTransformation[GraspingAction]):
 
     Shutting the gripper all the way onto an object that is not centred between the
     fingers wedges it sideways instead of holding it, so a robot whose grasp holds by
-    contact alone meets the object at its own width, measured on the object.
+    contact alone meets the object at its own width, measured on the object. A gripper
+    whose fingers are not modelled like the real ones keeps shutting, since a width
+    reached on its model need not hold on the real gripper.
     """
 
     squeeze: float = 0.0
@@ -451,8 +453,10 @@ class CloseFingersToObjectWidth(PlanTransformation[GraspingAction]):
     """
 
     def is_applicable(self, plan_node: GraspingAction) -> bool:
+        gripper = plan_node.arm.end_effector
         return (
-            isinstance(plan_node.arm.end_effector, HasTwoFingers)
+            isinstance(gripper, HasTwoFingers)
+            and gripper.fingers_are_modelled_like_the_real_ones
             and plan_node.grasp.graspable.root.has_collision()
         )
 

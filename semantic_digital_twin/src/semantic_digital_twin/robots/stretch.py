@@ -141,6 +141,10 @@ class StretchRightFinger(Finger):
 @dataclass(eq=False)
 class StretchGripper(EndEffector, HasTwoFingers[StretchLeftFinger, StretchRightFinger]):
 
+    @classproperty
+    def fingers_are_modelled_like_the_real_ones(cls) -> bool:
+        return False
+
     def setup_hardware_interfaces(self):
         self._setup_hardware_interfaces_for_active_connections()
 

@@ -40,6 +40,7 @@ from semantic_digital_twin.spatial_types import (
     Point3,
     RotationMatrix,
     HomogeneousTransformationMatrix,
+    Vector3,
 )
 from semantic_digital_twin.spatial_types.spatial_types import Pose, SpatialType
 from semantic_digital_twin.world_description.geometry import Color
@@ -183,6 +184,69 @@ class CartesianPosition(CartesianTask):
         )
 
         artifacts.error = root_P_goal.euclidean_distance(root_P_current)
+        return artifacts
+
+
+@dataclass(eq=False, repr=False)
+class DistanceAlongAxis(ConvergingTask):
+    """
+    Move two points, each fixed on a link of its own, until they stand a given distance
+    apart along an axis, leaving them free in every other direction. Both links may
+    move.
+    """
+
+    root_link: KinematicStructureEntity = field(kw_only=True)
+    """
+    The frame :attr:`axis` is fixed in.
+    """
+
+    reference_point: Point3 = field(kw_only=True)
+    """
+    The point the distance is measured from, in the frame of the link it is fixed on.
+    """
+
+    tip_point: Point3 = field(kw_only=True)
+    """
+    The point the distance is measured to, in the frame of the link it is fixed on.
+    """
+
+    axis: Vector3 = field(kw_only=True)
+    """
+    The unit direction the distance is measured along, in :attr:`root_link`.
+    """
+
+    distance: float = field(kw_only=True)
+    """
+    How far, in metres, :attr:`tip_point` is to stand from :attr:`reference_point`
+    along :attr:`axis`; negative where it is to stand against the axis.
+    """
+
+    reference_velocity: float = field(default=0.2, kw_only=True)
+    """
+    Reference velocity for normalization in m/s.
+    """
+
+    def build_artifacts(self, context: StatechartContext) -> MotionNodeArtifacts:
+        """
+        :return: The artifacts of this task, whose error is how far the distance along
+            :attr:`axis` lies from :attr:`distance`.
+        """
+        artifacts = MotionNodeArtifacts()
+        root_P_reference, root_P_tip = (
+            context.world.compose_forward_kinematics_expression(
+                self.root_link, point.reference_frame
+            )
+            @ point
+            for point in (self.reference_point, self.tip_point)
+        )
+        current_distance = (root_P_tip - root_P_reference) @ self.axis
+        artifacts.constraints.add_equality_constraint(
+            reference_velocity=self.reference_velocity,
+            equality_bound=self.distance - current_distance,
+            quadratic_weight=self.weight,
+            task_expression=current_distance,
+        )
+        artifacts.error = sm.abs(self.distance - current_distance)
         return artifacts
 
 

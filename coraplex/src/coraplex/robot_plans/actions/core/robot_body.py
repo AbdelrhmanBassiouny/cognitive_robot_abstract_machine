@@ -25,7 +25,7 @@ from giskardpy.motion_statechart.goals.collision_avoidance import (
 )
 from giskardpy.motion_statechart.tasks.cartesian_tasks import (
     CartesianPose,
-    CartesianPosition,
+    DistanceAlongAxis,
 )
 from giskardpy.motion_statechart.tasks.joint_tasks import (
     JointPositionList,
@@ -122,12 +122,12 @@ class MoveFingersToWidthAction(Action):
         if self.width > self.gripper.separation_when_open:
             raise WidthBeyondGripperOpening(gripper=self.gripper, width=self.width)
         fingertips = self.gripper.fingertips
-        return CartesianPosition(
-            root_link=fingertips.finger,
-            tip_link=fingertips.thumb,
-            goal_point=fingertips.finger_P_thumb(
-                max(0.0, self.width - 2 * self.squeeze)
-            ),
+        return DistanceAlongAxis(
+            root_link=fingertips.tool_frame,
+            reference_point=fingertips.finger_P_facing_point,
+            tip_point=fingertips.thumb_P_facing_point,
+            axis=fingertips.tool_V_finger_to_thumb,
+            distance=max(0.0, self.width - 2 * self.squeeze),
             name="MoveFingersToWidth",
             threshold=self.threshold,
         )
