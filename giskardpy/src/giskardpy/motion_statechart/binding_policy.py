@@ -1,6 +1,8 @@
 from dataclasses import dataclass, field
 from enum import Enum
 
+import numpy as np
+
 from krrood.symbolic_math.float_variable_data import FloatVariableData
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.spatial_types import HomogeneousTransformationMatrix
@@ -59,6 +61,11 @@ class ForwardKinematicsBinding:
     if left unset.
     """
 
+    _bound_root_T_tip: np.ndarray | None = field(default=None, init=False, repr=False)
+    """
+    The forward kinematics :attr:`root_T_tip` was last set to, None until then.
+    """
+
     def __post_init__(self) -> None:
         if self.root_T_tip is None:
             self.root_T_tip = HomogeneousTransformationMatrix.create_with_variables(
@@ -68,15 +75,18 @@ class ForwardKinematicsBinding:
         self.root_T_tip.child_frame = self.tip
         self.float_variable_data.register_expression(self.root_T_tip)
 
-    def change_root(self, root: KinematicStructureEntity) -> None:
+    def change_root(self, root: KinematicStructureEntity, world: World) -> None:
         """
-        Measure the chain from `root` from the next :meth:`bind` on, such as after the
-        branch holding :attr:`tip` was moved under another parent.
+        Measure the chain from `root`, such as after the branch holding :attr:`tip` was
+        moved under another parent, keeping the pose of :attr:`tip` that was bound last.
 
         :param root: The new root of the chain.
+        :param world: The world used for computing where `root` is now.
         """
+        new_root_T_root = world.compute_forward_kinematics_np(root, self.root)
         self.root = root
         self.root_T_tip.reference_frame = root
+        self._set(new_root_T_root @ self._bound_root_T_tip)
 
     def bind(self, world: World) -> None:
         """
@@ -84,6 +94,15 @@ class ForwardKinematicsBinding:
 
         :param world: The world used for computing the forward kinematics.
         """
-        root_T_tip = world.compute_forward_kinematics_np(self.root, self.tip)
-        root_T_tip_flat = root_T_tip[:3, :4].T.flatten()
-        self.float_variable_data.set_value(self.root_T_tip, root_T_tip_flat)
+        self._set(world.compute_forward_kinematics_np(self.root, self.tip))
+
+    def _set(self, root_T_tip: np.ndarray) -> None:
+        """
+        Set :attr:`root_T_tip` to `root_T_tip`.
+
+        :param root_T_tip: A homogeneous transformation matrix.
+        """
+        self._bound_root_T_tip = root_T_tip
+        self.float_variable_data.set_value(
+            self.root_T_tip, root_T_tip[:3, :4].T.flatten()
+        )

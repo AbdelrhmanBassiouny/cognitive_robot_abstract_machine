@@ -195,16 +195,20 @@ class DifferentialDriveBaseGoal(
 
     def on_start(self, context: StatechartContext) -> None:
         if self.binding_policy == GoalBindingPolicy.Bind_on_start:
-            self._bind_goal_reference_frame(context)
+            self._forward_kinematics_binding.bind(context.world)
 
     def build_artifacts(self, context: StatechartContext) -> NodeArtifacts:
         """
-        Report the outcome of the sequence, and bind
-        :attr:`parent_T_goal_reference_frame` again if the drive was moved under another
-        parent since it was bound, since the steps are rebuilt against that parent.
+        Report the outcome of the sequence, and express
+        :attr:`parent_T_goal_reference_frame` relative to the drive's new parent if the
+        drive was moved under another parent, since the steps are rebuilt against it.
+
+        Where the goal's reference frame was bound is kept.
         """
         if self._forward_kinematics_binding.root is not self._drive_parent:
-            self._bind_goal_reference_frame(context)
+            self._forward_kinematics_binding.change_root(
+                self._drive_parent, context.world
+            )
         return NodeArtifacts(
             observation=trinary_if_cases(
                 cases=[
@@ -214,14 +218,6 @@ class DifferentialDriveBaseGoal(
                 else_result=Scalar.const_trinary_unknown(),
             )
         )
-
-    def _bind_goal_reference_frame(self, context: StatechartContext) -> None:
-        """
-        Fix :attr:`parent_T_goal_reference_frame` to the current pose of the goal's
-        reference frame relative to the drive's current parent.
-        """
-        self._forward_kinematics_binding.change_root(self._drive_parent)
-        self._forward_kinematics_binding.bind(context.world)
 
 
 @dataclass(eq=False, repr=False)

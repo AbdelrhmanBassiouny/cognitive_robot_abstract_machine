@@ -15,6 +15,7 @@ from giskardpy.motion_statechart.goals.cartesian_goals import (
 from cramph.composites import Sequence, Parallel
 from giskardpy.motion_statechart.graph_node import EndMotion, MotionStatechartNode
 from cramph.node import CancelStatechart
+from giskardpy.motion_statechart.monitors.cartesian_monitors import PositionReached
 from giskardpy.motion_statechart.monitors.monitors import LocalMinimumReached
 from giskardpy.motion_statechart.monitors.overwrite_state_monitors import (
     SetSeedConfiguration,
@@ -1983,6 +1984,50 @@ class TestDiffDriveBaseGoal:
             world.compute_forward_kinematics_np(lift, base),
             Pose.from_xyz_rpy(x=1).to_np(),
             atol=1e-2,
+        )
+
+    def test_a_goal_bound_to_the_base_stays_where_it_was_bound_when_the_base_is_moved(
+        self, cylinder_bot_diff_world
+    ):
+        """
+        The goal is given relative to the base and bound when the drive starts, so
+        moving the base under another parent halfway there must not carry the goal along
+        with the base.
+        """
+        world = cylinder_bot_diff_world
+        base = world.get_connections_by_type(DifferentialDrive)[0].child
+        platform = Body(name=PrefixedName("platform"))
+        with world.modify_world():
+            world.add_connection(FixedConnection(parent=world.root, child=platform))
+        executor = StatechartExecutor(
+            context=StatechartContext(world=world), extensions=[MotionControl()]
+        )
+        motion_statechart = Statechart(context=executor.context)
+        motion_statechart.add_node(
+            drive := DifferentialDriveBaseGoal(
+                goal_pose=Pose.from_xyz_rpy(x=1, reference_frame=base)
+            )
+        )
+        motion_statechart.add_node(
+            halfway := PositionReached(
+                root_link=world.root,
+                tip_link=base,
+                goal_point=Point3(x=0.5, reference_frame=world.root),
+                threshold=0.1,
+            )
+        )
+        motion_statechart.add_node(moving := MoveBranch(body=base, new_parent=platform))
+        moving.start_condition = halfway.observes_true
+        motion_statechart.add_node(EndMotion.when_all_true([drive, moving]))
+
+        executor.compile(statechart=motion_statechart)
+        executor.tick_until_end()
+
+        assert base.parent_kinematic_structure_entity is platform
+        assert np.allclose(
+            world.compute_forward_kinematics_np(world.root, base),
+            Pose.from_xyz_rpy(x=1).to_np(),
+            atol=2 * drive.threshold,
         )
 
 
