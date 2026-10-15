@@ -578,6 +578,26 @@ class Body(KinematicStructureEntity):
             name=name, collision=shape_collection, visual=visuals_shape_collection
         )
 
+    @synchronized_attribute_modification
+    def update_shapes(
+        self, visual: ShapeCollection, collision: ShapeCollection
+    ) -> None:
+        """
+        Replace the shapes of this body and record the change in the world's
+        modification history, so that it is synchronized and can be rolled back.
+
+        :param visual: The shapes that represent how the body looks. Shapes whose origin
+            has no reference frame are taken relative to the body; the others are
+            expressed relative to it.
+        :param collision: The shapes that represent how the body collides, taken like
+            ``visual``.
+        """
+        for shapes in (visual, collision):
+            shapes.reference_frame = self
+            shapes.transform_all_shapes_to_own_frame()
+        self.visual = visual
+        self.collision = collision
+
     @property
     def combined_mesh(self) -> Optional[trimesh.Trimesh]:
         """
@@ -841,6 +861,25 @@ class SemanticAnnotation(WorldEntityWithSimulatorProperties):
     @property
     def bodies_with_collision(self) -> List[Body]:
         return [x for x in self.bodies if x.has_collision()]
+
+    @property
+    def mass(self) -> float:
+        """
+        :return: The mass of what the annotation references: the sum of the masses of
+            its bodies, the bodies of its parts included. A body that states no inertial
+            properties counts as weightless.
+        """
+        return sum(
+            body.inertial.mass
+            for body in self._distinct_bodies()
+            if body.inertial is not None
+        )
+
+    def _distinct_bodies(self) -> List[Body]:
+        """
+        :return: :attr:`bodies`, each once, told apart by their ids.
+        """
+        return list({body.id: body for body in self.bodies}.values())
 
     def as_bounding_box_collection_at_origin(
         self, origin: HomogeneousTransformationMatrix
