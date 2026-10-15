@@ -67,8 +67,8 @@ class CupForEachArm:
         """
         return [
             PlaceAction(
-                pick_up.grasp.graspable,
-                self.world.transform(
+                object_designator=pick_up.grasp.graspable,
+                target_location=self.world.transform(
                     Pose.from_xyz_rpy(
                         y=sideways_distance,
                         reference_frame=pick_up.grasp.graspable.root,
@@ -118,7 +118,7 @@ def pick_up_from_above(cup: Cup, arm: Arm) -> PickUpAction:
             reference_frame=cup.root,
         ),
     )
-    return PickUpAction(grasp, arm)
+    return PickUpAction(grasp=grasp, arm=arm)
 
 
 @pytest.fixture
@@ -158,7 +158,9 @@ def cup_for_each_arm(pr2_world_copy: World) -> CupForEachArm:
 def test_a_gripper_closes_at_its_grasp_although_the_other_arm_is_moving(
     cup_for_each_arm: CupForEachArm,
 ):
-    run_plan(Parallel(cup_for_each_arm.pick_ups), cup_for_each_arm.context_extensions)
+    run_plan(
+        Parallel(nodes=cup_for_each_arm.pick_ups), cup_for_each_arm.context_extensions
+    )
 
     world = cup_for_each_arm.world
     for pick_up in cup_for_each_arm.pick_ups:
@@ -176,10 +178,12 @@ def test_a_gripper_opens_at_its_place_target_although_the_other_arm_is_moving(
     cup_for_each_arm: CupForEachArm,
 ):
     # One after the other, so that both cups sit in their grippers at their grasps.
-    run_plan(Sequence(cup_for_each_arm.pick_ups), cup_for_each_arm.context_extensions)
+    run_plan(
+        Sequence(nodes=cup_for_each_arm.pick_ups), cup_for_each_arm.context_extensions
+    )
     places = cup_for_each_arm.places()
 
-    run_plan(Parallel(places), cup_for_each_arm.context_extensions)
+    run_plan(Parallel(nodes=places), cup_for_each_arm.context_extensions)
 
     for place in places:
         np.testing.assert_allclose(

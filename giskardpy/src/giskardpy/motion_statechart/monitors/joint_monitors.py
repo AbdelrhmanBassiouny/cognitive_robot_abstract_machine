@@ -1,4 +1,4 @@
-from dataclasses import field, dataclass
+from dataclasses import dataclass
 
 import krrood.symbolic_math.symbolic_math as sm
 from semantic_digital_twin.world_description.connections import (
@@ -11,23 +11,23 @@ from giskardpy.motion_statechart.graph_node import MotionStatechartNode
 from cramph.node import NodeArtifacts
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class JointPositionReached(EndedByOwner, MotionStatechartNode):
     """
     Monitors if a joint position is reached within a certain threshold.
     """
 
-    connection: ActiveConnection1DOF = field(kw_only=True)
+    connection: ActiveConnection1DOF
     """
     Monitored joint connection.
     """
 
-    position: float = field(kw_only=True)
+    position: float
     """
     Target position to monitor.
     """
 
-    threshold: float = field(default=0.01, kw_only=True)
+    threshold: float = 0.01
     """
     Threshold for position error.
     """

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 from semantic_digital_twin.spatial_types import (
     Vector3,
@@ -30,7 +30,7 @@ from giskardpy.motion_statechart.tasks.cartesian_tasks import (
 )
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class DifferentialDriveBaseGoal(
     SucceedsOnObservingTrue, FailsOnObservingFalse, CompositeNode
 ):
@@ -46,26 +46,24 @@ class DifferentialDriveBaseGoal(
     steps 1 and 2 follow the base as it drives.
     """
 
-    diff_drive_connection: DifferentialDrive | None = field(kw_only=True, default=None)
+    diff_drive_connection: DifferentialDrive | None = None
     """
     Drive connection to use.
 
     If it is None and there is only one diff drive in the world, it will be used.
     """
 
-    goal_pose: Pose = field(kw_only=True)
+    goal_pose: Pose
     """
     Pose to reach.
     """
 
-    weight: float = field(
-        default=DefaultWeights.WEIGHT_ABOVE_COLLISION_AVOIDANCE, kw_only=True
-    )
+    weight: float = DefaultWeights.WEIGHT_ABOVE_COLLISION_AVOIDANCE
     """
     Task priority relative to other tasks.
     """
 
-    threshold: float = field(default=0.01, kw_only=True)
+    threshold: float = 0.01
     """
     Threshold when the drive goals for the base are considered achieved.
     """
@@ -163,7 +161,7 @@ class DifferentialDriveBaseGoal(
         )
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class CartesianPoseStraight(EndedByOwner, CompositeNode):
     """
     Like CartesianPose, but constrains the tip link to move in a straight line towards
@@ -173,28 +171,28 @@ class CartesianPoseStraight(EndedByOwner, CompositeNode):
     what that parallel observes.
     """
 
-    root_link: KinematicStructureEntity = field(kw_only=True)
+    root_link: KinematicStructureEntity
     """
     Name of the root link of the kin chain.
     """
 
-    tip_link: KinematicStructureEntity = field(kw_only=True)
+    tip_link: KinematicStructureEntity
     """
     Name of the tip link of the kin chain.
     """
 
-    goal_pose: Pose = field(kw_only=True)
+    goal_pose: Pose
     """
     The goal pose.
     """
 
-    translation_threshold: float = field(default=0.01, kw_only=True)
+    translation_threshold: float = 0.01
     """
     If the position error falls below this threshold (in meters), that half of the goal
     is achieved.
     """
 
-    orientation_threshold: float = field(default=0.01, kw_only=True)
+    orientation_threshold: float = 0.01
     """
     If the orientation error falls below this threshold (in rad), that half of the goal
     is achieved.
@@ -205,9 +203,7 @@ class CartesianPoseStraight(EndedByOwner, CompositeNode):
     Task priority relative to other tasks.
     """
 
-    binding_policy: GoalBindingPolicy = field(
-        default=GoalBindingPolicy.Bind_at_build, kw_only=True
-    )
+    binding_policy: GoalBindingPolicy = GoalBindingPolicy.Bind_at_build
     """
     Describes when the goal is computed.
 

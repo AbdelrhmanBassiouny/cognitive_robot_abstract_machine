@@ -26,7 +26,7 @@ from cramph.monitors import CountSimulationTimeSeconds
 # %% watching a single task
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class NotApproachingGoal(EndedByOwner, MotionStatechartNode):
     """
     Turns ``True`` while :attr:`monitored_task` is not closing on its goal fast enough.
@@ -51,12 +51,12 @@ class NotApproachingGoal(EndedByOwner, MotionStatechartNode):
         :class:`StillProgressing` requires it to hold for a while.
     """
 
-    monitored_task: ConvergingTask = field(kw_only=True)
+    monitored_task: ConvergingTask
     """
     The task whose progress towards its goal is watched.
     """
 
-    minimum_convergence_rate: float = field(default=0.05, kw_only=True)
+    minimum_convergence_rate: float = 0.05
     """
     Rate below which the task counts as not approaching its goal, as a fraction of the
     task's own threshold per second.
@@ -221,7 +221,7 @@ class NotApproachingGoal(EndedByOwner, MotionStatechartNode):
         self._previous_error = None
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class AnyMonitoredTaskShortOfItsGoal(EndedByOwner, MotionStatechartNode):
     """
     Turns ``True`` while at least one of :attr:`monitored_tasks` is running and has not
@@ -235,7 +235,7 @@ class AnyMonitoredTaskShortOfItsGoal(EndedByOwner, MotionStatechartNode):
     of the motion and make the first wait after the last goal was reached a stall.
     """
 
-    monitored_tasks: List[ConvergingTask] = field(kw_only=True)
+    monitored_tasks: List[ConvergingTask]
     """
     The tasks whose life cycle states and goals are watched.
     """
@@ -265,7 +265,7 @@ class AnyMonitoredTaskShortOfItsGoal(EndedByOwner, MotionStatechartNode):
 # %% watching a whole goal
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class StillProgressing(EndedByOwner, CompositeNode):
     """
     Turns ``False`` once nothing under :attr:`monitored_node` has approached its goal
@@ -279,17 +279,17 @@ class StillProgressing(EndedByOwner, CompositeNode):
     the negation of its observation to a node's fail condition to give up on that node.
     """
 
-    monitored_node: MotionStatechartNode = field(kw_only=True)
+    monitored_node: MotionStatechartNode
     """
     The task or goal whose progress is watched.
     """
 
-    timeout: timedelta = field(default=timedelta(seconds=5), kw_only=True)
+    timeout: timedelta = timedelta(seconds=5)
     """
     Simulated time without progress after which this turns ``False``.
     """
 
-    minimum_convergence_rate: float = field(default=0.05, kw_only=True)
+    minimum_convergence_rate: float = 0.05
     """
     Rate below which a task counts as not approaching its goal, as a fraction of that
     task's own threshold per second.
@@ -424,7 +424,7 @@ class StillProgressing(EndedByOwner, CompositeNode):
         return tasks
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class Stalled(StillProgressing):
     """
     Turns ``True`` once nothing under :attr:`monitored_node` has approached its goal for
@@ -444,14 +444,14 @@ class Stalled(StillProgressing):
         return NodeArtifacts(observation=self._timer.observes_true)
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class _CancelBecauseNoProgress(CancelStatechart):
     """
     Cancels the motion by raising an error naming the tasks that stopped approaching
     their goals.
     """
 
-    progress_monitor: StillProgressing = field(kw_only=True)
+    progress_monitor: StillProgressing
     """
     The monitor that detected the stall.
     """

@@ -35,7 +35,7 @@ from semantic_digital_twin.spatial_types.spatial_types import Pose
 # %% actions running other actions as their steps
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class TransportAction(Action):
     """
     Picks an object up with one step and puts it down with another.
@@ -110,17 +110,17 @@ class TransportAction(Action):
 
     def create_action_body(self) -> StatechartNode:
         return Sequence(
-            [
-                ParkArmsAction(self.robot.all_arms),
+            nodes=[
+                ParkArmsAction(arms=self.robot.all_arms),
                 self.pick_up,
-                ParkArmsAction(self.robot.all_arms),
+                ParkArmsAction(arms=self.robot.all_arms),
                 self.place,
-                ParkArmsAction(self.robot.all_arms),
+                ParkArmsAction(arms=self.robot.all_arms),
             ]
         )
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class PickAndPlaceAction(Action):
     """
     Picks an object up with one step and puts it down with another, without moving the
@@ -140,14 +140,14 @@ class PickAndPlaceAction(Action):
 
     def create_action_body(self) -> StatechartNode:
         return Sequence(
-            [
+            nodes=[
                 self.pick_up,
                 self.place,
             ]
         )
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class MoveAndPlaceAction(Action):
     """
     Navigates to where the robot stands, faces the target and places the object there.
@@ -184,10 +184,10 @@ class MoveAndPlaceAction(Action):
         :return: The step placing the object from `standing_position`.
         """
         return cls(
-            navigate=NavigateAction(standing_position),
+            navigate=NavigateAction(target_location=standing_position),
             face_and_look_at=FaceAndLookAtAction(
-                face_at=FaceAtAction(target_location),
-                look_at=LookAtAction(target_location),
+                face_at=FaceAtAction(target=target_location),
+                look_at=LookAtAction(target=target_location),
             ),
             place=PlaceAction(
                 object_designator=object_designator, target_location=target_location
@@ -196,7 +196,7 @@ class MoveAndPlaceAction(Action):
 
     def create_action_body(self) -> StatechartNode:
         return Sequence(
-            [
+            nodes=[
                 self.navigate,
                 self.face_and_look_at,
                 self.place,
@@ -204,7 +204,7 @@ class MoveAndPlaceAction(Action):
         )
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class MoveAndPickUpAction(Action):
     """
     Navigates to where the robot stands, faces the object and picks it up.
@@ -246,9 +246,10 @@ class MoveAndPickUpAction(Action):
         """
         object_pose = Pose(reference_frame=grasp.graspable.root)
         return cls(
-            navigate=NavigateAction(standing_position),
+            navigate=NavigateAction(target_location=standing_position),
             face_and_look_at=FaceAndLookAtAction(
-                face_at=FaceAtAction(object_pose), look_at=LookAtAction(object_pose)
+                face_at=FaceAtAction(target=object_pose),
+                look_at=LookAtAction(target=object_pose),
             ),
             pick_up=PickUpAction(
                 grasp=grasp,
@@ -303,7 +304,7 @@ class MoveAndPickUpAction(Action):
 
     def create_action_body(self) -> StatechartNode:
         return Sequence(
-            [
+            nodes=[
                 self.navigate,
                 self.face_and_look_at,
                 self.pick_up,
@@ -311,7 +312,7 @@ class MoveAndPickUpAction(Action):
         )
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class MoveAndOpenAction(Action):
     """
     Navigates to where the robot stands, faces the handle and opens its container.
@@ -346,9 +347,10 @@ class MoveAndOpenAction(Action):
         """
         handle_pose = Pose(reference_frame=grasp.graspable.root)
         return cls(
-            navigate=NavigateAction(standing_position),
+            navigate=NavigateAction(target_location=standing_position),
             face_and_look_at=FaceAndLookAtAction(
-                face_at=FaceAtAction(handle_pose), look_at=LookAtAction(handle_pose)
+                face_at=FaceAtAction(target=handle_pose),
+                look_at=LookAtAction(target=handle_pose),
             ),
             open_container=OpenAction(grasp=grasp, arm=arm),
         )
@@ -403,7 +405,7 @@ class MoveAndOpenAction(Action):
 
     def create_action_body(self) -> StatechartNode:
         return Sequence(
-            [
+            nodes=[
                 self.navigate,
                 self.face_and_look_at,
                 self.open_container,

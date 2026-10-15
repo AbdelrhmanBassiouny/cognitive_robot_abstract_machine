@@ -181,7 +181,7 @@ def execute(link_length: float, vel_limit: float):
 
     msc.add_node(
         node1 := Sequence(
-            [
+            nodes=[
                 SetSeedConfiguration(
                     seed_configuration=JointState.from_str_dict(
                         {

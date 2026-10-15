@@ -70,7 +70,7 @@ def test_execute_collision_goal_in_fetched_world(rclpy_node, pr2_world_state_res
     msc = Statechart(context=client_executor.context)
     msc.add_node(
         Sequence(
-            [
+            nodes=[
                 SetSeedConfiguration(
                     seed_configuration=JointState.from_str_dict(
                         {
@@ -86,7 +86,7 @@ def test_execute_collision_goal_in_fetched_world(rclpy_node, pr2_world_state_res
                     )
                 ),
                 Parallel(
-                    [
+                    nodes=[
                         CartesianPose(
                             root_link=base_footprint,
                             tip_link=r_tip,

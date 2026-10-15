@@ -1,4 +1,4 @@
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from uuid import UUID, uuid4
 
 import pytest
@@ -109,7 +109,7 @@ def register_probe() -> UUID:
     return key
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class RecordingAction(Action):
     """
     An action whose execution deterministically records itself and can be made to fail
@@ -117,33 +117,35 @@ class RecordingAction(Action):
     node's candidates without depending on real motion physics.
     """
 
-    probe_key: UUID = field(kw_only=True)
+    probe_key: UUID
     """
     Id of the `TrialProbe` this action's attempts are recorded to.
     """
 
-    dof_id: UUID = field(kw_only=True)
+    dof_id: UUID
     """
     Id of the degree of freedom this action mutates on every attempt, to make world
     state changes observable.
     """
 
-    fail_on_attempt_number: Optional[int] = field(kw_only=True, default=None)
+    fail_on_attempt_number: Optional[int] = None
     """
     Report :attr:`reported_failure` once the probe has recorded this many calls; never
     fail if None.
     """
 
-    reported_failure: Callable[[], PlanFailure] = field(
-        kw_only=True, default=PlanFailure
-    )
+    reported_failure: Callable[[], PlanFailure] = PlanFailure
     """
     Builds the failure a failing attempt reports.
     """
 
     def create_action_body(self) -> StatechartNode:
         return Sequence(
-            [FunctionCall(function=self._record_attempt, failure_types=(PlanFailure,))]
+            nodes=[
+                FunctionCall(
+                    function=self._record_attempt, failure_types=(PlanFailure,)
+                )
+            ]
         )
 
     def _record_attempt(self) -> None:
@@ -379,7 +381,7 @@ def test_the_underspecified_steps_of_one_plan_are_tried_against_one_copy(
     dof = world.degrees_of_freedom[0]
     probe_key = register_probe()
     plan = Sequence(
-        [
+        nodes=[
             StatementNode(
                 statement=a(RecordingAction)(
                     probe_key=probe_key,
@@ -424,7 +426,7 @@ def _plan_of_two_underspecified_steps(world: World) -> Sequence:
     dof = world.degrees_of_freedom[0]
     probe_key = register_probe()
     return Sequence(
-        [
+        nodes=[
             StatementNode(
                 statement=a(RecordingAction)(
                     probe_key=probe_key,
@@ -603,7 +605,7 @@ def _compiled_trial_executor(
     candidate = RecordingAction(
         probe_key=register_probe(), dof_id=copied.degrees_of_freedom[0].id
     )
-    executor.compile(statechart_of(executor, Sequence([candidate])))
+    executor.compile(statechart_of(executor, Sequence(nodes=[candidate])))
     return executor, copied
 
 
@@ -703,8 +705,8 @@ def test_a_trial_tries_an_action_that_already_belongs_to_a_plan(debugging_execut
     """
     world, robot, executor = debugging_executor
     stand_where_it_is = robot.root.global_pose
-    action = NavigateAction(stand_where_it_is)
-    statechart_of(executor, Sequence([action]))
+    action = NavigateAction(target_location=stand_where_it_is)
+    statechart_of(executor, Sequence(nodes=[action]))
     trial = ActionTrial(executor=executor, trial_executor_type=SimulatedPlanExecutor)
 
     assert trial.succeeds(action)

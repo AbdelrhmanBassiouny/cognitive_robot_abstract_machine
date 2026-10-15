@@ -18,7 +18,7 @@ from semantic_digital_twin.world_description.world_entity import SemanticAnnotat
 # %% searching for an object
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class SearchAction(Action):
     """
     Searches for an object around a location.
@@ -52,7 +52,7 @@ class SearchAction(Action):
     def create_action_body(self) -> StatechartNode:
         detection_box = self._detection_box()
         return Sequence(
-            [
+            nodes=[
                 a(NavigateAction)(
                     target_location=variable(
                         Pose,
@@ -64,15 +64,15 @@ class SearchAction(Action):
                     )
                 ),
                 TryInOrder(
-                    [
+                    nodes=[
                         Sequence(
-                            [
+                            nodes=[
                                 LookAtAction(
-                                    self.target_location,
+                                    target=self.target_location,
                                     sideways_offset=sideways_offset,
                                 ),
                                 DetectAction(
-                                    DetectionTechnique.TYPES,
+                                    technique=DetectionTechnique.TYPES,
                                     object_sem_annotation=self.object_semantic_annotation,
                                     detection_box=detection_box,
                                 ),

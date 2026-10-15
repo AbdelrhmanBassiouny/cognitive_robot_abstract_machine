@@ -83,7 +83,7 @@ def test_insert_cylinder_with_tracy(tracy_world: World) -> None:
             GripperState.CLOSE
         )
     )
-    statechart.add_node(sequence := Sequence([close_gripper, goal]))
+    statechart.add_node(sequence := Sequence(nodes=[close_gripper, goal]))
     statechart.add_node(EndMotion.when_true(sequence))
 
     executor.compile(statechart=statechart)

@@ -220,7 +220,7 @@ class ParkArmsBeforeTorsoMotion(InsertionTransformation[MoveTorsoAction]):
         return joint_goal_of(plan_node)
 
     def nodes_to_insert(self, plan_node: MoveTorsoAction) -> List[StatechartNode]:
-        return [ParkArmsAction(plan_node.robot.all_arms)]
+        return [ParkArmsAction(arms=plan_node.robot.all_arms)]
 
 
 @dataclass
@@ -361,7 +361,7 @@ def test_a_transformation_bound_to_an_unmatchable_type_is_rejected():
     """
     with pytest.raises(CannotMatchOnType):
         TransformationOnAnUnmatchableType().matches_node(
-            MoveTorsoAction(TorsoState.HIGH)
+            MoveTorsoAction(torso_state=TorsoState.HIGH)
         )
 
 
@@ -419,7 +419,9 @@ def test_a_transformation_the_case_needs_is_applied(pr2_apartment_context):
     world, view, extensions = pr2_apartment_context
     plan_transformations = [MoveGripperBeforeHighTorso()]
 
-    plan = rewritten(MoveTorsoAction(TorsoState.HIGH), extensions, plan_transformations)
+    plan = rewritten(
+        MoveTorsoAction(torso_state=TorsoState.HIGH), extensions, plan_transformations
+    )
 
     assert kinds_of_the_steps_of(plan) == [MoveGripper, JointPositionList]
 
@@ -432,7 +434,9 @@ def test_a_transformation_the_case_does_not_need_is_skipped(pr2_apartment_contex
     world, view, extensions = pr2_apartment_context
     plan_transformations = [MoveGripperBeforeHighTorso()]
 
-    plan = rewritten(MoveTorsoAction(TorsoState.LOW), extensions, plan_transformations)
+    plan = rewritten(
+        MoveTorsoAction(torso_state=TorsoState.LOW), extensions, plan_transformations
+    )
 
     assert kinds_of_the_steps_of(plan) == [JointPositionList]
 
@@ -448,7 +452,12 @@ def test_a_transformation_bound_to_a_base_type_reaches_every_action(
     plan_transformations = [MoveGripperBeforeEveryAction()]
 
     plan = rewritten(
-        Sequence([MoveTorsoAction(TorsoState.HIGH), ParkArmsAction(view.all_arms)]),
+        Sequence(
+            nodes=[
+                MoveTorsoAction(torso_state=TorsoState.HIGH),
+                ParkArmsAction(arms=view.all_arms),
+            ]
+        ),
         extensions,
         plan_transformations,
     )
@@ -470,8 +479,8 @@ def test_a_transformation_bound_to_an_action_type_selects_the_actions_of_it(
     """
     world, view, extensions = pr2_apartment_context
     transformation = MoveGrippersBeforeTorsoMotion()
-    torso = MoveTorsoAction(TorsoState.HIGH)
-    parking = ParkArmsAction(view.all_arms)
+    torso = MoveTorsoAction(torso_state=TorsoState.HIGH)
+    parking = ParkArmsAction(arms=view.all_arms)
 
     assert transformation.matched_type is MoveTorsoAction
     assert transformation.matches_node(torso)
@@ -487,11 +496,11 @@ def test_a_transformation_bound_to_the_base_type_selects_every_action(
     """
     world, view, extensions = pr2_apartment_context
     transformation = MoveGripperBeforeEveryAction()
-    torso = MoveTorsoAction(TorsoState.HIGH)
+    torso = MoveTorsoAction(torso_state=TorsoState.HIGH)
 
     assert transformation.matched_type is Action
     assert transformation.matches_node(torso)
-    assert not transformation.matches_node(Sequence([torso]))
+    assert not transformation.matches_node(Sequence(nodes=[torso]))
 
 
 # %% inserting
@@ -505,7 +514,9 @@ def test_a_transformation_inserts_its_nodes_before_the_anchor(pr2_apartment_cont
     world, view, extensions = pr2_apartment_context
     plan_transformations = [MoveGrippersBeforeTorsoMotion()]
 
-    plan = rewritten(MoveTorsoAction(TorsoState.HIGH), extensions, plan_transformations)
+    plan = rewritten(
+        MoveTorsoAction(torso_state=TorsoState.HIGH), extensions, plan_transformations
+    )
 
     steps = steps_of(plan)
     assert [kind_of(step) for step in steps] == [
@@ -527,7 +538,9 @@ def test_a_transformation_inserts_its_nodes_after_the_anchor(pr2_apartment_conte
     world, view, extensions = pr2_apartment_context
     plan_transformations = [MoveGrippersAfterTorsoMotion()]
 
-    plan = rewritten(MoveTorsoAction(TorsoState.HIGH), extensions, plan_transformations)
+    plan = rewritten(
+        MoveTorsoAction(torso_state=TorsoState.HIGH), extensions, plan_transformations
+    )
 
     steps = steps_of(plan)
     assert [kind_of(step) for step in steps] == [
@@ -564,7 +577,9 @@ def test_a_transformation_leaves_actions_of_another_type_alone(pr2_apartment_con
     world, view, extensions = pr2_apartment_context
     plan_transformations = [MoveGrippersBeforeTorsoMotion()]
 
-    plan = rewritten(ParkArmsAction(view.all_arms), extensions, plan_transformations)
+    plan = rewritten(
+        ParkArmsAction(arms=view.all_arms), extensions, plan_transformations
+    )
 
     assert [node for node in plan.descendants if isinstance(node, MoveGripper)] == []
 
@@ -577,7 +592,9 @@ def test_an_inserted_action_is_expanded(pr2_apartment_context):
     world, view, extensions = pr2_apartment_context
     plan_transformations = [ParkArmsBeforeTorsoMotion()]
 
-    plan = rewritten(MoveTorsoAction(TorsoState.HIGH), extensions, plan_transformations)
+    plan = rewritten(
+        MoveTorsoAction(torso_state=TorsoState.HIGH), extensions, plan_transformations
+    )
 
     [park] = [node for node in plan.descendants if isinstance(node, ParkArmsAction)]
     assert kinds_of_the_steps_of(park) == [JointPositionList]
@@ -594,7 +611,11 @@ def test_a_neighbour_of_a_node_no_language_node_runs_is_rejected(
     plan_transformations = [MoveGripperBeforeEveryAction()]
 
     with pytest.raises(NotRunByLanguageNodeError):
-        rewritten(MoveTorsoAction(TorsoState.HIGH), extensions, plan_transformations)
+        rewritten(
+            MoveTorsoAction(torso_state=TorsoState.HIGH),
+            extensions,
+            plan_transformations,
+        )
 
 
 # %% detecting before a grasp
@@ -712,7 +733,7 @@ def test_a_transformation_on_reaches_also_fires_inside_a_pick_up(pr2_apartment_c
     plan_transformations = [DetectBeforeGrasp()]
 
     plan = rewritten(
-        PickUpAction(milk.grasp_candidates()[0], view.right_arm),
+        PickUpAction(grasp=milk.grasp_candidates()[0], arm=view.right_arm),
         extensions,
         plan_transformations,
     )
@@ -749,7 +770,7 @@ def pick_up_action(annotation, arm: Arm) -> PickUpAction:
     :param arm: The arm to pick it up with.
     :return: A pick-up of the object by the first grasp it offers.
     """
-    return PickUpAction(annotation.grasp_candidates()[0], arm)
+    return PickUpAction(grasp=annotation.grasp_candidates()[0], arm=arm)
 
 
 def handle_opened_by(opening: Match) -> Handle:
@@ -792,7 +813,7 @@ def test_the_drawer_is_only_opened_for_an_object_that_lies_in_one(
 
     in_a_drawer = pick_up_action(spoon, view.right_arm)
     in_the_open = pick_up_action(milk, view.right_arm)
-    rewritten(Sequence([in_a_drawer, in_the_open]), extensions)
+    rewritten(Sequence(nodes=[in_a_drawer, in_the_open]), extensions)
 
     assert transformation.is_applicable(in_a_drawer)
     assert not transformation.is_applicable(in_the_open)
@@ -828,7 +849,7 @@ def test_a_drawer_that_already_stands_open_needs_no_opening(pr2_apartment_contex
     transformation = OpenDrawerBeforePickUp()
 
     pick_up = pick_up_action(spoon, view.right_arm)
-    rewritten(Sequence([pick_up]), extensions)
+    rewritten(Sequence(nodes=[pick_up]), extensions)
     assert transformation.is_applicable(pick_up)
 
     connection = drawer.root.parent_connection
@@ -919,7 +940,9 @@ def test_the_drawer_is_opened_before_a_move_and_pick_up_rather_than_inside_it(
         grasp=spoon.grasp_candidates()[0],
         arm=view.right_arm,
     )
-    plan = rewritten(Sequence([move_and_pick_up]), extensions, plan_transformations)
+    plan = rewritten(
+        Sequence(nodes=[move_and_pick_up]), extensions, plan_transformations
+    )
 
     [opening, moved_and_picked_up] = steps_of(plan)
     assert is_grounding(opening, MoveAndOpenAction)
@@ -940,7 +963,7 @@ def test_the_drawer_the_object_lies_in_is_opened_before_the_pick_up(
     plan_transformations = [OpenDrawerBeforePickUp()]
 
     plan = rewritten(
-        Sequence([pick_up_action(spoon, view.right_arm)]),
+        Sequence(nodes=[pick_up_action(spoon, view.right_arm)]),
         extensions,
         plan_transformations,
     )
@@ -963,7 +986,7 @@ def test_the_actions_beside_the_pick_up_are_expanded(pr2_apartment_context):
     plan_transformations = [OpenDrawerBeforePickUp()]
 
     plan = rewritten(
-        Sequence([pick_up_action(spoon, view.right_arm)]),
+        Sequence(nodes=[pick_up_action(spoon, view.right_arm)]),
         extensions,
         plan_transformations,
     )
@@ -982,7 +1005,7 @@ def test_the_drawer_is_opened_with_the_arm_that_picks_up(pr2_apartment_context):
     plan_transformations = [OpenDrawerBeforePickUp()]
 
     pick_up = pick_up_action(spoon, view.left_arm)
-    plan = rewritten(Sequence([pick_up]), extensions, plan_transformations)
+    plan = rewritten(Sequence(nodes=[pick_up]), extensions, plan_transformations)
 
     [opening] = [
         step for step in steps_of(plan) if is_grounding(step, MoveAndOpenAction)
@@ -1000,7 +1023,7 @@ def test_an_object_that_lies_in_no_drawer_is_picked_up_unchanged(pr2_apartment_c
     plan_transformations = [OpenDrawerBeforePickUp()]
     pick_up = pick_up_action(milk, view.right_arm)
 
-    plan = rewritten(Sequence([pick_up]), extensions, plan_transformations)
+    plan = rewritten(Sequence(nodes=[pick_up]), extensions, plan_transformations)
 
     assert steps_of(plan) == [pick_up]
 
@@ -1043,9 +1066,9 @@ def test_the_opening_joins_the_sequence_a_grounded_pick_up_runs_in(
     underspecified = StatementNode(
         statement=a(PickUpAction)(grasp=described.grasp, arm=described.arm)
     )
-    plan = rewritten(Sequence([underspecified]), extensions, plan_transformations)
+    plan = rewritten(Sequence(nodes=[underspecified]), extensions, plan_transformations)
     candidate = pick_up_action(spoon, view.right_arm)
-    candidate_steps = Sequence([candidate])
+    candidate_steps = Sequence(nodes=[candidate])
 
     underspecified.choose_child_with(
         ChoosesTheGivenChild(
@@ -1072,7 +1095,9 @@ def test_the_first_action_of_a_plan_is_preceded_by_parking(pr2_apartment_context
     plan_transformations = [ParkArmsBeforeFirstAction()]
 
     plan = rewritten(
-        Sequence([MoveTorsoAction(TorsoState.HIGH)]), extensions, plan_transformations
+        Sequence(nodes=[MoveTorsoAction(torso_state=TorsoState.HIGH)]),
+        extensions,
+        plan_transformations,
     )
 
     assert kinds_of_the_steps_of(plan) == [ParkArmsAction, MoveTorsoAction]
@@ -1116,7 +1141,7 @@ def test_the_drawer_is_opened_once_in_front_of_a_move_and_pick_up_still_to_be_gr
         spoon, view.right_arm, context_of(extensions), seed=SAMPLING_SEED
     )
     plan = rewritten(
-        Sequence([StatementNode(statement=move_and_pick_up)]),
+        Sequence(nodes=[StatementNode(statement=move_and_pick_up)]),
         extensions,
         plan_transformations,
     )
@@ -1148,7 +1173,7 @@ def test_the_drawer_is_opened_in_front_of_a_transports_pick_up_before_it_is_grou
         context_of(extensions),
         seed=SAMPLING_SEED,
     )
-    plan = rewritten(Sequence([transport]), extensions, plan_transformations)
+    plan = rewritten(Sequence(nodes=[transport]), extensions, plan_transformations)
 
     parking = step_before(underspecified_move_and_pick_up_in(plan))
     opening = step_before(parking)
@@ -1172,9 +1197,10 @@ def test_a_move_and_pick_up_whose_grasps_are_on_several_objects_is_opened_per_ca
 
     standing_pose = Pose(reference_frame=world.root)
     move_and_pick_up = a(MoveAndPickUpAction)(
-        navigate=NavigateAction(standing_pose),
+        navigate=NavigateAction(target_location=standing_pose),
         face_and_look_at=FaceAndLookAtAction(
-            face_at=FaceAtAction(standing_pose), look_at=LookAtAction(standing_pose)
+            face_at=FaceAtAction(target=standing_pose),
+            look_at=LookAtAction(target=standing_pose),
         ),
         pick_up=a(PickUpAction)(
             grasp=variable(
@@ -1185,7 +1211,7 @@ def test_a_move_and_pick_up_whose_grasps_are_on_several_objects_is_opened_per_ca
         ),
     )
     plan = rewritten(
-        Sequence([StatementNode(statement=move_and_pick_up)]),
+        Sequence(nodes=[StatementNode(statement=move_and_pick_up)]),
         extensions,
         plan_transformations,
     )
@@ -1206,7 +1232,9 @@ def test_a_move_and_pick_up_of_an_object_in_no_drawer_is_left_alone(
         arm=view.right_arm,
     )
 
-    plan = rewritten(Sequence([move_and_pick_up]), extensions, plan_transformations)
+    plan = rewritten(
+        Sequence(nodes=[move_and_pick_up]), extensions, plan_transformations
+    )
 
     assert steps_of(plan) == [move_and_pick_up]
 
@@ -1223,7 +1251,7 @@ def test_a_transport_of_an_object_in_no_drawer_is_left_alone(pr2_apartment_conte
         seed=SAMPLING_SEED,
     )
 
-    plan = rewritten(Sequence([transport]), extensions, plan_transformations)
+    plan = rewritten(Sequence(nodes=[transport]), extensions, plan_transformations)
 
     assert isinstance(
         step_before(underspecified_move_and_pick_up_in(plan)), ParkArmsAction
@@ -1249,7 +1277,7 @@ def test_a_pick_and_place_does_not_park_the_arms_by_itself(pr2_apartment_context
     world, view, extensions = pr2_apartment_context
     pick_and_place = pick_and_place_of_the_milk(world, view.right_arm)
 
-    rewritten(Sequence([pick_and_place]), extensions)
+    rewritten(Sequence(nodes=[pick_and_place]), extensions)
 
     assert step_types_of(pick_and_place) == [PickUpAction, PlaceAction]
 
@@ -1261,7 +1289,7 @@ def test_the_arms_are_parked_around_every_step_of_a_pick_and_place(
     plan_transformations = [ParkArmsAroundPickAndPlaceSteps()]
     pick_and_place = pick_and_place_of_the_milk(world, view.right_arm)
 
-    rewritten(Sequence([pick_and_place]), extensions, plan_transformations)
+    rewritten(Sequence(nodes=[pick_and_place]), extensions, plan_transformations)
 
     assert step_types_of(pick_and_place) == [
         ParkArmsAction,
@@ -1331,10 +1359,10 @@ def test_two_transformations_applied_to_one_node_are_reported(
     plan_transformations = list(
         [MoveLeftGripperBeforeTorso(), MoveRightGripperBeforeTorso()]
     )
-    torso = MoveTorsoAction(TorsoState.HIGH)
+    torso = MoveTorsoAction(torso_state=TorsoState.HIGH)
 
     with caplog.at_level(logging.WARNING, logger=transformation_logger.name):
-        rewritten(Sequence([torso]), extensions, plan_transformations)
+        rewritten(Sequence(nodes=[torso]), extensions, plan_transformations)
 
     [warning] = warnings_of(caplog)
     assert str(torso) in warning
@@ -1351,7 +1379,9 @@ def test_the_transformations_that_collide_are_still_applied(pr2_apartment_contex
     )
 
     plan = rewritten(
-        Sequence([MoveTorsoAction(TorsoState.HIGH)]), extensions, plan_transformations
+        Sequence(nodes=[MoveTorsoAction(torso_state=TorsoState.HIGH)]),
+        extensions,
+        plan_transformations,
     )
 
     assert [step.end_effector for step in steps_of(plan)[:2]] == [
@@ -1374,7 +1404,7 @@ def test_a_transformation_the_case_does_not_need_is_no_collision(
 
     with caplog.at_level(logging.WARNING, logger=transformation_logger.name):
         plan = rewritten(
-            Sequence([MoveTorsoAction(TorsoState.LOW)]),
+            Sequence(nodes=[MoveTorsoAction(torso_state=TorsoState.LOW)]),
             extensions,
             plan_transformations,
         )
@@ -1424,7 +1454,7 @@ def test_a_grasp_closes_to_the_objects_width_where_objects_push_back(
     milk = world.get_semantic_annotations_by_type(Milk)[0]
 
     plan = rewritten(
-        GraspingAction(grasp_of(milk), left_or_only_arm(view)),
+        GraspingAction(grasp=grasp_of(milk), arm=left_or_only_arm(view)),
         extensions,
         executor_for=executor_for,
     )
@@ -1445,7 +1475,9 @@ def test_a_grasp_still_shuts_the_gripper_where_nothing_pushes_back(
     world, view, extensions = pr2_apartment_context
     milk = world.get_semantic_annotations_by_type(Milk)[0]
 
-    plan = rewritten(GraspingAction(grasp_of(milk), left_or_only_arm(view)), extensions)
+    plan = rewritten(
+        GraspingAction(grasp=grasp_of(milk), arm=left_or_only_arm(view)), extensions
+    )
 
     assert width_actions_of(plan) == []
     assert len(shutting_goals_of(plan)) == 1
@@ -1462,7 +1494,7 @@ def test_a_gripper_whose_fingers_are_not_modelled_like_the_real_ones_still_shuts
     milk = world.get_semantic_annotations_by_type(Milk)[0]
 
     plan = rewritten(
-        GraspingAction(grasp_of(milk), left_or_only_arm(view)),
+        GraspingAction(grasp=grasp_of(milk), arm=left_or_only_arm(view)),
         extensions,
         executor_for=robot_executor,
     )
@@ -1477,7 +1509,7 @@ def test_the_squeeze_is_handed_on_to_the_fingers(pr2_apartment_context):
     squeeze = 0.002
 
     plan = rewritten(
-        GraspingAction(grasp_of(milk), left_or_only_arm(view)),
+        GraspingAction(grasp=grasp_of(milk), arm=left_or_only_arm(view)),
         extensions,
         executor_for=lambda extensions: physically_simulated_executor(
             extensions,
@@ -1503,7 +1535,7 @@ def test_an_object_without_collision_is_still_held_by_shutting_the_gripper(
         world.add_semantic_annotation(shapeless)
 
     plan = rewritten(
-        GraspingAction(grasp_of(shapeless), left_or_only_arm(view)),
+        GraspingAction(grasp=grasp_of(shapeless), arm=left_or_only_arm(view)),
         extensions,
         executor_for=physically_simulated_executor,
     )

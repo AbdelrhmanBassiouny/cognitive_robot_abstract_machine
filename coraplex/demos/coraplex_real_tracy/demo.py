@@ -144,38 +144,38 @@ executor_type: type[PlanExecutor] = (
 executor = executor_type(world, context_extensions=[RobotAccess(tracy)], ros_node=node)
 
 plan = Sequence(
-    [
+    nodes=[
         # Stack Box 2
-        ParkArmsAction(tracy.all_arms),
+        ParkArmsAction(arms=tracy.all_arms),
         PickUpAction(
-            GraspCandidate(
+            grasp=GraspCandidate(
                 box2_annotation,
                 Pose.from_xyz_rpy(
                     pitch=np.pi / 2, reference_frame=box2_annotation.root
                 ),
             ),
-            tracy.left_arm,
+            arm=tracy.left_arm,
         ),
         PlaceAction(
-            box2_annotation,
-            Pose.from_xyz_rpy(
+            object_designator=box2_annotation,
+            target_location=Pose.from_xyz_rpy(
                 0.8, 0.0, table_top_z + 1.5 * box_edge, reference_frame=world.root
             ),
         ),
         # Stack Box 3
-        ParkArmsAction(tracy.all_arms),
+        ParkArmsAction(arms=tracy.all_arms),
         PickUpAction(
-            GraspCandidate(
+            grasp=GraspCandidate(
                 box3_annotation,
                 Pose.from_xyz_rpy(
                     pitch=np.pi / 2, reference_frame=box3_annotation.root
                 ),
             ),
-            tracy.right_arm,
+            arm=tracy.right_arm,
         ),
         PlaceAction(
-            box3_annotation,
-            Pose.from_xyz_rpy(
+            object_designator=box3_annotation,
+            target_location=Pose.from_xyz_rpy(
                 0.8, 0.0, table_top_z + 2.5 * box_edge, reference_frame=world.root
             ),
         ),

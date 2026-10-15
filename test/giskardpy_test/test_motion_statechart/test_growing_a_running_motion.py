@@ -18,7 +18,7 @@ def _torso_goal(world, position: float) -> Sequence:
     :return: A sequence moving the torso of the PR2 in `world` to `position`.
     """
     return Sequence(
-        [
+        nodes=[
             JointPositionList(
                 goal_state=JointState.from_str_dict(
                     {PR2Joint.TORSO_LIFT: position}, world=world

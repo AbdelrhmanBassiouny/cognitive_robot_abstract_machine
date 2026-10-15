@@ -107,7 +107,8 @@ def navigation_to(world: World, **parameters) -> NavigateAction:
     :return: A drive to a pose two meters from the origin of `world`.
     """
     return NavigateAction(
-        Pose.from_xyz_rpy(2.0, 2.0, 0.0, reference_frame=world.root), **parameters
+        target_location=Pose.from_xyz_rpy(2.0, 2.0, 0.0, reference_frame=world.root),
+        **parameters,
     )
 
 
@@ -133,7 +134,7 @@ def assert_drives_differentially_to(
 
 def test_an_expanded_action_runs_the_body_it_is_given_instead(pr2_apartment_context):
     world, robot, extensions = pr2_apartment_context
-    action = expand(MoveTorsoAction(TorsoState.HIGH), extensions)
+    action = expand(MoveTorsoAction(torso_state=TorsoState.HIGH), extensions)
     former_nodes = [action.action_body, *action.action_body.descendants]
     goal = JointPositionList(
         goal_state=robot.get_torso().get_joint_state_by_type(TorsoState.LOW)
@@ -151,9 +152,9 @@ def test_an_expanded_action_runs_a_body_deciding_its_own_success_instead(
     pr2_apartment_context,
 ):
     world, robot, extensions = pr2_apartment_context
-    action = expand(MoveTorsoAction(TorsoState.HIGH), extensions)
+    action = expand(MoveTorsoAction(torso_state=TorsoState.HIGH), extensions)
     body = Sequence(
-        [
+        nodes=[
             JointPositionList(
                 goal_state=robot.get_torso().get_joint_state_by_type(TorsoState.LOW)
             )
@@ -167,7 +168,7 @@ def test_an_expanded_action_runs_a_body_deciding_its_own_success_instead(
 
 def test_an_action_that_was_not_expanded_has_no_body_to_replace(pr2_apartment_context):
     world, robot, extensions = pr2_apartment_context
-    action = MoveTorsoAction(TorsoState.HIGH)
+    action = MoveTorsoAction(torso_state=TorsoState.HIGH)
     goal = JointPositionList(
         goal_state=robot.get_torso().get_joint_state_by_type(TorsoState.LOW)
     )
@@ -179,7 +180,7 @@ def test_an_action_that_was_not_expanded_has_no_body_to_replace(pr2_apartment_co
 def test_the_body_of_a_compiled_action_cannot_be_replaced(pr2_apartment_context):
     world, robot, extensions = pr2_apartment_context
     executor = simulated_executor(extensions)
-    action = MoveTorsoAction(TorsoState.HIGH)
+    action = MoveTorsoAction(torso_state=TorsoState.HIGH)
     executor.compile(statechart_of(executor, action))
     goal = JointPositionList(
         goal_state=robot.get_torso().get_joint_state_by_type(TorsoState.LOW)
@@ -194,9 +195,9 @@ def test_an_action_joining_a_compiled_statechart_runs_the_body_it_is_given_inste
 ):
     world, robot, extensions = pr2_apartment_context
     executor = simulated_executor(extensions)
-    statechart = statechart_of(executor, MoveTorsoAction(TorsoState.HIGH))
+    statechart = statechart_of(executor, MoveTorsoAction(torso_state=TorsoState.HIGH))
     executor.compile(statechart)
-    action = MoveTorsoAction(TorsoState.LOW)
+    action = MoveTorsoAction(torso_state=TorsoState.LOW)
     goal = JointPositionList(
         goal_state=robot.get_torso().get_joint_state_by_type(TorsoState.LOW)
     )
@@ -262,13 +263,13 @@ def test_stretch_drives_every_leg_of_a_path_with_its_differential_drive(
     world, robot, extensions = stretch_apartment_context
     target = Pose.from_xyz_rpy(2.0, 2.0, 0.0, reference_frame=world.root)
     unchanged = prepared(
-        PathPlanningNavigateAction(target), simulated_executor(extensions)
+        PathPlanningNavigateAction(target=target), simulated_executor(extensions)
     )
     executor = simulated_executor(
         rewriting_with(extensions, DriveStretchWithItsDifferentialDrive())
     )
 
-    action = prepared(PathPlanningNavigateAction(target), executor)
+    action = prepared(PathPlanningNavigateAction(target=target), executor)
 
     legs = action.action_body.nodes
     assert type(action.action_body) is Sequence
@@ -407,7 +408,7 @@ def close_action(world: World, robot: AbstractRobot) -> CloseAction:
     :return: An action closing a container of the apartment with the arm of `robot`.
     """
     handle = world.get_semantic_annotations_by_type(Handle)[0]
-    return CloseAction(handle.grasp_candidates()[0], robot.all_arms[0])
+    return CloseAction(grasp=handle.grasp_candidates()[0], arm=robot.all_arms[0])
 
 
 def closing_step_of(action: CloseAction) -> StatechartNode:

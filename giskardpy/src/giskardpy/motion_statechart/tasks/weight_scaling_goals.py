@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 import krrood.symbolic_math.symbolic_math as sm
 from cramph.context import StatechartContext
@@ -8,7 +8,7 @@ from giskardpy.motion_statechart.graph_node import ConvergingTask, MotionNodeArt
 from semantic_digital_twin.world_description.world_entity import Body
 
 
-@dataclass
+@dataclass(kw_only=True)
 class MaxManipulability(ConvergingTask):
     """
     This goal maximizes the manipulability of the kinematic chain between root_link and
@@ -18,17 +18,17 @@ class MaxManipulability(ConvergingTask):
     joints or odometry joints.
     """
 
-    root_link: Body = field(kw_only=True)
+    root_link: Body
     """
     The root of the kinematic chain whose manipulability is maximized.
     """
 
-    tip_link: Body = field(kw_only=True)
+    tip_link: Body
     """
     The tip of the kinematic chain whose manipulability is maximized.
     """
 
-    manipulability_threshold: float = field(default=0.5, kw_only=True)
+    manipulability_threshold: float = 0.5
     """
     Manipulability value the goal drives the measure towards.
     """

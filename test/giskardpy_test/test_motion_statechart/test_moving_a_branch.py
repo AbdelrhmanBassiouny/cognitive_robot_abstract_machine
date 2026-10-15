@@ -70,7 +70,7 @@ def test_a_motion_built_before_a_body_was_moved_moves_it_with_its_new_parent(
     goal_pose = Pose.from_xyz_rpy(x=1.5, reference_frame=world.root)
     statechart.add_node(
         carry := Sequence(
-            [
+            nodes=[
                 CartesianPose(
                     root_link=world.root,
                     tip_link=robot,

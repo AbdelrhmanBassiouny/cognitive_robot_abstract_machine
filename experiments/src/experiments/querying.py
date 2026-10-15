@@ -229,11 +229,11 @@ def build_plan(executor: SimulatedPlanExecutor) -> StatechartNode:
         raise PlanFailure()
 
     root = Sequence(
-        [
-            ParkArmsAction(pr2.all_arms),
-            MoveTorsoAction(TorsoState.HIGH),
+        nodes=[
+            ParkArmsAction(arms=pr2.all_arms),
+            MoveTorsoAction(torso_state=TorsoState.HIGH),
             TryInOrder(
-                [
+                nodes=[
                     FunctionCall(function=_failing_step, failure_types=(PlanFailure,)),
                     TransportAction.from_graspable_by_closest_grasps(
                         world.get_semantic_annotations_by_type(Milk)[0],

@@ -17,7 +17,7 @@ from cramph.node import NodeArtifacts
 from giskardpy.motion_statechart.tasks.joint_tasks import JointState
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class SetSeedConfiguration(SucceedsOnObservingTrue, MotionStatechartNode):
     """
     Overwrite the configuration of the world to allow starting the planning from a
@@ -29,7 +29,7 @@ class SetSeedConfiguration(SucceedsOnObservingTrue, MotionStatechartNode):
         matches.
     """
 
-    seed_configuration: JointState = field(kw_only=True)
+    seed_configuration: JointState
 
     def build_artifacts(self, context: StatechartContext) -> NodeArtifacts:
         """
@@ -42,18 +42,18 @@ class SetSeedConfiguration(SucceedsOnObservingTrue, MotionStatechartNode):
         self.seed_configuration.apply_to(context.world)
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class SetOdometry(SucceedsOnObservingTrue, MotionStatechartNode):
     """
     Sets the odometry of the robot to the given pose.
     """
 
-    base_pose: HomogeneousTransformationMatrix = field(kw_only=True)
+    base_pose: HomogeneousTransformationMatrix
     """
     The pose of the robot base.
     """
 
-    odom_connection: Optional[OmniDrive] = field(default=None, kw_only=True)
+    odom_connection: Optional[OmniDrive] = None
     """
     The odometry connection to use.
 

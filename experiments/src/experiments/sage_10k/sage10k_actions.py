@@ -16,7 +16,7 @@ from semantic_digital_twin.world_description.graph_of_convex_sets.boxes import (
 )
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class Sage10kOpenDoor(Action):
     """
     Open a door.
@@ -87,4 +87,4 @@ class Sage10kOpenDoor(Action):
 
         open_action = OpenAction.from_handle(self.door.handle, arm)
 
-        return Sequence([reach_action, open_action])
+        return Sequence(nodes=[reach_action, open_action])

@@ -64,7 +64,7 @@ def test_joint_goal(solver, pr2_world_state_reset):
     msc = Statechart(context=kin_sim.context)
     msc.add_node(
         sequence := Sequence(
-            [
+            nodes=[
                 JointPositionList(
                     goal_state=JointState.from_str_dict(
                         {PR2Joint.TORSO_LIFT: 0.1}, world=pr2_world_state_reset

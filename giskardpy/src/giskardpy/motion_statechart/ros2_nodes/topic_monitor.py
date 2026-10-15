@@ -19,25 +19,23 @@ from cramph.node import NodeArtifacts
 from giskardpy.motion_statechart.ros_context import RosContextExtension
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class TopicNode(EndedByOwner, MotionStatechartNode, Generic[MsgType]):
     """
     Superclass for nodes that use ROS topics.
     """
 
-    topic_name: str = field(kw_only=True)
+    topic_name: str
     """
     Name of the ROS topic to subscribe to.
     """
 
-    msg_type: Type[MsgType] = field(kw_only=True)
+    msg_type: Type[MsgType]
     """
     Type of the ROS message.
     """
 
-    qos_profile: QoSProfile = field(
-        kw_only=True, default_factory=lambda: QoSProfile(depth=10)
-    )
+    qos_profile: QoSProfile = field(default_factory=lambda: QoSProfile(depth=10))
     """
     QoS profile to use when subscribing to the topic.
     """
@@ -54,7 +52,7 @@ class TopicNode(EndedByOwner, MotionStatechartNode, Generic[MsgType]):
         self.ros2_node = ros_context_extension.ros_node
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class TopicSubscriberNode(TopicNode[MsgType]):
     """
     Superclass for all nodes that subscribe to a ROS topic.
@@ -108,7 +106,7 @@ class TopicSubscriberNode(TopicNode[MsgType]):
         self.clear_msg()
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class TopicPublisherNode(TopicNode[MsgType]):
     """
     Superclass for all nodes that publish to a ROS topic.
@@ -130,7 +128,7 @@ class TopicPublisherNode(TopicNode[MsgType]):
         )
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class WaitForMessage(TopicSubscriberNode[MsgType]):
     """
     This node will turn to True once a message was received on its topic.
@@ -143,7 +141,7 @@ class WaitForMessage(TopicSubscriberNode[MsgType]):
         return ObservationStateValues.FALSE
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class PublishOnStart(TopicPublisherNode[MsgType]):
     """
     This node will publish its message when on_start is called.
@@ -152,7 +150,7 @@ class PublishOnStart(TopicPublisherNode[MsgType]):
     is started again.
     """
 
-    msg: MsgType = field(kw_only=True)
+    msg: MsgType
     """
     Message to publish.
     """

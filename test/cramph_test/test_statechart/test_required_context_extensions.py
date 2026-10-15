@@ -31,7 +31,7 @@ class ExtensionASpecializedNodeRequires(ContextExtension):
     """
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class NodeRequiringAnExtension(NodeSucceedingOnObservingTrue):
     """
     A node that declares a context extension it requires.
@@ -42,7 +42,7 @@ class NodeRequiringAnExtension(NodeSucceedingOnObservingTrue):
         return super().required_context_extensions + (ExtensionANodeRequires,)
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class SpecializedNodeRequiringAnotherExtension(NodeRequiringAnExtension):
     """
     A node that requires an extension on top of the one its base class requires.
@@ -55,7 +55,7 @@ class SpecializedNodeRequiringAnotherExtension(NodeRequiringAnExtension):
         )
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class CompositeRequiringAnExtension(SucceedsOnObservingTrue, CompositeNode):
     """
     A composite node that declares a context extension it requires and remembers whether
@@ -82,7 +82,7 @@ class ExtensionACompositeReadsWhileExpanding(ContextExtension):
     """
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class CompositeReadingAnExtensionWhileExpanding(SucceedsOnObservingTrue, CompositeNode):
     """
     A composite node that declares a context extension it reads only while it expands,

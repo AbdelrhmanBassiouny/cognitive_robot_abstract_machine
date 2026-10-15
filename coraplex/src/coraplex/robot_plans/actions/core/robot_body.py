@@ -39,7 +39,7 @@ from semantic_digital_twin.datastructures.definitions import (
 )
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class MoveTorsoAction(Action):
     """
     Move the torso of the robot up and down.
@@ -52,10 +52,10 @@ class MoveTorsoAction(Action):
 
     def create_action_body(self) -> StatechartNode:
         joint_state = self.robot.get_torso().get_joint_state_by_type(self.torso_state)
-        return Sequence([JointPositionList(goal_state=joint_state)])
+        return Sequence(nodes=[JointPositionList(goal_state=joint_state)])
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class SetGripperAction(Action, MovesGripper):
     """
     Set the gripper state of the robot.
@@ -75,7 +75,7 @@ class SetGripperAction(Action, MovesGripper):
         return self.gripper_goal(self.motion, self.gripper)
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class MoveFingersToWidthAction(Action):
     """
     Closes a two-finger gripper until its fingertips stand a given distance apart,
@@ -133,7 +133,7 @@ class MoveFingersToWidthAction(Action):
         )
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class ParkArmsAction(Action, HasMaxJointVelocity):
     """
     Park the arms of the robot.
@@ -150,7 +150,7 @@ class ParkArmsAction(Action, HasMaxJointVelocity):
         if self.max_joint_velocity is None:
             return joint_goal
         return Parallel(
-            [
+            nodes=[
                 joint_goal,
                 JointVelocityLimit(
                     connections=list(park_state.connections),
@@ -173,7 +173,7 @@ class ParkArmsAction(Action, HasMaxJointVelocity):
         return JointState(connections=connections, target_values=target_values)
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class FollowToolCenterPointPathAction(MovesToolCenterPoint):
     """
     Represents an action to move a robotic arm's TCP (Tool Center Point) along a path of
@@ -192,12 +192,12 @@ class FollowToolCenterPointPathAction(MovesToolCenterPoint):
 
     def create_action_body(self) -> StatechartNode:
         waypoints = Sequence(
-            [self._waypoint_goal(pose) for pose in self.target_locations.poses]
+            nodes=[self._waypoint_goal(pose) for pose in self.target_locations.poses]
         )
         hold_base = self.keep_base_still()
         if not hold_base:
             return waypoints
-        return Parallel([waypoints, *hold_base])
+        return Parallel(nodes=[waypoints, *hold_base])
 
     def _waypoint_goal(self, target: Pose) -> CartesianPose:
         """
@@ -225,7 +225,7 @@ class FollowToolCenterPointPathAction(MovesToolCenterPoint):
         pass
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class MoveManipulatorAction(MovesToolCenterPoint):
     """
     Move the end_effector to a specific pose.
@@ -262,4 +262,4 @@ class MoveManipulatorAction(MovesToolCenterPoint):
             )
         if not accompanying:
             return goal
-        return Parallel([goal, *accompanying])
+        return Parallel(nodes=[goal, *accompanying])

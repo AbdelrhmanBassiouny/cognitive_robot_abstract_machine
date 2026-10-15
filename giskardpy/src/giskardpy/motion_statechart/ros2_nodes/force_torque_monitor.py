@@ -9,7 +9,7 @@ from cramph.context import StatechartContext
 from cramph.data_types import ObservationStateValues
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class ForceTorqueNode(TopicSubscriberNode[WrenchStamped]):
     """
     Superclass for all nodes that subscribe to a ROS topic that contains force and
@@ -43,13 +43,13 @@ class ForceTorqueNode(TopicSubscriberNode[WrenchStamped]):
         return float(np.linalg.norm(self.torque_as_np()))
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class ForceImpactMonitor(ForceTorqueNode):
     """
     This node checks if the force magnitude is above a threshold.
     """
 
-    threshold: float = field(kw_only=True)
+    threshold: float
 
     def on_tick(self, context: StatechartContext) -> Optional[ObservationStateValues]:
         super().on_tick(context)

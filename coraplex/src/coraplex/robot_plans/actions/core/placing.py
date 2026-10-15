@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 from typing_extensions import Any, Dict, List, Tuple
 
@@ -33,7 +33,7 @@ from semantic_digital_twin.robots.robot_parts import Arm
 from semantic_digital_twin.spatial_types.spatial_types import Pose
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class PlaceAction(
     MovesToolCenterPoint,
     ReattachesBodies,
@@ -56,7 +56,7 @@ class PlaceAction(
     Pose in the world at which the object should be placed.
     """
 
-    grasp_release_threshold: float = field(default=0.1, kw_only=True)
+    grasp_release_threshold: float = 0.1
     """
     Maximum fraction of sampled rays between the gripper's fingers that may still hit
     :attr:`object_designator` for it to count as released (see
@@ -72,7 +72,7 @@ class PlaceAction(
         )
 
         return Sequence(
-            [
+            nodes=[
                 self.tool_center_point_goal(
                     poses.retreat,
                     arm,
@@ -86,7 +86,7 @@ class PlaceAction(
                     max_linear_velocity=self.placing_linear_velocity,
                 ),
                 Parallel(
-                    [
+                    nodes=[
                         self.gripper_goal(
                             GripperState.OPEN,
                             arm.end_effector,

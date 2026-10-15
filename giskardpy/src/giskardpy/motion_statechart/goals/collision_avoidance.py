@@ -48,7 +48,7 @@ from semantic_digital_twin.world_description.world_entity import (
 )
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class _CollisionAvoidanceTask(Task):
     """
     Superclass with helper methods for collision avoidance tasks.
@@ -59,13 +59,13 @@ class _CollisionAvoidanceTask(Task):
         return super().required_context_extensions + (MotionControlContext,)
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class _CancelBecauseCollisionViolated(CancelStatechart):
     """
     Cancels the motion when one of the collision avoidance tasks it watches is violated.
     """
 
-    tasks: list[_CollisionAvoidanceTask] = field(kw_only=True)
+    tasks: list[_CollisionAvoidanceTask]
     """
     The list of collision avoidance tasks to check for collisions.
     """
@@ -93,7 +93,7 @@ class _CancelBecauseCollisionViolated(CancelStatechart):
         return sm.logic_or(*[node.observes_false for node in self.tasks])
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class _ExternalCollisionAvoidanceNode(_CollisionAvoidanceTask):
     """
     Avoids external collisions between a collision group and its collision_index-closest
@@ -103,17 +103,17 @@ class _ExternalCollisionAvoidanceNode(_CollisionAvoidanceTask):
     distance is larger than buffer_zone.
     """
 
-    body: Body = field(kw_only=True)
+    body: Body
     """
     The root body of the collision group avoiding external collisions.
     """
 
-    max_velocity: float = field(default=0.2, kw_only=True)
+    max_velocity: float = 0.2
     """
     The maximum velocity for the collision avoidance task.
     """
 
-    collision_index: int = field(default=0, kw_only=True)
+    collision_index: int = 0
     """
     The index of the closest object in the collision group.
 
@@ -187,7 +187,7 @@ class _ExternalCollisionAvoidanceNode(_CollisionAvoidanceTask):
         return self.root_V_contact_normal.norm() == 0
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class _ExternalCollisionHasData(_ExternalCollisionAvoidanceNode):
     """
     Monitors whether data was computed for the external collision avoidance task.
@@ -201,7 +201,7 @@ class _ExternalCollisionHasData(_ExternalCollisionAvoidanceNode):
         return artifacts
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class _ExternalCollisionAvoidanceTask(_ExternalCollisionAvoidanceNode):
     """
     Avoids external collisions between a collision group and its collision_index-closest
@@ -212,7 +212,7 @@ class _ExternalCollisionAvoidanceTask(_ExternalCollisionAvoidanceNode):
     drops below violated_distance.
     """
 
-    max_velocity: float = field(default=0.2, kw_only=True)
+    max_velocity: float = 0.2
     """
     The maximum velocity for the collision avoidance task.
     """
@@ -281,14 +281,14 @@ class _ExternalCollisionAvoidanceTask(_ExternalCollisionAvoidanceNode):
         return artifacts
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class _CancelBecauseExternalCollisionViolated(_CancelBecauseCollisionViolated):
     """
     Cancels the motion by raising an exception detailing which external collision tasks
     were violated.
     """
 
-    tasks: list[_ExternalCollisionAvoidanceTask] = field(kw_only=True)
+    tasks: list[_ExternalCollisionAvoidanceTask]
     """
     The list of external collision avoidance tasks to check for collisions.
     """
@@ -323,14 +323,14 @@ class _CancelBecauseExternalCollisionViolated(_CancelBecauseCollisionViolated):
         )
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class UpdateTemporaryCollisionRules(EndedByOwner, MotionStatechartNode):
     """
     Keeps temporary collision rules in force while it runs, next to the temporary rules
     of every other node running at the same time.
     """
 
-    temporary_rules: list[CollisionRule] = field(kw_only=True)
+    temporary_rules: list[CollisionRule]
     """
     The rules in force while this node runs.
     """
@@ -369,15 +369,15 @@ class UpdateTemporaryCollisionRules(EndedByOwner, MotionStatechartNode):
         )
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class SetInitialTemporaryCollisionRules(SucceedsOnObservingTrue, MotionStatechartNode):
     """
     Updates the temporary collision rules for the robot.
     """
 
-    temporary_rules: list[CollisionRule] = field(kw_only=True)
+    temporary_rules: list[CollisionRule]
     collision_matrix: CollisionMatrix = field(init=False)
-    set_on_build: bool = field(default=True, kw_only=True)
+    set_on_build: bool = True
     """
     Whether to set the collision matrix on build.
     """
@@ -406,7 +406,7 @@ class SetInitialTemporaryCollisionRules(SucceedsOnObservingTrue, MotionStatechar
         context.world.collision_manager.set_collision_matrix(self.collision_matrix)
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class ExternalCollisionAvoidance(EndedByOwner, CompositeNode):
     """
     A goal combining an ExternalCollisionDistanceMonitor and an
@@ -422,17 +422,17 @@ class ExternalCollisionAvoidance(EndedByOwner, CompositeNode):
         NodePlotSpec.create_collapsed_composite_node_style
     )
 
-    robot: AbstractRobot = field(kw_only=True, default=None)
+    robot: AbstractRobot = None
     """
     The robot for which the collision avoidance goal is defined.
     """
 
-    max_velocity: float = field(default=0.2, kw_only=True)
+    max_velocity: float = 0.2
     """
     The maximum velocity for the collision avoidance task.
     """
 
-    cancel_if_collision_violated: bool = field(default=True, kw_only=True)
+    cancel_if_collision_violated: bool = True
     """
     If True, the motion will be canceled if a collision is violated.
     """
@@ -507,7 +507,7 @@ class ExternalCollisionAvoidance(EndedByOwner, CompositeNode):
             )
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class ExternalCollisionDistanceMonitor(EndedByOwner, MotionStatechartNode):
     """
     Monitors the distance to the closest external object for a specific collision group
@@ -516,17 +516,17 @@ class ExternalCollisionDistanceMonitor(EndedByOwner, MotionStatechartNode):
     .. note:: the input bodies are only used to look up the collision groups.
     """
 
-    body: Body = field(kw_only=True)
+    body: Body
     """
     The robot body to monitor.
     """
 
-    threshold: float = field(kw_only=True)
+    threshold: float
     """
     Distance threshold in meters.
     """
 
-    collision_index: int = field(default=0, kw_only=True)
+    collision_index: int = 0
     """Index of the closest collision (0 = closest, 1 = second closest, etc.)."""
 
     @classproperty
@@ -554,7 +554,7 @@ class ExternalCollisionDistanceMonitor(EndedByOwner, MotionStatechartNode):
         return MotionNodeArtifacts(observation=distance_symbol < self.threshold)
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class _SelfCollisionAvoidanceNode(_CollisionAvoidanceTask):
     """
     Avoids self collisions between two collision groups.
@@ -564,17 +564,17 @@ class _SelfCollisionAvoidanceNode(_CollisionAvoidanceTask):
     buffer_zone.
     """
 
-    body_a: Body = field(kw_only=True)
+    body_a: Body
     """
     The root body of the first collision group to avoid self collisions with.
     """
 
-    body_b: Body = field(kw_only=True)
+    body_b: Body
     """
     The root body of the second collision group to avoid self collisions with.
     """
 
-    max_velocity: float = field(default=0.2, kw_only=True)
+    max_velocity: float = 0.2
     """
     The maximum velocity for the collision avoidance task.
     """
@@ -667,7 +667,7 @@ class _SelfCollisionAvoidanceNode(_CollisionAvoidanceTask):
         return self.group_b_V_contact_normal.norm() == 0
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class _SelfCollisionHasData(_SelfCollisionAvoidanceNode):
     """
     Monitors whether data was computed for the self collision avoidance task.
@@ -681,7 +681,7 @@ class _SelfCollisionHasData(_SelfCollisionAvoidanceNode):
         return artifacts
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class _SelfCollisionAvoidanceTask(_SelfCollisionAvoidanceNode):
     """
     Avoids self collisions between two collision groups.
@@ -692,7 +692,7 @@ class _SelfCollisionAvoidanceTask(_SelfCollisionAvoidanceNode):
     violated_distance.
     """
 
-    max_velocity: float = field(default=0.2, kw_only=True)
+    max_velocity: float = 0.2
     """
     The maximum velocity for the collision avoidance task.
     """
@@ -731,14 +731,14 @@ class _SelfCollisionAvoidanceTask(_SelfCollisionAvoidanceNode):
         return artifacts
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class _CancelBecauseSelfCollisionViolated(_CancelBecauseCollisionViolated):
     """
     Cancels the motion by raising an exception detailing which self collision tasks were
     violated.
     """
 
-    tasks: list[_SelfCollisionAvoidanceTask] = field(kw_only=True)
+    tasks: list[_SelfCollisionAvoidanceTask]
     """
     The list of self collision avoidance tasks to check for collisions.
     """
@@ -777,7 +777,7 @@ class _CancelBecauseSelfCollisionViolated(_CancelBecauseCollisionViolated):
         )
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class SelfCollisionAvoidance(EndedByOwner, CompositeNode):
     """
     A goal combining a SelfCollisionDistanceMonitor and a SelfCollisionAvoidanceTask.
@@ -793,17 +793,17 @@ class SelfCollisionAvoidance(EndedByOwner, CompositeNode):
         NodePlotSpec.create_collapsed_composite_node_style
     )
 
-    robot: AbstractRobot = field(kw_only=True, default=None)
+    robot: AbstractRobot = None
     """
     The robot for which the collision avoidance goal is defined.
     """
 
-    max_velocity: float = field(default=0.2, kw_only=True)
+    max_velocity: float = 0.2
     """
     The maximum velocity for the collision avoidance task.
     """
 
-    cancel_if_collision_violated: bool = field(default=True, kw_only=True)
+    cancel_if_collision_violated: bool = True
     """
     If True, the motion will be canceled if a collision is violated.
     """
@@ -903,7 +903,7 @@ class SelfCollisionAvoidance(EndedByOwner, CompositeNode):
             )
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class SelfCollisionDistanceMonitor(EndedByOwner, MotionStatechartNode):
     """
     Monitors the distance to the closest external object for the group of a body.
@@ -912,17 +912,17 @@ class SelfCollisionDistanceMonitor(EndedByOwner, MotionStatechartNode):
     .. note:: the input bodies are only used to look up the collision groups.
     """
 
-    body_a: Body = field(kw_only=True)
+    body_a: Body
     """
     First robot body to monitor.
     """
 
-    body_b: Body = field(kw_only=True)
+    body_b: Body
     """
     Second robot body to monitor.
     """
 
-    threshold: float = field(kw_only=True)
+    threshold: float
     """
     Distance threshold in meters.
     """

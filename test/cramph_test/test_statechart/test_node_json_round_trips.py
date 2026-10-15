@@ -127,19 +127,19 @@ def _cases() -> list[NodeRoundTripCase]:
             ],
         ),
         NodeRoundTripCase(
-            Sequence, lambda world: [Sequence([ConstTrueNode(), ConstTrueNode()])]
+            Sequence, lambda world: [Sequence(nodes=[ConstTrueNode(), ConstTrueNode()])]
         ),
         NodeRoundTripCase(
             Parallel,
             lambda world: [
-                Parallel([ConstTrueNode(), ConstFalseNode()], minimum_success=1)
+                Parallel(nodes=[ConstTrueNode(), ConstFalseNode()], minimum_success=1)
             ],
         ),
         NodeRoundTripCase(
-            TryInOrder, lambda world: [TryInOrder([_attempt(), _attempt()])]
+            TryInOrder, lambda world: [TryInOrder(nodes=[_attempt(), _attempt()])]
         ),
         NodeRoundTripCase(
-            TryAll, lambda world: [TryAll([ConstTrueNode(), ConstTrueNode()])]
+            TryAll, lambda world: [TryAll(nodes=[ConstTrueNode(), ConstTrueNode()])]
         ),
         NodeRoundTripCase(
             CompositeNodeChoosingItsChild,

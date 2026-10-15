@@ -143,7 +143,7 @@ def test_node_type_changes_the_chart_signature() -> None:
     original = Statechart(context=StatechartContext(world=World()))
     original.add_node(ConstTrueNode())
     changed = Statechart(context=StatechartContext(world=World()))
-    changed.add_node(Sequence([], name=original.nodes[0].name))
+    changed.add_node(Sequence(nodes=[], name=original.nodes[0].name))
 
     assert structure_of(original).signature != structure_of(changed).signature
 
@@ -174,7 +174,7 @@ def test_a_chart_seen_before_compiling_is_snapshotted_with_its_compiled_transiti
     before compiling must not outlive the compile.
     """
     chart = Statechart(context=StatechartContext(world=World()))
-    chart.add_node(Sequence([ConstTrueNode()]))
+    chart.add_node(Sequence(nodes=[ConstTrueNode()]))
     observer = ChartObserver()
     observer.snapshot(chart)
 

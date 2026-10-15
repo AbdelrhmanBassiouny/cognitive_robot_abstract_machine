@@ -169,7 +169,7 @@ class KeepStretchInFrontOfTheContainerItCloses(PlanTransformation[CloseAction]):
         CramLanguageNode.running(closing_goal).replace(
             closing_goal,
             Parallel(
-                [
+                nodes=[
                     CartesianPose(
                         name="Keep holding handle",
                         root_link=handle,

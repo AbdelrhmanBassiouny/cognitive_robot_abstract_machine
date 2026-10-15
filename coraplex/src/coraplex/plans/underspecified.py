@@ -39,7 +39,7 @@ logger = logging.getLogger(__name__)
 # %% attempting a grounded action
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class AttemptRewritingItsTask(Attempt):
     """
     An attempt whose task is rewritten by the plan transformations of its statechart

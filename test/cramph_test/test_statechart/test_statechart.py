@@ -255,7 +255,7 @@ def test_draw_with_invisible_node(tmp_path):
     msc.draw(str(tmp_path / "muh.pdf"))
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class _NodeThatEndsTheStatechart(TerminalNode):
     """
     A terminal node other than the two the statechart ships with.
@@ -400,10 +400,10 @@ class TestConditions:
         )
         msc = Statechart(context=kin_sim.context)
         node = ConstTrueNode()
-        msc.add_node(Sequence([node]))
+        msc.add_node(Sequence(nodes=[node]))
 
         with pytest.raises(NodeAlreadyBelongsToDifferentNodeError):
-            msc.add_node(Sequence([node]))
+            msc.add_node(Sequence(nodes=[node]))
 
     def test_add_node_to_multiple_goals2(self):
         kin_sim = StatechartExecutor(
@@ -416,10 +416,10 @@ class TestConditions:
         msc.add_node(node)
 
         with pytest.raises(NodeAlreadyBelongsToDifferentNodeError):
-            msc.add_node(Sequence([node]))
+            msc.add_node(Sequence(nodes=[node]))
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class _BuildCountingNode(EndedByOwner, StatechartNode):
     """
     Node that records how often :meth:`build` is invoked.
@@ -435,7 +435,7 @@ class _BuildCountingNode(EndedByOwner, StatechartNode):
         return NodeArtifacts(observation=sm.Scalar.const_true())
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class _BuildCountingCompositeNode(EndedByOwner, CompositeNode):
     """
     Composite statechart node that records its own build calls and owns a counting child
@@ -551,7 +551,7 @@ def test_goal_populated_before_compile_matches_one_populated_by_expand():
 # %% build orchestration and artifact production
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class _SetupThenArtifactsNode(EndedByOwner, StatechartNode):
     """
     Node that performs setup in :meth:`build` and describes itself in
@@ -605,7 +605,7 @@ def test_state_iteration_yields_nodes():
     assert dict(msc.observation_state).keys() == {node1, node2}
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class _TestThreadMonitor(ThreadPayloadMonitor):
     delay: float = 0.05
     return_value: float = ObservationStateValues.TRUE
@@ -615,7 +615,7 @@ class _TestThreadMonitor(ThreadPayloadMonitor):
         return self.return_value
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class _RaisingThreadMonitor(ThreadPayloadMonitor):
     """
     Thread payload monitor whose observation computation always fails.
@@ -625,7 +625,7 @@ class _RaisingThreadMonitor(ThreadPayloadMonitor):
         raise RuntimeError("observation failure")
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class _SucceedingThreadMonitor(ThreadPayloadMonitor):
     """
     Thread payload monitor whose observation computation succeeds.
@@ -1590,7 +1590,7 @@ class TestEndStatechart:
         )
         msc = Statechart(context=kin_sim.context)
         with pytest.raises(EndInCompositeNodeError):
-            msc.add_node(Sequence([ConstTrueNode(), EndStatechart()]))
+            msc.add_node(Sequence(nodes=[ConstTrueNode(), EndStatechart()]))
 
 
 class TestTemplates:
@@ -1744,7 +1744,7 @@ class TestTemplates:
         msc.add_nodes(
             [
                 parallel := Parallel(
-                    [
+                    nodes=[
                         CountTicks(ticks=3),
                         CountTicks(ticks=5),
                     ]
@@ -1769,7 +1769,7 @@ class TestTemplates:
         msc.add_nodes(
             [
                 parallel := Parallel(
-                    [
+                    nodes=[
                         CountTicks(ticks=2),
                         CountTicks(ticks=4),
                         CountTicks(ticks=6),
@@ -1796,7 +1796,7 @@ class TestTemplates:
         msc.add_nodes(
             [
                 parallel := Parallel(
-                    [
+                    nodes=[
                         CountTicks(ticks=3),
                         CountTicks(ticks=5),
                         CountTicks(ticks=7),
@@ -1828,7 +1828,7 @@ class TestLifeCycleTransitions:
 
         msc.add_node(
             sequence := Sequence(
-                [
+                nodes=[
                     ConstTrueNode(),
                     CompositeNodeCancellingIfChildRunsAfterItsEnd(),
                     CountTicks(name="delay EndStatechart", ticks=5),
@@ -1859,7 +1859,7 @@ class TestLifeCycleTransitions:
 
         msc.add_node(
             sequence := Sequence(
-                [
+                nodes=[
                     ConstTrueNode(),
                     CompositeNodeCancellingIfPausedChildResumesAfterItsEnd(),
                     CountTicks(name="delay EndStatechart", ticks=5),
@@ -2216,7 +2216,7 @@ class TestLifeCycleTransitions:
         msc = Statechart(context=kin_sim.context)
         msc.add_nodes(
             [
-                node1 := Parallel([ConstTrueNode(), ConstFalseNode()]),
+                node1 := Parallel(nodes=[ConstTrueNode(), ConstFalseNode()]),
                 pulse := Pulse(length=5),
             ]
         )
@@ -2371,7 +2371,7 @@ class TestLifeCycleForcedByParent:
         parent_life_cycle_state: LifeCycleValues,
     ):
         msc = Statechart(context=StatechartContext(world=World()))
-        msc.add_node(parent := Sequence([child := ConstTrueNode()]))
+        msc.add_node(parent := Sequence(nodes=[child := ConstTrueNode()]))
         _compile_msc(msc)
         states = {child: life_cycle_state, parent: parent_life_cycle_state}
         transitions = dict(
@@ -3775,10 +3775,10 @@ class TestEagerStateVariables:
         msc = Statechart(context=StatechartContext(world=World()))
         msc.add_node(
             Parallel(
-                [
+                nodes=[
                     ConstTrueNode(),
                     barrier := Parallel(
-                        [ConstTrueNode(), ConstFalseNode()], minimum_success=1
+                        nodes=[ConstTrueNode(), ConstFalseNode()], minimum_success=1
                     ),
                 ]
             )
@@ -3791,10 +3791,10 @@ class TestEagerStateVariables:
         msc = Statechart(context=StatechartContext(world=World()))
         msc.add_node(
             outer := Parallel(
-                [
+                nodes=[
                     ConstTrueNode(),
                     barrier := Parallel(
-                        [ConstTrueNode(), ConstFalseNode()], minimum_success=1
+                        nodes=[ConstTrueNode(), ConstFalseNode()], minimum_success=1
                     ),
                 ]
             )
@@ -3836,7 +3836,7 @@ class TestConditionScoping:
         kin_sim = StatechartExecutor(StatechartContext(world=World()))
         msc = Statechart(context=kin_sim.context)
         child = ConstTrueNode()
-        msc.add_node(Sequence([child]))
+        msc.add_node(Sequence(nodes=[child]))
         msc.add_node(EndStatechart.when_true(child))
 
         with pytest.raises(ConditionScopeError):
@@ -3847,8 +3847,8 @@ class TestConditionScoping:
         msc = Statechart(context=kin_sim.context)
         node_a = ConstTrueNode()
         node_b = ConstTrueNode()
-        msc.add_node(first := Parallel([node_a]))
-        msc.add_node(Parallel([node_b]))
+        msc.add_node(first := Parallel(nodes=[node_a]))
+        msc.add_node(Parallel(nodes=[node_b]))
         node_b.start_condition = node_a.observes_true
         msc.add_node(EndStatechart.when_true(first))
 
@@ -3860,7 +3860,7 @@ class TestConditionScoping:
         msc = Statechart(context=kin_sim.context)
         node_a = ConstTrueNode()
         node_b = ConstTrueNode()
-        msc.add_node(sequence := Sequence([node_a, Parallel([node_b])]))
+        msc.add_node(sequence := Sequence(nodes=[node_a, Parallel(nodes=[node_b])]))
         node_b.pause_condition = node_a.observes_true
         msc.add_node(EndStatechart.when_true(sequence))
 
@@ -3871,7 +3871,7 @@ class TestConditionScoping:
         kin_sim = StatechartExecutor(StatechartContext(world=World()))
         msc = Statechart(context=kin_sim.context)
         child = ConstTrueNode()
-        parallel = Parallel([child])
+        parallel = Parallel(nodes=[child])
         msc.add_node(parallel)
         parallel.success_condition = child.last_observed_true
         msc.add_node(EndStatechart.when_true(parallel))
@@ -3888,7 +3888,7 @@ class TestConditionScoping:
         kin_sim = StatechartExecutor(StatechartContext(world=World()))
         msc = Statechart(context=kin_sim.context)
         grandchild = ConstTrueNode()
-        outer = Parallel([Parallel([grandchild])])
+        outer = Parallel(nodes=[Parallel(nodes=[grandchild])])
         msc.add_node(outer)
         outer.success_condition = grandchild.last_observed_true
         msc.add_node(EndStatechart.when_true(outer))
@@ -3900,7 +3900,7 @@ class TestConditionScoping:
         kin_sim = StatechartExecutor(StatechartContext(world=World()))
         msc = Statechart(context=kin_sim.context)
         child = ConstTrueNode()
-        parallel = Parallel([child])
+        parallel = Parallel(nodes=[child])
         child.pause_condition = parallel.observes_true
         msc.add_node(parallel)
         msc.add_node(EndStatechart.when_true(parallel))
@@ -3914,7 +3914,7 @@ class TestConditionScoping:
         node_a = ConstTrueNode()
         node_b = ConstTrueNode()
         node_b.start_condition = node_a.observes_true
-        msc.add_node(parallel := Parallel([node_a, node_b]))
+        msc.add_node(parallel := Parallel(nodes=[node_a, node_b]))
         msc.add_node(EndStatechart.when_true(parallel))
 
         kin_sim.compile(statechart=msc)
@@ -3925,10 +3925,10 @@ class TestConditionScoping:
         msc = Statechart(context=kin_sim.context)
         msc.add_node(
             outer := Parallel(
-                [
+                nodes=[
                     ConstTrueNode(),
                     barrier := Parallel(
-                        [ConstTrueNode(), ConstFalseNode()], minimum_success=1
+                        nodes=[ConstTrueNode(), ConstFalseNode()], minimum_success=1
                     ),
                 ]
             )
@@ -3979,7 +3979,7 @@ class TestWrittenConditionsSurviveCompiling:
 
     def test_a_parallel_keeps_its_written_fail_condition(self):
         msc = Statechart(context=StatechartContext(world=World()))
-        msc.add_node(parallel := Parallel([ConstTrueNode()]))
+        msc.add_node(parallel := Parallel(nodes=[ConstTrueNode()]))
         written = str(parallel.fail_condition)
 
         _compile_msc(msc)
@@ -3992,7 +3992,7 @@ class TestWrittenConditionsSurviveCompiling:
             [
                 never_true := ConstFalseNode(),
                 parallel := Parallel(
-                    [
+                    nodes=[
                         NodeFailingOnObservingFalse(
                             observation=ObservationStateValues.FALSE
                         )

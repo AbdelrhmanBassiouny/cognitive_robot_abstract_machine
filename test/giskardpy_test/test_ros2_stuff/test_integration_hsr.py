@@ -76,7 +76,7 @@ def test_move_base(giskard: HSRTester):
     msc = Statechart(context=giskard.api.context)
     msc.add_node(
         node := Sequence(
-            [
+            nodes=[
                 SetOdometry(
                     base_pose=HomogeneousTransformationMatrix.from_xyz_axis_angle(
                         x=1.0,

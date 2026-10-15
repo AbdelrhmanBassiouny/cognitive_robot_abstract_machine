@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Optional
 
 from krrood.symbolic_math.symbolic_math import trinary_logic_and
@@ -21,7 +21,7 @@ from giskardpy.motion_statechart.tasks.cartesian_tasks import CartesianPose
 from giskardpy.motion_statechart.tasks.joint_tasks import JointPositionList, JointState
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class Open(EndedByOwner, CompositeNode):
     """
     Open a 1-dof mechanism in an environment by driving its degree of freedom towards
@@ -32,26 +32,24 @@ class Open(EndedByOwner, CompositeNode):
     :class:`ActiveConnection1DOF`, e.g. drawers, doors, or screw caps.
     """
 
-    tip_link: KinematicStructureEntity = field(kw_only=True)
+    tip_link: KinematicStructureEntity
     """
     End effector that is grasping the handle.
     """
 
-    environment_link: KinematicStructureEntity = field(kw_only=True)
+    environment_link: KinematicStructureEntity
     """
     Name of the handle that was grasped.
     """
 
-    goal_joint_state: Optional[float] = field(default=None, kw_only=True)
+    goal_joint_state: Optional[float] = None
     """
     Goal state for the mechanism.
 
     default is the limit this goal drives towards.
     """
 
-    mechanism_weight: float = field(
-        default=DefaultWeights.WEIGHT_BELOW_COLLISION_AVOIDANCE, kw_only=True
-    )
+    mechanism_weight: float = DefaultWeights.WEIGHT_BELOW_COLLISION_AVOIDANCE
     """
     Weight of the goal driving the degree of freedom of the mechanism.
 
@@ -60,9 +58,7 @@ class Open(EndedByOwner, CompositeNode):
     pushing the arm through what is in its way.
     """
 
-    grasp_weight: float = field(
-        default=DefaultWeights.WEIGHT_ABOVE_COLLISION_AVOIDANCE, kw_only=True
-    )
+    grasp_weight: float = DefaultWeights.WEIGHT_ABOVE_COLLISION_AVOIDANCE
     """
     Weight of the goal keeping the end effector fixed relative to the grasped part.
 
@@ -70,7 +66,7 @@ class Open(EndedByOwner, CompositeNode):
     letting the end effector drift off the grasped part, and the two move independently.
     """
 
-    grasping_end_effector: EndEffector | None = field(default=None, kw_only=True)
+    grasping_end_effector: EndEffector | None = None
     """
     The end effector grasping the part, which may then touch its surroundings while the
     mechanism moves; ``None`` leaves collision avoidance as it is.
@@ -134,7 +130,7 @@ class Open(EndedByOwner, CompositeNode):
         )
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class Close(Open):
     """
     Close a 1-dof mechanism in an environment by driving its degree of freedom towards

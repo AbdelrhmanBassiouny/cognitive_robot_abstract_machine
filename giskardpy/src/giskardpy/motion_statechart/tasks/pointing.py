@@ -16,28 +16,28 @@ from semantic_digital_twin.world_description.world_entity import (
 )
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class Pointing(CartesianTask):
     """
     Will orient pointing_axis at goal_point.
     """
 
-    goal_point: Point3 = field(kw_only=True)
+    goal_point: Point3
     """
     Where to point pointing_axis at.
     """
 
-    pointing_axis: Vector3 = field(kw_only=True)
+    pointing_axis: Vector3
     """
     The axis of tip_link that will be used for pointing.
     """
 
-    max_velocity: float = field(default=0.3, kw_only=True)
+    max_velocity: float = 0.3
     """
     Reference angular velocity for normalization in rad/s.
     """
 
-    threshold: float = field(default=0.01, kw_only=True)
+    threshold: float = 0.01
     """
     Observation is true if the pointing angle is below this threshold.
     """
@@ -100,7 +100,7 @@ class Pointing(CartesianTask):
         return artifacts
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class PointingBeside(Pointing):
     """
     Will orient pointing_axis at a point beside goal_point, moved horizontally at right
@@ -110,12 +110,12 @@ class PointingBeside(Pointing):
     see :attr:`binding_policy`.
     """
 
-    viewpoint: KinematicStructureEntity = field(kw_only=True)
+    viewpoint: KinematicStructureEntity
     """
     The entity whose line of sight to goal_point decides which way is sideways.
     """
 
-    sideways_offset: float = field(kw_only=True)
+    sideways_offset: float
     """
     How far the point pointed at lies to the left of goal_point, as seen from
     :attr:`viewpoint`; a negative offset lies to the right.
@@ -174,33 +174,33 @@ class PointingBeside(Pointing):
         return self.goal_point + goal_reference_frame_V_left
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class PointingCone(CartesianTask):
     """
     Will orient pointing_axis at goal_point with a cone-shaped tolerance region.
     """
 
-    goal_point: Point3 = field(kw_only=True)
+    goal_point: Point3
     """
     Where to point pointing_axis at.
     """
 
-    pointing_axis: Vector3 = field(kw_only=True)
+    pointing_axis: Vector3
     """
     The axis of tip_link that will be used for pointing.
     """
 
-    cone_theta: float = field(default=0.0, kw_only=True)
+    cone_theta: float = 0.0
     """
     Slack cone region in radians.
     """
 
-    max_velocity: float = field(default=0.3, kw_only=True)
+    max_velocity: float = 0.3
     """
     Reference angular velocity for normalization in rad/s.
     """
 
-    threshold: float = field(default=0.01, kw_only=True)
+    threshold: float = 0.01
     """
     Observation is true if the pointing angle is below this threshold.
     """

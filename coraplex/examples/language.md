@@ -71,10 +71,10 @@ from coraplex.robot_plans.actions.core.robot_body import ParkArmsAction
 from cramph.composites import Sequence
 from semantic_digital_twin.spatial_types import Pose
 
-navigate = NavigateAction(Pose.from_xyz_rpy(1, 1, 0, reference_frame=world.root))
-park = ParkArmsAction(pr2.all_arms)
+navigate = NavigateAction(target_location=Pose.from_xyz_rpy(1, 1, 0, reference_frame=world.root))
+park = ParkArmsAction(arms=pr2.all_arms)
 
-plan = Sequence([navigate, park])
+plan = Sequence(nodes=[navigate, park])
 ```
 
 The plan is executed by putting it into a statechart of a simulated executor, compiling and executing it.
@@ -100,10 +100,10 @@ from coraplex.robot_plans.actions.core.robot_body import ParkArmsAction
 from cramph.composites import TryInOrder
 from semantic_digital_twin.spatial_types import Pose
 
-navigate = NavigateAction(Pose.from_xyz_rpy(1, 1, 0, reference_frame=world.root))
-park = ParkArmsAction(pr2.all_arms)
+navigate = NavigateAction(target_location=Pose.from_xyz_rpy(1, 1, 0, reference_frame=world.root))
+park = ParkArmsAction(arms=pr2.all_arms)
 
-plan = TryInOrder([navigate, park])
+plan = TryInOrder(nodes=[navigate, park])
 
 run(plan)
 ```
@@ -119,10 +119,10 @@ from coraplex.robot_plans.actions.core.robot_body import ParkArmsAction
 from cramph.composites import Parallel
 from semantic_digital_twin.spatial_types import Pose
 
-navigate = NavigateAction(Pose.from_xyz_rpy(1, 1, 0, reference_frame=world.root))
-park = ParkArmsAction(pr2.all_arms)
+navigate = NavigateAction(target_location=Pose.from_xyz_rpy(1, 1, 0, reference_frame=world.root))
+park = ParkArmsAction(arms=pr2.all_arms)
 
-plan = Parallel([navigate, park])
+plan = Parallel(nodes=[navigate, park])
 
 run(plan)
 ```
@@ -138,10 +138,10 @@ from coraplex.robot_plans.actions.core.robot_body import ParkArmsAction
 from cramph.composites import TryAll
 from semantic_digital_twin.spatial_types import Pose
 
-navigate = NavigateAction(Pose.from_xyz_rpy(1, 1, 0, reference_frame=world.root))
-park = ParkArmsAction(pr2.all_arms)
+navigate = NavigateAction(target_location=Pose.from_xyz_rpy(1, 1, 0, reference_frame=world.root))
+park = ParkArmsAction(arms=pr2.all_arms)
 
-plan = TryAll([navigate, park])
+plan = TryAll(nodes=[navigate, park])
 
 run(plan)
 ```
@@ -157,11 +157,11 @@ from cramph.composites import Parallel, Sequence
 from semantic_digital_twin.datastructures.definitions import TorsoState
 from semantic_digital_twin.spatial_types import Pose
 
-navigate = NavigateAction(Pose.from_xyz_rpy(1, 1, 0, reference_frame=world.root))
-park = ParkArmsAction(pr2.all_arms)
-move_torso = MoveTorsoAction(TorsoState.HIGH)
+navigate = NavigateAction(target_location=Pose.from_xyz_rpy(1, 1, 0, reference_frame=world.root))
+park = ParkArmsAction(arms=pr2.all_arms)
+move_torso = MoveTorsoAction(torso_state=TorsoState.HIGH)
 
-plan = Parallel([navigate, Sequence([park, move_torso])])
+plan = Parallel(nodes=[navigate, Sequence(nodes=[park, move_torso])])
 
 run(plan)
 ```
@@ -186,11 +186,11 @@ def code_test():
     print("Code function")
 
 
-park = ParkArmsAction(pr2.all_arms)
+park = ParkArmsAction(arms=pr2.all_arms)
 code_lambda = FunctionCall(function=lambda: print("This is from the code object"))
 code_func = FunctionCall(function=code_test)
 
-plan = Parallel([park, code_lambda, code_func])
+plan = Parallel(nodes=[park, code_lambda, code_func])
 
 run(plan)
 ```
@@ -218,10 +218,10 @@ def code_test():
     raise PlanFailure
 
 
-navigate = NavigateAction(Pose.from_xyz_rpy(1, 1, 0, reference_frame=world.root))
+navigate = NavigateAction(target_location=Pose.from_xyz_rpy(1, 1, 0, reference_frame=world.root))
 code_func = FunctionCall(function=code_test, failure_types=(PlanFailure,))
 
-plan = TryAll([navigate, code_func])
+plan = TryAll(nodes=[navigate, code_func])
 
 run(plan)
 
@@ -244,7 +244,7 @@ from cramph.monitors import CountNodeResets
 from giskardpy.motion_statechart.goals.templates import RepeatOnStall
 from semantic_digital_twin.datastructures.definitions import TorsoState
 
-move_torso = Sequence([MoveTorsoAction(TorsoState.HIGH), MoveTorsoAction(TorsoState.LOW)])
+move_torso = Sequence(nodes=[MoveTorsoAction(torso_state=TorsoState.HIGH), MoveTorsoAction(torso_state=TorsoState.LOW)])
 
 plan = RepeatOnStall(
     task=move_torso,
@@ -284,7 +284,7 @@ two_seconds = CountSimulationTimeSeconds(seconds=2)
 plan = CancelledWhenTrue(
     monitor=two_seconds,
     monitored_node=Sequence(
-        [MoveTorsoAction(TorsoState.HIGH), MoveTorsoAction(TorsoState.LOW)]
+        nodes=[MoveTorsoAction(torso_state=TorsoState.HIGH), MoveTorsoAction(torso_state=TorsoState.LOW)]
     ),
     exception=PlanCancelled(monitor=two_seconds),
 )
@@ -307,7 +307,7 @@ from semantic_digital_twin.datastructures.definitions import TorsoState
 plan = PausedUntilTrue(
     monitor=CountSimulationTimeSeconds(seconds=2),
     monitored_node=Sequence(
-        [MoveTorsoAction(TorsoState.HIGH), MoveTorsoAction(TorsoState.LOW)]
+        nodes=[MoveTorsoAction(torso_state=TorsoState.HIGH), MoveTorsoAction(torso_state=TorsoState.LOW)]
     ),
 )
 

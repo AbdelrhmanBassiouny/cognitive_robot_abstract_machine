@@ -35,7 +35,7 @@ def test_a_kinematically_simulated_pick_is_held_by_the_world(pr2_apartment_conte
     """
     world, view, extensions = pr2_apartment_context
     milk = world.get_semantic_annotations_by_type(Milk)[0]
-    pick_up = PickUpAction(milk.grasp_candidates()[0], view.right_arm)
+    pick_up = PickUpAction(grasp=milk.grasp_candidates()[0], arm=view.right_arm)
 
     [attaching] = branch_moves_of(motion_nodes_of(pick_up, extensions))
 
@@ -50,7 +50,7 @@ def test_a_physically_simulated_pick_is_held_by_its_own_grip(pr2_apartment_conte
     """
     world, view, extensions = pr2_apartment_context
     milk = world.get_semantic_annotations_by_type(Milk)[0]
-    pick_up = PickUpAction(milk.grasp_candidates()[0], view.right_arm)
+    pick_up = PickUpAction(grasp=milk.grasp_candidates()[0], arm=view.right_arm)
 
     assert branch_moves_of(motion_nodes_in_physics_of(pick_up, extensions)) == []
 
@@ -65,9 +65,14 @@ def test_a_physically_simulated_place_is_released_by_its_own_grip(
     world, view, extensions = pr2_apartment_context
     milk = world.get_semantic_annotations_by_type(Milk)[0]
     plan = Sequence(
-        [
-            PickUpAction(milk.grasp_candidates()[0], view.right_arm),
-            PlaceAction(milk, Pose.from_xyz_rpy(1, 1, 0.8, reference_frame=world.root)),
+        nodes=[
+            PickUpAction(grasp=milk.grasp_candidates()[0], arm=view.right_arm),
+            PlaceAction(
+                object_designator=milk,
+                target_location=Pose.from_xyz_rpy(
+                    1, 1, 0.8, reference_frame=world.root
+                ),
+            ),
         ]
     )
 

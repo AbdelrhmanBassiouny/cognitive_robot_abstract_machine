@@ -65,7 +65,7 @@ from cramph.context import ContextExtension, StatechartContext
 # %% a body handed in, so expansion is exercised without a robot
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class ActionRunningHandedInSteps(Action):
     """
     An action whose body is handed to it rather than derived from a robot, so that
@@ -78,7 +78,7 @@ class ActionRunningHandedInSteps(Action):
     """
 
     def create_action_body(self) -> StatechartNode:
-        return Sequence(list(self.steps))
+        return Sequence(nodes=list(self.steps))
 
 
 def _succeeding(name: str) -> NodeSucceedingOnObservingTrue:
@@ -153,7 +153,7 @@ def test_action_runs_its_steps_as_one_sequence(simple_pr2_context):
     assert body.nodes == steps
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class ActionRunningOneNode(Action):
     """
     An action whose body is a single node rather than a sequence of steps.
@@ -288,24 +288,24 @@ def test_action_parameters_leave_out_statechart_machinery(simple_pr2_context):
     """
     Only what the action was parameterized with counts as its parameters.
     """
-    action = MoveTorsoAction(TorsoState.HIGH)
+    action = MoveTorsoAction(torso_state=TorsoState.HIGH)
 
     assert action.designator_parameter == {"torso_state": TorsoState.HIGH}
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class ActionWithKeywordOnlyParameter(ActionRunningHandedInSteps):
     """
     An action taking one of its parameters by keyword only.
     """
 
-    speed: float = field(default=1.0, kw_only=True)
+    speed: float = 1.0
     """
     A parameter that can only be passed by keyword.
     """
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class ActionWithHelperField(ActionRunningHandedInSteps):
     """
     An action carrying a field its caller sets that is not one of its parameters.
@@ -326,7 +326,7 @@ def test_a_keyword_only_field_is_a_parameter():
 
 
 def test_the_name_of_an_action_is_not_a_parameter():
-    action = MoveTorsoAction(TorsoState.HIGH, name="lift")
+    action = MoveTorsoAction(torso_state=TorsoState.HIGH, name="lift")
 
     assert action.designator_parameter == {"torso_state": TorsoState.HIGH}
 
@@ -347,7 +347,7 @@ def test_move_torso_runs_the_joint_goal_of_the_requested_state(
     Moving the torso drives it to the joint state that torso state stands for.
     """
     _, robot, extensions = simple_pr2_context
-    action = MoveTorsoAction(TorsoState.HIGH)
+    action = MoveTorsoAction(torso_state=TorsoState.HIGH)
 
     _expanded(action, extensions)
 
@@ -362,7 +362,9 @@ def test_set_gripper_drives_the_gripper_it_names(simple_pr2_context):
     Setting a gripper drives that gripper, with one goal.
     """
     _, robot, extensions = simple_pr2_context
-    action = SetGripperAction(robot.left_arm.end_effector, GripperState.OPEN)
+    action = SetGripperAction(
+        gripper=robot.left_arm.end_effector, motion=GripperState.OPEN
+    )
 
     _expanded(action, extensions)
 
@@ -375,8 +377,8 @@ def test_park_arms_caps_joint_velocity_only_when_asked(simple_pr2_context):
     The velocity cap is a limit run alongside the park goal, not always present.
     """
     _, robot, extensions = simple_pr2_context
-    capped = ParkArmsAction(robot.all_arms, max_joint_velocity=0.1)
-    uncapped = ParkArmsAction(robot.all_arms)
+    capped = ParkArmsAction(arms=robot.all_arms, max_joint_velocity=0.1)
+    uncapped = ParkArmsAction(arms=robot.all_arms)
 
     _expanded(capped, extensions)
     _expanded(uncapped, extensions)
@@ -392,7 +394,7 @@ def test_look_at_points_the_default_camera(simple_pr2_context):
     Looking somewhere aims the robot's own camera, and runs nothing else.
     """
     _, robot, extensions = simple_pr2_context
-    action = LookAtAction(Pose())
+    action = LookAtAction(target=Pose())
 
     _expanded(action, extensions)
 
@@ -407,7 +409,7 @@ def test_looking_beside_a_target_takes_sideways_from_the_robots_base(
     Left and right of a target are as seen from where the robot stands.
     """
     _, robot, extensions = simple_pr2_context
-    action = LookAtAction(Pose(), sideways_offset=0.5)
+    action = LookAtAction(target=Pose(), sideways_offset=0.5)
 
     _expanded(action, extensions)
 
@@ -422,7 +424,9 @@ def test_following_a_path_runs_one_goal_per_waypoint(simple_pr2_context):
     """
     _, robot, extensions = simple_pr2_context
     waypoints = [Pose(), Pose(), Pose()]
-    action = FollowToolCenterPointPathAction(PoseTrajectory(waypoints), robot.left_arm)
+    action = FollowToolCenterPointPathAction(
+        target_locations=PoseTrajectory(waypoints), arm=robot.left_arm
+    )
 
     _expanded(action, extensions)
 
@@ -437,8 +441,12 @@ def test_moving_the_manipulator_relaxes_collisions_only_when_allowed(
     """
     _, robot, extensions = simple_pr2_context
     end_effector = robot.left_arm.end_effector
-    allowed = MoveManipulatorAction(Pose(), end_effector, True)
-    forbidden = MoveManipulatorAction(Pose(), end_effector, False)
+    allowed = MoveManipulatorAction(
+        target_pose=Pose(), end_effector=end_effector, allow_gripper_collision=True
+    )
+    forbidden = MoveManipulatorAction(
+        target_pose=Pose(), end_effector=end_effector, allow_gripper_collision=False
+    )
 
     _expanded(allowed, extensions)
     _expanded(forbidden, extensions)
@@ -455,7 +463,7 @@ def test_navigating_drives_the_base_towards_what_it_should_face(
     Navigating commands the base pose, and runs nothing else.
     """
     _, robot, extensions = simple_pr2_context
-    action = NavigateAction(Pose())
+    action = NavigateAction(target_location=Pose())
 
     _expanded(action, extensions, robot_executor(extensions))
 
@@ -468,7 +476,7 @@ def test_navigating_writes_the_odometry_when_simulated(simple_pr2_context):
     A simulated run has no drive to follow a pose, so it sets the odometry itself.
     """
     _, _, extensions = simple_pr2_context
-    action = NavigateAction(Pose())
+    action = NavigateAction(target_location=Pose())
 
     _expanded(action, extensions)
 
@@ -482,7 +490,7 @@ def test_navigating_drives_the_base_when_physically_simulated(simple_pr2_context
     why performing in physics is told apart from performing kinematically.
     """
     _, robot, extensions = simple_pr2_context
-    action = NavigateAction(Pose())
+    action = NavigateAction(target_location=Pose())
 
     _expanded(action, extensions, physically_simulated_executor(extensions))
 
@@ -515,9 +523,13 @@ def arm_and_look_actions(robot) -> List[Action]:
     """
     end_effector = robot.left_arm.end_effector
     return [
-        MoveManipulatorAction(Pose(), end_effector, False),
-        FollowToolCenterPointPathAction(PoseTrajectory([Pose()]), robot.left_arm),
-        LookAtAction(Pose()),
+        MoveManipulatorAction(
+            target_pose=Pose(), end_effector=end_effector, allow_gripper_collision=False
+        ),
+        FollowToolCenterPointPathAction(
+            target_locations=PoseTrajectory([Pose()]), arm=robot.left_arm
+        ),
+        LookAtAction(target=Pose()),
     ]
 
 

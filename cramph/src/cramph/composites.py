@@ -50,7 +50,7 @@ from krrood.symbolic_math.symbolic_math import (
 # %% giving a node an outcome
 
 
-@dataclass(repr=False, eq=False)
+@dataclass(repr=False, eq=False, kw_only=True)
 class Attempt(SucceedsOnObservingTrue, FailsOnObservingFalse, CompositeNode):
     """
     Runs a node that would never end on its own and decides it, one way or the other.
@@ -69,12 +69,12 @@ class Attempt(SucceedsOnObservingTrue, FailsOnObservingFalse, CompositeNode):
         off its goal again is still being held.
     """
 
-    task: StatechartNode = field(kw_only=True)
+    task: StatechartNode
     """
     The node run until this goal is decided.
     """
 
-    failure_monitors: List[StatechartNode] = field(kw_only=True)
+    failure_monitors: List[StatechartNode]
     """
     The nodes whose observing True gives up on the task, any one of which is enough, so
     there has to be at least one.
@@ -159,7 +159,7 @@ class Attempt(SucceedsOnObservingTrue, FailsOnObservingFalse, CompositeNode):
 # %% goals that decide when their children end
 
 
-@dataclass(repr=False, eq=False)
+@dataclass(repr=False, eq=False, kw_only=True)
 class CompositeNodeEndingItsChildren(
     SucceedsOnObservingTrue, FailsOnObservingFalse, CompositeNode, ABC
 ):
@@ -211,7 +211,7 @@ class CompositeNodeEndingItsChildren(
 # %% the plan language: running a list of nodes
 
 
-@dataclass(repr=False, eq=False)
+@dataclass(repr=False, eq=False, kw_only=True)
 class CramLanguageNode(CompositeNode, ABC):  # ControlStructureNode?
     """
     A construct of the plan language, which runs the list of nodes it is handed.
@@ -384,7 +384,7 @@ class CramLanguageNode(CompositeNode, ABC):  # ControlStructureNode?
         self._wire_children()
 
 
-@dataclass(repr=False, eq=False)
+@dataclass(repr=False, eq=False, kw_only=True)
 class CramLanguageNodeRunningItsChildrenInTurn(
     CramLanguageNode, CompositeNodeEndingItsChildren, ABC
 ):
@@ -421,7 +421,7 @@ class CramLanguageNodeRunningItsChildrenInTurn(
         """
 
 
-@dataclass(repr=False, eq=False)
+@dataclass(repr=False, eq=False, kw_only=True)
 class Sequence(CramLanguageNodeRunningItsChildrenInTurn):
     """
     Runs a list of nodes one after another.
@@ -473,7 +473,7 @@ class Sequence(CramLanguageNodeRunningItsChildrenInTurn):
         )
 
 
-@dataclass(repr=False, eq=False)
+@dataclass(repr=False, eq=False, kw_only=True)
 class Parallel(EndedByOwner, CramLanguageNode):
     """
     Holds a list of nodes at once until enough of them are at their goals together.
@@ -486,7 +486,7 @@ class Parallel(EndedByOwner, CramLanguageNode):
     what it reached. For the same reason its own owner decides when it succeeded.
     """
 
-    minimum_success: Optional[int] = field(default=None, kw_only=True)
+    minimum_success: Optional[int] = None
     """
     How many nodes must have reached their goals for this goal to be achieved.
 
@@ -574,7 +574,7 @@ class Parallel(EndedByOwner, CramLanguageNode):
 # %% repeating a task
 
 
-@dataclass(repr=False, eq=False)
+@dataclass(repr=False, eq=False, kw_only=True)
 class RepeatUntil(CompositeNodeEndingItsChildren):
     """
     Runs a task again from the start whenever an attempt at it fails.
@@ -589,7 +589,7 @@ class RepeatUntil(CompositeNodeEndingItsChildren):
     task that cannot fail on its own is rejected, since it would never be retried.
     """
 
-    task: StatechartNode = field(kw_only=True)
+    task: StatechartNode
     """
     The node to run, and to run again after every failed attempt.
 
@@ -597,12 +597,12 @@ class RepeatUntil(CompositeNodeEndingItsChildren):
     unit.
     """
 
-    stop_retry_monitor: StatechartNode = field(kw_only=True)
+    stop_retry_monitor: StatechartNode
     """
     Stops the retrying once it observes True, which makes this goal observe False.
     """
 
-    exception: Optional[DataclassException] = field(default=None, kw_only=True)
+    exception: Optional[DataclassException] = None
     """
     The failure that ends the statechart once :attr:`stop_retry_monitor` calls the
     retrying off, or None to only observe False then.
@@ -683,7 +683,7 @@ class RepeatUntil(CompositeNodeEndingItsChildren):
 # %% trying alternatives
 
 
-@dataclass(repr=False, eq=False)
+@dataclass(repr=False, eq=False, kw_only=True)
 class TryAll(CramLanguageNode, CompositeNodeEndingItsChildren):
     """
     Runs a list of alternatives at once and takes the first one that works.
@@ -730,7 +730,7 @@ class TryAll(CramLanguageNode, CompositeNodeEndingItsChildren):
         )
 
 
-@dataclass(repr=False, eq=False)
+@dataclass(repr=False, eq=False, kw_only=True)
 class TryInOrder(CramLanguageNodeRunningItsChildrenInTurn):
     """
     Tries a list of alternatives one after another, short-circuiting on the first
@@ -795,7 +795,7 @@ class TryInOrder(CramLanguageNodeRunningItsChildrenInTurn):
 # %% monitored subtrees
 
 
-@dataclass(repr=False, eq=False)
+@dataclass(repr=False, eq=False, kw_only=True)
 class MonitoredCompositeNode(EndedByOwner, CompositeNode, ABC):
     """
     Runs a monitored node next to the monitor observing it.
@@ -809,12 +809,12 @@ class MonitoredCompositeNode(EndedByOwner, CompositeNode, ABC):
     observes from the moment this goal starts.
     """
 
-    monitor: StatechartNode = field(kw_only=True)
+    monitor: StatechartNode
     """
     The node whose observation controls the monitored node.
     """
 
-    monitored_node: Optional[StatechartNode] = field(default=None, kw_only=True)
+    monitored_node: Optional[StatechartNode] = None
     """
     The node placed under the monitor's control.
     """
@@ -853,7 +853,7 @@ class MonitoredCompositeNode(EndedByOwner, CompositeNode, ABC):
         return NodeArtifacts(observation=Scalar(self.monitored_node.last_observation))
 
 
-@dataclass(repr=False, eq=False)
+@dataclass(repr=False, eq=False, kw_only=True)
 class PausedWhileTrue(MonitoredCompositeNode):
     """
     Holds the monitored node for as long as the monitor observes True, and lets it
@@ -867,7 +867,7 @@ class PausedWhileTrue(MonitoredCompositeNode):
         )
 
 
-@dataclass(repr=False, eq=False)
+@dataclass(repr=False, eq=False, kw_only=True)
 class PausedUntilTrue(MonitoredCompositeNode):
     """
     Holds the monitored node until the monitor observes True, and lets it continue from
@@ -884,7 +884,7 @@ class PausedUntilTrue(MonitoredCompositeNode):
         )
 
 
-@dataclass(repr=False, eq=False)
+@dataclass(repr=False, eq=False, kw_only=True)
 class StoppedWhenTrue(MonitoredCompositeNode):
     """
     Interrupts the monitored node as soon as the monitor observes True.
@@ -945,7 +945,7 @@ class StoppedWhenTrue(MonitoredCompositeNode):
         )
 
 
-@dataclass(repr=False, eq=False)
+@dataclass(repr=False, eq=False, kw_only=True)
 class CancelledWhenTrue(StoppedWhenTrue):
     """
     Interrupts the monitored node as soon as the monitor observes True, and ends the
@@ -956,7 +956,7 @@ class CancelledWhenTrue(StoppedWhenTrue):
     a subtree that will never succeed.
     """
 
-    exception: DataclassException = field(kw_only=True)
+    exception: DataclassException
     """
     The failure reported once the monitor ends the statechart.
     """
@@ -1024,7 +1024,7 @@ class ChildChooserAccess(ContextExtension):
         self.chooser.cleanup()
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class CompositeNodeChoosingItsChild(SucceedsOnObservingTrue, CompositeNode):
     """
     Runs a child that is only chosen once this node runs, against the world as the nodes
@@ -1186,7 +1186,7 @@ class CompositeNodeChoosingItsChild(SucceedsOnObservingTrue, CompositeNode):
 # %% running a child grounded from a statement
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class StatementNode(CompositeNodeChoosingItsChild):
     """
     Runs a node described by an underspecified `a(...)` / `an(...)` statement.
@@ -1196,9 +1196,7 @@ class StatementNode(CompositeNodeChoosingItsChild):
     run. A plan language node handed a statement runs it through such a node.
     """
 
-    statement: Match = field(
-        kw_only=True, metadata=JSONMetadata(serialize=False).as_dict()
-    )
+    statement: Match = field(metadata=JSONMetadata(serialize=False).as_dict())
     """
     The underspecified statement the children are grounded from.
 

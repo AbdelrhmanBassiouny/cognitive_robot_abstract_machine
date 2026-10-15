@@ -738,7 +738,7 @@ class LifeCycleTransitions:
         ]
 
 
-@dataclass(repr=False, eq=False)
+@dataclass(repr=False, eq=False, kw_only=True)
 class StatechartNode(SubclassJSONSerializer, metaclass=ABCMeta):
     """
     A node of a statechart.
@@ -749,7 +749,6 @@ class StatechartNode(SubclassJSONSerializer, metaclass=ABCMeta):
 
     name: str = field(
         default=None,
-        kw_only=True,
         metadata=ParameterMetadata(is_parameter=False).as_dict(),
     )
     """
@@ -2003,7 +2002,7 @@ GenericStatechartNode = TypeVar("GenericStatechartNode", bound=StatechartNode)
 # %% how a node ends
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class EndedByOwner(StatechartNode):
     """
     A node whose observation says whether it reached its goal, but which only whoever runs
@@ -2016,7 +2015,7 @@ class EndedByOwner(StatechartNode):
         return Scalar.const_false()
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class SucceedsOnObservingTrue(StatechartNode):
     """
     A node that succeeds once it observes True, because ending it undoes nothing it did.
@@ -2027,7 +2026,7 @@ class SucceedsOnObservingTrue(StatechartNode):
         return self.observes_true
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class FailsOnObservingFalse(StatechartNode):
     """
     A node that fails once it observes False, because it can then no longer reach its
@@ -2039,7 +2038,7 @@ class FailsOnObservingFalse(StatechartNode):
         return self.observes_false
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class StructureCopyNode(EndedByOwner, StatechartNode):
     """
     Stands in for a node in a structure copy, see
@@ -2113,7 +2112,7 @@ def expanded_child_field() -> Any:
     return field(init=False, metadata=JSONMetadata(serialize=True).as_dict())
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class CompositeNode(StatechartNode):
     accepts_children_after_compile: bool = field(init=False, default=False)
     """
@@ -2292,7 +2291,7 @@ class CompositeNode(StatechartNode):
             self._add_child_to_statechart(node)
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class StructureCopyCompositeNode(EndedByOwner, CompositeNode):
     """
     Stands in for a composite node in a structure copy, see
@@ -2300,7 +2299,7 @@ class StructureCopyCompositeNode(EndedByOwner, CompositeNode):
     """
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class ThreadPayloadMonitor(EndedByOwner, ABC, StatechartNode):
     """
     Payload monitor that evaluates _compute_observation in a background thread.
@@ -2374,7 +2373,7 @@ class ThreadPayloadMonitor(EndedByOwner, ABC, StatechartNode):
                 )
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class TerminalNode(EndedByOwner, ABC, StatechartNode):
     """
     A node that ends the whole statechart once its observation state turns true.
@@ -2392,7 +2391,7 @@ class TerminalNode(EndedByOwner, ABC, StatechartNode):
         return sm.logic_or(node.observes_true, node.is_succeeded)
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class EndStatechart(TerminalNode):
     """
     Ends the statechart once it observes True, which it does as soon as it runs.
@@ -2483,7 +2482,7 @@ class EndStatechart(TerminalNode):
         return end
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class CancelStatechart(TerminalNode):
     """
     Ends the statechart by raising :attr:`exception` at the end of the tick it starts
@@ -2494,7 +2493,7 @@ class CancelStatechart(TerminalNode):
     behind it, which is gone by then.
     """
 
-    exception: DataclassException = field(kw_only=True)
+    exception: DataclassException
 
     _pending_exception: Optional[Exception] = field(
         default=None, init=False, repr=False

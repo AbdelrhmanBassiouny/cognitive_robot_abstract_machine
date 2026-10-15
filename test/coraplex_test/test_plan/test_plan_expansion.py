@@ -81,7 +81,7 @@ def _nodes_of_type(root: StatechartNode, node_type: type) -> List[StatechartNode
 def test_an_action_expands_into_its_motion(pr2_apartment_context):
     world, view, extensions = pr2_apartment_context
 
-    root = expand(MoveTorsoAction(TorsoState.HIGH), extensions)
+    root = expand(MoveTorsoAction(torso_state=TorsoState.HIGH), extensions)
 
     assert [type(node) for node in _nodes_of_type(root, JointPositionList)] == [
         JointPositionList
@@ -95,7 +95,12 @@ def test_a_sequence_holds_each_action_with_its_own_motion(pr2_apartment_context)
     world, view, extensions = pr2_apartment_context
 
     root = expand(
-        Sequence([MoveTorsoAction(TorsoState.LOW), MoveTorsoAction(TorsoState.HIGH)]),
+        Sequence(
+            nodes=[
+                MoveTorsoAction(torso_state=TorsoState.LOW),
+                MoveTorsoAction(torso_state=TorsoState.HIGH),
+            ]
+        ),
         extensions,
     )
 
@@ -118,7 +123,8 @@ def test_pause_monitor_pauses_the_children_goal(pr2_apartment_context, rclpy_nod
     monitor = ConstFalseNode(name="never")
 
     plan = PausedWhileTrue(
-        monitor=monitor, monitored_node=Sequence([MoveTorsoAction(TorsoState.HIGH)])
+        monitor=monitor,
+        monitored_node=Sequence(nodes=[MoveTorsoAction(torso_state=TorsoState.HIGH)]),
     )
     _compile(plan, extensions)
 
@@ -141,7 +147,8 @@ def test_pause_until_monitor_pauses_the_children_goal(
     monitor = ConstFalseNode(name="never")
 
     plan = PausedUntilTrue(
-        monitor=monitor, monitored_node=Sequence([MoveTorsoAction(TorsoState.HIGH)])
+        monitor=monitor,
+        monitored_node=Sequence(nodes=[MoveTorsoAction(torso_state=TorsoState.HIGH)]),
     )
     _compile(plan, extensions)
 
@@ -159,7 +166,7 @@ def test_cancel_monitor_ends_the_children_goal(pr2_apartment_context, rclpy_node
 
     plan = CancelledWhenTrue(
         monitor=monitor,
-        monitored_node=Sequence([MoveTorsoAction(TorsoState.HIGH)]),
+        monitored_node=Sequence(nodes=[MoveTorsoAction(torso_state=TorsoState.HIGH)]),
         exception=PlanCancelled(monitor=monitor),
     )
     _compile(plan, extensions)
@@ -187,7 +194,7 @@ def test_cancel_monitor_ends_the_motion_when_the_monitor_fires(
 
     plan = CancelledWhenTrue(
         monitor=monitor,
-        monitored_node=Sequence([MoveTorsoAction(TorsoState.HIGH)]),
+        monitored_node=Sequence(nodes=[MoveTorsoAction(torso_state=TorsoState.HIGH)]),
         exception=PlanCancelled(monitor=monitor),
     )
     _compile(plan, extensions)
@@ -214,11 +221,13 @@ def test_monitored_subtree_nested_in_a_sequence_compiles(
     never = ConstFalseNode(name="never")
 
     plan = Sequence(
-        [
-            MoveTorsoAction(TorsoState.LOW),
+        nodes=[
+            MoveTorsoAction(torso_state=TorsoState.LOW),
             CancelledWhenTrue(
                 monitor=never,
-                monitored_node=Sequence([MoveTorsoAction(TorsoState.HIGH)]),
+                monitored_node=Sequence(
+                    nodes=[MoveTorsoAction(torso_state=TorsoState.HIGH)]
+                ),
                 exception=PlanCancelled(monitor=never),
             ),
         ]
@@ -261,8 +270,8 @@ def test_a_pick_up_moves_the_object_to_the_gripper_between_closing_and_lifting(
 
     root = expand(
         PickUpAction(
-            world.get_semantic_annotations_by_type(Milk)[0].grasp_candidates()[0],
-            view.right_arm,
+            grasp=world.get_semantic_annotations_by_type(Milk)[0].grasp_candidates()[0],
+            arm=view.right_arm,
         ),
         extensions,
     )
@@ -290,9 +299,9 @@ def test_a_transport_runs_with_its_underspecified_steps(
     world, view, extensions = pr2_apartment_context
 
     plan = Sequence(
-        [
-            MoveTorsoAction(TorsoState.HIGH),
-            ParkArmsAction(view.all_arms),
+        nodes=[
+            MoveTorsoAction(torso_state=TorsoState.HIGH),
+            ParkArmsAction(arms=view.all_arms),
             TransportAction.from_graspable_by_closest_grasps(
                 world.get_semantic_annotations_by_type(Milk)[0],
                 Pose.from_xyz_rpy(2.37, 2.5, 1.05, reference_frame=world.root),
@@ -334,7 +343,7 @@ def test_perceiving_runs_between_the_motions_around_it(pr2_apartment_context):
 
     root = expand(
         Sequence(
-            [
+            nodes=[
                 tool_center_point_goal(view, view.left_arm),
                 PerceptionTask(query=query, answered_by=PerceptionSource.WORLD_MODEL),
                 tool_center_point_goal(view, view.right_arm),
@@ -356,7 +365,8 @@ def test_a_detect_action_expands_into_a_perception_task(pr2_apartment_context):
     world, view, extensions = pr2_apartment_context
 
     root = expand(
-        DetectAction(DetectionTechnique.TYPES, object_sem_annotation=Milk), extensions
+        DetectAction(technique=DetectionTechnique.TYPES, object_sem_annotation=Milk),
+        extensions,
     )
 
     assert [type(node) for node in _nodes_of_type(root, PerceptionTask)] == [
@@ -419,7 +429,7 @@ def test_pick_up_motions_follow_the_object_moved_after_expansion(pr2_apartment_c
     milk = world.get_semantic_annotations_by_type(Milk)[0]
     milk_body = milk.root
 
-    plan = PickUpAction(milk.grasp_candidates()[0], view.right_arm)
+    plan = PickUpAction(grasp=milk.grasp_candidates()[0], arm=view.right_arm)
     targets = [
         node.goal_pose
         for node in motion_nodes_of(plan, extensions)
