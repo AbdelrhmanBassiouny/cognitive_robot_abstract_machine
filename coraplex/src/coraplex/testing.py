@@ -33,6 +33,11 @@ from semantic_digital_twin.world_description.world_entity import Body
 
 from coraplex.datastructures.enums import VisualizationBackend
 from coraplex.visualization import WorldVisualization
+from cramph.executor import ExecutorExtension
+from typing_extensions import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from rclpy.node import Node
 
 logger = logging.getLogger(__name__)
 
@@ -49,19 +54,27 @@ except ImportError:
     )
 
 
-def start_visualization(world: World) -> WorldVisualization:
+def selected_visualizations(ros_node: Node | None) -> list[ExecutorExtension]:
     """
-    Start the selected renderer, defaulting to native RViz when available.
+    :param ros_node: The ROS node RViz publishes through.
+    :return: The visualization selected through the environment, defaulting to RViz
+        when ROS is available and `ros_node` is given, as executor extensions; empty
+        when headless.
 
-    :param world: The world to visualize.
-    :return: The renderer owner, accepting optional plan observers.
+    .. note::
+        Add the same visualizations to every executor of one demo. Each call returns a
+        new one, and a cramera visualization keeps its viewer's port until it is
+        stopped.
     """
     default_backend = (
         VisualizationBackend.RVIZ
-        if VizMarkerPublisher is not None
+        if VizMarkerPublisher is not None and ros_node is not None
         else VisualizationBackend.NONE
     )
-    return WorldVisualization.from_environment(world, default_backend).start()
+    visualization = WorldVisualization.from_environment(
+        default_backend, ros_node=ros_node
+    )
+    return [] if visualization is None else [visualization]
 
 
 def attach_tool(world: World, arm: Arm, tool_world: World, mount: dict) -> Body:

@@ -11,6 +11,7 @@ from krrood.entity_query_language.backends import (
 from krrood.entity_query_language.factories import a, variable, variable_from
 from cramph.composites import ChildChooserAccess, Sequence, StatementNode
 from cramph.data_types import LifeCycleValues
+from cramph.exceptions import MissingExecutorExtensionError
 from cramph.node import StatechartNode
 
 from coraplex.datastructures.enums import ActionTrialVisualization
@@ -30,6 +31,7 @@ from coraplex.plans.underspecified import (
 from coraplex.robot_plans.actions.base import Action
 from coraplex.robot_plans.actions.core.navigation import NavigateAction
 from coraplex.robot_plans.actions.core.pick_up import PickUpAction
+from coraplex.visualization import RvizVisualization
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.robots.robot_parts import Arm
 from semantic_digital_twin.semantic_annotations.semantic_annotations import Milk
@@ -588,6 +590,23 @@ def debugging_executor(apartment_world_pr2_copy_with_context, rclpy_node):
     yield world, robot, simulated_executor(extensions, ros_node=rclpy_node, debug=True)
 
 
+def _compiled_trial_executor(
+    trial: ActionTrial,
+) -> tuple[SimulatedPlanExecutor, World]:
+    """
+    :param trial: The trial whose executor is built.
+    :return: An executor of `trial` with one candidate compiled in the copy, and that
+        copy.
+    """
+    copied = trial._copy()
+    executor = trial._trial_executor(copied)
+    candidate = RecordingAction(
+        probe_key=register_probe(), dof_id=copied.degrees_of_freedom[0].id
+    )
+    executor.compile(statechart_of(executor, Sequence([candidate])))
+    return executor, copied
+
+
 def test_a_trial_publishes_its_copy_while_debugging(debugging_executor):
     """
     The candidates are tried in the copy, so a run being watched would otherwise show
@@ -596,10 +615,12 @@ def test_a_trial_publishes_its_copy_while_debugging(debugging_executor):
     world, robot, executor = debugging_executor
     trial = ActionTrial(executor=executor, trial_executor_type=SimulatedPlanExecutor)
 
-    copied = trial._copy()
+    trial_executor, copied = _compiled_trial_executor(trial)
 
-    assert trial._visualization.world is copied
-    assert trial._visualization.is_rendering
+    visualization = trial_executor.require_extension(RvizVisualization)
+    assert visualization.is_rendering
+    assert visualization.publisher._world is copied
+    trial_executor.execute()
     trial.discard()
 
 
@@ -611,14 +632,15 @@ def test_a_trial_publishes_its_copy_apart_from_the_world_it_copies(debugging_exe
     world, robot, executor = debugging_executor
     trial = ActionTrial(executor=executor, trial_executor_type=SimulatedPlanExecutor)
 
-    trial._copy()
+    trial_executor, copied = _compiled_trial_executor(trial)
 
-    publisher = trial._visualization.publisher
+    publisher = trial_executor.require_extension(RvizVisualization).publisher
     assert (
         publisher.tf_publisher.frame_names.prefix
         == ActionTrialVisualization.FRAME_PREFIX
     )
     assert publisher.topic_name == ActionTrialVisualization.MARKER_TOPIC
+    trial_executor.execute()
     trial.discard()
 
 
@@ -630,9 +652,11 @@ def test_a_trial_copy_is_drawn_see_through(debugging_executor):
     world, robot, executor = debugging_executor
     trial = ActionTrial(executor=executor, trial_executor_type=SimulatedPlanExecutor)
 
-    trial._copy()
+    trial_executor, copied = _compiled_trial_executor(trial)
 
-    assert trial._visualization.publisher.alpha == trial.copy_marker_alpha
+    publisher = trial_executor.require_extension(RvizVisualization).publisher
+    assert publisher.alpha == trial.copy_marker_alpha
+    trial_executor.execute()
     trial.discard()
 
 
@@ -649,67 +673,27 @@ def test_a_trial_publishes_nothing_without_debugging(
         trial_executor_type=SimulatedPlanExecutor,
     )
 
-    trial._copy()
+    trial_executor = trial._trial_executor(trial._copy())
 
-    assert trial._visualization is None
-
-
-def test_a_discarded_trial_stops_publishing_its_copy(debugging_executor):
-    """
-    Releasing the copy also stops publishing it, so nothing keeps drawing a world that
-    is gone.
-    """
-    world, robot, executor = debugging_executor
-    trial = ActionTrial(executor=executor, trial_executor_type=SimulatedPlanExecutor)
-    trial._copy()
-    visualization = trial._visualization
-
-    trial.discard()
-
-    assert not visualization.is_rendering
-    assert trial._visualization is None
-
-
-def test_a_caught_up_copy_keeps_being_published(debugging_executor):
-    """
-    A copy caught up with the world is still the one candidates are tried in, so it
-    keeps being shown rather than being drawn anew.
-    """
-    world, robot, executor = debugging_executor
-    trial = ActionTrial(executor=executor, trial_executor_type=SimulatedPlanExecutor)
-    trial._copy()
-    first = trial._visualization
-    dof = world.degrees_of_freedom[0]
-    world.state[dof.id].position = world.state[dof.id].position + 0.1
-    world.notify_state_change()
-
-    copied = trial._copy()
-
-    assert trial._visualization is first
-    assert first.is_rendering
-    assert first.world is copied
+    with pytest.raises(MissingExecutorExtensionError):
+        trial_executor.require_extension(RvizVisualization)
     trial.discard()
 
 
-def test_a_plan_stops_publishing_its_trial_copy_once_it_has_run(debugging_executor):
+def test_a_trial_stops_publishing_its_copy_once_the_candidate_has_run(
+    debugging_executor,
+):
     """
-    The copy is only published while the plan that tries candidates in it runs.
+    The copy is only published while a candidate runs in it.
     """
     world, robot, executor = debugging_executor
-    dof = world.degrees_of_freedom[0]
-    probe_key = register_probe()
-    plan = StatementNode(
-        statement=a(RecordingAction)(
-            probe_key=probe_key,
-            dof_id=dof.id,
-            fail_on_attempt_number=variable_from([None]),
-        )
-    )
+    trial = ActionTrial(executor=executor, trial_executor_type=SimulatedPlanExecutor)
+    trial_executor, copied = _compiled_trial_executor(trial)
 
-    executor.compile(statechart_of(executor, plan))
-    executor.execute()
+    trial_executor.execute()
 
-    assert _child_chooser_of(plan).trial._visualization is None
+    assert not trial_executor.require_extension(RvizVisualization).is_rendering
+    trial.discard()
 
 
 def test_a_trial_tries_an_action_that_already_belongs_to_a_plan(debugging_executor):

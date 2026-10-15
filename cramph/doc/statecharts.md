@@ -269,11 +269,12 @@ flowchart LR
 
 Conditions are checked when they are set and when the statechart is compiled:
 
+- A condition must be a symbolic expression (`InputNotExpressionError`).
 - A condition may read its own node, a sibling (a node with the same parent) or a direct
-  child; anything further away raises `ConditionScopeError`.
-- A start condition may not read its own node.
-- No condition may read an EndStatechart or CancelStatechart node, because nothing happens after one
-  of them.
+  child; anything further away raises `ConditionScopeError` when the statechart is compiled.
+- A start condition may not read its own node (`SelfInStartConditionError`).
+- No condition may read an EndStatechart or CancelStatechart node, because nothing happens
+  after one of them (`TerminalNodeInConditionError`).
 - Only predicates of nodes may appear in a condition, combined with `logic_and`, `logic_or`
   and `logic_not`; anything else, such as the trinary operators or the constant Unknown,
   raises `CannotConvertToStringError`.
@@ -407,6 +408,14 @@ The templates in `cramph.composites` are composite nodes that wire
 their children for common patterns. In the diagrams below, an arrow from node A to node B
 labelled `transition: expression` means that B's condition for that transition reads A.
 
+`Sequence`, `Parallel`, `TryInOrder` and `TryAll` are constructs of the plan language: each
+runs the list of `nodes` it is handed. Until the statechart is compiled, that list can still
+be changed with `add_node`, `insert_before`, `insert_after` and `replace`, which rewire the
+children's conditions accordingly; `replace` removes the replaced node and everything below
+it from the statechart. Wherever such a construct is handed a node, it also takes an
+underspecified `a(...)` statement, which it runs through a
+[`StatementNode`](#choosing-a-child-while-running).
+
 ### Attempt
 
 Runs a `task` together with a list of `failure_monitors`, and ends as soon as either the task
@@ -454,6 +463,9 @@ Runs its `nodes` one after another. Each step starts once the previous one has s
 
 - It observes **True** once the last step succeeded.
 - It observes **False** as soon as any step ended without succeeding.
+
+A `CancelStatechart` may be a step as well, which ends the statechart once the steps before
+it succeeded.
 
 ```{mermaid}
 flowchart LR
@@ -595,6 +607,9 @@ False once the monitor stopped it, and Unknown otherwise. Stopping the monitored
 interrupts it, so the template fails like any monitored composite statechart node whose
 monitored node ended without succeeding.
 
+`CancelledWhenTrue` takes an `exception`, which its `CancelStatechart` raises once the
+monitor's `last_observed_true` is True.
+
 ## Ending the statechart
 
 The statechart ends once an `EndStatechart` node is running and observes True, which it does
@@ -613,6 +628,102 @@ Both are usually created with factory methods that set their start condition:
 | `when_all_true(nodes)`            | every node observes True or has succeeded                            |
 | `when_any_true(nodes)`            | any node observes True or has succeeded                              |
 | `EndStatechart.when_false(node)`  | `node` currently observes False; this does not look at its outcome   |
+
+The `CancelStatechart` factories also take the `exception` to raise. `when_true` and
+`when_failed` default to one naming `node`; `when_all_true` and `when_any_true` require it.
+
+Once `execute()` or `tick_until_end()` returns or raises, because the statechart ended, was
+cancelled or ran out of ticks, the executor calls every node's `cleanup`. Calling `tick()`
+by hand cleans up nothing.
+
+## Writing a node
+
+A node class inherits `EndedByOwner` or `SucceedsOnObservingTrue` (see
+[Who ends a node](#who-ends-a-node)) and states what it observes in one of two ways:
+
+- `build_artifacts(context)` returns `NodeArtifacts` whose `observation` is a symbolic
+  expression. It is compiled into the tick, so it costs no Python call per tick.
+- `on_tick(context)` is called every tick the node was running at the start of, and may
+  return an `ObservationStateValues`, which takes precedence over the expression. Returning
+  None keeps the expression's value, or, for a node without one, the observation of its
+  last tick.
+
+Further hooks a node class may override:
+
+- `set_up(context)` is called once per context, before the node is first built. Register the
+  variables the node reads here.
+- `build(context)` is called when the statechart compiles the node, and again whenever the
+  kinematic structure of the world changed. An override must return `super().build(context)`.
+- `on_start`, `on_pause`, `on_unpause`, `on_end` and `on_reset` are called after the passes of
+  the tick in which the transition happened.
+- `cleanup(context)` is called once the executor finished running the statechart (see
+  [Ending the statechart](#ending-the-statechart)).
+
+A composite node adds its children in `expand(context)`, which is called once when it joins a
+statechart, and may reject them in `check_children()`, which runs when the statechart is
+compiled and the children's conditions are complete. The plan language constructs, for
+example, raise `CompositeNodeWithoutChildrenError` there if they were handed no node.
+
+Data or services that are not part of every statechart reach a node through its
+`StatechartContext` as a `ContextExtension`. A node class names the extensions it reads in
+`required_context_extensions`, and a composite node class those it reads only while expanding
+in `context_extensions_required_to_expand`; a statechart whose context lacks one raises
+`NodesMissingContextExtensionsError`. `context.require_extension(type)` returns an extension.
+
+cramph ships these nodes besides the templates:
+
+| Node                         | Observes                                                         |
+|------------------------------|------------------------------------------------------------------|
+| `CountTicks`                 | True once it ran `ticks` ticks                                   |
+| `CountSeconds`               | True once `seconds` of wall clock time passed since it started   |
+| `CountSimulationTimeSeconds` | True once it ran ticks worth `seconds` of the context's `tick_duration` |
+| `CheckTickCount`             | True once the statechart's tick count exceeds `threshold`        |
+| `CountNodeResets`            | True once `node` was reset `target` times                        |
+| `Pulse`                      | True for its first `length` ticks, then False                    |
+| `Print`                      | True every tick, printing `message`                              |
+| `ThreadedPredicateMonitor`   | Unknown until `predicate` returned in a thread of its own, then what it returned |
+| `FunctionCall`               | True once `function` returned in a thread of its own, False if it raised one of `failure_types`, and ends on its own |
+| `MoveBranch`                 | True once it moved `body` under `new_parent`, after which every node is built again |
+
+## Changing a statechart while it runs
+
+A compiled statechart can take new nodes. Adding a node compiles the statechart again; the
+nodes it already held keep their state and history. Changes made inside a
+`with statechart.modify():` block compile only once, when the outermost block ends; the
+nodes added in a block that raises are dropped again. A node the latest compile covered
+cannot be removed, and a composite node it covered takes no new children, unless its class
+accepts children after compiling, as a [node choosing its child](#choosing-a-child-while-running)
+does.
+
+When the kinematic structure of the world changes, every node is built again before the next
+tick settles, so expressions reading the structure follow it.
+
+Before compiling again or letting a node choose its child, both of which block the tick, the
+statechart asks its recompile callbacks whether what they drive is at rest. Until all are,
+the statechart keeps ticking and asks again on the next tick.
+
+## Choosing a child while running
+
+A `CompositeNodeChoosingItsChild` runs a child that is chosen only once it runs, against the
+world as the nodes before it left it. It asks the `ChildChooser` its context holds, through
+the `ChildChooserAccess` [context extension](#writing-a-node), for a child when it starts, and
+again whenever its latest child ended without succeeding.
+
+- It observes what its latest child observed last, and Unknown before it has a child.
+- It succeeds once a child succeeds, and fails once the chooser has no child left. Since that
+  can happen at any choice, it always counts as a node that can fail.
+- A chooser may answer that it has no choice yet; the node then asks again on the next tick.
+- A reset puts it back to choosing: the children it chose before never run again.
+
+Every chosen child joins the statechart after it was compiled, which compiles it again (see
+[Changing a statechart while it runs](#changing-a-statechart-while-it-runs)). Choosing waits
+until every recompile callback of the statechart is at rest, so a child is chosen against a
+world that holds still.
+
+A `StatementNode` is the node choosing its child that runs an underspecified `a(...)`
+statement: the statement is grounded only when the node starts, and the chooser decides
+which of its candidates run. The statement itself is not serialized; a process that ticks
+the statechart elsewhere receives the chosen children instead.
 
 ## Example
 

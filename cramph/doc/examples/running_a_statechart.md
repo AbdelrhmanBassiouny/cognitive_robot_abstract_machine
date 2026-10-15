@@ -20,8 +20,21 @@ with a `StatechartExecutor` and plots what happened.
 
 Every node receives a `StatechartContext`, which holds the world the statechart runs in. The
 `StatechartExecutor` compiles the statechart and ticks it until an `EndStatechart` ends it, so
-the statechart is built in the context of the executor that runs it. The executor's `pacer`
-decides how the ticks are spread over time; the default runs them as fast as possible.
+the statechart is built in the context of the executor that runs it.
+
+The executor's `pacer` decides how the ticks are spread over time:
+
+| Pacer                    | Ticks                                                                  |
+|--------------------------|------------------------------------------------------------------------|
+| `NoPacing` (the default) | as fast as possible                                                    |
+| `RealTimePacer`          | once per `tick_duration` of the context, in wall clock time            |
+| `SimulationPacer`        | `real_time_factor` times as fast as real time                          |
+| `SteppedSimulationPacer` | in lockstep with a physics simulation, which it steps one tick forward between two ticks |
+
+Every pacer but `NoPacing` needs a context that knows its `tick_duration`. `extensions` add
+behaviour to the executor around compiling, every tick, every recompile and the end of a run;
+an extension may also add the [context extensions](../statecharts.md#writing-a-node) its
+nodes read.
 
 ```{code-cell} ipython3
 from cramph.composites import Attempt, Sequence, TryInOrder
@@ -67,9 +80,11 @@ print(f"plan: {plan.life_cycle_state.name}")
 ## Plotting
 
 `Statechart.draw` renders the structure of the statechart and its transition conditions with
-graphviz. `Statechart.plot_gantt_chart` renders the recorded history, one bar per node,
-coloured by its life cycle state in every tick. Pass a context with a `tick_duration` to label
-the x-axis in seconds instead of ticks.
+graphviz. `Statechart.plot_gantt_chart` renders the recorded history with two bars per node,
+coloured by its life cycle state and by its observation in every tick. Pass a context with a
+`tick_duration` to label the x-axis in seconds instead of ticks. `Statechart.visualize` opens an
+interactive drawing of the nodes that follows their life cycle states while the statechart
+ticks.
 
 ```{code-cell} ipython3
 from pathlib import Path
