@@ -11,17 +11,22 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+import numpy as np
+
 from typing_extensions import Dict, List, Type
 
+from experiments.montessori.hole_geometry import HoleFootprint
 from experiments.montessori.perception.detections import (
     MontessoriBoardDetection,
     MontessoriDetection,
     MontessoriScene,
     MontessoriShapeDetection,
+    ShapeSortingHoleDetection,
 )
 from experiments.montessori.perception.orthophoto import WorkspaceRegion
 from experiments.montessori.pieces import PieceSet
 from experiments.montessori.semantics import MontessoriShape
+from experiments.montessori.world import _BOARD_MESH, _HOLE_FOOTPRINTS, _board_body
 from krrood.entity_query_language.utils import camel_case_to_words
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.grasping.grasp_candidates import HasGraspCandidates
@@ -35,7 +40,7 @@ from semantic_digital_twin.world_description.connections import (
     Connection6DoF,
     FixedConnection,
 )
-from semantic_digital_twin.world_description.geometry import Box, Color, Scale
+from semantic_digital_twin.world_description.geometry import Box, Color, Mesh, Scale
 from semantic_digital_twin.world_description.shape_collection import ShapeCollection
 from semantic_digital_twin.world_description.world_entity import (
     Body,
@@ -65,9 +70,9 @@ How far below the lid a hole's region reaches, in metres, so a piece standing in
 lies inside it as well as one resting on top of it.
 """
 
-HOLE_HEADROOM = 0.02
+HOLE_HEADROOM = 0.005
 """
-How far above the lid a hole's region reaches, in metres, so a piece resting over a hole
+How far above the lid a hole's region reaches, in metres, so a piece sunk into a hole
 lies inside it.
 """
 
@@ -81,7 +86,7 @@ TABLE_COLOR = Color(0.75, 0.76, 0.78)
 The colour the steel table is drawn in.
 """
 
-HOLE_COLOR = Color(0.08, 0.08, 0.08, 0.85)
+HOLE_COLOR = Color(0.05, 0.05, 0.05, 0.6)
 """
 The colour a hole's region is drawn in.
 """
@@ -183,6 +188,13 @@ class PerceivedTwin:
     What the current look committed, removed again when the next look is committed.
     """
 
+    sightings: Dict[SeenPiece, MontessoriShapeDetection] = field(
+        init=False, default_factory=dict
+    )
+    """
+    What the current look saw each piece as.
+    """
+
     colors: Dict[Type[MontessoriShape], Color] = field(default_factory=piece_colors)
     """
     The colour each kind of piece is drawn in.
@@ -260,29 +272,34 @@ class PerceivedTwin:
 
     def _commit_board(self, board: MontessoriBoardDetection) -> None:
         """
-        Add the board's lid and a region for each of its holes.
+        Add the board, drawn from its model with the holes cut through it, where the
+        look found it, and a region for each hole the look saw.
+
+        A hole the look saw is placed where the board's model has its hole of that
+        kind: the camera finds the board's pose well, but a hole's outline too coarsely
+        to put a piece through it.
 
         :param board: The board the look found.
         """
         height = board.lid_height - self.table_height
-        lid = self._place_body(
-            "board",
-            Box(
-                scale=Scale(board.footprint.width, board.footprint.length, height),
-                color=BOARD_COLOR,
-            ),
-            self._resting_on(board, self.table_height + height / 2),
-        )
-        self.committed.append(lid)
+        board_pose = self._resting_on(board, self.table_height + height / 2)
+        shape = Mesh.from_trimesh(mesh=_BOARD_MESH)
+        shape.color = BOARD_COLOR
+        body = _board_body(self._name("board"), shape, _HOLE_FOOTPRINTS)
+        self._attach(body, board_pose)
+        self.committed.append(body)
         for index, hole in enumerate(board.holes):
+            footprint = self._model_hole_for(board, hole)
+            outline = footprint.boundary.bounding_box
+            center_x, center_y = footprint.center.to_np()[:2]
             region = Region(
                 name=self._name(f"{self.kind_of(hole.category)} hole {index + 1}"),
                 area=ShapeCollection(
                     [
                         Box(
                             scale=Scale(
-                                hole.footprint.width,
-                                hole.footprint.length,
+                                outline.max_x - outline.min_x,
+                                outline.max_y - outline.min_y,
                                 HOLE_DEPTH + HOLE_HEADROOM,
                             ),
                             color=HOLE_COLOR,
@@ -292,12 +309,45 @@ class PerceivedTwin:
             )
             self._attach(
                 region,
-                self._resting_on(
-                    hole, board.lid_height + (HOLE_HEADROOM - HOLE_DEPTH) / 2
+                board_pose
+                @ HomogeneousTransformationMatrix.from_xyz_rpy(
+                    x=float(center_x + (outline.min_x + outline.max_x) / 2),
+                    y=float(center_y + (outline.min_y + outline.max_y) / 2),
+                    z=height / 2 + (HOLE_HEADROOM - HOLE_DEPTH) / 2,
                 ),
             )
             self.committed.append(region)
             self.holes.append(SeenHole(region, hole.category, board.lid_height))
+
+    @staticmethod
+    def _model_hole_for(
+        board: MontessoriBoardDetection, hole: ShapeSortingHoleDetection
+    ) -> HoleFootprint:
+        """
+        The hole of the board's model that a hole the look saw is.
+
+        :param board: The board the look found.
+        :param hole: A hole the look saw in it.
+        :return: The model's hole of the same kind nearest to where the hole was seen.
+        """
+        offset = hole.pose.position.to_np()[:2] - board.pose.position.to_np()[:2]
+        cosine, sine = np.cos(board.footprint.yaw), np.sin(board.footprint.yaw)
+        seen_at = np.array(
+            [
+                cosine * offset[0] + sine * offset[1],
+                -sine * offset[0] + cosine * offset[1],
+            ]
+        )
+        return min(
+            (
+                footprint
+                for footprint in _HOLE_FOOTPRINTS
+                if footprint.category is hole.category
+            ),
+            key=lambda footprint: np.linalg.norm(
+                footprint.center.to_np()[:2] - seen_at
+            ),
+        )
 
     def _commit_piece(self, piece: MontessoriShapeDetection, index: int) -> None:
         """
@@ -331,9 +381,9 @@ class PerceivedTwin:
         )
         self.committed.append(body)
         self.world.add_semantic_annotation(piece.category(name=body.name, root=body))
-        self.world.add_semantic_annotation(
-            SeenPiece(name=body.name, root=body, kind=piece.category)
-        )
+        seen = SeenPiece(name=body.name, root=body, kind=piece.category)
+        self.world.add_semantic_annotation(seen)
+        self.sightings[seen] = piece
 
     # %% placing entities
 
@@ -378,6 +428,7 @@ class PerceivedTwin:
             if self._annotates_one_of(annotation, committed):
                 self.world.remove_semantic_annotation(annotation)
         self.holes.clear()
+        self.sightings.clear()
         for entity in self.committed:
             self.world.remove_connection(entity.parent_connection)
             self.world.remove_kinematic_structure_entity(entity)

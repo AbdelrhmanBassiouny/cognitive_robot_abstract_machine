@@ -429,6 +429,12 @@ class Bridge:
     The newest plan-tree snapshot (see :meth:`snapshot_plan`).
     """
 
+    slot_answers: Dict[str, Any] = field(default_factory=dict)
+    """
+    How the parts the running plan left open were answered, and by which backend, as
+    the demo last published it (see :meth:`publish_slot_answers`).
+    """
+
     chart_state: ChartSnapshot = field(default_factory=ChartSnapshot)
     """
     The newest motion-statechart snapshot (see :meth:`observe_chart`).
@@ -899,11 +905,12 @@ class Bridge:
                     continue
                 connection = body.parent_connection
                 entries.append(
-                    "%s<-%s:%s"
+                    "%s<-%s:%s%s"
                     % (
                         name,
                         str(connection.parent.name) if connection else "",
                         type(connection).__name__ if connection else "root",
+                        self._drawing_of(body),
                     )
                 )
         except Exception as error:
@@ -913,6 +920,26 @@ class Bridge:
             return
         digest = hashlib.sha1("|".join(sorted(entries)).encode()).hexdigest()[:16]
         self._bundle_signature = "world-%s-robot-%s" % (digest, robot_name)
+
+    @staticmethod
+    def _drawing_of(body: Body) -> str:
+        """
+        :param body: A body the live bundle serializes.
+        :return: How the body is drawn: the kind and size of each of its visual shapes,
+            and the file a mesh is read from.
+        """
+        return "".join(
+            "[%s %s %s]"
+            % (
+                type(shape).__name__,
+                ",".join(
+                    "%.4f" % extent
+                    for extent in shape.local_frame_bounding_box.dimensions
+                ),
+                shape.filename if isinstance(shape, Mesh) else "",
+            )
+            for shape in body.visual.shapes
+        )
 
     def status(self) -> Dict[str, Any]:
         """
@@ -1503,6 +1530,22 @@ class Bridge:
                 and entry.group is PlanNodeGroup.ACTION
             ]
         return running[-1].label if running else None
+
+    def publish_slot_answers(self, answers: Dict[str, Any]) -> None:
+        """
+        Publish how the parts the running plan left open were answered.
+
+        :param answers: The backends there are and every answer so far, as JSON.
+        """
+        with self._lock:
+            self.slot_answers = answers
+
+    def get_slot_answers(self) -> Dict[str, Any]:
+        """
+        The newest published slot answers (safe to call from HTTP threads).
+        """
+        with self._lock:
+            return self.slot_answers
 
     def get_plan(self) -> Dict[str, Any]:
         """
