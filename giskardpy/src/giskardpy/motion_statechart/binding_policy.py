@@ -40,8 +40,10 @@ class ForwardKinematicsBinding:
     """
     name: PrefixedName
     """
-    Name of the Binding. It is used for naming the auxiliary variables.
-    ..warning:: ensure to generate a unique name, e.g., using the name of the MotionStatechartNode.
+    The name the variables of :attr:`root_T_tip` are created under.
+
+    .. warning:: Make it unique, for example by deriving it from the name of the node
+        holding the binding.
     """
     root: KinematicStructureEntity
     """Root of the kinematic chain."""
@@ -52,13 +54,12 @@ class ForwardKinematicsBinding:
         default=None, kw_only=True
     )
     """
-    The forward kinematics from :attr:`root` to :attr:`tip`, expressed over variables
-    that :meth:`bind` sets. New variables named after :attr:`name` unless an
-    expression over variables is given, such as one deserialized with the node holding
-    it.
+    The forward kinematics from :attr:`root` to :attr:`tip`, expressed over the
+    variables :meth:`bind` sets; created over new variables named after :attr:`name`
+    if left unset.
     """
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         if self.root_T_tip is None:
             self.root_T_tip = HomogeneousTransformationMatrix.create_with_variables(
                 str(self.name)

@@ -107,6 +107,14 @@ class DifferentialDriveBaseGoal(
         return self.nodes[0]
 
     @property
+    def _goal_reference_frame_name(self) -> PrefixedName:
+        """
+        :return: The name the variables of :attr:`parent_T_goal_reference_frame` are
+            created under.
+        """
+        return PrefixedName("parent_T_goal_ref", str(self.name))
+
+    @property
     def _drive_parent(self) -> KinematicStructureEntity:
         """
         :return: The body the drive is attached to now.
@@ -138,7 +146,7 @@ class DifferentialDriveBaseGoal(
             self.diff_drive_connection = diff_drives[0]
         self.parent_T_goal_reference_frame = (
             HomogeneousTransformationMatrix.create_with_variables(
-                str(PrefixedName("parent_T_goal_ref", str(self.name)))
+                str(self._goal_reference_frame_name)
             )
         )
         task_parameters = dict(
@@ -177,7 +185,7 @@ class DifferentialDriveBaseGoal(
         """
         super().set_up(context)
         self._forward_kinematics_binding = ForwardKinematicsBinding(
-            name=PrefixedName("parent_T_goal_ref", str(self.name)),
+            name=self._goal_reference_frame_name,
             root=self._drive_parent,
             tip=self.goal_pose.reference_frame,
             float_variable_data=context.float_variable_data,
@@ -185,7 +193,7 @@ class DifferentialDriveBaseGoal(
         )
         self._forward_kinematics_binding.bind(context.world)
 
-    def on_start(self, context: StatechartContext):
+    def on_start(self, context: StatechartContext) -> None:
         if self.binding_policy == GoalBindingPolicy.Bind_on_start:
             self._bind_goal_reference_frame(context)
 
