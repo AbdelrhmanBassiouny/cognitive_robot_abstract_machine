@@ -1,14 +1,14 @@
 ## #512 box bounds (claude/ecstatic-hopper-7j7iaz, off main)
 
 Plan:
-- One Bounds concept: corner-only classes are Bounds; boxes in space have AxisAlignedBox.bounds.
+- BoundsInterface (krrood Interface) declares lower/upper; Bounds stores them; AxisAlignedBox computes them.
 
 Done:
-- ab898338c: AxisAlignedRegion and the krrood change dropped; bounds property, CoordinateBounds.clip_segment.
+- d13d9ebae: BoundsInterface, krrood Interface + InterfaceInstantiationError, SubClassSafeGeneric property fix.
 
 Next:
 - CI on #512 (ORM build and PR2-fixture tests could not run locally).
-- Thread w6-_ answered (Bounds kept, region removed); left open for the user.
+- Thread w6-_ updated, left open for the user (both classes kept).
 
 ## #472 video-core (plan general-video-production / video-core)
 
@@ -26,7 +26,7 @@ Done:
 Next:
 - tomsch420 re-review on cram2#742; open there: timeline-scene modelling.
 - submission.py thread stays open until the limits land in experiments/video (#429; told on #429).
-- Bounds unification is draft #512 (AxisAlignedBox.bounds); thread rwJTv open until #512 lands.
+- Bounds unification is draft #512 (BoundsInterface); thread rwJTv open until #512 lands.
 - Fork threads await the user: AxisAlignedBox as Bounds, tuples, presentation library,
   Framing box, InsetStill/FootageScene names, test literals, SemDT depth/width, cache
   constants, LICENSE, voices str, Video vs Film.
