@@ -51,9 +51,9 @@ items:
     anything. TimelineScene is the Role[Video] a video plays in a VideoTimeline; units live in
     krrood.units (Quantity[T]).
 
-    Upstream round 1 answered in ee1e7bdad (renames, SoundChannel, crollywood.submission, StrEnums,
-    NDArray). Waiting on tomsch420 to re-review upstream, and on the user for the fork's 12 open
-    threads.
+    Upstream round 1 answered in ee1e7bdad; fork round 4 (ecdf83325) moved the venue limits out to
+    experiments/video (lands with #429), leaving VideoProduction.size_allowed_for as the hook.
+    Waiting on tomsch420 to re-review upstream, and on the user for the fork's open threads.
 - id: icra-video-on-core
   title: '#429 rebuilt on the general package, keeping only the ICRA scenes'
   branch: claude/the-icra-video-shows-the-plan-being-answered
