@@ -61,6 +61,7 @@ from cramph.context import StatechartContext
 from cramph.exceptions import NotRunByLanguageNodeError
 from cramph.node import StatechartNode
 from cramph.nodes_for_testing import ConstFalseNode
+from giskardpy.motion_statechart.goals.cartesian_goals import CartesianPoseStraight
 from giskardpy.motion_statechart.goals.gripper import MoveGripper
 from giskardpy.motion_statechart.tasks.cartesian_tasks import CartesianPose
 from giskardpy.motion_statechart.tasks.joint_tasks import JointPositionList
@@ -135,7 +136,7 @@ def kind_of(step: StatechartNode) -> type:
     :return: What the step does: the goal it moves the tool center point or a gripper
         with, even when it runs alongside speed caps or collision rules, else its type.
     """
-    for goal_type in (CartesianPose, MoveGripper):
+    for goal_type in (CartesianPose, CartesianPoseStraight, MoveGripper):
         if any(isinstance(node, goal_type) for node in [step, *step.descendants]):
             return goal_type
     return type(step)
@@ -652,6 +653,31 @@ def test_the_perception_precedes_the_final_approach_a_step_was_put_behind(
         DetectAction,
         CartesianPose,
         MoveGripper,
+    ]
+
+
+def test_the_perception_precedes_the_final_approach_of_a_straight_reach(
+    stretch_apartment_context,
+):
+    """
+    A reach moving its tool center point in a straight line approaches the object with a
+    different goal, which still counts as its final approach.
+    """
+    world, view, extensions = stretch_apartment_context
+    milk = world.get_semantic_annotations_by_type(Milk)[0]
+    plan_transformations = [DetectBeforeGrasp()]
+
+    plan = rewritten(
+        ReachAction(grasp=GraspCandidate.from_body_origin(milk), arm=view.all_arms[0]),
+        extensions,
+        plan_transformations,
+    )
+
+    assert kinds_of_the_steps_of(plan) == [
+        CartesianPoseStraight,
+        LookAtAction,
+        DetectAction,
+        CartesianPoseStraight,
     ]
 
 

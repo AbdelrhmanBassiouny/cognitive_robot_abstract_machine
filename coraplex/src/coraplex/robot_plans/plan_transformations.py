@@ -47,9 +47,11 @@ from coraplex.robot_plans.mixins import ReattachesBodies
 from cramph.composites import CramLanguageNode, StatementNode
 from cramph.node import StatechartNode
 from giskardpy.motion_statechart.goals.gripper import MoveGripper
+from giskardpy.motion_statechart.goals.cartesian_goals import CartesianPoseStraight
 from giskardpy.motion_statechart.tasks.cartesian_tasks import (
     CartesianPose,
     CartesianPosition,
+    CartesianPositionStraight,
 )
 from krrood.entity_query_language.core.mapped_variable import FlatVariable
 from krrood.entity_query_language.core.variable import InstantiatedVariable, Variable
@@ -117,7 +119,15 @@ class DetectBeforeGrasp(InsertionTransformation[ReachAction]):
             `arm`.
         """
         return any(
-            isinstance(node, (CartesianPose, CartesianPosition))
+            isinstance(
+                node,
+                (
+                    CartesianPose,
+                    CartesianPosition,
+                    CartesianPoseStraight,
+                    CartesianPositionStraight,
+                ),
+            )
             and node.tip_link is arm.end_effector.tool_frame
             for node in [step, *step.descendants]
         )
