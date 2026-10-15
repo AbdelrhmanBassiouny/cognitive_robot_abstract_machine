@@ -80,6 +80,18 @@ class Rect(Type):
     Rectangle height in pixels
     """
 
+    @classmethod
+    def from_corner_points(cls, x1: float, y1: float, x2: float, y2: float) -> Rect:
+        """
+        :param x1: Horizontal coordinate of the top-left corner.
+        :param y1: Vertical coordinate of the top-left corner.
+        :param x2: Horizontal coordinate of the bottom-right corner.
+        :param y2: Vertical coordinate of the bottom-right corner.
+        :return: The rectangle between the pixels containing the two corners.
+        """
+        left, top, right, bottom = int(x1), int(y1), int(x2), int(y2)
+        return cls(pos=Point2D(x=left, y=top), width=right - left, height=bottom - top)
+
     def get_corner_points(self) -> Tuple[int, int, int, int]:
         """Get the rectangle as a tuple of (x1, y1, x2, y2)."""
         return self.pos.x, self.pos.y, self.pos.x + self.width, self.pos.y + self.height

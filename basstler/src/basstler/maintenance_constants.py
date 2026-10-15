@@ -12,11 +12,31 @@ Values a program derives for itself belong beside the code that derives them, no
 from __future__ import annotations
 
 import re
+from enum import StrEnum
 
 GITHUB_API_ROOT = "https://api.github.com"
 """
 Base URL every GitHub REST call this package makes is built on.
 """
+
+
+class GitHubClient(StrEnum):
+    """
+    The executables the tooling reaches the GitHub API through, each named as it is on
+    ``PATH``.
+    """
+
+    COMMAND_LINE = "gh"
+    """
+    GitHub's own command-line client, preferred where it is installed.
+    """
+
+    CURL = "curl"
+    """
+    The plain HTTP client the shell hooks fall back to, with a token, where there is no
+    ``gh``.
+    """
+
 
 CREDENTIAL_VARIABLES = ("GH_TOKEN", "GITHUB_TOKEN")
 """

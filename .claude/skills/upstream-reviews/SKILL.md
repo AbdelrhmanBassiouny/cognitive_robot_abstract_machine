@@ -40,7 +40,7 @@ The fork is this checkout's own repository — resolve it rather than assuming:
 
 ```bash
 source .claude/hooks/resolve-personal-notes-config.sh
-python3 -m "${STACK_MODULE}" configuration
+"${BASSTLER_PYTHON}" -m "${STACK_MODULE}" configuration
 ```
 
 Take the target from the skill's argument: a bare number is an upstream pull

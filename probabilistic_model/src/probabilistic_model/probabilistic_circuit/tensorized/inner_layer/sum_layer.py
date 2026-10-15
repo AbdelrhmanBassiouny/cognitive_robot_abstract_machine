@@ -249,6 +249,17 @@ class SumLayer(InnerLayer):
             columns - offsets[child_layer_indices],
         )
 
+    def mixture_components(self) -> List[Tuple[Layer, int]]:
+        if self.number_of_nodes != 1:
+            return []
+        edges = self.inner_layer_edges
+        return [
+            (self.child_layers[child_layer_index], int(child_node))
+            for child_layer_index, child_node in zip(
+                edges.child_layer_indices, edges.child_nodes
+            )
+        ]
+
     def values_of_edges(self, child_results: List[npt.NDArray]) -> npt.NDArray:
         """
         Take the value of the child node of every edge.

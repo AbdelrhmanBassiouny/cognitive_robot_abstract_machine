@@ -6,7 +6,7 @@ from krrood.exceptions import DataclassException
 from random_events.variable import Variable
 
 if TYPE_CHECKING:
-    from random_events.product_algebra import Event
+    from random_events.product_algebra import Event, SimpleEvent
 
     from probabilistic_model.probabilistic_model import ProbabilisticModel
 
@@ -206,3 +206,28 @@ class InvalidMomentOrderError(DataclassException, ValueError):
 
     def suggest_correction(self) -> str:
         return "Ask for an order that is a whole number and not negative."
+
+
+@dataclass
+class EventMixesPointsAndIntervalsError(DataclassException, ValueError):
+    """
+    Exception raised when an event is to be measured uniformly while one of its
+    continuous variables takes points and intervals at once.
+
+    A point has no width, so there is no weight that puts it in proportion to an
+    interval.
+    """
+
+    event: SimpleEvent
+    """
+    The event whose variable mixes them.
+    """
+
+    def error_message(self) -> str:
+        return (
+            f"A continuous variable of {self.event} takes points and intervals at "
+            f"once."
+        )
+
+    def suggest_correction(self) -> str:
+        return "Make every continuous variable either points only or intervals only."

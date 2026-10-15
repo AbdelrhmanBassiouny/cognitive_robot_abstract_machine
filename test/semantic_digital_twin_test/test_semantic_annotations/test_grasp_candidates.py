@@ -7,6 +7,7 @@ from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.exceptions import (
     MissingReferenceFrameError,
     NoGraspGeometry,
+    ObjectHasNoWidthWithoutCollision,
     ReferenceFrameMismatchError,
 )
 from semantic_digital_twin.semantic_annotations.mixins import HasRootBody
@@ -28,7 +29,11 @@ from semantic_digital_twin.semantic_annotations.semantic_annotations import (
     Table,
 )
 from semantic_digital_twin.spatial_types import HomogeneousTransformationMatrix
-from semantic_digital_twin.spatial_types.spatial_types import Pose
+from semantic_digital_twin.spatial_types.spatial_types import (
+    Pose,
+    RotationMatrix,
+    Vector3,
+)
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.connections import FixedConnection
 from semantic_digital_twin.world_description.geometry import Box, Mesh, Scale
@@ -329,3 +334,78 @@ def test_an_object_described_with_its_type_can_be_grasped(milk):
     assert [
         grasp.grasp_pose.to_np().tolist() for grasp in described.grasp_candidates()
     ] == [grasp.grasp_pose.to_np().tolist() for grasp in milk.grasp_candidates()]
+
+
+# %% how wide the object stands between the fingers
+
+
+def test_the_width_is_the_objects_extent_along_the_closing_axis(milk):
+    """
+    A grasp whose closing axis lies along one of the box's own axes meets the box across
+    exactly that extent.
+    """
+    grasp = GraspCandidate(
+        milk,
+        Pose(
+            orientation=RotationMatrix.from_vectors(
+                x=Vector3.NEGATIVE_Z(), y=Vector3.Y()
+            ).quaternion,
+            reference_frame=milk.root,
+        ),
+    )
+
+    assert grasp.width_along_closing_axis == pytest.approx(BOX_SCALE.y)
+
+
+def test_turning_the_grasp_changes_the_width_it_meets(milk):
+    """
+    The same box offers a different width to fingers closing along its other axis, so
+    the width follows the grasp rather than the object alone.
+    """
+    along_y, along_x = (
+        GraspCandidate(
+            milk,
+            Pose(
+                orientation=RotationMatrix.from_vectors(
+                    x=Vector3.NEGATIVE_Z(), y=closing_axis
+                ).quaternion,
+                reference_frame=milk.root,
+            ),
+        )
+        for closing_axis in (Vector3.Y(), Vector3.X())
+    )
+
+    assert along_y.width_along_closing_axis == pytest.approx(BOX_SCALE.y)
+    assert along_x.width_along_closing_axis == pytest.approx(BOX_SCALE.x)
+
+
+def test_a_diagonal_grasp_meets_the_box_across_its_shadow(milk):
+    """
+    Closing at an angle meets the box across the width of its projection onto that
+    axis, since that is the widest the fingers can run into.
+    """
+    diagonal = GraspCandidate(
+        milk,
+        Pose(
+            orientation=RotationMatrix.from_vectors(
+                x=Vector3.NEGATIVE_Z(),
+                y=Vector3(x=1 / np.sqrt(2), y=1 / np.sqrt(2), z=0),
+            ).quaternion,
+            reference_frame=milk.root,
+        ),
+    )
+
+    expected = (BOX_SCALE.x + BOX_SCALE.y) / np.sqrt(2)
+    assert diagonal.width_along_closing_axis == pytest.approx(expected)
+
+
+def test_an_object_without_collision_has_no_width_to_measure():
+    body = Body(name=PrefixedName("shapeless", prefix="grasp_candidates"))
+    annotation = Milk(root=body)
+    world = World()
+    with world.modify_world():
+        world.add_kinematic_structure_entity(body)
+        world.add_semantic_annotation(annotation)
+
+    with pytest.raises(ObjectHasNoWidthWithoutCollision):
+        GraspCandidate.from_body_origin(annotation).width_along_closing_axis

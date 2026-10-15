@@ -480,6 +480,7 @@ class GiskardExecutable(Executable):
                     executor.tick()
                     pacer.sleep()
                     ticks += 1
+                pacer.wait_for_standstill()
                 history.end_active_motions()
             except BaseException as error:
                 history.end_active_motions(

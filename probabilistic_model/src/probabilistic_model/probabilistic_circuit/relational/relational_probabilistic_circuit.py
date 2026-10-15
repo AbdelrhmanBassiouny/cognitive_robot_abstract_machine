@@ -1,5 +1,5 @@
 """
-Relational probabilistic circuits ("RSPNs").
+Relational probabilistic circuits.
 
 .. note::
     This module deliberately bridges ``probabilistic_model`` and ``krrood``: it
@@ -24,6 +24,7 @@ from typing_extensions import (
     Type,
 )
 
+from krrood.class_diagrams.utils import common_base_class
 from krrood.ormatic.data_access_objects.dao import (
     DataAccessObjectSchema,
     get_dao_schema,
@@ -33,6 +34,7 @@ from krrood.parametrization.feature_extraction.aggregations import (
     compute_aggregation_statistics,
 )
 from krrood.parametrization.feature_extraction.feature_extractor import FeatureExtractor
+from krrood.patterns.field_metadata import JSONMetadata
 
 if TYPE_CHECKING:
     from krrood.entity_query_language.query.match import Match
@@ -42,8 +44,14 @@ from probabilistic_model.learning.jpt.variables import (
     infer_variables_from_dataframe,
 )
 from probabilistic_model.probabilistic_model import PartialPointType
+from probabilistic_model.probabilistic_circuit.groundable_circuit import (
+    GroundableCircuit,
+)
 from probabilistic_model.probabilistic_circuit.relational.exceptions import (
-    PartCircuitGroundingFailedError,
+    InstanceNotOfClassError,
+    MixedCircuitTypesError,
+    NoCommonSuperclassError,
+    UnknownExchangeablePartsError,
 )
 from probabilistic_model.probabilistic_circuit.relational.exchangeable_grounding import (
     CircuitType,
@@ -51,15 +59,11 @@ from probabilistic_model.probabilistic_circuit.relational.exchangeable_grounding
     GroundingMode,
     RelationalGrounding,
 )
-from probabilistic_model.probabilistic_circuit.relational.rustworkx_grounding import (
-    RustworkxRelationalGrounding,
+from probabilistic_model.probabilistic_circuit.relational.part_learning_methods import (
+    PartLearningMethods,
 )
 from probabilistic_model.probabilistic_circuit.relational.template import (
     RelationalDistributionTemplate,
-)
-from probabilistic_model.probabilistic_circuit.rx.probabilistic_circuit import (
-    ProbabilisticCircuit,
-    ProductUnit,
 )
 from random_events.variable import Variable
 
@@ -119,81 +123,6 @@ class ExchangeableDistributionTemplate(RelationalDistributionTemplate):
             domain=variable.domain,
         )
 
-    def ground(
-        self, parts_to_ground: list[Match], aggregation_statistics: PartialPointType
-    ) -> ProbabilisticCircuit:
-        """
-        Build a product circuit by grounding each exchangeable part independently.
-
-        :param parts_to_ground: The query parts, one per child object in the relation.
-        :param aggregation_statistics: Observed aggregation values shared across all
-            parts.
-        :return: A product circuit over the grounded distributions of all parts.
-        """
-        return self.ground_instance(
-            self.grounded_templates_of_parts(
-                parts_to_ground, self.template_distribution.ground
-            ),
-            aggregation_statistics,
-        )
-
-    def ground_instance(
-        self,
-        parts: list[GroundedPartTemplate[ProbabilisticCircuit]],
-        aggregation_statistics: PartialPointType,
-    ) -> ProbabilisticCircuit:
-        """
-        :param parts: The grounded template of every part.
-        :param aggregation_statistics: Observed aggregation values shared across all
-            parts.
-        :return: A product circuit over the conditioned templates of all parts.
-        """
-        result = ProbabilisticCircuit()
-        root = ProductUnit(probabilistic_circuit=result)
-        for part in parts:
-            root.add_subcircuit(
-                self._mount_part(
-                    result, self._conditioned_part(part, aggregation_statistics)
-                )
-            )
-        return result
-
-    def _conditioned_part(
-        self,
-        part: GroundedPartTemplate[ProbabilisticCircuit],
-        aggregation_statistics: PartialPointType,
-    ) -> ProbabilisticCircuit:
-        """
-        Condition a copy of the grounded template of a part on
-        ``aggregation_statistics`` and remove the latent variables.
-
-        :param part: The grounded template of the part.
-        :param aggregation_statistics: Observed aggregation values to condition on.
-        :return: A self-contained circuit over the variables of the part, ready to be
-            mounted into the parent.
-        """
-        part_circuit = part.circuit.__deepcopy__()
-        conditioning_result, _ = part_circuit.log_conditional_in_place(
-            aggregation_statistics, preserve_structure=True
-        )
-        if conditioning_result is None:
-            part_circuit = part.circuit.__deepcopy__()
-        non_latent_variables = [
-            variable
-            for variable in part_circuit.variables
-            if variable not in self.latent_variables
-        ]
-        part_circuit.restrict_to_variables_in_place(non_latent_variables)
-        part_circuit.update_variables(
-            {
-                variable: self.variable_of_part(variable, part)
-                for variable in part_circuit.variables
-            }
-        )
-        if len(part_circuit.nodes()) == 0:
-            raise PartCircuitGroundingFailedError(self.template_distribution.class_)
-        return part_circuit
-
 
 @dataclass
 class RelationalProbabilisticCircuit:
@@ -201,15 +130,20 @@ class RelationalProbabilisticCircuit:
     A probabilistic circuit that jointly models a class and its relational structure.
     """
 
-    class_: Type
+    class_: Optional[Type] = field(
+        init=False, default=None, metadata=JSONMetadata(serialize=True).as_dict()
+    )
     """
-    The domain class whose instances this distribution models.
+    The domain class whose instances this distribution models, set by ``fit``.
     """
 
-    class_probabilistic_circuit: Optional[ProbabilisticCircuit] = None
+    class_probabilistic_circuit: Optional[GroundableCircuit] = None
     """
     The fitted joint distribution over the class's scalar attributes and aggregation
     statistics, populated by ``fit``.
+
+    Its type is the one :attr:`learning_method` fits, and the class circuits of all
+    exchangeable templates have the same type.
     """
 
     exchangeable_distribution_templates: dict[str, ExchangeableDistributionTemplate] = (
@@ -233,13 +167,14 @@ class RelationalProbabilisticCircuit:
     What the class-level circuit is fitted with.
     """
 
-    part_learning_methods: dict[str, LearningMethod] = field(default_factory=dict)
+    part_learning_methods: PartLearningMethods = field(
+        default_factory=PartLearningMethods
+    )
     """
-    Per exchangeable-part field name, what that part's template distribution is fitted
-    with.
+    What the template distribution of every exchangeable part, nested ones included, is
+    fitted with, keyed by attribute accesses on a variable of :attr:`class_`.
 
-    A part absent from the mapping is fitted with a plain
-    :class:`~probabilistic_model.learning.jpt.jpt.JointProbabilityTree`.
+    Its default must fit the same circuit type as :attr:`learning_method`.
     """
 
     schema_information: Optional[DataAccessObjectSchema] = field(
@@ -364,7 +299,6 @@ class RelationalProbabilisticCircuit:
                 getattr(instance, exchangeable_part) for instance in instances
             )
         )
-        child_type = type(child_instances[0])
         child_feature_extractor = FeatureExtractor.from_instances(child_instances)
         child_dataframe = self._build_child_joint_dataframe(
             exchangeable_part,
@@ -380,9 +314,11 @@ class RelationalProbabilisticCircuit:
         ]
         template = ExchangeableDistributionTemplate(
             RelationalProbabilisticCircuit(
-                child_type,
-                learning_method=self.part_learning_methods.get(
-                    exchangeable_part, JointProbabilityTree()
+                learning_method=self.part_learning_methods.method_of_path(
+                    exchangeable_part
+                ),
+                part_learning_methods=self.part_learning_methods.of_part(
+                    exchangeable_part
                 ),
             ),
             latent_variables,
@@ -390,11 +326,41 @@ class RelationalProbabilisticCircuit:
         template.template_distribution.fit(
             child_instances, dataframe_from_parent=child_dataframe
         )
+        part_circuit_type = type(
+            template.template_distribution.class_probabilistic_circuit
+        )
+        if part_circuit_type is not type(self.class_probabilistic_circuit):
+            raise MixedCircuitTypesError(
+                self.class_,
+                exchangeable_part,
+                type(self.class_probabilistic_circuit),
+                part_circuit_type,
+            )
         return template
+
+    @staticmethod
+    def _class_of(instances: list[Any], class_: Optional[Type]) -> Type:
+        """
+        :param instances: Training instances.
+        :param class_: The class the circuit models, or ``None`` for the lowest common
+            superclass of the instances in their method resolution orders.
+        :return: The class the circuit models.
+        """
+        if class_ is None:
+            class_ = common_base_class([type(instance) for instance in instances])
+            if class_ is None:
+                raise NoCommonSuperclassError(
+                    sorted({type(instance) for instance in instances}, key=str)
+                )
+        for instance in instances:
+            if not isinstance(instance, class_):
+                raise InstanceNotOfClassError(class_, type(instance))
+        return class_
 
     def fit(
         self,
         instances: list[Any],
+        class_: Optional[Type] = None,
         dataframe_from_parent: Optional[pd.DataFrame] = None,
     ):
         """
@@ -405,12 +371,18 @@ class RelationalProbabilisticCircuit:
         ``ExchangeableDistributionTemplate`` per exchangeable part discovered in the
         schema.
 
-        :param instances: Training instances; all must be of the same class.
+        :param instances: Training instances.
+        :param class_: The class the circuit models, or ``None`` for the lowest common
+            superclass of the instances.
         :param dataframe_from_parent: Pre-built dataframe supplied by a parent
             ``_fit_exchangeable_part`` call. When provided, feature extraction and
             preprocessing are skipped.
         :return:``self``, to allow chaining.
+        :raises NoCommonSuperclassError: If ``class_`` is not given and the instances
+            share no superclass but ``object``.
+        :raises InstanceNotOfClassError: If an instance is not of ``class_``.
         """
+        self.class_ = self._class_of(instances, class_)
         self.feature_extractor = FeatureExtractor.from_instances(instances)
         class_dataframe = self._build_class_dataframe(
             self.feature_extractor, instances, dataframe_from_parent
@@ -422,10 +394,18 @@ class RelationalProbabilisticCircuit:
         self.schema_information = get_dao_schema(
             get_data_access_object_class(type(instances[0]))
         )
-        for collection_relationship in self.schema_information.collection_relationships:
-            exchangeable_part = collection_relationship.key
-            if exchangeable_part not in self.feature_extractor.exchangeable_features:
-                continue
+        exchangeable_parts = [
+            collection_relationship.key
+            for collection_relationship in self.schema_information.collection_relationships
+            if collection_relationship.key
+            in self.feature_extractor.exchangeable_features
+        ]
+        unknown_parts = {
+            path.split(".")[0] for path in self.part_learning_methods.methods_by_path
+        } - set(exchangeable_parts)
+        if unknown_parts:
+            raise UnknownExchangeablePartsError(self.class_, sorted(unknown_parts))
+        for exchangeable_part in exchangeable_parts:
             self.exchangeable_distribution_templates[exchangeable_part] = (
                 self._fit_exchangeable_part(exchangeable_part, instances)
             )
@@ -460,9 +440,10 @@ class RelationalProbabilisticCircuit:
         self,
         query: Match,
         grounding_mode: GroundingMode = GroundingMode.SAMPLED,
-    ) -> ProbabilisticCircuit:
+    ) -> GroundableCircuit:
         """
-        Ground the relational circuit for a specific query.
+        Ground the relational circuit for a specific query, in the circuit type it was
+        fitted in.
 
         :param query: An underspecified, resolved query instance whose structure
             determines which parts are grounded and how many child objects each
@@ -480,6 +461,6 @@ class RelationalProbabilisticCircuit:
         """
         :param grounding_mode: How to treat aggregation latents a query leaves
             undetermined.
-        :return: What grounds this circuit.
+        :return: What grounds this circuit in the circuit type it was fitted in.
         """
-        return RustworkxRelationalGrounding(self, grounding_mode)
+        return RelationalGrounding(self, grounding_mode)

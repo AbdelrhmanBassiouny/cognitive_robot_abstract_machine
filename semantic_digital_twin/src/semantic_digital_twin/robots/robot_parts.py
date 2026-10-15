@@ -77,7 +77,7 @@ from semantic_digital_twin.spatial_types import (
     RotationMatrix,
     HomogeneousTransformationMatrix,
 )
-from semantic_digital_twin.spatial_types.spatial_types import Pose
+from semantic_digital_twin.spatial_types.spatial_types import Point3, Pose
 from semantic_digital_twin.spatial_types.derivatives import DerivativeMap
 from semantic_digital_twin.world_description.connections import (
     ActiveConnection,
@@ -705,6 +705,23 @@ class EndEffector(AbstractRobotPart, ABC):
             reference_frame=grasp_pose.reference_frame,
         )
 
+    def tool_frame_goal_for_point(self, tool_P_point: Point3, grasp_pose: Pose) -> Pose:
+        """
+        Express a grasp frame as the goal that puts a point of this gripper on it, where
+        :meth:`tool_frame_goal` puts the tool frame itself there.
+
+        :param tool_P_point: The point to put on the grasp, read in the tool frame.
+        :param grasp_pose: The grasp frame to reach.
+        :return: The pose the tool frame has to reach, in ``grasp_pose``'s frame.
+        """
+        oriented = self.tool_frame_goal(grasp_pose)
+        return Pose(
+            position=grasp_pose.position
+            - oriented.rotation_matrix @ tool_P_point.vector3,
+            orientation=oriented.quaternion,
+            reference_frame=grasp_pose.reference_frame,
+        )
+
     @property
     def held_body(self) -> Optional[Body]:
         """
@@ -721,22 +738,23 @@ class EndEffector(AbstractRobotPart, ABC):
             raise MoreThanOneBodyHeld(self, children)
         return children[0]
 
-    @property
-    def held_body_T_grasp(self) -> Pose:
+    def held_body_T_grasp_at(self, tool_P_point: Point3) -> Pose:
         """
         The grasp this gripper has on the body it holds, read off the transform between
-        the tool frame and that body.
+        the tool frame and that body, with the grasp sitting at a given point of the
+        gripper rather than at the tool frame.
 
+        :param tool_P_point: The point the grasp sits at, read in the tool frame.
         :return: The grasp frame, in :attr:`held_body`'s frame.
+        :raises NothingHeld: If the gripper holds nothing.
         """
         body = self.held_body
         if body is None:
             raise NothingHeld(self)
         body_T_tool = self._world.transform(self.tool_frame.global_transform, body)
-        body_R_grasp = body_T_tool.rotation_matrix @ self.tool_R_grasp
         return HomogeneousTransformationMatrix.from_point_rotation_matrix(
-            point=body_T_tool.position,
-            rotation_matrix=body_R_grasp,
+            point=body_T_tool @ tool_P_point,
+            rotation_matrix=body_T_tool.rotation_matrix @ self.tool_R_grasp,
             reference_frame=body,
         ).pose
 
@@ -998,6 +1016,18 @@ class AbstractRobot(Agent, HasRobotParts, ABC):
         Returns a ROS file path pointing to the description of this robot, for example a
         URDF file.
         """
+
+    @classproperty
+    def uses_visual_as_collision_backup(cls) -> bool:
+        """
+        :return: Whether links of this robot's description that carry no collision
+            geometry collide with their visual geometry instead.
+
+        Override where the description leaves cosmetic parts, such as covers, drawn but
+        not described for contact, which otherwise leaves them invisible to collision
+        checking even though they bound the robot's real shape.
+        """
+        return False
 
     @classmethod
     @abstractmethod
