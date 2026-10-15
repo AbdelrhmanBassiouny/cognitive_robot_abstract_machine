@@ -8,7 +8,6 @@ from typing_extensions import List
 
 from coraplex.exceptions import ActionNotExpanded
 from coraplex.plans.executors import PlanExecutor
-from coraplex.plans.plan_transformation import PlanRewriting, PlanTransformation
 from coraplex.robot_plans.actions.core.container import CloseAction
 from coraplex.robot_plans.actions.core.navigation import (
     DrivesBase,
@@ -17,12 +16,7 @@ from coraplex.robot_plans.actions.core.navigation import (
 )
 from coraplex.robot_plans.actions.core.pick_up import PickUpAction, ReachAction
 from coraplex.robot_plans.actions.core.robot_body import MoveTorsoAction
-from coraplex.robot_plans.robot_specific_plan_transformations import (
-    DriveTiagoWithItsDifferentialDrive,
-    DriveStretchWithItsDifferentialDrive,
-)
 from cramph.composites import Parallel, Sequence, StatementNode
-from cramph.context import ContextExtension
 from cramph.exceptions import StatechartAlreadyCompiledError
 from cramph.node import StatechartNode
 from giskardpy.motion_statechart.goals.cartesian_goals import (
@@ -80,26 +74,6 @@ def prepared(
     """
     executor.prepare(statechart_of(executor, plan))
     return plan
-
-
-def rewriting_with(
-    extensions: List[ContextExtension], *transformations: PlanTransformation
-) -> List[ContextExtension]:
-    """
-    :return: `extensions` and a rewriting by `transformations`.
-    """
-    return [*extensions, PlanRewriting(transformations=list(transformations))]
-
-
-def every_base_transformation() -> List[PlanTransformation]:
-    """
-    :return: The transformations a plan may be given that change how a robot drives its
-        base.
-    """
-    return [
-        DriveStretchWithItsDifferentialDrive(),
-        DriveTiagoWithItsDifferentialDrive(),
-    ]
 
 
 def navigation_to(world: World, **parameters) -> NavigateAction:
@@ -217,11 +191,24 @@ def test_stretch_drives_with_its_differential_drive(
     stretch_apartment_context, build_executor
 ):
     world, robot, extensions = stretch_apartment_context
-    executor = build_executor(
-        rewriting_with(extensions, DriveStretchWithItsDifferentialDrive())
-    )
 
-    action = prepared(navigation_to(world), executor)
+    action = prepared(navigation_to(world), build_executor(extensions))
+
+    assert_drives_differentially_to(action.action_body, action, robot)
+
+
+def test_stretch_drives_with_its_differential_drive_whatever_the_plan_adaptations(
+    stretch_apartment_context,
+):
+    """
+    The robot adaptations are kept apart from the executor's plan adaptations, so a
+    caller replacing the latter keeps the robot driving the way it has to.
+    """
+    world, robot, extensions = stretch_apartment_context
+
+    action = prepared(
+        navigation_to(world), simulated_executor(extensions, plan_adaptations=[])
+    )
 
     assert_drives_differentially_to(action.action_body, action, robot)
 
@@ -230,16 +217,13 @@ def test_the_differential_drive_goal_takes_the_threshold_of_the_action(
     stretch_apartment_context,
 ):
     world, robot, extensions = stretch_apartment_context
-    executor = robot_executor(
-        rewriting_with(extensions, DriveStretchWithItsDifferentialDrive())
-    )
     default_action = navigation_to(world)
 
     action = prepared(
         navigation_to(
             world, base_pose_threshold=10 * default_action.base_pose_threshold
         ),
-        executor,
+        robot_executor(extensions),
     )
 
     assert action.base_pose_threshold != default_action.base_pose_threshold
@@ -262,13 +246,13 @@ def test_stretch_drives_every_leg_of_a_path_with_its_differential_drive(
     world, robot, extensions = stretch_apartment_context
     target = Pose.from_xyz_rpy(2.0, 2.0, 0.0, reference_frame=world.root)
     unchanged = prepared(
-        PathPlanningNavigateAction(target), simulated_executor(extensions)
-    )
-    executor = simulated_executor(
-        rewriting_with(extensions, DriveStretchWithItsDifferentialDrive())
+        PathPlanningNavigateAction(target),
+        simulated_executor(extensions, robot_adaptations=[]),
     )
 
-    action = prepared(PathPlanningNavigateAction(target), executor)
+    action = prepared(
+        PathPlanningNavigateAction(target), simulated_executor(extensions)
+    )
 
     legs = action.action_body.nodes
     assert type(action.action_body) is Sequence
@@ -281,28 +265,25 @@ def test_stretch_drives_every_leg_of_a_path_with_its_differential_drive(
 
 
 @pytest.mark.parametrize("build_executor", [simulated_executor, robot_executor])
-def test_a_tiago_given_its_differential_drive_drives_with_it(
-    tiago_context, build_executor
-):
+def test_a_tiago_drives_with_its_differential_drive(tiago_context, build_executor):
     """
     A real Tiago cannot be put at a pose, so the drive is not tied to simulation.
     """
     world, robot, extensions = tiago_context
-    executor = build_executor(
-        rewriting_with(extensions, DriveTiagoWithItsDifferentialDrive())
-    )
 
-    action = prepared(navigation_to(world), executor)
+    action = prepared(navigation_to(world), build_executor(extensions))
 
     assert_drives_differentially_to(action.action_body, action, robot)
 
 
-def test_a_simulated_tiago_not_given_its_differential_drive_writes_the_odometry(
+def test_a_simulated_tiago_without_its_robot_adaptations_writes_the_odometry(
     tiago_context,
 ):
     world, robot, extensions = tiago_context
 
-    action = prepared(navigation_to(world), simulated_executor(extensions))
+    action = prepared(
+        navigation_to(world), simulated_executor(extensions, robot_adaptations=[])
+    )
 
     assert type(action.action_body) is SetOdometry
 
@@ -315,19 +296,20 @@ def test_a_robot_of_another_type_keeps_its_drive_goal(
     pr2_apartment_context, build_executor, goal_type
 ):
     world, robot, extensions = pr2_apartment_context
-    executor = build_executor(rewriting_with(extensions, *every_base_transformation()))
 
-    action = prepared(navigation_to(world), executor)
+    action = prepared(navigation_to(world), build_executor(extensions))
 
     assert type(action.action_body) is goal_type
 
 
-def test_stretch_keeps_its_drive_goal_without_the_transformation(
+def test_stretch_keeps_its_drive_goal_without_its_robot_adaptations(
     stretch_apartment_context,
 ):
     world, robot, extensions = stretch_apartment_context
 
-    action = prepared(navigation_to(world), robot_executor(extensions))
+    action = prepared(
+        navigation_to(world), robot_executor(extensions, robot_adaptations=[])
+    )
 
     assert type(action.action_body) is CartesianPose
 
@@ -336,9 +318,7 @@ def test_a_simulated_stretch_arrives_driving_with_its_differential_drive(
     stretch_apartment_context,
 ):
     world, robot, extensions = stretch_apartment_context
-    executor = simulated_executor(
-        rewriting_with(extensions, DriveStretchWithItsDifferentialDrive())
-    )
+    executor = simulated_executor(extensions)
     action = navigation_to(world)
     executor.compile(statechart_of(executor, action))
 
@@ -355,9 +335,7 @@ def test_a_simulated_stretch_drives_differentially_to_a_pose_chosen_while_runnin
     stretch_apartment_context,
 ):
     world, robot, extensions = stretch_apartment_context
-    executor = simulated_executor(
-        rewriting_with(extensions, DriveStretchWithItsDifferentialDrive())
-    )
+    executor = simulated_executor(extensions)
     navigation = StatementNode(
         statement=a(NavigateAction)(
             target_location=variable_from([navigation_to(world).target_location])
@@ -379,9 +357,7 @@ def test_a_drive_chosen_while_running_is_watched_for_stalling_as_it_is_driven(
     on a stalled attempt has to watch the tasks of the body that runs.
     """
     world, robot, extensions = stretch_apartment_context
-    executor = simulated_executor(
-        rewriting_with(extensions, DriveStretchWithItsDifferentialDrive())
-    )
+    executor = simulated_executor(extensions)
     navigation = StatementNode(
         statement=a(NavigateAction)(
             target_location=variable_from([navigation_to(world).target_location])
@@ -495,16 +471,17 @@ def lifting_goal_of(action: PickUpAction) -> StatechartNode:
     return lift.nodes[0]
 
 
-def test_a_simulated_stretch_reaches_in_a_straight_line(stretch_apartment_context):
+@pytest.mark.parametrize("build_executor", [simulated_executor, robot_executor])
+def test_stretch_reaches_in_a_straight_line(stretch_apartment_context, build_executor):
     world, robot, extensions = stretch_apartment_context
     unchanged = prepared(
         ReachAction(grasp=handle_grasp(world), arm=robot.all_arms[0]),
-        robot_executor(extensions),
+        build_executor(extensions, robot_adaptations=[]),
     )
 
     action = prepared(
         ReachAction(grasp=handle_grasp(world), arm=robot.all_arms[0]),
-        simulated_executor(extensions),
+        build_executor(extensions),
     )
 
     for goal, default_goal in zip(
@@ -521,19 +498,20 @@ def test_a_simulated_stretch_reaches_in_a_straight_line(stretch_apartment_contex
         assert goal.binding_policy == default_goal.binding_policy
 
 
-def test_a_simulated_stretch_lifts_in_a_straight_line(stretch_apartment_context):
+@pytest.mark.parametrize("build_executor", [simulated_executor, robot_executor])
+def test_stretch_lifts_in_a_straight_line(stretch_apartment_context, build_executor):
     world, robot, extensions = stretch_apartment_context
     unchanged = lifting_goal_of(
         prepared(
             PickUpAction(grasp=handle_grasp(world), arm=robot.all_arms[0]),
-            robot_executor(extensions),
+            build_executor(extensions, robot_adaptations=[]),
         )
     )
 
     goal = lifting_goal_of(
         prepared(
             PickUpAction(grasp=handle_grasp(world), arm=robot.all_arms[0]),
-            simulated_executor(extensions),
+            build_executor(extensions),
         )
     )
 
@@ -542,17 +520,6 @@ def test_a_simulated_stretch_lifts_in_a_straight_line(stretch_apartment_context)
     assert goal.tip_link is unchanged.tip_link
     np.testing.assert_allclose(goal.goal_point.to_np(), unchanged.goal_point.to_np())
     assert goal.threshold == unchanged.threshold
-
-
-def test_the_real_stretch_reaches_unchanged(stretch_apartment_context):
-    world, robot, extensions = stretch_apartment_context
-
-    action = prepared(
-        ReachAction(grasp=handle_grasp(world), arm=robot.all_arms[0]),
-        robot_executor(extensions),
-    )
-
-    assert [type(goal) for goal in reaching_goals_of(action)] == [CartesianPose] * 2
 
 
 def test_a_robot_of_another_type_reaches_unchanged(pr2_apartment_context):

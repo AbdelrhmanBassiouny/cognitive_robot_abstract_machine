@@ -33,7 +33,10 @@ from coraplex.robot_plans.plan_transformations import (
     WriteTheOdometryInsteadOfDriving,
 )
 from coraplex.robot_plans.robot_specific_plan_transformations import (
+    DriveStretchWithItsDifferentialDrive,
+    DriveTiagoWithItsDifferentialDrive,
     KeepStretchInFrontOfTheContainerItCloses,
+    KeepTheTorsoUprightWhileUsingATool,
     MoveStretchToolCenterPointInAStraightLine,
 )
 from cramph.composites import ChildChooserAccess, StatementNode
@@ -111,7 +114,8 @@ class PlanExecutor(Executor, ABC):
     :class:`~coraplex.plans.context_extensions.MotionToleranceConfig` and a
     :class:`~coraplex.plans.plan_transformation.PlanRewriting` with default values are
     added unless one is given; the latter holds the transformations rewriting the plan
-    once it is expanded, and every action that joins it while it runs.
+    once it is expanded, and every action that joins it while it runs, after
+    :attr:`robot_adaptations` and :attr:`plan_adaptations`.
     """
 
     ros_node: Optional[Node] = field(default=None, kw_only=True)
@@ -140,6 +144,21 @@ class PlanExecutor(Executor, ABC):
     The top-level nodes of the plan compiled last.
     """
 
+    robot_adaptations: List[PlanTransformation] = field(
+        default_factory=lambda: [
+            DriveStretchWithItsDifferentialDrive(),
+            DriveTiagoWithItsDifferentialDrive(),
+            MoveStretchToolCenterPointInAStraightLine(),
+            KeepTheTorsoUprightWhileUsingATool(),
+        ],
+        kw_only=True,
+    )
+    """
+    The plan transformations adapting every plan to the robot performing each of its
+    nodes, however the executor runs it, offered every node before
+    :attr:`plan_adaptations`.
+    """
+
     plan_adaptations: List[PlanTransformation] = field(
         default_factory=list, kw_only=True
     )
@@ -158,7 +177,7 @@ class PlanExecutor(Executor, ABC):
         self.context = StatechartContext(world=self.world)
         for extension in self.context_extensions:
             if isinstance(extension, PlanRewriting):
-                extension = extension.preceded_by(self.plan_adaptations)
+                extension = extension.preceded_by(self.adaptations)
             self.context.add_extension(extension)
         self.child_chooser = UnderspecifiedChildChooser(
             executor=self, trial_executor_type=SimulatedPlanExecutor
@@ -170,8 +189,16 @@ class PlanExecutor(Executor, ABC):
         return [
             StatementGrounding(),
             MotionToleranceConfig(),
-            PlanRewriting(transformations=list(self.plan_adaptations)),
+            PlanRewriting(transformations=self.adaptations),
         ]
+
+    @property
+    def adaptations(self) -> List[PlanTransformation]:
+        """
+        :return: The transformations this executor rewrites every plan with before the
+            plan's own: :attr:`robot_adaptations`, then :attr:`plan_adaptations`.
+        """
+        return [*self.robot_adaptations, *self.plan_adaptations]
 
     def default_executor_extensions(self) -> list[ExecutorExtension]:
         return []
@@ -362,7 +389,6 @@ class SimulatedPlanExecutor(PlanExecutor, StatechartExecutor):
     plan_adaptations: List[PlanTransformation] = field(
         default_factory=lambda: [
             WriteTheOdometryInsteadOfDriving(),
-            MoveStretchToolCenterPointInAStraightLine(),
             KeepStretchInFrontOfTheContainerItCloses(),
         ],
         kw_only=True,

@@ -105,12 +105,14 @@ executor = SimulatedPlanExecutor(
 ## Adapting a plan to its executor
 
 Every executor offers each node of a plan to its
-{attr}`~coraplex.plans.executors.PlanExecutor.plan_adaptations` before the transformations of the plan's own
+{attr}`~coraplex.plans.executors.PlanExecutor.robot_adaptations` (see below), then to its
+{attr}`~coraplex.plans.executors.PlanExecutor.plan_adaptations`, and then to the transformations of the plan's own
 {class}`~coraplex.plans.plan_transformation.PlanRewriting`:
 
 - {class}`~coraplex.plans.executors.SimulatedPlanExecutor` puts the base at its goal by writing the odometry
-  ({class}`~coraplex.robot_plans.plan_transformations.WriteTheOdometryInsteadOfDriving`) and keeps a Stretch in front
-  of the container it closes.
+  ({class}`~coraplex.robot_plans.plan_transformations.WriteTheOdometryInsteadOfDriving`), unless the robot drives
+  differentially, and keeps a Stretch in front of the container it closes. The trial of a candidate for an
+  underspecified action writes the odometry for a differentially driven robot too.
 - {class}`~coraplex.plans.executors.PhysicallySimulatedPlanExecutor` closes a grasp to the object's width
   ({class}`~coraplex.robot_plans.plan_transformations.CloseFingersToObjectWidth`) and lets contact carry a picked
   object ({class}`~coraplex.robot_plans.plan_transformations.LetContactCarryTheBodies`).
@@ -123,26 +125,23 @@ An executor is given other adaptations as `plan_adaptations=[...]`.
 
 Some robots need a different implementation of a motion. Such a robot gets a
 {class}`~coraplex.plans.plan_transformation.PlanTransformation` that replaces the goal an action builds once the
-action is expanded, and that applies only to its robot type:
+action is expanded, and that applies only to its robot type. Every executor applies these through its
+{attr}`~coraplex.plans.executors.PlanExecutor.robot_adaptations`, whichever executor it is:
 
 - {class}`~coraplex.robot_plans.robot_specific_plan_transformations.DriveStretchWithItsDifferentialDrive` and
   {class}`~coraplex.robot_plans.robot_specific_plan_transformations.DriveTiagoWithItsDifferentialDrive` drive the base with a
   {class}`~giskardpy.motion_statechart.goals.cartesian_goals.DifferentialDriveBaseGoal`, which arrives within the
   {attr}`~coraplex.robot_plans.actions.core.navigation.DrivesBase.base_pose_threshold` of the action.
-- {class}`~coraplex.robot_plans.robot_specific_plan_transformations.KeepStretchInFrontOfTheContainerItCloses` keeps a
-  kinematically simulated Stretch in front of the container it closes.
+- {class}`~coraplex.robot_plans.robot_specific_plan_transformations.MoveStretchToolCenterPointInAStraightLine` moves
+  the tool center point of a Stretch to each of its targets along a straight line.
+- {class}`~coraplex.robot_plans.robot_specific_plan_transformations.KeepTheTorsoUprightWhileUsingATool` keeps Justin's
+  torso upright while it moves a tool.
 
-Apart from an executor's own adaptations, a transformation takes effect only for a plan whose executor was given it:
-
-```python
-executor = RealRobotPlanExecutor(
-    world,
-    context_extensions=[
-        RobotAccess(robot),
-        PlanRewriting(transformations=[DriveStretchWithItsDifferentialDrive()]),
-    ],
-)
-```
+A robot-specific transformation that only one way of executing needs belongs to that executor's
+{attr}`~coraplex.plans.executors.PlanExecutor.plan_adaptations` instead, such as
+{class}`~coraplex.robot_plans.robot_specific_plan_transformations.KeepStretchInFrontOfTheContainerItCloses` for a
+kinematically simulated Stretch. An executor is given other robot adaptations as `robot_adaptations=[...]`; an empty
+list turns them off.
 
 A transformation replaces the goal an action runs with
 {meth}`~coraplex.robot_plans.actions.base.Action.replace_action_body`, or with

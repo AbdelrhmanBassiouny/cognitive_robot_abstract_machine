@@ -54,9 +54,6 @@ from coraplex.robot_plans.actions.core.robot_body import (
     SetGripperAction,
 )
 from coraplex.robot_plans.plan_transformations import DetectBeforeGrasp
-from coraplex.robot_plans.robot_specific_plan_transformations import (
-    DriveStretchWithItsDifferentialDrive,
-)
 from krrood.entity_query_language.factories import a
 from semantic_digital_twin.specifications.connections import Connection6DoFSpecification
 from semantic_digital_twin.specifications.kinematic_structure_entities import (
@@ -152,17 +149,11 @@ class StretchApartmentDemonstration(RobotDemonstration):
 
     def build_context_extensions(self, world: World) -> List[ContextExtension]:
         """
-        Give the plan the Stretch in ``world``, detecting an object before grasping it
-        and moving the way the Stretch needs to.
+        Give the plan the Stretch in ``world``, detecting an object before grasping it.
         """
         return [
             RobotAccess(world.get_semantic_annotations_by_type(self.used_robot)[0]),
-            PlanRewriting(
-                transformations=[
-                    DetectBeforeGrasp(),
-                    DriveStretchWithItsDifferentialDrive(),
-                ]
-            ),
+            PlanRewriting(transformations=[DetectBeforeGrasp()]),
         ]
 
     def build_statechart(self, context: StatechartContext) -> Statechart:

@@ -15,6 +15,9 @@ from coraplex.exceptions import NotAStatementNode
 from coraplex.plans.context_extensions import StatementGrounding
 from coraplex.plans.designator import DesignatorParameters
 from coraplex.plans.plan_transformation import PlanRewriting
+from coraplex.robot_plans.robot_specific_plan_transformations import (
+    DriveWithTheDifferentialDrive,
+)
 from coraplex.visualization import RvizVisualization
 from cramph.composites import (
     Attempt,
@@ -71,8 +74,9 @@ class ActionTrial:
 
     Trials never publish to a synchronizer and always run simulated, in an executor of
     :attr:`trial_executor_type` over the copy, with the context extensions of
-    :attr:`executor` rebound to the copy. While the executor is debugging, the copy is
-    shown in RViz under its own frame prefix and marker topic.
+    :attr:`executor` rebound to the copy, and the base put where a candidate drives it.
+    While the executor is debugging, the copy is shown in RViz under its own frame
+    prefix and marker topic.
     """
 
     executor: PlanExecutor
@@ -162,13 +166,20 @@ class ActionTrial:
         :param world: The copy a candidate is tried in.
         :return: An executor running a candidate in `world`, configured like
             :attr:`executor`, the robot and everything else its context extensions refer
-            to rebound to `world`, and showing `world` in RViz while it is debugging.
+            to rebound to `world`, and showing `world` in RViz while it is debugging. It
+            puts the base where a candidate drives it instead of driving it there, so a
+            robot driving differentially does not do so in a trial.
         """
         return self.trial_executor_type(
             world,
             context_extensions=[
                 world.rebind_world_entities(extension)
                 for extension in self.executor.context_extensions
+            ],
+            robot_adaptations=[
+                adaptation
+                for adaptation in self.executor.robot_adaptations
+                if not isinstance(adaptation, DriveWithTheDifferentialDrive)
             ],
             collision_avoidance=self.executor.collision_avoidance,
             extensions=self._trial_visualizations(),
