@@ -13,7 +13,9 @@ Done:
 
 Next:
 - tomsch420 re-review on cram2#742; open there: timeline-scene modelling.
-- submission.py thread stays open until the limits land in experiments/video (#429).
+- submission.py thread stays open until the limits land in experiments/video (#429; told on #429).
+- Bounds unification: its own SemDT PR off main; user to pick abstract lower/upper (recommended)
+  or corner-point fields; thread rwJTv open until that PR exists.
 - Fork threads await the user: AxisAlignedBox as Bounds, tuples, presentation library,
   Framing box, InsetStill/FootageScene names, test literals, SemDT depth/width, cache
   constants, LICENSE, voices str, Video vs Film.
