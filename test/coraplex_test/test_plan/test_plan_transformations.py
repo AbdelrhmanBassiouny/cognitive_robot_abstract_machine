@@ -661,7 +661,8 @@ def test_the_perception_precedes_the_final_approach_of_a_straight_reach(
 ):
     """
     A reach moving its tool center point in a straight line approaches the object with a
-    different goal, which still counts as its final approach.
+    different goal, which still counts as its final approach, also where the Stretch
+    runs the reach's steps beside the hold of its base.
     """
     world, view, extensions = stretch_apartment_context
     milk = world.get_semantic_annotations_by_type(Milk)[0]
@@ -673,7 +674,11 @@ def test_the_perception_precedes_the_final_approach_of_a_straight_reach(
         plan_transformations,
     )
 
-    assert kinds_of_the_steps_of(plan) == [
+    final_approach = [
+        node for node in plan.descendants if isinstance(node, CartesianPoseStraight)
+    ][-1]
+    steps = next(node for node in final_approach.path if isinstance(node, Sequence))
+    assert kinds_of_the_steps_of(steps) == [
         CartesianPoseStraight,
         LookAtAction,
         DetectAction,

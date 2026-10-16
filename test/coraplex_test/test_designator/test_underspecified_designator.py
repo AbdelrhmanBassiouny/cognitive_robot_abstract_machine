@@ -34,6 +34,7 @@ from coraplex.robot_plans.actions.core.pick_up import PickUpAction, ReachAction
 from coraplex.visualization import RvizVisualization
 from giskardpy.motion_statechart.goals.cartesian_goals import CartesianPoseStraight
 from giskardpy.motion_statechart.monitors.overwrite_state_monitors import SetOdometry
+from giskardpy.motion_statechart.tasks.cartesian_tasks import CartesianPose
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.robots.robot_parts import Arm
 from semantic_digital_twin.robots.stretch import Stretch
@@ -744,9 +745,13 @@ def test_a_trial_moves_the_tool_center_point_the_way_the_robot_does(
 
     trial_executor.prepare(statechart_of(trial_executor, reach))
 
-    assert [type(step.nodes[0]) for step in reach.action_body.nodes] == [
-        CartesianPoseStraight
-    ] * 2
+    tool_frame = reach.arm.end_effector.tool_frame
+    assert [
+        type(node)
+        for node in reach.descendants
+        if isinstance(node, (CartesianPose, CartesianPoseStraight))
+        and node.tip_link is tool_frame
+    ] == [CartesianPoseStraight] * 2
     trial.discard()
 
 

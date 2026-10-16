@@ -146,6 +146,17 @@ class Action(
         self.statechart.remove_node(replaced)
         self._run_as_action_body(node)
 
+    def _hand_over_place_of(
+        self, child: StatechartNode, successor: StatechartNode
+    ) -> None:
+        """
+        Runs `successor` as :attr:`action_body` in place of `child`, see
+        :meth:`~cramph.node.CompositeNode._hand_over_place_of`.
+        """
+        self._check_accepts_children()
+        self.nodes[self.nodes.index(child)] = successor
+        self._run_as_action_body(successor)
+
     def _run_as_action_body(self, node: StatechartNode) -> None:
         """
         Puts `node` below this action and ends it once it is at its goal, unless it

@@ -35,6 +35,7 @@ from coraplex.robot_plans.plan_transformations import (
 from coraplex.robot_plans.robot_specific_plan_transformations import (
     DriveStretchWithItsDifferentialDrive,
     DriveTiagoWithItsDifferentialDrive,
+    KeepStretchFromTurningWhileMovingItsTool,
     KeepStretchInFrontOfTheContainerItCloses,
     KeepTheTorsoUprightWhileUsingATool,
     MoveStretchToolCenterPointInAStraightLine,
@@ -149,6 +150,7 @@ class PlanExecutor(Executor, ABC):
             DriveStretchWithItsDifferentialDrive(),
             DriveTiagoWithItsDifferentialDrive(),
             MoveStretchToolCenterPointInAStraightLine(),
+            KeepStretchFromTurningWhileMovingItsTool(),
             KeepTheTorsoUprightWhileUsingATool(),
         ],
         kw_only=True,

@@ -1,23 +1,30 @@
 from __future__ import annotations
 
 from copy import deepcopy
+from dataclasses import dataclass, field
 
 import numpy as np
 import pytest
 from typing_extensions import List
 
 from coraplex.exceptions import ActionNotExpanded
-from coraplex.plans.executors import PlanExecutor
+from coraplex.plans.executors import PlanExecutor, SimulatedPlanExecutor
 from coraplex.robot_plans.actions.core.container import CloseAction
+from coraplex.robot_plans.actions.core.misc import MoveToReach
 from coraplex.robot_plans.actions.core.navigation import (
     DrivesBase,
     NavigateAction,
     PathPlanningNavigateAction,
 )
 from coraplex.robot_plans.actions.core.pick_up import PickUpAction, ReachAction
-from coraplex.robot_plans.actions.core.robot_body import MoveTorsoAction
+from coraplex.robot_plans.actions.core.robot_body import (
+    MoveManipulatorAction,
+    MoveTorsoAction,
+)
 from cramph.composites import Parallel, Sequence, StatementNode
+from cramph.data_types import LifeCycleValues
 from cramph.exceptions import StatechartAlreadyCompiledError
+from cramph.executor import StatechartExecutor, TickingExecutorExtension
 from cramph.node import StatechartNode
 from giskardpy.motion_statechart.goals.cartesian_goals import (
     CartesianPoseStraight,
@@ -31,6 +38,7 @@ from giskardpy.motion_statechart.tasks.cartesian_tasks import (
     CartesianPose,
     CartesianPosition,
     CartesianPositionStraight,
+    HoldOrientation,
 )
 from giskardpy.motion_statechart.tasks.joint_tasks import JointPositionList
 from krrood.entity_query_language.factories import a, variable_from
@@ -38,9 +46,14 @@ from semantic_digital_twin.datastructures.definitions import TorsoState
 from semantic_digital_twin.grasping.grasp_candidates import GraspCandidate
 from semantic_digital_twin.robots.robot_parts import AbstractRobot
 from semantic_digital_twin.robots.tiago import Tiago
-from semantic_digital_twin.semantic_annotations.semantic_annotations import Handle
-from semantic_digital_twin.spatial_types.spatial_types import Pose
+from semantic_digital_twin.semantic_annotations.semantic_annotations import (
+    Handle,
+    Milk,
+)
+from semantic_digital_twin.spatial_types import HomogeneousTransformationMatrix
+from semantic_digital_twin.spatial_types.spatial_types import Pose, Pose2D
 from semantic_digital_twin.world import World
+from semantic_digital_twin.world_description.world_entity import Body
 
 from ...plan_running import (
     expand,
@@ -49,6 +62,36 @@ from ...plan_running import (
     simulated_executor,
     statechart_of,
 )
+
+# %% recording a run
+
+
+@dataclass
+class OrientationWhileRunning(TickingExecutorExtension):
+    """
+    Records the orientation of a body after every tick in which a node is running.
+    """
+
+    body: Body = field(kw_only=True)
+    """
+    The body whose orientation is recorded.
+    """
+
+    node: StatechartNode | None = field(default=None, kw_only=True)
+    """
+    The node during whose run the orientation is recorded.
+    """
+
+    orientations: list[np.ndarray] = field(default_factory=list, init=False)
+    """
+    The rotation matrices of :attr:`body` relative to the world root, one per tick.
+    """
+
+    def after_tick(self, executor: StatechartExecutor) -> None:
+        if self.node.life_cycle_state != LifeCycleValues.RUNNING:
+            return
+        self.orientations.append(self.body.global_pose.to_np()[:3, :3])
+
 
 # %% preparing a plan for a robot
 
@@ -100,6 +143,18 @@ def assert_drives_differentially_to(
         robot.mobile_base.pose_facing(action.target_location).to_np(),
     )
     assert goal.goal_pose.reference_frame is action.target_location.reference_frame
+
+
+def steps_of(action: StatechartNode) -> StatechartNode:
+    """
+    :return: The node running the steps of an expanded action, which runs beside the
+        hold of the base's orientation where a plan transformation added one.
+    """
+    for hold in held_orientations_of(action):
+        holding = hold.parent_node
+        if action.action_body in (holding, holding.parent_node):
+            return holding.nodes[0]
+    return action.action_body
 
 
 # %% replacing the body of an action
@@ -181,6 +236,19 @@ def test_an_action_joining_a_compiled_statechart_runs_the_body_it_is_given_inste
 
     assert action.action_body is goal
     assert statechart.latest_compile_covers(goal)
+
+
+def test_an_expanded_action_runs_the_node_wrapping_its_body(pr2_apartment_context):
+    world, robot, extensions = pr2_apartment_context
+    action = expand(MoveTorsoAction(TorsoState.HIGH), extensions)
+    body = action.action_body
+    wrapper = Parallel([HoldOrientation(root_link=world.root, tip_link=robot.root)])
+
+    wrapper.wrap(body)
+
+    assert action.action_body is wrapper
+    assert wrapper.nodes[0] is body
+    assert body in action.statechart.nodes
 
 
 # %% driving a differential drive
@@ -391,7 +459,7 @@ def closing_step_of(action: CloseAction) -> StatechartNode:
     :return: The step of an expanded close action between grasping the handle and
         letting go of it.
     """
-    grasp, closing_step, release, back_off = action.action_body.nodes
+    grasp, closing_step, release, back_off = steps_of(action).nodes
     return closing_step
 
 
@@ -427,6 +495,20 @@ def test_a_simulated_stretch_stays_in_front_of_the_container_it_closes(
     assert close.goal_joint_state == default_close.goal_joint_state
 
 
+def test_a_stretch_closes_a_container_with_its_base_free_to_turn(
+    stretch_apartment_context,
+):
+    """
+    The drawer travels further than the arm reaches, so the base has to turn to follow
+    it, and a stand chosen for grasping the handle would not be one to close it from.
+    """
+    world, robot, extensions = stretch_apartment_context
+
+    action = prepared(close_action(world, robot), simulated_executor(extensions))
+
+    assert held_orientations_of(action) == []
+
+
 def test_the_real_stretch_closes_a_container_unchanged(stretch_apartment_context):
     world, robot, extensions = stretch_apartment_context
     executor = robot_executor(extensions)
@@ -460,14 +542,14 @@ def reaching_goals_of(action: ReachAction) -> List[StatechartNode]:
     :return: The goals of an expanded reach action bringing the tool center point to
         the pre-grasp pose and to the grasp pose.
     """
-    return [step.nodes[0] for step in action.action_body.nodes]
+    return [step.nodes[0] for step in steps_of(action).nodes]
 
 
 def lifting_goal_of(action: PickUpAction) -> StatechartNode:
     """
     :return: The goal of an expanded pick up action lifting the grasped object.
     """
-    grasp_attempt, lift = action.action_body.nodes
+    grasp_attempt, lift = steps_of(action).nodes
     return lift.nodes[0]
 
 
@@ -520,6 +602,152 @@ def test_stretch_lifts_in_a_straight_line(stretch_apartment_context, build_execu
     assert goal.tip_link is unchanged.tip_link
     np.testing.assert_allclose(goal.goal_point.to_np(), unchanged.goal_point.to_np())
     assert goal.threshold == unchanged.threshold
+
+
+def held_orientations_of(action: StatechartNode) -> List[HoldOrientation]:
+    """
+    :return: The tasks below `action` holding the orientation of a link.
+    """
+    return [node for node in action.descendants if type(node) is HoldOrientation]
+
+
+@pytest.mark.parametrize("build_executor", [simulated_executor, robot_executor])
+def test_stretch_holds_the_orientation_of_its_base_while_it_reaches(
+    stretch_apartment_context, build_executor
+):
+    world, robot, extensions = stretch_apartment_context
+
+    action = prepared(
+        ReachAction(grasp=handle_grasp(world), arm=robot.all_arms[0]),
+        build_executor(extensions),
+    )
+
+    positioning, holding = action.action_body.nodes
+    [hold] = held_orientations_of(action)
+    assert type(positioning) is NavigateAction
+    assert hold.parent_node is holding
+    assert hold.root_link is world.root
+    assert hold.tip_link is robot.root
+
+
+def test_stretch_holds_the_orientation_of_its_base_once_for_nested_tool_motions(
+    stretch_apartment_context,
+):
+    """
+    Picking up reaches first, and both move the tool center point; the hold of the
+    picking up already covers the reaching.
+    """
+    world, robot, extensions = stretch_apartment_context
+
+    action = prepared(
+        PickUpAction(grasp=handle_grasp(world), arm=robot.all_arms[0]),
+        simulated_executor(extensions),
+    )
+
+    positioning, holding = action.action_body.nodes
+    [hold] = held_orientations_of(action)
+    assert hold.parent_node is holding
+
+
+def test_stretch_holds_the_orientation_of_its_base_only_once_it_drove_there(
+    stretch_apartment_context,
+):
+    """
+    Moving to reach drives the base, which the held orientation would stop; the reach
+    after the drive is held instead.
+    """
+    world, robot, extensions = stretch_apartment_context
+
+    action = prepared(
+        MoveToReach(
+            target_pose_offset_robot=Pose2D(0.2, -0.55),
+            reference_T_grasp=Pose.from_xyz_rpy(
+                x=0.7, y=-1.3, z=0.9, reference_frame=world.root
+            ),
+            hip_rotation=0.0,
+            end_effector=robot.all_arms[0].end_effector,
+        ),
+        simulated_executor(extensions),
+    )
+
+    [hold] = held_orientations_of(action)
+    [reaching] = [
+        node for node in action.descendants if type(node) is MoveManipulatorAction
+    ]
+    assert hold in reaching.descendants
+
+
+def stretch_reaching_milk_from(
+    world: World, robot: AbstractRobot, extensions: List, root_T_base: Pose
+) -> tuple[ReachAction, OrientationWhileRunning]:
+    """
+    Puts the base of a Stretch at `root_T_base`, and reaches for the milk standing at a
+    fixed place in a simulation that records the orientation of the base while it is
+    held.
+
+    :return: The reach, which ran, and the recording.
+    """
+    milk = world.get_semantic_annotations_by_type(Milk)[0]
+    milk.root.parent_connection.origin = HomogeneousTransformationMatrix.from_xyz_rpy(
+        1, -2, 0.8, reference_frame=world.root
+    )
+    drive = robot.root.parent_connection
+    drive.origin = world.transform(root_T_base, drive.parent).homogeneous_matrix
+    recording = OrientationWhileRunning(body=robot.root)
+    executor = SimulatedPlanExecutor(
+        world, context_extensions=extensions, extensions=[recording]
+    )
+    action = ReachAction(
+        grasp=GraspCandidate(milk, Pose(reference_frame=milk.root)),
+        arm=robot.all_arms[0],
+    )
+    executor.compile(statechart_of(executor, action))
+    [recording.node] = held_orientations_of(action)
+    executor.execute()
+    return action, recording
+
+
+@pytest.mark.parametrize(
+    "root_T_base",
+    [
+        Pose.from_xyz_rpy(0.4, -2.3, 0),
+        Pose.from_xyz_rpy(-1.0, -0.8, 0, yaw=2.0),
+    ],
+    ids=["nearby with the arm turned away", "far away"],
+)
+def test_a_simulated_stretch_reaches_without_turning_its_base(
+    stretch_apartment_context, root_T_base
+):
+    """
+    The base drives to where its arm reaches the milk first, and keeps its heading while
+    it reaches.
+    """
+    world, robot, extensions = stretch_apartment_context
+    root_T_base.reference_frame = world.root
+
+    action, recording = stretch_reaching_milk_from(
+        world, robot, extensions, root_T_base
+    )
+
+    assert action.life_cycle_state == LifeCycleValues.SUCCEEDED
+    np.testing.assert_allclose(
+        recording.orientations,
+        [recording.orientations[0]] * len(recording.orientations),
+        atol=1e-2,
+    )
+
+
+def test_a_robot_of_another_type_reaches_without_its_base_orientation_held(
+    pr2_apartment_context,
+):
+    world, robot, extensions = pr2_apartment_context
+
+    action = prepared(
+        ReachAction(grasp=handle_grasp(world), arm=robot.all_arms[0]),
+        simulated_executor(extensions),
+    )
+
+    assert held_orientations_of(action) == []
 
 
 def test_a_robot_of_another_type_reaches_unchanged(pr2_apartment_context):
