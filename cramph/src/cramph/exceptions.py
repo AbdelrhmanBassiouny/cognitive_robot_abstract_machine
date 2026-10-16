@@ -756,6 +756,31 @@ class NotRunByLanguageNodeError(NodeInitializationError):
 
 
 @dataclass
+class NotHeldByLanguageNodeError(NodeInitializationError):
+    """
+    Raised when another node is to take the place of a node whose parent is not a plan
+    language node, which leaves nothing that could run the other node in its place.
+    """
+
+    parent: StatechartNode
+    """
+    The parent of the node.
+    """
+
+    def error_message(self) -> str:
+        return (
+            f"{self.parent.name} holds {self.node.name}, and is no plan language node "
+            f"that could run another node in its place."
+        )
+
+    def suggest_correction(self) -> str:
+        return (
+            f"Take the place of the node a plan language node runs above "
+            f"{self.node.name}."
+        )
+
+
+@dataclass
 class RemovedNodeStillReferencedError(StatechartError):
     """
     Raised when a node is removed from a statechart while a node that stays still refers

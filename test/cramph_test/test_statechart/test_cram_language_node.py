@@ -14,8 +14,11 @@ from cramph.composites import (
 from cramph.data_types import LifeCycleValues, ObservationStateValues
 from cramph.exceptions import (
     NodeAlreadyAChildError,
+    NodeAlreadyBelongsToDifferentNodeError,
     NodeIsNotAChildError,
+    NotHeldByLanguageNodeError,
     NotRunByLanguageNodeError,
+    StatechartAlreadyCompiledError,
 )
 from cramph.executor import StatechartExecutor
 from cramph.node import EndStatechart, StatechartNode
@@ -267,6 +270,113 @@ def test_a_node_no_language_node_runs_has_none_running_it(
 
     with pytest.raises(NotRunByLanguageNodeError):
         CramLanguageNode.running(top_level)
+
+
+# %% a language node taking the place of another node
+
+
+def test_a_node_taking_the_place_of_a_step_runs_it_where_the_step_ran(
+    statechart_executor: StatechartExecutor,
+):
+    statechart = Statechart(context=statechart_executor.context)
+    first, second, third = _succeeding("1"), _succeeding("2"), _succeeding("3")
+    statechart.add_node(sequence := Sequence(nodes=[first, third]))
+    wrapper = Sequence(nodes=[second, third])
+
+    wrapper.take_place_of(third)
+    _run(statechart_executor, statechart, sequence)
+
+    assert sequence.nodes == [first, wrapper]
+    assert third.parent_node is wrapper
+    assert _start_order(statechart, [third, second, first]) == [first, second, third]
+    assert sequence.life_cycle_state == LifeCycleValues.SUCCEEDED
+
+
+def test_a_node_taking_the_place_of_a_top_level_node_runs_on_the_top_level(
+    statechart_executor: StatechartExecutor,
+):
+    statechart = Statechart(context=statechart_executor.context)
+    first, top_level = _succeeding("1"), _succeeding("top level")
+    statechart.add_node(top_level)
+    wrapper = Sequence(nodes=[first, top_level])
+
+    wrapper.take_place_of(top_level)
+    _run(statechart_executor, statechart, wrapper)
+
+    assert statechart.top_level_nodes[0] is wrapper
+    assert top_level.parent_node is wrapper
+    assert _start_order(statechart, [top_level, first]) == [first, top_level]
+
+
+def test_a_step_moved_into_a_parallel_is_no_longer_ended_at_its_goal(
+    statechart_executor: StatechartExecutor,
+):
+    """
+    A sequence ends a step at its goal, which a parallel never does, so the step keeps
+    nothing of how the sequence ran it.
+    """
+    statechart = Statechart(context=statechart_executor.context)
+    at_goal = NodeObservingAFixedValue(observation=ObservationStateValues.TRUE)
+    statechart.add_node(Sequence(nodes=[at_goal]))
+    not_at_goal = NodeObservingAFixedValue(observation=ObservationStateValues.FALSE)
+
+    Parallel(nodes=[at_goal, not_at_goal]).take_place_of(at_goal)
+    statechart_executor.compile(statechart)
+    statechart_executor.tick()
+    statechart_executor.tick()
+
+    assert at_goal.life_cycle_state == LifeCycleValues.RUNNING
+
+
+def test_a_node_that_failed_to_take_a_place_leaves_the_step_where_it_was(
+    statechart_executor: StatechartExecutor,
+):
+    statechart = Statechart(context=statechart_executor.context)
+    first, second = _succeeding("1"), _succeeding("2")
+    statechart.add_node(sequence := Sequence(nodes=[first, second]))
+    wrapper = Sequence(nodes=[first, second])
+
+    with pytest.raises(NodeAlreadyBelongsToDifferentNodeError):
+        wrapper.take_place_of(second)
+    _run(statechart_executor, statechart, sequence)
+
+    assert not wrapper.belongs_to_statechart()
+    assert sequence.nodes == [first, second]
+    assert second.parent_node is sequence
+    assert _start_order(statechart, [second, first]) == [first, second]
+
+
+def test_only_a_node_a_language_node_holds_can_hand_over_its_place(
+    statechart_executor: StatechartExecutor,
+):
+    statechart = Statechart(context=statechart_executor.context)
+    nested = _succeeding("nested")
+    attempt = Attempt(name="attempt", task=nested, failure_monitors=[ConstFalseNode()])
+    statechart.add_node(attempt)
+
+    with pytest.raises(NotHeldByLanguageNodeError) as raised:
+        Sequence(nodes=[_succeeding("1"), nested]).take_place_of(nested)
+
+    assert raised.value.node is nested
+
+
+def test_a_node_takes_only_the_place_of_a_node_it_runs(
+    statechart_executor: StatechartExecutor,
+):
+    statechart = Statechart(context=statechart_executor.context)
+    statechart.add_node(top_level := _succeeding("top level"))
+
+    with pytest.raises(NodeIsNotAChildError):
+        Sequence(nodes=[_succeeding("1")]).take_place_of(top_level)
+
+
+def test_a_compiled_node_keeps_its_place(statechart_executor: StatechartExecutor):
+    statechart = Statechart(context=statechart_executor.context)
+    statechart.add_node(top_level := _succeeding("top level"))
+    statechart_executor.compile(statechart)
+
+    with pytest.raises(StatechartAlreadyCompiledError):
+        Sequence(nodes=[_succeeding("1"), top_level]).take_place_of(top_level)
 
 
 # %% misuse

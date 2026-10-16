@@ -1179,6 +1179,64 @@ class RecompileCallback(ABC):
 
 
 @dataclass
+class TakenOverNode:
+    """
+    A node another composite node took the place of, with what it had before, so that
+    a modification that fails afterwards can put it back.
+    """
+
+    node: StatechartNode
+    """
+    The node whose place was taken.
+    """
+
+    new_parent: CompositeNode
+    """
+    The composite node that took its place and became its parent.
+    """
+
+    former_parent: CompositeNode | None
+    """
+    The parent the node had, or None for a top-level node.
+    """
+
+    former_conditions: dict[TransitionKind, sm.Scalar]
+    """
+    The transitions the former parent decided for the node, as they were.
+    """
+
+    @classmethod
+    def before_taking_over(
+        cls, node: StatechartNode, new_parent: CompositeNode
+    ) -> TakenOverNode:
+        """
+        :param node: The node whose place `new_parent` is about to take.
+        :param new_parent: The composite node about to take it.
+        :return: The node as it is now.
+        """
+        return cls(
+            node=node,
+            new_parent=new_parent,
+            former_parent=node.parent_node,
+            former_conditions={
+                transition_kind: node.get_condition(transition_kind)
+                for transition_kind in new_parent._transitions_owned_by_parent()
+            },
+        )
+
+    def put_back(self) -> None:
+        """
+        Gives the node its former parent, its place among that parent's nodes, and the
+        transitions that parent decided for it.
+        """
+        self.node.parent_node = self.former_parent
+        for transition_kind, condition in self.former_conditions.items():
+            self.node.set_condition(transition_kind, condition)
+        if self.former_parent is not None:
+            self.former_parent.list_in_place_of(self.new_parent, self.node)
+
+
+@dataclass
 class StatechartModification:
     """
     Batches changes to a statechart, so that a compiled statechart compiles again only
@@ -1198,8 +1256,15 @@ class StatechartModification:
     How many nodes the statechart held when this modification started.
     """
 
+    _taken_over_count_at_start: int = field(init=False, default=0)
+    """
+    How many nodes had their place taken in the open modifications when this one
+    started.
+    """
+
     def __enter__(self) -> Self:
         self._node_count_at_start = len(self.statechart.nodes)
+        self._taken_over_count_at_start = len(self.statechart._taken_over_nodes)
         self.statechart._open_modifications += 1
         return self
 
@@ -1207,7 +1272,10 @@ class StatechartModification:
         statechart = self.statechart
         statechart._open_modifications -= 1
         if exception is not None:
+            statechart._put_back_taken_over_nodes_from(self._taken_over_count_at_start)
             statechart._drop_nodes_from(self._node_count_at_start)
+        if statechart._open_modifications == 0:
+            statechart._taken_over_nodes.clear()
         if statechart._open_modifications > 0 or not statechart.is_compiled:
             return
         if not statechart._changed_since_compile:
@@ -1337,6 +1405,13 @@ class Statechart(SubclassJSONSerializer):
     _open_modifications: int = field(default=0, init=False, repr=False)
     """
     How many :class:`StatechartModification` blocks are open on this statechart.
+    """
+
+    _taken_over_nodes: List[TakenOverNode] = field(
+        default_factory=list, init=False, repr=False
+    )
+    """
+    The nodes another node took the place of in the open modifications, in order.
     """
 
     _recompile_callbacks: List[RecompileCallback] = field(
@@ -1557,12 +1632,51 @@ class Statechart(SubclassJSONSerializer):
             if isinstance(node, CompositeNode):
                 self._expand(node)
 
+    def add_node_above(self, node: StatechartNode, new_parent: CompositeNode) -> None:
+        """
+        Adds `new_parent` to the statechart in the place of `node`, which becomes its
+        child: `new_parent` gets the parent `node` had, or joins the top level if `node`
+        was on it.
+
+        :param node: A node of this statechart, held by its parent among its nodes.
+        :param new_parent: A composite node outside any statechart that runs `node`.
+        :raises NotInStatechartError: If `node` does not belong to this statechart.
+        :raises StatechartAlreadyCompiledError: If the latest compile covers `node`.
+        """
+        if node._statechart is not self:
+            raise NotInStatechartError(name=node.name)
+        if self.is_compiled and self.latest_compile_covers(node):
+            raise StatechartAlreadyCompiledError()
+        with self.modify():
+            self._register_node(new_parent)
+            self._taken_over_nodes.append(
+                TakenOverNode.before_taking_over(node, new_parent)
+            )
+            former_parent = node.parent_node
+            new_parent.parent_node = former_parent
+            if former_parent is not None:
+                former_parent.list_in_place_of(node, new_parent)
+            new_parent.take_over(node)
+            self._expand(new_parent)
+
     def latest_compile_covers(self, node: StatechartNode) -> bool:
         """
         :param node: A node of this statechart.
         :return: Whether the latest compile covered `node`, which fixed its wiring.
         """
         return node.index < self._compiled_node_count
+
+    def _put_back_taken_over_nodes_from(self, first_put_back: int) -> None:
+        """
+        Puts back every node whose place was taken from `first_put_back` on, the latest
+        first.
+
+        :param first_put_back: The position of the first record to undo in
+            :attr:`_taken_over_nodes`.
+        """
+        for taken_over in reversed(self._taken_over_nodes[first_put_back:]):
+            taken_over.put_back()
+        del self._taken_over_nodes[first_put_back:]
 
     def _drop_nodes_from(self, first_dropped_index: int) -> None:
         """

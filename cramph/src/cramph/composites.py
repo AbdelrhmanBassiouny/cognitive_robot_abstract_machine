@@ -26,6 +26,7 @@ from cramph.exceptions import (
     ChildCannotFailError,
     NodeAlreadyAChildError,
     NodeIsNotAChildError,
+    NotHeldByLanguageNodeError,
 )
 from cramph.node import (
     CancelStatechart,
@@ -303,6 +304,31 @@ class CramLanguageNode(CompositeNode, ABC):  # ControlStructureNode?
         self._place_child_in_statechart(node)
         self._wire_children()
         self.statechart.remove_node(replaced)
+
+    def take_place_of(self, node: StatechartNode) -> None:
+        """
+        Runs this node where `node` ran, with `node` as one of the nodes this node runs:
+        the plan language node that held `node` holds this node instead, and a top-level
+        `node` leaves the top level to it.
+
+        :param node: A node of a statechart, held by a plan language node or on the top
+            level, and one of :attr:`nodes`.
+        :raises NodeIsNotAChildError: If this node does not run `node`.
+        :raises NotHeldByLanguageNodeError: If a node other than a plan language node
+            holds `node`.
+        :raises StatechartAlreadyCompiledError: If the latest compile covers `node`.
+        """
+        if not self._runs(node):
+            raise NodeIsNotAChildError(node=self, child=node)
+        holder = node.parent_node
+        if holder is None:
+            node.statechart.add_node_above(node, self)
+            return
+        if not isinstance(holder, CramLanguageNode):
+            raise NotHeldByLanguageNodeError(node=node, parent=holder)
+        with node.statechart.modify():
+            node.statechart.add_node_above(node, self)
+            holder._wire_children()
 
     @staticmethod
     def running(node: StatechartNode) -> CramLanguageNode:

@@ -2222,19 +2222,52 @@ class CompositeNode(StatechartNode):
         :raises ChildTransitionAlreadyWiredError: If one of the child's transitions is
             no longer the one it was constructed with.
         """
-        wired_by_default = {
+        for transition_kind, default in self._transitions_owned_by_parent().items():
+            condition = node.get_condition(transition_kind)
+            if str(condition) != str(default):
+                raise ChildTransitionAlreadyWiredError(
+                    node=self, child=node, transition_kind=transition_kind
+                )
+
+    @staticmethod
+    def _transitions_owned_by_parent() -> dict[TransitionKind, Scalar]:
+        """
+        :return: The transitions a composite node decides for its children, each with
+            the condition a node is constructed with.
+        """
+        return {
             TransitionKind.START: Scalar.const_true(),
             TransitionKind.PAUSE: Scalar.const_false(),
             TransitionKind.SUCCEED: Scalar.const_false(),
             TransitionKind.INTERRUPT: Scalar.const_false(),
             TransitionKind.RESET: Scalar.const_false(),
         }
-        for transition_kind, default in wired_by_default.items():
-            condition = node.get_condition(transition_kind)
-            if str(condition) != str(default):
-                raise ChildTransitionAlreadyWiredError(
-                    node=self, child=node, transition_kind=transition_kind
-                )
+
+    def list_in_place_of(
+        self, child: StatechartNode, substitute: StatechartNode
+    ) -> None:
+        """
+        Lists `substitute` among :attr:`nodes` where `child` itself is listed, leaving
+        the statechart as it is.
+
+        :param child: One of :attr:`nodes`.
+        :param substitute: The node to list in its place.
+        """
+        position = next(
+            index for index, listed in enumerate(self.nodes) if listed is child
+        )
+        self.nodes[position] = substitute
+
+    def take_over(self, node: StatechartNode) -> None:
+        """
+        Becomes the parent of `node`, which forgets the transitions its former parent
+        decided for it, so that this node decides them anew.
+
+        :param node: A node of the statechart this node belongs to.
+        """
+        for transition_kind, default in self._transitions_owned_by_parent().items():
+            node.set_condition(transition_kind, default)
+        node.parent_node = self
 
     def _succeed_at_its_goal(self, child: StatechartNode) -> None:
         """
