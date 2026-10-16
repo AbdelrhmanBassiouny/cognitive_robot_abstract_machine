@@ -1741,7 +1741,7 @@ def test_a_gripper_closes_at_its_grasp_although_the_other_arm_is_moving(
     cup_for_each_arm: CupForEachArm,
 ):
     run_plan(
-        Sequence([Parallel(cup_for_each_arm.pick_ups)]),
+        Parallel(cup_for_each_arm.pick_ups),
         cup_for_each_arm.extensions_parking_first(),
     )
 

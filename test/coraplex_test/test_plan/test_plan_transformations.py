@@ -8,7 +8,6 @@ from typing_extensions import Callable, Iterable, List, Optional
 from coraplex.datastructures.enums import InsertionPosition, ReachFraction
 from coraplex.exceptions import (
     CannotMatchOnType,
-    FirstActionNotRunInSequence,
     ReachHasNoFinalApproach,
 )
 from coraplex.plans.plan_transformation import (
@@ -119,6 +118,22 @@ def rewritten(
     )
     executor.prepare(statechart_of(executor, plan))
     return plan
+
+
+def prepared_plan_nodes(
+    plan: StatechartNode,
+    extensions: List[ContextExtension],
+    plan_transformations: Iterable[PlanTransformation],
+) -> List[StatechartNode]:
+    """
+    :return: The nodes the plan runs on the top level once the statechart running
+        `plan` is prepared, which rewrites it with `plan_transformations`.
+    """
+    executor = simulated_executor(
+        [*extensions, PlanRewriting(transformations=list(plan_transformations))]
+    )
+    executor.prepare(statechart_of(executor, plan))
+    return executor.plan_nodes
 
 
 def steps_of(node: StatechartNode) -> List[StatechartNode]:
@@ -1073,19 +1088,22 @@ def test_parking_ends_before_a_first_action_running_in_parallel_starts(
     assert in_parallel.nodes == started_together
 
 
-def test_parking_needs_a_sequence_to_run_before_the_first_action(
-    pr2_apartment_context,
-):
+def test_parking_ends_before_a_plan_that_starts_in_parallel(pr2_apartment_context):
     world, view, extensions = pr2_apartment_context
-    torso_move = MoveTorsoAction(TorsoState.HIGH)
-    plan = Parallel(
-        [torso_move, SetGripperAction(view.right_arm.end_effector, GripperState.OPEN)]
+    in_parallel = Parallel(
+        [
+            MoveTorsoAction(TorsoState.HIGH),
+            SetGripperAction(view.right_arm.end_effector, GripperState.OPEN),
+        ]
     )
 
-    with pytest.raises(FirstActionNotRunInSequence) as raised:
-        rewritten(plan, extensions, [ParkArmsBeforeFirstAction()])
+    [plan_node] = prepared_plan_nodes(
+        in_parallel, extensions, [ParkArmsBeforeFirstAction()]
+    )
 
-    assert raised.value.plan_node is torso_move
+    [parking, running_in_parallel] = steps_of(plan_node)
+    assert isinstance(parking, ParkArmsAction)
+    assert running_in_parallel is in_parallel
 
 
 def underspecified_move_and_pick_up_in(plan: StatechartNode) -> StatementNode:
@@ -1329,22 +1347,6 @@ class MoveLeftGripperAlongsideTorso(ParallelInsertion[MoveTorsoAction]):
 
     def nodes_to_insert(self, plan_node: MoveTorsoAction) -> List[StatechartNode]:
         return [gripper_goal(plan_node.robot.left_arm.end_effector, GripperState.OPEN)]
-
-
-def prepared_plan_nodes(
-    plan: StatechartNode,
-    extensions: List[ContextExtension],
-    plan_transformations: Iterable[PlanTransformation],
-) -> List[StatechartNode]:
-    """
-    :return: The nodes the plan runs on the top level once the statechart running
-        `plan` is prepared, which rewrites it with `plan_transformations`.
-    """
-    executor = simulated_executor(
-        [*extensions, PlanRewriting(transformations=list(plan_transformations))]
-    )
-    executor.prepare(statechart_of(executor, plan))
-    return executor.plan_nodes
 
 
 def test_a_node_inserted_before_one_running_in_parallel_runs_right_before_it(

@@ -11,7 +11,6 @@ from coraplex.datastructures.enums import (
     PerceptionSource,
 )
 from coraplex.exceptions import (
-    FirstActionNotRunInSequence,
     GraspHasNoClosingGoal,
     ReachHasNoFinalApproach,
 )
@@ -411,14 +410,15 @@ class ParkArmsBeforeFirstAction(SequentialInsertion[Action]):
     def anchor(self, plan_node: Action) -> StatechartNode:
         """
         :return: The node that holds `plan_node` as a step of the nearest
-            :class:`~cramph.composites.Sequence` above it, so the parking ends before
-            anything running alongside `plan_node` starts.
-        :raises FirstActionNotRunInSequence: If no sequence runs `plan_node`.
+            :class:`~cramph.composites.Sequence` above it, or the plan itself when no
+            sequence runs `plan_node`, so the parking ends before anything running
+            alongside `plan_node` starts.
         """
-        for holder in [plan_node, *plan_node.path]:
-            if isinstance(holder.parent_node, Sequence):
-                return holder
-        raise FirstActionNotRunInSequence(plan_node=plan_node)
+        holders = [plan_node, *plan_node.path]
+        return next(
+            (holder for holder in holders if isinstance(holder.parent_node, Sequence)),
+            holders[-1],
+        )
 
     def nodes_to_insert(self, plan_node: Action) -> List[StatechartNode]:
         return [ParkArmsAction(plan_node.robot.all_arms)]
