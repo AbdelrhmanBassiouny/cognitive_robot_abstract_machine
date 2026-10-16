@@ -1,10 +1,10 @@
 basstler-plugin-spike, draft #516 (record only, never merges), base main. Item done.
 
 Plan:
-- Probe whether a cloud session loads a settings.json-enabled plugin. Finished.
+- Find a route by which cloud sessions load basstler as a plugin. Finished.
 
 Done:
-- Result: fail. The cloud session installed nothing, as the docs say. The local CLI install works. Recorded on #516, the manifest (spike + two dependents) and tracking issue #102.
+- Pass via claude.ai account plugins (user-started session: skill + start hook loaded). Repo routes fail (untrusted clone). Recorded on #516, manifest (spike + two dependents), #102.
 
 Next:
-- Nothing on this branch. Closing #516 is the user's call.
+- Nothing on this branch. The user removes basstler-spike from claude.ai and decides on closing #516.
