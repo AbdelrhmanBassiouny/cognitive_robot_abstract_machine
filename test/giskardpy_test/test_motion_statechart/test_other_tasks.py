@@ -1,6 +1,7 @@
 from math import radians
 
 import numpy as np
+import pytest
 
 from giskardpy.motion_statechart.data_types import DefaultWeights
 from cramph.data_types import LifeCycleValues, ObservationStateValues
@@ -19,7 +20,8 @@ from giskardpy.motion_statechart.tasks.align_planes import AlignPlanes
 from giskardpy.motion_statechart.tasks.cartesian_tasks import (
     CartesianPose,
 )
-from giskardpy.motion_statechart.tasks.joint_tasks import JointPositionList
+from giskardpy.motion_statechart.binding_policy import GoalBindingPolicy
+from giskardpy.motion_statechart.tasks.joint_tasks import JointPositionList, JointState
 from giskardpy.motion_statechart.tasks.feature_functions import (
     AngleGoal,
     AlignPerpendicular,
@@ -49,6 +51,8 @@ from semantic_digital_twin.spatial_types import (
     Point3,
 )
 from semantic_digital_twin.world import World
+from semantic_digital_twin.world_description.connections import PrismaticConnection
+from semantic_digital_twin.world_description.world_entity import Body
 from semantic_digital_twin.world_description.degree_of_freedom import (
     DegreeOfFreedomLimits,
 )
@@ -708,6 +712,65 @@ def test_pointing_aims_the_offset_away_from_the_goal_as_the_root_link_stands(
     head_to_aim = world_P_aim - head_pose[:3, 3]
     angle = np.arccos(
         np.dot(head_pose[:3, 0], head_to_aim) / np.linalg.norm(head_to_aim)
+    )
+    assert angle <= pointing.threshold
+
+
+def test_pointing_follows_a_goal_frame_that_moves_while_it_runs(
+    pr2_world_copy: World,
+):
+    """
+    A goal bound on every tick follows its frame, and the frame stays out of what the
+    pointing optimises, so the joint moving the frame still reaches its own goal.
+    """
+    world = pr2_world_copy
+    base = world.get_kinematic_structure_entity_by_name("base_link")
+    head = world.get_kinematic_structure_entity_by_name("head_tilt_link")
+    with world.modify_world():
+        region = Body(name=PrefixedName("region"))
+        world.add_kinematic_structure_entity(region)
+        region_joint = PrismaticConnection.create_with_dofs(
+            world=world,
+            parent=world.root,
+            child=region,
+            parent_T_connection_expression=HomogeneousTransformationMatrix.from_xyz_rpy(
+                2, 0, 1, reference_frame=world.root
+            ),
+            axis=Vector3.Y(),
+            dof_limits=DegreeOfFreedomLimits.from_position_range_and_speed(
+                lower_position=-1.0, upper_position=1.0, maximum_speed=0.5
+            ),
+        )
+        world.add_connection(region_joint)
+
+    kin_sim = StatechartExecutor(
+        context=StatechartContext(world=world),
+        extensions=[MotionControl()],
+    )
+    msc = Statechart(context=kin_sim.context)
+    pointing = Pointing(
+        root_link=base,
+        tip_link=head,
+        goal_point=Point3(reference_frame=region),
+        pointing_axis=Vector3.X(reference_frame=head),
+        binding_policy=GoalBindingPolicy.Bind_on_tick,
+    )
+    region_goal = JointPositionList(
+        goal_state=JointState.from_mapping({region_joint: 0.8})
+    )
+    msc.add_node(both := Parallel([pointing, region_goal]))
+    end = EndMotion()
+    end.start_condition = both.observes_true
+    msc.add_node(end)
+    kin_sim.compile(statechart=msc)
+
+    kin_sim.tick_until_end()
+
+    assert region_joint.position == pytest.approx(0.8, abs=region_goal.threshold)
+    head_pose = head.global_pose.to_np()
+    head_to_region = region.global_pose.to_np()[:3, 3] - head_pose[:3, 3]
+    angle = np.arccos(
+        np.dot(head_pose[:3, 0], head_to_region) / np.linalg.norm(head_to_region)
     )
     assert angle <= pointing.threshold
 

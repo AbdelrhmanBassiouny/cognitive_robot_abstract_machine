@@ -19,6 +19,13 @@ class GoalBindingPolicy(Enum):
     """Forward kinematics is only computed once at build time."""
     Bind_on_start = 2
     """Forward kinematics is computed during on_start of the MotionStatechartNode."""
+    Bind_on_tick = 3
+    """
+    Forward kinematics is computed during on_start and every on_tick of the
+    MotionStatechartNode, so the goal follows its reference frame while the node runs.
+    The bound transform stays out of what the controller optimises, so a goal frame
+    moved by another task is followed rather than pulled along.
+    """
 
 
 @dataclass
