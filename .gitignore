@@ -194,3 +194,6 @@ basstler/board.json
 # Local data produced by the Python coverage checks.
 /.coverage
 /.coverage.*
+
+# Some robokudo annotators have default models downloaded
+robokudo/src/robokudo/models/

@@ -38,7 +38,8 @@ dependencies = [
     "krrood",
     "semantic_digital_twin",
     "transformers",
-    "faiss-cpu"
+    "faiss-cpu",
+    "ultralytics"
 ]
 
 [project.urls]
@@ -62,4 +63,5 @@ workspace = [
 dev = [
     "pytest>=7.0.0,<8.0.0",
     "torch",
+    "ultralytics",
 ]

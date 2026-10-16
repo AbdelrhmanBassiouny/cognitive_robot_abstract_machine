@@ -43,6 +43,9 @@ from probabilistic_model.probabilistic_circuit.tensorized.layer_with_depth impor
 from probabilistic_model.probabilistic_circuit.tensorized.moment_query import (
     MomentQuery,
 )
+from probabilistic_model.probabilistic_circuit.tensorized.node_component_supports import (
+    NodeComponentSupports,
+)
 from probabilistic_model.probabilistic_circuit.tensorized.stacked_copies import (
     StackedLayer,
 )
@@ -61,9 +64,9 @@ class Layer(SubclassJSONSerializer, ABC):
     """
     Abstract base class for the layers of a layered probabilistic circuit.
 
-    A layer groups nodes that have the same scope and stores their parameters in
-    arrays, so that every query is evaluated for all nodes of the layer at once.
-    Variables are referred to by their index in the variables of the circuit.
+    A layer groups nodes that have the same scope and stores their parameters in arrays,
+    so that every query is evaluated for all nodes of the layer at once. Variables are
+    referred to by their index in the variables of the circuit.
     """
 
     # %% structure
@@ -137,9 +140,9 @@ class Layer(SubclassJSONSerializer, ABC):
         Append the layers of the circuit rooted here to ``result``, every layer after
         all of its descendants and each exactly once.
 
-        Reversed, this order has every layer after all of its parents, which a
-        breadth-first or a pre-order traversal does not guarantee for a layer that
-        several parents share.
+        Reversed, this order has every layer after all of its parents, which a breadth-
+        first or a pre-order traversal does not guarantee for a layer that several
+        parents share.
 
         :param result: The list to append to.
         :param visited: The ids of the layers already visited.
@@ -163,6 +166,35 @@ class Layer(SubclassJSONSerializer, ABC):
         return result
 
     # %% queries
+
+    @property
+    def log_normalization_constants(self) -> NodeValues:
+        """
+        :return: Zero for every node, shape (#nodes,), since a layer without weights
+            has nothing to normalize. A layer that mixes answers what each node's
+            weights sum to.
+        """
+        return np.zeros(self.number_of_nodes)
+
+    def nodes_with_components(self) -> NodeMask:
+        """
+        :return: One flag per node of this layer, all unset, since a layer that does
+            not mix has no node that mixes. A layer that mixes sets the flag of every
+            node that does.
+        """
+        return np.zeros(self.number_of_nodes, dtype=bool)
+
+    def component_supports(
+        self, variables: SortedSet, cache: Optional[QueryCache] = None
+    ) -> List[NodeComponentSupports]:
+        """
+        :param variables: The variables of the circuit.
+        :param cache: The shared cache of the current pass.
+        :return: No components for any node of this layer, since a layer that does not
+            mix has none to describe. A layer that mixes answers what every component of
+            every node models.
+        """
+        return [NodeComponentSupports(node, []) for node in range(self.number_of_nodes)]
 
     @abstractmethod
     def log_likelihood_of_nodes(
@@ -325,8 +357,8 @@ class Layer(SubclassJSONSerializer, ABC):
         :meth:`prune` pass.
 
         :param event: The simple event to truncate to.
-        :param query: The arguments of the truncation, which records the
-            log-probabilities of the new layers.
+        :param query: The arguments of the truncation, which records the log-
+            probabilities of the new layers.
         :param cache: The shared cache of the current query.
         :return: The truncated layer and the log-probabilities of its nodes.
         """
@@ -386,8 +418,8 @@ class Layer(SubclassJSONSerializer, ABC):
         See :meth:`log_truncated_of_simple_event` for the contract of the result.
 
         :param point: The partial point.
-        :param query: The arguments of the conditioning, which records the
-            log-probabilities of the new layers.
+        :param query: The arguments of the conditioning, which records the log-
+            probabilities of the new layers.
         :param cache: The shared cache of the current query.
         :return: The conditioned layer and the log-probabilities of its nodes.
         """
@@ -425,8 +457,8 @@ class Layer(SubclassJSONSerializer, ABC):
         """
         Remove every impossible and every unreachable node of the circuit rooted here.
 
-        The pass first propagates liveness downwards, parents before children, so that
-        a layer shared by several parents is pruned once against the union of what its
+        The pass first propagates liveness downwards, parents before children, so that a
+        layer shared by several parents is pruned once against the union of what its
         parents need, and then rebuilds the layers bottom-up.
 
         :param log_probabilities: The log-probabilities of the structural query that

@@ -21,9 +21,12 @@ from typing_extensions import (
 from probabilistic_model.probabilistic_circuit.tensorized.array_types import (
     DenseEdgeValues,
 )
+from probabilistic_model.probabilistic_circuit.probabilistic_circuit_representation import (
+    NodeType,
+    ProbabilisticCircuitRepresentation,
+)
 from probabilistic_model.probabilistic_model import PartialPointType, ProbabilisticModel
 
-NodeType = TypeVar("NodeType")
 """
 The type of the nodes of a circuit type.
 """
@@ -81,7 +84,7 @@ class ProductsOfCopies:
 
 
 @dataclass(eq=False)
-class GroundableCircuit(ProbabilisticModel, Generic[NodeType], ABC):
+class GroundableCircuit(ProbabilisticCircuitRepresentation[NodeType], ABC):
     """
     A circuit type that relational probabilistic circuits are fitted and grounded in.
     """

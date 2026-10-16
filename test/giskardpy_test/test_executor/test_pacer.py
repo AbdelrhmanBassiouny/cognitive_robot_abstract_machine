@@ -24,6 +24,8 @@ from giskardpy.motion_statechart.motion_statechart import MotionStatechart
 from giskardpy.qp.qp_controller_config import QPControllerConfig
 from semantic_digital_twin.adapters.multi_sim import MujocoSim
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
+from semantic_digital_twin.robots.pr2 import PR2
+from semantic_digital_twin.specifications.robots import RobotSpecification
 from semantic_digital_twin.spatial_types.spatial_types import (
     HomogeneousTransformationMatrix,
 )
@@ -188,14 +190,14 @@ class JointThatStopsAfterAWhile:
 
 
 @dataclass
-class JointValuesRead:
+class ActuatorLengthsRead:
     """
-    What a simulator answers a bulk read of joint values with.
+    What a simulator answers a bulk read of actuator lengths with.
     """
 
     result: Dict[str, float]
     """
-    The position read per joint name.
+    The length read per actuator name.
     """
 
 
@@ -246,15 +248,17 @@ class SimulationOfSettlingJoints:
         for joint in self.joints.values():
             joint.step()
 
-    def get_joints_values(self, joint_names: List[str]) -> JointValuesRead:
+    def get_actuators_lengths(self, actuator_names: List[str]) -> ActuatorLengthsRead:
         """
-        :param joint_names: The joints to read.
-        :return: Where each of them stands.
+        :param actuator_names: The servos to read, each named after its joint.
+        :return: Where the joint of each of them stands.
         """
-        return JointValuesRead(
+        return ActuatorLengthsRead(
             result={
-                joint_name: self.joints[joint_name].position
-                for joint_name in joint_names
+                actuator_name: self.joints[
+                    actuator_name.removesuffix("_servo")
+                ].position
+                for actuator_name in actuator_names
             }
         )
 
@@ -314,3 +318,42 @@ def test_a_simulation_without_servos_is_not_stepped_at_all():
     settling_pacer(simulation).wait_for_standstill()
 
     assert simulation.steps == 0
+
+
+@pytest.mark.skipif(
+    not runs_in_continuous_integration(), reason="MuJoCo tests only run in CI"
+)
+def test_waiting_covers_the_servos_moving_a_robots_base():
+    """
+    A base still rolling when its commanded velocity drops to zero is waited for like
+    any other servoed joint, so the robot stands still once the wait is over.
+    """
+    world = World()
+    with world.modify_world():
+        world.add_kinematic_structure_entity(Body(name=PrefixedName("floor")))
+    robot = RobotSpecification(PR2).spawn(world)
+    drive = robot.drive
+
+    simulation = MujocoSim(world=world, headless=True)
+    simulation.start_stepped_simulation()
+    try:
+        pacer = settling_pacer(simulation)
+        world.state[drive.x_velocity.id].velocity = 0.3
+        world.notify_state_change()
+        for _ in range(25):
+            pacer.sleep()
+        world.state[drive.x_velocity.id].velocity = 0.0
+        world.notify_state_change()
+        pacer.wait_for_standstill()
+        waited_until = simulation.simulator.get_body_position(
+            body_name=robot.root.name.name
+        ).result[0]
+        simulation.step_simulation(timedelta(seconds=1))
+        a_second_later = simulation.simulator.get_body_position(
+            body_name=robot.root.name.name
+        ).result[0]
+    finally:
+        simulation.stop_simulation()
+
+    assert waited_until == pytest.approx(0.15, abs=0.02)
+    assert a_second_later == pytest.approx(waited_until, abs=1e-3)
