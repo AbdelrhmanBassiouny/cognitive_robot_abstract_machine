@@ -37,6 +37,12 @@ class DatasetLocation(PathEnumeration):
     The recorded GraphQL responses the upstream review reader is replayed against.
     """
 
+    SITE_PLANS = DIRECTORY / "site-plans"
+    """
+    A ``plans`` directory as the notes branch carries it: two valid plans, one whose
+    manifest fails validation, and the generated directory that holds no plan.
+    """
+
     INSTALLED_DISTRIBUTIONS = DIRECTORY / "installed-distributions"
     """
     A directory that reads as installed distributions once it is on ``sys.path``, holding one

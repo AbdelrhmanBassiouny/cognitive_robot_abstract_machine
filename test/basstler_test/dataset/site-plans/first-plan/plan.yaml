@@ -1,0 +1,33 @@
+schema_version: 1
+id: first-plan
+title: First Plan
+description: A plan whose items have pull requests in two repositories.
+default_repository: owner/repo
+tracking_issue: 5
+waves:
+- id: wave-1
+  name: Wave 1
+tracks:
+- id: track-1
+  name: Track 1
+  wave: wave-1
+items:
+- id: merged-item
+  title: Merged Item
+  branch: merged-item
+  pull_request_number: 1
+  track: track-1
+  status: done
+- id: open-item
+  title: Open Item
+  branch: open-item
+  pull_request_number: 2
+  track: track-1
+  status: in progress
+- id: elsewhere-item
+  title: Item In Another Repository
+  branch: elsewhere-item
+  repository: other/repo
+  pull_request_number: 7
+  track: track-1
+  status: in progress
