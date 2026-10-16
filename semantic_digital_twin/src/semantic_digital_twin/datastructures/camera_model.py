@@ -41,6 +41,26 @@ class CameraModel(ABC):
         Return the image resolution represented by the model.
         """
 
+    @staticmethod
+    def _validate_field_of_view(field_of_view: FieldOfView) -> None:
+        """
+        Validate that both viewing angles lie between zero and pi.
+
+        :param field_of_view: Angular extent to validate.
+        :raises InvalidCameraFieldOfViewError: If either angle is outside the valid
+            range.
+        """
+        if not 0.0 < field_of_view.horizontal_angle < math.pi:
+            raise InvalidCameraFieldOfViewError(
+                horizontal_angle=field_of_view.horizontal_angle,
+                vertical_angle=field_of_view.vertical_angle,
+            )
+        if not 0.0 < field_of_view.vertical_angle < math.pi:
+            raise InvalidCameraFieldOfViewError(
+                horizontal_angle=field_of_view.horizontal_angle,
+                vertical_angle=field_of_view.vertical_angle,
+            )
+
 
 @dataclass
 class FieldOfViewCameraModel(CameraModel):
@@ -64,7 +84,7 @@ class FieldOfViewCameraModel(CameraModel):
         """
         Validate that both viewing angles describe a physical camera.
         """
-        _validate_field_of_view(self.angular_extent)
+        self._validate_field_of_view(self.angular_extent)
 
     @property
     def field_of_view(self) -> FieldOfView:
@@ -149,7 +169,7 @@ class PinholeCameraModel(CameraModel):
         :param distortion: Lens distortion associated with the image.
         :return: Centered pinhole calibration matching the requested extent.
         """
-        _validate_field_of_view(field_of_view)
+        cls._validate_field_of_view(field_of_view)
         focal_length_x = resolution.width / (
             2.0 * math.tan(field_of_view.horizontal_angle / 2.0)
         )
@@ -377,8 +397,8 @@ class RadialTangentialCameraDistortion(CameraDistortion, ABC):
     """
     Provide coefficients shared by ROS radial-tangential models.
 
-    ROS names the tangential terms ``t1`` and ``t2``. They are the coefficients
-    commonly written as ``p1`` and ``p2`` in camera-model equations.
+    ROS names the tangential terms ``t1`` and ``t2``. They are the coefficients commonly
+    written as ``p1`` and ``p2`` in camera-model equations.
     """
 
     radial_coefficient_1: float = 0.0
@@ -581,22 +601,3 @@ class CameraModality(StrEnum):
     """
     Per-pixel semantic or instance labels.
     """
-
-
-def _validate_field_of_view(field_of_view: FieldOfView) -> None:
-    """
-    Validate that both viewing angles lie between zero and pi.
-
-    :param field_of_view: Angular extent to validate.
-    :raises InvalidCameraFieldOfViewError: If either angle is outside the valid range.
-    """
-    if not 0.0 < field_of_view.horizontal_angle < math.pi:
-        raise InvalidCameraFieldOfViewError(
-            horizontal_angle=field_of_view.horizontal_angle,
-            vertical_angle=field_of_view.vertical_angle,
-        )
-    if not 0.0 < field_of_view.vertical_angle < math.pi:
-        raise InvalidCameraFieldOfViewError(
-            horizontal_angle=field_of_view.horizontal_angle,
-            vertical_angle=field_of_view.vertical_angle,
-        )
