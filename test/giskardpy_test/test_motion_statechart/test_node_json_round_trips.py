@@ -63,7 +63,7 @@ from giskardpy.motion_statechart.monitors.overwrite_state_monitors import (
 )
 from giskardpy.motion_statechart.monitors.progress_monitors import (
     AnyMonitoredTaskShortOfItsGoal,
-    NotApproachingGoal,
+    NoMonitoredTaskApproachingItsGoal,
     Stalled,
     StillProgressing,
     _CancelBecauseNoProgress,
@@ -731,10 +731,10 @@ def _monitor_cases() -> list[NodeRoundTripCase]:
             WorldFixture.CYLINDER_BOT_WORLD,
         ),
         NodeRoundTripCase(
-            NotApproachingGoal,
+            NoMonitoredTaskApproachingItsGoal,
             lambda world: [
                 task := _joint_goal(world),
-                NotApproachingGoal(monitored_task=task),
+                NoMonitoredTaskApproachingItsGoal(monitored_tasks=[task]),
             ],
             WorldFixture.PR2_WORLD,
         ),
