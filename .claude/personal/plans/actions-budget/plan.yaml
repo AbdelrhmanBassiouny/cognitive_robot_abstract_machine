@@ -68,15 +68,12 @@ items:
   status: in_progress
   pull_request_number: 515
   session: https://claude.ai/code/session_015LhBh1bQL2RDTPBjwCgtpQ
-  notes: 'A first job in ci.yml maps the changed paths to libraries, adds every library that
-    depends on them (read from each package''s own declared dependencies, not a second hand-kept
-    list), and feeds that set to the matrix. Draft pull requests run that set; `ready_for_review`,
-    a `full-ci` label and dispatch run everything. The budget reports a run-time matrix as
-    `UncountableJobs`: keep CI''s job count readable, then drop ci.yml''s jobs_per_push_run
-    override. A change only under `.claude/`, `basstler/`
-    or docs runs the tooling job alone. #284 already reads a pull request''s tooling label
-    off its changed files - reuse its classifier if it has landed first rather than writing
-    a second one.'
+  notes: 'Implemented on #515 (draft, on #503). basstler.changed_libraries selects the ci.yml
+    matrix libraries a draft changes plus their pyproject dependents; tooling-only runs test_basstler
+    alone, docs run nothing, other paths run everything. The matrix is a lib axis with a run-time
+    exclude, which basstler counts by its axes. The ci.yml override stays at 16 (worst case, a
+    krrood change; decided with the user). Needs a real run to confirm the run-time exclude and
+    the all-excluded skip on GitHub.'
 - id: usage-monitor
   title: Measure run volume against the manifest and warn before it is exceeded
   branch: null
