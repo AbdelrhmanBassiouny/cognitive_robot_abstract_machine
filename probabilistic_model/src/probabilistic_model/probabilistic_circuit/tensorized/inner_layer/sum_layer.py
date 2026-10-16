@@ -45,6 +45,9 @@ from probabilistic_model.probabilistic_circuit.tensorized.inner_layer.inner_laye
 from probabilistic_model.probabilistic_circuit.tensorized.moment_query import (
     MomentQuery,
 )
+from probabilistic_model.probabilistic_circuit.tensorized.node_component_supports import (
+    NodeComponentSupports,
+)
 from probabilistic_model.probabilistic_circuit.tensorized.query_cache import (
     QueryCache,
     memoized,
@@ -246,6 +249,27 @@ class SumLayer(InnerLayer):
             child_layer_indices,
             columns - offsets[child_layer_indices],
         )
+
+    def nodes_with_components(self) -> NodeMask:
+        result = np.zeros(self.number_of_nodes, dtype=bool)
+        result[self.log_weights.rows] = True
+        return result
+
+    def component_supports(
+        self, variables: SortedSet, cache: Optional[QueryCache] = None
+    ) -> List[NodeComponentSupports]:
+        child_supports = [
+            child_layer.support_of_nodes(variables, cache=cache)
+            for child_layer in self.child_layers
+        ]
+        result = [
+            NodeComponentSupports(node, []) for node in range(self.number_of_nodes)
+        ]
+        for edge in self.iterate_edges():
+            result[edge.node].supports.append(
+                child_supports[edge.child_layer_index][edge.child_node]
+            )
+        return result
 
     def mixture_components(self) -> List[Tuple[Layer, int]]:
         if self.number_of_nodes != 1:
