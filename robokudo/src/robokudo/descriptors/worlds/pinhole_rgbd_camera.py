@@ -15,7 +15,7 @@ from semantic_digital_twin.datastructures.camera_model import (
 )
 from semantic_digital_twin.datastructures.camera_resolution import CameraResolution
 from semantic_digital_twin.datastructures.field_of_view import FieldOfView
-from semantic_digital_twin.spatial_types import HomogeneousTransformationMatrix, Vector3
+from semantic_digital_twin.spatial_types import HomogeneousTransformationMatrix
 
 # %% Camera specification
 
@@ -28,17 +28,12 @@ class PinholeRGBDCameraSpec(CameraSpec):
 
     pose: HomogeneousTransformationMatrix
     """
-    Camera-root pose relative to its parent body.
+    Optical-frame pose relative to its parent body (x right, y down, z forward).
     """
 
     name: str = "semdt_camera_optical_frame"
     """
     Name shared by the camera annotation and its root body.
-    """
-
-    forward_facing_axis: Vector3 = field(default_factory=Vector3.Z)
-    """
-    Root-frame viewing axis selecting the fixed optical convention.
     """
 
     camera_model: PinholeCameraModel = field(

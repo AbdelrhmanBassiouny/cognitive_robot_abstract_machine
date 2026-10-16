@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+# %% Imports
 import os
 from collections import defaultdict
 from dataclasses import dataclass
@@ -39,7 +40,11 @@ from semantic_digital_twin.robots.robot_parts import (
     Neck,
     Torso,
 )
-from semantic_digital_twin.spatial_types import Vector3
+from semantic_digital_twin.spatial_types import (
+    HomogeneousTransformationMatrix,
+    Vector3,
+    RotationMatrix,
+)
 from semantic_digital_twin.world_description.connections import (
     FixedConnection,
     OmniDrive,
@@ -47,6 +52,8 @@ from semantic_digital_twin.world_description.connections import (
 from semantic_digital_twin.world_description.world_entity import (
     KinematicStructureEntity,
 )
+
+# %% Robot parts
 
 
 @dataclass(eq=False)
@@ -74,8 +81,14 @@ class GarmiCamera(RobotCamera):
         Sets up the default configuration for the camera.
         """
         return cls(
-            root=robot_root._world.get_body_in_branch_by_name(robot_root, "head"),
-            forward_facing_axis=Vector3(1, 0, 0),
+            root=cls.create_optical_root(
+                robot_root._world.get_body_in_branch_by_name(robot_root, "head"),
+                HomogeneousTransformationMatrix(
+                    data=RotationMatrix.from_vectors(
+                        x=-Vector3.Y(), y=-Vector3.Z(), z=Vector3.X()
+                    )
+                ),
+            ),
             camera_model=FieldOfViewCameraModel(
                 view=FieldOfView(horizontal_angle=0.99483, vertical_angle=0.75049)
             ),

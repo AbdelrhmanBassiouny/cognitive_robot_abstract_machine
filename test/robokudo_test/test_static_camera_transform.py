@@ -15,7 +15,6 @@ from robokudo.io.camera_model_adapters import RosCameraModelAdapter
 from robokudo.types.camera import CameraObservation
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.robots.robot_parts import Camera
-from semantic_digital_twin.spatial_types import Vector3
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.connections import Connection6DoF
 from semantic_digital_twin.world_description.world_entity import Body
@@ -58,7 +57,6 @@ def test_static_transform_binds_observation_camera_frame(
         camera=Camera(
             name=camera_body.name,
             root=camera_body,
-            forward_facing_axis=Vector3.Z(),
             camera_model=camera_model,
         ),
         effective_camera_model=camera_model,

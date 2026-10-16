@@ -9,6 +9,7 @@ made every step after the transform unreachable, so the mode never actually crop
 anything even when the camera-to-world transform was available.
 """
 
+# %% Imports
 import numpy as np
 import open3d as o3d
 import pytest
@@ -28,8 +29,10 @@ from semantic_digital_twin.datastructures.camera_model import PinholeCameraModel
 from semantic_digital_twin.datastructures.camera_resolution import CameraResolution
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.robots.robot_parts import Camera
-from semantic_digital_twin.spatial_types import HomogeneousTransformationMatrix, Vector3
+from semantic_digital_twin.spatial_types import HomogeneousTransformationMatrix
 from semantic_digital_twin.world_description.world_entity import Body
+
+# %% Camera behavior
 
 
 @pytest.fixture()
@@ -70,7 +73,6 @@ def cas_with_cloud_at_world_origin(
         camera=Camera(
             name=PrefixedName(name="camera"),
             root=camera_body,
-            forward_facing_axis=Vector3.Z(),
             camera_model=camera_model,
         ),
         effective_camera_model=camera_model,

@@ -105,8 +105,8 @@ def camera_intersections(
         resolution=resolution, field_of_view=FieldOfView()
     )
     camera.camera_range = CameraRange(minimum_distance=0.1, maximum_distance=8.0)
-    camera.root_T_forward_view = HomogeneousTransformationMatrix()
-    camera.world_T_optical = HomogeneousTransformationMatrix()
+    camera.world_T_forward_view = HomogeneousTransformationMatrix()
+    camera.root = Mock(global_transform=HomogeneousTransformationMatrix())
     camera.optical_R_forward_view = Camera.optical_R_forward_view
     return CameraIntersections(ray_tracer, camera, body, query, resolution)
 
@@ -121,7 +121,7 @@ def test_combined_render_uses_requested_depth_convention(
     """
     fixture = camera_intersections
     frame = fixture.ray_tracer.create_segmentation_and_depth(
-        fixture.camera.root_T_forward_view,
+        fixture.camera.world_T_forward_view,
         resolution=fixture.resolution,
         min_distance=fixture.camera.camera_range.minimum_distance,
         max_distance=fixture.camera.camera_range.maximum_distance,
@@ -161,7 +161,7 @@ def test_combined_render_handles_no_hits(
         hit_points=np.empty((0, 3)), ray_indices=np.array([], dtype=int), bodies=[]
     )
     frame = fixture.ray_tracer.create_segmentation_and_depth(
-        fixture.camera.root_T_forward_view,
+        fixture.camera.world_T_forward_view,
         resolution=fixture.resolution,
         depth_mode=depth_mode,
     )
@@ -327,7 +327,7 @@ def test_combined_render_uses_same_first_hit_for_depth_and_segmentation(
         bodies=[fixture.body, other_body, fixture.body],
     )
     frame = fixture.ray_tracer.create_segmentation_and_depth(
-        fixture.camera.root_T_forward_view,
+        fixture.camera.world_T_forward_view,
         resolution=fixture.resolution,
         depth_mode=depth_mode,
     )
@@ -345,7 +345,7 @@ def test_depth_map_supports_explicit_depth_mode(
     """
     fixture = camera_intersections
     depth = fixture.ray_tracer.create_depth_map(
-        fixture.camera.root_T_forward_view,
+        fixture.camera.world_T_forward_view,
         resolution=fixture.resolution,
         depth_mode=depth_mode,
     )

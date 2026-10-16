@@ -1,3 +1,4 @@
+# %% Imports
 import os
 import uuid
 from dataclasses import dataclass
@@ -19,7 +20,9 @@ from semantic_digital_twin.datastructures.camera_model import PinholeCameraModel
 from semantic_digital_twin.datastructures.camera_resolution import CameraResolution
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.robots.robot_parts import Camera
-from semantic_digital_twin.spatial_types import HomogeneousTransformationMatrix, Vector3
+from semantic_digital_twin.spatial_types import HomogeneousTransformationMatrix
+
+# %% Camera behavior
 
 
 @dataclass
@@ -312,7 +315,6 @@ class TestStorage:
         camera = Camera(
             name=PrefixedName(name=camera_frame),
             root=camera_body,
-            forward_facing_axis=Vector3.Z(),
             camera_model=camera_model,
         )
         with sem_world.modify_world():

@@ -262,7 +262,7 @@ def get_visible_bodies(camera: Camera) -> list[KinematicStructureEntity]:
     rt.update_scene()
 
     seg = rt.create_segmentation_mask(
-        camera.root_T_forward_view,
+        camera.world_T_forward_view,
         resolution=camera.resolution,
         min_distance=0.2,
         field_of_view=camera.field_of_view,
@@ -330,7 +330,7 @@ def occluding_bodies(camera: Camera, body: Body) -> list[Body]:
     :param body: The body for which the occluding bodies should be returned
     :return: A list of bodies that are occluding the given body.
     """
-    camera_pose = camera.root_T_forward_view
+    camera_pose = camera.world_T_forward_view
 
     # create a world only containing the target body
     world_without_occlusion = deepcopy(body._world)

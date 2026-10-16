@@ -4,6 +4,7 @@ ROS-independent camera metadata for perception frames.
 
 from __future__ import annotations
 
+# %% Imports
 from dataclasses import dataclass, replace
 
 from robokudo.exceptions import CameraPoseMissing
@@ -13,6 +14,8 @@ from semantic_digital_twin.datastructures.field_of_view import FieldOfView
 from semantic_digital_twin.robots.robot_parts import Camera
 from semantic_digital_twin.spatial_types import HomogeneousTransformationMatrix
 
+# %% Camera definitions
+
 
 @dataclass(frozen=True)
 class CameraObservation:
@@ -20,8 +23,7 @@ class CameraObservation:
     Describe the camera state used to produce one perception frame.
 
     :attr:`world_T_camera` alone transforms optical-frame points into world coordinates.
-    The fixed optical attachment on :attr:`camera` also determines the physical-root
-    pose needed for replay.
+    The camera root is the optical frame; its sampled pose is also its replay pose.
 
     An annotator can access native and effective parameters from its CAS::
 
@@ -77,17 +79,6 @@ class CameraObservation:
         if self.world_T_camera is None:
             raise CameraPoseMissing()
         return self.world_T_camera
-
-    @property
-    def world_T_root(self) -> HomogeneousTransformationMatrix | None:
-        """
-        Recover the physical-root pose using the camera's fixed optical attachment.
-
-        :return: Sampled physical-root pose, or no pose when none was sampled.
-        """
-        if self.world_T_camera is None:
-            return None
-        return self.world_T_camera @ self.camera.optical_attachment.inverse()
 
     @property
     def camera_T_world(self) -> HomogeneousTransformationMatrix:

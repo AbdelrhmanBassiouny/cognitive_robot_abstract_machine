@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+# %% Imports
 import os
 from collections import defaultdict
 from dataclasses import dataclass, field
@@ -44,11 +45,13 @@ from semantic_digital_twin.robots.robot_parts import (
     MobileBase,
     EndEffector,
 )
-from semantic_digital_twin.spatial_types import HomogeneousTransformationMatrix, Vector3
+from semantic_digital_twin.spatial_types import Vector3
 from semantic_digital_twin.world_description.connections import DifferentialDrive
 from semantic_digital_twin.world_description.world_entity import (
     KinematicStructureEntity,
 )
+
+# %% Robot parts
 
 
 class StretchTopic(StrEnum):
@@ -245,8 +248,6 @@ class StretchCameraColor(RobotCamera):
             ),
             minimal_height=1.322,
             maximal_height=1.322,
-            forward_facing_axis=Vector3.Z(),
-            root_T_optical=HomogeneousTransformationMatrix(),
             camera_model=FieldOfViewCameraModel(
                 view=FieldOfView(horizontal_angle=0.99483, vertical_angle=0.75049)
             ),
@@ -282,8 +283,6 @@ class StretchCameraDepth(RobotCamera):
             ),
             minimal_height=1.307,
             maximal_height=1.307,
-            forward_facing_axis=Vector3.Z(),
-            root_T_optical=HomogeneousTransformationMatrix(),
             camera_model=FieldOfViewCameraModel(
                 view=FieldOfView(horizontal_angle=0.99483, vertical_angle=0.75049)
             ),
@@ -318,8 +317,6 @@ class StretchCameraInfra1(RobotCamera):
             ),
             minimal_height=1.307,
             maximal_height=1.307,
-            forward_facing_axis=Vector3.Z(),
-            root_T_optical=HomogeneousTransformationMatrix(),
             camera_model=FieldOfViewCameraModel(
                 view=FieldOfView(horizontal_angle=0.99483, vertical_angle=0.75049)
             ),
@@ -354,8 +351,6 @@ class StretchCameraInfra2(RobotCamera):
             ),
             minimal_height=1.257,
             maximal_height=1.257,
-            forward_facing_axis=Vector3.Z(),
-            root_T_optical=HomogeneousTransformationMatrix(),
             camera_model=FieldOfViewCameraModel(
                 view=FieldOfView(horizontal_angle=0.99483, vertical_angle=0.75049)
             ),

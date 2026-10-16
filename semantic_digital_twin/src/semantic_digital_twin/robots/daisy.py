@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+# %% Imports
 import os
 from dataclasses import dataclass
 from enum import StrEnum
@@ -32,10 +33,12 @@ from semantic_digital_twin.robots.robot_parts import (
     Finger,
     RobotCamera,
 )
-from semantic_digital_twin.spatial_types import Vector3
+from semantic_digital_twin.spatial_types import HomogeneousTransformationMatrix, Vector3
 from semantic_digital_twin.world_description.world_entity import (
     KinematicStructureEntity,
 )
+
+# %% Robot parts
 
 
 class DAiSyJoint(StrEnum):
@@ -339,10 +342,10 @@ class DAiSyCamera(RobotCamera):
         cls, robot_root: KinematicStructureEntity
     ) -> Self:
         return cls(
-            root=robot_root._world.get_body_in_branch_by_name(
-                robot_root, "camera_link"
+            root=cls.create_optical_root(
+                robot_root._world.get_body_in_branch_by_name(robot_root, "camera_link"),
+                HomogeneousTransformationMatrix(),
             ),
-            forward_facing_axis=Vector3.Z(),
             camera_model=FieldOfViewCameraModel(
                 view=FieldOfView(horizontal_angle=1.047, vertical_angle=0.785)
             ),

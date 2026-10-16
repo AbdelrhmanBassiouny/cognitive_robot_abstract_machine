@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+# %% Imports
 import os
 from collections import defaultdict
 from dataclasses import dataclass
@@ -43,6 +44,8 @@ from semantic_digital_twin.spatial_types import Vector3
 from semantic_digital_twin.world_description.world_entity import (
     KinematicStructureEntity,
 )
+
+# %% Robot parts
 
 
 class TracyTopic(StrEnum):
@@ -399,9 +402,8 @@ class TracyCamera(RobotCamera):
     ) -> Self:
         return cls(
             root=robot_root._world.get_body_in_branch_by_name(
-                robot_root, "camera_link"
+                robot_root, "camera_color_optical_frame"
             ),
-            forward_facing_axis=Vector3.Z(),
             camera_model=FieldOfViewCameraModel(
                 view=FieldOfView(horizontal_angle=1.047, vertical_angle=0.785)
             ),

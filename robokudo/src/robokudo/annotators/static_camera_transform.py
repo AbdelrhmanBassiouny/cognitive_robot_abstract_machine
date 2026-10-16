@@ -48,7 +48,7 @@ class StaticCameraTransformAnnotator(BaseAnnotator):
 
     def update(self) -> Status:
         """
-        Bind the configured optical pose through the camera's fixed optical attachment.
+        Bind the configured world pose directly to the optical camera root.
         """
         start_timer = default_timer()
 
@@ -56,16 +56,11 @@ class StaticCameraTransformAnnotator(BaseAnnotator):
         parameters = self.descriptor.parameters
         observation = cas.require_camera_observation()
 
-        configured_observation = observation.with_world_T_camera(
-            parameters.world_T_camera
-        )
-        world_T_root = CameraInterface.bind_world_T_camera(
+        world_T_camera = CameraInterface.bind_world_T_camera(
             world_frame=parameters.world_frame,
             camera_frame=str(observation.camera.root.name),
-            world_T_camera=configured_observation.world_T_root,
+            world_T_camera=parameters.world_T_camera,
         )
-        root_T_optical = observation.camera.optical_attachment
-        world_T_camera = world_T_root @ root_T_optical
         cas.camera_observation = observation.with_world_T_camera(world_T_camera)
 
         end_timer = default_timer()

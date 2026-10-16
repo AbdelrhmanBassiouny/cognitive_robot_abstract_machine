@@ -34,7 +34,7 @@ from semantic_digital_twin.spatial_types import HomogeneousTransformationMatrix
 @pytest.fixture
 def optical_interface() -> SemDTRayTracerCameraInterface:
     """
-    Provide a simulated camera with an explicit optical offset.
+    Provide a simulated camera with an nonidentity optical root pose.
     """
     interface = SemDTRayTracerCameraInterface(
         SemDTRayTracerCameraConfig(
@@ -44,9 +44,15 @@ def optical_interface() -> SemDTRayTracerCameraInterface:
         )
     )
     context = interface.context_resolver.resolve()
-    context.camera.root_T_optical = HomogeneousTransformationMatrix.from_xyz_rpy(
-        x=0.1, y=0.2, z=0.3, yaw=np.pi / 2
-    )
+    root = context.camera.root
+    with context.world.modify_world():
+        root.parent_connection.origin = HomogeneousTransformationMatrix(
+            data=HomogeneousTransformationMatrix.from_xyz_rpy(
+                x=0.1, y=0.2, z=0.3, yaw=np.pi / 2
+            ),
+            reference_frame=root.parent_connection.parent,
+            child_frame=root,
+        )
     return interface
 
 
@@ -107,7 +113,7 @@ def test_interface_publishes_rendered_optical_pose(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """
-    The published camera pose includes the optical offset used for rendering.
+    The published camera pose matches the optical root pose used for rendering.
     """
     context = optical_interface.context_resolver.resolve()
     monkeypatch.setattr(
@@ -117,21 +123,20 @@ def test_interface_publishes_rendered_optical_pose(
     optical_interface.set_data(cas)
     np.testing.assert_allclose(
         cas.camera_observation.world_T_camera.to_np(),
-        context.camera.root.global_transform.to_np()
-        @ context.camera.root_T_optical.to_np(),
+        context.camera.root.global_transform.to_np(),
     )
 
 
 # %% Recorded optical pose
 
 
-def test_sensor_projection_preserves_optical_attachment(
+def test_sensor_projection_preserves_optical_root_pose(
     optical_interface: SemDTRayTracerCameraInterface,
     rectangular_frame: RenderedRGBDFrame,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """
-    Projecting a rendered observation preserves both physical-root and optical poses.
+    Projecting a rendered observation preserves the optical root pose.
     """
     context = optical_interface.context_resolver.resolve()
     monkeypatch.setattr(
@@ -147,7 +152,7 @@ def test_sensor_projection_preserves_optical_attachment(
         atol=1e-12,
     )
     np.testing.assert_allclose(
-        camera.world_T_optical.to_np(),
+        camera.root.global_transform.to_np(),
         cas.camera_observation.world_T_camera.to_np(),
         atol=1e-12,
     )
@@ -156,13 +161,13 @@ def test_sensor_projection_preserves_optical_attachment(
 # %% Static optical pose
 
 
-def test_static_optical_pose_binds_physical_root_pose(
+def test_static_optical_pose_binds_camera_root(
     optical_interface: SemDTRayTracerCameraInterface,
     rectangular_frame: RenderedRGBDFrame,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """
-    A static optical pose binds the physical camera root through its optical offset.
+    A static pose binds the optical root without an additional mounting offset.
     """
     context = optical_interface.context_resolver.resolve()
     monkeypatch.setattr(
@@ -175,9 +180,7 @@ def test_static_optical_pose_binds_physical_root_pose(
     descriptor.parameters.world_T_camera = HomogeneousTransformationMatrix.from_xyz_rpy(
         x=1.0, y=2.0, z=3.0, pitch=0.1, yaw=0.2
     )
-    expected_world_T_root = (
-        descriptor.parameters.world_T_camera @ context.camera.root_T_optical.inverse()
-    )
+    expected_world_T_root = descriptor.parameters.world_T_camera
     bind_pose = Mock(return_value=expected_world_T_root)
     monkeypatch.setattr(CameraInterface, "bind_world_T_camera", bind_pose)
     annotator = StaticCameraTransformAnnotator(descriptor=descriptor)
@@ -195,13 +198,13 @@ def test_static_optical_pose_binds_physical_root_pose(
     )
 
 
-def test_replayed_optical_pose_updates_physical_root(
+def test_replayed_optical_pose_updates_camera_root(
     optical_interface: SemDTRayTracerCameraInterface,
     rectangular_frame: RenderedRGBDFrame,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """
-    Replaying an optical pose updates the physical root through its optical attachment.
+    Replaying an optical pose updates the camera root directly.
     """
     context = optical_interface.context_resolver.resolve()
     monkeypatch.setattr(
@@ -222,52 +225,22 @@ def test_replayed_optical_pose_updates_physical_root(
     )
     SensorWorldProjector.apply_pose(world, observation)
     np.testing.assert_allclose(
-        camera.world_T_optical.to_np(), world_T_optical.to_np(), atol=1e-12
+        camera.root.global_transform.to_np(), world_T_optical.to_np(), atol=1e-12
     )
 
 
-# %% Viewing-direction observations
+# %% Recorded optical observations
 
 
-def test_viewing_direction_observation_preserves_projected_root_pose(
+def test_optical_observation_roundtrip_preserves_root_pose(
     optical_interface: SemDTRayTracerCameraInterface,
     rectangular_frame: RenderedRGBDFrame,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """
-    An optical observation of a viewing-direction camera preserves its physical root.
+    Recorded optical images retain the sampled root pose for replay.
     """
     context = optical_interface.context_resolver.resolve()
-    context.camera.root_T_optical = None
-    monkeypatch.setattr(
-        context.world.ray_tracer, "render", Mock(return_value=rectangular_frame)
-    )
-    cas = CAS()
-    optical_interface.set_data(cas)
-    world = SensorWorldProjector(cas.camera_observation).project()
-    camera = world.get_semantic_annotation_by_id(context.camera.id)
-    np.testing.assert_allclose(
-        camera.root.global_transform.to_np(),
-        context.camera.root.global_transform.to_np(),
-        atol=1e-12,
-    )
-    np.testing.assert_allclose(
-        camera.world_T_optical.to_np(),
-        cas.camera_observation.world_T_camera.to_np(),
-        atol=1e-12,
-    )
-
-
-def test_viewing_direction_observation_roundtrip_preserves_root_pose(
-    optical_interface: SemDTRayTracerCameraInterface,
-    rectangular_frame: RenderedRGBDFrame,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """
-    Recorded viewing-direction images retain the optical offset needed for replay.
-    """
-    context = optical_interface.context_resolver.resolve()
-    context.camera.root_T_optical = None
     monkeypatch.setattr(
         context.world.ray_tracer, "render", Mock(return_value=rectangular_frame)
     )

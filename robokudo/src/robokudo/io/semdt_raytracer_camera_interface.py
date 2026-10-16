@@ -90,7 +90,7 @@ class SemDTRayTracerCameraInterface(CameraInterface):
         """
         world = context.world
         camera = context.camera
-        world_T_camera = camera.world_T_optical
+        world_T_camera = camera.root.global_transform
 
         cas.set(CASViews.COLOR_IMAGE, frame.color_bgr.swapaxes(0, 1).copy())
         cas.set(CASViews.DEPTH_IMAGE, frame.depth_in_millimeters.swapaxes(0, 1).copy())

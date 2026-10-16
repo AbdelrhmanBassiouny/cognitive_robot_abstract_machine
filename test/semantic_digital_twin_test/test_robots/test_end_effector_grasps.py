@@ -182,7 +182,7 @@ def test_every_robot_states_its_axes_in_the_frame_they_belong_to(
             assert end_effector.approach_axis.reference_frame is end_effector.tool_frame
             assert end_effector.closing_axis.reference_frame is end_effector.tool_frame
         for camera in world.get_semantic_annotations_by_type(Camera):
-            assert camera.forward_facing_axis.reference_frame is camera.root
+            assert camera.viewing_direction.reference_frame is camera.root
 
 
 # %% tool frame goals

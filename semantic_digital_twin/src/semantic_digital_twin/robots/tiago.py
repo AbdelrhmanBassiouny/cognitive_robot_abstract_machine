@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+# %% Imports
 import math
 import os
 from abc import ABC
@@ -48,7 +49,7 @@ from semantic_digital_twin.robots.robot_parts import (
 )
 from semantic_digital_twin.datastructures.camera_model import FieldOfViewCameraModel
 from semantic_digital_twin.datastructures.field_of_view import FieldOfView
-from semantic_digital_twin.spatial_types import HomogeneousTransformationMatrix, Vector3
+from semantic_digital_twin.spatial_types import Vector3
 from semantic_digital_twin.world_description.connections import (
     ActiveConnection,
     DifferentialDrive,
@@ -56,6 +57,8 @@ from semantic_digital_twin.world_description.connections import (
 from semantic_digital_twin.world_description.world_entity import (
     KinematicStructureEntity,
 )
+
+# %% Robot parts
 
 
 class TiagoJoint(StrEnum):
@@ -404,8 +407,6 @@ class TiagoCamera(RobotCamera):
             root=robot_root._world.get_body_in_branch_by_name(
                 robot_root, "head_front_camera_optical_frame"
             ),
-            forward_facing_axis=Vector3.Z(),
-            root_T_optical=HomogeneousTransformationMatrix(),
             camera_model=FieldOfViewCameraModel(
                 view=FieldOfView(horizontal_angle=0.99483, vertical_angle=0.75049)
             ),

@@ -33,7 +33,7 @@ from semantic_digital_twin.datastructures.camera_resolution import CameraResolut
 from semantic_digital_twin.datastructures.field_of_view import FieldOfView
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.robots.robot_parts import Camera
-from semantic_digital_twin.spatial_types import HomogeneousTransformationMatrix, Vector3
+from semantic_digital_twin.spatial_types import HomogeneousTransformationMatrix
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.connections import Connection6DoF
 from semantic_digital_twin.world_description.world_entity import Body
@@ -96,7 +96,6 @@ def _recorded_scene(
     camera = Camera(
         name=PrefixedName(name="recorded_camera"),
         root=camera_root,
-        forward_facing_axis=Vector3.Z(),
         camera_model=FieldOfViewCameraModel(
             view=FieldOfView(), image_resolution=effective_model.resolution
         ),
@@ -207,8 +206,8 @@ def test_full_snapshot_replays_only_camera_context():
     assert replayed.camera.camera_range == scene.observation.camera.camera_range
     assert tuple(replayed.camera.modalities) == scene.observation.camera.modalities
     np.testing.assert_array_equal(
-        replayed.camera.forward_facing_axis.to_np(),
-        scene.observation.camera.forward_facing_axis.to_np(),
+        replayed.camera.viewing_direction.to_np(),
+        scene.observation.camera.viewing_direction.to_np(),
     )
     assert replayed.effective_camera_model == scene.observation.effective_camera_model
     assert replayed.world_T_camera.child_frame is replayed.camera.root

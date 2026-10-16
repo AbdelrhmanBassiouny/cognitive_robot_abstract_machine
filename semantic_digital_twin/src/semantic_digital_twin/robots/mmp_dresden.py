@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+# %% Imports
 from abc import ABC
 
 import numpy as np
@@ -39,6 +40,8 @@ from semantic_digital_twin.spatial_types import Vector3
 from semantic_digital_twin.world_description.world_entity import (
     KinematicStructureEntity,
 )
+
+# %% Robot parts
 
 
 class MMPDresdenJoint(StrEnum):
@@ -163,9 +166,8 @@ class MMPDresdenCamera(RobotCamera):
     ) -> Self:
         return cls(
             root=robot_root._world.get_body_in_branch_by_name(
-                robot_root, "pan_and_tilt_camera_link"
+                robot_root, "pan_and_tilt_camera_color_optical_frame"
             ),
-            forward_facing_axis=Vector3.Z(),
             camera_model=FieldOfViewCameraModel(
                 view=FieldOfView(horizontal_angle=1.047, vertical_angle=0.785)
             ),

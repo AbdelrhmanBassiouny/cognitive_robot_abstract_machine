@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+# %% Imports
 import os
 from collections import defaultdict
 from dataclasses import dataclass, field
@@ -54,6 +55,8 @@ from semantic_digital_twin.world_description.connections import (
 from semantic_digital_twin.world_description.world_entity import (
     KinematicStructureEntity,
 )
+
+# %% Robot parts
 
 
 class HSRBTopic(StrEnum):
@@ -207,7 +210,6 @@ class HSRBHandCamera(RobotCamera):
             root=robot_root._world.get_body_in_branch_by_name(
                 robot_root, "hand_camera_frame"
             ),
-            forward_facing_axis=Vector3.Z(),
             camera_model=FieldOfViewCameraModel(
                 view=FieldOfView(horizontal_angle=0.99483, vertical_angle=0.75049)
             ),
@@ -276,7 +278,6 @@ class HSRBHeadCenterCamera(RobotCamera):
             root=robot_root._world.get_body_in_branch_by_name(
                 robot_root, "head_center_camera_frame"
             ),
-            forward_facing_axis=Vector3.Z(),
             camera_model=FieldOfViewCameraModel(
                 view=FieldOfView(horizontal_angle=0.99483, vertical_angle=0.75049)
             ),
@@ -303,7 +304,6 @@ class HSRBHeadLeftCamera(RobotCamera):
             root=robot_root._world.get_body_in_branch_by_name(
                 robot_root, "head_l_stereo_camera_link"
             ),
-            forward_facing_axis=Vector3.Z(),
             camera_model=FieldOfViewCameraModel(
                 view=FieldOfView(horizontal_angle=0.99483, vertical_angle=0.75049)
             ),
@@ -329,7 +329,6 @@ class HSRBHeadRightCamera(RobotCamera):
             root=robot_root._world.get_body_in_branch_by_name(
                 robot_root, "head_r_stereo_camera_link"
             ),
-            forward_facing_axis=Vector3.Z(),
             camera_model=FieldOfViewCameraModel(
                 view=FieldOfView(horizontal_angle=0.99483, vertical_angle=0.75049)
             ),
@@ -355,7 +354,6 @@ class HSRBHeadRGBDCamera(RobotCamera):
             root=robot_root._world.get_body_in_branch_by_name(
                 robot_root, "head_rgbd_sensor_link"
             ),
-            forward_facing_axis=Vector3.Z(),
             camera_model=FieldOfViewCameraModel(
                 view=FieldOfView(horizontal_angle=0.99483, vertical_angle=0.75049)
             ),

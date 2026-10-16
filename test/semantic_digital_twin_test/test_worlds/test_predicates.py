@@ -247,10 +247,8 @@ def test_camera_view_frame_x_axis_is_the_forward_axis(pr2_world_copy: World):
     camera = pr2_world_copy.get_semantic_annotations_by_type(Camera)[0]
     root_T_camera = camera.root.global_transform
 
-    root_T_view = camera.root_T_forward_view.to_np()
-    root_V_forward = (
-        root_T_camera.rotation_matrix @ camera.forward_facing_axis
-    ).to_np()
+    root_T_view = camera.world_T_forward_view.to_np()
+    root_V_forward = (root_T_camera.rotation_matrix @ camera.viewing_direction).to_np()
 
     assert np.allclose(root_T_view[:3, 0], root_V_forward.flatten()[:3], atol=1e-9)
     assert np.allclose(root_T_view[:3, 3], root_T_camera.to_np()[:3, 3], atol=1e-9)
@@ -806,7 +804,6 @@ def test_nothing_occludes_a_body_in_clear_line_of_sight():
         camera = ReviewCamera(
             name=PrefixedName("camera", prefix="review"),
             root=camera_body,
-            forward_facing_axis=Vector3.X(),
             camera_model=FieldOfViewCameraModel(
                 view=FieldOfView(horizontal_angle=0.99, vertical_angle=0.75)
             ),

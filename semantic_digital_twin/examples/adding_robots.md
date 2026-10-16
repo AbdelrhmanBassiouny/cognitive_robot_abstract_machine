@@ -224,8 +224,11 @@ class MyRobotRightFinger(Finger):
 
 ```
 
-A robot camera needs a root body plus a camera model.
-`forward_facing_axis` is the axis of the camera frame that points forward into the scene.
+A robot camera needs an optical root body plus a camera model.
+The root uses positive x to the image right, positive y down, and positive z into the scene.
+Select the corresponding sensor's optical frame from the robot description. If none
+exists, `RobotCamera.create_optical_root(parent, parent_T_optical)` adds an optical
+body with a fixed mounting pose to the world graph.
 `default_camera=True` marks this as the camera returned by `robot.get_default_camera()`.
 Exactly one camera across the entire robot must have `default_camera=True`.
 
@@ -239,7 +242,6 @@ from semantic_digital_twin.datastructures.camera_model import FieldOfViewCameraM
 from semantic_digital_twin.datastructures.field_of_view import FieldOfView
 from semantic_digital_twin.datastructures.joint_state import JointState
 from semantic_digital_twin.robots.robot_parts import RobotCamera
-from semantic_digital_twin.spatial_types import Vector3
 from semantic_digital_twin.world_description.world_entity import KinematicStructureEntity
 
 @dataclass(eq=False)
@@ -253,7 +255,6 @@ class MyRobotCamera(RobotCamera):
             root=robot_root._world.get_body_in_branch_by_name(
                 robot_root, "camera_optical_frame"
             ),
-            forward_facing_axis=Vector3.Z(),
             camera_model=FieldOfViewCameraModel(
                 view=FieldOfView(horizontal_angle=1.047, vertical_angle=0.785)
             ),
@@ -261,10 +262,6 @@ class MyRobotCamera(RobotCamera):
             maximal_height=1.5,
             default_camera=True,
         )
-
-    @property
-    def forward_facing_axis(self) -> Vector3:
-        return Vector3.Z(reference_frame=self.root)
 
     def setup_hardware_interfaces(self):
         return None

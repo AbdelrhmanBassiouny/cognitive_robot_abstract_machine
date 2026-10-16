@@ -54,7 +54,6 @@ from semantic_digital_twin.exceptions import (
 from semantic_digital_twin.input_synchronization import InputSynchronizer
 from semantic_digital_twin.robots.exceptions import (
     MissingDriveConnectionError,
-    CameraOpticalConventionUndefined,
 )
 from semantic_digital_twin.robots.input_source import (
     BasePoseSource,
@@ -570,29 +569,15 @@ class Sensor(AbstractRobotPart, ABC):
 @dataclass(eq=False)
 class Camera(HasRootBody):
     """
-    A camera that captures images of the environment.
-    """
+    An image sensor rooted at its optical frame.
 
-    forward_facing_axis: Vector3 = field(kw_only=True)
-    """
-    Root-frame viewing axis selecting the default optical convention.
-
-    Positive unit z uses x-right, y-down optical axes. Positive unit x uses y-left, z-up body
-    axes. :attr:`root_T_optical` supplies the full orientation for other conventions.
+    The root axes are positive x right, positive y down, and positive z into the scene.
+    Its mounting pose belongs to the world connection of the root body.
     """
 
     camera_model: CameraModel = field(kw_only=True)
     """
     Native projection model of the camera.
-    """
-
-    root_T_optical: HomogeneousTransformationMatrix | None = field(
-        default=None, kw_only=True
-    )
-    """
-    Fixed optical pose relative to the camera root, with x right, y down, and z forward.
-
-    When omitted, :attr:`forward_facing_axis` selects a fixed root-relative convention.
     """
 
     camera_range: CameraRange = field(default_factory=CameraRange, kw_only=True)
@@ -604,19 +589,6 @@ class Camera(HasRootBody):
     """
     Kinds of image data the camera can produce.
     """
-
-    def __post_init__(self) -> None:
-        """
-        Express the viewing direction and optical attachment in the camera root frame.
-        """
-        super().__post_init__()
-        self.forward_facing_axis.reference_frame = self.root
-        self.root_T_optical = self.optical_attachment
-        self.root_T_optical.reference_frame = self.root
-        if self.root_T_optical.child_frame is None and np.array_equal(
-            self.root_T_optical.to_np(), np.eye(4)
-        ):
-            self.root_T_optical.child_frame = self.root
 
     @property
     def field_of_view(self) -> FieldOfView:
@@ -633,56 +605,13 @@ class Camera(HasRootBody):
         return self.camera_model.resolution
 
     @property
-    def optical_attachment(self) -> HomogeneousTransformationMatrix:
-        """
-        Return the optical pose relative to the camera root, independent of world pose.
-
-        :return: Fixed root-relative optical attachment.
-        :raises CameraOpticalConventionUndefined: If the viewing axis requires an
-            explicit optical orientation.
-        """
-        if self.root_T_optical is not None:
-            return self.root_T_optical
-        if np.array_equal(self.forward_facing_axis.to_np(), Vector3.Z().to_np()):
-            return HomogeneousTransformationMatrix()
-        if np.array_equal(self.forward_facing_axis.to_np(), Vector3.X().to_np()):
-            return self.x_forward_R_optical
-        raise CameraOpticalConventionUndefined(
-            camera_name=self.name, viewing_axis=self.forward_facing_axis
-        )
-
-    @classproperty
-    def x_forward_R_optical(cls: type[Camera]) -> HomogeneousTransformationMatrix:
-        """
-        Express right-down-forward optical axes in an x-forward, y-left, z-up root.
-
-        :return: Optical rotation relative to body axes.
-        """
-        return HomogeneousTransformationMatrix(
-            data=RotationMatrix.from_vectors(
-                x=-Vector3.Y(), y=-Vector3.Z(), z=Vector3.X()
-            )
-        )
-
-    @property
     def viewing_direction(self) -> Vector3:
         """
-        Return the optical forward direction expressed in the camera root.
+        Return optical positive z expressed in the camera root.
 
-        :return: Viewing direction following the fixed optical attachment.
+        :return: Forward direction with the optical root as its reference frame.
         """
-        root_V_forward = self.optical_attachment.rotation_matrix @ Vector3.Z()
-        root_V_forward.reference_frame = self.root
-        return root_V_forward
-
-    @property
-    def world_T_optical(self) -> HomogeneousTransformationMatrix:
-        """
-        Return the optical pose from the world root pose and fixed optical attachment.
-
-        :return: World-space optical pose preserving camera roll and image axes.
-        """
-        return self.root.global_transform @ self.optical_attachment
+        return Vector3.Z(reference_frame=self.root)
 
     @classproperty
     def optical_R_forward_view(cls: type[Camera]) -> HomogeneousTransformationMatrix:
@@ -694,13 +623,13 @@ class Camera(HasRootBody):
         return HomogeneousTransformationMatrix.from_xyz_rpy(pitch=-np.pi / 2)
 
     @property
-    def root_T_forward_view(self) -> HomogeneousTransformationMatrix:
+    def world_T_forward_view(self) -> HomogeneousTransformationMatrix:
         """
         Return the world-space x-forward pose with the optical image orientation.
 
-        :return: Forward-view pose preserving the fixed camera-relative image axes.
+        :return: Forward-view pose preserving the optical root orientation.
         """
-        return self.world_T_optical @ self.optical_R_forward_view
+        return self.root.global_transform @ self.optical_R_forward_view
 
 
 TCamera = TypeVar("TCamera", bound=Camera)
@@ -712,7 +641,7 @@ A kind of camera.
 @dataclass(eq=False)
 class RobotCamera(Camera, Sensor, ABC):
     """
-    A camera that participates in robot-part lifecycle handling.
+    An optical-frame-rooted camera that participates in robot-part lifecycle handling.
     """
 
     default_camera: bool = False
@@ -729,6 +658,37 @@ class RobotCamera(Camera, Sensor, ABC):
     """
     Maximal camera height above the ground in meters.
     """
+
+    @staticmethod
+    def create_optical_root(
+        parent: Body, parent_T_optical: HomogeneousTransformationMatrix
+    ) -> Body:
+        """
+        Add a geometry-free optical body fixed to its mounting body.
+
+        :param parent: Mounting body in the robot world.
+        :param parent_T_optical: Optical pose relative to the mounting body.
+        :return: Optical body attached by a fixed connection.
+        """
+        optical_root = Body(
+            name=PrefixedName(
+                name=f"{parent.name.name}_camera_optical_frame",
+                prefix=parent.name.prefix,
+            )
+        )
+        with parent._world.modify_world():
+            parent._world.add_connection(
+                FixedConnection(
+                    parent=parent,
+                    child=optical_root,
+                    parent_T_connection_expression=HomogeneousTransformationMatrix(
+                        data=parent_T_optical,
+                        reference_frame=parent,
+                        child_frame=optical_root,
+                    ),
+                )
+            )
+        return optical_root
 
 
 @dataclass(eq=False)

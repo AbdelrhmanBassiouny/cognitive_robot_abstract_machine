@@ -411,7 +411,7 @@ class RayTracer:
             )
         resolution = camera_model.resolution
         field_of_view = camera_model.field_of_view
-        world_T_optical = camera.world_T_optical
+        world_T_optical = camera.root.global_transform
         world_T_forward_view = HomogeneousTransformationMatrix(
             data=world_T_optical.to_np() @ camera.optical_R_forward_view.to_np(),
             reference_frame=world_T_optical.reference_frame,

@@ -52,7 +52,6 @@ def test_camera_can_be_added_without_a_robot():
     camera = Camera(
         name=PrefixedName(name="camera"),
         root=root,
-        forward_facing_axis=Vector3.X(),
         camera_model=model,
     )
 
@@ -73,26 +72,24 @@ def test_robot_camera_preserves_robot_part_and_sensor_types():
 
 
 @pytest.mark.parametrize("camera_type", [PR2KinectV1, StretchCameraColor, GarmiCamera])
-def test_robot_camera_accepts_projection_model_and_viewing_axis(
+def test_robot_camera_accepts_projection_model_and_optical_root(
     camera_type: type[RobotCamera], table_world: World
 ) -> None:
     """
-    Robot cameras retain their supplied model and viewing direction.
+    Robot cameras retain their supplied projection model and optical root.
     """
     model = PinholeCameraModel.from_field_of_view(
         resolution=CameraResolution(width=320, height=240),
         field_of_view=FieldOfView(),
     )
-    viewing_axis = Vector3.X()
     camera = camera_type(
         name=PrefixedName(name="camera"),
         root=table_world.root,
-        forward_facing_axis=viewing_axis,
         camera_model=model,
     )
 
-    assert camera.forward_facing_axis is viewing_axis
-    assert camera.forward_facing_axis.reference_frame is table_world.root
+    np.testing.assert_array_equal(camera.viewing_direction.to_np(), Vector3.Z().to_np())
+    assert camera.viewing_direction.reference_frame is table_world.root
     assert camera.camera_model is model
 
 
@@ -113,7 +110,6 @@ def test_camera_predicates_use_projection_model_resolution(
     camera = Camera(
         name=PrefixedName(name="camera"),
         root=table_world.root,
-        forward_facing_axis=Vector3.X(),
         camera_model=model,
     )
     with table_world.modify_world():
@@ -165,11 +161,11 @@ def test_default_pr2_kinect_uses_rgb_optical_frame(
     "camera_type",
     [StretchCameraColor, StretchCameraDepth, StretchCameraInfra1, StretchCameraInfra2],
 )
-def test_default_stretch_camera_supplies_viewing_axis(
+def test_default_stretch_camera_uses_optical_positive_z(
     camera_type: type[RobotCamera], table_world: World, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """
-    Default Stretch camera construction supplies an optical viewing direction.
+    Default Stretch camera construction uses positive z in its optical frame.
     """
     monkeypatch.setattr(
         table_world, "get_body_in_branch_by_name", lambda root, name: table_world.root
@@ -180,6 +176,6 @@ def test_default_stretch_camera_supplies_viewing_axis(
     )
 
     assert np.array_equal(
-        camera.forward_facing_axis, Vector3.Z(reference_frame=table_world.root)
+        camera.viewing_direction, Vector3.Z(reference_frame=table_world.root)
     )
-    assert camera.forward_facing_axis.reference_frame is table_world.root
+    assert camera.viewing_direction.reference_frame is table_world.root

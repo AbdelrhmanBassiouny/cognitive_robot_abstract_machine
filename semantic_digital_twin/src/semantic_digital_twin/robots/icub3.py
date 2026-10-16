@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+# %% Imports
 from abc import ABC
 
 import numpy as np
@@ -36,10 +37,12 @@ from semantic_digital_twin.robots.robot_parts import (
 )
 from semantic_digital_twin.datastructures.camera_model import FieldOfViewCameraModel
 from semantic_digital_twin.datastructures.field_of_view import FieldOfView
-from semantic_digital_twin.spatial_types import Vector3
+from semantic_digital_twin.spatial_types import HomogeneousTransformationMatrix, Vector3
 from semantic_digital_twin.world_description.world_entity import (
     KinematicStructureEntity,
 )
+
+# %% Robot parts
 
 
 class ICub3Joint(StrEnum):
@@ -574,8 +577,10 @@ class ICub3Camera(RobotCamera):
         cls, robot_root: KinematicStructureEntity
     ) -> Self:
         return cls(
-            root=robot_root._world.get_body_in_branch_by_name(robot_root, "head"),
-            forward_facing_axis=Vector3.Z(),
+            root=cls.create_optical_root(
+                robot_root._world.get_body_in_branch_by_name(robot_root, "head"),
+                HomogeneousTransformationMatrix(),
+            ),
             camera_model=FieldOfViewCameraModel(
                 view=FieldOfView(horizontal_angle=0.99483, vertical_angle=0.75049)
             ),

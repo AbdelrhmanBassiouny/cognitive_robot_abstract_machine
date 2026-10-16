@@ -5,6 +5,7 @@ This module provides classes for describing a world with predefined objects and 
 It builds semantic_digital_twin entities into a shared World instance.
 """
 
+# %% Imports
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -15,7 +16,6 @@ from semantic_digital_twin.datastructures.camera_model import (
 )
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.robots.robot_parts import Camera
-from semantic_digital_twin.spatial_types import Vector3
 from semantic_digital_twin.spatial_types import HomogeneousTransformationMatrix
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.connections import Connection6DoF
@@ -33,6 +33,8 @@ from semantic_digital_twin.world_description.world_entity import (
     SemanticAnnotation,
 )
 from typing_extensions import Any, Dict, List, Optional
+
+# %% Camera definitions
 
 
 @dataclass
@@ -83,22 +85,12 @@ class CameraSpec:
 
     pose: HomogeneousTransformationMatrix
     """
-    Camera-root pose relative to the parent body.
-    """
-
-    forward_facing_axis: Vector3
-    """
-    Viewing direction expressed in the camera root frame.
+    Optical-frame pose relative to the parent body (x right, y down, z forward).
     """
 
     camera_model: CameraModel
     """
     Native projection model of the camera.
-    """
-
-    root_T_optical: HomogeneousTransformationMatrix | None = None
-    """
-    Fixed root-relative optical pose; when omitted, the viewing axis selects its convention.
     """
 
     camera_range: CameraRange = field(default_factory=CameraRange)
@@ -261,7 +253,7 @@ class BaseWorldDescriptor:
 
     def build_camera(self, parent: Body, spec: CameraSpec) -> Camera:
         """
-        Create and attach one semantic camera.
+        Create an optical camera body and attach it at its specified parent-relative pose.
 
         :param parent: Body to which the camera root is attached.
         :param spec: Semantic camera description and relative pose.
@@ -278,8 +270,6 @@ class BaseWorldDescriptor:
             camera = Camera(
                 name=PrefixedName(name=spec.name),
                 root=camera_body,
-                forward_facing_axis=spec.forward_facing_axis,
-                root_T_optical=spec.root_T_optical,
                 camera_model=spec.camera_model,
                 camera_range=spec.camera_range,
                 modalities=spec.modalities,
@@ -287,7 +277,9 @@ class BaseWorldDescriptor:
             self.world.add_semantic_annotation(camera)
 
         with self.world.modify_world():
-            connection.origin = spec.pose
+            connection.origin = HomogeneousTransformationMatrix(
+                data=spec.pose, reference_frame=parent, child_frame=camera_body
+            )
 
         return camera
 

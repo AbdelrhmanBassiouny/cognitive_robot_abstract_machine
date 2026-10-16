@@ -22,6 +22,7 @@ The module handles:
 
 from __future__ import annotations
 
+# %% Imports
 import logging
 import struct
 from threading import Lock
@@ -63,16 +64,16 @@ from semantic_digital_twin.datastructures.camera_model import (
 )
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.robots.robot_parts import Camera
-from semantic_digital_twin.spatial_types import (
-    HomogeneousTransformationMatrix,
-    Vector3,
-)
+from semantic_digital_twin.spatial_types import HomogeneousTransformationMatrix
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.connections import Connection6DoF
 from semantic_digital_twin.world_description.world_entity import Body
 
 if TYPE_CHECKING:
     import numpy.typing as npt
+
+
+# %% Camera definitions
 
 
 class CameraInterface(object):
@@ -335,8 +336,6 @@ class CameraInterface(object):
             camera = Camera(
                 name=PrefixedName(name=camera_frame),
                 root=camera_body,
-                forward_facing_axis=Vector3.Z(),
-                root_T_optical=HomogeneousTransformationMatrix(),
                 camera_model=camera_model,
                 modalities=modalities,
             )

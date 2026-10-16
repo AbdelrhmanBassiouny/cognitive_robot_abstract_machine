@@ -26,10 +26,7 @@ from semantic_digital_twin.datastructures.camera_model import (
 from semantic_digital_twin.datastructures.field_of_view import FieldOfView
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.robots.robot_parts import AbstractRobot, Camera, RobotCamera
-from semantic_digital_twin.spatial_types import (
-    HomogeneousTransformationMatrix,
-    Vector3,
-)
+from semantic_digital_twin.spatial_types import HomogeneousTransformationMatrix
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.world_entity import Body
 
@@ -228,7 +225,6 @@ def test_resolver_rejects_pose_override_for_world_root_camera():
     camera = Camera(
         name=PrefixedName(name="root_camera"),
         root=camera_body,
-        forward_facing_axis=Vector3.Z(),
         camera_model=FieldOfViewCameraModel(view=FieldOfView()),
     )
     with world.modify_world():

@@ -1,3 +1,4 @@
+# %% Imports
 import os
 from collections import defaultdict
 from dataclasses import dataclass
@@ -44,7 +45,7 @@ from semantic_digital_twin.robots.robot_parts import (
     AbstractRobot,
     EndEffector,
 )
-from semantic_digital_twin.spatial_types import HomogeneousTransformationMatrix, Vector3
+from semantic_digital_twin.spatial_types import Vector3
 from semantic_digital_twin.world_description.connections import (
     ActiveConnection,
     OmniDrive,
@@ -52,6 +53,8 @@ from semantic_digital_twin.world_description.connections import (
 from semantic_digital_twin.world_description.world_entity import (
     KinematicStructureEntity,
 )
+
+# %% Robot parts
 
 
 class PR2Topic(StrEnum):
@@ -128,8 +131,6 @@ class PR2KinectV1(RobotCamera):
             root=robot_root._world.get_body_in_branch_by_name(
                 robot_root, "head_mount_kinect_rgb_optical_frame"
             ),
-            forward_facing_axis=Vector3.Z(),
-            root_T_optical=HomogeneousTransformationMatrix(),
             camera_model=FieldOfViewCameraModel(
                 view=FieldOfView(horizontal_angle=0.99483, vertical_angle=0.75049)
             ),
