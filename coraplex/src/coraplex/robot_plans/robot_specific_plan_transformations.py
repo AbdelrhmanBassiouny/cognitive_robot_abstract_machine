@@ -151,7 +151,9 @@ class KeepStretchFromTurningWhileMovingItsTool(
                 isinstance(node, MovesHandle) for node in [plan_node, *plan_node.path]
             )
             and not any(isinstance(node, DrivesBase) for node in plan_node.descendants)
-            and not any(self._holds_the_base(ancestor) for ancestor in plan_node.path)
+            and not any(
+                self._holds_the_base(ancestor, robot) for ancestor in plan_node.path
+            )
         )
 
     def apply(self, plan_node: MovesToolCenterPoint) -> None:
@@ -164,12 +166,17 @@ class KeepStretchFromTurningWhileMovingItsTool(
         ).wrap(plan_node.action_body)
 
     @staticmethod
-    def _holds_the_base(node: StatechartNode) -> bool:
+    def _holds_the_base(node: StatechartNode, robot: Stretch) -> bool:
         """
-        :return: Whether `node` holds the orientation of the base of a robot, which this
-            transformation makes an action do.
+        :return: Whether `node` runs what is below it beside a hold of the orientation of
+            the base of `robot`, as this transformation makes an action do. A hold
+            further down, such as that of an earlier action, does not cover the
+            others.
         """
-        return any(isinstance(child, HoldOrientation) for child in node.descendants)
+        return isinstance(node, Parallel) and any(
+            type(child) is HoldOrientation and child.tip_link is robot.root
+            for child in node.nodes
+        )
 
 
 # %% moving the tool center point in a straight line

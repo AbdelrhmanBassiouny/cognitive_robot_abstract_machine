@@ -40,6 +40,7 @@ from giskardpy.motion_statechart.tasks.cartesian_tasks import (
     CartesianPosition,
     CartesianPositionStraight,
     HoldOrientation,
+    HoldPose,
 )
 from giskardpy.motion_statechart.tasks.joint_tasks import JointPositionList
 from krrood.entity_query_language.factories import a, variable_from
@@ -644,6 +645,40 @@ def test_stretch_holds_the_orientation_of_its_base_once_for_nested_tool_motions(
 
     [hold] = held_orientations_of(action)
     assert hold.parent_node is action.action_body
+
+
+def test_stretch_holds_the_orientation_of_its_base_for_each_of_successive_tool_motions(
+    stretch_apartment_context,
+):
+    """
+    The hold of the first reach covers only that reach, not the one after it.
+    """
+    world, robot, extensions = stretch_apartment_context
+    reaches = [
+        ReachAction(grasp=handle_grasp(world), arm=robot.all_arms[0]) for _ in range(2)
+    ]
+
+    prepared(Sequence(list(reaches)), simulated_executor(extensions))
+
+    for reach in reaches:
+        [hold] = held_orientations_of(reach)
+        assert hold.parent_node is reach.action_body
+
+
+def test_stretch_holds_the_orientation_of_its_base_beside_a_hold_of_something_else(
+    stretch_apartment_context,
+):
+    world, robot, extensions = stretch_apartment_context
+    reach = ReachAction(grasp=handle_grasp(world), arm=robot.all_arms[0])
+    tool_frame = robot.all_arms[0].end_effector.tool_frame
+
+    prepared(
+        Parallel([HoldPose(root_link=world.root, tip_link=tool_frame), reach]),
+        simulated_executor(extensions),
+    )
+
+    [hold] = held_orientations_of(reach)
+    assert hold.tip_link is robot.root
 
 
 def test_stretch_holds_the_orientation_of_its_base_only_once_it_drove_there(
