@@ -13,9 +13,12 @@ from cramph.composites import (
 )
 from cramph.data_types import LifeCycleValues, ObservationStateValues
 from cramph.exceptions import (
+    ChildCannotBeWrappedError,
     NodeAlreadyAChildError,
     NodeIsNotAChildError,
     NotRunByLanguageNodeError,
+    StatechartAlreadyCompiledError,
+    TopLevelNodeCannotBeWrappedError,
 )
 from cramph.executor import StatechartExecutor
 from cramph.node import EndStatechart, StatechartNode
@@ -229,6 +232,90 @@ def test_a_parallel_can_still_arrive_through_a_node_inserted_after_it_joined(
     assert failing.life_cycle_state == LifeCycleValues.FAILED
     assert parallel.life_cycle_state == LifeCycleValues.RUNNING
     assert parallel.observation_state == ObservationStateValues.TRUE
+
+
+# %% wrapping a node
+
+
+def _at_goal(name: str) -> NodeObservingAFixedValue:
+    """
+    :return: A node that observes being at its goal and leaves ending it to its owner.
+    """
+    return NodeObservingAFixedValue(name=name, observation=ObservationStateValues.TRUE)
+
+
+def test_a_wrapped_step_runs_inside_its_wrapper_where_it_ran_before(
+    statechart_executor: StatechartExecutor,
+):
+    statechart = Statechart(context=statechart_executor.context)
+    first, wrapped, third = _succeeding("1"), _at_goal("wrapped"), _succeeding("3")
+    beside = _at_goal("beside")
+    statechart.add_node(sequence := Sequence(nodes=[first, wrapped, third]))
+    wrapper = Parallel(nodes=[beside])
+
+    wrapper.wrap(wrapped)
+    _run(statechart_executor, statechart, sequence)
+
+    assert sequence.nodes == [first, wrapper, third]
+    assert wrapper.nodes == [wrapped, beside]
+    assert wrapped.parent_node is wrapper
+    assert _start_order(statechart, [third, wrapper, first]) == [first, wrapper, third]
+    assert sequence.life_cycle_state == LifeCycleValues.SUCCEEDED
+
+
+def test_a_wrapped_node_is_no_longer_ended_by_the_node_that_ran_it(
+    statechart_executor: StatechartExecutor,
+):
+    """
+    The sequence ended the step once it was at its goal; a parallel ends none of its
+    nodes, so inside one the step keeps running while its sibling is not at its goal.
+    """
+    statechart = Statechart(context=statechart_executor.context)
+    wrapped = _at_goal("wrapped")
+    statechart.add_node(Sequence(nodes=[wrapped]))
+    Parallel(
+        nodes=[NodeObservingAFixedValue(observation=ObservationStateValues.FALSE)]
+    ).wrap(wrapped)
+
+    statechart_executor.compile(statechart)
+    statechart_executor.tick()
+    statechart_executor.tick()
+
+    assert wrapped.life_cycle_state == LifeCycleValues.RUNNING
+
+
+def test_wrapping_a_top_level_node_is_rejected(
+    statechart_executor: StatechartExecutor,
+):
+    statechart = Statechart(context=statechart_executor.context)
+    statechart.add_node(top_level := _at_goal("top level"))
+
+    with pytest.raises(TopLevelNodeCannotBeWrappedError):
+        Parallel(nodes=[_at_goal("beside")]).wrap(top_level)
+
+
+def test_wrapping_a_node_its_owner_cannot_hand_over_is_rejected(
+    statechart_executor: StatechartExecutor,
+):
+    statechart = Statechart(context=statechart_executor.context)
+    task = _at_goal("task")
+    statechart.add_node(Attempt(task=task, failure_monitors=[ConstFalseNode()]))
+
+    with pytest.raises(ChildCannotBeWrappedError):
+        Parallel(nodes=[_at_goal("beside")]).wrap(task)
+
+
+def test_wrapping_a_node_of_a_compiled_statechart_is_rejected(
+    statechart_executor: StatechartExecutor,
+):
+    statechart = Statechart(context=statechart_executor.context)
+    wrapped = _at_goal("wrapped")
+    statechart.add_node(sequence := Sequence(nodes=[wrapped]))
+    statechart.add_node(EndStatechart.when_true(sequence))
+    statechart_executor.compile(statechart)
+
+    with pytest.raises(StatechartAlreadyCompiledError):
+        Parallel(nodes=[_at_goal("beside")]).wrap(wrapped)
 
 
 # %% the language node running a node

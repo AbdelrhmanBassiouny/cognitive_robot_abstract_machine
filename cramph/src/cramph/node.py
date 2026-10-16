@@ -33,6 +33,7 @@ from cramph.data_types import (
     NodeJSONKey,
 )
 from cramph.exceptions import (
+    ChildCannotBeWrappedError,
     ChildTransitionAlreadyWiredError,
     NotInStatechartError,
     EndInCompositeNodeError,
@@ -1330,6 +1331,14 @@ class StatechartNode(SubclassJSONSerializer, metaclass=ABCMeta):
             raise NotInStatechartError(self.name)
         transition.update_expression(expression, self)
 
+    def _clear_owner_wiring(self) -> None:
+        """
+        Gives every transition the owner of this node wires back the condition it was
+        created with, so that another owner can wire it.
+        """
+        for transition_kind in TransitionKind.owner_wired_kinds():
+            self.set_condition(transition_kind, transition_kind.unwired_condition)
+
     def _get_transition(self, transition_kind: TransitionKind) -> TransitionCondition:
         """
         :param transition_kind: The kind of transition to look up.
@@ -2222,19 +2231,26 @@ class CompositeNode(StatechartNode):
         :raises ChildTransitionAlreadyWiredError: If one of the child's transitions is
             no longer the one it was constructed with.
         """
-        wired_by_default = {
-            TransitionKind.START: Scalar.const_true(),
-            TransitionKind.PAUSE: Scalar.const_false(),
-            TransitionKind.SUCCEED: Scalar.const_false(),
-            TransitionKind.INTERRUPT: Scalar.const_false(),
-            TransitionKind.RESET: Scalar.const_false(),
-        }
-        for transition_kind, default in wired_by_default.items():
+        for transition_kind in TransitionKind.owner_wired_kinds():
             condition = node.get_condition(transition_kind)
-            if str(condition) != str(default):
+            if str(condition) != str(transition_kind.unwired_condition):
                 raise ChildTransitionAlreadyWiredError(
                     node=self, child=node, transition_kind=transition_kind
                 )
+
+    def _hand_over_place_of(
+        self, child: StatechartNode, successor: StatechartNode
+    ) -> None:
+        """
+        Runs `successor`, which belongs to no statechart yet, where `child` ran, wired
+        the way this node wires its children. `child` stays in the statechart, for
+        `successor` to run, see :meth:`~cramph.composites.CramLanguageNode.wrap`.
+
+        :param child: A node this node runs.
+        :param successor: The node to run in its place.
+        :raises ChildCannotBeWrappedError: Unless a subclass hands its place over.
+        """
+        raise ChildCannotBeWrappedError(node=self, child=child)
 
     def _succeed_at_its_goal(self, child: StatechartNode) -> None:
         """

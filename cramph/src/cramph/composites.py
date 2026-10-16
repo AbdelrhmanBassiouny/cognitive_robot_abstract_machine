@@ -23,6 +23,7 @@ from cramph.data_types import (
 from cramph.exceptions import (
     NotRunByLanguageNodeError,
     AttemptWithoutFailureMonitorsError,
+    TopLevelNodeCannotBeWrappedError,
     ChildCannotFailError,
     NodeAlreadyAChildError,
     NodeIsNotAChildError,
@@ -303,6 +304,43 @@ class CramLanguageNode(CompositeNode, ABC):  # ControlStructureNode?
         self._place_child_in_statechart(node)
         self._wire_children()
         self.statechart.remove_node(replaced)
+
+    def wrap(self, node: StatechartNode) -> None:
+        """
+        Takes the place of `node` under the node running it, and runs `node`, with
+        everything below it, as its first child. The conditions the former owner wired
+        for `node` are cleared, so that this goal wires them.
+
+        .. warning:: A :meth:`~cramph.statechart.Statechart.modify` block that raises
+            after the wrap drops this goal, but does not give `node` back to its former
+            owner.
+
+        :param node: A node of a statechart that is not compiled yet.
+        :raises TopLevelNodeCannotBeWrappedError: If no node runs `node`.
+        :raises ChildCannotBeWrappedError: If the node running `node` cannot run another
+            node in its place.
+        :raises NodeAlreadyAChildError: If this goal already runs `node`.
+        :raises StatechartAlreadyCompiledError: If the latest compile covered the node
+            running `node`.
+        """
+        owner = node.parent_node
+        if owner is None:
+            raise TopLevelNodeCannotBeWrappedError(node=self, wrapped=node)
+        self._check_does_not_run(node)
+        owner._hand_over_place_of(node, self)
+        node._clear_owner_wiring()
+        node.parent_node = self
+        self._insert_at(0, node)
+
+    def _hand_over_place_of(
+        self, child: StatechartNode, successor: StatechartNode
+    ) -> None:
+        position = self._position_of(child)
+        self._check_can_run(successor)
+        self._check_accepts_children()
+        self.nodes[position] = successor
+        self._place_child_in_statechart(successor)
+        self._wire_children()
 
     @staticmethod
     def running(node: StatechartNode) -> CramLanguageNode:

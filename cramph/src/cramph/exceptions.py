@@ -739,6 +739,51 @@ class NodeAlreadyAChildError(NodeInitializationError):
 
 
 @dataclass
+class TopLevelNodeCannotBeWrappedError(NodeInitializationError):
+    """
+    Raised when a plan language node is asked to wrap a node no other node runs, so
+    there is no place for the wrapper to take.
+    """
+
+    wrapped: StatechartNode
+    """
+    The node that was to be wrapped.
+    """
+
+    def error_message(self) -> str:
+        return f"{self.node.name} cannot wrap {self.wrapped.name}, which no node runs."
+
+    def suggest_correction(self) -> str:
+        return (
+            f"Hand {self.wrapped.name} to {self.node.name} before adding it to the "
+            f"statechart."
+        )
+
+
+@dataclass
+class ChildCannotBeWrappedError(NodeInitializationError):
+    """
+    Raised when a node is wrapped whose owner cannot run another node in its place.
+    """
+
+    child: StatechartNode
+    """
+    The child that was to be wrapped.
+    """
+
+    def error_message(self) -> str:
+        return (
+            f"{self.node.name} cannot run another node in place of {self.child.name}."
+        )
+
+    def suggest_correction(self) -> str:
+        return (
+            f"Wrap a node whose owner hands its place over, or override "
+            f"_hand_over_place_of in {type(self.node).__name__}."
+        )
+
+
+@dataclass
 class NotRunByLanguageNodeError(NodeInitializationError):
     """
     Raised when the plan language node running a node is asked for, but no plan language
