@@ -8,6 +8,7 @@ from typing_extensions import Callable, Iterable, List, Optional
 from coraplex.datastructures.enums import InsertionPosition, ReachFraction
 from coraplex.exceptions import (
     CannotMatchOnType,
+    FirstActionNotRunInSequence,
     ReachHasNoFinalApproach,
 )
 from coraplex.plans.plan_transformation import (
@@ -41,6 +42,7 @@ from coraplex.robot_plans.actions.core.robot_body import (
     MoveFingersToWidthAction,
     MoveTorsoAction,
     ParkArmsAction,
+    SetGripperAction,
 )
 from coraplex.robot_plans.plan_transformations import (
     CloseFingersToObjectWidth,
@@ -53,6 +55,7 @@ from coraplex.robot_plans.plan_transformations import (
 from cramph.composites import (
     ChildChooser,
     CramLanguageNode,
+    Parallel,
     Sequence,
     StatementNode,
 )
@@ -1076,6 +1079,43 @@ def test_the_first_action_of_a_plan_is_preceded_by_parking(pr2_apartment_context
     )
 
     assert kinds_of_the_steps_of(plan) == [ParkArmsAction, MoveTorsoAction]
+
+
+def test_parking_ends_before_a_first_action_running_in_parallel_starts(
+    pr2_apartment_context,
+):
+    """
+    Parking alongside the actions that start the plan would pull their arms back while
+    they move.
+    """
+    world, view, extensions = pr2_apartment_context
+    started_together = [
+        MoveTorsoAction(TorsoState.HIGH),
+        SetGripperAction(view.right_arm.end_effector, GripperState.OPEN),
+    ]
+    in_parallel = Parallel(list(started_together))
+
+    plan = rewritten(Sequence([in_parallel]), extensions, [ParkArmsBeforeFirstAction()])
+
+    [parking, running_in_parallel] = steps_of(plan)
+    assert isinstance(parking, ParkArmsAction)
+    assert running_in_parallel is in_parallel
+    assert in_parallel.nodes == started_together
+
+
+def test_parking_needs_a_sequence_to_run_before_the_first_action(
+    pr2_apartment_context,
+):
+    world, view, extensions = pr2_apartment_context
+    torso_move = MoveTorsoAction(TorsoState.HIGH)
+    plan = Parallel(
+        [torso_move, SetGripperAction(view.right_arm.end_effector, GripperState.OPEN)]
+    )
+
+    with pytest.raises(FirstActionNotRunInSequence) as raised:
+        rewritten(plan, extensions, [ParkArmsBeforeFirstAction()])
+
+    assert raised.value.plan_node is torso_move
 
 
 def underspecified_move_and_pick_up_in(plan: StatechartNode) -> StatementNode:

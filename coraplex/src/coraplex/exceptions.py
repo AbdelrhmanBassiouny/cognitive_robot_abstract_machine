@@ -192,6 +192,26 @@ class ClosingGoalNotFound(DataclassException):
 
 
 @dataclass
+class FirstActionNotRunInSequence(DataclassException):
+    """
+    Raised when the arms are to be parked before the first action of a plan, but no
+    :class:`~cramph.composites.Sequence` runs that action, so nothing could run the
+    parking before it.
+    """
+
+    plan_node: StatechartNode
+    """
+    The first action of the plan.
+    """
+
+    def error_message(self) -> str:
+        return f"No sequence runs {self.plan_node}, the first action of its plan."
+
+    def suggest_correction(self) -> str:
+        return "run the plan in a sequence"
+
+
+@dataclass
 class ReachHasNoFinalApproach(DataclassException):
     """
     Raised when the final approach of a reach is asked for, but no tool center point
