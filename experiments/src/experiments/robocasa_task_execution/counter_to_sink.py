@@ -3,10 +3,12 @@ A PR2 performs RoboCasa's counter to sink pick and place task with an underspeci
 coraplex plan.
 
 RoboCasa composes the kitchen, samples the object to move and says where its own robot
-starts. The PR2 is spawned there and given a transport whose standing poses and grasps
-are left open; coraplex grounds them by trying candidates against a copy of the world.
-The PR2 lets go of the object above the sink, and RoboCasa's physics lets it fall in.
-Whether the task succeeded is decided by RoboCasa's own check.
+starts. The PR2 is spawned there and given a pick up whose standing pose and grasp are
+left open; coraplex grounds them by trying candidates against a copy of the world. The
+PR2 then stands in front of the sink and lowers the object into the basin along a path a
+graph of convex sets plans through the free space around the sink, and lets go of it
+just above the basin floor. Whether the task succeeded is decided by RoboCasa's own
+check.
 
 The episode is performed either kinematically or in MuJoCo physics, where the PR2's
 servos and drive move it and its fingers hold the object by friction alone.
@@ -54,8 +56,15 @@ from coraplex.execution_environment import (
 from coraplex.plans.plan_node import PlanNode
 from coraplex.plans.factories import sequential
 from experiments.robocasa_task_execution.exceptions import NoClearStandingPose
-from coraplex.robot_plans.actions.composite.transporting import TransportAction
-from coraplex.robot_plans.actions.core.robot_body import MoveTorsoAction
+from coraplex.robot_plans.actions.composite.transporting import MoveAndPickUpAction
+from coraplex.robot_plans.actions.core.robot_body import (
+    MoveTorsoAction,
+    ParkArmsAction,
+)
+from experiments.robocasa_task_execution.placing_into_the_basin import (
+    PlacingIntoTheBasin,
+    SinkBasin,
+)
 from semantic_digital_twin.adapters.multi_sim import MujocoSim
 from semantic_digital_twin.adapters.robocasa_dataset.loader import (
     RoboCasaDatasetLoader,
@@ -166,19 +175,23 @@ class CounterToSinkEpisode:
     """
 
     @classmethod
-    def compose(cls, layout: LayoutType, style: StyleType) -> Self:
+    def compose(
+        cls, layout: LayoutType, style: StyleType, seed: int | None = None
+    ) -> Self:
         """
         Compose a new episode, with the target object and distractors RoboCasa samples
         for it.
 
         :param layout: The kitchen layout to compose the episode in.
         :param style: The visual style of the kitchen.
+        :param seed: The seed RoboCasa samples the objects and their placements with;
+            ``None`` samples a different episode every time.
         :return: The episode, with the PR2 standing clear of the kitchen at or behind
             RoboCasa's start pose.
         """
         loader = RoboCasaDatasetLoader()
         environment = loader.build_task_environment(
-            RoboCasaTaskName.PICK_PLACE_COUNTER_TO_SINK, layout, style
+            RoboCasaTaskName.PICK_PLACE_COUNTER_TO_SINK, layout, style, seed=seed
         )
         task = loader.load_task_from_environment(environment)
         world = task.world
@@ -272,10 +285,7 @@ class CounterToSinkEpisode:
         :return: Where the target object is let go of: centred over the first basin of
             the sink, oriented as it stands now.
         """
-        _, x_corner, y_corner, rim_corner = next(
-            iter(self.environment.sink.get_int_sites(relative=False).values())
-        )
-        basin_center = (x_corner + y_corner) / 2
+        basin = SinkBasin.first_of(self.environment.sink)
         world = self.task.world
         body = self.target_object.root
         object_pose = body.global_pose
@@ -287,44 +297,66 @@ class CounterToSinkEpisode:
         height_above_lowest_point = object_pose.to_np()[2, 3] - lowest_point
         return Pose(
             position=Point3(
-                basin_center[0],
-                basin_center[1],
-                rim_corner[2] + height_above_lowest_point + drop_height,
+                basin.floor_center[0],
+                basin.floor_center[1],
+                basin.rim_height + height_above_lowest_point + drop_height,
             ),
             orientation=object_pose.quaternion,
             reference_frame=world.root,
         )
 
-    def transport_plan(self, sampling_seed: int) -> PlanNode:
+    def pick_up_plan(self, sampling_seed: int) -> PlanNode:
         """
         :param sampling_seed: The seed the standing poses are sampled with.
-        :return: The plan carrying the target object from the counter into the sink,
-            standing wherever and grasping however a trial finds to work.
+        :return: The plan picking the target object up from the counter with the right
+            arm, standing wherever and grasping however a trial finds to work, and
+            parking the arms afterwards.
         """
         context = Context(self.task.world, self.robot, sampling_seed=sampling_seed)
-        transport = TransportAction.from_graspable_by_closest_grasps(
-            self.target_object, self.placement_pose(), self.robot.right_arm, context
+        arms = self.robot.all_arms
+        pick_up = MoveAndPickUpAction.from_graspable_by_closest_grasps(
+            graspable=self.target_object, arm=self.robot.right_arm, context=context
         )
-        return sequential([MoveTorsoAction(TorsoState.HIGH), transport], context)
+        return sequential(
+            [
+                MoveTorsoAction(TorsoState.HIGH),
+                ParkArmsAction(arms),
+                pick_up,
+                ParkArmsAction(arms),
+            ],
+            context,
+        )
+
+    def placing_into_the_sink(self) -> PlacingIntoTheBasin:
+        """
+        :return: The placing of the target object, held by the right arm, into the first
+            basin of the sink.
+        """
+        return PlacingIntoTheBasin(
+            basin=SinkBasin.first_of(self.environment.sink),
+            held_object=self.target_object.root,
+            arm=self.robot.right_arm,
+            context=Context(self.task.world, self.robot),
+        )
 
     def perform(
         self, sampling_seed: int = 42, collision_avoidance: bool = True
     ) -> CounterToSinkOutcome:
         """
         Have the PR2 carry the target object into the sink kinematically, and let
-        RoboCasa's physics drop it in.
+        RoboCasa's physics settle it there.
 
         :param sampling_seed: The seed the standing poses are sampled with.
         :param collision_avoidance: Whether the PR2 avoids colliding with the kitchen
             and with itself while moving.
         :return: How the episode ended.
         """
-        plan = self.transport_plan(sampling_seed)
         with ExecutionEnvironment(
             ExecutionType.KINEMATICALLY_SIMULATED,
             collision_avoidance=collision_avoidance,
         ):
-            plan.perform()
+            self.pick_up_plan(sampling_seed).perform()
+            self.placing_into_the_sink().plan().perform()
         self.let_the_target_object_fall()
         return self.outcome()
 
@@ -366,8 +398,8 @@ class CounterToSinkEpisode:
     ) -> CounterToSinkOutcome:
         """
         Have the PR2 carry the target object into the sink in a physical simulation,
-        where its fingers hold the object by friction alone and the object falls into
-        the sink once they let go.
+        where its fingers hold the object by friction alone and the object drops onto
+        the basin floor once they let go.
 
         :param simulation: The started simulation of the episode's world, see
             :meth:`start_physical_simulation`.
@@ -378,11 +410,11 @@ class CounterToSinkEpisode:
             object to come to rest.
         :return: How the episode ended.
         """
-        plan = self.transport_plan(sampling_seed)
         with PhysicallySimulatedRobot(
             simulation=simulation, collision_avoidance=collision_avoidance
         ):
-            plan.perform()
+            self.pick_up_plan(sampling_seed).perform()
+            self.placing_into_the_sink().plan().perform()
         simulation.step_simulation(settling_time)
         return self.outcome()
 
@@ -474,6 +506,12 @@ def _parse_arguments() -> argparse.Namespace:
         help="RoboCasa visual style of the kitchen.",
     )
     parser.add_argument(
+        "--seed",
+        type=int,
+        default=None,
+        help="Seed RoboCasa samples the objects and their placements with.",
+    )
+    parser.add_argument(
         "--physics",
         action="store_true",
         help="Perform the episode in MuJoCo physics instead of kinematically.",
@@ -495,7 +533,7 @@ def main() -> None:
     logging.basicConfig(level=logging.INFO, force=True)
     arguments = _parse_arguments()
     episode = CounterToSinkEpisode.compose(
-        LayoutType[arguments.layout], StyleType[arguments.style]
+        LayoutType[arguments.layout], StyleType[arguments.style], seed=arguments.seed
     )
     logger.info("Task: %s", episode.task.instruction)
     if not arguments.physics:

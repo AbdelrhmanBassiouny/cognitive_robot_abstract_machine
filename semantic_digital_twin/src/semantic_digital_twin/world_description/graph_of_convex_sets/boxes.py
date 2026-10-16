@@ -589,6 +589,7 @@ class VolumetricGraphOfBoundingBoxes(
         tolerance=0.001,
         bloat_obstacles: float = 0.0,
         bloat_walls: float = 0.0,
+        obstacle_height_clearance: float = 0.01,
     ) -> Self:
         """
         Create a connectivity graph from the free space in the belief state of the
@@ -603,6 +604,8 @@ class VolumetricGraphOfBoundingBoxes(
             connectivity.
         :param bloat_obstacles: The amount to bloat the obstacles.
         :param bloat_walls: The amount to bloat the walls.
+        :param obstacle_height_clearance: The amount to bloat every obstacle and wall
+            upwards and downwards.
         :return: The connectivity graph. If no obstacles are found, an empty graph is
             returned.
         """
@@ -612,6 +615,7 @@ class VolumetricGraphOfBoundingBoxes(
                 semantic_wall_annotation,
                 bloat_obstacles,
                 bloat_walls,
+                obstacle_height_clearance,
             )
         )
 
@@ -652,6 +656,7 @@ class VolumetricGraphOfBoundingBoxes(
         search_space: BoundingBoxCollection[VolumetricBoundingBox, Point3],
         tolerance=0.001,
         bloat_obstacles: float = 0.0,
+        obstacle_height_clearance: float = 0.01,
     ) -> Self:
         """
         Create a connectivity graph from the free space in the belief state of the
@@ -662,6 +667,8 @@ class VolumetricGraphOfBoundingBoxes(
         :param tolerance: The tolerance for the intersection when calculating the
             connectivity.
         :param bloat_obstacles: The amount to bloat the obstacles.
+        :param obstacle_height_clearance: The amount to bloat every obstacle upwards and
+            downwards.
         :return: The connectivity graph.
         """
         semantic_annotation = SemanticEnvironmentAnnotation(
@@ -673,6 +680,7 @@ class VolumetricGraphOfBoundingBoxes(
             semantic_obstacle_annotation=semantic_annotation,
             tolerance=tolerance,
             bloat_obstacles=bloat_obstacles,
+            obstacle_height_clearance=obstacle_height_clearance,
         )
 
 
