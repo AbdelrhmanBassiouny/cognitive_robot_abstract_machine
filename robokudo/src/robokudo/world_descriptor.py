@@ -5,15 +5,12 @@ This module provides classes for describing a world with predefined objects and 
 It builds semantic_digital_twin entities into a shared World instance.
 """
 
+from __future__ import annotations
+
 # %% Imports
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from semantic_digital_twin.datastructures.camera_model import (
-    CameraModality,
-    CameraModel,
-    CameraRange,
-)
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.robots.robot_parts import Camera
 from semantic_digital_twin.spatial_types import HomogeneousTransformationMatrix
@@ -73,34 +70,19 @@ class RegionSpec:
 
 
 @dataclass
-class CameraSpec:
+class CameraPlacement:
     """
-    Describe a semantic camera and its attachment to a world.
-    """
-
-    name: str
-    """
-    Name shared by the camera annotation and its root body.
+    Place a detached semantic camera relative to a parent body.
     """
 
-    pose: HomogeneousTransformationMatrix
+    camera: Camera
     """
-    Optical-frame pose relative to the parent body (x right, y down, z forward).
-    """
-
-    camera_model: CameraModel
-    """
-    Native projection model of the camera.
+    Camera annotation whose optical root will be attached to the parent.
     """
 
-    camera_range: CameraRange = field(default_factory=CameraRange)
+    parent_T_camera: HomogeneousTransformationMatrix
     """
-    Usable distance interval of the camera.
-    """
-
-    modalities: tuple[CameraModality, ...] = field(default_factory=tuple)
-    """
-    Kinds of image data the camera can produce.
+    Optical-frame pose relative to the selected parent body.
     """
 
 
@@ -251,36 +233,30 @@ class BaseWorldDescriptor:
 
         return connections
 
-    def build_camera(self, parent: Body, spec: CameraSpec) -> Camera:
+    def build_camera(self, parent: Body, placement: CameraPlacement) -> Camera:
         """
-        Create an optical camera body and attach it at its specified parent-relative pose.
+        Attach and register the supplied camera at its parent-relative optical pose.
 
-        :param parent: Body to which the camera root is attached.
-        :param spec: Semantic camera description and relative pose.
-        :return: Camera annotation added to this descriptor's world.
+        :param parent: Body to which the detached optical root is attached.
+        :param placement: Camera annotation and its optical pose relative to the parent.
+        :return: The supplied camera annotation registered in this descriptor's world.
         """
+        camera = placement.camera
         with self.world.modify_world():
-            camera_body = Body(name=PrefixedName(name=spec.name))
             connection = Connection6DoF.create_with_dofs(
                 parent=parent,
-                child=camera_body,
+                child=camera.root,
                 world=self.world,
             )
             self.world.add_connection(connection)
-            camera = Camera(
-                name=PrefixedName(name=spec.name),
-                root=camera_body,
-                camera_model=spec.camera_model,
-                camera_range=spec.camera_range,
-                modalities=spec.modalities,
-            )
             self.world.add_semantic_annotation(camera)
 
         with self.world.modify_world():
             connection.origin = HomogeneousTransformationMatrix(
-                data=spec.pose, reference_frame=parent, child_frame=camera_body
+                data=placement.parent_T_camera,
+                reference_frame=parent,
+                child_frame=camera.root,
             )
-
         return camera
 
     def get_predefined_object_bodies(self) -> List[Body]:

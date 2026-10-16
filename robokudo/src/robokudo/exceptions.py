@@ -183,6 +183,30 @@ class CameraPoseOverrideUnavailable(RoboKudoError):
         return "attach the camera root through a Connection6DoF or omit camera_pose."
 
 
+# %% ROS frame identifiers
+
+
+@dataclass
+class InvalidROSFrameId(RoboKudoError, ValueError):
+    """
+    Raised when a ROS frame identifier is empty after normalization.
+    """
+
+    frame_id: str
+    """
+    Supplied ROS frame identifier.
+    """
+
+    def error_message(self) -> str:
+        return f"Invalid ROS frame identifier: {self.frame_id!r}."
+
+    def suggest_correction(self) -> str:
+        return "provide a nonempty ROS frame identifier containing more than leading slashes."
+
+
+# %% Camera observations
+
+
 @dataclass
 class InvalidCameraObservation(RoboKudoError, TypeError):
     """

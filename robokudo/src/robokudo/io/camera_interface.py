@@ -52,7 +52,7 @@ from robokudo.io.camera_model_adapters import RosCameraModelAdapter
 from robokudo.io.tf_listener_proxy import TFListenerProxy
 from robokudo.types.camera import CameraObservation
 from robokudo.utils.cv_bridge_workaround import CVBridgeWorkaround
-from robokudo.utils.ros_frames import normalize_ros_frame_id
+from robokudo.utils.ros_frames import find_bodies_for_ros_frame, normalize_ros_frame_id
 from robokudo.world import (
     init_world_entity_tracker_from_world,
     world_instance,
@@ -137,8 +137,8 @@ class CameraInterface(object):
             raise InvalidCameraObservation(
                 reason="the camera and world reference frames are identical"
             )
-        reference_matches = CameraInterface._bodies_for_ros_frame(world, reference_name)
-        camera_matches = CameraInterface._bodies_for_ros_frame(world, camera_name)
+        reference_matches = find_bodies_for_ros_frame(world, reference_name)
+        camera_matches = find_bodies_for_ros_frame(world, camera_name)
         if len(reference_matches) > 1 or len(camera_matches) > 1:
             raise InvalidCameraObservation(reason="camera pose frame is ambiguous")
 
@@ -201,18 +201,6 @@ class CameraInterface(object):
         return PrefixedName(
             name=f"{CameraInterface.STANDALONE_MOUNT_PREFIX}{camera_body.id}"
         )
-
-    @staticmethod
-    def _bodies_for_ros_frame(world: World, frame_id: str) -> list[Body]:
-        """
-        Find bodies whose names identify the same ROS frame.
-        """
-        normalized = normalize_ros_frame_id(frame_id)
-        return [
-            body
-            for body in world.bodies
-            if normalize_ros_frame_id(str(body.name)) == normalized
-        ]
 
     def static_world_T_camera_if_configured(
         self, camera_frame: str
@@ -303,7 +291,7 @@ class CameraInterface(object):
                 camera_names=tuple(str(camera.name) for camera in frame_cameras)
             )
 
-        camera_bodies = self._bodies_for_ros_frame(runtime_world, camera_frame)
+        camera_bodies = find_bodies_for_ros_frame(runtime_world, camera_frame)
         if len(camera_bodies) > 1:
             raise InvalidCameraObservation(reason="camera frame is ambiguous")
         camera_body = (
