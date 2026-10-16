@@ -28,12 +28,8 @@ from giskardpy.motion_statechart.goals.collision_avoidance import (
     _CancelBecauseExternalCollisionViolated,
     _CancelBecauseSelfCollisionViolated,
     _CollisionAvoidanceTask,
-    _ExternalCollisionAvoidanceNode,
     _ExternalCollisionAvoidanceTask,
-    _ExternalCollisionHasData,
-    _SelfCollisionAvoidanceNode,
     _SelfCollisionAvoidanceTask,
-    _SelfCollisionHasData,
 )
 from giskardpy.motion_statechart.goals.gripper import MoveGripper
 from giskardpy.motion_statechart.goals.open_close import Close, Open
@@ -849,7 +845,6 @@ def _collision_cases() -> list[NodeRoundTripCase]:
             )
             for node_type in (
                 ExternalCollisionAvoidance,
-                _ExternalCollisionHasData,
                 _ExternalCollisionAvoidanceTask,
                 _CancelBecauseExternalCollisionViolated,
             )
@@ -862,7 +857,6 @@ def _collision_cases() -> list[NodeRoundTripCase]:
             )
             for node_type in (
                 SelfCollisionAvoidance,
-                _SelfCollisionHasData,
                 _SelfCollisionAvoidanceTask,
                 _CancelBecauseSelfCollisionViolated,
             )
@@ -891,8 +885,6 @@ def _node_types_never_added_to_a_statechart() -> set[type[StatechartNode]]:
         FeatureFunctionMonitor,
         _CollisionAvoidanceTask,
         _CancelBecauseCollisionViolated,
-        _ExternalCollisionAvoidanceNode,
-        _SelfCollisionAvoidanceNode,
     }
 
 
