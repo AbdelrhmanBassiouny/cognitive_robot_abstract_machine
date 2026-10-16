@@ -1,0 +1,28 @@
+name: Library matrix
+
+on:
+  pull_request:
+
+concurrency:
+  group: library-matrix-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  changed-libraries:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      excluded: ${{ steps.select.outputs.excluded }}
+    steps:
+      - id: select
+        run: echo 'excluded=[]' >> "$GITHUB_OUTPUT"
+  test_each_lib:
+    needs: [changed-libraries]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      matrix:
+        lib: [core, middle_library, leaf, lonely, cycle_first, cycle_second, meta_package, checks]
+        exclude: ${{ fromJSON(needs.changed-libraries.outputs.excluded) }}
+    steps:
+      - run: echo tested

@@ -128,6 +128,11 @@ class ProjectLocation(PathEnumeration):
     This package's own directory.
     """
 
+    PACKAGE_TESTS = Path("test") / f"{PackageLocation.DIRECTORY.value.name}_test"
+    """
+    This package's own tests.
+    """
+
     PACKAGE_ENVIRONMENT = PACKAGE_SOURCE_TREE / ".venv"
     """
     The package's own virtual environment, which a session start creates and installs

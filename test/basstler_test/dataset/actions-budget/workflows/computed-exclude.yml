@@ -1,0 +1,28 @@
+name: Computed exclude
+
+on:
+  pull_request:
+
+concurrency:
+  group: computed-exclude-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  choose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      excluded: ${{ steps.choose.outputs.excluded }}
+    steps:
+      - id: choose
+        run: echo 'excluded=[{"library":"second"}]' >> "$GITHUB_OUTPUT"
+  test:
+    needs: [choose]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      matrix:
+        library: [first, second, third]
+        exclude: ${{ fromJSON(needs.choose.outputs.excluded) }}
+    steps:
+      - run: echo tested

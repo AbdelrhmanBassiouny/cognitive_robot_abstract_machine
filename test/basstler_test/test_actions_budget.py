@@ -114,6 +114,15 @@ def test_a_matrix_computed_at_run_time_cannot_be_counted():
     assert dataset_workflow("computed-matrix.yml").jobs_per_run is None
 
 
+def test_a_matrix_excluding_combinations_at_run_time_is_counted_by_its_axes():
+    """
+    Excluding can only remove combinations, so the three-library axis bounds the run:
+
+    one choosing job and at most three tests.
+    """
+    assert dataset_workflow("computed-exclude.yml").jobs_per_run == 1 + 3
+
+
 # %% workflows that keep to the budget
 
 

@@ -1,6 +1,6 @@
 """
-The ways a workflow can break the Actions budget, and the ways writing a budget file can
-fail.
+The ways a workflow can break the Actions budget, the ways writing a budget file can
+fail, and the ways reading a workflow's library matrix can.
 """
 
 from __future__ import annotations
@@ -189,6 +189,41 @@ class OverrideWithoutWorkflow(BudgetViolation):
 
     def error_message(self) -> str:
         return "has limits in the budget but no workflow file; remove its override"
+
+
+# %% library matrix errors
+
+
+@dataclass
+class MissingMatrixAxis(LookupError):
+    """
+    A workflow has no job of the key asked for, or its matrix has no static axis of the
+    name asked for.
+    """
+
+    workflow: Path
+    """
+    The workflow file.
+    """
+
+    job: str
+    """
+    The job's key.
+    """
+
+    axis: str
+    """
+    The axis asked for.
+    """
+
+    def __str__(self) -> str:
+        """
+        :return: Which axis is missing, and where.
+        """
+        return (
+            f"{self.workflow}: job {self.job!r} has no static matrix axis "
+            f"{self.axis!r}; name an axis listed in its strategy.matrix"
+        )
 
 
 # %% budget file errors

@@ -35,6 +35,7 @@ dependencies = [
     "jinja2>=3",
     "markdown>=3",
     "nh3>=0.2",
+    "packaging>=23",
 ]
 dynamic = ["version"]
 
