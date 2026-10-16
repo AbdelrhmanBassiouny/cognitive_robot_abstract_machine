@@ -51,7 +51,7 @@ class KeywordOnlyConstructorAudit:
         module_names = tuple(module.__name__ for module in self.modules)
         return [
             PositionalConstructorParameters(node_class, parameter_names)
-            for node_class in self._subclasses(StatechartNode)
+            for node_class in dict.fromkeys(self._subclasses(StatechartNode))
             if node_class.__module__.startswith(module_names)
             and is_dataclass(node_class)
             and (parameter_names := self._positional_parameter_names(node_class))
@@ -73,7 +73,8 @@ class KeywordOnlyConstructorAudit:
 
     def _subclasses(self, node_class: type[StatechartNode]) -> Iterator[type]:
         """
-        :return: Every direct and indirect subclass of `node_class`.
+        :return: Every direct and indirect subclass of `node_class`, once per path it
+            inherits from `node_class` along.
         """
         for subclass in node_class.__subclasses__():
             yield subclass

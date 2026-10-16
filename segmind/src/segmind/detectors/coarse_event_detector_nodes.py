@@ -34,7 +34,7 @@ from segmind.detectors.spatial_relation_detector_nodes import SupportDetector
 from segmind.detectors.agent_event_detector_nodes import GraspDetector
 
 
-@dataclass
+@dataclass(kw_only=True)
 class AbstractInteractionDetector(EventCombiningDetector):
     """
     Abstract base class for interaction-based detectors.
@@ -168,7 +168,7 @@ class AbstractInteractionDetector(EventCombiningDetector):
         return events
 
 
-@dataclass
+@dataclass(kw_only=True)
 class PlacingDetector(AbstractInteractionDetector):
     """
     Reports an object being put down.
@@ -219,7 +219,7 @@ class PlacingDetector(AbstractInteractionDetector):
         )
 
 
-@dataclass
+@dataclass(kw_only=True)
 class PickUpDetector(AbstractInteractionDetector):
     """
     Reports an object being picked up.

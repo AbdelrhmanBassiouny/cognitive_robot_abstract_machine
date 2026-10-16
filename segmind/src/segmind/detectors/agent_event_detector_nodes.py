@@ -26,7 +26,7 @@ from semantic_digital_twin.robots.robot_parts import EndEffector
 from semantic_digital_twin.world_description.world_entity import Body
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class GraspDetector(AbstractDetector):
     """
     Reports an object being taken hold of by an agent, and being let go of again.

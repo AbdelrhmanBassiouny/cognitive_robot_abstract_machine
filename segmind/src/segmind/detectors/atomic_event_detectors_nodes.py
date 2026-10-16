@@ -23,7 +23,7 @@ from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.world_entity import Body
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class ContactDetector(AbstractDetector):
     """
     Detects contacts between bodies being established and being lost.
@@ -82,7 +82,7 @@ class ContactDetector(AbstractDetector):
         ]
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class MotionDetector(AbstractDetector):
     """
     Base class for motion-based detectors.
@@ -195,7 +195,7 @@ class MotionDetector(AbstractDetector):
         )
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class TranslationDetector(MotionDetector):
     """
     Detector for translations.
@@ -242,7 +242,7 @@ class TranslationDetector(MotionDetector):
         return new_event
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class RotationDetector(MotionDetector):
     """
     Detector for rotations.

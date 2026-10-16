@@ -104,19 +104,19 @@ class SegmindContext(ContextExtension):
     """
 
 
-@dataclass(repr=False, eq=False)
+@dataclass(repr=False, eq=False, kw_only=True)
 class AbstractDetector(EndedByOwner, StatechartNode, ABC):
     """
     Abstract base class for all detectors.
     """
 
-    tracked_object: Optional[Body] = field(kw_only=True, default=None)
+    tracked_object: Body | None = None
     """
-    :param tracked_object: Optional body that should be monitored.
-    If None, all trackable objects in the world are checked.
+    Optional body that should be monitored. If None, all trackable objects in the world
+    are checked.
     """
 
-    exclude_robot: bool = field(kw_only=True, default=True)
+    exclude_robot: bool = True
     """
     Whether every body of every robot is left out of what a tracked object is checked
     against.
@@ -332,7 +332,7 @@ class AbstractDetector(EndedByOwner, StatechartNode, ABC):
         pass
 
 
-@dataclass(repr=False, eq=False)
+@dataclass(repr=False, eq=False, kw_only=True)
 class EventCombiningDetector(AbstractDetector, ABC):
     """
     A detector concluding from the events other detectors detected, over every body

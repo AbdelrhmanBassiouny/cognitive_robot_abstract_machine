@@ -27,7 +27,7 @@ from segmind.detectors.base import (
 )
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class SupportDetector(AbstractDetector):
     """
     Detects supports being established and being lost.
@@ -84,7 +84,7 @@ class SupportDetector(AbstractDetector):
         ]
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class ContainmentDetector(AbstractDetector):
     """
     Detects containments between bodies being established and being lost.
@@ -160,7 +160,7 @@ class ContainmentDetector(AbstractDetector):
         ]
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class InsertionDetector(EventCombiningDetector):
     """
     Detects insertion events based on object interaction context.

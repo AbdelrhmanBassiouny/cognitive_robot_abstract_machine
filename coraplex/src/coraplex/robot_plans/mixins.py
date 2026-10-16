@@ -191,20 +191,20 @@ class PlaceTuningParameters:
     """
 
 
-@dataclass
+@dataclass(kw_only=True)
 class GripperStallToleranceParameters:
     """
     Adds an optional finger speed and stall-tolerance to a gripper open/close motion.
     """
 
-    finger_velocity: Optional[float] = field(default=None, kw_only=True)
+    finger_velocity: Optional[float] = None
     """
     Maximum finger joint velocity (in m/s), enforced via
     :class:`~giskardpy.motion_statechart.tasks.joint_tasks.JointVelocityLimit`. ``None``
     leaves the speed unconstrained.
     """
 
-    stall_minimum_time: Optional[float] = field(default=None, kw_only=True)
+    stall_minimum_time: Optional[float] = None
     """
     Minimum stall dwell time (in seconds, see
     :attr:`~giskardpy.motion_statechart.monitors.monitors.LocalMinimumReached.minimum_time`)
@@ -212,7 +212,7 @@ class GripperStallToleranceParameters:
     default.
     """
 
-    tolerate_stall: bool = field(default=False, kw_only=True)
+    tolerate_stall: bool = False
     """
     Whether this motion is also considered done once the fingers' velocities settle
     near zero, even without reaching their nominal target position -- checked via a
@@ -222,14 +222,14 @@ class GripperStallToleranceParameters:
     """
 
 
-@dataclass
+@dataclass(kw_only=True)
 class CartesianVelocityLimitParameters:
     """
     Adds an optional linear and angular speed cap to a Cartesian tool-center-point
     motion.
     """
 
-    max_linear_velocity: Optional[float] = field(default=None, kw_only=True)
+    max_linear_velocity: Optional[float] = None
     """
     Maximum linear speed (in m/s) of the tool center point, enforced via
     :class:`~giskardpy.motion_statechart.tasks.cartesian_tasks.CartesianPositionVelocityLimit`.
@@ -237,7 +237,7 @@ class CartesianVelocityLimitParameters:
     limits).
     """
 
-    max_angular_velocity: Optional[float] = field(default=None, kw_only=True)
+    max_angular_velocity: Optional[float] = None
     """
     Maximum angular speed (in rad/s) of the tool center point, enforced via
     :class:`~giskardpy.motion_statechart.tasks.cartesian_tasks.CartesianRotationVelocityLimit`.
