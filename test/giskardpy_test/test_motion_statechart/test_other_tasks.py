@@ -11,7 +11,6 @@ from giskardpy.motion_statechart.graph_node import (
     EndMotion,
 )
 from giskardpy.motion_statechart.monitors.joint_monitors import JointPositionReached
-from giskardpy.motion_statechart.monitors.overwrite_state_monitors import SetOdometry
 from giskardpy.motion_statechart.monitors.progress_monitors import StillProgressing
 from cramph.statechart import (
     Statechart,
@@ -659,61 +658,6 @@ def test_pointing_lowers_the_torso_when_the_head_cannot_tilt_far_enough(
     kin_sim.tick_until_end()
 
     assert torso.position < torso.dof.limits.upper.position - 0.05
-
-
-def test_pointing_aims_the_offset_away_from_the_goal_as_the_root_link_stands(
-    pr2_world_state_reset: World,
-):
-    """
-    The offset is read in the root link's frame once the goal is bound, so a base moved
-    by an earlier step of the chart changes the point aimed at.
-    """
-    world = pr2_world_state_reset
-    base = world.get_kinematic_structure_entity_by_name("base_link")
-    head = world.get_kinematic_structure_entity_by_name("head_tilt_link")
-    goal_point = Point3(2, 0, 1, reference_frame=world.root)
-
-    kin_sim = StatechartExecutor(
-        context=StatechartContext(world=world),
-        extensions=[MotionControl()],
-    )
-    msc = Statechart(context=kin_sim.context)
-    pointing = Pointing(
-        root_link=base,
-        tip_link=head,
-        goal_point=goal_point,
-        pointing_axis=Vector3.X(reference_frame=head),
-        aim_offset=Vector3(0, 0.5, 0, reference_frame=base),
-    )
-    msc.add_node(
-        sequence := Sequence(
-            [
-                SetOdometry(
-                    base_pose=HomogeneousTransformationMatrix.from_xyz_rpy(
-                        0, -2, 0, yaw=0.8, reference_frame=world.root
-                    )
-                ),
-                pointing,
-            ]
-        )
-    )
-    end = EndMotion()
-    end.start_condition = sequence.observes_true
-    msc.add_node(end)
-    kin_sim.compile(statechart=msc)
-
-    kin_sim.tick_until_end()
-
-    world_R_base = base.global_pose.to_np()[:3, :3]
-    world_P_aim = (
-        goal_point.to_np()[:3] + world_R_base @ pointing.aim_offset.to_np()[:3]
-    )
-    head_pose = head.global_pose.to_np()
-    head_to_aim = world_P_aim - head_pose[:3, 3]
-    angle = np.arccos(
-        np.dot(head_pose[:3, 0], head_to_aim) / np.linalg.norm(head_to_aim)
-    )
-    assert angle <= pointing.threshold
 
 
 def test_pointing_follows_a_goal_frame_that_moves_while_it_runs(

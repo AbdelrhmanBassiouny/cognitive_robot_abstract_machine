@@ -366,19 +366,6 @@ def _cartesian_cases() -> list[NodeRoundTripCase]:
             WorldFixture.PR2_WORLD,
         ),
         NodeRoundTripCase(
-            Pointing,
-            lambda world: [
-                Pointing(
-                    root_link=_root(world),
-                    tip_link=_tip(world),
-                    goal_point=_point(world),
-                    pointing_axis=_tip_axis(world),
-                    aim_offset=Vector3(0, 0.5, 0, reference_frame=_root(world)),
-                )
-            ],
-            WorldFixture.PR2_WORLD,
-        ),
-        NodeRoundTripCase(
             PointingCone,
             lambda world: [
                 PointingCone(

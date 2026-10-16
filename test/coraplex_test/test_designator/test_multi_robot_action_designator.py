@@ -21,7 +21,11 @@ from coraplex.robot_plans.plan_transformations import (
     OpenDrawerBeforeMoveAndPickUp,
     ParkArmsBeforeFirstAction,
 )
-from coraplex.robot_plans.actions.composite.searching import SearchAction
+from coraplex.robot_plans.actions.composite.searching import (
+    SearchAction,
+    SweepRegion,
+    SweepRegionPlacement,
+)
 from coraplex.robot_plans.actions.composite.transporting import TransportAction
 from coraplex.robot_plans.actions.core.container import OpenAction, CloseAction
 from coraplex.robot_plans.actions.core.misc import DetectAction, MoveToReach
@@ -69,6 +73,7 @@ from giskardpy.motion_statechart.tasks.cartesian_tasks import (
 )
 from giskardpy.motion_statechart.tasks.joint_tasks import (
     JointPositionList,
+    JointState,
     JointVelocityLimit,
 )
 from giskardpy.motion_statechart.tasks.pointing import Pointing
@@ -1085,6 +1090,116 @@ def test_search_action(multiple_robot_apartment_context):
     assert first_detection.life_cycle_state == LifeCycleValues.SUCCEEDED
 
 
+def search_target_in_front_of(robot: AbstractRobot) -> Pose:
+    """
+    Stands `robot` east of the multi-storey building, facing a target in front of it.
+
+    :param robot: The robot that searches.
+    :return: The target, in the world frame.
+    """
+    world = robot._world
+    target = Pose.from_xyz_rpy(6, -2, 1.2, reference_frame=world.root)
+    robot.root.parent_connection.origin = stand_facing(
+        robot, (5, -2, 0), target.position.to_np(), world
+    )
+    world.notify_state_change()
+    return target
+
+
+def world_V_left_of_base(robot: AbstractRobot) -> np.ndarray:
+    """
+    :param robot: A robot with a mobile base.
+    :return: The direction to the left of where its base faces, in the world frame.
+    """
+    world_R_base = robot.mobile_base.root.global_transform.rotation_matrix.to_np()
+    world_V_forward = world_R_base[:3, :3] @ robot.mobile_base.forward_axis.to_np()[:3]
+    return np.cross([0.0, 0.0, 1.0], world_V_forward)
+
+
+def test_a_sweep_region_is_placed_at_the_target_turned_like_the_base(
+    multiple_robot_apartment_context,
+):
+    world, robot, extensions = multiple_robot_apartment_context
+    target = search_target_in_front_of(robot)
+    sweep_region = SweepRegion.added_to(
+        world, PrefixedName("sweep_region"), half_width=0.5, speed=0.5
+    )
+
+    run_plan(
+        SweepRegionPlacement(sweep_region=sweep_region, target=target, robot=robot),
+        extensions,
+    )
+
+    world_T_region = sweep_region.sweep.child.global_transform.to_np()
+    np.testing.assert_allclose(
+        world_T_region[:3, 3], target.position.to_np()[:3], atol=1e-6
+    )
+    np.testing.assert_allclose(
+        world_T_region[:3, 1], world_V_left_of_base(robot), atol=1e-6
+    )
+
+
+def test_looking_at_a_sweep_region_slid_sideways_looks_beside_the_target(
+    multiple_robot_apartment_context,
+):
+    world, robot, extensions = multiple_robot_apartment_context
+    target = search_target_in_front_of(robot)
+    sweep_region = SweepRegion.added_to(
+        world, PrefixedName("sweep_region"), half_width=0.5, speed=0.5
+    )
+    region = sweep_region.sweep.child
+    look = LookAtAction(Pose(reference_frame=region))
+    slide = JointPositionList(
+        goal_state=JointState.from_mapping({sweep_region.sweep: 0.5})
+    )
+
+    run_plan(
+        Sequence(
+            [
+                SweepRegionPlacement(
+                    sweep_region=sweep_region, target=target, robot=robot
+                ),
+                Parallel([look, slide]),
+            ]
+        ),
+        extensions,
+    )
+
+    assert sweep_region.sweep.position == pytest.approx(0.5, abs=slide.threshold)
+    world_P_aim = target.position.to_np()[:3] + 0.5 * world_V_left_of_base(robot)
+    camera = robot.get_default_camera()
+    world_T_camera = camera.root.global_transform.to_np()
+    world_V_looking = world_T_camera[:3, :3] @ camera.forward_facing_axis.to_np()[:3]
+    world_V_to_aim = world_P_aim - world_T_camera[:3, 3]
+    angle = np.arccos(
+        np.dot(world_V_looking, world_V_to_aim)
+        / (np.linalg.norm(world_V_looking) * np.linalg.norm(world_V_to_aim))
+    )
+    [pointing] = nodes_of_type(look, Pointing)
+    assert angle <= pointing.threshold
+
+
+def test_a_search_places_its_sweep_region_and_slides_it_to_each_look(
+    multiple_robot_apartment_context,
+):
+    world, robot, extensions = multiple_robot_apartment_context
+    search = SearchAction(
+        search_target_in_front_of(robot), object_semantic_annotation=Milk
+    )
+
+    expand(search, extensions)
+
+    [placement] = nodes_of_type(search, SweepRegionPlacement)
+    slides = nodes_of_type(search, JointPositionList)
+    assert placement.target is search.target_location
+    assert [
+        target
+        for slide in slides
+        for connection, target in slide.goal_state.items()
+        if connection is placement.sweep_region.sweep
+    ] == list(search.sideways_look_offsets)
+
+
 # %% what an action expands into
 
 
@@ -1149,28 +1264,6 @@ def test_look_at_points_the_default_camera(multiple_robot_apartment_context):
 
     [pointing] = nodes_of_type(action, Pointing)
     assert pointing.tip_link == robot.get_default_camera().root
-    assert pointing.aim_offset is None
-
-
-def test_looking_beside_a_target_looks_to_the_left_of_the_robots_base(
-    multiple_robot_apartment_context,
-):
-    """
-    Left and right of a target are as seen from where the robot's base faces.
-    """
-    _, robot, extensions = multiple_robot_apartment_context
-    action = LookAtAction(Pose(), sideways_offset=0.5)
-
-    expand(action, extensions)
-
-    [pointing] = nodes_of_type(action, Pointing)
-    base_V_offset = pointing.aim_offset.to_np()[:3]
-    base_V_forward = robot.mobile_base.forward_axis.to_np()[:3]
-    assert pointing.aim_offset.reference_frame is robot.root
-    assert base_V_offset[2] == pytest.approx(0.0)
-    assert np.dot(base_V_offset, base_V_forward) == pytest.approx(0.0)
-    assert np.linalg.norm(base_V_offset) == pytest.approx(action.sideways_offset)
-    assert np.cross(base_V_forward, base_V_offset)[2] > 0
 
 
 def test_following_a_path_runs_one_goal_per_waypoint(

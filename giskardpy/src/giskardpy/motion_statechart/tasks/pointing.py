@@ -37,20 +37,13 @@ class Pointing(CartesianTask):
     Observation is true if the pointing angle is below this threshold.
     """
 
-    aim_offset: Vector3 | None = field(default=None, kw_only=True)
-    """
-    How far from goal_point the point pointing_axis is oriented at lies, read in the
-    frame of root_link; None points at goal_point itself.
-    """
-
     @property
     def goal_reference_frame(self) -> KinematicStructureEntity:
         return self.goal_point.reference_frame
 
     def build_artifacts(self, context: StatechartContext) -> MotionNodeArtifacts:
         """
-        Build motion constraints that swing the pointing axis onto :attr:`goal_point`,
-        moved by :attr:`aim_offset`.
+        Build motion constraints that swing the pointing axis onto :attr:`goal_point`.
 
         :param context: Provides access to world model and kinematic expressions.
         :return: The artifacts of this task, whose error is the angle between the
@@ -68,10 +61,6 @@ class Pointing(CartesianTask):
         )
 
         root_P_goal_point = self.root_T_goal_reference_frame @ self.goal_point
-        if self.aim_offset is not None:
-            root_P_goal_point = root_P_goal_point + context.world.transform(
-                target_frame=self.root_link, spatial_object=self.aim_offset
-            )
 
         root_V_goal_axis = root_P_goal_point - root_T_tip.position
         root_V_goal_axis.scale(1)
