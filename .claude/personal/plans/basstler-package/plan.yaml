@@ -45,15 +45,24 @@ items:
 - id: basstler-plugin-spike
   title: Check that a CRAM cloud session loads basstler's skills and start hook as a Claude Code plugin
   branch: claude/tender-ramanujan-wy5gdb
-  status: in_progress
+  status: done
   track: extraction
   depends_on: []
   pull_request_number: 516
   session: https://claude.ai/code/session_01C4mbFw5Hur5ZLg7zJz3xJL
-  notes: 'Throwaway marketplace with one skill and a SessionStart hook, enabled from a scratch branch''s
+  notes: >
+    Throwaway marketplace with one skill and a SessionStart hook, enabled from a scratch branch's
     settings.json (extraKnownMarketplaces + enabledPlugins, pinned ref). Pass: skills and hooks ship
-    as a plugin and CRAM keeps only settings.json. Fail: CRAM keeps SKILL.md files and hook shims calling
-    python -m basstler from a pinned install.'
+    as a plugin and CRAM keeps only settings.json. Fail: CRAM keeps SKILL.md files and hook shims
+    calling python -m basstler from a pinned install.
+
+    Result 2026-10-16: fail. A fresh cloud session on the spike branch
+    (session_01LrdhnFP9vXJ1AUWHNkzBfY) registered no marketplace and installed no plugin: no skill,
+    no hook run, no prompt, no error. Documented behaviour: cloud sessions never install plugins a
+    repo's settings.json enables (code.claude.com/docs/en/cloud-environments, "What carries over
+    from your setup"). The same marketplace installs fine locally with `claude plugin install`,
+    including the sha-pinned git-subdir fetch. So CRAM keeps SKILL.md files and hook shims calling
+    python -m basstler from a pinned install. #516 stays a draft record and never merges.
 - id: basstler-repository-extraction
   title: "Create AbdelrhmanBassiouny/basstler from #501's tip with full history and every open tooling branch"
   branch: null
