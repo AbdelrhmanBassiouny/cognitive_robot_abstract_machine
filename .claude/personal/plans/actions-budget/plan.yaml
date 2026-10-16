@@ -98,11 +98,17 @@ items:
   - budget-manifest
   pull_request_number: 211
   status: not started
-  notes: 'Edits to #211, the open pull request that carries `integration-refresh.yml` (#282,
-    #285 and #291 stack on it), not a branch of its own. Drop the four-a-day `schedule`, keeping
-    `workflow_run`, `ready_for_review` and dispatch. A candidate pull request runs CI only,
-    which the budget-manifest Examples trigger already gives it since it is opened ready.
-    Probes bisect the merge order instead of dispatching every prefix, and run one at a time.'
+  notes: >
+    Edits to #211, the open pull request that carries `integration-refresh.yml` (#282, #285 and #291
+    stack on it), not a branch of its own. Drop the four-a-day `schedule`, keeping `workflow_run`,
+    `ready_for_review` and dispatch. A candidate pull request runs CI only, which the
+    budget-manifest Examples trigger already gives it since it is opened ready. Probes bisect the
+    merge order instead of dispatching every prefix, and run one at a time.
+
+    Also folded in from dead-workflows-and-branches: take-down-unreferenced-builds matches only
+    `integration-[0-9]*` (BUILD_BRANCH_PATTERN), so a probe round that dies before `take_down`
+    leaves its `integration-probe-*` branches forever. Extend the take-down to probe branches that
+    no in-flight localisation owns, test first.
 - id: stack-maintenance-event-only
   title: Stack maintenance runs on events only and bounds a restack's CI fan-out
   branch: null
