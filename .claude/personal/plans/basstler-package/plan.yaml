@@ -60,13 +60,18 @@ items:
     user. #516 is the record and never merges.
 - id: basstler-repository-extraction
   title: "Create AbdelrhmanBassiouny/basstler from #501's tip with full history and every open tooling branch"
-  branch: null
+  branch: claude/jolly-gauss-l2pjrh
   status: in_progress
   track: extraction
+  blockers:
+    - >-
+      Blocked: AbdelrhmanBassiouny/basstler does not exist and the GitHub App cannot create
+      repositories (403). The user creates it empty and public and installs the Claude App on it;
+      then push the prepared history from a mirror and open the draft pull request.
   depends_on: [basstler-plugin-spike]
   pull_request_number: null
   repository: AbdelrhmanBassiouny/basstler
-  session: https://claude.ai/code/session_013kCsTQdNToBZd8YixgPFwG
+  session: https://claude.ai/code/session_01DZCeMyvN5C1wCxeawxS8Vg
   notes: >
     git filter-repo over a mirror holding every open tooling branch: basstler/ to root,
     test/basstler_test/ to tests/, .claude/skills and hooks to plugin/, .claude/stack to docs/stack,
