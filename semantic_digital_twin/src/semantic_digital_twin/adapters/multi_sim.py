@@ -43,6 +43,7 @@ from semantic_digital_twin.callbacks.callback import (
     StateChangeCallback,
 )
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
+from semantic_digital_twin.datastructures.unique_entity_names import UniqueEntityNames
 from semantic_digital_twin.exceptions import (
     QuaternionConversionError,
     MujocoEntityNotFoundError,
@@ -76,6 +77,7 @@ from semantic_digital_twin.world_description.geometry import (
     Color,
 )
 from semantic_digital_twin.world_description.contact import ContactParameters
+from semantic_digital_twin.world_description.degree_of_freedom import DegreeOfFreedom
 from semantic_digital_twin.world_description.world_entity import (
     Region,
     Body,
@@ -83,6 +85,7 @@ from semantic_digital_twin.world_description.world_entity import (
     KinematicStructureEntity,
     Connection,
     WorldEntity,
+    WorldEntityWithID,
     Actuator,
     PositionServo,
 )
@@ -1653,6 +1656,41 @@ class MujocoLightConverter(LightConverter, ABC):
 
 
 @dataclass
+class SimulatorElementNames(UniqueEntityNames):
+    """
+    Names one kind of simulator element, such as every body, unique among that kind.
+    """
+
+    def preferred_name(self, entity: WorldEntityWithID) -> str:
+        return entity.name.name
+
+
+@dataclass
+class SimulatorModelNames:
+    """
+    The name every entity of a world is built into a simulator model under.
+
+    Each kind of element has its own names, as the simulator only requires names to be
+    unique among one kind.
+    """
+
+    bodies: SimulatorElementNames = field(default_factory=SimulatorElementNames)
+    """
+    The names of the bodies, which bodies and regions both become.
+    """
+
+    joints: SimulatorElementNames = field(default_factory=SimulatorElementNames)
+    """
+    The names of the joints, which connections become.
+    """
+
+    actuators: SimulatorElementNames = field(default_factory=SimulatorElementNames)
+    """
+    The names of the actuators.
+    """
+
+
+@dataclass
 class MultiSimBuilder(ABC):
     """
     A builder to build a world in the Multiverse simulator.
@@ -1661,6 +1699,13 @@ class MultiSimBuilder(ABC):
     _world: Optional[World] = None
     """
     The world to be built.
+    """
+
+    element_names: SimulatorModelNames = field(
+        init=False, default_factory=SimulatorModelNames
+    )
+    """
+    The name every entity of the last world built is built under.
     """
 
     _ignore_connection_types: ClassVar[Tuple[Type, ...]] = (
@@ -1718,6 +1763,7 @@ class MultiSimBuilder(ABC):
                 for free_joint_body in free_joint_bodies:
                     self.world.move_branch(free_joint_body, root)
 
+        self.element_names = SimulatorModelNames()
         self._start_build(file_path=file_path)
 
         for body in world.bodies_topologically_sorted:
@@ -1981,7 +2027,7 @@ class MujocoBuilder(MultiSimBuilder):
         geom_props = MujocoGeomConverter.convert(
             shape, visible=is_visible, collidable=is_collidable
         )
-        parent_body_name = parent.name.name
+        parent_body_name = self.element_names.bodies.assign(parent)
         parent_body_spec = self._find_entity(
             entity_type=mujoco.mjtObj.mjOBJ_BODY, entity_name=parent_body_name
         )
@@ -2219,13 +2265,15 @@ class MujocoBuilder(MultiSimBuilder):
         if isinstance(connection, self._ignore_connection_types):
             return
         joint_props = MujocoJointConverter.convert(connection)
+        joint_name = self.element_names.joints.assign(connection)
+        joint_props["name"] = joint_name
         if "equality_joint" in joint_props:
             equality_joint = joint_props.pop("equality_joint")
             equality = self.spec.add_equality()
             equality.type = mujoco.mjtEq.mjEQ_JOINT
             equality.objtype = mujoco.mjtObj.mjOBJ_JOINT
-            equality.name1 = joint_props["name"]
-            equality.name2 = equality_joint["joint"]
+            equality.name1 = joint_name
+            equality.name2 = self._mimicked_joint_name(connection)
             equality.data = equality_joint["data"]
         mujoco_joint = connection.get_simulator_property_of_type(MujocoJoint)
         if mujoco_joint is not None:
@@ -2236,7 +2284,7 @@ class MujocoBuilder(MultiSimBuilder):
             )
             joint_props["actfrcrange"] = mujoco_joint.actuator_force_range
 
-        child_body_name = connection.child.name.name
+        child_body_name = self.element_names.bodies.assign(connection.child)
         child_body_spec = self._find_entity(
             entity_type=mujoco.mjtObj.mjOBJ_BODY, entity_name=child_body_name
         )
@@ -2245,7 +2293,6 @@ class MujocoBuilder(MultiSimBuilder):
                 entity_name=child_body_name,
                 entity_type=mujoco.mjtObj.mjOBJ_BODY,
             )
-        joint_name = connection.name.name
         joint_spec = child_body_spec.add_joint(**joint_props)
         if joint_spec is None:
             raise MujocoEntityNotFoundError(
@@ -2254,12 +2301,35 @@ class MujocoBuilder(MultiSimBuilder):
                 action="add",
             )
 
+    def _mimicked_joint_name(self, connection: ActiveConnection1DOF) -> str:
+        """
+        :param connection: A connection mimicking another one's degree of freedom.
+        :return: The name of the joint of the connection that the degree of freedom is
+            named after, or the name of the degree of freedom if no connection is.
+        """
+        degree_of_freedom = connection.raw_dof
+        mimicked_connection = next(
+            (
+                other
+                for other in self.world.connections
+                if degree_of_freedom in other.dofs
+                and other.name.name == degree_of_freedom.name.name
+            ),
+            None,
+        )
+        if mimicked_connection is None:
+            return degree_of_freedom.name.name
+        return self.element_names.joints.assign(mimicked_connection)
+
     def _build_actuator(self, actuator: Actuator):
         actuator_props = MujocoActuatorConverter.convert(actuator)
-        dof_names = actuator_props.pop("dof_names")
-        assert len(dof_names) == 1, "Actuator must be associated with exactly one DOF."
-        actuator_props.update(self._transmission_for_degree_of_freedom(dof_names[0]))
-        actuator_name = actuator.name.name
+        actuator_props.pop("dof_names")
+        [degree_of_freedom] = actuator.dofs
+        actuator_name = self.element_names.actuators.assign(actuator)
+        actuator_props["name"] = actuator_name
+        actuator_props.update(
+            self._transmission_for_degree_of_freedom(degree_of_freedom)
+        )
         actuator_spec = self.spec.add_actuator(**actuator_props)
         if actuator_spec is None:
             raise MujocoEntityNotFoundError(
@@ -2268,29 +2338,30 @@ class MujocoBuilder(MultiSimBuilder):
                 action="add",
             )
 
-    def _transmission_for_degree_of_freedom(self, dof_name: str) -> Dict[str, Any]:
+    def _transmission_for_degree_of_freedom(
+        self, degree_of_freedom: DegreeOfFreedom
+    ) -> Dict[str, Any]:
         """
-        :param dof_name: The name of the degree of freedom an actuator drives.
+        :param degree_of_freedom: The degree of freedom an actuator drives.
         :return: The actuator's transmission properties: the joint moving that degree
-            of freedom, or the tendon of that name if no joint does.
+            of freedom, or the tendon of its name if no joint does.
         """
         connection = next(
-            (
-                conn
-                for conn in self.world.connections
-                if dof_name in [dof.name.name for dof in conn.dofs]
-            ),
+            (conn for conn in self.world.connections if degree_of_freedom in conn.dofs),
             None,
         )
         if connection is None:
-            return {"target": dof_name, "trntype": mujoco.mjtTrn.mjTRN_TENDON}
-        connection_name = connection.name.name
+            return {
+                "target": degree_of_freedom.name.name,
+                "trntype": mujoco.mjtTrn.mjTRN_TENDON,
+            }
+        joint_name = self.element_names.joints.assign(connection)
         joint_spec = self._find_entity(
-            entity_type=mujoco.mjtObj.mjOBJ_JOINT, entity_name=connection_name
+            entity_type=mujoco.mjtObj.mjOBJ_JOINT, entity_name=joint_name
         )
         if joint_spec is None:
             raise MujocoEntityNotFoundError(
-                entity_name=connection_name,
+                entity_name=joint_name,
                 entity_type=mujoco.mjtObj.mjOBJ_JOINT,
             )
         return {"target": joint_spec.name, "trntype": mujoco.mjtTrn.mjTRN_JOINT}
@@ -2298,7 +2369,8 @@ class MujocoBuilder(MultiSimBuilder):
     def _build_camera(self, camera: MultiSimCamera):
         camera_name = camera.name
         camera_props = MujocoCameraConverter.convert(camera)
-        body_name = camera_props.pop("body")
+        camera_props.pop("body")
+        body_name = self.element_names.bodies.assign(camera.body)
         body_spec = self._find_entity(
             entity_type=mujoco.mjtObj.mjOBJ_BODY, entity_name=body_name
         )
@@ -2322,7 +2394,8 @@ class MujocoBuilder(MultiSimBuilder):
         """
         light_name = light.name
         light_props = MujocoLightConverter.convert(light)
-        body_name = light_props.pop("body")
+        light_props.pop("body")
+        body_name = self.element_names.bodies.assign(light.body)
         body_spec = self._find_entity(
             entity_type=mujoco.mjtObj.mjOBJ_BODY, entity_name=body_name
         )
@@ -2352,14 +2425,18 @@ class MujocoBuilder(MultiSimBuilder):
             as a body's gravity compensation, merged in by the caller that knows its
             kind.
         """
-        if entity.name.name == "world":
+        body_name = self.element_names.bodies.assign(entity)
+        if entity is self.world.root:
             return
         body_props = MujocoKinematicStructureEntityConverter.convert(entity)
+        body_props["name"] = body_name
         body_props.update(additional_properties or {})
         mujoco_body = entity.get_simulator_property_of_type(MujocoBody)
         if mujoco_body is not None:
             body_props["mocap"] = mujoco_body.motion_capture
-        parent_body_name = entity.parent_connection.parent.name.name
+        parent_body_name = self.element_names.bodies.assign(
+            entity.parent_connection.parent
+        )
         parent_body_spec = self._find_entity(
             entity_type=mujoco.mjtObj.mjOBJ_BODY, entity_name=parent_body_name
         )
@@ -2371,7 +2448,7 @@ class MujocoBuilder(MultiSimBuilder):
         body_spec = parent_body_spec.add_body(**body_props)
         if body_spec is None:
             raise MujocoEntityNotFoundError(
-                entity_name=parent_body_name,
+                entity_name=body_name,
                 entity_type=mujoco.mjtObj.mjOBJ_BODY,
                 action="add",
             )
@@ -2423,7 +2500,14 @@ class MujocoBuilder(MultiSimBuilder):
         robot = body_to_robot.get(body_a)
         if robot is None or body_to_robot.get(body_b) is not robot:
             return
-        pair = tuple(sorted((body_a.name.name, body_b.name.name)))
+        pair = tuple(
+            sorted(
+                (
+                    self.element_names.bodies.assign(body_a),
+                    self.element_names.bodies.assign(body_b),
+                )
+            )
+        )
         if pair in excluded:
             return
         excluded.add(pair)
@@ -2511,13 +2595,25 @@ class EntitySpawner(ABC):
     The type of the entity to spawn.
     """
 
+    element_names: SimulatorModelNames = field(kw_only=True)
+    """
+    The name every entity is spawned under, shared with the model it is spawned into.
+    """
+
     @classmethod
-    def spawn(cls, simulator: BaseSimulator, entity: entity_type) -> bool:  # type: ignore
+    def spawn(
+        cls,
+        simulator: BaseSimulator,
+        entity: entity_type,  # type: ignore
+        element_names: SimulatorModelNames,
+    ) -> bool:
         """
         Spawns a WorldEntity object in the Multiverse simulator.
 
         :param simulator: The Multiverse simulator to spawn the entity in.
         :param entity: The WorldEntity object to spawn.
+        :param element_names: The name every entity is spawned under, shared with the
+            model it is spawned into.
 
         :return: True if the entity was spawned successfully, False otherwise.
         """
@@ -2527,7 +2623,7 @@ class EntitySpawner(ABC):
                 and not inspect.isabstract(subclass.entity_type)
                 and type(entity) is subclass.entity_type
             ):
-                return subclass()._spawn(simulator, entity)
+                return subclass(element_names=element_names)._spawn(simulator, entity)
         raise NotImplementedError(f"No converter found for entity type {type(entity)}.")
 
     @abstractmethod
@@ -2824,13 +2920,14 @@ class MujocoKinematicStructureEntitySpawner(
         kinematic_structure_entity_props = (
             MujocoKinematicStructureEntityConverter.convert(entity)
         )
-        entity_name = kinematic_structure_entity_props["name"]
         del kinematic_structure_entity_props["name"]
         result = simulator.add_entity(
-            entity_name=entity_name,
+            entity_name=self.element_names.bodies.assign(entity),
             entity_type="body",
             entity_properties=kinematic_structure_entity_props,
-            parent_name=entity.parent_connection.parent.name.name,
+            parent_name=self.element_names.bodies.assign(
+                entity.parent_connection.parent
+            ),
         )
         return (
             result.type
@@ -2853,7 +2950,7 @@ class MujocoKinematicStructureEntitySpawner(
             entity_name=shape_name,
             entity_type="geom",
             entity_properties=shape_props,
-            parent_name=parent.name.name,
+            parent_name=self.element_names.bodies.assign(parent),
         )
         return (
             result.type
@@ -2891,12 +2988,12 @@ class MujocoConnectionSpawner(MujocoEntitySpawner, ConnectionSpawner):
         self, simulator: MujocoSimulator, connection: Connection
     ) -> bool:
         joint_props = Mujoco1DOFJointConverter.convert(connection)
-        joint_name = joint_props.pop("name")
+        del joint_props["name"]
         result = simulator.add_entity(
-            entity_name=joint_name,
+            entity_name=self.element_names.joints.assign(connection),
             entity_type="joint",
             entity_properties=joint_props,
-            parent_name=connection.child.name.name,
+            parent_name=self.element_names.bodies.assign(connection.child),
         )
         return (
             result.type
@@ -2948,10 +3045,10 @@ class MujocoFreejointSpawner(MujocoEntitySpawner, Connection6DOFSpawner):
         self, simulator: MujocoSimulator, connection: Connection
     ) -> bool:
         result = simulator.add_entity(
-            entity_name=connection.name.name,
+            entity_name=self.element_names.joints.assign(connection),
             entity_type="joint",
             entity_properties={"type": mujoco.mjtJoint.mjJNT_FREE},
-            parent_name=connection.child.name.name,
+            parent_name=self.element_names.bodies.assign(connection.child),
         )
         return (
             result.type
@@ -2967,30 +3064,33 @@ class MujocoActuatorSpawner(MujocoEntitySpawner, ActuatorSpawner):
 
     def _spawn_actuator(self, simulator: MujocoSimulator, actuator: Actuator) -> bool:
         actuator_props = MujocoActuatorConverter.convert(actuator)
-        actuator_name = actuator_props.pop("name")
-        dof_names = actuator_props.pop("dof_names")
-        assert len(dof_names) == 1, "Actuator must be associated with exactly one DOF."
-        dof_name = dof_names[0]
+        del actuator_props["name"]
+        del actuator_props["dof_names"]
+        [degree_of_freedom] = actuator.dofs
         connection = next(
             (
                 conn
                 for conn in actuator._world.connections
-                if dof_name in [dof.name.name for dof in conn.dofs]
+                if degree_of_freedom in conn.dofs
             ),
             None,
         )
-        assert connection is not None, f"Connection for DOF {dof_name} not found."
-        connection_name = connection.name.name
-        joint_spec = simulator.get_joint(joint_name=connection_name).result
+        if connection is None:
+            raise MujocoEntityNotFoundError(
+                entity_name=degree_of_freedom.name.name,
+                entity_type=mujoco.mjtObj.mjOBJ_JOINT,
+            )
+        joint_name = self.element_names.joints.assign(connection)
+        joint_spec = simulator.get_joint(joint_name=joint_name).result
         if joint_spec is None:
             raise MujocoEntityNotFoundError(
-                entity_name=connection_name,
+                entity_name=joint_name,
                 entity_type=mujoco.mjtObj.mjOBJ_JOINT,
             )
         actuator_props["target"] = joint_spec.name
         actuator_props["trntype"] = mujoco.mjtTrn.mjTRN_JOINT
         result = simulator.add_entity(
-            entity_name=actuator_name,
+            entity_name=self.element_names.actuators.assign(actuator),
             entity_type="actuator",
             entity_properties=actuator_props,
         )
@@ -3042,6 +3142,11 @@ class MultiSimSynchronizer(ModelChangeCallback, ABC):
     The spawner to spawn WorldEntity, Shape, and Connection objects in the simulator.
     """
 
+    element_names: SimulatorModelNames = field(kw_only=True)
+    """
+    The name every entity of the world is built into the simulator's model under.
+    """
+
     _state_callback: Optional[_MultiSimStateCallback] = field(
         init=False, default=None, repr=False
     )
@@ -3060,13 +3165,25 @@ class MultiSimSynchronizer(ModelChangeCallback, ABC):
         for modification in self._world._model_manager.model_modification_blocks[-1]:
             if isinstance(modification, AddKinematicStructureEntityModification):
                 entity = modification.kinematic_structure_entity
-                self.entity_spawner.spawn(simulator=self.simulator, entity=entity)
+                self.entity_spawner.spawn(
+                    simulator=self.simulator,
+                    entity=entity,
+                    element_names=self.element_names,
+                )
             elif isinstance(modification, AddConnectionModification):
                 connection = modification.connection
-                self.entity_spawner.spawn(simulator=self.simulator, entity=connection)
+                self.entity_spawner.spawn(
+                    simulator=self.simulator,
+                    entity=connection,
+                    element_names=self.element_names,
+                )
             elif isinstance(modification, AddActuatorModification):
                 entity = modification.actuator
-                self.entity_spawner.spawn(simulator=self.simulator, entity=entity)
+                self.entity_spawner.spawn(
+                    simulator=self.simulator,
+                    entity=entity,
+                    element_names=self.element_names,
+                )
 
     def stop(self):
         if self._state_callback is not None:
@@ -3151,7 +3268,9 @@ class MujocoSynchronizer(MultiSimSynchronizer):
         """
         mj_model = self.simulator._mj_model
         joint_id = mujoco.mj_name2id(
-            mj_model, mujoco.mjtObj.mjOBJ_JOINT, connection.name.name
+            mj_model,
+            mujoco.mjtObj.mjOBJ_JOINT,
+            self.element_names.joints.assign(connection),
         )
         if joint_id == -1:
             return None
@@ -3310,7 +3429,7 @@ class MujocoSynchronizer(MultiSimSynchronizer):
             the degree of freedom's id.
         """
         return {
-            degree_of_freedom.id: actuator.name.name
+            degree_of_freedom.id: self.element_names.actuators.assign(actuator)
             for actuator in self._world.actuators
             for degree_of_freedom in actuator.dofs
         }
@@ -3614,7 +3733,8 @@ class MultiSim(ABC):
         :param step_size: The step size for the simulation.
         """
         self.world = world
-        self.builder_class().build_world(world=world, file_path=self.default_file_path)
+        builder = self.builder_class()
+        builder.build_world(world=world, file_path=self.default_file_path)
         self.simulator = self.simulator_class(
             file_path=self.default_file_path,
             _headless=headless,
@@ -3624,6 +3744,7 @@ class MultiSim(ABC):
         self.synchronizer = self.synchronizer_class(
             _world=world,
             simulator=self.simulator,
+            element_names=builder.element_names,
         )
 
     def start_simulation(self, constraints: Optional[SimulatorConstraints] = None):
