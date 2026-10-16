@@ -1,0 +1,5 @@
+{
+  "name": "basstler-spike-local",
+  "version": "0.0.1",
+  "description": "One skill and one SessionStart hook that report whether they were loaded"
+}
