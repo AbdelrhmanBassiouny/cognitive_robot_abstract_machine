@@ -70,14 +70,12 @@ items:
   notes: >
     git filter-repo over a mirror holding every open tooling branch: basstler/ to root,
     test/basstler_test/ to tests/, .claude/skills and hooks to plugin/, .claude/stack to docs/stack,
-    tooling workflows kept. Then one standalone commit: own CI (pytest tests/), plugin manifest,
-    cram2 values moved out of the shipped stack.toml into the consumer's
+    tooling workflows kept. Then one standalone commit: own CI (pytest tests/), plugin manifest and
+    marketplace, cram2 values moved out of the shipped stack.toml into the consumer's
     .claude/basstler/stack.toml, one venv location instead of basstler/.venv, reusable workflows,
-    hook installs basstler from git at a tag. Tag v0.1.0.
-
-    basstler-plugin-spike failed (cloud sessions do not install repo-enabled plugins), so CRAM keeps
-    the SKILL.md files under .claude/skills and hook shims calling python -m basstler from a pinned
-    install; a plugin manifest only serves local CLI users.
+    hook installs basstler from git at a tag. Tag v0.1.0. The spike passed through claude.ai: users
+    add the plugin there (Customize > Plugins, from the marketplace repo), or an org Owner installs
+    it for members; settings.json enabledPlugins only serves local and CI sessions.
 - id: basstler-open-pull-request-carryover
   title: Reopen the open tooling pull requests in the new repository, close the stale ones
   branch: null
