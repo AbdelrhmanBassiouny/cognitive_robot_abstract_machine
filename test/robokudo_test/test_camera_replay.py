@@ -13,7 +13,7 @@ import pytest
 from robokudo import world as rk_world
 from robokudo.cas import CAS, CASViews
 from robokudo.descriptors.camera_configs.config_mongodb_playback import MongoReplayMode
-from robokudo.exceptions import InvalidCameraObservation
+from robokudo.exceptions import InvalidCameraObservation, CameraObservationMissing
 from robokudo.io.cas_view_codecs import CameraObservationCodec, ViewPayload
 from robokudo.io.sensor_world import SensorWorldProjector
 from robokudo.io.storage import Storage, StorageDocumentField
@@ -480,3 +480,51 @@ def test_sensor_projection_copies_camera_data_and_sampled_pose(
         scene.observation.world_T_camera.to_np(),
         atol=1e-12,
     )
+
+
+# %% Sensor replay input validation
+
+
+def test_sensor_replay_requires_recorded_camera_observation() -> None:
+    """
+    Sensor replay rejects a frame without a camera observation before reading storage.
+    """
+    reader = StorageReaderInterface.__new__(StorageReaderInterface)
+    reader.storage = Mock()
+    with pytest.raises(CameraObservationMissing):
+        reader._restore_sensor_world({StorageDocumentField.VIEW_IDS: {}})
+    reader.storage.load_view_document.assert_not_called()
+
+
+@pytest.mark.parametrize("conflicting_identity", [False, True])
+def test_sensor_replay_rejects_conflicting_camera_root_without_changing_world(
+    conflicting_identity: bool,
+) -> None:
+    """
+    A recorded camera cannot overwrite a runtime body sharing its identity or name.
+    """
+    scene = _recorded_scene()
+    root = scene.observation.camera.root
+    conflict = (
+        Body(name=PrefixedName(name="runtime_camera"), id=root.id)
+        if conflicting_identity
+        else Body(name=root.name)
+    )
+    rk_world.init_world_with_entity_tracker()
+    reasoning_world = rk_world.world_instance()
+    with reasoning_world.modify_world():
+        reasoning_world.add_body(conflict)
+    document = Storage.encode_view_document(
+        CASViews.CAMERA_OBSERVATION, scene.observation
+    )
+    reader = StorageReaderInterface.__new__(StorageReaderInterface)
+    reader.storage = Mock(load_view_document=Mock(return_value=document))
+    reader.rk_logger = Mock()
+    frame = {
+        StorageDocumentField.WORLD: json.dumps(_snapshot(scene.world)),
+        StorageDocumentField.VIEW_IDS: {CASViews.CAMERA_OBSERVATION: 1},
+    }
+    with pytest.raises(InvalidCameraObservation):
+        reader._restore_sensor_world(frame)
+    assert reasoning_world.bodies == [conflict]
+    assert reasoning_world.get_semantic_annotations_by_type(Camera) == []

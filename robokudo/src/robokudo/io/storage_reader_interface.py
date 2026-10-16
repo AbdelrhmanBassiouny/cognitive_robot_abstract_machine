@@ -18,10 +18,13 @@ The module is primarily used for:
 * Visualization of stored data
 """
 
+from __future__ import annotations
+
+# %% Imports
 import json
 from dataclasses import dataclass
 from time import perf_counter
-from typing import Any, ClassVar
+from typing_extensions import Any, ClassVar, TYPE_CHECKING
 from uuid import UUID
 
 from semantic_digital_twin.adapters.ros.messages import WorldModelSnapshot
@@ -49,6 +52,11 @@ from robokudo.io.cas_view_codecs import CameraObservationCodec, ViewPayload
 from robokudo.io.sensor_world import SensorWorldProjector
 from robokudo.io.storage import Storage, StorageDocumentField
 
+if TYPE_CHECKING:
+    from robokudo.types.camera import CameraObservation
+
+# %% Snapshot restoration
+
 
 @dataclass(frozen=True)
 class RestoredWorld:
@@ -65,6 +73,9 @@ class RestoredWorld:
     """
     Elapsed time spent decoding and applying the snapshot.
     """
+
+
+# %% Recorded camera input
 
 
 class StorageReaderInterface(CameraInterface):
@@ -114,28 +125,58 @@ class StorageReaderInterface(CameraInterface):
     def _restore_sensor_world(self, cas_frame: dict[str, Any]) -> None:
         """
         Extract the recorded camera into the active reasoning world.
-        """
-        view_ids = cas_frame[StorageDocumentField.VIEW_IDS]
-        if CASViews.CAMERA_OBSERVATION not in view_ids:
-            raise CameraObservationMissing()
-        camera_document = self.storage.load_view_document(
-            cas_frame, CASViews.CAMERA_OBSERVATION
-        )
-        camera_payload = ViewPayload.from_document(camera_document)
 
-        snapshot_started = perf_counter()
+        :param cas_frame: Stored frame containing the world snapshot and camera view.
+        :raises CameraObservationMissing: If the frame has no camera observation.
+        :raises InvalidCameraObservation: If recorded sensor identities or names
+            conflict.
+        """
+        camera_payload = self._load_camera_payload(cas_frame)
         recorded_world = World()
         restored = self._restore_world(
             cas_frame[StorageDocumentField.WORLD], recorded_world
         )
-        snapshot_duration = perf_counter() - snapshot_started
-
         observation = CameraObservationCodec().decode_with_tracker(
             camera_payload, restored.tracker
         )
         projection_started = perf_counter()
-        projector = SensorWorldProjector(observation)
         reasoning_world = rk_world.world_instance()
+        self._check_sensor_conflicts(observation, reasoning_world)
+        SensorWorldProjector(observation).install(reasoning_world)
+        rk_world.init_world_entity_tracker_from_world(reasoning_world)
+        self._recorded_camera_id = observation.camera.id
+        self.rk_logger.debug(
+            "Mongo sensor replay restored full world in %.6f s and projected camera in %.6f s",
+            restored.duration_seconds,
+            perf_counter() - projection_started,
+        )
+
+    def _load_camera_payload(self, cas_frame: dict[str, Any]) -> ViewPayload:
+        """
+        Load the camera observation document referenced by a recorded frame.
+
+        :param cas_frame: Stored frame containing camera view identifiers.
+        :return: Encoded camera observation ready for snapshot-bound decoding.
+        :raises CameraObservationMissing: If the frame has no camera observation.
+        """
+        if CASViews.CAMERA_OBSERVATION not in cas_frame[StorageDocumentField.VIEW_IDS]:
+            raise CameraObservationMissing()
+        camera_document = self.storage.load_view_document(
+            cas_frame, CASViews.CAMERA_OBSERVATION
+        )
+        return ViewPayload.from_document(camera_document)
+
+    @staticmethod
+    def _check_sensor_conflicts(
+        observation: CameraObservation, reasoning_world: World
+    ) -> None:
+        """
+        Reject recorded sensor identities or names already present in the target world.
+
+        :param observation: Recorded camera and direct pose frames to install.
+        :param reasoning_world: Destination world whose entities must be preserved.
+        :raises InvalidCameraObservation: If an existing entity would conflict.
+        """
         recorded_entities = [observation.camera, observation.camera.root]
         if observation.world_T_camera is not None:
             recorded_entities.append(observation.world_T_camera.reference_frame)
@@ -159,15 +200,6 @@ class StorageReaderInterface(CameraInterface):
             raise InvalidCameraObservation(
                 reason="recorded sensor name already exists in the reasoning world"
             )
-        projector.install(reasoning_world)
-        rk_world.init_world_entity_tracker_from_world(reasoning_world)
-        self._recorded_camera_id = observation.camera.id
-        projection_duration = perf_counter() - projection_started
-        self.rk_logger.debug(
-            "Mongo sensor replay restored full world in %.3f ms and projected camera in %.3f ms",
-            snapshot_duration * 1000.0,
-            projection_duration * 1000.0,
-        )
 
     @staticmethod
     def _restore_world(snapshot: str, target_world: World) -> RestoredWorld:
