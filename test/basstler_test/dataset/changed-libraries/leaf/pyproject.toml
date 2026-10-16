@@ -1,0 +1,3 @@
+[project]
+name = "leaf"
+dependencies = ["middle_library[plotting]"]

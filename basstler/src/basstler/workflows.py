@@ -338,6 +338,11 @@ class Job:
     takes a runner itself.
     """
 
+    matrix_axes: Mapping[str, tuple[Any, ...]]
+    """
+    The matrix axes listed in the file, by name, leaving out any computed at run time.
+    """
+
     @classmethod
     def from_workflow(cls, identifier: str, declared: Mapping[str, Any]) -> Job:
         """
@@ -347,15 +352,32 @@ class Job:
         """
         needs = declared.get(WorkflowKey.NEEDS, ())
         strategy = declared.get(WorkflowKey.STRATEGY, {})
+        matrix = strategy.get(WorkflowKey.MATRIX)
         return cls(
             identifier=identifier,
             runs_on_a_runner=WorkflowKey.RUNS_ON in declared,
             timeout_minutes=declared.get(WorkflowKey.TIMEOUT_MINUTES),
             needs=(needs,) if isinstance(needs, str) else tuple(needs),
             condition=str(declared.get(WorkflowKey.CONDITION, "")),
-            instances=cls.matrix_combinations(strategy.get(WorkflowKey.MATRIX)),
+            instances=cls.matrix_combinations(matrix),
             reusable_workflow=declared.get(WorkflowKey.USES),
+            matrix_axes=cls.static_axes(matrix),
         )
+
+    @staticmethod
+    def static_axes(matrix: Any) -> dict[str, tuple[Any, ...]]:
+        """
+        :param matrix: A job's ``strategy.matrix``, or none when it has no matrix.
+        :return: Its axes listed in the file, by name.
+        """
+        if not isinstance(matrix, Mapping):
+            return {}
+        return {
+            key: tuple(values)
+            for key, values in matrix.items()
+            if key not in (WorkflowKey.INCLUDE, WorkflowKey.EXCLUDE)
+            and isinstance(values, list)
+        }
 
     @staticmethod
     def matrix_combinations(matrix: Any) -> int | None:
@@ -363,8 +385,9 @@ class Job:
         :param matrix: A job's ``strategy.matrix``, or none when it has no matrix.
         :return: The most combinations it runs: the product of its axes, less the
             excluded and plus the included ones, or the included ones alone when it has
-            no axes. None when the matrix, an axis or a combination list is an expression
-            evaluated at run time.
+            no axes. An exclusion list evaluated at run time counts as excluding
+            nothing, since it can only lower the count. None when the matrix, an axis or
+            the inclusion list is an expression evaluated at run time.
         """
         if matrix is None:
             return 1
@@ -372,6 +395,8 @@ class Job:
             return None
         included = matrix.get(WorkflowKey.INCLUDE, [])
         excluded = matrix.get(WorkflowKey.EXCLUDE, [])
+        if not isinstance(excluded, list):
+            excluded = []
         axes = [
             values
             for key, values in matrix.items()

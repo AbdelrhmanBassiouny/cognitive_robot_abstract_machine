@@ -17,8 +17,8 @@ def actions_budget() -> ActionsBudget:
     """
     return ActionsBudget(
         overrides={
-            # The whole library matrix on every pull-request push, until the
-            # changed-library matrix narrows it to what a change touches.
+            # A draft push runs the libraries it changes and their dependents. A change
+            # to krrood, which every library depends on, still runs the whole matrix.
             "ci.yml": WorkflowLimits(jobs_per_push_run=16),
             # A fork builds the image its own CI runs in, so a push to a fork has to
             # build it.

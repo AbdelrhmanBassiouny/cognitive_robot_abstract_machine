@@ -17,6 +17,28 @@ from basstler.locations import PathEnumeration, ProjectLocation
 from basstler.setup_steps import PersonalNotesSetting
 
 
+class RepositoryLibraryMatrix(StrEnum):
+    """
+    Where this repository's CI workflow runs its library matrix, as the workflow itself
+    names it to the selection command.
+    """
+
+    WORKFLOW = "ci.yml"
+    """
+    The CI workflow's file name.
+    """
+
+    JOB = "test_each_lib"
+    """
+    The job running the matrix.
+    """
+
+    AXIS = "lib"
+    """
+    The matrix axis listing the libraries.
+    """
+
+
 class DatasetLocation(PathEnumeration):
     """
     This suite's own test data, next to the tests that read it.
@@ -46,6 +68,17 @@ class DatasetLocation(PathEnumeration):
     ACTIONS_BUDGET_WORKFLOWS = ACTIONS_BUDGET / "workflows"
     """
     The workflows the dataset's manifest declares, each breaking the rule its name says.
+    """
+
+    CHANGED_LIBRARIES = DIRECTORY / "changed-libraries"
+    """
+    A small workspace whose packages depend on each other in a chain, in a cycle and not
+    at all, with a CI workflow testing them as one library matrix.
+    """
+
+    CHANGED_LIBRARIES_WORKFLOW = CHANGED_LIBRARIES / ".github" / "workflows" / "ci.yml"
+    """
+    The workspace's CI workflow.
     """
 
     INSTALLED_DISTRIBUTIONS = DIRECTORY / "installed-distributions"
