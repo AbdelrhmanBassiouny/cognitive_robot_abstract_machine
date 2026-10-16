@@ -105,10 +105,16 @@ items:
   depends_on: [basstler-repository-extraction]
   pull_request_number: null
   session: https://claude.ai/code/session_013kCsTQdNToBZd8YixgPFwG
-  notes: 'From fork main: delete basstler/, test/basstler_test/, .claude/hooks|skills|stack|shared|SETUP.md
-    (shims instead if the spike failed), the test_basstler job in ci.yml and the sync_version.py entry; add
-    settings.json enabling the plugin at v0.1.0, .claude/basstler/stack.toml with the cram2 values, and a
-    caller of the reusable upstream-reviews workflow. Promote to cram2 only with the user''s OK in-session.'
+  notes: >
+    From fork main: delete basstler/, test/basstler_test/,
+    .claude/hooks|skills|stack|shared|SETUP.md (shims instead if the spike failed), the
+    test_basstler job in ci.yml and the sync_version.py entry; add settings.json enabling the plugin
+    at v0.1.0, .claude/basstler/stack.toml with the cram2 values, and a caller of the reusable
+    upstream-reviews workflow. Promote to cram2 only with the user's OK in-session.
+
+    basstler-plugin-spike failed (cloud sessions do not install repo-enabled plugins), so CRAM keeps
+    the SKILL.md files under .claude/skills and hook shims calling python -m basstler from a pinned
+    install; a plugin manifest only serves local CLI users.
 - id: krrood-core-package
   title: Move krrood's general patterns into a light krrood_core package
   branch: claude/krrood-core-package
