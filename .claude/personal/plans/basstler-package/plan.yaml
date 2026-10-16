@@ -55,7 +55,7 @@ items:
     as a plugin and CRAM keeps only settings.json. Fail: CRAM keeps SKILL.md files and hook shims calling
     python -m basstler from a pinned install.'
 - id: basstler-repository-extraction
-  title: Create AbdelrhmanBassiouny/basstler from #501's tip with full history and every open tooling branch
+  title: "Create AbdelrhmanBassiouny/basstler from #501's tip with full history and every open tooling branch"
   branch: null
   status: not started
   track: extraction
