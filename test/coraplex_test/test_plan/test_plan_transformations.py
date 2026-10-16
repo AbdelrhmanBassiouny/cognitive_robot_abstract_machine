@@ -58,7 +58,7 @@ from cramph.composites import (
 )
 from cramph.context import ContextExtension
 from cramph.context import StatechartContext
-from cramph.exceptions import NotRunByLanguageNodeError
+from cramph.exceptions import NoLanguageNodeAboveError
 from cramph.node import StatechartNode
 from cramph.nodes_for_testing import ConstFalseNode
 from giskardpy.motion_statechart.goals.cartesian_goals import CartesianPoseStraight
@@ -583,7 +583,7 @@ def test_an_inserted_action_is_expanded(pr2_apartment_context):
     assert kinds_of_the_steps_of(park) == [JointPositionList]
 
 
-def test_a_neighbour_of_a_node_no_language_node_runs_is_rejected(
+def test_a_neighbour_of_a_node_without_a_language_node_above_it_is_rejected(
     pr2_apartment_context,
 ):
     """
@@ -593,7 +593,7 @@ def test_a_neighbour_of_a_node_no_language_node_runs_is_rejected(
     world, view, extensions = pr2_apartment_context
     plan_transformations = [MoveGripperBeforeEveryAction()]
 
-    with pytest.raises(NotRunByLanguageNodeError):
+    with pytest.raises(NoLanguageNodeAboveError):
         rewritten(MoveTorsoAction(TorsoState.HIGH), extensions, plan_transformations)
 
 
@@ -1028,12 +1028,12 @@ class ChoosesTheGivenChild(ChildChooser):
         return child
 
 
-def test_the_opening_joins_the_sequence_a_grounded_pick_up_runs_in(
+def test_the_opening_joins_the_sequence_a_grounded_pick_up_is_a_child_of(
     pr2_apartment_context,
 ):
     """
     A pick-up written as an underspecified statement is grounded into a candidate while
-    the plan runs, and the candidate runs in a sequence of its own.
+    the plan runs, and the candidate is a child of a sequence of its own.
 
     The opening has to land in that sequence, otherwise it is not run with the
     candidate.
@@ -1096,7 +1096,7 @@ def underspecified_move_and_pick_up_in(plan: StatechartNode) -> StatementNode:
 
 def step_before(step: StatechartNode) -> StatechartNode:
     """
-    :param step: A step that is not the first of the language node running it.
+    :param step: A step that is not the first child of its language node.
     :return: The step directly in front of it.
     """
     siblings = steps_of(step.parent_node)

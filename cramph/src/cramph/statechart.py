@@ -2154,7 +2154,7 @@ class Statechart(SubclassJSONSerializer):
         layout: GraphLayout = GraphLayout.LAYERED,
     ) -> GraphVisualizerBase:
         """
-        Open an interactive visualization of the nodes and the nodes they run, see
+        Open an interactive visualization of the nodes and their children, see
         :class:`~cramph.plotters.interactive_graph.StatechartGraphVisualizer`.
 
         :param backend: The rendering technology to use.

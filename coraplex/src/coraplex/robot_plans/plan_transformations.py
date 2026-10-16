@@ -465,7 +465,7 @@ class CloseFingersToObjectWidth(PlanTransformation[GraspingAction]):
 
     def apply(self, plan_node: GraspingAction) -> None:
         closing_step = self.closing_step(plan_node)
-        CramLanguageNode.running(closing_step).replace(
+        CramLanguageNode.closest_above(closing_step).replace(
             closing_step,
             plan_node.closing_step(
                 MoveFingersToWidthAction(

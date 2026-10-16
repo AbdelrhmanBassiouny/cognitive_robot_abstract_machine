@@ -372,12 +372,13 @@ class CompositeNodeNavigatingWhileItExpands(EndedByOwner, CompositeNode):
         self.preceding_fixed_value_node = self.statechart.get_preceding_node_by_type(
             self, NodeObservingAFixedValue
         )
-        self.children_of_language_node = CramLanguageNode.running(self).children
+        self.children_of_language_node = CramLanguageNode.closest_above(self).children
 
 
 def _self_deciding_step() -> NodeObservingAFixedValue:
     """
-    :return: A node a plan language node runs as it is.
+    :return: A node a plan language node takes as its child as it is, without an
+        attempt around it.
     """
     return NodeSucceedingOnObservingTrue(observation=ObservationStateValues.TRUE)
 

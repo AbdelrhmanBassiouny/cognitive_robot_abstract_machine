@@ -143,15 +143,15 @@ class InsertionTransformation(
         Inserts a node at :attr:`position` relative to the anchor node.
 
         :param anchor: The node the given node is placed relative to; a neighbour goes
-            into the plan language node running it, and a last child below the anchor
-            itself.
+            into the closest plan language node above it, and a last child below the
+            anchor itself.
         :param node: The node to insert
         """
         match self.position:
             case InsertionPosition.BEFORE:
-                CramLanguageNode.running(anchor).insert_before(anchor, node)
+                CramLanguageNode.closest_above(anchor).insert_before(anchor, node)
             case InsertionPosition.AFTER:
-                CramLanguageNode.running(anchor).insert_after(anchor, node)
+                CramLanguageNode.closest_above(anchor).insert_after(anchor, node)
             case InsertionPosition.LAST_CHILD:
                 anchor.add_node(node)
 

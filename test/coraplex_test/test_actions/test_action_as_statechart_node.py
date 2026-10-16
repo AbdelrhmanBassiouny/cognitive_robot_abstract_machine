@@ -74,7 +74,7 @@ class ActionRunningHandedInSteps(Action):
 
     steps: List[StatechartNode] = field(default_factory=list)
     """
-    The nodes this action runs, in order.
+    The children of this action, in order.
     """
 
     def create_action_body(self) -> StatechartNode:
@@ -161,7 +161,7 @@ class ActionRunningOneNode(Action):
 
     node: StatechartNode
     """
-    The node this action runs.
+    The child of this action.
     """
 
     def create_action_body(self) -> StatechartNode:

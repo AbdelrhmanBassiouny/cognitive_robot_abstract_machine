@@ -21,7 +21,7 @@ from cramph.data_types import (
     ObservationStateValues,
 )
 from cramph.exceptions import (
-    NotRunByLanguageNodeError,
+    NoLanguageNodeAboveError,
     AttemptWithoutFailureMonitorsError,
     ChildCannotFailError,
     NodeAlreadyAChildError,
@@ -178,7 +178,8 @@ class CompositeNodeEndingItsChildren(
         Rejects a child whose life cycle is not this goal's to decide.
 
         :param node: The child the caller passed.
-        :raises NodeAlreadyBelongsToDifferentNodeError: If another node runs `node`.
+        :raises NodeAlreadyBelongsToDifferentNodeError: If `node` is a child of another
+            node.
         :raises ChildTransitionAlreadyWiredError: If the caller already wired one of the
             transitions of `node`.
         """
@@ -208,25 +209,25 @@ class CompositeNodeEndingItsChildren(
             raise ChildCannotFailError(node=self, child=child)
 
 
-# %% the plan language: running a list of nodes
+# %% the plan language: composing a list of nodes
 
 
 @dataclass(repr=False, eq=False)
 class CramLanguageNode(CompositeNode, ABC):  # ControlStructureNode?
     """
-    A construct of the plan language, which runs the list of nodes it is handed.
+    A construct of the plan language, whose children are the list of nodes it is handed.
 
     Its children can be changed after it joined a statechart, up to the moment the
     statechart is compiled: :meth:`insert_before`, :meth:`insert_after` and
     :meth:`replace` rewire the conditions of the current children accordingly.
 
     Wherever it is handed a node, it also takes an underspecified `a(...)` statement,
-    which it runs through a :class:`StatementNode`.
+    for which it takes a :class:`StatementNode` as its child.
     """
 
     nodes: List[StatechartNode] = field(default_factory=list, init=True)
     """
-    The nodes this goal runs, in order.
+    The children of this goal, in order.
     """
 
     def __post_init__(self) -> None:
@@ -237,7 +238,7 @@ class CramLanguageNode(CompositeNode, ABC):  # ControlStructureNode?
     def _as_node(node: StatechartNode | Match) -> StatechartNode:
         """
         :param node: A node this goal was handed, or a statement of one.
-        :return: `node` itself, or a :class:`StatementNode` running the statement.
+        :return: `node` itself, or a :class:`StatementNode` grounding the statement.
         """
         if isinstance(node, Match):
             return StatementNode(statement=node)
@@ -245,39 +246,38 @@ class CramLanguageNode(CompositeNode, ABC):  # ControlStructureNode?
 
     def add_node(self, node: StatechartNode) -> None:
         """
-        Hands this goal one more node to run, after all the others.
+        Hands this goal one more child, after all the others.
 
-        A node it already runs is not added again.
+        A node that is its child already is not added again.
 
-        :param node: The node to run as a child of this goal.
+        :param node: The node to add as a child of this goal.
         """
         node = self._as_node(node)
-        if self._runs(node):
+        if self._has_child(node):
             return
         self._add_node_sanity_check(node)
         self._insert_at(len(self.nodes), node)
 
     def insert_before(self, reference: StatechartNode, node: StatechartNode) -> None:
         """
-        Hands this goal a node to run right before `reference`, or before the child
-        holding it.
+        Hands this goal a child right before `reference`, or before the child holding
+        it.
 
-        :param reference: A node this goal runs, or a node below one.
+        :param reference: A child of this goal, or a node below one.
         :param node: The node to insert.
         :raises NodeIsNotAChildError: If `reference` is not below this goal.
-        :raises NodeAlreadyAChildError: If this goal already runs `node`.
+        :raises NodeAlreadyAChildError: If `node` is a child of this goal already.
         """
         self._insert_at(self._position_of(reference), node)
 
     def insert_after(self, reference: StatechartNode, node: StatechartNode) -> None:
         """
-        Hands this goal a node to run right after `reference`, or after the child
-        holding it.
+        Hands this goal a child right after `reference`, or after the child holding it.
 
-        :param reference: A node this goal runs, or a node below one.
+        :param reference: A child of this goal, or a node below one.
         :param node: The node to insert.
         :raises NodeIsNotAChildError: If `reference` is not below this goal.
-        :raises NodeAlreadyAChildError: If this goal already runs `node`.
+        :raises NodeAlreadyAChildError: If `node` is a child of this goal already.
         """
         self._insert_at(self._position_of(reference) + 1, node)
 
@@ -302,14 +302,14 @@ class CramLanguageNode(CompositeNode, ABC):  # ControlStructureNode?
         """
         position = self._position_of(reference)
         node = self._as_node(node)
-        self._check_does_not_run(node)
+        self._check_is_not_a_child(node)
         if not self.belongs_to_statechart():
             self.nodes[position] = node
             return
         replaced = self.nodes[position]
-        self._check_can_run(node)
+        self._check_can_be_a_child(node)
         self._check_accepts_children()
-        if isinstance(node, CramLanguageNode) and node._runs(replaced):
+        if isinstance(node, CramLanguageNode) and node._has_child(replaced):
             node._join_statechart_keeping_child(
                 replaced, lambda: self._put_at(position, node)
             )
@@ -346,36 +346,36 @@ class CramLanguageNode(CompositeNode, ABC):  # ControlStructureNode?
         self._insert_at(position, child)
 
     @staticmethod
-    def running(node: StatechartNode) -> CramLanguageNode:
+    def closest_above(node: StatechartNode) -> CramLanguageNode:
         """
         :param node: A node of a statechart.
-        :return: The first plan language node on the path from `node` up to the root,
+        :return: The closest plan language node on the path from `node` up to the root,
             which can hold a neighbour of whatever holds `node` below it.
-        :raises NotRunByLanguageNodeError: If no plan language node is above `node`.
+        :raises NoLanguageNodeAboveError: If no plan language node is above `node`.
         """
         for ancestor in node.path:
             if isinstance(ancestor, CramLanguageNode):
                 return ancestor
-        raise NotRunByLanguageNodeError(node=node)
+        raise NoLanguageNodeAboveError(node=node)
 
     def expand(self, context: StatechartContext) -> None:
         """
         Adopt every node this goal was handed and wire them.
         """
         for node in list(self.nodes):
-            self._check_can_run(node)
+            self._check_can_be_a_child(node)
             self._place_child_in_statechart(node)
         self._wire_children()
 
     def check_children(self) -> None:
         """
-        Rejects this goal if it was never handed a node to run.
+        Rejects this goal if it was never handed a child.
         """
         self._check_has_children()
 
-    def _check_can_run(self, node: StatechartNode) -> None:
+    def _check_can_be_a_child(self, node: StatechartNode) -> None:
         """
-        Rejects a node this goal cannot run as its child, before it joins the
+        Rejects a node that cannot be a child of this goal, before it joins the
         statechart.
 
         :param node: The node the caller handed over.
@@ -386,7 +386,7 @@ class CramLanguageNode(CompositeNode, ABC):  # ControlStructureNode?
         Wires the conditions of the current children to each other.
         """
 
-    def _runs(self, node: StatechartNode) -> bool:
+    def _has_child(self, node: StatechartNode) -> bool:
         """
         :return: Whether `node` itself is one of the children, whatever other child it
             compares equal to.
@@ -403,11 +403,11 @@ class CramLanguageNode(CompositeNode, ABC):  # ControlStructureNode?
                 return self.nodes.index(holder)
         raise NodeIsNotAChildError(node=self, child=reference)
 
-    def _check_does_not_run(self, node: StatechartNode) -> None:
+    def _check_is_not_a_child(self, node: StatechartNode) -> None:
         """
-        :raises NodeAlreadyAChildError: If this goal already runs `node`.
+        :raises NodeAlreadyAChildError: If `node` is a child of this goal already.
         """
-        if self._runs(node):
+        if self._has_child(node):
             raise NodeAlreadyAChildError(node=self, child=node)
 
     def _insert_at(self, position: int, node: StatechartNode) -> None:
@@ -415,11 +415,11 @@ class CramLanguageNode(CompositeNode, ABC):  # ControlStructureNode?
         Runs `node` at `position` among the children.
         """
         node = self._as_node(node)
-        self._check_does_not_run(node)
+        self._check_is_not_a_child(node)
         if not self.belongs_to_statechart():
             self.nodes.insert(position, node)
             return
-        self._check_can_run(node)
+        self._check_can_be_a_child(node)
         self.nodes.insert(position, node)
         self._place_child_in_statechart(node)
         self._wire_children()
@@ -434,7 +434,7 @@ class CramLanguageNodeRunningItsChildrenInTurn(
     in a way it defines.
     """
 
-    def _check_can_run(self, node: StatechartNode) -> None:
+    def _check_can_be_a_child(self, node: StatechartNode) -> None:
         self._check_can_decide(node)
 
     def _wire_children(self) -> None:
@@ -474,15 +474,15 @@ class Sequence(CramLanguageNodeRunningItsChildrenInTurn):
     .. note:: corresponds to the RPL's SEQ. (McDermott, Drew. A reactive plan language, 1991)
     """
 
-    def _check_can_run(self, node: StatechartNode) -> None:
+    def _check_can_be_a_child(self, node: StatechartNode) -> None:
         """
         A node that ends the statechart may be a step although it belongs to no other
-        node's life cycle, see :meth:`CramLanguageNode._check_can_run`.
+        node's life cycle, see :meth:`CramLanguageNode._check_can_be_a_child`.
         """
         if isinstance(node, TerminalNode):
             self._check_caller_wired_no_transitions(node)
             return
-        super()._check_can_run(node)
+        super()._check_can_be_a_child(node)
 
     def _start_condition_after(self, previous: StatechartNode) -> Scalar:
         """
@@ -551,7 +551,7 @@ class Parallel(EndedByOwner, CramLanguageNode):
         :meth:`~cramph.node.StatechartNode.inherent_fail_condition`.
 
         Observing False means the nodes are not at their goals, which is not a failure
-        and is left to whoever runs this goal. A node that ended without
+        and is left to its owner. A node that ended without
         succeeding is different: nothing brings it back, so once too few are left this
         goal can no longer arrive and says so rather than holding its owner open forever.
         """
@@ -597,8 +597,7 @@ class Parallel(EndedByOwner, CramLanguageNode):
         says where it was cut off rather than where it is.
 
         Observing False means the nodes are not at their goals, not that anything went
-        wrong: whether that is worth giving up on is decided outside, by whoever runs
-        this goal.
+        wrong: whether that is worth giving up on is decided outside, by its owner.
         """
         nodes_at_their_goals = [
             trinary_logic_and(
@@ -733,7 +732,7 @@ class TryAll(CramLanguageNode, CompositeNodeEndingItsChildren):
     every one of them ended without doing so.
     """
 
-    def _check_can_run(self, node: StatechartNode) -> None:
+    def _check_can_be_a_child(self, node: StatechartNode) -> None:
         self._check_can_decide(node)
 
     def _wire_children(self) -> None:
@@ -1234,7 +1233,7 @@ class StatementNode(CompositeNodeChoosingItsChild):
 
     The statement is grounded only when this node starts, against the world the nodes
     before it left behind; the chooser of the context decides which of its candidates
-    run. A plan language node handed a statement runs it through such a node.
+    run. A plan language node handed a statement takes such a node as its child.
     """
 
     statement: Match = field(
@@ -1323,8 +1322,8 @@ class StatementNode(CompositeNodeChoosingItsChild):
     @property
     def grounded_nodes(self) -> list[StatechartNode]:
         """
-        :return: The node of the statement's type every child chosen so far runs, in
-            the order they were chosen, each found below whatever runs it.
+        :return: The node of the statement's type each child chosen so far holds, in
+            the order they were chosen, each found below whatever holds it.
         """
         return [
             next(

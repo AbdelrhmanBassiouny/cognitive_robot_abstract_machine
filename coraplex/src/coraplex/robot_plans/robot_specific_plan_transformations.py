@@ -223,7 +223,7 @@ class KeepStretchInFrontOfTheContainerItCloses(PlanTransformation[CloseAction]):
         handle = closing_goal.environment_link
         tool_frame = closing_goal.tip_link
         robot_root = plan_node.robot.root
-        CramLanguageNode.running(closing_goal).replace(
+        CramLanguageNode.closest_above(closing_goal).replace(
             closing_goal,
             Parallel(
                 [

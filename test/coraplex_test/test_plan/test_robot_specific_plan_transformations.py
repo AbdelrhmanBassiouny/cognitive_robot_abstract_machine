@@ -161,7 +161,7 @@ def steps_of(action: StatechartNode) -> StatechartNode:
 # %% replacing the body of an action
 
 
-def test_an_expanded_action_runs_the_body_it_is_given_instead(pr2_apartment_context):
+def test_an_expanded_action_takes_the_body_it_is_given_instead(pr2_apartment_context):
     world, robot, extensions = pr2_apartment_context
     action = expand(MoveTorsoAction(TorsoState.HIGH), extensions)
     former_nodes = [action.action_body, *action.action_body.descendants]
@@ -177,7 +177,7 @@ def test_an_expanded_action_runs_the_body_it_is_given_instead(pr2_apartment_cont
     assert not set(former_nodes) & set(action.statechart.nodes)
 
 
-def test_an_expanded_action_runs_a_body_deciding_its_own_success_instead(
+def test_an_expanded_action_takes_a_body_deciding_its_own_success_instead(
     pr2_apartment_context,
 ):
     world, robot, extensions = pr2_apartment_context
@@ -219,7 +219,7 @@ def test_the_body_of_a_compiled_action_cannot_be_replaced(pr2_apartment_context)
         action.replace_action_body(goal)
 
 
-def test_an_action_joining_a_compiled_statechart_runs_the_body_it_is_given_instead(
+def test_an_action_joining_a_compiled_statechart_takes_the_body_it_is_given_instead(
     pr2_apartment_context,
 ):
     world, robot, extensions = pr2_apartment_context

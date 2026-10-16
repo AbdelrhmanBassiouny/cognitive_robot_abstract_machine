@@ -129,7 +129,7 @@ class Action(
         rewriting = context.get_extension(PlanRewriting)
         if rewriting is not None:
             rewriting.configure(self)
-        self._run_as_action_body(self.create_action_body())
+        self._put_below_as_action_body(self.create_action_body())
 
     def replace_action_body(self, node: StatechartNode) -> None:
         """
@@ -148,14 +148,14 @@ class Action(
         replaced = self.action_body
         if replaced is None:
             raise ActionNotExpanded(self)
-        if isinstance(node, CramLanguageNode) and node._runs(replaced):
+        if isinstance(node, CramLanguageNode) and node._has_child(replaced):
             self._check_accepts_children()
             node._join_statechart_keeping_child(
                 replaced, lambda: self._put_in_place_of_action_body(node)
             )
             return
         self.statechart.remove_node(replaced)
-        self._run_as_action_body(node)
+        self._put_below_as_action_body(node)
 
     def _put_in_place_of_action_body(self, node: StatechartNode) -> None:
         """
@@ -163,9 +163,9 @@ class Action(
         one, which stays in the statechart.
         """
         self.nodes[self.nodes.index(self.action_body)] = node
-        self._run_as_action_body(node)
+        self._put_below_as_action_body(node)
 
-    def _run_as_action_body(self, node: StatechartNode) -> None:
+    def _put_below_as_action_body(self, node: StatechartNode) -> None:
         """
         Puts `node` below this action and ends it once it is at its goal, unless it
         decides its own success.

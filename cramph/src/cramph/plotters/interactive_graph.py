@@ -31,7 +31,7 @@ if TYPE_CHECKING:
 @dataclass
 class StatechartGraphVisualizer:
     """
-    An interactive drawing of the nodes of a statechart and the nodes they run.
+    An interactive drawing of the nodes of a statechart and their children.
 
     Nodes are labelled by their unique name, coloured by their life cycle state and
     reveal their state and run ticks when clicked, all updated while the statechart
@@ -78,8 +78,8 @@ class StatechartGraphVisualizer:
     def _parent_child_graph(self) -> rx.PyDiGraph[StatechartNode]:
         """
         Unlike :attr:`~cramph.statechart.Statechart.rx_graph`, whose edges are
-        transition condition dependencies, this graph's edges lead from each node to the
-        nodes it runs.
+        transition condition dependencies, this graph's edges lead from each node to its
+        children.
 
         :return: A graph of every node, each at its own :attr:`~StatechartNode.index`.
         """
