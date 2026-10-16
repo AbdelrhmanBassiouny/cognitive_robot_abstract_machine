@@ -142,14 +142,27 @@ def _parse_robosuite_mjcf(parser: MJCFParser) -> World:
     group before the shared, convention-agnostic :class:`MJCFParser` sees them, or they would be
     parsed as visible and rendered on top of the real materials.
 
+    RoboCasa also marks the regions it places objects by, such as an object's bounding box,
+    with fully transparent geoms in the visual group. They are not part of how anything
+    looks, so they are relabelled to the invisible
+    :attr:`~GeomVisibilityAndCollisionType.UNDEFINED_1` group.
+
+    Some RoboCasa objects, such as its pans, nest their shapes in more than one unnamed body;
+    each unnamed body is named after its place among the document's bodies, so that no two
+    bodies share a name.
+
     :param parser: The parser, already constructed from a robosuite/RoboCasa-composed MJCF
         document, to relabel and parse.
     :return: The parsed world.
     """
-    for body in parser.spec.bodies:
+    for index, body in enumerate(parser.spec.bodies):
+        if not body.name:
+            body.name = f"unnamed_body_{index}"
         for geom in body.geoms:
             if geom.group == GeomVisibilityAndCollisionType.VISIBLE_AND_COLLIDABLE_1:
                 geom.group = GeomVisibilityAndCollisionType.ONLY_COLLIDABLE
+            elif geom.rgba[3] == 0 and not geom.material:
+                geom.group = GeomVisibilityAndCollisionType.UNDEFINED_1
     return parser.parse()
 
 

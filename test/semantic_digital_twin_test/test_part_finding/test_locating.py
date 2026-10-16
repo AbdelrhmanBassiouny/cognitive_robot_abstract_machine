@@ -37,10 +37,13 @@ from semantic_digital_twin.part_finding.vision_language import (
 )
 from semantic_digital_twin.semantic_annotations.mixins import HasRootBody
 from semantic_digital_twin.semantic_annotations.semantic_annotations import (
+    Cup,
     DiningTable,
     Handle,
+    Kettle,
     Leg,
     Mug,
+    Pan,
     Pot,
 )
 from semantic_digital_twin.spatial_computations.mesh_rendering import (
@@ -140,6 +143,16 @@ def test_a_mug_calls_for_one_optional_handle():
     assert relationship.name == "handle"
     assert relationship.part_type is Handle
     assert relationship.part_name == "handle"
+    assert relationship.may_be_empty
+    assert not relationship.holds_many
+
+
+@pytest.mark.parametrize("whole_type", [Pan, Kettle, Cup])
+def test_cookware_held_by_a_handle_calls_for_one_optional_handle(whole_type):
+    [relationship] = PartRelationshipInspector.all_of_type(whole_type)
+
+    assert relationship.name == "handle"
+    assert relationship.part_type is Handle
     assert relationship.may_be_empty
     assert not relationship.holds_many
 
@@ -273,6 +286,27 @@ def test_a_found_handle_becomes_the_mugs_handle():
     assert len(mug.root.collision.combined_mesh.faces) == len(mesh.faces) - len(
         handle_faces
     )
+
+
+def test_a_handle_is_split_off_a_mug_that_collides_differently_than_it_looks():
+    mesh, handle_faces = mug_with_handle()
+    mug = annotate(mesh, Mug)
+    mug.root.collision = ShapeCollection(
+        [
+            Mesh.from_trimesh(
+                mesh=mesh.convex_hull,
+                origin=HomogeneousTransformationMatrix(reference_frame=mug.root),
+            )
+        ],
+        reference_frame=mug.root,
+    )
+    locator = stand_in_locator({"handle": [handle_faces]})
+
+    [handle] = AnnotationPartFinder(locator=locator).find_parts(mug)
+
+    assert mug.handle is handle
+    assert 0 < len(handle.root.collision) <= 32
+    assert 0 < len(mug.root.collision) <= 32
 
 
 def test_an_optional_part_the_locator_is_unsure_of_is_left_out():

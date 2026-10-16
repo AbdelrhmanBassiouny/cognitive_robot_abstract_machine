@@ -175,6 +175,64 @@ def test_parse_robosuite_mjcf_excludes_default_group_geoms_from_visuals():
     assert (0.0, 1.0, 0.0, 1.0) in visual_colors
 
 
+ROBOSUITE_STYLE_REGION_GEOM_MJCF = """
+<mujoco>
+  <worldbody>
+    <body name="base">
+      <geom type="box" size="0.1 0.1 0.1" group="1" rgba="0 1 0 1"/>
+      <geom name="reg_bbox" type="box" size="0.2 0.2 0.2" group="1" rgba="0 0 0 0"
+            contype="0" conaffinity="0"/>
+    </body>
+  </worldbody>
+</mujoco>
+"""
+
+
+def test_parse_robosuite_mjcf_excludes_transparent_region_geoms_from_visuals():
+    """
+    RoboCasa marks the regions it places objects by, such as an object's bounding box,
+    with fully transparent geoms in the visual group; they are not part of how the
+    object looks.
+    """
+    world = _parse_robosuite_mjcf(
+        MJCFParser.from_xml_string(ROBOSUITE_STYLE_REGION_GEOM_MJCF)
+    )
+    base = world.get_kinematic_structure_entity_by_name("base")
+
+    assert [tuple(shape.color.to_rgba()) for shape in base.visual.shapes] == [
+        (0.0, 1.0, 0.0, 1.0)
+    ]
+
+
+ROBOSUITE_STYLE_UNNAMED_BODIES_MJCF = """
+<mujoco>
+  <worldbody>
+    <body>
+      <body name="object">
+        <body pos="0 -0.045 0">
+          <geom type="box" size="0.1 0.1 0.1" group="1"/>
+        </body>
+      </body>
+    </body>
+  </worldbody>
+</mujoco>
+"""
+
+
+def test_parse_robosuite_mjcf_gives_every_unnamed_body_a_name_of_its_own():
+    """
+    Some RoboCasa objects, such as its pans, nest their shapes in more than one unnamed
+    body.
+    """
+    world = _parse_robosuite_mjcf(
+        MJCFParser.from_xml_string(ROBOSUITE_STYLE_UNNAMED_BODIES_MJCF)
+    )
+
+    names = [body.name.name for body in world.bodies]
+    assert len(set(names)) == len(names) == 4
+    assert all(names)
+
+
 def test_parse_robosuite_mjcf_keeps_default_group_geoms_collidable():
     """
     Relabelling a default-group geom to ONLY_COLLIDABLE must only affect its visibility, not

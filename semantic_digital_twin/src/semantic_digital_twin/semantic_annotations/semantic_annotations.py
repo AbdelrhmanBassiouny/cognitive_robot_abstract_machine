@@ -930,9 +930,9 @@ class DrinkingContainer(Container, Tableware): ...
 
 
 @dataclass(eq=False)
-class Cup(DrinkingContainer, IsPerceivable):
+class Cup(DrinkingContainer, IsPerceivable, HasHandle):
     """
-    A cup.
+    A cup, held by its handle if it has one.
     """
 
 
@@ -952,9 +952,9 @@ class Lid(Cookware): ...
 
 
 @dataclass(eq=False)
-class Pan(CookingContainer):
+class Pan(CookingContainer, HasHandle):
     """
-    A pan.
+    A pan, held by its handle.
     """
 
 
@@ -1330,7 +1330,10 @@ class Sink(HasHandle, HasFaucet):
 
 
 @dataclass(eq=False)
-class Kettle(CookingContainer): ...
+class Kettle(CookingContainer, HasHandle):
+    """
+    A kettle, held by its handle.
+    """
 
 
 @dataclass(eq=False)
