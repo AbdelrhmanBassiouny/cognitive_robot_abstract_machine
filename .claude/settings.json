@@ -1,4 +1,17 @@
 {
+  "extraKnownMarketplaces": {
+    "basstler-spike": {
+      "source": {
+        "source": "github",
+        "repo": "AbdelrhmanBassiouny/cognitive_robot_abstract_machine",
+        "ref": "claude/tender-ramanujan-wy5gdb",
+        "path": "basstler-plugin-spike/.claude-plugin/marketplace.json"
+      }
+    }
+  },
+  "enabledPlugins": {
+    "basstler-spike@basstler-spike": true
+  },
   "hooks": {
     "SessionStart": [
       {

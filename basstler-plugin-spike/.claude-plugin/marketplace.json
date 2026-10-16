@@ -1,0 +1,20 @@
+{
+  "name": "basstler-spike",
+  "description": "Throwaway marketplace checking that a CRAM cloud session loads basstler as a Claude Code plugin",
+  "owner": {
+    "name": "Abdelrhman Bassiouny"
+  },
+  "plugins": [
+    {
+      "name": "basstler-spike",
+      "description": "One skill and one SessionStart hook that report whether they were loaded",
+      "source": {
+        "source": "git-subdir",
+        "url": "AbdelrhmanBassiouny/cognitive_robot_abstract_machine",
+        "path": "basstler-plugin-spike/plugins/basstler-spike",
+        "ref": "claude/tender-ramanujan-wy5gdb",
+        "sha": "65759cc57b22821523efec8a4f1b50cea3c8a652"
+      }
+    }
+  ]
+}
