@@ -15,6 +15,7 @@ from coraplex.plans.designator import DesignatorParameters
 from coraplex.plans.plan_transformation import PlanRewriting
 from krrood.ormatic.utils import classproperty
 from cramph.node import SucceedsOnObservingTrue, FailsOnObservingFalse
+from cramph.composites import CramLanguageNode
 from cramph.context import ContextExtension, StatechartContext
 from cramph.node import CompositeNode, NodeArtifacts, StatechartNode
 from giskardpy.motion_statechart.graph_node import MotionStatechartNode
@@ -132,10 +133,14 @@ class Action(
 
     def replace_action_body(self, node: StatechartNode) -> None:
         """
-        Runs `node` as what this action does, in place of its :attr:`action_body`, which
-        leaves the statechart together with everything below it.
+        Puts `node` in place of :attr:`action_body`, as what this action does.
 
-        :param node: The node to run instead, which belongs to no statechart yet.
+        If `node` is a plan language node that has the action body among its children,
+        the action body stays in the statechart as that child, and the conditions this
+        action wired for it are cleared, so that `node` wires them. Otherwise the action
+        body leaves the statechart together with everything below it.
+
+        :param node: The node to put in its place, which belongs to no statechart yet.
         :raises ActionNotExpanded: If this action was not expanded yet.
         :raises StatechartAlreadyCompiledError: If the statechart of this action is
             compiled.
@@ -143,19 +148,22 @@ class Action(
         replaced = self.action_body
         if replaced is None:
             raise ActionNotExpanded(self)
+        if isinstance(node, CramLanguageNode) and node._runs(replaced):
+            self._check_accepts_children()
+            node._join_statechart_keeping_child(
+                replaced, lambda: self._put_in_place_of_action_body(node)
+            )
+            return
         self.statechart.remove_node(replaced)
         self._run_as_action_body(node)
 
-    def _hand_over_place_of(
-        self, child: StatechartNode, successor: StatechartNode
-    ) -> None:
+    def _put_in_place_of_action_body(self, node: StatechartNode) -> None:
         """
-        Runs `successor` as :attr:`action_body` in place of `child`, see
-        :meth:`~cramph.node.CompositeNode._hand_over_place_of`.
+        Puts `node` in the statechart as :attr:`action_body`, in place of the current
+        one, which stays in the statechart.
         """
-        self._check_accepts_children()
-        self.nodes[self.nodes.index(child)] = successor
-        self._run_as_action_body(successor)
+        self.nodes[self.nodes.index(self.action_body)] = node
+        self._run_as_action_body(node)
 
     def _run_as_action_body(self, node: StatechartNode) -> None:
         """

@@ -33,7 +33,6 @@ from cramph.data_types import (
     NodeJSONKey,
 )
 from cramph.exceptions import (
-    ChildCannotBeWrappedError,
     ChildTransitionAlreadyWiredError,
     NotInStatechartError,
     EndInCompositeNodeError,
@@ -2237,20 +2236,6 @@ class CompositeNode(StatechartNode):
                 raise ChildTransitionAlreadyWiredError(
                     node=self, child=node, transition_kind=transition_kind
                 )
-
-    def _hand_over_place_of(
-        self, child: StatechartNode, successor: StatechartNode
-    ) -> None:
-        """
-        Runs `successor`, which belongs to no statechart yet, where `child` ran, wired
-        the way this node wires its children. `child` stays in the statechart, for
-        `successor` to run, see :meth:`~cramph.composites.CramLanguageNode.wrap`.
-
-        :param child: A node this node runs.
-        :param successor: The node to run in its place.
-        :raises ChildCannotBeWrappedError: Unless a subclass hands its place over.
-        """
-        raise ChildCannotBeWrappedError(node=self, child=child)
 
     def _succeed_at_its_goal(self, child: StatechartNode) -> None:
         """

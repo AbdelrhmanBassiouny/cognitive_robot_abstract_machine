@@ -239,16 +239,22 @@ def test_an_action_joining_a_compiled_statechart_runs_the_body_it_is_given_inste
     assert statechart.latest_compile_covers(goal)
 
 
-def test_an_expanded_action_runs_the_node_wrapping_its_body(pr2_apartment_context):
+def test_an_action_body_replaced_by_a_node_holding_it_stays_below_that_node(
+    pr2_apartment_context,
+):
     world, robot, extensions = pr2_apartment_context
     action = expand(MoveTorsoAction(TorsoState.HIGH), extensions)
     body = action.action_body
-    wrapper = Parallel([HoldOrientation(root_link=world.root, tip_link=robot.root)])
+    replacement = Parallel(
+        [body, HoldOrientation(root_link=world.root, tip_link=robot.root)]
+    )
 
-    wrapper.wrap(body)
+    action.replace_action_body(replacement)
 
-    assert action.action_body is wrapper
-    assert wrapper.nodes[0] is body
+    assert action.action_body is replacement
+    assert action.nodes == [replacement]
+    assert replacement.nodes[0] is body
+    assert body.parent_node is replacement
     assert body in action.statechart.nodes
 
 

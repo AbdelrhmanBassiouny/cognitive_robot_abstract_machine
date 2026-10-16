@@ -5,7 +5,7 @@ from dataclasses import dataclass, field
 from itertools import combinations
 from typing import List
 
-from typing_extensions import Any, Generator, Optional
+from typing_extensions import Any, Callable, Generator, Optional
 
 from krrood.adapters.json_serializer import JSONField
 from krrood.entity_query_language.backends import QueryBackend
@@ -23,7 +23,6 @@ from cramph.data_types import (
 from cramph.exceptions import (
     NotRunByLanguageNodeError,
     AttemptWithoutFailureMonitorsError,
-    TopLevelNodeCannotBeWrappedError,
     ChildCannotFailError,
     NodeAlreadyAChildError,
     NodeIsNotAChildError,
@@ -284,13 +283,22 @@ class CramLanguageNode(CompositeNode, ABC):  # ControlStructureNode?
 
     def replace(self, reference: StatechartNode, node: StatechartNode) -> None:
         """
-        Runs `node` in place of `reference`, which leaves the statechart together with
-        everything below it.
+        Puts `node` in place of `reference` among the children of this goal.
 
-        :param reference: A node this goal runs.
-        :param node: The node to run in its place.
-        :raises NodeIsNotAChildError: If this goal does not run `reference`.
-        :raises NodeAlreadyAChildError: If this goal already runs `node`.
+        If `node` is a plan language node that has `reference` among its children,
+        `reference` stays in the statechart as that child, at the position it was handed
+        over at, and the conditions this goal wired for it are cleared, so that `node`
+        wires them. Otherwise `reference` leaves the statechart together with everything
+        below it.
+
+        .. warning:: A :meth:`~cramph.statechart.Statechart.modify` block that raises
+            afterwards removes `node`, but does not give `reference` back to this goal.
+
+        :param reference: A child of this goal.
+        :param node: The node to put in its place.
+        :raises NodeIsNotAChildError: If `reference` is not a child of this goal.
+        :raises NodeAlreadyAChildError: If `node` is a child of this goal already.
+        :raises StatechartAlreadyCompiledError: If the latest compile covered this goal.
         """
         position = self._position_of(reference)
         node = self._as_node(node)
@@ -300,47 +308,42 @@ class CramLanguageNode(CompositeNode, ABC):  # ControlStructureNode?
             return
         replaced = self.nodes[position]
         self._check_can_run(node)
+        self._check_accepts_children()
+        if isinstance(node, CramLanguageNode) and node._runs(replaced):
+            node._join_statechart_keeping_child(
+                replaced, lambda: self._put_at(position, node)
+            )
+            return
+        self._put_at(position, node)
+        self.statechart.remove_node(replaced)
+
+    def _put_at(self, position: int, node: StatechartNode) -> None:
+        """
+        Puts `node`, which is no child yet, in the statechart as the child at
+        `position`, in place of the child there, and wires the children again.
+        """
         self.nodes[position] = node
         self._place_child_in_statechart(node)
         self._wire_children()
-        self.statechart.remove_node(replaced)
 
-    def wrap(self, node: StatechartNode) -> None:
-        """
-        Takes the place of `node` under the node running it, and runs `node`, with
-        everything below it, as its first child. The conditions the former owner wired
-        for `node` are cleared, so that this goal wires them.
-
-        .. warning:: A :meth:`~cramph.statechart.Statechart.modify` block that raises
-            after the wrap drops this goal, but does not give `node` back to its former
-            owner.
-
-        :param node: A node of a statechart that is not compiled yet.
-        :raises TopLevelNodeCannotBeWrappedError: If no node runs `node`.
-        :raises ChildCannotBeWrappedError: If the node running `node` cannot run another
-            node in its place.
-        :raises NodeAlreadyAChildError: If this goal already runs `node`.
-        :raises StatechartAlreadyCompiledError: If the latest compile covered the node
-            running `node`.
-        """
-        owner = node.parent_node
-        if owner is None:
-            raise TopLevelNodeCannotBeWrappedError(node=self, wrapped=node)
-        self._check_does_not_run(node)
-        owner._hand_over_place_of(node, self)
-        node._clear_owner_wiring()
-        node.parent_node = self
-        self._insert_at(0, node)
-
-    def _hand_over_place_of(
-        self, child: StatechartNode, successor: StatechartNode
+    def _join_statechart_keeping_child(
+        self, child: StatechartNode, join_statechart: Callable[[], None]
     ) -> None:
-        position = self._position_of(child)
-        self._check_can_run(successor)
-        self._check_accepts_children()
-        self.nodes[position] = successor
-        self._place_child_in_statechart(successor)
-        self._wire_children()
+        """
+        Joins the statechart without `child`, which belongs to it already, and then
+        makes `child` a child of this node again, at the position it had among the
+        children. The conditions its former parent wired for it are cleared, so that
+        this node wires them.
+
+        :param child: A child of this node that belongs to the statechart already.
+        :param join_statechart: Puts this node in the statechart.
+        """
+        position = next(index for index, node in enumerate(self.nodes) if node is child)
+        del self.nodes[position]
+        join_statechart()
+        child._clear_owner_wiring()
+        child.parent_node = self
+        self._insert_at(position, child)
 
     @staticmethod
     def running(node: StatechartNode) -> CramLanguageNode:

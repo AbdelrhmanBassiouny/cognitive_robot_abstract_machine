@@ -13,12 +13,10 @@ from cramph.composites import (
 )
 from cramph.data_types import LifeCycleValues, ObservationStateValues
 from cramph.exceptions import (
-    ChildCannotBeWrappedError,
     NodeAlreadyAChildError,
     NodeIsNotAChildError,
     NotRunByLanguageNodeError,
     StatechartAlreadyCompiledError,
-    TopLevelNodeCannotBeWrappedError,
 )
 from cramph.executor import StatechartExecutor
 from cramph.node import EndStatechart, StatechartNode
@@ -234,88 +232,100 @@ def test_a_parallel_can_still_arrive_through_a_node_inserted_after_it_joined(
     assert parallel.observation_state == ObservationStateValues.TRUE
 
 
-# %% wrapping a node
+# %% replacing a node by one holding it
 
 
 def _at_goal(name: str) -> NodeObservingAFixedValue:
     """
-    :return: A node that observes being at its goal and leaves ending it to its owner.
+    :return: A node that observes being at its goal and leaves ending it to its parent.
     """
     return NodeObservingAFixedValue(name=name, observation=ObservationStateValues.TRUE)
 
 
-def test_a_wrapped_step_runs_inside_its_wrapper_where_it_ran_before(
+def test_a_step_replaced_by_a_node_holding_it_stays_in_the_statechart_below_that_node(
     statechart_executor: StatechartExecutor,
 ):
     statechart = Statechart(context=statechart_executor.context)
-    first, wrapped, third = _succeeding("1"), _at_goal("wrapped"), _succeeding("3")
+    first, held, third = _succeeding("1"), _at_goal("held"), _succeeding("3")
     beside = _at_goal("beside")
-    statechart.add_node(sequence := Sequence(nodes=[first, wrapped, third]))
-    wrapper = Parallel(nodes=[beside])
+    statechart.add_node(sequence := Sequence(nodes=[first, held, third]))
 
-    wrapper.wrap(wrapped)
+    sequence.replace(held, replacement := Parallel(nodes=[beside, held]))
     _run(statechart_executor, statechart, sequence)
 
-    assert sequence.nodes == [first, wrapper, third]
-    assert wrapper.nodes == [wrapped, beside]
-    assert wrapped.parent_node is wrapper
-    assert _start_order(statechart, [third, wrapper, first]) == [first, wrapper, third]
+    assert sequence.nodes == [first, replacement, third]
+    assert replacement.nodes == [beside, held]
+    assert held.parent_node is replacement
+    assert held in statechart.nodes
+    assert _start_order(statechart, [third, replacement, first]) == [
+        first,
+        replacement,
+        third,
+    ]
     assert sequence.life_cycle_state == LifeCycleValues.SUCCEEDED
 
 
-def test_a_wrapped_node_is_no_longer_ended_by_the_node_that_ran_it(
+def test_a_held_step_keeps_its_position_among_the_children_of_its_new_parent(
+    statechart_executor: StatechartExecutor,
+):
+    statechart = Statechart(context=statechart_executor.context)
+    held, before, after = (
+        _succeeding("held"),
+        _succeeding("before"),
+        _succeeding("after"),
+    )
+    statechart.add_node(sequence := Sequence(nodes=[held]))
+
+    sequence.replace(held, replacement := Sequence(nodes=[before, held, after]))
+    _run(statechart_executor, statechart, sequence)
+
+    assert replacement.nodes == [before, held, after]
+    assert _start_order(statechart, [after, held, before]) == [before, held, after]
+
+
+def test_a_held_step_is_no_longer_ended_by_its_former_parent(
     statechart_executor: StatechartExecutor,
 ):
     """
     The sequence ended the step once it was at its goal; a parallel ends none of its
-    nodes, so inside one the step keeps running while its sibling is not at its goal.
+    children, so below one the step keeps running while its sibling is not at its goal.
     """
     statechart = Statechart(context=statechart_executor.context)
-    wrapped = _at_goal("wrapped")
-    statechart.add_node(Sequence(nodes=[wrapped]))
-    Parallel(
-        nodes=[NodeObservingAFixedValue(observation=ObservationStateValues.FALSE)]
-    ).wrap(wrapped)
+    held = _at_goal("held")
+    statechart.add_node(sequence := Sequence(nodes=[held]))
+    sequence.replace(
+        held,
+        Parallel(
+            nodes=[
+                NodeObservingAFixedValue(observation=ObservationStateValues.FALSE),
+                held,
+            ]
+        ),
+    )
 
     statechart_executor.compile(statechart)
     statechart_executor.tick()
     statechart_executor.tick()
 
-    assert wrapped.life_cycle_state == LifeCycleValues.RUNNING
+    assert held.life_cycle_state == LifeCycleValues.RUNNING
 
 
-def test_wrapping_a_top_level_node_is_rejected(
+def test_replacing_a_step_of_a_compiled_statechart_is_rejected_and_changes_nothing(
     statechart_executor: StatechartExecutor,
 ):
     statechart = Statechart(context=statechart_executor.context)
-    statechart.add_node(top_level := _at_goal("top level"))
-
-    with pytest.raises(TopLevelNodeCannotBeWrappedError):
-        Parallel(nodes=[_at_goal("beside")]).wrap(top_level)
-
-
-def test_wrapping_a_node_its_owner_cannot_hand_over_is_rejected(
-    statechart_executor: StatechartExecutor,
-):
-    statechart = Statechart(context=statechart_executor.context)
-    task = _at_goal("task")
-    statechart.add_node(Attempt(task=task, failure_monitors=[ConstFalseNode()]))
-
-    with pytest.raises(ChildCannotBeWrappedError):
-        Parallel(nodes=[_at_goal("beside")]).wrap(task)
-
-
-def test_wrapping_a_node_of_a_compiled_statechart_is_rejected(
-    statechart_executor: StatechartExecutor,
-):
-    statechart = Statechart(context=statechart_executor.context)
-    wrapped = _at_goal("wrapped")
-    statechart.add_node(sequence := Sequence(nodes=[wrapped]))
+    held = _at_goal("held")
+    statechart.add_node(sequence := Sequence(nodes=[held]))
     statechart.add_node(EndStatechart.when_true(sequence))
     statechart_executor.compile(statechart)
+    replacement = Parallel(nodes=[_at_goal("beside"), held])
 
     with pytest.raises(StatechartAlreadyCompiledError):
-        Parallel(nodes=[_at_goal("beside")]).wrap(wrapped)
+        sequence.replace(held, replacement)
+
+    assert sequence.nodes == [held]
+    assert replacement.nodes[1] is held
+    assert held.parent_node is sequence
 
 
 # %% the language node running a node

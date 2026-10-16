@@ -124,22 +124,13 @@ class KeepStretchFromTurningWhileMovingItsTool(
     PlanTransformation[MovesToolCenterPoint]
 ):
     """
-    Holds the orientation of a Stretch's base while its tool moves.
+    Holds the orientation of a Stretch's base while its tool moves, so that the base
+    only drives along its heading, as the tool's sixth degree of freedom.
 
-    The base still drives along its heading, which gives the tool its sixth degree of freedom beside
-    the arm, the lift and the wrist, and makes moving it more stable.
-
-    The base does not turn to bring a target into reach: turning while the tool moves
-    sweeps the base through wide arcs for little gain, so a target the arm does not
-    reach from where the base faces fails instead. Choosing where the robot stands is
-    up to the plan.
-
-    Applies only while the base is controlled together with the arm. An action that
-    drives the base on its own is left as it is, since holding the base would stop the
-    drive; the actions moving the tool inside it are held instead. An action moving a
-    container by its handle is left as it is too, with everything inside it, since its
-    tool follows the container further than the arm reaches, and the base has to turn to
-    follow it. An action inside one that is held already is covered by it.
+    The base does not turn to bring a target into reach, which would sweep it through
+    wide arcs: a target out of reach fails, and where the robot stands is up to the
+    plan. Left as they are: actions driving the base, actions moving a container by its
+    handle, and actions below one that holds the base already.
     """
 
     def is_applicable(self, plan_node: MovesToolCenterPoint) -> bool:
@@ -157,21 +148,23 @@ class KeepStretchFromTurningWhileMovingItsTool(
         )
 
     def apply(self, plan_node: MovesToolCenterPoint) -> None:
-        Parallel(
-            [
-                HoldOrientation(
-                    root_link=plan_node.world.root, tip_link=plan_node.robot.root
-                )
-            ]
-        ).wrap(plan_node.action_body)
+        plan_node.replace_action_body(
+            Parallel(
+                [
+                    plan_node.action_body,
+                    HoldOrientation(
+                        root_link=plan_node.world.root, tip_link=plan_node.robot.root
+                    ),
+                ]
+            )
+        )
 
     @staticmethod
     def _holds_the_base(node: StatechartNode, robot: Stretch) -> bool:
         """
-        :return: Whether `node` runs what is below it beside a hold of the orientation of
-            the base of `robot`, as this transformation makes an action do. A hold
-            further down, such as that of an earlier action, does not cover the
-            others.
+        :return: Whether `node` holds the orientation of the base of `robot` beside its
+            other children, as this transformation makes an action do. A hold further
+            down, such as that of an earlier action, does not cover the others.
         """
         return isinstance(node, Parallel) and any(
             type(child) is HoldOrientation and child.tip_link is robot.root
