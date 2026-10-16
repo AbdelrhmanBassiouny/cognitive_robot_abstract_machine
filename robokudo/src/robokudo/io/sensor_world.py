@@ -11,7 +11,6 @@ from itertools import pairwise
 
 from robokudo.exceptions import InvalidCameraObservation
 from robokudo.types.camera import CameraObservation
-from robokudo.utils.ros_frames import normalize_ros_frame_id
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.robots.robot_parts import Camera
 from semantic_digital_twin.spatial_types import HomogeneousTransformationMatrix
@@ -36,46 +35,6 @@ class SensorWorldProjector:
     Recorded camera state that identifies the sensor context.
     """
 
-    @staticmethod
-    def _is_camera_frame_alias(pose_child: Body, camera_root: Body) -> bool:
-        """
-        Recognize ROS frame names that differ only by leading slashes.
-        """
-        return (
-            pose_child.name.prefix == camera_root.name.prefix
-            and pose_child.name.name != camera_root.name.name
-            and normalize_ros_frame_id(pose_child.name.name)
-            == normalize_ros_frame_id(camera_root.name.name)
-        )
-
-    @staticmethod
-    def _resolve_pose_child(observation: CameraObservation) -> Body:
-        """
-        Resolve the sampled child frame and validate its camera identity.
-
-        :param observation: Camera and sampled pose whose frames must agree.
-        :return: Camera root or an equivalent ROS frame body.
-        :raises InvalidCameraObservation: If pose frames are missing or inconsistent.
-        """
-        pose = observation.world_T_camera
-        camera_root = observation.camera.root
-        if pose is None:
-            return camera_root
-        if pose.reference_frame is None:
-            raise InvalidCameraObservation(
-                reason="sampled camera pose has no reference frame"
-            )
-        pose_child = pose.child_frame if pose.child_frame is not None else camera_root
-        if pose_child is camera_root:
-            return camera_root
-        if not isinstance(
-            pose_child, Body
-        ) or not SensorWorldProjector._is_camera_frame_alias(pose_child, camera_root):
-            raise InvalidCameraObservation(
-                reason="sampled pose child frame differs from the camera root"
-            )
-        return pose_child
-
     def project(self) -> World:
         """
         Project an isolated optical camera and its sampled pose into a sensor world.
@@ -99,7 +58,7 @@ class SensorWorldProjector:
         source_camera = self.observation.camera
         source_root = source_camera.root
         source_pose = self.observation.world_T_camera
-        source_child = self._resolve_pose_child(self.observation)
+        source_child = self.observation.pose_child
         source_reference = (
             source_pose.reference_frame if source_pose is not None else None
         )
@@ -144,7 +103,7 @@ class SensorWorldProjector:
         camera = observation.camera
         root = camera.root
         pose = observation.world_T_camera
-        pose_child = SensorWorldProjector._resolve_pose_child(observation)
+        pose_child = observation.pose_child
         reference = pose.reference_frame if pose is not None else None
         sensor_world = World()
         with sensor_world.modify_world():
@@ -194,7 +153,7 @@ class SensorWorldProjector:
         Apply the sampled optical pose directly to the camera root.
         """
         pose = observation.world_T_camera
-        pose_child = SensorWorldProjector._resolve_pose_child(observation)
+        pose_child = observation.pose_child
         if pose is None:
             return
         if pose.reference_frame is pose_child:

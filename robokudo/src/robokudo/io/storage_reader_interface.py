@@ -138,12 +138,9 @@ class StorageReaderInterface(CameraInterface):
         reasoning_world = rk_world.world_instance()
         recorded_entities = [observation.camera, observation.camera.root]
         if observation.world_T_camera is not None:
-            reference = observation.world_T_camera.reference_frame
-            if reference is not None:
-                recorded_entities.append(reference)
-            pose_child = observation.world_T_camera.child_frame
-            if pose_child is not None and pose_child is not observation.camera.root:
-                recorded_entities.append(pose_child)
+            recorded_entities.append(observation.world_T_camera.reference_frame)
+            if observation.pose_child is not observation.camera.root:
+                recorded_entities.append(observation.pose_child)
         if any(
             reasoning_world.find_world_entity_with_id(entity.id) is not None
             for entity in recorded_entities

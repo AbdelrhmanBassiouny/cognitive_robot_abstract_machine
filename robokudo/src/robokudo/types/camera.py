@@ -7,12 +7,14 @@ from __future__ import annotations
 # %% Imports
 from dataclasses import dataclass, replace
 
-from robokudo.exceptions import CameraPoseMissing
+from robokudo.exceptions import CameraPoseMissing, InvalidCameraObservation
+from robokudo.utils.ros_frames import normalize_ros_frame_id
 from semantic_digital_twin.datastructures.camera_model import PinholeCameraModel
 from semantic_digital_twin.datastructures.camera_resolution import CameraResolution
 from semantic_digital_twin.datastructures.field_of_view import FieldOfView
 from semantic_digital_twin.robots.robot_parts import Camera
 from semantic_digital_twin.spatial_types import HomogeneousTransformationMatrix
+from semantic_digital_twin.world_description.world_entity import Body
 
 # %% Camera definitions
 
@@ -24,6 +26,9 @@ class CameraObservation:
 
     :attr:`world_T_camera` alone transforms optical-frame points into world coordinates.
     The camera root is the optical frame; its sampled pose is also its replay pose.
+    A supplied pose must have a reference frame and identify this camera's optical root.
+    Frame metadata and the camera root must remain unchanged after construction; use
+    :meth:`with_world_T_camera` to replace the sampled pose.
 
     An annotator can access native and effective parameters from its CAS::
 
@@ -54,6 +59,50 @@ class CameraObservation:
     """
     Acquisition time as nanoseconds since the Unix epoch.
     """
+
+    def __post_init__(self) -> None:
+        """
+        Validate the sampled pose's reference frame and optical camera identity.
+
+        :raises InvalidCameraObservation: If a supplied pose lacks a reference frame or
+            identifies another camera.
+        """
+        pose = self.world_T_camera
+        if pose is None:
+            return
+        if pose.reference_frame is None:
+            raise InvalidCameraObservation(
+                reason="sampled camera pose has no reference frame"
+            )
+        pose_child = self.pose_child
+        camera_root = self.camera.root
+        if pose_child is camera_root:
+            return
+        if (
+            not isinstance(pose_child, Body)
+            or pose_child.name.prefix != camera_root.name.prefix
+            or pose_child.name.name == camera_root.name.name
+            or normalize_ros_frame_id(pose_child.name.name)
+            != normalize_ros_frame_id(camera_root.name.name)
+        ):
+            raise InvalidCameraObservation(
+                reason="sampled pose child frame differs from the camera root"
+            )
+
+    @property
+    def pose_child(self) -> Body:
+        """
+        Return the sampled child, or the camera root when no child is specified.
+
+        ROS aliases differing only by leading slashes are accepted within the same name
+        prefix. Validation occurs when the observation is constructed.
+
+        :return: Optical camera root or its explicitly sampled ROS alias.
+        """
+        pose = self.world_T_camera
+        if pose is None or pose.child_frame is None:
+            return self.camera.root
+        return pose.child_frame
 
     @property
     def resolution(self) -> CameraResolution:
@@ -97,5 +146,7 @@ class CameraObservation:
 
         :param world_T_camera: Transform from the optical frame into the world frame.
         :return: Observation containing the supplied pose.
+        :raises InvalidCameraObservation: If the pose lacks a reference frame or
+            identifies another camera.
         """
         return replace(self, world_T_camera=world_T_camera)

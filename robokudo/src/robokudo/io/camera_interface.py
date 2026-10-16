@@ -249,39 +249,29 @@ class CameraInterface(object):
         :param world_T_camera: Sampled camera pose, if available.
         """
         camera_frame = normalize_ros_frame_id(camera_frame)
-        if world_T_camera is not None:
-            pose_child = world_T_camera.child_frame
-            if (
-                pose_child is not None
-                and normalize_ros_frame_id(pose_child.name.name) != camera_frame
-            ):
-                raise InvalidCameraObservation(
-                    reason="sampled pose child frame differs from the camera root"
-                )
-            if world_T_camera.reference_frame is None:
-                raise InvalidCameraObservation(
-                    reason="sampled camera pose has no reference frame"
-                )
         camera = self._resolve_or_create_camera(
             camera_frame=camera_frame,
             camera_model=camera_model,
             modalities=modalities,
         )
-        if world_T_camera is not None:
-            if pose_child is None:
-                world_T_camera.child_frame = camera.root
-            elif pose_child is not camera.root:
-                world_T_camera = HomogeneousTransformationMatrix(
-                    data=world_T_camera,
-                    reference_frame=world_T_camera.reference_frame,
-                    child_frame=camera.root,
-                )
-        cas.camera_observation = CameraObservation(
+        if world_T_camera is not None and world_T_camera.child_frame is None:
+            world_T_camera.child_frame = camera.root
+        observation = CameraObservation(
             camera=camera,
             effective_camera_model=camera_model,
             world_T_camera=world_T_camera,
             timestamp_nanoseconds=timestamp_nanoseconds,
         )
+        if world_T_camera is not None and world_T_camera.child_frame is not camera.root:
+            observation = observation.with_world_T_camera(
+                HomogeneousTransformationMatrix(
+                    data=world_T_camera,
+                    reference_frame=world_T_camera.reference_frame,
+                    child_frame=camera.root,
+                )
+            )
+        self._register_camera(camera)
+        cas.camera_observation = observation
 
     def _resolve_or_create_camera(
         self,
@@ -290,7 +280,7 @@ class CameraInterface(object):
         modalities: tuple[CameraModality, ...],
     ) -> Camera:
         """
-        Resolve the stream camera or add a standalone semantic camera.
+        Resolve the stream camera or construct an unregistered standalone camera.
 
         :param camera_frame: Optical frame associated with the image stream.
         :param camera_model: First trustworthy calibration for a new camera.
@@ -316,32 +306,45 @@ class CameraInterface(object):
         camera_bodies = self._bodies_for_ros_frame(runtime_world, camera_frame)
         if len(camera_bodies) > 1:
             raise InvalidCameraObservation(reason="camera frame is ambiguous")
+        camera_body = (
+            camera_bodies[0]
+            if camera_bodies
+            else Body(name=PrefixedName(name=camera_frame))
+        )
+        return Camera(
+            name=PrefixedName(name=camera_frame),
+            root=camera_body,
+            camera_model=camera_model,
+            modalities=modalities,
+        )
+
+    def _register_camera(self, camera: Camera) -> None:
+        """
+        Register a validated stream camera and connect a new optical root to the world.
+
+        :param camera: Semantic camera whose observation has passed frame validation.
+        """
+        runtime_world = world_instance()
+        if runtime_world.find_world_entity_with_id(camera.id) is camera:
+            return
         existing_root = runtime_world.root
+        camera_body = camera.root
         with runtime_world.modify_world():
-            if len(camera_bodies) == 0:
-                camera_body = Body(name=PrefixedName(name=camera_frame))
+            if camera_body._world is None:
                 runtime_world.add_body(camera_body)
                 if existing_root is not None:
-                    # Keep the semantic world connected without treating this
-                    # unconstrained mount as an observed camera pose.
-                    camera_mount = Connection6DoF.create_with_dofs(
-                        parent=existing_root,
-                        child=camera_body,
-                        world=runtime_world,
-                        name=self._standalone_mount_name(camera_body),
+                    # An unconstrained mount keeps the world connected without
+                    # representing an observed camera pose.
+                    runtime_world.add_connection(
+                        Connection6DoF.create_with_dofs(
+                            parent=existing_root,
+                            child=camera_body,
+                            world=runtime_world,
+                            name=self._standalone_mount_name(camera_body),
+                        )
                     )
-                    runtime_world.add_connection(camera_mount)
-            else:
-                camera_body = camera_bodies[0]
-            camera = Camera(
-                name=PrefixedName(name=camera_frame),
-                root=camera_body,
-                camera_model=camera_model,
-                modalities=modalities,
-            )
             runtime_world.add_semantic_annotation(camera)
         init_world_entity_tracker_from_world(runtime_world)
-        return camera
 
     def set_data(self, cas: CAS) -> None:
         """

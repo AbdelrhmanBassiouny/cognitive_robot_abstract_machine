@@ -265,8 +265,6 @@ def _get_world_body_from_cas(cas: CAS, rk_world: World) -> Body | None:
     if observation is None or observation.world_T_camera is None:
         return None
     reference_frame = observation.world_T_camera.reference_frame
-    if reference_frame is None:
-        return None
     return rk_world.get_body_by_name(reference_frame.name)
 
 

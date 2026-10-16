@@ -180,7 +180,11 @@ def test_static_optical_pose_binds_camera_root(
     descriptor.parameters.world_T_camera = HomogeneousTransformationMatrix.from_xyz_rpy(
         x=1.0, y=2.0, z=3.0, pitch=0.1, yaw=0.2
     )
-    expected_world_T_root = descriptor.parameters.world_T_camera
+    expected_world_T_root = HomogeneousTransformationMatrix(
+        data=descriptor.parameters.world_T_camera,
+        reference_frame=context.world.root,
+        child_frame=context.camera.root,
+    )
     bind_pose = Mock(return_value=expected_world_T_root)
     monkeypatch.setattr(CameraInterface, "bind_world_T_camera", bind_pose)
     annotator = StaticCameraTransformAnnotator(descriptor=descriptor)
