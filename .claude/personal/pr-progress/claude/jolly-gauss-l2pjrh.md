@@ -1,12 +1,12 @@
-Item basstler-package/basstler-repository-extraction. Work lives in AbdelrhmanBassiouny/basstler, branch claude/jolly-gauss-l2pjrh (prepared locally; repo not created yet).
+Item basstler-package/basstler-repository-extraction. Work for AbdelrhmanBassiouny/basstler; standalone branch backed up on the fork as claude/jolly-gauss-l2pjrh (basstler history, not CRAM).
 
 Plan
-- Filtered history (#501 tip as main + open tooling branches) pushed to the new repo.
-- Standalone commit as draft PR: own CI, plugin manifest + marketplace, consumer stack.toml, one venv location, reusable workflows, hook installs from git tag. Tag v0.1.0 on merge.
+- Push filtered history: main = #501 tip; rewritten tooling branches (re-run filter-repo per roadmap section if the scratch mirror is gone).
+- Push claude/jolly-gauss-l2pjrh to the new repo, open its draft PR against main. Tag v0.1.0 on merge.
 
 Done
-- Mirror filtered with git filter-repo (paths in roadmap section); secret scan clean.
+- 4 commits on main: plugin/project split + one per-user env ($BASSTLER_HOME) + git-tag install; project-owned .claude/basstler/stack.toml; reusable upstream-reviews workflow + CI; .claude dir created on demand. 752 tests pass; live session start verified.
 
 Next
-- User: create empty public repo, install Claude App. Then add_repo push, push mirror, open draft PR.
-- Make the suite pass in the new layout, then the standalone changes, TDD.
+- Blocked: user installs the Claude GitHub App on AbdelrhmanBassiouny/basstler (pushes 403).
+- Follow-ups for the PR description: CRAM-named defaults left (cram-notes.md path, cram2-link-sent label, local-code-review skill); docformatter not run.
