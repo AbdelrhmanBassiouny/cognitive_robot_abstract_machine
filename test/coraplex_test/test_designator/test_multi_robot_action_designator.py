@@ -1668,6 +1668,16 @@ class CupForEachArm:
     the right arm.
     """
 
+    def extensions_parking_first(self) -> List[ContextExtension]:
+        """
+        :return: The context extensions of the plans of the robot, parking its arms
+            before the first action of a plan.
+        """
+        return [
+            *self.context_extensions,
+            PlanRewriting(transformations=[ParkArmsBeforeFirstAction()]),
+        ]
+
     def places(self) -> List[PlaceAction]:
         """
         :return: The actions that set each cup down to the side of where it is now, the
@@ -1707,14 +1717,14 @@ def cup_for_each_arm(multiple_robot_apartment_context) -> CupForEachArm:
         world,
         "near_cup",
         HomogeneousTransformationMatrix.from_xyz_rpy(
-            x=1.2, y=-1.8, z=0.6, reference_frame=world.root
+            x=1.2, y=-1.8, z=0.8, reference_frame=world.root
         ),
     )
     far_cup = add_cup(
         world,
         "far_cup",
         HomogeneousTransformationMatrix.from_xyz_rpy(
-            x=1.5, y=-2.2, z=0.6, reference_frame=world.root
+            x=1.5, y=-2.2, z=0.8, reference_frame=world.root
         ),
     )
     return CupForEachArm(
@@ -1730,7 +1740,10 @@ def cup_for_each_arm(multiple_robot_apartment_context) -> CupForEachArm:
 def test_a_gripper_closes_at_its_grasp_although_the_other_arm_is_moving(
     cup_for_each_arm: CupForEachArm,
 ):
-    run_plan(Parallel(cup_for_each_arm.pick_ups), cup_for_each_arm.context_extensions)
+    run_plan(
+        Sequence([Parallel(cup_for_each_arm.pick_ups)]),
+        cup_for_each_arm.extensions_parking_first(),
+    )
 
     world = cup_for_each_arm.world
     for pick_up in cup_for_each_arm.pick_ups:
@@ -1748,7 +1761,10 @@ def test_a_gripper_opens_at_its_place_target_although_the_other_arm_is_moving(
     cup_for_each_arm: CupForEachArm,
 ):
     # One after the other, so that both cups sit in their grippers at their grasps.
-    run_plan(Sequence(cup_for_each_arm.pick_ups), cup_for_each_arm.context_extensions)
+    run_plan(
+        Sequence(cup_for_each_arm.pick_ups),
+        cup_for_each_arm.extensions_parking_first(),
+    )
     places = cup_for_each_arm.places()
 
     run_plan(Parallel(places), cup_for_each_arm.context_extensions)
