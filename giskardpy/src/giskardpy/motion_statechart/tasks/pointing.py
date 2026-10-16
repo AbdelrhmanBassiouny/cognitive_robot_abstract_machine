@@ -3,13 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from cramph.context import StatechartContext
-from giskardpy.motion_statechart.binding_policy import (
-    ForwardKinematicsBinding,
-    GoalBindingPolicy,
-)
 from giskardpy.motion_statechart.graph_node import MotionNodeArtifacts
 from giskardpy.motion_statechart.tasks.cartesian_tasks import CartesianTask
-from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.spatial_types import Point3, Vector3
 from semantic_digital_twin.world_description.world_entity import (
     KinematicStructureEntity,
@@ -42,28 +37,26 @@ class Pointing(CartesianTask):
     Observation is true if the pointing angle is below this threshold.
     """
 
+    aim_offset: Vector3 | None = field(default=None, kw_only=True)
+    """
+    How far from goal_point the point pointing_axis is oriented at lies, read in the
+    frame of root_link; None points at goal_point itself.
+    """
+
     @property
     def goal_reference_frame(self) -> KinematicStructureEntity:
         return self.goal_point.reference_frame
 
-    @property
-    def aim_point(self) -> Point3:
-        """
-        :return: The point :attr:`pointing_axis` is oriented at, expressed in
-            :attr:`goal_reference_frame`.
-        """
-        return self.goal_point
-
     def build_artifacts(self, context: StatechartContext) -> MotionNodeArtifacts:
         """
-        Build motion constraints that swing the pointing axis onto :attr:`aim_point`.
+        Build motion constraints that swing the pointing axis onto :attr:`goal_point`,
+        moved by :attr:`aim_offset`.
 
         :param context: Provides access to world model and kinematic expressions.
         :return: The artifacts of this task, whose error is the angle between the
             pointing axis and the goal direction.
         """
         artifacts = MotionNodeArtifacts()
-        goal_reference_frame_P_goal_point = self.aim_point
 
         tip_V_pointing_axis = context.world.transform(
             target_frame=self.tip_link, spatial_object=self.pointing_axis
@@ -74,9 +67,11 @@ class Pointing(CartesianTask):
             self.root_link, self.tip_link
         )
 
-        root_P_goal_point = (
-            self.root_T_goal_reference_frame @ goal_reference_frame_P_goal_point
-        )
+        root_P_goal_point = self.root_T_goal_reference_frame @ self.goal_point
+        if self.aim_offset is not None:
+            root_P_goal_point = root_P_goal_point + context.world.transform(
+                target_frame=self.root_link, spatial_object=self.aim_offset
+            )
 
         root_V_goal_axis = root_P_goal_point - root_T_tip.position
         root_V_goal_axis.scale(1)
@@ -98,80 +93,6 @@ class Pointing(CartesianTask):
 
         artifacts.error = root_V_pointing_axis.angle_between(root_V_goal_axis)
         return artifacts
-
-
-@dataclass(eq=False, repr=False)
-class PointingBeside(Pointing):
-    """
-    Will orient pointing_axis at a point beside goal_point, moved horizontally at right
-    angles to the line of sight from :attr:`viewpoint` to goal_point.
-
-    The line of sight is taken where :attr:`viewpoint` stands when the goal is bound,
-    see :attr:`binding_policy`.
-    """
-
-    viewpoint: KinematicStructureEntity = field(kw_only=True)
-    """
-    The entity whose line of sight to goal_point decides which way is sideways.
-    """
-
-    sideways_offset: float = field(kw_only=True)
-    """
-    How far the point pointed at lies to the left of goal_point, as seen from
-    :attr:`viewpoint`; a negative offset lies to the right.
-    """
-
-    _viewpoint_binding: ForwardKinematicsBinding = field(init=False, repr=False)
-    """
-    Binds where :attr:`viewpoint` stands relative to the goal reference frame.
-    """
-
-    _world_root_binding: ForwardKinematicsBinding = field(init=False, repr=False)
-    """
-    Binds the world root relative to the goal reference frame, which says where up is.
-    """
-
-    def set_up(self, context: StatechartContext) -> None:
-        """
-        Additionally binds :attr:`viewpoint` and the world root, which the sideways
-        direction is described against.
-        """
-        super().set_up(context)
-        self._viewpoint_binding = ForwardKinematicsBinding(
-            name=PrefixedName("goal_ref_T_viewpoint", str(self.name)),
-            root=self.goal_reference_frame,
-            tip=self.viewpoint,
-            float_variable_data=context.float_variable_data,
-        )
-        self._world_root_binding = ForwardKinematicsBinding(
-            name=PrefixedName("goal_ref_T_world_root", str(self.name)),
-            root=self.goal_reference_frame,
-            tip=context.world.root,
-            float_variable_data=context.float_variable_data,
-        )
-        self._viewpoint_binding.bind(context.world)
-        self._world_root_binding.bind(context.world)
-
-    def on_start(self, context: StatechartContext) -> None:
-        super().on_start(context)
-        if self.binding_policy == GoalBindingPolicy.Bind_on_start:
-            self._viewpoint_binding.bind(context.world)
-            self._world_root_binding.bind(context.world)
-
-    @property
-    def aim_point(self) -> Point3:
-        goal_reference_frame_V_line_of_sight = (
-            self.goal_point - self._viewpoint_binding.root_T_tip.position
-        )
-        goal_reference_frame_T_world_root = self._world_root_binding.root_T_tip
-        goal_reference_frame_V_up = goal_reference_frame_T_world_root @ Vector3.Z(
-            reference_frame=goal_reference_frame_T_world_root.child_frame
-        )
-        goal_reference_frame_V_left = goal_reference_frame_V_up.cross(
-            goal_reference_frame_V_line_of_sight
-        )
-        goal_reference_frame_V_left.scale(self.sideways_offset)
-        return self.goal_point + goal_reference_frame_V_left
 
 
 @dataclass(eq=False, repr=False)

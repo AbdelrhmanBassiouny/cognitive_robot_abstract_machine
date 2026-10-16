@@ -3,6 +3,7 @@ from __future__ import annotations
 from abc import ABC
 from dataclasses import dataclass, field
 
+import numpy as np
 from typing_extensions import Optional
 
 from coraplex.exceptions import NoFloorBelowRobot, NotOnASingleLevelException
@@ -20,7 +21,7 @@ from giskardpy.motion_statechart.tasks.cartesian_tasks import (
     CartesianPose,
     CartesianPosition,
 )
-from giskardpy.motion_statechart.tasks.pointing import Pointing, PointingBeside
+from giskardpy.motion_statechart.tasks.pointing import Pointing
 from semantic_digital_twin.exceptions import MissingMovableJointError
 from semantic_digital_twin.reasoning.predicates import InsideOf
 from semantic_digital_twin.robots.robot_parts import Camera
@@ -129,24 +130,36 @@ class LookAtAction(Action):
 
     sideways_offset: float = 0.0
     """
-    How far to the left of the target the robot looks instead, as seen from where its
-    base stands when the look starts; a negative offset looks to the right.
+    How far to the left of the target the robot looks instead, along the left of its
+    base as it stands when the look starts; a negative offset looks to the right.
     """
 
     def create_action_body(self) -> StatechartNode:
         camera = self.camera or self.robot.get_default_camera()
-        pointing = PointingBeside(
+        pointing = Pointing(
             root_link=self.robot.get_torso().root,
             tip_link=camera.root,
             goal_point=self.target.position,
             pointing_axis=camera.forward_facing_axis,
-            viewpoint=self.robot.root,
-            sideways_offset=self.sideways_offset,
+            aim_offset=self._sideways_aim_offset(),
         )
         hold_base = self.keep_base_still()
         if not hold_base:
             return pointing
         return Parallel([pointing, *hold_base])
+
+    def _sideways_aim_offset(self) -> Vector3 | None:
+        """
+        :return: :attr:`sideways_offset` along the left of the robot's base, or None
+            when the robot looks at the target itself.
+        """
+        if self.sideways_offset == 0.0:
+            return None
+        base_V_forward = self.robot.mobile_base.forward_axis.to_np()[:3]
+        base_V_left = np.cross([0.0, 0.0, 1.0], base_V_forward)
+        return Vector3(
+            *(self.sideways_offset * base_V_left), reference_frame=self.robot.root
+        )
 
 
 @dataclass(eq=False, repr=False)

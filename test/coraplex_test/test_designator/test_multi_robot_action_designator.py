@@ -71,7 +71,7 @@ from giskardpy.motion_statechart.tasks.joint_tasks import (
     JointPositionList,
     JointVelocityLimit,
 )
-from giskardpy.motion_statechart.tasks.pointing import Pointing, PointingBeside
+from giskardpy.motion_statechart.tasks.pointing import Pointing
 from giskardpy.utils.utils_for_tests import compare_axis_angle, compare_orientations
 from semantic_digital_twin.callbacks.callback import ModelChangeCallback
 from semantic_digital_twin.datastructures.definitions import (
@@ -1149,22 +1149,28 @@ def test_look_at_points_the_default_camera(multiple_robot_apartment_context):
 
     [pointing] = nodes_of_type(action, Pointing)
     assert pointing.tip_link == robot.get_default_camera().root
+    assert pointing.aim_offset is None
 
 
-def test_looking_beside_a_target_takes_sideways_from_the_robots_base(
+def test_looking_beside_a_target_looks_to_the_left_of_the_robots_base(
     multiple_robot_apartment_context,
 ):
     """
-    Left and right of a target are as seen from where the robot stands.
+    Left and right of a target are as seen from where the robot's base faces.
     """
     _, robot, extensions = multiple_robot_apartment_context
     action = LookAtAction(Pose(), sideways_offset=0.5)
 
     expand(action, extensions)
 
-    [pointing] = nodes_of_type(action, PointingBeside)
-    assert pointing.viewpoint == robot.root
-    assert pointing.sideways_offset == action.sideways_offset
+    [pointing] = nodes_of_type(action, Pointing)
+    base_V_offset = pointing.aim_offset.to_np()[:3]
+    base_V_forward = robot.mobile_base.forward_axis.to_np()[:3]
+    assert pointing.aim_offset.reference_frame is robot.root
+    assert base_V_offset[2] == pytest.approx(0.0)
+    assert np.dot(base_V_offset, base_V_forward) == pytest.approx(0.0)
+    assert np.linalg.norm(base_V_offset) == pytest.approx(action.sideways_offset)
+    assert np.cross(base_V_forward, base_V_offset)[2] > 0
 
 
 def test_following_a_path_runs_one_goal_per_waypoint(
