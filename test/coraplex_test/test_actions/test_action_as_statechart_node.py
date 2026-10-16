@@ -10,6 +10,7 @@ from coraplex.plans.context_extensions import RobotAccess
 from coraplex.plans.executors import PlanExecutor
 from coraplex.robot_plans.actions.base import Action
 from coraplex.robot_plans.actions.core.exceptions import WidthBeyondGripperOpening
+from coraplex.datastructures.enums import MovementType
 from coraplex.datastructures.trajectory import PoseTrajectory
 from coraplex.robot_plans.actions.core.navigation import LookAtAction, NavigateAction
 from coraplex.robot_plans.actions.core.robot_body import (
@@ -41,6 +42,8 @@ from giskardpy.motion_statechart.goals.gripper import MoveGripper
 from giskardpy.motion_statechart.data_types import DefaultWeights
 from giskardpy.motion_statechart.tasks.cartesian_tasks import (
     CartesianPose,
+    CartesianPosition,
+    CartesianPositionVelocityLimit,
     DistanceAlongAxis,
     HoldPose,
 )
@@ -454,6 +457,87 @@ def test_moving_the_manipulator_relaxes_collisions_only_when_allowed(
     assert len(_nodes_of_type(allowed, UpdateTemporaryCollisionRules)) == 1
     assert _nodes_of_type(forbidden, UpdateTemporaryCollisionRules) == []
     assert len(_nodes_of_type(forbidden, CartesianPose)) == 1
+
+
+def test_moving_the_manipulator_hands_what_accompanies_it_to_its_pose(
+    simple_pr2_context,
+):
+    """
+    The collision allowance and the hold on the base run in the pose itself, rather
+    than in another parallel around it, so that the motion is a level shallower.
+    """
+    _, robot, extensions = simple_pr2_context
+    action = MoveManipulatorAction(
+        target_pose=Pose(),
+        end_effector=robot.left_arm.end_effector,
+        allow_gripper_collision=True,
+    )
+
+    _expanded(action, extensions)
+
+    [pose] = _nodes_of_type(action, CartesianPose)
+    [allowance] = _nodes_of_type(action, UpdateTemporaryCollisionRules)
+    [hold_base] = _nodes_of_type(action, HoldPose)
+    assert allowance.parent_node is pose
+    assert hold_base.parent_node is pose
+    assert _nodes_of_type(action, Parallel) == [pose]
+
+
+def test_a_pose_of_the_tool_center_point_holds_what_accompanies_it(
+    simple_pr2_context,
+):
+    """
+    Every reach moves the tool center point through this goal, so a parallel around it
+    would make every reach a level deeper.
+    """
+    _, robot, extensions = simple_pr2_context
+    action = MoveManipulatorAction(
+        target_pose=Pose(),
+        end_effector=robot.left_arm.end_effector,
+        allow_gripper_collision=False,
+    )
+    _expanded(action, extensions)
+
+    goal = action.tool_center_point_goal(
+        Pose(), robot.left_arm, allow_gripper_collision=True, max_linear_velocity=0.1
+    )
+
+    assert isinstance(goal, CartesianPose)
+    assert [type(node) for node in goal.nodes] == [
+        CartesianPositionVelocityLimit,
+        UpdateTemporaryCollisionRules,
+        HoldPose,
+    ]
+
+
+def test_a_position_of_the_tool_center_point_runs_beside_what_accompanies_it(
+    simple_pr2_context,
+):
+    """
+    A position goal is a single task, which cannot hold other nodes, so it still runs
+    in a parallel with them.
+    """
+    _, robot, extensions = simple_pr2_context
+    action = MoveManipulatorAction(
+        target_pose=Pose(),
+        end_effector=robot.left_arm.end_effector,
+        allow_gripper_collision=False,
+    )
+    _expanded(action, extensions)
+
+    goal = action.tool_center_point_goal(
+        Pose(),
+        robot.left_arm,
+        allow_gripper_collision=True,
+        movement_type=MovementType.TRANSLATION,
+    )
+
+    assert isinstance(goal, Parallel)
+    assert [type(node) for node in goal.nodes] == [
+        CartesianPosition,
+        UpdateTemporaryCollisionRules,
+        HoldPose,
+    ]
 
 
 def test_navigating_drives_the_base_towards_what_it_should_face(

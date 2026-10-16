@@ -260,6 +260,6 @@ class MoveManipulatorAction(MovesToolCenterPoint):
             accompanying.append(
                 UpdateTemporaryCollisionRules.for_end_effector(self.end_effector)
             )
-        if not accompanying:
-            return goal
-        return Parallel(nodes=[goal, *accompanying])
+        for node in accompanying:
+            goal.add_node(node)
+        return goal

@@ -691,14 +691,10 @@ class TestCartesianTasks:
         executor.tick()
 
         strict_orientation = next(
-            node
-            for node in strict.parallel.nodes
-            if isinstance(node, CartesianOrientation)
+            node for node in strict.nodes if isinstance(node, CartesianOrientation)
         )
         loose_orientation = next(
-            node
-            for node in loose.parallel.nodes
-            if isinstance(node, CartesianOrientation)
+            node for node in loose.nodes if isinstance(node, CartesianOrientation)
         )
         assert strict_orientation.observation_state == ObservationStateValues.FALSE
         assert loose_orientation.observation_state == ObservationStateValues.TRUE
@@ -1663,7 +1659,7 @@ class TestCartesianTasks:
         motion_statechart.add_node(goal)
         executor.compile(statechart=motion_statechart)
 
-        position_task, orientation_task = goal.parallel.nodes
+        position_task, orientation_task = goal.nodes
         assert position_task.threshold == goal.translation_threshold
         assert orientation_task.threshold == goal.orientation_threshold
 
@@ -1707,9 +1703,7 @@ class TestCartesianTasks:
 
         executor.compile(statechart=motion_statechart)
         straight = next(
-            node
-            for node in goal.parallel.nodes
-            if isinstance(node, CartesianPositionStraight)
+            node for node in goal.nodes if isinstance(node, CartesianPositionStraight)
         )
         path = record_tip_path(executor, straight, root, tip)
 
@@ -2439,7 +2433,7 @@ class TestDebugExpressions:
 
         names = {
             debug_expression.name
-            for child in task.parallel.nodes
+            for child in task.nodes
             for debug_expression in child.debug_expressions
         }
         assert names == {

@@ -303,6 +303,8 @@ class MovesToolCenterPoint(Action, ABC):
         :return: The goal moving the tool center point there, together with whatever
             speed caps and collision allowances were asked for, and the task keeping the
             base still, see :meth:`~coraplex.robot_plans.actions.base.Action.keep_base_still`.
+            A goal that is a parallel of its tasks holds them itself; any other is put in
+            a parallel with them.
         """
         end_effector = arm.end_effector
         root = self.controlled_root
@@ -317,6 +319,10 @@ class MovesToolCenterPoint(Action, ABC):
         accompanying.extend(self.keep_base_still())
         goal = self._reach_target(target, root, tip, movement_type)
         if not accompanying:
+            return goal
+        if isinstance(goal, Parallel):
+            for node in accompanying:
+                goal.add_node(node)
             return goal
         return Parallel(nodes=[goal, *accompanying], name=type(goal).__name__)
 

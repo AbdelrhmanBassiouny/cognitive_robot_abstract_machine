@@ -2,26 +2,19 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
-from semantic_digital_twin.spatial_types import HomogeneousTransformationMatrix
-from semantic_digital_twin.spatial_types.spatial_types import Pose
-from semantic_digital_twin.world_description.connections import DifferentialDrive
-from semantic_digital_twin.world_description.world_entity import (
-    KinematicStructureEntity,
-)
-from cramph.node import EndedByOwner, SucceedsOnObservingTrue, FailsOnObservingFalse
 from cramph.composites import Sequence, Parallel
-from cramph.node import CompositeNode, NodeArtifacts, expanded_child_field
-from krrood.symbolic_math.symbolic_math import (
-    Scalar,
-    logic_or,
-    trinary_if_cases,
+from cramph.context import StatechartContext
+from cramph.node import (
+    CompositeNode,
+    NodeArtifacts,
+    StatechartNode,
+    expanded_child_field,
 )
+from cramph.node import SucceedsOnObservingTrue, FailsOnObservingFalse
 from giskardpy.motion_statechart.binding_policy import (
     ForwardKinematicsBinding,
     GoalBindingPolicy,
 )
-from cramph.context import StatechartContext
 from giskardpy.motion_statechart.data_types import DefaultWeights
 from giskardpy.motion_statechart.exceptions import UnexpectedWorldEntityCountError
 from giskardpy.motion_statechart.tasks.cartesian_tasks import (
@@ -33,6 +26,17 @@ from giskardpy.motion_statechart.tasks.drive_tasks import (
     BaseOrientation,
     BasePosition,
     BaseTurnTowardsGoalPosition,
+)
+from krrood.symbolic_math.symbolic_math import (
+    Scalar,
+    trinary_if_cases,
+)
+from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
+from semantic_digital_twin.spatial_types import HomogeneousTransformationMatrix
+from semantic_digital_twin.spatial_types.spatial_types import Pose
+from semantic_digital_twin.world_description.connections import DifferentialDrive
+from semantic_digital_twin.world_description.world_entity import (
+    KinematicStructureEntity,
 )
 
 
@@ -218,13 +222,13 @@ class DifferentialDriveBaseGoal(
 
 
 @dataclass(eq=False, repr=False, kw_only=True)
-class CartesianPoseStraight(EndedByOwner, CompositeNode):
+class CartesianPoseStraight(Parallel):
     """
     Like CartesianPose, but constrains the tip link to move in a straight line towards
     the goal.
 
-    Both tasks run in one :class:`~cramph.composites.Parallel`, and this goal observes
-    what that parallel observes.
+    This goal is the parallel holding both tasks, together with any node it is handed,
+    such as a speed cap or a collision allowance accompanying the motion.
     """
 
     root_link: KinematicStructureEntity
@@ -266,18 +270,18 @@ class CartesianPoseStraight(EndedByOwner, CompositeNode):
     See GoalBindingPolicy for more information.
     """
 
-    @property
-    def parallel(self) -> Parallel:
-        """
-        The parallel running the position and the orientation task.
-        """
-        return self.nodes[0]
+    nodes: list[StatechartNode] = field(default_factory=list, init=False)
+    """
+    The position and the orientation task, followed by the nodes this goal was handed.
+    """
 
     def expand(self, context: StatechartContext) -> None:
         """
-        Add the parallel running the position and the orientation task.
+        Create the position and the orientation task, then adopt them before the nodes
+        this goal was handed, as :meth:`~cramph.composites.CramLanguageNode.expand`
+        does.
         """
-        tasks = [
+        self.nodes[:0] = [
             CartesianPositionStraight(
                 name=self.name + "/position",
                 root_link=self.root_link,
@@ -297,22 +301,4 @@ class CartesianPoseStraight(EndedByOwner, CompositeNode):
                 binding_policy=self.binding_policy,
             ),
         ]
-        self._add_child_to_statechart(
-            Parallel(name=f"{self.name}/parallel", nodes=tasks)
-        )
-
-    @property
-    def inherent_fail_condition(self) -> Scalar:
-        """
-        Fails as well once the parallel can no longer arrive, see
-        :meth:`~cramph.node.StatechartNode.inherent_fail_condition`.
-        """
-        return logic_or(
-            super().inherent_fail_condition, self.parallel.is_failed_or_interrupted
-        )
-
-    def build_artifacts(self, context: StatechartContext) -> NodeArtifacts:
-        """
-        Observe what the parallel observes.
-        """
-        return NodeArtifacts(observation=self.parallel.observation_variable)
+        super().expand(context)

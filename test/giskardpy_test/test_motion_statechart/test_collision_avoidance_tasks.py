@@ -788,7 +788,7 @@ def test_avoid_self_collision_with_l_arm(pr2_with_box, rclpy_node):
 
     kin_sim.compile(statechart=msc)
 
-    assert len(msc.nodes) == 14
+    assert len(msc.nodes) == 13
 
     kin_sim.tick_until_end(500)
 

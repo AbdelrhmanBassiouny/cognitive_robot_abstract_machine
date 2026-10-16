@@ -548,9 +548,17 @@ def handle_grasp(world: World) -> GraspCandidate:
 def reaching_goals_of(action: ReachAction) -> List[StatechartNode]:
     """
     :return: The goals of an expanded reach action bringing the tool center point to
-        the pre-grasp pose and to the grasp pose.
+        the pre-grasp pose and to the grasp pose. A pose goal is the step itself, holding
+        what accompanies it; any other goal is the first node of its step.
     """
-    return [step.nodes[0] for step in steps_of(action).nodes]
+    return [
+        (
+            step
+            if isinstance(step, (CartesianPose, CartesianPoseStraight))
+            else step.nodes[0]
+        )
+        for step in steps_of(action).nodes
+    ]
 
 
 def lifting_goal_of(action: PickUpAction) -> StatechartNode:
