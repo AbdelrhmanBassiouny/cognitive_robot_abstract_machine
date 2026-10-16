@@ -1,0 +1,6 @@
+schema_version: 99
+id: broken-plan
+title: Broken Plan
+description: A plan whose manifest fails validation.
+default_repository: owner/repo
+items: []

@@ -1,0 +1,18 @@
+schema_version: 1
+id: second-plan
+title: Second Plan
+description: A plan with no pull requests yet.
+default_repository: owner/repo
+waves:
+- id: wave-1
+  name: Wave 1
+tracks:
+- id: track-1
+  name: Track 1
+  wave: wave-1
+items:
+- id: unstarted-item
+  title: Unstarted Item
+  branch: unstarted-item
+  track: track-1
+  status: not started
