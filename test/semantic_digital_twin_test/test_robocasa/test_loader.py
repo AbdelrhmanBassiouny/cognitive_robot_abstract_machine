@@ -157,3 +157,34 @@ def test_load_task_unknown_name_raises(robocasa_loader):
             layout_id=LayoutType.LAYOUT001,
             style_id=StyleType.STYLE001,
         )
+
+
+def test_task_environments_built_with_the_same_seed_compose_the_same_scene(
+    robocasa_loader,
+):
+    """
+    Two task environments built with the same seed sample the same objects and place
+    them alike.
+    """
+    from robocasa.models.scenes.scene_registry import LayoutType, StyleType
+
+    first, second = (
+        robocasa_loader.build_task_environment(
+            "PickPlaceCounterToSink",
+            layout_id=LayoutType.LAYOUT001,
+            style_id=StyleType.STYLE001,
+            seed=7,
+        )
+        for _ in range(2)
+    )
+
+    assert {name: model.mjcf_path for name, model in first.objects.items()} == {
+        name: model.mjcf_path for name, model in second.objects.items()
+    }
+    assert [
+        first.sim.data.get_body_xpos(model.root_body).tolist()
+        for model in first.objects.values()
+    ] == [
+        second.sim.data.get_body_xpos(model.root_body).tolist()
+        for model in second.objects.values()
+    ]

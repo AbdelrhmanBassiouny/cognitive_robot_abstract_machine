@@ -306,6 +306,7 @@ class RoboCasaDatasetLoader:
         task_name: str,
         layout_id: LayoutType,
         style_id: StyleType,
+        seed: int | None = None,
     ) -> RoboCasaTask:
         """
         Compose a RoboCasa task scene and return it bound to its parsed World.
@@ -319,11 +320,15 @@ class RoboCasaDatasetLoader:
             ``"TurnOnMicrowave"``).
         :param layout_id: A member of ``robocasa.models.scenes.scene_registry.LayoutType``.
         :param style_id: A member of ``robocasa.models.scenes.scene_registry.StyleType``.
+        :param seed: The seed RoboCasa samples the scene with; ``None`` samples a
+            different scene every time.
         :return: The task bound to the world it is defined over.
         :raises RoboCasaTaskNotFoundError: if ``task_name`` is not a registered RoboCasa kitchen
             task.
         """
-        environment = self.build_task_environment(task_name, layout_id, style_id)
+        environment = self.build_task_environment(
+            task_name, layout_id, style_id, seed=seed
+        )
         return self.load_task_from_environment(environment)
 
     def build_task_environment(
@@ -331,6 +336,7 @@ class RoboCasaDatasetLoader:
         task_name: str,
         layout_id: LayoutType,
         style_id: StyleType,
+        seed: int | None = None,
     ) -> Any:
         """
         Build and reset the RoboCasa/robosuite environment a task's scene is composed
@@ -347,6 +353,8 @@ class RoboCasaDatasetLoader:
             (for example ``"TurnOnMicrowave"``).
         :param layout_id: A member of ``robocasa.models.scenes.scene_registry.LayoutType``.
         :param style_id: A member of ``robocasa.models.scenes.scene_registry.StyleType``.
+        :param seed: The seed RoboCasa samples the scene with; ``None`` samples a
+            different scene every time.
         :return: The reset environment.
         :raises RoboCasaTaskNotFoundError: if ``task_name`` is not a registered RoboCasa kitchen
             task.
@@ -364,6 +372,7 @@ class RoboCasaDatasetLoader:
             use_camera_obs=False,
             control_freq=20,
             ignore_done=True,
+            seed=seed,
         )
         environment.reset()
         return environment
