@@ -121,10 +121,21 @@ items:
   title: Disable dead workflows and delete stale build and probe branches
   branch: null
   track: hygiene
+  session: https://claude.ai/code/session_01HpHnFV9u2zyPbpe2ECMMdt
+  blockers:
+    - >-
+      The user deletes the 12 approved probe branches: git push origin --delete $(git ls-remote
+      --heads origin 'integration-probe-20260913-085124-narrowing-*' | sed 's|.*refs/heads/||'). A
+      cloud session's git access is refused (HTTP 403) when it deletes branches other than its own.
+      Mark done once they are gone.
   depends_on: []
-  status: not started
-  notes: Coraplex hang diagnosis (temporary), Integration token probe and board are still
-    registered as active with no file on any branch. 406 remote branches exist, many of them
-    `integration-<date>` and `integration-probe-*` builds that are never pushed to again.
-    Deleting branches is destructive, so it is listed for the user to approve rather than
-    done by a session on its own.
+  status: blocked
+  notes: >
+    No branch or pull request of its own: what remains is two repository actions. Dead workflows are
+    done - Coraplex hang diagnosis, Integration token probe and board (plus every other fork
+    pipeline) were disabled on 2026-10-13, and the user chose to leave them disabled rather than
+    delete their run history. Build branches: the integration-<date> builds are already gone
+    (take-down-unreferenced-builds removes them); the 12
+    integration-probe-20260913-085124-narrowing-0..11 branches are left from a localisation round
+    that never reached take_down. The user approved deleting them; the fix that stops this recurring
+    is folded into integration-pipeline-event-only (#211).
