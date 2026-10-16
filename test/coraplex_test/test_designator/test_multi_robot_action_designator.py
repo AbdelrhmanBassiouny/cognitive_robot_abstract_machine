@@ -17,7 +17,10 @@ from cramph.statechart import Statechart
 from cramph.composites import Parallel, Sequence, TryAll, TryInOrder
 from cramph.threaded_nodes import FunctionCall
 from cramph.data_types import LifeCycleValues
-from coraplex.robot_plans.plan_transformations import OpenDrawerBeforeMoveAndPickUp
+from coraplex.robot_plans.plan_transformations import (
+    OpenDrawerBeforeMoveAndPickUp,
+    ParkArmsBeforeFirstAction,
+)
 from coraplex.robot_plans.actions.composite.searching import SearchAction
 from coraplex.robot_plans.actions.composite.transporting import TransportAction
 from coraplex.robot_plans.actions.core.container import OpenAction, CloseAction
@@ -1578,7 +1581,7 @@ def test_a_cup_picked_up_earlier_in_the_plan_ends_upright(
 
     run_plan(
         Sequence([pick_up_from_above(cup, left_or_only_arm(robot)), carry]),
-        extensions,
+        [*extensions, PlanRewriting(transformations=[ParkArmsBeforeFirstAction()])],
     )
 
     # The cup is held with the orientation error the gripper reached its grasp with.
