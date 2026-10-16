@@ -5,8 +5,8 @@ Plan
 - Push claude/jolly-gauss-l2pjrh to the new repo, open its draft PR against main. Tag v0.1.0 on merge.
 
 Done
-- 4 commits on main: plugin/project split + one per-user env ($BASSTLER_HOME) + git-tag install; project-owned .claude/basstler/stack.toml; reusable upstream-reviews workflow + CI; .claude dir created on demand. 752 tests pass; live session start verified.
+- 5 commits on main: plugin/project split + per-user env + git-tag install; project-owned stack.toml; reusable workflow + CI; .claude dir on demand; CRAM names generalised (notes.md, promotion-link-sent, upstream, generic local-code-review) + docformatter config/script, run. 752 pass.
 
 Next
-- Blocked: user installs the Claude GitHub App on AbdelrhmanBassiouny/basstler (pushes 403).
-- Follow-ups for the PR description: CRAM-named defaults left (cram-notes.md path, cram2-link-sent label, local-code-review skill); docformatter not run.
+- Blocked: Claude GitHub App not installed on AbdelrhmanBassiouny/basstler (pushes 403).
+- PR description: migration notes (notes path, label), recorded on cram-basstler-removal and carryover items.
