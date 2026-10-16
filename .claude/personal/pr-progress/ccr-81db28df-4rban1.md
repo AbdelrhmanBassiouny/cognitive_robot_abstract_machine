@@ -1,13 +1,12 @@
 PR #515 (draft, on #503), item actions-budget/changed-library-matrix.
 
 Plan
-- basstler: count a matrix with a run-time `exclude` by its static axes.
-- basstler module: changed paths -> matrix libraries + pyproject dependents -> exclusions; tooling/docs-only -> tooling job alone; other paths -> everything.
-- ci.yml: `changed-libraries` first job (replaces to-lowercase), one `lib` axis + computed exclude; drafts narrowed, everything else full.
-- Keep ci.yml override 16 (worst case, user-approved), reword its comment.
+- Implemented as settled; see the PR description for the design and the decisions to check.
 
 Done
-- Branch, draft PR, manifest + roadmap recorded.
+- basstler.changed_libraries + tests (dataset workspace), run-time-exclude counting, ci.yml changed-libraries job, override kept at 16 (user-approved), packaging dependency (user-approved). Pushed 9c946ecb3.
+- Full basstler suite: only the 18 failures #503's head has in this environment.
 
 Next
-- Tests first for the counting change, then the selector, then ci.yml.
+- Watch the draft's first real CI run: confirm the run-time `exclude` expression works and that test_each_lib skips cleanly when every library is excluded.
+- Retarget with #503 when it lands; converge with #284's classifier if it lands.
