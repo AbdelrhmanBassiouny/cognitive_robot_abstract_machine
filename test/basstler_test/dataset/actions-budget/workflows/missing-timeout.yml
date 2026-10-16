@@ -1,0 +1,10 @@
+name: Missing timeout
+
+on:
+  workflow_dispatch:
+
+jobs:
+  work:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo worked

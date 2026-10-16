@@ -59,6 +59,7 @@ include = ["basstler"]
 [tool.setuptools.package-data]
 basstler = [
     "templates/*.html",
+    "templates/*.jinja",
     "queries/*.graphql",
     "stack.toml",
     "plan-item-modes.toml",

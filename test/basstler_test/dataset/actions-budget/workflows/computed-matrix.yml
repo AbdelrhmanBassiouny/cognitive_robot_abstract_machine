@@ -1,0 +1,27 @@
+name: Computed matrix
+
+on:
+  pull_request:
+
+concurrency:
+  group: computed-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  choose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      libraries: ${{ steps.choose.outputs.libraries }}
+    steps:
+      - id: choose
+        run: echo 'libraries=["first"]' >> "$GITHUB_OUTPUT"
+  test:
+    needs: [choose]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      matrix:
+        library: ${{ fromJSON(needs.choose.outputs.libraries) }}
+    steps:
+      - run: echo tested

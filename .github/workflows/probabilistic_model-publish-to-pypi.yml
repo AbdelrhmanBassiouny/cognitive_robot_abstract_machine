@@ -15,7 +15,9 @@ defaults:
 jobs:
   check-version:
     name: Check if version is new
+    if: ${{ github.event_name != 'push' || !github.event.repository.fork }}
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     outputs:
       should_publish: ${{ steps.check.outputs.should_publish }}
       version: ${{ steps.check.outputs.version }}
@@ -52,6 +54,7 @@ jobs:
   build:
     name: Build distribution
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     needs: check-version
     if: needs.check-version.outputs.should_publish == 'true'
     steps:
@@ -77,6 +80,7 @@ jobs:
   publish:
     name: Publish to PyPI
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     needs: build
     defaults:
       run:

@@ -1,0 +1,16 @@
+name: Lifecycle pull request
+
+on:
+  pull_request:
+    types: [opened, closed]
+
+concurrency:
+  group: lifecycle
+  cancel-in-progress: false
+
+jobs:
+  work:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - run: echo worked

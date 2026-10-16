@@ -45,7 +45,7 @@ The directory the migration emptied of Python.
 Its SKILL.md files, settings.json and bash entry points stay; not one ``.py`` file does.
 """
 
-WORKFLOWS_DIRECTORY = PackageLocation.REPOSITORY_ROOT / ".github" / "workflows"
+WORKFLOWS_DIRECTORY = PackageLocation.REPOSITORY_ROOT / ProjectLocation.WORKFLOWS
 """
 Where this repository's Actions workflows live.
 

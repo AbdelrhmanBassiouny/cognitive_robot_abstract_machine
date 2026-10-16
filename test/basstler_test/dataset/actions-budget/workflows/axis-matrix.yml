@@ -1,0 +1,21 @@
+name: Axis matrix
+
+on:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      matrix:
+        python: ['3.12', '3.13', '3.14']
+        system: [ubuntu-latest, macos-latest]
+        exclude:
+          - python: '3.12'
+            system: macos-latest
+        include:
+          - python: '3.11'
+            system: ubuntu-latest
+    steps:
+      - run: echo tested

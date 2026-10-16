@@ -36,6 +36,7 @@ jobs:
   report:
     name: Report upstream review threads
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
 

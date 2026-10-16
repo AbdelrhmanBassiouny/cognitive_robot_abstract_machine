@@ -29,6 +29,7 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 60
     container:
       image: ${{ inputs.use_container && inputs.repo_lowercase || '' }}
     defaults:
