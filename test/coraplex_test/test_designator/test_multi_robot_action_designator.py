@@ -1121,9 +1121,7 @@ def test_a_sweep_region_is_placed_at_the_target_turned_like_the_base(
 ):
     world, robot, extensions = multiple_robot_apartment_context
     target = search_target_in_front_of(robot)
-    sweep_region = SweepRegion.added_to(
-        world, PrefixedName("sweep_region"), half_width=0.5, speed=0.5
-    )
+    sweep_region = SweepRegion.for_robot(robot, half_width=0.5, speed=0.5)
 
     run_plan(
         SweepRegionPlacement(sweep_region=sweep_region, target=target, robot=robot),
@@ -1144,9 +1142,7 @@ def test_looking_at_a_sweep_region_slid_sideways_looks_beside_the_target(
 ):
     world, robot, extensions = multiple_robot_apartment_context
     target = search_target_in_front_of(robot)
-    sweep_region = SweepRegion.added_to(
-        world, PrefixedName("sweep_region"), half_width=0.5, speed=0.5
-    )
+    sweep_region = SweepRegion.for_robot(robot, half_width=0.5, speed=0.5)
     region = sweep_region.sweep.child
     look = LookAtAction(Pose(reference_frame=region))
     slide = JointPositionList(
@@ -1198,6 +1194,44 @@ def test_a_search_places_its_sweep_region_and_slides_it_to_each_look(
         for connection, target in slide.goal_state.items()
         if connection is placement.sweep_region.sweep
     ] == list(search.sideways_look_offsets)
+
+
+def test_the_searches_of_one_robot_share_its_sweep_region(
+    multiple_robot_apartment_context,
+):
+    world, robot, extensions = multiple_robot_apartment_context
+    target = search_target_in_front_of(robot)
+    searches = [
+        SearchAction(target, object_semantic_annotation=Milk),
+        SearchAction(target, object_semantic_annotation=Milk),
+    ]
+
+    expand(Sequence(searches), extensions)
+
+    [first, second] = [
+        placement
+        for search in searches
+        for placement in nodes_of_type(search, SweepRegionPlacement)
+    ]
+    assert first.sweep_region == second.sweep_region
+
+
+def test_a_search_removes_the_sweep_region_once_the_plan_ended(
+    multiple_robot_apartment_context,
+):
+    world, robot, extensions = multiple_robot_apartment_context
+    milk_body = world.get_body_by_name("milk.stl")
+    milk_body.parent_connection.origin = HomogeneousTransformationMatrix.from_xyz_rpy(
+        6, -2, 1.2, reference_frame=world.root
+    )
+    search = SearchAction(milk_body.global_pose, object_semantic_annotation=Milk)
+
+    run_plan(search, extensions)
+
+    [placement] = nodes_of_type(search, SweepRegionPlacement)
+    sweep_region = placement.sweep_region
+    assert sweep_region.sweep.child not in world.kinematic_structure_entities
+    assert sweep_region.placement.child not in world.kinematic_structure_entities
 
 
 # %% what an action expands into

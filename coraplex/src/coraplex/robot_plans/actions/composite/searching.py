@@ -18,7 +18,6 @@ from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.robots.robot_part_mixins import HasMobileBase
 from semantic_digital_twin.spatial_types import HomogeneousTransformationMatrix, Vector3
 from semantic_digital_twin.spatial_types.spatial_types import Pose
-from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.connections import (
     Connection6DoF,
     PrismaticConnection,
@@ -53,16 +52,48 @@ class SweepRegion:
     """
 
     @classmethod
-    def added_to(
-        cls, world: World, name: PrefixedName, half_width: float, speed: float
+    def for_robot(
+        cls, robot: HasMobileBase, half_width: float, speed: float
     ) -> SweepRegion:
         """
-        :param world: The world the region is added to.
-        :param name: The name of the region's body.
+        :param robot: The robot that looks at the region.
+        :param half_width: How far the region has to slide to either side of the target.
+        :param speed: How fast the region has to be able to slide, in meters per second.
+        :return: The sweep region of `robot`, added to its world unless it has one
+            already, able to slide at least `half_width` at `speed`.
+        """
+        sweep_region = cls.in_world_of(robot)
+        if sweep_region is None:
+            return cls._added_for(robot, half_width, speed)
+        sweep_region._allow(half_width, speed)
+        return sweep_region
+
+    @classmethod
+    def in_world_of(cls, robot: HasMobileBase) -> SweepRegion | None:
+        """
+        :param robot: The robot that looks at the region.
+        :return: The sweep region of `robot` in its world, or None if it has none.
+        """
+        regions = robot._world.get_bodies_by_name(cls._name_for(robot))
+        if not regions:
+            return None
+        [region] = regions
+        sweep = region.parent_connection
+        return cls(placement=sweep.parent.parent_connection, sweep=sweep)
+
+    @classmethod
+    def _added_for(
+        cls, robot: HasMobileBase, half_width: float, speed: float
+    ) -> SweepRegion:
+        """
+        :param robot: The robot that looks at the region.
         :param half_width: How far the region slides to either side of the target.
         :param speed: How fast the region slides, in meters per second.
-        :return: A new region in `world`, at the world's origin until it is placed.
+        :return: A new sweep region of `robot` in its world, at the world's origin until
+            it is placed.
         """
+        world = robot._world
+        name = cls._name_for(robot)
         origin = Body(name=PrefixedName(f"{name.name}_origin", name.prefix))
         region = Body(name=name)
         with world.modify_world():
@@ -85,6 +116,36 @@ class SweepRegion:
             world.add_connection(placement)
             world.add_connection(sweep)
         return cls(placement=placement, sweep=sweep)
+
+    @staticmethod
+    def _name_for(robot: HasMobileBase) -> PrefixedName:
+        """
+        :param robot: The robot that looks at the region.
+        :return: The name of the body of the sweep region of `robot`.
+        """
+        return PrefixedName("sweep_region", str(robot.name))
+
+    def _allow(self, half_width: float, speed: float) -> None:
+        """
+        Widens the limits of :attr:`sweep` so that it slides at least `half_width` to
+        either side at `speed`, keeping whatever wider limits it has already.
+
+        :param half_width: How far the region has to slide to either side.
+        :param speed: How fast the region has to be able to slide.
+        """
+        limits = self.sweep.dof.limits
+        half_width = max(half_width, limits.upper.position)
+        speed = max(speed, limits.upper.velocity)
+        self.sweep.dof.limits = DegreeOfFreedomLimits.from_position_range_and_speed(
+            lower_position=-half_width, upper_position=half_width, maximum_speed=speed
+        )
+
+    def remove(self) -> None:
+        """
+        Removes the region from its world.
+        """
+        world = self.placement._world
+        world.remove_branch_from_world(self.placement.child)
 
     def place(self, target: Pose, robot: HasMobileBase) -> None:
         """
@@ -173,11 +234,8 @@ class SearchAction(Action):
     """
 
     def create_action_body(self) -> StatechartNode:
-        sweep_region = SweepRegion.added_to(
-            self.world,
-            PrefixedName("sweep_region", self._node_id),
-            half_width=self._half_sweep_width(),
-            speed=self.sweep_speed,
+        sweep_region = SweepRegion.for_robot(
+            self.robot, half_width=self._half_sweep_width(), speed=self.sweep_speed
         )
         detection_box = self._detection_box()
         return Sequence(
@@ -211,7 +269,8 @@ class SearchAction(Action):
                                         JointPositionList(
                                             goal_state=JointState.from_mapping(
                                                 {sweep_region.sweep: sideways_offset}
-                                            )
+                                            ),
+                                            max_velocity=self.sweep_speed,
                                         ),
                                     ]
                                 ),
@@ -227,6 +286,16 @@ class SearchAction(Action):
                 ),
             ]
         )
+
+    def cleanup(self, context: StatechartContext) -> None:
+        """
+        Removes the sweep region of the robot from the world once the plan ended, unless
+        another search of the robot already did.
+        """
+        sweep_region = SweepRegion.in_world_of(self.robot)
+        if sweep_region is None:
+            return
+        sweep_region.remove()
 
     def _half_sweep_width(self) -> float:
         """
