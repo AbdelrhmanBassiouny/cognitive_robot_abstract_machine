@@ -86,7 +86,7 @@ from semantic_digital_twin.datastructures.definitions import (
 )
 from semantic_digital_twin.reasoning.robot_predicates import get_visible_bodies
 from semantic_digital_twin.robots.robot_part_mixins import HasMobileBase
-from semantic_digital_twin.robots.robot_parts import AbstractRobot, Arm, EndEffector
+from semantic_digital_twin.robots.robot_parts import AbstractRobot, EndEffector
 from ..conftest import (
     grasp_point_of,
     left_or_only_arm,
@@ -127,7 +127,6 @@ from semantic_digital_twin.spatial_types import (
     HomogeneousTransformationMatrix,
     Point3,
     Quaternion,
-    RotationMatrix,
     Vector3,
 )
 from semantic_digital_twin.spatial_types.spatial_types import Pose, Pose2D
@@ -1608,22 +1607,6 @@ def add_cup(
     return cup
 
 
-def pick_up_from_above(cup: Cup, arm: Arm) -> PickUpAction:
-    """
-    :param cup: A cup standing upright.
-    :param arm: The arm that picks it up.
-    :return: The pick-up of `cup` that comes down onto its origin along its z-axis.
-    """
-    grasp = GraspCandidate(
-        cup,
-        Pose(
-            orientation=RotationMatrix.from_rpy(pitch=np.pi / 2).quaternion,
-            reference_frame=cup.root,
-        ),
-    )
-    return PickUpAction(grasp, arm)
-
-
 def cup_in_reach(robot: AbstractRobot, name: str, roll: float = 0.0) -> Cup:
     """
     Stands `robot` facing along the world's x-axis, with a new cup ahead of it and to
@@ -1647,6 +1630,25 @@ def cup_in_reach(robot: AbstractRobot, name: str, roll: float = 0.0) -> Cup:
     )
     world.notify_state_change()
     return cup
+
+
+def test_a_pick_up_from_above_comes_down_onto_the_objects_origin(
+    multiple_robot_apartment_context,
+):
+    world, robot, extensions = multiple_robot_apartment_context
+    cup = cup_in_reach(robot, "cup")
+    arm = left_or_only_arm(robot)
+
+    pick_up = PickUpAction.from_above(cup, arm)
+
+    cup_T_grasp = pick_up.grasp.grasp_pose
+    assert pick_up.grasp.graspable is cup
+    assert pick_up.arm is arm
+    assert cup_T_grasp.reference_frame is cup.root
+    np.testing.assert_allclose(cup_T_grasp.position.to_np()[:3], [0, 0, 0])
+    np.testing.assert_allclose(
+        cup_T_grasp.rotation_matrix.to_np()[:3, 0], [0, 0, -1], atol=1e-9
+    )
 
 
 # %% carrying held objects upright
@@ -1713,7 +1715,7 @@ def test_a_cup_picked_up_earlier_in_the_plan_ends_upright(
     carry = CarryAction(drive_ahead(robot))
 
     run_plan(
-        Sequence([pick_up_from_above(cup, left_or_only_arm(robot)), carry]),
+        Sequence([PickUpAction.from_above(cup, left_or_only_arm(robot)), carry]),
         [*extensions, PlanRewriting(transformations=[ParkArmsBeforeFirstAction()])],
     )
 
@@ -1743,7 +1745,7 @@ def test_a_cup_put_down_earlier_in_the_plan_is_not_carried(
     expand(
         Sequence(
             [
-                pick_up_from_above(cup, left_or_only_arm(robot)),
+                PickUpAction.from_above(cup, left_or_only_arm(robot)),
                 PlaceAction(cup, Pose.from_xyz_rpy(y=0.1, reference_frame=cup.root)),
                 carry,
             ]
@@ -1864,8 +1866,8 @@ def cup_for_each_arm(multiple_robot_apartment_context) -> CupForEachArm:
         world=world,
         context_extensions=extensions,
         pick_ups=[
-            pick_up_from_above(near_cup, left_arm),
-            pick_up_from_above(far_cup, right_arm),
+            PickUpAction.from_above(near_cup, left_arm),
+            PickUpAction.from_above(far_cup, right_arm),
         ],
     )
 
