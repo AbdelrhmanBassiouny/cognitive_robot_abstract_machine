@@ -38,7 +38,7 @@ items:
   pull_request_number: 64
   track: engine-stack
   depends_on: []
-  status: in progress
+  status: in_progress
   notes: '2026-08-12 steward cascade: restacked onto its cascaded base, which now carries
     main be377fdf (#41 merged 2026-08-10). Full account in roadmap.md section 21. Merged D-core-aid
     (1ad96142); one conflict, an add/add on rdr/exceptions.py between this branch''s underspecified-target
@@ -56,7 +56,7 @@ items:
     reproducing it.'
   depends_on:
   - D-core-underspecified
-  status: in progress
+  status: in_progress
   notes: '2026-08-12 steward cascade: restacked onto its cascaded base, which now carries
     main be377fdf (#41 merged 2026-08-10). Full account in roadmap.md section 21. Merged D-core-underspecified
     (07545624); the same rdr/exceptions.py add/add recurring, this time also carrying CaseNotSerializableError.
@@ -69,7 +69,7 @@ items:
   track: engine-stack
   depends_on:
   - D-core-corner-case
-  status: in progress
+  status: in_progress
   notes: 'The rule-tree unparser, plus the `type_hints.py` to `object_to_source.py` rename
     its own review asked for. Restacked and cascaded. One finding worth keeping: the rename''s
     claim to update every importer was narrower than stated, and CI caught `template_file_creator.py`
@@ -83,7 +83,7 @@ items:
   track: engine-stack
   depends_on:
   - D-core-serialization
-  status: in progress
+  status: in_progress
   notes: 'Restacked 2026-08-12 out of the six days it spent unmergeable, which was what stopped
     the whole stack landing. Two resolutions outlive that round: `base_expressions.py` keeps
     main''s `set_active_root_if_not_set` API at this branch''s own placement, hoisted out
@@ -97,7 +97,7 @@ items:
   track: engine-stack
   depends_on:
   - D-core-support
-  status: in progress
+  status: in_progress
   session: https://claude.ai/code/session_01Gid5Qw9cbedssFEqojo1SK
   notes: 'The Expert policy split, and the parameter-object work handed to it from the single-class
     plan. What it establishes for everything above: `ExpertInterface` carries only the expert
@@ -111,7 +111,7 @@ items:
   track: engine-stack
   depends_on:
   - d-core-expert
-  status: in progress
+  status: in_progress
   session: https://claude.ai/code/session_012Fy3CmMRRy1m5DtzVUhP2X
   notes: 'The `EQLSingleClassRDR` inference engine, ported from the superseded mega-slice.
     What it settled: a fit saves once on its way out through a `finally`, not once per inserted
@@ -125,7 +125,7 @@ items:
   track: engine-stack
   depends_on:
   - d-core-single-class
-  status: in progress
+  status: in_progress
   session: https://claude.ai/code/session_015bucsUoPW3ktQ1NnTZbbVx
   blockers:
   - The GroundTruth thread on backend.py:36 is answered and deliberately left open. No dataclass

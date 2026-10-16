@@ -47,7 +47,7 @@ items:
   pull_request_number: 408
   track: montessori-eql
   depends_on: []
-  status: in progress
+  status: in_progress
   session: https://claude.ai/code/session_018BRw6aQGWWkAfdikDGE4iq
   blockers: []
   notes: 'One of three pull requests #244 (sdt_segmind_krrood_from_fast_monitor) split into
@@ -61,7 +61,7 @@ items:
   pull_request_number: 409
   track: montessori-eql
   depends_on: []
-  status: in progress
+  status: in_progress
   session: https://claude.ai/code/session_018BRw6aQGWWkAfdikDGE4iq
   blockers: []
   notes: 'One of three pull requests #244 split into on 2026-09-18. The semantic_digital_twin
@@ -78,7 +78,7 @@ items:
   track: montessori-eql
   depends_on:
   - sdt_numeric_geometry_and_panda
-  status: in progress
+  status: in_progress
   session: https://claude.ai/code/session_018BRw6aQGWWkAfdikDGE4iq
   blockers: []
   notes: 'One of three pull requests #244 split into on 2026-09-18. The segmind third: detectors
@@ -93,7 +93,7 @@ items:
   track: montessori-eql
   depends_on:
   - segmind_numeric_hole_events
-  status: in progress
+  status: in_progress
   session: https://claude.ai/code/session_01PQvyunW5okcgiEHmJZAu8N
   blockers: []
   notes: 'Split out of #169 on 2026-09-03 at the developer''s request, so `icra-experiments`
@@ -108,7 +108,7 @@ items:
   track: montessori-eql
   depends_on:
   - montessori_monitor_and_recording
-  status: in progress
+  status: in_progress
   session: https://claude.ai/code/session_01PQvyunW5okcgiEHmJZAu8N
   blockers: []
   notes: 'Base of the stack. On 2026-08-18 main was merged in twice. The first merge (608bc7fe6)
@@ -124,7 +124,7 @@ items:
   track: montessori-eql
   depends_on:
   - montessori_fast_inline_monitor
-  status: in progress
+  status: in_progress
   session: https://claude.ai/code/session_01PwwiAsZeaJSjECjsWEtkog
   notes: 'Marked ready for review. Also carries the local-environment fixes (lark, sdt ORM
     duplicate table, costmaps inflation memory, detector-test frames) and the Symbol/Match-default
@@ -139,7 +139,7 @@ items:
   track: montessori-eql
   depends_on:
   - cramera_eql_autocomplete
-  status: in progress
+  status: in_progress
   notes: 'Rebased onto cramera_eql_autocomplete on 2026-08-18 (was based on montessori_fast_inline_monitor);
     reparent needed a native GitHub-stack dissolve, see roadmap. Restacked the same day by
     merging the base''s current tip in rather than rebasing: 10ca075c2, cramera suite 488,
@@ -152,7 +152,7 @@ items:
   track: montessori-eql
   depends_on:
   - montessori_eql_where_is_highlighting
-  status: in progress
+  status: in_progress
   notes: 'Restacked on 2026-08-18 by merging the base in: 4d9d9ad33, cramera suite 544, then
     again onto the post-main-merge base, once more for 06582ca32, and again for the ORM-untracking
     fix: b8f970a93. Its history carries stale duplicates of #164''s commits and internal pre/post-merge
@@ -166,7 +166,7 @@ items:
   track: montessori-eql
   depends_on:
   - montessori_event_replay
-  status: in progress
+  status: in_progress
   notes: 'The 2026-08-18 restack dropped this branch''s stale copies of #164/#165 commits
     and amended an EqlSuggestions stub into its panel test harness (a semantic conflict with
     the autocomplete feature git could not see). Restacked again later that day by merging
@@ -179,7 +179,7 @@ items:
   track: montessori-eql
   depends_on:
   - cramera-question-readback
-  status: in progress
+  status: in_progress
   notes: 'Top of the stack. rapidfuzz dependency is declared in cramera/requirements.txt.
     Restacked on 2026-08-18 by merging the base in: 5acc3d83f, cramera suite 598 and all 216
     node tests green, then onto the post-main-merge base, once more for 06582ca32, and again
@@ -211,7 +211,7 @@ items:
   track: action-execution
   depends_on:
   - montessori_perform_queried_action
-  status: not started
+  status: not_started
   notes: The user types an under-specified action into the console; pressing the run button
     resolves the missing parameters and executes it. Builds on the execute-from-the-console
     machinery the perform button introduces.
@@ -222,7 +222,7 @@ items:
   track: replay-annotation
   depends_on:
   - montessori_event_replay
-  status: in progress
+  status: in_progress
   session: https://claude.ai/code/session_01XVBfkBE9UCvRtcarKufjUH
   notes: 'During replay of a segmind event, show the event''s name in the video with an arrow
     from the label to each involved object; the arrow tips follow the objects as they move.
@@ -235,7 +235,7 @@ items:
   track: underspecified-queries
   depends_on:
   - cramera_eql_autocomplete
-  status: in progress
+  status: in_progress
   session: https://claude.ai/code/session_01SmNyQsR4yhwF5wGyfrj6sH
   notes: 'A section of its own in the console, beside Current State and Episodic Memory: a
     question writes `...` for an enumerable field, and every value that field could take is
@@ -250,6 +250,6 @@ items:
   pull_request_number: null
   track: live-panels
   depends_on: []
-  status: not started
+  status: not_started
   notes: Every tab in the panel widget can be detached into its own window, reattached, resized
     freely, or expanded to take the full page.

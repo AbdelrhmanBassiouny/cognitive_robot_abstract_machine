@@ -33,7 +33,7 @@ items:
   pull_request_number: 281
   track: tips
   depends_on: []
-  status: in progress
+  status: in_progress
   session: https://claude.ai/code/session_01JXqGieiBr1kGogq8KKKrmP
   notes: '`tips_of()` merged strictly by ascending pull request number, so a collision between
     two in-flight branches was decided by nothing connected to importance. Adds a `BranchPriority`
@@ -47,7 +47,7 @@ items:
   track: tips
   depends_on:
   - order-tips-by-priority
-  status: in progress
+  status: in_progress
   session: https://claude.ai/code/session_013L7NYMym2QDk2Z7U66PB3z
   notes: 'The priority tier above is only as good as the label feeding it, and the label is
     applied by hand - so a branch nobody labelled loses a collision it should have won. `changed_paths.py`
@@ -61,7 +61,7 @@ items:
   pull_request_number: 285
   track: tips
   depends_on: []
-  status: in progress
+  status: in_progress
   session: https://claude.ai/code/session_01Q7bjPFbn4b4p8zJ3n4rVrt
   notes: 'A live failure, not a hypothetical: the scheduled refresh failed six runs in a row
     on `can''t open file .claude/stack/integration.py`, because a tip carrying #185''s relocation
@@ -75,7 +75,7 @@ items:
   pull_request_number: 282
   track: reports
   depends_on: []
-  status: in progress
+  status: in_progress
   session: https://claude.ai/code/session_019xM1h7GZkD9fFcJaqdTjKd
   notes: 'Every reason a build left a branch out other than a named integration conflict was
     silent, and the conflict comment named the branch it breaks by bare name only. New `integration_left_out.py`

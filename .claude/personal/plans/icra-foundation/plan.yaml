@@ -42,7 +42,7 @@ items:
   pull_request_number: 265
   track: integration
   depends_on: []
-  status: in progress
+  status: in_progress
   session: https://claude.ai/code/session_0155Lgy4BZ7QcZHiRuxxJJyA
   blockers:
   - 'Cross-plan: this item merges montessori-eql-stack''s montessori_monitor_and_recording
@@ -58,7 +58,7 @@ items:
   track: integration
   depends_on:
   - integrated-simulation-pipeline
-  status: not started
+  status: not_started
   notes: The bridge to the robot, and the one item on this plan that needs the robot before
     any experiment does. Merge the integrated branch into tracy_icra, run the demo on the
     UR10 with the live camera, and keep a capture of the run. This is knowledge-directed-perception's
@@ -72,7 +72,7 @@ items:
   pull_request_number: null
   track: scenario-model
   depends_on: []
-  status: not started
+  status: not_started
   notes: 'The seam montessori-scenarios (#296) left closed, named in its own fifth-round notes:
     "tracy_icra''s ~1,200 lines of actuation stay where they live; tracy-demo-takes-the-integrated-branch
     is where they meet these scenarios." Checked directly against the merged tree: TracyWatchesTheSceneStandStill,
@@ -87,7 +87,7 @@ items:
   pull_request_number: null
   track: long-term-memory
   depends_on: []
-  status: not started
+  status: not_started
   notes: 'What makes long-term memory a corpus rather than a schema, and the item one person
     can carry alone from the day the episode model lands. A headless generator runs the scenarios
     repeatedly over seeded randomised layouts, conditions and perturbations, and records per

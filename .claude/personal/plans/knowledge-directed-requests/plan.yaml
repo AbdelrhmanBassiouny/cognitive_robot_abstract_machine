@@ -39,7 +39,7 @@ items:
   pull_request_number: 222
   track: request-language
   depends_on: []
-  status: in progress
+  status: in_progress
   session: https://claude.ai/code/session_01MotUMLrQxbZKQWs4BADwkj
   blockers:
   - '`test_each_lib (krrood)` is red on #222, and every branch stacked on it inherits it -
@@ -62,7 +62,7 @@ items:
   track: request-language
   depends_on:
   - perception-backend
-  status: in progress
+  status: in_progress
   session: https://claude.ai/code/session_0137umDhuvEG3jkbh6iZUDzQ
   notes: 'Raised by the developer across five review threads on #222, which are one ask: a
     look should be narrowed by what the world means, not by an attribute spelled as a string.
@@ -77,7 +77,7 @@ items:
   track: request-language
   depends_on:
   - perception-predicates-guide-the-search
-  status: in progress
+  status: in_progress
   session: https://claude.ai/code/session_013HJ4gSb7tjesc6vB1GAtwu
   blockers:
   - One of the six review threads of 2026-09-02 is still open, and it is the developer's to
@@ -100,7 +100,7 @@ items:
   depends_on:
   - perception-predicates-guide-the-search
   - search-clipped-to-a-predicates-region
-  status: in progress
+  status: in_progress
   session: https://claude.ai/code/session_01WDteX4z7jQUBG4FZqMKG5m
   notes: 'The developer''s third mechanism on r3893499716, deferred out of #227 as a second
     pull request''s worth of work: a predicate no search algorithm covers is still answerable,
@@ -115,7 +115,7 @@ items:
   depends_on:
   - choose-detection-method
   - detector-parameters-from-knowledge
-  status: in progress
+  status: in_progress
   session: https://claude.ai/code/session_0139rDK7uNEvtjEVZ5krjS4h
   notes: 'Raised by the developer on `search-clipped-to-a-predicates-region`''s review (r3915356623),
     2026-09-02: the pipeline''s own six fields are not one kind of thing - the world already
@@ -129,7 +129,7 @@ items:
   depends_on:
   - perception-backend
   - choose-detection-method
-  status: in progress
+  status: in_progress
   session: https://claude.ai/code/session_01DnVSdcxop561xKAGeg61MG
   notes: Finds a surface in the picture from what the twin already says it is like - a large
     horizontal plane, mirror-finished, colourless, of about the modelled size - stated as
@@ -144,7 +144,7 @@ items:
   track: method-selection
   depends_on:
   - perception-backend
-  status: in progress
+  status: in_progress
   session: https://claude.ai/code/session_01JzpfVmddAPa4ZTJYSEEqAF
   notes: 'The detector interface the backend dispatches to, chosen by a rule tree over properties
     of the surface and the target - this is where perception measurably gets better as the
@@ -160,7 +160,7 @@ items:
   track: method-selection
   depends_on:
   - choose-detection-method
-  status: in progress
+  status: in_progress
   session: https://claude.ai/code/session_014LgGAmWL8JZM3qW7pwwnbp
   notes: The detectors' numbers - hue windows, size ranges, edge-agreement thresholds, mesh
     classification thresholds, and (widened 2026-08-31) the numbers that say *how to search*
@@ -176,7 +176,7 @@ items:
   track: method-selection
   depends_on:
   - detector-parameters-from-knowledge
-  status: not started
+  status: not_started
   notes: 'The developer''s own suggestion on #202: an interactive presenter for the ripple-down
     rules'' `ConclusionHelper`, showing the live camera feed beside the parameters it would
     conclude, so an expert sees what a value does before committing it as a rule. Needs `detector-parameters-from-knowledge`''s
@@ -194,7 +194,7 @@ items:
   - choose-detection-method
   - surfaces-found-by-looking
   - how-to-look-concluded-from-the-request
-  status: in progress
+  status: in_progress
   session: https://claude.ai/code/session_01SK2tbXUzLSPebeVcKif92s
   notes: 'Added 2026-09-05 at the developer''s direction on #259 (r3940339984 and r3940357436):
     "why not replace this with an EQL match statement of semdt semantic annotation or kinematic
@@ -210,7 +210,7 @@ items:
   track: method-selection
   depends_on:
   - surfaces-found-by-looking
-  status: in progress
+  status: in_progress
   session: https://claude.ai/code/session_01ViZEJchUqcVcsFMbYHeVR6
   blockers:
   - Depends on `knowledge-directed-grounding`'s `holes-fitted-like-pieces` (in_progress) -
@@ -227,7 +227,7 @@ items:
   depends_on:
   - a-look-is-described-by-a-match
   - detector-parameters-from-knowledge
-  status: not started
+  status: not_started
   blockers:
   - Needs `montessori-perception-split`'s `shape-vocabulary-on-main` (#488, PieceSet as worlds
     of bodies) - a cross-plan dependency `depends_on` cannot express.
@@ -244,7 +244,7 @@ items:
   track: demo-requests
   depends_on:
   - choose-detection-method
-  status: not started
+  status: not_started
   blockers:
   - Depends on `knowledge-directed-grounding`'s `demo-runs-on-grounded-perception` (not_started)
     - a cross-plan dependency that `split-knowledge-directed-perception` could not preserve

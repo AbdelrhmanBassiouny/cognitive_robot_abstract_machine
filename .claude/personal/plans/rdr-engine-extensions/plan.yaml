@@ -75,7 +75,7 @@ items:
   track: feature-layer
   depends_on:
   - rdr-feature-registry
-  status: not started
+  status: not_started
   notes: '%feature magic, AST-hash dedup, registry autocomplete.'
 - id: rdr-multi-class
   title: 'MCRDR port: multi-valued attributes'
@@ -96,7 +96,7 @@ items:
   track: multi-tree-engines
   depends_on:
   - rdr-multi-class
-  status: not started
+  status: not_started
   notes: Monotonic-conclusions contract + recorded dependency edges.
 - id: rdr-concept-trees
   title: NRDR concept layer

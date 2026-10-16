@@ -42,7 +42,7 @@ items:
   pull_request_number: null
   track: pytest-conversion
   depends_on: []
-  status: not started
+  status: not_started
   notes: 'Every unittest-based module outside test_eql_rdr: test_ripple_down_rules and parts
     of test_eql. Raised by the #159 review''s "all tests everywhere should be pytest"; the
     test_eql_rdr half landed on #67 and #98 while they were still unlanded, and this is the

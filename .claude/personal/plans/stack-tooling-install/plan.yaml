@@ -34,7 +34,7 @@ items:
   title: Extract a deterministic setup script from /setup-personal-notes
   branch: claude/setup-personal-notes-script
   pull_request_number: 107
-  status: in progress
+  status: in_progress
   session: https://claude.ai/code/session_01DbUfzLJEFqE4U3fKBFd2WA
   track: install
   depends_on: []
@@ -52,7 +52,7 @@ items:
   title: 'PR 2: /setup-stacked-prs guided one-command setup skill'
   branch: claude/setup-stacked-prs-skill
   pull_request_number: 110
-  status: in progress
+  status: in_progress
   session: https://claude.ai/code/session_015HBn7bNMj6Ao5inyStmrMN
   track: install
   depends_on: []
@@ -71,7 +71,7 @@ items:
     ref
   branch: claude/maintenance-tooling-pinning-gdod18
   pull_request_number: 198
-  status: in progress
+  status: in_progress
   session: https://claude.ai/code/session_01THzpHsajMptZ3X1DmwAU2c
   track: base-correctness
   depends_on: []
@@ -84,7 +84,7 @@ items:
   title: Cut session branches from main, not the integration branch
   branch: claude/plan-item-kickoff-workflow-s3mfvk
   pull_request_number: 199
-  status: in progress
+  status: in_progress
   session: https://claude.ai/code/session_014Fp9aaMYx1E6toT2jDDWdW
   track: base-correctness
   depends_on: []

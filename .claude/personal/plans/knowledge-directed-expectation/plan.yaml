@@ -35,7 +35,7 @@ items:
   pull_request_number: 246
   track: events
   depends_on: []
-  status: in progress
+  status: in_progress
   session: https://claude.ai/code/session_01UdpwcAQGVFCKEy8VA2iFwv
   blockers:
   - One of the four review threads of 2026-09-03 is left open deliberately, and it is the
@@ -54,7 +54,7 @@ items:
   track: events
   depends_on:
   - episode-replayed-into-the-world
-  status: in progress
+  status: in_progress
   session: https://claude.ai/code/session_0124wGjWgkgfuDHX1xTJh6St
   blockers:
   - 'One thread is open on #257 and it is the developer''s to settle. r3940953108 asked whether
@@ -76,7 +76,7 @@ items:
   track: events
   depends_on:
   - expectations-from-events
-  status: not started
+  status: not_started
   notes: 'Added 2026-09-04 at the developer''s ask on #257 (r3934932647 and r3937639689).
     expectations-from-events keeps what holds of one piece the robot acted on, from the action''s
     declared effect and each event''s declared Effect, both stated as the twin''s own relations.'
@@ -105,7 +105,7 @@ items:
   track: demo-expectation
   depends_on:
   - expectations-from-events
-  status: not started
+  status: not_started
   blockers:
   - Depends on `knowledge-directed-requests`'s `demo-asks-by-query` (not_started) - a cross-plan
     dependency that `split-knowledge-directed-perception` could not preserve (`depends_on`
@@ -123,7 +123,7 @@ items:
   pull_request_number: null
   track: events
   depends_on: []
-  status: not started
+  status: not_started
   notes: 'Split out of icra-mechanism''s `snapshot-working-memory` (#301) on 2026-09-11, per
     the developer''s own direction on that PR''s review thread: `SnapshotWorkingMemory` now
     writes every perceived pose onto the twin unconditionally, and deciding whether a piece

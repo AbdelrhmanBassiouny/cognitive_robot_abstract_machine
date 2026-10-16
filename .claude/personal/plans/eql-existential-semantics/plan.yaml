@@ -67,7 +67,7 @@ items:
   pull_request_number: null
   track: benchmarking
   depends_on: []
-  status: not started
+  status: not_started
   notes: 'GOAL: a repeatable timing harness for EQL query evaluation, plus a recorded baseline
     on main, so every later item in this plan reports a measured delta instead of an assertion
     that it is "probably fine". EXPLORE FIRST: (a) what PR #99 already built — it measured
@@ -100,7 +100,7 @@ items:
   track: binding-order
   depends_on:
   - binding-order-planner
-  status: not started
+  status: not_started
   notes: 'Raised from match-query-ergonomics (#181) on 2026-08-23 and measured on krrood PR
     #192''s branch: over a domain of one Handle and one Container, entity(body).where(HasType(entity(body),
     Handle)) returns *both* rows, while entity(body).where(HasType(body, Handle)) returns
@@ -114,7 +114,7 @@ items:
   pull_request_number: null
   track: disjunction-safety
   depends_on: []
-  status: not started
+  status: not_started
   notes: 'GOAL: OR''s behaviour is stated, tested, and safe. Today core_logical_operators.py
     documents OR as an "ElseIf" that evaluates the right operand only when the left is False,
     but measured behaviour is classical disjunction — the union of both branches'' solution
@@ -128,7 +128,7 @@ items:
   track: quantifiers
   depends_on:
   - binding-order-planner
-  status: not started
+  status: not_started
   notes: 'GOAL: exists() is a filter on the outer bindings that emits no new bindings at all.
     For each distinct assignment to the outer-visible variables, yield it once if at least
     one assignment to the remaining variables satisfies the condition; the remaining variables
@@ -142,7 +142,7 @@ items:
   track: quantifiers
   depends_on:
   - exists-semijoin
-  status: not started
+  status: not_started
   notes: 'GOAL: a variable a query does not select, used in a plain .where(), behaves like
     one inside exists(): it binds nothing per row and never escapes, so the query yields one
     row per binding of its selection, not one per witness. The same "locals never escape"
@@ -155,7 +155,7 @@ items:
   track: quantifiers
   depends_on:
   - exists-semijoin
-  status: not started
+  status: not_started
   notes: 'GOAL: not_(exists(...)) is an antijoin (R ▷ S) — one row per outer binding with
     no witness — and for_all stops failing for the same reason exists did. EXPLORE FIRST:
     (a) whether Not wrapping a semi-join Exists gives the antijoin for free once the semi-join
@@ -169,7 +169,7 @@ items:
   track: api-surface
   depends_on:
   - exists-semijoin
-  status: not started
+  status: not_started
   notes: 'GOAL: exists(*conditions), joined like where(). Hard break — all five in-repo call
     sites migrate in the same PR, no deprecation shim (user decision, 2026-08-03: a shim that
     silently accepts a now-meaningless variable is exactly the misuse-prone interface being
@@ -184,7 +184,7 @@ items:
   track: api-surface
   depends_on:
   - exists-single-argument
-  status: not started
+  status: not_started
   notes: 'GOAL: the two consumers that read Exists.variable keep working without it. THE CONSUMERS:
     (a) ExistsRule.build and QuantifierScope.focus in verbalization — "there exists a Robot
     such that its battery is greater than 0" needs both a noun to introduce and a discourse
@@ -201,7 +201,7 @@ items:
   - exists-consumers
   - negation-antijoin
   - disjunction-range-restriction
-  status: not started
+  status: not_started
   notes: 'GOAL: close the loop the user asked for — a published before/after on what the binding-order
     and quantifier changes did to EQL''s evaluation cost, using the wave-0 harness unchanged.
     REPORT: per query shape, the baseline and final numbers for wall time, variable enumerations,
@@ -216,7 +216,7 @@ items:
   track: disjunction-safety
   depends_on:
   - disjunction-range-restriction
-  status: not started
+  status: not_started
   notes: 'GOAL: an n-ary threshold connective in core_logical_operators.py - "at least k of
     these n operands hold" - with Or (k=1) and And (k=n) as its two ends, its first-order
     reading written down, and its range-restriction rule stated as a function of k. IT GENERALIZES

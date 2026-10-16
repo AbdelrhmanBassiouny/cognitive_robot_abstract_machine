@@ -35,7 +35,7 @@ items:
     note
   branch: claude/deferred-dependency-drift-pr-qxpfsm
   pull_request_number: 184
-  status: in progress
+  status: in_progress
   session: https://claude.ai/code/session_01VBa9VPHJW4VjpWtdq1XLE2
   track: corrections
   depends_on: []
@@ -49,7 +49,7 @@ items:
   title: Hide deferred items in the dashboard by default, behind their own toggle
   branch: claude/hidden-deferred-plan-items-6weef1
   pull_request_number: 157
-  status: in progress
+  status: in_progress
   session: https://claude.ai/code/session_01KzZzsqTc7Ub6ceYP9wDyAN
   track: legibility
   blockers:
@@ -75,7 +75,7 @@ items:
   title: Refresh button in the dashboard masthead, copying the command that rebuilds the page
   branch: claude/rdr-dashboard-refresh-button-tpuvo9
   pull_request_number: 206
-  status: in progress
+  status: in_progress
   session: https://claude.ai/code/session_0112C4kGpRE6uLmi5Lwkghx2
   track: legibility
   depends_on: []
@@ -88,7 +88,7 @@ items:
   title: 'PR 3: shared pull_request_state module + LOC/CI/conflict chips in plan dashboards'
   branch: claude/shared-pr-state-chips
   pull_request_number: 111
-  status: in progress
+  status: in_progress
   session: https://claude.ai/code/session_01PDkiMhjnoromH2KP2z8Koy
   track: live-state
   depends_on: []
@@ -115,7 +115,7 @@ items:
   track: corrections
   session: https://claude.ai/code/session_01U2r4CGpBKiD551i2FE5NXW
   depends_on: []
-  status: in progress
+  status: in_progress
   notes: 'Decided by the developer on 2026-09-03, taking the roadmap''s open entry "Cross-plan
     dependencies are not representable" and choosing the reference form `<plan-id>/<item-id>`
     (a slash cannot occur in either kebab-case id, so a bare id keeps meaning this plan).
@@ -124,7 +124,7 @@ items:
 - id: ready-to-promote-upstream-links
   title: 'PR 5: ready-to-promote sidebar list + one-click upstream create-pull-request links'
   branch: null
-  status: not started
+  status: not_started
   track: live-state
   depends_on:
   - shared-pr-state-chips

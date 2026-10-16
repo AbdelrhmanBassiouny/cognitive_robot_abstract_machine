@@ -36,7 +36,7 @@ items:
   pull_request_number: 55
   track: grammar-features
   depends_on: []
-  status: in progress
+  status: in_progress
   session: https://claude.ai/code/session_014rJsLXhoAAV5Xbc2w5dyHR
   notes: 'Adds AgreementProcessor as its own lowering pass ahead of DeterminerProcessor/MorphologyProcessor,
     plus PhraseFragment.concord_number and the All universal quantifier; removes coreference_processor''s
@@ -49,7 +49,7 @@ items:
   track: grammar-features
   depends_on:
   - agreement
-  status: in progress
+  status: in_progress
   notes: Adds verbalization/cardinality.py (Cardinality enum + column_cardinality) and routes
     a grouped report's non-key columns through it, so a scalar attribute reads distributively
     singular ("the battery") while a collection keeps the quantified plural ("all the tasks").
@@ -78,7 +78,7 @@ items:
   track: performatives
   depends_on:
   - performatives-core
-  status: in progress
+  status: in_progress
   notes: Approach M - one class both executes and verbalizes, rather than an external visitor.
     Performable becomes a plain field-less ABC mixin; the verbalization shapes (interleave/coordinate/concurrent)
     move to free functions in verbalization/composition.py so krrood's combinators and coraplex's
@@ -91,7 +91,7 @@ items:
   track: performatives
   depends_on:
   - performatives-core
-  status: not started
+  status: not_started
   notes: 'Deferred out of #14 to keep it scoped to the framework-agnostic layer. Gives a concrete
     action (e.g. NavigateAction) its own fragment instead of relying on the generic "given
     that"/"such that" rendering, including operand field-name aliasing.'
@@ -102,7 +102,7 @@ items:
   track: performatives
   depends_on:
   - performatives-core
-  status: not started
+  status: not_started
   notes: 'Surfaced during the rdr-refactor plan''s d-core-expert item (PR #98) review: the
     Expert policy''s conclusion/conditions validators (ConclusionDomain.hint(), AnswerName.CONDITIONS.example_assignment,
     and the DataclassException hierarchy in rdr/exceptions.py) currently build their hints/error
@@ -114,7 +114,7 @@ items:
   track: performatives
   depends_on:
   - performatives-core
-  status: not started
+  status: not_started
   notes: 'Deferred out of #14. Follows the same distributed placement as coraplex''s Perform
     - each act lives in the layer that owns the behaviour it names, not in a central registry.'
 - id: language-nodes-and-bridge
@@ -124,7 +124,7 @@ items:
   track: performatives
   depends_on:
   - plannode-performable
-  status: not started
+  status: not_started
   notes: 'Phases C and D of the unification. Requires the shared shape functions and the Performable
     mixin from #15 to exist first. Cross-plan note (2026-08-29, from eql-existential-semantics
     #137): when this item re-expresses coraplex''s ParallelNode/TryAllNode and giskardpy''s
@@ -138,6 +138,6 @@ items:
   track: performatives
   depends_on:
   - language-nodes-and-bridge
-  status: not started
+  status: not_started
   notes: Phase E - the end-to-end proof that one tree executes and verbalizes, once the bridge
     exists.

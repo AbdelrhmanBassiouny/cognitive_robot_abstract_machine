@@ -31,7 +31,7 @@ items:
 - id: symbol-graph-without-matplotlib
   title: Importing the symbol graph loads no optional dependency
   branch: claude/symbol-graph-without-matplotlib
-  status: in progress
+  status: in_progress
   track: optional-imports
   depends_on: []
   pull_request_number: 509
@@ -41,7 +41,7 @@ items:
 - id: matplotlib-optional
   title: matplotlib is imported only when drawing
   branch: null
-  status: not started
+  status: not_started
   track: optional-imports
   depends_on: [symbol-graph-without-matplotlib]
   notes: 'User-approved option 1: graph_visualizer.py and RDR import matplotlib inside the drawing
@@ -51,7 +51,7 @@ items:
 - id: type-hint-resolver-skips-missing-modules
   title: Type-hint resolution skips modules that are not installed
   branch: null
-  status: not started
+  status: not_started
   track: optional-imports
   depends_on: []
   notes: 'class_diagrams.utils / krrood.utils.get_scope_from_imports import every module a source file
@@ -60,7 +60,7 @@ items:
 - id: core-boundary-guard
   title: One guard over every core module, with import-linter and a shrinking offender list
   branch: null
-  status: not started
+  status: not_started
   track: guards
   depends_on: [symbol-graph-without-matplotlib]
   notes: 'Core subpackages declared once. A test walks every core module (pkgutil), imports each in a
@@ -71,7 +71,7 @@ items:
 - id: serializer-without-heavy-dependencies
   title: JSON serializer and symbol graph import no sqlalchemy, scipy or casadi
   branch: null
-  status: not started
+  status: not_started
   track: core-boundaries
   depends_on: [type-hint-resolver-skips-missing-modules, core-boundary-guard]
   notes: 'HasGeneric moves from ormatic.data_access_objects.base into patterns; the scipy sparse-array
@@ -81,7 +81,7 @@ items:
 - id: eql-probabilistic-split
   title: Core EQL imports no random_events or probabilistic_model
   branch: null
-  status: not started
+  status: not_started
   track: core-boundaries
   depends_on: [type-hint-resolver-skips-missing-modules, core-boundary-guard]
   notes: 'Split operators/causal.py: Cause/Confounder/CausesEffect stay core, the random_events dataclasses
@@ -91,7 +91,7 @@ items:
 - id: verbalization-realization-split
   title: Verbalization vocabulary stays core, realization moves to all
   branch: null
-  status: not started
+  status: not_started
   track: core-boundaries
   depends_on: [type-hint-resolver-skips-missing-modules, core-boundary-guard]
   notes: 'User-approved: _verbalization_fragment_ stays abstract and unchanged. The vocabulary
@@ -101,7 +101,7 @@ items:
 - id: krrood-core-and-all-extras
   title: pyproject core and all extras, workspace packages switched, core-only CI job
   branch: null
-  status: not started
+  status: not_started
   track: packaging
   depends_on: [matplotlib-optional, core-boundary-guard, serializer-without-heavy-dependencies, eql-probabilistic-split, verbalization-realization-split]
   notes: 'Breaking for outside users: pip has no default extras. Every workspace package that lists krrood
@@ -111,7 +111,7 @@ items:
 - id: core-weight-regression-check
   title: CI compares core install size and import time against the base branch
   branch: null
-  status: not started
+  status: not_started
   track: packaging
   depends_on: [krrood-core-and-all-extras]
   notes: 'One CI job, only when krrood or its pyproject changes: installs core krrood from base and head

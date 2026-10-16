@@ -35,7 +35,7 @@ items:
   title: Fast-forward the fork's default branch at session start
   branch: claude/fork-main-upstream-sync-mtrzpr
   pull_request_number: 188
-  status: in progress
+  status: in_progress
   session: https://claude.ai/code/session_01DmexEkCHmVuQjanQpsHX4F
   track: handover
   depends_on: []
@@ -48,7 +48,7 @@ items:
   title: Run the personal-notes setup from the planning skills instead of asking first
   branch: claude/auto-run-setup-notes-02nhxv
   pull_request_number: 156
-  status: in progress
+  status: in_progress
   blockers:
   - Two outdated review threads on plan-item-resolve/SKILL.md, a deferral to
   - The review thread on the guard's global constants is answered in a conversation comment
@@ -67,7 +67,7 @@ items:
   title: Read upstream review threads whether or not the fork pull request is labelled
   branch: claude/plan-item-kickoff-workflow-y2xfva
   pull_request_number: 194
-  status: in progress
+  status: in_progress
   session: https://claude.ai/code/session_01Cs9MvTBPS4hsd1HJimooVy
   track: conventions
   depends_on: []

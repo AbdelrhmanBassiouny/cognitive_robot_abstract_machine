@@ -36,7 +36,7 @@ items:
   pull_request_number: 81
   track: why-answers
   depends_on: []
-  status: in progress
+  status: in_progress
   session: https://claude.ai/code/session_01V2DJMF1C2bQjhLcPo5sFkx
   notes: 'W1. KNOWN-STALE per-branch progress note: pr-progress/rdr/why-answer.md still says
     "Not started" even though this PR is real, open, and W2/W3 already build on it — the exact
@@ -52,7 +52,7 @@ items:
   track: why-answers
   depends_on:
   - rdr-why-answer
-  status: in progress
+  status: in_progress
   notes: 'W2. Deep in review: 20/22 threads resolved, 2 blocked on PR #83''s boolean-predicate
     goldens.'
 - id: rdr-why-query-surface
@@ -62,7 +62,7 @@ items:
   track: why-answers
   depends_on:
   - eql-causal-verbalization
-  status: in progress
+  status: in_progress
   session: https://claude.ai/code/session_0148J38dvujaob3AYJqfNzwa
   notes: W3. %why magic deferred until D-ui (#76) lands.
 - id: rdr-decision-queries
@@ -72,7 +72,7 @@ items:
   track: why-answers
   depends_on:
   - eql-causal-verbalization
-  status: in progress
+  status: in_progress
   session: https://claude.ai/code/session_013NepUGgubeWHnLT5TUPLdu
   notes: C1. Reframed 2026-07-17 (ExplainableChoice protocol dropped as YAGNI). Coordinates
     with W3 via a shared ExplanationCarrier seam.

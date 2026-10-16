@@ -45,7 +45,7 @@ items:
   pull_request_number: 277
   track: gate-and-skills
   depends_on: []
-  status: in progress
+  status: in_progress
   session: https://claude.ai/code/session_01GhTbjxmunfCd5vuXRid6m9
   notes: '/plan-create and /add-plan-item read the budget and route new work to a new plan
     when the plan they would otherwise grow is at it. Only needs the budget to exist, not
@@ -59,7 +59,7 @@ items:
   pull_request_number: 504
   track: gate-and-skills
   depends_on: []
-  status: in progress
+  status: in_progress
   session: https://claude.ai/code/session_01Xxsd3jwKjjEsHdyyfC8Azo
   notes: 'Stacked on #501 (base claude/brave-archimedes-nonocl); modules under basstler/src/basstler/,
     hooks run them with BASSTLER_PYTHON. Per-field limits checked on every save: landed items

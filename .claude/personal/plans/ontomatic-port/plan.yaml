@@ -41,150 +41,150 @@ items:
   title: 'EQL: correlated exists/for_all and matching collection-valued attributes'
   track: paper-eql-ormatic
   depends_on: []
-  status: not started
+  status: not_started
   notes: 'Source commits 3853c9b6d8, 1cd3425d67, c95bbfb41b, 3308cb252f on aamas27-fast-translation.'
 - id: eql-predicate-call-memo
   branch: eql-predicate-call-memo
   title: 'EQL: call each predicate once per distinct argument tuple'
   track: paper-eql-ormatic
   depends_on: [eql-correlated-quantifiers]
-  status: not started
+  status: not_started
   notes: 'Source commit 08f9178dd2 on aamas27-unification-revision.'
 - id: ormatic-collection-translation
   branch: ormatic-collection-translation
   title: 'ORMatic: translate EQL over collection-valued attributes to SQL'
   track: paper-eql-ormatic
   depends_on: [eql-correlated-quantifiers]
-  status: not started
+  status: not_started
   notes: 'Source commits 5f4cfb9aee, eeeb2e48db.'
 - id: ormatic-identifier-selection
   branch: ormatic-identifier-selection
   title: 'ORMatic: select identifiers such as IRIs and join only the tables a query needs'
   track: paper-eql-ormatic
   depends_on: [ormatic-collection-translation]
-  status: not started
+  status: not_started
   notes: 'Source commits aa8e9299a3, 67a666b1e2, 20f6990f69, f083e650c4.'
 - id: ormatic-reference-fixes
   branch: ormatic-reference-fixes
   title: 'ORMatic: keep same-class references, reject a variable used as a condition'
   track: paper-eql-ormatic
   depends_on: [ormatic-identifier-selection]
-  status: not started
+  status: not_started
   notes: 'Source commits 8316e4c8b8, 9936287aac.'
 - id: descriptor-characteristics
   branch: descriptor-characteristics
   title: Property characteristics and chain axioms on upstream property descriptors
   track: ontomatic-core
   depends_on: []
-  status: not started
+  status: not_started
   notes: 'Port ontomatic/property_descriptor/mixins.py from aamas27-experiments onto main''s descriptors.'
 - id: descriptor-provenance
   branch: descriptor-provenance
   title: Inferred facts with provenance and fact placement in PropertyDescriptorRelation
   track: ontomatic-core
   depends_on: [descriptor-characteristics]
-  status: not started
+  status: not_started
   notes: 'InferredThrough, premises/explain, equivalence/inverse/symmetry/chain inference.'
 - id: terminology-model
   branch: terminology-model
   title: Typed Terminology read from RDF, profile report, explicit domain/range rules
   track: ontomatic-core
   depends_on: []
-  status: not started
+  status: not_started
   notes: 'Seed from owl2rl_tbox.py; replaces ClassInfo/PropertyInfo and the rdrs/property_inference files.'
 - id: model-compiler
   branch: model-compiler
   title: Compile a Terminology into Python modules on krrood.code_generation
   track: ontomatic-core
   depends_on: [terminology-model, descriptor-characteristics, eql-correlated-quantifiers]
-  status: not started
+  status: not_started
   notes: 'Fixes: sufficient conditions as a disjunction, owl:Thing filler, owl:Nothing, hierarchy cycles.'
 - id: abox-loader
   branch: abox-loader
   title: ABox loader as the Algorithm 1 pipeline of step classes
   track: ontomatic-core
   depends_on: [model-compiler, descriptor-provenance]
-  status: not started
+  status: not_started
 - id: owl2rl-consistency-check
   branch: owl2rl-consistency-check
   title: OWL 2 RL equality and consistency check on a rule registry
   track: ontomatic-core
   depends_on: [abox-loader]
-  status: not started
+  status: not_started
 - id: closure-verification
   branch: closure-verification
   title: Differential tests against owlrl's closure and the 78-rule coverage test
   track: ontomatic-core
   depends_on: [owl2rl-consistency-check]
-  status: not started
+  status: not_started
 - id: owl2bench-experiments
   branch: owl2bench-experiments
   title: OWL2Bench model generation, queries and closure comparison in experiments/
   track: ontomatic-core
   depends_on: [closure-verification]
-  status: not started
+  status: not_started
   notes: 'From krrood_experiments aamas27-* and the supplement; large runs skipped in CI.'
 - id: rl-unsupported-constructs
   branch: rl-unsupported-constructs
   title: oneOf, someValuesFrom owl:Thing, owl:Nothing, subclass and subproperty cycles
   track: rl-gaps
   depends_on: [closure-verification]
-  status: not started
+  status: not_started
 - id: rl-data-properties
   branch: rl-data-properties
   title: Multi-valued data properties, datatype check, data-property cardinality and disjointness
   track: rl-gaps
   depends_on: [closure-verification]
-  status: not started
+  status: not_started
 - id: rl-nested-expressions
   branch: rl-nested-expressions
   title: Unions and complements inside class expressions, intersections as equivalent classes
   track: rl-gaps
   depends_on: [closure-verification]
-  status: not started
+  status: not_started
 - id: rl-runtime-classification
   branch: rl-runtime-classification
   title: Evaluate every compiled class axiom at runtime, not only hasValue
   track: rl-gaps
   depends_on: [closure-verification]
-  status: not started
+  status: not_started
 - id: roles-without-markers
   branch: roles-without-markers
   title: Designate roles without roleFor markers, keep multiply classified individuals whole
   track: rl-gaps
   depends_on: [closure-verification]
-  status: not started
+  status: not_started
 - id: inference-retraction
   branch: inference-retraction
   title: Retract inferred facts incrementally over recorded provenance
   track: rl-gaps
   depends_on: [closure-verification, descriptor-provenance]
-  status: not started
+  status: not_started
 - id: owl-profile-detection
   branch: owl-profile-detection
   title: Classify the ontology and each axiom into OWL 2 EL/QL/RL/DL with reasons
   track: dl-extensions
   depends_on: [terminology-model]
-  status: not started
+  status: not_started
 - id: el-classification
   branch: el-classification
   title: Consequence-based OWL 2 EL TBox classification compiled as inheritance
   track: dl-extensions
   depends_on: [owl-profile-detection, model-compiler]
-  status: not started
+  status: not_started
   notes: 'Brings LUBM into scope.'
 - id: existential-witnesses
   branch: existential-witnesses
   title: Witness objects for existentials in superclass position, chase with blocking
   track: dl-extensions
   depends_on: [el-classification, abox-loader]
-  status: not started
+  status: not_started
 - id: open-world-query-answers
   branch: open-world-query-answers
   title: Unions, complements and allValuesFrom as three-valued query-time conditions
   track: dl-extensions
   depends_on: [existential-witnesses]
-  status: not started
+  status: not_started
 - id: sroiq-classification
   branch: sroiq-classification
   title: 'Research: Python hypertableau for full SROIQ TBox classification'

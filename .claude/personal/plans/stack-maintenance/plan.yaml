@@ -27,7 +27,7 @@ items:
   title: Write the manifest and republish the dashboard before anything else, at every transition
   branch: claude/plan-manifest-update-priority-ex2zst
   pull_request_number: 151
-  status: in progress
+  status: in_progress
   session: https://claude.ai/code/session_01Rm1Xa8ujsXWBai4U8v6ThY
   track: pass
   blockers: []
@@ -43,7 +43,7 @@ items:
   title: Pin the stack tooling for the length of a maintenance pass
   branch: claude/stack-tooling-pinning-qf5r2m
   pull_request_number: 158
-  status: in progress
+  status: in_progress
   session: https://claude.ai/code/session_016DukdvsJzggwAAF3CkKaDZ
   track: pass
   blockers:
@@ -60,7 +60,7 @@ items:
   title: Promote with a written summary, and report the links as a table rather than a notification
   branch: claude/plan-item-kickoff-workflow-y38l38
   pull_request_number: 162
-  status: in progress
+  status: in_progress
   session: https://claude.ai/code/session_01Vc9tayconnyqgvN3r5g6pi
   track: pass
   depends_on:
@@ -75,7 +75,7 @@ items:
   title: 'Regenerated personal integration branch: build, check, resolve, report'
   branch: claude/plan-item-kickoff-workflow-ixbvxl
   pull_request_number: 154
-  status: in progress
+  status: in_progress
   session: https://claude.ai/code/session_01Ra51SAHQKy7TVYRG2HRERW
   track: integration
   depends_on:
@@ -91,7 +91,7 @@ items:
     job
   branch: claude/plan-item-kickoff-workflow-unification-wg4w4x
   pull_request_number: 211
-  status: in progress
+  status: in_progress
   session: https://claude.ai/code/session_01KgTu7rha5xxBYAVm41e3uV
   track: integration
   depends_on:
@@ -108,7 +108,7 @@ items:
   title: Localise a red candidate to the branches that caused it
   branch: claude/plan-item-kickoff-workflow-unification-wg4w4x
   pull_request_number: 211
-  status: in progress
+  status: in_progress
   session: https://claude.ai/code/session_0138w5mqzbkyMPtotF7PD59Z
   track: integration
   depends_on:
@@ -137,7 +137,7 @@ items:
     drops
   branch: claude/stack-maintenance-kickoff-9kal0j
   pull_request_number: 260
-  status: in progress
+  status: in_progress
   session: https://claude.ai/code/session_016Fms9hs3XuS3a5wgc5ts3x
   track: integration
   depends_on:

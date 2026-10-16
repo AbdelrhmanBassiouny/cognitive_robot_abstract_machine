@@ -32,7 +32,7 @@ items:
 - id: basstler-src-layout
   title: Move basstler to the src layout, importable through an editable install
   branch: claude/brave-archimedes-nonocl
-  status: in progress
+  status: in_progress
   track: extraction
   depends_on: []
   pull_request_number: 501
@@ -85,7 +85,7 @@ items:
 - id: basstler-open-pull-request-carryover
   title: Reopen the open tooling pull requests in the new repository, close the stale ones
   branch: null
-  status: not started
+  status: not_started
   track: extraction
   depends_on: [basstler-repository-extraction]
   pull_request_number: null
@@ -102,7 +102,7 @@ items:
 - id: cram-basstler-removal
   title: Remove basstler from CRAM, keeping only its configuration and a pinned reference
   branch: null
-  status: not started
+  status: not_started
   track: extraction
   depends_on: [basstler-repository-extraction]
   pull_request_number: null
@@ -133,7 +133,7 @@ items:
 - id: basstler-krrood-core-dependency
   title: Make basstler depend on krrood_core and use its patterns
   branch: claude/magical-albattani-9fbkd5
-  status: in progress
+  status: in_progress
   track: extraction
   depends_on: [basstler-src-layout, krrood-core-package]
   pull_request_number: 508
@@ -144,7 +144,7 @@ items:
 - id: basstler-notes-core-python
   title: 'Bash→Python 1: notes-core modules (config, git seam, writer, markers)'
   branch: claude/basstler-notes-core-python
-  status: in progress
+  status: in_progress
   track: conversion
   depends_on: []
   pull_request_number: 505
@@ -157,7 +157,7 @@ items:
   repository: AbdelrhmanBassiouny/basstler
   title: 'Bash→Python 2: the four notes writers become python -m subcommands'
   branch: null
-  status: not started
+  status: not_started
   track: conversion
   depends_on:
   - basstler-notes-core-python
@@ -168,7 +168,7 @@ items:
   repository: AbdelrhmanBassiouny/basstler
   title: 'Bash→Python 3: save-plan and the plan manifest tools'
   branch: null
-  status: not started
+  status: not_started
   track: conversion
   depends_on:
   - basstler-save-commands-python
@@ -181,7 +181,7 @@ items:
   repository: AbdelrhmanBassiouny/basstler
   title: 'Bash→Python 4: session-start behind an inert probing shim'
   branch: null
-  status: not started
+  status: not_started
   track: conversion
   depends_on:
   - basstler-notes-core-python
@@ -195,7 +195,7 @@ items:
   repository: AbdelrhmanBassiouny/basstler
   title: 'Bash→Python 5: check-setup as typed rows'
   branch: null
-  status: not started
+  status: not_started
   track: conversion
   depends_on:
   - basstler-notes-core-python
@@ -208,7 +208,7 @@ items:
   repository: AbdelrhmanBassiouny/basstler
   title: 'Bash→Python 6: refresh_dashboard orchestration in-process'
   branch: null
-  status: not started
+  status: not_started
   track: conversion
   depends_on:
   - basstler-save-commands-python
@@ -223,7 +223,7 @@ items:
   repository: AbdelrhmanBassiouny/basstler
   title: 'Bash→Python 7: slim the sourced config file to constants'
   branch: null
-  status: not started
+  status: not_started
   track: conversion
   depends_on:
   - basstler-save-commands-python
@@ -241,7 +241,7 @@ items:
   repository: AbdelrhmanBassiouny/basstler
   title: 'One github backend: the gh-CLI-else-token rule implemented once'
   branch: null
-  status: not started
+  status: not_started
   track: conversion
   depends_on:
   - basstler-notes-core-python
@@ -261,7 +261,7 @@ items:
   title: Report a promoted branch's upstream CI alongside its review threads
   branch: claude/review-pr-ci-status-20k6g4
   pull_request_number: 420
-  status: in progress
+  status: in_progress
   session: https://claude.ai/code/session_01P3qbqgYFh5n1M26ey2szz6
   track: carried-across
   depends_on: []
@@ -280,7 +280,7 @@ items:
   title: Say why an upstream check failed, not only that it did
   branch: claude/upstream-check-failure-logs
   pull_request_number: 424
-  status: in progress
+  status: in_progress
   session: https://claude.ai/code/session_01LSQTbfwr6ankeW9mFPdB2y
   track: carried-across
   depends_on:

@@ -33,7 +33,7 @@ items:
   pull_request_number: null
   track: catalogue
   depends_on: []
-  status: not started
+  status: not_started
   notes: '`.claude/stack/definitions.py`. Per branch, relative to its merge base with `main`:
     parse every changed `.py` file at both revisions with `ast` and record each top-level
     class and module-level function as a `Definition` - name, kind, file, base classes, public
@@ -52,7 +52,7 @@ items:
   track: catalogue
   depends_on:
   - definition-catalogue
-  status: not started
+  status: not_started
   notes: '`.claude/stack/overlaps.py`. Compares catalogues pairwise, skipping pairs already
     in an ancestor relationship, since a stacked pair shares definitions by construction.
     Signals, strongest first: the same definition name in different files; the same path added
@@ -67,7 +67,7 @@ items:
   track: visibility
   depends_on:
   - overlap-detector
-  status: not started
+  status: not_started
   notes: Both in `plan-dashboard`'s `templates/dashboard.html`, Cytoscape from cdnjs at a
     pinned version, rendering into the Artifact and the Pages site alike. The pull request
     graph draws items as nodes, with edges from both `depends_on` and the real pull request
@@ -87,7 +87,7 @@ items:
   track: regrouping
   depends_on:
   - definition-catalogue
-  status: not started
+  status: not_started
   notes: '`.claude/stack/common_parent.py`. Extracting a shared parent and changing direction
     mid-plan are the same operation - give a set of branches a new common parent - so it is
     one command in two phases rather than two commands. `probe` runs `git merge-tree --write-tree`
@@ -102,7 +102,7 @@ items:
   depends_on:
   - overlap-detector
   - common-parent
-  status: not started
+  status: not_started
   notes: 'Three edits. `plan-item-kickoff` queries the catalogue for what the item describes
     and reports near-matches before implementation begins - the early gate. `integration-conflict-triage`''s
     `reconcile` verdict stops being a dead end and names `common-parent` as what carries it

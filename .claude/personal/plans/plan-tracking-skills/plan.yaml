@@ -20,7 +20,7 @@ items:
   title: Fix plan_item_bootstrap writing item fields at the wrong indentation
   branch: claude/plan-item-bootstrap-yaml-indent-y8qs0m
   pull_request_number: 160
-  status: in progress
+  status: in_progress
   session: https://claude.ai/code/session_0157EHWeTzFSYf1nqHX5J7NC
   track: skills
   depends_on: []
@@ -34,7 +34,7 @@ items:
 - id: plan-item-edit-guard
   title: 'PreToolUse guard: refuse source edits from a branch with no plan item'
   branch: null
-  status: not started
+  status: not_started
   track: skills
   depends_on: []
   notes: 'The third and strongest of the three fixes recorded on `session-start-plan-and-setup-guards`,
@@ -45,7 +45,7 @@ items:
 - id: report-document-naming
   title: One name for the report-to-document method across the .claude tooling
   branch: null
-  status: not started
+  status: not_started
   track: skills
   depends_on: []
   notes: 'From an upstream review of cram2 #537: "i feel like you have `as_document`, `as_dict`,
@@ -67,4 +67,4 @@ items:
     `test/basstler_test/`; writing it against `main`''s `.claude/stack/` layout would mean
     writing it twice.'
   depends_on: []
-  status: in progress
+  status: in_progress

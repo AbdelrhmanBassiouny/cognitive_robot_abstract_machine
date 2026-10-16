@@ -20,7 +20,7 @@ items:
   title: 'PR 4: plans-only Pages site (stack board retired for the native stack map)'
   branch: claude/dashboard-publish-automation-hnfi5a
   pull_request_number: 218
-  status: in progress
+  status: in_progress
   session: https://claude.ai/code/session_01CfwosnvBeiWvRLXxcnfHPk
   track: cutover
   depends_on: []
@@ -38,7 +38,7 @@ items:
 - id: routine-cutover
   title: 'Retire the scheduled LLM Routine: deterministic Action + on-demand sessions'
   branch: claude/stack-maintenance-action
-  status: in progress
+  status: in_progress
   session: https://claude.ai/code/session_01Q8JfYcge9pLWPxGSE9d9d1
   track: cutover
   pull_request_number: 280
@@ -60,7 +60,7 @@ items:
 - id: artifact-path-retirement
   title: Retire the Artifact publishing path once the Pages site has run one green cycle
   branch: null
-  status: not started
+  status: not_started
   track: cutover
   depends_on:
   - stack-board-single-site
@@ -74,7 +74,7 @@ items:
 - id: tooling-branch-retirement
   title: Tag and delete claude/stack-workflow-tooling after one green cycle
   branch: null
-  status: not started
+  status: not_started
   track: cutover
   depends_on:
   - routine-cutover
@@ -93,4 +93,4 @@ items:
   pull_request_number: 482
   session: https://claude.ai/code/session_017wfueWmCbN76Z5MQo2EWAv
   depends_on: []
-  status: in progress
+  status: in_progress
