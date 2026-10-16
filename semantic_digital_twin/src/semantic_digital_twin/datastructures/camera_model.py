@@ -48,7 +48,7 @@ class FieldOfViewCameraModel(CameraModel):
     Describe an ideal camera from its angular extent and image resolution.
     """
 
-    field_of_view_value: FieldOfView = field(kw_only=True)
+    angular_extent: FieldOfView = field(kw_only=True)
     """
     Angular extent of the camera image.
     """
@@ -64,14 +64,14 @@ class FieldOfViewCameraModel(CameraModel):
         """
         Validate that both viewing angles describe a physical camera.
         """
-        _validate_field_of_view(self.field_of_view_value)
+        _validate_field_of_view(self.angular_extent)
 
     @property
     def field_of_view(self) -> FieldOfView:
         """
         Return the declared angular extent.
         """
-        return self.field_of_view_value
+        return self.angular_extent
 
     @property
     def resolution(self) -> CameraResolution:

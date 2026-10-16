@@ -496,7 +496,7 @@ class AzureKinectRGB(RobotCamera):
                 HomogeneousTransformationMatrix(),
             ),
             camera_model=FieldOfViewCameraModel(
-                field_of_view_value=FieldOfView(
+                angular_extent=FieldOfView(
                     horizontal_angle=0.99483, vertical_angle=0.75049
                 )
             ),

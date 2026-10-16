@@ -48,14 +48,14 @@ def test_pinhole_camera_model_from_field_of_view_preserves_projection():
 def test_field_of_view_camera_model_rejects_zero_angle():
     with pytest.raises(InvalidCameraFieldOfViewError):
         FieldOfViewCameraModel(
-            field_of_view_value=FieldOfView(
+            angular_extent=FieldOfView(
                 horizontal_angle=0.0, vertical_angle=np.radians(60.0)
             )
         )
 
 
 def test_field_of_view_camera_model_has_default_resolution():
-    model = FieldOfViewCameraModel(field_of_view_value=FieldOfView())
+    model = FieldOfViewCameraModel(angular_extent=FieldOfView())
 
     assert model.resolution == CameraResolution()
 
@@ -64,7 +64,7 @@ def test_field_of_view_camera_model_preserves_explicit_resolution():
     resolution = CameraResolution(width=320, height=240)
 
     model = FieldOfViewCameraModel(
-        field_of_view_value=FieldOfView(),
+        angular_extent=FieldOfView(),
         image_resolution=resolution,
     )
 
@@ -194,6 +194,6 @@ def test_field_of_view_model_exposes_declared_value() -> None:
     """
     The common field-of-view property exposes the explicitly configured value.
     """
-    field_of_view_value = FieldOfView()
-    model = FieldOfViewCameraModel(field_of_view_value=field_of_view_value)
-    assert model.field_of_view is field_of_view_value
+    angular_extent = FieldOfView()
+    model = FieldOfViewCameraModel(angular_extent=angular_extent)
+    assert model.field_of_view is angular_extent

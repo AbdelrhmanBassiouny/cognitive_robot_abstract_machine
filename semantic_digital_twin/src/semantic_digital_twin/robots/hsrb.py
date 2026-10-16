@@ -211,7 +211,7 @@ class HSRBHandCamera(RobotCamera):
                 robot_root, "hand_camera_frame"
             ),
             camera_model=FieldOfViewCameraModel(
-                field_of_view_value=FieldOfView(
+                angular_extent=FieldOfView(
                     horizontal_angle=0.99483, vertical_angle=0.75049
                 )
             ),
@@ -281,7 +281,7 @@ class HSRBHeadCenterCamera(RobotCamera):
                 robot_root, "head_center_camera_frame"
             ),
             camera_model=FieldOfViewCameraModel(
-                field_of_view_value=FieldOfView(
+                angular_extent=FieldOfView(
                     horizontal_angle=0.99483, vertical_angle=0.75049
                 )
             ),
@@ -309,7 +309,7 @@ class HSRBHeadLeftCamera(RobotCamera):
                 robot_root, "head_l_stereo_camera_link"
             ),
             camera_model=FieldOfViewCameraModel(
-                field_of_view_value=FieldOfView(
+                angular_extent=FieldOfView(
                     horizontal_angle=0.99483, vertical_angle=0.75049
                 )
             ),
@@ -336,7 +336,7 @@ class HSRBHeadRightCamera(RobotCamera):
                 robot_root, "head_r_stereo_camera_link"
             ),
             camera_model=FieldOfViewCameraModel(
-                field_of_view_value=FieldOfView(
+                angular_extent=FieldOfView(
                     horizontal_angle=0.99483, vertical_angle=0.75049
                 )
             ),
@@ -363,7 +363,7 @@ class HSRBHeadRGBDCamera(RobotCamera):
                 robot_root, "head_rgbd_sensor_link"
             ),
             camera_model=FieldOfViewCameraModel(
-                field_of_view_value=FieldOfView(
+                angular_extent=FieldOfView(
                     horizontal_angle=0.99483, vertical_angle=0.75049
                 )
             ),

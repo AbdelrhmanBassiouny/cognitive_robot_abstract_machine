@@ -805,9 +805,7 @@ def test_nothing_occludes_a_body_in_clear_line_of_sight():
             name=PrefixedName("camera", prefix="review"),
             root=camera_body,
             camera_model=FieldOfViewCameraModel(
-                field_of_view_value=FieldOfView(
-                    horizontal_angle=0.99, vertical_angle=0.75
-                )
+                angular_extent=FieldOfView(horizontal_angle=0.99, vertical_angle=0.75)
             ),
         )
         world.add_semantic_annotation(camera)

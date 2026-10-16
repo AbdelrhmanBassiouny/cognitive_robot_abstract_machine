@@ -66,7 +66,7 @@ def test_interface_publishes_effective_model_for_field_of_view_camera():
     native_field_of_view = context.camera.field_of_view
     resolution = CameraResolution(width=32, height=24)
     context.camera.camera_model = FieldOfViewCameraModel(
-        field_of_view_value=native_field_of_view,
+        angular_extent=native_field_of_view,
         image_resolution=resolution,
     )
     cas = CAS()
