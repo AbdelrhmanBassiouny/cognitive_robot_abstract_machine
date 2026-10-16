@@ -63,6 +63,14 @@ items:
     from your setup"). The same marketplace installs fine locally with `claude plugin install`,
     including the sha-pinned git-subdir fetch. So CRAM keeps SKILL.md files and hook shims calling
     python -m basstler from a pinned install. #516 stays a draft record and never merges.
+
+    Probe 2 (session_01GqkSaKAiwFwvxJnbXmhaBY, 384694f52): the same plugin as a skills-directory
+    plugin under .claude/skills/ was also skipped - "workspace was not trusted when plugins were
+    scanned". A cloud session never trusts the clone for plugins, so no repo-supplied plugin loads
+    by any route; settings.json hooks and plain skills still do. The session does run claude.ai
+    plugin sync (~/.claude/plugins/synced/<org>_<account> bucket, empty), so routes to test next are
+    a plugin enabled on the claude.ai account or organization, server-managed settings, and an
+    environment setup script installing at user scope.
 - id: basstler-repository-extraction
   title: "Create AbdelrhmanBassiouny/basstler from #501's tip with full history and every open tooling branch"
   branch: null
