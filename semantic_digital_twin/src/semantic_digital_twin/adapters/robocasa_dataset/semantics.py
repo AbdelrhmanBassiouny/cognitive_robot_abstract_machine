@@ -12,6 +12,7 @@ from semantic_digital_twin.semantic_annotations.semantic_annotations import (
     Bottle,
     Bowl,
     Bread,
+    Button,
     Cabinet,
     Carrot,
     CoffeeMachine,
@@ -19,12 +20,17 @@ from semantic_digital_twin.semantic_annotations.semantic_annotations import (
     CounterTop,
     Cup,
     Dishwasher,
+    Door,
     Drawer,
+    Faucet,
     Floor,
     Fridge,
+    Handle,
     Hood,
     Kettle,
+    Knob,
     Lettuce,
+    Lever,
     Microwave,
     Mug,
     Orange,
@@ -114,6 +120,51 @@ class RoboCasaObjectCategory(StrEnum):
     POT = "pot"
     KETTLE = "kettle"
     BREAD = "bread"
+
+
+class RoboCasaPartCategory(StrEnum):
+    """
+    Parts that RoboCasa fixtures ship as bodies of their own, each valued by the word
+    RoboCasa puts into the names of those bodies.
+    """
+
+    HANDLE = "handle"
+    DOOR = "door"
+    DRAWER = "drawer"
+    KNOB = "knob"
+    BUTTON = "button"
+    LEVER = "lever"
+    FAUCET = "spout"
+
+    @property
+    def annotation_class(self) -> Type[HasRootBody]:
+        """
+        :return: The SemanticAnnotation subclass a body of this part category is
+            annotated with.
+        """
+        return {
+            RoboCasaPartCategory.HANDLE: Handle,
+            RoboCasaPartCategory.DOOR: Door,
+            RoboCasaPartCategory.DRAWER: Drawer,
+            RoboCasaPartCategory.KNOB: Knob,
+            RoboCasaPartCategory.BUTTON: Button,
+            RoboCasaPartCategory.LEVER: Lever,
+            RoboCasaPartCategory.FAUCET: Faucet,
+        }[self]
+
+    @classmethod
+    def all_named_in(cls, body_name: str) -> list[RoboCasaPartCategory]:
+        """
+        :param body_name: The name of a RoboCasa body.
+        :return: The part categories whose word the name contains, ignoring case, in
+            declaration order.
+        """
+        lower_case_body_name = body_name.lower()
+        return [
+            part_category
+            for part_category in cls
+            if part_category.value in lower_case_body_name
+        ]
 
 
 def _tokenize_category(category: str) -> set[str]:

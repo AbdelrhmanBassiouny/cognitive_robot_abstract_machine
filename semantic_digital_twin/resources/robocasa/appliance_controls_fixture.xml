@@ -1,0 +1,100 @@
+<?xml version="1.0" ?>
+<mujoco model="appliance_controls_fixture">
+	<compiler angle="radian" autolimits="true"/>
+	<worldbody>
+		<body name="sink_main_group_main" pos="0.0 0.0 0.0" quat="1.0 0.0 0.0 0.0">
+			<inertial mass="5.0" pos="0.0 0.0 0.0" quat="1.0 0.0 0.0 0.0" diaginertia="1.0 1.0 1.0"/>
+			<geom type="box" size="0.3 0.3 0.3" rgba="0.7 0.7 0.7 1.0" contype="1" conaffinity="1" group="3"/>
+			<body name="sink_main_group_handle" pos="0.32 -0.1 0.2" quat="1.0 0.0 0.0 0.0">
+				<inertial mass="0.1" pos="0.0 0.0 0.0" quat="1.0 0.0 0.0 0.0" diaginertia="0.01 0.01 0.01"/>
+				<joint name="sink_main_group_handle_joint" type="hinge" axis="1 0 0" pos="0 0 0"/>
+				<geom type="box" size="0.02 0.02 0.02" rgba="0.1 0.1 0.1 1.0" contype="1" conaffinity="1" group="3"/>
+			</body>
+			<body name="sink_main_group_spout" pos="0.32 0.0 0.2" quat="1.0 0.0 0.0 0.0">
+				<inertial mass="0.1" pos="0.0 0.0 0.0" quat="1.0 0.0 0.0 0.0" diaginertia="0.01 0.01 0.01"/>
+				<joint name="sink_main_group_spout_joint" type="hinge" axis="1 0 0" pos="0 0 0"/>
+				<geom type="box" size="0.02 0.02 0.02" rgba="0.1 0.1 0.1 1.0" contype="1" conaffinity="1" group="3"/>
+			</body>
+		</body>
+		<body name="stove_main_group_main" pos="1.0 0.0 0.0" quat="1.0 0.0 0.0 0.0">
+			<inertial mass="5.0" pos="0.0 0.0 0.0" quat="1.0 0.0 0.0 0.0" diaginertia="1.0 1.0 1.0"/>
+			<geom type="box" size="0.3 0.3 0.3" rgba="0.7 0.7 0.7 1.0" contype="1" conaffinity="1" group="3"/>
+			<body name="stove_main_group_knob_front_left" pos="0.32 -0.1 0.2" quat="1.0 0.0 0.0 0.0">
+				<inertial mass="0.1" pos="0.0 0.0 0.0" quat="1.0 0.0 0.0 0.0" diaginertia="0.01 0.01 0.01"/>
+				<joint name="stove_main_group_knob_front_left_joint" type="hinge" axis="1 0 0" pos="0 0 0"/>
+				<geom type="box" size="0.02 0.02 0.02" rgba="0.1 0.1 0.1 1.0" contype="1" conaffinity="1" group="3"/>
+			</body>
+			<body name="stove_main_group_knob_rear_right" pos="0.32 0.0 0.2" quat="1.0 0.0 0.0 0.0">
+				<inertial mass="0.1" pos="0.0 0.0 0.0" quat="1.0 0.0 0.0 0.0" diaginertia="0.01 0.01 0.01"/>
+				<joint name="stove_main_group_knob_rear_right_joint" type="hinge" axis="1 0 0" pos="0 0 0"/>
+				<geom type="box" size="0.02 0.02 0.02" rgba="0.1 0.1 0.1 1.0" contype="1" conaffinity="1" group="3"/>
+			</body>
+		</body>
+		<body name="oven_main_group_main" pos="2.0 0.0 0.0" quat="1.0 0.0 0.0 0.0">
+			<inertial mass="5.0" pos="0.0 0.0 0.0" quat="1.0 0.0 0.0 0.0" diaginertia="1.0 1.0 1.0"/>
+			<geom type="box" size="0.3 0.3 0.3" rgba="0.7 0.7 0.7 1.0" contype="1" conaffinity="1" group="3"/>
+			<body name="oven_main_group_door" pos="0.32 -0.1 0.2" quat="1.0 0.0 0.0 0.0">
+				<inertial mass="0.1" pos="0.0 0.0 0.0" quat="1.0 0.0 0.0 0.0" diaginertia="0.01 0.01 0.01"/>
+				<joint name="oven_main_group_door_joint" type="hinge" axis="1 0 0" pos="0 0 0"/>
+				<geom type="box" size="0.02 0.02 0.02" rgba="0.1 0.1 0.1 1.0" contype="1" conaffinity="1" group="3"/>
+			</body>
+			<body name="oven_main_group_knob_temp" pos="0.32 0.0 0.2" quat="1.0 0.0 0.0 0.0">
+				<inertial mass="0.1" pos="0.0 0.0 0.0" quat="1.0 0.0 0.0 0.0" diaginertia="0.01 0.01 0.01"/>
+				<joint name="oven_main_group_knob_temp_joint" type="hinge" axis="1 0 0" pos="0 0 0"/>
+				<geom type="box" size="0.02 0.02 0.02" rgba="0.1 0.1 0.1 1.0" contype="1" conaffinity="1" group="3"/>
+			</body>
+		</body>
+		<body name="dishwasher_main_group_main" pos="3.0 0.0 0.0" quat="1.0 0.0 0.0 0.0">
+			<inertial mass="5.0" pos="0.0 0.0 0.0" quat="1.0 0.0 0.0 0.0" diaginertia="1.0 1.0 1.0"/>
+			<geom type="box" size="0.3 0.3 0.3" rgba="0.7 0.7 0.7 1.0" contype="1" conaffinity="1" group="3"/>
+			<body name="dishwasher_main_group_button_power" pos="0.32 -0.1 0.2" quat="1.0 0.0 0.0 0.0">
+				<inertial mass="0.1" pos="0.0 0.0 0.0" quat="1.0 0.0 0.0 0.0" diaginertia="0.01 0.01 0.01"/>
+				<joint name="dishwasher_main_group_button_power_joint" type="slide" axis="1 0 0" pos="0 0 0"/>
+				<geom type="box" size="0.02 0.02 0.02" rgba="0.1 0.1 0.1 1.0" contype="1" conaffinity="1" group="3"/>
+			</body>
+			<body name="dishwasher_main_group_door" pos="0.32 0.0 0.2" quat="1.0 0.0 0.0 0.0">
+				<inertial mass="0.1" pos="0.0 0.0 0.0" quat="1.0 0.0 0.0 0.0" diaginertia="0.01 0.01 0.01"/>
+				<joint name="dishwasher_main_group_door_joint" type="hinge" axis="1 0 0" pos="0 0 0"/>
+				<geom type="box" size="0.02 0.02 0.02" rgba="0.1 0.1 0.1 1.0" contype="1" conaffinity="1" group="3"/>
+			</body>
+		</body>
+		<body name="toaster_main_group_main" pos="4.0 0.0 0.0" quat="1.0 0.0 0.0 0.0">
+			<inertial mass="5.0" pos="0.0 0.0 0.0" quat="1.0 0.0 0.0 0.0" diaginertia="1.0 1.0 1.0"/>
+			<geom type="box" size="0.3 0.3 0.3" rgba="0.7 0.7 0.7 1.0" contype="1" conaffinity="1" group="3"/>
+			<body name="toaster_main_group_button_cancel" pos="0.32 -0.1 0.2" quat="1.0 0.0 0.0 0.0">
+				<inertial mass="0.1" pos="0.0 0.0 0.0" quat="1.0 0.0 0.0 0.0" diaginertia="0.01 0.01 0.01"/>
+				<joint name="toaster_main_group_button_cancel_joint" type="slide" axis="1 0 0" pos="0 0 0"/>
+				<geom type="box" size="0.02 0.02 0.02" rgba="0.1 0.1 0.1 1.0" contype="1" conaffinity="1" group="3"/>
+			</body>
+			<body name="toaster_main_group_knob_doneness" pos="0.32 0.0 0.2" quat="1.0 0.0 0.0 0.0">
+				<inertial mass="0.1" pos="0.0 0.0 0.0" quat="1.0 0.0 0.0 0.0" diaginertia="0.01 0.01 0.01"/>
+				<joint name="toaster_main_group_knob_doneness_joint" type="hinge" axis="1 0 0" pos="0 0 0"/>
+				<geom type="box" size="0.02 0.02 0.02" rgba="0.1 0.1 0.1 1.0" contype="1" conaffinity="1" group="3"/>
+			</body>
+			<body name="toaster_main_group_lever" pos="0.32 0.1 0.2" quat="1.0 0.0 0.0 0.0">
+				<inertial mass="0.1" pos="0.0 0.0 0.0" quat="1.0 0.0 0.0 0.0" diaginertia="0.01 0.01 0.01"/>
+				<joint name="toaster_main_group_lever_joint" type="slide" axis="1 0 0" pos="0 0 0"/>
+				<geom type="box" size="0.02 0.02 0.02" rgba="0.1 0.1 0.1 1.0" contype="1" conaffinity="1" group="3"/>
+			</body>
+		</body>
+		<body name="coffee_machine_main_group_main" pos="5.0 0.0 0.0" quat="1.0 0.0 0.0 0.0">
+			<inertial mass="5.0" pos="0.0 0.0 0.0" quat="1.0 0.0 0.0 0.0" diaginertia="1.0 1.0 1.0"/>
+			<geom type="box" size="0.3 0.3 0.3" rgba="0.7 0.7 0.7 1.0" contype="1" conaffinity="1" group="3"/>
+			<body name="coffee_machine_main_group_Button001" pos="0.32 -0.1 0.2" quat="1.0 0.0 0.0 0.0">
+				<inertial mass="0.1" pos="0.0 0.0 0.0" quat="1.0 0.0 0.0 0.0" diaginertia="0.01 0.01 0.01"/>
+				<joint name="coffee_machine_main_group_Button001_joint" type="slide" axis="1 0 0" pos="0 0 0"/>
+				<geom type="box" size="0.02 0.02 0.02" rgba="0.1 0.1 0.1 1.0" contype="1" conaffinity="1" group="3"/>
+			</body>
+			<body name="coffee_machine_main_group_Button002" pos="0.32 0.0 0.2" quat="1.0 0.0 0.0 0.0">
+				<inertial mass="0.1" pos="0.0 0.0 0.0" quat="1.0 0.0 0.0 0.0" diaginertia="0.01 0.01 0.01"/>
+				<joint name="coffee_machine_main_group_Button002_joint" type="slide" axis="1 0 0" pos="0 0 0"/>
+				<geom type="box" size="0.02 0.02 0.02" rgba="0.1 0.1 0.1 1.0" contype="1" conaffinity="1" group="3"/>
+			</body>
+			<body name="coffee_machine_main_group_Lever001" pos="0.32 0.1 0.2" quat="1.0 0.0 0.0 0.0">
+				<inertial mass="0.1" pos="0.0 0.0 0.0" quat="1.0 0.0 0.0 0.0" diaginertia="0.01 0.01 0.01"/>
+				<joint name="coffee_machine_main_group_Lever001_joint" type="hinge" axis="1 0 0" pos="0 0 0"/>
+				<geom type="box" size="0.02 0.02 0.02" rgba="0.1 0.1 0.1 1.0" contype="1" conaffinity="1" group="3"/>
+			</body>
+		</body>
+	</worldbody>
+</mujoco>

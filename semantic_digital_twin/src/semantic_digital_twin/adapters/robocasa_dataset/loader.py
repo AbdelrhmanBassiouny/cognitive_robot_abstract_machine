@@ -26,20 +26,13 @@ from semantic_digital_twin.adapters.robocasa_dataset.semantics import (
     RoboCasaKitchenApplianceResolver,
     RoboCasaObjectCategory,
     RoboCasaObjectResolver,
+    RoboCasaPartCategory,
 )
 from semantic_digital_twin.exceptions import WorldEntityNotFoundError
-from semantic_digital_twin.semantic_annotations.mixins import (
-    HasDoors,
-    HasDrawers,
-    HasHandle,
-)
+from semantic_digital_twin.part_finding.relationships import PartRelationshipInspector
+from semantic_digital_twin.semantic_annotations.mixins import PartWholeRelationship
 from semantic_digital_twin.semantic_annotations.natural_language import (
     NaturalLanguageWithTypeDescription,
-)
-from semantic_digital_twin.semantic_annotations.semantic_annotations import (
-    Door,
-    Drawer,
-    Handle,
 )
 from semantic_digital_twin.spatial_types.spatial_types import (
     HomogeneousTransformationMatrix,
@@ -697,8 +690,7 @@ class RoboCasaDatasetLoader:
         """
         Attach the SemanticAnnotation matching ``category`` to ``body``, falling back to
         NaturalLanguageWithTypeDescription if no matching SemanticAnnotation subclass is
-        known, and attaching any handle/door/drawer sub-part annotations found under
-        ``body``.
+        known, and attaching the annotations of the parts found under ``body``.
 
         :param world: The world ``body`` belongs to.
         :param body: The body to annotate.
@@ -722,50 +714,63 @@ class RoboCasaDatasetLoader:
         self, world: World, parent_annotation: SemanticAnnotation, parent_body: Body
     ) -> None:
         """
-        Detect handle/door/drawer bodies already present under a kitchen appliance's
-        root body (RoboCasa appliances like cabinets ship these as real articulated sub-
-        bodies in their own MJCF, not something this adapter synthesizes) and attach
-        them as parts of the nearest enclosing SemanticAnnotation by their RoboCasa
-        body-naming convention (mirroring the naming-convention detection
-        ``adapters/procthor/procthor_pipelines.py`` already uses for ProcTHOR dressers).
+        Annotate the bodies below ``parent_body`` that RoboCasa ships as parts of a
+        fixture, such as handles, doors, drawers, knobs, buttons, levers and faucets,
+        and attach each as a part of the nearest enclosing annotation that has room for
+        it.
 
-        Each match is attached via :meth:`~semantic_digital_twin.semantic_annotations.mixins.PartWholeRelationship.add`,
-        the framework's normal part-whole mechanism, recursing into each direct child so that, for
-        example, a handle nested inside a door is attached to the door's annotation rather than the
-        enclosing cabinet's. This is safe: a sub-body is only ever offered to its own direct
-        kinematic parent, so ``World.move_branch`` (invoked by ``add()``'s default mount strategy) is
-        a no-op re-parent that leaves the body's real connection type and degree of freedom
-        untouched.
+        A part is recognized by the word its body name contains (see
+        :class:`~semantic_digital_twin.adapters.robocasa_dataset.semantics.RoboCasaPartCategory`).
+        Parts nested in a part, such as a handle on a door, attach to that part. A part
+        keeps the joint it moves on.
 
         :param world: The world ``parent_body`` belongs to.
-        :param parent_annotation: The SemanticAnnotation of ``parent_body`` to attach newly found
-            direct sub-parts to.
-        :param parent_body: The body to search direct children of for sub-part bodies.
+        :param parent_annotation: The annotation that parts found among the direct children
+            of ``parent_body`` are attached to.
+        :param parent_body: The body whose direct children are searched for parts.
         """
         for child_body in parent_body.child_kinematic_structure_entities:
             if not isinstance(child_body, Body):
                 continue
-            child_name = child_body.name.name.lower()
-            child_annotation = parent_annotation
+            child_annotation = self._attach_part_annotation(
+                world, parent_annotation, child_body
+            )
+            self._attach_sub_part_annotations(
+                world, child_annotation or parent_annotation, child_body
+            )
 
-            if (
-                "handle" in child_name
-                and isinstance(parent_annotation, HasHandle)
-                and parent_annotation.handle is None
+    @staticmethod
+    def _attach_part_annotation(
+        world: World, whole: SemanticAnnotation, body: Body
+    ) -> SemanticAnnotation | None:
+        """
+        Annotate ``body`` with the first part category its name contains that ``whole``
+        has room for, and attach it as a part of ``whole``.
+
+        :param world: The world ``body`` belongs to.
+        :param whole: The annotation to attach the part to.
+        :param body: The body to annotate.
+        :return: The annotation of the part, or None if ``whole`` has no room for a part
+            the name of ``body`` contains.
+        """
+        if not isinstance(whole, PartWholeRelationship):
+            return None
+        part_types_with_room = [
+            relationship.part_type
+            for relationship in PartRelationshipInspector.all_of_type(type(whole))
+            if relationship.holds_many or not relationship.is_filled_in(whole)
+        ]
+        for part_category in RoboCasaPartCategory.all_named_in(body.name.name):
+            if not any(
+                issubclass(part_category.annotation_class, part_type)
+                for part_type in part_types_with_room
             ):
-                child_annotation = Handle(root=child_body)
-                world.add_semantic_annotation(child_annotation)
-                parent_annotation.add(child_annotation)
-            elif "door" in child_name and isinstance(parent_annotation, HasDoors):
-                child_annotation = Door(root=child_body)
-                world.add_semantic_annotation(child_annotation)
-                parent_annotation.add(child_annotation)
-            elif "drawer" in child_name and isinstance(parent_annotation, HasDrawers):
-                child_annotation = Drawer(root=child_body)
-                world.add_semantic_annotation(child_annotation)
-                parent_annotation.add(child_annotation)
-
-            self._attach_sub_part_annotations(world, child_annotation, child_body)
+                continue
+            part = part_category.annotation_class(root=body)
+            world.add_semantic_annotation(part)
+            whole.add(part)
+            return part
+        return None
 
     @staticmethod
     def _find_body(world: World, name: str) -> Optional[Body]:

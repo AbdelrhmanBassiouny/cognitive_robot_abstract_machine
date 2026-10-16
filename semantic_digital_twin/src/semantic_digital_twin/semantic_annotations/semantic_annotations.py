@@ -41,6 +41,10 @@ from semantic_digital_twin.semantic_annotations.mixins import (
     HasLegs,
     HasSink,
     HasShelfLayers,
+    HasFaucet,
+    HasKnobs,
+    HasButtons,
+    HasLevers,
 )
 from semantic_digital_twin.grasping.grasp_candidates import (
     GraspCandidate,
@@ -154,7 +158,37 @@ class Handle(HasGraspCandidates):
 
 
 @dataclass(eq=False)
-class Dishwasher(HasCaseAsRootBody, HasDoors, HasDrawers):
+class Knob(HasRootBody):
+    """
+    A control that is turned to set a value, such as the heat of a burner or the time
+    of a timer.
+    """
+
+
+@dataclass(eq=False)
+class Button(HasRootBody):
+    """
+    A control that is pressed to trigger a function, such as switching an appliance on.
+    """
+
+
+@dataclass(eq=False)
+class Lever(HasRootBody):
+    """
+    A control that is pushed, pulled or tilted to trigger a function, such as lowering
+    the bread into a toaster.
+    """
+
+
+@dataclass(eq=False)
+class Faucet(HasRootBody):
+    """
+    The spout of a sink that water flows out of.
+    """
+
+
+@dataclass(eq=False)
+class Dishwasher(HasCaseAsRootBody, HasDoors, HasDrawers, HasButtons):
     """
     A dishwasher is a kitchen appliance used for cleaning dishes, utensils, and
     cookware.
@@ -609,7 +643,7 @@ class Fridge(Cabinet): ...
 
 
 @dataclass(eq=False)
-class Oven(HasRootBody, HasDoors): ...
+class Oven(HasRootBody, HasDoors, HasKnobs): ...
 
 
 @dataclass(eq=False)
@@ -1287,9 +1321,11 @@ class Sofa(Furniture, HasSupportingSurface):
 
 
 @dataclass(eq=False)
-class Sink(HasRootBody):
+class Sink(HasHandle, HasFaucet):
     """
     A sink.
+
+    Its handle is the handle of its faucet, which sets the flow of water.
     """
 
 
@@ -1630,7 +1666,7 @@ class Leg(HasRootBody):
 
 
 @dataclass(eq=False)
-class Cooktop(HasRootBody):
+class Cooktop(HasRootBody, HasKnobs):
     """
     A cooktop surface for cooking.
     """
@@ -1822,14 +1858,14 @@ class Hood(HasRootBody):
 
 
 @dataclass(eq=False)
-class Toaster(HasRootBody):
+class Toaster(HasRootBody, HasButtons, HasKnobs, HasLevers):
     """
     A countertop appliance for toasting slices of bread.
     """
 
 
 @dataclass(eq=False)
-class CoffeeMachine(HasRootBody):
+class CoffeeMachine(HasRootBody, HasButtons, HasLevers):
     """
     A countertop appliance that brews coffee.
     """

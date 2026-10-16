@@ -1,6 +1,8 @@
 from pathlib import Path
 from xml.etree import ElementTree as ET
 
+import pytest
+
 from semantic_digital_twin.adapters.mjcf import MJCFParser
 from semantic_digital_twin.adapters.robocasa_dataset.loader import (
     RoboCasaDatasetLoader,
@@ -19,13 +21,26 @@ from semantic_digital_twin.semantic_annotations.natural_language import (
 )
 from semantic_digital_twin.semantic_annotations.semantic_annotations import (
     Apple,
+    Button,
     Cabinet,
+    CoffeeMachine,
+    Cooktop,
+    Dishwasher,
     Door,
+    Faucet,
     Floor,
     Handle,
+    Knob,
+    Lever,
     Microwave,
+    Oven,
+    Sink,
+    Toaster,
 )
-from semantic_digital_twin.world_description.connections import RevoluteConnection
+from semantic_digital_twin.world_description.connections import (
+    PrismaticConnection,
+    RevoluteConnection,
+)
 
 ROBOCASA_RESOURCES_DIR = (
     Path(__file__).resolve().parents[3]
@@ -248,3 +263,120 @@ def test_apply_object_semantics_annotates_body_with_collision_not_root():
     assert len(annotations) == 1
     assert annotations[0].root.name.name == "hinge_cabinet_main"
     assert annotations[0].root != world.root
+
+
+# %% appliance controls as parts of their appliance
+
+APPLIANCE_CONTROLS_FIXTURE = ROBOCASA_RESOURCES_DIR / "appliance_controls_fixture.xml"
+
+
+@pytest.mark.parametrize(
+    "category, appliance_body_name, appliance_type, parts",
+    [
+        (
+            RoboCasaKitchenApplianceCategory.SINK,
+            "sink_main_group_main",
+            Sink,
+            {
+                "faucet": (Faucet, {"sink_main_group_spout"}),
+                "handle": (Handle, {"sink_main_group_handle"}),
+            },
+        ),
+        (
+            RoboCasaKitchenApplianceCategory.STOVE,
+            "stove_main_group_main",
+            Cooktop,
+            {
+                "knobs": (
+                    Knob,
+                    {
+                        "stove_main_group_knob_front_left",
+                        "stove_main_group_knob_rear_right",
+                    },
+                ),
+            },
+        ),
+        (
+            RoboCasaKitchenApplianceCategory.OVEN,
+            "oven_main_group_main",
+            Oven,
+            {
+                "doors": (Door, {"oven_main_group_door"}),
+                "knobs": (Knob, {"oven_main_group_knob_temp"}),
+            },
+        ),
+        (
+            RoboCasaKitchenApplianceCategory.DISHWASHER,
+            "dishwasher_main_group_main",
+            Dishwasher,
+            {
+                "buttons": (Button, {"dishwasher_main_group_button_power"}),
+                "doors": (Door, {"dishwasher_main_group_door"}),
+            },
+        ),
+        (
+            RoboCasaKitchenApplianceCategory.TOASTER,
+            "toaster_main_group_main",
+            Toaster,
+            {
+                "buttons": (Button, {"toaster_main_group_button_cancel"}),
+                "knobs": (Knob, {"toaster_main_group_knob_doneness"}),
+                "levers": (Lever, {"toaster_main_group_lever"}),
+            },
+        ),
+        (
+            RoboCasaKitchenApplianceCategory.COFFEE_MACHINE,
+            "coffee_machine_main_group_main",
+            CoffeeMachine,
+            {
+                "buttons": (
+                    Button,
+                    {
+                        "coffee_machine_main_group_Button001",
+                        "coffee_machine_main_group_Button002",
+                    },
+                ),
+                "levers": (Lever, {"coffee_machine_main_group_Lever001"}),
+            },
+        ),
+    ],
+)
+def test_attach_semantic_annotation_attaches_appliance_controls(
+    category, appliance_body_name, appliance_type, parts
+):
+    """
+    The controls a RoboCasa appliance ships as bodies of their own become parts of the
+    appliance's annotation, each annotated with the type of control it is.
+    """
+    world = MJCFParser(str(APPLIANCE_CONTROLS_FIXTURE)).parse()
+    loader = RoboCasaDatasetLoader()
+    loader._attach_semantic_annotation(
+        world, world.get_body_by_name(appliance_body_name), category
+    )
+
+    [appliance] = world.get_semantic_annotations_by_type(appliance_type)
+    for field_name, (part_type, part_body_names) in parts.items():
+        value = getattr(appliance, field_name)
+        attached_parts = value if isinstance(value, list) else [value]
+        assert all(type(part) is part_type for part in attached_parts)
+        assert {part.root.name.name for part in attached_parts} == part_body_names
+
+
+def test_attaching_appliance_controls_keeps_their_joints():
+    """
+    Recording a control as a part of its appliance leaves the joint the control moves on
+    in place.
+    """
+    world = MJCFParser(str(APPLIANCE_CONTROLS_FIXTURE)).parse()
+    toaster_body = world.get_body_by_name("toaster_main_group_main")
+    loader = RoboCasaDatasetLoader()
+    loader._attach_semantic_annotation(
+        world, toaster_body, RoboCasaKitchenApplianceCategory.TOASTER
+    )
+
+    knob_body = world.get_body_by_name("toaster_main_group_knob_doneness")
+    lever_body = world.get_body_by_name("toaster_main_group_lever")
+    assert isinstance(knob_body.parent_connection, RevoluteConnection)
+    assert isinstance(lever_body.parent_connection, PrismaticConnection)
+    assert knob_body.parent_kinematic_structure_entity == toaster_body
+    assert lever_body.parent_kinematic_structure_entity == toaster_body

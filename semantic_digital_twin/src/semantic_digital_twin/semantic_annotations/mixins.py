@@ -101,6 +101,10 @@ if TYPE_CHECKING:
         Sink,
         ShelfLayer,
         Wall,
+        Knob,
+        Button,
+        Lever,
+        Faucet,
     )
     from semantic_digital_twin.world import World
     from semantic_digital_twin.world_description.graph_of_convex_sets.boxes import (
@@ -741,6 +745,72 @@ class HasSink(PartWholeRelationship):
     )
     """
     The sink of the semantic annotation.
+    """
+
+
+@dataclass(eq=False)
+class HasFaucet(PartWholeRelationship):
+    """
+    A mixin class for semantic annotations that have a faucet.
+    """
+
+    faucet: Optional[Faucet] = field(
+        default=None,
+        metadata=IsPartWholeRelationship().as_dict(),
+    )
+    """
+    The faucet of the semantic annotation.
+    """
+
+
+@dataclass(eq=False)
+class HasKnobs(PartWholeRelationship):
+    """
+    A mixin class for semantic annotations that have knobs.
+    """
+
+    knobs: List[Knob] = field(
+        default_factory=list,
+        hash=False,
+        kw_only=True,
+        metadata=IsPartWholeRelationship().as_dict(),
+    )
+    """
+    The knobs of the semantic annotation.
+    """
+
+
+@dataclass(eq=False)
+class HasButtons(PartWholeRelationship):
+    """
+    A mixin class for semantic annotations that have buttons.
+    """
+
+    buttons: List[Button] = field(
+        default_factory=list,
+        hash=False,
+        kw_only=True,
+        metadata=IsPartWholeRelationship().as_dict(),
+    )
+    """
+    The buttons of the semantic annotation.
+    """
+
+
+@dataclass(eq=False)
+class HasLevers(PartWholeRelationship):
+    """
+    A mixin class for semantic annotations that have levers.
+    """
+
+    levers: List[Lever] = field(
+        default_factory=list,
+        hash=False,
+        kw_only=True,
+        metadata=IsPartWholeRelationship().as_dict(),
+    )
+    """
+    The levers of the semantic annotation.
     """
 
 
