@@ -44,12 +44,12 @@ items:
     basstler = "."`, and `pyproject.toml` shipped as package data.'
 - id: basstler-plugin-spike
   title: Check that a CRAM cloud session loads basstler's skills and start hook as a Claude Code plugin
-  branch: null
-  status: not started
+  branch: claude/tender-ramanujan-wy5gdb
+  status: in_progress
   track: extraction
   depends_on: []
-  pull_request_number: null
-  session: https://claude.ai/code/session_013kCsTQdNToBZd8YixgPFwG
+  pull_request_number: 516
+  session: https://claude.ai/code/session_01C4mbFw5Hur5ZLg7zJz3xJL
   notes: 'Throwaway marketplace with one skill and a SessionStart hook, enabled from a scratch branch''s
     settings.json (extraKnownMarketplaces + enabledPlugins, pinned ref). Pass: skills and hooks ship
     as a plugin and CRAM keeps only settings.json. Fail: CRAM keeps SKILL.md files and hook shims calling
