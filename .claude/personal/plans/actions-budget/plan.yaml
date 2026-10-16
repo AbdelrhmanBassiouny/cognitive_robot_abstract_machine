@@ -61,11 +61,13 @@ items:
     lands.'
 - id: changed-library-matrix
   title: Pull request CI tests the libraries a change touches and their dependents
-  branch: null
+  branch: ccr-81db28df-4rban1
   track: manifest
   depends_on:
   - budget-manifest
-  status: not_started
+  status: in progress
+  pull_request_number: 515
+  session: https://claude.ai/code/session_015LhBh1bQL2RDTPBjwCgtpQ
   notes: 'A first job in ci.yml maps the changed paths to libraries, adds every library that
     depends on them (read from each package''s own declared dependencies, not a second hand-kept
     list), and feeds that set to the matrix. Draft pull requests run that set; `ready_for_review`,
