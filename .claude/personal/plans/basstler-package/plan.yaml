@@ -61,7 +61,7 @@ items:
 - id: basstler-repository-extraction
   title: "Create AbdelrhmanBassiouny/basstler from #501's tip with full history and every open tooling branch"
   branch: null
-  status: not started
+  status: in_progress
   track: extraction
   depends_on: [basstler-plugin-spike]
   pull_request_number: null
