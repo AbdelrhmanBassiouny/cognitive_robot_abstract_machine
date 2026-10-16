@@ -1,13 +1,12 @@
-Item basstler-package/basstler-repository-extraction. Work for AbdelrhmanBassiouny/basstler; standalone branch backed up on the fork as claude/jolly-gauss-l2pjrh (basstler history, not CRAM).
+Item basstler-package/basstler-repository-extraction: draft PR AbdelrhmanBassiouny/basstler#1 (branch claude/jolly-gauss-l2pjrh there); bug fix basstler#2 stacked on it.
 
 Plan
-- Push filtered history: main = #501 tip; rewritten tooling branches (re-run filter-repo per roadmap section if the scratch mirror is gone).
-- Push claude/jolly-gauss-l2pjrh to the new repo, open its draft PR against main. Tag v0.1.0 on merge.
-- Then push claude/validate-manifest-before-save (local only, stacked on it): bug PR, save-plan.sh validates via plan_manifest_tools validate.
+- Review and merge basstler#1, then tag v0.1.0 on main. basstler#2 then retargets to main.
 
 Done
-- 5 commits on main (plugin split, project stack.toml, workflows+CI, .claude on demand, generic names + docformatter). 752 pass.
-- Notes branch 0f6ab95e2: statuses respelled with underscores (readable by old and new dashboards). Dashboard republished (v9).
+- basstler main = #501 tip filtered, plus the 24 rewritten tooling branches; #1 and #2 open as drafts. 752 / 755 tests pass.
+- Notes branch: statuses with underscores; cram-notes.md renamed to notes.md (a31b24f99). Dashboard v10.
 
 Next
-- Blocked: Claude GitHub App not installed on AbdelrhmanBassiouny/basstler (pushes 403).
+- User: set CLAUDE_PERSONAL_NOTES_PATH=.claude/personal/notes.md in the cloud environment (CRAM tooling still defaults to cram-notes.md).
+- CI on basstler#1 not yet checked.
