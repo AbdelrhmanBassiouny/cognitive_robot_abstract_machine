@@ -112,6 +112,11 @@ items:
     workflow. Cloud sessions get the plugin from the user's or org's claude.ai plugins, not from the
     repo. Open: whether CRAM keeps a fallback for contributors who have not added it. Promote to
     cram2 only with the user's OK in-session.
+
+    Plugin renames to absorb: the notes default is now .claude/personal/notes.md (rename
+    cram-notes.md on the notes branch, or set CLAUDE_PERSONAL_NOTES_PATH), and
+    .claude/basstler/stack.toml must name upstream_repository =
+    "cram2/cognitive_robot_abstract_machine" and upstream_remote = "cram2".
 - id: krrood-core-package
   title: Move krrood's general patterns into a light krrood_core package
   branch: claude/krrood-core-package
