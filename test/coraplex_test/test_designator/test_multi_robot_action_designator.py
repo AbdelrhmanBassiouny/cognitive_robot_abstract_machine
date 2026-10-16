@@ -712,8 +712,13 @@ def test_transport(multiple_robot_apartment_context, rclpy_node):
 
 def test_move_to_reach(multiple_robot_apartment_context, rclpy_node):
     world, robot, extensions = multiple_robot_apartment_context
+    # a Stretch keeps its heading while it reaches, so it stands behind the grasp,
+    # where its arm already points along the approach
+    stand_offset = (
+        Pose2D(-0.55, 0.0) if isinstance(robot, Stretch) else Pose2D(0.2, -0.55)
+    )
     move_to_reach = MoveToReach(
-        target_pose_offset_robot=Pose2D(0.2, -0.55),
+        target_pose_offset_robot=stand_offset,
         reference_T_grasp=Pose.from_xyz_rpy(
             x=0.7, y=-1.3, z=0.9, reference_frame=world.root
         ),

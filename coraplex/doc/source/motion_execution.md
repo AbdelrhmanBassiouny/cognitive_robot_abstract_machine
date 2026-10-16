@@ -134,9 +134,10 @@ action is expanded, and that applies only to its robot type. Every executor appl
   {attr}`~coraplex.robot_plans.actions.core.navigation.DrivesBase.base_pose_threshold` of the action.
 - {class}`~coraplex.robot_plans.robot_specific_plan_transformations.MoveStretchToolCenterPointInAStraightLine` moves
   the tool center point of a Stretch to each of its targets along a straight line.
-- {class}`~coraplex.robot_plans.robot_specific_plan_transformations.KeepStretchFromTurningWhileMovingItsTool` drives a
-  Stretch to where its arm reaches the first target of its tool, then holds the heading of its base while the tool
-  moves, so the base only drives along it. Opening and closing a container are left as they are.
+- {class}`~coraplex.robot_plans.robot_specific_plan_transformations.KeepStretchFromTurningWhileMovingItsTool` holds the
+  heading of a Stretch's base while its tool moves, so the base only drives along it. A target the arm does not reach
+  from where the base faces fails rather than being reached by turning, so the plan has to stand the Stretch facing
+  it. Opening and closing a container are left as they are.
 - {class}`~coraplex.robot_plans.robot_specific_plan_transformations.KeepTheTorsoUprightWhileUsingATool` keeps Justin's
   torso upright while it moves a tool.
 

@@ -9,6 +9,7 @@ from typing_extensions import List
 
 from coraplex.exceptions import ActionNotExpanded
 from coraplex.plans.executors import PlanExecutor, SimulatedPlanExecutor
+from coraplex.plans.failures import MotionMadeNoProgress
 from coraplex.robot_plans.actions.core.container import CloseAction
 from coraplex.robot_plans.actions.core.misc import MoveToReach
 from coraplex.robot_plans.actions.core.navigation import (
@@ -151,9 +152,8 @@ def steps_of(action: StatechartNode) -> StatechartNode:
         hold of the base's orientation where a plan transformation added one.
     """
     for hold in held_orientations_of(action):
-        holding = hold.parent_node
-        if action.action_body in (holding, holding.parent_node):
-            return holding.nodes[0]
+        if hold.parent_node is action.action_body:
+            return action.action_body.nodes[0]
     return action.action_body
 
 
@@ -622,10 +622,8 @@ def test_stretch_holds_the_orientation_of_its_base_while_it_reaches(
         build_executor(extensions),
     )
 
-    positioning, holding = action.action_body.nodes
     [hold] = held_orientations_of(action)
-    assert type(positioning) is NavigateAction
-    assert hold.parent_node is holding
+    assert hold.parent_node is action.action_body
     assert hold.root_link is world.root
     assert hold.tip_link is robot.root
 
@@ -644,9 +642,8 @@ def test_stretch_holds_the_orientation_of_its_base_once_for_nested_tool_motions(
         simulated_executor(extensions),
     )
 
-    positioning, holding = action.action_body.nodes
     [hold] = held_orientations_of(action)
-    assert hold.parent_node is holding
+    assert hold.parent_node is action.action_body
 
 
 def test_stretch_holds_the_orientation_of_its_base_only_once_it_drove_there(
@@ -679,13 +676,14 @@ def test_stretch_holds_the_orientation_of_its_base_only_once_it_drove_there(
 
 def stretch_reaching_milk_from(
     world: World, robot: AbstractRobot, extensions: List, root_T_base: Pose
-) -> tuple[ReachAction, OrientationWhileRunning]:
+) -> tuple[SimulatedPlanExecutor, ReachAction, OrientationWhileRunning]:
     """
-    Puts the base of a Stretch at `root_T_base`, and reaches for the milk standing at a
-    fixed place in a simulation that records the orientation of the base while it is
-    held.
+    Puts the base of a Stretch at `root_T_base`, and prepares a reach for the milk
+    standing at a fixed place in a simulation that records the orientation of the base
+    while it is held.
 
-    :return: The reach, which ran, and the recording.
+    :return: The executor, with the reach compiled but not run yet, the reach, and the
+        recording.
     """
     milk = world.get_semantic_annotations_by_type(Milk)[0]
     milk.root.parent_connection.origin = HomogeneousTransformationMatrix.from_xyz_rpy(
@@ -703,38 +701,75 @@ def stretch_reaching_milk_from(
     )
     executor.compile(statechart_of(executor, action))
     [recording.node] = held_orientations_of(action)
-    executor.execute()
-    return action, recording
+    return executor, action, recording
+
+
+def assert_kept_its_heading(
+    recording: OrientationWhileRunning, tolerance: float = 0.01
+) -> None:
+    """
+    Asserts that the recorded body turned at most `tolerance` radians away from where it
+    faced when the recording started.
+    """
+    assert recording.orientations
+    start = recording.orientations[0]
+    turned = [
+        np.arccos(np.clip((np.trace(start.T @ orientation) - 1) / 2, -1, 1))
+        for orientation in recording.orientations
+    ]
+    assert max(turned) <= tolerance
 
 
 @pytest.mark.parametrize(
     "root_T_base",
     [
-        Pose.from_xyz_rpy(0.4, -2.3, 0),
-        Pose.from_xyz_rpy(-1.0, -0.8, 0, yaw=2.0),
+        Pose.from_xyz_rpy(0.33, -1.98, 0, yaw=np.pi / 2),
+        Pose.from_xyz_rpy(0.33, -2.2, 0, yaw=np.pi / 2),
     ],
-    ids=["nearby with the arm turned away", "far away"],
+    ids=["where its arm reaches the milk", "short of the milk along its heading"],
 )
 def test_a_simulated_stretch_reaches_without_turning_its_base(
     stretch_apartment_context, root_T_base
 ):
     """
-    The base drives to where its arm reaches the milk first, and keeps its heading while
-    it reaches.
+    The Stretch stands with its arm towards the milk, and keeps its heading while it
+    reaches, driving along it where it has to.
     """
     world, robot, extensions = stretch_apartment_context
     root_T_base.reference_frame = world.root
 
-    action, recording = stretch_reaching_milk_from(
+    executor, action, recording = stretch_reaching_milk_from(
         world, robot, extensions, root_T_base
     )
 
+    executor.execute()
+
     assert action.life_cycle_state == LifeCycleValues.SUCCEEDED
-    np.testing.assert_allclose(
-        recording.orientations,
-        [recording.orientations[0]] * len(recording.orientations),
-        atol=1e-2,
+    assert_kept_its_heading(recording)
+
+
+def test_a_simulated_stretch_facing_away_fails_to_reach_rather_than_turning(
+    stretch_apartment_context,
+):
+    """
+    Turning to bring a target into reach sweeps the base through wide arcs, so a Stretch
+    whose arm points away from the milk fails to reach it instead.
+
+    Straining towards the milk bends the held heading by less than a degree, far from
+    the turn reaching it would take.
+    """
+    world, robot, extensions = stretch_apartment_context
+    executor, action, recording = stretch_reaching_milk_from(
+        world,
+        robot,
+        extensions,
+        Pose.from_xyz_rpy(0.4, -2.3, 0, reference_frame=world.root),
     )
+
+    with pytest.raises(MotionMadeNoProgress):
+        executor.execute()
+
+    assert_kept_its_heading(recording, tolerance=np.deg2rad(2))
 
 
 def test_a_robot_of_another_type_reaches_without_its_base_orientation_held(
