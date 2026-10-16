@@ -19,7 +19,7 @@ from coraplex.locations.locations import ReachabilityLocation
 from coraplex.querying.grasp_closeness import ClosestGrasps
 from coraplex.plans.plan_transformation import (
     ConfigurationTransformation,
-    InsertionTransformation,
+    SequentialInsertion,
     MatchedType,
     PlanTransformation,
 )
@@ -84,7 +84,7 @@ if TYPE_CHECKING:
 
 
 @dataclass
-class DetectBeforeGrasp(InsertionTransformation[ReachAction]):
+class DetectBeforeGrasp(SequentialInsertion[ReachAction]):
     """
     Looks at the object and detects it before a reach makes its final approach, so that
     the approach acts on a freshly perceived pose instead of the one the world holds.
@@ -155,7 +155,7 @@ class DetectBeforeGrasp(InsertionTransformation[ReachAction]):
 
 @dataclass
 class DrawerOpening(
-    InsertionTransformation[MatchedType],
+    SequentialInsertion[MatchedType],
     Generic[MatchedType],
     SubClassSafeGeneric,
     ABC,
@@ -389,7 +389,7 @@ class ParkArmsAroundPickAndPlaceSteps(PlanTransformation[PickAndPlaceAction]):
 
 
 @dataclass
-class ParkArmsBeforeFirstAction(InsertionTransformation[Action]):
+class ParkArmsBeforeFirstAction(SequentialInsertion[Action]):
     """
     Parks the robot's arms in front of the first action of a plan.
 

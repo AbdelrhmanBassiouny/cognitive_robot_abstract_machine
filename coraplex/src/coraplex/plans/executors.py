@@ -191,8 +191,9 @@ class PlanExecutor(Executor, ABC):
         if not self.plan_nodes:
             raise EmptyStatechartError()
         rewriting = self.context.require_extension(PlanRewriting)
-        for plan_node in self.plan_nodes:
-            rewriting.rewrite(plan_node)
+        self.plan_nodes = [
+            rewriting.rewrite(plan_node) for plan_node in self.plan_nodes
+        ]
         if self.collision_avoidance:
             statechart.add_node(ExternalCollisionAvoidance())
             statechart.add_node(SelfCollisionAvoidance())

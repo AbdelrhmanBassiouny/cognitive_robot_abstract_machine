@@ -174,22 +174,17 @@ class MovementType(Enum):
 
 class InsertionPosition(Enum):
     """
-    Where an insertion rewrite places its nodes relative to the anchor node.
+    When the nodes a sequential insertion inserts run relative to the anchor node.
     """
 
     BEFORE = auto()
     """
-    As the left neighbour of the anchor node.
+    Right before the anchor node.
     """
 
     AFTER = auto()
     """
-    As the right neighbour of the anchor node.
-    """
-
-    LAST_CHILD = auto()
-    """
-    As the last child of the anchor node.
+    Right after the anchor node.
     """
 
 

@@ -17,7 +17,7 @@ from typing_extensions import (
 
 from coraplex.datastructures.enums import InsertionPosition
 from coraplex.exceptions import CannotMatchOnType
-from cramph.composites import CramLanguageNode
+from cramph.composites import CramLanguageNode, Parallel, Sequence
 from cramph.context import ContextExtension
 from cramph.node import StatechartNode
 from krrood.patterns.subclass_safe_generic import SubClassSafeGeneric
@@ -109,13 +109,6 @@ class InsertionTransformation(
     statechart it was inserted into.
     """
 
-    @property
-    @abstractmethod
-    def position(self) -> InsertionPosition:
-        """
-        :return: Where the inserted nodes are placed relative to the anchor node.
-        """
-
     @abstractmethod
     def anchor(self, plan_node: MatchedType) -> StatechartNode:
         """
@@ -133,27 +126,84 @@ class InsertionTransformation(
     def apply(self, plan_node: MatchedType) -> None:
         anchor = self.anchor(plan_node)
         for node in self.nodes_to_insert(plan_node):
-            self._insert(anchor, node)
-            if self.position is InsertionPosition.AFTER:
-                # each further node goes behind the one before it, keeping their order
-                anchor = node
+            anchor = self._insert(anchor, node)
 
-    def _insert(self, anchor: StatechartNode, node: StatechartNode) -> None:
+    @abstractmethod
+    def _insert(self, anchor: StatechartNode, node: StatechartNode) -> StatechartNode:
         """
-        Inserts a node at :attr:`position` relative to the anchor node.
+        Inserts a node next to the anchor node.
 
-        :param anchor: The node the given node is placed relative to; a neighbour goes
-            into the plan language node running it, and a last child below the anchor
-            itself.
-        :param node: The node to insert
+        :param anchor: The node the given node is placed next to.
+        :param node: The node to insert.
+        :return: The node the next node is placed next to, which keeps the inserted
+            nodes in their order.
         """
+
+    @staticmethod
+    def _step_holding(node: StatechartNode) -> StatechartNode:
+        """
+        :param node: A node of a plan.
+        :return: `node`, or the node above it, that the plan language node nearest above
+            `node` runs, or the top-level node above `node` when no plan language node
+            runs it.
+        """
+        holders = [node, *node.path]
+        return next(
+            (
+                holder
+                for holder in holders
+                if isinstance(holder.parent_node, CramLanguageNode)
+            ),
+            holders[-1],
+        )
+
+
+@dataclass
+class SequentialInsertion(
+    InsertionTransformation[MatchedType], Generic[MatchedType], SubClassSafeGeneric, ABC
+):
+    """
+    Inserts nodes that run right before or right after the anchor node: as steps of the
+    sequence that runs the anchor, or, when no sequence runs it, of a new sequence that
+    takes the place of the step holding the anchor.
+    """
+
+    @property
+    @abstractmethod
+    def position(self) -> InsertionPosition:
+        """
+        :return: Whether the inserted nodes run before or after the anchor node.
+        """
+
+    def _insert(self, anchor: StatechartNode, node: StatechartNode) -> StatechartNode:
+        step = self._step_holding(anchor)
+        if not isinstance(step.parent_node, Sequence):
+            Sequence(nodes=[step]).take_place_of(step)
         match self.position:
             case InsertionPosition.BEFORE:
-                CramLanguageNode.running(anchor).insert_before(anchor, node)
+                step.parent_node.insert_before(step, node)
+                return anchor
             case InsertionPosition.AFTER:
-                CramLanguageNode.running(anchor).insert_after(anchor, node)
-            case InsertionPosition.LAST_CHILD:
-                anchor.add_node(node)
+                step.parent_node.insert_after(step, node)
+                return node
+
+
+@dataclass
+class ParallelInsertion(
+    InsertionTransformation[MatchedType], Generic[MatchedType], SubClassSafeGeneric, ABC
+):
+    """
+    Inserts nodes that run alongside the anchor node: in the parallel that runs the
+    anchor, or, when no parallel runs it, in a new parallel that takes the place of the
+    step holding the anchor.
+    """
+
+    def _insert(self, anchor: StatechartNode, node: StatechartNode) -> StatechartNode:
+        step = self._step_holding(anchor)
+        if not isinstance(step.parent_node, Parallel):
+            Parallel(nodes=[step]).take_place_of(step)
+        step.parent_node.add_node(node)
+        return anchor
 
 
 # %% rewriting a plan
@@ -213,18 +263,25 @@ class PlanRewriting(ContextExtension):
             ):
                 transformation.apply(node)
 
-    def rewrite(self, root: StatechartNode) -> None:
+    def rewrite(self, root: StatechartNode) -> StatechartNode:
         """
         Applies every transformation to every node below and including `root` that it
-        matches and applies to.
+        matches and applies to, and to every node a transformation puts around `root`.
 
         :param root: The part of the plan to rewrite.
+        :return: The node that runs in the place of `root` once rewritten: `root`
+            itself, or the node a transformation put in its place around it.
         """
         if not self.transformations:
-            return
-        while (node := self._next_node_to_offer(root)) is not None:
+            return root
+        former_parent = root.parent_node
+        rewritten = root
+        while (node := self._next_node_to_offer(rewritten)) is not None:
             self._offered.add(node)
             self._apply_to(node)
+            while rewritten.parent_node is not former_parent:
+                rewritten = rewritten.parent_node
+        return rewritten
 
     def _next_node_to_offer(self, root: StatechartNode) -> Optional[StatechartNode]:
         """

@@ -10,11 +10,10 @@ from dataclasses import dataclass
 
 from typing_extensions import List
 
-from coraplex.datastructures.enums import InsertionPosition
 from coraplex.exceptions import ClosingGoalNotFound, ToolPathNotFound
 from coraplex.plans.plan_transformation import (
     ConfigurationTransformation,
-    InsertionTransformation,
+    ParallelInsertion,
     PlanTransformation,
 )
 from coraplex.robot_plans.actions.composite.tool_based import ToolMotionAction
@@ -39,29 +38,24 @@ from semantic_digital_twin.spatial_types.spatial_types import Pose, Vector3
 
 
 @dataclass
-class KeepTheTorsoUprightWhileUsingATool(InsertionTransformation[ToolMotionAction]):
+class KeepTheTorsoUprightWhileUsingATool(ParallelInsertion[ToolMotionAction]):
     """
     Keeps Justin's torso upright while it moves a tool, which no other robot needs: its
     torso would otherwise lean into the motion.
     """
-
-    @property
-    def position(self) -> InsertionPosition:
-        return InsertionPosition.LAST_CHILD
 
     def is_applicable(self, plan_node: ToolMotionAction) -> bool:
         return isinstance(plan_node.robot, Justin)
 
     def anchor(self, plan_node: ToolMotionAction) -> StatechartNode:
         """
-        :return: The goal holding the tool on its path, beside which the torso is held.
+        :return: The goal moving the tool along its path, alongside which the torso is
+            held.
         :raises ToolPathNotFound: If the action holds no goal moving the tool along a
             path.
         """
         for node in plan_node.descendants:
-            if isinstance(node, Parallel) and any(
-                isinstance(child, CartesianPositionTrajectory) for child in node.nodes
-            ):
+            if isinstance(node, CartesianPositionTrajectory):
                 return node
         raise ToolPathNotFound(plan_node)
 

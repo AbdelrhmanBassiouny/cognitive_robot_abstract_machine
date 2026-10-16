@@ -78,7 +78,6 @@ def show(node, depth=0):
 ## A Reach Without Transformations
 
 `ReachAction` moves the gripper to a pre-pose and then makes its final approach onto the object.
-The transformations insert next to a node, so the reach runs inside a sequence that can hold them.
 
 ```python
 from cramph.composites import Sequence
@@ -216,10 +215,10 @@ since an action is a statechart node. `matches_node` does that selection, and `i
 whether the case a matched node describes needs the transformation at all, so one that is always
 worth applying answers `True`.
 
-How the plan changes is what the subclass brings. `InsertionTransformation` inserts nodes and asks
-for the `position` they are placed at, the `anchor` they are placed next to, and the
-`nodes_to_insert`, which are built anew on every application, since a node belongs to the one
-statechart it was inserted into.
+How the plan changes is what the subclass brings. `SequentialInsertion` inserts nodes that run right
+before or right after another node, and asks for that `position`, the `anchor` they run next to,
+and the `nodes_to_insert`, which are built anew on every application, since a node belongs to the
+one statechart it was inserted into.
 
 ```python
 from dataclasses import dataclass
@@ -227,14 +226,14 @@ from dataclasses import dataclass
 from typing_extensions import List
 
 from coraplex.datastructures.enums import InsertionPosition
-from coraplex.plans.plan_transformation import InsertionTransformation
+from coraplex.plans.plan_transformation import SequentialInsertion
 from coraplex.robot_plans.actions.core.navigation import NavigateAction
 from coraplex.robot_plans.actions.core.robot_body import ParkArmsAction
 from cramph.node import StatechartNode
 
 
 @dataclass
-class ParkArmsBeforeNavigating(InsertionTransformation[NavigateAction]):
+class ParkArmsBeforeNavigating(SequentialInsertion[NavigateAction]):
     """
     Parks the arms before the robot drives off, so it does not carry them into the
     furniture it passes.
@@ -282,10 +281,11 @@ print(navigate.life_cycle_state)
 
 ## Where the Nodes Land
 
-Every insertion says where its nodes go: `BEFORE` or `AFTER` the anchor makes them its siblings,
-`LAST_CHILD` appends them to the sequence given as the anchor. The position is part of what the rewrite
-is rather than something its caller passes, so parking once the robot has arrived is a rewrite of
-its own:
+A sequential insertion says when its nodes run: `BEFORE` or `AFTER` the anchor. They become steps of
+the sequence that runs the anchor; where no sequence runs it, because it runs in a `Parallel` or is
+the whole plan, a new sequence takes the anchor's place and runs it together with the inserted
+nodes. The position is part of what the rewrite is rather than something its caller passes, so
+parking once the robot has arrived is a rewrite of its own:
 
 ```python
 @dataclass
@@ -300,6 +300,42 @@ class ParkArmsAfterNavigating(ParkArmsBeforeNavigating):
 
 
 plan_transformations = [ParkArmsAfterNavigating()]
+
+navigate = expand(
+    Sequence(
+        [NavigateAction(Pose.from_xyz_rpy(1.5, 2.4, 0.0, reference_frame=world.root))]
+    )
+)
+
+show(navigate)
+```
+
+Nodes that run at the same time as the anchor come from a `ParallelInsertion` instead. They join the
+`Parallel` that runs the anchor; where none runs it, a new one takes the anchor's place. Looking at
+where the robot is headed while it drives is such a rewrite:
+
+```python
+from coraplex.plans.plan_transformation import ParallelInsertion
+from coraplex.robot_plans.actions.core.navigation import LookAtAction
+
+
+@dataclass
+class LookAtTheGoalWhileNavigating(ParallelInsertion[NavigateAction]):
+    """
+    Looks at where the robot is headed for as long as it drives there.
+    """
+
+    def is_applicable(self, plan_node: NavigateAction) -> bool:
+        return True
+
+    def anchor(self, plan_node: NavigateAction) -> StatechartNode:
+        return plan_node
+
+    def nodes_to_insert(self, plan_node: NavigateAction) -> List[StatechartNode]:
+        return [LookAtAction(plan_node.target_location)]
+
+
+plan_transformations = [LookAtTheGoalWhileNavigating()]
 
 navigate = expand(
     Sequence(
