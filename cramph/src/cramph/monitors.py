@@ -48,8 +48,8 @@ class CountSeconds(EndedByOwner, StatechartNode):
     """
     This node counts X seconds and then turns True.
 
-    Only counts while in state RUNNING, and it is up to whoever runs it to stop it once
-    it has counted far enough.
+    Only counts while in state RUNNING, and it is up to its owner to stop it once it has
+    counted far enough.
     """
 
     seconds: float
@@ -72,8 +72,8 @@ class TickCounter(EndedByOwner, StatechartNode, ABC):
     Base for nodes that count ticks while RUNNING and turn True once a target is
     reached.
 
-    Only counts while in state RUNNING, and it is up to whoever runs it to stop it once
-    it reaches its target.
+    Only counts while in state RUNNING, and it is up to its owner to stop it once it
+    reaches its target.
     """
 
     _counter: int = field(init=False, default=0)

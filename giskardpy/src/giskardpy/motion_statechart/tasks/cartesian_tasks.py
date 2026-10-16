@@ -797,26 +797,20 @@ class CartesianPose(EndedByOwner, CompositeNode):
 
 
 @dataclass(eq=False, repr=False, kw_only=True)
-class HoldPose(Task):
+class HoldOrientation(Task):
     """
-    Keeps a link at the pose it had when this task started.
+    Keeps a link in the orientation it had when this task started, leaving it free to
+    move.
 
     An invariant rather than a goal, so it does not report progress. It observes
-    whether the link is still at that pose.
-
-    ..note:: Unlike :class:`CartesianPose`, this constrains the chain between
-        ``root_link`` and ``tip_link`` without naming a pose, because the pose to keep
-        is the one the link is already at.
+    whether the link is still in that orientation.
     """
 
     root_link: KinematicStructureEntity
     """Base link of the kinematic chain."""
 
     tip_link: KinematicStructureEntity
-    """The link kept where it is."""
-
-    reference_linear_velocity: float = CartesianPosition.default_reference_velocity
-    """Unit: m/s. Normalizes the translational constraints against the others."""
+    """The link kept as it is."""
 
     reference_angular_velocity: float = CartesianOrientation.default_reference_velocity
     """Unit: rad/s. Normalizes the rotational constraints against the others."""
@@ -829,14 +823,11 @@ class HoldPose(Task):
     otherwise move it, and buying clearance by moving it is the motion this prevents.
     """
 
-    translation_threshold: float = 0.01
-    """Unit: m. The link counts as held while it is at most this far from its pose."""
-
     orientation_threshold: float = 0.01
     """Unit: rad. The link counts as held while it is rotated at most this far from its pose."""
 
     _pose_to_keep: ForwardKinematicsBinding = field(init=False, repr=False)
-    """The pose the link is held at, bound when this task starts."""
+    """The pose of the link bound when this task starts."""
 
     def set_up(self, context: StatechartContext) -> None:
         """
@@ -851,46 +842,74 @@ class HoldPose(Task):
         )
         self._pose_to_keep.bind(context.world)
 
-    def on_start(self, context: StatechartContext):
+    def on_start(self, context: StatechartContext) -> None:
         self._pose_to_keep.bind(context.world)
 
     def build_artifacts(self, context: StatechartContext) -> MotionNodeArtifacts:
         """
-        Constrain the chain to the pose bound when this task started.
+        Constrain the chain to the orientation bound when this task started.
 
         :param context: Provides access to world model and kinematic expressions.
         :return: The artifacts of this task, which observes whether the link is within
-            :attr:`translation_threshold` and :attr:`orientation_threshold` of that pose.
+            :attr:`orientation_threshold` of that orientation.
         """
         artifacts = MotionNodeArtifacts()
-        root_T_tip = context.world.compose_forward_kinematics_expression(
+        root_R_tip = context.world.compose_forward_kinematics_expression(
             self.root_link, self.tip_link
-        )
-        root_T_tip_when_started = self._pose_to_keep.root_T_tip
-
-        artifacts.geometry.add_point_goal_constraints(
-            frame_P_goal=root_T_tip_when_started.position,
-            frame_P_current=root_T_tip.position,
-            reference_velocity=self.reference_linear_velocity,
-            quadratic_weight=self.weight,
-            name="position",
-        )
+        ).rotation_matrix
+        root_R_tip_when_started = self._pose_to_keep.root_T_tip.rotation_matrix
         artifacts.geometry.add_rotation_goal_constraints(
-            frame_R_goal=root_T_tip_when_started.rotation_matrix,
-            frame_R_current=root_T_tip.rotation_matrix,
+            frame_R_goal=root_R_tip_when_started,
+            frame_R_current=root_R_tip,
             reference_velocity=self.reference_angular_velocity,
             quadratic_weight=self.weight,
             name="orientation",
         )
+        artifacts.observation = (
+            sm.abs(root_R_tip.rotational_distance(root_R_tip_when_started))
+            <= self.orientation_threshold
+        )
+        return artifacts
+
+
+@dataclass(eq=False, repr=False, kw_only=True)
+class HoldPose(HoldOrientation):
+    """
+    Keeps a link at the pose it had when this task started.
+
+    .. note:: Unlike :class:`CartesianPose`, this constrains the chain between
+        :attr:`root_link` and :attr:`tip_link` without naming a pose, because the pose
+        to keep is the one the link is already at.
+    """
+
+    reference_linear_velocity: float = CartesianPosition.default_reference_velocity
+    """Unit: m/s. Normalizes the translational constraints against the others."""
+
+    translation_threshold: float = 0.01
+    """Unit: m. The link counts as held while it is at most this far from its pose."""
+
+    def build_artifacts(self, context: StatechartContext) -> MotionNodeArtifacts:
+        """
+        Differs from :meth:`HoldOrientation.build_artifacts` in also constraining the
+        position, and observing whether the link is within
+        :attr:`translation_threshold` of it.
+        """
+        artifacts = super().build_artifacts(context)
+        root_P_tip = context.world.compose_forward_kinematics_expression(
+            self.root_link, self.tip_link
+        ).position
+        root_P_tip_when_started = self._pose_to_keep.root_T_tip.position
+        artifacts.geometry.add_point_goal_constraints(
+            frame_P_goal=root_P_tip_when_started,
+            frame_P_current=root_P_tip,
+            reference_velocity=self.reference_linear_velocity,
+            quadratic_weight=self.weight,
+            name="position",
+        )
         artifacts.observation = sm.logic_and(
-            root_T_tip_when_started.position.euclidean_distance(root_T_tip.position)
+            artifacts.observation,
+            root_P_tip_when_started.euclidean_distance(root_P_tip)
             <= self.translation_threshold,
-            sm.abs(
-                root_T_tip.rotation_matrix.rotational_distance(
-                    root_T_tip_when_started.rotation_matrix
-                )
-            )
-            <= self.orientation_threshold,
         )
         return artifacts
 

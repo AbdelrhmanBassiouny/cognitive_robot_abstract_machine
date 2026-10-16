@@ -1,29 +1,31 @@
 from __future__ import annotations
 
 from copy import deepcopy
+from dataclasses import dataclass, field
 
 import numpy as np
 import pytest
 from typing_extensions import List
 
 from coraplex.exceptions import ActionNotExpanded
-from coraplex.plans.executors import PlanExecutor
-from coraplex.plans.plan_transformation import PlanRewriting, PlanTransformation
+from coraplex.plans.executors import PlanExecutor, SimulatedPlanExecutor
+from coraplex.plans.failures import MotionMadeNoProgress
 from coraplex.robot_plans.actions.core.container import CloseAction
+from coraplex.robot_plans.actions.core.misc import MoveToReach
 from coraplex.robot_plans.actions.core.navigation import (
     DrivesBase,
     NavigateAction,
     PathPlanningNavigateAction,
 )
 from coraplex.robot_plans.actions.core.pick_up import PickUpAction, ReachAction
-from coraplex.robot_plans.actions.core.robot_body import MoveTorsoAction
-from coraplex.robot_plans.robot_specific_plan_transformations import (
-    DriveTiagoWithItsDifferentialDrive,
-    DriveStretchWithItsDifferentialDrive,
+from coraplex.robot_plans.actions.core.robot_body import (
+    MoveManipulatorAction,
+    MoveTorsoAction,
 )
 from cramph.composites import Parallel, Sequence, StatementNode
-from cramph.context import ContextExtension
+from cramph.data_types import LifeCycleValues
 from cramph.exceptions import StatechartAlreadyCompiledError
+from cramph.executor import StatechartExecutor, TickingExecutorExtension
 from cramph.node import StatechartNode
 from giskardpy.motion_statechart.goals.cartesian_goals import (
     CartesianPoseStraight,
@@ -37,6 +39,8 @@ from giskardpy.motion_statechart.tasks.cartesian_tasks import (
     CartesianPose,
     CartesianPosition,
     CartesianPositionStraight,
+    HoldOrientation,
+    HoldPose,
 )
 from giskardpy.motion_statechart.tasks.joint_tasks import JointPositionList
 from krrood.entity_query_language.factories import a, variable_from
@@ -44,9 +48,14 @@ from semantic_digital_twin.datastructures.definitions import TorsoState
 from semantic_digital_twin.grasping.grasp_candidates import GraspCandidate
 from semantic_digital_twin.robots.robot_parts import AbstractRobot
 from semantic_digital_twin.robots.tiago import Tiago
-from semantic_digital_twin.semantic_annotations.semantic_annotations import Handle
-from semantic_digital_twin.spatial_types.spatial_types import Pose
+from semantic_digital_twin.semantic_annotations.semantic_annotations import (
+    Handle,
+    Milk,
+)
+from semantic_digital_twin.spatial_types import HomogeneousTransformationMatrix
+from semantic_digital_twin.spatial_types.spatial_types import Pose, Pose2D
 from semantic_digital_twin.world import World
+from semantic_digital_twin.world_description.world_entity import Body
 
 from ...plan_running import (
     expand,
@@ -55,6 +64,36 @@ from ...plan_running import (
     simulated_executor,
     statechart_of,
 )
+
+# %% recording a run
+
+
+@dataclass
+class OrientationWhileRunning(TickingExecutorExtension):
+    """
+    Records the orientation of a body after every tick in which a node is running.
+    """
+
+    body: Body = field(kw_only=True)
+    """
+    The body whose orientation is recorded.
+    """
+
+    node: StatechartNode | None = field(default=None, kw_only=True)
+    """
+    The node during whose run the orientation is recorded.
+    """
+
+    orientations: list[np.ndarray] = field(default_factory=list, init=False)
+    """
+    The rotation matrices of :attr:`body` relative to the world root, one per tick.
+    """
+
+    def after_tick(self, executor: StatechartExecutor) -> None:
+        if self.node.life_cycle_state != LifeCycleValues.RUNNING:
+            return
+        self.orientations.append(self.body.global_pose.to_np()[:3, :3])
+
 
 # %% preparing a plan for a robot
 
@@ -80,26 +119,6 @@ def prepared(
     """
     executor.prepare(statechart_of(executor, plan))
     return plan
-
-
-def rewriting_with(
-    extensions: List[ContextExtension], *transformations: PlanTransformation
-) -> List[ContextExtension]:
-    """
-    :return: `extensions` and a rewriting by `transformations`.
-    """
-    return [*extensions, PlanRewriting(transformations=list(transformations))]
-
-
-def every_base_transformation() -> List[PlanTransformation]:
-    """
-    :return: The transformations a plan may be given that change how a robot drives its
-        base.
-    """
-    return [
-        DriveStretchWithItsDifferentialDrive(),
-        DriveTiagoWithItsDifferentialDrive(),
-    ]
 
 
 def navigation_to(world: World, **parameters) -> NavigateAction:
@@ -129,10 +148,21 @@ def assert_drives_differentially_to(
     assert goal.goal_pose.reference_frame is action.target_location.reference_frame
 
 
+def steps_of(action: StatechartNode) -> StatechartNode:
+    """
+    :return: The node running the steps of an expanded action, which runs beside the
+        hold of the base's orientation where a plan transformation added one.
+    """
+    for hold in held_orientations_of(action):
+        if hold.parent_node is action.action_body:
+            return action.action_body.nodes[0]
+    return action.action_body
+
+
 # %% replacing the body of an action
 
 
-def test_an_expanded_action_runs_the_body_it_is_given_instead(pr2_apartment_context):
+def test_an_expanded_action_takes_the_body_it_is_given_instead(pr2_apartment_context):
     world, robot, extensions = pr2_apartment_context
     action = expand(MoveTorsoAction(torso_state=TorsoState.HIGH), extensions)
     former_nodes = [action.action_body, *action.action_body.descendants]
@@ -148,7 +178,7 @@ def test_an_expanded_action_runs_the_body_it_is_given_instead(pr2_apartment_cont
     assert not set(former_nodes) & set(action.statechart.nodes)
 
 
-def test_an_expanded_action_runs_a_body_deciding_its_own_success_instead(
+def test_an_expanded_action_takes_a_body_deciding_its_own_success_instead(
     pr2_apartment_context,
 ):
     world, robot, extensions = pr2_apartment_context
@@ -190,7 +220,7 @@ def test_the_body_of_a_compiled_action_cannot_be_replaced(pr2_apartment_context)
         action.replace_action_body(goal)
 
 
-def test_an_action_joining_a_compiled_statechart_runs_the_body_it_is_given_instead(
+def test_an_action_joining_a_compiled_statechart_takes_the_body_it_is_given_instead(
     pr2_apartment_context,
 ):
     world, robot, extensions = pr2_apartment_context
@@ -210,6 +240,25 @@ def test_an_action_joining_a_compiled_statechart_runs_the_body_it_is_given_inste
     assert statechart.latest_compile_covers(goal)
 
 
+def test_an_action_body_replaced_by_a_node_holding_it_stays_below_that_node(
+    pr2_apartment_context,
+):
+    world, robot, extensions = pr2_apartment_context
+    action = expand(MoveTorsoAction(torso_state=TorsoState.HIGH), extensions)
+    body = action.action_body
+    replacement = Parallel(
+        nodes=[body, HoldOrientation(root_link=world.root, tip_link=robot.root)]
+    )
+
+    action.replace_action_body(replacement)
+
+    assert action.action_body is replacement
+    assert action.nodes == [replacement]
+    assert replacement.nodes[0] is body
+    assert body.parent_node is replacement
+    assert body in action.statechart.nodes
+
+
 # %% driving a differential drive
 
 
@@ -218,11 +267,24 @@ def test_stretch_drives_with_its_differential_drive(
     stretch_apartment_context, build_executor
 ):
     world, robot, extensions = stretch_apartment_context
-    executor = build_executor(
-        rewriting_with(extensions, DriveStretchWithItsDifferentialDrive())
-    )
 
-    action = prepared(navigation_to(world), executor)
+    action = prepared(navigation_to(world), build_executor(extensions))
+
+    assert_drives_differentially_to(action.action_body, action, robot)
+
+
+def test_stretch_drives_with_its_differential_drive_whatever_the_plan_adaptations(
+    stretch_apartment_context,
+):
+    """
+    The robot adaptations are kept apart from the executor's plan adaptations, so a
+    caller replacing the latter keeps the robot driving the way it has to.
+    """
+    world, robot, extensions = stretch_apartment_context
+
+    action = prepared(
+        navigation_to(world), simulated_executor(extensions, plan_adaptations=[])
+    )
 
     assert_drives_differentially_to(action.action_body, action, robot)
 
@@ -231,16 +293,13 @@ def test_the_differential_drive_goal_takes_the_threshold_of_the_action(
     stretch_apartment_context,
 ):
     world, robot, extensions = stretch_apartment_context
-    executor = robot_executor(
-        rewriting_with(extensions, DriveStretchWithItsDifferentialDrive())
-    )
     default_action = navigation_to(world)
 
     action = prepared(
         navigation_to(
             world, base_pose_threshold=10 * default_action.base_pose_threshold
         ),
-        executor,
+        robot_executor(extensions),
     )
 
     assert action.base_pose_threshold != default_action.base_pose_threshold
@@ -263,13 +322,13 @@ def test_stretch_drives_every_leg_of_a_path_with_its_differential_drive(
     world, robot, extensions = stretch_apartment_context
     target = Pose.from_xyz_rpy(2.0, 2.0, 0.0, reference_frame=world.root)
     unchanged = prepared(
-        PathPlanningNavigateAction(target=target), simulated_executor(extensions)
-    )
-    executor = simulated_executor(
-        rewriting_with(extensions, DriveStretchWithItsDifferentialDrive())
+        PathPlanningNavigateAction(target=target),
+        simulated_executor(extensions, robot_adaptations=[]),
     )
 
-    action = prepared(PathPlanningNavigateAction(target=target), executor)
+    action = prepared(
+        PathPlanningNavigateAction(target=target), simulated_executor(extensions)
+    )
 
     legs = action.action_body.nodes
     assert type(action.action_body) is Sequence
@@ -282,28 +341,25 @@ def test_stretch_drives_every_leg_of_a_path_with_its_differential_drive(
 
 
 @pytest.mark.parametrize("build_executor", [simulated_executor, robot_executor])
-def test_a_tiago_given_its_differential_drive_drives_with_it(
-    tiago_context, build_executor
-):
+def test_a_tiago_drives_with_its_differential_drive(tiago_context, build_executor):
     """
     A real Tiago cannot be put at a pose, so the drive is not tied to simulation.
     """
     world, robot, extensions = tiago_context
-    executor = build_executor(
-        rewriting_with(extensions, DriveTiagoWithItsDifferentialDrive())
-    )
 
-    action = prepared(navigation_to(world), executor)
+    action = prepared(navigation_to(world), build_executor(extensions))
 
     assert_drives_differentially_to(action.action_body, action, robot)
 
 
-def test_a_simulated_tiago_not_given_its_differential_drive_writes_the_odometry(
+def test_a_simulated_tiago_without_its_robot_adaptations_writes_the_odometry(
     tiago_context,
 ):
     world, robot, extensions = tiago_context
 
-    action = prepared(navigation_to(world), simulated_executor(extensions))
+    action = prepared(
+        navigation_to(world), simulated_executor(extensions, robot_adaptations=[])
+    )
 
     assert type(action.action_body) is SetOdometry
 
@@ -316,19 +372,20 @@ def test_a_robot_of_another_type_keeps_its_drive_goal(
     pr2_apartment_context, build_executor, goal_type
 ):
     world, robot, extensions = pr2_apartment_context
-    executor = build_executor(rewriting_with(extensions, *every_base_transformation()))
 
-    action = prepared(navigation_to(world), executor)
+    action = prepared(navigation_to(world), build_executor(extensions))
 
     assert type(action.action_body) is goal_type
 
 
-def test_stretch_keeps_its_drive_goal_without_the_transformation(
+def test_stretch_keeps_its_drive_goal_without_its_robot_adaptations(
     stretch_apartment_context,
 ):
     world, robot, extensions = stretch_apartment_context
 
-    action = prepared(navigation_to(world), robot_executor(extensions))
+    action = prepared(
+        navigation_to(world), robot_executor(extensions, robot_adaptations=[])
+    )
 
     assert type(action.action_body) is CartesianPose
 
@@ -337,9 +394,7 @@ def test_a_simulated_stretch_arrives_driving_with_its_differential_drive(
     stretch_apartment_context,
 ):
     world, robot, extensions = stretch_apartment_context
-    executor = simulated_executor(
-        rewriting_with(extensions, DriveStretchWithItsDifferentialDrive())
-    )
+    executor = simulated_executor(extensions)
     action = navigation_to(world)
     executor.compile(statechart_of(executor, action))
 
@@ -356,9 +411,7 @@ def test_a_simulated_stretch_drives_differentially_to_a_pose_chosen_while_runnin
     stretch_apartment_context,
 ):
     world, robot, extensions = stretch_apartment_context
-    executor = simulated_executor(
-        rewriting_with(extensions, DriveStretchWithItsDifferentialDrive())
-    )
+    executor = simulated_executor(extensions)
     navigation = StatementNode(
         statement=a(NavigateAction)(
             target_location=variable_from([navigation_to(world).target_location])
@@ -380,9 +433,7 @@ def test_a_drive_chosen_while_running_is_watched_for_stalling_as_it_is_driven(
     on a stalled attempt has to watch the tasks of the body that runs.
     """
     world, robot, extensions = stretch_apartment_context
-    executor = simulated_executor(
-        rewriting_with(extensions, DriveStretchWithItsDifferentialDrive())
-    )
+    executor = simulated_executor(extensions)
     navigation = StatementNode(
         statement=a(NavigateAction)(
             target_location=variable_from([navigation_to(world).target_location])
@@ -416,7 +467,7 @@ def closing_step_of(action: CloseAction) -> StatechartNode:
     :return: The step of an expanded close action between grasping the handle and
         letting go of it.
     """
-    grasp, closing_step, release, back_off = action.action_body.nodes
+    grasp, closing_step, release, back_off = steps_of(action).nodes
     return closing_step
 
 
@@ -452,6 +503,20 @@ def test_a_simulated_stretch_stays_in_front_of_the_container_it_closes(
     assert close.goal_joint_state == default_close.goal_joint_state
 
 
+def test_a_stretch_closes_a_container_with_its_base_free_to_turn(
+    stretch_apartment_context,
+):
+    """
+    The drawer travels further than the arm reaches, so the base has to turn to follow
+    it, and a stand chosen for grasping the handle would not be one to close it from.
+    """
+    world, robot, extensions = stretch_apartment_context
+
+    action = prepared(close_action(world, robot), simulated_executor(extensions))
+
+    assert held_orientations_of(action) == []
+
+
 def test_the_real_stretch_closes_a_container_unchanged(stretch_apartment_context):
     world, robot, extensions = stretch_apartment_context
     executor = robot_executor(extensions)
@@ -485,27 +550,28 @@ def reaching_goals_of(action: ReachAction) -> List[StatechartNode]:
     :return: The goals of an expanded reach action bringing the tool center point to
         the pre-grasp pose and to the grasp pose.
     """
-    return [step.nodes[0] for step in action.action_body.nodes]
+    return [step.nodes[0] for step in steps_of(action).nodes]
 
 
 def lifting_goal_of(action: PickUpAction) -> StatechartNode:
     """
     :return: The goal of an expanded pick up action lifting the grasped object.
     """
-    grasp_attempt, lift = action.action_body.nodes
+    grasp_attempt, lift = steps_of(action).nodes
     return lift.nodes[0]
 
 
-def test_a_simulated_stretch_reaches_in_a_straight_line(stretch_apartment_context):
+@pytest.mark.parametrize("build_executor", [simulated_executor, robot_executor])
+def test_stretch_reaches_in_a_straight_line(stretch_apartment_context, build_executor):
     world, robot, extensions = stretch_apartment_context
     unchanged = prepared(
         ReachAction(grasp=handle_grasp(world), arm=robot.all_arms[0]),
-        robot_executor(extensions),
+        build_executor(extensions, robot_adaptations=[]),
     )
 
     action = prepared(
         ReachAction(grasp=handle_grasp(world), arm=robot.all_arms[0]),
-        simulated_executor(extensions),
+        build_executor(extensions),
     )
 
     for goal, default_goal in zip(
@@ -522,19 +588,20 @@ def test_a_simulated_stretch_reaches_in_a_straight_line(stretch_apartment_contex
         assert goal.binding_policy == default_goal.binding_policy
 
 
-def test_a_simulated_stretch_lifts_in_a_straight_line(stretch_apartment_context):
+@pytest.mark.parametrize("build_executor", [simulated_executor, robot_executor])
+def test_stretch_lifts_in_a_straight_line(stretch_apartment_context, build_executor):
     world, robot, extensions = stretch_apartment_context
     unchanged = lifting_goal_of(
         prepared(
             PickUpAction(grasp=handle_grasp(world), arm=robot.all_arms[0]),
-            robot_executor(extensions),
+            build_executor(extensions, robot_adaptations=[]),
         )
     )
 
     goal = lifting_goal_of(
         prepared(
             PickUpAction(grasp=handle_grasp(world), arm=robot.all_arms[0]),
-            simulated_executor(extensions),
+            build_executor(extensions),
         )
     )
 
@@ -545,15 +612,219 @@ def test_a_simulated_stretch_lifts_in_a_straight_line(stretch_apartment_context)
     assert goal.threshold == unchanged.threshold
 
 
-def test_the_real_stretch_reaches_unchanged(stretch_apartment_context):
+def held_orientations_of(action: StatechartNode) -> List[HoldOrientation]:
+    """
+    :return: The tasks below `action` holding the orientation of a link.
+    """
+    return [node for node in action.descendants if type(node) is HoldOrientation]
+
+
+@pytest.mark.parametrize("build_executor", [simulated_executor, robot_executor])
+def test_stretch_holds_the_orientation_of_its_base_while_it_reaches(
+    stretch_apartment_context, build_executor
+):
     world, robot, extensions = stretch_apartment_context
 
     action = prepared(
         ReachAction(grasp=handle_grasp(world), arm=robot.all_arms[0]),
-        robot_executor(extensions),
+        build_executor(extensions),
     )
 
-    assert [type(goal) for goal in reaching_goals_of(action)] == [CartesianPose] * 2
+    [hold] = held_orientations_of(action)
+    assert hold.parent_node is action.action_body
+    assert hold.root_link is world.root
+    assert hold.tip_link is robot.root
+
+
+def test_stretch_holds_the_orientation_of_its_base_once_for_nested_tool_motions(
+    stretch_apartment_context,
+):
+    """
+    Picking up reaches first, and both move the tool center point; the hold of the
+    picking up already covers the reaching.
+    """
+    world, robot, extensions = stretch_apartment_context
+
+    action = prepared(
+        PickUpAction(grasp=handle_grasp(world), arm=robot.all_arms[0]),
+        simulated_executor(extensions),
+    )
+
+    [hold] = held_orientations_of(action)
+    assert hold.parent_node is action.action_body
+
+
+def test_stretch_holds_the_orientation_of_its_base_for_each_of_successive_tool_motions(
+    stretch_apartment_context,
+):
+    """
+    The hold of the first reach covers only that reach, not the one after it.
+    """
+    world, robot, extensions = stretch_apartment_context
+    reaches = [
+        ReachAction(grasp=handle_grasp(world), arm=robot.all_arms[0]) for _ in range(2)
+    ]
+
+    prepared(Sequence(nodes=list(reaches)), simulated_executor(extensions))
+
+    for reach in reaches:
+        [hold] = held_orientations_of(reach)
+        assert hold.parent_node is reach.action_body
+
+
+def test_stretch_holds_the_orientation_of_its_base_beside_a_hold_of_something_else(
+    stretch_apartment_context,
+):
+    world, robot, extensions = stretch_apartment_context
+    reach = ReachAction(grasp=handle_grasp(world), arm=robot.all_arms[0])
+    tool_frame = robot.all_arms[0].end_effector.tool_frame
+
+    prepared(
+        Parallel(nodes=[HoldPose(root_link=world.root, tip_link=tool_frame), reach]),
+        simulated_executor(extensions),
+    )
+
+    [hold] = held_orientations_of(reach)
+    assert hold.tip_link is robot.root
+
+
+def test_stretch_holds_the_orientation_of_its_base_only_once_it_drove_there(
+    stretch_apartment_context,
+):
+    """
+    Moving to reach drives the base, which the held orientation would stop; the reach
+    after the drive is held instead.
+    """
+    world, robot, extensions = stretch_apartment_context
+
+    action = prepared(
+        MoveToReach(
+            target_pose_offset_robot=Pose2D(0.2, -0.55),
+            reference_T_grasp=Pose.from_xyz_rpy(
+                x=0.7, y=-1.3, z=0.9, reference_frame=world.root
+            ),
+            hip_rotation=0.0,
+            end_effector=robot.all_arms[0].end_effector,
+        ),
+        simulated_executor(extensions),
+    )
+
+    [hold] = held_orientations_of(action)
+    [reaching] = [
+        node for node in action.descendants if type(node) is MoveManipulatorAction
+    ]
+    assert hold in reaching.descendants
+
+
+def stretch_reaching_milk_from(
+    world: World, robot: AbstractRobot, extensions: List, root_T_base: Pose
+) -> tuple[SimulatedPlanExecutor, ReachAction, OrientationWhileRunning]:
+    """
+    Puts the base of a Stretch at `root_T_base`, and prepares a reach for the milk
+    standing at a fixed place in a simulation that records the orientation of the base
+    while it is held.
+
+    :return: The executor, with the reach compiled but not run yet, the reach, and the
+        recording.
+    """
+    milk = world.get_semantic_annotations_by_type(Milk)[0]
+    milk.root.parent_connection.origin = HomogeneousTransformationMatrix.from_xyz_rpy(
+        1, -2, 0.8, reference_frame=world.root
+    )
+    drive = robot.root.parent_connection
+    drive.origin = world.transform(root_T_base, drive.parent).homogeneous_matrix
+    recording = OrientationWhileRunning(body=robot.root)
+    executor = SimulatedPlanExecutor(
+        world, context_extensions=extensions, extensions=[recording]
+    )
+    action = ReachAction(
+        grasp=GraspCandidate(milk, Pose(reference_frame=milk.root)),
+        arm=robot.all_arms[0],
+    )
+    executor.compile(statechart_of(executor, action))
+    [recording.node] = held_orientations_of(action)
+    return executor, action, recording
+
+
+def assert_kept_its_heading(
+    recording: OrientationWhileRunning, tolerance: float = 0.01
+) -> None:
+    """
+    Asserts that the recorded body turned at most `tolerance` radians away from where it
+    faced when the recording started.
+    """
+    assert recording.orientations
+    start = recording.orientations[0]
+    turned = [
+        np.arccos(np.clip((np.trace(start.T @ orientation) - 1) / 2, -1, 1))
+        for orientation in recording.orientations
+    ]
+    assert max(turned) <= tolerance
+
+
+@pytest.mark.parametrize(
+    "root_T_base",
+    [
+        Pose.from_xyz_rpy(0.33, -1.98, 0, yaw=np.pi / 2),
+        Pose.from_xyz_rpy(0.33, -2.2, 0, yaw=np.pi / 2),
+    ],
+    ids=["where its arm reaches the milk", "short of the milk along its heading"],
+)
+def test_a_simulated_stretch_reaches_without_turning_its_base(
+    stretch_apartment_context, root_T_base
+):
+    """
+    The Stretch stands with its arm towards the milk, and keeps its heading while it
+    reaches, driving along it where it has to.
+    """
+    world, robot, extensions = stretch_apartment_context
+    root_T_base.reference_frame = world.root
+
+    executor, action, recording = stretch_reaching_milk_from(
+        world, robot, extensions, root_T_base
+    )
+
+    executor.execute()
+
+    assert action.life_cycle_state == LifeCycleValues.SUCCEEDED
+    assert_kept_its_heading(recording)
+
+
+def test_a_simulated_stretch_facing_away_fails_to_reach_rather_than_turning(
+    stretch_apartment_context,
+):
+    """
+    Turning to bring a target into reach sweeps the base through wide arcs, so a Stretch
+    whose arm points away from the milk fails to reach it instead.
+
+    Straining towards the milk bends the held heading by less than a degree, far from
+    the turn reaching it would take.
+    """
+    world, robot, extensions = stretch_apartment_context
+    executor, action, recording = stretch_reaching_milk_from(
+        world,
+        robot,
+        extensions,
+        Pose.from_xyz_rpy(0.4, -2.3, 0, reference_frame=world.root),
+    )
+
+    with pytest.raises(MotionMadeNoProgress):
+        executor.execute()
+
+    assert_kept_its_heading(recording, tolerance=np.deg2rad(2))
+
+
+def test_a_robot_of_another_type_reaches_without_its_base_orientation_held(
+    pr2_apartment_context,
+):
+    world, robot, extensions = pr2_apartment_context
+
+    action = prepared(
+        ReachAction(grasp=handle_grasp(world), arm=robot.all_arms[0]),
+        simulated_executor(extensions),
+    )
+
+    assert held_orientations_of(action) == []
 
 
 def test_a_robot_of_another_type_reaches_unchanged(pr2_apartment_context):

@@ -44,7 +44,7 @@ from coraplex.robot_plans.actions.core.robot_body import (
     ParkArmsAction,
 )
 from coraplex.robot_plans.mixins import ReattachesBodies
-from cramph.composites import CramLanguageNode, StatementNode
+from cramph.composites import CramLanguageNode, Sequence, StatementNode
 from cramph.node import StatechartNode
 from giskardpy.motion_statechart.goals.gripper import MoveGripper
 from giskardpy.motion_statechart.goals.cartesian_goals import CartesianPoseStraight
@@ -101,12 +101,15 @@ class DetectBeforeGrasp(InsertionTransformation[ReachAction]):
         :param plan_node: The reach
         :raises ReachHasNoFinalApproach: If no step of the reach moves its tool center
             point, which it has none of before it is expanded.
-        :return: The last step of the reach moving the tool center point of its arm,
-            which brings the gripper onto the object, whatever a transformation put
-            after it.
+        :return: The last step of a sequence below the reach moving the tool center
+            point of its arm, which brings the gripper onto the object, whatever a
+            transformation put after it or around the sequence.
         """
-        body = plan_node.action_body
-        steps = [] if body is None else body.children
+        steps = [
+            node
+            for node in plan_node.descendants
+            if isinstance(node.parent_node, Sequence)
+        ]
         for step in reversed(steps):
             if self._moves_the_tool_center_point(step, plan_node.arm):
                 return step
@@ -464,7 +467,7 @@ class CloseFingersToObjectWidth(PlanTransformation[GraspingAction]):
 
     def apply(self, plan_node: GraspingAction) -> None:
         closing_step = self.closing_step(plan_node)
-        CramLanguageNode.running(closing_step).replace(
+        CramLanguageNode.closest_above(closing_step).replace(
             closing_step,
             plan_node.closing_step(
                 MoveFingersToWidthAction(

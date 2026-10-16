@@ -180,7 +180,7 @@ class TransitionHasNoOutcomeError(StatechartError):
 @dataclass
 class CompositeNodeWithoutChildrenError(NodeInitializationError):
     """
-    Raised when a composite node that runs a list of child nodes is built without any.
+    Raised when a composite node that exists to hold child nodes is built without any.
     """
 
     def error_message(self) -> str:
@@ -705,48 +705,48 @@ class PrerequisiteNotExpandedError(NodeInitializationError):
 @dataclass
 class NodeIsNotAChildError(NodeInitializationError):
     """
-    Raised when a composite node is asked about a node it does not run.
+    Raised when a composite node is asked about a node that is not its child.
     """
 
     child: StatechartNode
     """
-    The node the composite node does not run.
+    The node that is not a child of the composite node.
     """
 
     def error_message(self) -> str:
-        return f"{self.node.name} does not run {self.child.name}."
+        return f"{self.child.name} is not a child of {self.node.name}."
 
     def suggest_correction(self) -> str:
-        return f"Refer to one of the nodes {self.node.name} runs."
+        return f"Refer to one of the children of {self.node.name}."
 
 
 @dataclass
 class NodeAlreadyAChildError(NodeInitializationError):
     """
-    Raised when a composite node is handed a node it already runs.
+    Raised when a composite node is handed a node that is its child already.
     """
 
     child: StatechartNode
     """
-    The node the composite node already runs.
+    The node that is a child of the composite node already.
     """
 
     def error_message(self) -> str:
-        return f"{self.node.name} already runs {self.child.name}."
+        return f"{self.child.name} is a child of {self.node.name} already."
 
     def suggest_correction(self) -> str:
-        return "Hand the composite node a node it does not run yet."
+        return "Hand the composite node a node that is not its child yet."
 
 
 @dataclass
-class NotRunByLanguageNodeError(NodeInitializationError):
+class NoLanguageNodeAboveError(NodeInitializationError):
     """
-    Raised when the plan language node running a node is asked for, but no plan language
-    node is above it, which leaves nothing that could hold a neighbour of it.
+    Raised when the closest plan language node above a node is asked for, but there is
+    none, which leaves nothing that could hold a neighbour of it.
     """
 
     def error_message(self) -> str:
-        return f"No plan language node runs {self.node.name}."
+        return f"No plan language node is above {self.node.name}."
 
     def suggest_correction(self) -> str:
         return (

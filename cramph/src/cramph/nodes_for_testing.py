@@ -414,7 +414,7 @@ class NodeDeclaringItsOwnFailure(EndedByOwner, CompositeNode):
     decide about itself where succeeding is left to its owner.
 
     Being a composite node is what gives it an :meth:`expand` hook to declare
-    the failure in; it runs no children of its own.
+    the failure in; it has no children of its own.
     """
 
     def expand(self, context: StatechartContext) -> None:

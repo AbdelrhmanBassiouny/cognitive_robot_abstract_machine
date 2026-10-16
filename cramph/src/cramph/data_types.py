@@ -375,6 +375,24 @@ class TransitionKind(Enum):
             ):
                 return frozenset({LifeCycleValues.RUNNING, LifeCycleValues.PAUSED})
 
+    @property
+    def unwired_condition(self) -> Scalar:
+        """
+        :return: The condition a node is created with for this transition, before
+            anything wires it.
+        """
+        if self is TransitionKind.START:
+            return Scalar.const_true()
+        return Scalar.const_false()
+
+    @classmethod
+    def owner_wired_kinds(cls) -> tuple[TransitionKind, ...]:
+        """
+        :return: The transitions the owner of a node wires, which are all but failing:
+            a node declares its own failure.
+        """
+        return cls.START, cls.PAUSE, cls.SUCCEED, cls.INTERRUPT, cls.RESET
+
     @classmethod
     def ending_kinds(cls) -> tuple[TransitionKind, ...]:
         """

@@ -30,11 +30,18 @@ from coraplex.plans.underspecified import (
 )
 from coraplex.robot_plans.actions.base import Action
 from coraplex.robot_plans.actions.core.navigation import NavigateAction
-from coraplex.robot_plans.actions.core.pick_up import PickUpAction
+from coraplex.robot_plans.actions.core.pick_up import PickUpAction, ReachAction
 from coraplex.visualization import RvizVisualization
+from giskardpy.motion_statechart.goals.cartesian_goals import CartesianPoseStraight
+from giskardpy.motion_statechart.monitors.overwrite_state_monitors import SetOdometry
+from giskardpy.motion_statechart.tasks.cartesian_tasks import CartesianPose
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.robots.robot_parts import Arm
-from semantic_digital_twin.semantic_annotations.semantic_annotations import Milk
+from semantic_digital_twin.robots.stretch import Stretch
+from semantic_digital_twin.semantic_annotations.semantic_annotations import (
+    Handle,
+    Milk,
+)
 from semantic_digital_twin.spatial_types.spatial_types import Pose
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.connections import FixedConnection
@@ -679,6 +686,74 @@ def test_a_trial_publishes_nothing_without_debugging(
 
     with pytest.raises(MissingExecutorExtensionError):
         trial_executor.require_extension(RvizVisualization)
+    trial.discard()
+
+
+def test_a_trial_adapts_a_candidate_to_the_robot_as_its_executor_does(
+    apartment_world_pr2_copy_with_context,
+):
+    """
+    A candidate is tried the way the robot will perform it, so the trial keeps the robot
+    adaptations its executor was given, apart from how the base drives.
+    """
+    world, robot, extensions = apartment_world_pr2_copy_with_context
+    executor = simulated_executor(extensions, robot_adaptations=[])
+    trial = ActionTrial(executor=executor, trial_executor_type=SimulatedPlanExecutor)
+
+    trial_executor = trial._trial_executor(trial._copy())
+
+    assert trial_executor.robot_adaptations == executor.robot_adaptations
+    trial.discard()
+
+
+def test_a_trial_puts_a_differentially_driven_base_at_its_goal(
+    stretch_apartment_context,
+):
+    """
+    A trial only decides whether a candidate can succeed, so it puts the base where the
+    candidate drives it instead of spending the time driving there.
+    """
+    world, robot, extensions = stretch_apartment_context
+    trial = ActionTrial(
+        executor=simulated_executor(extensions),
+        trial_executor_type=SimulatedPlanExecutor,
+    )
+    copied = trial._copy()
+    trial_executor = trial._trial_executor(copied)
+    navigation = NavigateAction(
+        target_location=Pose.from_xyz_rpy(2.0, 2.0, 0.0, reference_frame=copied.root)
+    )
+
+    trial_executor.prepare(statechart_of(trial_executor, navigation))
+
+    assert type(navigation.action_body) is SetOdometry
+    trial.discard()
+
+
+def test_a_trial_moves_the_tool_center_point_the_way_the_robot_does(
+    stretch_apartment_context,
+):
+    world, robot, extensions = stretch_apartment_context
+    trial = ActionTrial(
+        executor=simulated_executor(extensions),
+        trial_executor_type=SimulatedPlanExecutor,
+    )
+    copied = trial._copy()
+    trial_executor = trial._trial_executor(copied)
+    reach = ReachAction(
+        grasp=copied.get_semantic_annotations_by_type(Handle)[0].grasp_candidates()[0],
+        arm=copied.get_semantic_annotations_by_type(Stretch)[0].all_arms[0],
+    )
+
+    trial_executor.prepare(statechart_of(trial_executor, reach))
+
+    tool_frame = reach.arm.end_effector.tool_frame
+    assert [
+        type(node)
+        for node in reach.descendants
+        if isinstance(node, (CartesianPose, CartesianPoseStraight))
+        and node.tip_link is tool_frame
+    ] == [CartesianPoseStraight] * 2
     trial.discard()
 
 
