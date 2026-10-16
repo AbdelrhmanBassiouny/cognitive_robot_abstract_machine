@@ -19,7 +19,6 @@ from giskardpy.motion_statechart.tasks.align_planes import AlignPlanes
 from giskardpy.motion_statechart.tasks.cartesian_tasks import (
     CartesianPose,
 )
-from giskardpy.motion_statechart.binding_policy import GoalBindingPolicy
 from giskardpy.motion_statechart.tasks.joint_tasks import JointPositionList, JointState
 from giskardpy.motion_statechart.tasks.feature_functions import (
     AngleGoal,
@@ -660,12 +659,12 @@ def test_pointing_lowers_the_torso_when_the_head_cannot_tilt_far_enough(
     assert torso.position < torso.dof.limits.upper.position - 0.05
 
 
-def test_pointing_follows_a_goal_frame_that_moves_while_it_runs(
+def test_pointing_follows_a_goal_point_given_as_an_expression_of_a_moving_frame(
     pr2_world_copy: World,
 ):
     """
-    A goal bound on every tick follows its frame, and the frame stays out of what the
-    pointing optimises, so the joint moving the frame still reaches its own goal.
+    A goal given as the expression of where its frame is follows that frame while the
+    pointing runs, and the joint moving the frame still reaches its own goal.
     """
     world = pr2_world_copy
     base = world.get_kinematic_structure_entity_by_name("base_link")
@@ -692,12 +691,13 @@ def test_pointing_follows_a_goal_frame_that_moves_while_it_runs(
         extensions=[MotionControl()],
     )
     msc = Statechart(context=kin_sim.context)
+    world_T_region = world.compose_forward_kinematics_expression(world.root, region)
+    world_T_region.reference_frame = world.root
     pointing = Pointing(
         root_link=base,
         tip_link=head,
-        goal_point=Point3(reference_frame=region),
+        goal_point=world_T_region.position,
         pointing_axis=Vector3.X(reference_frame=head),
-        binding_policy=GoalBindingPolicy.Bind_on_tick,
     )
     region_goal = JointPositionList(
         goal_state=JointState.from_mapping({region_joint: 0.8})

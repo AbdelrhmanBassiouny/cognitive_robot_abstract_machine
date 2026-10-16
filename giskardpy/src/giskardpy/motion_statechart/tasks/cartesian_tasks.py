@@ -95,13 +95,8 @@ class CartesianTask(ConvergingTask, ABC):
         self.root_T_goal_reference_frame = self._forward_kinematics_binding.root_T_tip
 
     def on_start(self, context: StatechartContext):
-        if self.binding_policy != GoalBindingPolicy.Bind_at_build:
+        if self.binding_policy == GoalBindingPolicy.Bind_on_start:
             self._forward_kinematics_binding.bind(context.world)
-
-    def on_tick(self, context: StatechartContext) -> ObservationStateValues | None:
-        if self.binding_policy == GoalBindingPolicy.Bind_on_tick:
-            self._forward_kinematics_binding.bind(context.world)
-        return None
 
     @property
     @abstractmethod
@@ -495,7 +490,6 @@ class CartesianPositionTrajectory(CartesianTask):
 
         The observation follows from that distance, so it is one control cycle behind.
         """
-        super().on_tick(context)
         goal_reference_frame_P_tip_np = (
             self._compiled_goal_reference_frame_P_tip.evaluate()
         )

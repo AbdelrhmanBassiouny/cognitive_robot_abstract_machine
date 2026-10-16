@@ -10,7 +10,6 @@ from giskardpy.motion_statechart.binding_policy import (
     ForwardKinematicsBinding,
     GoalBindingPolicy,
 )
-from cramph.data_types import ObservationStateValues
 from cramph.node import EndedByOwner
 from cramph.context import StatechartContext
 from giskardpy.motion_statechart.graph_node import MotionStatechartNode
@@ -32,8 +31,8 @@ class RootRelativeGoalMonitor(EndedByOwner, MotionStatechartNode, ABC):
     Base for monitors whose goal is captured relative to the kinematic chain via a
     forward kinematics binding.
 
-    The :class:`GoalBindingPolicy` decides whether the goal is frozen once at build
-    time, recaptured every time the monitor starts, or recaptured on every tick.
+    The :class:`GoalBindingPolicy` decides whether the goal is frozen once at build time
+    or recaptured every time the monitor starts.
     """
 
     root_link: Body = field(kw_only=True)
@@ -85,13 +84,8 @@ class RootRelativeGoalMonitor(EndedByOwner, MotionStatechartNode, ABC):
         return self._forward_kinematics_binding.root_T_tip @ self.goal
 
     def on_start(self, context: StatechartContext) -> None:
-        if self.binding_policy != GoalBindingPolicy.Bind_at_build:
+        if self.binding_policy == GoalBindingPolicy.Bind_on_start:
             self._forward_kinematics_binding.bind(context.world)
-
-    def on_tick(self, context: StatechartContext) -> ObservationStateValues | None:
-        if self.binding_policy == GoalBindingPolicy.Bind_on_tick:
-            self._forward_kinematics_binding.bind(context.world)
-        return None
 
 
 @dataclass(eq=False, repr=False)
@@ -234,12 +228,10 @@ class PointingAt(EndedByOwner, MotionStatechartNode):
     """
     Point the tip link should point at.
     """
-
     root_link: Body = field(kw_only=True)
     """
     Reference link the goal point is expressed in.
     """
-
     pointing_axis: Vector3 = field(kw_only=True)
     """
     Axis of the tip link that should point at the goal point.
