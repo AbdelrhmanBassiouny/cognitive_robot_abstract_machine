@@ -26,6 +26,7 @@ from cramph.statechart import (
 from giskardpy.motion_statechart.monitors.progress_monitors import StillProgressing
 from giskardpy.motion_statechart.tasks.cartesian_tasks import (
     CartesianPose,
+    HoldOrientation,
     HoldPose,
     CartesianOrientation,
     CartesianPosition,
@@ -215,6 +216,53 @@ class TestHoldPose:
             executor.tick()
 
         assert hold.observation_state == ObservationStateValues.FALSE
+
+    def test_a_link_held_in_its_orientation_still_moves_but_does_not_turn(
+        self, cylinder_bot_world: World
+    ):
+        """
+        Tasks pull the link both to another position and into another orientation, and
+        only the turning is held off.
+        """
+        world = cylinder_bot_world
+        bot = world.get_kinematic_structure_entity_by_name("bot")
+        start = world.compute_forward_kinematics_np(world.root, bot).copy()
+        goal_point = Point3(1, 0, 0, reference_frame=world.root)
+        executor = self.executor_for(world)
+        motion_statechart = Statechart(context=executor.context)
+        motion_statechart.add_nodes(
+            [
+                moving := CartesianPosition(
+                    root_link=world.root,
+                    tip_link=bot,
+                    goal_point=goal_point,
+                    weight=DefaultWeights.WEIGHT_BELOW_COLLISION_AVOIDANCE,
+                ),
+                CartesianOrientation(
+                    root_link=world.root,
+                    tip_link=bot,
+                    goal_orientation=RotationMatrix.from_rpy(
+                        yaw=np.pi / 2, reference_frame=world.root
+                    ),
+                    weight=DefaultWeights.WEIGHT_BELOW_COLLISION_AVOIDANCE,
+                ),
+                HoldOrientation(
+                    root_link=world.root,
+                    tip_link=bot,
+                    weight=DefaultWeights.WEIGHT_ABOVE_COLLISION_AVOIDANCE,
+                ),
+            ]
+        )
+        motion_statechart.add_node(EndMotion.when_true(moving))
+
+        executor.compile(statechart=motion_statechart)
+        executor.tick_until_end()
+
+        reached = world.compute_forward_kinematics_np(world.root, bot)
+        np.testing.assert_allclose(
+            reached[:3, 3], goal_point.to_np()[:3], atol=moving.threshold
+        )
+        np.testing.assert_allclose(reached[:3, :3], start[:3, :3], atol=1e-3)
 
 
 # %% straight line paths
