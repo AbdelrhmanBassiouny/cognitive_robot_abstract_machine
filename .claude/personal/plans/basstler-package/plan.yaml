@@ -42,6 +42,58 @@ items:
     missing. Asked for on cram2#659 (`scripts/sync_version.py:26`, LucaKro: "why is basstler
     not a proper package like the others?"). What goes away: `FLAT_LAYOUT_PACKAGES`, `package-dir
     basstler = "."`, and `pyproject.toml` shipped as package data.'
+- id: basstler-plugin-spike
+  title: Check that a CRAM cloud session loads basstler's skills and start hook as a Claude Code plugin
+  branch: null
+  status: not started
+  track: extraction
+  depends_on: []
+  pull_request_number: null
+  session: https://claude.ai/code/session_013kCsTQdNToBZd8YixgPFwG
+  notes: 'Throwaway marketplace with one skill and a SessionStart hook, enabled from a scratch branch''s
+    settings.json (extraKnownMarketplaces + enabledPlugins, pinned ref). Pass: skills and hooks ship
+    as a plugin and CRAM keeps only settings.json. Fail: CRAM keeps SKILL.md files and hook shims calling
+    python -m basstler from a pinned install.'
+- id: basstler-repository-extraction
+  title: Create AbdelrhmanBassiouny/basstler from #501's tip with full history and every open tooling branch
+  branch: null
+  status: not started
+  track: extraction
+  depends_on: [basstler-plugin-spike]
+  pull_request_number: null
+  repository: AbdelrhmanBassiouny/basstler
+  session: https://claude.ai/code/session_013kCsTQdNToBZd8YixgPFwG
+  notes: 'git filter-repo over a mirror holding every open tooling branch: basstler/ to root, test/basstler_test/
+    to tests/, .claude/skills and hooks to plugin/, .claude/stack to docs/stack, tooling workflows kept. Then
+    one standalone commit: own CI (pytest tests/), plugin manifest, cram2 values moved out of the shipped
+    stack.toml into the consumer''s .claude/basstler/stack.toml, one venv location instead of basstler/.venv,
+    reusable workflows, hook installs basstler from git at a tag. Tag v0.1.0.'
+- id: basstler-open-pull-request-carryover
+  title: Reopen the open tooling pull requests in the new repository, close the stale ones
+  branch: null
+  status: not started
+  track: extraction
+  depends_on: [basstler-repository-extraction]
+  pull_request_number: null
+  repository: AbdelrhmanBassiouny/basstler
+  session: https://claude.ai/code/session_013kCsTQdNToBZd8YixgPFwG
+  notes: 'Branches arrive rewritten by the extraction. Reopen #505 #508 #503 #504 #492 #514 #420 #424 #280
+    #430 #437 #253 there (quote unresolved upstream threads), close the fork PR with a link, set each
+    item''s repository and new number. Stale, written before the package existed: #260 #277 #281 #282
+    #284 #285 #291 #293 #482 - close each with a one-paragraph issue in the new repo unless the user
+    marks it to carry.'
+- id: cram-basstler-removal
+  title: Remove basstler from CRAM, keeping only its configuration and a pinned reference
+  branch: null
+  status: not started
+  track: extraction
+  depends_on: [basstler-repository-extraction]
+  pull_request_number: null
+  session: https://claude.ai/code/session_013kCsTQdNToBZd8YixgPFwG
+  notes: 'From fork main: delete basstler/, test/basstler_test/, .claude/hooks|skills|stack|shared|SETUP.md
+    (shims instead if the spike failed), the test_basstler job in ci.yml and the sync_version.py entry; add
+    settings.json enabling the plugin at v0.1.0, .claude/basstler/stack.toml with the cram2 values, and a
+    caller of the reusable upstream-reviews workflow. Promote to cram2 only with the user''s OK in-session.'
 - id: krrood-core-package
   title: Move krrood's general patterns into a light krrood_core package
   branch: claude/krrood-core-package
@@ -76,6 +128,7 @@ items:
     NotesMarker.section_in, in basstler/src/basstler/. Stacked on #501; step 2 is the first
     caller.'
 - id: basstler-save-commands-python
+  repository: AbdelrhmanBassiouny/basstler
   title: 'Bash→Python 2: the four notes writers become python -m subcommands'
   branch: null
   status: not started
@@ -86,6 +139,7 @@ items:
     and `create-personal-notes-branch.sh` become three-line shims; their bodies move onto
     the core modules, collapsing four near-identical scratch-worktree write dances into `NotesBranchWriter`.'
 - id: basstler-save-plan-python
+  repository: AbdelrhmanBassiouny/basstler
   title: 'Bash→Python 3: save-plan and the plan manifest tools'
   branch: null
   status: not started
@@ -98,6 +152,7 @@ items:
     and the `--manifest`/`--roadmap` source files must exist. Both existing test files carry
     over, one with an import change and one as the shim contract test.'
 - id: basstler-session-start-python
+  repository: AbdelrhmanBassiouny/basstler
   title: 'Bash→Python 4: session-start behind an inert probing shim'
   branch: null
   status: not started
@@ -111,6 +166,7 @@ items:
     or later. `session_start.py` reproduces the stdout summary and every written marker byte-for-byte,
     pinned by golden-output fixtures recorded from the bash version before deletion.'
 - id: basstler-setup-checks-python
+  repository: AbdelrhmanBassiouny/basstler
   title: 'Bash→Python 5: check-setup as typed rows'
   branch: null
   status: not started
@@ -123,6 +179,7 @@ items:
     and `prerequisite-check.md`. The parsing enums the test file already defines move into
     the production module and the test imports them instead.'
 - id: basstler-dashboard-refresh-python
+  repository: AbdelrhmanBassiouny/basstler
   title: 'Bash→Python 6: refresh_dashboard orchestration in-process'
   branch: null
   status: not started
@@ -137,6 +194,7 @@ items:
     contract and the `--plan-id` flag stay unchanged; the existing shell test carries over
     as the shim contract test.'
 - id: basstler-config-shim-slimming
+  repository: AbdelrhmanBassiouny/basstler
   title: 'Bash→Python 7: slim the sourced config file to constants'
   branch: null
   status: not started
@@ -154,6 +212,7 @@ items:
     The behavioural functions are deleted once a grep of every `.md` confirms no prose instructs
     a session to call them.'
 - id: basstler-github-api-unification
+  repository: AbdelrhmanBassiouny/basstler
   title: 'One github backend: the gh-CLI-else-token rule implemented once'
   branch: null
   status: not started
@@ -203,10 +262,6 @@ items:
   blockers:
   - 'Waits on upstream-pull-request-checks (#420), which waits on basstler-package (#185,
     cram2#659). #424 is stacked on #420''s branch and lands after it.'
-  notes: 'Built 2026-09-19 (https://claude.ai/code/session_01LSQTbfwr6ankeW9mFPdB2y), stacked
-    on #420. `--failure-logs` reads each failed upstream check''s job log on the fork''s runner
-    and quotes the pytest short summary, the runner''s error annotations, or the log''s tail.
-    Carried across #185 2026-10-04 at `2d4a15148` (merging #420''s `a6d7b29c1`), with the
-    user''s go-ahead to push after the ready flip. The seven conflicts were the ones the trial
-    merge found. The job-log branch joined #185''s single shared `gh` stub. It logs the endpoint
-    and still matches `--allow-escape-sequences` rather than skipping it.'
+  notes: 'Superseded by the move to its own repository: its tip becomes the new repo''s main
+    (basstler-repository-extraction), so it never lands in CRAM. Close it and cram2#659 as superseded
+    once cram-basstler-removal opens upstream.'
