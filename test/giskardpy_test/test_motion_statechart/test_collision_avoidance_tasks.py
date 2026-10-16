@@ -396,9 +396,9 @@ def test_update_collision_matrix_later(cylinder_bot_world: World):
             # The avoidance rules are in force until the robot is stuck in front of the
             # obstacle; only then do the rules allowing every collision start.
             Sequence(
-                [
+                nodes=[
                     Parallel(
-                        [
+                        nodes=[
                             LocalMinimumReached(),
                             UpdateTemporaryCollisionRules(
                                 temporary_rules=[
@@ -413,7 +413,7 @@ def test_update_collision_matrix_later(cylinder_bot_world: World):
                         ]
                     ),
                     Parallel(
-                        [
+                        nodes=[
                             ConstFalseNode(),
                             UpdateTemporaryCollisionRules(
                                 temporary_rules=[AllowAllCollisions()]
@@ -475,7 +475,7 @@ def test_consumer_cleanup_after_cancel(cylinder_bot_world: World):
     )
     msc.add_node(
         Sequence(
-            [
+            nodes=[
                 CountTicks(ticks=5),
                 CancelStatechart(exception=Exception("muh")),
             ]
@@ -637,7 +637,7 @@ def test_avoid_collision_go_around_corner(pr2_with_box):
     )
     msc.add_node(
         Sequence(
-            [
+            nodes=[
                 SetSeedConfiguration(
                     seed_configuration=JointState.from_str_dict(
                         {
@@ -665,7 +665,7 @@ def test_avoid_collision_go_around_corner(pr2_with_box):
                     )
                 ),
                 Parallel(
-                    [
+                    nodes=[
                         CartesianPose(
                             root_link=pr2_with_box.root,
                             tip_link=r_tip,
@@ -732,7 +732,7 @@ def test_avoid_self_collision_with_l_arm(pr2_with_box, rclpy_node):
     msc = Statechart(context=kin_sim.context)
     msc.add_node(
         Sequence(
-            [
+            nodes=[
                 SetSeedConfiguration(
                     seed_configuration=JointState.from_str_dict(
                         {
@@ -755,7 +755,7 @@ def test_avoid_self_collision_with_l_arm(pr2_with_box, rclpy_node):
                     )
                 ),
                 Parallel(
-                    [
+                    nodes=[
                         CartesianPose(
                             root_link=base_footprint,
                             tip_link=r_tip,
@@ -848,7 +848,7 @@ def _build_arms_crossing_statechart(
     msc = Statechart(context=executor.context)
     msc.add_node(
         goal := Sequence(
-            [
+            nodes=[
                 SetSeedConfiguration(
                     seed_configuration=JointState.from_str_dict(
                         {
@@ -1012,14 +1012,14 @@ def test_hard_constraints_violated(
     )
     msc.add_node(
         Sequence(
-            [
+            nodes=[
                 SetOdometry(
                     base_pose=HomogeneousTransformationMatrix.from_xyz_rpy(
                         x=1, reference_frame=cylinder_bot_world.root
                     )
                 ),
                 Parallel(
-                    [
+                    nodes=[
                         CartesianPose(
                             root_link=cylinder_bot_world.root,
                             tip_link=tip,
@@ -1082,7 +1082,7 @@ def test_collision_for_robot_with_static_base(
     msc = Statechart(context=kin_sim.context)
     msc.add_node(
         goal := Parallel(
-            [
+            nodes=[
                 CartesianPosition(
                     root_link=world.root,
                     tip_link=tool_frame,
@@ -1219,7 +1219,7 @@ def test_building_a_rules_node_keeps_the_temporary_rules_in_force(
     )
     statechart = Statechart(context=executor.context)
     rules_node = UpdateTemporaryCollisionRules(temporary_rules=[AvoidAllCollisions()])
-    statechart.add_node(Sequence([ConstFalseNode(), rules_node]))
+    statechart.add_node(Sequence(nodes=[ConstFalseNode(), rules_node]))
 
     executor.compile(statechart)
 
@@ -1267,7 +1267,7 @@ def test_the_rules_of_a_rules_node_are_out_of_force_once_it_ended(
     executor = _executor_of(cylinder_bot_world)
     statechart = Statechart(context=executor.context)
     rules_node = UpdateTemporaryCollisionRules(temporary_rules=[AllowAllCollisions()])
-    statechart.add_node(Sequence([rules_node, ConstFalseNode()]))
+    statechart.add_node(Sequence(nodes=[rules_node, ConstFalseNode()]))
 
     executor.compile(statechart)
     executor.tick()

@@ -1,6 +1,6 @@
 from __future__ import division
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import timedelta
 
 from cramph.composites import Attempt, RepeatUntil
@@ -9,7 +9,7 @@ from cramph.node import StatechartNode
 from giskardpy.motion_statechart.monitors.progress_monitors import Stalled
 
 
-@dataclass(repr=False, eq=False)
+@dataclass(repr=False, eq=False, kw_only=True)
 class RepeatOnStall(RepeatUntil):
     """
     Runs a task again from the start whenever it stops approaching its goal.
@@ -18,12 +18,12 @@ class RepeatOnStall(RepeatUntil):
     :attr:`timeout` alone decides when such an attempt is given up on.
     """
 
-    timeout: timedelta = field(default=timedelta(seconds=5), kw_only=True)
+    timeout: timedelta = timedelta(seconds=5)
     """
     Simulated time without progress after which an attempt counts as failed.
     """
 
-    minimum_convergence_rate: float = field(default=0.05, kw_only=True)
+    minimum_convergence_rate: float = 0.05
     """
     Rate below which a task counts as not approaching its goal, as a fraction of that
     task's own threshold per second.

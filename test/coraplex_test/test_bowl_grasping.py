@@ -125,7 +125,7 @@ def test_transporting_a_bowl_grasps_it_at_its_rim(pr2_and_bowl):
         seed=SAMPLING_SEED,
     )
 
-    Sequence([transport])
+    Sequence(nodes=[transport])
 
     first_pick_up = next(
         iter(EntityQueryLanguageGenerativeBackend().evaluate(transport.pick_up))

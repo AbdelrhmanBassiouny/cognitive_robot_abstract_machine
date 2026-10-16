@@ -25,7 +25,7 @@ from semantic_digital_twin.spatial_types.spatial_types import SpatialType
 from semantic_digital_twin.world_description.world_entity import Body
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class RootRelativeGoalMonitor(EndedByOwner, MotionStatechartNode, ABC):
     """
     Base for monitors whose goal is captured relative to the kinematic chain via a
@@ -35,14 +35,12 @@ class RootRelativeGoalMonitor(EndedByOwner, MotionStatechartNode, ABC):
     or recaptured every time the monitor starts.
     """
 
-    root_link: Body = field(kw_only=True)
+    root_link: Body
     """
     Root link of the kinematic chain the goal is expressed in.
     """
 
-    binding_policy: GoalBindingPolicy = field(
-        default=GoalBindingPolicy.Bind_on_start, kw_only=True
-    )
+    binding_policy: GoalBindingPolicy = GoalBindingPolicy.Bind_on_start
     """
     When the goal reference frame is captured.
 
@@ -88,29 +86,29 @@ class RootRelativeGoalMonitor(EndedByOwner, MotionStatechartNode, ABC):
             self._forward_kinematics_binding.bind(context.world)
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class PoseReached(RootRelativeGoalMonitor):
     """
     Observes ``True`` once the tip link has reached the goal pose within the position
     and orientation thresholds.
     """
 
-    tip_link: Body = field(kw_only=True)
+    tip_link: Body
     """
     Link that should reach the goal pose.
     """
 
-    goal_pose: HomogeneousTransformationMatrix = field(kw_only=True)
+    goal_pose: HomogeneousTransformationMatrix
     """
     Target pose to reach.
     """
 
-    position_threshold: float = field(default=0.01, kw_only=True)
+    position_threshold: float = 0.01
     """
     Distance threshold for the position part of the goal in meters.
     """
 
-    orientation_threshold: float = field(default=0.01, kw_only=True)
+    orientation_threshold: float = 0.01
     """
     Rotation error threshold for the orientation part of the goal in radians.
     """
@@ -141,23 +139,23 @@ class PoseReached(RootRelativeGoalMonitor):
         )
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class PositionReached(RootRelativeGoalMonitor):
     """
     Observes ``True`` once the tip link is within ``threshold`` of the goal point.
     """
 
-    tip_link: Body = field(kw_only=True)
+    tip_link: Body
     """
     Link that should reach the goal point.
     """
 
-    goal_point: Point3 = field(kw_only=True)
+    goal_point: Point3
     """
     Target 3D point to reach.
     """
 
-    threshold: float = field(default=0.01, kw_only=True)
+    threshold: float = 0.01
     """
     Distance threshold for goal achievement in meters.
     """
@@ -176,24 +174,24 @@ class PositionReached(RootRelativeGoalMonitor):
         return NodeArtifacts(observation=distance_to_goal < self.threshold)
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class OrientationReached(RootRelativeGoalMonitor):
     """
     Observes ``True`` once the tip link orientation is within ``threshold`` of the goal
     orientation.
     """
 
-    tip_link: Body = field(kw_only=True)
+    tip_link: Body
     """
     Link that should reach the goal orientation.
     """
 
-    goal_orientation: RotationMatrix = field(kw_only=True)
+    goal_orientation: RotationMatrix
     """
     Target orientation to reach.
     """
 
-    threshold: float = field(default=0.01, kw_only=True)
+    threshold: float = 0.01
     """
     Rotation error threshold for goal achievement in radians.
     """
@@ -212,32 +210,34 @@ class OrientationReached(RootRelativeGoalMonitor):
         return NodeArtifacts(observation=sm.abs(rotation_error) < self.threshold)
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class PointingAt(EndedByOwner, MotionStatechartNode):
     """
     Observes ``True`` once the pointing axis of the tip link is aimed at the goal point
     within ``threshold``.
     """
 
-    tip_link: Body = field(kw_only=True)
+    tip_link: Body
     """
     Link whose pointing axis is checked.
     """
 
-    goal_point: Point3 = field(kw_only=True)
+    goal_point: Point3
     """
     Point the tip link should point at.
     """
-    root_link: Body = field(kw_only=True)
+
+    root_link: Body
     """
     Reference link the goal point is expressed in.
     """
-    pointing_axis: Vector3 = field(kw_only=True)
+
+    pointing_axis: Vector3
     """
     Axis of the tip link that should point at the goal point.
     """
 
-    threshold: float = field(default=0.01, kw_only=True)
+    threshold: float = 0.01
     """
     Distance threshold between the goal point and the pointing line in meters.
     """
@@ -263,34 +263,34 @@ class PointingAt(EndedByOwner, MotionStatechartNode):
         return NodeArtifacts(observation=sm.abs(distance) < self.threshold)
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class VectorsAligned(EndedByOwner, MotionStatechartNode):
     """
     Observes ``True`` once the tip normal is aligned with the goal normal within
     ``threshold``.
     """
 
-    root_link: Body = field(kw_only=True)
+    root_link: Body
     """
     Reference link the goal normal is expressed in.
     """
 
-    tip_link: Body = field(kw_only=True)
+    tip_link: Body
     """
     Link the tip normal is expressed in.
     """
 
-    goal_normal: Vector3 = field(kw_only=True)
+    goal_normal: Vector3
     """
     Reference normal the tip normal should align with.
     """
 
-    tip_normal: Vector3 = field(kw_only=True)
+    tip_normal: Vector3
     """
     Normal of the tip link that should align with the goal normal.
     """
 
-    threshold: float = field(default=0.01, kw_only=True)
+    threshold: float = 0.01
     """
     Angle threshold between the two normals in radians.
     """
@@ -314,39 +314,39 @@ class VectorsAligned(EndedByOwner, MotionStatechartNode):
         return NodeArtifacts(observation=error < self.threshold)
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class DistanceToLine(EndedByOwner, MotionStatechartNode):
     """
     Observes ``True`` once the tip link is within ``threshold`` of the line segment
     centered at ``center_point`` along ``line_axis``.
     """
 
-    root_link: Body = field(kw_only=True)
+    root_link: Body
     """
     Reference link the line is expressed in.
     """
 
-    tip_link: Body = field(kw_only=True)
+    tip_link: Body
     """
     Link whose distance to the line is checked.
     """
 
-    center_point: Point3 = field(kw_only=True)
+    center_point: Point3
     """
     Center of the line segment.
     """
 
-    line_axis: Vector3 = field(kw_only=True)
+    line_axis: Vector3
     """
     Direction of the line segment.
     """
 
-    line_length: float = field(kw_only=True)
+    line_length: float
     """
     Length of the line segment.
     """
 
-    threshold: float = field(default=0.01, kw_only=True)
+    threshold: float = 0.01
     """
     Distance threshold to the line segment in meters.
     """

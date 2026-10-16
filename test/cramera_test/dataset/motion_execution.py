@@ -83,7 +83,7 @@ def motion_execution() -> MotionExecution:
     A plan of one step in a statechart, without anything ticking it.
     """
     motion = ConstTrueNode(name="Transport")
-    plan = Sequence([motion])
+    plan = Sequence(nodes=[motion])
     chart = Statechart(context=StatechartContext(world=World()))
     chart.add_node(plan)
     bridge = Bridge()

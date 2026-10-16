@@ -128,15 +128,15 @@ with world.modify_world():
     milk = Milk(root=milk_body)
     world.add_semantic_annotation(milk)
 
-plan = Sequence([
-        ParkArmsAction(pr2.all_arms),
-        MoveTorsoAction(TorsoState.HIGH),
-        NavigateAction(Pose.from_xyz_rpy(2.0, 2.0, 0.0, reference_frame=world.root)),
+plan = Sequence(nodes=[
+        ParkArmsAction(arms=pr2.all_arms),
+        MoveTorsoAction(torso_state=TorsoState.HIGH),
+        NavigateAction(target_location=Pose.from_xyz_rpy(2.0, 2.0, 0.0, reference_frame=world.root)),
         PickUpAction(
             grasp=milk.grasp_candidates()[0],
             arm=pr2.right_arm,
         ),
-        NavigateAction(Pose.from_xyz_rpy(4.0, 4.0, 0.0, reference_frame=world.root)),
+        NavigateAction(target_location=Pose.from_xyz_rpy(4.0, 4.0, 0.0, reference_frame=world.root)),
         PlaceAction(
             object_designator=milk,
             target_location=Pose.from_xyz_rpy(4.2, 4.0, 1.0, reference_frame=world.root),

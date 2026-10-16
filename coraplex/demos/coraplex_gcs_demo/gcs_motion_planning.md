@@ -67,7 +67,7 @@ from coraplex.robot_plans.actions.core.robot_body import ParkArmsAction
 
 executor = RealRobotPlanExecutor(world, context_extensions=[RobotAccess(robot)])
 statechart = Statechart(context=executor.context)
-statechart.add_node(ParkArmsAction(robot.all_arms))
+statechart.add_node(ParkArmsAction(arms=robot.all_arms))
 executor.compile(statechart)
 executor.execute()
 ```

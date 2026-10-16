@@ -73,8 +73,8 @@ from coraplex.robot_plans.actions.core.robot_body import ParkArmsAction, MoveTor
 from cramph.composites import Sequence
 from semantic_digital_twin.datastructures.definitions import TorsoState
 
-run(Sequence([ParkArmsAction(pr2_view.all_arms),
-            MoveTorsoAction(TorsoState.HIGH)]))
+run(Sequence(nodes=[ParkArmsAction(arms=pr2_view.all_arms),
+            MoveTorsoAction(torso_state=TorsoState.HIGH)]))
 
 ```
 
@@ -89,7 +89,7 @@ location = ReachabilityLocation(
     context=context, seed=0,
 )
 
-run(NavigateAction(location.ground()))
+run(NavigateAction(target_location=location.ground()))
 
 pr2_view.root.parent_connection.origin = origin_pose.homogeneous_matrix
 ```
@@ -142,7 +142,7 @@ location = VisibilityLocation(
     Pose(reference_frame=world.get_body_by_name("milk.stl")), context=context, seed=0
 )
 
-run(NavigateAction(location.ground()))
+run(NavigateAction(target_location=location.ground()))
 
 pr2_view.root.parent_connection.origin = origin_pose.homogeneous_matrix
 ```

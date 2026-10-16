@@ -40,15 +40,13 @@ from semantic_digital_twin.spatial_types.spatial_types import (
 from semantic_digital_twin.world_description.geometry import VolumetricBoundingBox
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class DrivesBase(Action, ABC):
     """
     Base class for the actions that move the robot's base to a pose.
     """
 
-    base_pose_threshold: float = field(
-        default=DifferentialDriveBaseGoal.threshold, kw_only=True
-    )
+    base_pose_threshold: float = DifferentialDriveBaseGoal.threshold
     """
     How far the base may be from a pose it drives to, in meters and in radians, to count
     as arrived.
@@ -95,7 +93,7 @@ class DrivesBase(Action, ABC):
         )
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class NavigateAction(DrivesBase):
     """
     Navigates the Robot to a position.
@@ -111,7 +109,7 @@ class NavigateAction(DrivesBase):
         return self._drive_to(self.robot.mobile_base.pose_facing(self.target_location))
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class LookAtAction(Action):
     """
     Lets the robot look at a position.
@@ -146,10 +144,10 @@ class LookAtAction(Action):
         hold_base = self.keep_base_still()
         if not hold_base:
             return pointing
-        return Parallel([pointing, *hold_base])
+        return Parallel(nodes=[pointing, *hold_base])
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class FaceAtAction(Action):
     """
     Turns the robot's base on the spot until its front faces a target.
@@ -165,7 +163,7 @@ class FaceAtAction(Action):
 
     def create_action_body(self) -> StatechartNode:
         return Parallel(
-            [
+            nodes=[
                 Pointing(
                     root_link=self.world.root,
                     tip_link=self.robot.root,
@@ -193,7 +191,7 @@ class FaceAtAction(Action):
         return root_P_target
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class PathPlanningNavigateAction(DrivesBase):
     """
     Navigates the robot to a pose along a path through the environment's free space.
@@ -211,7 +209,7 @@ class PathPlanningNavigateAction(DrivesBase):
     """
 
     def create_action_body(self) -> StatechartNode:
-        return Sequence([self._drive_to(waypoint) for waypoint in self._path()])
+        return Sequence(nodes=[self._drive_to(waypoint) for waypoint in self._path()])
 
     @property
     def _floor(self) -> Floor:
@@ -315,7 +313,7 @@ class PathPlanningNavigateAction(DrivesBase):
         )
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class ElevatorNavigation(ReattachesBodies):
     """
     Navigates a robot to another level of a building using an elevator, the robot drives
@@ -333,25 +331,25 @@ class ElevatorNavigation(ReattachesBodies):
     Level of the building the robot should end up on.
     """
 
-    exit_clearance: float = field(default=0.5, kw_only=True)
+    exit_clearance: float = 0.5
     """
     Distance the robot keeps from the elevator's opening after driving out, on top of
     half the cabin's depth.
     """
 
-    arrival_threshold: float = field(default=0.01, kw_only=True)
+    arrival_threshold: float = 0.01
     """
     Position error within which the elevator's drive and doors count as having arrived.
     """
 
     def create_action_body(self) -> StatechartNode:
         return Sequence(
-            [
-                NavigateAction(self._pose_infront_of_elevator),
+            nodes=[
+                NavigateAction(target_location=self._pose_infront_of_elevator),
                 PausedUntilTrue(
                     monitor=self._elevator_open_at_floor(self._current_floor),
                     monitored_node=NavigateAction(
-                        Pose.from_xyz_rpy(
+                        target_location=Pose.from_xyz_rpy(
                             z=self._height_in_cabin,
                             reference_frame=self.elevator.root,
                         )
@@ -360,7 +358,9 @@ class ElevatorNavigation(ReattachesBodies):
                 *self.reattach(self.robot.root, self.elevator.root),
                 PausedUntilTrue(
                     monitor=self._elevator_open_at_floor(self.target_floor),
-                    monitored_node=NavigateAction(self._pose_infront_of_elevator),
+                    monitored_node=NavigateAction(
+                        target_location=self._pose_infront_of_elevator
+                    ),
                 ),
                 *self.reattach(self.robot.root, self.world.root),
             ]
@@ -434,6 +434,6 @@ class ElevatorNavigation(ReattachesBodies):
             )
         )
         return Parallel(
-            nodes,
+            nodes=nodes,
             name="ElevatorOpenAtTargetFloor",
         )

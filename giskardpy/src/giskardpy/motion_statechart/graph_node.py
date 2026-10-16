@@ -145,7 +145,7 @@ class MotionNodeArtifacts(NodeArtifacts):
         return GeometricConstraintBuilder(self.constraints)
 
 
-@dataclass(repr=False, eq=False)
+@dataclass(repr=False, eq=False, kw_only=True)
 class MotionStatechartNode(StatechartNode):
     """
     A node of a motion statechart, which may contribute constraints, an error signal and
@@ -263,7 +263,7 @@ def velocity_convergence_expression(
     )
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class StructureCopyMotionStatechartNode(EndedByOwner, MotionStatechartNode):
     """
     Stands in for a motion statechart node in a structure copy, see
@@ -271,7 +271,7 @@ class StructureCopyMotionStatechartNode(EndedByOwner, MotionStatechartNode):
     """
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class Task(EndedByOwner, MotionStatechartNode):
     """
     Tasks are MotionStatechartNodes that add motion constraints.
@@ -280,9 +280,7 @@ class Task(EndedByOwner, MotionStatechartNode):
     when it succeeded.
     """
 
-    weight: float = field(
-        default=DefaultWeights.WEIGHT_BELOW_COLLISION_AVOIDANCE.value, kw_only=True
-    )
+    weight: float = DefaultWeights.WEIGHT_BELOW_COLLISION_AVOIDANCE.value
     """
     Task priority relative to other tasks.
     """
@@ -295,7 +293,7 @@ class Task(EndedByOwner, MotionStatechartNode):
         return Task(name=self.name)
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class ConvergingTask(ABC, Task):
     """
     A task that drives a single scalar error towards zero and counts as having reached
@@ -312,7 +310,7 @@ class ConvergingTask(ABC, Task):
     observation.
     """
 
-    threshold: float = field(default=0.01, kw_only=True)
+    threshold: float = 0.01
     """
     Error at or below which the goal counts as reached, in the task's own units.
     """
@@ -372,13 +370,13 @@ class ConvergingTask(ABC, Task):
         return self.error_signal / self.threshold
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class EndMotion(EndStatechart):
     """
     Ends the motion once the world has settled.
     """
 
-    joint_convergence_threshold: float = field(default=0.01, kw_only=True)
+    joint_convergence_threshold: float = 0.01
     """
     Fraction of a degree of freedom's maximum velocity below which it is considered
     settled.
@@ -386,12 +384,12 @@ class EndMotion(EndStatechart):
     Only used while at least one active degree of freedom exists; see :meth:`build`.
     """
 
-    minimum_threshold: float = field(default=0.01, kw_only=True)
+    minimum_threshold: float = 0.01
     """
     Lower bound for the per-degree-of-freedom velocity threshold.
     """
 
-    maximum_threshold: float = field(default=0.06, kw_only=True)
+    maximum_threshold: float = 0.06
     """
     Upper bound for the per-degree-of-freedom velocity threshold.
     """

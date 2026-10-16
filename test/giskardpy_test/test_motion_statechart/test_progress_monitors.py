@@ -101,19 +101,19 @@ def tick_until_end_recording(
     raise TimeoutError("motion never ended")
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class NodeWithDeclaredDependencies(EndedByOwner, MotionStatechartNode):
     """
     Node that declares whichever build dependencies a test needs, so dependency ordering
     and cycle detection can be exercised without a real task.
     """
 
-    dependencies: List[MotionStatechartNode] = field(default_factory=list, kw_only=True)
+    dependencies: List[MotionStatechartNode] = field(default_factory=list)
     """
     The nodes this node claims to depend on.
     """
 
-    built_after: List[str] = field(default_factory=list, kw_only=True)
+    built_after: List[str] = field(default_factory=list)
     """
     Shared list every instance appends its name to when it is built.
     """

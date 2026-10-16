@@ -38,7 +38,7 @@ def test_motion_recording_retains_completed_chart(
         "finalize_recording",
         lambda bridge, recording: finalized.append(recording),
     )
-    plan = Sequence([MoveTorsoAction(TorsoState.HIGH)])
+    plan = Sequence(nodes=[MoveTorsoAction(torso_state=TorsoState.HIGH)])
     bridge = Bridge()
     live = LiveVisualization(bridge=bridge)
     executor = SimulatedPlanExecutor(

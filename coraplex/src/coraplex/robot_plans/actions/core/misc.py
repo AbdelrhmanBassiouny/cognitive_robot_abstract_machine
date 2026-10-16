@@ -36,7 +36,7 @@ from semantic_digital_twin.semantic_annotations.semantic_annotations import (
 )
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class DetectAction(Action):
     """
     Detects an object and writes the pose it is seen at into the world.
@@ -103,7 +103,7 @@ class DetectAction(Action):
 
     def create_action_body(self) -> StatechartNode:
         return Sequence(
-            [
+            nodes=[
                 PerceptionTask(
                     query=self._build_query(),
                     answered_by=self.perception_source,
@@ -150,7 +150,7 @@ class DetectAction(Action):
         )
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class MoveToReach(MovesToolCenterPoint, HasApproachesGraspPoses):
     """
     Let the robot move to a position facing the target and reach with a end_effector.
@@ -180,11 +180,13 @@ class MoveToReach(MovesToolCenterPoint, HasApproachesGraspPoses):
 
     def create_action_body(self) -> StatechartNode:
         return Sequence(
-            [
-                NavigateAction(self.standing_pose),
+            nodes=[
+                NavigateAction(target_location=self.standing_pose),
                 MoveManipulatorAction(
-                    self.end_effector.tool_frame_goal_for_grasp(self.reference_T_grasp),
-                    self.end_effector,
+                    target_pose=self.end_effector.tool_frame_goal_for_grasp(
+                        self.reference_T_grasp
+                    ),
+                    end_effector=self.end_effector,
                     allow_gripper_collision=False,
                     position_threshold=self.position_threshold,
                     orientation_threshold=self.orientation_threshold,

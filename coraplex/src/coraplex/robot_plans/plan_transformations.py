@@ -140,9 +140,9 @@ class DetectBeforeGrasp(InsertionTransformation[ReachAction]):
             plan_node.grasp.grasp_pose, plan_node.arm.end_effector, plan_node.grasp
         ).grasp
         return [
-            LookAtAction(approached_pose),
+            LookAtAction(target=approached_pose),
             DetectAction(
-                DetectionTechnique.TYPES,
+                technique=DetectionTechnique.TYPES,
                 object_sem_annotation=type(plan_node.grasp.graspable),
                 accept_first_if_multiple=True,
             ),
@@ -253,7 +253,7 @@ class OpenDrawerBeforePickUp(DrawerOpening[PickUpAction]):
         )
         nodes.extend(
             [
-                ParkArmsAction(plan_node.robot.all_arms),
+                ParkArmsAction(arms=plan_node.robot.all_arms),
                 StatementNode(statement=drive_to_the_object),
             ]
         )
@@ -313,7 +313,7 @@ class OpenDrawerBeforeMoveAndPickUp(DrawerOpening[MoveAndPickUpAction]):
             # The candidates are grounded after the opening, which leaves the arms at
             # the handle, where they would stand in collision at every standing pose.
             robot = plan_node.context.require_extension(RobotAccess).robot
-            nodes.append(ParkArmsAction(robot.all_arms))
+            nodes.append(ParkArmsAction(arms=robot.all_arms))
         return nodes
 
     def _pick_up_target(
@@ -380,8 +380,10 @@ class ParkArmsAroundPickAndPlaceSteps(PlanTransformation[PickAndPlaceAction]):
     def apply(self, plan_node: PickAndPlaceAction) -> None:
         steps = plan_node.action_body
         for step in list(steps.nodes):
-            steps.insert_before(step, ParkArmsAction(plan_node.robot.all_arms))
-        steps.insert_after(steps.nodes[-1], ParkArmsAction(plan_node.robot.all_arms))
+            steps.insert_before(step, ParkArmsAction(arms=plan_node.robot.all_arms))
+        steps.insert_after(
+            steps.nodes[-1], ParkArmsAction(arms=plan_node.robot.all_arms)
+        )
 
 
 # %% parking before anything else
@@ -411,7 +413,7 @@ class ParkArmsBeforeFirstAction(InsertionTransformation[Action]):
         return plan_node
 
     def nodes_to_insert(self, plan_node: Action) -> List[StatechartNode]:
-        return [ParkArmsAction(plan_node.robot.all_arms)]
+        return [ParkArmsAction(arms=plan_node.robot.all_arms)]
 
     @staticmethod
     def _first_action_of_the_plan_of(node: StatechartNode) -> Optional[Action]:

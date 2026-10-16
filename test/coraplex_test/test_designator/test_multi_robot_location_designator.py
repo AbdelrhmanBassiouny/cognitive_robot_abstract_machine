@@ -141,7 +141,12 @@ def test_new_reachability_location_body(
 ):
     world, robot, extensions = multiple_robot_simple_apartment_context
 
-    plan = Sequence([ParkArmsAction(robot.all_arms), MoveTorsoAction(TorsoState.HIGH)])
+    plan = Sequence(
+        nodes=[
+            ParkArmsAction(arms=robot.all_arms),
+            MoveTorsoAction(torso_state=TorsoState.HIGH),
+        ]
+    )
     run_plan(plan, extensions)
     world.notify_state_change()
 
@@ -164,7 +169,12 @@ def test_new_reachability_location_body(
 def test_visibility_location_pose(multiple_robot_simple_apartment_context):
     world, robot, extensions = multiple_robot_simple_apartment_context
 
-    plan = Sequence([ParkArmsAction(robot.all_arms), MoveTorsoAction(TorsoState.HIGH)])
+    plan = Sequence(
+        nodes=[
+            ParkArmsAction(arms=robot.all_arms),
+            MoveTorsoAction(torso_state=TorsoState.HIGH),
+        ]
+    )
     run_plan(plan, extensions)
     world.notify_state_change()
 
@@ -183,7 +193,12 @@ def test_visibility_location_pose(multiple_robot_simple_apartment_context):
 def test_visibility_location_body(multiple_robot_simple_apartment_context):
     world, robot, extensions = multiple_robot_simple_apartment_context
 
-    plan = Sequence([ParkArmsAction(robot.all_arms), MoveTorsoAction(TorsoState.HIGH)])
+    plan = Sequence(
+        nodes=[
+            ParkArmsAction(arms=robot.all_arms),
+            MoveTorsoAction(torso_state=TorsoState.HIGH),
+        ]
+    )
     run_plan(plan, extensions)
     world.notify_state_change()
 

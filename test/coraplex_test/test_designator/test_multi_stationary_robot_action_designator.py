@@ -163,7 +163,7 @@ def stationary_block_context(robot_setup):
 def test_park_arms_multi(stationary_block_context):
     world, view, extensions = stationary_block_context
 
-    description = ParkArmsAction(view.all_arms)
+    description = ParkArmsAction(arms=view.all_arms)
     plan = description
     run_plan(plan, extensions)
     joints = []
@@ -192,8 +192,8 @@ def test_reach_action_multi(stationary_block_context):
     grasp_pose = Pose.from_xyz_rpy(pitch=np.pi / 2, reference_frame=box_body)
 
     plan = Sequence(
-        [
-            ParkArmsAction(view.all_arms),
+        nodes=[
+            ParkArmsAction(arms=view.all_arms),
             ReachAction(
                 grasp=GraspCandidate(box, grasp_pose),
                 arm=left_or_only_arm(view),
@@ -216,7 +216,9 @@ def test_reach_action_multi(stationary_block_context):
 def test_move_gripper_multi(stationary_block_context):
     world, view, extensions = stationary_block_context
 
-    plan = SetGripperAction(left_or_only_arm(view).end_effector, GripperState.OPEN)
+    plan = SetGripperAction(
+        gripper=left_or_only_arm(view).end_effector, motion=GripperState.OPEN
+    )
 
     executor = run_plan(plan, extensions)
     arm = view.all_arms[0]
@@ -226,7 +228,9 @@ def test_move_gripper_multi(stationary_block_context):
     for connection, target in open_state.items():
         assert connection.position == pytest.approx(target, abs=0.01)
 
-    plan = SetGripperAction(left_or_only_arm(view).end_effector, GripperState.CLOSE)
+    plan = SetGripperAction(
+        gripper=left_or_only_arm(view).end_effector, motion=GripperState.CLOSE
+    )
 
     run_plan(plan, extensions)
     for connection, target in close_state.items():
@@ -239,9 +243,9 @@ def test_grasping(stationary_block_context):
 
     box_body = world.get_body_by_name("box1")
     description = GraspingAction(
-        top_down_grasp(world, box_body), left_or_only_arm(robot_view)
+        grasp=top_down_grasp(world, box_body), arm=left_or_only_arm(robot_view)
     )
-    plan = Sequence([ParkArmsAction(robot_view.all_arms), description])
+    plan = Sequence(nodes=[ParkArmsAction(arms=robot_view.all_arms), description])
     run_plan(plan, extensions)
     # The grasp sits at the box's own origin, so that is where the fingers end up.
     assert np.allclose(
@@ -257,11 +261,11 @@ def test_pick_up_multi(stationary_block_context):
     left_arm = left_or_only_arm(view)
     box_body = world.get_body_by_name("box1")
     plan = Sequence(
-        [
-            ParkArmsAction(view.all_arms),
+        nodes=[
+            ParkArmsAction(arms=view.all_arms),
             PickUpAction(
-                graspable_annotation(world, box_body).grasp_candidates()[0],
-                left_or_only_arm(view),
+                grasp=graspable_annotation(world, box_body).grasp_candidates()[0],
+                arm=left_or_only_arm(view),
             ),
         ]
     )
@@ -294,15 +298,15 @@ def test_place_multi(stationary_block_context, place_position):
     box_body = world.get_body_by_name("box1")
 
     plan = Sequence(
-        [
-            ParkArmsAction(view.all_arms),
+        nodes=[
+            ParkArmsAction(arms=view.all_arms),
             PickUpAction(
-                graspable_annotation(world, box_body).grasp_candidates()[0],
-                left_or_only_arm(view),
+                grasp=graspable_annotation(world, box_body).grasp_candidates()[0],
+                arm=left_or_only_arm(view),
             ),
             PlaceAction(
-                graspable_annotation(world, box_body),
-                Pose(place_position, reference_frame=world.root),
+                object_designator=graspable_annotation(world, box_body),
+                target_location=Pose(place_position, reference_frame=world.root),
             ),
         ]
     )
@@ -425,8 +429,8 @@ def test_a_pick_in_physics_leaves_the_box_to_the_grip(
     arm = left_or_only_arm(view)
     stood_on = box.parent_connection.parent
     resting_height = box.global_pose.position.to_np().flatten()[2]
-    pick = PickUpAction(top_down_grasp(world, box), arm)
-    plan = Sequence([ParkArmsAction(view.all_arms), pick])
+    pick = PickUpAction(grasp=top_down_grasp(world, box), arm=arm)
+    plan = Sequence(nodes=[ParkArmsAction(arms=view.all_arms), pick])
 
     perform_in_physics(plan, extensions, simulation)
 
@@ -457,12 +461,12 @@ def test_a_place_in_physics_leaves_the_box_to_the_release(
         reference_frame=world.root,
     )
     plan = Sequence(
-        [
-            ParkArmsAction(view.all_arms),
-            PickUpAction(top_down_grasp(world, box), arm),
+        nodes=[
+            ParkArmsAction(arms=view.all_arms),
+            PickUpAction(grasp=top_down_grasp(world, box), arm=arm),
             PlaceAction(
-                graspable_annotation(world, box),
-                Pose(target, reference_frame=world.root),
+                object_designator=graspable_annotation(world, box),
+                target_location=Pose(target, reference_frame=world.root),
             ),
         ]
     )

@@ -39,7 +39,7 @@ ActionResult = TypeVar("ActionResult")
 ActionFeedback = TypeVar("ActionFeedback")
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class ActionServerTask(
     EndedByOwner,
     MotionStatechartNode,
@@ -128,7 +128,7 @@ class ActionServerTask(
         logger.info(f"Action server {self.action_topic} done.")
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class NavigateActionServerTask(
     ActionServerTask[
         NavigateToPose,

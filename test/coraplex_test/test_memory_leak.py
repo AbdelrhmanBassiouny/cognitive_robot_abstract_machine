@@ -38,7 +38,13 @@ def test_ref_chain_after_copy_with_execute(pr2_apartment_context):
     )
 
     plan = Sequence(
-        [NavigateAction(Pose.from_xyz_rpy(1, -1, 0, reference_frame=copy_world.root))]
+        nodes=[
+            NavigateAction(
+                target_location=Pose.from_xyz_rpy(
+                    1, -1, 0, reference_frame=copy_world.root
+                )
+            )
+        ]
     )
 
     run_plan(plan, copy_extensions)
@@ -64,7 +70,7 @@ def test_ref_chain_after_copy_with_execute_complex_plan(pr2_apartment_context):
         context_of(copy_extensions),
         seed=SAMPLING_SEED,
     )
-    plan = Sequence([MoveTorsoAction(TorsoState.HIGH), description])
+    plan = Sequence(nodes=[MoveTorsoAction(torso_state=TorsoState.HIGH), description])
     run_plan(plan, copy_extensions)
 
     gc.collect()

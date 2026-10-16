@@ -11,16 +11,16 @@ from semantic_digital_twin.spatial_types import Point3, Vector3
 from semantic_digital_twin.world_description.world_entity import Body
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class FeatureFunctionMonitor(EndedByOwner, MotionStatechartNode):
     """
     Base for monitors that compare a controlled feature (attached to ``tip_link``) with a
     reference feature (attached to ``root_link``) expressed in the root link frame.
     """
 
-    tip_link: Body = field(kw_only=True)
+    tip_link: Body
     """Link the controlled feature is attached to."""
-    root_link: Body = field(kw_only=True)
+    root_link: Body
     """Link the reference feature is attached to."""
     reference_feature: Point3 | Vector3 = field(init=False)
     """Reference feature, typically the target for `controlled_feature`."""
@@ -55,20 +55,20 @@ class FeatureFunctionMonitor(EndedByOwner, MotionStatechartNode):
         return NodeArtifacts()
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class HeightMonitor(FeatureFunctionMonitor):
     """
     Observes ``True`` while the height difference between the controlled and reference point along
     the root z-axis is within ``[lower_limit, upper_limit]``.
     """
 
-    reference_point: Point3 = field(kw_only=True)
+    reference_point: Point3
     """Reference point to measure the height against."""
-    tip_point: Point3 = field(kw_only=True)
+    tip_point: Point3
     """Controlled point whose height is checked."""
-    lower_limit: float = field(kw_only=True)
+    lower_limit: float
     """Lower bound for the height difference in meters."""
-    upper_limit: float = field(kw_only=True)
+    upper_limit: float
     """Upper bound for the height difference in meters."""
 
     def build_artifacts(self, context: StatechartContext) -> NodeArtifacts:
@@ -86,18 +86,18 @@ class HeightMonitor(FeatureFunctionMonitor):
         return artifacts
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class PerpendicularMonitor(FeatureFunctionMonitor):
     """
     Observes ``True`` while the controlled normal is perpendicular to the reference normal within
     ``threshold``.
     """
 
-    reference_normal: Vector3 = field(kw_only=True)
+    reference_normal: Vector3
     """Reference normal to check perpendicularity against."""
-    tip_normal: Vector3 = field(kw_only=True)
+    tip_normal: Vector3
     """Controlled normal."""
-    threshold: float = field(default=0.01, kw_only=True)
+    threshold: float = 0.01
     """Threshold on the dot product of the two normals."""
 
     def build_artifacts(self, context: StatechartContext) -> NodeArtifacts:
@@ -110,20 +110,20 @@ class PerpendicularMonitor(FeatureFunctionMonitor):
         return artifacts
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class DistanceMonitor(FeatureFunctionMonitor):
     """
     Observes ``True`` while the planar distance (ignoring the z-axis) between the controlled and
     reference point is within ``[lower_limit, upper_limit]``.
     """
 
-    reference_point: Point3 = field(kw_only=True)
+    reference_point: Point3
     """Reference point to measure the distance against."""
-    tip_point: Point3 = field(kw_only=True)
+    tip_point: Point3
     """Controlled point whose distance is checked."""
-    lower_limit: float = field(kw_only=True)
+    lower_limit: float
     """Lower bound for the distance in meters."""
-    upper_limit: float = field(kw_only=True)
+    upper_limit: float
     """Upper bound for the distance in meters."""
 
     def build_artifacts(self, context: StatechartContext) -> NodeArtifacts:
@@ -141,20 +141,20 @@ class DistanceMonitor(FeatureFunctionMonitor):
         return artifacts
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class AngleMonitor(FeatureFunctionMonitor):
     """
     Observes ``True`` while the angle between the controlled and reference vector is within
     ``[lower_angle, upper_angle]``.
     """
 
-    reference_vector: Vector3 = field(kw_only=True)
+    reference_vector: Vector3
     """Reference vector to measure the angle against."""
-    tip_vector: Vector3 = field(kw_only=True)
+    tip_vector: Vector3
     """Controlled vector."""
-    lower_angle: float = field(kw_only=True)
+    lower_angle: float
     """Lower bound for the angle in radians."""
-    upper_angle: float = field(kw_only=True)
+    upper_angle: float
     """Upper bound for the angle in radians."""
 
     def build_artifacts(self, context: StatechartContext) -> NodeArtifacts:

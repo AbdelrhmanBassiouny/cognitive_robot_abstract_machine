@@ -242,7 +242,7 @@ def test_the_rightmost_node_has_no_right_neighbour(nested_statechart: Statechart
     assert last.right_neighbour is None
 
 
-@dataclass
+@dataclass(kw_only=True)
 class ComparedByItsSpeed:
     """
     Gives a node a parameter and, with it, an equality over that parameter alone.
@@ -254,7 +254,7 @@ class ComparedByItsSpeed:
     """
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class NodeComparedByItsSpeed(ConstTrueNode, ComparedByItsSpeed):
     """
     A node that compares equal to every node of its class running at the same speed.
@@ -345,7 +345,7 @@ def test_the_children_of_a_sequence_are_the_steps_it_was_handed(
 # %% navigating while the tree is still expanding
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class CompositeNodeNavigatingWhileItExpands(EndedByOwner, CompositeNode):
     """
     A node that reads the tree around it while it expands, which is the moment the plan

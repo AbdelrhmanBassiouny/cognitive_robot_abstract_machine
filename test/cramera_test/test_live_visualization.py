@@ -221,7 +221,7 @@ class TestWorldSync:
 # %% plan synchronization
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class ActionNamingTheChart(ConstTrueNode, DesignatorParameters):
     """
     A node that is an action, as far as naming the published chart goes.

@@ -175,7 +175,7 @@ class TestReactionTimeAcrossNesting:
     def test_a_parent_reads_the_outcome_its_child_reaches_on_the_same_tick(self):
         statechart = Statechart(context=StatechartContext(world=World()))
         child = ConstTrueNode()
-        parallel = Parallel([child])
+        parallel = Parallel(nodes=[child])
         statechart.add_node(parallel)
         child.success_condition = child.observes_true
         parallel.success_condition = child.is_succeeded
@@ -190,7 +190,7 @@ class TestReactionTimeAcrossNesting:
     def test_a_parent_reads_what_its_child_observes_on_the_same_tick(self):
         statechart = Statechart(context=StatechartContext(world=World()))
         child = ConstTrueNode()
-        parallel = Parallel([child])
+        parallel = Parallel(nodes=[child])
         statechart.add_node(parallel)
         parallel.success_condition = child.observes_true
         executor = _compile(statechart)
@@ -529,9 +529,9 @@ class TestLifeCycleCallbacks:
         statechart = Statechart(context=StatechartContext(world=World()))
         child = NodeRecordingItsCallbacks()
         trigger = ConstTrueNode()
-        inner = Parallel([trigger, child])
-        middle = Parallel([inner])
-        outer = Parallel([middle])
+        inner = Parallel(nodes=[trigger, child])
+        middle = Parallel(nodes=[inner])
+        outer = Parallel(nodes=[middle])
         statechart.add_node(outer)
         inner.pause_condition = trigger.observes_true
         middle.success_condition = inner.is_paused

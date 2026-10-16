@@ -93,7 +93,7 @@ def test_door_opening(wall_door_handle_world, _hsr_world_setup, rclpy_node):
     robot = world.get_semantic_annotations_by_type(AbstractRobot)[0]
 
     run_plan(
-        Sage10kOpenDoor(door),
+        Sage10kOpenDoor(door=door),
         [
             RobotAccess(robot),
             StatementGrounding(query_backend=ProbabilisticBackend()),

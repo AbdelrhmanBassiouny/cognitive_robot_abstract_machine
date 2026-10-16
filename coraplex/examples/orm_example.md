@@ -92,7 +92,7 @@ description = TransportAction(
         object_designator=milk,
     ),
 )
-plan = Sequence([MoveTorsoAction(TorsoState.HIGH),
+plan = Sequence(nodes=[MoveTorsoAction(torso_state=TorsoState.HIGH),
                    description])
 run(plan)
 ```

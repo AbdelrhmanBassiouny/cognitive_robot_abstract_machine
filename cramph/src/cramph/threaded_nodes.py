@@ -15,7 +15,7 @@ from cramph.node import StatechartNode
 logger = logging.getLogger(__name__)
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class ThreadedNode(StatechartNode, ABC):
     """
     Runs :meth:`run` once in a daemon thread of its own every time it starts, so slow
@@ -82,7 +82,7 @@ class ThreadedNode(StatechartNode, ABC):
             self._error = error
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class FunctionCall(SucceedsOnObservingTrue, FailsOnObservingFalse, ThreadedNode):
     """
     Calls a function once when it starts, in a thread of its own.
@@ -95,12 +95,12 @@ class FunctionCall(SucceedsOnObservingTrue, FailsOnObservingFalse, ThreadedNode)
     runs, and functions started in the same tick run at the same time.
     """
 
-    function: Callable[[], Any] = field(kw_only=True)
+    function: Callable[[], Any]
     """
     The function to call.
     """
 
-    failure_types: Tuple[Type[BaseException], ...] = field(default=(), kw_only=True)
+    failure_types: Tuple[Type[BaseException], ...] = ()
     """
     The exceptions that make this node fail rather than being raised out of the tick.
     """

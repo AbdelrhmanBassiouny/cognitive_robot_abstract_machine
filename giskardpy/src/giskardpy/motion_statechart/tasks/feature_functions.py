@@ -18,7 +18,7 @@ from giskardpy.motion_statechart.graph_node import (
 )
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class FeatureFunctionGoal(ConvergingTask, ABC):
     """
     Base for feature tasks operating on geometric features.
@@ -27,11 +27,11 @@ class FeatureFunctionGoal(ConvergingTask, ABC):
     (from `root_link`) into a common frame and registers debug visualizations.
     """
 
-    tip_link: KinematicStructureEntity = field(kw_only=True)
+    tip_link: KinematicStructureEntity
     """
     The link where the controlled feature is attached. Defines the moving frame of reference.
     """
-    root_link: KinematicStructureEntity = field(kw_only=True)
+    root_link: KinematicStructureEntity
     """
     The static reference link. Defines the fixed frame of reference.
     """
@@ -119,7 +119,7 @@ class FeatureFunctionGoal(ConvergingTask, ABC):
         return artifacts
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class AlignPerpendicular(FeatureFunctionGoal):
     """
     Align two normal vectors to be perpendicular.
@@ -128,25 +128,23 @@ class AlignPerpendicular(FeatureFunctionGoal):
     Completion occurs when |current_angle - π/2| < `threshold`.
     """
 
-    tip_normal: Vector3 = field(kw_only=True)
+    tip_normal: Vector3
     """
     The normal vector to be controlled, defined in the tip link frame.
     """
-    reference_normal: Vector3 = field(kw_only=True)
+    reference_normal: Vector3
     """
     The reference normal vector to align against, defined in the root link frame.
     """
-    weight: float = field(
-        default=DefaultWeights.WEIGHT_BELOW_COLLISION_AVOIDANCE, kw_only=True
-    )
+    weight: float = DefaultWeights.WEIGHT_BELOW_COLLISION_AVOIDANCE
     """
     Priority weight for the alignment constraint in the optimization problem.
     """
-    maximum_velocity: float = field(default=0.2, kw_only=True)
+    maximum_velocity: float = 0.2
     """
     Maximum allowed angular velocity for the alignment motion in radians per second.
     """
-    threshold: float = field(default=0.01, kw_only=True)
+    threshold: float = 0.01
     """
     Tolerance threshold in radians. The goal is considered achieved when the absolute
     difference between the current angle and 90 degrees is below this value.
@@ -176,40 +174,38 @@ class AlignPerpendicular(FeatureFunctionGoal):
         return artifacts
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class HeightGoal(FeatureFunctionGoal):
     """
     Moves the `tip_point` to be the specified distance away from the `reference_point`
     along the z-axis of the map frame.
     """
 
-    tip_point: Point3 = field(kw_only=True)
+    tip_point: Point3
     """
     Tip point to be controlled.
     """
-    reference_point: Point3 = field(kw_only=True)
+    reference_point: Point3
     """
     Reference point to measure the distance against.
     """
-    lower_limit: float = field(kw_only=True)
+    lower_limit: float
     """
     Lower limit to control the distance away from the `reference_point`.
     """
-    upper_limit: float = field(kw_only=True)
+    upper_limit: float
     """
     Upper limit to control the distance away from the `reference_point`.
     """
-    weight: float = field(
-        default=DefaultWeights.WEIGHT_BELOW_COLLISION_AVOIDANCE, kw_only=True
-    )
+    weight: float = DefaultWeights.WEIGHT_BELOW_COLLISION_AVOIDANCE
     """
     Priority weight for the height constraint in the optimization problem.
     """
-    maximum_velocity: float = field(default=0.2, kw_only=True)
+    maximum_velocity: float = 0.2
     """
     Maximum allowed velocity for the height motion in meters per second.
     """
-    threshold: float = field(default=0.0, kw_only=True)
+    threshold: float = 0.0
     """
     How far outside the limits still counts as achieved.
     """
@@ -242,40 +238,38 @@ class HeightGoal(FeatureFunctionGoal):
         return artifacts
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class DistanceGoal(FeatureFunctionGoal):
     """
     Moves the `tip_point` to be the specified distance away from the `reference_point`
     measured in the x-y-plane of the map frame.
     """
 
-    tip_point: Point3 = field(kw_only=True)
+    tip_point: Point3
     """
     Tip point to be controlled.
     """
-    reference_point: Point3 = field(kw_only=True)
+    reference_point: Point3
     """
     Reference point to measure the distance against.
     """
-    lower_limit: float = field(kw_only=True)
+    lower_limit: float
     """
     Lower limit to control the distance away from the `reference_point`.
     """
-    upper_limit: float = field(kw_only=True)
+    upper_limit: float
     """
     Upper limit to control the distance away from the `reference_point`.
     """
-    weight: float = field(
-        default=DefaultWeights.WEIGHT_BELOW_COLLISION_AVOIDANCE, kw_only=True
-    )
+    weight: float = DefaultWeights.WEIGHT_BELOW_COLLISION_AVOIDANCE
     """
     Priority weight for the distance constraint in the optimization problem.
     """
-    maximum_velocity: float = field(default=0.2, kw_only=True)
+    maximum_velocity: float = 0.2
     """
     Maximum allowed velocity for the distance motion in meters per second.
     """
-    threshold: float = field(default=0.0, kw_only=True)
+    threshold: float = 0.0
     """
     How far outside the limits still counts as achieved.
     """
@@ -319,31 +313,29 @@ class DistanceGoal(FeatureFunctionGoal):
         return artifacts
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class ReachPoint(FeatureFunctionGoal):
     """
     Drives a controlled point on the tip onto a reference point.
     """
 
-    tip_point: Point3 = field(kw_only=True)
+    tip_point: Point3
     """
     The point to be controlled, defined in the tip link frame.
     """
-    reference_point: Point3 = field(kw_only=True)
+    reference_point: Point3
     """
     The target point to reach, defined in the root link frame.
     """
-    weight: float = field(
-        default=DefaultWeights.WEIGHT_ABOVE_COLLISION_AVOIDANCE, kw_only=True
-    )
+    weight: float = DefaultWeights.WEIGHT_ABOVE_COLLISION_AVOIDANCE
     """
     Priority weight for the reach constraint in the optimization problem.
     """
-    maximum_velocity: float = field(default=0.2, kw_only=True)
+    maximum_velocity: float = 0.2
     """
     Maximum allowed velocity for the reaching motion in meters per second.
     """
-    threshold: float = field(default=0.01, kw_only=True)
+    threshold: float = 0.01
     """
     Distance at or below which the goal is considered achieved, in meters.
     """
@@ -371,40 +363,38 @@ class ReachPoint(FeatureFunctionGoal):
         return artifacts
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class AngleGoal(FeatureFunctionGoal):
     """
     Controls the angle between the `tip_vector` and the `reference_vector` to be between
     `lower_angle` and `upper_angle`.
     """
 
-    tip_vector: Vector3 = field(kw_only=True)
+    tip_vector: Vector3
     """
     Tip vector to be controlled.
     """
-    reference_vector: Vector3 = field(kw_only=True)
+    reference_vector: Vector3
     """
     Reference vector to measure the angle against.
     """
-    lower_angle: float = field(kw_only=True)
+    lower_angle: float
     """
     Lower limit to control the angle between the `tip_vector` and the `reference_vector`.
     """
-    upper_angle: float = field(kw_only=True)
+    upper_angle: float
     """
     Upper limit to control the angle between the `tip_vector` and the `reference_vector`.
     """
-    weight: float = field(
-        default=DefaultWeights.WEIGHT_BELOW_COLLISION_AVOIDANCE, kw_only=True
-    )
+    weight: float = DefaultWeights.WEIGHT_BELOW_COLLISION_AVOIDANCE
     """
     Priority weight for the angle constraint in the optimization problem.
     """
-    maximum_velocity: float = field(default=0.2, kw_only=True)
+    maximum_velocity: float = 0.2
     """
     Maximum allowed angular velocity for the angle motion in radians per second.
     """
-    threshold: float = field(default=0.0, kw_only=True)
+    threshold: float = 0.0
     """
     How far outside the limits still counts as achieved.
     """

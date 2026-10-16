@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import field, dataclass
+from dataclasses import dataclass
 from typing_extensions import List
 
 import krrood.symbolic_math.symbolic_math as sm
@@ -16,31 +16,29 @@ from semantic_digital_twin.world_description.connections import (
 )
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class JointPositionList(ConvergingTask):
     """
     Moves the robot to a given joint position.
     """
 
-    goal_state: JointState = field(kw_only=True)
+    goal_state: JointState
     """
     The goal joint state.
     """
 
-    threshold: float = field(default=0.01, kw_only=True)
+    threshold: float = 0.01
     """
     If all joint position errors are smaller than this threshold, the task's observation
     state is true.
     """
 
-    weight: float = field(
-        default=DefaultWeights.WEIGHT_BELOW_COLLISION_AVOIDANCE, kw_only=True
-    )
+    weight: float = DefaultWeights.WEIGHT_BELOW_COLLISION_AVOIDANCE
     """
     The weight of this task.
     """
 
-    max_velocity: float = field(default=1.0, kw_only=True)
+    max_velocity: float = 1.0
     """
     The maximum velocity of the joints.
     """
@@ -98,7 +96,7 @@ class JointPositionList(ConvergingTask):
         return sm.limit(velocity, ll_vel, ul_vel)
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class JointVelocityLimit(Task):
     """
     Limits the velocity of a set of joints to a maximum value.
@@ -109,19 +107,17 @@ class JointVelocityLimit(Task):
     for each given joint, not by tuning a reference/normalization velocity.
     """
 
-    connections: List[ActiveConnection1DOF] = field(kw_only=True)
+    connections: List[ActiveConnection1DOF]
     """
     The joints whose velocity is constrained.
     """
 
-    max_velocity: float = field(default=0.1, kw_only=True)
+    max_velocity: float = 0.1
     """
     Maximum allowed velocity (in rad/s or m/s, per joint).
     """
 
-    weight: float = field(
-        default=DefaultWeights.WEIGHT_ABOVE_COLLISION_AVOIDANCE, kw_only=True
-    )
+    weight: float = DefaultWeights.WEIGHT_ABOVE_COLLISION_AVOIDANCE
     """
     Optimization weight determining how strongly the velocity limit is enforced.
 

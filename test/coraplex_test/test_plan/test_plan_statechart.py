@@ -98,9 +98,9 @@ def test_a_plan_grounding_an_action_mid_sequence_runs_as_one_statechart(
     pr2_apartment_context,
 ):
     world, robot, extensions = pr2_apartment_context
-    torso = MoveTorsoAction(TorsoState.HIGH)
+    torso = MoveTorsoAction(torso_state=TorsoState.HIGH)
     plan = Sequence(
-        [
+        nodes=[
             torso,
             StatementNode(
                 statement=a(NavigateAction)(
@@ -132,8 +132,8 @@ def test_an_underspecified_action_is_grounded_against_the_world_the_steps_before
     location = RecordingLocationInFrontOfTheRobot(world=world, robot=robot)
 
     plan = Sequence(
-        [
-            MoveTorsoAction(TorsoState.HIGH),
+        nodes=[
+            MoveTorsoAction(torso_state=TorsoState.HIGH),
             StatementNode(
                 statement=a(NavigateAction)(
                     target_location=variable(Pose, domain=location)
@@ -154,10 +154,10 @@ def test_a_branch_moved_mid_plan_follows_its_new_parent(pr2_apartment_context):
     height_before = milk.global_pose.z
 
     plan = Sequence(
-        [
-            MoveTorsoAction(TorsoState.LOW),
+        nodes=[
+            MoveTorsoAction(torso_state=TorsoState.LOW),
             MoveBranch(body=milk, new_parent=tool_frame),
-            MoveTorsoAction(TorsoState.HIGH),
+            MoveTorsoAction(torso_state=TorsoState.HIGH),
         ]
     )
     run_plan(plan, extensions)
@@ -170,8 +170,8 @@ def test_a_branch_moved_mid_plan_follows_its_new_parent(pr2_apartment_context):
 
 
 def test_actions_with_the_same_parameters_are_different_nodes():
-    first = MoveTorsoAction(TorsoState.HIGH)
-    second = MoveTorsoAction(TorsoState.HIGH)
+    first = MoveTorsoAction(torso_state=TorsoState.HIGH)
+    second = MoveTorsoAction(torso_state=TorsoState.HIGH)
 
     assert first != second
 
@@ -179,13 +179,14 @@ def test_actions_with_the_same_parameters_are_different_nodes():
 def test_a_place_finds_the_grasp_of_the_pick_up_before_it(pr2_apartment_context):
     world, robot, extensions = pr2_apartment_context
     milk = world.get_semantic_annotations_by_type(Milk)[0]
-    pick_up = PickUpAction(milk.grasp_candidates()[0], robot.left_arm)
+    pick_up = PickUpAction(grasp=milk.grasp_candidates()[0], arm=robot.left_arm)
     place = PlaceAction(
-        milk, Pose.from_xyz_rpy(0.8, -1.9, 0.7, reference_frame=world.root)
+        object_designator=milk,
+        target_location=Pose.from_xyz_rpy(0.8, -1.9, 0.7, reference_frame=world.root),
     )
     statechart = Statechart(context=simulated_executor(extensions).context)
 
-    statechart.add_node(Sequence([pick_up, place]))
+    statechart.add_node(Sequence(nodes=[pick_up, place]))
 
     assert statechart.get_preceding_node_by_type(place, PickUpAction) is pick_up
 
@@ -195,14 +196,15 @@ def test_a_place_below_a_pausing_composite_finds_the_pick_up_before_that(
 ):
     world, robot, extensions = pr2_apartment_context
     milk = world.get_semantic_annotations_by_type(Milk)[0]
-    pick_up = PickUpAction(milk.grasp_candidates()[0], robot.left_arm)
+    pick_up = PickUpAction(grasp=milk.grasp_candidates()[0], arm=robot.left_arm)
     place = PlaceAction(
-        milk, Pose.from_xyz_rpy(0.8, -1.9, 0.7, reference_frame=world.root)
+        object_designator=milk,
+        target_location=Pose.from_xyz_rpy(0.8, -1.9, 0.7, reference_frame=world.root),
     )
     paused_place = PausedUntilTrue(monitor=ConstTrueNode(), monitored_node=place)
     statechart = Statechart(context=simulated_executor(extensions).context)
 
-    statechart.add_node(Sequence([pick_up, paused_place]))
+    statechart.add_node(Sequence(nodes=[pick_up, paused_place]))
 
     assert statechart.get_preceding_node_by_type(place, PickUpAction) is pick_up
 
@@ -214,15 +216,16 @@ def test_a_place_after_several_pick_ups_uses_the_arm_that_picked_its_object(
     milk = world.get_semantic_annotations_by_type(Milk)[0]
     spoon = world.get_semantic_annotations_by_type(Spoon)[0]
     place_milk = PlaceAction(
-        milk, Pose.from_xyz_rpy(0.8, -1.9, 0.7, reference_frame=world.root)
+        object_designator=milk,
+        target_location=Pose.from_xyz_rpy(0.8, -1.9, 0.7, reference_frame=world.root),
     )
     statechart = Statechart(context=simulated_executor(extensions).context)
 
     statechart.add_node(
         Sequence(
-            [
-                PickUpAction(milk.grasp_candidates()[0], robot.left_arm),
-                PickUpAction(spoon.grasp_candidates()[0], robot.right_arm),
+            nodes=[
+                PickUpAction(grasp=milk.grasp_candidates()[0], arm=robot.left_arm),
+                PickUpAction(grasp=spoon.grasp_candidates()[0], arm=robot.right_arm),
                 place_milk,
             ]
         )
@@ -243,18 +246,22 @@ def test_a_place_after_an_earlier_place_uses_the_arm_that_picked_its_object(
     milk = world.get_semantic_annotations_by_type(Milk)[0]
     spoon = world.get_semantic_annotations_by_type(Spoon)[0]
     place_spoon = PlaceAction(
-        spoon, Pose.from_xyz_rpy(0.8, -1.9, 0.7, reference_frame=world.root)
+        object_designator=spoon,
+        target_location=Pose.from_xyz_rpy(0.8, -1.9, 0.7, reference_frame=world.root),
     )
     statechart = Statechart(context=simulated_executor(extensions).context)
 
     statechart.add_node(
         Sequence(
-            [
-                PickUpAction(milk.grasp_candidates()[0], robot.left_arm),
+            nodes=[
+                PickUpAction(grasp=milk.grasp_candidates()[0], arm=robot.left_arm),
                 PlaceAction(
-                    milk, Pose.from_xyz_rpy(0.8, -1.5, 0.7, reference_frame=world.root)
+                    object_designator=milk,
+                    target_location=Pose.from_xyz_rpy(
+                        0.8, -1.5, 0.7, reference_frame=world.root
+                    ),
                 ),
-                PickUpAction(spoon.grasp_candidates()[0], robot.right_arm),
+                PickUpAction(grasp=spoon.grasp_candidates()[0], arm=robot.right_arm),
                 place_spoon,
             ]
         )
@@ -323,10 +330,12 @@ def test_a_sent_plan_compiles_without_what_its_actions_read_to_expand(
     sent = statechart_of(
         client,
         Sequence(
-            [
-                MoveTorsoAction(TorsoState.HIGH),
-                NavigateAction(_pose_in_front_of_the_robot(world, robot)),
-                PickUpAction(milk.grasp_candidates()[0], robot.left_arm),
+            nodes=[
+                MoveTorsoAction(torso_state=TorsoState.HIGH),
+                NavigateAction(
+                    target_location=_pose_in_front_of_the_robot(world, robot)
+                ),
+                PickUpAction(grasp=milk.grasp_candidates()[0], arm=robot.left_arm),
             ]
         ),
     )
@@ -366,8 +375,8 @@ def test_a_plan_on_the_robot_is_sent_once_with_the_chooser_grounding_its_actions
         executors, "GiskardClientExecutor", lambda ros_node, context: giskard
     )
     plan = Sequence(
-        [
-            MoveTorsoAction(TorsoState.HIGH),
+        nodes=[
+            MoveTorsoAction(torso_state=TorsoState.HIGH),
             StatementNode(
                 statement=a(NavigateAction)(
                     target_location=variable(
@@ -400,7 +409,10 @@ def test_plans_run_one_after_another_share_one_connection_to_giskard(
 
     monkeypatch.setattr(executors, "GiskardClientExecutor", connect)
     executor = robot_executor(extensions)
-    plans = [MoveTorsoAction(TorsoState.HIGH), MoveTorsoAction(TorsoState.LOW)]
+    plans = [
+        MoveTorsoAction(torso_state=TorsoState.HIGH),
+        MoveTorsoAction(torso_state=TorsoState.LOW),
+    ]
 
     for plan in plans:
         executor.compile(statechart_of(executor, plan))
@@ -421,7 +433,9 @@ def test_closing_the_executor_closes_its_connection_to_giskard(
         executors, "GiskardClientExecutor", lambda ros_node, context: giskard
     )
     executor = robot_executor(extensions)
-    executor.compile(statechart_of(executor, MoveTorsoAction(TorsoState.HIGH)))
+    executor.compile(
+        statechart_of(executor, MoveTorsoAction(torso_state=TorsoState.HIGH))
+    )
     executor.execute()
 
     executor.close()
@@ -522,7 +536,7 @@ def test_an_expanded_action_is_received_with_the_nodes_it_runs(pr2_apartment_con
     """
     world, robot, extensions = pr2_apartment_context
     sent = Statechart(context=simulated_executor(extensions).context)
-    sent.add_node(action := MoveTorsoAction(TorsoState.HIGH))
+    sent.add_node(action := MoveTorsoAction(torso_state=TorsoState.HIGH))
 
     received = Statechart.from_json(
         json.loads(json.dumps(sent.to_json())),

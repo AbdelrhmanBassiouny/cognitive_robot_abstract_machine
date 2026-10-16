@@ -26,13 +26,13 @@ from cramph.statechart import Statechart
 # %% mimics
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class CompositeNodeCountingTheChildrenOfAnother(EndedByOwner, CompositeNode):
     """
     A composite node that reads the children of another composite node while it expands.
     """
 
-    watched: CompositeNode = field(kw_only=True)
+    watched: CompositeNode
     """
     The composite node whose children are counted.
     """

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 import numpy as np
 
@@ -24,38 +24,38 @@ from semantic_digital_twin.world_description.world_entity import (
 # %% staying on a line
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class StayOnLineTask(ConvergingTask):
     """
     Keeps a point on the tip on the line segment between two points.
     """
 
-    root_link: KinematicStructureEntity = field(kw_only=True)
+    root_link: KinematicStructureEntity
     """
     Root link of the kinematic chain.
     """
 
-    tip_link: KinematicStructureEntity = field(kw_only=True)
+    tip_link: KinematicStructureEntity
     """
     Tip link of the kinematic chain, which the controlled point is attached to.
     """
 
-    tip_P_tool: Point3 = field(kw_only=True)
+    tip_P_tool: Point3
     """
     The controlled point.
     """
 
-    root_P_start: Point3 = field(kw_only=True)
+    root_P_start: Point3
     """
     Start of the line segment.
     """
 
-    root_P_end: Point3 = field(kw_only=True)
+    root_P_end: Point3
     """
     End of the line segment.
     """
 
-    reference_velocity: float = field(default=0.1, kw_only=True)
+    reference_velocity: float = 0.1
     """
     Reference velocity for normalization in m/s.
     """
@@ -97,7 +97,7 @@ class StayOnLineTask(ConvergingTask):
 # %% inserting a cylinder
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class InsertCylinder(EndedByOwner, CompositeNode):
     """
     Inserts a grasped cylinder into a hole.
@@ -109,64 +109,62 @@ class InsertCylinder(EndedByOwner, CompositeNode):
     Observes True once the cylinder is straightened.
     """
 
-    tip_link: KinematicStructureEntity = field(kw_only=True)
+    tip_link: KinematicStructureEntity
     """
     Controlled tip of the kinematic chain; the grasped body to insert.
     """
 
-    tip_P_tool: Point3 = field(kw_only=True)
+    tip_P_tool: Point3
     """
     The point of the cylinder that leads the insertion.
     """
 
-    hole_point: Point3 = field(kw_only=True)
+    hole_point: Point3
     """
     Position of the hole to insert into.
     """
 
-    tip_V_axis: Vector3 = field(kw_only=True)
+    tip_V_axis: Vector3
     """
     Insertion axis of the cylinder.
     """
 
-    up_axis: Vector3 = field(kw_only=True)
+    up_axis: Vector3
     """
     Axis pointing out of the hole.
     """
 
-    pre_grasp_height: float = field(default=0.2, kw_only=True)
+    pre_grasp_height: float = 0.2
     """
     Distance above the hole along :attr:`up_axis` at which the insertion starts, in m.
     """
 
-    tilt: float = field(default=np.pi / 10, kw_only=True)
+    tilt: float = np.pi / 10
     """
     Angle in rad by which the cylinder is tilted during the approach.
     """
 
-    tilt_threshold: float = field(default=0.01, kw_only=True)
+    tilt_threshold: float = 0.01
     """
     How far from :attr:`tilt` the cylinder still counts as tilted, in rad.
     """
 
-    approach_velocity: float = field(default=0.1, kw_only=True)
+    approach_velocity: float = 0.1
     """
     Maximum velocity while reaching the point above the hole, in m/s.
     """
 
-    insertion_velocity: float = field(default=0.05, kw_only=True)
+    insertion_velocity: float = 0.05
     """
     Maximum velocity while moving down into the hole, in m/s.
     """
 
-    straightening_velocity: float = field(default=0.025, kw_only=True)
+    straightening_velocity: float = 0.025
     """
     Reference angular velocity while straightening the cylinder, in rad/s.
     """
 
-    weight: float = field(
-        default=DefaultWeights.WEIGHT_ABOVE_COLLISION_AVOIDANCE, kw_only=True
-    )
+    weight: float = DefaultWeights.WEIGHT_ABOVE_COLLISION_AVOIDANCE
     """
     Task priority relative to other tasks.
     """

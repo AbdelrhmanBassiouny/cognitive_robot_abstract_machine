@@ -29,7 +29,7 @@ from semantic_digital_twin.world_description.world_entity import (
 logger = logging.getLogger(__name__)
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class Action(
     SucceedsOnObservingTrue,
     FailsOnObservingFalse,

@@ -32,50 +32,50 @@ from ...plan_running import run_plan
 
 
 def test_factory_construction():
-    act = NavigateAction(Pose())
-    act2 = MoveTorsoAction(TorsoState.HIGH)
-    act3 = DetectAction(DetectionTechnique.TYPES)
+    act = NavigateAction(target_location=Pose())
+    act2 = MoveTorsoAction(torso_state=TorsoState.HIGH)
+    act3 = DetectAction(technique=DetectionTechnique.TYPES)
 
-    root = Sequence([act, act2, act3])
+    root = Sequence(nodes=[act, act2, act3])
     assert isinstance(root, Sequence)
     assert len(root.children) == 3
 
 
 def test_parallel_construction():
-    act = NavigateAction(Pose())
-    act2 = MoveTorsoAction(TorsoState.HIGH)
-    act3 = DetectAction(DetectionTechnique.TYPES)
+    act = NavigateAction(target_location=Pose())
+    act2 = MoveTorsoAction(torso_state=TorsoState.HIGH)
+    act3 = DetectAction(technique=DetectionTechnique.TYPES)
 
-    root = Parallel([act, act2, act3])
+    root = Parallel(nodes=[act, act2, act3])
     assert isinstance(root, Parallel)
     assert len(root.children) == 3
 
 
 def test_try_in_order_construction():
-    act = NavigateAction(Pose())
-    act2 = MoveTorsoAction(TorsoState.HIGH)
-    act3 = DetectAction(DetectionTechnique.TYPES)
+    act = NavigateAction(target_location=Pose())
+    act2 = MoveTorsoAction(torso_state=TorsoState.HIGH)
+    act3 = DetectAction(technique=DetectionTechnique.TYPES)
 
-    root = TryInOrder([act, act2, act3])
+    root = TryInOrder(nodes=[act, act2, act3])
     assert isinstance(root, TryInOrder)
     assert len(root.children) == 3
 
 
 def test_try_all_construction():
-    act = NavigateAction(Pose())
-    act2 = MoveTorsoAction(TorsoState.HIGH)
-    act3 = DetectAction(DetectionTechnique.TYPES)
+    act = NavigateAction(target_location=Pose())
+    act2 = MoveTorsoAction(torso_state=TorsoState.HIGH)
+    act3 = DetectAction(technique=DetectionTechnique.TYPES)
 
-    root = TryAll([act, act2, act3])
+    root = TryAll(nodes=[act, act2, act3])
     assert isinstance(root, TryAll)
     assert len(root.children) == 3
 
 
 def test_combination_construction():
-    act = NavigateAction(Pose())
-    act2 = MoveTorsoAction(TorsoState.HIGH)
-    act3 = DetectAction(DetectionTechnique.TYPES)
-    root = Parallel([Sequence([act, act2]), act3])
+    act = NavigateAction(target_location=Pose())
+    act2 = MoveTorsoAction(torso_state=TorsoState.HIGH)
+    act3 = DetectAction(technique=DetectionTechnique.TYPES)
+    root = Parallel(nodes=[Sequence(nodes=[act, act2]), act3])
     assert isinstance(root, Parallel)
     assert len(root.children) == 2
     assert isinstance(root.children[0], Sequence)
@@ -84,11 +84,13 @@ def test_combination_construction():
 
 def test_perform_execute_single(pr2_apartment_context):
     world, robot_view, extensions = pr2_apartment_context
-    act = NavigateAction(Pose.from_xyz_rpy(0.3, -1.3, 0, reference_frame=world.root))
-    act2 = MoveTorsoAction(TorsoState.HIGH)
-    act3 = ParkArmsAction(robot_view.all_arms)
+    act = NavigateAction(
+        target_location=Pose.from_xyz_rpy(0.3, -1.3, 0, reference_frame=world.root)
+    )
+    act2 = MoveTorsoAction(torso_state=TorsoState.HIGH)
+    act3 = ParkArmsAction(arms=robot_view.all_arms)
 
-    plan = Sequence([act, act2, act3])
+    plan = Sequence(nodes=[act, act2, act3])
     run_plan(plan, extensions)
     np.testing.assert_almost_equal(
         robot_view.root.global_transform.to_np()[:3, 3], [0.3, -1.3, 0], decimal=1
@@ -101,7 +103,7 @@ def test_perform_execute_single(pr2_apartment_context):
 def test_perform_single_designator(pr2_apartment_context):
     world, robot_view, extensions = pr2_apartment_context
 
-    plan = Sequence([MoveTorsoAction(TorsoState.HIGH)])
+    plan = Sequence(nodes=[MoveTorsoAction(torso_state=TorsoState.HIGH)])
     run_plan(plan, extensions)
 
     assert world.state[
@@ -120,7 +122,7 @@ def test_perform_parallel(pr2_apartment_context):
     act2 = FunctionCall(function=lambda: check_thread_id(main_thread_id))
     act3 = FunctionCall(function=lambda: check_thread_id(main_thread_id))
 
-    plan = Parallel([act, act2, act3])
+    plan = Parallel(nodes=[act, act2, act3])
     run_plan(plan, extensions)
 
     assert [node.life_cycle_state for node in plan.children] == [
@@ -152,7 +154,9 @@ def test_perform_repeat_runs_a_succeeding_motion_once(pr2_apartment_context):
     """
     world, robot_view, extensions = pr2_apartment_context
 
-    plan = _repeat_on_stall(Sequence([MoveTorsoAction(TorsoState.HIGH)]), 3)
+    plan = _repeat_on_stall(
+        Sequence(nodes=[MoveTorsoAction(torso_state=TorsoState.HIGH)]), 3
+    )
     run_plan(plan, extensions)
 
     assert world.state[
@@ -169,10 +173,18 @@ def test_repeat_does_not_give_up_on_a_child_that_starts_at_its_goal(
     which must not be mistaken for an attempt that stalled.
     """
     world, robot_view, extensions = pr2_apartment_context
-    executor = run_plan(Sequence([MoveTorsoAction(TorsoState.HIGH)]), extensions)
+    executor = run_plan(
+        Sequence(nodes=[MoveTorsoAction(torso_state=TorsoState.HIGH)]), extensions
+    )
 
     plan = _repeat_on_stall(
-        Sequence([MoveTorsoAction(TorsoState.HIGH), MoveTorsoAction(TorsoState.LOW)]), 3
+        Sequence(
+            nodes=[
+                MoveTorsoAction(torso_state=TorsoState.HIGH),
+                MoveTorsoAction(torso_state=TorsoState.LOW),
+            ]
+        ),
+        3,
     )
     run_plan(plan, extensions)
 
@@ -189,10 +201,12 @@ def test_exception_sequential(pr2_apartment_context):
     def raise_except():
         raise PlanFailure()
 
-    act = NavigateAction(Pose.from_xyz_rpy(1, -1, reference_frame=world.root))
+    act = NavigateAction(
+        target_location=Pose.from_xyz_rpy(1, -1, reference_frame=world.root)
+    )
     act2 = FunctionCall(function=raise_except, failure_types=(PlanFailure,))
 
-    plan = Sequence([act, act2])
+    plan = Sequence(nodes=[act, act2])
 
     def perform_plan():
         run_plan(plan, extensions)
@@ -209,10 +223,12 @@ def test_exception_try_in_order(pr2_apartment_context):
     def raise_except():
         raise PlanFailure()
 
-    act = NavigateAction(Pose.from_xyz_rpy(1, -1, reference_frame=world.root))
+    act = NavigateAction(
+        target_location=Pose.from_xyz_rpy(1, -1, reference_frame=world.root)
+    )
     act2 = FunctionCall(function=raise_except, failure_types=(PlanFailure,))
 
-    plan = TryInOrder([act, act2])
+    plan = TryInOrder(nodes=[act, act2])
     run_plan(plan, extensions)
     assert len(plan.children) == 2
     assert plan.life_cycle_state == LifeCycleValues.SUCCEEDED
@@ -224,10 +240,12 @@ def test_exception_try_all(pr2_apartment_context):
     def raise_except():
         raise PlanFailure()
 
-    act = NavigateAction(Pose.from_xyz_rpy(x=-2, reference_frame=world.root))
+    act = NavigateAction(
+        target_location=Pose.from_xyz_rpy(x=-2, reference_frame=world.root)
+    )
     act2 = FunctionCall(function=raise_except, failure_types=(PlanFailure,))
 
-    plan = TryAll([act, act2])
+    plan = TryAll(nodes=[act, act2])
     run_plan(plan, extensions)
 
     assert type(plan) is TryAll
@@ -247,9 +265,9 @@ def test_try_in_order_recovers_from_a_failing_code_step(pr2_apartment_context):
         raise PlanFailure()
 
     plan = TryInOrder(
-        [
+        nodes=[
             FunctionCall(function=raise_except, failure_types=(PlanFailure,)),
-            MoveTorsoAction(TorsoState.HIGH),
+            MoveTorsoAction(torso_state=TorsoState.HIGH),
         ]
     )
     run_plan(plan, extensions)
@@ -268,7 +286,10 @@ def test_children_report_the_outcome_of_the_chart_they_ran_in(pr2_apartment_cont
     world, robot_view, extensions = pr2_apartment_context
 
     root = Sequence(
-        [MoveTorsoAction(TorsoState.HIGH), ParkArmsAction(robot_view.all_arms)]
+        nodes=[
+            MoveTorsoAction(torso_state=TorsoState.HIGH),
+            ParkArmsAction(arms=robot_view.all_arms),
+        ]
     )
     run_plan(root, extensions)
 
@@ -283,14 +304,14 @@ def test_children_report_the_outcome_of_the_chart_they_ran_in(pr2_apartment_cont
 
 def test_cancel_monitor_construction(pr2_apartment_context):
     world, robot_view, extensions = pr2_apartment_context
-    act = ParkArmsAction(robot_view.all_arms)
-    act2 = MoveTorsoAction(TorsoState.HIGH)
+    act = ParkArmsAction(arms=robot_view.all_arms)
+    act2 = MoveTorsoAction(torso_state=TorsoState.HIGH)
 
     never = ConstFalseNode(name="never")
 
     root = CancelledWhenTrue(
         monitor=never,
-        monitored_node=Sequence([act, act2]),
+        monitored_node=Sequence(nodes=[act, act2]),
         exception=PlanCancelled(monitor=never),
     )
     assert isinstance(root, CancelledWhenTrue)
@@ -314,7 +335,7 @@ def test_cancel_monitor_stops_the_motion_it_wraps(pr2_apartment_context):
 
     plan = CancelledWhenTrue(
         monitor=always,
-        monitored_node=Sequence([MoveTorsoAction(TorsoState.HIGH)]),
+        monitored_node=Sequence(nodes=[MoveTorsoAction(torso_state=TorsoState.HIGH)]),
         exception=PlanCancelled(monitor=always),
     )
     with pytest.raises(PlanCancelled):
@@ -334,13 +355,15 @@ def test_cancel_monitor_gives_up_on_the_plan_instead_of_stalling(pr2_apartment_c
     always = ConstTrueNode(name="always")
 
     plan = Sequence(
-        [
+        nodes=[
             CancelledWhenTrue(
                 monitor=always,
-                monitored_node=Sequence([MoveTorsoAction(TorsoState.HIGH)]),
+                monitored_node=Sequence(
+                    nodes=[MoveTorsoAction(torso_state=TorsoState.HIGH)]
+                ),
                 exception=PlanCancelled(monitor=always),
             ),
-            MoveTorsoAction(TorsoState.LOW),
+            MoveTorsoAction(torso_state=TorsoState.LOW),
         ]
     )
     with pytest.raises(PlanCancelled):
@@ -358,7 +381,7 @@ def test_never_firing_cancel_monitor_leaves_the_motion_alone(pr2_apartment_conte
 
     plan = CancelledWhenTrue(
         monitor=never,
-        monitored_node=Sequence([MoveTorsoAction(TorsoState.HIGH)]),
+        monitored_node=Sequence(nodes=[MoveTorsoAction(torso_state=TorsoState.HIGH)]),
         exception=PlanCancelled(monitor=never),
     )
     run_plan(plan, extensions)
@@ -378,7 +401,9 @@ def test_repeat_raises_when_it_runs_out_of_attempts(pr2_apartment_context):
 
     plan = _repeat_on_stall(
         Sequence(
-            [tool_center_point_goal(robot_view, robot_view.right_arm, unreachable)]
+            nodes=[
+                tool_center_point_goal(robot_view, robot_view.right_arm, unreachable)
+            ]
         ),
         2,
         timeout=timedelta(seconds=1),
@@ -396,7 +421,7 @@ def test_repeat_of_a_non_converging_motion_is_attempted(pr2_apartment_context):
     world, robot_view, extensions = pr2_apartment_context
     target = Pose.from_xyz_rpy(1, -1, reference_frame=world.root)
 
-    plan = _repeat_on_stall(Sequence([NavigateAction(target)]), 2)
+    plan = _repeat_on_stall(Sequence(nodes=[NavigateAction(target_location=target)]), 2)
     run_plan(plan, extensions)
 
     assert plan.life_cycle_state == LifeCycleValues.SUCCEEDED

@@ -429,7 +429,7 @@ class RoboKudoPerception(PerceptionInterface):
 # %% perceiving inside the motion chart
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class PerceptionTask(EndedByOwner, FailsOnObservingFalse, StatechartNode):
     """
     Statechart node that answers a perception query and writes what it saw into the
@@ -446,12 +446,12 @@ class PerceptionTask(EndedByOwner, FailsOnObservingFalse, StatechartNode):
         up the control loop for as long as the pipeline takes to answer.
     """
 
-    query: PerceptionQuery = field(kw_only=True)
+    query: PerceptionQuery
     """
     What to look for and where.
     """
 
-    answered_by: PerceptionSource = field(kw_only=True)
+    answered_by: PerceptionSource
     """
     Which kind of source answers the query.
 

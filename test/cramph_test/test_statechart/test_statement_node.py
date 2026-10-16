@@ -94,10 +94,10 @@ def test_a_statement_handed_to_a_language_node_becomes_a_statement_node():
     statement = _succeeding_statement("step")
 
     for language_node in (
-        Sequence([statement]),
-        TryInOrder([statement]),
-        TryAll([statement]),
-        Parallel([statement]),
+        Sequence(nodes=[statement]),
+        TryInOrder(nodes=[statement]),
+        TryAll(nodes=[statement]),
+        Parallel(nodes=[statement]),
     ):
         [step] = language_node.nodes
         assert isinstance(step, StatementNode)
@@ -122,7 +122,7 @@ def test_a_statement_inserted_into_a_joined_sequence_runs_as_a_statement_node(
         name="first", observation=ObservationStateValues.TRUE
     )
     statement = _succeeding_statement("inserted")
-    sequence = Sequence([first])
+    sequence = Sequence(nodes=[first])
     statechart_executor.context.add_extension(
         ChildChooserAccess(chooser=ChooserRunningEveryCandidate())
     )
@@ -144,7 +144,7 @@ def test_a_statement_replacing_a_step_runs_as_a_statement_node(
         name="replaced", observation=ObservationStateValues.TRUE
     )
     statement = _succeeding_statement("replacement")
-    sequence = Sequence([replaced])
+    sequence = Sequence(nodes=[replaced])
     statechart_executor.context.add_extension(
         ChildChooserAccess(chooser=ChooserRunningEveryCandidate())
     )
@@ -161,7 +161,7 @@ def test_a_statement_replacing_a_step_runs_as_a_statement_node(
 def test_a_sequence_runs_the_node_its_statement_grounds_to(
     statechart_executor: StatechartExecutor,
 ):
-    sequence = Sequence([_succeeding_statement("grounded")])
+    sequence = Sequence(nodes=[_succeeding_statement("grounded")])
 
     _run(statechart_executor, ChooserRunningEveryCandidate(), sequence)
 

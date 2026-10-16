@@ -232,35 +232,45 @@ def transport_plan(kitchen: KitchenWithFilledDrawer) -> Sequence:
         x=-0.25, y=1.85, yaw=np.pi, reference_frame=world.root
     )
     return Sequence(
-        [
+        nodes=[
             # The arms start stretched out, which would reach into the counter.
-            ParkArmsAction(robot.all_arms),
-            NavigateAction(in_front_of_the_closed_drawer),
+            ParkArmsAction(arms=robot.all_arms),
+            NavigateAction(target_location=in_front_of_the_closed_drawer),
             OpenAction.from_handle(kitchen.drawer_handle, robot.left_arm),
-            ParkArmsAction(robot.all_arms),
-            NavigateAction(in_front_of_the_open_drawer),
+            ParkArmsAction(arms=robot.all_arms),
+            NavigateAction(target_location=in_front_of_the_open_drawer),
             Parallel(
-                [
+                nodes=[
                     HoldPose(
                         root_link=kitchen.world.root, tip_link=robot.mobile_base.root
                     ),
-                    PickUpAction(grasp_from_above(kitchen.bowl), robot.left_arm),
-                    PickUpAction(grasp_from_above(kitchen.cup), robot.right_arm),
+                    PickUpAction(
+                        grasp=grasp_from_above(kitchen.bowl), arm=robot.left_arm
+                    ),
+                    PickUpAction(
+                        grasp=grasp_from_above(kitchen.cup), arm=robot.right_arm
+                    ),
                 ]
             ),
-            ParkArmsAction(robot.all_arms),
-            NavigateAction(facing_the_kitchen_island),
-            MoveTorsoAction(TorsoState.HIGH),
+            ParkArmsAction(arms=robot.all_arms),
+            NavigateAction(target_location=facing_the_kitchen_island),
+            MoveTorsoAction(torso_state=TorsoState.HIGH),
             Parallel(
-                [
+                nodes=[
                     HoldPose(
                         root_link=kitchen.world.root, tip_link=robot.mobile_base.root
                     ),
-                    PlaceAction(kitchen.bowl, kitchen.world_T_bowl_goal),
-                    PlaceAction(kitchen.cup, kitchen.world_T_cup_goal),
+                    PlaceAction(
+                        object_designator=kitchen.bowl,
+                        target_location=kitchen.world_T_bowl_goal,
+                    ),
+                    PlaceAction(
+                        object_designator=kitchen.cup,
+                        target_location=kitchen.world_T_cup_goal,
+                    ),
                 ]
             ),
-            ParkArmsAction(robot.all_arms),
+            ParkArmsAction(arms=robot.all_arms),
         ]
     )
 

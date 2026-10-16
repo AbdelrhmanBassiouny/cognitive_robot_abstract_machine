@@ -109,7 +109,7 @@ def test_nested_goals(tmp_path):
     msc = Statechart(context=StatechartContext(world=World()))
     msc.add_node(
         sequence := Sequence(
-            [
+            nodes=[
                 ConstTrueNode(),
                 CompositeNodeWithNestedCompositeChild(),
             ]
@@ -459,7 +459,7 @@ def test_conditions_of_goal_children_survive_json_round_trip():
     msc = Statechart(context=StatechartContext(world=World()))
     child = ConstTrueNode()
     sibling = ConstTrueNode()
-    msc.add_node(Parallel([child, sibling]))
+    msc.add_node(Parallel(nodes=[child, sibling]))
     child.success_condition = child.observes_true
     sibling.start_condition = child.observes_true
 
@@ -472,7 +472,7 @@ def test_goal_reading_its_child_survives_json_round_trip():
     """
     msc = Statechart(context=StatechartContext(world=World()))
     child = ConstTrueNode()
-    msc.add_node(parallel := Parallel([child]))
+    msc.add_node(parallel := Parallel(nodes=[child]))
     parallel.success_condition = child.is_succeeded
 
     assert_conditions_survive_json_round_trip(msc)
@@ -585,7 +585,7 @@ def test_written_conditions_of_a_compiled_statechart_survive_json_round_trip(
     written on the original.
     """
     msc = Statechart(context=statechart_executor.context)
-    msc.add_node(sequence := Sequence([ConstTrueNode()]))
+    msc.add_node(sequence := Sequence(nodes=[ConstTrueNode()]))
     written = [str(condition) for condition in sequence.conditions]
     statechart_executor.compile(statechart=msc)
 

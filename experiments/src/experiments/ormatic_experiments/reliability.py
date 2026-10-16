@@ -115,7 +115,7 @@ def create_plan(world: World, n_actions: int) -> Sequence:
     Create a sequential plan with *n_actions* random :class:`NavigateAction` instances.
     """
     return Sequence(
-        [
+        nodes=[
             StatementNode(statement=_random_navigate_action(world))
             for _ in range(n_actions)
         ]

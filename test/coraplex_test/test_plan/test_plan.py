@@ -46,7 +46,12 @@ def test_sequence_runs_all_motions(pr2_apartment_context):
     """
     world, robot_view, extensions = pr2_apartment_context
 
-    plan = Sequence([MoveTorsoAction(TorsoState.LOW), MoveTorsoAction(TorsoState.HIGH)])
+    plan = Sequence(
+        nodes=[
+            MoveTorsoAction(torso_state=TorsoState.LOW),
+            MoveTorsoAction(torso_state=TorsoState.HIGH),
+        ]
+    )
     run_plan(plan, extensions)
 
     assert _torso_position(world) == pytest.approx(0.3, abs=0.05)
@@ -78,7 +83,10 @@ def test_algebra_sequential_plan(apartment_world_pr2_copy_with_context):
 
     # resolved_navigate = next(pm_backend.evaluate(navigate_action))
     plan = Sequence(
-        [MoveTorsoAction(TorsoState.LOW), StatementNode(statement=navigate_action)]
+        nodes=[
+            MoveTorsoAction(torso_state=TorsoState.LOW),
+            StatementNode(statement=navigate_action),
+        ]
     )
 
     run_plan(plan, extensions)

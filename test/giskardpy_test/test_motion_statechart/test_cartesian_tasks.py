@@ -144,7 +144,7 @@ class TestHoldPose:
             goal_point=Point3(1, 0, 0, reference_frame=cylinder_bot_world.root),
         )
         hold = HoldPose(root_link=cylinder_bot_world.root, tip_link=bot)
-        together = Parallel([goal, hold])
+        together = Parallel(nodes=[goal, hold])
         progressing = StillProgressing(monitored_node=together)
         executor = self.executor_for(cylinder_bot_world)
         motion_statechart = Statechart(context=executor.context)
@@ -854,7 +854,7 @@ class TestCartesianTasks:
         motion_statechart = Statechart(context=executor.context)
         motion_statechart.add_node(
             both_grippers := Parallel(
-                [
+                nodes=[
                     CartesianPose(
                         root_link=base_link,
                         tip_link=right_tip,
@@ -1076,7 +1076,7 @@ class TestCartesianTasks:
         )
         motion_statechart.add_node(
             goal := Parallel(
-                [
+                nodes=[
                     CartesianOrientation(
                         root_link=_hsr_world_setup.root,
                         tip_link=hand.tool_frame,

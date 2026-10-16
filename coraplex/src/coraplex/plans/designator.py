@@ -11,7 +11,7 @@ from krrood.patterns.field_metadata import ParameterMetadata
 T = TypeVar("T")
 
 
-@dataclass(eq=False)
+@dataclass(eq=False, kw_only=True)
 class DesignatorParameters:
     """
     Reads back the parameters a designator was built with, off its dataclass fields.

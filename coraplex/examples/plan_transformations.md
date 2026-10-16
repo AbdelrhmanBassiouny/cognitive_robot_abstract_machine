@@ -89,7 +89,7 @@ from semantic_digital_twin.spatial_types.spatial_types import Pose
 milk = world.get_semantic_annotations_by_type(Milk)[0]
 grasp = milk.grasp_candidates()[0]
 
-reach = expand(Sequence([ReachAction(grasp=grasp, arm=pr2.right_arm)]))
+reach = expand(Sequence(nodes=[ReachAction(grasp=grasp, arm=pr2.right_arm)]))
 
 show(reach)
 ```
@@ -107,7 +107,7 @@ from coraplex.robot_plans.plan_transformations import DetectBeforeGrasp
 
 plan_transformations.append(DetectBeforeGrasp())
 
-reach = expand(Sequence([ReachAction(grasp=grasp, arm=pr2.right_arm)]))
+reach = expand(Sequence(nodes=[ReachAction(grasp=grasp, arm=pr2.right_arm)]))
 
 show(reach)
 ```
@@ -128,7 +128,7 @@ reach that `PickUpAction` builds. Nothing has to be passed down to it:
 ```python
 from coraplex.robot_plans.actions.core.pick_up import PickUpAction
 
-pick_up = expand(Sequence([PickUpAction(grasp, pr2.right_arm)]))
+pick_up = expand(Sequence(nodes=[PickUpAction(grasp=grasp, arm=pr2.right_arm)]))
 
 show(pick_up)
 ```
@@ -192,7 +192,7 @@ plan_transformations = [OpenDrawerBeforePickUp()]
 spoon_annotation = world.get_semantic_annotations_by_type(Spoon)[0]
 
 pick_up = expand(
-    Sequence([PickUpAction(spoon_annotation.grasp_candidates()[0], pr2.right_arm)])
+    Sequence(nodes=[PickUpAction(grasp=spoon_annotation.grasp_candidates()[0], arm=pr2.right_arm)])
 )
 
 show(pick_up)
@@ -203,7 +203,7 @@ drive are grounded when they are run, and the parking was expanded in turn. The 
 open, so the same registration leaves its pick-up alone:
 
 ```python
-milk_pick_up = expand(Sequence([PickUpAction(grasp, pr2.right_arm)]))
+milk_pick_up = expand(Sequence(nodes=[PickUpAction(grasp=grasp, arm=pr2.right_arm)]))
 
 show(milk_pick_up)
 ```
@@ -251,7 +251,7 @@ class ParkArmsBeforeNavigating(InsertionTransformation[NavigateAction]):
         return plan_node
 
     def nodes_to_insert(self, plan_node: NavigateAction) -> List[StatechartNode]:
-        return [ParkArmsAction(plan_node.robot.all_arms)]
+        return [ParkArmsAction(arms=plan_node.robot.all_arms)]
 ```
 
 ```python
@@ -259,7 +259,7 @@ plan_transformations = [ParkArmsBeforeNavigating()]
 
 navigate = expand(
     Sequence(
-        [NavigateAction(Pose.from_xyz_rpy(1.5, 2.4, 0.0, reference_frame=world.root))]
+        nodes=[NavigateAction(target_location=Pose.from_xyz_rpy(1.5, 2.4, 0.0, reference_frame=world.root))]
     )
 )
 
@@ -270,7 +270,7 @@ The parking is part of the plan like any other action, so it is performed with i
 
 ```python
 navigate = Sequence(
-    [NavigateAction(Pose.from_xyz_rpy(1.5, 2.4, 0.0, reference_frame=world.root))]
+    nodes=[NavigateAction(target_location=Pose.from_xyz_rpy(1.5, 2.4, 0.0, reference_frame=world.root))]
 )
 
 executor, statechart = statechart_for(navigate)
@@ -303,7 +303,7 @@ plan_transformations = [ParkArmsAfterNavigating()]
 
 navigate = expand(
     Sequence(
-        [NavigateAction(Pose.from_xyz_rpy(1.5, 2.4, 0.0, reference_frame=world.root))]
+        nodes=[NavigateAction(target_location=Pose.from_xyz_rpy(1.5, 2.4, 0.0, reference_frame=world.root))]
     )
 )
 
@@ -339,7 +339,7 @@ class ParkArmsBeforeLongDrives(ParkArmsBeforeNavigating):
 ```python
 plan_transformations = [ParkArmsBeforeLongDrives()]
 
-navigate = expand(Sequence([NavigateAction(pr2.root.global_pose)]))
+navigate = expand(Sequence(nodes=[NavigateAction(target_location=pr2.root.global_pose)]))
 
 show(navigate)
 ```

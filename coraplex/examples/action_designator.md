@@ -123,7 +123,7 @@ from semantic_digital_twin.datastructures.definitions import TorsoState
 
 torso_pose = TorsoState.HIGH
 
-plan = MoveTorsoAction(torso_pose)
+plan = MoveTorsoAction(torso_state=torso_pose)
 
 run(plan)
 ```
@@ -151,7 +151,7 @@ Park arms is used to move one or both arms into the default parking position.
 ```python
 from coraplex.robot_plans.actions.core.robot_body import ParkArmsAction
 
-run(ParkArmsAction(pr2.all_arms))
+run(ParkArmsAction(arms=pr2.all_arms))
 ```
 
 ## Pick Up and Place
@@ -179,10 +179,10 @@ from cramph.composites import Sequence
 arm = pr2.right_arm
 milk = world.get_semantic_annotations_by_type(Milk)[0]
 
-run(Sequence([ParkArmsAction(pr2.all_arms),
-     MoveTorsoAction(TorsoState.HIGH),
+run(Sequence(nodes=[ParkArmsAction(arms=pr2.all_arms),
+     MoveTorsoAction(torso_state=TorsoState.HIGH),
      NavigateAction(
-         Pose.from_xyz_rpy(1.5, 2.4, 0.0, reference_frame=world.root)
+         target_location=Pose.from_xyz_rpy(1.5, 2.4, 0.0, reference_frame=world.root)
      ),
      PickUpAction(
          grasp=next(iter(milk.grasp_candidates())),
@@ -254,7 +254,7 @@ description = TransportAction.from_graspable_by_closest_grasps(
     context,
     seed=0,
 )
-run(Sequence([MoveTorsoAction(TorsoState.HIGH),
+run(Sequence(nodes=[MoveTorsoAction(torso_state=TorsoState.HIGH),
             description]))
 ```
 
@@ -280,10 +280,10 @@ with world.modify_world():
         handle := Handle(root=world.get_body_by_name("handle_cab10_t"))
     )
 
-run(Sequence([
-    MoveTorsoAction(TorsoState.HIGH),
-    ParkArmsAction(pr2.all_arms),
-    NavigateAction(Pose.from_xyz_quaternion(1.7074915981292725, 2.6873629093170166, 0.0,
+run(Sequence(nodes=[
+    MoveTorsoAction(torso_state=TorsoState.HIGH),
+    ParkArmsAction(arms=pr2.all_arms),
+    NavigateAction(target_location=Pose.from_xyz_quaternion(1.7074915981292725, 2.6873629093170166, 0.0,
                                             -0.0, 0.0, 0.5253598267689507, -0.850880163370435,
                                             reference_frame=world.root)),
     OpenAction.from_handle(handle, pr2.right_arm)]))
@@ -301,10 +301,10 @@ the apartment. Additionally, we open the drawer such that we can close it with t
 from coraplex.robot_plans.actions.core.container import CloseAction
 from cramph.composites import Sequence
 
-run(Sequence([
-    MoveTorsoAction(TorsoState.HIGH),
-    ParkArmsAction(pr2.all_arms),
-    NavigateAction(Pose.from_xyz_quaternion(1.72, 2.65, 0.0,
+run(Sequence(nodes=[
+    MoveTorsoAction(torso_state=TorsoState.HIGH),
+    ParkArmsAction(arms=pr2.all_arms),
+    NavigateAction(target_location=Pose.from_xyz_quaternion(1.72, 2.65, 0.0,
                                             -0.0, 0.0, 0.5253598267689507, -0.850880163370435,
                                             reference_frame=world.root)),
     CloseAction.from_handle(handle, pr2.right_arm)]))

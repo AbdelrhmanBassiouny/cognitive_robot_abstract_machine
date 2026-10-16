@@ -167,14 +167,14 @@ def test_wiggle_insert(hsr_world_state_reset):
     msc = Statechart(context=kin_sim.context)
     msc.add_node(
         motion := Sequence(
-            [
+            nodes=[
                 SetSeedConfiguration(
                     seed_configuration=JointState.from_str_dict(
                         goal_state, world=hsr_world_state_reset
                     )
                 ),
                 Parallel(
-                    [
+                    nodes=[
                         wiggle := WiggleInsert(
                             name="wiggle",
                             root_link=root_link,
@@ -183,7 +183,7 @@ def test_wiggle_insert(hsr_world_state_reset):
                             weight=DefaultWeights.WEIGHT_BELOW_COLLISION_AVOIDANCE,
                         ),
                         barrier := Parallel(
-                            [
+                            nodes=[
                                 CountSimulationTimeSeconds(seconds=5),
                                 CartesianPosition(
                                     root_link=root_link,
