@@ -46,7 +46,7 @@ items:
   branch: claude/inspiring-pascal-u7ruus
   track: manifest
   depends_on: []
-  status: in progress
+  status: in_progress
   session: https://claude.ai/code/session_01RiyB21wDi8SaFucjBG6K3Y
   pull_request_number: 503
   notes: 'Reworked after review: no per-workflow manifest. basstler checks every workflow
@@ -65,7 +65,7 @@ items:
   track: manifest
   depends_on:
   - budget-manifest
-  status: not started
+  status: not_started
   notes: 'A first job in ci.yml maps the changed paths to libraries, adds every library that
     depends on them (read from each package''s own declared dependencies, not a second hand-kept
     list), and feeds that set to the matrix. Draft pull requests run that set; `ready_for_review`,
@@ -81,7 +81,7 @@ items:
   track: monitor
   depends_on:
   - budget-manifest
-  status: not started
+  status: not_started
   notes: 'A basstler module counts the last 24 hours of runs and jobs per workflow from the
     Actions API and compares them with daily ceilings it adds to `WorkflowLimits` in `.github/actions_budget.py`. Three surfaces, none on a
     timer: the session-start summary prints a warning line at 80% and an over-budget line
@@ -95,7 +95,7 @@ items:
   depends_on:
   - budget-manifest
   pull_request_number: 211
-  status: not started
+  status: not_started
   notes: 'Edits to #211, the open pull request that carries `integration-refresh.yml` (#282,
     #285 and #291 stack on it), not a branch of its own. Drop the four-a-day `schedule`, keeping
     `workflow_run`, `ready_for_review` and dispatch. A candidate pull request runs CI only,
@@ -108,7 +108,7 @@ items:
   depends_on:
   - budget-manifest
   pull_request_number: 280
-  status: not started
+  status: not_started
   notes: 'Edits to #280. Drop the six-hourly `schedule`. A restack pushes to every branch
     above a moved parent at once, and each push started a full 24-job matrix - the `action_required`
     runs pushed by `github-actions[bot]` across ten branches in the audit window are those.
@@ -120,7 +120,7 @@ items:
   branch: null
   track: hygiene
   depends_on: []
-  status: not started
+  status: not_started
   notes: Coraplex hang diagnosis (temporary), Integration token probe and board are still
     registered as active with no file on any branch. 406 remote branches exist, many of them
     `integration-<date>` and `integration-probe-*` builds that are never pushed to again.
