@@ -63,25 +63,16 @@ items:
   branch: claude/jolly-gauss-l2pjrh
   status: in_progress
   track: extraction
-  blockers:
-    - >-
-      Blocked on access, not work: AbdelrhmanBassiouny/basstler exists (empty) but the Claude GitHub
-      App is not installed on it, so pushes return 403. The standalone branch is built and backed up
-      on the fork as claude/jolly-gauss-l2pjrh; once the App is on the repo, push main (#501 tip,
-      filtered) and the rewritten tooling branches, then the branch, and open the draft PR.
   depends_on: [basstler-plugin-spike]
-  pull_request_number: null
+  pull_request_number: 1
   repository: AbdelrhmanBassiouny/basstler
   session: https://claude.ai/code/session_01DZCeMyvN5C1wCxeawxS8Vg
   notes: >
-    git filter-repo over a mirror holding every open tooling branch: basstler/ to root,
-    test/basstler_test/ to tests/, .claude/skills and hooks to plugin/, .claude/stack to docs/stack,
-    tooling workflows kept. Then one standalone commit: own CI (pytest tests/), plugin manifest and
-    marketplace, cram2 values moved out of the shipped stack.toml into the consumer's
-    .claude/basstler/stack.toml, one venv location instead of basstler/.venv, reusable workflows,
-    hook installs basstler from git at a tag. Tag v0.1.0. The spike passed through claude.ai: users
-    add the plugin there (Customize > Plugins, from the marketplace repo), or an org Owner installs
-    it for members; settings.json enabledPlugins only serves local and CI sessions.
+    Pushed: main is #501's tip filtered (basstler/ to root, tests/, plugin/, docs/), with the 24
+    rewritten tooling branches. Draft PR basstler#1 makes it standalone: plugin beside the project,
+    one per-user environment installing the package at the plugin's tag, the project's own
+    .claude/basstler/stack.toml, a reusable upstream-reviews workflow and CI, no CRAM names. Tag
+    v0.1.0 on merge. Bug fix basstler#2 (save-plan.sh validates the manifest) is stacked on it.
 - id: basstler-open-pull-request-carryover
   title: Reopen the open tooling pull requests in the new repository, close the stale ones
   branch: null
@@ -116,9 +107,8 @@ items:
     repo. Open: whether CRAM keeps a fallback for contributors who have not added it. Promote to
     cram2 only with the user's OK in-session.
 
-    Plugin renames to absorb: the notes default is now .claude/personal/notes.md (rename
-    cram-notes.md on the notes branch, or set CLAUDE_PERSONAL_NOTES_PATH), and
-    .claude/basstler/stack.toml must name upstream_repository =
+    Plugin renames to absorb: the notes are already at the plugin's default,
+    .claude/personal/notes.md, and .claude/basstler/stack.toml must name upstream_repository =
     "cram2/cognitive_robot_abstract_machine" and upstream_remote = "cram2".
 - id: krrood-core-package
   title: Move krrood's general patterns into a light krrood_core package

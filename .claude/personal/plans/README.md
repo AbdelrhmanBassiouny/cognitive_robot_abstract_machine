@@ -6,7 +6,7 @@ initiative: a structured `plan.yaml` drives generation, a sibling
 `roadmap.md` carries the narrative ("why", history, design decisions) that
 doesn't belong in structured data. Never merged into `main` — this
 directory lives only on `claude/personal-notes`, exactly like
-`cram-notes.md` and `pr-progress/*.md`.
+`notes.md` and `pr-progress/*.md`.
 
 ## Layout
 

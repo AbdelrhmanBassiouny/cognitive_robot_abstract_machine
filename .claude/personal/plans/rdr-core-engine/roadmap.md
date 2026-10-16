@@ -5,7 +5,7 @@
 - Two generated files, not one, were conflicting on #67 — cleared 2026-08-31. `test/krrood_test/dataset/ormatic_interface.py` was tracked only here and is now removed from the index, with `main`'s `/ormatic_interface.py` ignore rule arriving in the same merge.
 - `open_ready` means open plus non-draft, and deliberately not more. It answers *"can a dependent safely start stacking on this?"*, which stayed true of #67 throughout the six days it was unmergeable against its own base. Folding `mergeable_state` in would buy a visibility problem with a false negative; the visibility belongs in a per-item mergeable chip instead.
 - `scripts/format_docstrings.py` regresses ```:return: ``x``` ``` to ```:return:``x``` and rewrites unrelated docstrings wholesale — fourteen recorded instances. Every round reverts its churn by hand and keeps its output only where the file is being rewritten anyway. It wants a package-wide pass of its own, which nobody has taken.
-- Follow `.claude/personal/cram-notes.md` and this repository's `AGENTS.md`.
+- Follow `.claude/personal/notes.md` and this repository's `AGENTS.md`.
 - SOLID is a review gate: a new capability enters as an abstraction plus small dataclass implementations, and strategies stay substitutable without touching the engine.
 - TDD: failing test first, and no test is modified to make something pass.
 - `krrood` stays self-contained; world-like scenarios are mimicked in `test/krrood_test/dataset`.
