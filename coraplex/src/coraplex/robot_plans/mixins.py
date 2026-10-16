@@ -192,62 +192,6 @@ class PlaceTuningParameters:
 
 
 @dataclass(kw_only=True)
-class GripperStallToleranceParameters:
-    """
-    Adds an optional finger speed and stall-tolerance to a gripper open/close motion.
-    """
-
-    finger_velocity: Optional[float] = None
-    """
-    Maximum finger joint velocity (in m/s), enforced via
-    :class:`~giskardpy.motion_statechart.tasks.joint_tasks.JointVelocityLimit`. ``None``
-    leaves the speed unconstrained.
-    """
-
-    stall_minimum_time: Optional[float] = None
-    """
-    Minimum stall dwell time (in seconds, see
-    :attr:`~giskardpy.motion_statechart.monitors.monitors.LocalMinimumReached.minimum_time`)
-    to command. Only meaningful when :attr:`tolerate_stall` is True. ``None`` keeps the
-    default.
-    """
-
-    tolerate_stall: bool = False
-    """
-    Whether this motion is also considered done once the fingers' velocities settle
-    near zero, even without reaching their nominal target position -- checked via a
-    separate :class:`~giskardpy.motion_statechart.monitors.monitors.LocalMinimumReached`
-    monitor alongside the goal, not by the goal's own observation, since stalling does
-    not mean the goal itself was reached.
-    """
-
-
-@dataclass(kw_only=True)
-class CartesianVelocityLimitParameters:
-    """
-    Adds an optional linear and angular speed cap to a Cartesian tool-center-point
-    motion.
-    """
-
-    max_linear_velocity: Optional[float] = None
-    """
-    Maximum linear speed (in m/s) of the tool center point, enforced via
-    :class:`~giskardpy.motion_statechart.tasks.cartesian_tasks.CartesianPositionVelocityLimit`.
-    ``None`` leaves the linear speed unconstrained (other than the robot's own hardware
-    limits).
-    """
-
-    max_angular_velocity: Optional[float] = None
-    """
-    Maximum angular speed (in rad/s) of the tool center point, enforced via
-    :class:`~giskardpy.motion_statechart.tasks.cartesian_tasks.CartesianRotationVelocityLimit`.
-    Only meaningful for :class:`~giskardpy.motion_statechart.tasks.cartesian_tasks.CartesianPose`
-    (i.e. when not :attr:`~coraplex.datastructures.enums.MovementType.TRANSLATION`).
-    ``None`` leaves the angular speed unconstrained.
-    """
-
-
-@dataclass(kw_only=True)
 class MovesGripper:
     """
     Builds the goals that drive a gripper to one of its states.
