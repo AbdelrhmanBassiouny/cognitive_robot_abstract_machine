@@ -65,9 +65,10 @@ items:
   track: extraction
   blockers:
     - >-
-      Blocked: AbdelrhmanBassiouny/basstler does not exist and the GitHub App cannot create
-      repositories (403). The user creates it empty and public and installs the Claude App on it;
-      then push the prepared history from a mirror and open the draft pull request.
+      Blocked on access, not work: AbdelrhmanBassiouny/basstler exists (empty) but the Claude GitHub
+      App is not installed on it, so pushes return 403. The standalone branch is built and backed up
+      on the fork as claude/jolly-gauss-l2pjrh; once the App is on the repo, push main (#501 tip,
+      filtered) and the rewritten tooling branches, then the branch, and open the draft PR.
   depends_on: [basstler-plugin-spike]
   pull_request_number: null
   repository: AbdelrhmanBassiouny/basstler
