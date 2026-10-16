@@ -225,7 +225,7 @@ def test_resolver_rejects_pose_override_for_world_root_camera():
     camera = Camera(
         name=PrefixedName(name="root_camera"),
         root=camera_body,
-        camera_model=FieldOfViewCameraModel(view=FieldOfView()),
+        camera_model=FieldOfViewCameraModel(field_of_view_value=FieldOfView()),
     )
     with world.modify_world():
         world.add_body(camera_body)

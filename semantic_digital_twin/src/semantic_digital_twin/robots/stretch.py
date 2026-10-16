@@ -249,7 +249,9 @@ class StretchCameraColor(RobotCamera):
             minimal_height=1.322,
             maximal_height=1.322,
             camera_model=FieldOfViewCameraModel(
-                view=FieldOfView(horizontal_angle=0.99483, vertical_angle=0.75049)
+                field_of_view_value=FieldOfView(
+                    horizontal_angle=0.99483, vertical_angle=0.75049
+                )
             ),
             default_camera=True,
         )
@@ -284,7 +286,9 @@ class StretchCameraDepth(RobotCamera):
             minimal_height=1.307,
             maximal_height=1.307,
             camera_model=FieldOfViewCameraModel(
-                view=FieldOfView(horizontal_angle=0.99483, vertical_angle=0.75049)
+                field_of_view_value=FieldOfView(
+                    horizontal_angle=0.99483, vertical_angle=0.75049
+                )
             ),
         )
 
@@ -318,7 +322,9 @@ class StretchCameraInfra1(RobotCamera):
             minimal_height=1.307,
             maximal_height=1.307,
             camera_model=FieldOfViewCameraModel(
-                view=FieldOfView(horizontal_angle=0.99483, vertical_angle=0.75049)
+                field_of_view_value=FieldOfView(
+                    horizontal_angle=0.99483, vertical_angle=0.75049
+                )
             ),
         )
 
@@ -352,7 +358,9 @@ class StretchCameraInfra2(RobotCamera):
             minimal_height=1.257,
             maximal_height=1.257,
             camera_model=FieldOfViewCameraModel(
-                view=FieldOfView(horizontal_angle=0.99483, vertical_angle=0.75049)
+                field_of_view_value=FieldOfView(
+                    horizontal_angle=0.99483, vertical_angle=0.75049
+                )
             ),
         )
 

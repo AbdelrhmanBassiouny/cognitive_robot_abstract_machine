@@ -405,7 +405,9 @@ class TracyCamera(RobotCamera):
                 robot_root, "camera_color_optical_frame"
             ),
             camera_model=FieldOfViewCameraModel(
-                view=FieldOfView(horizontal_angle=1.047, vertical_angle=0.785)
+                field_of_view_value=FieldOfView(
+                    horizontal_angle=1.047, vertical_angle=0.785
+                )
             ),
             minimal_height=0.8,
             maximal_height=1.7,

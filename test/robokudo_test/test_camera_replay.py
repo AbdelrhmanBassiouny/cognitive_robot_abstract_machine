@@ -97,7 +97,8 @@ def _recorded_scene(
         name=PrefixedName(name="recorded_camera"),
         root=camera_root,
         camera_model=FieldOfViewCameraModel(
-            view=FieldOfView(), image_resolution=effective_model.resolution
+            field_of_view_value=FieldOfView(),
+            image_resolution=effective_model.resolution,
         ),
         camera_range=CameraRange(minimum_distance=0.2, maximum_distance=12.0),
         modalities=(CameraModality.COLOR, CameraModality.DEPTH),

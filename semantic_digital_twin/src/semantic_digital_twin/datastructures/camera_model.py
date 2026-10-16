@@ -48,7 +48,7 @@ class FieldOfViewCameraModel(CameraModel):
     Describe an ideal camera from its angular extent and image resolution.
     """
 
-    view: FieldOfView = field(kw_only=True)
+    field_of_view_value: FieldOfView = field(kw_only=True)
     """
     Angular extent of the camera image.
     """
@@ -64,14 +64,14 @@ class FieldOfViewCameraModel(CameraModel):
         """
         Validate that both viewing angles describe a physical camera.
         """
-        _validate_field_of_view(self.view)
+        _validate_field_of_view(self.field_of_view_value)
 
     @property
     def field_of_view(self) -> FieldOfView:
         """
         Return the declared angular extent.
         """
-        return self.view
+        return self.field_of_view_value
 
     @property
     def resolution(self) -> CameraResolution:
@@ -321,33 +321,35 @@ class CameraDistortion(ABC):
                     f"{len(ordered_coefficients)}"
                 ),
             )
-        if model is CameraDistortionModel.NONE:
-            return NoCameraDistortion()
-        if model is CameraDistortionModel.PLUMB_BOB:
-            return PlumbBobCameraDistortion(
-                radial_coefficient_1=ordered_coefficients[0],
-                radial_coefficient_2=ordered_coefficients[1],
-                tangential_coefficient_1=ordered_coefficients[2],
-                tangential_coefficient_2=ordered_coefficients[3],
-                radial_coefficient_3=ordered_coefficients[4],
-            )
-        if model is CameraDistortionModel.RATIONAL_POLYNOMIAL:
-            return RationalPolynomialCameraDistortion(
-                radial_coefficient_1=ordered_coefficients[0],
-                radial_coefficient_2=ordered_coefficients[1],
-                tangential_coefficient_1=ordered_coefficients[2],
-                tangential_coefficient_2=ordered_coefficients[3],
-                radial_coefficient_3=ordered_coefficients[4],
-                radial_coefficient_4=ordered_coefficients[5],
-                radial_coefficient_5=ordered_coefficients[6],
-                radial_coefficient_6=ordered_coefficients[7],
-            )
-        return EquidistantCameraDistortion(
-            radial_coefficient_1=ordered_coefficients[0],
-            radial_coefficient_2=ordered_coefficients[1],
-            radial_coefficient_3=ordered_coefficients[2],
-            radial_coefficient_4=ordered_coefficients[3],
-        )
+        match model:
+            case CameraDistortionModel.NONE:
+                return NoCameraDistortion()
+            case CameraDistortionModel.PLUMB_BOB:
+                return PlumbBobCameraDistortion(
+                    radial_coefficient_1=ordered_coefficients[0],
+                    radial_coefficient_2=ordered_coefficients[1],
+                    tangential_coefficient_1=ordered_coefficients[2],
+                    tangential_coefficient_2=ordered_coefficients[3],
+                    radial_coefficient_3=ordered_coefficients[4],
+                )
+            case CameraDistortionModel.RATIONAL_POLYNOMIAL:
+                return RationalPolynomialCameraDistortion(
+                    radial_coefficient_1=ordered_coefficients[0],
+                    radial_coefficient_2=ordered_coefficients[1],
+                    tangential_coefficient_1=ordered_coefficients[2],
+                    tangential_coefficient_2=ordered_coefficients[3],
+                    radial_coefficient_3=ordered_coefficients[4],
+                    radial_coefficient_4=ordered_coefficients[5],
+                    radial_coefficient_5=ordered_coefficients[6],
+                    radial_coefficient_6=ordered_coefficients[7],
+                )
+            case CameraDistortionModel.EQUIDISTANT:
+                return EquidistantCameraDistortion(
+                    radial_coefficient_1=ordered_coefficients[0],
+                    radial_coefficient_2=ordered_coefficients[1],
+                    radial_coefficient_3=ordered_coefficients[2],
+                    radial_coefficient_4=ordered_coefficients[3],
+                )
 
 
 @dataclass(frozen=True, kw_only=True)

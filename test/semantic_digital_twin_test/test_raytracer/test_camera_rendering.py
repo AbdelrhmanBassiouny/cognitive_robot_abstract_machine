@@ -218,7 +218,7 @@ def test_render_derives_pinhole_calibration(
     """
     fixture = camera_intersections
     model = FieldOfViewCameraModel(
-        view=FieldOfView(), image_resolution=fixture.resolution
+        field_of_view_value=FieldOfView(), image_resolution=fixture.resolution
     )
     fixture.camera.camera_model = model
     frame = fixture.ray_tracer.render(fixture.camera)

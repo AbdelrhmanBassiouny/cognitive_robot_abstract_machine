@@ -347,7 +347,9 @@ class DAiSyCamera(RobotCamera):
                 HomogeneousTransformationMatrix(),
             ),
             camera_model=FieldOfViewCameraModel(
-                view=FieldOfView(horizontal_angle=1.047, vertical_angle=0.785)
+                field_of_view_value=FieldOfView(
+                    horizontal_angle=1.047, vertical_angle=0.785
+                )
             ),
             minimal_height=1.4,
             maximal_height=1.4,

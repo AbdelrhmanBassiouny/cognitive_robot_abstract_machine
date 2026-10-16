@@ -408,7 +408,9 @@ class TiagoCamera(RobotCamera):
                 robot_root, "head_front_camera_optical_frame"
             ),
             camera_model=FieldOfViewCameraModel(
-                view=FieldOfView(horizontal_angle=0.99483, vertical_angle=0.75049)
+                field_of_view_value=FieldOfView(
+                    horizontal_angle=0.99483, vertical_angle=0.75049
+                )
             ),
             minimal_height=1.0665,
             maximal_height=1.4165,

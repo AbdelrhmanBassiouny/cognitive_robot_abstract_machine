@@ -211,7 +211,9 @@ class HSRBHandCamera(RobotCamera):
                 robot_root, "hand_camera_frame"
             ),
             camera_model=FieldOfViewCameraModel(
-                view=FieldOfView(horizontal_angle=0.99483, vertical_angle=0.75049)
+                field_of_view_value=FieldOfView(
+                    horizontal_angle=0.99483, vertical_angle=0.75049
+                )
             ),
             minimal_height=0.75049,
             maximal_height=0.99483,
@@ -279,7 +281,9 @@ class HSRBHeadCenterCamera(RobotCamera):
                 robot_root, "head_center_camera_frame"
             ),
             camera_model=FieldOfViewCameraModel(
-                view=FieldOfView(horizontal_angle=0.99483, vertical_angle=0.75049)
+                field_of_view_value=FieldOfView(
+                    horizontal_angle=0.99483, vertical_angle=0.75049
+                )
             ),
             minimal_height=0.75049,
             maximal_height=0.99483,
@@ -305,7 +309,9 @@ class HSRBHeadLeftCamera(RobotCamera):
                 robot_root, "head_l_stereo_camera_link"
             ),
             camera_model=FieldOfViewCameraModel(
-                view=FieldOfView(horizontal_angle=0.99483, vertical_angle=0.75049)
+                field_of_view_value=FieldOfView(
+                    horizontal_angle=0.99483, vertical_angle=0.75049
+                )
             ),
             minimal_height=0.75049,
             maximal_height=0.99483,
@@ -330,7 +336,9 @@ class HSRBHeadRightCamera(RobotCamera):
                 robot_root, "head_r_stereo_camera_link"
             ),
             camera_model=FieldOfViewCameraModel(
-                view=FieldOfView(horizontal_angle=0.99483, vertical_angle=0.75049)
+                field_of_view_value=FieldOfView(
+                    horizontal_angle=0.99483, vertical_angle=0.75049
+                )
             ),
             minimal_height=0.75049,
             maximal_height=0.99483,
@@ -355,7 +363,9 @@ class HSRBHeadRGBDCamera(RobotCamera):
                 robot_root, "head_rgbd_sensor_link"
             ),
             camera_model=FieldOfViewCameraModel(
-                view=FieldOfView(horizontal_angle=0.99483, vertical_angle=0.75049)
+                field_of_view_value=FieldOfView(
+                    horizontal_angle=0.99483, vertical_angle=0.75049
+                )
             ),
             minimal_height=0.75049,
             maximal_height=0.99483,

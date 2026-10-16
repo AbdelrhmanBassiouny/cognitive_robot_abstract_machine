@@ -90,7 +90,9 @@ class GarmiCamera(RobotCamera):
                 ),
             ),
             camera_model=FieldOfViewCameraModel(
-                view=FieldOfView(horizontal_angle=0.99483, vertical_angle=0.75049)
+                field_of_view_value=FieldOfView(
+                    horizontal_angle=0.99483, vertical_angle=0.75049
+                )
             ),
             minimal_height=0.75049,
             maximal_height=0.99483,

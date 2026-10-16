@@ -48,12 +48,14 @@ def test_pinhole_camera_model_from_field_of_view_preserves_projection():
 def test_field_of_view_camera_model_rejects_zero_angle():
     with pytest.raises(InvalidCameraFieldOfViewError):
         FieldOfViewCameraModel(
-            view=FieldOfView(horizontal_angle=0.0, vertical_angle=np.radians(60.0))
+            field_of_view_value=FieldOfView(
+                horizontal_angle=0.0, vertical_angle=np.radians(60.0)
+            )
         )
 
 
 def test_field_of_view_camera_model_has_default_resolution():
-    model = FieldOfViewCameraModel(view=FieldOfView())
+    model = FieldOfViewCameraModel(field_of_view_value=FieldOfView())
 
     assert model.resolution == CameraResolution()
 
@@ -62,7 +64,7 @@ def test_field_of_view_camera_model_preserves_explicit_resolution():
     resolution = CameraResolution(width=320, height=240)
 
     model = FieldOfViewCameraModel(
-        view=FieldOfView(),
+        field_of_view_value=FieldOfView(),
         image_resolution=resolution,
     )
 
@@ -183,3 +185,15 @@ def test_equidistant_distortion_names_ordered_coefficients():
 def test_camera_distortion_rejects_nonfinite_coefficient(coefficient: float):
     with pytest.raises(InvalidCameraDistortionError):
         PlumbBobCameraDistortion(radial_coefficient_1=coefficient)
+
+
+# %% Declared angular extent
+
+
+def test_field_of_view_model_exposes_declared_value() -> None:
+    """
+    The common field-of-view property exposes the explicitly configured value.
+    """
+    field_of_view_value = FieldOfView()
+    model = FieldOfViewCameraModel(field_of_view_value=field_of_view_value)
+    assert model.field_of_view is field_of_view_value
