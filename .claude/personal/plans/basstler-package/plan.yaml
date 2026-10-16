@@ -91,11 +91,14 @@ items:
   pull_request_number: null
   repository: AbdelrhmanBassiouny/basstler
   session: https://claude.ai/code/session_013kCsTQdNToBZd8YixgPFwG
-  notes: 'Branches arrive rewritten by the extraction. Reopen #505 #508 #503 #504 #492 #514 #420 #424 #280
-    #430 #437 #253 there (quote unresolved upstream threads), close the fork PR with a link, set each
-    item''s repository and new number. Stale, written before the package existed: #260 #277 #281 #282
-    #284 #285 #291 #293 #482 - close each with a one-paragraph issue in the new repo unless the user
-    marks it to carry.'
+  notes: >
+    Branches arrive rewritten by the extraction. Reopen #505 #508 #503 #504 #492 #514 #420 #424 #280
+    #430 #437 #253 there (quote unresolved upstream threads), close the fork PR with a link, set
+    each item's repository and new number. Stale, written before the package existed: #260 #277 #281
+    #282 #284 #285 #291 #293 #482 - close each with a one-paragraph issue in the new repo unless the
+    user marks it to carry.
+
+    Relabel the carried pull requests: cram2-link-sent is now promotion-link-sent.
 - id: cram-basstler-removal
   title: Remove basstler from CRAM, keeping only its configuration and a pinned reference
   branch: null
