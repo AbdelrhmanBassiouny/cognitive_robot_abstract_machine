@@ -6,7 +6,8 @@ from __future__ import annotations
 
 # %% Imports
 from copy import deepcopy
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
+from itertools import pairwise
 
 from robokudo.exceptions import InvalidCameraObservation
 from robokudo.types.camera import CameraObservation
@@ -47,49 +48,66 @@ class SensorWorldProjector:
             == normalize_ros_frame_id(camera_root.name.name)
         )
 
+    @staticmethod
+    def _resolve_pose_child(observation: CameraObservation) -> Body:
+        """
+        Resolve the sampled child frame and validate its camera identity.
+
+        :param observation: Camera and sampled pose whose frames must agree.
+        :return: Camera root or an equivalent ROS frame body.
+        :raises InvalidCameraObservation: If pose frames are missing or inconsistent.
+        """
+        pose = observation.world_T_camera
+        camera_root = observation.camera.root
+        if pose is None:
+            return camera_root
+        if pose.reference_frame is None:
+            raise InvalidCameraObservation(
+                reason="sampled camera pose has no reference frame"
+            )
+        pose_child = pose.child_frame if pose.child_frame is not None else camera_root
+        if pose_child is camera_root:
+            return camera_root
+        if not isinstance(
+            pose_child, Body
+        ) or not SensorWorldProjector._is_camera_frame_alias(pose_child, camera_root):
+            raise InvalidCameraObservation(
+                reason="sampled pose child frame differs from the camera root"
+            )
+        return pose_child
+
     def project(self) -> World:
         """
-        Project the camera into an optical root with its sampled world pose and
-        identifiers.
+        Project an isolated optical camera and its sampled pose into a sensor world.
+
+        :return: World containing only the camera and its direct pose frames.
+        :raises InvalidCameraObservation: If sampled pose frames are inconsistent.
+        """
+        observation = self._copy_observation()
+        sensor_world = self._create_world(observation)
+        self.apply_pose(sensor_world, observation)
+        return sensor_world
+
+    def _copy_observation(self) -> CameraObservation:
+        """
+        Copy camera metadata and pose frames while preserving their recorded identities.
+
+        :return: Observation detached from the recorded world's bodies and geometry.
+        :raises InvalidCameraObservation: If the sampled pose cannot describe the
+            camera.
         """
         source_camera = self.observation.camera
         source_root = source_camera.root
         source_pose = self.observation.world_T_camera
-        source_pose_child = (
-            source_pose.child_frame
-            if source_pose is not None and source_pose.child_frame is not None
-            else source_root
-        )
-        if source_pose is not None and source_pose.reference_frame is None:
-            raise InvalidCameraObservation(
-                reason="sampled camera pose has no reference frame"
-            )
-        if source_pose_child is not source_root and (
-            not isinstance(source_pose_child, Body)
-            or not self._is_camera_frame_alias(source_pose_child, source_root)
-        ):
-            raise InvalidCameraObservation(
-                reason="sampled pose child frame differs from the camera root"
-            )
-
+        source_child = self._resolve_pose_child(self.observation)
         source_reference = (
             source_pose.reference_frame if source_pose is not None else None
         )
-        root = Body(name=deepcopy(source_root.name), id=source_root.id)
-        pose_child = (
-            Body(name=deepcopy(source_pose_child.name), id=source_pose_child.id)
-            if source_pose_child is not source_root
-            else root
-        )
-        reference = (
-            Body(name=deepcopy(source_reference.name), id=source_reference.id)
-            if source_reference is not None and source_reference is not source_root
-            else None
-        )
-        if reference is None and pose_child is not root:
+        if source_reference is source_root and source_child is not source_root:
             raise InvalidCameraObservation(
                 reason="aliased camera pose has no separate reference frame"
             )
+        root = Body(name=deepcopy(source_root.name), id=source_root.id)
         camera = Camera(
             id=source_camera.id,
             name=deepcopy(source_camera.name),
@@ -98,44 +116,57 @@ class SensorWorldProjector:
             camera_range=deepcopy(source_camera.camera_range),
             modalities=tuple(source_camera.modalities),
         )
+        if source_pose is None:
+            return replace(self.observation, camera=camera)
+        pose_child = (
+            Body(name=deepcopy(source_child.name), id=source_child.id)
+            if source_child is not source_root
+            else root
+        )
+        reference = (
+            root
+            if source_reference is source_root
+            else Body(name=deepcopy(source_reference.name), id=source_reference.id)
+        )
+        pose = HomogeneousTransformationMatrix(
+            data=source_pose, reference_frame=reference, child_frame=pose_child
+        )
+        return replace(self.observation, camera=camera, world_T_camera=pose)
 
+    @staticmethod
+    def _create_world(observation: CameraObservation) -> World:
+        """
+        Attach the observation's camera and direct pose frames to a new world.
+
+        :param observation: Isolated camera metadata and sampled frame references.
+        :return: Sensor world with identity mounts ready to receive the sampled pose.
+        """
+        camera = observation.camera
+        root = camera.root
+        pose = observation.world_T_camera
+        pose_child = SensorWorldProjector._resolve_pose_child(observation)
+        reference = pose.reference_frame if pose is not None else None
         sensor_world = World()
-        connection = None
         with sensor_world.modify_world():
-            if reference is not None:
+            if reference is not None and reference is not root:
                 sensor_world.add_body(reference)
             if pose_child is not root:
                 sensor_world.add_body(pose_child)
             sensor_world.add_body(root)
-            if reference is not None:
-                connection = Connection6DoF.create_with_dofs(
-                    parent=reference,
-                    child=pose_child,
-                    world=sensor_world,
-                    name=PrefixedName(
-                        name=f"{pose_child.name.name}_T_{reference.name.name}"
-                    ),
-                )
-                sensor_world.add_connection(connection)
-            if pose_child is not root:
+            for parent, child in pairwise((reference, pose_child, root)):
+                if parent is None or parent is child:
+                    continue
                 sensor_world.add_connection(
                     Connection6DoF.create_with_dofs(
-                        parent=pose_child,
-                        child=root,
+                        parent=parent,
+                        child=child,
                         world=sensor_world,
                         name=PrefixedName(
-                            name=f"{root.name.name}_T_{pose_child.name.name}"
+                            name=f"{child.name.name}_T_{parent.name.name}"
                         ),
                     )
                 )
             sensor_world.add_semantic_annotation(camera)
-        if connection is not None:
-            with sensor_world.modify_world():
-                connection.origin = HomogeneousTransformationMatrix(
-                    data=self.observation.world_T_camera,
-                    reference_frame=reference,
-                    child_frame=pose_child,
-                )
         return sensor_world
 
     def install(self, reasoning_world: World) -> Camera:
@@ -163,26 +194,9 @@ class SensorWorldProjector:
         Apply the sampled optical pose directly to the camera root.
         """
         pose = observation.world_T_camera
-        pose_child = (
-            pose.child_frame
-            if pose is not None and pose.child_frame is not None
-            else observation.camera.root
-        )
-        if pose_child is not observation.camera.root and (
-            not isinstance(pose_child, Body)
-            or not SensorWorldProjector._is_camera_frame_alias(
-                pose_child, observation.camera.root
-            )
-        ):
-            raise InvalidCameraObservation(
-                reason="sampled pose child frame differs from the camera root"
-            )
+        pose_child = SensorWorldProjector._resolve_pose_child(observation)
         if pose is None:
             return
-        if pose.reference_frame is None:
-            raise InvalidCameraObservation(
-                reason="sampled camera pose has no reference frame"
-            )
         if pose.reference_frame is pose_child:
             return
         connection = pose_child.parent_connection

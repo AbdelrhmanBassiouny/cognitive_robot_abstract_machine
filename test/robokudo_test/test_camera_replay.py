@@ -454,3 +454,29 @@ def test_explicit_full_world_replay_restores_recorded_objects():
         )
     )
     assert cas.contains(CASViews.QUERY)
+
+
+# %% Projection isolation
+
+
+@pytest.mark.parametrize("pose_frame_alias", [False, True])
+def test_sensor_projection_copies_camera_data_and_sampled_pose(
+    pose_frame_alias: bool,
+) -> None:
+    """
+    Projection preserves the sampled optical pose without sharing camera calibration.
+    """
+    scene = _recorded_scene(pose_frame_alias=pose_frame_alias)
+    projected_world = SensorWorldProjector(scene.observation).project()
+    projected_camera = projected_world.get_semantic_annotation_by_id(
+        scene.observation.camera.id
+    )
+    assert projected_camera is not scene.observation.camera
+    assert projected_camera.root is not scene.observation.camera.root
+    assert projected_camera.camera_model == scene.observation.camera.camera_model
+    assert projected_camera.camera_model is not scene.observation.camera.camera_model
+    np.testing.assert_allclose(
+        projected_camera.root.global_transform.to_np(),
+        scene.observation.world_T_camera.to_np(),
+        atol=1e-12,
+    )
