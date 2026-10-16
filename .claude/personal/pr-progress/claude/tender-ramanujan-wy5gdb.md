@@ -1,12 +1,10 @@
-basstler-plugin-spike, draft #516 (never merges), base main.
+basstler-plugin-spike, draft #516 (record only, never merges), base main. Item done.
 
 Plan:
-- Probe plugin under basstler-plugin-spike/ (skill + SessionStart hook), plugin source git-subdir pinned by sha.
-- .claude/settings.json: extraKnownMarketplaces (github, path into this branch) + enabledPlugins.
-- Child cloud session on this branch reports skill/hook/env; record pass or fail.
+- Probe whether a cloud session loads a settings.json-enabled plugin. Finished.
 
 Done:
-- Branch re-cut from main, #516 opened, manifest and roadmap recorded.
+- Result: fail. The cloud session installed nothing, as the docs say. The local CLI install works. Recorded on #516, the manifest (spike + two dependents) and tracking issue #102.
 
 Next:
-- Add plugin, validate with `claude plugin validate`, pin sha in settings, push, run child session.
+- Nothing on this branch. Closing #516 is the user's call.
