@@ -34,7 +34,6 @@ from semantic_digital_twin.adapters.ros.world_synchronizer import (
     Synchronizer,
     WorldSynchronizer,
 )
-from semantic_digital_twin.adapters.ros.exceptions import WorldUpdatesLostError
 from semantic_digital_twin.adapters.ros.world_fetcher import FetchWorldServer
 from semantic_digital_twin.adapters.urdf import URDFParser
 from semantic_digital_twin.callbacks.callback import StateChangeCallback
@@ -3153,81 +3152,97 @@ def test_updates_published_while_a_receiver_is_busy_are_not_lost(rclpy_node):
         receiver_synchronizer.close()
 
 
-def empty_update_message(
-    publisher: MetaData, sequence_number: int
-) -> std_msgs.msg.String:
+@dataclass
+class LoggerRecordingWarnings:
     """
-    :return: The ros message of an update of `publisher` that changes nothing, at
-        `sequence_number` in its stream.
+    Stands in for the logger of a ros node, recording every warning it is given.
     """
-    update = WorldUpdate(
-        meta_data=publisher,
-        sequence_number=sequence_number,
-        state_update=WorldStateUpdate(meta_data=publisher, ids=[], states=[]),
-    )
-    return std_msgs.msg.String(data=json.dumps(to_json(update)))
+
+    warnings: List[str] = field(default_factory=list)
+    """
+    Every warning given, in order.
+    """
+
+    def warning(self, message: str, **kwargs) -> None:
+        self.warnings.append(message)
+
+
+@dataclass
+class ReceivingSynchronizer:
+    """
+    A synchronizer of an empty world, on a topic nobody else publishes on, and the
+    warnings its node gives.
+    """
+
+    synchronizer: WorldSynchronizer
+    """
+    Receives the updates.
+    """
+
+    logger: LoggerRecordingWarnings
+    """
+    Records the warnings of the node of :attr:`synchronizer`.
+    """
+
+    def receive(self, publisher: MetaData, sequence_number: int) -> None:
+        """
+        Hand the synchronizer an update of `publisher` at `sequence_number` in its
+        stream that changes nothing.
+        """
+        update = WorldUpdate(
+            meta_data=publisher,
+            sequence_number=sequence_number,
+            state_update=WorldStateUpdate(meta_data=publisher, ids=[], states=[]),
+        )
+        self.synchronizer.subscription_callback(
+            std_msgs.msg.String(data=json.dumps(to_json(update)))
+        )
 
 
 @pytest.fixture()
-def receiving_synchronizer(rclpy_node) -> WorldSynchronizer:
-    """
-    :return: A synchronizer of an empty world, on a topic nobody else publishes on.
-    """
+def receiving(rclpy_node, monkeypatch) -> ReceivingSynchronizer:
     synchronizer = WorldSynchronizer(
         node=rclpy_node,
         _world=World(name="receiving"),
         topic_name=unique_topic("receiving"),
     )
-    yield synchronizer
+    logger = LoggerRecordingWarnings()
+    monkeypatch.setattr(rclpy_node, "get_logger", lambda: logger)
+    yield ReceivingSynchronizer(synchronizer=synchronizer, logger=logger)
     synchronizer.close()
 
 
-def test_a_receiver_that_lost_updates_says_so_when_asked_how_far_it_caught_up(
-    receiving_synchronizer: WorldSynchronizer,
+def test_a_receiver_that_lost_updates_warns_about_it(
+    receiving: ReceivingSynchronizer,
 ):
     """
-    Its world may differ from the publisher's in what the lost updates carried, which
-    catching up with a later position does not repair.
+    Its world may differ from the publisher's in what the lost updates carried.
     """
     publisher = MetaData(node_name="publisher", process_id=1)
-    receiving_synchronizer.subscription_callback(empty_update_message(publisher, 1))
-    receiving_synchronizer.subscription_callback(empty_update_message(publisher, 4))
+    receiving.receive(publisher, 1)
+    receiving.receive(publisher, 4)
 
-    with pytest.raises(WorldUpdatesLostError) as raised:
-        receiving_synchronizer.has_applied(
-            StreamPosition(origin=publisher, sequence_number=4)
-        )
-
-    assert raised.value.publisher == publisher
-    assert raised.value.last_received_sequence_number == 1
-    assert raised.value.received_sequence_number == 4
+    assert len(receiving.logger.warnings) == 1
 
 
-def test_updates_received_in_sequence_are_not_lost(
-    receiving_synchronizer: WorldSynchronizer,
-):
+def test_updates_received_in_sequence_are_not_lost(receiving: ReceivingSynchronizer):
     publisher = MetaData(node_name="publisher", process_id=1)
-    receiving_synchronizer.subscription_callback(empty_update_message(publisher, 1))
-    receiving_synchronizer.subscription_callback(empty_update_message(publisher, 2))
+    receiving.receive(publisher, 1)
+    receiving.receive(publisher, 2)
 
-    assert receiving_synchronizer.has_applied(
-        StreamPosition(origin=publisher, sequence_number=2)
-    )
+    assert receiving.logger.warnings == []
 
 
 def test_a_publisher_heard_from_for_the_first_time_has_lost_nothing(
-    receiving_synchronizer: WorldSynchronizer,
+    receiving: ReceivingSynchronizer,
 ):
     """
     A receiver that joins late starts somewhere in the middle of the stream, having
     fetched what was published before.
     """
-    publisher = MetaData(node_name="publisher", process_id=1)
-    receiving_synchronizer.subscription_callback(empty_update_message(publisher, 7))
+    receiving.receive(MetaData(node_name="publisher", process_id=1), 7)
 
-    assert receiving_synchronizer.has_applied(
-        StreamPosition(origin=publisher, sequence_number=7)
-    )
+    assert receiving.logger.warnings == []
 
 
 if __name__ == "__main__":

@@ -22,7 +22,6 @@ from sqlalchemy.orm import Session
 
 from krrood.adapters.json_serializer import from_json, to_json
 from krrood.ormatic.data_access_objects.helper import to_dao
-from semantic_digital_twin.adapters.ros.exceptions import WorldUpdatesLostError
 from semantic_digital_twin.adapters.ros.messages import (
     MessageField,
     MetaData,
@@ -94,7 +93,7 @@ class Synchronizer(WorldEntityWithClassBasedID, PublicationProgress):
     every applied message is remembered per publisher, so that two processes can tell
     each other what to catch up with without comparing world models they cannot compare.
     A message that does not follow the one received from its publisher before reveals
-    that messages in between were lost.
+    that messages in between were lost, which is logged.
     """
 
     node: RosNode = field(kw_only=True)
@@ -160,13 +159,6 @@ class Synchronizer(WorldEntityWithClassBasedID, PublicationProgress):
     )
     """
     The position of the message received last, per publisher.
-    """
-
-    _lost_updates: dict[MetaData, WorldUpdatesLostError] = field(
-        default_factory=dict, init=False, repr=False
-    )
-    """
-    The first loss of messages noticed, per publisher whose messages were lost.
     """
 
     _sequence_number_lock: threading.Lock = field(
@@ -266,26 +258,31 @@ class Synchronizer(WorldEntityWithClassBasedID, PublicationProgress):
             self._notice_lost_messages(deserialized_message)
             self._subscription_callback(deserialized_message)
 
-    def _notice_lost_messages(self, message: Message) -> None:
+    def _notice_lost_messages(
+        self, message: Message, warning_throttle_period: float = 1.0
+    ) -> None:
         """
-        Remember, and report, that messages of the publisher of `message` were lost if
-        `message` does not follow the one received from it before.
+        Warn that messages of the publisher of `message` were lost if `message` does not
+        follow the one received from it before.
+
+        Only what changed is published, so the world may differ from the publisher's in
+        what the lost messages carried.
 
         :param message: A message just received from another synchronizer.
+        :param warning_throttle_period: The fewest seconds between two warnings.
         """
         publisher = message.meta_data
         with self._sequence_number_lock:
             last_received = self._received_sequence_numbers.get(publisher)
             self._received_sequence_numbers[publisher] = message.sequence_number
-            if last_received is None or message.sequence_number == last_received + 1:
-                return
-            lost_updates = WorldUpdatesLostError(
-                publisher=publisher,
-                last_received_sequence_number=last_received,
-                received_sequence_number=message.sequence_number,
-            )
-            self._lost_updates.setdefault(publisher, lost_updates)
-        self.node.get_logger().error(str(lost_updates))
+        if last_received is None or message.sequence_number == last_received + 1:
+            return
+        self.node.get_logger().warning(
+            f"Updates #{last_received + 1} to #{message.sequence_number - 1} of "
+            f"'{publisher.node_name}' were lost, so this world may differ from the one "
+            f"of the publisher.",
+            throttle_duration_sec=warning_throttle_period,
+        )
 
     @property
     def published_sequence_number(self) -> int:
@@ -304,15 +301,9 @@ class Synchronizer(WorldEntityWithClassBasedID, PublicationProgress):
 
         A publisher this world never heard from is treated as being at the start of its
         stream, so its first message is still awaited.
-
-        :raises WorldUpdatesLostError: If messages of the publisher of ``position`` were
-            lost.
         """
         with self._sequence_number_lock:
-            lost_updates = self._lost_updates.get(position.origin)
             applied = self._applied_sequence_numbers.get(position.origin, 0)
-        if lost_updates is not None:
-            raise lost_updates
         return applied >= position.sequence_number
 
     def record_applied(self, message: Message):

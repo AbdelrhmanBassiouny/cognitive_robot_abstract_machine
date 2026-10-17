@@ -3,12 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Type
 
-from typing_extensions import TYPE_CHECKING
-
 from krrood.exceptions import DataclassException
-
-if TYPE_CHECKING:
-    from semantic_digital_twin.adapters.ros.messages import MetaData
 
 
 @dataclass
@@ -76,42 +71,3 @@ class LaserScanBeamCountMismatch(ROS2ConversionError):
 
     def suggest_correction(self) -> str:
         return "check that the scan's angle_min, angle_max and angle_increment match its ranges."
-
-
-@dataclass
-class WorldUpdatesLostError(DataclassException):
-    """
-    Raised when a synchronizer is asked how far it caught up with a publisher whose
-    updates it did not all receive.
-
-    Only what changed is published, so the world may differ from the publisher's in what
-    the lost updates carried for good.
-    """
-
-    publisher: MetaData
-    """
-    The synchronizer whose updates were lost.
-    """
-
-    last_received_sequence_number: int
-    """
-    The position of the update received before the lost ones.
-    """
-
-    received_sequence_number: int
-    """
-    The position of the update received after the lost ones.
-    """
-
-    def error_message(self) -> str:
-        return (
-            f"Updates #{self.last_received_sequence_number + 1} to "
-            f"#{self.received_sequence_number - 1} of '{self.publisher.node_name}' were "
-            f"lost, so this world may differ from the one of the publisher."
-        )
-
-    def suggest_correction(self) -> str:
-        return (
-            "Fetch the world again, and raise the message queue depth of the "
-            "synchronizers if the receiver cannot keep up with the publisher."
-        )
