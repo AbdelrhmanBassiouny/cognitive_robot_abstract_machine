@@ -265,6 +265,8 @@ class CollisionManager(ModelChangeCallback):
         .. note:: You may want to call `update_collision_matrix` before calling this method if rules or the world model have changed.
         :return: Result of the collision checking.
         """
+        self._world.commit_modifications()
+        self.collision_detector.world_model_updater.ensure_synchronized()
         collision_results = self.collision_detector.check_collisions(
             self.collision_matrix
         )

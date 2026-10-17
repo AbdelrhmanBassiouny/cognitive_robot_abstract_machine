@@ -21,7 +21,6 @@ from krrood.adapters.json_serializer import (
     from_json,
 )
 from semantic_digital_twin.exceptions import (
-    MissingWorldModificationContextError,
     MismatchingIDsInWorldModification,
 )
 from abc import abstractmethod, ABC
@@ -733,7 +732,12 @@ def synchronized_attribute_modification(func):
 
     @wraps(func)
     def wrapper(self: WorldEntityWithID, *args: Any, **kwargs: Any) -> Any:
+        with self._world._implicit_modification_block(func):
+            return record_attribute_modification(self, *args, **kwargs)
 
+    def record_attribute_modification(
+        self: WorldEntityWithID, *args: Any, **kwargs: Any
+    ) -> Any:
         object_before_change = to_json(self)
         result = func(self, *args, **kwargs)
         object_after_change = to_json(self)
@@ -748,11 +752,6 @@ def synchronized_attribute_modification(func):
         current_model_modification_block = (
             self._world.get_world_model_manager().current_model_modification_block
         )
-        if (
-            not self._world._model_manager._active_world_model_update_context_manager_ids
-        ):
-            raise MissingWorldModificationContextError(func)
-
         current_model_modification_block.append(
             AttributeUpdateModification.from_kwargs(
                 {
