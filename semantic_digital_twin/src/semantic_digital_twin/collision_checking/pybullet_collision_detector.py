@@ -427,25 +427,32 @@ class BulletCollisionDetector(CollisionDetector):
     def check_collisions(
         self, collision_matrix: CollisionMatrix
     ) -> CollisionCheckingResult:
-
-        query = self.collision_matrix_to_bullet_query(collision_matrix)
-        result: List[bullet.Collision] = (
-            self.kineverse_world.get_closest_filtered_map_batch(query)
-        )
-        return CollisionCheckingResult(
-            [
-                ClosestPoints(
-                    body_a=self._world.get_kinematic_structure_entity_by_id(
-                        collision.obj_a.name
-                    ),
-                    body_b=self._world.get_kinematic_structure_entity_by_id(
-                        collision.obj_b.name
-                    ),
-                    distance=collision.contact_distance,
-                    root_P_point_on_body_a=collision.map_P_pa,
-                    root_P_point_on_body_b=collision.map_P_pb,
-                    root_V_contact_normal_from_b_to_a=collision.world_V_n,
-                )
-                for collision in result
-            ]
-        )
+        # A model change (see CollisionDetectorModelUpdater.on_model_change) rebuilds
+        # body_to_bullet_object and the kineverse world from scratch while holding
+        # _world_lock; a query has to wait for that rebuild to finish rather than read
+        # it mid-rebuild, or a body a background thread is checking can momentarily be
+        # missing from the dict and raise a KeyError (as happened live while a grasp's
+        # ReAttachNode reparented a piece during real-robot execution, racing segmind's
+        # own background event-monitor thread).
+        with self._world._world_lock:
+            query = self.collision_matrix_to_bullet_query(collision_matrix)
+            result: List[bullet.Collision] = (
+                self.kineverse_world.get_closest_filtered_map_batch(query)
+            )
+            return CollisionCheckingResult(
+                [
+                    ClosestPoints(
+                        body_a=self._world.get_kinematic_structure_entity_by_id(
+                            collision.obj_a.name
+                        ),
+                        body_b=self._world.get_kinematic_structure_entity_by_id(
+                            collision.obj_b.name
+                        ),
+                        distance=collision.contact_distance,
+                        root_P_point_on_body_a=collision.map_P_pa,
+                        root_P_point_on_body_b=collision.map_P_pb,
+                        root_V_contact_normal_from_b_to_a=collision.world_V_n,
+                    )
+                    for collision in result
+                ]
+            )
