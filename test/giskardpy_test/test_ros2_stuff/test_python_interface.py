@@ -116,11 +116,78 @@ class TestGiskardClientExecutorClose:
         world = World()
         WorldSynchronizer(node=rospy.get_node(), _world=world)
 
-        executor = GiskardClientExecutor(node_handle=rospy.get_node(), world=world)
+        executor = GiskardClientExecutor(
+            node_handle=rospy.get_node(), world=world, announces_presence=True
+        )
 
         executor.close()
 
         assert executor.heartbeat_publisher.timer.is_canceled
+
+
+class TestAnnouncingPresence:
+    """
+    A client is only watched by Giskard once it announces itself, and it only does that
+    when asked to: a goal that is stopped because heartbeats went missing is the wrong
+    default for a client on a busy machine.
+    """
+
+    def test_a_client_does_not_announce_itself_unless_asked(
+        self, giskard_command_server
+    ):
+        world = World()
+        WorldSynchronizer(node=rospy.get_node(), _world=world)
+
+        executor = GiskardClientExecutor(node_handle=rospy.get_node(), world=world)
+
+        assert executor.heartbeat_publisher is None
+
+    def test_a_client_that_never_announced_itself_can_be_closed(
+        self, giskard_command_server
+    ):
+        world = World()
+        WorldSynchronizer(node=rospy.get_node(), _world=world)
+        executor = GiskardClientExecutor(node_handle=rospy.get_node(), world=world)
+
+        executor.close()
+
+        assert executor.heartbeat_publisher is None
+
+    def test_a_client_asked_to_on_construction_announces_itself(
+        self, giskard_command_server
+    ):
+        world = World()
+        WorldSynchronizer(node=rospy.get_node(), _world=world)
+
+        executor = GiskardClientExecutor(
+            node_handle=rospy.get_node(), world=world, announces_presence=True
+        )
+
+        assert not executor.heartbeat_publisher.timer.is_canceled()
+        executor.close()
+
+    def test_a_client_can_start_announcing_itself_later(self, giskard_command_server):
+        world = World()
+        WorldSynchronizer(node=rospy.get_node(), _world=world)
+        executor = GiskardClientExecutor(node_handle=rospy.get_node(), world=world)
+
+        executor.announce_presence()
+
+        assert not executor.heartbeat_publisher.timer.is_canceled()
+        executor.close()
+
+    def test_announcing_twice_keeps_the_first_heartbeat(self, giskard_command_server):
+        world = World()
+        WorldSynchronizer(node=rospy.get_node(), _world=world)
+        executor = GiskardClientExecutor(
+            node_handle=rospy.get_node(), world=world, announces_presence=True
+        )
+        first_publisher = executor.heartbeat_publisher
+
+        executor.announce_presence()
+
+        assert executor.heartbeat_publisher is first_publisher
+        executor.close()
 
 
 class TestGiskardClientExecutorNodeClose:

@@ -16,7 +16,8 @@ import pytest
 
 from basstler.locations import ProjectLocation
 
-from .constants import PersonalNotesPath, ScratchBranch
+from .constants import DatasetLocation, PersonalNotesPath, ScratchBranch
+from .project_declaration import ProjectDeclaration
 from .scratch_repository import (
     SCRATCH_IDENTITY,
     ScratchRepository,
@@ -383,20 +384,41 @@ def test_reports_declared_dependencies_that_are_not_installed(
 ):
     check_setup_repository.write(
         SetupPrerequisiteFile.PACKAGE_METADATA,
-        '[project]\ndependencies = ["pytest>=1", "no-such-distribution-exists>=2"]\n',
+        DatasetLocation.PARTLY_INSTALLED_PROJECT.read_text(),
     )
+    installed, uninstalled = ProjectDeclaration.read(
+        DatasetLocation.PARTLY_INSTALLED_PROJECT
+    ).dependencies
 
     report = run_check_setup(check_setup_repository)
+    detail = report.results[SetupCheck.DASHBOARD_DEPENDENCIES].detail
     assert report.exit_code == 1
     assert (
         report.results[SetupCheck.DASHBOARD_DEPENDENCIES].status
         == CheckStatus.NEEDS_SETUP
     )
-    assert (
-        "no-such-distribution-exists"
-        in report.results[SetupCheck.DASHBOARD_DEPENDENCIES].detail
+    assert uninstalled in detail
+    assert installed not in detail
+
+
+def test_reports_a_declaration_it_cannot_read_rather_than_nothing_missing(
+    check_setup_repository: ScratchRepository,
+):
+    """
+    A declaration the lookup cannot parse says nothing about what is installed, so it is
+    not reported as an environment with nothing missing.
+    """
+    check_setup_repository.write(
+        SetupPrerequisiteFile.PACKAGE_METADATA, "this is not toml\n"
     )
-    assert "pytest" not in report.results[SetupCheck.DASHBOARD_DEPENDENCIES].detail
+
+    report = run_check_setup(check_setup_repository)
+
+    assert report.exit_code == 1
+    assert (
+        report.results[SetupCheck.DASHBOARD_DEPENDENCIES].status
+        == CheckStatus.NEEDS_SETUP
+    )
 
 
 # %% the outcome of it all working

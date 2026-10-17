@@ -105,7 +105,7 @@ class Giskard:
     Runs the motion statecharts of the goals.
     """
 
-    motion_server: MotionServer = field(init=False)
+    motion_server: MotionServer | None = field(init=False, default=None)
     """
     Accepts goals and executes them.
     """
@@ -360,6 +360,8 @@ class Giskard:
             self.model_reload_synchronizer.close()
         if self.world_fetcher is not None:
             self.world_fetcher.close()
+        if self.motion_server is not None:
+            self.motion_server.client_watchdog.presence.stop()
         if self.tf_publisher is not None:
             self.tf_publisher.stop()
         if self.viz_marker_publisher is not None:

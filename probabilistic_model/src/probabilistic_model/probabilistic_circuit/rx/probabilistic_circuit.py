@@ -40,6 +40,11 @@ from probabilistic_model.probabilistic_circuit.groundable_circuit import (
     GroundableCircuit,
     ProductsOfCopies,
 )
+from probabilistic_model.probabilistic_circuit.probabilistic_circuit_representation import (
+    MixtureOverVariable,
+    ProbabilisticCircuitRepresentation,
+    UnnormalizedMixture,
+)
 from probabilistic_model.probabilistic_circuit.tensorized.array_types import (
     DenseEdgeValues,
 )
@@ -160,9 +165,18 @@ class Unit(SubclassJSONSerializer, ABC):
 
     def mixture_components(self) -> List[Unit]:
         """
-        :return: The subcircuits this unit mixes if it is a sum unit, otherwise nothing.
+        :return: Nothing, since a unit that does not mix has no components. A unit that
+            mixes answers the subcircuits it mixes.
         """
         return []
+
+    @property
+    def log_normalization_constant(self) -> float:
+        """
+        :return: ``0.0``, since a unit that mixes nothing has no weights to normalize.
+            A unit that mixes answers what its weights sum to.
+        """
+        return 0.0
 
     @property
     def leaves(self) -> List[LeafUnit]:
@@ -510,6 +524,17 @@ class SumUnit(InnerUnit):
 
     def mixture_components(self) -> List[Unit]:
         return self.subcircuits
+
+    @property
+    def log_normalization_constant(self) -> float:
+        """
+        :return: ``log(sum(exp(w)))`` over the weights of the components this unit
+            mixes, which is ``0.0`` while it mixes nothing.
+        """
+        log_weights = self.log_weights
+        if len(log_weights) == 0:
+            return 0.0
+        return float(logsumexp(log_weights))
 
     @property
     def log_weighted_subcircuits(self) -> List[Tuple[float, Unit]]:
@@ -1630,6 +1655,83 @@ class ProbabilisticCircuit(GroundableCircuit[Unit], SubclassJSONSerializer):
             component = products.components[index]
             root.add_subcircuit(self.mount(component.root)[component.root.index])
         return root
+
+    # %% reading the mixtures
+
+    def unnormalized_mixtures(
+        self, tolerance: float = 1e-6
+    ) -> List[UnnormalizedMixture[Unit]]:
+        return [
+            UnnormalizedMixture(node, node.log_normalization_constant)
+            for node in self.nodes()
+            if abs(node.log_normalization_constant) >= tolerance
+        ]
+
+    def mixtures_over(
+        self, variables: SortedSet[Variable]
+    ) -> List[MixtureOverVariable[Unit]]:
+        _ = self.support
+        return [
+            report
+            for layer in self.layers
+            for node in layer
+            for report in self._mixtures_of_unit_over(node, variables)
+        ]
+
+    def _mixtures_of_unit_over(
+        self, unit: Unit, variables: SortedSet[Variable]
+    ) -> List[MixtureOverVariable[Unit]]:
+        """
+        :param unit: The unit to read.
+        :param variables: The variables to read it through.
+        :return: One report per variable the unit models, or nothing if it mixes fewer
+            than two components.
+        """
+        components = unit.mixture_components()
+        if len(components) < 2:
+            return []
+        return [
+            MixtureOverVariable(
+                unit,
+                variable,
+                [
+                    component.result_of_current_query.marginal([variable])
+                    for component in components
+                ],
+            )
+            for variable in variables
+            if variable in unit.variables
+        ]
+
+    # %% composition
+
+    @classmethod
+    def mixture_of(cls, components: List[Self], log_weights: Iterable[float]) -> Self:
+        log_weights = list(log_weights)
+        ProbabilisticCircuitRepresentation.validate_mixture(components, log_weights)
+        result = cls()
+        root = SumUnit(probabilistic_circuit=result)
+        for component, log_weight in zip(components, log_weights):
+            root.add_subcircuit(result._mounted_copy_of(component), log_weight)
+        root.normalize()
+        return result
+
+    @classmethod
+    def product_of(cls, factors: List[Self]) -> Self:
+        ProbabilisticCircuitRepresentation.validate_product(factors)
+        result = cls()
+        root = ProductUnit(probabilistic_circuit=result)
+        for factor in factors:
+            root.add_subcircuit(result._mounted_copy_of(factor))
+        return result
+
+    def _mounted_copy_of(self, other: Self) -> Unit:
+        """
+        :param other: A circuit to copy into this one.
+        :return: The root of the copy, a unit of this circuit.
+        """
+        copy = other.__deepcopy__()
+        return self.mount(copy.root)[copy.root.index]
 
     def marginal(self, variables: Iterable[Variable]) -> Optional[Self]:
         result = self.restrict_to_variables(variables)

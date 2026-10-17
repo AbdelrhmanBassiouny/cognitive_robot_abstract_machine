@@ -20,7 +20,12 @@ from basstler.locations import ProjectLocation
 
 from .constants import PersonalNotesPath, ScratchBranch
 from .scratch_repository import SCRATCH_IDENTITY, GitIdentity, ScratchRepository
-from .session_start_summary import SummaryMessage, summary_message, summary_value
+from .session_start_summary import (
+    SummaryLine,
+    SummaryMessage,
+    summary_message,
+    summary_value,
+)
 
 RECORDED_IDENTITY = GitIdentity("Ada Lovelace", "ada@example.com")
 """
@@ -33,9 +38,6 @@ IDENTITY_FILE_WITHOUT_EMAIL = f"[user]\n\tname = {RECORDED_IDENTITY.name}\n"
 A recording that names the author but cannot authorize a commit - the half-written state
 a hand-edited file can land in.
 """
-
-SUMMARY_LABEL = "git identity"
-
 
 # %% the scratch layout
 
@@ -115,7 +117,7 @@ def test_reports_the_identity_it_set(git_identity_repository: ScratchRepository)
 
     result = run_session_start(git_identity_repository)
 
-    assert summary_value(result.stdout, SUMMARY_LABEL) == summary_message(
+    assert summary_value(result.stdout, SummaryLine.GIT_IDENTITY) == summary_message(
         SummaryMessage.GIT_IDENTITY_WRITTEN,
         ScratchBranch.PERSONAL_NOTES,
         PersonalNotesPath.GIT_IDENTITY,
@@ -148,7 +150,7 @@ def test_reports_the_identity_it_left_alone(
 
     result = run_session_start(git_identity_repository)
 
-    assert summary_value(result.stdout, SUMMARY_LABEL) == summary_message(
+    assert summary_value(result.stdout, SummaryLine.GIT_IDENTITY) == summary_message(
         SummaryMessage.CLONE_HAS_ITS_OWN_GIT_IDENTITY,
         f"{SCRATCH_IDENTITY.name} <{SCRATCH_IDENTITY.email}>",
     )
@@ -176,7 +178,7 @@ def test_reports_that_no_identity_is_recorded(
 
     result = run_session_start(git_identity_repository)
 
-    assert summary_value(result.stdout, SUMMARY_LABEL) == summary_message(
+    assert summary_value(result.stdout, SummaryLine.GIT_IDENTITY) == summary_message(
         SummaryMessage.NO_GIT_IDENTITY_RECORDED,
         ScratchBranch.PERSONAL_NOTES,
         PersonalNotesPath.GIT_IDENTITY,
@@ -205,7 +207,7 @@ def test_names_what_an_incomplete_recording_is_missing(
 
     result = run_session_start(git_identity_repository)
 
-    assert summary_value(result.stdout, SUMMARY_LABEL) == summary_message(
+    assert summary_value(result.stdout, SummaryLine.GIT_IDENTITY) == summary_message(
         SummaryMessage.GIT_IDENTITY_INCOMPLETE,
         PersonalNotesPath.GIT_IDENTITY,
         ScratchBranch.PERSONAL_NOTES,

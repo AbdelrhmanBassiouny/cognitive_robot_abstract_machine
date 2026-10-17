@@ -6,7 +6,7 @@ name: Upstream reviews
 # session cannot reach, so the read happens here and the session reads this job's
 # log. Dispatch-only on purpose: nothing about this should run on a timer.
 #
-# Runs unchanged in any fork - the upstream comes from basstler/stack.toml
+# Runs unchanged in any fork - the upstream comes from basstler/src/basstler/stack.toml
 # and the fork owner from the runner's own context, so no repository is named here.
 #
 # A runner starts with nothing installed and no session hook runs on it, so this job
@@ -42,13 +42,13 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: "3.12"
 
       - name: Install the basstler dependencies
         run: |
           set -euo pipefail
           source .claude/hooks/resolve-personal-notes-config.sh
-          pip install "./${BASSTLER_PACKAGE_DIRECTORY}"
+          pip install --editable "./${BASSTLER_SOURCE_TREE}"
 
       - name: Read upstream review threads
         env:
@@ -71,4 +71,4 @@ jobs:
             ARGUMENTS+=(--include-resolved)
           fi
           source .claude/hooks/resolve-personal-notes-config.sh
-          python3 -m "${UPSTREAM_REVIEWS_MODULE}" "${ARGUMENTS[@]}"
+          "${BASSTLER_PYTHON}" -m "${UPSTREAM_REVIEWS_MODULE}" "${ARGUMENTS[@]}"

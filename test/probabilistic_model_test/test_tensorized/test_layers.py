@@ -43,10 +43,12 @@ from probabilistic_model.probabilistic_circuit.rx.helper import (
     uniform_measure_of_event,
     uniform_measure_of_simple_event,
 )
-from probabilistic_model.exceptions import ShapeMismatchError
+from probabilistic_model.exceptions import (
+    NumberOfWeightsMismatchError,
+    ShapeMismatchError,
+)
 from probabilistic_model.probabilistic_circuit.tensorized.exceptions import (
     NonPositiveScaleError,
-    NumberOfWeightsMismatchError,
 )
 from probabilistic_model.probabilistic_circuit.tensorized.forward_sample_assignment import (
     ForwardSampleAssignment,

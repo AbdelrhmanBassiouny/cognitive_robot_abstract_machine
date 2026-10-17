@@ -1,5 +1,6 @@
 import logging
 import os
+import tempfile
 from dataclasses import dataclass, field
 from datetime import timedelta
 
@@ -149,8 +150,10 @@ class MJCFParser(WorldModelParser):
             part in contact collides with the geoms it does have.
         :return: A parser for the world described by that document.
         """
-        file_path = "/tmp/scene.xml"
-        with open(file_path, "w") as f:
+        # A file of its own, so that parsers created at the same time, e.g. by parallel
+        # test workers, never overwrite each other's scene.
+        file_descriptor, file_path = tempfile.mkstemp(prefix="scene_", suffix=".xml")
+        with os.fdopen(file_descriptor, "w") as f:
             f.write(xml_string)
         return cls(
             file_path, use_visual_as_collision_backup=use_visual_as_collision_backup

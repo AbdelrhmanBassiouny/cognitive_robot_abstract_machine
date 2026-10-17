@@ -452,6 +452,9 @@ class SimulatedPlanExecutor(PlanExecutor, StatechartExecutor):
                     raise MotionExceededSimulationTimeLimit(self.simulation_time_limit)
                 self.tick()
                 self.pacer.sleep()
+            # The controller stops commanding, so a velocity-servoed base stops too.
+            MotionControl.set_velocity_acceleration_jerk_to_zero(self.world)
+            self.world.notify_state_change()
             self.pacer.wait_for_standstill()
         finally:
             MotionControl.set_velocity_acceleration_jerk_to_zero(self.world)

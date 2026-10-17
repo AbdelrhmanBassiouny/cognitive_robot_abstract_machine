@@ -79,8 +79,8 @@ class RobotSpecification:
         The ``odom`` is fixed to the world root at the localization pose. The connection
         attaching the robot to it is the drive declared by the robot's mobile base, or a
         fixed connection when the robot has no mobile base. An active drive is marked as
-        controlled and its start pose is applied afterwards, that of a fixed one at
-        creation.
+        controlled, driven by the servos its mobile base declares, and its start pose is
+        applied afterwards, that of a fixed one at creation.
 
         The robot is annotated while it still owns the world it was parsed into, so that
         the annotation's name-based lookups cannot be confused by an equally named joint
@@ -131,14 +131,16 @@ class RobotSpecification:
                 **drive_velocity_limits,
             )
             world.merge_world(robot_world, root_connection=odom_C_robot)
+            robot = cast("AbstractRobot", world.get_semantic_annotation_by_id(robot_id))
             if is_active:
                 odom_C_robot.has_hardware_interface = True
+                robot.mobile_base.declare_drive_servos(odom_C_robot)
 
         # The start pose touches DoF state, so it is set after the modification block.
         if is_active and self.odom_T_robot_start is not None:
             odom_C_robot.origin = self.odom_T_robot_start
 
-        return cast("AbstractRobot", world.get_semantic_annotation_by_id(robot_id))
+        return robot
 
     def _drive_velocity_limits(
         self, connection_type: Type[Connection]

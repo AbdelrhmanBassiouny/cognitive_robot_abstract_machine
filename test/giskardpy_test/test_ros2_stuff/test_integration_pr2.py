@@ -355,6 +355,7 @@ class TestActionServerEvents:
         msc.add_node(give_up := CountSeconds(seconds=30))
         msc.add_node(EndMotion.when_true(give_up))
         giskard.api.compile(msc)
+        giskard.api.announce_presence()
         goal_accepted_future = giskard.api.execute_async()
         wait_for_future_to_complete(goal_accepted_future)
         client_watchdog = giskard.giskard.motion_server.client_watchdog
