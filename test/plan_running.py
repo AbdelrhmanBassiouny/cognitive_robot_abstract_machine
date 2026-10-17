@@ -153,6 +153,5 @@ def run_plan(
     """
     executor = simulated_executor(extensions, **options)
     executor.compile(statechart_of(executor, plan))
-    executor.statechart.draw('/tmp/muh.pdf')
     executor.execute()
     return executor
