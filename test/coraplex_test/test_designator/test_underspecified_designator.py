@@ -28,7 +28,7 @@ from coraplex.plans.underspecified import (
     ActionTrial,
     UnderspecifiedChildChooser,
 )
-from coraplex.robot_plans.actions.base import Action
+from coraplex.robot_plans.actions.base import SequentialAction
 from coraplex.robot_plans.actions.core.navigation import NavigateAction
 from coraplex.robot_plans.actions.core.pick_up import PickUpAction, ReachAction
 from coraplex.visualization import RvizVisualization
@@ -117,7 +117,7 @@ def register_probe() -> UUID:
 
 
 @dataclass(eq=False, repr=False, kw_only=True)
-class RecordingAction(Action):
+class RecordingAction(SequentialAction):
     """
     An action whose execution deterministically records itself and can be made to fail
     on a specific attempt, for testing the trial-then-real handling of an underspecified
@@ -146,14 +146,10 @@ class RecordingAction(Action):
     Builds the failure a failing attempt reports.
     """
 
-    def create_action_body(self) -> StatechartNode:
-        return Sequence(
-            nodes=[
-                FunctionCall(
-                    function=self._record_attempt, failure_types=(PlanFailure,)
-                )
-            ]
-        )
+    def create_steps(self) -> List[StatechartNode]:
+        return [
+            FunctionCall(function=self._record_attempt, failure_types=(PlanFailure,))
+        ]
 
     def _record_attempt(self) -> None:
         """
@@ -726,7 +722,7 @@ def test_a_trial_puts_a_differentially_driven_base_at_its_goal(
 
     trial_executor.prepare(statechart_of(trial_executor, navigation))
 
-    assert type(navigation.action_body) is SetOdometry
+    assert type(navigation.goal) is SetOdometry
     trial.discard()
 
 

@@ -7,6 +7,7 @@ from scipy.spatial.transform import Rotation
 
 from coraplex.datastructures.enums import CuttingTechnique, PouringSide
 from coraplex.exceptions import WipingTargetMissing
+from coraplex.robot_plans.actions.base import ParallelAction
 from coraplex.robot_plans.actions.composite.tool_based import (
     CuttingAction,
     MixingAction,
@@ -33,7 +34,6 @@ from semantic_digital_twin.world_description.geometry import Box, Scale
 from semantic_digital_twin.world_description.shape_collection import ShapeCollection
 from semantic_digital_twin.world_description.world_entity import Body
 
-from cramph.composites import Parallel
 from coraplex.robot_plans.robot_specific_plan_transformations import (
     KeepTheTorsoUprightWhileUsingATool,
 )
@@ -78,11 +78,11 @@ def tool_action_world(pr2_apartment_context):
 def _tool_path_goals(action, extensions):
     """
     :return: The goals the action expanded into that follow its tool path, one per tool
-        motion: its body where that is such a goal, and the steps of its body otherwise.
+        motion: the action itself where it runs its tool path side by side, and its
+        steps otherwise.
     """
     expand(action, extensions)
-    body = action.action_body
-    candidates = [body] if isinstance(body, Parallel) else body.nodes
+    candidates = [action] if isinstance(action, ParallelAction) else action.nodes
     return [goal for goal in candidates if _trajectory_of(goal) is not None]
 
 

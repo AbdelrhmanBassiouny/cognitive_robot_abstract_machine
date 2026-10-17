@@ -16,6 +16,7 @@ from cramph.exceptions import (
     NodeAlreadyAChildError,
     NodeIsNotAChildError,
     NoLanguageNodeAboveError,
+    NotATopLevelNodeError,
     StatechartAlreadyCompiledError,
 )
 from cramph.executor import StatechartExecutor
@@ -326,6 +327,62 @@ def test_replacing_a_step_of_a_compiled_statechart_is_rejected_and_changes_nothi
     assert sequence.nodes == [held]
     assert replacement.nodes[1] is held
     assert held.parent_node is sequence
+
+
+# %% replacing a top-level node
+
+
+def test_a_top_level_node_replaced_by_a_node_holding_it_stays_below_that_node(
+    statechart_executor: StatechartExecutor,
+):
+    statechart = Statechart(context=statechart_executor.context)
+    statechart.add_node(held := _succeeding("held"))
+    beside = _at_goal("beside")
+
+    statechart.replace(held, replacement := Sequence(nodes=[held, beside]))
+    _run(statechart_executor, statechart, replacement)
+
+    assert statechart.top_level_nodes[0] is replacement
+    assert replacement.nodes == [held, beside]
+    assert held.parent_node is replacement
+    assert replacement.life_cycle_state == LifeCycleValues.SUCCEEDED
+
+
+def test_a_replaced_top_level_node_leaves_the_statechart(
+    statechart_executor: StatechartExecutor,
+):
+    statechart = Statechart(context=statechart_executor.context)
+    statechart.add_node(replaced := Sequence(nodes=[_succeeding("below")]))
+
+    statechart.replace(replaced, replacement := _succeeding("instead"))
+
+    assert statechart.nodes == [replacement]
+    assert not replaced.belongs_to_statechart()
+
+
+def test_only_a_top_level_node_is_replaced_by_the_statechart(
+    statechart_executor: StatechartExecutor,
+):
+    statechart = Statechart(context=statechart_executor.context)
+    statechart.add_node(Sequence(nodes=[step := _succeeding("step")]))
+
+    with pytest.raises(NotATopLevelNodeError):
+        statechart.replace(step, _succeeding("instead"))
+
+
+def test_replacing_a_top_level_node_of_a_compiled_statechart_is_rejected(
+    statechart_executor: StatechartExecutor,
+):
+    statechart = Statechart(context=statechart_executor.context)
+    statechart.add_node(held := _at_goal("held"))
+    statechart_executor.compile(statechart)
+    replacement = Parallel(nodes=[_at_goal("beside"), held])
+
+    with pytest.raises(StatechartAlreadyCompiledError):
+        statechart.replace(held, replacement)
+
+    assert held.parent_node is None
+    assert statechart.top_level_nodes == [held]
 
 
 # %% the closest language node above a node

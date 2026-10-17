@@ -17,7 +17,7 @@ from coraplex.plans.plan_transformation import (
     logger as transformation_logger,
 )
 from coraplex.plans.underspecified import PlanChildChooser
-from coraplex.robot_plans.actions.base import Action
+from coraplex.robot_plans.actions.base import Action, GoalAction
 from coraplex.robot_plans.actions.composite.facing import FaceAndLookAtAction
 from coraplex.robot_plans.actions.composite.transporting import (
     MoveAndOpenAction,
@@ -51,7 +51,6 @@ from coraplex.robot_plans.plan_transformations import (
     ParkArmsBeforeFirstAction,
 )
 from cramph.composites import (
-    CramLanguageNode,
     Sequence,
     StatementNode,
 )
@@ -119,13 +118,12 @@ def rewritten(
 def steps_of(node: StatechartNode) -> List[StatechartNode]:
     """
     :param node: An expanded action, or a plan language node.
-    :return: The steps it runs, in order, which is its body alone for an action whose
-        body is a single node.
+    :return: The steps it runs, in order, which is its goal alone for an action reaching
+        a single goal.
     """
-    body = node.action_body if isinstance(node, Action) else node
-    if not isinstance(body, CramLanguageNode):
-        return [body]
-    return list(body.nodes)
+    if isinstance(node, GoalAction):
+        return [node.goal]
+    return list(node.nodes)
 
 
 def kind_of(step: StatechartNode) -> type:
@@ -235,7 +233,7 @@ class MoveGripperLastInTheReachBody(InsertionTransformation[ReachAction]):
         return True
 
     def anchor(self, plan_node: ReachAction) -> StatechartNode:
-        return plan_node.action_body
+        return plan_node
 
     def nodes_to_insert(self, plan_node: ReachAction) -> List[StatechartNode]:
         return [

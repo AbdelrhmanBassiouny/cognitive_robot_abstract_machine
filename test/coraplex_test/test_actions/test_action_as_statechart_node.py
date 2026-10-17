@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import importlib
 from dataclasses import dataclass, field
 
 import numpy as np
@@ -8,7 +9,13 @@ from typing_extensions import List, Optional, Type
 
 from coraplex.plans.context_extensions import RobotAccess
 from coraplex.plans.executors import PlanExecutor
-from coraplex.robot_plans.actions.base import Action
+from coraplex.robot_plans.actions.base import (
+    Action,
+    GoalAction,
+    ParallelAction,
+    SequentialAction,
+    TryAllAction,
+)
 from coraplex.robot_plans.actions.core.exceptions import WidthBeyondGripperOpening
 from coraplex.datastructures.enums import MovementType
 from coraplex.datastructures.trajectory import PoseTrajectory
@@ -69,9 +76,9 @@ from cramph.context import ContextExtension, StatechartContext
 
 
 @dataclass(eq=False, repr=False, kw_only=True)
-class ActionRunningHandedInSteps(Action):
+class ActionRunningHandedInSteps(SequentialAction):
     """
-    An action whose body is handed to it rather than derived from a robot, so that
+    An action whose steps are handed to it rather than derived from a robot, so that
     expanding and running an action can be exercised on its own.
     """
 
@@ -80,8 +87,38 @@ class ActionRunningHandedInSteps(Action):
     The children of this action, in order.
     """
 
-    def create_action_body(self) -> StatechartNode:
-        return Sequence(nodes=list(self.steps))
+    def create_steps(self) -> List[StatechartNode]:
+        return list(self.steps)
+
+
+@dataclass(eq=False, repr=False, kw_only=True)
+class ActionHoldingHandedInSteps(ParallelAction):
+    """
+    An action running the steps handed to it side by side.
+    """
+
+    steps: List[StatechartNode] = field(default_factory=list)
+    """
+    The children of this action.
+    """
+
+    def create_steps(self) -> List[StatechartNode]:
+        return list(self.steps)
+
+
+@dataclass(eq=False, repr=False, kw_only=True)
+class ActionTryingHandedInSteps(TryAllAction):
+    """
+    An action trying the steps handed to it side by side as alternatives.
+    """
+
+    steps: List[StatechartNode] = field(default_factory=list)
+    """
+    The alternatives of this action.
+    """
+
+    def create_steps(self) -> List[StatechartNode]:
+        return list(self.steps)
 
 
 def _succeeding(name: str) -> NodeSucceedingOnObservingTrue:
@@ -141,9 +178,10 @@ def _run_until(statechart: Statechart, end: EndStatechart) -> None:
 # %% an action is a statechart node
 
 
-def test_action_runs_its_steps_as_one_sequence(simple_pr2_context):
+def test_a_sequential_action_is_the_sequence_of_its_steps(simple_pr2_context):
     """
-    An action's body is a sequence of exactly the nodes it names.
+    The steps of an action are its own children, without a sequence between them and
+    the action.
     """
     _, _, extensions = simple_pr2_context
     steps = [_succeeding("first"), _succeeding("second")]
@@ -151,15 +189,15 @@ def test_action_runs_its_steps_as_one_sequence(simple_pr2_context):
 
     _expanded(action, extensions)
 
-    [body] = action.children
-    assert isinstance(body, Sequence)
-    assert body.nodes == steps
+    assert isinstance(action, Sequence)
+    assert action.nodes == steps
+    assert action.children == steps
 
 
 @dataclass(eq=False, repr=False, kw_only=True)
-class ActionRunningOneNode(Action):
+class ActionRunningOneNode(GoalAction):
     """
-    An action whose body is a single node rather than a sequence of steps.
+    An action reaching a single goal rather than running steps.
     """
 
     node: StatechartNode
@@ -167,12 +205,16 @@ class ActionRunningOneNode(Action):
     The child of this action.
     """
 
-    def create_action_body(self) -> StatechartNode:
+    def create_goal(self) -> StatechartNode:
         return self.node
 
 
-def test_an_action_has_no_body_before_it_is_expanded():
-    assert ActionRunningHandedInSteps(steps=[]).action_body is None
+def test_an_action_has_no_goal_before_it_is_expanded():
+    assert ActionRunningOneNode(node=_succeeding("goal")).goal is None
+
+
+def test_an_action_has_no_steps_before_it_is_expanded():
+    assert ActionRunningHandedInSteps(steps=[_succeeding("step")]).nodes == []
 
 
 def test_an_action_needs_the_robot_performing_it(simple_pr2_context):
@@ -186,16 +228,16 @@ def test_an_action_needs_the_robot_performing_it(simple_pr2_context):
     assert raised.value.nodes_by_missing_extension == {RobotAccess: [action]}
 
 
-def test_an_action_runs_the_body_it_created(simple_pr2_context):
+def test_an_action_reaching_a_goal_holds_the_goal_it_created(simple_pr2_context):
     _, _, extensions = simple_pr2_context
-    action = ActionRunningHandedInSteps(steps=[_succeeding("only step")])
+    action = ActionRunningOneNode(node=_succeeding("goal"))
 
     _expanded(action, extensions)
 
-    assert action.children == [action.action_body]
+    assert action.children == [action.goal]
 
 
-def test_an_action_body_can_be_a_single_node(simple_pr2_context):
+def test_an_action_reaching_a_goal_succeeds_once_the_goal_did(simple_pr2_context):
     _, _, extensions = simple_pr2_context
     step = _succeeding("only step")
     action = ActionRunningOneNode(node=step)
@@ -203,7 +245,7 @@ def test_an_action_body_can_be_a_single_node(simple_pr2_context):
 
     _run_until(statechart, EndStatechart.when_true(action))
 
-    assert action.action_body is step
+    assert action.goal is step
     assert action.life_cycle_state == LifeCycleValues.SUCCEEDED
 
 
@@ -222,7 +264,7 @@ def test_an_action_whose_body_its_owner_decides_succeeds_once_the_body_arrives(
 
     _run_until(statechart, EndStatechart.when_true(action))
 
-    assert action.action_body is task
+    assert action.goal is task
     assert task.life_cycle_state == LifeCycleValues.SUCCEEDED
     assert action.life_cycle_state == LifeCycleValues.SUCCEEDED
 
@@ -248,6 +290,92 @@ def test_an_action_whose_body_its_owner_decides_waits_while_the_body_is_away(
         executor.tick()
 
     assert action.life_cycle_state == LifeCycleValues.RUNNING
+
+
+def test_a_parallel_action_ends_itself_once_all_its_steps_are_at_their_goals(
+    simple_pr2_context,
+):
+    """
+    A parallel on its own leaves ending it to its owner; as an action it ends itself,
+    so it can be a step of another one.
+    """
+    _, _, extensions = simple_pr2_context
+    steps = [
+        NodeObservingAFixedValue(name=name, observation=ObservationStateValues.TRUE)
+        for name in ("first", "second")
+    ]
+    action = ActionHoldingHandedInSteps(steps=steps)
+    statechart = _expanded(action, extensions)
+
+    _run_until(statechart, EndStatechart.when_true(action))
+
+    assert action.children == steps
+    assert action.life_cycle_state == LifeCycleValues.SUCCEEDED
+
+
+def test_a_parallel_action_waits_while_a_step_is_away(simple_pr2_context):
+    """
+    A step that has not arrived yet makes the parallel observe False, which is not a
+    failure of the action.
+    """
+    _, _, extensions = simple_pr2_context
+    action = ActionHoldingHandedInSteps(
+        steps=[
+            NodeObservingAFixedValue(
+                name="arrived", observation=ObservationStateValues.TRUE
+            ),
+            NodeObservingAFixedValue(
+                name="away", observation=ObservationStateValues.FALSE
+            ),
+        ]
+    )
+    statechart = _expanded(action, extensions)
+    statechart.add_node(EndStatechart.when_true(action))
+    executor = StatechartExecutor(context=statechart.context)
+    executor.compile(statechart)
+
+    for _ in range(3):
+        executor.tick()
+
+    assert action.life_cycle_state == LifeCycleValues.RUNNING
+
+
+def test_a_parallel_action_fails_once_a_step_can_no_longer_arrive(simple_pr2_context):
+    _, _, extensions = simple_pr2_context
+    action = ActionHoldingHandedInSteps(
+        steps=[
+            NodeObservingAFixedValue(
+                name="arrived", observation=ObservationStateValues.TRUE
+            ),
+            _failing("gives up"),
+        ]
+    )
+    statechart = _expanded(action, extensions)
+
+    _run_until(statechart, EndStatechart.when_failed(action))
+
+    assert action.life_cycle_state == LifeCycleValues.FAILED
+
+
+def test_a_parallel_action_takes_no_minimum_of_successes(simple_pr2_context):
+    """
+    How many steps have to arrive is up to the action, not one of its parameters.
+    """
+    assert ActionHoldingHandedInSteps(steps=[]).designator_parameter == {"steps": []}
+
+
+def test_a_try_all_action_succeeds_once_one_of_its_steps_succeeded(
+    simple_pr2_context,
+):
+    _, _, extensions = simple_pr2_context
+    action = ActionTryingHandedInSteps(
+        steps=[_failing("gives up"), _succeeding("arrives")]
+    )
+    statechart = _expanded(action, extensions)
+
+    _run_until(statechart, EndStatechart.when_true(action))
+
+    assert action.life_cycle_state == LifeCycleValues.SUCCEEDED
 
 
 def test_action_succeeds_once_its_last_step_succeeded(simple_pr2_context):
@@ -285,6 +413,43 @@ def test_action_without_steps_is_rejected(simple_pr2_context):
 
     with pytest.raises(CompositeNodeWithoutChildrenError):
         statechart.compile()
+
+
+def _subclasses_of(cls: type) -> List[type]:
+    """
+    :return: Every class deriving from `cls`, however indirectly.
+    """
+    return [
+        subclass
+        for direct in cls.__subclasses__()
+        for subclass in [direct, *_subclasses_of(direct)]
+    ]
+
+
+def test_every_action_is_compared_and_hashed_as_the_node_it_is():
+    """
+    The mixins describing an action's parameters are dataclasses comparing by value,
+    which must not decide whether two actions are the same node.
+    """
+    importlib.import_module("coraplex.robot_plans.actions.composite.transporting")
+    importlib.import_module("coraplex.robot_plans.actions.composite.tool_based")
+    importlib.import_module("coraplex.robot_plans.actions.composite.searching")
+
+    deciding = {
+        action_type.__name__: {
+            method: next(
+                owner for owner in action_type.__mro__ if method in owner.__dict__
+            )
+            for method in ("__eq__", "__hash__")
+        }
+        for action_type in _subclasses_of(Action)
+    }
+
+    assert {
+        name: owners
+        for name, owners in deciding.items()
+        if set(owners.values()) != {StatechartNode}
+    } == {}
 
 
 def test_action_parameters_leave_out_statechart_machinery(simple_pr2_context):
@@ -388,7 +553,7 @@ def test_park_arms_caps_joint_velocity_only_when_asked(simple_pr2_context):
 
     [limit] = _nodes_of_type(capped, JointVelocityLimit)
     assert limit.max_velocity == 0.1
-    assert _nodes_of_type(capped, Parallel) != []
+    assert limit in capped.nodes
     assert _nodes_of_type(uncapped, JointVelocityLimit) == []
 
 
@@ -667,7 +832,7 @@ def test_fingers_sent_to_a_width_are_given_the_distance_between_their_facing_poi
 
     _expanded(action, extensions, physically_simulated_executor(extensions))
 
-    goal = action.action_body
+    goal = action.goal
     assert isinstance(goal, DistanceAlongAxis)
     assert goal.reference_point.reference_frame is gripper.finger.tip
     assert goal.tip_point.reference_frame is gripper.thumb.tip
@@ -685,9 +850,7 @@ def test_a_squeeze_sends_the_fingers_past_the_width(simple_pr2_context):
     _expanded(touching, extensions, physically_simulated_executor(extensions))
     _expanded(pressing, extensions, physically_simulated_executor(extensions))
 
-    assert pressing.action_body.distance == pytest.approx(
-        touching.action_body.distance - 2 * squeeze
-    )
+    assert pressing.goal.distance == pytest.approx(touching.goal.distance - 2 * squeeze)
 
 
 def test_hinged_fingers_sent_to_a_width_stand_that_far_apart(stretch_apartment_context):
@@ -727,4 +890,4 @@ def test_fingers_may_be_sent_as_wide_as_their_gripper_opens(simple_pr2_context):
 
     _expanded(action, extensions, physically_simulated_executor(extensions))
 
-    assert isinstance(action.action_body, DistanceAlongAxis)
+    assert isinstance(action.goal, DistanceAlongAxis)

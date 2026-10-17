@@ -1,8 +1,13 @@
 import pytest
 
-from krrood.ormatic.data_access_objects.helper import to_dao
+from krrood.ormatic.data_access_objects.helper import (
+    get_data_access_object_class,
+    to_dao,
+)
+from sqlalchemy import select
 from krrood.ormatic.exceptions import QueryCannotBePersisted
 from coraplex.orm.ormatic_interface import *  # type: ignore
+from coraplex.robot_plans.actions.base import Action
 from coraplex.robot_plans.actions.composite.transporting import (
     MoveAndPickUpAction,
     MoveAndPlaceAction,
@@ -73,6 +78,26 @@ def test_a_performed_plan_is_read_back_with_its_steps(
         type(step) for step in simple_plan.nodes
     ]
     assert recreated_plan.nodes[1].torso_state == simple_plan.nodes[1].torso_state
+
+
+def test_actions_of_every_shape_are_stored_as_actions(
+    coraplex_testing_session, pr2_apartment_context, simple_plan
+):
+    """
+    Reaching a goal, running steps in turn and running them side by side are shapes of
+    an action, so asking for the stored actions finds all of them.
+    """
+    world, robot_view, extensions = pr2_apartment_context
+    _executed(simple_plan, extensions)
+    _stored_and_loaded(coraplex_testing_session, simple_plan)
+
+    stored_actions = coraplex_testing_session.scalars(
+        select(get_data_access_object_class(Action))
+    ).all()
+
+    assert sorted(type(action).__name__ for action in stored_actions) == sorted(
+        f"{type(step).__name__}DAO" for step in simple_plan.nodes
+    )
 
 
 @pytest.fixture

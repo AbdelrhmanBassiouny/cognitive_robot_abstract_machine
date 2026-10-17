@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from typing_extensions import Type
+from typing_extensions import List, Type
 
 from krrood.ormatic.utils import classproperty
 from coraplex.datastructures.enums import (
@@ -11,9 +11,8 @@ from coraplex.datastructures.enums import (
     PerceptionSource,
 )
 from coraplex.perception import PerceptionQuery, PerceptionTask
-from cramph.composites import Sequence
 from cramph.node import StatechartNode
-from coraplex.robot_plans.actions.base import Action
+from coraplex.robot_plans.actions.base import SequentialAction
 from coraplex.robot_plans.actions.core.exceptions import DetectionTargetMissing
 from coraplex.robot_plans.actions.core.navigation import NavigateAction
 from coraplex.robot_plans.actions.core.robot_body import MoveManipulatorAction
@@ -37,7 +36,7 @@ from semantic_digital_twin.semantic_annotations.semantic_annotations import (
 
 
 @dataclass(eq=False, repr=False, kw_only=True)
-class DetectAction(Action):
+class DetectAction(SequentialAction):
     """
     Detects an object and writes the pose it is seen at into the world.
 
@@ -101,16 +100,14 @@ class DetectAction(Action):
         """
         return 3.0
 
-    def create_action_body(self) -> StatechartNode:
-        return Sequence(
-            nodes=[
-                PerceptionTask(
-                    query=self._build_query(),
-                    answered_by=self.perception_source,
-                    accept_first_if_multiple=self.accept_first_if_multiple,
-                )
-            ]
-        )
+    def create_steps(self) -> List[StatechartNode]:
+        return [
+            PerceptionTask(
+                query=self._build_query(),
+                answered_by=self.perception_source,
+                accept_first_if_multiple=self.accept_first_if_multiple,
+            )
+        ]
 
     def _build_query(self) -> PerceptionQuery:
         """
@@ -151,7 +148,7 @@ class DetectAction(Action):
 
 
 @dataclass(eq=False, repr=False, kw_only=True)
-class MoveToReach(MovesToolCenterPoint, HasApproachesGraspPoses):
+class MoveToReach(MovesToolCenterPoint, SequentialAction, HasApproachesGraspPoses):
     """
     Let the robot move to a position facing the target and reach with a end_effector.
     """
@@ -178,21 +175,19 @@ class MoveToReach(MovesToolCenterPoint, HasApproachesGraspPoses):
     The end effector that should reach it.
     """
 
-    def create_action_body(self) -> StatechartNode:
-        return Sequence(
-            nodes=[
-                NavigateAction(target_location=self.standing_pose),
-                MoveManipulatorAction(
-                    target_pose=self.end_effector.tool_frame_goal_for_grasp(
-                        self.reference_T_grasp
-                    ),
-                    end_effector=self.end_effector,
-                    allow_gripper_collision=False,
-                    position_threshold=self.position_threshold,
-                    orientation_threshold=self.orientation_threshold,
+    def create_steps(self) -> List[StatechartNode]:
+        return [
+            NavigateAction(target_location=self.standing_pose),
+            MoveManipulatorAction(
+                target_pose=self.end_effector.tool_frame_goal_for_grasp(
+                    self.reference_T_grasp
                 ),
-            ]
-        )
+                end_effector=self.end_effector,
+                allow_gripper_collision=False,
+                position_threshold=self.position_threshold,
+                orientation_threshold=self.orientation_threshold,
+            ),
+        ]
 
     @property
     def standing_pose(self) -> Pose:

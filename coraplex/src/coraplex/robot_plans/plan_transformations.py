@@ -381,11 +381,10 @@ class ParkArmsAroundPickAndPlaceSteps(PlanTransformation[PickAndPlaceAction]):
         return True
 
     def apply(self, plan_node: PickAndPlaceAction) -> None:
-        steps = plan_node.action_body
-        for step in list(steps.nodes):
-            steps.insert_before(step, ParkArmsAction(arms=plan_node.robot.all_arms))
-        steps.insert_after(
-            steps.nodes[-1], ParkArmsAction(arms=plan_node.robot.all_arms)
+        for step in list(plan_node.nodes):
+            plan_node.insert_before(step, ParkArmsAction(arms=plan_node.robot.all_arms))
+        plan_node.insert_after(
+            plan_node.nodes[-1], ParkArmsAction(arms=plan_node.robot.all_arms)
         )
 
 
@@ -486,9 +485,7 @@ class CloseFingersToObjectWidth(PlanTransformation[GraspingAction]):
             grasp, which it has none of before it is expanded.
         :return: The step of the grasp that shuts its gripper.
         """
-        body = plan_node.action_body
-        steps = [] if body is None else body.nodes
-        for step in reversed(steps):
+        for step in reversed(plan_node.nodes):
             if any(
                 isinstance(node, MoveGripper) and node.state is GripperState.CLOSE
                 for node in [step, *step.descendants]

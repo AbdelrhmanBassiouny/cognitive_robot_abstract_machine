@@ -37,9 +37,14 @@ from coraplex.exceptions import (
     WipingTargetMissing,
 )
 from cramph.node import StatechartNode
-from coraplex.robot_plans.actions.base import Action
+from coraplex.robot_plans.actions.base import (
+    Action,
+    ParallelAction,
+    SequentialAction,
+    TryAllAction,
+)
 from coraplex.robot_plans.mixins import MovesToolCenterPoint
-from cramph.composites import Parallel, Sequence, TryAll
+from cramph.composites import Parallel
 from giskardpy.motion_statechart.data_types import DefaultWeights
 from giskardpy.motion_statechart.goals.collision_avoidance import (
     UpdateTemporaryCollisionRules,
@@ -152,18 +157,18 @@ class ToolMotionAction(FullBodyControlledAction, MovesToolCenterPoint, ABC):
             return []
         return self.tool.tool_alignment(target)
 
-    def create_action_body(self) -> StatechartNode:
+    def create_steps(self) -> List[StatechartNode]:
         """
-        :return: The goal moving the tool along the sampled waypoints while keeping it
-            aligned with its target.
+        :return: The nodes moving the tool along the sampled waypoints while keeping it
+            aligned with its target, see :meth:`_tool_path_steps`.
         """
-        return self._tool_path_goal()
+        return self._tool_path_steps()
 
-    def _tool_path_goal(self) -> Parallel:
+    def _tool_path_steps(self) -> List[StatechartNode]:
         """
-        :return: The goal following the sampled waypoints with the tool, holding every
-            alignment the tool asks for while it moves and letting the manipulator touch
-            what it works on.
+        :return: The nodes following the sampled waypoints with the tool together,
+            holding every alignment the tool asks for while it moves and letting the
+            manipulator touch what it works on.
         """
         root = self.controlled_root
         tip = self.tool.get_tool_frame()
@@ -186,21 +191,19 @@ class ToolMotionAction(FullBodyControlledAction, MovesToolCenterPoint, ABC):
             )
             for pair in self._alignment_pairs
         ]
-        return Parallel(
-            nodes=[
-                UpdateTemporaryCollisionRules.for_end_effector(self.arm.end_effector),
-                Parallel(
-                    nodes=[
-                        CartesianPositionTrajectory(**trajectory_arguments),
-                        *alignments,
-                    ]
-                ),
-            ]
-        )
+        return [
+            UpdateTemporaryCollisionRules.for_end_effector(self.arm.end_effector),
+            Parallel(
+                nodes=[
+                    CartesianPositionTrajectory(**trajectory_arguments),
+                    *alignments,
+                ]
+            ),
+        ]
 
 
 @dataclass(kw_only=True, eq=False, repr=False)
-class MixingAction(ToolMotionAction):
+class MixingAction(ToolMotionAction, ParallelAction):
     """
     Mix the contents of a container with a tool.
     """
@@ -235,7 +238,7 @@ class MixingAction(ToolMotionAction):
 
 
 @dataclass(kw_only=True, eq=False, repr=False)
-class CuttingAction(ToolMotionAction):
+class CuttingAction(ToolMotionAction, ParallelAction):
     """
     Cut a food object with a tool.
     """
@@ -288,7 +291,7 @@ class CuttingAction(ToolMotionAction):
 
 
 @dataclass(kw_only=True, eq=False, repr=False)
-class WipingAction(ToolMotionAction):
+class WipingAction(ToolMotionAction, TryAllAction):
     """
     Wipe a surface or a patch around a target pose with a tool.
     """
@@ -378,28 +381,26 @@ class WipingAction(ToolMotionAction):
             return self.surface
         return self.target_pose
 
-    def create_action_body(self) -> StatechartNode:
+    def create_steps(self) -> List[StatechartNode]:
         """
-        :return: The goal moving the tool along the sampled waypoints, which also
-            counts as done once the tool reached the final waypoint, since the last
-            stretch of a wipe often stalls against the surface.
+        :return: The goal moving the tool along the sampled waypoints, and as an
+            alternative to it, the tool having reached the final waypoint, since the
+            last stretch of a wipe often stalls against the surface.
         """
-        return TryAll(
-            nodes=[
-                self._tool_path_goal(),
-                PositionReached(
-                    name=f"{self.name}/final waypoint reached",
-                    root_link=self.world.root,
-                    tip_link=self.tool.root,
-                    goal_point=self._waypoints[-1],
-                    threshold=self.final_waypoint_success_tolerance,
-                ),
-            ]
-        )
+        return [
+            Parallel(nodes=self._tool_path_steps()),
+            PositionReached(
+                name=f"{self.name}/final waypoint reached",
+                root_link=self.world.root,
+                tip_link=self.tool.root,
+                goal_point=self._waypoints[-1],
+                threshold=self.final_waypoint_success_tolerance,
+            ),
+        ]
 
 
 @dataclass(kw_only=True, eq=False, repr=False)
-class PouringAction(FullBodyControlledAction, MovesToolCenterPoint):
+class PouringAction(FullBodyControlledAction, MovesToolCenterPoint, SequentialAction):
     """
     Pour from a held source container into a target container by tilting the source next
     to the target's rim.
@@ -583,23 +584,21 @@ class PouringAction(FullBodyControlledAction, MovesToolCenterPoint):
             reference_frame=self.world.root,
         )
 
-    def create_action_body(self) -> StatechartNode:
+    def create_steps(self) -> List[StatechartNode]:
         """
         :return: The goals moving the source container to the pre-pour pose and then
             tilting it into the pouring pose.
         """
         pre_pour_pose, pour_pose = self._pour_poses()
-        return Sequence(
-            nodes=[
-                self.tool_center_point_goal(
-                    pre_pour_pose,
-                    self.arm,
-                    allow_gripper_collision=True,
-                ),
-                self.tool_center_point_goal(
-                    pour_pose,
-                    self.arm,
-                    allow_gripper_collision=True,
-                ),
-            ]
-        )
+        return [
+            self.tool_center_point_goal(
+                pre_pour_pose,
+                self.arm,
+                allow_gripper_collision=True,
+            ),
+            self.tool_center_point_goal(
+                pour_pose,
+                self.arm,
+                allow_gripper_collision=True,
+            ),
+        ]

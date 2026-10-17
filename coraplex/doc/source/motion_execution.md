@@ -147,9 +147,9 @@ A robot-specific transformation that only one way of executing needs belongs to 
 kinematically simulated Stretch. An executor is given other robot adaptations as `robot_adaptations=[...]`; an empty
 list turns them off.
 
-A transformation replaces the goal an action runs with
-{meth}`~coraplex.robot_plans.actions.base.Action.replace_action_body`, or with
-{meth}`~cramph.composites.CramLanguageNode.replace` for a step of a plan language node. A
+A transformation replaces a step of a plan language node with
+{meth}`~cramph.composites.CramLanguageNode.replace`; an action running several steps is the plan language node of those
+steps, so its steps are replaced, inserted before and after the same way. A
 {class}`~coraplex.plans.plan_transformation.ConfigurationTransformation` instead changes an action's settings right
 before it expands, so nothing it expanded into has to be replaced.
 

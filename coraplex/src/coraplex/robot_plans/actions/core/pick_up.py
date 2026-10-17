@@ -3,8 +3,11 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 
+from typing_extensions import List
+
 
 from coraplex.datastructures.enums import MovementType
+from coraplex.robot_plans.actions.base import SequentialAction
 from cramph.composites import Parallel, Sequence
 from cramph.node import StatechartNode
 from coraplex.robot_plans.mixins import (
@@ -49,6 +52,7 @@ class HasGraspChoice:
 @dataclass(eq=False, repr=False, kw_only=True)
 class ReachAction(
     MovesToolCenterPoint,
+    SequentialAction,
     HasApproachesGraspPoses,
     ReachTuningParameters,
     HasGraspDetectionThreshold,
@@ -80,7 +84,7 @@ class ReachAction(
     :class:`PickUpAction` to open before its slower final approach.
     """
 
-    def create_action_body(self) -> StatechartNode:
+    def create_steps(self) -> List[StatechartNode]:
         poses = self.grasp_pose_sequence(
             self.grasp.grasp_pose, self.arm.end_effector, self.grasp
         )
@@ -103,13 +107,14 @@ class ReachAction(
                 max_linear_velocity=self.final_approach_linear_velocity,
             )
         )
-        return Sequence(nodes=children)
+        return children
 
 
 @dataclass(eq=False, repr=False, kw_only=True)
 class PickUpAction(
     MovesToolCenterPoint,
     ReattachesBodies,
+    SequentialAction,
     HasGraspChoice,
     HasApproachesGraspPoses,
     PickUpTuningParameters,
@@ -161,27 +166,26 @@ class PickUpAction(
             ],
         )
 
-    def create_action_body(self) -> StatechartNode:
+    def create_steps(self) -> List[StatechartNode]:
         lift_to_pose = self.grasp_pose_sequence(
             self.grasp.grasp_pose, self.arm.end_effector, self.grasp
         ).retreat
-        return Sequence(
-            nodes=[
-                self._grasp_attempt(),
-                self.tool_center_point_goal(
-                    lift_to_pose,
-                    self.arm,
-                    allow_gripper_collision=True,
-                    movement_type=MovementType.TRANSLATION,
-                    max_linear_velocity=self.lift_linear_velocity,
-                ),
-            ]
-        )
+        return [
+            self._grasp_attempt(),
+            self.tool_center_point_goal(
+                lift_to_pose,
+                self.arm,
+                allow_gripper_collision=True,
+                movement_type=MovementType.TRANSLATION,
+                max_linear_velocity=self.lift_linear_velocity,
+            ),
+        ]
 
 
 @dataclass(eq=False, repr=False, kw_only=True)
 class GraspingAction(
     MovesToolCenterPoint,
+    SequentialAction,
     HasGraspChoice,
     HasApproachesGraspPoses,
     PickUpTuningParameters,
@@ -201,33 +205,31 @@ class GraspingAction(
     :attr:`~giskardpy.motion_statechart.goals.gripper.MoveGripper.tolerate_stall`).
     """
 
-    def create_action_body(self) -> StatechartNode:
-        return Sequence(
-            nodes=[
-                ReachAction(
-                    grasp=self.grasp,
-                    arm=self.arm,
-                    approach_clearance=self.approach_clearance,
-                    retreat_distance=self.retreat_distance,
-                    pre_approach_linear_velocity=self.pre_approach_linear_velocity,
-                    final_approach_linear_velocity=self.final_approach_linear_velocity,
-                    open_gripper_at_pre_pose=True,
-                    position_threshold=self.position_threshold,
-                    orientation_threshold=self.orientation_threshold,
-                    grasp_detection_threshold=self.grasp_detection_threshold,
-                ),
-                self.closing_step(
-                    self.gripper_goal(
-                        GripperState.CLOSE,
-                        self.arm.end_effector,
-                        allow_gripper_collision=True,
-                        finger_velocity=self.grasp_closing_velocity,
-                        stall_minimum_time=self.grasp_stall_minimum_time,
-                        tolerate_stall=self.tolerate_grasp_stall,
-                    )
-                ),
-            ]
-        )
+    def create_steps(self) -> List[StatechartNode]:
+        return [
+            ReachAction(
+                grasp=self.grasp,
+                arm=self.arm,
+                approach_clearance=self.approach_clearance,
+                retreat_distance=self.retreat_distance,
+                pre_approach_linear_velocity=self.pre_approach_linear_velocity,
+                final_approach_linear_velocity=self.final_approach_linear_velocity,
+                open_gripper_at_pre_pose=True,
+                position_threshold=self.position_threshold,
+                orientation_threshold=self.orientation_threshold,
+                grasp_detection_threshold=self.grasp_detection_threshold,
+            ),
+            self.closing_step(
+                self.gripper_goal(
+                    GripperState.CLOSE,
+                    self.arm.end_effector,
+                    allow_gripper_collision=True,
+                    finger_velocity=self.grasp_closing_velocity,
+                    stall_minimum_time=self.grasp_stall_minimum_time,
+                    tolerate_stall=self.tolerate_grasp_stall,
+                )
+            ),
+        ]
 
     def closing_step(self, closing_goal: StatechartNode) -> Parallel:
         """

@@ -3,13 +3,18 @@ from __future__ import annotations
 from abc import ABC
 from dataclasses import dataclass, field
 
-from typing_extensions import Optional
+from typing_extensions import List, Optional
 
 from coraplex.exceptions import NoFloorBelowRobot, NotOnASingleLevelException
 from cramph.node import StatechartNode
-from coraplex.robot_plans.actions.base import Action
+from coraplex.robot_plans.actions.base import (
+    Action,
+    GoalAction,
+    ParallelAction,
+    SequentialAction,
+)
 from coraplex.robot_plans.mixins import ReattachesBodies
-from cramph.composites import Parallel, PausedUntilTrue, Sequence
+from cramph.composites import Parallel, PausedUntilTrue
 from giskardpy.motion_statechart.goals.cartesian_goals import DifferentialDriveBaseGoal
 from giskardpy.motion_statechart.graph_node import MotionStatechartNode
 from giskardpy.motion_statechart.monitors.joint_monitors import (
@@ -94,7 +99,7 @@ class DrivesBase(Action, ABC):
 
 
 @dataclass(eq=False, repr=False, kw_only=True)
-class NavigateAction(DrivesBase):
+class NavigateAction(DrivesBase, GoalAction):
     """
     Navigates the Robot to a position.
     """
@@ -105,12 +110,12 @@ class NavigateAction(DrivesBase):
     x-axis.
     """
 
-    def create_action_body(self) -> StatechartNode:
+    def create_goal(self) -> StatechartNode:
         return self._drive_to(self.robot.mobile_base.pose_facing(self.target_location))
 
 
 @dataclass(eq=False, repr=False, kw_only=True)
-class LookAtAction(Action):
+class LookAtAction(ParallelAction):
     """
     Lets the robot look at a position.
     """
@@ -131,7 +136,7 @@ class LookAtAction(Action):
     base stands when the look starts; a negative offset looks to the right.
     """
 
-    def create_action_body(self) -> StatechartNode:
+    def create_steps(self) -> List[StatechartNode]:
         camera = self.camera or self.robot.get_default_camera()
         pointing = PointingBeside(
             root_link=self.robot.get_torso().root,
@@ -141,14 +146,11 @@ class LookAtAction(Action):
             viewpoint=self.robot.root,
             sideways_offset=self.sideways_offset,
         )
-        hold_base = self.keep_base_still()
-        if not hold_base:
-            return pointing
-        return Parallel(nodes=[pointing, *hold_base])
+        return [pointing, *self.keep_base_still()]
 
 
 @dataclass(eq=False, repr=False, kw_only=True)
-class FaceAtAction(Action):
+class FaceAtAction(ParallelAction):
     """
     Turns the robot's base on the spot until its front faces a target.
 
@@ -161,25 +163,23 @@ class FaceAtAction(Action):
     What to face; only its horizontal position matters.
     """
 
-    def create_action_body(self) -> StatechartNode:
-        return Parallel(
-            nodes=[
-                Pointing(
-                    root_link=self.world.root,
-                    tip_link=self.robot.root,
-                    goal_point=self._target_at_base_height(),
-                    pointing_axis=Vector3(
-                        *self.robot.mobile_base.forward_axis.to_np()[:3],
-                        reference_frame=self.robot.root,
-                    ),
+    def create_steps(self) -> List[StatechartNode]:
+        return [
+            Pointing(
+                root_link=self.world.root,
+                tip_link=self.robot.root,
+                goal_point=self._target_at_base_height(),
+                pointing_axis=Vector3(
+                    *self.robot.mobile_base.forward_axis.to_np()[:3],
+                    reference_frame=self.robot.root,
                 ),
-                CartesianPosition(
-                    root_link=self.world.root,
-                    tip_link=self.robot.root,
-                    goal_point=Point3(reference_frame=self.robot.root),
-                ),
-            ]
-        )
+            ),
+            CartesianPosition(
+                root_link=self.world.root,
+                tip_link=self.robot.root,
+                goal_point=Point3(reference_frame=self.robot.root),
+            ),
+        ]
 
     def _target_at_base_height(self) -> Point3:
         """
@@ -192,7 +192,7 @@ class FaceAtAction(Action):
 
 
 @dataclass(eq=False, repr=False, kw_only=True)
-class PathPlanningNavigateAction(DrivesBase):
+class PathPlanningNavigateAction(DrivesBase, SequentialAction):
     """
     Navigates the robot to a pose along a path through the environment's free space.
 
@@ -208,8 +208,8 @@ class PathPlanningNavigateAction(DrivesBase):
     Where the robot should stand at the end of the path, with its base.
     """
 
-    def create_action_body(self) -> StatechartNode:
-        return Sequence(nodes=[self._drive_to(waypoint) for waypoint in self._path()])
+    def create_steps(self) -> List[StatechartNode]:
+        return [self._drive_to(waypoint) for waypoint in self._path()]
 
     @property
     def _floor(self) -> Floor:
@@ -314,7 +314,7 @@ class PathPlanningNavigateAction(DrivesBase):
 
 
 @dataclass(eq=False, repr=False, kw_only=True)
-class ElevatorNavigation(ReattachesBodies):
+class ElevatorNavigation(ReattachesBodies, SequentialAction):
     """
     Navigates a robot to another level of a building using an elevator, the robot drives
     in the elevator and waits there until the doors open again and the elevator is at
@@ -342,29 +342,27 @@ class ElevatorNavigation(ReattachesBodies):
     Position error within which the elevator's drive and doors count as having arrived.
     """
 
-    def create_action_body(self) -> StatechartNode:
-        return Sequence(
-            nodes=[
-                NavigateAction(target_location=self._pose_infront_of_elevator),
-                PausedUntilTrue(
-                    monitor=self._elevator_open_at_floor(self._current_floor),
-                    monitored_node=NavigateAction(
-                        target_location=Pose.from_xyz_rpy(
-                            z=self._height_in_cabin,
-                            reference_frame=self.elevator.root,
-                        )
-                    ),
+    def create_steps(self) -> List[StatechartNode]:
+        return [
+            NavigateAction(target_location=self._pose_infront_of_elevator),
+            PausedUntilTrue(
+                monitor=self._elevator_open_at_floor(self._current_floor),
+                monitored_node=NavigateAction(
+                    target_location=Pose.from_xyz_rpy(
+                        z=self._height_in_cabin,
+                        reference_frame=self.elevator.root,
+                    )
                 ),
-                *self.reattach(self.robot.root, self.elevator.root),
-                PausedUntilTrue(
-                    monitor=self._elevator_open_at_floor(self.target_floor),
-                    monitored_node=NavigateAction(
-                        target_location=self._pose_infront_of_elevator
-                    ),
+            ),
+            *self.reattach(self.robot.root, self.elevator.root),
+            PausedUntilTrue(
+                monitor=self._elevator_open_at_floor(self.target_floor),
+                monitored_node=NavigateAction(
+                    target_location=self._pose_infront_of_elevator
                 ),
-                *self.reattach(self.robot.root, self.world.root),
-            ]
-        )
+            ),
+            *self.reattach(self.robot.root, self.world.root),
+        ]
 
     @property
     def _current_floor(self) -> Level:

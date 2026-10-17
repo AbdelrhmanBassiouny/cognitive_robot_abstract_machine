@@ -739,6 +739,22 @@ class NoLanguageNodeAboveError(NodeInitializationError):
 
 
 @dataclass
+class NotATopLevelNodeError(NodeInitializationError):
+    """
+    Raised when the statechart is asked to replace a node that is the child of another
+    node, which is the replacement that node's parent has to make.
+    """
+
+    def error_message(self) -> str:
+        return f"{self.node.name} is not a top-level node of its statechart."
+
+    def suggest_correction(self) -> str:
+        return (
+            f"Replace {self.node.name} through the closest plan language node above it."
+        )
+
+
+@dataclass
 class RemovedNodeStillReferencedError(StatechartError):
     """
     Raised when a node is removed from a statechart while a node that stays still refers

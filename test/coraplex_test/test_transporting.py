@@ -63,7 +63,7 @@ def _steps_of(action: Action) -> List[StatechartNode]:
     """
     :return: The steps the expanded `action` runs, in order.
     """
-    return action.action_body.nodes
+    return action.nodes
 
 
 def _underspecified_steps(transport: TransportAction) -> List[Type[Action]]:

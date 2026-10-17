@@ -13,6 +13,7 @@ from cramph.context import StatechartContext
 from coraplex.exceptions import ObjectIsNotHeld
 from coraplex.querying.predicates import GripperHolds
 from cramph.node import StatechartNode
+from coraplex.robot_plans.actions.base import SequentialAction
 from cramph.composites import Parallel, Sequence
 from coraplex.robot_plans.actions.core.pick_up import PickUpAction
 from coraplex.robot_plans.mixins import (
@@ -37,6 +38,7 @@ from semantic_digital_twin.spatial_types.spatial_types import Pose
 class PlaceAction(
     MovesToolCenterPoint,
     ReattachesBodies,
+    SequentialAction,
     HasApproachesGraspPoses,
     PlaceTuningParameters,
     HasGraspDetectionThreshold,
@@ -63,7 +65,7 @@ class PlaceAction(
     :func:`~semantic_digital_twin.reasoning.robot_predicates.is_body_gripped`).
     """
 
-    def create_action_body(self) -> StatechartNode:
+    def create_steps(self) -> List[StatechartNode]:
         arm, grasp = self._holding_arm_and_grasp()
         # A release runs the grasp backwards: down from above the target, then out
         # along the way the grasp was approached.
@@ -71,38 +73,36 @@ class PlaceAction(
             grasp.moved_to(self.target_location), arm.end_effector, grasp
         )
 
-        return Sequence(
-            nodes=[
-                self.tool_center_point_goal(
-                    poses.retreat,
-                    arm,
-                    allow_gripper_collision=True,
-                    max_linear_velocity=self.transport_linear_velocity,
-                ),
-                self.tool_center_point_goal(
-                    poses.grasp,
-                    arm,
-                    allow_gripper_collision=True,
-                    max_linear_velocity=self.placing_linear_velocity,
-                ),
-                Parallel(
-                    nodes=[
-                        self.gripper_goal(
-                            GripperState.OPEN,
-                            arm.end_effector,
-                            allow_gripper_collision=True,
-                            finger_velocity=self.release_opening_velocity,
-                        ),
-                        # Keeps the gripper in place while it opens, whatever else
-                        # moves the robot meanwhile.
-                        self.tool_center_point_goal(
-                            poses.grasp, arm, allow_gripper_collision=True
-                        ),
-                    ]
-                ),
-                self._retract(arm, poses.pre_grasp),
-            ]
-        )
+        return [
+            self.tool_center_point_goal(
+                poses.retreat,
+                arm,
+                allow_gripper_collision=True,
+                max_linear_velocity=self.transport_linear_velocity,
+            ),
+            self.tool_center_point_goal(
+                poses.grasp,
+                arm,
+                allow_gripper_collision=True,
+                max_linear_velocity=self.placing_linear_velocity,
+            ),
+            Parallel(
+                nodes=[
+                    self.gripper_goal(
+                        GripperState.OPEN,
+                        arm.end_effector,
+                        allow_gripper_collision=True,
+                        finger_velocity=self.release_opening_velocity,
+                    ),
+                    # Keeps the gripper in place while it opens, whatever else
+                    # moves the robot meanwhile.
+                    self.tool_center_point_goal(
+                        poses.grasp, arm, allow_gripper_collision=True
+                    ),
+                ]
+            ),
+            self._retract(arm, poses.pre_grasp),
+        ]
 
     def _retract(self, arm: Arm, retract_pose: Pose) -> Sequence:
         """
