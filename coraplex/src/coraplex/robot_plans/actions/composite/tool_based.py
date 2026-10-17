@@ -43,6 +43,7 @@ from coraplex.exceptions import (
 from cramph.node import StatechartNode
 from coraplex.robot_plans.actions.base import (
     Action,
+    ActionOfSteps,
     ParallelAction,
     SequentialAction,
     TryAllAction,
@@ -86,7 +87,9 @@ class FullBodyControlledAction(Action, ABC):
 
 
 @dataclass(kw_only=True, eq=False, repr=False)
-class ToolMotionAction(FullBodyControlledAction, MovesToolCenterPoint, ABC):
+class ToolMotionAction(
+    FullBodyControlledAction, MovesToolCenterPoint, ActionOfSteps, ABC
+):
     """
     An action that moves a tool along a sampled tool path while keeping the tool aligned
     with its target.

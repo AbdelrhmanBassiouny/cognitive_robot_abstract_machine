@@ -4,17 +4,12 @@ import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 
-from typing_extensions import (
-    List,
-    Optional,
-)
-
 from coraplex.plans.context_extensions import RobotAccess, StatementGrounding
 from coraplex.plans.designator import DesignatorParameters
 from coraplex.plans.plan_transformation import PlanRewriting
 from krrood.ormatic.utils import classproperty
 from cramph.node import SucceedsOnObservingTrue, FailsOnObservingFalse
-from cramph.composites import Parallel, Sequence, TryAll
+from cramph.composites import CramLanguageNode, Parallel, Sequence, TryAll
 from cramph.context import ContextExtension, StatechartContext
 from cramph.node import CompositeNode, NodeArtifacts, StatechartNode
 from giskardpy.motion_statechart.graph_node import MotionStatechartNode
@@ -33,7 +28,6 @@ logger = logging.getLogger(__name__)
 
 @dataclass(eq=False, repr=False, kw_only=True)
 class Action(
-    SucceedsOnObservingTrue,
     CompositeNode,
     DesignatorParameters,
     ABC,
@@ -53,7 +47,7 @@ class Action(
         stored as the statechart node it is.
     """
 
-    temporary_collision_rules: List[CollisionRule] = field(
+    temporary_collision_rules: list[CollisionRule] = field(
         default_factory=list,
         init=False,
         repr=False,
@@ -83,7 +77,7 @@ class Action(
         return self.context.require_extension(RobotAccess).robot
 
     @property
-    def sampling_seed(self) -> Optional[int]:
+    def sampling_seed(self) -> int | None:
         """
         :return: The seed for the locations this action samples, so a run can be
             repeated; ``None`` samples afresh each run.
@@ -98,7 +92,7 @@ class Action(
         """
         return self.context.require_extension(RobotAccess).controlled_root
 
-    def keep_base_still(self) -> List[MotionStatechartNode]:
+    def keep_base_still(self) -> list[MotionStatechartNode]:
         """
         :return: The task holding the robot's base where it stands, empty when the robot
             has no mobile base or may move its whole body.
@@ -129,7 +123,7 @@ class Action(
         self.temporary_collision_rules = self.create_temporary_collision_rules()
         self._create_what_it_does(context)
 
-    def create_temporary_collision_rules(self) -> List[CollisionRule]:
+    def create_temporary_collision_rules(self) -> list[CollisionRule]:
         """
         :return: New collision rules to keep in force while this action runs, none by
             default. New ones for each action, because rules are taken out of force by
@@ -174,7 +168,7 @@ class Action(
 
 
 @dataclass(eq=False, repr=False, kw_only=True)
-class GoalAction(Action, FailsOnObservingFalse, ABC):
+class GoalAction(Action, SucceedsOnObservingTrue, FailsOnObservingFalse, ABC):
     """
     An action reaching a single goal, the node :meth:`create_goal` creates, which stays a
     node of its own below the action.
@@ -192,7 +186,7 @@ class GoalAction(Action, FailsOnObservingFalse, ABC):
         """
 
     @property
-    def goal(self) -> Optional[StatechartNode]:
+    def goal(self) -> StatechartNode | None:
         """
         :return: The child reaching the goal of this action, None until the action was
             expanded.
@@ -226,36 +220,36 @@ class GoalAction(Action, FailsOnObservingFalse, ABC):
 
 
 @dataclass(eq=False, repr=False, kw_only=True)
-class ActionOfSteps(Action, ABC):
+class ActionOfSteps(Action, CramLanguageNode, ABC):
     """
     An action that is the plan language node of its own steps, the nodes
     :meth:`create_steps` creates, so the steps are its children and the language node
     it also is decides how they run and when they are done.
-
-    .. note:: The language node comes after :class:`Action` in the method resolution
-        order of every shape, so that the action ends itself once its steps are done,
-        even where the language node alone would leave that to its owner.
     """
 
-    nodes: List[StatechartNode] = field(default_factory=list, init=False, repr=False)
+    nodes: list[StatechartNode] = field(default_factory=list, init=False, repr=False)
     """
     The steps of this action, which :meth:`create_steps` creates when the action is
     expanded, and which plan transformations may add to.
     """
 
     @abstractmethod
-    def create_steps(self) -> List[StatechartNode]:
+    def create_steps(self) -> list[StatechartNode]:
         """
         :return: New nodes doing what this action does, in order. Called once, when the
             action is expanded.
         """
+
+    # expanded as an action, which adopts the steps as a language node in
+    # _create_what_it_does
+    expand = Action.expand
 
     def _create_what_it_does(self, context: StatechartContext) -> None:
         """
         Puts the steps below this action and lets the language node wire them.
         """
         self.nodes = [self._as_node(step) for step in self.create_steps()]
-        super(Action, self).expand(context)
+        self._adopt_nodes()
 
 
 @dataclass(eq=False, repr=False, kw_only=True)
@@ -272,11 +266,20 @@ class ParallelAction(ActionOfSteps, Parallel, ABC):
     together.
     """
 
-    minimum_success: Optional[int] = field(default=None, init=False, repr=False)
+    minimum_success: int | None = field(default=None, init=False, repr=False)
     """
     None, so every step has to be at its goal; how many have to be is up to the action,
     not a parameter it is described by.
     """
+
+    @property
+    def inherent_success_condition(self) -> Scalar:
+        """
+        Differs from :attr:`~cramph.node.EndedByOwner.inherent_success_condition` of a
+        parallel in ending the action once it observes True, so it can be a step of
+        another one.
+        """
+        return self.observes_true
 
 
 @dataclass(eq=False, repr=False, kw_only=True)

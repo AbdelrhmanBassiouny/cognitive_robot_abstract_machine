@@ -445,15 +445,63 @@ def _subclasses_of(cls: type) -> List[type]:
     ]
 
 
+def _every_action_type() -> List[Type[Action]]:
+    """
+    :return: Every action class of coraplex, the composite ones included.
+    """
+    importlib.import_module("coraplex.robot_plans.actions.composite.transporting")
+    importlib.import_module("coraplex.robot_plans.actions.composite.tool_based")
+    importlib.import_module("coraplex.robot_plans.actions.composite.searching")
+    return _subclasses_of(Action)
+
+
+def _members_decided_by_base_order(action_type: type) -> dict[str, List[str]]:
+    """
+    :return: Each member of `action_type` that several of its classes define, where the
+        class defining it first does not derive from the others, mapped to the names of
+        those others. Which of them wins then depends only on the order of the bases.
+        Comparison and hashing count, every other dunder does not.
+    """
+    member_names = {
+        member
+        for owner in action_type.__mro__
+        for member in owner.__dict__
+        if member in ("__eq__", "__hash__")
+        or not (member.startswith("__") or member == "_abc_impl")
+    }
+    decided_by_order = {}
+    for member in member_names:
+        winner, *overridden = [
+            owner for owner in action_type.__mro__ if member in owner.__dict__
+        ]
+        beaten_by_order = [
+            owner.__name__ for owner in overridden if not issubclass(winner, owner)
+        ]
+        if beaten_by_order:
+            decided_by_order[member] = beaten_by_order
+    return decided_by_order
+
+
+def test_no_member_of_an_action_depends_on_the_order_of_its_bases():
+    """
+    Where two bases of an action define the same member, a class deriving from both
+    decides it, so reordering the bases cannot change what the action does.
+    """
+    decided_by_order = {
+        action_type.__name__: _members_decided_by_base_order(action_type)
+        for action_type in _every_action_type()
+    }
+
+    assert {
+        name: members for name, members in decided_by_order.items() if members
+    } == {}
+
+
 def test_every_action_is_compared_and_hashed_as_the_node_it_is():
     """
     The mixins describing an action's parameters are dataclasses comparing by value,
     which must not decide whether two actions are the same node.
     """
-    importlib.import_module("coraplex.robot_plans.actions.composite.transporting")
-    importlib.import_module("coraplex.robot_plans.actions.composite.tool_based")
-    importlib.import_module("coraplex.robot_plans.actions.composite.searching")
-
     deciding = {
         action_type.__name__: {
             method: next(
@@ -461,7 +509,7 @@ def test_every_action_is_compared_and_hashed_as_the_node_it_is():
             )
             for method in ("__eq__", "__hash__")
         }
-        for action_type in _subclasses_of(Action)
+        for action_type in _every_action_type()
     }
 
     assert {

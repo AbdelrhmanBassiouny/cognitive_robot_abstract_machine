@@ -199,13 +199,7 @@ class CramLanguageNode(CompositeNode, ABC):  # ControlStructureNode?
         replaced = self.nodes[position]
         self._check_can_be_a_child(node)
         self._check_accepts_children()
-        if isinstance(node, CramLanguageNode) and node._has_child(replaced):
-            node._join_statechart_keeping_child(
-                replaced, lambda: self._put_at(position, node)
-            )
-            return
-        self._put_at(position, node)
-        self.statechart.remove_node(replaced)
+        node._take_place_of(replaced, lambda: self._put_at(position, node))
 
     def _put_at(self, position: int, node: StatechartNode) -> None:
         """
@@ -216,24 +210,27 @@ class CramLanguageNode(CompositeNode, ABC):  # ControlStructureNode?
         self._place_child_in_statechart(node)
         self._wire_children()
 
-    def _join_statechart_keeping_child(
-        self, child: StatechartNode, join_statechart: Callable[[], None]
+    def _take_place_of(
+        self, replaced: StatechartNode, join_statechart: Callable[[], None]
     ) -> None:
         """
-        Joins the statechart without `child`, which belongs to it already, and then
-        makes `child` a child of this node again, at the position it had among the
-        children. The conditions its former parent wired for it are cleared, so that
-        this node wires them.
-
-        :param child: A child of this node that belongs to the statechart already.
-        :param join_statechart: Puts this node in the statechart.
+        Differs from :meth:`~cramph.node.StatechartNode._take_place_of` where `replaced`
+        is one of the children of this node: it stays in the statechart and becomes a
+        child of this node again, at the position it has among the children. The
+        conditions its former parent wired for it are cleared, so that this node wires
+        them.
         """
-        position = next(index for index, node in enumerate(self.nodes) if node is child)
+        if not self._has_child(replaced):
+            super()._take_place_of(replaced, join_statechart)
+            return
+        position = next(
+            index for index, node in enumerate(self.nodes) if node is replaced
+        )
         del self.nodes[position]
         join_statechart()
-        child._clear_owner_wiring()
-        child.parent_node = self
-        self._insert_at(position, child)
+        replaced._clear_owner_wiring()
+        replaced.parent_node = self
+        self._insert_at(position, replaced)
 
     @staticmethod
     def closest_above(node: StatechartNode) -> CramLanguageNode:
@@ -249,6 +246,9 @@ class CramLanguageNode(CompositeNode, ABC):  # ControlStructureNode?
         raise NoLanguageNodeAboveError(node=node)
 
     def expand(self, context: StatechartContext) -> None:
+        self._adopt_nodes()
+
+    def _adopt_nodes(self) -> None:
         """
         Adopt every node this goal was handed and wire them.
         """
@@ -1093,8 +1093,8 @@ class CompositeNodeChoosingItsChild(SucceedsOnObservingTrue, CompositeNode):
 
     def failure_reasons_of(self, child: StatechartNode) -> List[StatechartNode]:
         """
-        Which failure monitors gave up on `child`, which is what turns its failure into a
-        reason.
+        Which failure monitors gave up on `child`, which is what turns its failure into
+        a reason.
 
         They are read through their last observation, because a monitor ends with its
         child and a node that ended observes nothing any more.
@@ -1165,7 +1165,9 @@ class CompositeNodeChoosingItsChild(SucceedsOnObservingTrue, CompositeNode):
             return True
         self.adopt_chosen_child(child)
         chooser.prepare_chosen_child(self, child, context)
-        self.give_up_on_child_when(child, chooser.failure_monitors_for(self, child, context))
+        self.give_up_on_child_when(
+            child, chooser.failure_monitors_for(self, child, context)
+        )
         return True
 
     def adopt_chosen_child(self, child: StatechartNode) -> None:
@@ -1181,8 +1183,8 @@ class CompositeNodeChoosingItsChild(SucceedsOnObservingTrue, CompositeNode):
         self, child: StatechartNode, failure_monitors: List[StatechartNode]
     ) -> None:
         """
-        Run `failure_monitors` beside `child`, failing it once one of them observes
-        True and ending them once it ended.
+        Run `failure_monitors` beside `child`, failing it once one of them observes True
+        and ending them once it ended.
 
         A monitor is read through its last observation, so one that ends itself on
         firing still gives up on the child.

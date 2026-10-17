@@ -34,7 +34,7 @@ from typing_extensions import List, Optional
 from coraplex.datastructures.enums import MovementType
 
 
-@dataclass(kw_only=True)
+@dataclass(kw_only=True, eq=False)
 class HasMaxJointVelocity:
     """
     Adds an optional joint velocity cap to an action or motion.
@@ -48,7 +48,7 @@ class HasMaxJointVelocity:
     """
 
 
-@dataclass(kw_only=True)
+@dataclass(kw_only=True, eq=False)
 class HasApproachVelocity:
     """
     Adds an optional pre-approach speed to an action that reaches towards a target
@@ -67,7 +67,7 @@ class HasApproachVelocity:
     """
 
 
-@dataclass(kw_only=True)
+@dataclass(kw_only=True, eq=False)
 class HasGraspDetectionThreshold:
     """
     Adds a grasp-detection sensitivity threshold to an action that checks whether an
@@ -86,7 +86,7 @@ class HasGraspDetectionThreshold:
     """
 
 
-@dataclass(kw_only=True)
+@dataclass(kw_only=True, eq=False)
 class ReachTuningParameters(HasApproachVelocity):
     """
     Tunable approach speeds for :class:`~coraplex.robot_plans.actions.core.pick_up.ReachAction`.
@@ -101,7 +101,7 @@ class ReachTuningParameters(HasApproachVelocity):
     """
 
 
-@dataclass(kw_only=True)
+@dataclass(kw_only=True, eq=False)
 class PickUpTuningParameters(ReachTuningParameters):
     """
     Tunable grasp speeds and target-object friction for
@@ -148,7 +148,7 @@ class PickUpTuningParameters(ReachTuningParameters):
     """
 
 
-@dataclass(kw_only=True)
+@dataclass(kw_only=True, eq=False)
 class PlaceTuningParameters:
     """
     Tunable transport/placing/release speeds for
@@ -188,7 +188,7 @@ class PlaceTuningParameters:
     """
 
 
-@dataclass(kw_only=True)
+@dataclass(kw_only=True, eq=False)
 class MovesGripper:
     """
     Builds the goals that drive a gripper to one of its states.
@@ -437,7 +437,7 @@ class GraspPoseSequence:
     """
 
 
-@dataclass(kw_only=True)
+@dataclass(kw_only=True, eq=False)
 class HasApproachesGraspPoses:
     """
     Turns a grasp frame (x-axis along the approach, see

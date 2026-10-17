@@ -30,7 +30,7 @@ from semantic_digital_twin.robots.robot_parts import Arm
 logger = logging.getLogger(__name__)
 
 
-@dataclass(kw_only=True)
+@dataclass(kw_only=True, eq=False)
 class HasGraspChoice:
     """
     Adds to an action the grasp it takes hold by.

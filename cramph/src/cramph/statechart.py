@@ -62,7 +62,7 @@ from cramph.node import (
     StatechartNode,
     TransitionCondition,
 )
-from cramph.composites import CompositeNodeChoosingItsChild, CramLanguageNode
+from cramph.composites import CompositeNodeChoosingItsChild
 from cramph.plotters.graphviz import StatechartGraphviz
 from cramph.plotters.interactive_graph import StatechartGraphVisualizer
 from semantic_digital_twin.world import ModelRevision
@@ -1681,13 +1681,7 @@ class Statechart(SubclassJSONSerializer):
             raise NotATopLevelNodeError(node=node)
         if self.is_compiled and self.latest_compile_covers(node):
             raise StatechartAlreadyCompiledError()
-        if isinstance(replacement, CramLanguageNode) and replacement._has_child(node):
-            replacement._join_statechart_keeping_child(
-                node, lambda: self.add_node(replacement)
-            )
-            return
-        self.add_node(replacement)
-        self.remove_node(node)
+        replacement._take_place_of(node, lambda: self.add_node(replacement))
 
     @staticmethod
     def _check_not_referenced(
