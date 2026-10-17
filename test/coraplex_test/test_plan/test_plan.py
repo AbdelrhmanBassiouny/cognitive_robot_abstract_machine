@@ -92,7 +92,7 @@ def test_algebra_sequential_plan(apartment_world_pr2_copy_with_context):
     run_plan(plan, extensions)
 
     assert isinstance(plan.nodes[1].grounded_nodes[-1], NavigateAction)
-    assert len(plan.nodes[1].children) == 1
+    assert len(plan.nodes[1].chosen_children) == 1
 
 
 def test_parameterization_of_pick_up(apartment_world_pr2_copy_with_context):

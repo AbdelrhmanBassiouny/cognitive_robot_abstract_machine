@@ -443,8 +443,8 @@ def test_a_drive_chosen_while_running_is_watched_for_stalling_as_it_is_driven(
 
     executor.execute()
 
-    [attempt] = navigation.children
-    [stalled] = attempt.failure_monitors
+    [steps] = navigation.chosen_children
+    [stalled] = navigation.failure_monitors_of(steps)
     [action] = navigation.grounded_nodes
     assert stalled.monitored_tasks == [
         node for node in action.descendants if isinstance(node, ConvergingTask)

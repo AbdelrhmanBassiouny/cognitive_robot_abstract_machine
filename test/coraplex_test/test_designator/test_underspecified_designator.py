@@ -278,7 +278,7 @@ def test_isolation_rejected_candidate_never_touches_real_world(
     run_plan(plan, extensions)
 
     assert plan.life_cycle_state == LifeCycleValues.SUCCEEDED
-    assert len(plan.children) == 1
+    assert len(plan.chosen_children) == 1
     assert plan.grounded_nodes[0].fail_on_attempt_number is None
 
     probe = _registered_probes[probe_key]

@@ -18,6 +18,7 @@ from cramph.composites import (
 from cramph.context import StatechartContext
 from cramph.data_types import LifeCycleValues, ObservationStateValues
 from cramph.executor import StatechartExecutor
+from cramph.monitors import CountTicks
 from cramph.node import StatechartNode
 from cramph.nodes_for_testing import NodeSucceedingOnObservingTrue
 from cramph.statechart import Statechart
@@ -80,6 +81,34 @@ class ChooserGivingAFreshChild(ChildChooser):
     ) -> StatechartNode | None:
         self.given_children += 1
         return _node_succeeding_at_once(f"child {self.given_children}")
+
+
+@dataclass
+class ChooserGivingUpOnItsFirstChild(ChooserGivingAFreshChild):
+    """
+    Gives a child that never ends on its own first, with a failure monitor giving up on
+    it after a few ticks, and a fresh child that succeeds at once after that.
+    """
+
+    def choose_child(
+        self, node: CompositeNodeChoosingItsChild, context: StatechartContext
+    ) -> StatechartNode | None:
+        if self.given_children > 0:
+            return super().choose_child(node, context)
+        self.given_children += 1
+        return NodeSucceedingOnObservingTrue(
+            name="undecided", observation=ObservationStateValues.UNKNOWN
+        )
+
+    def failure_monitors_for(
+        self,
+        node: CompositeNodeChoosingItsChild,
+        child: StatechartNode,
+        context: StatechartContext,
+    ) -> list[StatechartNode]:
+        if child.name != "undecided":
+            return []
+        return [CountTicks(name="timeout", ticks=2)]
 
 
 # %% helpers
@@ -160,6 +189,11 @@ class ClientAndRunningStatechart:
     Tells both ends which goal is running.
     """
 
+    client_chooser: ChildChooser = field(default_factory=ChooserGivingAFreshChild)
+    """
+    Chooses the children on the client's copy.
+    """
+
     executor: StatechartExecutor = field(init=False)
     """
     Ticks the running statechart.
@@ -195,13 +229,12 @@ class ClientAndRunningStatechart:
         )
         self.running = TwoChoosingNodes.in_context(self.executor.context)
 
-        client_chooser = ChooserGivingAFreshChild()
         client_context = StatechartContext(world=World())
-        client_context.add_extension(ChildChooserAccess(chooser=client_chooser))
+        client_context.add_extension(ChildChooserAccess(chooser=self.client_chooser))
         self.copy = TwoChoosingNodes.in_context(client_context)
         self.client = ChildChoiceClient(
             statechart=self.copy.statechart,
-            chooser=client_chooser,
+            chooser=self.client_chooser,
             required_position=StreamPosition(
                 origin=MetaData(node_name="client", process_id=0), sequence_number=1
             ),
@@ -331,3 +364,23 @@ def test_a_choice_made_after_one_whose_node_ended_untaken_is_rejected(
 
     with pytest.raises(StatechartOutOfStepError):
         exchange.executor.tick()
+
+
+# %% the failure monitors of a child travel with it
+
+
+def test_the_running_side_gives_up_on_a_child_the_client_handed_failure_monitors():
+    exchange = ClientAndRunningStatechart(
+        client_chooser=ChooserGivingUpOnItsFirstChild()
+    )
+    exchange.start()
+
+    for _ in range(10):
+        exchange.let_the_client_answer()
+        exchange.executor.tick()
+
+    choosing_node = exchange.running.starting_first
+    undecided, succeeding = choosing_node.chosen_children
+    assert undecided.life_cycle_state == LifeCycleValues.FAILED
+    assert [monitor.name for monitor in choosing_node.failure_reasons] == ["timeout"]
+    assert succeeding.life_cycle_state == LifeCycleValues.SUCCEEDED
