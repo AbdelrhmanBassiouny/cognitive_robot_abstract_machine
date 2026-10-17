@@ -114,7 +114,11 @@ class PlaceAction(
         return Sequence(
             name=f"{self.name}/retract",
             nodes=[
-                *self.reattach(self.object_designator.root, self.world.root),
+                *self.reattach(
+                    self.object_designator.root,
+                    self.world.root,
+                    holding_end_effector=arm.end_effector,
+                ),
                 # The gripper starts out around the object it has just let go of.
                 self.tool_center_point_goal(
                     retract_pose,

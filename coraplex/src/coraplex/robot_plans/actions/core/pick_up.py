@@ -161,7 +161,9 @@ class PickUpAction(
                     orientation_threshold=self.orientation_threshold,
                 ),
                 *self.reattach(
-                    self.grasp.graspable.root, self.arm.end_effector.tool_frame
+                    self.grasp.graspable.root,
+                    self.arm.end_effector.tool_frame,
+                    holding_end_effector=self.arm.end_effector,
                 ),
             ],
         )

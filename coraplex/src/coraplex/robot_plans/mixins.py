@@ -416,17 +416,35 @@ class ReattachesBodies(Action, ABC):
     """
 
     def reattach(
-        self, body: KinematicStructureEntity, new_parent: KinematicStructureEntity
+        self,
+        body: KinematicStructureEntity,
+        new_parent: KinematicStructureEntity,
+        holding_end_effector: EndEffector | None = None,
     ) -> List[StatechartNode]:
         """
         :param body: The root of the branch to move.
         :param new_parent: The body the branch is moved under.
-        :return: The node moving `body` under `new_parent`, none unless this action
+        :param holding_end_effector: The end effector around `body` while it is moved,
+            which may keep touching its surroundings meanwhile, or None if there is none.
+        :return: The node moving `body` under `new_parent`, together with the collision
+            allowance of `holding_end_effector`; none unless this action
             :attr:`reattaches_in_world_model`.
         """
         if not self.reattaches_in_world_model:
             return []
-        return [MoveBranch(body=body, new_parent=new_parent)]
+        moving = MoveBranch(body=body, new_parent=new_parent)
+        if holding_end_effector is None:
+            return [moving]
+        return [
+            Parallel(
+                nodes=[
+                    moving,
+                    UpdateTemporaryCollisionRules.for_end_effector(
+                        holding_end_effector
+                    ),
+                ]
+            )
+        ]
 
 
 @dataclass
