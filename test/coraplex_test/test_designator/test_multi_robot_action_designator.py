@@ -128,7 +128,10 @@ from semantic_digital_twin.spatial_types import (
 )
 from semantic_digital_twin.spatial_types.spatial_types import Pose, Pose2D
 from semantic_digital_twin.world import World
-from semantic_digital_twin.world_description.connections import FixedConnection
+from semantic_digital_twin.world_description.connections import (
+    DifferentialDrive,
+    FixedConnection,
+)
 from semantic_digital_twin.world_description.geometry import Cylinder, Scale
 from semantic_digital_twin.world_description.shape_collection import ShapeCollection
 from semantic_digital_twin.world_description.world_entity import Body
@@ -1254,13 +1257,25 @@ def test_moving_the_manipulator_relaxes_collisions_only_when_allowed(
     assert len(nodes_of_type(forbidden, CartesianPose)) == 1
 
 
+@pytest.fixture
+def robot_without_differential_drive_context(multiple_robot_apartment_context):
+    """
+    The multi-robot context, skipped for a robot with a differential drive, which every
+    executor drives with a goal of its own.
+    """
+    world, robot, extensions = multiple_robot_apartment_context
+    if isinstance(robot.drive, DifferentialDrive):
+        pytest.skip(f"{type(robot).__name__} drives differentially")
+    return multiple_robot_apartment_context
+
+
 def test_navigating_drives_the_base_towards_what_it_should_face(
-    multiple_robot_apartment_context,
+    robot_without_differential_drive_context,
 ):
     """
     Navigating commands the base pose, and runs nothing else.
     """
-    _, robot, extensions = multiple_robot_apartment_context
+    _, robot, extensions = robot_without_differential_drive_context
     action = NavigateAction(target_location=Pose())
 
     statechart_of(robot_executor(extensions), action)
@@ -1270,12 +1285,12 @@ def test_navigating_drives_the_base_towards_what_it_should_face(
 
 
 def test_navigating_writes_the_odometry_when_simulated(
-    multiple_robot_apartment_context,
+    robot_without_differential_drive_context,
 ):
     """
     A simulated run has no drive to follow a pose, so it sets the odometry itself.
     """
-    _, _, extensions = multiple_robot_apartment_context
+    _, _, extensions = robot_without_differential_drive_context
     action = NavigateAction(target_location=Pose())
 
     expand(action, extensions)
@@ -1285,13 +1300,13 @@ def test_navigating_writes_the_odometry_when_simulated(
 
 
 def test_navigating_drives_the_base_when_physically_simulated(
-    multiple_robot_apartment_context,
+    robot_without_differential_drive_context,
 ):
     """
     A robot whose wheels have to carry it cannot be put at a pose by saying so, which is
     why performing in physics is told apart from performing kinematically.
     """
-    _, robot, extensions = multiple_robot_apartment_context
+    _, robot, extensions = robot_without_differential_drive_context
     action = NavigateAction(target_location=Pose())
 
     statechart_of(physically_simulated_executor(extensions), action)
@@ -1559,8 +1574,11 @@ def cup_in_reach(robot: AbstractRobot, name: str, roll: float = 0.0) -> Cup:
             1, -2, 0.8, roll=roll, reference_frame=world.root
         ),
     )
+    # A Stretch keeps its heading while it reaches, so it stands behind the cup, where
+    # its arm already points at it.
+    world_P_stand = (0.45, -2.0, 0) if isinstance(robot, Stretch) else (0.3, -2.3, 0)
     robot.root.parent_connection.origin = stand_facing(
-        robot, (0.3, -2.3, 0), (1.3, -2.3, 0), world
+        robot, world_P_stand, (1.3, world_P_stand[1], 0), world
     )
     world.notify_state_change()
     return cup
