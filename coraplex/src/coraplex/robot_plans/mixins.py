@@ -16,8 +16,6 @@ from giskardpy.motion_statechart.goals.gripper import MoveGripper
 from giskardpy.motion_statechart.graph_node import MotionStatechartNode
 from giskardpy.motion_statechart.tasks.cartesian_tasks import (
     CartesianPose,
-    CartesianPosition,
-    CartesianPositionStraight,
     CartesianPositionVelocityLimit,
     CartesianRotationVelocityLimit,
 )
@@ -30,8 +28,6 @@ from semantic_digital_twin.world_description.world_entity import (
     KinematicStructureEntity,
 )
 from typing_extensions import List, Optional
-
-from coraplex.datastructures.enums import MovementType
 
 
 @dataclass(kw_only=True, eq=False)
@@ -278,18 +274,14 @@ class MovesToolCenterPoint(Action, ABC):
         self,
         target: Pose,
         arm: Arm,
-        movement_type: MovementType = MovementType.CARTESIAN,
         max_linear_velocity: Optional[float] = None,
         max_angular_velocity: Optional[float] = None,
     ) -> MotionStatechartNode:
         """
         :param target: Where the tool center point should end up.
         :param arm: The arm whose tool center point is moved.
-        :param movement_type: Whether the orientation of the tool center point is
-            commanded alongside its position.
         :param max_linear_velocity: Cap on the speed of the tool center point, in m/s.
-        :param max_angular_velocity: Cap on how fast it turns, in rad/s. Only meaningful
-            when the orientation is commanded.
+        :param max_angular_velocity: Cap on how fast it turns, in rad/s.
         :return: The goal moving the tool center point there, together with whatever
             speed caps were asked for, and the task keeping the base still, see :meth:`~coraplex.robot_plans.actions.base.Action.keep_base_still`.
             A goal that is a parallel of its tasks holds them itself; any other is put in
@@ -298,10 +290,10 @@ class MovesToolCenterPoint(Action, ABC):
         root = self.controlled_root
         tip = arm.end_effector.tool_frame
         accompanying: List[MotionStatechartNode] = self._velocity_limits(
-            root, tip, movement_type, max_linear_velocity, max_angular_velocity
+            root, tip, max_linear_velocity, max_angular_velocity
         )
         accompanying.extend(self.keep_base_still())
-        goal = self._reach_target(target, root, tip, movement_type)
+        goal = self._reach_target(target, root, tip)
         if not accompanying:
             return goal
         if isinstance(goal, Parallel):
@@ -315,25 +307,11 @@ class MovesToolCenterPoint(Action, ABC):
         target: Pose,
         root: KinematicStructureEntity,
         tip: KinematicStructureEntity,
-        movement_type: MovementType,
     ) -> MotionStatechartNode:
         """
-        :return: The task that brings `tip` to `target`, commanding its orientation
-            unless only a translation was asked for, along a straight line where
+        :return: The task that brings `tip` to `target`, along a straight line where
             :attr:`moves_tool_center_point_in_a_straight_line`.
         """
-        if movement_type == MovementType.TRANSLATION:
-            position_task_type = (
-                CartesianPositionStraight
-                if self.moves_tool_center_point_in_a_straight_line
-                else CartesianPosition
-            )
-            return position_task_type(
-                root_link=root,
-                tip_link=tip,
-                goal_point=target.position,
-                threshold=self.resolved_position_threshold(),
-            )
         if self.moves_tool_center_point_in_a_straight_line:
             return CartesianPoseStraight(
                 root_link=root,
@@ -355,13 +333,11 @@ class MovesToolCenterPoint(Action, ABC):
     def _velocity_limits(
         root: KinematicStructureEntity,
         tip: KinematicStructureEntity,
-        movement_type: MovementType,
         max_linear_velocity: Optional[float],
         max_angular_velocity: Optional[float],
     ) -> List[MotionStatechartNode]:
         """
-        :return: The speed caps that were asked for, if any. A turning cap is left out
-            when the orientation is not commanded, because there is nothing to cap.
+        :return: The speed caps that were asked for, if any.
         """
         limits: List[MotionStatechartNode] = []
         if max_linear_velocity is not None:
@@ -372,10 +348,7 @@ class MovesToolCenterPoint(Action, ABC):
                     max_linear_velocity=max_linear_velocity,
                 )
             )
-        if (
-            max_angular_velocity is not None
-            and movement_type != MovementType.TRANSLATION
-        ):
+        if max_angular_velocity is not None:
             limits.append(
                 CartesianRotationVelocityLimit(
                     root_link=root,

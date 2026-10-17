@@ -31,8 +31,6 @@ from giskardpy.motion_statechart.monitors.overwrite_state_monitors import SetOdo
 from giskardpy.motion_statechart.tasks.align_planes import AlignPlanes
 from giskardpy.motion_statechart.tasks.cartesian_tasks import (
     CartesianPose,
-    CartesianPosition,
-    CartesianPositionStraight,
     HoldOrientation,
     HoldPose,
 )
@@ -494,11 +492,12 @@ def test_stretch_lifts_in_a_straight_line(stretch_apartment_context, build_execu
         )
     )
 
-    assert type(goal) is CartesianPositionStraight
+    assert type(goal) is CartesianPoseStraight
     assert goal.root_link is unchanged.root_link
     assert goal.tip_link is unchanged.tip_link
-    np.testing.assert_allclose(goal.goal_point.to_np(), unchanged.goal_point.to_np())
-    assert goal.threshold == unchanged.threshold
+    np.testing.assert_allclose(goal.goal_pose.to_np(), unchanged.goal_pose.to_np())
+    assert goal.translation_threshold == unchanged.translation_threshold
+    assert goal.orientation_threshold == unchanged.orientation_threshold
 
 
 def held_orientations_of(action: StatechartNode) -> List[HoldOrientation]:
@@ -741,4 +740,4 @@ def test_a_robot_of_another_type_lifts_unchanged(pr2_apartment_context):
         )
     )
 
-    assert type(goal) is CartesianPosition
+    assert type(goal) is CartesianPose

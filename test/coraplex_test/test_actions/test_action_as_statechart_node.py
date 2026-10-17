@@ -18,7 +18,6 @@ from coraplex.robot_plans.actions.base import (
     TryAllAction,
 )
 from coraplex.robot_plans.actions.core.exceptions import WidthBeyondGripperOpening
-from coraplex.datastructures.enums import MovementType
 from coraplex.datastructures.trajectory import PoseTrajectory
 from coraplex.robot_plans.actions.core.container import OpenAction
 from coraplex.robot_plans.actions.core.navigation import LookAtAction, NavigateAction
@@ -58,7 +57,6 @@ from giskardpy.motion_statechart.goals.gripper import MoveGripper
 from giskardpy.motion_statechart.data_types import DefaultWeights
 from giskardpy.motion_statechart.tasks.cartesian_tasks import (
     CartesianPose,
-    CartesianPosition,
     CartesianPositionVelocityLimit,
     DistanceAlongAxis,
     HoldPose,
@@ -780,7 +778,7 @@ def test_a_pick_up_grasps_reattaches_and_lifts_as_its_own_steps(
     assert type(grasping) is GraspingAction
     assert type(reattaching) is MoveBranch
     assert reattaching.new_parent is robot.left_arm.end_effector.tool_frame
-    assert type(_goal_moving_the_tool(lifting)) is CartesianPosition
+    assert type(_goal_moving_the_tool(lifting)) is CartesianPose
 
 
 def test_a_place_reattaches_and_retracts_as_its_own_steps(pr2_apartment_context):
@@ -968,31 +966,6 @@ def test_a_pose_of_the_tool_center_point_holds_what_accompanies_it(
         CartesianPositionVelocityLimit,
         HoldPose,
     ]
-
-
-def test_a_position_of_the_tool_center_point_runs_beside_what_accompanies_it(
-    simple_pr2_context,
-):
-    """
-    A position goal is a single task, which cannot hold other nodes, so it still runs
-    in a parallel with them.
-    """
-    _, robot, extensions = simple_pr2_context
-    action = MoveManipulatorAction(
-        target_pose=Pose(),
-        end_effector=robot.left_arm.end_effector,
-        allow_gripper_collision=False,
-    )
-    _expanded(action, extensions)
-
-    goal = action.tool_center_point_goal(
-        Pose(),
-        robot.left_arm,
-        movement_type=MovementType.TRANSLATION,
-    )
-
-    assert isinstance(goal, Parallel)
-    assert [type(node) for node in goal.nodes] == [CartesianPosition, HoldPose]
 
 
 def test_navigating_drives_the_base_towards_what_it_should_face(

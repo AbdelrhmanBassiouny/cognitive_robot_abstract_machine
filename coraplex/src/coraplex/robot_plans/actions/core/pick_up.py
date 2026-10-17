@@ -6,7 +6,6 @@ from dataclasses import dataclass
 from typing_extensions import List
 
 
-from coraplex.datastructures.enums import MovementType
 from coraplex.robot_plans.actions.base import SequentialAction
 from cramph.composites import Parallel
 from cramph.node import StatechartNode
@@ -190,7 +189,6 @@ class PickUpAction(
             self.tool_center_point_goal(
                 lift_to_pose,
                 self.arm,
-                movement_type=MovementType.TRANSLATION,
                 max_linear_velocity=self.lift_linear_velocity,
             ),
         ]

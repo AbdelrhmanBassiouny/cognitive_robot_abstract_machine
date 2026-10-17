@@ -283,12 +283,13 @@ def test_a_pick_up_moves_the_object_to_the_gripper_between_closing_and_lifting(
         )
     ]
     # The gripper closes while a pose goal, which brings its own position goal, keeps
-    # it at the grasp.
-    assert steps[-5:] == [
+    # it at the grasp; the lift is such a pose goal as well.
+    assert steps[-6:] == [
         MoveGripper,
         CartesianPose,
         CartesianPosition,
         MoveBranch,
+        CartesianPose,
         CartesianPosition,
     ]
 
