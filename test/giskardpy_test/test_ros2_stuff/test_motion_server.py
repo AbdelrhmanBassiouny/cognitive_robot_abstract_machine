@@ -29,6 +29,7 @@ from semantic_digital_twin.input_synchronization import (
 from giskardpy.middleware.ros2.motion_goal import MotionGoal
 from giskardpy.middleware.ros2.motion_server import MotionServer
 from giskardpy.middleware.ros2.post_goal_plotters import PostGoalPlotter
+from giskardpy.middleware.ros2.world_updates import OutgoingWorldUpdates
 from cramph.exceptions import SelfInStartConditionError
 from giskardpy.motion_statechart.graph_node import EndMotion
 from cramph.monitors import CountSimulationTimeSeconds
@@ -643,8 +644,14 @@ def motion_server(init_rospy) -> MotionServerFixture:
     world = executor.context.world
     action_server = GoalQueueMimic()
     world_updates = WorldUpdatesMimic(executor=executor)
+    publication_progress = PublicationProgressMimic()
+    outgoing_world_updates = OutgoingWorldUpdates(
+        world_synchronizer=publication_progress
+    )
     feedback_publisher = ActionFeedbackPublisher(
-        executor=executor, action_server=action_server
+        executor=executor,
+        action_server=action_server,
+        outgoing_world_updates=outgoing_world_updates,
     )
     command_publisher = RecordingCommandPublisher(world=world)
     control_input = RecordingInputSynchronizer(world=world, executor=executor)
@@ -665,14 +672,13 @@ def motion_server(init_rospy) -> MotionServerFixture:
     )
     idle_input = RecordingInputSynchronizer(world=world, executor=executor)
     plotter = RecordingPlotter(executor=executor)
-    publication_progress = PublicationProgressMimic()
     server = MotionServer(
         executor=executor,
         action_server=action_server,
         control_loop=control_loop,
         client_watchdog=client_watchdog,
         world_updates=world_updates,
-        world_synchronizer=publication_progress,
+        outgoing_world_updates=outgoing_world_updates,
         feedback_publisher=feedback_publisher,
         inputs=WorldStateInputs(world=world, synchronizers=[idle_input]),
         cycle_counter=cycle_counter,

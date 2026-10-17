@@ -20,6 +20,7 @@ from semantic_digital_twin.input_synchronization import WorldStateInputs
 from giskardpy.middleware.ros2.world_updates import (
     ClientWorldUpdates,
     IncomingWorldUpdates,
+    OutgoingWorldUpdates,
 )
 from giskardpy.motion_statechart.graph_node import EndMotion
 from cramph.monitors import CountSimulationTimeSeconds
@@ -450,7 +451,11 @@ def control_loop(init_rospy) -> ControlLoopFixture:
                 presence=HeartbeatPresence(node=rospy.get_node())
             ),
             feedback_publisher=ActionFeedbackPublisher(
-                executor=executor, action_server=action_server
+                executor=executor,
+                action_server=action_server,
+                outgoing_world_updates=OutgoingWorldUpdates(
+                    world_synchronizer=controlled_synchronizer
+                ),
             ),
             inputs=WorldStateInputs(world=controlled_world),
             cycle_counter=CycleCounter(),
@@ -583,7 +588,11 @@ def local_control_loop(init_rospy) -> ControlLoop:
             presence=HeartbeatPresence(node=rospy.get_node())
         ),
         feedback_publisher=ActionFeedbackPublisher(
-            executor=executor, action_server=action_server
+            executor=executor,
+            action_server=action_server,
+            outgoing_world_updates=OutgoingWorldUpdates(
+                world_synchronizer=PublishingSynchronizerMimic()
+            ),
         ),
         inputs=WorldStateInputs(world=world),
         cycle_counter=CycleCounter(),

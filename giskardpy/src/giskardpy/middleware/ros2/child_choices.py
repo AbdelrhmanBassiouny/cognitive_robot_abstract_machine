@@ -6,6 +6,8 @@ A node of a goal may choose its child only once it runs, see
 the client, which holds what the choice is made from, so Giskard publishes the nodes
 waiting for a child in its feedback, the client chooses on its copy of the statechart
 and sends the nodes the choice added, and Giskard adds them to the running statechart.
+Each side takes a choice only once its world contains the changes the other side
+published before.
 
 .. note:: This is an interim way of getting a client's choices into a running goal,
     meant to be replaced by a proper interface between client and Giskard.
@@ -13,11 +15,12 @@ and sends the nodes the choice added, and Giskard adds them to the running state
 
 from __future__ import annotations
 
+import time
 from dataclasses import dataclass, field
 from enum import StrEnum
 from threading import Lock
 
-from typing_extensions import Any, Dict, List, Optional, Self, Set, Tuple
+from typing_extensions import Any, Dict, Optional, Self
 
 from cramph.composites import ChildChooser, CompositeNodeChoosingItsChild
 from cramph.context import StatechartContext
@@ -27,7 +30,10 @@ from cramph.statechart import Statechart
 from giskardpy.middleware.ros2.action_server import ActionServerHandler
 from giskardpy.middleware.ros2.exceptions import StatechartOutOfStepError
 from giskardpy.middleware.ros2.feedback_publisher import MotionStatechartPayloadKey
-from giskardpy.middleware.ros2.world_updates import IncomingWorldUpdates
+from giskardpy.middleware.ros2.world_updates import (
+    ClientWorldUpdates,
+    IncomingWorldUpdates,
+)
 from krrood.adapters.json_serializer import SubclassJSONSerializer, from_json, to_json
 from semantic_digital_twin.adapters.ros.messages import StreamPosition
 from semantic_digital_twin.adapters.world_entity_kwargs_tracker import (
@@ -290,24 +296,49 @@ class ChildChoiceClient:
     Chooses the children.
     """
 
-    required_position: Optional[StreamPosition] = None
+    world_updates: ClientWorldUpdates
+    """
+    Tells whether the client's world contains the changes Giskard published while
+    running the goal.
+    """
+
+    required_position: StreamPosition | None = None
     """
     The change of the client's world every choice is made on.
     """
 
-    _answered: Set[Tuple[int, int, int]] = field(
+    _answered: set[tuple[int, int, int]] = field(
         default_factory=set, init=False, repr=False
     )
     """
     Every request answered, as goal, node index and the number of children the node held.
     """
 
-    def answer(self, feedback: Dict[str, Any]) -> List[ChildChoiceMessage]:
+    _waiting_for_changes_since: float | None = field(
+        default=None, init=False, repr=False
+    )
+    """
+    The :func:`time.monotonic` time the client started waiting for its world to catch up
+    with Giskard's, or ``None`` if it is not waiting.
+    """
+
+    def answer(self, feedback: dict[str, Any]) -> list[ChildChoiceMessage]:
         """
         :param feedback: The feedback of the running goal.
         :return: A choice for every node waiting for a child that was not answered
-            before. A choice that is still pending is asked for again next time.
+            before, none while the client's world does not contain the changes the
+            feedback reports. A choice that is still pending is asked for again next
+            time.
+        :raises GiskardWorldUpdateNotReceivedError: If the client's world does not
+            catch up within the timeout of :attr:`world_updates`.
         """
+        if self._waiting_for_changes_since is None:
+            self._waiting_for_changes_since = time.monotonic()
+        if not self.world_updates.has_applied_the_changes_reported_in(
+            feedback, self._waiting_for_changes_since
+        ):
+            return []
+        self._waiting_for_changes_since = None
         goal_id = feedback[MotionStatechartPayloadKey.GOAL_ID]
         messages = []
         for index, child_count in feedback[
@@ -327,7 +358,7 @@ class ChildChoiceClient:
 
     def _choose(
         self, goal_id: int, node: CompositeNodeChoosingItsChild
-    ) -> Optional[ChildChoiceMessage]:
+    ) -> ChildChoiceMessage | None:
         """
         Choose the next child of `node` on the client's copy.
 

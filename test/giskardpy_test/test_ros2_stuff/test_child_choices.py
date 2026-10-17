@@ -30,11 +30,13 @@ from giskardpy.middleware.ros2.exceptions import StatechartOutOfStepError
 from giskardpy.middleware.ros2.feedback_publisher import MotionStatechartPayloadKey
 from semantic_digital_twin.input_synchronization import InputSynchronizer
 from giskardpy.middleware.ros2.motion_goal import MotionGoal
+from giskardpy.middleware.ros2.world_updates import ClientWorldUpdates
 from giskardpy.motion_statechart.graph_node import EndMotion
 from krrood.adapters.json_serializer import from_json
 from semantic_digital_twin.adapters.ros.messages import MetaData
 from semantic_digital_twin.world import World
 
+from .test_world_updates import PublishingSynchronizerMimic
 from .test_motion_server import (
     CycleWatchingGoalCanceler,
     GoalQueueMimic,
@@ -108,6 +110,14 @@ class ClientAnsweringFromTheControlLoop(InputSynchronizer):
 # %% helpers
 
 
+def client_world_updates() -> ClientWorldUpdates:
+    """
+    :return: The world updates of a client whose world published no change and applied
+        none of Giskard's.
+    """
+    return ClientWorldUpdates(world_synchronizer=PublishingSynchronizerMimic())
+
+
 @dataclass
 class ChoosingGoal:
     """
@@ -166,7 +176,9 @@ def _client_answering(
     answering = ClientAnsweringFromTheControlLoop(
         world=motion_server.executor.context.world,
         client=ChildChoiceClient(
-            statechart=goal.statechart, chooser=ChooserAnsweringInTurn(children)
+            statechart=goal.statechart,
+            chooser=ChooserAnsweringInTurn(children),
+            world_updates=client_world_updates(),
         ),
         action_server=motion_server.action_server,
         server_chooser=_server_chooser(motion_server),
@@ -317,6 +329,7 @@ def test_the_client_answers_a_waiting_node_once_per_child_it_holds():
     client = ChildChoiceClient(
         statechart=goal.statechart,
         chooser=ChooserAnsweringInTurn([CountSimulationTimeSeconds(seconds=0.1)]),
+        world_updates=client_world_updates(),
     )
     feedback = {
         MotionStatechartPayloadKey.GOAL_ID: 3,
