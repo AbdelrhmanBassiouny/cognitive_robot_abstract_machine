@@ -489,15 +489,15 @@ def load_board(path: Path = PackageLocation.BOARD.value) -> list[PullRequest]:
     data = json.loads(path.read_text())
     return [
         PullRequest(
-            number=pr["number"],
-            head=pr["head"],
-            base=pr["base"],
-            draft=bool(pr["draft"]),
-            labels=list(pr.get("labels", [])),
-            ci=pr.get("ci"),
-            session=pr.get("session"),
+            number=pull_request["number"],
+            head=pull_request["head"],
+            base=pull_request["base"],
+            draft=bool(pull_request["draft"]),
+            labels=list(pull_request.get("labels", [])),
+            ci=pull_request.get("ci"),
+            session=pull_request.get("session"),
         )
-        for pr in data["pull_requests"]
+        for pull_request in data["pull_requests"]
     ]
 
 
@@ -521,35 +521,37 @@ def derive_status(draft: bool, merged: bool, in_review: bool) -> BranchStatus:
 
 def build_stack(
     configuration: Configuration,
-    prs: list[PullRequest],
+    pull_requests: list[PullRequest],
     is_merged: Callable[[str], bool],
 ) -> Stack:
-    """Assemble the :class:`Stack` from the PR export and a merged-branch predicate.
+    """Assemble the :class:`Stack` from the pull request export and a merged-branch predicate.
 
     :param configuration: The static configuration.
-    :param prs: The exported pull requests.
+    :param pull_requests: The exported pull requests.
     :param is_merged: Maps a branch name to whether it has landed upstream; injected so the pure
         assembly logic can be tested without git.
     :return: The assembled stack.
     """
     branches = [
         Branch(
-            name=pr.head,
-            parent=pr.base,
-            pull_request_number=pr.number,
+            name=pull_request.head,
+            parent=pull_request.base,
+            pull_request_number=pull_request.number,
             status=derive_status(
-                pr.draft, is_merged(pr.head), configuration.in_review_label in pr.labels
+                pull_request.draft,
+                is_merged(pull_request.head),
+                configuration.in_review_label in pull_request.labels,
             ),
             strategy=(
                 IntegrationStrategy.REBASE
-                if configuration.rebase_label in pr.labels
+                if configuration.rebase_label in pull_request.labels
                 else IntegrationStrategy.MERGE
             ),
-            labels=pr.labels,
-            ci=pr.ci,
-            session=pr.session,
+            labels=pull_request.labels,
+            ci=pull_request.ci,
+            session=pull_request.session,
         )
-        for pr in prs
+        for pull_request in pull_requests
     ]
     return Stack(configuration=configuration, branches=branches, is_merged=is_merged)
 
@@ -728,12 +730,14 @@ def _merged_predicate(configuration: Configuration):
     return is_merged
 
 
-def load_stack() -> Stack:
-    """:return: the full live stack: configuration + board export + git merged-detection."""
+def load_stack(board: Path = PackageLocation.BOARD.value) -> Stack:
+    """:param board: The exported board to derive the stack from.
+    :return: the full live stack: configuration + board export + git merged-detection.
+    """
     configuration = load_configuration()
-    prs = load_board()
-    fetch(configuration, [pr.head for pr in prs])
-    return build_stack(configuration, prs, _merged_predicate(configuration))
+    pull_requests = load_board(board)
+    fetch(configuration, [pull_request.head for pull_request in pull_requests])
+    return build_stack(configuration, pull_requests, _merged_predicate(configuration))
 
 
 def resolve_ref(configuration: Configuration, name: str) -> str:

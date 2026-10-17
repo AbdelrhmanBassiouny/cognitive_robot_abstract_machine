@@ -245,10 +245,8 @@ def test_inertia_tensor_is_expressed_in_the_link_frame(table_parser):
     )
 
 
-def test_undeclared_link_inertial_keeps_the_default(table_parser):
-    inertial = table_parser.parse().root.inertial
-    assert inertial.mass == 1.0
-    assert inertial.inertia.to_values() == (1.0, 1.0, 1.0, 0.0, 0.0, 0.0)
+def test_a_link_that_declares_no_inertial_gets_none(table_parser):
+    assert table_parser.parse().root.inertial is None
 
 
 def test_xacro():

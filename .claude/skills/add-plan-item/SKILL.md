@@ -64,7 +64,7 @@ The rule is in `${SCOPE_DECISION_DOCUMENT}` — read it rather than re-deriving
 it here. Gather its evidence in one call:
 
 ```bash
-python3 -m "${CHECK_SCOPE_OVERLAP_MODULE}" \
+"${BASSTLER_PYTHON}" -m "${CHECK_SCOPE_OVERLAP_MODULE}" \
     --base <base-branch> \
     --path <path> [--path <path> ...] \
     --candidate '<item-id-or-title>=<branch>' [--candidate ... ]
@@ -121,8 +121,8 @@ changes" section governs. Either way the proposal ends with `${SAVE_PLAN_SCRIPT}
 and republishing the dashboard via `/plan-dashboard <plan-id>` in the same turn,
 so no published dashboard is older than the manifest behind it.
 
-**If the outcome is a new item**, `${PLAN_ITEM_BOOTSTRAP_SCRIPT}`'s `record`
-operation writes its `plan.yaml` entry and `roadmap.md` section and runs the save
+**If the outcome is a new item**, the `record` operation of
+`"${BASSTLER_PYTHON}" -m "${PLAN_ITEM_BOOTSTRAP_MODULE}"` writes its `plan.yaml` entry and `roadmap.md` section and runs the save
 for you — `record` only, never `open`, which creates the branch and pull request
 this skill does not.
 

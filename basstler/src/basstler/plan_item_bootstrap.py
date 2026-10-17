@@ -69,7 +69,7 @@ from typing import Any, ClassVar, Protocol
 
 import yaml
 
-from basstler.locations import ProjectLocation
+from basstler.locations import ClaudeCodeVariable, ProjectLocation
 from basstler.maintenance_constants import GITHUB_API_ROOT
 from basstler.plan_model import ItemStatus
 from basstler.standard_streams import StandardStreamHandler
@@ -1549,7 +1549,9 @@ def main() -> int:
     See the module docstring for the command line contract.
     """
     arguments = build_parser().parse_args()
-    project_root = Path(os.environ.get("CLAUDE_PROJECT_DIR", Path.cwd()))
+    project_root = Path(
+        os.environ.get(ClaudeCodeVariable.PROJECT_DIRECTORY, Path.cwd())
+    )
 
     try:
         if arguments.subcommand == "record":

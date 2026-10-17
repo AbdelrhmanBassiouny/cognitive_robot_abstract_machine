@@ -62,7 +62,7 @@ from enum import IntEnum, StrEnum
 from pathlib import Path
 from typing import Any, ClassVar
 
-from basstler.locations import ProjectLocation
+from basstler.locations import ClaudeCodeVariable, ProjectLocation
 from basstler.standard_streams import StandardStreamHandler
 
 logger = StandardStreamHandler.logger_for(__name__)
@@ -837,7 +837,9 @@ def main() -> int:
     See the module docstring for the command line contract.
     """
     arguments = build_parser().parse_args()
-    project_root = Path(os.environ.get("CLAUDE_PROJECT_DIR", Path.cwd()))
+    project_root = Path(
+        os.environ.get(ClaudeCodeVariable.PROJECT_DIRECTORY, Path.cwd())
+    )
 
     report: Report
     try:

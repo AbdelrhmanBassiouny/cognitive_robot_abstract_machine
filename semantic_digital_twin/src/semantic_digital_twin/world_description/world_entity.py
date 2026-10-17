@@ -49,7 +49,10 @@ from semantic_digital_twin.exceptions import (
     ReferenceFrameMismatchError,
 )
 from semantic_digital_twin.mixin import HasSimulatorProperties, UniqueSimulatorProperty
-from semantic_digital_twin.world_description.connection_properties import ServoGains
+from semantic_digital_twin.world_description.connection_properties import (
+    ServoGains,
+    VelocityServoGains,
+)
 from semantic_digital_twin.spatial_types.spatial_types import (
     HomogeneousTransformationMatrix,
     Point3,
@@ -550,9 +553,9 @@ class Body(KinematicStructureEntity):
     The index of the entity in `_world.kinematic_structure`.
     """
 
-    inertial: Optional[Inertial] = field(default_factory=Inertial, repr=False)
+    inertial: Optional[Inertial] = field(default=None, repr=False)
     """
-    Inertia properties of the body.
+    Inertia properties of the body, or ``None`` if its description gives none.
     """
 
     def __post_init__(self):
@@ -1393,6 +1396,15 @@ class Actuator(WorldEntityWithSimulatorProperties):
         """
         self._dofs.append(dof)
 
+    @property
+    def set_point(self) -> float:
+        """
+        The value the world commands this actuator to: by default, the position the
+        world holds for its one degree of freedom.
+        """
+        [degree_of_freedom] = self.dofs
+        return float(self._world.state[degree_of_freedom.id].position)
+
 
 @dataclass(eq=False)
 class PositionServo(Actuator):
@@ -1407,3 +1419,22 @@ class PositionServo(Actuator):
     """
     How hard the servo pulls the degree of freedom towards the set point.
     """
+
+
+@dataclass(eq=False)
+class VelocityServo(Actuator):
+    """
+    An actuator that drives its degree of freedom at a commanded velocity: the velocity
+    the world holds for the degree of freedom is the servo's set point, and where the
+    degree of freedom ends up is what the physics makes of it.
+    """
+
+    gains: VelocityServoGains = field(kw_only=True)
+    """
+    How hard the servo pushes the degree of freedom towards the set point.
+    """
+
+    @property
+    def set_point(self) -> float:
+        [degree_of_freedom] = self.dofs
+        return float(self._world.state[degree_of_freedom.id].velocity)
