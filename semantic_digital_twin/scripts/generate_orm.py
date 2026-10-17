@@ -36,6 +36,8 @@ from semantic_digital_twin.world import (
     WorldStateBatchContextManager,
 )
 from semantic_digital_twin.world_description.mesh_file_storage import MeshFileStorage
+from semantic_digital_twin.part_finding.decomposed_objects import DecomposedObjectStore
+from semantic_digital_twin.pipeline.part_finding import UseDecomposedObjects
 
 # remove classes that should not be mapped
 ignore_classes = {
@@ -46,6 +48,9 @@ ignore_classes = {
     StateChangeCounter,
     ForwardKinematicsManager,
     MeshFileStorage,
+    # A store holds a database session, and the step that reads it holds the store.
+    DecomposedObjectStore,
+    UseDecomposedObjects,
     semantic_digital_twin.adapters.procthor.procthor_resolver.ProcthorResolver,
     SemanticDirection,
     SubclassJSONSerializer,

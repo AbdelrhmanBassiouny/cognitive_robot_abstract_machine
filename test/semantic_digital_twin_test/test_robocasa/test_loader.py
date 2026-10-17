@@ -1,3 +1,5 @@
+from dataclasses import dataclass, field
+
 import pytest
 
 pytest.importorskip("robocasa", reason="robocasa is not installed")
@@ -13,6 +15,7 @@ from semantic_digital_twin.adapters.robocasa_dataset.semantics import (
     RoboCasaKitchenApplianceCategory,
     RoboCasaObjectCategory,
 )
+from semantic_digital_twin.pipeline.pipeline import Pipeline, Step
 from semantic_digital_twin.semantic_annotations.natural_language import (
     NaturalLanguageWithTypeDescription,
 )
@@ -20,6 +23,23 @@ from semantic_digital_twin.semantic_annotations.semantic_annotations import (
     Dishwasher,
     Floor,
 )
+from semantic_digital_twin.world import World
+
+
+@dataclass
+class RecordWorlds(Step):
+    """
+    A preprocessing step that only remembers the worlds it is applied to.
+    """
+
+    worlds: list[World] = field(default_factory=list)
+    """
+    The worlds the step was applied to, oldest first.
+    """
+
+    def _apply(self, world: World) -> World:
+        self.worlds.append(world)
+        return world
 
 
 @pytest.fixture(scope="session")
@@ -188,3 +208,46 @@ def test_task_environments_built_with_the_same_seed_compose_the_same_scene(
         second.sim.data.get_body_xpos(model.root_body).tolist()
         for model in second.objects.values()
     ]
+
+
+def test_a_loaded_object_is_preprocessed(robocasa_loader):
+    step = RecordWorlds()
+    loader = RoboCasaDatasetLoader(
+        directory=robocasa_loader.directory, preprocessing=Pipeline(steps=[step])
+    )
+
+    world = loader.load_object(RoboCasaObjectCategory.APPLE)
+
+    assert step.worlds == [world]
+
+
+def test_a_loaded_kitchen_appliance_is_preprocessed(robocasa_loader):
+    step = RecordWorlds()
+    loader = RoboCasaDatasetLoader(
+        directory=robocasa_loader.directory, preprocessing=Pipeline(steps=[step])
+    )
+
+    world = loader.load_kitchen_appliance(RoboCasaKitchenApplianceCategory.DISHWASHER)
+
+    assert step.worlds == [world]
+
+
+def test_a_loaded_task_is_preprocessed_before_its_objects_are_resolved(
+    robocasa_loader,
+):
+    from robocasa.models.scenes.scene_registry import LayoutType, StyleType
+
+    step = RecordWorlds()
+    loader = RoboCasaDatasetLoader(
+        directory=robocasa_loader.directory, preprocessing=Pipeline(steps=[step])
+    )
+
+    task = loader.load_task(
+        "TurnOnMicrowave",
+        layout_id=LayoutType.LAYOUT001,
+        style_id=StyleType.STYLE001,
+    )
+
+    assert step.worlds == [task.world]
+    for manipulated_object in task.manipulated_objects:
+        assert manipulated_object in task.world.bodies

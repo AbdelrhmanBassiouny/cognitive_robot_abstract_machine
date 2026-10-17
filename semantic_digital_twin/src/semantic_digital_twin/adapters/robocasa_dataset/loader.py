@@ -30,6 +30,7 @@ from semantic_digital_twin.adapters.robocasa_dataset.semantics import (
 )
 from semantic_digital_twin.exceptions import WorldEntityNotFoundError
 from semantic_digital_twin.part_finding.relationships import PartRelationshipInspector
+from semantic_digital_twin.pipeline.pipeline import Pipeline
 from semantic_digital_twin.semantic_annotations.mixins import PartWholeRelationship
 from semantic_digital_twin.semantic_annotations.natural_language import (
     NaturalLanguageWithTypeDescription,
@@ -222,6 +223,13 @@ class RoboCasaDatasetLoader:
     Resolver mapping RoboCasa object category names to SemanticAnnotation subclasses.
     """
 
+    preprocessing: Pipeline = field(default_factory=lambda: Pipeline(steps=[]))
+    """
+    The steps every loaded world goes through once it is annotated, such as
+    :class:`~semantic_digital_twin.pipeline.part_finding.UseDecomposedObjects`, which
+    gives the objects the parts stored for their shapes.
+    """
+
     self_contained_object_groups: ClassVar[Tuple[str, ...]] = (
         "objaverse",
         "lightwheel",
@@ -305,7 +313,7 @@ class RoboCasaDatasetLoader:
 
         world = _parse_robosuite_mjcf(MJCFParser.from_xml_string(task.get_xml()))
         self._apply_kitchen_appliance_semantics(world, kitchen_appliances)
-        return world
+        return self.preprocessing.apply(world)
 
     def load_task(
         self,
@@ -403,6 +411,7 @@ class RoboCasaDatasetLoader:
         manipulated_objects = self._apply_task_object_semantics(
             world, environment.object_cfgs, environment.objects
         )
+        world = self.preprocessing.apply(world)
 
         return RoboCasaTask(
             world=world,
@@ -516,7 +525,9 @@ class RoboCasaDatasetLoader:
 
         The object's sampled category drives the annotation, falling back to
         NaturalLanguageWithTypeDescription when the category has no matching
-        SemanticAnnotation subclass. An object whose body is not present in ``world``
+        SemanticAnnotation subclass. The annotation goes to the body with the object's
+        shape, see :meth:`_body_with_shape`, while the body RoboCasa moves the object by
+        is the one collected. An object whose body is not present in ``world``
         (RoboCasa's object sampling is stochastic per reset) is skipped.
 
         :param world: The world the task scene was parsed into.
@@ -535,10 +546,34 @@ class RoboCasaDatasetLoader:
             if body is None:
                 continue
             self._attach_semantic_annotation(
-                world, body, str(object_configuration["info"]["cat"])
+                world,
+                self._body_with_shape(world, body),
+                str(object_configuration["info"]["cat"]),
             )
             manipulated_objects.append(body)
         return manipulated_objects
+
+    @staticmethod
+    def _body_with_shape(world: World, body: Body) -> Body:
+        """
+        The body an object's annotation belongs to, the same one it is annotated at when
+        loaded alone by :meth:`load_object`.
+
+        Some RoboCasa objects, such as its pans, keep their shape in a body below the
+        body RoboCasa moves them by, which in a task may show only the liquid they hold.
+
+        :param world: The world the object was parsed into.
+        :param body: The body RoboCasa moves the object by.
+        :return: The first body, from ``body`` down, that collides; ``body`` if none
+            does.
+        """
+        for candidate in [
+            body,
+            *world.compute_descendent_child_kinematic_structure_entities(body),
+        ]:
+            if isinstance(candidate, Body) and candidate.has_collision():
+                return candidate
+        return body
 
     def load_kitchen_appliance(
         self,
@@ -564,7 +599,7 @@ class RoboCasaDatasetLoader:
         appliance = self._find_configured_appliance(category, style_id)
         world = _parse_robosuite_mjcf(MJCFParser.from_xml_string(appliance.get_xml()))
         self._apply_kitchen_appliance_semantics(world, {appliance.name: appliance})
-        return world
+        return self.preprocessing.apply(world)
 
     def _find_configured_appliance(
         self,
@@ -657,7 +692,7 @@ class RoboCasaDatasetLoader:
 
         world = _parse_robosuite_mjcf(MJCFParser(str(model_files[instance_index])))
         self._apply_object_semantics(world, category)
-        return world
+        return self.preprocessing.apply(world)
 
     def _apply_kitchen_appliance_semantics(
         self, world: World, kitchen_appliances: Dict[str, Any]

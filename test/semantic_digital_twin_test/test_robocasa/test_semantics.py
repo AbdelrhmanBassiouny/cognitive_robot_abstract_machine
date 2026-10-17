@@ -1,4 +1,5 @@
 from pathlib import Path
+from types import SimpleNamespace
 from xml.etree import ElementTree as ET
 
 import pytest
@@ -34,6 +35,7 @@ from semantic_digital_twin.semantic_annotations.semantic_annotations import (
     Lever,
     Microwave,
     Oven,
+    Pan,
     Sink,
     Toaster,
 )
@@ -231,6 +233,46 @@ def test_parse_robosuite_mjcf_gives_every_unnamed_body_a_name_of_its_own():
     names = [body.name.name for body in world.bodies]
     assert len(set(names)) == len(names) == 4
     assert all(names)
+
+
+ROBOSUITE_STYLE_PAN_WITH_LIQUID_MJCF = """
+<mujoco>
+  <worldbody>
+    <body name="pan_main">
+      <geom name="pan_liquid" type="cylinder" size="0.1 0.001" group="1"
+            rgba="0.5 0.6 1 0.3" contype="0" conaffinity="0"/>
+      <body>
+        <geom type="box" size="0.1 0.1 0.02" group="1" rgba="0 1 0 1"
+              contype="0" conaffinity="0"/>
+        <geom type="box" size="0.1 0.1 0.02"/>
+      </body>
+    </body>
+  </worldbody>
+</mujoco>
+"""
+
+
+def test_a_task_object_is_annotated_where_its_shape_is():
+    """
+    Some RoboCasa objects, such as its pans, keep their shape in a body below the body
+    RoboCasa moves them by, which in a task may show only the liquid they hold; the
+    annotation goes to the body with the shape, as when the object is loaded alone,
+    while the body RoboCasa moves stays the manipulated one.
+    """
+    world = _parse_robosuite_mjcf(
+        MJCFParser.from_xml_string(ROBOSUITE_STYLE_PAN_WITH_LIQUID_MJCF)
+    )
+    pan_main = world.get_kinematic_structure_entity_by_name("pan_main")
+
+    manipulated = RoboCasaDatasetLoader()._apply_task_object_semantics(
+        world,
+        [{"name": "pan", "info": {"cat": "pan"}}],
+        {"pan": SimpleNamespace(root_body="pan_main")},
+    )
+
+    [pan] = world.get_semantic_annotations_by_type(Pan)
+    assert manipulated == [pan_main]
+    assert pan.root in world.compute_child_kinematic_structure_entities(pan_main)
 
 
 def test_parse_robosuite_mjcf_keeps_default_group_geoms_collidable():
