@@ -82,8 +82,16 @@ record_personal_settings_sync() {
 # HEAD, or a branch that was never pushed with -u/--set-upstream). Shared by
 # fetch_personal_notes_branch below and by create-personal-notes-branch.sh's
 # existence check, so both apply the exact same fallback remote.
+#
+# "No upstream" is an answer, not an error, so this always succeeds. Reading
+# git's output into a variable rather than piping it keeps that true under
+# `set -o pipefail`, where a pipeline reports the failing git rather than the
+# succeeding `cut` - which aborted every caller that assigns this at top level
+# under `set -e`.
 current_branch_upstream_remote() {
-  git rev-parse --abbrev-ref --symbolic-full-name @{upstream} 2>/dev/null | cut -d/ -f1
+  local upstream_branch
+  upstream_branch="$(git rev-parse --abbrev-ref --symbolic-full-name @{upstream} 2>/dev/null || true)"
+  printf '%s\n' "${upstream_branch%%/*}"
 }
 
 # fetch_personal_notes_branch: fetches NOTES_BRANCH from NOTES_REMOTE. If that
@@ -333,6 +341,9 @@ PLAN_MANIFEST_TOOLS_MODULE="basstler.plan_manifest_tools"
 # plan_updates_since_support: renders the plan-state delta
 # plan-updates-since.sh reports.
 PLAN_UPDATES_SINCE_SUPPORT_MODULE="basstler.plan_updates_since_support"
+# setup_personal_notes: the one-time personal-notes setup
+# setup-personal-notes.sh runs.
+SETUP_PERSONAL_NOTES_MODULE="basstler.setup_personal_notes"
 # stack: read-only stacked-PR status tool (status/check/next/restack-plan)
 # - see its own module docstring and STACK_DIRECTORY/README.md.
 STACK_MODULE="basstler.stack"
@@ -413,6 +424,9 @@ SETUP_PERSONAL_NOTES_DIRECTORY=".claude/skills/setup-personal-notes"
 # the single source of truth for that question, so no caller re-implements
 # "is the notes branch there?" with its own git plumbing.
 CHECK_SETUP_SCRIPT=".claude/hooks/check-setup.sh"
+# setup-personal-notes.sh: performs the whole setup non-interactively - the
+# mechanical half of /setup-personal-notes, so the setup needs no session.
+SETUP_PERSONAL_NOTES_SCRIPT=".claude/hooks/setup-personal-notes.sh"
 # prerequisite-check.md: the shared "run check-setup.sh, offer
 # /setup-personal-notes if it fails" procedure that plan-create,
 # plan-dashboard, plan-item-kickoff and plan-item-resolve each reference in

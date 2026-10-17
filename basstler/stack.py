@@ -49,6 +49,7 @@ from urllib.parse import quote
 
 from basstler.locations import PackageLocation, ProjectLocation
 from basstler.repository import Repository
+from basstler.repository_label import RepositoryLabel
 from basstler.standard_streams import StandardStreamHandler
 
 logger = StandardStreamHandler.logger_for(__name__)
@@ -257,9 +258,11 @@ def load_configuration(
     )
     resolution = resolved_remotes(path, fork_repository, upstream_repository)
     return Configuration(
-        in_review_label=values.get("in_review_label", "in-review"),
-        rebase_label=values.get("rebase_label", "rebase"),
-        needs_resolution_label=values.get("needs_resolution_label", "needs-resolution"),
+        in_review_label=values.get("in_review_label", RepositoryLabel.IN_REVIEW),
+        rebase_label=values.get("rebase_label", RepositoryLabel.REBASE),
+        needs_resolution_label=values.get(
+            "needs_resolution_label", RepositoryLabel.NEEDS_RESOLUTION
+        ),
         fork_repository=resolution.fork.repository,
         fork_remote=resolution.fork.name,
         upstream_repository=upstream_repository,

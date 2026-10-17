@@ -1,5 +1,6 @@
 """
-Reading and writing the fork's pull requests.
+Reaching GitHub's REST API, and reading and writing a repository's pull requests and
+labels through it.
 
 The reading and the writing halves are declared separately, so a caller that must not
 write - the board export - can be handed a reader and provably cannot. Every write here
@@ -12,6 +13,8 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
+import subprocess
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -24,6 +27,7 @@ from basstler.maintenance_board import PullRequestRecord
 from basstler.maintenance_constants import CREDENTIAL_VARIABLES, GITHUB_API_ROOT
 from basstler.maintenance_errors import ExternalCallFailed
 from basstler.repository import Repository
+from basstler.repository_label import RepositoryLabel
 
 
 @dataclass
@@ -38,8 +42,8 @@ class GitHubCredentialUnavailableError(RuntimeError):
     def __str__(self) -> str:
         """:return: What was looked for, so the caller can supply it."""
         return (
-            f"no GitHub token: set one of {', '.join(self.variables)}, or run this "
-            f"with a caller that has one"
+            f"no GitHub token: set one of {', '.join(self.variables)}, or install the "
+            f"gh CLI and run 'gh auth login'"
         )
 
 
@@ -103,6 +107,21 @@ class ForkPullRequests(PullRequestReader, PullRequestWriter, ABC):
     """
 
 
+@dataclass(frozen=True)
+class RepositoryLabels(ABC):
+    """
+    The labels a repository carries, and adding one it lacks.
+    """
+
+    @abstractmethod
+    def labels(self) -> set[str]:
+        """:return: The name of every label the repository carries."""
+
+    @abstractmethod
+    def create_label(self, label: RepositoryLabel) -> None:
+        """:param label: The label to add, with its purpose as the description."""
+
+
 @dataclass
 class GitHubRequestFailed(ExternalCallFailed):
     """
@@ -128,18 +147,25 @@ class GitHubRequestFailed(ExternalCallFailed):
 # %% the client that makes the calls
 
 
+AUTHENTICATED_USER_PATH = "/user"
+"""
+Where the API reports whose credential a request carries.
+"""
+
+GITHUB_CLI = "gh"
+"""
+The GitHub CLI, consulted only for the token it stores once ``gh auth login`` has run.
+"""
+
+
 @dataclass(frozen=True)
-class GitHubRepository(ForkPullRequests):
+class GitHubConnection:
     """
-    Every pull-request call this executor makes, against one repository.
+    Authenticated access to GitHub's REST API.
 
-    ``gh`` is absent from the environment this normally runs in, so the calls are plain
-    authenticated requests rather than a CLI wrapper.
-    """
-
-    repository: Repository
-    """
-    The repository to read and write.
+    ``gh`` is absent from some environments this runs in, so every call is a plain
+    authenticated request rather than a CLI wrapper; the CLI only lends its stored token
+    where no token variable is set.
     """
 
     token: str
@@ -147,9 +173,96 @@ class GitHubRepository(ForkPullRequests):
     The credential the requests authenticate with.
     """
 
+    api_root: str = GITHUB_API_ROOT
+    """
+    The API host, overridable for a GitHub Enterprise deployment.
+    """
+
+    @classmethod
+    def from_environment(
+        cls, environment: Mapping[str, str]
+    ) -> GitHubConnection | None:
+        """
+        Build a connection from whichever credential *environment* offers.
+
+        :param environment: The variables to read the token from, including the ``PATH``
+            the CLI is looked up on.
+        :return: The connection, or ``None`` when no credential is available.
+        """
+        for variable in CREDENTIAL_VARIABLES:
+            token = environment.get(variable)
+            if token:
+                return cls(token)
+        if shutil.which(GITHUB_CLI, path=environment.get("PATH")) is None:
+            return None
+        stored = subprocess.run(
+            [GITHUB_CLI, "auth", "token"],
+            capture_output=True,
+            text=True,
+            env=dict(environment),
+        )
+        token = stored.stdout.strip()
+        if stored.returncode != 0 or not token:
+            return None
+        return cls(token)
+
+    def authenticated_login(self) -> str:
+        """:return: The login the credential belongs to."""
+        return str(self.request("GET", AUTHENTICATED_USER_PATH)["login"])
+
+    def request(
+        self, method: str, path: str, payload: Mapping[str, Any] | None = None
+    ) -> Any:
+        """
+        Make one authenticated API call.
+
+        :param method: The HTTP method.
+        :param path: The path below the API root, starting with a slash.
+        :param payload: The JSON body, absent for a read.
+        :return: The decoded response.
+        :raises GitHubRequestFailed: If the API answers with an error status.
+        """
+        request = urllib.request.Request(
+            f"{self.api_root}{path}",
+            method=method,
+            data=None if payload is None else json.dumps(payload).encode(),
+            headers={
+                "Authorization": f"Bearer {self.token}",
+                "Accept": "application/vnd.github+json",
+                "Content-Type": "application/json",
+            },
+        )
+        try:
+            with urllib.request.urlopen(request) as response:
+                return json.loads(response.read())
+        except urllib.error.HTTPError as refused:
+            raise GitHubRequestFailed(
+                status=refused.code,
+                detail=refused.read().decode(errors="replace"),
+                method=method,
+                path=path,
+            ) from refused
+
+
+@dataclass(frozen=True)
+class GitHubRepository(ForkPullRequests, RepositoryLabels):
+    """
+    Every pull-request and label call this tooling makes, against one repository.
+    """
+
+    repository: Repository
+    """
+    The repository to read and write.
+    """
+
+    connection: GitHubConnection
+    """
+    The authenticated API access the calls go through.
+    """
+
     page_size: int = 100
     """
-    How many pull requests to ask for per request.
+    How many pull requests or labels to ask for per request.
     """
 
     @classmethod
@@ -159,27 +272,16 @@ class GitHubRepository(ForkPullRequests):
 
         :param repository: The repository to read and write.
         :return: The client.
-        :raises GitHubCredentialUnavailableError: If no token is set.
+        :raises GitHubCredentialUnavailableError: If no credential is available.
         """
-        for variable in CREDENTIAL_VARIABLES:
-            token = os.environ.get(variable)
-            if token:
-                return cls(repository, token)
-        raise GitHubCredentialUnavailableError(CREDENTIAL_VARIABLES)
+        connection = GitHubConnection.from_environment(os.environ)
+        if connection is None:
+            raise GitHubCredentialUnavailableError(CREDENTIAL_VARIABLES)
+        return cls(repository, connection)
 
     def open_pull_requests(self) -> list[PullRequestRecord]:
         """:return: Every open pull request on the repository, oldest page first."""
-        collected: list[PullRequestRecord] = []
-        page = 1
-        while True:
-            query = urllib.parse.urlencode(
-                {"state": "open", "per_page": self.page_size, "page": page}
-            )
-            fetched = self._call("GET", f"/pulls?{query}")
-            collected.extend(fetched)
-            if len(fetched) < self.page_size:
-                return collected
-            page += 1
+        return self._every_page("/pulls", state="open")
 
     def pull_request(self, number: int) -> PullRequestRecord:
         """:param number: The pull request to read.
@@ -212,35 +314,47 @@ class GitHubRepository(ForkPullRequests):
         """
         self._call("PATCH", f"/pulls/{number}", {"body": body})
 
+    def labels(self) -> set[str]:
+        """:return: The name of every label the repository carries."""
+        return {label["name"] for label in self._every_page("/labels")}
+
+    def create_label(self, label: RepositoryLabel) -> None:
+        """:param label: The label to add, with its purpose as the description."""
+        self._call(
+            "POST", "/labels", {"name": label.value, "description": label.purpose}
+        )
+
+    def _every_page(self, path: str, **filters: str) -> list[Any]:
+        """
+        Read a listing to its end, one page at a time.
+
+        :param path: The listing's path below the repository.
+        :param filters: Query parameters narrowing the listing.
+        :return: Every entry, oldest page first.
+        """
+        collected: list[Any] = []
+        page = 1
+        while True:
+            query = urllib.parse.urlencode(
+                {**filters, "per_page": self.page_size, "page": page}
+            )
+            fetched = self._call("GET", f"{path}?{query}")
+            collected.extend(fetched)
+            if len(fetched) < self.page_size:
+                return collected
+            page += 1
+
     def _call(
         self, method: str, path: str, payload: Mapping[str, Any] | None = None
     ) -> Any:
         """
-        Make one authenticated API call.
+        Make one call against this repository.
 
         :param method: The HTTP method.
         :param path: The path below the repository, starting with a slash.
         :param payload: The JSON body, absent for a read.
         :return: The decoded response.
-        :raises GitHubRequestFailed: If the API answers with an error status.
         """
-        request = urllib.request.Request(
-            f"{GITHUB_API_ROOT}/repos/{self.repository}{path}",
-            method=method,
-            data=None if payload is None else json.dumps(payload).encode(),
-            headers={
-                "Authorization": f"Bearer {self.token}",
-                "Accept": "application/vnd.github+json",
-                "Content-Type": "application/json",
-            },
+        return self.connection.request(
+            method, f"/repos/{self.repository}{path}", payload
         )
-        try:
-            with urllib.request.urlopen(request) as response:
-                return json.loads(response.read())
-        except urllib.error.HTTPError as refused:
-            raise GitHubRequestFailed(
-                status=refused.code,
-                detail=refused.read().decode(errors="replace"),
-                method=method,
-                path=path,
-            ) from refused

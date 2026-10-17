@@ -21,13 +21,11 @@ set -euo pipefail
 # last recorded. Pass it explicitly to diff from an older or arbitrary point
 # instead.
 #
-# The tracking-issue comment lookup needs no Claude Code session: like
-# github-api.sh (see that script's own header comment), it prefers the `gh`
-# CLI when installed, otherwise GH_TOKEN/GITHUB_TOKEN with curl. It is not
-# sourced from github-api.sh directly - that file is not yet reachable from
-# this repository's main branch (see this item's plan.yaml notes) - so the
+# The tracking-issue comment lookup needs no Claude Code session: it prefers
+# the `gh` CLI when installed, otherwise GH_TOKEN/GITHUB_TOKEN with curl. The
 # credential/request logic below is a small, deliberately temporary copy of
-# that same pattern, not a new one.
+# what basstler.maintenance_github.GitHubConnection does, for
+# basstler-github-api-unification to fold into it.
 #
 # Every user-facing message string, and the comment-JSON parsing, live in
 # plan_updates_since_support rather than inline here - so this script

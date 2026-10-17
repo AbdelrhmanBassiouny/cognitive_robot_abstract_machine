@@ -11,6 +11,7 @@ here, so the repository-root test/conftest.py - which imports the robotics stack
 job does not install - is never loaded for it.
 """
 
+import urllib.request
 from pathlib import Path
 
 import pytest
@@ -18,6 +19,7 @@ import pytest
 from basstler.locations import PackageLocation
 
 from .executable_stubs import ExecutableStubDirectory
+from .github_api_replay import ReplayingGitHubApi
 from .scratch_repository import ScratchRepository
 from .upstream_reviews_replay import RecordedResponse, ReplayingClient
 
@@ -76,3 +78,17 @@ def paginated_client() -> ReplayingClient:
             RecordedResponse.PULL_REQUEST_PAGE_TWO.load(),
         ]
     )
+
+
+@pytest.fixture
+def github_api(monkeypatch: pytest.MonkeyPatch) -> ReplayingGitHubApi:
+    """
+    GitHub's REST API, answered in-process for the duration of one test.
+
+    :param monkeypatch: pytest's patcher, which restores the real ``urlopen``
+        afterwards.
+    :return: The stand-in, carrying no labels yet.
+    """
+    replaying = ReplayingGitHubApi()
+    monkeypatch.setattr(urllib.request, "urlopen", replaying)
+    return replaying

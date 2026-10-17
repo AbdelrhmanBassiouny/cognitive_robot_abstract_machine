@@ -50,8 +50,8 @@ from basstler.stack import (
 )
 
 from basstler.locations import ProjectLocation
+from basstler.repository_label import RepositoryLabel
 
-from .constants import StackLabel
 from .scratch_repository import ScratchRepository
 from .script_runner import PythonModuleRunner
 
@@ -73,9 +73,9 @@ so its absolute imports of its siblings would not resolve.
 
 def make_configuration(upstream_setup_command: str | None = None) -> Configuration:
     return Configuration(
-        in_review_label=StackLabel.IN_REVIEW,
-        rebase_label=StackLabel.REBASE,
-        needs_resolution_label=StackLabel.NEEDS_RESOLUTION,
+        in_review_label=RepositoryLabel.IN_REVIEW,
+        rebase_label=RepositoryLabel.REBASE,
+        needs_resolution_label=RepositoryLabel.NEEDS_RESOLUTION,
         fork_repository=Repository("a-fork-owner", "a-fork"),
         fork_remote="origin",
         upstream_repository=Repository("an-upstream-owner", "a-project"),
@@ -120,7 +120,11 @@ def test_drafted_is_draft():
 
 def test_in_review_derived_from_label():
     stack = build(
-        [PullRequest(3, "feature", "main", draft=False, labels=[StackLabel.IN_REVIEW])]
+        [
+            PullRequest(
+                3, "feature", "main", draft=False, labels=[RepositoryLabel.IN_REVIEW]
+            )
+        ]
     )
     assert stack.branches[0].status == BranchStatus.IN_REVIEW
 
@@ -133,7 +137,9 @@ def test_merged_derived_from_predicate_not_labels():
 
 
 def test_rebase_label_sets_strategy():
-    stack = build([PullRequest(1, "f", "main", draft=True, labels=[StackLabel.REBASE])])
+    stack = build(
+        [PullRequest(1, "f", "main", draft=True, labels=[RepositoryLabel.REBASE])]
+    )
     assert stack.branches[0].strategy == IntegrationStrategy.REBASE
     stack = build([PullRequest(1, "f", "main", draft=True, labels=[])])
     assert stack.branches[0].strategy == IntegrationStrategy.MERGE
@@ -179,7 +185,9 @@ def test_child_promotable_once_parent_reaches_review():
     # its own parent the moment the parent has reached in-review - it does not have to
     # wait for the parent to fully merge.
     prs = [
-        PullRequest(1, "parent", "main", draft=False, labels=[StackLabel.IN_REVIEW]),
+        PullRequest(
+            1, "parent", "main", draft=False, labels=[RepositoryLabel.IN_REVIEW]
+        ),
         PullRequest(2, "child", "parent", draft=False),
     ]
     assert next_to_promote(build(prs)).name == "child"
@@ -211,7 +219,7 @@ def test_promotion_order_withholds_a_branch_delegated_for_conflict_resolution():
     # not be promoted even though it is otherwise ready and unblocked.
     prs = [
         PullRequest(
-            1, "stuck", "main", draft=False, labels=[StackLabel.NEEDS_RESOLUTION]
+            1, "stuck", "main", draft=False, labels=[RepositoryLabel.NEEDS_RESOLUTION]
         ),
         PullRequest(2, "fine", "main", draft=False),
     ]
@@ -242,7 +250,9 @@ def test_ci_and_session_carried_onto_branch():
 def test_restack_plan_excludes_merged_only():
     prs = [
         PullRequest(1, "landed", "main", draft=False),
-        PullRequest(2, "review", "main", draft=False, labels=[StackLabel.IN_REVIEW]),
+        PullRequest(
+            2, "review", "main", draft=False, labels=[RepositoryLabel.IN_REVIEW]
+        ),
         PullRequest(3, "wip", "review", draft=True),
     ]
     plan = restack_plan(build(prs, merged={"landed"}))
@@ -252,7 +262,11 @@ def test_restack_plan_excludes_merged_only():
 
 
 def test_restack_plan_carries_parent_and_strategy():
-    prs = [PullRequest(2, "wip", "base-branch", draft=True, labels=[StackLabel.REBASE])]
+    prs = [
+        PullRequest(
+            2, "wip", "base-branch", draft=True, labels=[RepositoryLabel.REBASE]
+        )
+    ]
     plan = restack_plan(build(prs))
     assert plan == [
         {
@@ -538,9 +552,9 @@ def test_every_setting_is_printed_under_its_own_field_name(capsys):
     printed = dict(line.split("\t") for line in capsys.readouterr().out.splitlines())
 
     assert printed == {
-        "in_review_label": StackLabel.IN_REVIEW,
-        "rebase_label": StackLabel.REBASE,
-        "needs_resolution_label": StackLabel.NEEDS_RESOLUTION,
+        "in_review_label": RepositoryLabel.IN_REVIEW,
+        "rebase_label": RepositoryLabel.REBASE,
+        "needs_resolution_label": RepositoryLabel.NEEDS_RESOLUTION,
         "fork_repository": "a-fork-owner/a-fork",
         "fork_remote": "origin",
         "upstream_repository": "an-upstream-owner/a-project",
@@ -603,8 +617,8 @@ def a_deep_stack_beside_an_independent_branch(
             name,
             parent,
             draft=name not in approved,
-            labels=([StackLabel.IN_REVIEW] if name in promoted else [])
-            + ([StackLabel.NEEDS_RESOLUTION] if name in withheld else []),
+            labels=([RepositoryLabel.IN_REVIEW] if name in promoted else [])
+            + ([RepositoryLabel.NEEDS_RESOLUTION] if name in withheld else []),
         )
         for number, (name, parent) in enumerate([*deep, *aside], start=1)
     ]
@@ -1099,18 +1113,18 @@ def test_a_label_write_prints_the_complete_set_one_label_per_line(
         offline_checkout,
         "labels",
         "--current",
-        StackLabel.IN_REVIEW,
+        RepositoryLabel.IN_REVIEW,
         "--current",
-        StackLabel.BUG,
+        RepositoryLabel.BUG,
         "--add",
-        StackLabel.REBASE,
+        RepositoryLabel.REBASE,
     )
 
     assert result.returncode == ExitCode.SUCCESS
     assert result.stdout.splitlines() == [
-        StackLabel.IN_REVIEW,
-        StackLabel.BUG,
-        StackLabel.REBASE,
+        RepositoryLabel.IN_REVIEW,
+        RepositoryLabel.BUG,
+        RepositoryLabel.REBASE,
     ]
 
 
@@ -1121,13 +1135,13 @@ def test_a_contradictory_label_write_is_refused_rather_than_guessed_at(
         offline_checkout,
         "labels",
         "--add",
-        StackLabel.REBASE,
+        RepositoryLabel.REBASE,
         "--remove",
-        StackLabel.REBASE,
+        RepositoryLabel.REBASE,
     )
 
     assert result.returncode == ExitCode.USAGE
-    assert StackLabel.REBASE in result.stderr
+    assert RepositoryLabel.REBASE in result.stderr
 
 
 def test_a_checkout_whose_fork_cannot_be_identified_says_so_by_status(

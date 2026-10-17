@@ -13,6 +13,8 @@ from __future__ import annotations
 
 import re
 
+from basstler.repository_label import RepositoryLabel
+
 GITHUB_API_ROOT = "https://api.github.com"
 """
 Base URL every GitHub REST call this package makes is built on.
@@ -48,7 +50,7 @@ PROMOTION_HEADING = "## Promote"
 description - the summary that carried it is delivered once and then gone, and the
 description is still there a week later."""
 
-PROMOTION_LINK_LABEL = "cram2-link-sent"
+PROMOTION_LINK_LABEL = RepositoryLabel.PROMOTION_LINK_SENT
 """
 Marks a branch whose link has been built, so a later pass does not rebuild it.
 """

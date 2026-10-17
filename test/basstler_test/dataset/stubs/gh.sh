@@ -6,7 +6,10 @@ set -uo pipefail
 # earlier on PATH than any real one - see the stub_bin fixture in
 # test_plan_updates_since_sh.py and the stubbed_gh fixture in test_upstream_reviews.py.
 #
-# One stub rather than one per suite: the two recognized invocations are disjoint, and a
+# `gh auth token`, what basstler.maintenance_github borrows a credential through:
+#   STUB_GH_TOKEN - the token to print; unset, the stub reports no login and fails
+#
+# One stub rather than one per suite: the recognized invocations are disjoint, and a
 # second copy is what drifts when the contract moves.
 #
 # `gh api graphql --input -`, the one call upstream_reviews' transport makes:
@@ -23,6 +26,15 @@ set -uo pipefail
 #
 # Exits 64 on an invocation it doesn't recognize, rather than a plausible-looking
 # success: a test must fail loudly if a caller changes the call it makes.
+
+if [ "${1:-}" = "auth" ] && [ "${2:-}" = "token" ]; then
+  if [ -z "${STUB_GH_TOKEN:-}" ]; then
+    echo "stub gh: not logged in to any GitHub hosts" >&2
+    exit 1
+  fi
+  printf '%s\n' "${STUB_GH_TOKEN}"
+  exit 0
+fi
 
 if [ "${1:-}" = "api" ] && [ "${2:-}" = "graphql" ] && [ "${3:-}" = "--input" ]; then
   REQUEST_BODY="$(cat)"

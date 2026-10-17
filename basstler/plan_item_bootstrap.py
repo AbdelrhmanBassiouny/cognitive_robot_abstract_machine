@@ -69,7 +69,7 @@ from typing import Any, ClassVar, Protocol
 
 import yaml
 
-from basstler.locations import ProjectLocation
+from basstler.locations import HookScript, ProjectLocation
 from basstler.maintenance_constants import GITHUB_API_ROOT
 from basstler.plan_model import ItemStatus
 from basstler.standard_streams import StandardStreamHandler
@@ -91,30 +91,6 @@ What opens an item block, the list marker its first field sits behind.
 
 
 # %% the vocabulary a plan manifest is written in
-
-
-class HookScript(StrEnum):
-    """
-    The hook scripts this module drives, named once so a caller - a test installing them
-    into a scratch layout, or this module invoking one - never spells a filename itself.
-    """
-
-    CONFIGURATION = "resolve-personal-notes-config.sh"
-    """
-    Resolves the personal-notes remote and branch, and fetches it.
-    """
-
-    SAVE_PLAN = "save-plan.sh"
-    """
-    Pushes an edited manifest and roadmap to the personal-notes branch.
-    """
-
-    @property
-    def path(self) -> Path:
-        """
-        The script's path from the project root.
-        """
-        return ProjectLocation.HOOKS / self.value
 
 
 class PlanDocument(StrEnum):
@@ -1238,10 +1214,9 @@ class GitHubPullRequestOpener:
     Sends a bearer token when the environment supplies one and nothing otherwise. Inside
     a Claude Code session the credential is inert - the agent proxy substitutes its own
     identity - but the same code run from a terminal or a scheduled Action has no proxy,
-    and there the token is the credential. This is deliberately not a third copy of the
-    prefer-``gh``-else-token rule ``github-api.sh`` and ``pr_state`` carry between them;
-    it is the minimum that works from ``main`` today, for whichever item unifies them to
-    absorb.
+    and there the token is the credential. It is the minimum that works from ``main``
+    today, for whichever item unifies it with
+    :class:`basstler.maintenance_github.GitHubConnection` to absorb.
     """
 
     api_root: str = GITHUB_API_ROOT

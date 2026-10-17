@@ -24,12 +24,11 @@ import pytest
 import yaml
 
 import basstler.plan_item_bootstrap
-from basstler.locations import ProjectLocation
+from basstler.locations import HookScript, ProjectLocation
 from basstler.plan_item_bootstrap import (
     BLOCK_STYLED_KEYS,
     CreatedPullRequest,
     ExitCode,
-    HookScript,
     ItemRecordRequest,
     ItemStatus,
     KeySpecification,
@@ -162,8 +161,8 @@ def bootstrap_repository(scratch_repository: ScratchRepository) -> ScratchReposi
     :return: The same repository, ready to bootstrap an item in.
     """
     scratch_repository.install_hook_scripts(
-        HookScript.CONFIGURATION.value,
-        HookScript.SAVE_PLAN.value,
+        HookScript.CONFIGURATION,
+        HookScript.SAVE_PLAN,
     )
     scratch_repository.install_package()
     scratch_repository.write("README.md", "scratch repo\n")

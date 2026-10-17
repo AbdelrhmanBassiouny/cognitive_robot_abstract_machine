@@ -19,13 +19,14 @@ from pathlib import Path
 
 import pytest
 
-from basstler.locations import ProjectLocation
+from basstler.locations import HookScript, ProjectLocation
 
 from .constants import DatasetLocation, ScratchBranch
 from .script_runner import BashScriptRunner
 
 from .executable_stubs import (
     ExecutableStubDirectory,
+    StubbedExecutable,
     path_hiding_executable,
 )
 
@@ -97,8 +98,8 @@ def install_plan_updates_since(repository: ScratchRepository) -> None:
     :param repository: A fixture-built scratch repository.
     """
     repository.install_hook_scripts(
-        "resolve-personal-notes-config.sh",
-        "plan-updates-since.sh",
+        HookScript.CONFIGURATION,
+        HookScript.PLAN_UPDATES_SINCE,
     )
     repository.install_package()
     repository.write("README.md", "scratch repo\n")
@@ -184,9 +185,7 @@ def run_plan_updates_since(
     return BashScriptRunner(
         project_root=repository.project_root,
         removed_variable_prefixes=REMOVED_VARIABLE_PREFIXES,
-        script_path=(
-            repository.project_root / ProjectLocation.HOOKS / "plan-updates-since.sh"
-        ),
+        script_path=repository.hook_script_path(HookScript.PLAN_UPDATES_SINCE),
     ).run(*arguments, **(env or {}))
 
 
@@ -340,7 +339,7 @@ def test_tracking_issue_without_default_repository_fails_clearly(
 def test_prints_tracking_issue_comments_via_the_gh_backend(
     scratch_repo: ScratchRepository, stub_bin: ExecutableStubDirectory, tmp_path: Path
 ):
-    stub_bin.install("gh")
+    stub_bin.install(StubbedExecutable.GH)
     sha = write_plan_commit(
         scratch_repo, PLAN_ID, PLAN_MANIFEST_WITH_TRACKING_ISSUE, PLAN_ROADMAP, "v1"
     )
@@ -375,7 +374,7 @@ def test_prints_tracking_issue_comments_via_the_gh_backend(
 def test_prints_tracking_issue_comments_via_the_curl_fallback(
     scratch_repo: ScratchRepository, stub_bin: ExecutableStubDirectory, tmp_path: Path
 ):
-    stub_bin.install("curl")
+    stub_bin.install(StubbedExecutable.CURL)
     sha = write_plan_commit(
         scratch_repo, PLAN_ID, PLAN_MANIFEST_WITH_TRACKING_ISSUE, PLAN_ROADMAP, "v1"
     )
@@ -384,7 +383,7 @@ def test_prints_tracking_issue_comments_via_the_curl_fallback(
         author_login="hubot", created_at="2026-08-01T01:00:00Z", body="Ship it"
     )
     comments_json = json.dumps([comment.to_api_response()])
-    hidden_gh_path = path_hiding_executable("gh", tmp_path)
+    hidden_gh_path = path_hiding_executable(StubbedExecutable.GH, tmp_path)
 
     result = run_plan_updates_since(
         scratch_repo,
@@ -414,7 +413,7 @@ def test_fails_when_neither_gh_nor_a_token_is_available(
     sha = write_plan_commit(
         scratch_repo, PLAN_ID, PLAN_MANIFEST_WITH_TRACKING_ISSUE, PLAN_ROADMAP, "v1"
     )
-    hidden_gh_path = path_hiding_executable("gh", tmp_path)
+    hidden_gh_path = path_hiding_executable(StubbedExecutable.GH, tmp_path)
 
     result = run_plan_updates_since(
         scratch_repo,

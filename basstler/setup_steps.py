@@ -28,6 +28,7 @@ from pathlib import Path
 
 from basstler.locations import PackageLocation, ProjectLocation
 from basstler.repository import Repository
+from basstler.repository_label import RepositoryLabel
 from basstler.standard_streams import StandardStreamHandler
 
 logger = StandardStreamHandler.logger_for(__name__)
@@ -262,66 +263,6 @@ def resolve_repository(project_root: Path, notes_remote: str) -> Repository | No
     return None
 
 
-# %% the labels a fork has to carry
-
-
-class RepositoryLabel(StrEnum):
-    """
-    Every label this tooling reads or applies, and therefore every one a fork must
-    carry, each with the description it is created with.
-
-    A member is its own label name, so the set mirrors build_dashboard.py's
-    ``PullRequestLabel`` member for member and value for value - held equal by a test
-    rather than by an import, because that module needs the dashboard's dependencies
-    installed, which is one of the things this script exists to run before.
-    """
-
-    purpose: str
-    """
-    What the label means, used as its description when it is created.
-    """
-
-    def __new__(cls, label: str, purpose: str) -> RepositoryLabel:
-        """
-        Make a member that is its own label name and carries what the label means.
-
-        :param label: The label's name, as GitHub stores it.
-        :param purpose: What it means, used as the description when it is created.
-        :return: The member.
-        """
-        member = str.__new__(cls, label)
-        member._value_ = label
-        member.purpose = purpose
-        return member
-
-    MERGED = ("merged", "The changes landed even though GitHub never recorded a merge")
-    """
-    Read by the dashboard, which treats the label exactly like a real merge.
-    """
-
-    IN_REVIEW = ("in-review", "Under review")
-    """
-    Recognized so it does not read as an unknown label; no script acts on it yet.
-    """
-
-    BUG = ("bug", "A bug fix")
-    """
-    Applied by a session opening a bug-fix pull request, and shown as a dashboard chip.
-    """
-
-    def creation_command(self, repository: Repository) -> str:
-        """
-        The ``gh`` command that creates this label.
-
-        :param repository: The repository to create it in.
-        :return: The command, ready to paste.
-        """
-        return (
-            f"gh label create {self.value} --repo {repository.full_name} "
-            f'--description "{self.purpose}"'
-        )
-
-
 # %% the steps themselves
 
 
@@ -380,7 +321,7 @@ class ForkLabels(SetupStep):
     @property
     def title(self) -> str:
         """See :attr:`SetupStep.title`."""
-        return f"Add three labels to {self.repository.full_name}"
+        return f"Add {len(RepositoryLabel)} labels to {self.repository.full_name}"
 
     @property
     def reason(self) -> str:

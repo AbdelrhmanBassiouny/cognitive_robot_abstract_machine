@@ -10,7 +10,7 @@ from pathlib import Path
 import pytest
 
 import basstler
-from basstler.locations import PackageLocation, ProjectLocation
+from basstler.locations import HookScript, PackageLocation, ProjectLocation
 
 # %% a member stands in for its path
 
@@ -68,3 +68,14 @@ def test_the_package_directory_is_named_the_same_from_the_project_root():
         PackageLocation.REPOSITORY_ROOT / ProjectLocation.PACKAGE
         == PackageLocation.DIRECTORY.value
     )
+
+
+# %% the shell entry points
+
+
+@pytest.mark.parametrize("script", list(HookScript), ids=lambda member: member.name)
+def test_every_hook_script_exists(script: HookScript):
+    """
+    A misspelled script name would only fail where a caller first runs or installs it.
+    """
+    assert (PackageLocation.REPOSITORY_ROOT / script.path).is_file()

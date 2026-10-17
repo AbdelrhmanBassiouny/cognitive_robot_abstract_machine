@@ -78,6 +78,7 @@ from basstler.maintenance_report import (
     exit_code_for,
 )
 from basstler.maintenance_restack_procedure import restack
+from basstler.repository_label import RepositoryLabel
 from basstler.maintenance_restack_steps import (
     BranchOutcome,
     RestackOutcome,
@@ -85,7 +86,7 @@ from basstler.maintenance_restack_steps import (
 )
 
 from .scratch_repository import initialize_bare_repository, install_package_into
-from .constants import StackBranch, StackLabel
+from .constants import StackBranch
 from .script_runner import PythonModuleRunner
 
 MAINTENANCE_MODULE = basstler.maintenance.__name__
@@ -145,9 +146,9 @@ def make_configuration() -> Configuration:
     :return: The configuration a scratch fork checkout resolves to.
     """
     return Configuration(
-        in_review_label=StackLabel.IN_REVIEW,
-        rebase_label=StackLabel.REBASE,
-        needs_resolution_label=StackLabel.NEEDS_RESOLUTION,
+        in_review_label=RepositoryLabel.IN_REVIEW,
+        rebase_label=RepositoryLabel.REBASE,
+        needs_resolution_label=RepositoryLabel.NEEDS_RESOLUTION,
         fork_repository=Repository("a-fork-owner", "a-fork"),
         fork_remote="origin",
         upstream_repository=Repository("an-upstream-owner", "a-project"),
@@ -429,7 +430,7 @@ def test_the_export_reads_each_field_out_of_the_shape_the_api_returns_it_in():
                 head=StackBranch.CHILD,
                 base=StackBranch.PARENT,
                 draft=True,
-                labels=[StackLabel.REBASE],
+                labels=[RepositoryLabel.REBASE],
                 body=f"see {A_SESSION_LINK}",
             )
         ]
@@ -440,7 +441,7 @@ def test_the_export_reads_each_field_out_of_the_shape_the_api_returns_it_in():
     assert exported.head == StackBranch.CHILD
     assert exported.base == StackBranch.PARENT
     assert exported.draft is True
-    assert exported.labels == [StackLabel.REBASE]
+    assert exported.labels == [RepositoryLabel.REBASE]
     assert exported.session == A_SESSION_LINK
 
 
@@ -710,7 +711,7 @@ def test_a_rebase_labelled_branch_is_rebased_rather_than_merged(
     )
 
     outcomes = restack(
-        a_stack(fork_checkout, the_board(labels=[StackLabel.REBASE])),
+        a_stack(fork_checkout, the_board(labels=[RepositoryLabel.REBASE])),
         fork_checkout.git,
         RecordingPullRequests(),
     )
@@ -802,7 +803,7 @@ def test_a_rebase_whose_lease_has_expired_is_rejected_rather_than_forced_through
     )
 
     outcomes = restack(
-        a_stack(fork_checkout, the_board(labels=[StackLabel.REBASE])),
+        a_stack(fork_checkout, the_board(labels=[RepositoryLabel.REBASE])),
         fork_checkout.git,
         RecordingPullRequests(),
     )

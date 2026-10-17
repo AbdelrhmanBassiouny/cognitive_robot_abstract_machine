@@ -29,7 +29,7 @@ from basstler.plan_item_mode import (
     UnknownModeError,
 )
 
-from basstler.locations import PackageLocation, ProjectLocation
+from basstler.locations import HookScript, PackageLocation, ProjectLocation
 
 from .scratch_repository import ScratchRepository
 from .script_runner import PythonModuleRunner
@@ -40,13 +40,9 @@ The import path the scratch layout's copy of the module under test is run by, re
 the module rather than spelled out.
 """
 
-BASH_ENTRY_POINTS = (
-    ProjectLocation.PERSONAL_NOTES_CONFIGURATION_SCRIPT.value.name,
-    ProjectLocation.PERSONAL_NOTES_WRITER_SCRIPT.value.name,
-)
+BASH_ENTRY_POINTS = (HookScript.CONFIGURATION, HookScript.WRITE_NOTES_FILE)
 """
-The two shell scripts the module sources and runs, named by the locations it reads them
-from rather than retyped.
+The two shell scripts the module sources and runs.
 """
 
 # %% fixtures
