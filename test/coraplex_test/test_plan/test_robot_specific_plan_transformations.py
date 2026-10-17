@@ -446,7 +446,7 @@ def lifting_goal_of(action: PickUpAction) -> StatechartNode:
         runs in a parallel only where something accompanies it, such as the hold on the
         base of a robot that stands still.
     """
-    grasp_attempt, lift = action.nodes
+    lift = action.nodes[-1]
     return lift.nodes[0] if type(lift) is Parallel else lift
 
 

@@ -8,7 +8,7 @@ from typing_extensions import List
 
 from coraplex.datastructures.enums import MovementType
 from coraplex.robot_plans.actions.base import SequentialAction
-from cramph.composites import Parallel, Sequence
+from cramph.composites import Parallel
 from cramph.node import StatechartNode
 from coraplex.robot_plans.mixins import (
     ReattachesBodies,
@@ -145,36 +145,33 @@ class PickUpAction(
     one.
     """
 
-    def _grasp_attempt(self) -> Sequence:
+    def _grasp_steps(self) -> List[StatechartNode]:
         """
         A pick-up is a grasp the world is then told about: the object hangs off the tool
         frame afterwards, which is what makes it move with the arm.
 
-        :return: One attempt at taking :attr:`grasp`, without lifting the object.
+        :return: The steps taking :attr:`grasp`, without lifting the object.
         """
-        return Sequence(
-            name=f"{self.name}/grasp attempt",
-            nodes=[
-                GraspingAction(
-                    grasp=self.grasp,
-                    arm=self.arm,
-                    approach_clearance=self.approach_clearance,
-                    retreat_distance=self.retreat_distance,
-                    pre_approach_linear_velocity=self.pre_approach_linear_velocity,
-                    final_approach_linear_velocity=self.final_approach_linear_velocity,
-                    grasp_closing_velocity=self.grasp_closing_velocity,
-                    grasp_stall_minimum_time=self.grasp_stall_minimum_time,
-                    tolerate_grasp_stall=self.tolerate_grasp_stall,
-                    grasp_detection_threshold=self.grasp_detection_threshold,
-                    position_threshold=self.position_threshold,
-                    orientation_threshold=self.orientation_threshold,
-                ),
-                *self.reattach(
-                    self.grasp.graspable.root,
-                    self.arm.end_effector.tool_frame,
-                ),
-            ],
-        )
+        return [
+            GraspingAction(
+                grasp=self.grasp,
+                arm=self.arm,
+                approach_clearance=self.approach_clearance,
+                retreat_distance=self.retreat_distance,
+                pre_approach_linear_velocity=self.pre_approach_linear_velocity,
+                final_approach_linear_velocity=self.final_approach_linear_velocity,
+                grasp_closing_velocity=self.grasp_closing_velocity,
+                grasp_stall_minimum_time=self.grasp_stall_minimum_time,
+                tolerate_grasp_stall=self.tolerate_grasp_stall,
+                grasp_detection_threshold=self.grasp_detection_threshold,
+                position_threshold=self.position_threshold,
+                orientation_threshold=self.orientation_threshold,
+            ),
+            *self.reattach(
+                self.grasp.graspable.root,
+                self.arm.end_effector.tool_frame,
+            ),
+        ]
 
     def create_temporary_collision_rules(self) -> List[CollisionRule]:
         """
@@ -189,7 +186,7 @@ class PickUpAction(
             self.grasp.grasp_pose, self.arm.end_effector, self.grasp
         ).retreat
         return [
-            self._grasp_attempt(),
+            *self._grasp_steps(),
             self.tool_center_point_goal(
                 lift_to_pose,
                 self.arm,

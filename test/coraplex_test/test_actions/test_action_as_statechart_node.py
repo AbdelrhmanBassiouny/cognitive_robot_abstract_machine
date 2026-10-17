@@ -50,6 +50,7 @@ from cramph.nodes_for_testing import (
     NodeSucceedingOnObservingTrue,
 )
 from cramph.statechart import Statechart
+from cramph.world_modification_nodes import MoveBranch
 from giskardpy.motion_statechart.goals.collision_avoidance import (
     UpdateTemporaryCollisionRules,
 )
@@ -705,6 +706,51 @@ def test_an_action_lets_nothing_touch_unless_it_says_so(simple_pr2_context):
     _expanded(action, extensions)
 
     assert action.temporary_collision_rules == []
+
+
+# %% a pick up and a place run their steps without grouping them further
+
+
+def _goal_moving_the_tool(step: StatechartNode) -> StatechartNode:
+    """
+    :return: The goal moving the tool center point in `step`, which runs in a parallel
+        only where something accompanies it.
+    """
+    return step.nodes[0] if type(step) is Parallel else step
+
+
+def test_a_pick_up_grasps_reattaches_and_lifts_as_its_own_steps(
+    pr2_apartment_context,
+):
+    world, robot, extensions = pr2_apartment_context
+    milk = world.get_semantic_annotations_by_type(Milk)[0]
+    pick_up = PickUpAction(grasp=milk.grasp_candidates()[0], arm=robot.left_arm)
+
+    _expanded(pick_up, extensions)
+
+    grasping, reattaching, lifting = pick_up.nodes
+    assert type(grasping) is GraspingAction
+    assert type(reattaching) is MoveBranch
+    assert reattaching.new_parent is robot.left_arm.end_effector.tool_frame
+    assert type(_goal_moving_the_tool(lifting)) is CartesianPosition
+
+
+def test_a_place_reattaches_and_retracts_as_its_own_steps(pr2_apartment_context):
+    world, robot, extensions = pr2_apartment_context
+    milk = world.get_semantic_annotations_by_type(Milk)[0]
+    pick_up = PickUpAction(grasp=milk.grasp_candidates()[0], arm=robot.left_arm)
+    place = PlaceAction(
+        object_designator=milk,
+        target_location=Pose.from_xyz_rpy(0.8, -1.9, 0.7, reference_frame=world.root),
+    )
+
+    statechart_of(simulated_executor(extensions), Sequence(nodes=[pick_up, place]))
+
+    *_, reattaching, retracting = place.nodes
+    assert type(reattaching) is MoveBranch
+    assert reattaching.new_parent is world.root
+    assert type(_goal_moving_the_tool(retracting)) is CartesianPose
+    assert not any(type(node) is Sequence for node in place.descendants)
 
 
 # %% the converted actions

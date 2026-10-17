@@ -14,7 +14,7 @@ from coraplex.exceptions import ObjectIsNotHeld
 from coraplex.querying.predicates import GripperHolds
 from cramph.node import StatechartNode
 from coraplex.robot_plans.actions.base import SequentialAction
-from cramph.composites import Parallel, Sequence
+from cramph.composites import Parallel
 from coraplex.robot_plans.actions.core.pick_up import PickUpAction
 from coraplex.robot_plans.mixins import (
     ReattachesBodies,
@@ -110,31 +110,28 @@ class PlaceAction(
                     self.tool_center_point_goal(poses.grasp, arm),
                 ]
             ),
-            self._retract(arm, poses.pre_grasp),
+            *self._retract_steps(arm, poses.pre_grasp),
         ]
 
-    def _retract(self, arm: Arm, retract_pose: Pose) -> Sequence:
+    def _retract_steps(self, arm: Arm, retract_pose: Pose) -> List[StatechartNode]:
         """
         :param arm: The arm that placed the object.
         :param retract_pose: Where its tool frame withdraws to.
         :return: The steps that re-parent the placed object back to the world and
             retract the end effector away from it.
         """
-        return Sequence(
-            name=f"{self.name}/retract",
-            nodes=[
-                *self.reattach(
-                    self.object_designator.root,
-                    self.world.root,
-                ),
-                # The gripper starts out around the object it has just let go of.
-                self.tool_center_point_goal(
-                    retract_pose,
-                    arm,
-                    max_linear_velocity=self.retract_linear_velocity,
-                ),
-            ],
-        )
+        return [
+            *self.reattach(
+                self.object_designator.root,
+                self.world.root,
+            ),
+            # The gripper starts out around the object it has just let go of.
+            self.tool_center_point_goal(
+                retract_pose,
+                arm,
+                max_linear_velocity=self.retract_linear_velocity,
+            ),
+        ]
 
     def _holding_arm_and_grasp(self) -> Tuple[Arm, GraspCandidate]:
         """
