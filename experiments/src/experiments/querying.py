@@ -33,7 +33,7 @@ from cramph.data_types import LifeCycleValues
 from coraplex.orm.ormatic_interface import Base  # type: ignore
 from coraplex.plans.failures import PlanFailure
 from coraplex.robot_plans.actions.base import Action
-from cramph.composites import Attempt, Sequence, TryInOrder
+from cramph.composites import Sequence, StatementNode, TryInOrder
 from cramph.node import StatechartNode
 from coraplex.robot_plans.actions.composite.transporting import TransportAction
 from coraplex.robot_plans.actions.core.robot_body import MoveTorsoAction, ParkArmsAction
@@ -330,14 +330,10 @@ def _q_did_anything_go_wrong(plan: StatechartNode) -> BehaviourQuery:
 
 
 def _q_why_did_you_fail(plan: StatechartNode) -> BehaviourQuery:
-    n = eql.variable(Attempt, domain=_nodes_of(plan))
+    n = eql.variable(StatementNode, domain=_nodes_of(plan))
     return BehaviourQuery(
         question="Why did you fail at that step?",
-        query=eql.an(
-            eql.entity(n.failure_reasons).where(
-                n.life_cycle_state == LifeCycleValues.FAILED
-            )
-        ),
+        query=eql.an(eql.entity(n.failure_reasons)),
     )
 
 

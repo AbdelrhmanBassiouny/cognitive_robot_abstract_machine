@@ -9,7 +9,6 @@ import pytest
 import cramph
 from cramph import nodes_for_testing
 from cramph.composites import (
-    Attempt,
     CancelledWhenTrue,
     ChildChooserAccess,
     CompositeNodeChoosingItsChild,
@@ -24,6 +23,7 @@ from cramph.composites import (
     TryInOrder,
 )
 from cramph.context import StatechartContext
+from cramph.data_types import ObservationStateValues
 from cramph.exceptions import NodeNotFoundError
 from cramph.executor import StatechartExecutor
 from cramph.monitors import (
@@ -45,7 +45,11 @@ from cramph.node import (
     StructureCopyNode,
     SucceedsOnObservingTrue,
 )
-from cramph.nodes_for_testing import ConstFalseNode, ConstTrueNode
+from cramph.nodes_for_testing import (
+    ConstFalseNode,
+    ConstTrueNode,
+    NodeFailingOnObservingFalse,
+)
 from cramph.threaded_nodes import FunctionCall
 from cramph.world_modification_nodes import MoveBranch
 from krrood.entity_query_language.factories import a
@@ -61,11 +65,11 @@ from ...statechart_json_round_trip import (
 # %% nodes of the cases
 
 
-def _attempt() -> Attempt:
+def _node_that_can_fail() -> NodeFailingOnObservingFalse:
     """
-    :return: An attempt that can fail, as the nodes moving on after a failure need it.
+    :return: A node that can fail, as the nodes moving on after a failure need it.
     """
-    return Attempt(task=ConstTrueNode(), failure_monitors=[ConstFalseNode()])
+    return NodeFailingOnObservingFalse(observation=ObservationStateValues.TRUE)
 
 
 def _context(world: World) -> StatechartContext:
@@ -136,7 +140,7 @@ def _cases() -> list[NodeRoundTripCase]:
             ],
         ),
         NodeRoundTripCase(
-            TryInOrder, lambda world: [TryInOrder(nodes=[_attempt(), _attempt()])]
+            TryInOrder, lambda world: [TryInOrder(nodes=[_node_that_can_fail(), _node_that_can_fail()])]
         ),
         NodeRoundTripCase(
             TryAll, lambda world: [TryAll(nodes=[ConstTrueNode(), ConstTrueNode()])]
@@ -150,13 +154,9 @@ def _cases() -> list[NodeRoundTripCase]:
             lambda world: [StatementNode(statement=a(ConstTrueNode)())],
         ),
         NodeRoundTripCase(
-            Attempt,
-            lambda world: [_attempt()],
-        ),
-        NodeRoundTripCase(
             RepeatUntil,
             lambda world: [
-                RepeatUntil(task=_attempt(), stop_retry_monitor=ConstFalseNode())
+                RepeatUntil(task=_node_that_can_fail(), stop_retry_monitor=ConstFalseNode())
             ],
         ),
         NodeRoundTripCase(

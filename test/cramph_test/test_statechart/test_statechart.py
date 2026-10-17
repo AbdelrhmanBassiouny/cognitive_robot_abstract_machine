@@ -31,7 +31,7 @@ from cramph.exceptions import (
     ConditionScopeError,
     TerminalNodeInConditionError,
 )
-from cramph.composites import Attempt, Sequence, Parallel
+from cramph.composites import Sequence, Parallel
 from cramph.node import EndStatechart, StatechartNode
 from cramph.node import (
     CancelStatechart,
@@ -65,6 +65,7 @@ from cramph.nodes_for_testing import (
     NodeObservingNothingYet,
     NodeFailingOnObservingFalse,
     NodeSucceedingOnObservingTrue,
+    NodeDeclaringItsOwnFailure,
     NodeDeclaringNoWayToSucceed,
     ConstTrueNode,
     CompositeNodeWithChainedChildren,
@@ -502,9 +503,7 @@ def test_node_added_to_a_joined_goal_joins_the_statechart_right_away():
     """
     msc = Statechart(context=StatechartContext(world=World()))
     msc.add_node(goal := Sequence())
-    goal.add_node(
-        node := Attempt(task=ConstTrueNode(), failure_monitors=[ConstFalseNode()])
-    )
+    goal.add_node(node := ConstTrueNode())
 
     assert node in msc.nodes
     assert node.parent_node is goal
@@ -1717,11 +1716,7 @@ class TestTemplates:
         msc.add_node(
             sequence := Sequence(
                 nodes=[
-                    Attempt(
-                        name="step",
-                        task=ConstFalseNode(name="stuck"),
-                        failure_monitors=[CountTicks(ticks=2, name="gave up")],
-                    ),
+                    NodeDeclaringItsOwnFailure(name="step"),
                     ConstTrueNode(name="unreached step"),
                 ]
             )
@@ -2906,11 +2901,7 @@ class TestReadingChildrenThatEnded:
         failure instead of waiting for a step that will never succeed.
         """
         msc = Statechart(context=StatechartContext(world=World()))
-        step = Attempt(
-            name="given up on",
-            task=ConstFalseNode(),
-            failure_monitors=[CountTicks(ticks=2)],
-        )
+        step = NodeDeclaringItsOwnFailure(name="given up on")
         last_step = ConstTrueNode()
         msc.add_node(sequence := Sequence(nodes=[step, last_step]))
 
@@ -2930,11 +2921,8 @@ class TestReadingChildrenThatEnded:
         ended, not from what it observed on the way.
         """
         msc = Statechart(context=StatechartContext(world=World()))
-        last_step = Attempt(
-            name="given up on",
-            task=NodeObservingNothingYet(),
-            failure_monitors=[CountTicks(ticks=2)],
-        )
+        last_step = NodeObservingNothingYet(name="given up on")
+        last_step.fail_condition = sm.Scalar.const_true()
         msc.add_node(sequence := Sequence(nodes=[last_step]))
 
         executor = _compile_msc(msc)

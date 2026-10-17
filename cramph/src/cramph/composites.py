@@ -22,7 +22,6 @@ from cramph.data_types import (
 )
 from cramph.exceptions import (
     NoLanguageNodeAboveError,
-    AttemptWithoutFailureMonitorsError,
     ChildCannotFailError,
     NodeAlreadyAChildError,
     NodeIsNotAChildError,
@@ -46,115 +45,6 @@ from krrood.symbolic_math.symbolic_math import (
     logic_not,
     logic_or,
 )
-
-# %% giving a node an outcome
-
-
-@dataclass(repr=False, eq=False, kw_only=True)
-class Attempt(SucceedsOnObservingTrue, FailsOnObservingFalse, CompositeNode):
-    """
-    Runs a node that would never end on its own and decides it, one way or the other.
-
-    A node that keeps holding its goal observes only whether it is at that goal right
-    now, so nothing about it ever concludes. This goal concludes instead: it
-    observes True once the task is at its goal, which ends it as a success, and False
-    once one of :attr:`failure_monitors` fires, which is what it declares its own
-    failure on. That is what lets a maintained node be one step of a plan.
-
-    It declares that failure as well once the task ended without succeeding, which is the
-    task having concluded on its own and nothing else here would notice.
-
-    .. note:: The task is never ended from here. It keeps exerting itself after first
-        reaching its goal and comes down only with this goal, so a task that was pushed
-        off its goal again is still being held.
-    """
-
-    task: StatechartNode
-    """
-    The node run until this goal is decided.
-    """
-
-    failure_monitors: List[StatechartNode]
-    """
-    The nodes whose observing True gives up on the task, any one of which is enough, so
-    there has to be at least one.
-
-    A monitor is read the way it is written, so one that observes being *well* has to be
-    negated before it can be passed here.
-    """
-
-    def __post_init__(self) -> None:
-        super().__post_init__()
-        if not self.failure_monitors:
-            raise AttemptWithoutFailureMonitorsError(node=self)
-
-    @property
-    def any_failure_monitor_fired(self) -> Scalar:
-        """
-        :return: True once a failure monitor fired, and false while none has.
-        """
-        return trinary_logic_or(
-            *[monitor.last_observed_true for monitor in self.failure_monitors]
-        )
-
-    @property
-    def failure_reasons(self) -> List[StatechartNode]:
-        """
-        Which monitors gave up on the task, which is what turns a failure into a reason.
-
-        They are read through their last observation, because ending this goal ends them
-        too and a node that ended observes nothing any more.
-
-        :return: The failure monitors that fired, in the order they were given, and
-            nothing at all unless this goal declared itself failed. Empty as well for a
-            failure the task reached on its own, which no monitor is the reason for.
-        """
-        if self.life_cycle_state != LifeCycleValues.FAILED:
-            return []
-        return [
-            monitor
-            for monitor in self.failure_monitors
-            if monitor.last_observation_state == ObservationStateValues.TRUE
-        ]
-
-    def expand(self, context: StatechartContext) -> None:
-        """
-        Add the task and the monitors.
-
-        A monitor that fires fails this goal on the same tick, which interrupts the
-        monitor and so keeps the observation it fired on as its last observation.
-        """
-        self._add_child_to_statechart(self.task)
-        self._add_children_to_statechart(self.failure_monitors)
-
-    def build_artifacts(self, context: StatechartContext) -> NodeArtifacts:
-        """
-        Report reaching the goal, being given up on, or neither.
-
-        Reaching the goal outranks a monitor firing on the same tick: a task
-        that arrived did what it was asked, whatever else was true at that moment. The
-        task is read through its last observation, which is what it observes for as long
-        as this goal holds it open, and what it arrived at if it ended itself.
-
-        A task that ended without succeeding is reported the same way a monitor giving up
-        is: nothing will move it any more, and an attempt still waiting for it would never
-        end. What it observed when it ended does not count as reaching its goal.
-        """
-        task_at_its_goal = logic_and(
-            self.task.last_observed_true,
-            logic_not(self.task.is_failed_or_interrupted),
-        )
-        return NodeArtifacts(
-            observation=trinary_if_cases(
-                cases=[
-                    (task_at_its_goal, Scalar.const_true()),
-                    (self.any_failure_monitor_fired, Scalar.const_false()),
-                    (self.task.is_failed_or_interrupted, Scalar.const_false()),
-                ],
-                else_result=Scalar.const_trinary_unknown(),
-            )
-        )
-
 
 # %% goals that decide when their children end
 
@@ -623,10 +513,9 @@ class RepeatUntil(CompositeNodeEndingItsChildren):
     :attr:`stop_retry_monitor` calls the retrying off, so a caller can tell "eventually
     worked" from "gave up".
 
-    What counts as a failed attempt is stated on the task itself: hand it an
-    :class:`Attempt` carrying the failure monitors that decide it, or see
-    :class:`RepeatOnStall`, which derives that decision from the task's own progress. A
-    task that cannot fail on its own is rejected, since it would never be retried.
+    What counts as a failed attempt is stated on the task itself, through its fail
+    condition. A task that cannot fail on its own is rejected, since it would never be
+    retried.
     """
 
     task: StatechartNode
@@ -780,9 +669,8 @@ class TryInOrder(CramLanguageNodeRunningItsChildrenInTurn):
     succeeding. Its observation turns True as soon as an alternative succeeds and False
     only once every one of them is over, so it stays unknown while any is still running.
 
-    Each alternative decides for itself when to give up, which is why this goal reduces
-    to ordering: wrap one in an :class:`Attempt` carrying the monitors that decide it.
-    An alternative that cannot fail is rejected anywhere but last, since the
+    Each alternative decides for itself when to give up, through its fail condition,
+    which is why this goal reduces to ordering. An alternative that cannot fail is rejected anywhere but last, since the
     alternatives after it could never start.
 
     .. note:: corresponds to the RPL's TRY-IN-ORDER. (McDermott, Drew. A reactive plan language, 1991)
@@ -841,7 +729,7 @@ class MonitoredCompositeNode(EndedByOwner, CompositeNode, ABC):
     Runs a monitored node next to the monitor observing it.
 
     What it observes is what the monitored node has reached, so nothing here ever
-    concludes either: a plan step built from one is an attempt wrapping it.
+    concludes either: the goal holding it ends it once it observes True.
 
     The two are siblings, which is what lets the monitor's observation drive the
     monitored node's life cycle: a transition condition may only reference the owning

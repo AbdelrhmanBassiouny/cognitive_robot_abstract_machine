@@ -4,12 +4,9 @@ Tests for the motion statechart templates that try alternatives, ``TryAll`` and
 
 The templates are exercised by compiling them into a real :class:`Statechart` and
 ticking the executor, asserting the resulting observation and life cycle states.
-``ConstTrueNode`` / ``ConstFalseNode`` are used as deterministic children that always
-succeed / fail.
+Alternatives observe a fixed value and fail on observing False, so they are deterministic
+children that always arrive / fail.
 """
-
-from datetime import timedelta
-from math import ceil
 
 import pytest
 from cramph.data_types import LifeCycleValues, ObservationStateValues
@@ -17,14 +14,14 @@ from cramph.exceptions import (
     ChildCannotFailError,
     CompositeNodeWithoutChildrenError,
 )
-from cramph.composites import Attempt, Sequence, TryAll, TryInOrder
+from cramph.composites import Sequence, TryAll, TryInOrder
 from giskardpy.motion_statechart.graph_node import MotionStatechartNode
 from cramph.statechart import Statechart
 from cramph.monitors import CountTicks, Pulse
-from giskardpy.motion_statechart.monitors.progress_monitors import Stalled
 from cramph.nodes_for_testing import (
     ConstFalseNode,
     ConstTrueNode,
+    NodeFailingOnObservingFalse,
     NodeObservingNothingYet,
 )
 from cramph.composites import PausedUntilTrue, PausedWhileTrue, StoppedWhenTrue
@@ -37,59 +34,44 @@ from cramph.executor import StatechartExecutor
 # Number of ticks after which the templates below have settled into their final observation.
 SETTLE_TICKS = 6
 
-# Simulated time an alternative is given before it is abandoned. Short so that a test
-# that has to wait out the give-up budget stays fast.
-GIVE_UP_AFTER = timedelta(seconds=0.2)
-
 
 def _compile_and_tick(
-    goal: MotionStatechartNode,
-    ticks: int = SETTLE_TICKS,
-    alternatives_to_abandon: int = 0,
+    goal: MotionStatechartNode, ticks: int = SETTLE_TICKS
 ) -> StatechartExecutor:
     """
     Add the goal to a fresh statechart, compile it and tick the executor.
 
     :param goal: The template under test.
-    :param ticks: Control cycles to run on top of the give-up budget.
-    :param alternatives_to_abandon: How many alternatives have to exhaust
-        :data:`GIVE_UP_AFTER` before the assertion holds. Turned into control cycles
-        using the control rate the executor actually runs at.
+    :param ticks: Control cycles to run.
     :return: The executor, so a caller can keep ticking and inspect intermediate states.
     """
-    motion_control = MotionControl()
     executor = StatechartExecutor(
-        context=StatechartContext(world=World()), extensions=[motion_control]
+        context=StatechartContext(world=World()), extensions=[MotionControl()]
     )
     msc = Statechart(context=executor.context)
     msc.add_node(goal)
     executor.compile(statechart=msc)
-    cycles_per_alternative = ceil(
-        GIVE_UP_AFTER / motion_control.qp_controller_config.control_time_step
-    )
-    for _ in range(ticks + alternatives_to_abandon * cycles_per_alternative):
+    for _ in range(ticks):
         executor.tick()
     return executor
 
 
-def _alternative(node: MotionStatechartNode) -> Attempt:
+def _failing(name: str) -> NodeFailingOnObservingFalse:
     """
-    Wrap a node the way a caller of the try-templates has to: an attempt that reaches a
-    outcome on its own, giving up once the node stops making progress.
+    :return: An alternative that fails on the first tick it runs.
+    """
+    return NodeFailingOnObservingFalse(
+        name=name, observation=ObservationStateValues.FALSE
+    )
 
-    :param node: The node to try.
-    :return: The alternative to hand to the template.
+
+def _arriving(name: str) -> NodeFailingOnObservingFalse:
     """
-    return Attempt(
-        name=f"{node.name}/attempt",
-        task=node,
-        failure_monitors=[
-            Stalled(
-                name=f"{node.name}/stalled",
-                monitored_node=node,
-                timeout=GIVE_UP_AFTER,
-            )
-        ],
+    :return: An alternative that is at its goal from the first tick it runs, and could
+        fail, so a template accepts it anywhere.
+    """
+    return NodeFailingOnObservingFalse(
+        name=name, observation=ObservationStateValues.TRUE
     )
 
 
@@ -113,8 +95,8 @@ def _ticks_until_observed_true(
 
 
 def test_try_all_succeeds_if_any_child_succeeds():
-    stuck = _alternative(ConstFalseNode(name="a"))
-    arriving = _alternative(ConstTrueNode(name="b"))
+    stuck = _failing("a")
+    arriving = _arriving("b")
     goal = TryAll(nodes=[stuck, arriving])
     _compile_and_tick(goal)
 
@@ -127,17 +109,17 @@ def test_try_all_succeeds_if_any_child_succeeds():
 def test_try_all_fails_only_if_all_children_fail():
     goal = TryAll(
         nodes=[
-            _alternative(ConstFalseNode(name="a")),
-            _alternative(ConstFalseNode(name="b")),
+            _failing("a"),
+            _failing("b"),
         ]
     )
-    _compile_and_tick(goal, alternatives_to_abandon=1)
+    _compile_and_tick(goal)
 
     assert goal.last_observation_state == ObservationStateValues.FALSE
 
 
 def test_try_all_single_child():
-    goal = TryAll(nodes=[_alternative(ConstTrueNode(name="only"))])
+    goal = TryAll(nodes=[_arriving("only")])
     _compile_and_tick(goal)
 
     assert goal.last_observation_state == ObservationStateValues.TRUE
@@ -147,8 +129,8 @@ def test_try_all_single_child():
 
 
 def test_try_in_order_short_circuits_on_first_success():
-    first = _alternative(ConstTrueNode(name="first"))
-    second = _alternative(ConstFalseNode(name="second"))
+    first = _arriving("first")
+    second = _failing("second")
     goal = TryInOrder(nodes=[first, second])
     _compile_and_tick(goal)
 
@@ -160,10 +142,10 @@ def test_try_in_order_short_circuits_on_first_success():
 
 
 def test_try_in_order_advances_after_failure():
-    first = _alternative(ConstFalseNode(name="first"))
-    second = _alternative(ConstTrueNode(name="second"))
+    first = _failing("first")
+    second = _arriving("second")
     goal = TryInOrder(nodes=[first, second])
-    _compile_and_tick(goal, alternatives_to_abandon=1)
+    _compile_and_tick(goal)
 
     assert goal.last_observation_state == ObservationStateValues.TRUE
     # Both children ran: the first failed, the second was started and succeeded.
@@ -172,10 +154,10 @@ def test_try_in_order_advances_after_failure():
 
 
 def test_try_in_order_fails_only_if_all_children_fail():
-    first = _alternative(ConstFalseNode(name="first"))
-    second = _alternative(ConstFalseNode(name="second"))
+    first = _failing("first")
+    second = _failing("second")
     goal = TryInOrder(nodes=[first, second])
-    _compile_and_tick(goal, alternatives_to_abandon=2)
+    _compile_and_tick(goal)
 
     assert goal.last_observation_state == ObservationStateValues.FALSE
     assert first.life_cycle_state == LifeCycleValues.FAILED
@@ -183,51 +165,10 @@ def test_try_in_order_fails_only_if_all_children_fail():
 
 
 def test_try_in_order_single_child():
-    goal = TryInOrder(nodes=[_alternative(ConstTrueNode(name="only"))])
+    goal = TryInOrder(nodes=[_arriving("only")])
     _compile_and_tick(goal)
 
     assert goal.last_observation_state == ObservationStateValues.TRUE
-
-
-# %% progress monitors
-
-
-def test_a_progress_monitor_ends_with_the_alternative_it_watches():
-    """
-    A monitor that outlived its alternative would keep measuring progress against a node
-    that has ended, and would eventually report that node as stalled long after it was
-    decided.
-    """
-    first = _alternative(ConstFalseNode(name="first"))
-    second = _alternative(ConstTrueNode(name="second"))
-    goal = TryInOrder(nodes=[first, second])
-    _compile_and_tick(goal, alternatives_to_abandon=1)
-
-    assert all(
-        monitor.life_cycle_state.is_terminal
-        for alternative in (first, second)
-        for monitor in alternative.failure_monitors
-    )
-
-
-# %% alternatives that need more than one tick to reach their goal
-
-#: Control cycles a slow alternative needs before its observation turns True.
-SLOW_ALTERNATIVE_CYCLES = 5
-
-
-def test_slow_alternative_is_not_abandoned_while_still_working():
-    """
-    An alternative whose observation is still False because it has not reached its goal
-    yet must not be mistaken for one that failed.
-    """
-    slow = _alternative(CountTicks(name="slow", ticks=SLOW_ALTERNATIVE_CYCLES))
-    fallback = _alternative(ConstTrueNode(name="fallback"))
-    goal = TryInOrder(nodes=[slow, fallback])
-    _compile_and_tick(goal, ticks=2)
-
-    assert slow.life_cycle_state == LifeCycleValues.RUNNING
-    assert fallback.life_cycle_state == LifeCycleValues.NOT_STARTED
 
 
 # %% when the next alternative takes over
@@ -238,85 +179,18 @@ def test_the_next_alternative_starts_on_the_cycle_the_previous_one_fails():
     An alternative waits for its predecessor's outcome, which it reads on the cycle that
     outcome is reached, so no control cycle passes with neither of them running.
     """
-    first = _alternative(ConstFalseNode(name="first"))
-    second = _alternative(ConstTrueNode(name="second"))
+    first = _failing("first")
+    second = _arriving("second")
     goal = TryInOrder(nodes=[first, second])
+    executor = _compile_and_tick(goal, ticks=0)
 
-    motion_control = MotionControl()
-    executor = StatechartExecutor(
-        context=StatechartContext(world=World()), extensions=[motion_control]
-    )
-    msc = Statechart(context=executor.context)
-    msc.add_node(goal)
-    executor.compile(statechart=msc)
-
-    cycles_to_abandon_an_alternative = ceil(
-        GIVE_UP_AFTER / motion_control.qp_controller_config.control_time_step
-    )
-    for _ in range(cycles_to_abandon_an_alternative + SETTLE_TICKS):
+    for _ in range(SETTLE_TICKS):
         executor.tick()
         if first.life_cycle_state == LifeCycleValues.FAILED:
             break
 
     assert first.life_cycle_state == LifeCycleValues.FAILED
     assert second.life_cycle_state == LifeCycleValues.RUNNING
-
-
-# %% alternatives abandoned before they observed anything
-
-
-def test_an_alternative_abandoned_undecided_hands_over_to_the_next_one():
-    """
-    An alternative that is given up on while it still observes nothing is no more use
-    than one that failed outright, so the next one has to be tried.
-    """
-    first = _alternative(NodeObservingNothingYet(name="first"))
-    second = _alternative(ConstTrueNode(name="second"))
-    goal = TryInOrder(nodes=[first, second])
-    _compile_and_tick(goal, alternatives_to_abandon=1)
-
-    assert first.life_cycle_state == LifeCycleValues.FAILED
-    assert second.life_cycle_state == LifeCycleValues.SUCCEEDED
-    assert goal.last_observation_state == ObservationStateValues.TRUE
-
-
-def test_a_composite_alternative_that_never_arrives_hands_over_to_the_next_one():
-    """
-    An alternative built from several nodes observes nothing decisive while its steps
-    are still short of their goals, which is what it looks like when it is abandoned.
-    """
-    first = _alternative(
-        Sequence(
-            name="first",
-            nodes=[
-                _alternative(ConstFalseNode(name="stuck step")),
-                _alternative(ConstTrueNode(name="unreached step")),
-            ],
-        )
-    )
-    fallback = _alternative(ConstTrueNode(name="fallback"))
-    goal = TryInOrder(nodes=[first, fallback])
-    _compile_and_tick(goal, alternatives_to_abandon=1)
-
-    assert first.life_cycle_state == LifeCycleValues.FAILED
-    assert fallback.life_cycle_state == LifeCycleValues.SUCCEEDED
-    assert goal.last_observation_state == ObservationStateValues.TRUE
-
-
-def test_the_goal_fails_once_every_alternative_was_abandoned():
-    """
-    Giving up on the last alternative decides the goal, instead of leaving whoever waits
-    for it waiting forever.
-    """
-    goal = TryInOrder(
-        nodes=[
-            _alternative(NodeObservingNothingYet(name="first")),
-            _alternative(NodeObservingNothingYet(name="second")),
-        ]
-    )
-    _compile_and_tick(goal, alternatives_to_abandon=2)
-
-    assert goal.last_observation_state == ObservationStateValues.FALSE
 
 
 # %% goals built without children
@@ -352,7 +226,7 @@ def test_a_try_in_order_rejects_a_plain_task_before_its_last_alternative():
     A plain task has no way of failing, so the alternatives after it could never start.
     """
     task = ConstFalseNode(name="first")
-    goal = TryInOrder(nodes=[task, _alternative(ConstTrueNode(name="second"))])
+    goal = TryInOrder(nodes=[task, _arriving("second")])
 
     with pytest.raises(ChildCannotFailError) as error:
         _compile_and_tick(goal, ticks=0)
@@ -364,11 +238,11 @@ def test_a_try_in_order_rejects_a_plain_task_before_its_last_alternative():
 def test_a_try_in_order_accepts_a_plain_task_as_its_last_alternative():
     goal = TryInOrder(
         nodes=[
-            _alternative(ConstFalseNode(name="first")),
+            _failing("first"),
             ConstTrueNode(name="last"),
         ]
     )
-    _compile_and_tick(goal, alternatives_to_abandon=1)
+    _compile_and_tick(goal)
 
     assert goal.last_observation_state == ObservationStateValues.TRUE
 

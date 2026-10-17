@@ -5,11 +5,11 @@ from dataclasses import dataclass, field
 from typing_extensions import List, Optional
 
 from cramph.composites import (
-    Attempt,
     ChildChooser,
     ChildChooserAccess,
     CompositeNodeChoosingItsChild,
     RepeatUntil,
+    StoppedWhenTrue,
 )
 from cramph.data_types import LifeCycleValues, ObservationStateValues
 from cramph.executor import StatechartExecutor, TickingExecutorExtension
@@ -524,14 +524,14 @@ def test_a_reset_node_chooses_again_instead_of_running_its_earlier_children(
     succeeding = _succeeding_child("succeeding")
     chooser = ChooserAnsweringInTurn([failing, undecided, succeeding])
     choosing_node = CompositeNodeChoosingItsChild(name="choosing")
-    attempt = Attempt(
-        name="attempt",
-        task=choosing_node,
-        failure_monitors=[CountTicks(name="timeout", ticks=6)],
+    stopped = StoppedWhenTrue(
+        name="stopped",
+        monitor=CountTicks(name="timeout", ticks=6),
+        monitored_node=choosing_node,
     )
 
     statechart = _run_repeated_until_decided(
-        statechart_executor, chooser, attempt, resets_until_stopped=3
+        statechart_executor, chooser, stopped, resets_until_stopped=3
     )
 
     assert chooser.asked_nodes == [choosing_node] * 3

@@ -4,7 +4,7 @@ import pytest
 from typing_extensions import List
 
 from cramph.composites import (
-    Attempt,
+    PausedWhileTrue,
     CramLanguageNode,
     Parallel,
     Sequence,
@@ -336,8 +336,10 @@ def test_the_closest_language_node_above_a_nested_node_is_the_first_one_on_its_p
 ):
     statechart = Statechart(context=statechart_executor.context)
     nested = _succeeding("nested")
-    attempt = Attempt(name="attempt", task=nested, failure_monitors=[ConstFalseNode()])
-    statechart.add_node(sequence := Sequence(nodes=[attempt]))
+    paused = PausedWhileTrue(
+        name="paused", monitor=ConstFalseNode(), monitored_node=nested
+    )
+    statechart.add_node(sequence := Sequence(nodes=[paused]))
 
     assert CramLanguageNode.closest_above(nested) is sequence
 
@@ -347,13 +349,15 @@ def test_a_step_inserted_before_a_nested_node_runs_before_what_holds_it(
 ):
     statechart = Statechart(context=statechart_executor.context)
     first, nested = _succeeding("1"), _succeeding("nested")
-    attempt = Attempt(name="attempt", task=nested, failure_monitors=[ConstFalseNode()])
-    statechart.add_node(sequence := Sequence(nodes=[attempt]))
+    paused = PausedWhileTrue(
+        name="paused", monitor=ConstFalseNode(), monitored_node=nested
+    )
+    statechart.add_node(sequence := Sequence(nodes=[paused]))
 
     CramLanguageNode.closest_above(nested).insert_before(nested, first)
     _run(statechart_executor, statechart, sequence)
 
-    assert _start_order(statechart, [attempt, first]) == [first, attempt]
+    assert _start_order(statechart, [paused, first]) == [first, paused]
 
 
 def test_a_node_without_a_language_node_above_it_has_none_closest_above_it(

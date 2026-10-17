@@ -231,22 +231,21 @@ print(code_func.life_cycle_state)
 
 ## Repeat
 
-{class}`~giskardpy.motion_statechart.goals.templates.RepeatOnStall` attempts a task again whenever an attempt stops
-making progress, until the task succeeds or its stop monitor fires. Counting the attempts with
+{class}`~cramph.composites.RepeatUntil` attempts a task again whenever an attempt fails, until the task succeeds or
+its stop monitor fires. Counting the attempts with
 {class}`~cramph.monitors.CountNodeResets` limits how often it tries, and the exception it is given is raised once the
 attempts run out.
 
 ```python
 from cramph.exceptions import RepetitionsExhausted
 from coraplex.robot_plans.actions.core.robot_body import MoveTorsoAction
-from cramph.composites import Sequence
+from cramph.composites import RepeatUntil, Sequence
 from cramph.monitors import CountNodeResets
-from giskardpy.motion_statechart.goals.templates import RepeatOnStall
 from semantic_digital_twin.datastructures.definitions import TorsoState
 
 move_torso = Sequence(nodes=[MoveTorsoAction(torso_state=TorsoState.HIGH), MoveTorsoAction(torso_state=TorsoState.LOW)])
 
-plan = RepeatOnStall(
+plan = RepeatUntil(
     task=move_torso,
     stop_retry_monitor=CountNodeResets(node=move_torso, target=3),
     exception=RepetitionsExhausted(repeated_node=move_torso, maximum_repetitions=3),

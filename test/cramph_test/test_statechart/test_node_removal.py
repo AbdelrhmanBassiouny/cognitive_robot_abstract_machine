@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from cramph.composites import Attempt, Sequence
+from cramph.composites import Sequence
 from cramph.data_types import LifeCycleValues
 from cramph.exceptions import (
     RemovedNodeStillReferencedError,
@@ -10,7 +10,7 @@ from cramph.exceptions import (
 )
 from cramph.executor import StatechartExecutor
 from cramph.node import CancelStatechart, EndStatechart
-from cramph.nodes_for_testing import ConstFalseNode, ConstTrueNode
+from cramph.nodes_for_testing import ConstTrueNode
 from cramph.statechart import Statechart
 
 # %% removing nodes
@@ -147,11 +147,7 @@ def test_a_compiled_statechart_runs_after_a_joining_node_was_removed_again(
     with statechart.modify():
         statechart.add_node(removed := ConstTrueNode())
         statechart.add_node(
-            sequence := Sequence(
-                nodes=[
-                    Attempt(task=ConstTrueNode(), failure_monitors=[ConstFalseNode()])
-                ]
-            )
+            sequence := Sequence(nodes=[ConstTrueNode()])
         )
         statechart.add_node(EndStatechart.when_true(sequence))
         statechart.remove_node(removed)
@@ -166,9 +162,7 @@ def test_a_statechart_runs_after_a_node_was_removed(
     statechart = Statechart(context=statechart_executor.context)
     statechart.add_node(removed := ConstTrueNode())
     statechart.add_node(
-        sequence := Sequence(
-            nodes=[Attempt(task=ConstTrueNode(), failure_monitors=[ConstFalseNode()])]
-        )
+        sequence := Sequence(nodes=[ConstTrueNode()])
     )
     statechart.add_node(EndStatechart.when_true(sequence))
 

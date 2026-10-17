@@ -1,5 +1,4 @@
 import threading
-from datetime import timedelta
 
 import numpy as np
 import pytest
@@ -13,15 +12,14 @@ from cramph.exceptions import PlanCancelled, RepetitionsExhausted
 from cramph.composites import (
     CancelledWhenTrue,
     Parallel,
+    RepeatUntil,
     Sequence,
     TryAll,
     TryInOrder,
 )
 from coraplex.robot_plans.actions.core.misc import DetectAction
 from coraplex.robot_plans.actions.core.navigation import NavigateAction
-from ..conftest import tool_center_point_goal
 from coraplex.robot_plans.actions.core.robot_body import MoveTorsoAction, ParkArmsAction
-from giskardpy.motion_statechart.goals.templates import RepeatOnStall
 from cramph.monitors import CountNodeResets
 from cramph.nodes_for_testing import ConstFalseNode, ConstTrueNode
 from semantic_digital_twin.datastructures.definitions import TorsoState
@@ -130,20 +128,17 @@ def test_perform_parallel(pr2_apartment_context):
     ] * 3
 
 
-def _repeat_on_stall(
-    task: Sequence, maximum_repetitions: int, **settings
-) -> RepeatOnStall:
+def _repeat(task: Sequence, maximum_repetitions: int) -> RepeatUntil:
     """
     :return: `task` attempted until it succeeds, at most `maximum_repetitions` times,
         raising :class:`RepetitionsExhausted` once the attempts run out.
     """
-    return RepeatOnStall(
+    return RepeatUntil(
         task=task,
         stop_retry_monitor=CountNodeResets(node=task, target=maximum_repetitions),
         exception=RepetitionsExhausted(
             repeated_node=task, maximum_repetitions=maximum_repetitions
         ),
-        **settings,
     )
 
 
@@ -154,44 +149,12 @@ def test_perform_repeat_runs_a_succeeding_motion_once(pr2_apartment_context):
     """
     world, robot_view, extensions = pr2_apartment_context
 
-    plan = _repeat_on_stall(
-        Sequence(nodes=[MoveTorsoAction(torso_state=TorsoState.HIGH)]), 3
-    )
+    plan = _repeat(Sequence(nodes=[MoveTorsoAction(torso_state=TorsoState.HIGH)]), 3)
     run_plan(plan, extensions)
 
     assert world.state[
         world.get_degree_of_freedom_by_name("torso_lift_joint").id
     ].position == pytest.approx(0.3, abs=0.05)
-    assert plan.life_cycle_state == LifeCycleValues.SUCCEEDED
-
-
-def test_repeat_does_not_give_up_on_a_child_that_starts_at_its_goal(
-    pr2_apartment_context,
-):
-    """
-    A child that is already where it should be finishes without converging on anything,
-    which must not be mistaken for an attempt that stalled.
-    """
-    world, robot_view, extensions = pr2_apartment_context
-    executor = run_plan(
-        Sequence(nodes=[MoveTorsoAction(torso_state=TorsoState.HIGH)]), extensions
-    )
-
-    plan = _repeat_on_stall(
-        Sequence(
-            nodes=[
-                MoveTorsoAction(torso_state=TorsoState.HIGH),
-                MoveTorsoAction(torso_state=TorsoState.LOW),
-            ]
-        ),
-        3,
-    )
-    run_plan(plan, extensions)
-
-    [torso_down] = (
-        robot_view.get_torso().get_joint_state_by_type(TorsoState.LOW).target_values
-    )
-    assert _torso_position(world) == pytest.approx(torso_down, abs=0.05)
     assert plan.life_cycle_state == LifeCycleValues.SUCCEEDED
 
 
@@ -390,41 +353,3 @@ def test_never_firing_cancel_monitor_leaves_the_motion_alone(pr2_apartment_conte
     assert plan.last_observation_state == ObservationStateValues.TRUE
 
 
-def test_repeat_raises_when_it_runs_out_of_attempts(pr2_apartment_context):
-    """
-    A motion that can never succeed is attempted the allowed number of times and then
-    reported as a plan failure, rather than silently stalling until the motion runs out
-    of control cycles.
-    """
-    world, robot_view, extensions = pr2_apartment_context
-    unreachable = Pose.from_xyz_rpy(5, 0, 0, reference_frame=world.root)
-
-    plan = _repeat_on_stall(
-        Sequence(
-            nodes=[
-                tool_center_point_goal(robot_view, robot_view.right_arm, unreachable)
-            ]
-        ),
-        2,
-        timeout=timedelta(seconds=1),
-    )
-
-    with pytest.raises(RepetitionsExhausted):
-        run_plan(plan, extensions)
-
-
-def test_repeat_of_a_non_converging_motion_is_attempted(pr2_apartment_context):
-    """
-    Progress is measured from a task's error, and a motion that has none is no longer
-    rejected: it is attempted until it succeeds or the attempts run out.
-    """
-    world, robot_view, extensions = pr2_apartment_context
-    target = Pose.from_xyz_rpy(1, -1, reference_frame=world.root)
-
-    plan = _repeat_on_stall(Sequence(nodes=[NavigateAction(target_location=target)]), 2)
-    run_plan(plan, extensions)
-
-    assert plan.life_cycle_state == LifeCycleValues.SUCCEEDED
-    np.testing.assert_almost_equal(
-        robot_view.root.global_transform.to_np()[:3, 3], [1, -1, 0], decimal=1
-    )

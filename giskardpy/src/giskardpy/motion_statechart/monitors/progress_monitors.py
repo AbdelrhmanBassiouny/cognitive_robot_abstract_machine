@@ -547,9 +547,8 @@ class Stalled(StillProgressing):
     :attr:`timeout`.
 
     The same measurement as :class:`StillProgressing`, said the way a failure monitor is
-    read: a monitor is passed to an
-    :class:`~cramph.composites.Attempt` as the thing that goes
-    wrong, not as the thing that goes right.
+    read: it observes the thing that goes wrong, not the thing that goes right, so a node
+    choosing its child can give up on that child once it fires.
     """
 
     def build_artifacts(self, context: StatechartContext) -> NodeArtifacts:

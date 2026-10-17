@@ -8,7 +8,6 @@ import pytest
 
 from cramph.context import StatechartContext
 from cramph.executor import StatechartExecutor
-from cramph.monitors import CountNodeResets
 from cramph.node import StatechartNode
 from giskardpy import motion_statechart
 from giskardpy.motion_control import MotionControl
@@ -33,7 +32,6 @@ from giskardpy.motion_statechart.goals.collision_avoidance import (
 )
 from giskardpy.motion_statechart.goals.gripper import MoveGripper
 from giskardpy.motion_statechart.goals.open_close import Close, Open
-from giskardpy.motion_statechart.goals.templates import RepeatOnStall
 from giskardpy.motion_statechart.goals.tracebot import InsertCylinder, StayOnLineTask
 from giskardpy.motion_statechart.graph_node import (
     EndMotion,
@@ -228,15 +226,6 @@ def _still_progressing_cancelling_the_motion(world: World) -> list[StatechartNod
     task = _joint_goal(world)
     still_progressing = StillProgressing(monitored_node=task)
     return [task, still_progressing, still_progressing.cancel_motion()]
-
-
-def _repeat_on_stall(world: World) -> list[StatechartNode]:
-    task = _joint_goal(world)
-    return [
-        RepeatOnStall(
-            task=task, stop_retry_monitor=CountNodeResets(node=task, target=1)
-        )
-    ]
 
 
 def _external_collision_avoidance(world: World) -> list[StatechartNode]:
@@ -761,7 +750,6 @@ def _monitor_cases() -> list[NodeRoundTripCase]:
             _still_progressing_cancelling_the_motion,
             WorldFixture.PR2_WORLD,
         ),
-        NodeRoundTripCase(RepeatOnStall, _repeat_on_stall, WorldFixture.PR2_WORLD),
     ]
 
 

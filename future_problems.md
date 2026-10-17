@@ -41,7 +41,7 @@ object, so a stored transport loses its steps; ORMatic needs to map such a union
 
 `ActionTrial.succeeds` runs a candidate in a `Sequence` of its own, so that the nodes a
 plan transformation puts beside it are tried with it, the way the candidate runs for
-real inside the `Attempt` of its `StatementNode`. Simon would rather not wrap the
+real inside the `/steps` sequence its `StatementNode` chose. Simon would rather not wrap the
 candidate; doing without it needs plan transformations that can insert beside a node
 no language node runs.
 
