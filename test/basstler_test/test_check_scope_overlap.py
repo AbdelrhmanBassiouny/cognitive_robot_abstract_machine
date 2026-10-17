@@ -21,8 +21,9 @@ from basstler.check_scope_overlap import (
     build_scope_report,
 )
 
-from basstler.locations import PackageLocation, ProjectLocation
+from basstler.locations import PackageLocation
 
+from .constants import SkillDirectory, SkillFile
 from .scratch_repository import ScratchRepository
 
 CHECK_SCOPE_OVERLAP_MODULE = basstler.check_scope_overlap.__name__
@@ -37,9 +38,7 @@ BASE_BRANCH = "main"
 The branch the scratch repository's candidates are compared against.
 """
 
-NEW_SKILL_PATH = str(
-    ProjectLocation.CLAUDE_CODE_DIRECTORY / "skills" / "new-thing" / "SKILL.md"
-)
+NEW_SKILL_PATH = str(SkillDirectory.ROOT / "new-thing" / SkillFile.INSTRUCTIONS)
 """
 A path no branch but ``overlapping`` introduces - the fold test's positive case.
 """

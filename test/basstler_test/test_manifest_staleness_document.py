@@ -1,0 +1,150 @@
+"""
+Tests that the manifest-staleness rule reaches every skill it binds.
+
+The rule lives in one document, referenced by each skill rather than restated in it,
+so what needs guarding is the reference: a skill that writes plan data without citing
+the rule is exactly the drift the document exists to end.
+
+Which skills are bound is *derived* from what they do - a skill that runs a
+plan-writing script is bound by that fact - rather than listed here, so a skill added
+later is covered without this file being edited.
+"""
+
+from __future__ import annotations
+
+import re
+import subprocess
+from pathlib import Path
+
+import pytest
+
+from basstler.locations import PackageLocation, ProjectLocation
+
+from .constants import SkillDirectory, SkillFile
+
+MASTER_INDEX_KEY = "_index"
+"""
+How the dashboard URL cache names the master index's own page.
+"""
+
+BLOCKER_OWNER_CONSTANT = "MAINTENANCE_BLOCKER_OWNER"
+"""
+The constant naming who stack maintenance writes its blockers under, which the writer
+and the clearer of one have to agree on exactly.
+"""
+
+PLAN_WRITING_SCRIPTS = (
+    "PLAN_ITEM_BOOTSTRAP_MODULE",
+    "SAVE_PLAN_SCRIPT",
+    "WRITE_PERSONAL_NOTES_FILE_SCRIPT",
+)
+"""
+The constants naming a script that writes plan data, so a skill invoking one is writing
+plan state and is bound by the rule.
+
+The third is how the dashboard refresh pushes its own manifest corrections, which is
+a plan-data write like any other - so the publisher is bound by what it does rather
+than by being named here.
+"""
+
+STALENESS_DOCUMENT_CONSTANT = "MANIFEST_STALENESS_DOCUMENT"
+"""
+The constant a bound skill cites the rule through.
+"""
+
+
+def shell_constant(name: str) -> str:
+    """
+    Resolve one constant from the shell configuration that defines it.
+
+    Asking the shell rather than restating its value is what keeps this test from
+    becoming a second, independently-drifting copy of the path.
+
+    :param name: The constant to resolve.
+    :return: Its value.
+    """
+    result = subprocess.run(
+        [
+            "bash",
+            "-c",
+            f'source {ProjectLocation.PERSONAL_NOTES_CONFIGURATION_SCRIPT}; printf "%s" "${{{name}}}"',
+        ],
+        cwd=PackageLocation.REPOSITORY_ROOT,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    return result.stdout
+
+
+def currency_document() -> str:
+    """
+    The rule document itself, found where the shell configuration says it is.
+
+    :return: Its markdown.
+    """
+    return (
+        PackageLocation.REPOSITORY_ROOT / shell_constant(STALENESS_DOCUMENT_CONSTANT)
+    ).read_text()
+
+
+def skill_instructions(skill: SkillDirectory) -> str:
+    """
+    :param skill: The skill to read.
+    :return: The instructions it keeps in this repository.
+    """
+    return (PackageLocation.REPOSITORY_ROOT / skill.instructions).read_text()
+
+
+def skills_writing_plan_data() -> list[Path]:
+    """
+    Every skill document that runs a script which writes plan data.
+
+    :return: Their paths, in a stable order.
+    """
+    return sorted(
+        skill
+        for skill in (PackageLocation.REPOSITORY_ROOT / SkillDirectory.ROOT).glob(
+            f"*/{SkillFile.INSTRUCTIONS}"
+        )
+        if any(script in skill.read_text() for script in PLAN_WRITING_SCRIPTS)
+    )
+
+
+def test_the_rule_lives_where_the_shell_configuration_says_it_does():
+    document = Path(shell_constant(STALENESS_DOCUMENT_CONSTANT))
+
+    assert document.name == "manifest-staleness.md"
+    assert (PackageLocation.REPOSITORY_ROOT / document).is_file()
+
+
+@pytest.mark.parametrize(
+    "skill", skills_writing_plan_data(), ids=lambda skill: skill.parent.name
+)
+def test_a_skill_that_writes_plan_data_cites_the_currency_rule(skill: Path):
+    assert STALENESS_DOCUMENT_CONSTANT in skill.read_text()
+
+
+def test_the_rule_names_the_blocker_owner_through_its_constant():
+    """
+    A blocker written under one name and cleared under another would accumulate forever,
+    so the document cites the one constant rather than spelling the name out.
+    """
+    assert shell_constant(BLOCKER_OWNER_CONSTANT)
+    assert BLOCKER_OWNER_CONSTANT in currency_document()
+
+
+def test_creating_a_plan_republishes_the_index_the_new_plan_belongs_in():
+    """
+    The index lists every plan, so adding one is the single change that makes the index
+    itself wrong - the one case where publishing only the plan's own page is not enough.
+    """
+    assert MASTER_INDEX_KEY in skill_instructions(SkillDirectory.PLAN_CREATE)
+
+
+def test_the_rule_names_no_plan_of_its_own():
+    document = currency_document()
+    placeholders = set(re.findall(r"<([a-z-]+)>", document))
+
+    assert "plan-id" in placeholders
+    assert not re.search(r"plans/(?!<)[a-z][a-z0-9-]*/", document)

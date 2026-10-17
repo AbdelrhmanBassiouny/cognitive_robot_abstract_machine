@@ -19,7 +19,7 @@ from basstler.maintenance_constants import (
     MERGEABLE_STATE_WITH_CONFLICTS,
 )
 from basstler.maintenance_board import PullRequestField
-from basstler.maintenance_git_commands import GitCommandRunner, ProposedPush
+from basstler.maintenance_git_commands import MaintenanceGitCommandRunner, ProposedPush
 from basstler.maintenance_github import ForkPullRequests
 from basstler.stack import (
     Branch,
@@ -189,7 +189,7 @@ class BranchUnderRestack:
     The derived stack it belongs to.
     """
 
-    git: GitCommandRunner
+    git: MaintenanceGitCommandRunner
     """
     The runner to execute through.
     """
