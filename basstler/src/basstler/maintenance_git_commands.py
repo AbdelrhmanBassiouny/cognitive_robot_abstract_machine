@@ -108,21 +108,29 @@ class ProposedPush:
 
     @classmethod
     def publishing(
-        cls, configuration: Configuration, branch: str, strategy: IntegrationStrategy
+        cls,
+        configuration: Configuration,
+        branch: str,
+        strategy: IntegrationStrategy,
+        replaces_superseded_merges: bool = False,
     ) -> ProposedPush:
         """
         Build the push that publishes a restacked branch.
 
         :param configuration: The resolved configuration.
         :param branch: The branch to publish.
-        :param strategy: How its parent was integrated, which is what authorises a
-            rewrite - and which ``build_stack`` sets to rebase only from the label.
+        :param strategy: How its parent was integrated, which authorises a rewrite when
+            it is a rebase - and which ``build_stack`` sets to rebase only from the label.
+        :param replaces_superseded_merges: Whether the integration replaced merges that
+            only brought in an earlier state of the parent, the one rewrite a merge is
+            authorised to make.
         :return: The push.
         """
         return cls(
             remote=configuration.fork_remote,
             refspec=f"{branch}:{branch}",
-            with_lease=strategy is IntegrationStrategy.REBASE,
+            with_lease=strategy is IntegrationStrategy.REBASE
+            or replaces_superseded_merges,
         )
 
 
@@ -185,6 +193,39 @@ class GitCommandRunner:
         """:param reference: Any reference git can resolve.
         :return: The commit it names."""
         return self.run("rev-parse", reference)
+
+    def parents_of(self, commit: str) -> tuple[str, ...]:
+        """:param commit: Any reference git can resolve to a commit.
+        :return: The commit's parents, its first parent first."""
+        return tuple(
+            self.run("rev-list", "--parents", "--max-count=1", commit).split()[1:]
+        )
+
+    def tree_of(self, commit: str) -> str:
+        """:param commit: Any reference git can resolve to a commit.
+        :return: The tree the commit records."""
+        return self.run("rev-parse", f"{commit}^{{tree}}")
+
+    def automatic_merge_tree(self, first: str, second: str) -> str | None:
+        """
+        Merge two commits without touching any branch or the working tree.
+
+        :param first: One side of the merge.
+        :param second: The other side.
+        :return: The tree merging them produces, or ``None`` when it conflicts.
+        """
+        merge = self.attempt("merge-tree", "--write-tree", first, second)
+        return merge.output.splitlines()[0] if merge.succeeded else None
+
+    def adds_only_merges(self, candidate: str, reference: str) -> bool:
+        """:param candidate: The reference whose history is examined.
+        :param reference: The reference it is compared against.
+        :return: Whether every commit *candidate* holds beyond *reference* is a merge.
+        """
+        beyond = self.run(
+            "rev-list", "--no-merges", "--max-count=1", f"{reference}..{candidate}"
+        )
+        return not beyond
 
     def checkout(self, branch: str, start_point: str) -> None:
         """
