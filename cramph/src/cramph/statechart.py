@@ -45,6 +45,7 @@ from cramph.exceptions import (
     NodesMissingContextExtensionsError,
     PrerequisiteNotExpandedError,
     StatechartAlreadyCompiledError,
+    NotATopLevelNodeError,
     NotInStatechartError,
     RemovedNodeStillReferencedError,
 )
@@ -1656,6 +1657,31 @@ class Statechart(SubclassJSONSerializer):
             removed_node._statechart = None
             removed_node.index = None
             removed_node.parent_node_index = None
+
+    def replace(self, node: StatechartNode, replacement: StatechartNode) -> None:
+        """
+        Puts `replacement` on the top layer in place of the top-level node `node`, the
+        way :meth:`~cramph.composites.CramLanguageNode.replace` does for a child.
+
+        If `replacement` is a plan language node that has `node` among its children,
+        `node` stays in the statechart as that child and the conditions written on it
+        are cleared, so that `replacement` wires them. Otherwise `node` leaves the
+        statechart together with everything below it.
+
+        :param node: A top-level node of this statechart.
+        :param replacement: The node to put in its place, which belongs to no
+            statechart yet.
+        :raises NotInStatechartError: If `node` does not belong to this statechart.
+        :raises NotATopLevelNodeError: If `node` is the child of another node.
+        :raises StatechartAlreadyCompiledError: If the latest compile covers `node`.
+        """
+        if node._statechart is not self:
+            raise NotInStatechartError(name=node.name)
+        if node.parent_node is not None:
+            raise NotATopLevelNodeError(node=node)
+        if self.is_compiled and self.latest_compile_covers(node):
+            raise StatechartAlreadyCompiledError()
+        replacement._take_place_of(node, lambda: self.add_node(replacement))
 
     @staticmethod
     def _check_not_referenced(

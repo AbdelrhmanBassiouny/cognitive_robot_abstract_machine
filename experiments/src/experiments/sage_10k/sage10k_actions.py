@@ -1,10 +1,12 @@
-from cramph.composites import Sequence, StatementNode
+from cramph.composites import StatementNode
 from dataclasses import dataclass
+
+from typing_extensions import List
 
 import rustworkx
 
 from krrood.entity_query_language.factories import a, an, variable
-from coraplex.robot_plans.actions.base import Action
+from coraplex.robot_plans.actions.base import SequentialAction
 from cramph.node import StatechartNode
 from coraplex.robot_plans.actions.core.container import OpenAction
 from coraplex.robot_plans.actions.core.misc import MoveToReach
@@ -17,7 +19,7 @@ from semantic_digital_twin.world_description.graph_of_convex_sets.boxes import (
 
 
 @dataclass(eq=False, repr=False, kw_only=True)
-class Sage10kOpenDoor(Action):
+class Sage10kOpenDoor(SequentialAction):
     """
     Open a door.
 
@@ -28,7 +30,7 @@ class Sage10kOpenDoor(Action):
 
     door: Door
 
-    def create_action_body(self) -> StatechartNode:
+    def create_steps(self) -> List[StatechartNode]:
         """
         Build the steps for reaching the handle and opening the door.
 
@@ -87,4 +89,4 @@ class Sage10kOpenDoor(Action):
 
         open_action = OpenAction.from_handle(self.door.handle, arm)
 
-        return Sequence(nodes=[reach_action, open_action])
+        return [reach_action, open_action]

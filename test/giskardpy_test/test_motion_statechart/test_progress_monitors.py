@@ -21,7 +21,8 @@ from giskardpy.motion_statechart.graph_node import EndMotion, MotionStatechartNo
 from cramph.node import NodeArtifacts
 from cramph.monitors import CountSimulationTimeSeconds
 from giskardpy.motion_statechart.monitors.progress_monitors import (
-    NotApproachingGoal,
+    AnyMonitoredTaskShortOfItsGoal,
+    NoMonitoredTaskApproachingItsGoal,
     StillProgressing,
 )
 from cramph.statechart import Statechart
@@ -256,7 +257,9 @@ class TestStallDetection:
 
         executor.compile(statechart=motion_statechart)
         not_approaching = [
-            node for node in progressing.nodes if isinstance(node, NotApproachingGoal)
+            node
+            for node in progressing.nodes
+            if isinstance(node, NoMonitoredTaskApproachingItsGoal)
         ]
         recorded = tick_until_end_recording(
             executor, motion_statechart, not_approaching + [progressing]
@@ -472,6 +475,42 @@ class TestStallDetection:
         ]
         assert [node.seconds for node in timer] == [timeout.total_seconds()]
 
+    def test_one_monitor_watches_every_task_beneath_the_watched_node(
+        self, cylinder_bot_world: World
+    ):
+        """
+        A plan holds dozens of converging tasks, and a monitor per task made the
+        statechart several times larger than the plan itself.
+        """
+        bot = cylinder_bot_world.get_kinematic_structure_entity_by_name("bot")
+        tasks = [
+            CartesianPosition(
+                root_link=cylinder_bot_world.root,
+                tip_link=bot,
+                goal_point=Point3(x, 0, 0, reference_frame=cylinder_bot_world.root),
+            )
+            for x in (1, 2, 3)
+        ]
+        sequence = Sequence(nodes=tasks)
+        progressing = StillProgressing(monitored_node=sequence, timeout=STALL_TIMEOUT)
+        executor = StatechartExecutor(
+            context=StatechartContext(world=cylinder_bot_world),
+            extensions=[MotionControl()],
+        )
+        motion_statechart = Statechart(context=executor.context)
+        motion_statechart.add_nodes([sequence, progressing])
+        motion_statechart.add_node(EndMotion.when_true(sequence))
+
+        executor.compile(statechart=motion_statechart)
+
+        assert [type(node) for node in progressing.nodes] == [
+            CountSimulationTimeSeconds,
+            NoMonitoredTaskApproachingItsGoal,
+            AnyMonitoredTaskShortOfItsGoal,
+        ]
+        assert progressing.nodes[1].monitored_tasks == tasks
+        assert progressing.monitored_tasks == tasks
+
     def test_a_task_at_its_goal_is_not_approaching_one(self, cylinder_bot_world: World):
         """
         A task that is exactly at its goal has nothing left to approach, so it must not
@@ -484,7 +523,7 @@ class TestStallDetection:
             tip_link=bot,
             goal_point=Point3(0, 0, 0, reference_frame=bot),
         )
-        monitor = NotApproachingGoal(monitored_task=arrived)
+        monitor = NoMonitoredTaskApproachingItsGoal(monitored_tasks=[arrived])
         executor = StatechartExecutor(
             context=StatechartContext(world=cylinder_bot_world),
             extensions=[MotionControl()],
@@ -526,16 +565,26 @@ it.
 @dataclass
 class ScriptedErrorRun:
     """
-    A :class:`NotApproachingGoal` watching a task whose error a test sets on every
-    control cycle, by putting the bot that far short of the task's goal.
+    A :class:`NoMonitoredTaskApproachingItsGoal` watching tasks whose errors a test sets
+    on every control cycle, by putting the bot where it should be.
     """
 
     world: World
     """
-    The world of the bot whose distance to the goal is the task's error.
+    The world of the bot whose distances to the goals are the tasks' errors.
     """
 
-    monitor: NotApproachingGoal = field(init=False)
+    goal_xs: List[float] = field(default_factory=lambda: [GOAL_X])
+    """
+    The x position of each watched task's goal.
+    """
+
+    tasks: List[CartesianPosition] = field(init=False)
+    """
+    The watched tasks, one per goal in :attr:`goal_xs`.
+    """
+
+    monitor: NoMonitoredTaskApproachingItsGoal = field(init=False)
     """
     The monitor under test.
     """
@@ -551,14 +600,18 @@ class ScriptedErrorRun:
     """
 
     def __post_init__(self):
-        task = CartesianPosition(
-            root_link=self.world.root,
-            tip_link=self.world.get_kinematic_structure_entity_by_name("bot"),
-            goal_point=Point3(GOAL_X, 0, 0, reference_frame=self.world.root),
-            threshold=TASK_THRESHOLD,
-        )
-        self.monitor = NotApproachingGoal(
-            monitored_task=task, minimum_convergence_rate=CONVERGENCE_RATE
+        self.tasks = [
+            CartesianPosition(
+                name=f"goal at {goal_x}",
+                root_link=self.world.root,
+                tip_link=self.world.get_kinematic_structure_entity_by_name("bot"),
+                goal_point=Point3(goal_x, 0, 0, reference_frame=self.world.root),
+                threshold=TASK_THRESHOLD,
+            )
+            for goal_x in self.goal_xs
+        ]
+        self.monitor = NoMonitoredTaskApproachingItsGoal(
+            monitored_tasks=self.tasks, minimum_convergence_rate=CONVERGENCE_RATE
         )
         self.executor = StatechartExecutor(
             context=StatechartContext(world=self.world),
@@ -566,14 +619,14 @@ class ScriptedErrorRun:
         )
         self.context = self.executor.context
         motion_statechart = Statechart(context=self.context)
-        motion_statechart.add_nodes([task, self.monitor])
-        motion_statechart.add_node(EndMotion.when_true(task))
+        motion_statechart.add_nodes([*self.tasks, self.monitor])
+        motion_statechart.add_node(EndMotion.when_all_true(self.tasks))
         self.executor.compile(statechart=motion_statechart)
 
     @property
     def required_fall_per_cycle(self) -> float:
         """
-        :return: How far the task's error has to fall on every control cycle.
+        :return: How far a task's error has to fall on every control cycle.
         """
         return (
             CONVERGENCE_RATE
@@ -587,13 +640,25 @@ class ScriptedErrorRun:
         self, errors: List[float]
     ) -> List[ObservationStateValues]:
         """
-        :param errors: The task's error on each control cycle.
+        :param errors: The first task's error on each control cycle, the bot being
+            short of its goal.
+        :return: What the monitor observes on each of those control cycles.
+        """
+        return self.observations_while_the_bot_is_at(
+            [self.goal_xs[0] - error for error in errors]
+        )
+
+    def observations_while_the_bot_is_at(
+        self, positions: List[float]
+    ) -> List[ObservationStateValues]:
+        """
+        :param positions: The bot's x position on each control cycle.
         :return: What the monitor observes on each of those control cycles.
         """
         drive = self.world.get_connections_by_type(OmniDrive)[0]
         observations = []
-        for error in errors:
-            self.world.state[drive.x.id].position = GOAL_X - error
+        for position in positions:
+            self.world.state[drive.x.id].position = position
             self.world.notify_state_change()
             self.executor.tick()
             observations.append(self.monitor.observation_state)
@@ -656,6 +721,41 @@ class TestConvergenceRule:
         assert run.observations_while_the_error_is([5.0]) == [
             ObservationStateValues.FALSE
         ]
+
+    def test_several_tasks_are_stalled_only_while_none_of_them_approaches(
+        self, cylinder_bot_world: World
+    ):
+        """
+        Driving towards one goal and away from another is progress, and standing still
+        is progress for neither, which the one monitor watching both has to tell apart.
+        """
+        run = ScriptedErrorRun(cylinder_bot_world, goal_xs=[GOAL_X, -GOAL_X])
+        step = 4 * run.required_fall_per_cycle
+
+        moving = run.observations_while_the_bot_is_at([0.0, step, 2 * step])
+        standing = run.observations_while_the_bot_is_at([2 * step])
+
+        assert moving == [
+            ObservationStateValues.FALSE,
+            ObservationStateValues.FALSE,
+            ObservationStateValues.FALSE,
+        ]
+        assert standing == [ObservationStateValues.TRUE]
+
+    def test_the_stalled_tasks_are_those_not_approaching_their_goal(
+        self, cylinder_bot_world: World
+    ):
+        """
+        The monitor names the tasks it judges stuck, so a stall can blame them and not
+        the tasks that still get closer.
+        """
+        run = ScriptedErrorRun(cylinder_bot_world, goal_xs=[GOAL_X, -GOAL_X])
+        approached, receding = run.tasks
+        step = 4 * run.required_fall_per_cycle
+
+        run.observations_while_the_bot_is_at([0.0, step, 2 * step])
+
+        assert run.monitor.stalled_tasks == [receding]
 
 
 # %% differentiating with respect to time
@@ -824,7 +924,7 @@ class TestTaskAtItsGoal:
         )
         motion_statechart = Statechart(context=executor.context)
         motion_statechart.add_node(task)
-        not_approaching = NotApproachingGoal(monitored_task=task)
+        not_approaching = NoMonitoredTaskApproachingItsGoal(monitored_tasks=[task])
         motion_statechart.add_node(not_approaching)
         timer = CountSimulationTimeSeconds(seconds=MOTION_DURATION.total_seconds())
         motion_statechart.add_node(timer)

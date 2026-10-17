@@ -9,6 +9,7 @@ import json
 from dataclasses import dataclass, field
 
 import pytest
+from typing_extensions import Any
 
 from cramph.composites import (
     ChildChooser,
@@ -18,6 +19,7 @@ from cramph.composites import (
 from cramph.context import StatechartContext
 from cramph.data_types import LifeCycleValues, ObservationStateValues
 from cramph.executor import StatechartExecutor
+from cramph.monitors import CountTicks
 from cramph.node import StatechartNode
 from cramph.nodes_for_testing import NodeSucceedingOnObservingTrue
 from cramph.statechart import Statechart
@@ -26,13 +28,23 @@ from giskardpy.middleware.ros2.child_choices import (
     ChildChoiceMessage,
     ChildSentByClient,
 )
-from giskardpy.middleware.ros2.exceptions import StatechartOutOfStepError
+from giskardpy.middleware.ros2.exceptions import (
+    GiskardWorldUpdateNotReceivedError,
+    StatechartOutOfStepError,
+)
 from giskardpy.middleware.ros2.feedback_publisher import (
     ActionFeedbackPublisher,
     MotionStatechartPayloadKey,
 )
+from giskardpy.middleware.ros2.world_updates import (
+    ClientWorldUpdates,
+    OutgoingWorldUpdates,
+)
 from semantic_digital_twin.adapters.ros.messages import MetaData, StreamPosition
 from semantic_digital_twin.world import World
+
+from .test_motion_server import PublicationProgressMimic
+from .test_world_updates import PublishingSynchronizerMimic
 
 # %% mimics
 
@@ -47,6 +59,14 @@ class ActionServerRunningOneGoal:
     """
     The goal that is running.
     """
+
+    sent_feedback: list[Any] = field(default_factory=list)
+    """
+    Every feedback message that was sent.
+    """
+
+    def send_feedback(self, message: Any) -> None:
+        self.sent_feedback.append(message)
 
 
 @dataclass
@@ -80,6 +100,34 @@ class ChooserGivingAFreshChild(ChildChooser):
     ) -> StatechartNode | None:
         self.given_children += 1
         return _node_succeeding_at_once(f"child {self.given_children}")
+
+
+@dataclass
+class ChooserGivingUpOnItsFirstChild(ChooserGivingAFreshChild):
+    """
+    Gives a child that never ends on its own first, with a failure monitor giving up on
+    it after a few ticks, and a fresh child that succeeds at once after that.
+    """
+
+    def choose_child(
+        self, node: CompositeNodeChoosingItsChild, context: StatechartContext
+    ) -> StatechartNode | None:
+        if self.given_children > 0:
+            return super().choose_child(node, context)
+        self.given_children += 1
+        return NodeSucceedingOnObservingTrue(
+            name="undecided", observation=ObservationStateValues.UNKNOWN
+        )
+
+    def failure_monitors_for(
+        self,
+        node: CompositeNodeChoosingItsChild,
+        child: StatechartNode,
+        context: StatechartContext,
+    ) -> list[StatechartNode]:
+        if child.name != "undecided":
+            return []
+        return [CountTicks(name="timeout", ticks=2)]
 
 
 # %% helpers
@@ -160,6 +208,37 @@ class ClientAndRunningStatechart:
     Tells both ends which goal is running.
     """
 
+    client_chooser: ChildChooser = field(default_factory=ChooserGivingAFreshChild)
+    """
+    Chooses the children on the client's copy.
+    """
+
+    running_side_publications: PublicationProgressMimic = field(
+        default_factory=PublicationProgressMimic
+    )
+    """
+    Publishes the changes of the running side's world.
+    """
+
+    client_world_updates: ClientWorldUpdates = field(
+        default_factory=lambda: ClientWorldUpdates(
+            world_synchronizer=PublishingSynchronizerMimic()
+        )
+    )
+    """
+    Tells how far the client's world caught up with the changes of the running side.
+    """
+
+    outgoing_world_updates: OutgoingWorldUpdates = field(init=False)
+    """
+    Tells which changes of the running side's world its goal published.
+    """
+
+    feedback_publisher: ActionFeedbackPublisher = field(init=False)
+    """
+    Reports the running statechart to the client.
+    """
+
     executor: StatechartExecutor = field(init=False)
     """
     Ticks the running statechart.
@@ -194,14 +273,22 @@ class ClientAndRunningStatechart:
             ChildChooserAccess(chooser=self.receiving_chooser)
         )
         self.running = TwoChoosingNodes.in_context(self.executor.context)
+        self.outgoing_world_updates = OutgoingWorldUpdates(
+            world_synchronizer=self.running_side_publications
+        )
+        self.feedback_publisher = ActionFeedbackPublisher(
+            executor=self.executor,
+            action_server=self.action_server,
+            outgoing_world_updates=self.outgoing_world_updates,
+        )
 
-        client_chooser = ChooserGivingAFreshChild()
         client_context = StatechartContext(world=World())
-        client_context.add_extension(ChildChooserAccess(chooser=client_chooser))
+        client_context.add_extension(ChildChooserAccess(chooser=self.client_chooser))
         self.copy = TwoChoosingNodes.in_context(client_context)
         self.client = ChildChoiceClient(
             statechart=self.copy.statechart,
-            chooser=client_chooser,
+            chooser=self.client_chooser,
+            world_updates=self.client_world_updates,
             required_position=StreamPosition(
                 origin=MetaData(node_name="client", process_id=0), sequence_number=1
             ),
@@ -209,9 +296,18 @@ class ClientAndRunningStatechart:
 
     def start(self) -> None:
         """
-        Compile the running statechart, which starts it.
+        Accept the running statechart as a goal and compile it, which starts it.
         """
+        self.outgoing_world_updates.start_goal()
         self.executor.compile(self.running.statechart)
+
+    def let_the_client_catch_up(self) -> None:
+        """
+        Let every change the running side published so far reach the client's world.
+        """
+        self.client_world_updates.world_synchronizer.applied_sequence_number = (
+            self.running_side_publications.published_sequence_number
+        )
 
     def let_the_client_answer(self) -> list[ChildChoiceMessage]:
         """
@@ -220,9 +316,7 @@ class ClientAndRunningStatechart:
 
         :return: The choices the client sent.
         """
-        feedback = ActionFeedbackPublisher(
-            executor=self.executor, action_server=self.action_server
-        ).create_states()
+        feedback = self.feedback_publisher.create_states()
         feedback[MotionStatechartPayloadKey.GOAL_ID] = self.action_server.goal_id
         sent_choices = [
             ChildChoiceMessage.from_json(json.loads(json.dumps(choice.to_json())))
@@ -331,3 +425,127 @@ def test_a_choice_made_after_one_whose_node_ended_untaken_is_rejected(
 
     with pytest.raises(StatechartOutOfStepError):
         exchange.executor.tick()
+
+
+# %% the failure monitors of a child travel with it
+
+
+def test_the_running_side_gives_up_on_a_child_the_client_handed_failure_monitors():
+    exchange = ClientAndRunningStatechart(
+        client_chooser=ChooserGivingUpOnItsFirstChild()
+    )
+    exchange.start()
+
+    for _ in range(10):
+        exchange.let_the_client_answer()
+        exchange.executor.tick()
+
+    choosing_node = exchange.running.starting_first
+    undecided, succeeding = choosing_node.chosen_children
+    assert undecided.life_cycle_state == LifeCycleValues.FAILED
+    assert [monitor.name for monitor in choosing_node.failure_reasons] == ["timeout"]
+    assert succeeding.life_cycle_state == LifeCycleValues.SUCCEEDED
+
+
+# %% the client chooses on the changes the running side published
+
+
+def test_the_client_chooses_only_once_its_world_holds_the_changes_of_the_goal(
+    exchange: ClientAndRunningStatechart,
+):
+    """
+    A choice reads the client's world, which learns of a change of the running side, a
+    body attached to a gripper, say, on another channel than the request to choose.
+    """
+    exchange.running_side_publications.publish_one_update()
+
+    answered_before_catching_up = exchange.let_the_client_answer()
+    exchange.let_the_client_catch_up()
+    [answer] = exchange.let_the_client_answer()
+
+    assert answered_before_catching_up == []
+    assert answer.node_index == exchange.copy.starting_first.index
+
+
+def test_the_client_does_not_wait_for_changes_published_before_the_goal(
+    exchange_before_start: ClientAndRunningStatechart,
+):
+    """
+    A client that fetched the world instead of receiving these changes would never catch
+    up with them.
+    """
+    exchange = exchange_before_start
+    exchange.running_side_publications.publish_one_update()
+    exchange.start()
+
+    [answer] = exchange.let_the_client_answer()
+
+    assert answer.node_index == exchange.copy.starting_first.index
+
+
+def test_a_client_whose_world_does_not_catch_up_reports_it(
+    exchange: ClientAndRunningStatechart,
+):
+    exchange.client_world_updates.timeout = 0.0
+    exchange.running_side_publications.publish_one_update()
+
+    with pytest.raises(GiskardWorldUpdateNotReceivedError) as raised:
+        exchange.let_the_client_answer()
+
+    assert raised.value.awaited_sequence_number == (
+        exchange.running_side_publications.published_sequence_number
+    )
+
+
+# %% a node waiting for a child is asked about again
+
+
+def test_the_running_side_asks_again_while_a_node_waits_for_a_child(
+    exchange: ClientAndRunningStatechart,
+):
+    """
+    A client that could not answer yet is only asked again by another feedback, which is
+    otherwise sent only when the states change.
+    """
+    exchange.feedback_publisher.child_request_repeat_period = 0.0
+
+    exchange.feedback_publisher.publish_if_changed()
+    exchange.feedback_publisher.publish_if_changed()
+
+    assert len(exchange.action_server.sent_feedback) == 2
+
+
+def test_the_running_side_asks_again_only_once_the_repeat_period_passed(
+    exchange: ClientAndRunningStatechart,
+):
+    exchange.feedback_publisher.child_request_repeat_period = 60.0
+
+    exchange.feedback_publisher.publish_if_changed()
+    exchange.feedback_publisher.publish_if_changed()
+
+    assert len(exchange.action_server.sent_feedback) == 1
+
+
+def test_the_running_side_repeats_nothing_while_no_node_waits_for_a_child():
+    action_server = ActionServerRunningOneGoal()
+    executor = StatechartExecutor(context=StatechartContext(world=World()))
+    statechart = Statechart(context=executor.context)
+    statechart.add_node(
+        NodeSucceedingOnObservingTrue(
+            name="undecided", observation=ObservationStateValues.UNKNOWN
+        )
+    )
+    executor.compile(statechart)
+    feedback_publisher = ActionFeedbackPublisher(
+        executor=executor,
+        action_server=action_server,
+        outgoing_world_updates=OutgoingWorldUpdates(
+            world_synchronizer=PublicationProgressMimic()
+        ),
+        child_request_repeat_period=0.0,
+    )
+
+    feedback_publisher.publish_if_changed()
+    feedback_publisher.publish_if_changed()
+
+    assert len(action_server.sent_feedback) == 1

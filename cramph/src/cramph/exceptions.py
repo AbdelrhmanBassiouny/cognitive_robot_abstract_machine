@@ -84,23 +84,6 @@ class EndInCompositeNodeError(NodeInitializationError):
 
 
 @dataclass
-class AttemptWithoutFailureMonitorsError(NodeInitializationError):
-    """
-    Raised when an attempt is created without a failure monitor, which leaves nothing
-    that could give up on its task.
-    """
-
-    def error_message(self) -> str:
-        return f'The attempt "{self.node.name}" has no failure monitors.'
-
-    def suggest_correction(self) -> str:
-        return (
-            "Pass at least one failure monitor, or hand the task to a template as it "
-            "is, which ends it once it observes True."
-        )
-
-
-@dataclass
 class ChildCannotFailError(NodeInitializationError):
     """
     Raised when a template that only moves on once a child failed is handed a child that
@@ -120,8 +103,8 @@ class ChildCannotFailError(NodeInitializationError):
 
     def suggest_correction(self) -> str:
         return (
-            "Wrap the child in an Attempt whose failure monitors decide when to give up "
-            "on it."
+            "Give the child a fail condition, for example one reading a monitor that "
+            "decides when to give up on it."
         )
 
 
@@ -752,6 +735,22 @@ class NoLanguageNodeAboveError(NodeInitializationError):
         return (
             f"Put {self.node.name} below a plan language node, or add the new node as "
             f"the last child of one."
+        )
+
+
+@dataclass
+class NotATopLevelNodeError(NodeInitializationError):
+    """
+    Raised when the statechart is asked to replace a node that is the child of another
+    node, which is the replacement that node's parent has to make.
+    """
+
+    def error_message(self) -> str:
+        return f"{self.node.name} is not a top-level node of its statechart."
+
+    def suggest_correction(self) -> str:
+        return (
+            f"Replace {self.node.name} through the closest plan language node above it."
         )
 
 

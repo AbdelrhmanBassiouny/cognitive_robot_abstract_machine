@@ -2,7 +2,7 @@ from __future__ import annotations, division
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from itertools import combinations
+from itertools import combinations, takewhile
 from typing import List
 
 from typing_extensions import Any, Callable, Generator, Optional
@@ -22,7 +22,6 @@ from cramph.data_types import (
 )
 from cramph.exceptions import (
     NoLanguageNodeAboveError,
-    AttemptWithoutFailureMonitorsError,
     ChildCannotFailError,
     NodeAlreadyAChildError,
     NodeIsNotAChildError,
@@ -46,115 +45,6 @@ from krrood.symbolic_math.symbolic_math import (
     logic_not,
     logic_or,
 )
-
-# %% giving a node an outcome
-
-
-@dataclass(repr=False, eq=False, kw_only=True)
-class Attempt(SucceedsOnObservingTrue, FailsOnObservingFalse, CompositeNode):
-    """
-    Runs a node that would never end on its own and decides it, one way or the other.
-
-    A node that keeps holding its goal observes only whether it is at that goal right
-    now, so nothing about it ever concludes. This goal concludes instead: it
-    observes True once the task is at its goal, which ends it as a success, and False
-    once one of :attr:`failure_monitors` fires, which is what it declares its own
-    failure on. That is what lets a maintained node be one step of a plan.
-
-    It declares that failure as well once the task ended without succeeding, which is the
-    task having concluded on its own and nothing else here would notice.
-
-    .. note:: The task is never ended from here. It keeps exerting itself after first
-        reaching its goal and comes down only with this goal, so a task that was pushed
-        off its goal again is still being held.
-    """
-
-    task: StatechartNode
-    """
-    The node run until this goal is decided.
-    """
-
-    failure_monitors: List[StatechartNode]
-    """
-    The nodes whose observing True gives up on the task, any one of which is enough, so
-    there has to be at least one.
-
-    A monitor is read the way it is written, so one that observes being *well* has to be
-    negated before it can be passed here.
-    """
-
-    def __post_init__(self) -> None:
-        super().__post_init__()
-        if not self.failure_monitors:
-            raise AttemptWithoutFailureMonitorsError(node=self)
-
-    @property
-    def any_failure_monitor_fired(self) -> Scalar:
-        """
-        :return: True once a failure monitor fired, and false while none has.
-        """
-        return trinary_logic_or(
-            *[monitor.last_observed_true for monitor in self.failure_monitors]
-        )
-
-    @property
-    def failure_reasons(self) -> List[StatechartNode]:
-        """
-        Which monitors gave up on the task, which is what turns a failure into a reason.
-
-        They are read through their last observation, because ending this goal ends them
-        too and a node that ended observes nothing any more.
-
-        :return: The failure monitors that fired, in the order they were given, and
-            nothing at all unless this goal declared itself failed. Empty as well for a
-            failure the task reached on its own, which no monitor is the reason for.
-        """
-        if self.life_cycle_state != LifeCycleValues.FAILED:
-            return []
-        return [
-            monitor
-            for monitor in self.failure_monitors
-            if monitor.last_observation_state == ObservationStateValues.TRUE
-        ]
-
-    def expand(self, context: StatechartContext) -> None:
-        """
-        Add the task and the monitors.
-
-        A monitor that fires fails this goal on the same tick, which interrupts the
-        monitor and so keeps the observation it fired on as its last observation.
-        """
-        self._add_child_to_statechart(self.task)
-        self._add_children_to_statechart(self.failure_monitors)
-
-    def build_artifacts(self, context: StatechartContext) -> NodeArtifacts:
-        """
-        Report reaching the goal, being given up on, or neither.
-
-        Reaching the goal outranks a monitor firing on the same tick: a task
-        that arrived did what it was asked, whatever else was true at that moment. The
-        task is read through its last observation, which is what it observes for as long
-        as this goal holds it open, and what it arrived at if it ended itself.
-
-        A task that ended without succeeding is reported the same way a monitor giving up
-        is: nothing will move it any more, and an attempt still waiting for it would never
-        end. What it observed when it ended does not count as reaching its goal.
-        """
-        task_at_its_goal = logic_and(
-            self.task.last_observed_true,
-            logic_not(self.task.is_failed_or_interrupted),
-        )
-        return NodeArtifacts(
-            observation=trinary_if_cases(
-                cases=[
-                    (task_at_its_goal, Scalar.const_true()),
-                    (self.any_failure_monitor_fired, Scalar.const_false()),
-                    (self.task.is_failed_or_interrupted, Scalar.const_false()),
-                ],
-                else_result=Scalar.const_trinary_unknown(),
-            )
-        )
-
 
 # %% goals that decide when their children end
 
@@ -309,13 +199,7 @@ class CramLanguageNode(CompositeNode, ABC):  # ControlStructureNode?
         replaced = self.nodes[position]
         self._check_can_be_a_child(node)
         self._check_accepts_children()
-        if isinstance(node, CramLanguageNode) and node._has_child(replaced):
-            node._join_statechart_keeping_child(
-                replaced, lambda: self._put_at(position, node)
-            )
-            return
-        self._put_at(position, node)
-        self.statechart.remove_node(replaced)
+        node._take_place_of(replaced, lambda: self._put_at(position, node))
 
     def _put_at(self, position: int, node: StatechartNode) -> None:
         """
@@ -326,24 +210,27 @@ class CramLanguageNode(CompositeNode, ABC):  # ControlStructureNode?
         self._place_child_in_statechart(node)
         self._wire_children()
 
-    def _join_statechart_keeping_child(
-        self, child: StatechartNode, join_statechart: Callable[[], None]
+    def _take_place_of(
+        self, replaced: StatechartNode, join_statechart: Callable[[], None]
     ) -> None:
         """
-        Joins the statechart without `child`, which belongs to it already, and then
-        makes `child` a child of this node again, at the position it had among the
-        children. The conditions its former parent wired for it are cleared, so that
-        this node wires them.
-
-        :param child: A child of this node that belongs to the statechart already.
-        :param join_statechart: Puts this node in the statechart.
+        Differs from :meth:`~cramph.node.StatechartNode._take_place_of` where `replaced`
+        is one of the children of this node: it stays in the statechart and becomes a
+        child of this node again, at the position it has among the children. The
+        conditions its former parent wired for it are cleared, so that this node wires
+        them.
         """
-        position = next(index for index, node in enumerate(self.nodes) if node is child)
+        if not self._has_child(replaced):
+            super()._take_place_of(replaced, join_statechart)
+            return
+        position = next(
+            index for index, node in enumerate(self.nodes) if node is replaced
+        )
         del self.nodes[position]
         join_statechart()
-        child._clear_owner_wiring()
-        child.parent_node = self
-        self._insert_at(position, child)
+        replaced._clear_owner_wiring()
+        replaced.parent_node = self
+        self._insert_at(position, replaced)
 
     @staticmethod
     def closest_above(node: StatechartNode) -> CramLanguageNode:
@@ -359,6 +246,9 @@ class CramLanguageNode(CompositeNode, ABC):  # ControlStructureNode?
         raise NoLanguageNodeAboveError(node=node)
 
     def expand(self, context: StatechartContext) -> None:
+        self._adopt_nodes()
+
+    def _adopt_nodes(self) -> None:
         """
         Adopt every node this goal was handed and wire them.
         """
@@ -623,10 +513,9 @@ class RepeatUntil(CompositeNodeEndingItsChildren):
     :attr:`stop_retry_monitor` calls the retrying off, so a caller can tell "eventually
     worked" from "gave up".
 
-    What counts as a failed attempt is stated on the task itself: hand it an
-    :class:`Attempt` carrying the failure monitors that decide it, or see
-    :class:`RepeatOnStall`, which derives that decision from the task's own progress. A
-    task that cannot fail on its own is rejected, since it would never be retried.
+    What counts as a failed attempt is stated on the task itself, through its fail
+    condition. A task that cannot fail on its own is rejected, since it would never be
+    retried.
     """
 
     task: StatechartNode
@@ -780,9 +669,8 @@ class TryInOrder(CramLanguageNodeRunningItsChildrenInTurn):
     succeeding. Its observation turns True as soon as an alternative succeeds and False
     only once every one of them is over, so it stays unknown while any is still running.
 
-    Each alternative decides for itself when to give up, which is why this goal reduces
-    to ordering: wrap one in an :class:`Attempt` carrying the monitors that decide it.
-    An alternative that cannot fail is rejected anywhere but last, since the
+    Each alternative decides for itself when to give up, through its fail condition,
+    which is why this goal reduces to ordering. An alternative that cannot fail is rejected anywhere but last, since the
     alternatives after it could never start.
 
     .. note:: corresponds to the RPL's TRY-IN-ORDER. (McDermott, Drew. A reactive plan language, 1991)
@@ -841,7 +729,7 @@ class MonitoredCompositeNode(EndedByOwner, CompositeNode, ABC):
     Runs a monitored node next to the monitor observing it.
 
     What it observes is what the monitored node has reached, so nothing here ever
-    concludes either: a plan step built from one is an attempt wrapping it.
+    concludes either: the goal holding it ends it once it observes True.
 
     The two are siblings, which is what lets the monitor's observation drive the
     monitored node's life cycle: a transition condition may only reference the owning
@@ -1041,6 +929,37 @@ class ChildChooser(ABC):
         :return: The child `node` runs next, or None if no child is left.
         """
 
+    def prepare_chosen_child(
+        self,
+        node: CompositeNodeChoosingItsChild,
+        child: StatechartNode,
+        context: StatechartContext,
+    ) -> None:
+        """
+        Finishes a chosen child once it joined the statechart and expanded, before its
+        failure monitors are asked for. Does nothing unless overridden.
+
+        :param node: The node that chose `child`.
+        :param child: The child just chosen.
+        :param context: The context the statechart runs in.
+        """
+
+    def failure_monitors_for(
+        self,
+        node: CompositeNodeChoosingItsChild,
+        child: StatechartNode,
+        context: StatechartContext,
+    ) -> List[StatechartNode]:
+        """
+        :param node: The node that chose `child`.
+        :param child: The child just chosen and prepared, see
+            :meth:`prepare_chosen_child`.
+        :param context: The context the statechart runs in.
+        :return: The nodes whose observing True gives up on `child`, any one of which
+            is enough. None unless overridden, so `child` runs until it ends on its own.
+        """
+        return []
+
     def cleanup(self) -> None:
         """
         Releases what the chooser acquired to choose children, once the statechart
@@ -1074,6 +993,11 @@ class CompositeNodeChoosingItsChild(SucceedsOnObservingTrue, CompositeNode):
     its latest child ended without succeeding. It succeeds with the first child that
     succeeds, and fails once the chooser has no child left.
 
+    The chooser may hand a child failure monitors, which this node runs beside the child
+    and which fail the child once one of them observes True, so a child that would never
+    end on its own is given up on and the next one chosen. A child that reaches its goal
+    on the tick a monitor fires succeeds all the same.
+
     A reset puts it back to choosing: the children it chose before never run again, and
     it asks the chooser anew once it starts again.
 
@@ -1091,7 +1015,20 @@ class CompositeNodeChoosingItsChild(SucceedsOnObservingTrue, CompositeNode):
 
     _children_of_earlier_runs: int = field(default=0, init=False, repr=False)
     """
-    How many of :attr:`nodes` were chosen before the latest reset.
+    How many of :attr:`nodes` were added before the latest reset.
+    """
+
+    _chosen_children: List[StatechartNode] = field(
+        default_factory=list, init=False, repr=False
+    )
+    """
+    The children the chooser chose, in the order it chose them, without their failure
+    monitors.
+    """
+
+    _chosen_before_latest_reset: int = field(default=0, init=False, repr=False)
+    """
+    How many of :attr:`chosen_children` were chosen before the latest reset.
     """
 
     @classproperty
@@ -1126,14 +1063,66 @@ class CompositeNodeChoosingItsChild(SucceedsOnObservingTrue, CompositeNode):
         return True
 
     @property
+    def chosen_children(self) -> List[StatechartNode]:
+        """
+        :return: The children the chooser chose, in the order it chose them, without
+            their failure monitors.
+        """
+        return list(self._chosen_children)
+
+    @property
     def latest_child(self) -> Optional[StatechartNode]:
         """
         :return: The child chosen last since the latest reset, or None before the first
             such choice.
         """
-        if len(self.nodes) == self._children_of_earlier_runs:
+        if len(self._chosen_children) == self._chosen_before_latest_reset:
             return None
-        return self.nodes[-1]
+        return self._chosen_children[-1]
+
+    def failure_monitors_of(self, child: StatechartNode) -> List[StatechartNode]:
+        """
+        :param child: One of :attr:`chosen_children`.
+        :return: The failure monitors the chooser handed `child`, which follow it among
+            :attr:`nodes` up to the next chosen child.
+        """
+        following = self.nodes[self.nodes.index(child) + 1 :]
+        return list(
+            takewhile(lambda node: node not in self._chosen_children, following)
+        )
+
+    def failure_reasons_of(self, child: StatechartNode) -> List[StatechartNode]:
+        """
+        Which failure monitors gave up on `child`, which is what turns its failure into
+        a reason.
+
+        They are read through their last observation, because a monitor ends with its
+        child and a node that ended observes nothing any more.
+
+        :param child: One of :attr:`chosen_children`.
+        :return: The failure monitors of `child` that fired, in the order the chooser
+            handed them, and nothing at all unless `child` failed. Empty as well for a
+            child that failed on its own, which no monitor is the reason for.
+        """
+        if child.life_cycle_state != LifeCycleValues.FAILED:
+            return []
+        return [
+            monitor
+            for monitor in self.failure_monitors_of(child)
+            if monitor.last_observation_state == ObservationStateValues.TRUE
+        ]
+
+    @property
+    def failure_reasons(self) -> List[StatechartNode]:
+        """
+        :return: The failure monitors that gave up on any of :attr:`chosen_children`,
+            child by child, see :meth:`failure_reasons_of`.
+        """
+        return [
+            monitor
+            for child in self._chosen_children
+            for monitor in self.failure_reasons_of(child)
+        ]
 
     @property
     def is_waiting_for_a_child(self) -> bool:
@@ -1175,6 +1164,10 @@ class CompositeNodeChoosingItsChild(SucceedsOnObservingTrue, CompositeNode):
             self.give_up()
             return True
         self.adopt_chosen_child(child)
+        chooser.prepare_chosen_child(self, child, context)
+        self.give_up_on_child_when(
+            child, chooser.failure_monitors_for(self, child, context)
+        )
         return True
 
     def adopt_chosen_child(self, child: StatechartNode) -> None:
@@ -1182,8 +1175,32 @@ class CompositeNodeChoosingItsChild(SucceedsOnObservingTrue, CompositeNode):
         Run `child` next, succeeding once it succeeds.
         """
         self._add_child_to_statechart(child)
+        self._chosen_children.append(child)
         self.success_condition = logic_or(self.success_condition, child.is_succeeded)
         self.statechart.request_rebuild(self)
+
+    def give_up_on_child_when(
+        self, child: StatechartNode, failure_monitors: List[StatechartNode]
+    ) -> None:
+        """
+        Run `failure_monitors` beside `child`, failing it once one of them observes True
+        and ending them once it ended.
+
+        A monitor is read through its last observation, so one that ends itself on
+        firing still gives up on the child.
+
+        :param child: The child just chosen.
+        :param failure_monitors: The monitors that give up on `child`.
+        """
+        if not failure_monitors:
+            return
+        self._add_children_to_statechart(failure_monitors)
+        child.fail_condition = logic_or(
+            child.fail_condition,
+            *[monitor.last_observed_true for monitor in failure_monitors],
+        )
+        for monitor in failure_monitors:
+            monitor.interrupt_condition = child.is_terminated
 
     def give_up(self) -> None:
         """
@@ -1207,6 +1224,7 @@ class CompositeNodeChoosingItsChild(SucceedsOnObservingTrue, CompositeNode):
             for child in children_of_this_run:
                 child.start_condition = Scalar.const_false()
             self._children_of_earlier_runs = len(self.nodes)
+            self._chosen_before_latest_reset = len(self._chosen_children)
             self._out_of_children = False
             self.statechart.request_rebuild(self)
 
@@ -1329,7 +1347,7 @@ class StatementNode(CompositeNodeChoosingItsChild):
                 for node in [child, *child.descendants]
                 if isinstance(node, self.statement._type_)
             )
-            for child in self.children
+            for child in self.chosen_children
         ]
 
     def to_json(self, **kwargs) -> dict[str, Any]:

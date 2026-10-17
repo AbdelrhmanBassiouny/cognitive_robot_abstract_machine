@@ -13,7 +13,8 @@ from cramph.context import StatechartContext
 from coraplex.exceptions import ObjectIsNotHeld
 from coraplex.querying.predicates import GripperHolds
 from cramph.node import StatechartNode
-from cramph.composites import Parallel, Sequence
+from coraplex.robot_plans.actions.base import SequentialAction
+from cramph.composites import Parallel
 from coraplex.robot_plans.actions.core.pick_up import PickUpAction
 from coraplex.robot_plans.mixins import (
     ReattachesBodies,
@@ -22,6 +23,10 @@ from coraplex.robot_plans.mixins import (
     MovesGripper,
     MovesToolCenterPoint,
     PlaceTuningParameters,
+)
+from semantic_digital_twin.collision_checking.collision_matrix import CollisionRule
+from semantic_digital_twin.collision_checking.collision_rules import (
+    AllowCollisionForEndEffector,
 )
 from semantic_digital_twin.datastructures.definitions import GripperState
 from semantic_digital_twin.grasping.grasp_candidates import (
@@ -37,6 +42,7 @@ from semantic_digital_twin.spatial_types.spatial_types import Pose
 class PlaceAction(
     MovesToolCenterPoint,
     ReattachesBodies,
+    SequentialAction,
     HasApproachesGraspPoses,
     PlaceTuningParameters,
     HasGraspDetectionThreshold,
@@ -63,7 +69,17 @@ class PlaceAction(
     :func:`~semantic_digital_twin.reasoning.robot_predicates.is_body_gripped`).
     """
 
-    def create_action_body(self) -> StatechartNode:
+    def create_temporary_collision_rules(self) -> List[CollisionRule]:
+        """
+        :return: An allowance for the gripper holding :attr:`object_designator` to
+            touch the surroundings of the object, which it is around from setting it down
+            until it has retracted, the moment the object is put back under the world
+            included.
+        """
+        arm, _ = self._holding_arm_and_grasp()
+        return [AllowCollisionForEndEffector(end_effector=arm.end_effector)]
+
+    def create_steps(self) -> List[StatechartNode]:
         arm, grasp = self._holding_arm_and_grasp()
         # A release runs the grasp backwards: down from above the target, then out
         # along the way the grasp was approached.
@@ -71,59 +87,51 @@ class PlaceAction(
             grasp.moved_to(self.target_location), arm.end_effector, grasp
         )
 
-        return Sequence(
-            nodes=[
-                self.tool_center_point_goal(
-                    poses.retreat,
-                    arm,
-                    allow_gripper_collision=True,
-                    max_linear_velocity=self.transport_linear_velocity,
-                ),
-                self.tool_center_point_goal(
-                    poses.grasp,
-                    arm,
-                    allow_gripper_collision=True,
-                    max_linear_velocity=self.placing_linear_velocity,
-                ),
-                Parallel(
-                    nodes=[
-                        self.gripper_goal(
-                            GripperState.OPEN,
-                            arm.end_effector,
-                            allow_gripper_collision=True,
-                            finger_velocity=self.release_opening_velocity,
-                        ),
-                        # Keeps the gripper in place while it opens, whatever else
-                        # moves the robot meanwhile.
-                        self.tool_center_point_goal(
-                            poses.grasp, arm, allow_gripper_collision=True
-                        ),
-                    ]
-                ),
-                self._retract(arm, poses.pre_grasp),
-            ]
-        )
+        return [
+            self.tool_center_point_goal(
+                poses.retreat,
+                arm,
+                max_linear_velocity=self.transport_linear_velocity,
+            ),
+            self.tool_center_point_goal(
+                poses.grasp,
+                arm,
+                max_linear_velocity=self.placing_linear_velocity,
+            ),
+            Parallel(
+                nodes=[
+                    self.gripper_goal(
+                        GripperState.OPEN,
+                        arm.end_effector,
+                        finger_velocity=self.release_opening_velocity,
+                    ),
+                    # Keeps the gripper in place while it opens, whatever else
+                    # moves the robot meanwhile.
+                    self.tool_center_point_goal(poses.grasp, arm),
+                ]
+            ),
+            *self._retract_steps(arm, poses.pre_grasp),
+        ]
 
-    def _retract(self, arm: Arm, retract_pose: Pose) -> Sequence:
+    def _retract_steps(self, arm: Arm, retract_pose: Pose) -> List[StatechartNode]:
         """
         :param arm: The arm that placed the object.
         :param retract_pose: Where its tool frame withdraws to.
         :return: The steps that re-parent the placed object back to the world and
             retract the end effector away from it.
         """
-        return Sequence(
-            name=f"{self.name}/retract",
-            nodes=[
-                *self.reattach(self.object_designator.root, self.world.root),
-                # The gripper starts out around the object it has just let go of.
-                self.tool_center_point_goal(
-                    retract_pose,
-                    arm,
-                    allow_gripper_collision=True,
-                    max_linear_velocity=self.retract_linear_velocity,
-                ),
-            ],
-        )
+        return [
+            *self.reattach(
+                self.object_designator.root,
+                self.world.root,
+            ),
+            # The gripper starts out around the object it has just let go of.
+            self.tool_center_point_goal(
+                retract_pose,
+                arm,
+                max_linear_velocity=self.retract_linear_velocity,
+            ),
+        ]
 
     def _holding_arm_and_grasp(self) -> Tuple[Arm, GraspCandidate]:
         """

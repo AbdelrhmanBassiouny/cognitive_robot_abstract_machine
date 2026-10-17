@@ -12,10 +12,18 @@ from typing_extensions import Iterator, List
 from coraplex.exceptions import MotionDidNotFinish
 from coraplex.locations.base import Location
 from coraplex.plans.failures import EmptyUnderspecified
-from coraplex.robot_plans.actions.core.navigation import NavigateAction
+from coraplex.robot_plans.actions.composite.facing import FaceAndLookAtAction
+from coraplex.robot_plans.actions.core.navigation import (
+    FaceAtAction,
+    LookAtAction,
+    NavigateAction,
+)
 from coraplex.robot_plans.actions.core.pick_up import PickUpAction
 from coraplex.robot_plans.actions.core.placing import PlaceAction
-from coraplex.robot_plans.actions.core.robot_body import MoveTorsoAction
+from coraplex.robot_plans.actions.core.robot_body import (
+    MoveTorsoAction,
+    SetGripperAction,
+)
 from coraplex.plans import executors
 from cramph.composites import (
     StatementNode,
@@ -39,7 +47,7 @@ from krrood.entity_query_language.factories import a, variable
 from semantic_digital_twin.adapters.world_entity_kwargs_tracker import (
     WorldEntityWithIDKwargsTracker,
 )
-from semantic_digital_twin.datastructures.definitions import TorsoState
+from semantic_digital_twin.datastructures.definitions import GripperState, TorsoState
 from semantic_digital_twin.robots.robot_parts import AbstractRobot
 from semantic_digital_twin.semantic_annotations.semantic_annotations import (
     Milk,
@@ -529,14 +537,18 @@ def test_an_underspecified_action_out_of_candidates_on_the_robot_says_it_is_empt
     assert failure.value.node is plan
 
 
-def test_an_expanded_action_is_received_with_the_nodes_it_runs(pr2_apartment_context):
+def test_an_expanded_action_is_received_with_the_goal_it_reaches(pr2_apartment_context):
     """
     A receiver does not expand the nodes of a statechart again, so an action has to
-    arrive knowing the sequence it runs.
+    arrive knowing the goal it reaches.
     """
     world, robot, extensions = pr2_apartment_context
     sent = Statechart(context=simulated_executor(extensions).context)
-    sent.add_node(action := MoveTorsoAction(torso_state=TorsoState.HIGH))
+    sent.add_node(
+        action := SetGripperAction(
+            gripper=robot.left_arm.end_effector, motion=GripperState.OPEN
+        )
+    )
 
     received = Statechart.from_json(
         json.loads(json.dumps(sent.to_json())),
@@ -545,6 +557,35 @@ def test_an_expanded_action_is_received_with_the_nodes_it_runs(pr2_apartment_con
     )
 
     received_action = received.get_node_by_index(action.index)
-    assert received_action.action_body is received.get_node_by_index(
-        action.action_body.index
+    assert received_action.goal is received.get_node_by_index(action.goal.index)
+
+
+def test_an_expanded_action_is_received_with_the_steps_it_runs(pr2_apartment_context):
+    """
+    The steps of an action are its children, which arrive linked to it rather than
+    created again.
+    """
+    world, robot, extensions = pr2_apartment_context
+    target = Pose.from_xyz_rpy(1.0, 0.0, 1.0, reference_frame=world.root)
+    sent = Statechart(context=simulated_executor(extensions).context)
+    sent.add_node(
+        action := FaceAndLookAtAction(
+            face_at=FaceAtAction(target=target), look_at=LookAtAction(target=target)
+        )
     )
+
+    received = Statechart.from_json(
+        json.loads(json.dumps(sent.to_json())),
+        context=simulated_executor(extensions).context,
+        **WorldEntityWithIDKwargsTracker.from_world(world).create_kwargs(),
+    )
+
+    received_action = received.get_node_by_index(action.index)
+    assert type(received_action) is FaceAndLookAtAction
+    assert received_action.nodes == [
+        received.get_node_by_index(step.index) for step in action.nodes
+    ]
+    assert [type(step) for step in received_action.nodes] == [
+        FaceAtAction,
+        LookAtAction,
+    ]

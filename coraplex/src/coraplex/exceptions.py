@@ -154,25 +154,6 @@ class CannotMatchOnType(DataclassException):
 
 
 @dataclass
-class ActionNotExpanded(DataclassException):
-    """
-    Raised when the body of an action is to be replaced before the action was expanded,
-    so it has no body yet.
-    """
-
-    action: StatechartNode
-    """
-    The action that has no body.
-    """
-
-    def error_message(self) -> str:
-        return f"{self.action} was not expanded, so it has no body to replace."
-
-    def suggest_correction(self) -> str:
-        return "add the action to a statechart before replacing its body"
-
-
-@dataclass
 class ClosingGoalNotFound(DataclassException):
     """
     Raised when the goal closing the container is asked for, but no such goal lies below

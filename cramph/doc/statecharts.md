@@ -349,12 +349,11 @@ leaves it abstract raises a `TypeError`.
   only its owner ends it. Monitors (`CountSeconds`, `CountTicks`, `Print`, …), `Parallel`
   and the monitored composite nodes are examples.
 - **`SucceedsOnObservingTrue`**: ending the node undoes nothing it did, so it ends itself: it
-  succeeds once it observes True. Examples are `Attempt`, the ordering templates,
-  `FunctionCall`, `MoveBranch` and `CompositeNodeChoosingItsChild`.
+  succeeds once it observes True. Examples are the ordering templates, `FunctionCall`, `MoveBranch` and `CompositeNodeChoosingItsChild`.
 
 Independently, a node class can inherit **`FailsOnObservingFalse`**: observing False
-means it can no longer reach its goal, so it fails once it observes False. `Attempt`,
-the ordering templates and `FunctionCall` do.
+means it can no longer reach its goal, so it fails once it observes False. The ordering
+templates and `FunctionCall` do.
 
 What a class brings is its *inherent* success and fail condition
 (`inherent_success_condition`, `inherent_fail_condition`). The conditions written on a node
@@ -367,8 +366,7 @@ reach `minimum_success`, and every monitored composite statechart node fails onc
 monitored node ended without succeeding.
 
 A node its owner ends becomes a step by being handed to an ordering template, which is then
-its owner and ends it once it observes True. `Attempt` does the same for a single node and
-adds failure monitors that decide when to give up on it.
+its owner and ends it once it observes True.
 
 ```{mermaid}
 flowchart LR
@@ -380,11 +378,9 @@ flowchart LR
     end
     subgraph itself ["SucceedsOnObservingTrue"]
         direction TB
-        attempt(["Attempt"])
         ordering(["Sequence, TryInOrder,<br/>TryAll, RepeatUntil"])
         steps(["FunctionCall, MoveBranch,<br/>CompositeNodeChoosingItsChild"])
     end
-    owner -- "task of" --> attempt
     owner -- "ended at its goal by" --> ordering
     itself -- "usable as a step of" --> ordering
 ```
@@ -415,47 +411,6 @@ children's conditions accordingly; `replace` removes the replaced node and every
 it from the statechart. Wherever such a construct is handed a node, it also takes an
 underspecified `a(...)` statement, which it runs through a
 [`StatementNode`](#choosing-a-child-while-running).
-
-### Attempt
-
-Runs a `task` together with a list of `failure_monitors`, and ends as soon as either the task
-reaches its goal or a monitor gives up on it.
-
-- It observes **True** once the task's `last_observed_true` is True while the task has not
-  ended without succeeding, and then succeeds.
-- It observes **False** once any failure monitor's `last_observed_true` is True, and then fails.
-  Reaching the goal wins if both happen on the same tick.
-- It observes **False** as well once the task ended without succeeding, which is the task
-  having concluded on its own; an attempt still waiting for it would never end.
-- Otherwise it observes Unknown and keeps going.
-
-The task is never ended by the attempt directly. It keeps running until the attempt
-itself ends and interrupts it. The attempt fails on the tick a failure monitor fires,
-which interrupts the monitor and keeps what it observed as its last observation, so
-`attempt.failure_reasons` can list the monitors that caused a failure after the fact. An
-attempt needs at least one failure monitor; creating one without raises an
-`AttemptWithoutFailureMonitorsError`.
-
-```{mermaid}
-flowchart LR
-    subgraph attempt ["Attempt"]
-        direction TB
-        task(["task"])
-        m1(["failure monitor 1"])
-        m2(["failure monitor 2"])
-    end
-    obs{"Attempt observes"}
-    task -- "last_observed_true" --> obs
-    m1 -- "last_observed_true" --> obs
-    m2 -- "last_observed_true" --> obs
-    obs -- "True: success" --> S([SUCCEEDED])
-    obs -- "False: fail" --> F([FAILED])
-
-    classDef succeeded fill:#28A745,stroke:#15803D,color:#FFFFFF
-    classDef failed fill:#EF4444,stroke:#B91C1C,color:#FFFFFF
-    class S succeeded
-    class F failed
-```
 
 ### Sequence
 
@@ -494,9 +449,8 @@ nodes are left to reach `minimum_success` at all.
 `Parallel` never ends any of its nodes: ending a node that reached its goal would let a node
 that is still running undo what it achieved. For the same reason it is a
 node whose owner decides its success and never succeeds on its own; it only fails on its own,
-once too few nodes are left. Put it into an `Attempt`, or hand it to an
-ordering template, to get a step that finishes once all nodes are at
-their goals together.
+once too few nodes are left. Hand it to an ordering template to get a step that finishes
+once all nodes are at their goals together.
 
 ```{mermaid}
 flowchart LR
@@ -522,8 +476,8 @@ alternative starts once the previous one ended without succeeding.
 - It observes **True** as soon as an alternative succeeded.
 - It observes **False** once every alternative ended without succeeding.
 
-Each alternative decides for itself when to give up, typically as an `Attempt` with failure
-monitors. An alternative that cannot fail would keep the later alternatives from ever
+Each alternative decides for itself when to give up, through its fail condition. An
+alternative that cannot fail would keep the later alternatives from ever
 starting, so it is rejected anywhere but last.
 
 ```{mermaid}
@@ -555,8 +509,7 @@ Runs all of its `nodes` at the same time and takes the first one that works.
 `RepeatUntil` runs a `task` and resets it whenever it fails, until either the task succeeds or
 `stop_retry_monitor` calls the retrying off.
 
-- What counts as a failed try is stated on the task, typically as an `Attempt` with failure
-  monitors. A task that cannot fail would never be retried, so it is rejected.
+- What counts as a failed try is stated on the task, through its fail condition. A task that cannot fail would never be retried, so it is rejected.
 - A failed try is reset on the next tick, as long as the stop monitor has not
   observed True. Resetting a goal resets everything below it, so a composite task starts over as a
   whole.
@@ -713,6 +666,12 @@ again whenever its latest child ended without succeeding.
 - It succeeds once a child succeeds, and fails once the chooser has no child left. Since that
   can happen at any choice, it always counts as a node that can fail.
 - A chooser may answer that it has no choice yet; the node then asks again on the next tick.
+- A chooser may hand failure monitors along with a child. They run beside it and fail it once
+  one of them observes True, unless it reaches its goal on the same tick; they end with it.
+  Before asking for them, the node lets the chooser prepare the child, which has joined the
+  statechart by then.
+  `failure_reasons` names the monitors that gave up on a child, and `chosen_children` keeps
+  the children apart from them.
 - A reset puts it back to choosing: the children it chose before never run again.
 
 Every chosen child joins the statechart after it was compiled, which compiles it again (see
@@ -727,25 +686,29 @@ the statechart elsewhere receives the chosen children instead.
 
 ## Example
 
-A plan that first tries a slow approach and falls back to a fast one once the slow one takes
-too long. Counters stand in for real work:
+A plan that first tries a slow approach and falls back to a fast one once the slow one fails.
+A function that raises and counters stand in for real work:
 
 ```python
-from cramph.composites import Attempt, Sequence, TryInOrder
+from cramph.composites import Sequence, TryInOrder
 from cramph.context import StatechartContext
 from cramph.executor import StatechartExecutor
 from cramph.monitors import CountTicks
 from cramph.node import EndStatechart
 from cramph.statechart import Statechart
+from cramph.threaded_nodes import FunctionCall
 from semantic_digital_twin.world import World
 
 executor = StatechartExecutor(context=StatechartContext(world=World()))
 statechart = Statechart(context=executor.context)
 
-slow_approach = Attempt(
-    name="slow approach",
-    task=CountTicks(name="slow", ticks=100),
-    failure_monitors=[CountTicks(name="timeout", ticks=10)],
+
+def slip():
+    raise RuntimeError("the gripper slipped")
+
+
+slow_approach = FunctionCall(
+    name="slow approach", function=slip, failure_types=(RuntimeError,)
 )
 fast_approach = CountTicks(name="fast approach", ticks=5)
 
@@ -761,9 +724,9 @@ statechart.add_node(EndStatechart.when_true(plan))
 
 After running it:
 
-- `slow_approach` is FAILED, and `slow_approach.failure_reasons` names the `timeout` monitor.
-- `fast_approach` and `retreat` are SUCCEEDED, ended by the templates running them.
-- `plan` is SUCCEEDED, and the `slow` counter is INTERRUPTED, because its attempt ended it.
+- `slow_approach` is FAILED, since its function raised one of its `failure_types`.
+- `fast_approach` and `retreat` are SUCCEEDED, ended by the templates holding them.
+- `plan` is SUCCEEDED.
 
 [Running a Statechart](examples/running_a_statechart.md) executes this plan and plots it.
 

@@ -216,12 +216,14 @@ class PlanExecutor(Executor, ABC):
         :raises EmptyStatechartError: If `statechart` holds no node.
         """
         Executor.compile(self, statechart)
-        self.plan_nodes = list(statechart.top_level_nodes)
-        if not self.plan_nodes:
+        plan_nodes = list(statechart.top_level_nodes)
+        if not plan_nodes:
             raise EmptyStatechartError()
         rewriting = self.context.require_extension(PlanRewriting)
-        for plan_node in self.plan_nodes:
+        for plan_node in plan_nodes:
             rewriting.rewrite(plan_node)
+        # a transformation may have put a plan node below a node holding it
+        self.plan_nodes = list(statechart.top_level_nodes)
         if self.collision_avoidance:
             statechart.add_node(ExternalCollisionAvoidance())
             statechart.add_node(SelfCollisionAvoidance())

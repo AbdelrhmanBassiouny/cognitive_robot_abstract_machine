@@ -5,11 +5,11 @@ from dataclasses import dataclass, field
 from typing_extensions import List, Optional
 
 from cramph.composites import (
-    Attempt,
     ChildChooser,
     ChildChooserAccess,
     CompositeNodeChoosingItsChild,
     RepeatUntil,
+    StoppedWhenTrue,
 )
 from cramph.data_types import LifeCycleValues, ObservationStateValues
 from cramph.executor import StatechartExecutor, TickingExecutorExtension
@@ -18,6 +18,7 @@ from cramph.node import EndStatechart, StatechartNode
 from cramph.nodes_for_testing import (
     ConstFalseNode,
     NodeFailingOnObservingFalse,
+    NodeObservingAFixedValue,
     NodeSucceedingOnObservingTrue,
 )
 from cramph.statechart import Statechart
@@ -60,6 +61,43 @@ class ChooserAnsweringInTurn(ChildChooser):
         if not self.children:
             return None
         return self.children.pop(0)
+
+
+@dataclass
+class ChooserGivingUpOnItsChildren(ChooserAnsweringInTurn):
+    """
+    Gives the prepared children in turn, each with the failure monitors prepared for
+    it, and notes in which order it was asked about a child it gave.
+    """
+
+    failure_monitors: List[List[StatechartNode]] = field(default_factory=list)
+    """
+    The failure monitors still to give, one list per child, in the order of
+    :attr:`children`.
+    """
+
+    calls: List[str] = field(default_factory=list)
+    """
+    Which of the questions about a given child were asked, in order, with whether the
+    child belonged to the statechart by then.
+    """
+
+    def prepare_chosen_child(
+        self,
+        node: CompositeNodeChoosingItsChild,
+        child: StatechartNode,
+        context,
+    ) -> None:
+        self.calls.append(f"prepare {child.name}, joined: {child.index is not None}")
+
+    def failure_monitors_for(
+        self,
+        node: CompositeNodeChoosingItsChild,
+        child: StatechartNode,
+        context,
+    ) -> List[StatechartNode]:
+        self.calls.append(f"monitors {child.name}")
+        return self.failure_monitors.pop(0)
 
 
 @dataclass
@@ -360,6 +398,121 @@ def test_the_extensions_hold_still_before_a_node_chooses(statechart_context):
     assert chooser.held_still_when_asked == [True]
 
 
+# %% giving up on a child
+
+
+def test_a_child_is_given_up_on_once_one_of_its_failure_monitors_fires(
+    statechart_executor: StatechartExecutor,
+):
+    undecided = _undecided_child("undecided")
+    timeout = CountTicks(name="timeout", ticks=3)
+    succeeding = _succeeding_child("succeeding")
+    chooser = ChooserGivingUpOnItsChildren(
+        [undecided, succeeding], failure_monitors=[[timeout], []]
+    )
+
+    choosing_node = _run_choosing_node(statechart_executor, chooser)
+
+    assert choosing_node.chosen_children == [undecided, succeeding]
+    assert undecided.life_cycle_state == LifeCycleValues.FAILED
+    assert choosing_node.life_cycle_state == LifeCycleValues.SUCCEEDED
+
+
+def test_a_child_reaching_its_goal_succeeds_although_a_monitor_fires_on_that_tick(
+    statechart_executor: StatechartExecutor,
+):
+    child = _succeeding_child("child")
+    firing_at_once = NodeObservingAFixedValue(
+        name="firing at once", observation=ObservationStateValues.TRUE
+    )
+    chooser = ChooserGivingUpOnItsChildren([child], failure_monitors=[[firing_at_once]])
+
+    choosing_node = _run_choosing_node(statechart_executor, chooser)
+
+    assert child.life_cycle_state == LifeCycleValues.SUCCEEDED
+    assert choosing_node.failure_reasons == []
+
+
+def test_the_failure_monitors_of_a_child_stop_once_it_ended(
+    statechart_executor: StatechartExecutor,
+):
+    failing = _failing_child("failing")
+    never_firing = ConstFalseNode(name="never firing")
+    undecided = _undecided_child("undecided")
+    timeout = CountTicks(name="timeout", ticks=5)
+    chooser = ChooserGivingUpOnItsChildren(
+        [failing, undecided], failure_monitors=[[never_firing], [timeout]]
+    )
+
+    _run_choosing_node(
+        statechart_executor, chooser, end_node_factory=EndStatechart.when_failed
+    )
+
+    assert never_firing.life_cycle_state == LifeCycleValues.INTERRUPTED
+    assert timeout.last_observation_state == ObservationStateValues.TRUE
+
+
+def test_the_failure_monitors_of_a_child_are_not_among_the_chosen_children(
+    statechart_executor: StatechartExecutor,
+):
+    undecided = _undecided_child("undecided")
+    timeout = CountTicks(name="timeout", ticks=3)
+    chooser = ChooserGivingUpOnItsChildren([undecided], failure_monitors=[[timeout]])
+
+    choosing_node = _run_choosing_node(
+        statechart_executor, chooser, end_node_factory=EndStatechart.when_failed
+    )
+
+    assert choosing_node.chosen_children == [undecided]
+    assert choosing_node.failure_monitors_of(undecided) == [timeout]
+    assert choosing_node.latest_child is undecided
+
+
+def test_the_failure_reasons_are_the_monitors_that_gave_up_on_a_child(
+    statechart_executor: StatechartExecutor,
+):
+    undecided = _undecided_child("undecided")
+    timeout = CountTicks(name="timeout", ticks=3)
+    never_firing = ConstFalseNode(name="never firing")
+    succeeding = _succeeding_child("succeeding")
+    chooser = ChooserGivingUpOnItsChildren(
+        [undecided, succeeding], failure_monitors=[[never_firing, timeout], []]
+    )
+
+    choosing_node = _run_choosing_node(statechart_executor, chooser)
+
+    assert choosing_node.failure_reasons_of(undecided) == [timeout]
+    assert choosing_node.failure_reasons_of(succeeding) == []
+    assert choosing_node.failure_reasons == [timeout]
+
+
+def test_a_child_failing_on_its_own_has_no_failure_reasons(
+    statechart_executor: StatechartExecutor,
+):
+    failing = _failing_child("failing")
+    never_firing = ConstFalseNode(name="never firing")
+    succeeding = _succeeding_child("succeeding")
+    chooser = ChooserGivingUpOnItsChildren(
+        [failing, succeeding], failure_monitors=[[never_firing], []]
+    )
+
+    choosing_node = _run_choosing_node(statechart_executor, chooser)
+
+    assert failing.life_cycle_state == LifeCycleValues.FAILED
+    assert choosing_node.failure_reasons_of(failing) == []
+
+
+def test_a_chosen_child_is_prepared_once_it_joined_and_before_its_monitors_are_asked_for(
+    statechart_executor: StatechartExecutor,
+):
+    child = _succeeding_child("child")
+    chooser = ChooserGivingUpOnItsChildren([child], failure_monitors=[[]])
+
+    _run_choosing_node(statechart_executor, chooser)
+
+    assert chooser.calls == ["prepare child, joined: True", "monitors child"]
+
+
 # %% choosing again after a reset
 
 
@@ -371,14 +524,14 @@ def test_a_reset_node_chooses_again_instead_of_running_its_earlier_children(
     succeeding = _succeeding_child("succeeding")
     chooser = ChooserAnsweringInTurn([failing, undecided, succeeding])
     choosing_node = CompositeNodeChoosingItsChild(name="choosing")
-    attempt = Attempt(
-        name="attempt",
-        task=choosing_node,
-        failure_monitors=[CountTicks(name="timeout", ticks=6)],
+    stopped = StoppedWhenTrue(
+        name="stopped",
+        monitor=CountTicks(name="timeout", ticks=6),
+        monitored_node=choosing_node,
     )
 
     statechart = _run_repeated_until_decided(
-        statechart_executor, chooser, attempt, resets_until_stopped=3
+        statechart_executor, chooser, stopped, resets_until_stopped=3
     )
 
     assert chooser.asked_nodes == [choosing_node] * 3

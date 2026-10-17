@@ -4,7 +4,7 @@ import pytest
 from typing_extensions import List
 
 from cramph.composites import (
-    Attempt,
+    PausedWhileTrue,
     CramLanguageNode,
     Parallel,
     Sequence,
@@ -16,6 +16,7 @@ from cramph.exceptions import (
     NodeAlreadyAChildError,
     NodeIsNotAChildError,
     NoLanguageNodeAboveError,
+    NotATopLevelNodeError,
     StatechartAlreadyCompiledError,
 )
 from cramph.executor import StatechartExecutor
@@ -328,6 +329,62 @@ def test_replacing_a_step_of_a_compiled_statechart_is_rejected_and_changes_nothi
     assert held.parent_node is sequence
 
 
+# %% replacing a top-level node
+
+
+def test_a_top_level_node_replaced_by_a_node_holding_it_stays_below_that_node(
+    statechart_executor: StatechartExecutor,
+):
+    statechart = Statechart(context=statechart_executor.context)
+    statechart.add_node(held := _succeeding("held"))
+    beside = _at_goal("beside")
+
+    statechart.replace(held, replacement := Sequence(nodes=[held, beside]))
+    _run(statechart_executor, statechart, replacement)
+
+    assert statechart.top_level_nodes[0] is replacement
+    assert replacement.nodes == [held, beside]
+    assert held.parent_node is replacement
+    assert replacement.life_cycle_state == LifeCycleValues.SUCCEEDED
+
+
+def test_a_replaced_top_level_node_leaves_the_statechart(
+    statechart_executor: StatechartExecutor,
+):
+    statechart = Statechart(context=statechart_executor.context)
+    statechart.add_node(replaced := Sequence(nodes=[_succeeding("below")]))
+
+    statechart.replace(replaced, replacement := _succeeding("instead"))
+
+    assert statechart.nodes == [replacement]
+    assert not replaced.belongs_to_statechart()
+
+
+def test_only_a_top_level_node_is_replaced_by_the_statechart(
+    statechart_executor: StatechartExecutor,
+):
+    statechart = Statechart(context=statechart_executor.context)
+    statechart.add_node(Sequence(nodes=[step := _succeeding("step")]))
+
+    with pytest.raises(NotATopLevelNodeError):
+        statechart.replace(step, _succeeding("instead"))
+
+
+def test_replacing_a_top_level_node_of_a_compiled_statechart_is_rejected(
+    statechart_executor: StatechartExecutor,
+):
+    statechart = Statechart(context=statechart_executor.context)
+    statechart.add_node(held := _at_goal("held"))
+    statechart_executor.compile(statechart)
+    replacement = Parallel(nodes=[_at_goal("beside"), held])
+
+    with pytest.raises(StatechartAlreadyCompiledError):
+        statechart.replace(held, replacement)
+
+    assert held.parent_node is None
+    assert statechart.top_level_nodes == [held]
+
+
 # %% the closest language node above a node
 
 
@@ -336,8 +393,10 @@ def test_the_closest_language_node_above_a_nested_node_is_the_first_one_on_its_p
 ):
     statechart = Statechart(context=statechart_executor.context)
     nested = _succeeding("nested")
-    attempt = Attempt(name="attempt", task=nested, failure_monitors=[ConstFalseNode()])
-    statechart.add_node(sequence := Sequence(nodes=[attempt]))
+    paused = PausedWhileTrue(
+        name="paused", monitor=ConstFalseNode(), monitored_node=nested
+    )
+    statechart.add_node(sequence := Sequence(nodes=[paused]))
 
     assert CramLanguageNode.closest_above(nested) is sequence
 
@@ -347,13 +406,15 @@ def test_a_step_inserted_before_a_nested_node_runs_before_what_holds_it(
 ):
     statechart = Statechart(context=statechart_executor.context)
     first, nested = _succeeding("1"), _succeeding("nested")
-    attempt = Attempt(name="attempt", task=nested, failure_monitors=[ConstFalseNode()])
-    statechart.add_node(sequence := Sequence(nodes=[attempt]))
+    paused = PausedWhileTrue(
+        name="paused", monitor=ConstFalseNode(), monitored_node=nested
+    )
+    statechart.add_node(sequence := Sequence(nodes=[paused]))
 
     CramLanguageNode.closest_above(nested).insert_before(nested, first)
     _run(statechart_executor, statechart, sequence)
 
-    assert _start_order(statechart, [attempt, first]) == [first, attempt]
+    assert _start_order(statechart, [paused, first]) == [first, paused]
 
 
 def test_a_node_without_a_language_node_above_it_has_none_closest_above_it(

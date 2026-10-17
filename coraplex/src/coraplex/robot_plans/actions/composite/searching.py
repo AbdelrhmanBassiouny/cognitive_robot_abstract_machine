@@ -2,9 +2,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from typing_extensions import List
+
 from coraplex.datastructures.enums import DetectionTechnique
 from coraplex.locations.locations import VisibilityLocation
-from coraplex.robot_plans.actions.base import Action
+from coraplex.robot_plans.actions.base import SequentialAction
 from coraplex.robot_plans.actions.core.misc import DetectAction
 from coraplex.robot_plans.actions.core.navigation import LookAtAction, NavigateAction
 from cramph.composites import Sequence, TryInOrder
@@ -19,7 +21,7 @@ from semantic_digital_twin.world_description.world_entity import SemanticAnnotat
 
 
 @dataclass(eq=False, repr=False, kw_only=True)
-class SearchAction(Action):
+class SearchAction(SequentialAction):
     """
     Searches for an object around a location.
 
@@ -49,40 +51,38 @@ class SearchAction(Action):
     How far beyond the points looked at an object may lie and still be detected.
     """
 
-    def create_action_body(self) -> StatechartNode:
+    def create_steps(self) -> List[StatechartNode]:
         detection_box = self._detection_box()
-        return Sequence(
-            nodes=[
-                a(NavigateAction)(
-                    target_location=variable(
-                        Pose,
-                        domain=VisibilityLocation(
-                            target_pose=self.target_location,
-                            context=self.context,
-                            seed=self.sampling_seed,
-                        ),
+        return [
+            a(NavigateAction)(
+                target_location=variable(
+                    Pose,
+                    domain=VisibilityLocation(
+                        target_pose=self.target_location,
+                        context=self.context,
+                        seed=self.sampling_seed,
+                    ),
+                )
+            ),
+            TryInOrder(
+                nodes=[
+                    Sequence(
+                        nodes=[
+                            LookAtAction(
+                                target=self.target_location,
+                                sideways_offset=sideways_offset,
+                            ),
+                            DetectAction(
+                                technique=DetectionTechnique.TYPES,
+                                object_sem_annotation=self.object_semantic_annotation,
+                                detection_box=detection_box,
+                            ),
+                        ]
                     )
-                ),
-                TryInOrder(
-                    nodes=[
-                        Sequence(
-                            nodes=[
-                                LookAtAction(
-                                    target=self.target_location,
-                                    sideways_offset=sideways_offset,
-                                ),
-                                DetectAction(
-                                    technique=DetectionTechnique.TYPES,
-                                    object_sem_annotation=self.object_semantic_annotation,
-                                    detection_box=detection_box,
-                                ),
-                            ]
-                        )
-                        for sideways_offset in self.sideways_look_offsets
-                    ]
-                ),
-            ]
-        )
+                    for sideways_offset in self.sideways_look_offsets
+                ]
+            ),
+        ]
 
     def _detection_box(self) -> VolumetricBoundingBox:
         """

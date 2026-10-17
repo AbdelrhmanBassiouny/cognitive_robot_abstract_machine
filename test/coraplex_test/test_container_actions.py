@@ -70,7 +70,7 @@ def test_gripper_backs_off_the_handle_after_letting_go(pr2_at_drawer, action_typ
     action = action_type(grasp=grasp, arm=arm)
     statechart_of(simulated_executor(extensions), action)
 
-    *_, letting_go, back_off = action.action_body.nodes
+    *_, letting_go, back_off = action.nodes
 
     assert [
         node.state for node in goals_of(letting_go) if isinstance(node, MoveGripper)

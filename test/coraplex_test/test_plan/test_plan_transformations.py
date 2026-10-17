@@ -16,8 +16,8 @@ from coraplex.plans.plan_transformation import (
     PlanTransformation,
     logger as transformation_logger,
 )
-from coraplex.plans.underspecified import AttemptRewritingItsTask
-from coraplex.robot_plans.actions.base import Action
+from coraplex.plans.underspecified import PlanChildChooser
+from coraplex.robot_plans.actions.base import Action, GoalAction
 from coraplex.robot_plans.actions.composite.facing import FaceAndLookAtAction
 from coraplex.robot_plans.actions.composite.transporting import (
     MoveAndOpenAction,
@@ -51,8 +51,6 @@ from coraplex.robot_plans.plan_transformations import (
     ParkArmsBeforeFirstAction,
 )
 from cramph.composites import (
-    ChildChooser,
-    CramLanguageNode,
     Sequence,
     StatementNode,
 )
@@ -60,7 +58,6 @@ from cramph.context import ContextExtension
 from cramph.context import StatechartContext
 from cramph.exceptions import NoLanguageNodeAboveError
 from cramph.node import StatechartNode
-from cramph.nodes_for_testing import ConstFalseNode
 from giskardpy.motion_statechart.goals.cartesian_goals import CartesianPoseStraight
 from giskardpy.motion_statechart.goals.gripper import MoveGripper
 from giskardpy.motion_statechart.tasks.cartesian_tasks import CartesianPose
@@ -121,13 +118,12 @@ def rewritten(
 def steps_of(node: StatechartNode) -> List[StatechartNode]:
     """
     :param node: An expanded action, or a plan language node.
-    :return: The steps it runs, in order, which is its body alone for an action whose
-        body is a single node.
+    :return: The steps it runs, in order, which is its goal alone for an action reaching
+        a single goal.
     """
-    body = node.action_body if isinstance(node, Action) else node
-    if not isinstance(body, CramLanguageNode):
-        return [body]
-    return list(body.nodes)
+    if isinstance(node, GoalAction):
+        return [node.goal]
+    return list(node.nodes)
 
 
 def kind_of(step: StatechartNode) -> type:
@@ -237,7 +233,7 @@ class MoveGripperLastInTheReachBody(InsertionTransformation[ReachAction]):
         return True
 
     def anchor(self, plan_node: ReachAction) -> StatechartNode:
-        return plan_node.action_body
+        return plan_node
 
     def nodes_to_insert(self, plan_node: ReachAction) -> List[StatechartNode]:
         return [
@@ -1034,9 +1030,10 @@ def test_an_object_that_lies_in_no_drawer_is_picked_up_unchanged(pr2_apartment_c
 
 
 @dataclass
-class ChoosesTheGivenChild(ChildChooser):
+class ChoosesTheGivenChild(PlanChildChooser):
     """
-    Answers a node choosing its child with the child it was given, once.
+    Answers a node choosing its child with the child it was given, once, and prepares
+    it as a plan's child.
     """
 
     child: Optional[StatechartNode] = field(default=None)
@@ -1076,11 +1073,7 @@ def test_the_opening_joins_the_sequence_a_grounded_pick_up_is_a_child_of(
     candidate_steps = Sequence(nodes=[candidate])
 
     underspecified.choose_child_with(
-        ChoosesTheGivenChild(
-            child=AttemptRewritingItsTask(
-                task=candidate_steps, failure_monitors=[ConstFalseNode()]
-            )
-        ),
+        ChoosesTheGivenChild(child=candidate_steps),
         plan.statechart.context,
     )
 

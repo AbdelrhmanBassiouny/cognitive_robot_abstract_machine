@@ -8,7 +8,6 @@ import pytest
 
 from cramph.context import StatechartContext
 from cramph.executor import StatechartExecutor
-from cramph.monitors import CountNodeResets
 from cramph.node import StatechartNode
 from giskardpy import motion_statechart
 from giskardpy.motion_control import MotionControl
@@ -28,16 +27,11 @@ from giskardpy.motion_statechart.goals.collision_avoidance import (
     _CancelBecauseExternalCollisionViolated,
     _CancelBecauseSelfCollisionViolated,
     _CollisionAvoidanceTask,
-    _ExternalCollisionAvoidanceNode,
     _ExternalCollisionAvoidanceTask,
-    _ExternalCollisionHasData,
-    _SelfCollisionAvoidanceNode,
     _SelfCollisionAvoidanceTask,
-    _SelfCollisionHasData,
 )
 from giskardpy.motion_statechart.goals.gripper import MoveGripper
 from giskardpy.motion_statechart.goals.open_close import Close, Open
-from giskardpy.motion_statechart.goals.templates import RepeatOnStall
 from giskardpy.motion_statechart.goals.tracebot import InsertCylinder, StayOnLineTask
 from giskardpy.motion_statechart.graph_node import (
     EndMotion,
@@ -67,7 +61,7 @@ from giskardpy.motion_statechart.monitors.overwrite_state_monitors import (
 )
 from giskardpy.motion_statechart.monitors.progress_monitors import (
     AnyMonitoredTaskShortOfItsGoal,
-    NotApproachingGoal,
+    NoMonitoredTaskApproachingItsGoal,
     Stalled,
     StillProgressing,
     _CancelBecauseNoProgress,
@@ -232,15 +226,6 @@ def _still_progressing_cancelling_the_motion(world: World) -> list[StatechartNod
     task = _joint_goal(world)
     still_progressing = StillProgressing(monitored_node=task)
     return [task, still_progressing, still_progressing.cancel_motion()]
-
-
-def _repeat_on_stall(world: World) -> list[StatechartNode]:
-    task = _joint_goal(world)
-    return [
-        RepeatOnStall(
-            task=task, stop_retry_monitor=CountNodeResets(node=task, target=1)
-        )
-    ]
 
 
 def _external_collision_avoidance(world: World) -> list[StatechartNode]:
@@ -735,10 +720,10 @@ def _monitor_cases() -> list[NodeRoundTripCase]:
             WorldFixture.CYLINDER_BOT_WORLD,
         ),
         NodeRoundTripCase(
-            NotApproachingGoal,
+            NoMonitoredTaskApproachingItsGoal,
             lambda world: [
                 task := _joint_goal(world),
-                NotApproachingGoal(monitored_task=task),
+                NoMonitoredTaskApproachingItsGoal(monitored_tasks=[task]),
             ],
             WorldFixture.PR2_WORLD,
         ),
@@ -765,7 +750,6 @@ def _monitor_cases() -> list[NodeRoundTripCase]:
             _still_progressing_cancelling_the_motion,
             WorldFixture.PR2_WORLD,
         ),
-        NodeRoundTripCase(RepeatOnStall, _repeat_on_stall, WorldFixture.PR2_WORLD),
     ]
 
 
@@ -849,7 +833,6 @@ def _collision_cases() -> list[NodeRoundTripCase]:
             )
             for node_type in (
                 ExternalCollisionAvoidance,
-                _ExternalCollisionHasData,
                 _ExternalCollisionAvoidanceTask,
                 _CancelBecauseExternalCollisionViolated,
             )
@@ -862,7 +845,6 @@ def _collision_cases() -> list[NodeRoundTripCase]:
             )
             for node_type in (
                 SelfCollisionAvoidance,
-                _SelfCollisionHasData,
                 _SelfCollisionAvoidanceTask,
                 _CancelBecauseSelfCollisionViolated,
             )
@@ -891,8 +873,6 @@ def _node_types_never_added_to_a_statechart() -> set[type[StatechartNode]]:
         FeatureFunctionMonitor,
         _CollisionAvoidanceTask,
         _CancelBecauseCollisionViolated,
-        _ExternalCollisionAvoidanceNode,
-        _SelfCollisionAvoidanceNode,
     }
 
 

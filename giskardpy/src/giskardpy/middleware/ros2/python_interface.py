@@ -205,6 +205,7 @@ class GiskardClientExecutor(Executor):
         client = ChildChoiceClient(
             statechart=self.statechart,
             chooser=child_chooser_access.chooser,
+            world_updates=self.world_updates,
             required_position=self.world_updates.required_position(),
         )
         publisher = self.node_handle.create_publisher(

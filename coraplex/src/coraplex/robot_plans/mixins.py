@@ -12,9 +12,6 @@ from krrood.ormatic.utils import classproperty
 from cramph.composites import Parallel
 from giskardpy.motion_statechart.binding_policy import GoalBindingPolicy
 from giskardpy.motion_statechart.goals.cartesian_goals import CartesianPoseStraight
-from giskardpy.motion_statechart.goals.collision_avoidance import (
-    UpdateTemporaryCollisionRules,
-)
 from giskardpy.motion_statechart.goals.gripper import MoveGripper
 from giskardpy.motion_statechart.graph_node import MotionStatechartNode
 from giskardpy.motion_statechart.tasks.cartesian_tasks import (
@@ -37,7 +34,7 @@ from typing_extensions import List, Optional
 from coraplex.datastructures.enums import MovementType
 
 
-@dataclass(kw_only=True)
+@dataclass(kw_only=True, eq=False)
 class HasMaxJointVelocity:
     """
     Adds an optional joint velocity cap to an action or motion.
@@ -51,7 +48,7 @@ class HasMaxJointVelocity:
     """
 
 
-@dataclass(kw_only=True)
+@dataclass(kw_only=True, eq=False)
 class HasApproachVelocity:
     """
     Adds an optional pre-approach speed to an action that reaches towards a target
@@ -70,7 +67,7 @@ class HasApproachVelocity:
     """
 
 
-@dataclass(kw_only=True)
+@dataclass(kw_only=True, eq=False)
 class HasGraspDetectionThreshold:
     """
     Adds a grasp-detection sensitivity threshold to an action that checks whether an
@@ -89,7 +86,7 @@ class HasGraspDetectionThreshold:
     """
 
 
-@dataclass(kw_only=True)
+@dataclass(kw_only=True, eq=False)
 class ReachTuningParameters(HasApproachVelocity):
     """
     Tunable approach speeds for :class:`~coraplex.robot_plans.actions.core.pick_up.ReachAction`.
@@ -104,7 +101,7 @@ class ReachTuningParameters(HasApproachVelocity):
     """
 
 
-@dataclass(kw_only=True)
+@dataclass(kw_only=True, eq=False)
 class PickUpTuningParameters(ReachTuningParameters):
     """
     Tunable grasp speeds and target-object friction for
@@ -151,7 +148,7 @@ class PickUpTuningParameters(ReachTuningParameters):
     """
 
 
-@dataclass(kw_only=True)
+@dataclass(kw_only=True, eq=False)
 class PlaceTuningParameters:
     """
     Tunable transport/placing/release speeds for
@@ -191,7 +188,7 @@ class PlaceTuningParameters:
     """
 
 
-@dataclass(kw_only=True)
+@dataclass(kw_only=True, eq=False)
 class MovesGripper:
     """
     Builds the goals that drive a gripper to one of its states.
@@ -201,7 +198,6 @@ class MovesGripper:
         self,
         state: GripperState,
         end_effector: EndEffector,
-        allow_gripper_collision: bool = False,
         finger_velocity: Optional[float] = None,
         stall_minimum_time: Optional[float] = None,
         tolerate_stall: bool = False,
@@ -209,8 +205,6 @@ class MovesGripper:
         """
         :param state: The state to drive the gripper to.
         :param end_effector: The gripper that is driven.
-        :param allow_gripper_collision: Whether that gripper, and whatever it holds, may
-            touch its surroundings while the fingers move.
         :param finger_velocity: Cap on the speed of the finger joints, in m/s.
         :param stall_minimum_time: How long the fingers must stand still before a stall
             counts, in seconds.
@@ -221,7 +215,6 @@ class MovesGripper:
         return MoveGripper(
             end_effector=end_effector,
             state=state,
-            allow_gripper_collision=allow_gripper_collision,
             finger_velocity=finger_velocity,
             stall_minimum_time=stall_minimum_time,
             tolerate_stall=tolerate_stall,
@@ -285,7 +278,6 @@ class MovesToolCenterPoint(Action, ABC):
         self,
         target: Pose,
         arm: Arm,
-        allow_gripper_collision: bool = False,
         movement_type: MovementType = MovementType.CARTESIAN,
         max_linear_velocity: Optional[float] = None,
         max_angular_velocity: Optional[float] = None,
@@ -293,30 +285,28 @@ class MovesToolCenterPoint(Action, ABC):
         """
         :param target: Where the tool center point should end up.
         :param arm: The arm whose tool center point is moved.
-        :param allow_gripper_collision: Whether that arm's manipulator, and whatever it
-            holds, may touch its surroundings on the way.
         :param movement_type: Whether the orientation of the tool center point is
             commanded alongside its position.
         :param max_linear_velocity: Cap on the speed of the tool center point, in m/s.
         :param max_angular_velocity: Cap on how fast it turns, in rad/s. Only meaningful
             when the orientation is commanded.
         :return: The goal moving the tool center point there, together with whatever
-            speed caps and collision allowances were asked for, and the task keeping the
-            base still, see :meth:`~coraplex.robot_plans.actions.base.Action.keep_base_still`.
+            speed caps were asked for, and the task keeping the base still, see :meth:`~coraplex.robot_plans.actions.base.Action.keep_base_still`.
+            A goal that is a parallel of its tasks holds them itself; any other is put in
+            a parallel with them.
         """
-        end_effector = arm.end_effector
         root = self.controlled_root
-        tip = end_effector.tool_frame
+        tip = arm.end_effector.tool_frame
         accompanying: List[MotionStatechartNode] = self._velocity_limits(
             root, tip, movement_type, max_linear_velocity, max_angular_velocity
         )
-        if allow_gripper_collision:
-            accompanying.append(
-                UpdateTemporaryCollisionRules.for_end_effector(end_effector)
-            )
         accompanying.extend(self.keep_base_still())
         goal = self._reach_target(target, root, tip, movement_type)
         if not accompanying:
+            return goal
+        if isinstance(goal, Parallel):
+            for node in accompanying:
+                goal.add_node(node)
             return goal
         return Parallel(nodes=[goal, *accompanying], name=type(goal).__name__)
 
@@ -410,7 +400,9 @@ class ReattachesBodies(Action, ABC):
     """
 
     def reattach(
-        self, body: KinematicStructureEntity, new_parent: KinematicStructureEntity
+        self,
+        body: KinematicStructureEntity,
+        new_parent: KinematicStructureEntity,
     ) -> List[StatechartNode]:
         """
         :param body: The root of the branch to move.
@@ -445,7 +437,7 @@ class GraspPoseSequence:
     """
 
 
-@dataclass(kw_only=True)
+@dataclass(kw_only=True, eq=False)
 class HasApproachesGraspPoses:
     """
     Turns a grasp frame (x-axis along the approach, see

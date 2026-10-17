@@ -21,14 +21,20 @@ from giskardpy.middleware.ros2.exceptions import StateUpdateAheadOfStatechartErr
 from giskardpy.middleware.ros2.feedback_publisher import ActionFeedbackPublisher
 from giskardpy.middleware.ros2.motion_goal import MotionGoal
 from giskardpy.middleware.ros2.state_updates import StatechartStateUpdate
+from giskardpy.middleware.ros2.world_updates import OutgoingWorldUpdates
 from giskardpy.motion_statechart.graph_node import EndMotion
 from semantic_digital_twin.adapters.ros.messages import MetaData
 from semantic_digital_twin.input_synchronization import InputSynchronizer
 from semantic_digital_twin.world import World
 
-from .test_child_choices import ChooserAnsweringInTurn, ChoosingGoal
+from .test_child_choices import (
+    ChooserAnsweringInTurn,
+    ChoosingGoal,
+    client_world_updates,
+)
 from .test_motion_server import (
     GoalQueueMimic,
+    PublicationProgressMimic,
     MotionServerFixture,
     feedback_data,
     motion_server,
@@ -159,7 +165,11 @@ def _reported_states(ticks: int) -> dict:
     for _ in range(ticks):
         executor.tick()
     return ActionFeedbackPublisher(
-        executor=executor, action_server=GoalQueueMimic()
+        executor=executor,
+        action_server=GoalQueueMimic(),
+        outgoing_world_updates=OutgoingWorldUpdates(
+            world_synchronizer=PublicationProgressMimic()
+        ),
     ).create_states()
 
 
@@ -289,7 +299,9 @@ def test_the_client_follows_a_child_it_chose_once_giskard_runs_it(
         statechart=goal.statechart,
         action_server=motion_server.action_server,
         child_choice_client=ChildChoiceClient(
-            statechart=goal.statechart, chooser=ChooserAnsweringInTurn([child])
+            statechart=goal.statechart,
+            chooser=ChooserAnsweringInTurn([child]),
+            world_updates=client_world_updates(),
         ),
         server_chooser=motion_server.executor.context.require_extension(
             ChildChooserAccess

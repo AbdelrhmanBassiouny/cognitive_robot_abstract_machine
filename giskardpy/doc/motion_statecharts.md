@@ -47,12 +47,6 @@ whoever runs it writes its success and interrupt conditions. Monitors such as `P
 they are and end every `EndedByOwner` node once it observes True, see
 [Who ends a node](https://cram2.github.io/cognitive_robot_abstract_machine/cramph/statecharts.html#who-ends-a-node).
 
-## RepeatOnStall
-
-`RepeatOnStall` is a `RepeatUntil` whose attempts fail once the task has not been approaching
-its goal for `timeout`, measured by a `Stalled` monitor. A task that already is an `Attempt`
-keeps its own failure monitors and gives up on a stall as well.
-
 ## Ending the motion
 
 The motion ends once an `EndMotion` node is running and observes True. `EndMotion` observes

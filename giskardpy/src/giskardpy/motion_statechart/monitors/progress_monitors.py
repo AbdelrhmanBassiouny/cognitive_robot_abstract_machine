@@ -12,6 +12,7 @@ from krrood.symbolic_math.symbolic_math import (
     FloatVariable,
     Scalar,
     VariableParameters,
+    Vector,
 )
 from giskardpy.motion_statechart.context import MotionControlContext
 from krrood.ormatic.utils import classproperty
@@ -23,51 +24,55 @@ from cramph.node import CancelStatechart, CompositeNode, NodeArtifacts
 from giskardpy.motion_statechart.graph_node import ConvergingTask, MotionStatechartNode
 from cramph.monitors import CountSimulationTimeSeconds
 
-# %% watching a single task
+# %% watching tasks
 
 
 @dataclass(eq=False, repr=False, kw_only=True)
-class NotApproachingGoal(EndedByOwner, MotionStatechartNode):
+class NoMonitoredTaskApproachingItsGoal(EndedByOwner, MotionStatechartNode):
     """
-    Turns ``True`` while :attr:`monitored_task` is not closing on its goal fast enough.
+    Turns ``True`` while none of :attr:`monitored_tasks` is closing on its goal fast
+    enough.
 
-    The task counts as approaching its goal while its error lies below the error it had
+    A task counts as approaching its goal while its error lies below the error it had
     when it last made progress, by at least :attr:`minimum_convergence_rate` times its
     threshold for every second since. An error that moves without getting smaller, as
     it does for an arm that collision avoidance keeps pushing back, therefore never
     counts as approaching, however fast it moves.
 
-    A task that is not running has no meaningful progress, so it is reported as not
+    A task that is not running has no meaningful progress, so it counts as not
     approaching. That makes this node safe to combine with others, but it means the
-    node only says something useful about a task while that task runs.
+    node only says something useful about the tasks that run.
 
-    A task that has reached its goal is reported as not approaching too: its error can
-    keep moving within the threshold for as long as it holds the goal, as a grip held
-    while something else moves does, and that movement is not progress. Counting it
-    would keep a motion whose other tasks are stuck from ever being given up on.
+    A task that has reached its goal counts as not approaching too: its error can keep
+    moving within the threshold for as long as it holds the goal, as a grip held while
+    something else moves does, and that movement is not progress. Counting it would keep
+    a motion whose other tasks are stuck from ever being given up on.
+
+    One node watches every task, rather than one node per task, because a plan holds
+    dozens of converging tasks, most of which do not run at any one time.
 
     .. note:: An error also stops falling while the robot drives around an obstacle, so
         this node on its own is not evidence that a task is stuck.
         :class:`StillProgressing` requires it to hold for a while.
     """
 
-    monitored_task: ConvergingTask
+    monitored_tasks: List[ConvergingTask]
     """
-    The task whose progress towards its goal is watched.
+    The tasks whose progress towards their goals is watched.
     """
 
     minimum_convergence_rate: float = 0.05
     """
-    Rate below which the task counts as not approaching its goal, as a fraction of the
+    Rate below which a task counts as not approaching its goal, as a fraction of the
     task's own threshold per second.
 
     0.05 means the error must fall by at least 5% of that task's own success threshold
     every second, or the task counts as not approaching its goal.
     """
 
-    _error_at_last_progress: FloatVariable = field(init=False, repr=False)
+    _errors_at_last_progress: np.ndarray = field(init=False, repr=False)
     """
-    The monitored task's error when it last counted as making progress, or infinity
+    Each monitored task's error when it last counted as making progress, or infinity
     while there is nothing to compare with yet, so that the first error measured counts
     as progress.
 
@@ -75,15 +80,28 @@ class NotApproachingGoal(EndedByOwner, MotionStatechartNode):
     for all the time since, not merely below the lowest value seen.
     """
 
-    _seconds_since_last_progress: FloatVariable = field(init=False, repr=False)
+    _seconds_since_last_progress: np.ndarray = field(init=False, repr=False)
     """
-    Simulated time from the last progress up to the previous control cycle.
+    Simulated time from each monitored task's last progress up to the previous control
+    cycle.
     """
 
-    _compiled_error: CompiledFunction = field(init=False, repr=False)
+    _errors_at_last_progress_variables: Vector = field(init=False, repr=False)
     """
-    The monitored task's error, compiled once and bound to the world state, so that
-    :meth:`on_tick` can record it when the task makes progress.
+    The variables the observation reads :attr:`_errors_at_last_progress` through,
+    updated whenever it changes.
+    """
+
+    _seconds_since_last_progress_variables: Vector = field(init=False, repr=False)
+    """
+    The variables the observation reads :attr:`_seconds_since_last_progress` through,
+    updated whenever it changes.
+    """
+
+    _compiled_errors: CompiledFunction = field(init=False, repr=False)
+    """
+    The monitored tasks' errors, compiled once and bound to the world state, so that
+    :meth:`on_tick` can measure them all at once.
     """
 
     _control_dt: float = field(default=0.0, init=False, repr=False)
@@ -91,10 +109,10 @@ class NotApproachingGoal(EndedByOwner, MotionStatechartNode):
     Seconds between control cycles.
     """
 
-    _previous_error: Optional[float] = field(default=None, init=False, repr=False)
+    _previous_errors: np.ndarray = field(init=False, repr=False)
     """
-    The monitored task's error on the previous control cycle, which the observation of
-    that cycle judged, or None before there was one.
+    Each monitored task's error on the previous control cycle, which the observation of
+    that cycle judged, or NaN where there was none.
     """
 
     @classproperty
@@ -103,7 +121,20 @@ class NotApproachingGoal(EndedByOwner, MotionStatechartNode):
 
     @property
     def prerequisite_nodes(self) -> List[MotionStatechartNode]:
-        return [self.monitored_task]
+        return list(self.monitored_tasks)
+
+    @property
+    def stalled_tasks(self) -> List[ConvergingTask]:
+        """
+        :return: The monitored tasks that are running but did not approach their goal
+            on the last control cycle, leaving out those that already hold it.
+        """
+        stalled = self._judged() & self._falls_too_slowly(self._previous_errors)
+        return [
+            task
+            for task, is_stalled in zip(self.monitored_tasks, stalled)
+            if is_stalled
+        ]
 
     def set_up(self, context: StatechartContext) -> None:
         """
@@ -113,112 +144,194 @@ class NotApproachingGoal(EndedByOwner, MotionStatechartNode):
         self._control_dt = context.require_extension(
             MotionControlContext
         ).qp_controller_config.control_time_step.total_seconds()
-        self._error_at_last_progress = self._registered_variable(
+        self._errors_at_last_progress_variables = self._registered_variables(
             "error_at_last_progress", context
         )
-        self._seconds_since_last_progress = self._registered_variable(
+        self._seconds_since_last_progress_variables = self._registered_variables(
             "seconds_since_last_progress", context
         )
-        self._forget_progress(context)
+        self._errors_at_last_progress = np.full(len(self.monitored_tasks), np.inf)
+        self._seconds_since_last_progress = np.zeros(len(self.monitored_tasks))
+        self._previous_errors = np.full(len(self.monitored_tasks), np.nan)
+        self._store_progress(context)
 
     def build_artifacts(self, context: StatechartContext) -> NodeArtifacts:
-        self._compile_error(context)
-        error = self.monitored_task.error_signal
-        required_fall = (
-            self.minimum_convergence_rate
-            * self.monitored_task.threshold
-            * (self._seconds_since_last_progress + self._control_dt)
-        )
+        if not self.monitored_tasks:
+            return NodeArtifacts(observation=Scalar.const_true())
+        self._compile_errors(context)
         return NodeArtifacts(
-            observation=sm.trinary_logic_or(
-                self._monitored_task_is_not_running(),
-                self.monitored_task.goal_reached_at(error),
-                self._error_at_last_progress - error < required_fall,
+            observation=sm.min(
+                sm.Vector(
+                    [
+                        self._not_approaching(task, index)
+                        for index, task in enumerate(self.monitored_tasks)
+                    ]
+                )
             )
         )
 
-    def _registered_variable(
-        self, name: str, context: StatechartContext
-    ) -> FloatVariable:
+    def _not_approaching(self, task: ConvergingTask, index: int) -> Scalar:
         """
-        :param name: What the variable holds.
-        :param context: The context whose float variable data holds its value.
-        :return: A new variable of this node, registered with that data.
+        :param task: One of the monitored tasks.
+        :param index: Its position in :attr:`monitored_tasks`.
+        :return: Whether `task` is not approaching its goal at its current error.
         """
-        variable = FloatVariable(f"{self.name}_{name}")
-        context.float_variable_data.register_expression(variable)
-        return variable
+        error = task.error_signal
+        return sm.trinary_logic_or(
+            sm.Scalar(task.life_cycle_variable != int(LifeCycleValues.RUNNING)),
+            task.goal_reached_at(error),
+            self._fell_too_little(
+                error_at_last_progress=self._errors_at_last_progress_variables[index],
+                error=error,
+                seconds_since_last_progress=self._seconds_since_last_progress_variables[
+                    index
+                ],
+                threshold=task.threshold,
+            ),
+        )
 
-    def _compile_error(self, context: StatechartContext) -> None:
+    def _fell_too_little(
+        self,
+        error_at_last_progress: Scalar | np.ndarray,
+        error: Scalar | np.ndarray,
+        seconds_since_last_progress: Scalar | np.ndarray,
+        threshold: float | np.ndarray,
+    ) -> Scalar | np.ndarray:
         """
-        Compile the monitored task's error against the world's positions and the float
+        The rule deciding whether an error fell by too little to count as progress, for
+        symbolic expressions as well as numpy arrays, so that the observation and
+        :meth:`on_tick` cannot disagree on it.
+
+        :param error_at_last_progress: The error when the task last made progress.
+        :param error: The error now.
+        :param seconds_since_last_progress: Simulated time from the last progress up to
+            the previous control cycle.
+        :param threshold: The task's threshold.
+        :return: Whether the error fell by less than the minimum rate requires.
+        """
+        required_fall = (
+            self.minimum_convergence_rate
+            * threshold
+            * (seconds_since_last_progress + self._control_dt)
+        )
+        return error_at_last_progress - error < required_fall
+
+    def _falls_too_slowly(self, errors: np.ndarray) -> np.ndarray:
+        """
+        :param errors: An error per monitored task, NaN where there is none.
+        :return: Per monitored task, whether the error is known and fell by too little
+            since the task last made progress.
+        """
+        with np.errstate(invalid="ignore"):
+            fell_too_little = self._fell_too_little(
+                error_at_last_progress=self._errors_at_last_progress,
+                error=errors,
+                seconds_since_last_progress=self._seconds_since_last_progress,
+                threshold=np.array([task.threshold for task in self.monitored_tasks]),
+            )
+        return ~np.isnan(errors) & fell_too_little
+
+    def _registered_variables(self, name: str, context: StatechartContext) -> Vector:
+        """
+        :param name: What the variables hold.
+        :param context: The context whose float variable data holds their values.
+        :return: One new variable of this node per monitored task, registered with that
+            data.
+        """
+        variables = Vector(
+            [
+                FloatVariable(f"{self.name}_{index}_{name}")
+                for index in range(len(self.monitored_tasks))
+            ]
+        )
+        if self.monitored_tasks:
+            context.float_variable_data.register_expression(variables)
+        return variables
+
+    def _compile_errors(self, context: StatechartContext) -> None:
+        """
+        Compile the monitored tasks' errors against the world's positions and the float
         variable data, reading both in place.
         """
-        self._compiled_error = self.monitored_task.error_signal.compile(
+        self._compiled_errors = Vector(
+            [task.error_signal for task in self.monitored_tasks]
+        ).compile(
             parameters=VariableParameters.from_lists(
                 context.world.state.position_float_variables,
                 context.float_variable_data.variables,
             ),
             sparse=False,
         )
-        self._compiled_error.bind_args_to_memory_view(0, context.world.state.positions)
-        context.float_variable_data.bind_argument(self._compiled_error, 1)
+        self._compiled_errors.bind_args_to_memory_view(0, context.world.state.positions)
+        context.float_variable_data.bind_argument(self._compiled_errors, 1)
 
-    def _monitored_task_is_not_running(self) -> Scalar:
+    def _judged(self) -> np.ndarray:
         """
-        :return: ``True`` while the monitored task is in any life cycle state other
-            than :attr:`~cramph.data_types.LifeCycleValues.RUNNING`.
+        :return: Per monitored task, whether it runs and has not reached its goal, the
+            only tasks whose progress is judged.
         """
-        return sm.Scalar(
-            self.monitored_task.life_cycle_variable != int(LifeCycleValues.RUNNING)
+        return np.array(
+            [
+                task.life_cycle_state == LifeCycleValues.RUNNING
+                and task.observation_state != ObservationStateValues.TRUE
+                for task in self.monitored_tasks
+            ],
+            dtype=bool,
         )
 
     def on_start(self, context: StatechartContext):
-        self._forget_progress(context)
+        self._forget_progress(np.ones(len(self.monitored_tasks), dtype=bool))
+        self._store_progress(context)
 
     def on_tick(self, context: StatechartContext) -> None:
         """
-        Move the error at the last progress forward once the task made progress on the
+        Move each task's error at the last progress forward once it made progress on the
         previous control cycle, and count the time while it did not.
 
-        A tick calls this before it observes anything, so what it reads of this node and
-        the monitored task is how the previous control cycle ended, and the error that
-        cycle judged is the one remembered from it.
+        A tick calls this before it observes anything, so what it reads of the monitored
+        tasks is how the previous control cycle ended, and the errors that cycle judged
+        are the ones remembered from it.
         """
-        error = float(self._compiled_error.evaluate()[0])
-        previous_error, self._previous_error = self._previous_error, error
-        if (
-            self.monitored_task.life_cycle_state != LifeCycleValues.RUNNING
-            or self.monitored_task.observation_state == ObservationStateValues.TRUE
-        ):
-            self._forget_progress(context)
+        if not self.monitored_tasks:
             return None
-        if previous_error is None:
-            return None
-        if self.observation_state == ObservationStateValues.FALSE:
-            context.float_variable_data.set_value(
-                self._error_at_last_progress, previous_error
-            )
-            context.float_variable_data.set_value(
-                self._seconds_since_last_progress, 0.0
-            )
-            return None
-        context.float_variable_data.set_value(
-            self._seconds_since_last_progress,
-            context.float_variable_data.get_value(self._seconds_since_last_progress)
-            + self._control_dt,
-        )
+        errors = np.asarray(self._compiled_errors.evaluate(), dtype=float).reshape(-1)
+        previous_errors, self._previous_errors = self._previous_errors, errors.copy()
+        still_judged = self._judged()
+        judged = still_judged & ~np.isnan(previous_errors)
+        stalled = judged & self._falls_too_slowly(previous_errors)
+        approached = judged & ~stalled
+        self._errors_at_last_progress[approached] = previous_errors[approached]
+        self._seconds_since_last_progress[approached] = 0.0
+        self._seconds_since_last_progress[stalled] += self._control_dt
+        self._forget_progress(~still_judged)
+        self._store_progress(context)
         return None
 
-    def _forget_progress(self, context: StatechartContext) -> None:
+    def _forget_progress(self, tasks: np.ndarray) -> None:
         """
-        Start judging progress afresh, from the next measured error.
+        Start judging the progress of `tasks` afresh, from their next measured errors.
+
+        :param tasks: Per monitored task, whether to forget its progress.
+        """
+        self._errors_at_last_progress[tasks] = np.inf
+        self._seconds_since_last_progress[tasks] = 0.0
+        self._previous_errors[tasks] = np.nan
+
+    def _store_progress(self, context: StatechartContext) -> None:
+        """
+        Copy :attr:`_errors_at_last_progress` and :attr:`_seconds_since_last_progress`
+        into the float variable data the observation reads.
 
         :param context: The context whose float variable data holds the progress.
         """
-        context.float_variable_data.set_value(self._error_at_last_progress, np.inf)
-        context.float_variable_data.set_value(self._seconds_since_last_progress, 0.0)
-        self._previous_error = None
+        if self.monitored_tasks:
+            context.float_variable_data.set_value(
+                self._errors_at_last_progress_variables, self._errors_at_last_progress
+            )
+            context.float_variable_data.set_value(
+                self._seconds_since_last_progress_variables,
+                self._seconds_since_last_progress,
+            )
 
 
 @dataclass(eq=False, repr=False, kw_only=True)
@@ -304,14 +417,24 @@ class StillProgressing(EndedByOwner, CompositeNode):
         """
         :return: The converging tasks watched by this node, in the order they were found.
         """
-        return [monitor.monitored_task for monitor in self._not_approaching_monitors]
+        if self._not_approaching is None:
+            return []
+        return self._not_approaching.monitored_tasks
 
     @property
-    def _not_approaching_monitors(self) -> List[NotApproachingGoal]:
+    def _not_approaching(self) -> Optional[NoMonitoredTaskApproachingItsGoal]:
         """
-        :return: One monitor per converging task found under :attr:`monitored_node`.
+        :return: The child watching every converging task found under
+            :attr:`monitored_node`, or None if nothing converges beneath it.
         """
-        return [node for node in self.nodes if isinstance(node, NotApproachingGoal)]
+        return next(
+            (
+                node
+                for node in self.nodes
+                if isinstance(node, NoMonitoredTaskApproachingItsGoal)
+            ),
+            None,
+        )
 
     @property
     def _timer(self) -> CountSimulationTimeSeconds:
@@ -327,13 +450,9 @@ class StillProgressing(EndedByOwner, CompositeNode):
         :return: The monitored tasks that are running but not currently approaching their
             goal, leaving out those that already hold it.
         """
-        return [
-            monitor.monitored_task
-            for monitor in self._not_approaching_monitors
-            if monitor.observation_state == ObservationStateValues.TRUE
-            and monitor.monitored_task.life_cycle_state == LifeCycleValues.RUNNING
-            and monitor.monitored_task.observation_state != ObservationStateValues.TRUE
-        ]
+        if self._not_approaching is None:
+            return []
+        return self._not_approaching.stalled_tasks
 
     def cancel_motion(self) -> CancelStatechart:
         """
@@ -365,8 +484,8 @@ class StillProgressing(EndedByOwner, CompositeNode):
         self, monitored_tasks: List[ConvergingTask]
     ) -> List[MotionStatechartNode]:
         """
-        Adds one monitor per converging task, next to one observing whether any of them
-        runs.
+        Adds one monitor watching every converging task, next to one observing whether
+        any of them is still short of its goal.
 
         A node with nothing converging beneath it has nothing that could approach a
         goal, so it counts as stalled for as long as it runs and :attr:`timeout` alone
@@ -379,19 +498,16 @@ class StillProgressing(EndedByOwner, CompositeNode):
         """
         if not monitored_tasks:
             return []
-        not_approaching_monitors = [
-            NotApproachingGoal(
-                name=f"{self.name}/{task.name}",
-                monitored_task=task,
-                minimum_convergence_rate=self.minimum_convergence_rate,
-            )
-            for task in monitored_tasks
-        ]
+        not_approaching = NoMonitoredTaskApproachingItsGoal(
+            name=f"{self.name}/not_approaching",
+            monitored_tasks=monitored_tasks,
+            minimum_convergence_rate=self.minimum_convergence_rate,
+        )
         still_working = AnyMonitoredTaskShortOfItsGoal(
             name=f"{self.name}/short_of_its_goal", monitored_tasks=monitored_tasks
         )
-        self._add_children_to_statechart(not_approaching_monitors + [still_working])
-        return [still_working, *not_approaching_monitors]
+        self._add_children_to_statechart([not_approaching, still_working])
+        return [not_approaching, still_working]
 
     def build_artifacts(self, context: StatechartContext) -> NodeArtifacts:
         """
@@ -431,9 +547,8 @@ class Stalled(StillProgressing):
     :attr:`timeout`.
 
     The same measurement as :class:`StillProgressing`, said the way a failure monitor is
-    read: a monitor is passed to an
-    :class:`~cramph.composites.Attempt` as the thing that goes
-    wrong, not as the thing that goes right.
+    read: it observes the thing that goes wrong, not the thing that goes right, so a node
+    choosing its child can give up on that child once it fires.
     """
 
     def build_artifacts(self, context: StatechartContext) -> NodeArtifacts:

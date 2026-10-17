@@ -40,7 +40,10 @@ from giskardpy.middleware.ros2.robot_interface_config import (
     StandAloneRobotInterfaceConfig,
 )
 from giskardpy.middleware.ros2.server_config import GiskardServerConfig
-from giskardpy.middleware.ros2.world_updates import IncomingWorldUpdates
+from giskardpy.middleware.ros2.world_updates import (
+    IncomingWorldUpdates,
+    OutgoingWorldUpdates,
+)
 from giskardpy.model.world_config import WorldConfig
 from giskardpy.qp.qp_controller_config import QPControllerConfig
 from krrood.ormatic.utils import create_engine
@@ -213,8 +216,13 @@ class Giskard:
         client_watchdog = ClientWatchdog(
             presence=HeartbeatPresence(node=rospy.get_node()),
         )
+        outgoing_world_updates = OutgoingWorldUpdates(
+            world_synchronizer=self.world_synchronizer
+        )
         feedback_publisher = ActionFeedbackPublisher(
-            executor=self.executor, action_server=action_server
+            executor=self.executor,
+            action_server=action_server,
+            outgoing_world_updates=outgoing_world_updates,
         )
         cycle_counter = CycleCounter()
         world_updates = IncomingWorldUpdates(
@@ -237,7 +245,7 @@ class Giskard:
             control_loop=control_loop,
             client_watchdog=client_watchdog,
             world_updates=world_updates,
-            world_synchronizer=self.world_synchronizer,
+            outgoing_world_updates=outgoing_world_updates,
             feedback_publisher=feedback_publisher,
             inputs=WorldStateInputs(world=world),
             cycle_counter=cycle_counter,
