@@ -336,6 +336,34 @@ def test_a_part_the_annotation_has_already_is_not_looked_for():
     assert locator.queries == []
 
 
+def test_of_more_handles_found_than_an_object_has_the_most_likely_are_added():
+    mesh, (large, small) = pot_with_handles()
+    pot = annotate(mesh, Pot)
+    piece_of_the_pot = np.arange(10)
+    finder = AnnotationPartFinder(
+        locator=KnownPartLocator(
+            parts=[
+                LocatedPart("handles", large, confidence=0.6),
+                LocatedPart("handles", piece_of_the_pot, confidence=0.7),
+                LocatedPart("handles", small, confidence=0.9),
+            ]
+        ),
+        decomposer=None,
+    )
+
+    handles = finder.find_parts(pot)
+
+    assert pot.handles == handles
+    assert [len(handle.root.visual.combined_mesh.faces) for handle in handles] == [
+        len(small),
+        len(piece_of_the_pot),
+    ]
+    assert handles[0].root.visual.combined_mesh.centroid[0] < 0
+    assert len(pot.root.visual.combined_mesh.faces) == len(mesh.faces) - len(
+        small
+    ) - len(piece_of_the_pot)
+
+
 def test_each_located_leg_becomes_a_leg_of_the_table():
     mesh, leg_faces = table_with_legs()
     table = annotate(mesh, DiningTable)

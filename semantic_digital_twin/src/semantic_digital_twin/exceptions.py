@@ -628,6 +628,47 @@ class CannotBeAPartOf(UsageError):
 
 
 @dataclass
+class TooManyParts(UsageError):
+    """
+    Raised when ``add`` is called with a part for a field that holds as many parts as it
+    may already, such as a third handle for an object with one on each side.
+    """
+
+    annotation: SemanticAnnotation
+    """
+    The annotation the part was being added to.
+    """
+
+    part: SemanticAnnotation
+    """
+    The part that could not be added.
+    """
+
+    field_name: str
+    """
+    The part-whole relationship field the part was being added to.
+    """
+
+    maximum_parts: int
+    """
+    The most parts the field may hold.
+    """
+
+    def error_message(self) -> str:
+        return (
+            f"{type(self.part).__name__} cannot be added to the field "
+            f"'{self.field_name}' of {type(self.annotation).__name__}, which holds "
+            f"{self.maximum_parts} parts at most and is full."
+        )
+
+    def suggest_correction(self) -> str:
+        return (
+            f"keep only the {self.maximum_parts} parts of the field that are most likely "
+            f"right, or remove one before adding another."
+        )
+
+
+@dataclass
 class AmbiguousPart(UsageError):
     """
     Raised when ``add`` is called with a part whose type matches more than one part-

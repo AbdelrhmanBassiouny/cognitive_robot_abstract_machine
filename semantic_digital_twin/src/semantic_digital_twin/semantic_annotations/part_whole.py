@@ -10,6 +10,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from typing_extensions import Optional
+
 from krrood.patterns.field_metadata import FieldMetadata
 
 # %% relation metadata
@@ -33,4 +35,11 @@ class IsPartWholeRelationship(FieldMetadata):
     This is a property of the relation rather than of the part: the same
     :class:`~semantic_digital_twin.semantic_annotations.semantic_annotations.EntryWay`
     cuts the wall it is an aperture of, but not the door whose passage it marks.
+    """
+
+    maximum_parts: Optional[int] = None
+    """
+    The most parts a field holding any number of parts may hold; ``None`` for no limit.
+
+    An object held by its handles, for example, has one on each side at most.
     """

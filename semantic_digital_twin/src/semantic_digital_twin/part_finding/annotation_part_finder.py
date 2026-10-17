@@ -72,7 +72,7 @@ class AnnotationPartFinder:
 
         :param whole: The annotation, whose root is a body.
         :return: The parts added, in the order of the annotation's part-whole
-            relationships.
+            relationships and, within one, the most likely first.
         """
         missing = [
             relationship.name
@@ -84,11 +84,30 @@ class AnnotationPartFinder:
             return []
         query = PartQuery.from_mesh(shapes.combined_mesh, type(whole), missing)
         parts = []
-        for located in self.locator.locate(query):
+        for located in self._most_likely_first(query, self.locator.locate(query)):
             part = self._add(whole, query, located)
             if part is not None:
                 parts.append(part)
         return parts
+
+    @staticmethod
+    def _most_likely_first(
+        query: PartQuery, located_parts: list[LocatedPart]
+    ) -> list[LocatedPart]:
+        """
+        :param query: The query the parts were located for.
+        :param located_parts: The parts located.
+        :return: The parts, in the order of the relationships of ``query`` and, within
+            one, the most likely first, so that a relationship that holds a limited
+            number of parts keeps the most likely ones.
+        """
+        return sorted(
+            located_parts,
+            key=lambda located: (
+                query.relationship_names.index(located.relationship_name),
+                -located.confidence,
+            ),
+        )
 
     def _add(
         self, whole: PartWholeRelationship, query: PartQuery, located: LocatedPart
@@ -99,12 +118,15 @@ class AnnotationPartFinder:
         :param located: The part.
         :return: The part, split off the annotation's root body and added to the
             annotation; ``None`` if the annotation may lack it and the locator is not
-            sure enough of it, or nothing of it is left in the body's shape.
+            sure enough of it, if the annotation has as many parts of the kind as it
+            may, or if nothing of it is left in the body's shape.
         """
         relationship = PartRelationshipInspector.named(
             query.whole_type, located.relationship_name
         )
         if relationship.may_be_empty and located.confidence < self.minimum_confidence:
+            return None
+        if not relationship.has_room_in(whole):
             return None
         splitter = PartSplitter(
             part_type=relationship.part_type,

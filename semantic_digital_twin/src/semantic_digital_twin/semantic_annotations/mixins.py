@@ -56,6 +56,7 @@ from semantic_digital_twin.exceptions import (
     AmbiguousPart,
     CannotBeAPartOf,
     NoSupportingSurfaceError,
+    TooManyParts,
     UnknownPartWholeRelationshipField,
 )
 from semantic_digital_twin.reasoning.predicates import SupportedBy
@@ -494,6 +495,7 @@ class PartWholeRelationship(HasRootKinematicStructureEntity):
             accepts ``type(part)``.
         :raises AmbiguousPart: If ``type(part)`` matches more than one part-whole
             relationship field.
+        :raises TooManyParts: If the field holds as many parts as it may already.
         """
         candidate_fields = WrappedClass(type(self)).fields_with_metadata(
             IsPartWholeRelationship
@@ -525,10 +527,20 @@ class PartWholeRelationship(HasRootKinematicStructureEntity):
             raise AmbiguousPart(self, part, [match.field for match in matches])
 
         [match] = matches
-        part._mount_strategy(self, IsPartWholeRelationship.of_wrapped_field(match))
+        relationship = IsPartWholeRelationship.of_wrapped_field(match)
         if match.is_many_to_many_relationship:
-            getattr(self, match.field.name).append(part)
+            parts = getattr(self, match.field.name)
+            if (
+                relationship.maximum_parts is not None
+                and len(parts) >= relationship.maximum_parts
+            ):
+                raise TooManyParts(
+                    self, part, match.field.name, relationship.maximum_parts
+                )
+            part._mount_strategy(self, relationship)
+            parts.append(part)
         else:
+            part._mount_strategy(self, relationship)
             setattr(self, match.field.name, part)
 
     @property
@@ -703,10 +715,10 @@ class HasHandles(HasRootBody, PartWholeRelationship):
         default_factory=list,
         hash=False,
         kw_only=True,
-        metadata=IsPartWholeRelationship().as_dict(),
+        metadata=IsPartWholeRelationship(maximum_parts=2).as_dict(),
     )
     """
-    The handles of the semantic annotation.
+    The handles of the semantic annotation, at most two: one on each side.
     """
 
 

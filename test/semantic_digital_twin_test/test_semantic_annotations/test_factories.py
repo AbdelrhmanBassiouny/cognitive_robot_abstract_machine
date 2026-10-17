@@ -10,6 +10,7 @@ from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.exceptions import (
     CannotBeAPartOf,
     AmbiguousPart,
+    TooManyParts,
     UnknownPartWholeRelationshipField,
 )
 from semantic_digital_twin.exceptions import (
@@ -55,6 +56,7 @@ from semantic_digital_twin.semantic_annotations.semantic_annotations import (
     Hood,
     Toaster,
     CoffeeMachine,
+    Pot,
 )
 from semantic_digital_twin.spatial_types import (
     HomogeneousTransformationMatrix,
@@ -663,7 +665,12 @@ class TestFactories(unittest.TestCase):
             world.root
         ).bounding_box()
         np.testing.assert_allclose(
-            [surface_box.min_x, surface_box.max_x, surface_box.min_y, surface_box.max_y],
+            [
+                surface_box.min_x,
+                surface_box.max_x,
+                surface_box.min_y,
+                surface_box.max_y,
+            ],
             [table_box.min_x, table_box.max_x, table_box.min_y, table_box.max_y],
             atol=1e-9,
         )
@@ -1325,6 +1332,26 @@ def test_add_rejects_unsupported_part_type():
         # A Door has handle/entry way part-whole relationship fields but no drawer field.
         with pytest.raises(CannotBeAPartOf):
             door.add(drawer)
+
+
+def test_an_object_has_at_most_two_handles():
+    """
+    An object held by its handles has one on each side at most, so a third handle found
+    on it is a mistake.
+    """
+    world = _world_with_root()
+    with world.modify_world():
+        pot = Pot.create_with_new_body_in_world(name="pot", world=world)
+        handles = [
+            Handle.create_with_new_body_in_world(name=f"handle_{index}", world=world)
+            for index in range(3)
+        ]
+        pot.add(handles[0])
+        pot.add(handles[1])
+        with pytest.raises(TooManyParts):
+            pot.add(handles[2])
+
+    assert pot.handles == handles[:2]
 
 
 def test_add_raises_on_ambiguous_part():

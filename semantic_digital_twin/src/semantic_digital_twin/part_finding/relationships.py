@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from krrood.class_diagrams.class_diagram import WrappedClass
 from krrood.class_diagrams.wrapped_field import WrappedField
 from krrood.entity_query_language.utils import camel_case_to_words
-from typing_extensions import Type
+from typing_extensions import Optional, Type
 
 from semantic_digital_twin.exceptions import (
     NoSinglePartWholeRelationshipField,
@@ -127,9 +127,22 @@ class PartRelationshipInspector:
     @property
     def holds_many(self) -> bool:
         """
-        :return: Whether the relationship holds any number of parts rather than one.
+        :return: Whether the relationship holds several parts rather than one, up to
+            :attr:`maximum_parts`.
         """
         return self.relationship_field.is_many_to_many_relationship
+
+    @property
+    def maximum_parts(self) -> Optional[int]:
+        """
+        :return: The most parts the relationship holds, one for a relationship that
+            holds a single part; ``None`` for no limit.
+        """
+        if not self.holds_many:
+            return 1
+        return IsPartWholeRelationship.of_wrapped_field(
+            self.relationship_field
+        ).maximum_parts
 
     @property
     def may_be_empty(self) -> bool:
@@ -155,3 +168,12 @@ class PartRelationshipInspector:
         :return: Whether the annotation has a part in this relationship already.
         """
         return bool(self.parts_of(whole))
+
+    def has_room_in(self, whole: PartWholeRelationship) -> bool:
+        """
+        :param whole: An annotation of the type this relationship belongs to.
+        :return: Whether the annotation may be given another part in this relationship.
+        """
+        return (
+            self.maximum_parts is None or len(self.parts_of(whole)) < self.maximum_parts
+        )
