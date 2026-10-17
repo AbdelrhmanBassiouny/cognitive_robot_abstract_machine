@@ -1,4 +1,4 @@
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from uuid import UUID, uuid4
 
 import pytest
@@ -30,11 +30,18 @@ from coraplex.plans.underspecified import (
 )
 from coraplex.robot_plans.actions.base import Action
 from coraplex.robot_plans.actions.core.navigation import NavigateAction
-from coraplex.robot_plans.actions.core.pick_up import PickUpAction
+from coraplex.robot_plans.actions.core.pick_up import PickUpAction, ReachAction
 from coraplex.visualization import RvizVisualization
+from giskardpy.motion_statechart.goals.cartesian_goals import CartesianPoseStraight
+from giskardpy.motion_statechart.monitors.overwrite_state_monitors import SetOdometry
+from giskardpy.motion_statechart.tasks.cartesian_tasks import CartesianPose
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.robots.robot_parts import Arm
-from semantic_digital_twin.semantic_annotations.semantic_annotations import Milk
+from semantic_digital_twin.robots.stretch import Stretch
+from semantic_digital_twin.semantic_annotations.semantic_annotations import (
+    Handle,
+    Milk,
+)
 from semantic_digital_twin.spatial_types.spatial_types import Pose
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.connections import FixedConnection
@@ -109,7 +116,7 @@ def register_probe() -> UUID:
     return key
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class RecordingAction(Action):
     """
     An action whose execution deterministically records itself and can be made to fail
@@ -117,33 +124,35 @@ class RecordingAction(Action):
     node's candidates without depending on real motion physics.
     """
 
-    probe_key: UUID = field(kw_only=True)
+    probe_key: UUID
     """
     Id of the `TrialProbe` this action's attempts are recorded to.
     """
 
-    dof_id: UUID = field(kw_only=True)
+    dof_id: UUID
     """
     Id of the degree of freedom this action mutates on every attempt, to make world
     state changes observable.
     """
 
-    fail_on_attempt_number: Optional[int] = field(kw_only=True, default=None)
+    fail_on_attempt_number: Optional[int] = None
     """
     Report :attr:`reported_failure` once the probe has recorded this many calls; never
     fail if None.
     """
 
-    reported_failure: Callable[[], PlanFailure] = field(
-        kw_only=True, default=PlanFailure
-    )
+    reported_failure: Callable[[], PlanFailure] = PlanFailure
     """
     Builds the failure a failing attempt reports.
     """
 
     def create_action_body(self) -> StatechartNode:
         return Sequence(
-            [FunctionCall(function=self._record_attempt, failure_types=(PlanFailure,))]
+            nodes=[
+                FunctionCall(
+                    function=self._record_attempt, failure_types=(PlanFailure,)
+                )
+            ]
         )
 
     def _record_attempt(self) -> None:
@@ -379,7 +388,7 @@ def test_the_underspecified_steps_of_one_plan_are_tried_against_one_copy(
     dof = world.degrees_of_freedom[0]
     probe_key = register_probe()
     plan = Sequence(
-        [
+        nodes=[
             StatementNode(
                 statement=a(RecordingAction)(
                     probe_key=probe_key,
@@ -424,7 +433,7 @@ def _plan_of_two_underspecified_steps(world: World) -> Sequence:
     dof = world.degrees_of_freedom[0]
     probe_key = register_probe()
     return Sequence(
-        [
+        nodes=[
             StatementNode(
                 statement=a(RecordingAction)(
                     probe_key=probe_key,
@@ -603,7 +612,7 @@ def _compiled_trial_executor(
     candidate = RecordingAction(
         probe_key=register_probe(), dof_id=copied.degrees_of_freedom[0].id
     )
-    executor.compile(statechart_of(executor, Sequence([candidate])))
+    executor.compile(statechart_of(executor, Sequence(nodes=[candidate])))
     return executor, copied
 
 
@@ -680,6 +689,74 @@ def test_a_trial_publishes_nothing_without_debugging(
     trial.discard()
 
 
+def test_a_trial_adapts_a_candidate_to_the_robot_as_its_executor_does(
+    apartment_world_pr2_copy_with_context,
+):
+    """
+    A candidate is tried the way the robot will perform it, so the trial keeps the robot
+    adaptations its executor was given, apart from how the base drives.
+    """
+    world, robot, extensions = apartment_world_pr2_copy_with_context
+    executor = simulated_executor(extensions, robot_adaptations=[])
+    trial = ActionTrial(executor=executor, trial_executor_type=SimulatedPlanExecutor)
+
+    trial_executor = trial._trial_executor(trial._copy())
+
+    assert trial_executor.robot_adaptations == executor.robot_adaptations
+    trial.discard()
+
+
+def test_a_trial_puts_a_differentially_driven_base_at_its_goal(
+    stretch_apartment_context,
+):
+    """
+    A trial only decides whether a candidate can succeed, so it puts the base where the
+    candidate drives it instead of spending the time driving there.
+    """
+    world, robot, extensions = stretch_apartment_context
+    trial = ActionTrial(
+        executor=simulated_executor(extensions),
+        trial_executor_type=SimulatedPlanExecutor,
+    )
+    copied = trial._copy()
+    trial_executor = trial._trial_executor(copied)
+    navigation = NavigateAction(
+        target_location=Pose.from_xyz_rpy(2.0, 2.0, 0.0, reference_frame=copied.root)
+    )
+
+    trial_executor.prepare(statechart_of(trial_executor, navigation))
+
+    assert type(navigation.action_body) is SetOdometry
+    trial.discard()
+
+
+def test_a_trial_moves_the_tool_center_point_the_way_the_robot_does(
+    stretch_apartment_context,
+):
+    world, robot, extensions = stretch_apartment_context
+    trial = ActionTrial(
+        executor=simulated_executor(extensions),
+        trial_executor_type=SimulatedPlanExecutor,
+    )
+    copied = trial._copy()
+    trial_executor = trial._trial_executor(copied)
+    reach = ReachAction(
+        grasp=copied.get_semantic_annotations_by_type(Handle)[0].grasp_candidates()[0],
+        arm=copied.get_semantic_annotations_by_type(Stretch)[0].all_arms[0],
+    )
+
+    trial_executor.prepare(statechart_of(trial_executor, reach))
+
+    tool_frame = reach.arm.end_effector.tool_frame
+    assert [
+        type(node)
+        for node in reach.descendants
+        if isinstance(node, (CartesianPose, CartesianPoseStraight))
+        and node.tip_link is tool_frame
+    ] == [CartesianPoseStraight] * 2
+    trial.discard()
+
+
 def test_a_trial_stops_publishing_its_copy_once_the_candidate_has_run(
     debugging_executor,
 ):
@@ -703,8 +780,8 @@ def test_a_trial_tries_an_action_that_already_belongs_to_a_plan(debugging_execut
     """
     world, robot, executor = debugging_executor
     stand_where_it_is = robot.root.global_pose
-    action = NavigateAction(stand_where_it_is)
-    statechart_of(executor, Sequence([action]))
+    action = NavigateAction(target_location=stand_where_it_is)
+    statechart_of(executor, Sequence(nodes=[action]))
     trial = ActionTrial(executor=executor, trial_executor_type=SimulatedPlanExecutor)
 
     assert trial.succeeds(action)

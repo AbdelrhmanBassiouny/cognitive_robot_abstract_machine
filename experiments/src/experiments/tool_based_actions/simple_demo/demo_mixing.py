@@ -58,12 +58,16 @@ def main() -> None:
         world.add_semantic_annotations([Bowl(root=bowl_body), whisk])
 
     plan = Sequence(
-        [
-            SetGripperAction(pr2.right_arm.end_effector, GripperState.CLOSE),
-            ParkArmsAction(pr2.all_arms),
-            MoveTorsoAction(TorsoState.HIGH),
+        nodes=[
+            SetGripperAction(
+                gripper=pr2.right_arm.end_effector, motion=GripperState.CLOSE
+            ),
+            ParkArmsAction(arms=pr2.all_arms),
+            MoveTorsoAction(torso_state=TorsoState.HIGH),
             NavigateAction(
-                Pose.from_xyz_rpy(*BASE_POSITION_XYZ, reference_frame=world.root)
+                target_location=Pose.from_xyz_rpy(
+                    *BASE_POSITION_XYZ, reference_frame=world.root
+                )
             ),
             MixingAction(container=bowl_body, arm=pr2.right_arm, tool=whisk),
         ]

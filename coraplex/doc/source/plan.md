@@ -27,7 +27,7 @@ actions, motions and further composites. They are built on their own, before the
 ```python
 from cramph.composites import Sequence
 
-plan = Sequence([ParkArmsAction(robot.all_arms), NavigateAction(target_pose)])
+plan = Sequence(nodes=[ParkArmsAction(arms=robot.all_arms), NavigateAction(target_location=target_pose)])
 ```
 
 ## How a Plan is shaped

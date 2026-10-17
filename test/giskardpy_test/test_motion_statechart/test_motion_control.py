@@ -187,7 +187,7 @@ def run_one_joint_goal_after_another(
         extensions=[MotionControl(), recording],
     )
     statechart = Statechart(context=executor.context)
-    statechart.add_node(sequence := Sequence([first, second]))
+    statechart.add_node(sequence := Sequence(nodes=[first, second]))
     statechart.add_node(EndMotion.when_true(sequence))
     executor.compile(statechart)
     executor.tick_until_end()

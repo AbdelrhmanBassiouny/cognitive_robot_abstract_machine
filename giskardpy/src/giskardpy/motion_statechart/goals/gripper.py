@@ -19,7 +19,7 @@ from semantic_digital_twin.robots.robot_parts import EndEffector
 from typing_extensions import List, Optional
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class MoveGripper(Parallel):
     """
     Drive a gripper to one of the states its end effector defines.
@@ -28,37 +28,37 @@ class MoveGripper(Parallel):
     the goal can be told to settle for fingers that have stopped moving instead.
     """
 
-    end_effector: EndEffector = field(kw_only=True)
+    end_effector: EndEffector
     """
     The gripper to drive.
     """
 
-    state: GripperState = field(kw_only=True)
+    state: GripperState
     """
     The state to drive it to, read off the end effector as a joint state.
     """
 
-    tolerate_stall: bool = field(default=False, kw_only=True)
+    tolerate_stall: bool = False
     """
     Whether fingers that have stopped moving count as done, even short of their
     commanded position.
     """
 
-    stall_minimum_time: Optional[float] = field(default=None, kw_only=True)
+    stall_minimum_time: Optional[float] = None
     """
     How long the fingers must stand still before a stall counts, in seconds.
 
     None keeps :attr:`~giskardpy.motion_statechart.monitors.monitors.LocalMinimumReached.minimum_time`.
     """
 
-    finger_velocity: Optional[float] = field(default=None, kw_only=True)
+    finger_velocity: Optional[float] = None
     """
     Maximum speed of the finger joints, in meters per second.
 
     None leaves the speed capped only by the joints' own limits.
     """
 
-    allow_gripper_collision: bool = field(default=False, kw_only=True)
+    allow_gripper_collision: bool = False
     """
     Whether this end effector, and whatever it holds, may touch its surroundings while
     the fingers move.
@@ -104,7 +104,7 @@ class MoveGripper(Parallel):
         if not self.tolerate_stall:
             return joint_goal
         return Parallel(
-            [joint_goal, self._stall_monitor(goal_state)], minimum_success=1
+            nodes=[joint_goal, self._stall_monitor(goal_state)], minimum_success=1
         )
 
     def _stall_monitor(self, goal_state: JointState) -> LocalMinimumReached:

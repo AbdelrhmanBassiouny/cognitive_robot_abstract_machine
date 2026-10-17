@@ -183,19 +183,22 @@ def _whole_scene(world: World) -> VolumetricBoundingBox:
 
 
 def _navigate(world: World) -> NavigateAction:
-    return NavigateAction(_pose(world))
+    return NavigateAction(target_location=_pose(world))
 
 
 def _face_and_look_at(world: World) -> FaceAndLookAtAction:
-    return FaceAndLookAtAction(FaceAtAction(_pose(world)), LookAtAction(_pose(world)))
+    return FaceAndLookAtAction(
+        face_at=FaceAtAction(target=_pose(world)),
+        look_at=LookAtAction(target=_pose(world)),
+    )
 
 
 def _pick_up(world: World) -> PickUpAction:
-    return PickUpAction(_milk(world).grasp_candidates()[0], _arm(world))
+    return PickUpAction(grasp=_milk(world).grasp_candidates()[0], arm=_arm(world))
 
 
 def _place(world: World) -> PlaceAction:
-    return PlaceAction(_milk(world), _pose(world))
+    return PlaceAction(object_designator=_milk(world), target_location=_pose(world))
 
 
 def _move_and_pick_up(world: World) -> MoveAndPickUpAction:
@@ -242,29 +245,32 @@ def _elevator_navigation(world: World) -> list[StatechartNode]:
         ground_floor = GroundFloor.create_with_new_region_in_world(
             name="ground_floor", world=world, scale=Scale(40, 40, 6)
         )
-    return [ElevatorNavigation(elevator, ground_floor)]
+    return [ElevatorNavigation(elevator=elevator, target_floor=ground_floor)]
 
 
 def _robot_body_cases() -> list[ActionRoundTripCase]:
     return [
         ActionRoundTripCase(
-            MoveTorsoAction, lambda world: [MoveTorsoAction(TorsoState.HIGH)]
+            MoveTorsoAction,
+            lambda world: [MoveTorsoAction(torso_state=TorsoState.HIGH)],
         ),
         ActionRoundTripCase(
             SetGripperAction,
             lambda world: [
-                SetGripperAction(_arm(world).end_effector, GripperState.OPEN)
+                SetGripperAction(
+                    gripper=_arm(world).end_effector, motion=GripperState.OPEN
+                )
             ],
         ),
         ActionRoundTripCase(
             MoveFingersToWidthAction,
             lambda world: [
-                MoveFingersToWidthAction(_arm(world).end_effector, width=0.04)
+                MoveFingersToWidthAction(gripper=_arm(world).end_effector, width=0.04)
             ],
             executor_for=physically_simulated_executor,
         ),
         ActionRoundTripCase(
-            ParkArmsAction, lambda world: [ParkArmsAction(_robot(world).all_arms)]
+            ParkArmsAction, lambda world: [ParkArmsAction(arms=_robot(world).all_arms)]
         ),
         ActionRoundTripCase(
             FollowToolCenterPointPathAction,
@@ -302,13 +308,19 @@ def _robot_body_cases() -> list[ActionRoundTripCase]:
 def _navigation_and_perception_cases() -> list[ActionRoundTripCase]:
     return [
         ActionRoundTripCase(NavigateAction, lambda world: [_navigate(world)]),
-        ActionRoundTripCase(CarryAction, lambda world: [CarryAction(_navigate(world))]),
+        ActionRoundTripCase(
+            CarryAction, lambda world: [CarryAction(navigate=_navigate(world))]
+        ),
         ActionRoundTripCase(
             PathPlanningNavigateAction,
-            lambda world: [PathPlanningNavigateAction(_pose(world))],
+            lambda world: [PathPlanningNavigateAction(target=_pose(world))],
         ),
-        ActionRoundTripCase(LookAtAction, lambda world: [LookAtAction(_pose(world))]),
-        ActionRoundTripCase(FaceAtAction, lambda world: [FaceAtAction(_pose(world))]),
+        ActionRoundTripCase(
+            LookAtAction, lambda world: [LookAtAction(target=_pose(world))]
+        ),
+        ActionRoundTripCase(
+            FaceAtAction, lambda world: [FaceAtAction(target=_pose(world))]
+        ),
         ActionRoundTripCase(
             FaceAndLookAtAction, lambda world: [_face_and_look_at(world)]
         ),
@@ -346,7 +358,9 @@ def _manipulation_cases() -> list[ActionRoundTripCase]:
         ActionRoundTripCase(
             GraspingAction,
             lambda world: [
-                GraspingAction(_milk(world).grasp_candidates()[0], _arm(world))
+                GraspingAction(
+                    grasp=_milk(world).grasp_candidates()[0], arm=_arm(world)
+                )
             ],
         ),
         ActionRoundTripCase(PickUpAction, lambda world: [_pick_up(world)]),
@@ -356,13 +370,13 @@ def _manipulation_cases() -> list[ActionRoundTripCase]:
         ActionRoundTripCase(
             OpenAction,
             lambda world: [
-                OpenAction(_handle(world).grasp_candidates()[0], _arm(world))
+                OpenAction(grasp=_handle(world).grasp_candidates()[0], arm=_arm(world))
             ],
         ),
         ActionRoundTripCase(
             CloseAction,
             lambda world: [
-                CloseAction(_handle(world).grasp_candidates()[0], _arm(world))
+                CloseAction(grasp=_handle(world).grasp_candidates()[0], arm=_arm(world))
             ],
         ),
         ActionRoundTripCase(
@@ -379,7 +393,7 @@ def _manipulation_cases() -> list[ActionRoundTripCase]:
                     navigate=_navigate(world),
                     face_and_look_at=_face_and_look_at(world),
                     open_container=OpenAction(
-                        _handle(world).grasp_candidates()[0], _arm(world)
+                        grasp=_handle(world).grasp_candidates()[0], arm=_arm(world)
                     ),
                 )
             ],

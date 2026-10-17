@@ -101,12 +101,15 @@ class DetectBeforeGrasp(SequentialInsertion[ReachAction]):
         :param plan_node: The reach
         :raises ReachHasNoFinalApproach: If no step of the reach moves its tool center
             point, which it has none of before it is expanded.
-        :return: The last step of the reach moving the tool center point of its arm,
-            which brings the gripper onto the object, whatever a transformation put
-            after it.
+        :return: The last step of a sequence below the reach moving the tool center
+            point of its arm, which brings the gripper onto the object, whatever a
+            transformation put after it or around the sequence.
         """
-        body = plan_node.action_body
-        steps = [] if body is None else body.children
+        steps = [
+            node
+            for node in plan_node.descendants
+            if isinstance(node.parent_node, Sequence)
+        ]
         for step in reversed(steps):
             if self._moves_the_tool_center_point(step, plan_node.arm):
                 return step
@@ -140,9 +143,9 @@ class DetectBeforeGrasp(SequentialInsertion[ReachAction]):
             plan_node.grasp.grasp_pose, plan_node.arm.end_effector, plan_node.grasp
         ).grasp
         return [
-            LookAtAction(approached_pose),
+            LookAtAction(target=approached_pose),
             DetectAction(
-                DetectionTechnique.TYPES,
+                technique=DetectionTechnique.TYPES,
                 object_sem_annotation=type(plan_node.grasp.graspable),
                 accept_first_if_multiple=True,
             ),
@@ -253,7 +256,7 @@ class OpenDrawerBeforePickUp(DrawerOpening[PickUpAction]):
         )
         nodes.extend(
             [
-                ParkArmsAction(plan_node.robot.all_arms),
+                ParkArmsAction(arms=plan_node.robot.all_arms),
                 StatementNode(statement=drive_to_the_object),
             ]
         )
@@ -313,7 +316,7 @@ class OpenDrawerBeforeMoveAndPickUp(DrawerOpening[MoveAndPickUpAction]):
             # The candidates are grounded after the opening, which leaves the arms at
             # the handle, where they would stand in collision at every standing pose.
             robot = plan_node.context.require_extension(RobotAccess).robot
-            nodes.append(ParkArmsAction(robot.all_arms))
+            nodes.append(ParkArmsAction(arms=robot.all_arms))
         return nodes
 
     def _pick_up_target(
@@ -380,8 +383,10 @@ class ParkArmsAroundPickAndPlaceSteps(PlanTransformation[PickAndPlaceAction]):
     def apply(self, plan_node: PickAndPlaceAction) -> None:
         steps = plan_node.action_body
         for step in list(steps.nodes):
-            steps.insert_before(step, ParkArmsAction(plan_node.robot.all_arms))
-        steps.insert_after(steps.nodes[-1], ParkArmsAction(plan_node.robot.all_arms))
+            steps.insert_before(step, ParkArmsAction(arms=plan_node.robot.all_arms))
+        steps.insert_after(
+            steps.nodes[-1], ParkArmsAction(arms=plan_node.robot.all_arms)
+        )
 
 
 # %% parking before anything else
@@ -421,7 +426,7 @@ class ParkArmsBeforeFirstAction(SequentialInsertion[Action]):
         )
 
     def nodes_to_insert(self, plan_node: Action) -> List[StatechartNode]:
-        return [ParkArmsAction(plan_node.robot.all_arms)]
+        return [ParkArmsAction(arms=plan_node.robot.all_arms)]
 
     @staticmethod
     def _first_action_of_the_plan_of(node: StatechartNode) -> Optional[Action]:
@@ -472,7 +477,7 @@ class CloseFingersToObjectWidth(PlanTransformation[GraspingAction]):
 
     def apply(self, plan_node: GraspingAction) -> None:
         closing_step = self.closing_step(plan_node)
-        CramLanguageNode.running(closing_step).replace(
+        CramLanguageNode.closest_above(closing_step).replace(
             closing_step,
             plan_node.closing_step(
                 MoveFingersToWidthAction(

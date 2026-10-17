@@ -31,7 +31,7 @@ def test_force_impact_node(rclpy_node):
     msc = Statechart(context=StatechartContext(world=World()))
     msc.add_node(
         parallel := Parallel(
-            [
+            nodes=[
                 ForceImpactMonitor(topic_name=topic_name, threshold=10),
                 Sequence(
                     nodes=[

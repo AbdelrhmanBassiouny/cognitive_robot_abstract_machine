@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 from typing_extensions import TYPE_CHECKING
 
@@ -20,7 +20,7 @@ if TYPE_CHECKING:
 # %% driving with held objects upright
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class CarryAction(Action):
     """
     Drives the robot's base to a pose while every object the robot holds keeps its
@@ -36,7 +36,7 @@ class CarryAction(Action):
     The drive, or an underspecified statement of it.
     """
 
-    upright_threshold: float = field(default=AlignPlanes.threshold, kw_only=True)
+    upright_threshold: float = AlignPlanes.threshold
     """
     Angle in radians between a held object's z-axis and the world's z-axis within which
     the object counts as upright.
@@ -55,7 +55,7 @@ class CarryAction(Action):
         ]
         if not keep_upright:
             return self.navigate
-        return Parallel([self.navigate, *keep_upright])
+        return Parallel(nodes=[self.navigate, *keep_upright])
 
     def _held_bodies(self) -> list[Body]:
         """

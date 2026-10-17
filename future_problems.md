@@ -86,3 +86,7 @@ have no plan transformation in
   for moving a tool center point, so a transformation can match it:
   `MovesToolCenterPoint.tool_center_point_goal` builds a plain `CartesianPose` or
   `CartesianPosition` inside many actions.
+
+
+# real robot problems
+- motion statechart inspector doesn't work

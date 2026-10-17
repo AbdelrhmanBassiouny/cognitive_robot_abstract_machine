@@ -165,25 +165,34 @@ def build_statechart(
     statechart = Statechart(context=context)
     statechart.add_node(
         Sequence(
-            [
-                ParkArmsAction(robot.all_arms),
-                NavigateAction(standing_pose_in_front_of(source, world)),
-                PickUpAction(
-                    GraspCandidate.from_body_origin(parcel), robot.torso.left_arm
+            nodes=[
+                ParkArmsAction(arms=robot.all_arms),
+                NavigateAction(
+                    target_location=standing_pose_in_front_of(source, world)
                 ),
-                ParkArmsAction(robot.all_arms),
+                PickUpAction(
+                    grasp=GraspCandidate.from_body_origin(parcel),
+                    arm=robot.torso.left_arm,
+                ),
+                ParkArmsAction(arms=robot.all_arms),
                 straighten_torso(robot),
-                NavigateAction(Pose.from_xyz_rpy(yaw=turn, reference_frame=robot.root)),
-                NavigateAction(standing_pose_in_front_of(destination, world)),
+                NavigateAction(
+                    target_location=Pose.from_xyz_rpy(
+                        yaw=turn, reference_frame=robot.root
+                    )
+                ),
+                NavigateAction(
+                    target_location=standing_pose_in_front_of(destination, world)
+                ),
                 PlaceAction(
-                    parcel,
-                    Pose(
+                    object_designator=parcel,
+                    target_location=Pose(
                         destination.position,
                         destination.quaternion,
                         reference_frame=world.root,
                     ),
                 ),
-                ParkArmsAction(robot.all_arms),
+                ParkArmsAction(arms=robot.all_arms),
                 straighten_torso(robot),
             ]
         )

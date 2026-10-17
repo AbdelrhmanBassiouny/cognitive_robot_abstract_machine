@@ -343,9 +343,9 @@ class BulletWorldDemonstration(RobotDemonstration):
         statechart = Statechart(context=context)
         statechart.add_node(
             Sequence(
-                [
-                    ParkArmsAction(robot.all_arms),
-                    MoveTorsoAction(TorsoState.HIGH),
+                nodes=[
+                    ParkArmsAction(arms=robot.all_arms),
+                    MoveTorsoAction(torso_state=TorsoState.HIGH),
                     TransportAction.from_graspable_by_closest_grasps(
                         self.milk.annotation_in(world),
                         self.milk.target_location(world),

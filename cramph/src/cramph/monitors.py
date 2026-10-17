@@ -13,13 +13,13 @@ from cramph.threaded_nodes import ThreadedNode
 logger = logging.getLogger(__name__)
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class CheckTickCount(EndedByOwner, StatechartNode):
     """
     Sets observation to True if the tick count is above threshold.
     """
 
-    threshold: int = field(kw_only=True)
+    threshold: int
     """
     After this many ticks, the node will turn True.
     """
@@ -30,7 +30,7 @@ class CheckTickCount(EndedByOwner, StatechartNode):
         return artifacts
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class Print(EndedByOwner, StatechartNode):
     """
     Prints a message to the console every tick.
@@ -43,17 +43,17 @@ class Print(EndedByOwner, StatechartNode):
         return ObservationStateValues.TRUE
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class CountSeconds(EndedByOwner, StatechartNode):
     """
     This node counts X seconds and then turns True.
 
-    Only counts while in state RUNNING, and it is up to whoever runs it to stop it once
-    it has counted far enough.
+    Only counts while in state RUNNING, and it is up to its owner to stop it once it has
+    counted far enough.
     """
 
-    seconds: float = field(kw_only=True)
-    _now: Callable[[], float] = field(default=time.monotonic, kw_only=True, repr=False)
+    seconds: float
+    _now: Callable[[], float] = field(default=time.monotonic, repr=False)
     _start_time: float = field(init=False)
 
     def on_tick(self, context: StatechartContext) -> Optional[ObservationStateValues]:
@@ -66,14 +66,14 @@ class CountSeconds(EndedByOwner, StatechartNode):
         self._start_time = self._now()
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class TickCounter(EndedByOwner, StatechartNode, ABC):
     """
     Base for nodes that count ticks while RUNNING and turn True once a target is
     reached.
 
-    Only counts while in state RUNNING, and it is up to whoever runs it to stop it once
-    it reaches its target.
+    Only counts while in state RUNNING, and it is up to its owner to stop it once it
+    reaches its target.
     """
 
     _counter: int = field(init=False, default=0)
@@ -97,7 +97,7 @@ class TickCounter(EndedByOwner, StatechartNode, ABC):
         """
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class CountSimulationTimeSeconds(TickCounter):
     """
     This node counts X seconds of simulation time (ticks * tick duration) and then turns
@@ -106,7 +106,7 @@ class CountSimulationTimeSeconds(TickCounter):
     Only counts while in state RUNNING.
     """
 
-    seconds: float = field(kw_only=True)
+    seconds: float
     """
     How many seconds of simulation time to count.
     """
@@ -115,7 +115,7 @@ class CountSimulationTimeSeconds(TickCounter):
         return context.require_tick_duration() * self._counter >= self.seconds
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class CountTicks(TickCounter):
     """
     This node counts :attr:`ticks`-many ticks and then turns True.
@@ -123,7 +123,7 @@ class CountTicks(TickCounter):
     Only counts while in state RUNNING.
     """
 
-    ticks: int = field(kw_only=True)
+    ticks: int
     """
     Turns True after this many ticks.
     """
@@ -132,7 +132,7 @@ class CountTicks(TickCounter):
         return self._counter >= self.ticks
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class ThreadedPredicateMonitor(EndedByOwner, ThreadedNode):
     """
     Evaluates an arbitrary boolean predicate in a background thread and exposes the
@@ -146,7 +146,7 @@ class ThreadedPredicateMonitor(EndedByOwner, ThreadedNode):
     whatever produces it (e.g. an EQL condition is wrapped in a lambda by the caller).
     """
 
-    predicate: Optional[Callable[[], bool]] = field(kw_only=True)
+    predicate: Optional[Callable[[], bool]]
     """
     The predicate to evaluate, passed as a constructor argument.
     """
@@ -186,7 +186,7 @@ class ThreadedPredicateMonitor(EndedByOwner, ThreadedNode):
         )
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class Pulse(EndedByOwner, StatechartNode):
     """
     Will stay True for a single tick, then turn False.
@@ -197,7 +197,7 @@ class Pulse(EndedByOwner, StatechartNode):
     Keeps track of how many ticks have passed since first True.
     """
 
-    length: int = field(default=1, kw_only=True)
+    length: int = 1
     """
     Number of ticks to stay True.
     """
@@ -213,7 +213,7 @@ class Pulse(EndedByOwner, StatechartNode):
         return ObservationStateValues.FALSE
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class CountNodeResets(EndedByOwner, StatechartNode):
     """
     Turns True once :attr:`node` has been reset :attr:`target` times.
@@ -223,12 +223,12 @@ class CountNodeResets(EndedByOwner, StatechartNode):
     so it survives the resets it is counting.
     """
 
-    node: StatechartNode = field(kw_only=True)
+    node: StatechartNode
     """
     The node whose resets are counted.
     """
 
-    target: int = field(kw_only=True)
+    target: int
     """
     Number of resets after which this turns True.
     """

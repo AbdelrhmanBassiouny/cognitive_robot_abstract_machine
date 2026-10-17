@@ -75,7 +75,7 @@ def _create_executor() -> StatechartExecutor:
     )
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class _ConvergingTaskWithoutErrorSignal(ConvergingTask):
     """
     Converging task whose artifacts leave the error unset.
@@ -166,7 +166,7 @@ def test_parallel_local_minimum_reached_tolerates_stall(pr2_world_state_reset: W
     msc = Statechart(context=kin_sim.context)
     msc.add_node(
         combined := Parallel(
-            [
+            nodes=[
                 joint_goal := JointPositionList(
                     goal_state=JointState.from_mapping({torso_joint: 1.0}),
                 ),
@@ -429,7 +429,7 @@ class TestTemplates:
             goal_pose=pre_cut_pose,
         )
         cut = Sequence(
-            [
+            nodes=[
                 CartesianPose(
                     name="Down",
                     root_link=map_link,
@@ -507,7 +507,7 @@ class TestTemplates:
         msc = Statechart(context=kin_sim.context)
         msc.add_node(
             parallel := Parallel(
-                [
+                nodes=[
                     AlignPlanes(
                         root_link=map,
                         tip_link=r_tip,

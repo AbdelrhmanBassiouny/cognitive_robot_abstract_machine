@@ -133,7 +133,7 @@ def test_a_copied_plan_rewriting_offers_the_nodes_offered_already_again(
     world, _, extensions = pr2_apartment_context
     counting = TransformationCountingItsApplications()
     rewriting = PlanRewriting(transformations=[counting])
-    torso = MoveTorsoAction(TorsoState.HIGH)
+    torso = MoveTorsoAction(torso_state=TorsoState.HIGH)
     statechart_of(simulated_executor(extensions), torso)
     rewriting.rewrite(torso)
 
@@ -151,7 +151,7 @@ def test_an_action_samples_with_the_seed_of_its_plan(pr2_apartment_context):
     the plan's seed, so a run repeats.
     """
     _, _, extensions = pr2_apartment_context
-    action = MoveTorsoAction(TorsoState.HIGH)
+    action = MoveTorsoAction(torso_state=TorsoState.HIGH)
 
     statechart_of(
         simulated_executor(with_grounding(extensions, sampling_seed=5)), action

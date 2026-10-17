@@ -18,7 +18,7 @@ from krrood.symbolic_math.symbolic_math import FloatVariable
 from semantic_digital_twin.world_description.degree_of_freedom import DegreeOfFreedom
 
 
-@dataclass(repr=False, eq=False)
+@dataclass(repr=False, eq=False, kw_only=True)
 class LocalMinimumReached(EndedByOwner, MotionStatechartNode):
     """
     Checks if the robot has reached a local minimum in the trajectory, by checking if

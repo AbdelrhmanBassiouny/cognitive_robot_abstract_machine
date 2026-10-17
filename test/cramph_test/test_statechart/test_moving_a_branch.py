@@ -98,7 +98,7 @@ def recording_executor(
 # %% nodes and extensions recording what happens to them
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class NodeCountingItsBuilds(EndedByOwner, StatechartNode):
     """
     A node that keeps running and counts how often it was set up and built.
@@ -122,19 +122,19 @@ class NodeCountingItsBuilds(EndedByOwner, StatechartNode):
         return NodeArtifacts()
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class NodeObservingABodyPastAPosition(EndedByOwner, StatechartNode):
     """
     A node that keeps running and observes whether a body lies at or beyond a position
     along the x axis of the root.
     """
 
-    body: Body = field(kw_only=True)
+    body: Body
     """
     The body whose position is observed.
     """
 
-    position: float = field(kw_only=True)
+    position: float
     """
     The x coordinate the body has to reach.
     """

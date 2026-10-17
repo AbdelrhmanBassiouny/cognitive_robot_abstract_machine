@@ -41,7 +41,7 @@ class NodeAssertionError(StatechartError):
         return ""
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class ConstTrueNode(EndedByOwner, StatechartNode):
     """
     A node that has always reached its goal, so ending it always succeeds it.
@@ -51,7 +51,7 @@ class ConstTrueNode(EndedByOwner, StatechartNode):
         return NodeArtifacts(observation=sm.Scalar.const_true())
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class ConstFalseNode(EndedByOwner, StatechartNode):
     """
     A node that never reaches its goal, so nothing but being released ever ends it.
@@ -61,19 +61,19 @@ class ConstFalseNode(EndedByOwner, StatechartNode):
         return NodeArtifacts(observation=sm.Scalar.const_false())
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class NodeReferringToAWorldEntity(ConstTrueNode):
     """
     A node holding an entity of the world its statechart runs in.
     """
 
-    world_entity: WorldEntityWithID = field(kw_only=True)
+    world_entity: WorldEntityWithID
     """
     The entity of the world this node refers to.
     """
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class NodeWithOwnStructureCopy(EndedByOwner, StatechartNode):
     """
     A kind of node declared outside of the statechart's own node classes, whose structure
@@ -84,19 +84,19 @@ class NodeWithOwnStructureCopy(EndedByOwner, StatechartNode):
         return NodeWithOwnStructureCopy(name=self.name)
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class SpecializedNodeWithOwnStructureCopy(NodeWithOwnStructureCopy):
     """
     A specialization of :class:`NodeWithOwnStructureCopy` whose structure copy falls back to that kind.
     """
 
-    detail: int = field(default=0, kw_only=True)
+    detail: int = 0
     """
     A value only the specialization has, and its structure copy does not.
     """
 
 
-@dataclass(repr=False, eq=False)
+@dataclass(repr=False, eq=False, kw_only=True)
 class ChangeStateOnEvents(EndedByOwner, StatechartNode):
 
     state: str | None = None
@@ -117,7 +117,7 @@ class ChangeStateOnEvents(EndedByOwner, StatechartNode):
         self.state = "on_reset"
 
 
-@dataclass(repr=False, eq=False)
+@dataclass(repr=False, eq=False, kw_only=True)
 class CompositeNodeWithChainedChildren(EndedByOwner, CompositeNode):
     """
     A composite node whose second child starts once its first child observes True, and
@@ -139,7 +139,7 @@ class CompositeNodeWithChainedChildren(EndedByOwner, CompositeNode):
         return NodeArtifacts(observation=self.sub_node2.observation_variable)
 
 
-@dataclass(repr=False, eq=False)
+@dataclass(repr=False, eq=False, kw_only=True)
 class CompositeNodeWithNestedCompositeChild(EndedByOwner, CompositeNode):
     """
     A composite node with a single composite child, observing what that child observes.
@@ -155,7 +155,7 @@ class CompositeNodeWithNestedCompositeChild(EndedByOwner, CompositeNode):
         return NodeArtifacts(observation=sm.Scalar(self.inner.observation_variable))
 
 
-@dataclass(repr=False, eq=False)
+@dataclass(repr=False, eq=False, kw_only=True)
 class CompositeNodeCancellingIfChildRunsAfterItsEnd(
     SucceedsOnObservingTrue, CompositeNode
 ):
@@ -192,7 +192,7 @@ class CompositeNodeCancellingIfChildRunsAfterItsEnd(
         return NodeArtifacts(observation=sm.Scalar(self.ticking2.observation_variable))
 
 
-@dataclass(repr=False, eq=False)
+@dataclass(repr=False, eq=False, kw_only=True)
 class CompositeNodeWithChildSucceedingBeforeItStarts(EndedByOwner, CompositeNode):
     """
     A composite node whose child has its success condition met before it starts.
@@ -221,7 +221,7 @@ class CompositeNodeWithChildSucceedingBeforeItStarts(EndedByOwner, CompositeNode
         return NodeArtifacts(observation=sm.Scalar(self.node3.observation_variable))
 
 
-@dataclass(repr=False, eq=False)
+@dataclass(repr=False, eq=False, kw_only=True)
 class CompositeNodeCancellingIfPausedChildResumesAfterItsEnd(
     SucceedsOnObservingTrue, CompositeNode
 ):
@@ -260,7 +260,7 @@ class CompositeNodeCancellingIfPausedChildResumesAfterItsEnd(
         return NodeArtifacts(observation=sm.Scalar(self.ticking1.observation_variable))
 
 
-@dataclass(repr=False, eq=False)
+@dataclass(repr=False, eq=False, kw_only=True)
 class CompositeNodeResumingItsPausedChildren(SucceedsOnObservingTrue, CompositeNode):
     """
     A composite node whose children, paused along with it, resume once it resumes while
@@ -295,7 +295,7 @@ class CompositeNodeResumingItsPausedChildren(SucceedsOnObservingTrue, CompositeN
 # %% nodes that differ in what they can be judged by
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class NodeObservingNothingYet(EndedByOwner, StatechartNode):
     """
     A node that runs without ever deciding what it observes, so ending it can only
@@ -306,14 +306,14 @@ class NodeObservingNothingYet(EndedByOwner, StatechartNode):
         return NodeArtifacts(observation=sm.Scalar.const_trinary_unknown())
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class NodeObservingAPredicate(EndedByOwner, StatechartNode):
     """
     A node whose observation reads a life cycle predicate, which only a transition
     condition may do.
     """
 
-    watched_node: StatechartNode = field(default=None, kw_only=True)
+    watched_node: StatechartNode = None
     """
     The node whose outcome this node tries to observe.
     """
@@ -322,13 +322,13 @@ class NodeObservingAPredicate(EndedByOwner, StatechartNode):
         return NodeArtifacts(observation=sm.Scalar(self.watched_node.is_succeeded))
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class NodeObservingLastObservation(EndedByOwner, StatechartNode):
     """
     A node whose observation reads the observation another node took most recently.
     """
 
-    watched_node: StatechartNode = field(default=None, kw_only=True)
+    watched_node: StatechartNode = None
     """
     The node whose most recent observation this node observes.
     """
@@ -337,14 +337,14 @@ class NodeObservingLastObservation(EndedByOwner, StatechartNode):
         return NodeArtifacts(observation=sm.Scalar(self.watched_node.last_observation))
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class NodeObservingAnObservationPredicate(EndedByOwner, StatechartNode):
     """
     A node that observes whether another node observed True on the previous
     tick.
     """
 
-    watched_node: StatechartNode = field(default=None, kw_only=True)
+    watched_node: StatechartNode = None
     """
     The node whose observation this node asks about.
     """
@@ -353,13 +353,13 @@ class NodeObservingAnObservationPredicate(EndedByOwner, StatechartNode):
         return NodeArtifacts(observation=sm.Scalar(self.watched_node.observes_true))
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class NodeObservingTheOppositeOfAnObservationPredicate(EndedByOwner, StatechartNode):
     """
     A node that observes True while another node does not observe True.
     """
 
-    watched_node: StatechartNode = field(default=None, kw_only=True)
+    watched_node: StatechartNode = None
     """
     The node whose observation this node contradicts.
     """
@@ -370,14 +370,14 @@ class NodeObservingTheOppositeOfAnObservationPredicate(EndedByOwner, StatechartN
         )
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class NodeObservingAFixedValue(EndedByOwner, StatechartNode):
     """
     A node that observes the same value on every tick and leaves ending it to its
     owner.
     """
 
-    observation: ObservationStateValues = field(kw_only=True)
+    observation: ObservationStateValues
     """
     What this node observes on every tick.
     """
@@ -386,35 +386,35 @@ class NodeObservingAFixedValue(EndedByOwner, StatechartNode):
         return NodeArtifacts(observation=sm.Scalar(float(self.observation)))
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class NodeFailingOnObservingFalse(FailsOnObservingFalse, NodeObservingAFixedValue):
     """
     A node that fails itself once it observes False and leaves succeeding to its owner.
     """
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class NodeSucceedingOnObservingTrue(SucceedsOnObservingTrue, NodeObservingAFixedValue):
     """
     A node that succeeds once it observes True and declares no failure of its own.
     """
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class NodeDeclaringNoWayToSucceed(StatechartNode):
     """
     A node class that leaves open how it succeeds.
     """
 
 
-@dataclass(repr=False, eq=False)
+@dataclass(repr=False, eq=False, kw_only=True)
 class NodeDeclaringItsOwnFailure(EndedByOwner, CompositeNode):
     """
     A node short of its goal that declares it cannot continue, which is what a node may
     decide about itself where succeeding is left to its owner.
 
     Being a composite node is what gives it an :meth:`expand` hook to declare
-    the failure in; it runs no children of its own.
+    the failure in; it has no children of its own.
     """
 
     def expand(self, context: StatechartContext) -> None:
@@ -427,7 +427,7 @@ class NodeDeclaringItsOwnFailure(EndedByOwner, CompositeNode):
 # %% goals that end their child
 
 
-@dataclass(repr=False, eq=False)
+@dataclass(repr=False, eq=False, kw_only=True)
 class CompositeNodeCuttingOffItsChildAtItsGoal(EndedByOwner, CompositeNode):
     """
     Composite node whose child has reached its goal but is never ended on its
@@ -447,7 +447,7 @@ class CompositeNodeCuttingOffItsChildAtItsGoal(EndedByOwner, CompositeNode):
         return NodeArtifacts(observation=sm.Scalar.const_true())
 
 
-@dataclass(repr=False, eq=False)
+@dataclass(repr=False, eq=False, kw_only=True)
 class CompositeNodeCuttingOffItsChild(EndedByOwner, CompositeNode):
     """
     Composite node whose child is short of its goal and is never ended on its
@@ -467,7 +467,7 @@ class CompositeNodeCuttingOffItsChild(EndedByOwner, CompositeNode):
         return NodeArtifacts(observation=sm.Scalar.const_true())
 
 
-@dataclass(repr=False, eq=False)
+@dataclass(repr=False, eq=False, kw_only=True)
 class CompositeNodeWithChildInterruptedBySibling(EndedByOwner, CompositeNode):
     """
     Composite node whose child is interrupted by a sibling on the first tick,
@@ -495,7 +495,7 @@ class CompositeNodeWithChildInterruptedBySibling(EndedByOwner, CompositeNode):
         return NodeArtifacts(observation=sm.Scalar.const_true())
 
 
-@dataclass(repr=False, eq=False)
+@dataclass(repr=False, eq=False, kw_only=True)
 class CompositeNodeWithChildFailingOnItsOwn(EndedByOwner, CompositeNode):
     """
     Composite node whose child declares its own failure on the first tick, so
@@ -523,7 +523,7 @@ class CompositeNodeWithChildFailingOnItsOwn(EndedByOwner, CompositeNode):
         return NodeArtifacts(observation=sm.Scalar.const_true())
 
 
-@dataclass(repr=False, eq=False)
+@dataclass(repr=False, eq=False, kw_only=True)
 class CompositeNodeWithChildSucceedingOnItsOwn(EndedByOwner, CompositeNode):
     """
     Composite node whose child declares its own success on the first tick, so
@@ -551,7 +551,7 @@ class CompositeNodeWithChildSucceedingOnItsOwn(EndedByOwner, CompositeNode):
         return NodeArtifacts(observation=sm.Scalar.const_true())
 
 
-@dataclass(repr=False, eq=False)
+@dataclass(repr=False, eq=False, kw_only=True)
 class CompositeNodeWithChildStartingLate(EndedByOwner, CompositeNode):
     """
     Composite node whose child waits for a delay before it starts, so the
@@ -559,7 +559,7 @@ class CompositeNodeWithChildStartingLate(EndedByOwner, CompositeNode):
     conditions have a settled value.
     """
 
-    delay_in_ticks: int = field(default=2, kw_only=True)
+    delay_in_ticks: int = 2
     """
     How many ticks pass before the child's start condition turns true.
     """
@@ -579,7 +579,7 @@ class CompositeNodeWithChildStartingLate(EndedByOwner, CompositeNode):
         return NodeArtifacts(observation=sm.Scalar.const_false())
 
 
-@dataclass(repr=False, eq=False)
+@dataclass(repr=False, eq=False, kw_only=True)
 class CompositeNodeCuttingOffItsUndecidedChild(EndedByOwner, CompositeNode):
     """
     Composite node whose child never decides what it observes, so this node
@@ -599,7 +599,7 @@ class CompositeNodeCuttingOffItsUndecidedChild(EndedByOwner, CompositeNode):
         return NodeArtifacts(observation=sm.Scalar.const_true())
 
 
-@dataclass(repr=False, eq=False)
+@dataclass(repr=False, eq=False, kw_only=True)
 class CompositeNodeCuttingOffItsGrandchild(EndedByOwner, CompositeNode):
     """
     Composite node holding another composite node, so that ending
@@ -661,7 +661,7 @@ class LifeCycleCallback(Enum):
     """
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class NodeRecordingItsCallbacks(EndedByOwner, StatechartNode):
     """
     A node that never reaches its goal and records every life cycle callback run on it.
@@ -700,7 +700,7 @@ class NodeRecordingItsCallbacks(EndedByOwner, StatechartNode):
         self.callbacks.append(LifeCycleCallback.RESET)
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class NodeObservingTrueOnlyOnTick(EndedByOwner, StatechartNode):
     """
     A node whose observation expression is False but whose
@@ -721,7 +721,7 @@ class NodeObservingTrueOnlyOnTick(EndedByOwner, StatechartNode):
         return ObservationStateValues.TRUE
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class NodeWritingAVariableOnStart(EndedByOwner, StatechartNode):
     """
     A node that sets a float variable to True when it starts, so what its start callback
@@ -746,13 +746,13 @@ class NodeWritingAVariableOnStart(EndedByOwner, StatechartNode):
         )
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class NodeObservingAWrittenVariable(EndedByOwner, StatechartNode):
     """
     A node that observes True once another node's start callback wrote its variable.
     """
 
-    writer: NodeWritingAVariableOnStart = field(kw_only=True)
+    writer: NodeWritingAVariableOnStart
     """
     The node whose written variable this node observes.
     """
@@ -775,7 +775,7 @@ class NodeObservingAWrittenVariable(EndedByOwner, StatechartNode):
         )
 
 
-@dataclass(repr=False, eq=False)
+@dataclass(repr=False, eq=False, kw_only=True)
 class CompositeNodeObservingItsSecondChildRun(EndedByOwner, CompositeNode):
     """
     Composite node that observes True once its second child is running, which
@@ -811,7 +811,7 @@ class CompositeNodeObservingItsSecondChildRun(EndedByOwner, CompositeNode):
         )
 
 
-@dataclass(repr=False, eq=False)
+@dataclass(repr=False, eq=False, kw_only=True)
 class CompositeNodeWithARecordingChild(EndedByOwner, CompositeNode):
     """
     Composite node holding one child that records its callbacks and would start
@@ -828,7 +828,7 @@ class CompositeNodeWithARecordingChild(EndedByOwner, CompositeNode):
         self._add_child_to_statechart(self.child)
 
 
-@dataclass(repr=False, eq=False)
+@dataclass(repr=False, eq=False, kw_only=True)
 class CompositeNodeObservingItsCancellingChildRun(EndedByOwner, CompositeNode):
     """
     Composite node that observes True once its :class:`CancelStatechart` child is

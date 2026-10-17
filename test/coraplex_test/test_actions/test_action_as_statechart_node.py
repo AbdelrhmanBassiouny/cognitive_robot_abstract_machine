@@ -36,7 +36,7 @@ from cramph.context import ContextExtension, StatechartContext
 # %% a body handed in, so expansion is exercised without a robot
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class ActionRunningHandedInSteps(Action):
     """
     An action whose body is handed to it rather than derived from a robot, so that
@@ -45,11 +45,11 @@ class ActionRunningHandedInSteps(Action):
 
     steps: List[StatechartNode] = field(default_factory=list)
     """
-    The nodes this action runs, in order.
+    The children of this action, in order.
     """
 
     def create_action_body(self) -> StatechartNode:
-        return Sequence(list(self.steps))
+        return Sequence(nodes=list(self.steps))
 
 
 def _succeeding(name: str) -> NodeSucceedingOnObservingTrue:
@@ -115,7 +115,7 @@ def test_action_runs_its_steps_as_one_sequence(simple_pr2_context):
     assert body.nodes == steps
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class ActionRunningOneNode(Action):
     """
     An action whose body is a single node rather than a sequence of steps.
@@ -123,7 +123,7 @@ class ActionRunningOneNode(Action):
 
     node: StatechartNode
     """
-    The node this action runs.
+    The child of this action.
     """
 
     def create_action_body(self) -> StatechartNode:
@@ -250,24 +250,24 @@ def test_action_parameters_leave_out_statechart_machinery(simple_pr2_context):
     """
     Only what the action was parameterized with counts as its parameters.
     """
-    action = MoveTorsoAction(TorsoState.HIGH)
+    action = MoveTorsoAction(torso_state=TorsoState.HIGH)
 
     assert action.designator_parameter == {"torso_state": TorsoState.HIGH}
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class ActionWithKeywordOnlyParameter(ActionRunningHandedInSteps):
     """
     An action taking one of its parameters by keyword only.
     """
 
-    speed: float = field(default=1.0, kw_only=True)
+    speed: float = 1.0
     """
     A parameter that can only be passed by keyword.
     """
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class ActionWithHelperField(ActionRunningHandedInSteps):
     """
     An action carrying a field its caller sets that is not one of its parameters.
@@ -288,7 +288,7 @@ def test_a_keyword_only_field_is_a_parameter():
 
 
 def test_the_name_of_an_action_is_not_a_parameter():
-    action = MoveTorsoAction(TorsoState.HIGH, name="lift")
+    action = MoveTorsoAction(torso_state=TorsoState.HIGH, name="lift")
 
     assert action.designator_parameter == {"torso_state": TorsoState.HIGH}
 

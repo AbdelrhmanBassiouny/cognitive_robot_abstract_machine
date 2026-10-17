@@ -418,7 +418,7 @@ class TestFeatureFunctions:
         )
         msc = Statechart(context=kin_sim.context)
         combined_goal = Parallel(
-            [
+            nodes=[
                 HeightGoal(
                     root_link=root,
                     tip_link=tip,
@@ -522,7 +522,9 @@ class TestFeatureFunctions:
             threshold=perpendicular_threshold,
         )
 
-        combined_goal = Parallel([height_goal, distance_goal, align_perpendicular])
+        combined_goal = Parallel(
+            nodes=[height_goal, distance_goal, align_perpendicular]
+        )
         msc.add_node(combined_goal)
         msc.add_node(EndMotion.when_true(combined_goal))
 
@@ -702,7 +704,7 @@ def test_pointing_follows_a_goal_point_given_as_an_expression_of_a_moving_frame(
     region_goal = JointPositionList(
         goal_state=JointState.from_mapping({region_joint: 0.8})
     )
-    msc.add_node(both := Parallel([pointing, region_goal]))
+    msc.add_node(both := Parallel(nodes=[pointing, region_goal]))
     end = EndMotion()
     end.start_condition = both.observes_true
     msc.add_node(end)
@@ -1020,7 +1022,7 @@ class TestOpenClose:
         msc.add_nodes(
             [
                 Sequence(
-                    [
+                    nodes=[
                         CartesianPose(
                             root_link=pr2_world_copy.root,
                             tip_link=r_tip,
@@ -1029,7 +1031,7 @@ class TestOpenClose:
                             ),
                         ),
                         opening := Parallel(
-                            [
+                            nodes=[
                                 Open(
                                     tip_link=r_tip,
                                     environment_link=handle,
@@ -1043,7 +1045,7 @@ class TestOpenClose:
                             ]
                         ),
                         closing := Parallel(
-                            [
+                            nodes=[
                                 Close(
                                     tip_link=r_tip,
                                     environment_link=handle,
@@ -1118,7 +1120,7 @@ class TestOpenClose:
         unscrew_statechart.add_nodes(
             [
                 sequence := Sequence(
-                    [
+                    nodes=[
                         # Grasp with the roll axis of the gripper collinear with the
                         # screw axis, so the wrist can follow the cap's rotation.
                         CartesianPose(

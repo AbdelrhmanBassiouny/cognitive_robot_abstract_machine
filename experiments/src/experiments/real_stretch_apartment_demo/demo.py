@@ -54,9 +54,6 @@ from coraplex.robot_plans.actions.core.robot_body import (
     SetGripperAction,
 )
 from coraplex.robot_plans.plan_transformations import DetectBeforeGrasp
-from coraplex.robot_plans.robot_specific_plan_transformations import (
-    DriveStretchWithItsDifferentialDrive,
-)
 from krrood.entity_query_language.factories import a
 from semantic_digital_twin.specifications.connections import Connection6DoFSpecification
 from semantic_digital_twin.specifications.kinematic_structure_entities import (
@@ -152,17 +149,11 @@ class StretchApartmentDemonstration(RobotDemonstration):
 
     def build_context_extensions(self, world: World) -> List[ContextExtension]:
         """
-        Give the plan the Stretch in ``world``, detecting an object before grasping it
-        and moving the way the Stretch needs to.
+        Give the plan the Stretch in ``world``, detecting an object before grasping it.
         """
         return [
             RobotAccess(world.get_semantic_annotations_by_type(self.used_robot)[0]),
-            PlanRewriting(
-                transformations=[
-                    DetectBeforeGrasp(),
-                    DriveStretchWithItsDifferentialDrive(),
-                ]
-            ),
+            PlanRewriting(transformations=[DetectBeforeGrasp()]),
         ]
 
     def build_statechart(self, context: StatechartContext) -> Statechart:
@@ -179,15 +170,17 @@ class StretchApartmentDemonstration(RobotDemonstration):
         CEREAL_SHELF_LAYER_T_CEREAL.reference_frame = shelf_layer_body
 
         plan = Sequence(
-            [
-                ParkArmsAction(robot.all_arms),
-                SetGripperAction(arm.end_effector, motion=GripperState.CLOSE),
+            nodes=[
+                ParkArmsAction(arms=robot.all_arms),
+                SetGripperAction(gripper=arm.end_effector, motion=GripperState.CLOSE),
                 NavigateAction(
-                    Pose.from_xyz_rpy(
+                    target_location=Pose.from_xyz_rpy(
                         1.2, 1.2, 0, yaw=np.pi, reference_frame=world.root
                     )
                 ),
-                LookAtAction(Pose.from_xyz_rpy(reference_frame=shelf_layer_body)),
+                LookAtAction(
+                    target=Pose.from_xyz_rpy(reference_frame=shelf_layer_body)
+                ),
                 StatementNode(
                     statement=a(NavigateAction)(
                         target_location=Pose.from_xyz_rpy(
@@ -195,20 +188,22 @@ class StretchApartmentDemonstration(RobotDemonstration):
                         )
                     )
                 ),
-                LookAtAction(Pose.from_xyz_rpy(reference_frame=shelf_layer_body)),
+                LookAtAction(
+                    target=Pose.from_xyz_rpy(reference_frame=shelf_layer_body)
+                ),
                 DetectAction(
-                    DetectionTechnique.TYPES,
+                    technique=DetectionTechnique.TYPES,
                     object_sem_annotation=CheezeIt,
                     trust_detected_orientation=True,
                     accept_first_if_multiple=True,
                 ),
                 PickUpAction(
-                    cereal.grasp_candidates()[0],
-                    arm,
+                    grasp=cereal.grasp_candidates()[0],
+                    arm=arm,
                 ),
-                ParkArmsAction(robot.all_arms),
+                ParkArmsAction(arms=robot.all_arms),
                 NavigateAction(
-                    Pose.from_xyz_rpy(
+                    target_location=Pose.from_xyz_rpy(
                         0.8, 0, 0, yaw=np.pi, reference_frame=bedside_table_body
                     )
                 ),
@@ -221,14 +216,16 @@ class StretchApartmentDemonstration(RobotDemonstration):
                         reference_frame=bedside_table_body,
                     ),
                 ),
-                ParkArmsAction(robot.all_arms),
-                SetGripperAction(arm.end_effector, motion=GripperState.CLOSE),
+                ParkArmsAction(arms=robot.all_arms),
+                SetGripperAction(gripper=arm.end_effector, motion=GripperState.CLOSE),
                 NavigateAction(
-                    Pose.from_xyz_rpy(
+                    target_location=Pose.from_xyz_rpy(
                         1.2, 1.2, 0, yaw=np.pi, reference_frame=world.root
                     )
                 ),
-                LookAtAction(Pose.from_xyz_rpy(reference_frame=shelf_layer_body)),
+                LookAtAction(
+                    target=Pose.from_xyz_rpy(reference_frame=shelf_layer_body)
+                ),
                 StatementNode(
                     statement=a(NavigateAction)(
                         target_location=Pose.from_xyz_rpy(
@@ -236,9 +233,11 @@ class StretchApartmentDemonstration(RobotDemonstration):
                         )
                     )
                 ),
-                LookAtAction(Pose.from_xyz_rpy(reference_frame=bedside_table_body)),
+                LookAtAction(
+                    target=Pose.from_xyz_rpy(reference_frame=bedside_table_body)
+                ),
                 DetectAction(
-                    DetectionTechnique.TYPES,
+                    technique=DetectionTechnique.TYPES,
                     object_sem_annotation=CheezeIt,
                     trust_detected_orientation=False,
                     accept_first_if_multiple=True,
@@ -249,9 +248,9 @@ class StretchApartmentDemonstration(RobotDemonstration):
                         arm=arm,
                     )
                 ),
-                ParkArmsAction(robot.all_arms),
+                ParkArmsAction(arms=robot.all_arms),
                 NavigateAction(
-                    Pose.from_xyz_rpy(
+                    target_location=Pose.from_xyz_rpy(
                         0.8, 0.6, 0, yaw=-np.pi / 2, reference_frame=world.root
                     )
                 ),
@@ -261,8 +260,8 @@ class StretchApartmentDemonstration(RobotDemonstration):
                         target_location=CEREAL_SHELF_LAYER_T_CEREAL.pose,
                     )
                 ),
-                ParkArmsAction(robot.all_arms),
-                SetGripperAction(arm.end_effector, motion=GripperState.CLOSE),
+                ParkArmsAction(arms=robot.all_arms),
+                SetGripperAction(gripper=arm.end_effector, motion=GripperState.CLOSE),
             ]
         )
 

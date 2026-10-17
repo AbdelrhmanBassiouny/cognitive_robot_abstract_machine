@@ -187,10 +187,10 @@ class ToolMotionAction(FullBodyControlledAction, MovesToolCenterPoint, ABC):
             for pair in self._alignment_pairs
         ]
         return Parallel(
-            [
+            nodes=[
                 UpdateTemporaryCollisionRules.for_end_effector(self.arm.end_effector),
                 Parallel(
-                    [
+                    nodes=[
                         CartesianPositionTrajectory(**trajectory_arguments),
                         *alignments,
                     ]
@@ -385,7 +385,7 @@ class WipingAction(ToolMotionAction):
             stretch of a wipe often stalls against the surface.
         """
         return TryAll(
-            [
+            nodes=[
                 self._tool_path_goal(),
                 PositionReached(
                     name=f"{self.name}/final waypoint reached",
@@ -590,7 +590,7 @@ class PouringAction(FullBodyControlledAction, MovesToolCenterPoint):
         """
         pre_pour_pose, pour_pose = self._pour_poses()
         return Sequence(
-            [
+            nodes=[
                 self.tool_center_point_goal(
                     pre_pour_pose,
                     self.arm,

@@ -314,8 +314,8 @@ class GarmiApartmentDemonstration(RobotDemonstration):
         statechart = Statechart(context=context)
         statechart.add_node(
             Sequence(
-                [
-                    ParkArmsAction(robot.all_arms),
+                nodes=[
+                    ParkArmsAction(arms=robot.all_arms),
                     TransportAction.from_graspable_by_closest_grasps(
                         world.get_semantic_annotations_by_type(Bowl)[0],
                         Pose(

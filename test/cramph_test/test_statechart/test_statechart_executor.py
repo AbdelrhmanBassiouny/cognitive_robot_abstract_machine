@@ -305,7 +305,7 @@ class ExtensionInstallingACountingContext(ExecutorExtension):
         context.add_extension(self.counting_context)
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class NodeRequiringACountingContext(ConstTrueNode):
     """
     A node that can only be built in a context that holds a :class:`CountingContext`.

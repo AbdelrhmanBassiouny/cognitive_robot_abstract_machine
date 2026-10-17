@@ -370,12 +370,12 @@ def _spawn_robot_and_prepare_pick_up(
     apple = world.get_body_by_name(apple_name)
     apple_annotation = world.get_semantic_annotations_by_type(Apple)[0]
     plan = Sequence(
-        [
-            ParkArmsAction(pr2.all_arms),
-            MoveTorsoAction(TorsoState.HIGH),
+        nodes=[
+            ParkArmsAction(arms=pr2.all_arms),
+            MoveTorsoAction(torso_state=TorsoState.HIGH),
             PickUpAction(
-                apple_annotation.grasp_candidates()[0],
-                pr2.right_arm,
+                grasp=apple_annotation.grasp_candidates()[0],
+                arm=pr2.right_arm,
             ),
         ]
     )

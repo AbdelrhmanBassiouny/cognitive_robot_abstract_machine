@@ -30,7 +30,7 @@ from semantic_digital_twin.spatial_types.spatial_types import Pose
 logger = logging.getLogger(__name__)
 
 
-@dataclass
+@dataclass(kw_only=True)
 class HasGraspChoice:
     """
     Adds to an action the grasp it takes hold by.
@@ -53,7 +53,7 @@ class HasGraspChoice:
     """
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class ReachAction(
     MovesToolCenterPoint,
     HasApproachesGraspPoses,
@@ -110,10 +110,10 @@ class ReachAction(
                 max_linear_velocity=self.final_approach_linear_velocity,
             )
         )
-        return Sequence(children)
+        return Sequence(nodes=children)
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class PickUpAction(
     MovesToolCenterPoint,
     ReattachesBodies,
@@ -153,7 +153,7 @@ class PickUpAction(
                 reference_frame=graspable.root,
             ),
         )
-        return cls(grasp, arm)
+        return cls(grasp=grasp, arm=arm)
 
     def _grasp_attempt(self) -> Sequence:
         """
@@ -190,7 +190,7 @@ class PickUpAction(
             self.grasp.grasp_pose, self.arm.end_effector, self.grasp
         ).retreat
         return Sequence(
-            [
+            nodes=[
                 self._grasp_attempt(),
                 self.tool_center_point_goal(
                     lift_to_pose,
@@ -203,7 +203,7 @@ class PickUpAction(
         )
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class GraspingAction(
     MovesToolCenterPoint,
     HasGraspChoice,
@@ -227,7 +227,7 @@ class GraspingAction(
 
     def create_action_body(self) -> StatechartNode:
         return Sequence(
-            [
+            nodes=[
                 ReachAction(
                     grasp=self.grasp,
                     arm=self.arm,
@@ -260,7 +260,7 @@ class GraspingAction(
             grasp, whatever else moves the robot meanwhile.
         """
         return Parallel(
-            [
+            nodes=[
                 closing_goal,
                 self.tool_center_point_goal(
                     self.grasp_pose_sequence(

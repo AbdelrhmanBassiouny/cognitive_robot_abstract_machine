@@ -1220,7 +1220,7 @@ class TakenOverNode:
             former_parent=node.parent_node,
             former_conditions={
                 transition_kind: node.get_condition(transition_kind)
-                for transition_kind in new_parent._transitions_owned_by_parent()
+                for transition_kind in TransitionKind.owner_wired_kinds()
             },
         )
 
@@ -2268,7 +2268,7 @@ class Statechart(SubclassJSONSerializer):
         layout: GraphLayout = GraphLayout.LAYERED,
     ) -> GraphVisualizerBase:
         """
-        Open an interactive visualization of the nodes and the nodes they run, see
+        Open an interactive visualization of the nodes and their children, see
         :class:`~cramph.plotters.interactive_graph.StatechartGraphVisualizer`.
 
         :param backend: The rendering technology to use.

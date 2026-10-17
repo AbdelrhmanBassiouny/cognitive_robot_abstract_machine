@@ -37,13 +37,13 @@ from typing_extensions import List, Optional
 from coraplex.datastructures.enums import MovementType
 
 
-@dataclass
+@dataclass(kw_only=True)
 class HasMaxJointVelocity:
     """
     Adds an optional joint velocity cap to an action or motion.
     """
 
-    max_joint_velocity: Optional[float] = field(default=None, kw_only=True)
+    max_joint_velocity: Optional[float] = None
     """
     Maximum joint velocity (in rad/s or m/s, per joint), enforced via
     :class:`~giskardpy.motion_statechart.tasks.joint_tasks.JointVelocityLimit`. ``None``
@@ -51,7 +51,7 @@ class HasMaxJointVelocity:
     """
 
 
-@dataclass
+@dataclass(kw_only=True)
 class HasApproachVelocity:
     """
     Adds an optional pre-approach speed to an action that reaches towards a target
@@ -62,7 +62,7 @@ class HasApproachVelocity:
     reach is itself a :class:`ReachAction` and forwards this same value to it.
     """
 
-    pre_approach_linear_velocity: Optional[float] = field(default=None, kw_only=True)
+    pre_approach_linear_velocity: Optional[float] = None
     """
     Maximum linear speed (in m/s) for the initial pre-pose approach, enforced via
     :class:`~giskardpy.motion_statechart.tasks.cartesian_tasks.CartesianPositionVelocityLimit`.
@@ -70,7 +70,7 @@ class HasApproachVelocity:
     """
 
 
-@dataclass
+@dataclass(kw_only=True)
 class HasGraspDetectionThreshold:
     """
     Adds a grasp-detection sensitivity threshold to an action that checks whether an
@@ -81,7 +81,7 @@ class HasGraspDetectionThreshold:
     :class:`~coraplex.robot_plans.actions.core.placing.PlaceAction`.
     """
 
-    grasp_detection_threshold: float = field(default=0.9, kw_only=True)
+    grasp_detection_threshold: float = 0.9
     """
     Minimum fraction of sampled rays between the gripper's fingers that must hit the
     target object for it to count as grasped/held (see
@@ -89,13 +89,13 @@ class HasGraspDetectionThreshold:
     """
 
 
-@dataclass
+@dataclass(kw_only=True)
 class ReachTuningParameters(HasApproachVelocity):
     """
     Tunable approach speeds for :class:`~coraplex.robot_plans.actions.core.pick_up.ReachAction`.
     """
 
-    final_approach_linear_velocity: Optional[float] = field(default=None, kw_only=True)
+    final_approach_linear_velocity: Optional[float] = None
     """
     Maximum linear speed (in m/s) for the final approach onto the target pose, enforced
     via
@@ -104,7 +104,7 @@ class ReachTuningParameters(HasApproachVelocity):
     """
 
 
-@dataclass
+@dataclass(kw_only=True)
 class PickUpTuningParameters(ReachTuningParameters):
     """
     Tunable grasp speeds and target-object friction for
@@ -118,7 +118,7 @@ class PickUpTuningParameters(ReachTuningParameters):
     places rather than two similarly-named-but-distinct fields.
     """
 
-    grasp_closing_velocity: Optional[float] = field(default=None, kw_only=True)
+    grasp_closing_velocity: Optional[float] = None
     """
     Maximum finger joint velocity (in m/s) used while closing onto the object, enforced
     via
@@ -126,7 +126,7 @@ class PickUpTuningParameters(ReachTuningParameters):
     leaves the speed unconstrained.
     """
 
-    lift_linear_velocity: Optional[float] = field(default=None, kw_only=True)
+    lift_linear_velocity: Optional[float] = None
     """
     Maximum linear speed (in m/s) for lifting the object clear of the table after
     grasping, enforced via
@@ -134,14 +134,14 @@ class PickUpTuningParameters(ReachTuningParameters):
     ``None`` leaves the speed unconstrained.
     """
 
-    grasp_stall_minimum_time: Optional[float] = field(default=None, kw_only=True)
+    grasp_stall_minimum_time: Optional[float] = None
     """
     Minimum stall dwell time (in seconds, see
     :attr:`~giskardpy.motion_statechart.goals.gripper.MoveGripper.stall_minimum_time`)
     for the CLOSE motion. ``None`` keeps the default.
     """
 
-    object_friction: Optional[float] = field(default=None, kw_only=True)
+    object_friction: Optional[float] = None
     """
     Sliding friction coefficient to apply to the target object's geom before this pick,
     overriding the world's default. Not consumed by this action itself -- applying it is
@@ -151,14 +151,14 @@ class PickUpTuningParameters(ReachTuningParameters):
     """
 
 
-@dataclass
+@dataclass(kw_only=True)
 class PlaceTuningParameters:
     """
     Tunable transport/placing/release speeds for
     :class:`~coraplex.robot_plans.actions.core.placing.PlaceAction`.
     """
 
-    placing_linear_velocity: Optional[float] = field(default=None, kw_only=True)
+    placing_linear_velocity: Optional[float] = None
     """
     Maximum linear speed (in m/s) for the final descent onto the target location,
     enforced via
@@ -166,7 +166,7 @@ class PlaceTuningParameters:
     ``None`` leaves the speed unconstrained.
     """
 
-    transport_linear_velocity: Optional[float] = field(default=None, kw_only=True)
+    transport_linear_velocity: Optional[float] = None
     """
     Maximum linear speed (in m/s) for carrying the held object above the target
     location, before the final descent, enforced via
@@ -174,7 +174,7 @@ class PlaceTuningParameters:
     ``None`` leaves the speed unconstrained.
     """
 
-    release_opening_velocity: Optional[float] = field(default=None, kw_only=True)
+    release_opening_velocity: Optional[float] = None
     """
     Maximum finger joint velocity (in m/s) used while opening the gripper to release
     the object, enforced via
@@ -182,7 +182,7 @@ class PlaceTuningParameters:
     leaves the speed unconstrained.
     """
 
-    retract_linear_velocity: Optional[float] = field(default=None, kw_only=True)
+    retract_linear_velocity: Optional[float] = None
     """
     Maximum linear speed (in m/s) for retracting the end effector away from the placed
     object, enforced via
@@ -191,63 +191,7 @@ class PlaceTuningParameters:
     """
 
 
-@dataclass
-class GripperStallToleranceParameters:
-    """
-    Adds an optional finger speed and stall-tolerance to a gripper open/close motion.
-    """
-
-    finger_velocity: Optional[float] = field(default=None, kw_only=True)
-    """
-    Maximum finger joint velocity (in m/s), enforced via
-    :class:`~giskardpy.motion_statechart.tasks.joint_tasks.JointVelocityLimit`. ``None``
-    leaves the speed unconstrained.
-    """
-
-    stall_minimum_time: Optional[float] = field(default=None, kw_only=True)
-    """
-    Minimum stall dwell time (in seconds, see
-    :attr:`~giskardpy.motion_statechart.monitors.monitors.LocalMinimumReached.minimum_time`)
-    to command. Only meaningful when :attr:`tolerate_stall` is True. ``None`` keeps the
-    default.
-    """
-
-    tolerate_stall: bool = field(default=False, kw_only=True)
-    """
-    Whether this motion is also considered done once the fingers' velocities settle
-    near zero, even without reaching their nominal target position -- checked via a
-    separate :class:`~giskardpy.motion_statechart.monitors.monitors.LocalMinimumReached`
-    monitor alongside the goal, not by the goal's own observation, since stalling does
-    not mean the goal itself was reached.
-    """
-
-
-@dataclass
-class CartesianVelocityLimitParameters:
-    """
-    Adds an optional linear and angular speed cap to a Cartesian tool-center-point
-    motion.
-    """
-
-    max_linear_velocity: Optional[float] = field(default=None, kw_only=True)
-    """
-    Maximum linear speed (in m/s) of the tool center point, enforced via
-    :class:`~giskardpy.motion_statechart.tasks.cartesian_tasks.CartesianPositionVelocityLimit`.
-    ``None`` leaves the linear speed unconstrained (other than the robot's own hardware
-    limits).
-    """
-
-    max_angular_velocity: Optional[float] = field(default=None, kw_only=True)
-    """
-    Maximum angular speed (in rad/s) of the tool center point, enforced via
-    :class:`~giskardpy.motion_statechart.tasks.cartesian_tasks.CartesianRotationVelocityLimit`.
-    Only meaningful for :class:`~giskardpy.motion_statechart.tasks.cartesian_tasks.CartesianPose`
-    (i.e. when not :attr:`~coraplex.datastructures.enums.MovementType.TRANSLATION`).
-    ``None`` leaves the angular speed unconstrained.
-    """
-
-
-@dataclass
+@dataclass(kw_only=True)
 class MovesGripper:
     """
     Builds the goals that drive a gripper to one of its states.
@@ -284,7 +228,7 @@ class MovesGripper:
         )
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class MovesToolCenterPoint(Action, ABC):
     """
     An action that moves an arm's tool center point, with optional goal-achievement
@@ -293,13 +237,13 @@ class MovesToolCenterPoint(Action, ABC):
     when left unset.
     """
 
-    position_threshold: Optional[float] = field(default=None, kw_only=True)
+    position_threshold: Optional[float] = None
     """
     Distance threshold in meters for goal achievement. ``None`` falls back to
     :attr:`~coraplex.plans.context_extensions.MotionToleranceConfig.default_tcp_position_threshold`.
     """
 
-    orientation_threshold: Optional[float] = field(default=None, kw_only=True)
+    orientation_threshold: Optional[float] = None
     """
     Rotation threshold in rad for goal achievement. ``None`` falls back to
     :attr:`~coraplex.plans.context_extensions.MotionToleranceConfig.tool_orientation_threshold`.
@@ -374,7 +318,7 @@ class MovesToolCenterPoint(Action, ABC):
         goal = self._reach_target(target, root, tip, movement_type)
         if not accompanying:
             return goal
-        return Parallel([goal, *accompanying], name=type(goal).__name__)
+        return Parallel(nodes=[goal, *accompanying], name=type(goal).__name__)
 
     def _reach_target(
         self,
@@ -452,7 +396,7 @@ class MovesToolCenterPoint(Action, ABC):
         return limits
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class ReattachesBodies(Action, ABC):
     """
     An action that moves a body under a new parent in the world model, such as an object
@@ -501,7 +445,7 @@ class GraspPoseSequence:
     """
 
 
-@dataclass
+@dataclass(kw_only=True)
 class HasApproachesGraspPoses:
     """
     Turns a grasp frame (x-axis along the approach, see
@@ -509,12 +453,12 @@ class HasApproachesGraspPoses:
     tool frame goals that approach it, reach it and withdraw from it.
     """
 
-    approach_clearance: float = field(default=0.1, kw_only=True)
+    approach_clearance: float = 0.1
     """
     The gap in meters between the object and the gripper at the pre-grasp pose.
     """
 
-    retreat_distance: float = field(default=0.1, kw_only=True)
+    retreat_distance: float = 0.1
     """
     How far in meters the gripper rises when it leaves a grasp or a placed object.
     """

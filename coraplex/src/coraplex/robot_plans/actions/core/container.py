@@ -29,7 +29,7 @@ from semantic_digital_twin.spatial_types.spatial_types import Pose
 # %% taking a container by its handle
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class MovesHandle(MovesToolCenterPoint, HasGraspChoice, ABC):
     """
     An action that takes hold of a container's handle by :attr:`grasp`, moves the
@@ -85,10 +85,10 @@ class MovesHandle(MovesToolCenterPoint, HasGraspChoice, ABC):
     def create_action_body(self) -> StatechartNode:
         end_effector = self.arm.end_effector
         return Sequence(
-            [
+            nodes=[
                 GraspingAction(
-                    self.grasp,
-                    self.arm,
+                    grasp=self.grasp,
+                    arm=self.arm,
                     approach_clearance=self.approach_clearance,
                 ),
                 self.create_mechanism_goal(),
@@ -109,7 +109,7 @@ class MovesHandle(MovesToolCenterPoint, HasGraspChoice, ABC):
 # %% opening and closing
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class OpenAction(MovesHandle):
     """
     Opens a container like object.
@@ -124,7 +124,7 @@ class OpenAction(MovesHandle):
         )
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class CloseAction(MovesHandle):
     """
     Closes a container like object.

@@ -33,7 +33,6 @@ from semantic_digital_twin.world_description.geometry import Box, Scale
 from semantic_digital_twin.world_description.shape_collection import ShapeCollection
 from semantic_digital_twin.world_description.world_entity import Body
 
-from coraplex.plans.plan_transformation import PlanRewriting
 from cramph.composites import Parallel
 from coraplex.robot_plans.robot_specific_plan_transformations import (
     KeepTheTorsoUprightWhileUsingATool,
@@ -384,20 +383,15 @@ def justin_world():
 
 def _rewritten_mixing(world, robot):
     """
-    :return: A mixing action of `robot` in `world`, expanded and rewritten by
-        :class:`~coraplex.robot_plans.robot_specific_plan_transformations.KeepTheTorsoUprightWhileUsingATool`.
+    :return: A mixing action of `robot` in `world`, expanded and rewritten the way a
+        simulated executor rewrites it.
     """
     container = _add_box_body(world, "mixed_container", (0.2, 0.2, 0.1), (1, 0, 1))
     tool_body = _add_box_body(world, "mixing_tool", (0.04, 0.04, 0.2), (1, 0.3, 1))
     action = MixingAction(
         container=container, arm=robot.all_arms[0], tool=Whisk(root=tool_body)
     )
-    executor = simulated_executor(
-        [
-            *robot_extensions(robot),
-            PlanRewriting(transformations=[KeepTheTorsoUprightWhileUsingATool()]),
-        ]
-    )
+    executor = simulated_executor(robot_extensions(robot))
     executor.prepare(statechart_of(executor, action))
     return action
 

@@ -488,7 +488,7 @@ class KitchenPointingScenario(BenchmarkScenario):
         motion_statechart = Statechart(context=robot.api.context)
         motion_statechart.add_node(
             sequence := Sequence(
-                [
+                nodes=[
                     Pointing(
                         root_link=map_frame,
                         tip_link=camera,
@@ -496,7 +496,7 @@ class KitchenPointingScenario(BenchmarkScenario):
                         pointing_axis=pointing_axis,
                     ),
                     Parallel(
-                        [
+                        nodes=[
                             Pointing(
                                 root_link=map_frame,
                                 tip_link=camera,
@@ -567,7 +567,7 @@ class LongSequenceScenario(BenchmarkScenario):
             for index, offset in enumerate(self.waypoint_offsets)
         ]
         motion_statechart = Statechart(context=robot.api.context)
-        motion_statechart.add_node(sequence := Sequence(waypoints))
+        motion_statechart.add_node(sequence := Sequence(nodes=waypoints))
         motion_statechart.add_node(SelfCollisionAvoidance(robot=robot.api.robot))
         motion_statechart.add_node(EndMotion.when_true(sequence))
         return motion_statechart
@@ -624,10 +624,10 @@ class DeeplyNestedCascadeScenario(BenchmarkScenario):
                 ),
             )
             stages.append(
-                self._nested(Sequence(instant_steps + [self._nested(waypoint)]))
+                self._nested(Sequence(nodes=instant_steps + [self._nested(waypoint)]))
             )
         motion_statechart = Statechart(context=robot.api.context)
-        motion_statechart.add_node(sequence := Sequence(stages))
+        motion_statechart.add_node(sequence := Sequence(nodes=stages))
         motion_statechart.add_node(EndMotion.when_true(sequence))
         return motion_statechart
 
@@ -638,7 +638,7 @@ class DeeplyNestedCascadeScenario(BenchmarkScenario):
             `step` in the innermost one.
         """
         for _ in range(self.nesting_depth):
-            step = Sequence([step])
+            step = Sequence(nodes=[step])
         return step
 
 

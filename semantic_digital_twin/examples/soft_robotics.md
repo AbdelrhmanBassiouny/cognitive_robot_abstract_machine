@@ -73,7 +73,7 @@ executor_pcc = StatechartExecutor(
 msc_pcc = Statechart(context=executor_pcc.context)
 msc_pcc.add_node(
     goal_pcc := Sequence(
-        [
+        nodes=[
             CartesianPosition(
                 root_link=world_pcc.root,
                 tip_link=trunk_pcc.arms[0].tip,
@@ -130,7 +130,7 @@ executor_cos = StatechartExecutor(
 msc_cos = Statechart(context=executor_cos.context)
 msc_cos.add_node(
     goal_cos := Sequence(
-        [
+        nodes=[
             CartesianPosition(
                 root_link=world_cosserat.root,
                 tip_link=trunk_cos.arms[0].tip,

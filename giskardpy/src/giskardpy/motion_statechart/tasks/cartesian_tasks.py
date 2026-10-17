@@ -49,7 +49,7 @@ from semantic_digital_twin.world_description.world_entity import (
 )
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class CartesianTask(ConvergingTask, ABC):
     """
     Base class for all cartesian tasks.
@@ -57,15 +57,13 @@ class CartesianTask(ConvergingTask, ABC):
     .. note:: subclasses describe their goal by implementing `build_artifacts`.
     """
 
-    root_link: KinematicStructureEntity = field(kw_only=True)
+    root_link: KinematicStructureEntity
     """Base link of the kinematic chain."""
 
-    tip_link: KinematicStructureEntity = field(kw_only=True)
+    tip_link: KinematicStructureEntity
     """End link that should reach the goal position."""
 
-    binding_policy: GoalBindingPolicy = field(
-        default=GoalBindingPolicy.Bind_on_start, kw_only=True
-    )
+    binding_policy: GoalBindingPolicy = GoalBindingPolicy.Bind_on_start
     """Describes when the goal is computed. See GoalBindingPolicy for more information."""
 
     root_T_goal_reference_frame: HomogeneousTransformationMatrix = field(init=False)
@@ -129,7 +127,7 @@ class CartesianTask(ConvergingTask, ABC):
         )
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class CartesianPosition(CartesianTask):
     """
     Move a tip link to a goal position in 3D space.
@@ -141,14 +139,13 @@ class CartesianPosition(CartesianTask):
 
     default_reference_velocity: ClassVar[float] = 0.2
 
-    goal_point: Point3 = field(kw_only=True)
+    goal_point: Point3
     """Target 3D point to reach."""
-    threshold: float = field(default=0.01, kw_only=True)
+    threshold: float = 0.01
     """Distance threshold for goal achievement in meters."""
 
     reference_velocity: float = field(
         default_factory=lambda: CartesianPosition.default_reference_velocity,
-        kw_only=True,
     )
     """Reference velocity for normalization in m/s."""
 
@@ -187,7 +184,7 @@ class CartesianPosition(CartesianTask):
         return artifacts
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class DistanceAlongAxis(ConvergingTask):
     """
     Move two points, each fixed on a link of its own, until they stand a given distance
@@ -195,33 +192,33 @@ class DistanceAlongAxis(ConvergingTask):
     move.
     """
 
-    root_link: KinematicStructureEntity = field(kw_only=True)
+    root_link: KinematicStructureEntity
     """
     The frame :attr:`axis` is fixed in.
     """
 
-    reference_point: Point3 = field(kw_only=True)
+    reference_point: Point3
     """
     The point the distance is measured from, in the frame of the link it is fixed on.
     """
 
-    tip_point: Point3 = field(kw_only=True)
+    tip_point: Point3
     """
     The point the distance is measured to, in the frame of the link it is fixed on.
     """
 
-    axis: Vector3 = field(kw_only=True)
+    axis: Vector3
     """
     The unit direction the distance is measured along, in :attr:`root_link`.
     """
 
-    distance: float = field(kw_only=True)
+    distance: float
     """
     How far, in metres, :attr:`tip_point` is to stand from :attr:`reference_point`
     along :attr:`axis`; negative where it is to stand against the axis.
     """
 
-    reference_velocity: float = field(default=0.2, kw_only=True)
+    reference_velocity: float = 0.2
     """
     Reference velocity for normalization in m/s.
     """
@@ -250,29 +247,29 @@ class DistanceAlongAxis(ConvergingTask):
         return artifacts
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class CartesianPositionTrajectory(CartesianTask):
     """
     Move a tip link to a goal position along a trajectory.
     .. warning:: the trajectory is assumed to be dense and smooth.
     """
 
-    goal_points: list[Point3] = field(kw_only=True)
+    goal_points: list[Point3]
     """Target 3D point to reach."""
     _goal_points_np: np.ndarray = field(init=False, repr=False)
     """Goal points in numpy format."""
-    maximum_skip_ahead: int | None = field(default=None, kw_only=True)
+    maximum_skip_ahead: int | None = None
     """
     This limits how many points can be skipped in very dense trajectories.
     Setting this number is required if your trajectory contains loops.
     """
 
-    threshold: float = field(default=0.01, kw_only=True)
+    threshold: float = 0.01
     """
     Distance threshold for goal achievement in meters.
     """
 
-    look_ahead_distance: float = field(default=0.01, kw_only=True)
+    look_ahead_distance: float = 0.01
     """
     Distance from the current position to tracking target.
     Increasing this value can increase the tracking velocity, but might reduce tracking accuracy.
@@ -280,7 +277,6 @@ class CartesianPositionTrajectory(CartesianTask):
 
     reference_velocity: float | None = field(
         default_factory=lambda: CartesianPosition.default_reference_velocity,
-        kw_only=True,
     )
     """Reference velocity for normalization in m/s."""
 
@@ -290,7 +286,7 @@ class CartesianPositionTrajectory(CartesianTask):
     remaining_distance: FloatVariable = field(init=False, repr=False)
     """Distance left to travel along the trajectory, rewritten every control cycle."""
 
-    current_index: int = field(default=0, kw_only=True)
+    current_index: int = 0
     """Current index in the goal points array."""
 
     _compiled_goal_reference_frame_P_tip: CompiledFunction = field(
@@ -526,7 +522,7 @@ class CartesianPositionTrajectory(CartesianTask):
         )
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class CartesianPositionStraight(CartesianTask):
     """
     Move a tip link to a goal position along a straight line.
@@ -535,15 +531,13 @@ class CartesianPositionStraight(CartesianTask):
     line towards the goal, useful for tasks requiring linear trajectories.
     """
 
-    goal_point: Point3 = field(kw_only=True)
+    goal_point: Point3
     """Target 3D point to reach."""
 
-    reference_velocity: float = field(
-        default=CartesianPosition.default_reference_velocity, kw_only=True
-    )
+    reference_velocity: float = CartesianPosition.default_reference_velocity
     """Reference velocity for movement in m/s."""
 
-    threshold: float = field(default=0.01, kw_only=True)
+    threshold: float = 0.01
     """Distance threshold for goal achievement in meters."""
 
     _line_start_binding: ForwardKinematicsBinding = field(init=False)
@@ -637,7 +631,7 @@ class CartesianPositionStraight(CartesianTask):
         return artifacts
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class CartesianOrientation(CartesianTask):
     """
     Rotate a tip link to match a goal orientation.
@@ -650,14 +644,13 @@ class CartesianOrientation(CartesianTask):
 
     default_reference_velocity: ClassVar[float] = 0.2
 
-    goal_orientation: RotationMatrix = field(kw_only=True)
+    goal_orientation: RotationMatrix
     """Target rotation matrix to match."""
-    threshold: float = field(default=0.01, kw_only=True)
+    threshold: float = 0.01
     """Rotation error threshold for goal achievement in radians."""
 
     reference_velocity: float = field(
         default_factory=lambda: CartesianOrientation.default_reference_velocity,
-        kw_only=True,
     )
     """Reference angular velocity for normalization in rad/s."""
 
@@ -697,7 +690,7 @@ class CartesianOrientation(CartesianTask):
         return artifacts
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class CartesianPose(EndedByOwner, CompositeNode):
     """
     This goal will use the kinematic chain between root and tip link to move tip_link into the 6D goal_pose.
@@ -708,29 +701,25 @@ class CartesianPose(EndedByOwner, CompositeNode):
     observes.
     """
 
-    root_link: KinematicStructureEntity | None = field(default=None, kw_only=True)
+    root_link: KinematicStructureEntity | None = None
     """Base link of the kinematic chain. Defaults to the root of the world."""
 
-    tip_link: KinematicStructureEntity = field(kw_only=True)
+    tip_link: KinematicStructureEntity
     """End link that should reach the goal pose."""
 
-    goal_pose: Pose = field(kw_only=True)
+    goal_pose: Pose
     """The goal pose."""
 
-    reference_linear_velocity: float = field(
-        default=CartesianPosition.default_reference_velocity, kw_only=True
-    )
+    reference_linear_velocity: float = CartesianPosition.default_reference_velocity
     """Unit: m/s. This is used for normalization, for real limits use CartesianVelocityLimit."""
 
-    reference_angular_velocity: float = field(
-        default=CartesianOrientation.default_reference_velocity, kw_only=True
-    )
+    reference_angular_velocity: float = CartesianOrientation.default_reference_velocity
     """Unit: rad/s. This is used for normalization, for real limits use CartesianVelocityLimit."""
 
-    translation_threshold: float = field(default=0.01, kw_only=True)
+    translation_threshold: float = 0.01
     """If the position error falls below this threshold (in meters), that half of the goal is achieved."""
 
-    orientation_threshold: float = field(default=0.01, kw_only=True)
+    orientation_threshold: float = 0.01
     """
     If the orientation error falls below this threshold (in rad), that half of the goal
     is achieved.
@@ -740,14 +729,10 @@ class CartesianPose(EndedByOwner, CompositeNode):
         never be reached -- set this independently of :attr:`translation_threshold`.
     """
 
-    weight: float = field(
-        default=DefaultWeights.WEIGHT_BELOW_COLLISION_AVOIDANCE, kw_only=True
-    )
+    weight: float = DefaultWeights.WEIGHT_BELOW_COLLISION_AVOIDANCE
     """Task priority relative to other tasks."""
 
-    binding_policy: GoalBindingPolicy = field(
-        default=GoalBindingPolicy.Bind_on_start, kw_only=True
-    )
+    binding_policy: GoalBindingPolicy = GoalBindingPolicy.Bind_on_start
     """Describes when the goal is computed. See GoalBindingPolicy for more information."""
 
     @property
@@ -811,38 +796,26 @@ class CartesianPose(EndedByOwner, CompositeNode):
         return NodeArtifacts(observation=self.parallel.observation_variable)
 
 
-@dataclass(eq=False, repr=False)
-class HoldPose(Task):
+@dataclass(eq=False, repr=False, kw_only=True)
+class HoldOrientation(Task):
     """
-    Keeps a link at the pose it had when this task started.
+    Keeps a link in the orientation it had when this task started, leaving it free to
+    move.
 
     An invariant rather than a goal, so it does not report progress. It observes
-    whether the link is still at that pose.
-
-    ..note:: Unlike :class:`CartesianPose`, this constrains the chain between
-        ``root_link`` and ``tip_link`` without naming a pose, because the pose to keep
-        is the one the link is already at.
+    whether the link is still in that orientation.
     """
 
-    root_link: KinematicStructureEntity = field(kw_only=True)
+    root_link: KinematicStructureEntity
     """Base link of the kinematic chain."""
 
-    tip_link: KinematicStructureEntity = field(kw_only=True)
-    """The link kept where it is."""
+    tip_link: KinematicStructureEntity
+    """The link kept as it is."""
 
-    reference_linear_velocity: float = field(
-        default=CartesianPosition.default_reference_velocity, kw_only=True
-    )
-    """Unit: m/s. Normalizes the translational constraints against the others."""
-
-    reference_angular_velocity: float = field(
-        default=CartesianOrientation.default_reference_velocity, kw_only=True
-    )
+    reference_angular_velocity: float = CartesianOrientation.default_reference_velocity
     """Unit: rad/s. Normalizes the rotational constraints against the others."""
 
-    weight: float = field(
-        default=DefaultWeights.WEIGHT_ABOVE_COLLISION_AVOIDANCE, kw_only=True
-    )
+    weight: float = DefaultWeights.WEIGHT_ABOVE_COLLISION_AVOIDANCE
     """
     Task priority relative to other tasks.
 
@@ -850,14 +823,11 @@ class HoldPose(Task):
     otherwise move it, and buying clearance by moving it is the motion this prevents.
     """
 
-    translation_threshold: float = field(default=0.01, kw_only=True)
-    """Unit: m. The link counts as held while it is at most this far from its pose."""
-
-    orientation_threshold: float = field(default=0.01, kw_only=True)
+    orientation_threshold: float = 0.01
     """Unit: rad. The link counts as held while it is rotated at most this far from its pose."""
 
     _pose_to_keep: ForwardKinematicsBinding = field(init=False, repr=False)
-    """The pose the link is held at, bound when this task starts."""
+    """The pose of the link bound when this task starts."""
 
     def set_up(self, context: StatechartContext) -> None:
         """
@@ -872,51 +842,79 @@ class HoldPose(Task):
         )
         self._pose_to_keep.bind(context.world)
 
-    def on_start(self, context: StatechartContext):
+    def on_start(self, context: StatechartContext) -> None:
         self._pose_to_keep.bind(context.world)
 
     def build_artifacts(self, context: StatechartContext) -> MotionNodeArtifacts:
         """
-        Constrain the chain to the pose bound when this task started.
+        Constrain the chain to the orientation bound when this task started.
 
         :param context: Provides access to world model and kinematic expressions.
         :return: The artifacts of this task, which observes whether the link is within
-            :attr:`translation_threshold` and :attr:`orientation_threshold` of that pose.
+            :attr:`orientation_threshold` of that orientation.
         """
         artifacts = MotionNodeArtifacts()
-        root_T_tip = context.world.compose_forward_kinematics_expression(
+        root_R_tip = context.world.compose_forward_kinematics_expression(
             self.root_link, self.tip_link
-        )
-        root_T_tip_when_started = self._pose_to_keep.root_T_tip
-
-        artifacts.geometry.add_point_goal_constraints(
-            frame_P_goal=root_T_tip_when_started.position,
-            frame_P_current=root_T_tip.position,
-            reference_velocity=self.reference_linear_velocity,
-            quadratic_weight=self.weight,
-            name="position",
-        )
+        ).rotation_matrix
+        root_R_tip_when_started = self._pose_to_keep.root_T_tip.rotation_matrix
         artifacts.geometry.add_rotation_goal_constraints(
-            frame_R_goal=root_T_tip_when_started.rotation_matrix,
-            frame_R_current=root_T_tip.rotation_matrix,
+            frame_R_goal=root_R_tip_when_started,
+            frame_R_current=root_R_tip,
             reference_velocity=self.reference_angular_velocity,
             quadratic_weight=self.weight,
             name="orientation",
         )
-        artifacts.observation = sm.logic_and(
-            root_T_tip_when_started.position.euclidean_distance(root_T_tip.position)
-            <= self.translation_threshold,
-            sm.abs(
-                root_T_tip.rotation_matrix.rotational_distance(
-                    root_T_tip_when_started.rotation_matrix
-                )
-            )
-            <= self.orientation_threshold,
+        artifacts.observation = (
+            sm.abs(root_R_tip.rotational_distance(root_R_tip_when_started))
+            <= self.orientation_threshold
         )
         return artifacts
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
+class HoldPose(HoldOrientation):
+    """
+    Keeps a link at the pose it had when this task started.
+
+    .. note:: Unlike :class:`CartesianPose`, this constrains the chain between
+        :attr:`root_link` and :attr:`tip_link` without naming a pose, because the pose
+        to keep is the one the link is already at.
+    """
+
+    reference_linear_velocity: float = CartesianPosition.default_reference_velocity
+    """Unit: m/s. Normalizes the translational constraints against the others."""
+
+    translation_threshold: float = 0.01
+    """Unit: m. The link counts as held while it is at most this far from its pose."""
+
+    def build_artifacts(self, context: StatechartContext) -> MotionNodeArtifacts:
+        """
+        Differs from :meth:`HoldOrientation.build_artifacts` in also constraining the
+        position, and observing whether the link is within
+        :attr:`translation_threshold` of it.
+        """
+        artifacts = super().build_artifacts(context)
+        root_P_tip = context.world.compose_forward_kinematics_expression(
+            self.root_link, self.tip_link
+        ).position
+        root_P_tip_when_started = self._pose_to_keep.root_T_tip.position
+        artifacts.geometry.add_point_goal_constraints(
+            frame_P_goal=root_P_tip_when_started,
+            frame_P_current=root_P_tip,
+            reference_velocity=self.reference_linear_velocity,
+            quadratic_weight=self.weight,
+            name="position",
+        )
+        artifacts.observation = sm.logic_and(
+            artifacts.observation,
+            root_P_tip_when_started.euclidean_distance(root_P_tip)
+            <= self.translation_threshold,
+        )
+        return artifacts
+
+
+@dataclass(eq=False, repr=False, kw_only=True)
 class CartesianPositionVelocityLimit(Task):
     """
     Limit the Cartesian (translational) velocity of a tip link relative to a root link.
@@ -933,25 +931,23 @@ class CartesianPositionVelocityLimit(Task):
        consider using larger limits or reducing the prediction horizon.
     """
 
-    root_link: KinematicStructureEntity = field(kw_only=True)
+    root_link: KinematicStructureEntity
     """
     Root link of the kinematic chain. 
     Defines the reference frame from which the tip's motion is measured.
     """
-    tip_link: KinematicStructureEntity = field(kw_only=True)
+    tip_link: KinematicStructureEntity
     """
     Tip link of the kinematic chain. 
     The translational velocity of this link (expressed in the root link frame) is constrained.
     """
-    max_linear_velocity: float = field(default=0.1, kw_only=True)
+    max_linear_velocity: float = 0.1
     """
     Maximum allowed linear speed of the tip in meters per second (m/s).
     Default: 0.1 m/s. The enforcement ensures the Euclidean norm of the
     tip-frame translational velocity does not exceed this value.
     """
-    weight: float = field(
-        default=DefaultWeights.WEIGHT_ABOVE_COLLISION_AVOIDANCE, kw_only=True
-    )
+    weight: float = DefaultWeights.WEIGHT_ABOVE_COLLISION_AVOIDANCE
     """
     Optimization weight determining how strongly the linear velocity
     limit is enforced. Higher weights give this constraint soft priority
@@ -981,7 +977,7 @@ class CartesianPositionVelocityLimit(Task):
         return artifacts
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class CartesianRotationVelocityLimit(Task):
     """
     Represents a Cartesian rotational velocity limit task within a kinematic chain.
@@ -1000,17 +996,15 @@ class CartesianRotationVelocityLimit(Task):
        consider using larger limits or reducing the prediction horizon.
     """
 
-    root_link: KinematicStructureEntity = field(kw_only=True)
+    root_link: KinematicStructureEntity
     """Root link of the kinematic chain. Defines the reference frame from which the tip's motion is measured."""
-    tip_link: KinematicStructureEntity = field(kw_only=True)
+    tip_link: KinematicStructureEntity
     """Tip link of the kinematic chain. The translational velocity of this link (expressed in the root link frame) is constrained."""
-    max_angular_velocity: float = field(default=0.4, kw_only=True)
+    max_angular_velocity: float = 0.4
     """Maximum allowed angular speed. Interpreted in radians per second (rad/s).
     The enforcement ensures the magnitude of the instantaneous
     rotation rate does not exceed this threshold."""
-    weight: float = field(
-        default=DefaultWeights.WEIGHT_ABOVE_COLLISION_AVOIDANCE, kw_only=True
-    )
+    weight: float = DefaultWeights.WEIGHT_ABOVE_COLLISION_AVOIDANCE
     """Optimization weight determining how strongly the rotational velocity
     limit is enforced. Higher weights give this constraint soft priority
     over lower weighted constraints when conflicts occur."""
@@ -1036,7 +1030,7 @@ class CartesianRotationVelocityLimit(Task):
         return artifacts
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class CartesianVelocityLimit(EndedByOwner, CompositeNode):
     """
     Combines both linear and angular velocity limits for a kinematic chain.
@@ -1052,21 +1046,19 @@ class CartesianVelocityLimit(EndedByOwner, CompositeNode):
        consider using larger limits or reducing the prediction horizon.
     """
 
-    root_link: KinematicStructureEntity = field(kw_only=True)
+    root_link: KinematicStructureEntity
     """Root link of the kinematic chain. Defines the reference frame from which the tip's motion is measured."""
-    tip_link: KinematicStructureEntity = field(kw_only=True)
+    tip_link: KinematicStructureEntity
     """Tip link of the kinematic chain. Both translational and rotational velocities of this link (expressed in the root link frame) are constrained."""
-    max_linear_velocity: float = field(default=0.1, kw_only=True)
+    max_linear_velocity: float = 0.1
     """Maximum allowed linear speed of the tip in meters per second (m/s).
     Default: 0.1 m/s. The enforcement ensures the Euclidean norm of the
     tip-frame translational velocity does not exceed this value."""
-    max_angular_velocity: float = field(default=0.4, kw_only=True)
+    max_angular_velocity: float = 0.4
     """Maximum allowed angular speed. Interpreted in radians per second (rad/s).
     Default: 0.5 rad/s. The enforcement ensures the magnitude of the instantaneous
     rotation rate does not exceed this threshold."""
-    weight: float = field(
-        default=DefaultWeights.WEIGHT_ABOVE_COLLISION_AVOIDANCE, kw_only=True
-    )
+    weight: float = DefaultWeights.WEIGHT_ABOVE_COLLISION_AVOIDANCE
     """Optimization weight determining how strongly both velocity
     limits are enforced. Higher weights give these constraints soft priority
     over lower weighted constraints when conflicts occur."""

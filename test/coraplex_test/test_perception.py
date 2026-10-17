@@ -446,8 +446,8 @@ def test_detection_corrects_a_grasp_planned_before_it(pr2_apartment_context):
     )
 
     plan = PickUpAction(
-        milk.grasp_candidates()[0],
-        view.right_arm,
+        grasp=milk.grasp_candidates()[0],
+        arm=view.right_arm,
     )
     targets = [
         node.goal_pose
@@ -950,7 +950,7 @@ def test_detect_action_reads_the_world_model_when_the_robot_is_simulated(
     decided by the executor running the plan rather than by the plan itself.
     """
     world, view, extensions = pr2_apartment_context
-    plan = DetectAction(DetectionTechnique.TYPES, object_sem_annotation=Milk)
+    plan = DetectAction(technique=DetectionTechnique.TYPES, object_sem_annotation=Milk)
 
     tasks = [
         node
@@ -969,7 +969,7 @@ def test_detect_action_reads_the_world_model_when_the_robot_is_physically_simula
     exactly, so there is no perception pipeline to ask.
     """
     world, view, extensions = pr2_apartment_context
-    plan = DetectAction(DetectionTechnique.TYPES, object_sem_annotation=Milk)
+    plan = DetectAction(technique=DetectionTechnique.TYPES, object_sem_annotation=Milk)
 
     [task] = [
         node
@@ -985,7 +985,7 @@ def test_detect_action_asks_robokudo_on_the_real_robot(pr2_apartment_context):
     perception pipeline.
     """
     world, view, extensions = pr2_apartment_context
-    plan = DetectAction(DetectionTechnique.TYPES, object_sem_annotation=Milk)
+    plan = DetectAction(technique=DetectionTechnique.TYPES, object_sem_annotation=Milk)
     executor = robot_executor(extensions)
 
     executor.prepare(statechart_of(executor, plan))
@@ -1073,11 +1073,13 @@ def test_a_detection_that_sees_nothing_lets_the_next_alternative_run(
     """
     world, view, extensions = pr2_apartment_context
     plan = TryInOrder(
-        [
+        nodes=[
             not_seen := DetectAction(
-                DetectionTechnique.TYPES, object_sem_annotation=Bowl
+                technique=DetectionTechnique.TYPES, object_sem_annotation=Bowl
             ),
-            seen := DetectAction(DetectionTechnique.TYPES, object_sem_annotation=Milk),
+            seen := DetectAction(
+                technique=DetectionTechnique.TYPES, object_sem_annotation=Milk
+            ),
         ]
     )
 
@@ -1096,7 +1098,7 @@ def test_a_detection_looks_only_inside_the_box_it_is_given(
     """
     world, view, extensions = pr2_apartment_context
     detection = DetectAction(
-        DetectionTechnique.TYPES,
+        technique=DetectionTechnique.TYPES,
         object_sem_annotation=Milk,
         detection_box=empty_region,
     )
@@ -1118,7 +1120,9 @@ def test_a_detection_without_a_box_looks_as_far_to_every_side_of_the_robot(
     [task] = [
         node
         for node in motion_nodes_of(
-            DetectAction(DetectionTechnique.TYPES, object_sem_annotation=Milk),
+            DetectAction(
+                technique=DetectionTechnique.TYPES, object_sem_annotation=Milk
+            ),
             extensions,
         )
         if isinstance(node, PerceptionTask)
@@ -1138,4 +1142,4 @@ def test_a_detection_needs_an_object_type_or_a_box(pr2_apartment_context):
     world, view, extensions = pr2_apartment_context
 
     with pytest.raises(DetectionTargetMissing):
-        motion_nodes_of(DetectAction(DetectionTechnique.TYPES), extensions)
+        motion_nodes_of(DetectAction(technique=DetectionTechnique.TYPES), extensions)

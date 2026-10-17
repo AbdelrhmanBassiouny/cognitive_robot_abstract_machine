@@ -738,7 +738,7 @@ class LifeCycleTransitions:
         ]
 
 
-@dataclass(repr=False, eq=False)
+@dataclass(repr=False, eq=False, kw_only=True)
 class StatechartNode(SubclassJSONSerializer, metaclass=ABCMeta):
     """
     A node of a statechart.
@@ -749,7 +749,6 @@ class StatechartNode(SubclassJSONSerializer, metaclass=ABCMeta):
 
     name: str = field(
         default=None,
-        kw_only=True,
         metadata=ParameterMetadata(is_parameter=False).as_dict(),
     )
     """
@@ -966,7 +965,7 @@ class StatechartNode(SubclassJSONSerializer, metaclass=ABCMeta):
     @property
     def children(self) -> List[StatechartNode]:
         """
-        :return: The nodes this one runs, in order, empty for a node that runs none.
+        :return: The children of this node, in order, empty for a node without any.
         """
         return []
 
@@ -1001,7 +1000,7 @@ class StatechartNode(SubclassJSONSerializer, metaclass=ABCMeta):
     @property
     def is_leaf(self) -> bool:
         """
-        :return: Whether this node runs no other node.
+        :return: Whether this node has no children.
         """
         return not self.children
 
@@ -1329,6 +1328,14 @@ class StatechartNode(SubclassJSONSerializer, metaclass=ABCMeta):
         if transition is None:
             raise NotInStatechartError(self.name)
         transition.update_expression(expression, self)
+
+    def _clear_owner_wiring(self) -> None:
+        """
+        Gives every transition the owner of this node wires back the condition it was
+        created with, so that another owner can wire it.
+        """
+        for transition_kind in TransitionKind.owner_wired_kinds():
+            self.set_condition(transition_kind, transition_kind.unwired_condition)
 
     def _get_transition(self, transition_kind: TransitionKind) -> TransitionCondition:
         """
@@ -2003,11 +2010,11 @@ GenericStatechartNode = TypeVar("GenericStatechartNode", bound=StatechartNode)
 # %% how a node ends
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class EndedByOwner(StatechartNode):
     """
-    A node whose observation says whether it reached its goal, but which only whoever runs
-    it ends, because releasing it may undo what it reached, as with a node that keeps
+    A node whose observation says whether it reached its goal, but which only its owner
+    ends, because releasing it may undo what it reached, as with a node that keeps
     holding a state only while it runs.
     """
 
@@ -2016,7 +2023,7 @@ class EndedByOwner(StatechartNode):
         return Scalar.const_false()
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class SucceedsOnObservingTrue(StatechartNode):
     """
     A node that succeeds once it observes True, because ending it undoes nothing it did.
@@ -2027,7 +2034,7 @@ class SucceedsOnObservingTrue(StatechartNode):
         return self.observes_true
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class FailsOnObservingFalse(StatechartNode):
     """
     A node that fails once it observes False, because it can then no longer reach its
@@ -2039,7 +2046,7 @@ class FailsOnObservingFalse(StatechartNode):
         return self.observes_false
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class StructureCopyNode(EndedByOwner, StatechartNode):
     """
     Stands in for a node in a structure copy, see
@@ -2113,7 +2120,7 @@ def expanded_child_field() -> Any:
     return field(init=False, metadata=JSONMetadata(serialize=True).as_dict())
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class CompositeNode(StatechartNode):
     accepts_children_after_compile: bool = field(init=False, default=False)
     """
@@ -2129,7 +2136,7 @@ class CompositeNode(StatechartNode):
     @property
     def children(self) -> List[StatechartNode]:
         """
-        :return: The nodes this one runs, which is what :attr:`nodes` holds.
+        :return: The children of this node, which is what :attr:`nodes` holds.
         """
         return list(self.nodes)
 
@@ -2159,7 +2166,7 @@ class CompositeNode(StatechartNode):
 
     def check_children(self) -> None:
         """
-        Rejects children this node cannot run, once the statechart is compiled and the
+        Rejects children this node cannot have, once the statechart is compiled and the
         children's conditions are complete.
         """
 
@@ -2222,26 +2229,12 @@ class CompositeNode(StatechartNode):
         :raises ChildTransitionAlreadyWiredError: If one of the child's transitions is
             no longer the one it was constructed with.
         """
-        for transition_kind, default in self._transitions_owned_by_parent().items():
+        for transition_kind in TransitionKind.owner_wired_kinds():
             condition = node.get_condition(transition_kind)
-            if str(condition) != str(default):
+            if str(condition) != str(transition_kind.unwired_condition):
                 raise ChildTransitionAlreadyWiredError(
                     node=self, child=node, transition_kind=transition_kind
                 )
-
-    @staticmethod
-    def _transitions_owned_by_parent() -> dict[TransitionKind, Scalar]:
-        """
-        :return: The transitions a composite node decides for its children, each with
-            the condition a node is constructed with.
-        """
-        return {
-            TransitionKind.START: Scalar.const_true(),
-            TransitionKind.PAUSE: Scalar.const_false(),
-            TransitionKind.SUCCEED: Scalar.const_false(),
-            TransitionKind.INTERRUPT: Scalar.const_false(),
-            TransitionKind.RESET: Scalar.const_false(),
-        }
 
     def list_in_place_of(
         self, child: StatechartNode, substitute: StatechartNode
@@ -2265,8 +2258,7 @@ class CompositeNode(StatechartNode):
 
         :param node: A node of the statechart this node belongs to.
         """
-        for transition_kind, default in self._transitions_owned_by_parent().items():
-            node.set_condition(transition_kind, default)
+        node._clear_owner_wiring()
         node.parent_node = self
 
     def _succeed_at_its_goal(self, child: StatechartNode) -> None:
@@ -2286,7 +2278,7 @@ class CompositeNode(StatechartNode):
 
     def _check_has_children(self) -> None:
         """
-        Rejects a node that was built without the child nodes it exists to run.
+        Rejects a node that was built without the child nodes it exists to hold.
 
         Call this at the start of :meth:`expand`, while :attr:`nodes` still holds only
         what the caller passed.
@@ -2325,7 +2317,7 @@ class CompositeNode(StatechartNode):
             self._add_child_to_statechart(node)
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class StructureCopyCompositeNode(EndedByOwner, CompositeNode):
     """
     Stands in for a composite node in a structure copy, see
@@ -2333,7 +2325,7 @@ class StructureCopyCompositeNode(EndedByOwner, CompositeNode):
     """
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class ThreadPayloadMonitor(EndedByOwner, ABC, StatechartNode):
     """
     Payload monitor that evaluates _compute_observation in a background thread.
@@ -2407,7 +2399,7 @@ class ThreadPayloadMonitor(EndedByOwner, ABC, StatechartNode):
                 )
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class TerminalNode(EndedByOwner, ABC, StatechartNode):
     """
     A node that ends the whole statechart once its observation state turns true.
@@ -2425,7 +2417,7 @@ class TerminalNode(EndedByOwner, ABC, StatechartNode):
         return sm.logic_or(node.observes_true, node.is_succeeded)
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class EndStatechart(TerminalNode):
     """
     Ends the statechart once it observes True, which it does as soon as it runs.
@@ -2516,7 +2508,7 @@ class EndStatechart(TerminalNode):
         return end
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class CancelStatechart(TerminalNode):
     """
     Ends the statechart by raising :attr:`exception` at the end of the tick it starts
@@ -2527,7 +2519,7 @@ class CancelStatechart(TerminalNode):
     behind it, which is gone by then.
     """
 
-    exception: DataclassException = field(kw_only=True)
+    exception: DataclassException
 
     _pending_exception: Optional[Exception] = field(
         default=None, init=False, repr=False

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 import krrood.symbolic_math.symbolic_math as sm
 from cramph.node import SucceedsOnObservingTrue
@@ -13,7 +13,7 @@ from semantic_digital_twin.world_description.world_entity import (
 # %% changing the kinematic structure
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class MoveBranch(SucceedsOnObservingTrue, StatechartNode):
     """
     Moves a body, with everything below it, under a new parent when it starts, see
@@ -23,12 +23,12 @@ class MoveBranch(SucceedsOnObservingTrue, StatechartNode):
     follow its new parent.
     """
 
-    body: KinematicStructureEntity = field(kw_only=True)
+    body: KinematicStructureEntity
     """
     The root of the branch that is moved.
     """
 
-    new_parent: KinematicStructureEntity = field(kw_only=True)
+    new_parent: KinematicStructureEntity
     """
     The body the branch is moved under.
     """

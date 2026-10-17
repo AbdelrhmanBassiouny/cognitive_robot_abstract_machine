@@ -26,14 +26,14 @@ def simple_plan(pr2_apartment_context):
     world, robot_view, extensions = pr2_apartment_context
 
     plan = Sequence(
-        [
+        nodes=[
             NavigateAction(
-                Pose.from_xyz_quaternion(
+                target_location=Pose.from_xyz_quaternion(
                     1.6, 1.9, 0, 0, 0, 0, 1, reference_frame=world.root
                 )
             ),
-            MoveTorsoAction(TorsoState.HIGH),
-            ParkArmsAction(robot_view.all_arms),
+            MoveTorsoAction(torso_state=TorsoState.HIGH),
+            ParkArmsAction(arms=robot_view.all_arms),
         ]
     )
     return plan

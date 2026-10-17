@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 from cramph.context import StatechartContext
 from giskardpy.motion_statechart.data_types import DefaultWeights
@@ -9,7 +9,7 @@ from semantic_digital_twin.spatial_types import Point3, Vector3
 from semantic_digital_twin.world_description.world_entity import Body
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class GraspBar(ConvergingTask):
     """
     Like a CartesianPose but with more freedom: the tip link is allowed to be at any
@@ -18,54 +18,52 @@ class GraspBar(ConvergingTask):
     It aligns ``tip_grasp_axis`` with ``bar_axis`` while allowing rotation around it.
     """
 
-    root_link: Body = field(kw_only=True)
+    root_link: Body
     """
     Root link of the kinematic chain.
     """
 
-    tip_link: Body = field(kw_only=True)
+    tip_link: Body
     """
     Tip link of the kinematic chain.
     """
 
-    tip_grasp_axis: Vector3 = field(kw_only=True)
+    tip_grasp_axis: Vector3
     """
     Axis of the tip link that will be aligned with the bar axis.
     """
 
-    bar_center: Point3 = field(kw_only=True)
+    bar_center: Point3
     """
     Center of the bar to be grasped.
     """
 
-    bar_axis: Vector3 = field(kw_only=True)
+    bar_axis: Vector3
     """
     Alignment of the bar to be grasped.
     """
 
-    bar_length: float = field(kw_only=True)
+    bar_length: float
     """
     Length of the bar to be grasped.
     """
 
-    threshold: float = field(default=0.01, kw_only=True)
+    threshold: float = 0.01
     """
     Distance threshold to the bar for goal achievement in meters.
     """
 
-    reference_linear_velocity: float = field(default=0.1, kw_only=True)
+    reference_linear_velocity: float = 0.1
     """
     Reference linear velocity for normalization in m/s.
     """
 
-    reference_angular_velocity: float = field(default=0.5, kw_only=True)
+    reference_angular_velocity: float = 0.5
     """
     Reference angular velocity for normalization in rad/s.
     """
 
-    weight: float = field(
-        default=DefaultWeights.WEIGHT_ABOVE_COLLISION_AVOIDANCE, kw_only=True
-    )
+    weight: float = DefaultWeights.WEIGHT_ABOVE_COLLISION_AVOIDANCE
     """
     Priority weight relative to other tasks.
     """

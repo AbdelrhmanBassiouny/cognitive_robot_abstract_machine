@@ -17,7 +17,7 @@ from cramph.exceptions import (
     NodeAlreadyBelongsToDifferentNodeError,
     NodeIsNotAChildError,
     NotHeldByLanguageNodeError,
-    NotRunByLanguageNodeError,
+    NoLanguageNodeAboveError,
     StatechartAlreadyCompiledError,
 )
 from cramph.executor import StatechartExecutor
@@ -234,10 +234,106 @@ def test_a_parallel_can_still_arrive_through_a_node_inserted_after_it_joined(
     assert parallel.observation_state == ObservationStateValues.TRUE
 
 
-# %% the language node running a node
+# %% replacing a node by one holding it
 
 
-def test_the_language_node_running_a_nested_node_is_the_first_one_above_it(
+def _at_goal(name: str) -> NodeObservingAFixedValue:
+    """
+    :return: A node that observes being at its goal and leaves ending it to its parent.
+    """
+    return NodeObservingAFixedValue(name=name, observation=ObservationStateValues.TRUE)
+
+
+def test_a_step_replaced_by_a_node_holding_it_stays_in_the_statechart_below_that_node(
+    statechart_executor: StatechartExecutor,
+):
+    statechart = Statechart(context=statechart_executor.context)
+    first, held, third = _succeeding("1"), _at_goal("held"), _succeeding("3")
+    beside = _at_goal("beside")
+    statechart.add_node(sequence := Sequence(nodes=[first, held, third]))
+
+    sequence.replace(held, replacement := Parallel(nodes=[beside, held]))
+    _run(statechart_executor, statechart, sequence)
+
+    assert sequence.nodes == [first, replacement, third]
+    assert replacement.nodes == [beside, held]
+    assert held.parent_node is replacement
+    assert held in statechart.nodes
+    assert _start_order(statechart, [third, replacement, first]) == [
+        first,
+        replacement,
+        third,
+    ]
+    assert sequence.life_cycle_state == LifeCycleValues.SUCCEEDED
+
+
+def test_a_held_step_keeps_its_position_among_the_children_of_its_new_parent(
+    statechart_executor: StatechartExecutor,
+):
+    statechart = Statechart(context=statechart_executor.context)
+    held, before, after = (
+        _succeeding("held"),
+        _succeeding("before"),
+        _succeeding("after"),
+    )
+    statechart.add_node(sequence := Sequence(nodes=[held]))
+
+    sequence.replace(held, replacement := Sequence(nodes=[before, held, after]))
+    _run(statechart_executor, statechart, sequence)
+
+    assert replacement.nodes == [before, held, after]
+    assert _start_order(statechart, [after, held, before]) == [before, held, after]
+
+
+def test_a_held_step_is_no_longer_ended_by_its_former_parent(
+    statechart_executor: StatechartExecutor,
+):
+    """
+    The sequence ended the step once it was at its goal; a parallel ends none of its
+    children, so below one the step keeps running while its sibling is not at its goal.
+    """
+    statechart = Statechart(context=statechart_executor.context)
+    held = _at_goal("held")
+    statechart.add_node(sequence := Sequence(nodes=[held]))
+    sequence.replace(
+        held,
+        Parallel(
+            nodes=[
+                NodeObservingAFixedValue(observation=ObservationStateValues.FALSE),
+                held,
+            ]
+        ),
+    )
+
+    statechart_executor.compile(statechart)
+    statechart_executor.tick()
+    statechart_executor.tick()
+
+    assert held.life_cycle_state == LifeCycleValues.RUNNING
+
+
+def test_replacing_a_step_of_a_compiled_statechart_is_rejected_and_changes_nothing(
+    statechart_executor: StatechartExecutor,
+):
+    statechart = Statechart(context=statechart_executor.context)
+    held = _at_goal("held")
+    statechart.add_node(sequence := Sequence(nodes=[held]))
+    statechart.add_node(EndStatechart.when_true(sequence))
+    statechart_executor.compile(statechart)
+    replacement = Parallel(nodes=[_at_goal("beside"), held])
+
+    with pytest.raises(StatechartAlreadyCompiledError):
+        sequence.replace(held, replacement)
+
+    assert sequence.nodes == [held]
+    assert replacement.nodes[1] is held
+    assert held.parent_node is sequence
+
+
+# %% the closest language node above a node
+
+
+def test_the_closest_language_node_above_a_nested_node_is_the_first_one_on_its_path(
     statechart_executor: StatechartExecutor,
 ):
     statechart = Statechart(context=statechart_executor.context)
@@ -245,7 +341,7 @@ def test_the_language_node_running_a_nested_node_is_the_first_one_above_it(
     attempt = Attempt(name="attempt", task=nested, failure_monitors=[ConstFalseNode()])
     statechart.add_node(sequence := Sequence(nodes=[attempt]))
 
-    assert CramLanguageNode.running(nested) is sequence
+    assert CramLanguageNode.closest_above(nested) is sequence
 
 
 def test_a_step_inserted_before_a_nested_node_runs_before_what_holds_it(
@@ -256,20 +352,20 @@ def test_a_step_inserted_before_a_nested_node_runs_before_what_holds_it(
     attempt = Attempt(name="attempt", task=nested, failure_monitors=[ConstFalseNode()])
     statechart.add_node(sequence := Sequence(nodes=[attempt]))
 
-    CramLanguageNode.running(nested).insert_before(nested, first)
+    CramLanguageNode.closest_above(nested).insert_before(nested, first)
     _run(statechart_executor, statechart, sequence)
 
     assert _start_order(statechart, [attempt, first]) == [first, attempt]
 
 
-def test_a_node_no_language_node_runs_has_none_running_it(
+def test_a_node_without_a_language_node_above_it_has_none_closest_above_it(
     statechart_executor: StatechartExecutor,
 ):
     statechart = Statechart(context=statechart_executor.context)
     statechart.add_node(top_level := _succeeding("top level"))
 
-    with pytest.raises(NotRunByLanguageNodeError):
-        CramLanguageNode.running(top_level)
+    with pytest.raises(NoLanguageNodeAboveError):
+        CramLanguageNode.closest_above(top_level)
 
 
 # %% a language node taking the place of another node
@@ -382,7 +478,7 @@ def test_a_compiled_node_keeps_its_place(statechart_executor: StatechartExecutor
 # %% misuse
 
 
-def test_inserting_next_to_a_node_the_goal_does_not_run_is_rejected(
+def test_inserting_next_to_a_node_that_is_not_below_the_goal_is_rejected(
     statechart_executor: StatechartExecutor,
 ):
     statechart = Statechart(context=statechart_executor.context)
@@ -392,7 +488,7 @@ def test_inserting_next_to_a_node_the_goal_does_not_run_is_rejected(
         sequence.insert_before(_succeeding("stranger"), _succeeding("2"))
 
 
-def test_inserting_a_node_the_goal_already_runs_is_rejected(
+def test_inserting_a_node_that_is_a_child_of_the_goal_already_is_rejected(
     statechart_executor: StatechartExecutor,
 ):
     statechart = Statechart(context=statechart_executor.context)

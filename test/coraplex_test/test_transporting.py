@@ -162,7 +162,7 @@ def test_a_transport_grounds_the_steps_it_is_given(pr2_apartment_context):
     """
     world, robot, extensions = pr2_apartment_context
     transport = _transport_of_the_milk(world, extensions)
-    expand(Sequence([transport]), extensions)
+    expand(Sequence(nodes=[transport]), extensions)
 
     assert _underspecified_steps(transport) == [
         MoveAndPickUpAction,
@@ -173,7 +173,7 @@ def test_a_transport_grounds_the_steps_it_is_given(pr2_apartment_context):
 def test_a_transport_leaves_the_torso_where_it_is(pr2_apartment_context):
     world, robot, extensions = pr2_apartment_context
     transport = _transport_of_the_milk(world, extensions)
-    expand(Sequence([transport]), extensions)
+    expand(Sequence(nodes=[transport]), extensions)
 
     assert not [
         child for child in _steps_of(transport) if isinstance(child, MoveTorsoAction)
@@ -224,7 +224,7 @@ def pick_and_place_of_the_milk(world: World, arm: Arm) -> PickAndPlaceAction:
 def test_a_pick_and_place_grounds_the_steps_it_is_given(pr2_apartment_context):
     world, robot, extensions = pr2_apartment_context
     pick_and_place = pick_and_place_of_the_milk(world, robot.right_arm)
-    expand(Sequence([pick_and_place]), extensions)
+    expand(Sequence(nodes=[pick_and_place]), extensions)
 
     assert [
         child.statement._type_
@@ -248,7 +248,7 @@ def test_move_and_pick_up_takes_the_grasp_it_was_given(pr2_apartment_context):
         grasp=grasp,
         arm=robot.left_arm,
     )
-    expand(Sequence([move_and_pick_up]), extensions)
+    expand(Sequence(nodes=[move_and_pick_up]), extensions)
 
     pick_ups = [
         child
@@ -271,7 +271,7 @@ def test_move_and_pick_up_approaches_with_the_clearances_it_was_given(
         approach_clearance=approach_clearance,
         retreat_distance=retreat_distance,
     )
-    expand(Sequence([move_and_pick_up]), extensions)
+    expand(Sequence(nodes=[move_and_pick_up]), extensions)
 
     [pick_up] = [
         child
@@ -911,7 +911,7 @@ def test_a_move_and_act_step_only_ever_stands_where_it_was_sent(
     """
     world, robot, extensions = pr2_apartment_context
     step = build(world, extensions)
-    expand(Sequence([step]), extensions)
+    expand(Sequence(nodes=[step]), extensions)
 
     for target in _navigation_targets(step):
         np.testing.assert_allclose(
@@ -935,7 +935,12 @@ def _assert_base_faces(robot: AbstractRobot, target: Point3):
 def test_facing_after_navigating_turns_where_the_robot_was_sent(pr2_apartment_context):
     world, robot, extensions = pr2_apartment_context
     target = Pose.from_xyz_rpy(4.0, 2.5, 0.9, reference_frame=world.root)
-    plan = Sequence([NavigateAction(_standing_pose(world)), FaceAtAction(target)])
+    plan = Sequence(
+        nodes=[
+            NavigateAction(target_location=_standing_pose(world)),
+            FaceAtAction(target=target),
+        ]
+    )
 
     run_plan(plan, extensions)
     np.testing.assert_allclose(
@@ -952,9 +957,9 @@ def test_facing_a_target_given_relative_to_a_body_turns_towards_that_body(
     world, robot, extensions = pr2_apartment_context
     milk = world.get_semantic_annotations_by_type(Milk)[0].root
     plan = Sequence(
-        [
-            NavigateAction(_standing_pose(world)),
-            FaceAtAction(Pose(reference_frame=milk)),
+        nodes=[
+            NavigateAction(target_location=_standing_pose(world)),
+            FaceAtAction(target=Pose(reference_frame=milk)),
         ]
     )
 
@@ -968,9 +973,11 @@ def test_facing_and_looking_at_a_target_turns_the_base_and_the_camera_towards_it
     world, robot, extensions = pr2_apartment_context
     target = Pose.from_xyz_rpy(4.0, 2.5, 0.9, reference_frame=world.root)
     plan = Sequence(
-        [
-            NavigateAction(_standing_pose(world)),
-            FaceAndLookAtAction(FaceAtAction(target), LookAtAction(target)),
+        nodes=[
+            NavigateAction(target_location=_standing_pose(world)),
+            FaceAndLookAtAction(
+                face_at=FaceAtAction(target=target), look_at=LookAtAction(target=target)
+            ),
         ]
     )
 

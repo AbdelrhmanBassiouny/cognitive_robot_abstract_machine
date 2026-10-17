@@ -15,6 +15,7 @@ from coraplex.plans.designator import DesignatorParameters
 from coraplex.plans.plan_transformation import PlanRewriting
 from krrood.ormatic.utils import classproperty
 from cramph.node import SucceedsOnObservingTrue, FailsOnObservingFalse
+from cramph.composites import CramLanguageNode
 from cramph.context import ContextExtension, StatechartContext
 from cramph.node import CompositeNode, NodeArtifacts, StatechartNode
 from giskardpy.motion_statechart.graph_node import MotionStatechartNode
@@ -29,7 +30,7 @@ from semantic_digital_twin.world_description.world_entity import (
 logger = logging.getLogger(__name__)
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class Action(
     SucceedsOnObservingTrue,
     FailsOnObservingFalse,
@@ -128,14 +129,18 @@ class Action(
         rewriting = context.get_extension(PlanRewriting)
         if rewriting is not None:
             rewriting.configure(self)
-        self._run_as_action_body(self.create_action_body())
+        self._put_below_as_action_body(self.create_action_body())
 
     def replace_action_body(self, node: StatechartNode) -> None:
         """
-        Runs `node` as what this action does, in place of its :attr:`action_body`, which
-        leaves the statechart together with everything below it.
+        Puts `node` in place of :attr:`action_body`, as what this action does.
 
-        :param node: The node to run instead, which belongs to no statechart yet.
+        If `node` is a plan language node that has the action body among its children,
+        the action body stays in the statechart as that child, and the conditions this
+        action wired for it are cleared, so that `node` wires them. Otherwise the action
+        body leaves the statechart together with everything below it.
+
+        :param node: The node to put in its place, which belongs to no statechart yet.
         :raises ActionNotExpanded: If this action was not expanded yet.
         :raises StatechartAlreadyCompiledError: If the statechart of this action is
             compiled.
@@ -143,10 +148,24 @@ class Action(
         replaced = self.action_body
         if replaced is None:
             raise ActionNotExpanded(self)
+        if isinstance(node, CramLanguageNode) and node._has_child(replaced):
+            self._check_accepts_children()
+            node._join_statechart_keeping_child(
+                replaced, lambda: self._put_in_place_of_action_body(node)
+            )
+            return
         self.statechart.remove_node(replaced)
-        self._run_as_action_body(node)
+        self._put_below_as_action_body(node)
 
-    def _run_as_action_body(self, node: StatechartNode) -> None:
+    def _put_in_place_of_action_body(self, node: StatechartNode) -> None:
+        """
+        Puts `node` in the statechart as :attr:`action_body`, in place of the current
+        one, which stays in the statechart.
+        """
+        self.nodes[self.nodes.index(self.action_body)] = node
+        self._put_below_as_action_body(node)
+
+    def _put_below_as_action_body(self, node: StatechartNode) -> None:
         """
         Puts `node` below this action and ends it once it is at its goal, unless it
         decides its own success.

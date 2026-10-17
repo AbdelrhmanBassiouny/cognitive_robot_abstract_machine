@@ -26,7 +26,7 @@ from semantic_digital_twin.spatial_types import (
 from semantic_digital_twin.world_description.world_entity import Body
 
 
-@dataclass(eq=False, repr=False)
+@dataclass(eq=False, repr=False, kw_only=True)
 class WiggleInsert(ConvergingTask):
     """
     Presses the tip link down towards a hole while wiggling it with random translational
@@ -36,82 +36,80 @@ class WiggleInsert(ConvergingTask):
     in :meth:`on_tick`.
     """
 
-    root_link: Body = field(kw_only=True)
+    root_link: Body
     """
     Root link of the kinematic chain.
     """
 
-    tip_link: Body = field(kw_only=True)
+    tip_link: Body
     """
     Tip link that is pressed into the hole.
     """
 
-    hole_point: Point3 = field(kw_only=True)
+    hole_point: Point3
     """
     Center point of the hole.
     """
 
-    noise_translation: float = field(kw_only=True, default=0.5)
+    noise_translation: float = 0.5
     """
     Strength of the translational wiggle.
 
     Default is an untuned preset, not a calibrated value.
     """
 
-    noise_angle: float = field(kw_only=True, default=10)
+    noise_angle: float = 10
     """
     Strength of the angular wiggle.
 
     Default is an untuned preset, not a calibrated value.
     """
 
-    down_velocity: float = field(kw_only=True, default=0.2)
+    down_velocity: float = 0.2
     """
     Reference velocity for pressing down in m/s.
 
     Default is an untuned preset, not a calibrated value.
     """
 
-    hole_normal: Optional[Vector3] = field(default=None, kw_only=True)
+    hole_normal: Optional[Vector3] = None
     """
     Vector perpendicular to the hole.
 
     Defaults to the root z-axis.
     """
 
-    threshold: float = field(default=0.01, kw_only=True)
+    threshold: float = 0.01
     """
     Distance to the hole point below which the task is achieved.
     """
 
-    random_walk: bool = field(default=True, kw_only=True)
+    random_walk: bool = True
     """
     If ``True`` a random walk is used, otherwise an uncorrelated random sample.
     """
 
-    vector_momentum_factor: float = field(default=0.9, kw_only=True)
+    vector_momentum_factor: float = 0.9
     """
     Influence of the previous translational momentum during a random walk.
     """
 
-    angular_momentum_factor: float = field(default=0.9, kw_only=True)
+    angular_momentum_factor: float = 0.9
     """
     Influence of the previous angular momentum during a random walk.
     """
 
-    center_pull_strength_angle: float = field(default=0.1, kw_only=True)
+    center_pull_strength_angle: float = 0.1
     """
     Pull back towards the starting angle during a random walk.
     """
 
-    center_pull_strength_vector: float = field(default=0.25, kw_only=True)
+    center_pull_strength_vector: float = 0.25
     """
     Pull back towards the hole point during a random walk.
     """
 
-    weight: float = field(
-        default=DefaultWeights.WEIGHT_ABOVE_COLLISION_AVOIDANCE, kw_only=True
-    )
+    weight: float = DefaultWeights.WEIGHT_ABOVE_COLLISION_AVOIDANCE
     """
     Priority weight relative to other tasks.
     """

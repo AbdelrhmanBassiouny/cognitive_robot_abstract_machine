@@ -83,7 +83,15 @@ from giskardpy.motion_statechart.tasks.cartesian_tasks import (
     CartesianRotationVelocityLimit,
     CartesianVelocityLimit,
     DistanceAlongAxis,
+    HoldOrientation,
     HoldPose,
+)
+from giskardpy.motion_statechart.tasks.drive_tasks import (
+    BaseHeading,
+    BaseOrientation,
+    BasePosition,
+    BaseTurnTowardsGoalPosition,
+    DrivenBaseTask,
 )
 from giskardpy.motion_statechart.tasks.feature_functions import (
     AlignPerpendicular,
@@ -118,7 +126,10 @@ from semantic_digital_twin.spatial_types import (
 )
 from semantic_digital_twin.spatial_types.spatial_types import Pose
 from semantic_digital_twin.world import World
-from semantic_digital_twin.world_description.connections import ActiveConnection1DOF
+from semantic_digital_twin.world_description.connections import (
+    ActiveConnection1DOF,
+    DifferentialDrive,
+)
 from semantic_digital_twin.world_description.world_entity import Body
 
 from ..motion_control_context import create_context_with_motion_control
@@ -190,6 +201,20 @@ def _joint_goal(world: World) -> JointPositionList:
     )
 
 
+def _driven_base_node(node_type: type[DrivenBaseTask], world: World) -> DrivenBaseTask:
+    """
+    :return: A node of `node_type` moving the base of the differential drive in `world`
+        to a pose given in the drive's parent.
+    """
+    return node_type(
+        base=world.get_connections_by_type(DifferentialDrive)[0].child,
+        goal_pose=_pose(world),
+        parent_T_goal_reference_frame=HomogeneousTransformationMatrix(
+            reference_frame=_root(world)
+        ),
+    )
+
+
 def _collision_rule(world: World) -> AvoidCollisionBetweenGroups:
     return AvoidCollisionBetweenGroups(
         buffer_zone_distance=0.05,
@@ -249,11 +274,16 @@ def _cartesian_cases() -> list[NodeRoundTripCase]:
             ],
             WorldFixture.PR2_WORLD,
         ),
-        NodeRoundTripCase(
-            HoldPose,
-            lambda world: [HoldPose(root_link=_root(world), tip_link=_tip(world))],
-            WorldFixture.PR2_WORLD,
-        ),
+        *[
+            NodeRoundTripCase(
+                node_type,
+                lambda world, node_type=node_type: [
+                    node_type(root_link=_root(world), tip_link=_tip(world))
+                ],
+                WorldFixture.PR2_WORLD,
+            )
+            for node_type in [HoldOrientation, HoldPose]
+        ],
         NodeRoundTripCase(
             CartesianPosition,
             lambda world: [
@@ -341,6 +371,21 @@ def _cartesian_cases() -> list[NodeRoundTripCase]:
             lambda world: [DifferentialDriveBaseGoal(goal_pose=_pose(world))],
             WorldFixture.CYLINDER_BOT_DIFF_WORLD,
         ),
+        *[
+            NodeRoundTripCase(
+                node_type,
+                lambda world, node_type=node_type: [
+                    _driven_base_node(node_type, world)
+                ],
+                WorldFixture.CYLINDER_BOT_DIFF_WORLD,
+            )
+            for node_type in [
+                BasePosition,
+                BaseOrientation,
+                BaseHeading,
+                BaseTurnTowardsGoalPosition,
+            ]
+        ],
         NodeRoundTripCase(
             AlignPlanes,
             lambda world: [
